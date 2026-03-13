@@ -21,7 +21,7 @@
     "@tauri-apps/plugin-window-state": "^2",
     "react": "^19",
     "react-dom": "^19",
-    "react-markdown": "^9",
+    "react-markdown": "^10",
     "rehype-highlight": "^7",
     "remark-gfm": "^4"
   },
