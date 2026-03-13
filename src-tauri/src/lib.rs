@@ -15,6 +15,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(tauri_plugin_store::Builder::new().build())
         .manage(FileWatcherState(Arc::new(Mutex::new(None))))
         .manage(commands::InitialFile(Mutex::new(None)))
         .setup(|app| {
