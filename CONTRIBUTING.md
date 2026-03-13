@@ -5,9 +5,10 @@ Thanks for your interest in contributing!
 ## Development Setup
 
 ```bash
-# Prerequisites: Node.js 22+, pnpm, Rust stable
+# Prerequisites: Node.js (see .nvmrc), pnpm, Rust stable
 git clone https://github.com/hamidfzm/glyph.git
 cd glyph
+nvm use          # or fnm use — reads .nvmrc
 pnpm install
 pnpm tauri dev
 ```
