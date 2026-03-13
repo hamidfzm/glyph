@@ -6,11 +6,12 @@
     <title>Glyph</title>
     <authors>hamidfzm</authors>
     <projectUrl>https://github.com/hamidfzm/glyph</projectUrl>
+    <packageSourceUrl>https://github.com/hamidfzm/glyph/tree/main/chocolatey</packageSourceUrl>
     <iconUrl>https://raw.githubusercontent.com/hamidfzm/glyph/main/src-tauri/icons/icon.png</iconUrl>
     <licenseUrl>https://github.com/hamidfzm/glyph/blob/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <projectSourceUrl>https://github.com/hamidfzm/glyph</projectSourceUrl>
     <bugTrackerUrl>https://github.com/hamidfzm/glyph/issues</bugTrackerUrl>
+    <releaseNotes>https://github.com/hamidfzm/glyph/releases</releaseNotes>
     <tags>markdown viewer glyph tauri</tags>
     <summary>Cross-platform markdown viewer</summary>
     <description>A modern, cross-platform markdown viewer with GFM support, syntax highlighting, live reload, and platform-native styling.</description>
