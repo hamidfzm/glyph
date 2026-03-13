@@ -6,19 +6,16 @@ use tauri::{
 pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
     let handle = app.handle();
 
-    // File menu
-    let open = MenuItemBuilder::with_id("open", "Open…")
+    // Shared menu items
+    let open = MenuItemBuilder::with_id("open", "Open\u{2026}")
         .accelerator("CmdOrCtrl+O")
         .build(handle)?;
     let close = MenuItemBuilder::with_id("close", "Close Window")
         .accelerator("CmdOrCtrl+W")
         .build(handle)?;
-
-    let file_menu = SubmenuBuilder::new(handle, "File")
-        .item(&open)
-        .separator()
-        .item(&close)
-        .build()?;
+    let settings = MenuItemBuilder::with_id("open-settings", "Settings\u{2026}")
+        .accelerator("CmdOrCtrl+,")
+        .build(handle)?;
 
     // Edit menu
     let edit_menu = SubmenuBuilder::new(handle, "Edit")
@@ -37,6 +34,24 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .fullscreen()
         .build()?;
 
+    // AI menu
+    let ai_summarize = MenuItemBuilder::with_id("ai-summarize", "Summarize Document")
+        .build(handle)?;
+    let ai_explain = MenuItemBuilder::with_id("ai-explain", "Explain Document")
+        .build(handle)?;
+    let ai_simplify = MenuItemBuilder::with_id("ai-simplify", "Simplify Document")
+        .build(handle)?;
+    let ai_read_aloud = MenuItemBuilder::with_id("ai-read-aloud", "Read Aloud")
+        .build(handle)?;
+
+    let ai_menu = SubmenuBuilder::new(handle, "AI")
+        .item(&ai_summarize)
+        .item(&ai_explain)
+        .item(&ai_simplify)
+        .separator()
+        .item(&ai_read_aloud)
+        .build()?;
+
     // Help menu
     let about_metadata = AboutMetadataBuilder::new()
         .name(Some("Glyph"))
@@ -50,11 +65,19 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .about(Some(about_metadata))
         .build()?;
 
-    // macOS app menu
+    // macOS: Settings goes in app menu, File menu is simple
     #[cfg(target_os = "macos")]
     let menu = {
+        let file_menu = SubmenuBuilder::new(handle, "File")
+            .item(&open)
+            .separator()
+            .item(&close)
+            .build()?;
+
         let app_menu = SubmenuBuilder::new(handle, "Glyph")
             .about(None)
+            .separator()
+            .item(&settings)
             .separator()
             .services()
             .separator()
@@ -70,17 +93,30 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
             .item(&file_menu)
             .item(&edit_menu)
             .item(&view_menu)
+            .item(&ai_menu)
             .item(&help_menu)
             .build()?
     };
 
+    // Windows/Linux: Settings goes in File menu
     #[cfg(not(target_os = "macos"))]
-    let menu = MenuBuilder::new(handle)
-        .item(&file_menu)
-        .item(&edit_menu)
-        .item(&view_menu)
-        .item(&help_menu)
-        .build()?;
+    let menu = {
+        let file_menu = SubmenuBuilder::new(handle, "File")
+            .item(&open)
+            .separator()
+            .item(&settings)
+            .separator()
+            .item(&close)
+            .build()?;
+
+        MenuBuilder::new(handle)
+            .item(&file_menu)
+            .item(&edit_menu)
+            .item(&view_menu)
+            .item(&ai_menu)
+            .item(&help_menu)
+            .build()?
+    };
 
     Ok(menu)
 }
@@ -97,6 +133,21 @@ pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) 
         }
         "toggle-sidebar" => {
             let _ = app.emit("menu-toggle-sidebar", ());
+        }
+        "open-settings" => {
+            let _ = app.emit("menu-open-settings", ());
+        }
+        "ai-summarize" => {
+            let _ = app.emit("menu-ai-action", "summarize");
+        }
+        "ai-explain" => {
+            let _ = app.emit("menu-ai-action", "explain");
+        }
+        "ai-simplify" => {
+            let _ = app.emit("menu-ai-action", "simplify");
+        }
+        "ai-read-aloud" => {
+            let _ = app.emit("menu-ai-read-aloud", ());
         }
         _ => {}
     }
