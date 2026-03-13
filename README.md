@@ -13,6 +13,34 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 - Window position/size persistence across restarts
 - CLI support — open files directly: `glyph README.md`
 
+## Install
+
+### macOS (Homebrew)
+
+```bash
+brew tap hamidfzm/tap
+brew install --cask glyph
+```
+
+### Windows (Chocolatey)
+
+```powershell
+choco install glyph
+```
+
+### Linux
+
+Download the `.deb` or `.AppImage` from [Releases](https://github.com/hamidfzm/glyph/releases).
+
+```bash
+# Debian/Ubuntu
+sudo dpkg -i glyph_*.deb
+
+# AppImage
+chmod +x Glyph_*.AppImage
+./Glyph_*.AppImage
+```
+
 ## Development
 
 ```bash
@@ -30,13 +58,6 @@ Build for production:
 
 ```bash
 pnpm tauri build
-```
-
-## Install via Homebrew (macOS)
-
-```bash
-brew tap hamidfzm/tap
-brew install --cask glyph
 ```
 
 ## Keyboard Shortcuts
