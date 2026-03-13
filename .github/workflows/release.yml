@@ -47,7 +47,32 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Glyph ${{ github.ref_name }}"
-          releaseBody: "See the assets below for platform-specific downloads."
+          releaseBody: |
+            ## Install
+
+            ### macOS
+            ```bash
+            brew tap hamidfzm/tap && brew install --cask glyph
+            ```
+            Or download `Glyph_*_universal.dmg` below.
+
+            ### Windows
+            ```powershell
+            choco install glyph
+            ```
+            Or download `Glyph_*_x64_en-US.msi` below.
+
+            ### Linux
+            ```bash
+            # Arch (AUR)
+            yay -S glyph-bin
+
+            # Debian/Ubuntu
+            sudo dpkg -i glyph_*_amd64.deb
+            ```
+            Or download the `.AppImage` below.
+
+            ## Assets
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
