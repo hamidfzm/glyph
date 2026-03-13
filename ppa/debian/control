@@ -1,0 +1,15 @@
+Source: glyph
+Section: text
+Priority: optional
+Maintainer: hamidfzm <https://github.com/hamidfzm>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+Homepage: https://github.com/hamidfzm/glyph
+
+Package: glyph
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, libwebkit2gtk-4.1-0, libgtk-3-0
+Description: Cross-platform markdown viewer
+ A modern markdown viewer with GFM support, syntax highlighting,
+ live file watching, table of contents sidebar, and platform-native styling.
+ Built with Tauri v2, React 19, and TypeScript.
