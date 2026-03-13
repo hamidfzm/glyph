@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { usePlatform } from "../hooks/usePlatform";
 import { useTheme } from "../hooks/useTheme";
 import { useFileLoader } from "../hooks/useFileLoader";
@@ -26,22 +27,18 @@ export function App() {
     }, [metadata?.path, loadFile]),
   );
 
-  // Keyboard shortcuts
+  // Menu events from Rust
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key === "o") {
-        e.preventDefault();
-        openFileDialog();
-      }
-      if (mod && e.key === "b") {
-        e.preventDefault();
-        setSidebarVisible((v) => !v);
-      }
+    const unlistenOpen = listen("menu-open-file", () => {
+      openFileDialog();
+    });
+    const unlistenSidebar = listen("menu-toggle-sidebar", () => {
+      setSidebarVisible((v) => !v);
+    });
+    return () => {
+      unlistenOpen.then((fn) => fn());
+      unlistenSidebar.then((fn) => fn());
     };
-
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
   }, [openFileDialog]);
 
   return (

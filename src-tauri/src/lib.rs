@@ -1,4 +1,5 @@
 mod commands;
+mod menu;
 mod watcher;
 
 use std::sync::{Arc, Mutex};
@@ -17,6 +18,9 @@ pub fn run() {
         .manage(FileWatcherState(Arc::new(Mutex::new(None))))
         .manage(commands::InitialFile(Mutex::new(None)))
         .setup(|app| {
+            let menu = menu::build_menu(app)?;
+            app.set_menu(menu)?;
+
             // Parse CLI arguments and store initial file path
             if let Ok(matches) = app.cli().matches() {
                 if let Some(file_arg) = matches.args.get("file") {
@@ -42,6 +46,7 @@ pub fn run() {
             }
             Ok(())
         })
+        .on_menu_event(menu::handle_menu_event)
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::get_file_metadata,
