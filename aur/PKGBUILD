@@ -1,0 +1,17 @@
+# Maintainer: hamidfzm <https://github.com/hamidfzm>
+pkgname=glyph-bin
+pkgver={{VERSION}}
+pkgrel=1
+pkgdesc="A modern, cross-platform markdown viewer"
+arch=('x86_64')
+url="https://github.com/hamidfzm/glyph"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3')
+provides=('glyph')
+conflicts=('glyph')
+source=("${url}/releases/download/v${pkgver}/glyph_${pkgver}_amd64.deb")
+sha256sums=('{{SHA256}}')
+
+package() {
+    bsdtar -xf data.tar.* -C "$pkgdir/"
+}
