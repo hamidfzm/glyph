@@ -1,0 +1,21 @@
+/* Solarized Light highlight theme */
+.hljs { color: #657b83; }
+.hljs-comment, .hljs-quote { color: #93a1a1; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag { color: #859900; }
+.hljs-string, .hljs-attribute, .hljs-regexp { color: #2aa198; }
+.hljs-number, .hljs-literal, .hljs-variable, .hljs-template-variable, .hljs-tag .hljs-attr { color: #d33682; }
+.hljs-title, .hljs-section, .hljs-selector-id { color: #268bd2; font-weight: 600; }
+.hljs-type, .hljs-built_in, .hljs-builtin-name { color: #b58900; }
+.hljs-symbol, .hljs-bullet, .hljs-link { color: #cb4b16; }
+.hljs-deletion { color: #dc322f; background: rgba(220, 50, 47, 0.08); }
+.hljs-addition { color: #859900; background: rgba(133, 153, 0, 0.08); }
+
+/* Dark mode (Solarized Light stays light-ish, but adapt slightly) */
+.dark .hljs { color: #93a1a1; }
+.dark .hljs-comment, .dark .hljs-quote { color: #586e75; }
+.dark .hljs-keyword, .dark .hljs-selector-tag { color: #859900; }
+.dark .hljs-string, .dark .hljs-attribute, .dark .hljs-regexp { color: #2aa198; }
+.dark .hljs-number, .dark .hljs-literal, .dark .hljs-variable, .dark .hljs-template-variable, .dark .hljs-tag .hljs-attr { color: #d33682; }
+.dark .hljs-title, .dark .hljs-section, .dark .hljs-selector-id { color: #268bd2; }
+.dark .hljs-type, .dark .hljs-built_in, .dark .hljs-builtin-name { color: #b58900; }
+.dark .hljs-symbol, .dark .hljs-bullet, .dark .hljs-link { color: #cb4b16; }

@@ -1,8 +1,8 @@
 .markdown-body {
-  line-height: 1.7;
-  font-size: 16px;
+  line-height: var(--glyph-line-height, 1.7);
+  font-size: var(--glyph-font-size, 16px);
   color: var(--color-text-primary);
-  max-width: 800px;
+  max-width: var(--glyph-content-width, 800px);
   margin: 0 auto;
 }
 
@@ -82,7 +82,7 @@
 }
 
 .markdown-body code {
-  font-family: "SF Mono", "Fira Code", "Cascadia Code", "JetBrains Mono", monospace;
+  font-family: var(--glyph-code-font, "SF Mono", "Fira Code", "Cascadia Code", "JetBrains Mono", monospace);
   font-size: 0.875em;
   padding: 0.2em 0.4em;
   background: var(--color-surface-secondary);

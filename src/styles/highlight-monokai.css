@@ -1,0 +1,21 @@
+/* Monokai highlight theme */
+.hljs { color: #f8f8f2; }
+.hljs-comment, .hljs-quote { color: #75715e; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag { color: #f92672; }
+.hljs-string, .hljs-attribute, .hljs-regexp { color: #e6db74; }
+.hljs-number, .hljs-literal, .hljs-variable, .hljs-template-variable, .hljs-tag .hljs-attr { color: #ae81ff; }
+.hljs-title, .hljs-section, .hljs-selector-id { color: #a6e22e; font-weight: 600; }
+.hljs-type, .hljs-built_in, .hljs-builtin-name { color: #66d9ef; }
+.hljs-symbol, .hljs-bullet, .hljs-link { color: #ae81ff; }
+.hljs-deletion { color: #f92672; background: rgba(249, 38, 114, 0.1); }
+.hljs-addition { color: #a6e22e; background: rgba(166, 226, 46, 0.1); }
+
+/* Dark mode (Monokai is inherently dark, keep same) */
+.dark .hljs { color: #f8f8f2; }
+.dark .hljs-comment, .dark .hljs-quote { color: #75715e; }
+.dark .hljs-keyword, .dark .hljs-selector-tag { color: #f92672; }
+.dark .hljs-string, .dark .hljs-attribute, .dark .hljs-regexp { color: #e6db74; }
+.dark .hljs-number, .dark .hljs-literal, .dark .hljs-variable, .dark .hljs-template-variable, .dark .hljs-tag .hljs-attr { color: #ae81ff; }
+.dark .hljs-title, .dark .hljs-section, .dark .hljs-selector-id { color: #a6e22e; }
+.dark .hljs-type, .dark .hljs-built_in, .dark .hljs-builtin-name { color: #66d9ef; }
+.dark .hljs-symbol, .dark .hljs-bullet, .dark .hljs-link { color: #ae81ff; }
