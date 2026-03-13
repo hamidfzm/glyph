@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -47,7 +47,127 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Glyph ${{ github.ref_name }}"
-          releaseBody: "See the [changelog](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details."
+          releaseBody: "See the assets below for platform-specific downloads."
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+  publish-homebrew:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Wait for release assets
+        run: |
+          # Wait for the DMG to be available
+          for i in $(seq 1 30); do
+            URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Glyph_${{ steps.version.outputs.version }}_universal.dmg"
+            if curl -fsSL -o /dev/null -w "%{http_code}" "$URL" | grep -q 200; then
+              echo "DMG available"
+              exit 0
+            fi
+            echo "Waiting for DMG... attempt $i"
+            sleep 30
+          done
+          echo "DMG not found, skipping homebrew update"
+          exit 1
+      - name: Compute DMG sha256
+        id: sha
+        run: |
+          curl -fsSL -o glyph.dmg "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Glyph_${{ steps.version.outputs.version }}_universal.dmg"
+          SHA=$(shasum -a 256 glyph.dmg | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Update homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+
+          cat > /tmp/glyph.rb << CASK
+          cask "glyph" do
+            version "$VERSION"
+            sha256 "$SHA"
+
+            url "https://github.com/hamidfzm/glyph/releases/download/v#{version}/Glyph_#{version}_universal.dmg"
+            name "Glyph"
+            desc "Cross-platform markdown viewer"
+            homepage "https://github.com/hamidfzm/glyph"
+
+            livecheck do
+              url :url
+              strategy :github_latest
+            end
+
+            app "Glyph.app"
+
+            zap trash: [
+              "~/Library/Application Support/com.hamidfzm.glyph",
+              "~/Library/Caches/com.hamidfzm.glyph",
+              "~/Library/Preferences/com.hamidfzm.glyph.plist",
+            ]
+          end
+          CASK
+
+          gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb \
+            --method PUT \
+            --field message="chore: update glyph to $VERSION" \
+            --field content="$(base64 -w0 /tmp/glyph.rb)" \
+            --field sha="$(gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb --jq .sha)"
+
+  publish-chocolatey:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get version
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Wait for release assets
+        shell: bash
+        run: |
+          for i in $(seq 1 30); do
+            URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Glyph_${{ steps.version.outputs.version }}_x64_en-US.msi"
+            CODE=$(curl -fsSL -o /dev/null -w "%{http_code}" "$URL" 2>/dev/null || echo "000")
+            if [ "$CODE" = "200" ]; then
+              echo "MSI available"
+              exit 0
+            fi
+            echo "Waiting for MSI... attempt $i"
+            sleep 30
+          done
+          echo "MSI not found"
+          exit 1
+      - name: Compute MSI sha256
+        id: sha
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Glyph_${version}_x64_en-US.msi" -OutFile glyph.msi
+          $hash = (Get-FileHash glyph.msi -Algorithm SHA256).Hash.ToLower()
+          "sha256=$hash" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+      - name: Build and push Chocolatey package
+        shell: pwsh
+        env:
+          CHOCO_API_KEY: ${{ secrets.CHOCO_API_KEY }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $sha = "${{ steps.sha.outputs.sha256 }}"
+
+          # Update nuspec version
+          $nuspec = Get-Content chocolatey/glyph.nuspec -Raw
+          $nuspec = $nuspec.Replace('{{VERSION}}', $version)
+          Set-Content chocolatey/glyph.nuspec $nuspec
+
+          # Update install script checksum
+          $install = Get-Content chocolatey/tools/chocolateyinstall.ps1 -Raw
+          $install = $install.Replace('{{SHA256}}', $sha)
+          Set-Content chocolatey/tools/chocolateyinstall.ps1 $install
+
+          cd chocolatey
+          choco pack
+          choco push glyph.$version.nupkg --source https://push.chocolatey.org/ --api-key $env:CHOCO_API_KEY
