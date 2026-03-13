@@ -24,6 +24,13 @@ cd src-tauri && cargo clippy    # Rust linting
 - File watching uses `notify` crate with events pushed via Tauri event system
 - CLI args stored in Rust managed state, queried by frontend on mount
 
+## Branch Protection
+
+- `main` requires CI to pass on all 3 platforms before merge
+- Strict status checks — branch must be up to date with `main`
+- Linear history enforced (rebase/squash only, no merge commits)
+- No force pushes or branch deletion on `main`
+
 ## Conventions
 
 - **Commits**: Use conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`)

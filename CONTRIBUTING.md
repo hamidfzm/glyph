@@ -31,6 +31,15 @@ pnpm tauri dev
 - **Frontend** (`src/`): React 19 + TypeScript — components and hooks
 - **Styling**: Tailwind CSS v4 with CSS custom properties for platform-adaptive theming
 
+## Branch Protection
+
+The `main` branch has the following protections:
+
+- **Required CI checks**: All three platform builds (macOS, Ubuntu, Windows) must pass
+- **Strict status checks**: Branch must be up to date with `main` before merging
+- **Linear history**: No merge commits — use rebase or squash
+- **No force pushes** or branch deletion
+
 ## Guidelines
 
 - Keep PRs focused — one feature or fix per PR
