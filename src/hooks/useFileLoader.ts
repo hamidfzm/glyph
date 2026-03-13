@@ -18,7 +18,14 @@ interface FileState {
   error: string | null;
 }
 
-export function useFileLoader() {
+const MAX_RECENT_FILES = 10;
+
+export function useFileLoader(options?: {
+  reopenLastFile?: boolean;
+  recentFiles?: string[];
+  onRecentFilesChange?: (files: string[]) => void;
+  autoReload?: boolean;
+}) {
   const [state, setState] = useState<FileState>({
     content: null,
     metadata: null,
@@ -26,6 +33,16 @@ export function useFileLoader() {
     initializing: true,
     error: null,
   });
+
+  const addToRecent = useCallback(
+    (path: string) => {
+      if (!options?.onRecentFilesChange) return;
+      const current = options.recentFiles ?? [];
+      const updated = [path, ...current.filter((f) => f !== path)].slice(0, MAX_RECENT_FILES);
+      options.onRecentFilesChange(updated);
+    },
+    [options],
+  );
 
   const loadFile = useCallback(async (path: string) => {
     setState((prev) => ({ ...prev, loading: true, initializing: false, error: null }));
@@ -36,6 +53,7 @@ export function useFileLoader() {
       ]);
       await invoke("watch_file", { path });
       setState({ content, metadata, loading: false, initializing: false, error: null });
+      addToRecent(path);
     } catch (err) {
       console.error("Failed to load file:", err);
       setState((prev) => ({
@@ -45,7 +63,7 @@ export function useFileLoader() {
         error: String(err),
       }));
     }
-  }, []);
+  }, [addToRecent]);
 
   const openFileDialog = useCallback(async () => {
     const selected = await open({
@@ -67,13 +85,16 @@ export function useFileLoader() {
     invoke<string | null>("get_initial_file").then((path) => {
       if (path) {
         loadFile(path);
+      } else if (options?.reopenLastFile && options.recentFiles?.[0]) {
+        loadFile(options.recentFiles[0]);
       } else {
         setState((prev) => ({ ...prev, initializing: false }));
       }
     }).catch(() => {
       setState((prev) => ({ ...prev, initializing: false }));
     });
-  }, [loadFile]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Also listen for open-file events (e.g. from file associations)
   useEffect(() => {

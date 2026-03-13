@@ -4,9 +4,10 @@ import type { TocEntry } from "../hooks/useTableOfContents";
 interface SidebarProps {
   entries: TocEntry[];
   visible: boolean;
+  width?: number;
 }
 
-export function Sidebar({ entries, visible }: SidebarProps) {
+export function Sidebar({ entries, visible, width }: SidebarProps) {
   const [activeId, setActiveId] = useState<string>("");
   const observerRef = useRef<IntersectionObserver | null>(null);
 
@@ -44,8 +45,9 @@ export function Sidebar({ entries, visible }: SidebarProps) {
 
   return (
     <nav
-      className="w-56 shrink-0 overflow-y-auto border-r border-[var(--color-border)] select-none pt-3"
+      className="shrink-0 overflow-y-auto border-r border-[var(--color-border)] select-none pt-3"
       style={{
+        width: width ?? 224,
         background: "var(--glyph-sidebar-bg)",
       }}
     >
