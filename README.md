@@ -28,7 +28,21 @@ brew install --cask glyph
 choco install glyph
 ```
 
-### Linux
+### Arch Linux (AUR)
+
+```bash
+yay -S glyph-bin
+```
+
+### Debian/Ubuntu (PPA)
+
+```bash
+sudo add-apt-repository ppa:hamidfzm/glyph
+sudo apt update
+sudo apt install glyph
+```
+
+### Linux (manual)
 
 Download the `.deb` or `.AppImage` from [Releases](https://github.com/hamidfzm/glyph/releases).
 
