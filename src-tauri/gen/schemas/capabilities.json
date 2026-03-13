@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default capabilities for Glyph","local":true,"windows":["main"],"permissions":["core:default","dialog:default","dialog:allow-open","fs:default","fs:allow-read-text-file","os:default","cli:default","cli:allow-cli-matches","window-state:default"]}}

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+src-tauri/target/
+*.log
+.DS_Store
+
+# Claude Code local settings (keep .claude/ committed, ignore local overrides)
+.claude/settings.local.json

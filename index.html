@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Glyph</title>
+    <style>
+      html, body, #root { height: 100%; margin: 0; padding: 0; }
+      body {
+        background: #ffffff;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #1c1c1e; }
+        #splash { color: #98989d; }
+        #splash-spinner { border-color: #38383a; border-top-color: #636366; }
+      }
+      #splash {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #6e6e73;
+        gap: 12px;
+      }
+      #splash-spinner {
+        width: 24px;
+        height: 24px;
+        border: 2.5px solid #d2d2d7;
+        border-top-color: #6e6e73;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div id="splash">
+        <div id="splash-spinner"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

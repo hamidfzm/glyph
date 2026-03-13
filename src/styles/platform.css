@@ -1,0 +1,38 @@
+:root {
+  --glyph-font: system-ui, -apple-system, sans-serif;
+  --glyph-radius: 6px;
+  --glyph-radius-sm: 4px;
+  --glyph-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --glyph-titlebar-height: 0px;
+  --glyph-sidebar-blur: 0px;
+  --glyph-sidebar-bg: var(--color-surface-secondary);
+}
+
+[data-platform="macos"] {
+  --glyph-font: "SF Pro", -apple-system, BlinkMacSystemFont, system-ui,
+    sans-serif;
+  --glyph-radius: 8px;
+  --glyph-radius-sm: 6px;
+  --glyph-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  --glyph-titlebar-height: 52px;
+  --glyph-sidebar-blur: 20px;
+  --glyph-sidebar-bg: rgba(245, 245, 247, 0.8);
+}
+
+.dark[data-platform="macos"] {
+  --glyph-sidebar-bg: rgba(44, 44, 46, 0.8);
+}
+
+[data-platform="windows"] {
+  --glyph-font: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --glyph-radius: 4px;
+  --glyph-radius-sm: 2px;
+  --glyph-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+[data-platform="linux"] {
+  --glyph-font: system-ui, "Ubuntu", "Cantarell", sans-serif;
+  --glyph-radius: 6px;
+  --glyph-radius-sm: 4px;
+  --glyph-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
