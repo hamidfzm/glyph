@@ -52,7 +52,7 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .item(&ai_read_aloud)
         .build()?;
 
-    // Help menu
+    // About metadata (shared between app menu on macOS and Help menu elsewhere)
     let about_metadata = AboutMetadataBuilder::new()
         .name(Some("Glyph"))
         .version(Some(env!("CARGO_PKG_VERSION")))
@@ -61,8 +61,9 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .license(Some("MIT"))
         .build();
 
+    // Help menu
     let help_menu = SubmenuBuilder::new(handle, "Help")
-        .about(Some(about_metadata))
+        .about(Some(about_metadata.clone()))
         .build()?;
 
     // macOS: Settings goes in app menu, File menu is simple
@@ -75,7 +76,7 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
             .build()?;
 
         let app_menu = SubmenuBuilder::new(handle, "Glyph")
-            .about(None)
+            .about(Some(about_metadata))
             .separator()
             .item(&settings)
             .separator()

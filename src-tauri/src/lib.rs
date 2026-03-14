@@ -3,13 +3,22 @@ mod menu;
 mod watcher;
 
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{DragDropEvent, Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_cli::CliExt;
 use watcher::FileWatcherState;
 
+const MD_EXTENSIONS: &[&str] = &["md", "markdown", "mdown", "mkd", "mkdn"];
+
+fn is_markdown_file(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| MD_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
+        .unwrap_or(false)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -48,6 +57,18 @@ pub fn run() {
             Ok(())
         })
         .on_menu_event(menu::handle_menu_event)
+        .on_window_event(|window, event| {
+            // Handle drag and drop of markdown files
+            if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
+                for path in paths {
+                    if is_markdown_file(path) {
+                        let path_str = path.to_string_lossy().to_string();
+                        let _ = window.emit("open-file", &path_str);
+                        break; // Only open the first markdown file
+                    }
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::get_file_metadata,
@@ -55,6 +76,29 @@ pub fn run() {
             watcher::watch_file,
             watcher::unwatch_file,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Glyph");
+        .build(tauri::generate_context!())
+        .expect("error while building Glyph");
+
+    app.run(|app_handle, event| {
+        if let RunEvent::Opened { urls } = event {
+            for url in urls {
+                if let Ok(path) = url.to_file_path() {
+                    let path_str = path.to_string_lossy().to_string();
+
+                    // Try to emit to the frontend (works if webview is ready)
+                    let emitted = app_handle.emit("open-file", &path_str).is_ok();
+
+                    // Also store in InitialFile state as fallback (for when
+                    // the webview hasn't loaded yet on first launch)
+                    if emitted {
+                        if let Some(state) = app_handle.try_state::<commands::InitialFile>() {
+                            let mut guard = state.0.lock().unwrap();
+                            *guard = Some(path_str);
+                        }
+                    }
+                    break; // Only open the first file
+                }
+            }
+        }
+    });
 }
