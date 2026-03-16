@@ -1,7 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/v2/crates/tauri/schema.json",
   "productName": "Glyph",
-  "version": "0.1.1",
   "identifier": "com.hamidfzm.glyph",
   "build": {
     "frontendDist": "../dist",

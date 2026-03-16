@@ -79,19 +79,20 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building Glyph");
 
-    app.run(|app_handle, event| {
-        if let RunEvent::Opened { urls } = event {
+    app.run(|_app_handle, _event| {
+        #[cfg(target_os = "macos")]
+        if let RunEvent::Opened { urls } = _event {
             for url in urls {
                 if let Ok(path) = url.to_file_path() {
                     let path_str = path.to_string_lossy().to_string();
 
                     // Try to emit to the frontend (works if webview is ready)
-                    let emitted = app_handle.emit("open-file", &path_str).is_ok();
+                    let emitted = _app_handle.emit("open-file", &path_str).is_ok();
 
                     // Also store in InitialFile state as fallback (for when
                     // the webview hasn't loaded yet on first launch)
                     if emitted {
-                        if let Some(state) = app_handle.try_state::<commands::InitialFile>() {
+                        if let Some(state) = _app_handle.try_state::<commands::InitialFile>() {
                             let mut guard = state.0.lock().unwrap();
                             *guard = Some(path_str);
                         }
