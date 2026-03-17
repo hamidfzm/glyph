@@ -1,4 +1,4 @@
-pkgbase = glyph-bin
+pkgbase = glyph-md-bin
 	pkgdesc = A modern, cross-platform markdown viewer
 	pkgver = {{VERSION}}
 	pkgrel = 1
@@ -12,4 +12,4 @@ pkgbase = glyph-bin
 	source = https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/Glyph_{{VERSION}}_amd64.deb
 	sha256sums = {{SHA256}}
 
-pkgname = glyph-bin
+pkgname = glyph-md-bin

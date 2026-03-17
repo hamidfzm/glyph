@@ -1,5 +1,5 @@
 # Maintainer: hamidfzm <https://github.com/hamidfzm>
-pkgname=glyph-bin
+pkgname=glyph-md-bin
 pkgver={{VERSION}}
 pkgrel=1
 pkgdesc="A modern, cross-platform markdown viewer"

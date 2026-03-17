@@ -65,7 +65,7 @@ jobs:
             ### Linux
             ```bash
             # Arch (AUR)
-            yay -S glyph-bin
+            yay -S glyph-md-bin
 
             # Debian/Ubuntu
             sudo dpkg -i glyph_*_amd64.deb
@@ -223,7 +223,7 @@ jobs:
           EOF
 
           # Clone AUR repo
-          git clone ssh://aur@aur.archlinux.org/glyph-bin.git /tmp/aur
+          git clone ssh://aur@aur.archlinux.org/glyph-md-bin.git /tmp/aur
 
           # Update PKGBUILD from template
           sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" \
