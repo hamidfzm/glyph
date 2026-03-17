@@ -23,8 +23,10 @@ export const SettingsContext = createContext<SettingsContextValue>({
 });
 
 function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+  const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
   const result = { ...target };
   for (const key of Object.keys(source)) {
+    if (FORBIDDEN.has(key)) continue;
     if (
       source[key] !== null &&
       typeof source[key] === "object" &&
@@ -46,6 +48,9 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 
 function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
   const keys = path.split(".");
+  const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
+  if (keys.some((k) => FORBIDDEN.has(k))) return obj;
+
   const result = { ...obj };
   let current: Record<string, unknown> = result;
 
