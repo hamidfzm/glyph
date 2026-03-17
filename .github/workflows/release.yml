@@ -184,3 +184,115 @@ jobs:
           cd chocolatey
           choco pack
           choco push glyph.$version.nupkg --source https://push.chocolatey.org/ --api-key $env:CHOCO_API_KEY
+
+  publish-aur:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Download deb and compute sha256
+        id: sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release download "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "glyph_${VERSION}_amd64.deb"
+          SHA=$(shasum -a 256 "glyph_${VERSION}_amd64.deb" | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Update AUR package
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+
+          # Configure SSH for AUR
+          mkdir -p ~/.ssh
+          echo "$AUR_SSH_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+          cat >> ~/.ssh/config << EOF
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur
+            User aur
+          EOF
+
+          # Clone AUR repo
+          git clone ssh://aur@aur.archlinux.org/glyph-bin.git /tmp/aur
+
+          # Update PKGBUILD from template
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" \
+            aur/PKGBUILD > /tmp/aur/PKGBUILD
+
+          # Update .SRCINFO from template
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" \
+            aur/.SRCINFO > /tmp/aur/.SRCINFO
+
+          # Push to AUR
+          cd /tmp/aur
+          git config user.name "hamidfzm"
+          git config user.email "hamidfzm@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          git diff --cached --quiet || {
+            git commit -m "Update to $VERSION"
+            git push
+          }
+
+  publish-ppa:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Download deb and extract binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release download "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "glyph_${VERSION}_amd64.deb"
+          dpkg-deb -x "glyph_${VERSION}_amd64.deb" /tmp/glyph-extracted
+      - name: Import GPG key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format long 2>/dev/null | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
+          echo "GPG_KEY_ID=$GPG_KEY_ID" >> "$GITHUB_ENV"
+      - name: Build source package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DATE=$(date -R)
+
+          # Set up source tree
+          mkdir -p /tmp/glyph-${VERSION}/debian
+          cp -r /tmp/glyph-extracted/* /tmp/glyph-${VERSION}/
+
+          # Copy debian packaging files with version/date substitution
+          cp ppa/debian/control /tmp/glyph-${VERSION}/debian/
+          cp ppa/debian/rules /tmp/glyph-${VERSION}/debian/
+          cp ppa/debian/compat /tmp/glyph-${VERSION}/debian/
+
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{DATE}}/$DATE/g" \
+            ppa/debian/changelog > /tmp/glyph-${VERSION}/debian/changelog
+
+          # Create orig tarball
+          tar czf /tmp/glyph_${VERSION}.orig.tar.gz -C /tmp glyph-${VERSION}
+
+          # Build source package
+          cd /tmp/glyph-${VERSION}
+          debuild -S -sa -k"$GPG_KEY_ID" --no-lintian
+      - name: Upload to PPA
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          cd /tmp
+          dput ppa:hamidfzm/glyph glyph_${VERSION}-1_source.changes
