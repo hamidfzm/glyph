@@ -201,8 +201,8 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           gh release download "${{ github.ref_name }}" \
             --repo "${{ github.repository }}" \
-            --pattern "glyph_${VERSION}_amd64.deb"
-          SHA=$(shasum -a 256 "glyph_${VERSION}_amd64.deb" | awk '{print $1}')
+            --pattern "Glyph_${VERSION}_amd64.deb"
+          SHA=$(shasum -a 256 "Glyph_${VERSION}_amd64.deb" | awk '{print $1}')
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
       - name: Update AUR package
         env:
@@ -258,8 +258,8 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           gh release download "${{ github.ref_name }}" \
             --repo "${{ github.repository }}" \
-            --pattern "glyph_${VERSION}_amd64.deb"
-          dpkg-deb -x "glyph_${VERSION}_amd64.deb" /tmp/glyph-extracted
+            --pattern "Glyph_${VERSION}_amd64.deb"
+          dpkg-deb -x "Glyph_${VERSION}_amd64.deb" /tmp/glyph-extracted
       - name: Import GPG key
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}

@@ -9,7 +9,7 @@ pkgbase = glyph-bin
 	depends = gtk3
 	provides = glyph
 	conflicts = glyph
-	source = https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/glyph_{{VERSION}}_amd64.deb
+	source = https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/Glyph_{{VERSION}}_amd64.deb
 	sha256sums = {{SHA256}}
 
 pkgname = glyph-bin

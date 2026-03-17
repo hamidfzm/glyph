@@ -9,7 +9,7 @@ license=('MIT')
 depends=('webkit2gtk-4.1' 'gtk3')
 provides=('glyph')
 conflicts=('glyph')
-source=("${url}/releases/download/v${pkgver}/glyph_${pkgver}_amd64.deb")
+source=("${url}/releases/download/v${pkgver}/Glyph_${pkgver}_amd64.deb")
 sha256sums=('{{SHA256}}')
 
 package() {
