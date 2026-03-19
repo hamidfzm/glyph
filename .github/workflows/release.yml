@@ -292,7 +292,7 @@ jobs:
 
           # Build source package
           cd /tmp/glyph-${VERSION}
-          DEBUILD_LINTIAN=no debuild -S -sa -k"$GPG_KEY_ID"
+          DEBUILD_LINTIAN=no debuild -S -sa -d -k"$GPG_KEY_ID"
       - name: Upload to PPA
         run: |
           VERSION="${{ steps.version.outputs.version }}"
