@@ -291,7 +291,21 @@ jobs:
           # Copy debian packaging files with version/date substitution
           cp ppa/debian/control /tmp/glyph-${VERSION}/debian/
           cp ppa/debian/rules /tmp/glyph-${VERSION}/debian/
-          cp ppa/debian/copyright /tmp/glyph-${VERSION}/debian/
+
+          # Generate debian/copyright from repo LICENSE file
+          {
+            echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/"
+            echo "Upstream-Name: glyph"
+            echo "Upstream-Contact: hamidfzm <hamidfzm@users.noreply.github.com>"
+            echo "Source: https://github.com/hamidfzm/glyph"
+            echo ""
+            echo "Files: *"
+            echo "Copyright: 2026 hamidfzm"
+            echo "License: MIT"
+            echo ""
+            echo "License: MIT"
+            awk 'NR>3{if(/^$/)print " .";else print " "$0}' LICENSE
+          } > /tmp/glyph-${VERSION}/debian/copyright
 
           sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{DATE}}/$DATE/g" \
             ppa/debian/changelog > /tmp/glyph-${VERSION}/debian/changelog
