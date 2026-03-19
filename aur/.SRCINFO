@@ -4,12 +4,15 @@ pkgbase = glyph-md-bin
 	pkgrel = 1
 	url = https://github.com/hamidfzm/glyph
 	arch = x86_64
+	arch = aarch64
 	license = MIT
 	depends = webkit2gtk-4.1
 	depends = gtk3
 	provides = glyph
 	conflicts = glyph
-	source = https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/Glyph_{{VERSION}}_amd64.deb
-	sha256sums = {{SHA256}}
+	source_x86_64 = https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/Glyph_{{VERSION}}_amd64.deb
+	source_aarch64 = https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/Glyph_{{VERSION}}_arm64.deb
+	sha256sums_x86_64 = {{SHA256_AMD64}}
+	sha256sums_aarch64 = {{SHA256_ARM64}}
 
 pkgname = glyph-md-bin

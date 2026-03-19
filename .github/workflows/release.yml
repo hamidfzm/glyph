@@ -18,6 +18,8 @@ jobs:
             args: "--target universal-apple-darwin"
           - platform: ubuntu-22.04
             args: ""
+          - platform: ubuntu-22.04-arm
+            args: ""
           - platform: windows-latest
             args: ""
     runs-on: ${{ matrix.platform }}
@@ -33,7 +35,7 @@ jobs:
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
@@ -193,7 +195,7 @@ jobs:
       - name: Get version
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-      - name: Download deb and compute sha256
+      - name: Download debs and compute sha256
         id: sha
         env:
           GH_TOKEN: ${{ github.token }}
@@ -201,15 +203,17 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           gh release download "${{ github.ref_name }}" \
             --repo "${{ github.repository }}" \
-            --pattern "Glyph_${VERSION}_amd64.deb"
-          SHA=$(shasum -a 256 "Glyph_${VERSION}_amd64.deb" | awk '{print $1}')
-          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+            --pattern "Glyph_${VERSION}_amd64.deb" \
+            --pattern "Glyph_${VERSION}_arm64.deb"
+          echo "sha256_amd64=$(shasum -a 256 "Glyph_${VERSION}_amd64.deb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "sha256_arm64=$(shasum -a 256 "Glyph_${VERSION}_arm64.deb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
       - name: Update AUR package
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          SHA="${{ steps.sha.outputs.sha256 }}"
+          SHA_AMD64="${{ steps.sha.outputs.sha256_amd64 }}"
+          SHA_ARM64="${{ steps.sha.outputs.sha256_arm64 }}"
 
           # Configure SSH for AUR
           mkdir -p ~/.ssh
@@ -226,11 +230,15 @@ jobs:
           git clone ssh://aur@aur.archlinux.org/glyph-md-bin.git /tmp/aur
 
           # Update PKGBUILD from template
-          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" \
+          sed -e "s/{{VERSION}}/$VERSION/g" \
+            -e "s/{{SHA256_AMD64}}/$SHA_AMD64/g" \
+            -e "s/{{SHA256_ARM64}}/$SHA_ARM64/g" \
             aur/PKGBUILD > /tmp/aur/PKGBUILD
 
           # Update .SRCINFO from template
-          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" \
+          sed -e "s/{{VERSION}}/$VERSION/g" \
+            -e "s/{{SHA256_AMD64}}/$SHA_AMD64/g" \
+            -e "s/{{SHA256_ARM64}}/$SHA_ARM64/g" \
             aur/.SRCINFO > /tmp/aur/.SRCINFO
 
           # Push to AUR
@@ -253,14 +261,15 @@ jobs:
       - name: Get version
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-      - name: Download deb and extract binary
+      - name: Download debs and extract binaries
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           gh release download "${{ github.ref_name }}" \
             --repo "${{ github.repository }}" \
-            --pattern "Glyph_${VERSION}_amd64.deb"
+            --pattern "Glyph_${VERSION}_amd64.deb" \
+            --pattern "Glyph_${VERSION}_arm64.deb"
           dpkg-deb -x "Glyph_${VERSION}_amd64.deb" /tmp/glyph-extracted
       - name: Import GPG key
         env:

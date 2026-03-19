@@ -7,7 +7,7 @@ Standards-Version: 4.6.0
 Homepage: https://github.com/hamidfzm/glyph
 
 Package: glyph
-Architecture: amd64
+Architecture: amd64 arm64
 Depends: ${shlibs:Depends}, ${misc:Depends}, libwebkit2gtk-4.1-0, libgtk-3-0
 Description: Cross-platform markdown viewer
  A modern markdown viewer with GFM support, syntax highlighting,
