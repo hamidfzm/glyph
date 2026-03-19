@@ -291,6 +291,7 @@ jobs:
           # Copy debian packaging files with version/date substitution
           cp ppa/debian/control /tmp/glyph-${VERSION}/debian/
           cp ppa/debian/rules /tmp/glyph-${VERSION}/debian/
+          cp ppa/debian/copyright /tmp/glyph-${VERSION}/debian/
 
           sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{DATE}}/$DATE/g" \
             ppa/debian/changelog > /tmp/glyph-${VERSION}/debian/changelog
