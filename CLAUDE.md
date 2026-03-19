@@ -39,6 +39,22 @@ cd src-tauri && cargo clippy    # Rust linting
 - **Formatting**: Use default Prettier/rustfmt conventions
 - **Imports**: Named exports, no default exports
 
+## Component Structure
+
+- `src/components/markdown/` — Markdown rendering (MarkdownViewer, LinkComponent, ImageComponent, HeadingComponent)
+- `src/components/layout/` — App shell (Sidebar, StatusBar, Titlebar, EmptyState)
+- `src/components/icons/` — SVG icon components
+- `src/components/modals/` — Overlay UI (SettingsModal, AIPanel)
+
+## Workflow: Issues, PRs, and Project Board
+
+- **GitHub Project**: "Glyph Roadmap" (kanban board linked to this repo)
+- When starting work on a feature/fix, move the corresponding issue to **In Progress** on the project board
+- Create a branch from `main` for the work (e.g. `feat/search`, `fix/link-opening`)
+- When done, create a PR referencing the issue (e.g. `Closes #7`)
+- After merge, the issue moves to **Done** automatically via GitHub's linked issue resolution
+- When creating new feature ideas, create a GitHub issue and add it to the project board as **Todo**
+
 ## Key Files
 
 - `src-tauri/tauri.conf.json` — App window config, CLI plugin config, bundle settings
