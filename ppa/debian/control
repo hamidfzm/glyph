@@ -1,7 +1,7 @@
 Source: glyph
 Section: text
 Priority: optional
-Maintainer: hamidfzm <https://github.com/hamidfzm>
+Maintainer: hamidfzm <hamidfzm@users.noreply.github.com>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.0
 Homepage: https://github.com/hamidfzm/glyph

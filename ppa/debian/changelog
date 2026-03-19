@@ -1,5 +1,5 @@
-glyph ({{VERSION}}-1) unstable; urgency=medium
+glyph ({{VERSION}}-1) noble; urgency=medium
 
-  * Initial release
+  * Release {{VERSION}}
 
- -- hamidfzm <https://github.com/hamidfzm>  {{DATE}}
+ -- hamidfzm <hamidfzm@users.noreply.github.com>  {{DATE}}
