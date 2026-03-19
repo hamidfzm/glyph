@@ -6,12 +6,40 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 
 ## Features
 
-- GFM support — tables, task lists, strikethrough, code blocks with syntax highlighting
-- Live reload — file watcher auto-updates the view when the file changes externally
+### Markdown Rendering
+- GitHub Flavored Markdown — tables, task lists, strikethrough, autolinks
+- Syntax highlighting for code blocks (6 themes: Glyph, GitHub, Monokai, Nord, Solarized Light/Dark)
+- Local and remote image display
+- External links open in system browser with optional confirmation dialog
+
+### Viewer
 - Table of Contents sidebar with active heading tracking
-- System dark/light mode support
-- Window position/size persistence across restarts
-- CLI support — open files directly: `glyph README.md`
+- Live reload — file watcher auto-updates on external changes
+- Drag and drop markdown files to open
+- File associations — double-click `.md` files to open in Glyph
+- CLI support — `glyph README.md`
+- Recent files list
+
+### Appearance
+- System / Light / Dark themes
+- Customizable font family, size, line height, and content width
+- Custom code font support
+- Platform-native styling (macOS vibrancy, Windows Mica)
+
+### AI (optional)
+- Summarize, explain, translate, and simplify documents
+- Providers: Claude, OpenAI, Ollama (local)
+- Text-to-speech with configurable voice and speed
+
+### Platform
+- Cross-platform: macOS (universal), Windows (x64), Linux (amd64 + arm64)
+- Window state persistence across restarts
+- Native menu bar with keyboard shortcuts
+
+### Roadmap
+
+See [open issues](https://github.com/hamidfzm/glyph/issues) for planned features including:
+tabs, in-document search, PDF export, math/LaTeX, Mermaid diagrams, zoom, footnotes, and more.
 
 ## Install
 
@@ -31,7 +59,7 @@ choco install glyph
 ### Arch Linux (AUR)
 
 ```bash
-yay -S glyph-bin
+yay -S glyph-md-bin
 ```
 
 ### Debian/Ubuntu (PPA)
