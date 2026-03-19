@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { TocEntry } from "../hooks/useTableOfContents";
+import type { TocEntry } from "../../hooks/useTableOfContents";
 
 interface SidebarProps {
   entries: TocEntry[];

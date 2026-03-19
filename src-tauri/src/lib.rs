@@ -21,6 +21,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
@@ -40,12 +41,27 @@ pub fn run() {
                             let absolute = if path.is_absolute() {
                                 path.to_path_buf()
                             } else {
-                                std::env::current_dir()
+                                // Try current dir first, then TAURI_INVOKE_ORIGIN or parent
+                                let from_cwd = std::env::current_dir()
                                     .unwrap_or_default()
-                                    .join(path)
+                                    .join(path);
+                                if from_cwd.exists() {
+                                    from_cwd
+                                } else {
+                                    // In dev mode, cwd is src-tauri/ — try parent
+                                    let from_parent = std::env::current_dir()
+                                        .unwrap_or_default()
+                                        .join("..")
+                                        .join(path);
+                                    if from_parent.exists() {
+                                        from_parent
+                                    } else {
+                                        from_cwd
+                                    }
+                                }
                             };
-                            let abs_str = absolute.to_string_lossy().to_string();
-                            {
+                            if let Ok(canonical) = absolute.canonicalize() {
+                                let abs_str = canonical.to_string_lossy().to_string();
                                 let state = app.state::<commands::InitialFile>();
                                 let mut guard = state.0.lock().unwrap();
                                 *guard = Some(abs_str);

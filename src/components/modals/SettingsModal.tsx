@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { useSettings } from "../hooks/useSettings";
-import { MODEL_SUGGESTIONS } from "../lib/settings";
+import { useSettings } from "../../hooks/useSettings";
+import { MODEL_SUGGESTIONS } from "../../lib/settings";
 
 type Tab = "appearance" | "layout" | "behavior" | "ai";
 
@@ -323,6 +323,17 @@ function BehaviorTab() {
           <Toggle
             checked={behavior.reopenLastFile}
             onChange={(v) => updateSettings("behavior.reopenLastFile", v)}
+          />
+        </div>
+
+        <div className="settings-row">
+          <div>
+            <span className="settings-label">Confirm External Links</span>
+            <div className="settings-description">Ask before opening links in browser</div>
+          </div>
+          <Toggle
+            checked={behavior.confirmExternalLinks}
+            onChange={(v) => updateSettings("behavior.confirmExternalLinks", v)}
           />
         </div>
       </div>

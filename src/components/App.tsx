@@ -9,12 +9,12 @@ import { useTableOfContents } from "../hooks/useTableOfContents";
 import { useContextMenu } from "../hooks/useContextMenu";
 import { useTTS } from "../hooks/useTTS";
 import { useAI, type AIAction } from "../hooks/useAI";
-import { Sidebar } from "./Sidebar";
-import { MarkdownViewer } from "./MarkdownViewer";
-import { EmptyState } from "./EmptyState";
-import { StatusBar } from "./StatusBar";
-import { SettingsModal } from "./SettingsModal";
-import { AIPanel } from "./AIPanel";
+import { Sidebar } from "./layout/Sidebar";
+import { MarkdownViewer } from "./markdown/MarkdownViewer";
+import { EmptyState } from "./layout/EmptyState";
+import { StatusBar } from "./layout/StatusBar";
+import { SettingsModal } from "./modals/SettingsModal";
+import { AIPanel } from "./modals/AIPanel";
 
 // Code theme CSS (inline imports for production compatibility)
 import glyphThemeCSS from "../styles/highlight.css?inline";
@@ -168,7 +168,7 @@ export function App() {
       <div className="flex flex-1 min-h-0">
         {sidebarPosition === "left" && sidebarElement}
         {content ? (
-          <MarkdownViewer content={content} />
+          <MarkdownViewer content={content} filePath={metadata?.path} />
         ) : !initializing ? (
           <div className="flex-1">
             <EmptyState platform={platform} onOpenFile={openFileDialog} />

@@ -1,4 +1,4 @@
-import { countWords, readingTime } from "../lib/markdown";
+import { countWords, readingTime } from "../../lib/markdown";
 
 interface StatusBarProps {
   filePath?: string;

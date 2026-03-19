@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { AIAction } from "../hooks/useAI";
+import type { AIAction } from "../../hooks/useAI";
 
 interface AIPanelProps {
   open: boolean;

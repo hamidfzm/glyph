@@ -13,6 +13,7 @@
     "cli:default",
     "cli:allow-cli-matches",
     "window-state:default",
-    "store:default"
+    "store:default",
+    "opener:default"
   ]
 }

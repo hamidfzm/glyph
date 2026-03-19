@@ -18,6 +18,7 @@ export interface LayoutSettings {
 export interface BehaviorSettings {
   autoReload: boolean;
   reopenLastFile: boolean;
+  confirmExternalLinks: boolean;
   recentFiles: string[];
 }
 
@@ -56,6 +57,7 @@ export const DEFAULT_SETTINGS: Settings = {
   behavior: {
     autoReload: true,
     reopenLastFile: false,
+    confirmExternalLinks: true,
     recentFiles: [],
   },
   ai: {
