@@ -12,6 +12,7 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 ### Markdown Rendering
 - GitHub Flavored Markdown — tables, task lists, strikethrough, autolinks
 - Syntax highlighting for code blocks (6 themes: Glyph, GitHub, Monokai, Nord, Solarized Light/Dark)
+- Math/LaTeX rendering — inline (`$...$`) and block (`$$...$$`) equations via KaTeX
 - Mermaid diagrams — flowcharts, sequence diagrams, Gantt charts, and more (theme-aware)
 - Local and remote image display
 - External links open in system browser with optional confirmation dialog
@@ -43,7 +44,7 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 ### Roadmap
 
 See [open issues](https://github.com/hamidfzm/glyph/issues) for planned features including:
-tabs, in-document search, PDF export, math/LaTeX, zoom, footnotes, and more.
+tabs, in-document search, PDF export, zoom, footnotes, and more.
 
 ## Install
 
