@@ -40,7 +40,7 @@ export function MarkdownViewer({ content, filePath }: MarkdownViewerProps) {
 
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto">
-      <div className="markdown-body px-8 py-6 pb-24">
+      <div className="markdown-body px-8 py-6 pb-[60vh]">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[[rehypeHighlight, { plainText: ["mermaid"] }]]}
