@@ -105,6 +105,24 @@
   line-height: 1.6;
 }
 
+/* Mermaid diagrams */
+.markdown-body .mermaid-diagram {
+  margin: 0 0 1em;
+  text-align: center;
+  overflow-x: auto;
+}
+
+.markdown-body .mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.markdown-body .mermaid-error .mermaid-error-label {
+  font-size: 0.8em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 0.5em;
+}
+
 .markdown-body table {
   width: 100%;
   margin: 0 0 1em;
