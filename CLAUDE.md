@@ -68,6 +68,18 @@ cd src-tauri && cargo test      # Rust tests
 - After merge, the issue moves to **Done** automatically via GitHub's linked issue resolution
 - When creating new feature ideas, create a GitHub issue and add it to the project board as **Todo**
 
+## Releases
+
+To create a new release:
+
+1. Bump version in `package.json` and `src-tauri/Cargo.toml` (keep in sync)
+2. Run `cargo check` in `src-tauri/` to update `Cargo.lock`
+3. Commit: `chore: bump version to X.Y.Z`
+4. Push to `main`
+5. Create release: `gh release create vX.Y.Z --title "Glyph vX.Y.Z" --generate-notes --notes-start-tag <previous-tag>`
+
+The `--generate-notes` flag uses `.github/release.yml` to auto-categorize PRs into the changelog (Features, Bug Fixes, Security, Testing & CI, Dependencies, Documentation). PRs labeled `skip-changelog` are excluded.
+
 ## Key Files
 
 - `src-tauri/tauri.conf.json` — App window config, CLI plugin config, bundle settings
