@@ -3,7 +3,9 @@ mod menu;
 mod watcher;
 
 use std::sync::{Arc, Mutex};
-use tauri::{DragDropEvent, Emitter, Manager, RunEvent, WindowEvent};
+use tauri::{DragDropEvent, Emitter, Manager, WindowEvent};
+#[cfg(target_os = "macos")]
+use tauri::RunEvent;
 use tauri_plugin_cli::CliExt;
 use watcher::FileWatcherState;
 
