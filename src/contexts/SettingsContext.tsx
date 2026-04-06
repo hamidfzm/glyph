@@ -1,11 +1,11 @@
+import { createContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { load, type Store } from "@tauri-apps/plugin-store";
-import { createContext, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
-  CONTENT_WIDTH_MAP,
+  type Settings,
   DEFAULT_SETTINGS,
   FONT_FAMILY_MAP,
   LINE_HEIGHT_MAP,
-  type Settings,
+  CONTENT_WIDTH_MAP,
 } from "../lib/settings";
 
 export interface SettingsContextValue {
@@ -22,22 +22,24 @@ export const SettingsContext = createContext<SettingsContextValue>({
   loaded: false,
 });
 
-function deepMerge(
-  target: Record<string, unknown>,
-  source: Record<string, unknown>,
-): Record<string, unknown> {
-  const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
+const FORBIDDEN_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+function isSafePlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  if (value === Object.prototype) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
   const result = { ...target };
   for (const key of Object.keys(source)) {
-    if (FORBIDDEN.has(key)) continue;
-    if (
-      source[key] !== null &&
-      typeof source[key] === "object" &&
-      !Array.isArray(source[key]) &&
-      typeof target[key] === "object" &&
-      target[key] !== null &&
-      !Array.isArray(target[key])
-    ) {
+    if (FORBIDDEN_OBJECT_KEYS.has(key)) continue;
+    if (isSafePlainObject(source[key]) && isSafePlainObject(target[key])) {
       result[key] = deepMerge(
         target[key] as Record<string, unknown>,
         source[key] as Record<string, unknown>,
@@ -49,24 +51,45 @@ function deepMerge(
   return result;
 }
 
-function setNestedValue(
-  obj: Record<string, unknown>,
-  path: string,
-  value: unknown,
-): Record<string, unknown> {
+function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
   const keys = path.split(".");
-  const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
-  if (keys.some((k) => FORBIDDEN.has(k))) return obj;
+  if (keys.length === 0 || keys.some((k) => k === "")) {
+    return obj;
+  }
 
   const result = { ...obj };
   let current: Record<string, unknown> = result;
 
   for (let i = 0; i < keys.length - 1; i++) {
-    current[keys[i]] = { ...(current[keys[i]] as Record<string, unknown>) };
-    current = current[keys[i]] as Record<string, unknown>;
+    const key = keys[i];
+    if (FORBIDDEN_OBJECT_KEYS.has(key)) {
+      return obj;
+    }
+    if (!isSafePlainObject(current)) {
+      return obj;
+    }
+    const existing = Object.hasOwn(current, key) ? current[key] : undefined;
+    if (isSafePlainObject(existing)) {
+      current[key] = { ...existing };
+    } else {
+      current[key] = {};
+    }
+    const next = current[key] as Record<string, unknown>;
+    if (!isSafePlainObject(next)) {
+      return obj;
+    }
+    current = next;
   }
 
-  current[keys[keys.length - 1]] = value;
+  const lastKey = keys[keys.length - 1];
+  if (FORBIDDEN_OBJECT_KEYS.has(lastKey)) {
+    return obj;
+  }
+  if (!isSafePlainObject(current)) {
+    return obj;
+  }
+
+  current[lastKey] = value;
   return result;
 }
 
@@ -152,9 +175,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
 
     init();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   // Listen for system theme changes when theme is "system"
@@ -181,27 +202,24 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }, SAVE_DEBOUNCE);
   }, []);
 
-  const updateSettings = useCallback(
-    (path: string, value: unknown) => {
-      setSettings((prev) => {
-        const updated = setNestedValue(
-          prev as unknown as Record<string, unknown>,
-          path,
-          value,
-        ) as unknown as Settings;
+  const updateSettings = useCallback((path: string, value: unknown) => {
+    setSettings((prev) => {
+      const updated = setNestedValue(
+        prev as unknown as Record<string, unknown>,
+        path,
+        value,
+      ) as unknown as Settings;
 
-        // Apply side effects
-        if (path.startsWith("appearance.theme")) {
-          applyTheme(updated.appearance.theme);
-        }
-        applyCSSVariables(updated);
-        saveToStore(updated);
+      // Apply side effects
+      if (path.startsWith("appearance.theme")) {
+        applyTheme(updated.appearance.theme);
+      }
+      applyCSSVariables(updated);
+      saveToStore(updated);
 
-        return updated;
-      });
-    },
-    [saveToStore],
-  );
+      return updated;
+    });
+  }, [saveToStore]);
 
   const resetSettings = useCallback(() => {
     setSettings(DEFAULT_SETTINGS);
