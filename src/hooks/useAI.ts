@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { createAIProvider } from "../lib/ai-providers";
 import type { AISettings } from "../lib/settings";
 
@@ -13,7 +13,8 @@ interface AIState {
 
 const ACTION_PROMPTS: Record<AIAction, { system: string; user: (text: string) => string }> = {
   summarize: {
-    system: "You are a helpful assistant that creates clear, concise summaries. Respond in markdown.",
+    system:
+      "You are a helpful assistant that creates clear, concise summaries. Respond in markdown.",
     user: (text) => `Summarize the following document concisely:\n\n${text}`,
   },
   explain: {
@@ -21,11 +22,13 @@ const ACTION_PROMPTS: Record<AIAction, { system: string; user: (text: string) =>
     user: (text) => `Explain the following content in simple terms:\n\n${text}`,
   },
   translate: {
-    system: "You are a helpful translator. Detect the source language and translate to English. If already in English, translate to Spanish. Respond in markdown.",
+    system:
+      "You are a helpful translator. Detect the source language and translate to English. If already in English, translate to Spanish. Respond in markdown.",
     user: (text) => `Translate the following text:\n\n${text}`,
   },
   simplify: {
-    system: "You are a helpful assistant that simplifies complex text to be easily understood. Use simple words and short sentences. Respond in markdown.",
+    system:
+      "You are a helpful assistant that simplifies complex text to be easily understood. Use simple words and short sentences. Respond in markdown.",
     user: (text) => `Simplify the following text:\n\n${text}`,
   },
 };

@@ -22,6 +22,7 @@ export function EmptyState({ platform, onOpenFile }: EmptyStateProps) {
         </p>
       </div>
       <button
+        type="button"
         onClick={onOpenFile}
         className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] rounded-[var(--glyph-radius)] transition-colors"
       >

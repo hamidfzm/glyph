@@ -1,5 +1,8 @@
 # Glyph
 
+[![CI](https://github.com/hamidfzm/glyph/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hamidfzm/glyph/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/hamidfzm/glyph/graph/badge.svg)](https://codecov.io/gh/hamidfzm/glyph)
+
 A modern, cross-platform markdown viewer with platform-native styling.
 
 Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
@@ -101,6 +104,23 @@ Build for production:
 
 ```bash
 pnpm tauri build
+```
+
+### Testing
+
+```bash
+pnpm test                       # Run frontend tests (Vitest)
+pnpm test:coverage              # Run with coverage report
+cd src-tauri && cargo test      # Run Rust tests
+```
+
+### Linting & Formatting
+
+```bash
+pnpm lint                       # Lint TypeScript (Biome)
+pnpm format:check               # Check formatting (Biome)
+pnpm check                      # Lint + format + organize imports
+cd src-tauri && cargo clippy    # Lint Rust
 ```
 
 ## Keyboard Shortcuts

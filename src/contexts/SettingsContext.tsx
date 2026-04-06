@@ -35,7 +35,10 @@ function isSafePlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
-function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+function deepMerge(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): Record<string, unknown> {
   const result = { ...target };
   for (const key of Object.keys(source)) {
     if (FORBIDDEN_OBJECT_KEYS.has(key)) continue;
@@ -51,7 +54,11 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
   return result;
 }
 
-function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
+function setNestedValue(
+  obj: Record<string, unknown>,
+  path: string,
+  value: unknown,
+): Record<string, unknown> {
   const keys = path.split(".");
   if (keys.length === 0 || keys.some((k) => k === "")) {
     return obj;
@@ -68,7 +75,7 @@ function setNestedValue(obj: Record<string, unknown>, path: string, value: unkno
     if (!isSafePlainObject(current)) {
       return obj;
     }
-    const existing = Object.prototype.hasOwnProperty.call(current, key) ? current[key] : undefined;
+    const existing = Object.hasOwn(current, key) ? current[key] : undefined;
     if (isSafePlainObject(existing)) {
       current[key] = { ...existing };
     } else {
@@ -175,7 +182,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
 
     init();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Listen for system theme changes when theme is "system"
@@ -202,24 +211,27 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }, SAVE_DEBOUNCE);
   }, []);
 
-  const updateSettings = useCallback((path: string, value: unknown) => {
-    setSettings((prev) => {
-      const updated = setNestedValue(
-        prev as unknown as Record<string, unknown>,
-        path,
-        value,
-      ) as unknown as Settings;
+  const updateSettings = useCallback(
+    (path: string, value: unknown) => {
+      setSettings((prev) => {
+        const updated = setNestedValue(
+          prev as unknown as Record<string, unknown>,
+          path,
+          value,
+        ) as unknown as Settings;
 
-      // Apply side effects
-      if (path.startsWith("appearance.theme")) {
-        applyTheme(updated.appearance.theme);
-      }
-      applyCSSVariables(updated);
-      saveToStore(updated);
+        // Apply side effects
+        if (path.startsWith("appearance.theme")) {
+          applyTheme(updated.appearance.theme);
+        }
+        applyCSSVariables(updated);
+        saveToStore(updated);
 
-      return updated;
-    });
-  }, [saveToStore]);
+        return updated;
+      });
+    },
+    [saveToStore],
+  );
 
   const resetSettings = useCallback(() => {
     setSettings(DEFAULT_SETTINGS);

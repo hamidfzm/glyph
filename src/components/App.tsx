@@ -1,28 +1,27 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { usePlatform } from "../hooks/usePlatform";
-import { useTheme } from "../hooks/useTheme";
-import { useSettings } from "../hooks/useSettings";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { type AIAction, useAI } from "../hooks/useAI";
+import { useContextMenu } from "../hooks/useContextMenu";
 import { useFileLoader } from "../hooks/useFileLoader";
 import { useFileWatcher } from "../hooks/useFileWatcher";
+import { usePlatform } from "../hooks/usePlatform";
+import { useSettings } from "../hooks/useSettings";
 import { useTableOfContents } from "../hooks/useTableOfContents";
-import { useContextMenu } from "../hooks/useContextMenu";
+import { useTheme } from "../hooks/useTheme";
 import { useTTS } from "../hooks/useTTS";
-import { useAI, type AIAction } from "../hooks/useAI";
-import { Sidebar } from "./layout/Sidebar";
-import { MarkdownViewer } from "./markdown/MarkdownViewer";
-import { EmptyState } from "./layout/EmptyState";
-import { StatusBar } from "./layout/StatusBar";
-import { SettingsModal } from "./modals/SettingsModal";
-import { AIPanel } from "./modals/AIPanel";
-
 // Code theme CSS (inline imports for production compatibility)
 import glyphThemeCSS from "../styles/highlight.css?inline";
 import githubThemeCSS from "../styles/highlight-github.css?inline";
 import monokaiThemeCSS from "../styles/highlight-monokai.css?inline";
 import nordThemeCSS from "../styles/highlight-nord.css?inline";
-import solarizedLightThemeCSS from "../styles/highlight-solarized-light.css?inline";
 import solarizedDarkThemeCSS from "../styles/highlight-solarized-dark.css?inline";
+import solarizedLightThemeCSS from "../styles/highlight-solarized-light.css?inline";
+import { EmptyState } from "./layout/EmptyState";
+import { Sidebar } from "./layout/Sidebar";
+import { StatusBar } from "./layout/StatusBar";
+import { MarkdownViewer } from "./markdown/MarkdownViewer";
+import { AIPanel } from "./modals/AIPanel";
+import { SettingsModal } from "./modals/SettingsModal";
 
 const CODE_THEMES: Record<string, string> = {
   glyph: glyphThemeCSS,
@@ -156,11 +155,7 @@ export function App() {
   const sidebarWidth = settings.layout.sidebarWidth;
 
   const sidebarElement = content ? (
-    <Sidebar
-      entries={tocEntries}
-      visible={sidebarVisible}
-      width={sidebarWidth}
-    />
+    <Sidebar entries={tocEntries} visible={sidebarVisible} width={sidebarWidth} />
   ) : null;
 
   return (

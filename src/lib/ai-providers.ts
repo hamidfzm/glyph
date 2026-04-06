@@ -119,10 +119,7 @@ export function createAIProvider(settings: AISettings): AIProvider | null {
       return new OpenAIProvider(key, settings.model);
     }
     case "ollama": {
-      return new OllamaProvider(
-        settings.ollamaUrl || "http://localhost:11434",
-        settings.model,
-      );
+      return new OllamaProvider(settings.ollamaUrl || "http://localhost:11434", settings.model);
     }
     default:
       return null;
