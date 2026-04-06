@@ -4,6 +4,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
@@ -17,6 +19,8 @@ updates:
     directory: "/src-tauri"
     schedule:
       interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
@@ -34,6 +38,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    commit-message:
+      prefix: "chore(ci)"
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
