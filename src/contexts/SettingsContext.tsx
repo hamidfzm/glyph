@@ -53,7 +53,7 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 
 function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
   const keys = path.split(".");
-  if (keys.length === 0 || keys.some((k) => k === "" || FORBIDDEN_OBJECT_KEYS.has(k))) {
+  if (keys.length === 0 || keys.some((k) => k === "")) {
     return obj;
   }
 
@@ -62,6 +62,9 @@ function setNestedValue(obj: Record<string, unknown>, path: string, value: unkno
 
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
+    if (FORBIDDEN_OBJECT_KEYS.has(key)) {
+      return obj;
+    }
     if (!isSafePlainObject(current)) {
       return obj;
     }
@@ -71,10 +74,17 @@ function setNestedValue(obj: Record<string, unknown>, path: string, value: unkno
     } else {
       current[key] = {};
     }
-    current = current[key] as Record<string, unknown>;
+    const next = current[key] as Record<string, unknown>;
+    if (!isSafePlainObject(next)) {
+      return obj;
+    }
+    current = next;
   }
 
   const lastKey = keys[keys.length - 1];
+  if (FORBIDDEN_OBJECT_KEYS.has(lastKey)) {
+    return obj;
+  }
   if (!isSafePlainObject(current)) {
     return obj;
   }
