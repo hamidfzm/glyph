@@ -10,8 +10,17 @@ pnpm tauri dev                  # Run in development (starts Vite + Cargo)
 pnpm tauri dev -- -- /path.md   # Dev mode with a file argument
 pnpm tauri build                # Production build
 pnpm typecheck                  # TypeScript type checking
+pnpm lint                       # Lint TypeScript with Biome
+pnpm format:check               # Check formatting with Biome
+pnpm format                     # Auto-format with Biome
+pnpm check                      # Biome lint + format + organize imports
+pnpm check:fix                  # Auto-fix all Biome issues
+pnpm test                       # Run frontend tests (Vitest)
+pnpm test:watch                 # Run frontend tests in watch mode
+pnpm test:coverage              # Run frontend tests with coverage
 cd src-tauri && cargo check     # Rust type checking
 cd src-tauri && cargo clippy    # Rust linting
+cd src-tauri && cargo test      # Rust tests
 ```
 
 ## Architecture
@@ -36,7 +45,11 @@ cd src-tauri && cargo clippy    # Rust linting
 - **Commits**: Use conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`)
 - **No co-authored-by** lines in commits
 - **Package manager**: pnpm only (not npm/yarn)
-- **Formatting**: Use default Prettier/rustfmt conventions
+- **Linting (TS)**: Biome (configured in `biome.json`) — run `pnpm lint`
+- **Linting (Rust)**: Clippy — run `cargo clippy` in `src-tauri/`
+- **Formatting**: Biome for TypeScript, rustfmt for Rust
+- **Testing (TS)**: Vitest + Testing Library — test files colocated as `*.test.{ts,tsx}`
+- **Testing (Rust)**: `#[cfg(test)]` modules in source files
 - **Imports**: Named exports, no default exports
 
 ## Component Structure

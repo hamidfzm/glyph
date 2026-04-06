@@ -1,11 +1,11 @@
-import { createContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { load, type Store } from "@tauri-apps/plugin-store";
+import { createContext, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
-  type Settings,
+  CONTENT_WIDTH_MAP,
   DEFAULT_SETTINGS,
   FONT_FAMILY_MAP,
   LINE_HEIGHT_MAP,
-  CONTENT_WIDTH_MAP,
+  type Settings,
 } from "../lib/settings";
 
 export interface SettingsContextValue {
@@ -22,7 +22,10 @@ export const SettingsContext = createContext<SettingsContextValue>({
   loaded: false,
 });
 
-function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+function deepMerge(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): Record<string, unknown> {
   const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
   const result = { ...target };
   for (const key of Object.keys(source)) {
@@ -46,7 +49,11 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
   return result;
 }
 
-function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
+function setNestedValue(
+  obj: Record<string, unknown>,
+  path: string,
+  value: unknown,
+): Record<string, unknown> {
   const keys = path.split(".");
   const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
   if (keys.some((k) => FORBIDDEN.has(k))) return obj;
@@ -145,7 +152,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
 
     init();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Listen for system theme changes when theme is "system"
@@ -172,24 +181,27 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }, SAVE_DEBOUNCE);
   }, []);
 
-  const updateSettings = useCallback((path: string, value: unknown) => {
-    setSettings((prev) => {
-      const updated = setNestedValue(
-        prev as unknown as Record<string, unknown>,
-        path,
-        value,
-      ) as unknown as Settings;
+  const updateSettings = useCallback(
+    (path: string, value: unknown) => {
+      setSettings((prev) => {
+        const updated = setNestedValue(
+          prev as unknown as Record<string, unknown>,
+          path,
+          value,
+        ) as unknown as Settings;
 
-      // Apply side effects
-      if (path.startsWith("appearance.theme")) {
-        applyTheme(updated.appearance.theme);
-      }
-      applyCSSVariables(updated);
-      saveToStore(updated);
+        // Apply side effects
+        if (path.startsWith("appearance.theme")) {
+          applyTheme(updated.appearance.theme);
+        }
+        applyCSSVariables(updated);
+        saveToStore(updated);
 
-      return updated;
-    });
-  }, [saveToStore]);
+        return updated;
+      });
+    },
+    [saveToStore],
+  );
 
   const resetSettings = useCallback(() => {
     setSettings(DEFAULT_SETTINGS);

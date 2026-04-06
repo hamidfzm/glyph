@@ -1,7 +1,10 @@
-import { useCallback, type ComponentPropsWithoutRef } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { type ComponentPropsWithoutRef, useCallback } from "react";
 
-function resolveImageSrc(src: string | undefined, filePath: string | undefined): string | undefined {
+function resolveImageSrc(
+  src: string | undefined,
+  filePath: string | undefined,
+): string | undefined {
   if (!src) return src;
   if (/^(https?:|data:)/i.test(src)) return src;
   if (filePath) {

@@ -9,7 +9,7 @@ use watcher::FileWatcherState;
 
 const MD_EXTENSIONS: &[&str] = &["md", "markdown", "mdown", "mkd", "mkdn"];
 
-fn is_markdown_file(path: &std::path::Path) -> bool {
+pub fn is_markdown_file(path: &std::path::Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .map(|ext| MD_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
@@ -118,4 +118,72 @@ pub fn run() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn md_extension() {
+        assert!(is_markdown_file(Path::new("README.md")));
+    }
+
+    #[test]
+    fn markdown_extension() {
+        assert!(is_markdown_file(Path::new("notes.markdown")));
+    }
+
+    #[test]
+    fn mdown_extension() {
+        assert!(is_markdown_file(Path::new("doc.mdown")));
+    }
+
+    #[test]
+    fn mkd_extension() {
+        assert!(is_markdown_file(Path::new("file.mkd")));
+    }
+
+    #[test]
+    fn mkdn_extension() {
+        assert!(is_markdown_file(Path::new("file.mkdn")));
+    }
+
+    #[test]
+    fn case_insensitive() {
+        assert!(is_markdown_file(Path::new("README.MD")));
+        assert!(is_markdown_file(Path::new("readme.Md")));
+    }
+
+    #[test]
+    fn not_markdown_txt() {
+        assert!(!is_markdown_file(Path::new("file.txt")));
+    }
+
+    #[test]
+    fn not_markdown_rs() {
+        assert!(!is_markdown_file(Path::new("main.rs")));
+    }
+
+    #[test]
+    fn not_markdown_no_extension() {
+        assert!(!is_markdown_file(Path::new("Makefile")));
+    }
+
+    #[test]
+    fn not_markdown_hidden_file() {
+        assert!(!is_markdown_file(Path::new(".gitignore")));
+    }
+
+    #[test]
+    fn with_directory_path() {
+        assert!(is_markdown_file(Path::new("/home/user/docs/README.md")));
+        assert!(is_markdown_file(Path::new("./relative/path/notes.markdown")));
+    }
+
+    #[test]
+    fn empty_path() {
+        assert!(!is_markdown_file(Path::new("")));
+    }
 }

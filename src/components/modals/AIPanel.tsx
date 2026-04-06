@@ -43,9 +43,14 @@ export function AIPanel({
     <div className="ai-panel" data-open={open}>
       <div className="ai-panel-header">
         <h3>{action ? ACTION_LABELS[action] : "AI"}</h3>
-        <button className="settings-close" onClick={onClose}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <button type="button" className="settings-close" onClick={onClose}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path
+              d="M3 3l8 8M11 3l-8 8"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
           </svg>
         </button>
       </div>
@@ -67,7 +72,14 @@ export function AIPanel({
         )}
 
         {!loading && !error && !result && (
-          <div style={{ color: "var(--color-text-tertiary)", fontSize: 13, textAlign: "center", padding: "40px 0" }}>
+          <div
+            style={{
+              color: "var(--color-text-tertiary)",
+              fontSize: 13,
+              textAlign: "center",
+              padding: "40px 0",
+            }}
+          >
             Use the AI menu or context menu to run an action.
           </div>
         )}
@@ -75,18 +87,17 @@ export function AIPanel({
 
       {result && (
         <div className="ai-panel-footer">
-          {onReadAloud && (
-            speaking ? (
-              <button className="ai-panel-btn" onClick={onStopReading}>
+          {onReadAloud &&
+            (speaking ? (
+              <button type="button" className="ai-panel-btn" onClick={onStopReading}>
                 Stop Reading
               </button>
             ) : (
-              <button className="ai-panel-btn" onClick={() => onReadAloud(result)}>
+              <button type="button" className="ai-panel-btn" onClick={() => onReadAloud(result)}>
                 Read Aloud
               </button>
-            )
-          )}
-          <button className="ai-panel-btn" onClick={handleCopy}>
+            ))}
+          <button type="button" className="ai-panel-btn" onClick={handleCopy}>
             Copy
           </button>
         </div>

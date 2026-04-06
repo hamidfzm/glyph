@@ -10,6 +10,7 @@ export function ExternalLinkIcon() {
       strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
+      aria-hidden="true"
     >
       <path d="M9 3L5 7" />
       <path d="M7 3h2v2" />

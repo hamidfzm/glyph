@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
 import mermaid from "mermaid";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 let idCounter = 0;
 
@@ -12,10 +12,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
   const idRef = useRef(`mermaid-diagram-${idCounter++}`);
   const [error, setError] = useState<string | null>(null);
 
-  const isDark = useCallback(
-    () => document.documentElement.classList.contains("dark"),
-    [],
-  );
+  const isDark = useCallback(() => document.documentElement.classList.contains("dark"), []);
 
   const renderDiagram = useCallback(async () => {
     try {

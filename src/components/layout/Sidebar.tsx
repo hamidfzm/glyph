@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TocEntry } from "../../hooks/useTableOfContents";
 
 interface SidebarProps {
@@ -59,6 +59,7 @@ export function Sidebar({ entries, visible, width }: SidebarProps) {
           {entries.map((entry) => (
             <li key={entry.id}>
               <button
+                type="button"
                 onClick={() => scrollTo(entry.id)}
                 className={`w-full text-left text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors ${
                   activeId === entry.id
