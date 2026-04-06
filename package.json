@@ -30,7 +30,10 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "picomatch": "4.0.4"
+    }
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",

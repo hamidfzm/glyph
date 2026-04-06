@@ -11,6 +11,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pr-title:
+    name: PR title (conventional commits)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if echo "$TITLE" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\([^)]+\))?(!)?: .+'; then
+            echo "OK: $TITLE"
+          else
+            echo "::error::PR title must follow Conventional Commits (e.g. feat: add feature, fix(scope): description). See https://www.conventionalcommits.org/"
+            exit 1
+          fi
+
   check:
     runs-on: ubuntu-latest
     steps:
