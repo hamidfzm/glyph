@@ -4,6 +4,14 @@ A modern, cross-platform markdown viewer with platform-native styling.
 
 Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 
+## Screenshots
+
+Add `hero.png` and `demo.gif` under [`docs/assets/`](docs/assets/) (see [`docs/assets/README.md`](docs/assets/README.md)). Until then, the images below are path placeholders.
+
+![Glyph — main window](docs/assets/hero.png)
+
+![Glyph — short demo](docs/assets/demo.gif)
+
 ## Features
 
 ### Markdown Rendering
