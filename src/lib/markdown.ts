@@ -2,7 +2,7 @@ export function countWords(text: string): number {
   return text
     .replace(/```[\s\S]*?```/g, "")
     .replace(/`[^`]*`/g, "")
-    .replace(/[#*_~\[\]()>|+-]/g, " ")
+    .replace(/[#*_~[\]()>|+-]/g, " ")
     .split(/\s+/)
     .filter((w) => w.length > 0).length;
 }

@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { useCallback, useEffect, useState } from "react";
 
 interface FileMetadata {
   name: string;
@@ -44,26 +44,29 @@ export function useFileLoader(options?: {
     [options],
   );
 
-  const loadFile = useCallback(async (path: string) => {
-    setState((prev) => ({ ...prev, loading: true, initializing: false, error: null }));
-    try {
-      const [content, metadata] = await Promise.all([
-        invoke<string>("read_file", { path }),
-        invoke<FileMetadata>("get_file_metadata", { path }),
-      ]);
-      await invoke("watch_file", { path });
-      setState({ content, metadata, loading: false, initializing: false, error: null });
-      addToRecent(path);
-    } catch (err) {
-      console.error("Failed to load file:", err);
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        initializing: false,
-        error: String(err),
-      }));
-    }
-  }, [addToRecent]);
+  const loadFile = useCallback(
+    async (path: string) => {
+      setState((prev) => ({ ...prev, loading: true, initializing: false, error: null }));
+      try {
+        const [content, metadata] = await Promise.all([
+          invoke<string>("read_file", { path }),
+          invoke<FileMetadata>("get_file_metadata", { path }),
+        ]);
+        await invoke("watch_file", { path });
+        setState({ content, metadata, loading: false, initializing: false, error: null });
+        addToRecent(path);
+      } catch (err) {
+        console.error("Failed to load file:", err);
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          initializing: false,
+          error: String(err),
+        }));
+      }
+    },
+    [addToRecent],
+  );
 
   const openFileDialog = useCallback(async () => {
     const selected = await open({
@@ -80,20 +83,21 @@ export function useFileLoader(options?: {
     }
   }, [loadFile]);
 
-  // On mount, check if a file was passed via CLI args
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only effect — CLI args checked once
   useEffect(() => {
-    invoke<string | null>("get_initial_file").then((path) => {
-      if (path) {
-        loadFile(path);
-      } else if (options?.reopenLastFile && options.recentFiles?.[0]) {
-        loadFile(options.recentFiles[0]);
-      } else {
+    invoke<string | null>("get_initial_file")
+      .then((path) => {
+        if (path) {
+          loadFile(path);
+        } else if (options?.reopenLastFile && options.recentFiles?.[0]) {
+          loadFile(options.recentFiles[0]);
+        } else {
+          setState((prev) => ({ ...prev, initializing: false }));
+        }
+      })
+      .catch(() => {
         setState((prev) => ({ ...prev, initializing: false }));
-      }
-    }).catch(() => {
-      setState((prev) => ({ ...prev, initializing: false }));
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      });
   }, []);
 
   // Also listen for open-file events (e.g. from file associations)

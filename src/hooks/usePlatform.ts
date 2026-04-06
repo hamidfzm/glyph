@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import { platform } from "@tauri-apps/plugin-os";
+import { useEffect, useState } from "react";
 
 export type Platform = "macos" | "windows" | "linux" | "unknown";
 

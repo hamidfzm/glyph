@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { useEffect, useRef } from "react";
 
 export function useFileWatcher(onFileChanged: () => void) {
   const callbackRef = useRef(onFileChanged);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSettings } from "../../hooks/useSettings";
 import { MODEL_SUGGESTIONS } from "../../lib/settings";
 
@@ -32,6 +32,7 @@ function Segmented<T extends string>({
     <div className="settings-segmented">
       {options.map((opt) => (
         <button
+          type="button"
           key={opt.value}
           data-active={value === opt.value}
           onClick={() => onChange(opt.value)}
@@ -74,13 +75,25 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   ];
 
   return (
-    <div className="settings-overlay" onClick={handleBackdropClick}>
+    <div
+      className="settings-overlay"
+      onClick={handleBackdropClick}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+      role="dialog"
+    >
       <div className="settings-modal">
         <div className="settings-header">
           <h2>Settings</h2>
-          <button className="settings-close" onClick={onClose}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <button type="button" className="settings-close" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path
+                d="M3 3l8 8M11 3l-8 8"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
             </svg>
           </button>
         </div>
@@ -88,6 +101,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         <nav className="settings-nav">
           {tabs.map((t) => (
             <button
+              type="button"
               key={t.id}
               className="settings-tab"
               data-active={tab === t.id}
@@ -106,7 +120,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         </div>
 
         <div className="settings-footer">
-          <button className="settings-reset-btn" onClick={resetSettings}>
+          <button type="button" className="settings-reset-btn" onClick={resetSettings}>
             Reset to Defaults
           </button>
           <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
@@ -251,48 +265,46 @@ function LayoutTab() {
   const { layout } = settings;
 
   return (
-    <>
-      <div className="settings-section">
-        <div className="settings-section-title">Sidebar</div>
-        <div className="settings-row">
-          <div>
-            <span className="settings-label">Show Sidebar</span>
-            <div className="settings-description">Toggle the table of contents sidebar</div>
-          </div>
-          <Toggle
-            checked={layout.sidebarVisible}
-            onChange={(v) => updateSettings("layout.sidebarVisible", v)}
-          />
+    <div className="settings-section">
+      <div className="settings-section-title">Sidebar</div>
+      <div className="settings-row">
+        <div>
+          <span className="settings-label">Show Sidebar</span>
+          <div className="settings-description">Toggle the table of contents sidebar</div>
         </div>
+        <Toggle
+          checked={layout.sidebarVisible}
+          onChange={(v) => updateSettings("layout.sidebarVisible", v)}
+        />
+      </div>
 
-        <div className="settings-row">
-          <span className="settings-label">Sidebar Position</span>
-          <Segmented
-            value={layout.sidebarPosition}
-            options={[
-              { value: "left", label: "Left" },
-              { value: "right", label: "Right" },
-            ]}
-            onChange={(v) => updateSettings("layout.sidebarPosition", v)}
+      <div className="settings-row">
+        <span className="settings-label">Sidebar Position</span>
+        <Segmented
+          value={layout.sidebarPosition}
+          options={[
+            { value: "left", label: "Left" },
+            { value: "right", label: "Right" },
+          ]}
+          onChange={(v) => updateSettings("layout.sidebarPosition", v)}
+        />
+      </div>
+
+      <div className="settings-row">
+        <span className="settings-label">Sidebar Width</span>
+        <div className="settings-range">
+          <input
+            type="range"
+            min={160}
+            max={320}
+            step={8}
+            value={layout.sidebarWidth}
+            onChange={(e) => updateSettings("layout.sidebarWidth", Number(e.target.value))}
           />
-        </div>
-
-        <div className="settings-row">
-          <span className="settings-label">Sidebar Width</span>
-          <div className="settings-range">
-            <input
-              type="range"
-              min={160}
-              max={320}
-              step={8}
-              value={layout.sidebarWidth}
-              onChange={(e) => updateSettings("layout.sidebarWidth", Number(e.target.value))}
-            />
-            <span className="settings-range-value">{layout.sidebarWidth}px</span>
-          </div>
+          <span className="settings-range-value">{layout.sidebarWidth}px</span>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -342,11 +354,15 @@ function BehaviorTab() {
         <div className="settings-section">
           <div className="settings-section-title">Recent Files</div>
           {behavior.recentFiles.map((file) => (
-            <div key={file} style={{ fontSize: 12, color: "var(--color-text-secondary)", padding: "3px 0" }}>
+            <div
+              key={file}
+              style={{ fontSize: 12, color: "var(--color-text-secondary)", padding: "3px 0" }}
+            >
               {file}
             </div>
           ))}
           <button
+            type="button"
             className="settings-reset-btn"
             style={{ marginTop: 8 }}
             onClick={() => updateSettings("behavior.recentFiles", [])}
@@ -363,7 +379,7 @@ function AITab() {
   const { settings, updateSettings } = useSettings();
   const { ai } = settings;
 
-  const models = ai.provider !== "none" ? MODEL_SUGGESTIONS[ai.provider] ?? [] : [];
+  const models = ai.provider !== "none" ? (MODEL_SUGGESTIONS[ai.provider] ?? []) : [];
 
   return (
     <>
@@ -417,7 +433,9 @@ function AITab() {
         {ai.provider !== "none" && (
           <div className="settings-row">
             <span className="settings-label">Model</span>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+            <div
+              style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}
+            >
               <input
                 className="settings-input"
                 type="text"

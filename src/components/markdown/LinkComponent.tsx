@@ -1,6 +1,6 @@
-import { useCallback, useContext, type ComponentPropsWithoutRef } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { type ComponentPropsWithoutRef, useCallback, useContext } from "react";
 import { SettingsContext } from "../../contexts/SettingsContext";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 
@@ -14,15 +14,12 @@ export function LinkComponent(props: ComponentPropsWithoutRef<"a">) {
       e.preventDefault();
 
       if (settings.behavior.confirmExternalLinks) {
-        const confirmed = await ask(
-          `Open this link in your browser?\n\n${href}`,
-          {
-            title: "Open External Link",
-            kind: "info",
-            okLabel: "Open",
-            cancelLabel: "Cancel",
-          },
-        );
+        const confirmed = await ask(`Open this link in your browser?\n\n${href}`, {
+          title: "Open External Link",
+          kind: "info",
+          okLabel: "Open",
+          cancelLabel: "Cancel",
+        });
         if (!confirmed) return;
       }
 

@@ -25,9 +25,9 @@ export function useContextMenu(platform: Platform, actions: ContextMenuActions) 
 
       const selection = window.getSelection()?.toString() ?? "";
       const items: Array<
-        Awaited<ReturnType<typeof MenuItem.new>> |
-        Awaited<ReturnType<typeof PredefinedMenuItem.new>> |
-        Awaited<ReturnType<typeof Submenu.new>>
+        | Awaited<ReturnType<typeof MenuItem.new>>
+        | Awaited<ReturnType<typeof PredefinedMenuItem.new>>
+        | Awaited<ReturnType<typeof Submenu.new>>
       > = [];
 
       // Copy + Select All

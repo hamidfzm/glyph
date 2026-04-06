@@ -21,9 +21,8 @@ export function useTableOfContents(content: string | null): TocEntry[] {
 
     const headingRegex = /^(#{1,6})\s+(.+)$/gm;
     const entries: TocEntry[] = [];
-    let match;
 
-    while ((match = headingRegex.exec(content)) !== null) {
+    for (const match of content.matchAll(headingRegex)) {
       entries.push({
         id: slugify(match[2]),
         text: match[2],

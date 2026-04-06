@@ -1,0 +1,27 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: 80%
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+  hide_project_coverage: false
+
+flags:
+  frontend:
+    paths:
+      - src/
+    carryforward: true
+  rust:
+    paths:
+      - src-tauri/src/
+    carryforward: true

@@ -1,11 +1,11 @@
-import { useRef, useEffect } from "react";
+import { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import { headingComponents } from "./HeadingComponent";
-import { LinkComponent } from "./LinkComponent";
-import { useImageComponent } from "./ImageComponent";
+import remarkGfm from "remark-gfm";
 import { CodeBlockComponent } from "./CodeBlockComponent";
+import { headingComponents } from "./HeadingComponent";
+import { useImageComponent } from "./ImageComponent";
+import { LinkComponent } from "./LinkComponent";
 
 interface MarkdownViewerProps {
   content: string;
@@ -34,15 +34,12 @@ export function MarkdownViewer({ content, filePath }: MarkdownViewerProps) {
         el.scrollTop = scrollPosRef.current;
       });
     }
-  }, [content]);
+  });
 
   const ImageComponent = useImageComponent(filePath);
 
   return (
-    <div
-      ref={scrollRef}
-      className="flex-1 overflow-y-auto"
-    >
+    <div ref={scrollRef} className="flex-1 overflow-y-auto">
       <div className="markdown-body px-8 py-6 pb-24">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
