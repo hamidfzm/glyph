@@ -22,19 +22,24 @@ export const SettingsContext = createContext<SettingsContextValue>({
   loaded: false,
 });
 
+const FORBIDDEN_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+function isSafePlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  if (value === Object.prototype) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
-  const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
   const result = { ...target };
   for (const key of Object.keys(source)) {
-    if (FORBIDDEN.has(key)) continue;
-    if (
-      source[key] !== null &&
-      typeof source[key] === "object" &&
-      !Array.isArray(source[key]) &&
-      typeof target[key] === "object" &&
-      target[key] !== null &&
-      !Array.isArray(target[key])
-    ) {
+    if (FORBIDDEN_OBJECT_KEYS.has(key)) continue;
+    if (isSafePlainObject(source[key]) && isSafePlainObject(target[key])) {
       result[key] = deepMerge(
         target[key] as Record<string, unknown>,
         source[key] as Record<string, unknown>,
@@ -48,50 +53,29 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 
 function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
   const keys = path.split(".");
-  const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
+  if (keys.length === 0 || keys.some((k) => k === "" || FORBIDDEN_OBJECT_KEYS.has(k))) {
+    return obj;
+  }
 
   const result = { ...obj };
   let current: Record<string, unknown> = result;
 
-  const isSafePlainObject = (value: unknown): value is Record<string, unknown> => {
-    if (value === null || typeof value !== "object" || Array.isArray(value)) {
-      return false;
-    }
-    // Ensure we never operate directly on Object.prototype or similar.
-    const proto = Object.getPrototypeOf(value);
-    return value !== Object.prototype && (proto === Object.prototype || proto === null);
-  };
-
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
-    if (FORBIDDEN.has(key)) {
-      return obj;
-    }
-
     if (!isSafePlainObject(current)) {
-      // Abort if the current object is not a safe plain object to avoid prototype pollution.
       return obj;
     }
-
-    const existing = current[key];
+    const existing = Object.prototype.hasOwnProperty.call(current, key) ? current[key] : undefined;
     if (isSafePlainObject(existing)) {
-      // Reuse existing nested object when it is a safe plain object.
-      current[key] = { ...(existing as Record<string, unknown>) };
+      current[key] = { ...existing };
     } else {
-      // Create a new nested object if none exists or it's not a safe plain object.
       current[key] = {};
     }
-
     current = current[key] as Record<string, unknown>;
   }
 
   const lastKey = keys[keys.length - 1];
-  if (FORBIDDEN.has(lastKey)) {
-    return obj;
-  }
-
   if (!isSafePlainObject(current)) {
-    // Abort if the current object is not a safe plain object.
     return obj;
   }
 
