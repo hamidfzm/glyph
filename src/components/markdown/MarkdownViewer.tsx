@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import { CodeBlockComponent } from "./CodeBlockComponent";
 import { headingComponents } from "./HeadingComponent";
 import { useImageComponent } from "./ImageComponent";
@@ -42,8 +44,8 @@ export function MarkdownViewer({ content, filePath }: MarkdownViewerProps) {
     <div ref={scrollRef} className="flex-1 overflow-y-auto">
       <div className="markdown-body px-8 py-6 pb-24">
         <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[[rehypeHighlight, { plainText: ["mermaid"] }]]}
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[[rehypeHighlight, { plainText: ["mermaid"] }], rehypeKatex]}
           components={{
             ...headingComponents,
             a: LinkComponent,
