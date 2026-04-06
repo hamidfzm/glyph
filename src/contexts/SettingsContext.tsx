@@ -49,17 +49,38 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
   const keys = path.split(".");
   const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
-  if (keys.some((k) => FORBIDDEN.has(k))) return obj;
 
   const result = { ...obj };
   let current: Record<string, unknown> = result;
 
   for (let i = 0; i < keys.length - 1; i++) {
-    current[keys[i]] = { ...(current[keys[i]] as Record<string, unknown>) };
-    current = current[keys[i]] as Record<string, unknown>;
+    const key = keys[i];
+    if (FORBIDDEN.has(key)) {
+      return obj;
+    }
+
+    const existing = current[key];
+    if (
+      existing !== null &&
+      typeof existing === "object" &&
+      !Array.isArray(existing)
+    ) {
+      // Reuse existing nested object when it is a plain object.
+      current[key] = { ...(existing as Record<string, unknown>) };
+    } else {
+      // Create a new nested object if none exists or it's not a plain object.
+      current[key] = {};
+    }
+
+    current = current[key] as Record<string, unknown>;
   }
 
-  current[keys[keys.length - 1]] = value;
+  const lastKey = keys[keys.length - 1];
+  if (FORBIDDEN.has(lastKey)) {
+    return obj;
+  }
+
+  current[lastKey] = value;
   return result;
 }
 
