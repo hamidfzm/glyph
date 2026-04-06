@@ -76,9 +76,15 @@ To create a new release:
 2. Run `cargo check` in `src-tauri/` to update `Cargo.lock`
 3. Commit: `chore: bump version to X.Y.Z`
 4. Push to `main`
-5. Create release: `gh release create vX.Y.Z --title "Glyph vX.Y.Z" --generate-notes --notes-start-tag <previous-tag>`
+5. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`
 
-The `--generate-notes` flag uses `.github/release.yml` to auto-categorize PRs into the changelog (Features, Bug Fixes, Security, Testing & CI, Dependencies, Documentation). PRs labeled `skip-changelog` are excluded.
+The tag push triggers `.github/workflows/release.yml` which:
+- Builds binaries for all platforms via `tauri-action`
+- Creates the GitHub release with install instructions
+- Appends an auto-generated changelog (categorized by PR labels via `.github/release.yml`)
+- Publishes to Homebrew, Chocolatey, AUR, and PPA
+
+Do **not** create releases manually with `gh release create` — let the CI workflow handle it.
 
 ## Key Files
 
