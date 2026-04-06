@@ -55,6 +55,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Run tests with coverage
         run: pnpm test:coverage
+      - name: Upload coverage report (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: coverage/
+          retention-days: 14
       - name: Upload frontend coverage
         if: always()
         uses: codecov/codecov-action@v5
