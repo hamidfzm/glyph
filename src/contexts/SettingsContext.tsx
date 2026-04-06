@@ -53,22 +53,32 @@ function setNestedValue(obj: Record<string, unknown>, path: string, value: unkno
   const result = { ...obj };
   let current: Record<string, unknown> = result;
 
+  const isSafePlainObject = (value: unknown): value is Record<string, unknown> => {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return false;
+    }
+    // Ensure we never operate directly on Object.prototype or similar.
+    const proto = Object.getPrototypeOf(value);
+    return value !== Object.prototype && (proto === Object.prototype || proto === null);
+  };
+
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
     if (FORBIDDEN.has(key)) {
       return obj;
     }
 
+    if (!isSafePlainObject(current)) {
+      // Abort if the current object is not a safe plain object to avoid prototype pollution.
+      return obj;
+    }
+
     const existing = current[key];
-    if (
-      existing !== null &&
-      typeof existing === "object" &&
-      !Array.isArray(existing)
-    ) {
-      // Reuse existing nested object when it is a plain object.
+    if (isSafePlainObject(existing)) {
+      // Reuse existing nested object when it is a safe plain object.
       current[key] = { ...(existing as Record<string, unknown>) };
     } else {
-      // Create a new nested object if none exists or it's not a plain object.
+      // Create a new nested object if none exists or it's not a safe plain object.
       current[key] = {};
     }
 
@@ -77,6 +87,11 @@ function setNestedValue(obj: Record<string, unknown>, path: string, value: unkno
 
   const lastKey = keys[keys.length - 1];
   if (FORBIDDEN.has(lastKey)) {
+    return obj;
+  }
+
+  if (!isSafePlainObject(current)) {
+    // Abort if the current object is not a safe plain object.
     return obj;
   }
 
