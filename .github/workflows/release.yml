@@ -76,8 +76,6 @@ jobs:
             sudo dpkg -i glyph_*_amd64.deb
             ```
             Or download the `.AppImage` below.
-
-            ## Assets
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
