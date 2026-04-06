@@ -1,77 +1,104 @@
-# Welcome to Glyph
+# Glyph Sample Document
 
-A modern, cross-platform markdown viewer with platform-native styling.
+A test file for verifying links and images.
 
-## Features
+## Links
 
-- **Live reload** — edit this file and watch it update instantly
-- **GFM support** — tables, task lists, strikethrough, and more
-- **Syntax highlighting** — beautiful code blocks out of the box
-- **Dark mode** — follows your system theme automatically
-- **Table of Contents** — navigate long documents with ease
+Here are some links to test external link opening:
 
-## Code Example
+- [Unsplash](https://unsplash.com) — Free photos
+- [GitHub](https://github.com/hamidfzm/glyph) — Glyph repository
+- [Rust Programming Language](https://www.rust-lang.org)
+- [Tauri Documentation](https://v2.tauri.app)
+- [React Docs](https://react.dev)
+
+### Anchor Links
+
+These should navigate within the page, not open externally:
+
+- [Go to Images](#images)
+- [Go to Code](#code-block)
+
+## Images
+
+### Remote Images (Unsplash)
+
+A mountain landscape:
+
+![Mountain landscape](https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=400&fit=crop)
+
+A forest path:
+
+![Forest path](https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&h=400&fit=crop)
+
+### Placeholder Images
+
+![Picsum 1](https://picsum.photos/800/300)
+
+## Code Block
 
 ```rust
 fn main() {
     println!("Hello from Glyph!");
-    let numbers: Vec<i32> = (1..=10).filter(|n| n % 2 == 0).collect();
-    println!("Even numbers: {:?}", numbers);
 }
 ```
 
 ```typescript
-interface MarkdownFile {
-  name: string;
-  path: string;
-  content: string;
-  modified: number;
-}
-
-function readingTime(words: number): string {
-  const minutes = Math.max(1, Math.ceil(words / 230));
-  return `${minutes} min read`;
+export function greet(name: string): string {
+  return `Hello, ${name}!`;
 }
 ```
 
-## GFM Table
+## Mermaid Diagrams
 
-| Feature         | Status |
-|-----------------|--------|
-| Markdown render | Done   |
-| File watching   | Done   |
-| Sidebar TOC     | Done   |
-| Dark mode       | Done   |
-| Homebrew cask   | Done   |
+### Flowchart
 
-## Task List
+```mermaid
+graph TD
+    A[Open Markdown File] --> B{Valid File?}
+    B -->|Yes| C[Parse Markdown]
+    B -->|No| D[Show Error]
+    C --> E[Render HTML]
+    E --> F[Display in Viewer]
+    F --> G{File Changed?}
+    G -->|Yes| C
+    G -->|No| F
+```
 
-- [x] Set up Tauri v2 project
-- [x] Implement markdown rendering
-- [x] Add file watcher
-- [x] Platform-adaptive styling
-- [ ] Add more themes
-- [ ] Plugin system
+### Sequence Diagram
 
-## Blockquote
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Tauri
+    participant FileSystem
 
-> "The best interface is no interface."
->
-> — Golden Krishna
+    User->>Frontend: Open file dialog
+    Frontend->>Tauri: invoke("open_file")
+    Tauri->>FileSystem: Read file
+    FileSystem-->>Tauri: File contents
+    Tauri-->>Frontend: Markdown string
+    Frontend->>Frontend: Render markdown
+    Note over Frontend: Live reload on change
+```
 
-## Nested List
+### Invalid Diagram (Error Fallback)
 
-1. Frontend
-   - React 19
-   - Tailwind CSS v4
-   - react-markdown
-2. Backend
-   - Tauri v2 (Rust)
-   - notify crate for file watching
-3. Distribution
-   - GitHub Actions CI/CD
-   - Homebrew Cask
+```mermaid
+this is not valid mermaid syntax !!!
+```
+
+## Table
+
+| Feature | Status |
+|---------|--------|
+| Links open in browser | Testing |
+| External link icon | Testing |
+| Remote images | Testing |
+| Local images | Testing |
+| Confirm dialog | Testing |
 
 ---
 
-*Built with Glyph — view your markdown beautifully.*
+*End of sample document*

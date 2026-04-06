@@ -5,6 +5,7 @@ import rehypeHighlight from "rehype-highlight";
 import { headingComponents } from "./HeadingComponent";
 import { LinkComponent } from "./LinkComponent";
 import { useImageComponent } from "./ImageComponent";
+import { CodeBlockComponent } from "./CodeBlockComponent";
 
 interface MarkdownViewerProps {
   content: string;
@@ -45,11 +46,12 @@ export function MarkdownViewer({ content, filePath }: MarkdownViewerProps) {
       <div className="markdown-body px-8 py-6 pb-24">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeHighlight]}
+          rehypePlugins={[[rehypeHighlight, { plainText: ["mermaid"] }]]}
           components={{
             ...headingComponents,
             a: LinkComponent,
             img: ImageComponent,
+            pre: CodeBlockComponent,
           }}
         >
           {content}
