@@ -22,19 +22,24 @@ export const SettingsContext = createContext<SettingsContextValue>({
   loaded: false,
 });
 
+const FORBIDDEN_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+function isSafePlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  if (value === Object.prototype) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
-  const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
   const result = { ...target };
   for (const key of Object.keys(source)) {
-    if (FORBIDDEN.has(key)) continue;
-    if (
-      source[key] !== null &&
-      typeof source[key] === "object" &&
-      !Array.isArray(source[key]) &&
-      typeof target[key] === "object" &&
-      target[key] !== null &&
-      !Array.isArray(target[key])
-    ) {
+    if (FORBIDDEN_OBJECT_KEYS.has(key)) continue;
+    if (isSafePlainObject(source[key]) && isSafePlainObject(target[key])) {
       result[key] = deepMerge(
         target[key] as Record<string, unknown>,
         source[key] as Record<string, unknown>,
@@ -48,18 +53,43 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 
 function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
   const keys = path.split(".");
-  const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
-  if (keys.some((k) => FORBIDDEN.has(k))) return obj;
+  if (keys.length === 0 || keys.some((k) => k === "")) {
+    return obj;
+  }
 
   const result = { ...obj };
   let current: Record<string, unknown> = result;
 
   for (let i = 0; i < keys.length - 1; i++) {
-    current[keys[i]] = { ...(current[keys[i]] as Record<string, unknown>) };
-    current = current[keys[i]] as Record<string, unknown>;
+    const key = keys[i];
+    if (FORBIDDEN_OBJECT_KEYS.has(key)) {
+      return obj;
+    }
+    if (!isSafePlainObject(current)) {
+      return obj;
+    }
+    const existing = Object.prototype.hasOwnProperty.call(current, key) ? current[key] : undefined;
+    if (isSafePlainObject(existing)) {
+      current[key] = { ...existing };
+    } else {
+      current[key] = {};
+    }
+    const next = current[key] as Record<string, unknown>;
+    if (!isSafePlainObject(next)) {
+      return obj;
+    }
+    current = next;
   }
 
-  current[keys[keys.length - 1]] = value;
+  const lastKey = keys[keys.length - 1];
+  if (FORBIDDEN_OBJECT_KEYS.has(lastKey)) {
+    return obj;
+  }
+  if (!isSafePlainObject(current)) {
+    return obj;
+  }
+
+  current[lastKey] = value;
   return result;
 }
 
