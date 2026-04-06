@@ -21,6 +21,7 @@
     "@tauri-apps/plugin-os": "^2",
     "@tauri-apps/plugin-store": "^2",
     "@tauri-apps/plugin-window-state": "^2",
+    "mermaid": "^11.14.0",
     "react": "^19",
     "react-dom": "^19",
     "react-markdown": "^10",
