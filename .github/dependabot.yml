@@ -9,6 +9,8 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # NPM @tauri-apps/plugin-* must match Rust tauri-plugin-* minor versions; separate Dependabot PRs drift and break `tauri build`.
+      - dependency-name: "@tauri-apps/plugin-*"
     groups:
       dev-dependencies:
         dependency-type: "development"
