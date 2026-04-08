@@ -77,10 +77,12 @@ jobs:
             # Arch (AUR)
             yay -S glyph-md-bin
 
-            # Debian/Ubuntu
-            sudo dpkg -i glyph_*_amd64.deb
+            # Debian/Ubuntu (PPA)
+            sudo add-apt-repository ppa:hamidfzm/glyph
+            sudo apt update
+            sudo apt install glyph
             ```
-            Or download the `.AppImage` below.
+            Or download the `.deb` / `.AppImage` below.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
@@ -123,10 +125,12 @@ jobs:
           # Arch (AUR)
           yay -S glyph-md-bin
 
-          # Debian/Ubuntu
-          sudo dpkg -i glyph_*_amd64.deb
+          # Debian/Ubuntu (PPA)
+          sudo add-apt-repository ppa:hamidfzm/glyph
+          sudo apt update
+          sudo apt install glyph
           ```
-          Or download the `.AppImage` below.
+          Or download the `.deb` / `.AppImage` below.
 
           ---
 
@@ -356,6 +360,10 @@ jobs:
   publish-ppa:
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        series: [jammy, noble]
     steps:
       - uses: actions/checkout@v6
       - name: Install packaging tools
@@ -384,6 +392,7 @@ jobs:
       - name: Build source package
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          SERIES="${{ matrix.series }}"
           DATE=$(date -R)
 
           # Set up source tree
@@ -409,7 +418,7 @@ jobs:
             awk 'NR>3{if(/^$/)print " .";else print " "$0}' LICENSE
           } > /tmp/glyph-${VERSION}/debian/copyright
 
-          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{DATE}}/$DATE/g" \
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SERIES}}/$SERIES/g" -e "s/{{DATE}}/$DATE/g" \
             ppa/debian/changelog > /tmp/glyph-${VERSION}/debian/changelog
 
           # Create orig tarball
@@ -421,5 +430,6 @@ jobs:
       - name: Upload to PPA
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          SERIES="${{ matrix.series }}"
           cd /tmp
-          dput ppa:hamidfzm/glyph glyph_${VERSION}-1_source.changes
+          dput ppa:hamidfzm/glyph glyph_${VERSION}-1~${SERIES}1_source.changes
