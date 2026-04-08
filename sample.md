@@ -99,6 +99,28 @@ this is not valid mermaid syntax !!!
 | Local images | Testing |
 | Confirm dialog | Testing |
 
+## Math
+
+Einstein's famous equation $E = mc^2$ changed physics forever. The fine-structure constant is approximately $\alpha \approx 1/137$.
+
+### Block Equations
+
+The Gaussian integral:
+
+$$\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}$$
+
+Euler's identity:
+
+$$e^{i\pi} + 1 = 0$$
+
+The Basel problem:
+
+$$\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}$$
+
+### Matrix
+
+$$\begin{pmatrix} a & b \\ c & d \end{pmatrix} \begin{pmatrix} x \\ y \end{pmatrix} = \begin{pmatrix} ax + by \\ cx + dy \end{pmatrix}$$
+
 ---
 
 *End of sample document*

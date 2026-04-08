@@ -41,7 +41,7 @@ jobs:
         if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -76,11 +76,55 @@ jobs:
             sudo dpkg -i glyph_*_amd64.deb
             ```
             Or download the `.AppImage` below.
-
-            ## Assets
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+  update-release-notes:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate changelog and prepend install instructions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CHANGELOG=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name="${{ github.ref_name }}" \
+            -f previous_tag_name="$(gh release list --repo ${{ github.repository }} --limit 2 --json tagName --jq '.[1].tagName')" \
+            --jq .body)
+
+          BODY=$(cat <<'INSTALL'
+          ## Install
+
+          ### macOS
+          ```bash
+          brew tap hamidfzm/tap && brew install --cask glyph
+          ```
+          Or download `Glyph_*_universal.dmg` below.
+
+          ### Windows
+          ```powershell
+          choco install glyph
+          ```
+          Or download `Glyph_*_x64_en-US.msi` below.
+
+          ### Linux
+          ```bash
+          # Arch (AUR)
+          yay -S glyph-md-bin
+
+          # Debian/Ubuntu
+          sudo dpkg -i glyph_*_amd64.deb
+          ```
+          Or download the `.AppImage` below.
+
+          ---
+
+          INSTALL
+          )
+
+          printf '%s\n\n%s' "$BODY" "$CHANGELOG" > /tmp/release-body.md
+          gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --notes-file /tmp/release-body.md
 
   publish-homebrew:
     needs: build

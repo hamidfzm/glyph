@@ -105,6 +105,17 @@
   line-height: 1.6;
 }
 
+/* KaTeX math */
+.markdown-body .katex-display {
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.markdown-body .katex {
+  color: var(--color-text-primary);
+}
+
 /* Mermaid diagrams */
 .markdown-body .mermaid-diagram {
   margin: 0 0 1em;

@@ -68,6 +68,24 @@ cd src-tauri && cargo test      # Rust tests
 - After merge, the issue moves to **Done** automatically via GitHub's linked issue resolution
 - When creating new feature ideas, create a GitHub issue and add it to the project board as **Todo**
 
+## Releases
+
+To create a new release:
+
+1. Bump version in `package.json` and `src-tauri/Cargo.toml` (keep in sync)
+2. Run `cargo check` in `src-tauri/` to update `Cargo.lock`
+3. Commit: `chore: bump version to X.Y.Z`
+4. Push to `main`
+5. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`
+
+The tag push triggers `.github/workflows/release.yml` which:
+- Builds binaries for all platforms via `tauri-action`
+- Creates the GitHub release with install instructions
+- Appends an auto-generated changelog (categorized by PR labels via `.github/release.yml`)
+- Publishes to Homebrew, Chocolatey, AUR, and PPA
+
+Do **not** create releases manually with `gh release create` — let the CI workflow handle it.
+
 ## Key Files
 
 - `src-tauri/tauri.conf.json` — App window config, CLI plugin config, bundle settings
