@@ -1,4 +1,4 @@
-glyph ({{VERSION}}-1) noble; urgency=medium
+glyph ({{VERSION}}-1~{{SERIES}}1) {{SERIES}}; urgency=medium
 
   * Release {{VERSION}}
 
