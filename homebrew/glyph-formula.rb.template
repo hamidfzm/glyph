@@ -1,0 +1,33 @@
+class Glyph < Formula
+  desc "Cross-platform markdown viewer"
+  homepage "https://github.com/hamidfzm/glyph"
+  license "MIT"
+  version "{{VERSION}}"
+
+  on_linux do
+    if Hardware::CPU.intel?
+      url "https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/Glyph_{{VERSION}}_amd64.deb"
+      sha256 "{{SHA256_AMD64}}"
+    end
+    if Hardware::CPU.arm?
+      url "https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/Glyph_{{VERSION}}_arm64.deb"
+      sha256 "{{SHA256_ARM64}}"
+    end
+  end
+
+  depends_on :linux
+  depends_on "webkit2gtk"
+  depends_on "gtk+3"
+
+  def install
+    # Extract binary from deb
+    system "ar", "x", cached_download
+    system "tar", "xf", "data.tar.gz"
+    bin.install Dir["usr/bin/*"]
+    share.install Dir["usr/share/*"]
+  end
+
+  test do
+    assert_match "glyph", shell_output("#{bin}/glyph --version", 1)
+  end
+end

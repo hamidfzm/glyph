@@ -67,6 +67,13 @@ choco install glyph
 yay -S glyph-md-bin
 ```
 
+### Linux (Homebrew)
+
+```bash
+brew tap hamidfzm/tap
+brew install glyph
+```
+
 ### Debian/Ubuntu (PPA)
 
 ```bash
