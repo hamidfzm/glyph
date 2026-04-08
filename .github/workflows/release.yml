@@ -410,7 +410,7 @@ jobs:
             --pattern "Glyph_${VERSION}_arm64.deb"
       - name: Clone apt-repo and update
         env:
-          GH_TOKEN: ${{ secrets.APT_REPO_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
