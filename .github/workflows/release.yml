@@ -72,6 +72,9 @@ jobs:
             # Arch (AUR)
             yay -S glyph-md-bin
 
+            # Homebrew (Linuxbrew)
+            brew tap hamidfzm/tap && brew install glyph
+
             # Debian/Ubuntu (PPA)
             sudo add-apt-repository ppa:hamidfzm/glyph
             sudo apt update
@@ -114,6 +117,9 @@ jobs:
           ```bash
           # Arch (AUR)
           yay -S glyph-md-bin
+
+          # Homebrew (Linuxbrew)
+          brew tap hamidfzm/tap && brew install glyph
 
           # Debian/Ubuntu (PPA)
           sudo add-apt-repository ppa:hamidfzm/glyph
