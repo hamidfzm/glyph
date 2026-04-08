@@ -63,7 +63,12 @@ jobs:
 
             ### Windows
             ```powershell
+            # Chocolatey
             choco install glyph
+
+            # Scoop
+            scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
+            scoop install glyph
             ```
             Or download `Glyph_*_x64_en-US.msi` below.
 
@@ -104,7 +109,12 @@ jobs:
 
           ### Windows
           ```powershell
+          # Chocolatey
           choco install glyph
+
+          # Scoop
+          scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
+          scoop install glyph
           ```
           Or download `Glyph_*_x64_en-US.msi` below.
 
