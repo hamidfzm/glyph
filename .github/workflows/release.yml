@@ -269,7 +269,7 @@ jobs:
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
       - name: Update scoop-bucket
         env:
-          GH_TOKEN: ${{ secrets.SCOOP_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           SHA="${{ steps.sha.outputs.sha256 }}"
