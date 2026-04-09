@@ -63,7 +63,12 @@ jobs:
 
             ### Windows
             ```powershell
+            # Chocolatey
             choco install glyph
+
+            # Scoop
+            scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
+            scoop install glyph
             ```
             Or download `Glyph_*_x64_en-US.msi` below.
 
@@ -114,7 +119,12 @@ jobs:
 
           ### Windows
           ```powershell
+          # Chocolatey
           choco install glyph
+
+          # Scoop
+          scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
+          scoop install glyph
           ```
           Or download `Glyph_*_x64_en-US.msi` below.
 
@@ -294,6 +304,51 @@ jobs:
           cd chocolatey
           choco pack
           choco push glyph.$version.nupkg --source https://push.chocolatey.org/ --api-key $env:CHOCO_API_KEY
+
+  publish-scoop:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Download MSI and compute sha256
+        id: sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release download "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "Glyph_${VERSION}_x64_en-US.msi"
+          SHA=$(shasum -a 256 "Glyph_${VERSION}_x64_en-US.msi" | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Update scoop-bucket
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" \
+            scoop/glyph.json.template > /tmp/glyph.json
+
+          # Get current file SHA for update (or empty for first push)
+          FILE_SHA=$(gh api repos/hamidfzm/scoop-bucket/contents/bucket/glyph.json --jq .sha 2>/dev/null || echo "")
+
+          if [ -n "$FILE_SHA" ]; then
+            gh api repos/hamidfzm/scoop-bucket/contents/bucket/glyph.json \
+              --method PUT \
+              --field message="chore: update glyph to $VERSION" \
+              --field content="$(base64 -w0 /tmp/glyph.json)" \
+              --field sha="$FILE_SHA"
+          else
+            gh api repos/hamidfzm/scoop-bucket/contents/bucket/glyph.json \
+              --method PUT \
+              --field message="chore: add glyph $VERSION" \
+              --field content="$(base64 -w0 /tmp/glyph.json)"
+          fi
 
   publish-aur:
     needs: build

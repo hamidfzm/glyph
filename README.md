@@ -61,6 +61,13 @@ brew install --cask glyph
 choco install glyph
 ```
 
+### Windows (Scoop)
+
+```powershell
+scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
+scoop install glyph
+```
+
 ### Arch Linux (AUR)
 
 ```bash

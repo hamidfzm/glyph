@@ -1,0 +1,22 @@
+{
+    "version": "{{VERSION}}",
+    "description": "Cross-platform markdown viewer",
+    "homepage": "https://github.com/hamidfzm/glyph",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/Glyph_{{VERSION}}_x64_en-US.msi",
+            "hash": "{{SHA256}}"
+        }
+    },
+    "checkver": {
+        "github": "https://github.com/hamidfzm/glyph"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/hamidfzm/glyph/releases/download/v$version/Glyph_${version}_x64_en-US.msi"
+            }
+        }
+    }
+}
