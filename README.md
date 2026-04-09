@@ -82,6 +82,15 @@ sudo apt update
 sudo apt install glyph
 ```
 
+### Debian
+
+```bash
+curl -fsSL https://hamidfzm.github.io/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
+echo "deb [signed-by=/usr/share/keyrings/glyph.gpg] https://hamidfzm.github.io/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/glyph.list
+sudo apt update
+sudo apt install glyph
+```
+
 ### Linux (manual)
 
 Download the `.deb` or `.AppImage` from [Releases](https://github.com/hamidfzm/glyph/releases).
