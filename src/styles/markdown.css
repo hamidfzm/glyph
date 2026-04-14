@@ -89,6 +89,50 @@
   border-radius: var(--glyph-radius-sm);
 }
 
+.markdown-body .code-block-wrapper {
+  position: relative;
+  margin: 0 0 1em;
+}
+
+.markdown-body .code-block-wrapper pre {
+  margin: 0;
+}
+
+.markdown-body .code-copy-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--glyph-radius-sm);
+  background: var(--color-surface-secondary);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+  z-index: 1;
+}
+
+.markdown-body .code-block-wrapper:hover .code-copy-button,
+.markdown-body .code-copy-button:focus-visible {
+  opacity: 1;
+}
+
+.markdown-body .code-copy-button:hover {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.markdown-body .code-copy-button.copied {
+  opacity: 1;
+  color: var(--color-accent);
+}
+
 .markdown-body pre {
   margin: 0 0 1em;
   padding: 1em;
