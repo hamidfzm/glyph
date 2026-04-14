@@ -29,6 +29,20 @@ When creating PRs, always follow the PR template. When creating issues, use the 
 - `src/components/icons/` — SVG icon components
 - `src/components/modals/` — Overlay UI (SettingsModal, AIPanel)
 
+## Releases
+
+To create a new release:
+
+1. Bump version in `package.json` and `src-tauri/Cargo.toml` (keep in sync)
+2. Run `cargo check` in `src-tauri/` to update `Cargo.lock`
+3. Commit: `chore: bump version to X.Y.Z`
+4. Push to `main`
+5. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`
+
+The tag push triggers `.github/workflows/release.yml` which builds, creates the GitHub release, and publishes to Homebrew, Chocolatey, AUR, and PPA.
+
+Do **not** create releases manually with `gh release create` — let the CI workflow handle it.
+
 ## Key Files
 
 - `src-tauri/tauri.conf.json` — App window config, CLI plugin config, bundle settings
