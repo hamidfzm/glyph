@@ -1,6 +1,24 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_SETTINGS } from "../../lib/settings";
 import { StatusBar } from "./StatusBar";
+
+function mockSettings(fontSize: number) {
+  vi.doMock("../../hooks/useSettings", () => ({
+    useSettings: () => ({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        appearance: { ...DEFAULT_SETTINGS.appearance, fontSize },
+      },
+      updateSettings: vi.fn(),
+      resetSettings: vi.fn(),
+      loaded: true,
+    }),
+  }));
+}
+
+// Default mock at 100% zoom
+mockSettings(16);
 
 describe("StatusBar", () => {
   it("renders nothing when content is null", () => {
@@ -27,5 +45,10 @@ describe("StatusBar", () => {
   it("does not display file path when not provided", () => {
     render(<StatusBar content="some content" />);
     expect(screen.queryByText(/\//)).toBeNull();
+  });
+
+  it("does not show zoom percentage at default zoom (100%)", () => {
+    render(<StatusBar content="some content" />);
+    expect(screen.queryByText("100%")).toBeNull();
   });
 });
