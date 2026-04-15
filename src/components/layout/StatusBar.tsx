@@ -1,4 +1,6 @@
+import { useSettings } from "../../hooks/useSettings";
 import { countWords, readingTime } from "../../lib/markdown";
+import { ZOOM_DEFAULT } from "../../lib/settings";
 
 interface StatusBarProps {
   filePath?: string;
@@ -6,6 +8,9 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ filePath, content }: StatusBarProps) {
+  const { settings } = useSettings();
+  const zoomPercent = Math.round((settings.appearance.fontSize / ZOOM_DEFAULT) * 100);
+
   if (!content) return null;
 
   const words = countWords(content);
@@ -19,6 +24,7 @@ export function StatusBar({ filePath, content }: StatusBarProps) {
       )}
       <span className="ml-auto">{words.toLocaleString()} words</span>
       <span>{readingTime(words)}</span>
+      {zoomPercent !== 100 && <span>{zoomPercent}%</span>}
     </div>
   );
 }

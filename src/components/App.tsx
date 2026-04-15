@@ -9,6 +9,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useTableOfContents } from "../hooks/useTableOfContents";
 import { useTheme } from "../hooks/useTheme";
 import { useTTS } from "../hooks/useTTS";
+import { ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../lib/settings";
 // Code theme CSS (inline imports for production compatibility)
 import glyphThemeCSS from "../styles/highlight.css?inline";
 import githubThemeCSS from "../styles/highlight-github.css?inline";
@@ -113,14 +114,40 @@ export function App() {
         tts.speak(content);
       }
     });
+    const unlistenZoomIn = listen("menu-zoom-in", () => {
+      updateSettings(
+        "appearance.fontSize",
+        Math.min(settings.appearance.fontSize + ZOOM_STEP, ZOOM_MAX),
+      );
+    });
+    const unlistenZoomOut = listen("menu-zoom-out", () => {
+      updateSettings(
+        "appearance.fontSize",
+        Math.max(settings.appearance.fontSize - ZOOM_STEP, ZOOM_MIN),
+      );
+    });
+    const unlistenZoomReset = listen("menu-zoom-reset", () => {
+      updateSettings("appearance.fontSize", ZOOM_DEFAULT);
+    });
     return () => {
       unlistenOpen.then((fn) => fn());
       unlistenSidebar.then((fn) => fn());
       unlistenSettings.then((fn) => fn());
       unlistenAI.then((fn) => fn());
       unlistenReadAloud.then((fn) => fn());
+      unlistenZoomIn.then((fn) => fn());
+      unlistenZoomOut.then((fn) => fn());
+      unlistenZoomReset.then((fn) => fn());
     };
-  }, [openFileDialog, toggleSidebar, content, handleAIAction, tts]);
+  }, [
+    openFileDialog,
+    toggleSidebar,
+    content,
+    handleAIAction,
+    tts,
+    settings.appearance.fontSize,
+    updateSettings,
+  ]);
 
   // Apply code theme via injected <style> element
   useEffect(() => {
