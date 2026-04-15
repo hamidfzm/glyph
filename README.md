@@ -10,20 +10,27 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 ## Features
 
 ### Markdown Rendering
-- GitHub Flavored Markdown — tables, task lists, strikethrough, autolinks
+- GitHub Flavored Markdown — tables, task lists, strikethrough, autolinks, footnotes
 - Syntax highlighting for code blocks (6 themes: Glyph, GitHub, Monokai, Nord, Solarized Light/Dark)
+- Copy button on code blocks
 - Math/LaTeX rendering — inline (`$...$`) and block (`$$...$$`) equations via KaTeX
 - Mermaid diagrams — flowcharts, sequence diagrams, Gantt charts, and more (theme-aware)
+- YAML frontmatter stripping — frontmatter is parsed and hidden from rendered output
+- Emoji shortcodes — `:smile:` → 😊, `:+1:` → 👍
 - Local and remote image display
 - External links open in system browser with optional confirmation dialog
 
 ### Viewer
+- Multiple files in tabs — open, switch, close, middle-click to close
+- In-document search — `Cmd/Ctrl+F` with match highlighting and navigation
+- Zoom in/out — `Cmd/Ctrl+=/-/0` with zoom level in status bar
 - Table of Contents sidebar with active heading tracking
 - Live reload — file watcher auto-updates on external changes
 - Drag and drop markdown files to open
 - File associations — double-click `.md` files to open in Glyph
 - CLI support — `glyph README.md`
 - Recent files list
+- Session restore — open tabs persist across restarts
 
 ### Appearance
 - System / Light / Dark themes
@@ -40,11 +47,6 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 - Cross-platform: macOS (universal), Windows (x64), Linux (amd64 + arm64)
 - Window state persistence across restarts
 - Native menu bar with keyboard shortcuts
-
-### Roadmap
-
-See [open issues](https://github.com/hamidfzm/glyph/issues) for planned features including:
-tabs, in-document search, PDF export, zoom, footnotes, and more.
 
 ## Install
 
@@ -151,8 +153,13 @@ cd src-tauri && cargo clippy    # Lint Rust
 
 | Shortcut | Action |
 |----------|--------|
-| `Cmd+O` / `Ctrl+O` | Open file |
+| `Cmd+O` / `Ctrl+O` | Open file(s) |
+| `Cmd+F` / `Ctrl+F` | Find in document |
+| `Cmd+=` / `Ctrl+=` | Zoom in |
+| `Cmd+-` / `Ctrl+-` | Zoom out |
+| `Cmd+0` / `Ctrl+0` | Reset zoom |
 | `Cmd+B` / `Ctrl+B` | Toggle sidebar |
+| `Cmd+,` / `Ctrl+,` | Settings |
 | `Cmd+W` / `Ctrl+W` | Close window |
 
 ## License
