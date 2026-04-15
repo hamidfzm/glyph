@@ -206,3 +206,51 @@
   border-top: 1px solid var(--color-border);
   margin: 2em 0;
 }
+
+/* Footnotes */
+.markdown-body .footnotes {
+  margin-top: 2em;
+  padding-top: 1em;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.875em;
+  color: var(--color-text-secondary);
+}
+
+.markdown-body .footnotes ol {
+  padding-left: 1.5em;
+}
+
+.markdown-body .footnotes li {
+  margin: 0.5em 0;
+}
+
+.markdown-body .footnotes li p {
+  margin: 0.25em 0;
+}
+
+.markdown-body [data-footnote-ref] {
+  color: var(--color-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.markdown-body [data-footnote-backref] {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.markdown-body [data-footnote-backref]:hover {
+  color: var(--color-accent);
+}
+
+.markdown-body .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
