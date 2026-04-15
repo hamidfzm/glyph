@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
+import remarkGemoji from "remark-gemoji";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { CodeBlockComponent } from "./CodeBlockComponent";
@@ -53,7 +54,7 @@ export function MarkdownViewer({
     <div ref={scrollRef} className="flex-1 overflow-y-auto">
       <div className="markdown-body px-8 py-6 pb-[60vh]">
         <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkMath]}
+          remarkPlugins={[remarkGfm, remarkMath, remarkGemoji]}
           rehypePlugins={[[rehypeHighlight, { plainText: ["mermaid"] }], rehypeKatex]}
           components={{
             ...headingComponents,

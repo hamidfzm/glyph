@@ -36,6 +36,7 @@
     "react-markdown": "^10",
     "rehype-highlight": "^7",
     "rehype-katex": "^7.0.1",
+    "remark-gemoji": "^8.0.0",
     "remark-gfm": "^4",
     "remark-math": "^6.0.0"
   },
