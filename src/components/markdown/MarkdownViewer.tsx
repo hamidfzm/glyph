@@ -6,6 +6,8 @@ import remarkFrontmatter from "remark-frontmatter";
 import remarkGemoji from "remark-gemoji";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import { useSearch } from "../../hooks/useSearch";
+import { SearchBar } from "../layout/SearchBar";
 import { CodeBlockComponent } from "./CodeBlockComponent";
 import { headingComponents } from "./HeadingComponent";
 import { useImageComponent } from "./ImageComponent";
@@ -16,6 +18,8 @@ interface MarkdownViewerProps {
   filePath?: string;
   initialScrollTop?: number;
   onScrollChange?: (scrollTop: number) => void;
+  searchOpen: boolean;
+  onSearchClose: () => void;
 }
 
 export function MarkdownViewer({
@@ -23,8 +27,13 @@ export function MarkdownViewer({
   filePath,
   initialScrollTop = 0,
   onScrollChange,
+  searchOpen,
+  onSearchClose,
 }: MarkdownViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const search = useSearch({ containerRef: contentRef });
 
   // Restore scroll position on mount
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — restore once when tab activates
@@ -51,21 +60,39 @@ export function MarkdownViewer({
 
   const ImageComponent = useImageComponent(filePath);
 
+  const handleSearchClose = () => {
+    search.clear();
+    onSearchClose();
+  };
+
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto">
-      <div className="markdown-body px-8 py-6 pb-[60vh]">
-        <ReactMarkdown
-          remarkPlugins={[remarkFrontmatter, remarkGfm, remarkMath, remarkGemoji]}
-          rehypePlugins={[[rehypeHighlight, { plainText: ["mermaid"] }], rehypeKatex]}
-          components={{
-            ...headingComponents,
-            a: LinkComponent,
-            img: ImageComponent,
-            pre: CodeBlockComponent,
-          }}
-        >
-          {content}
-        </ReactMarkdown>
+    <div className="flex-1 relative">
+      {searchOpen && (
+        <SearchBar
+          query={search.query}
+          onQueryChange={search.setQuery}
+          matchCount={search.matchCount}
+          currentMatch={search.currentMatch}
+          onNext={search.nextMatch}
+          onPrev={search.prevMatch}
+          onClose={handleSearchClose}
+        />
+      )}
+      <div ref={scrollRef} className="h-full overflow-y-auto">
+        <div ref={contentRef} className="markdown-body px-8 py-6 pb-[60vh]">
+          <ReactMarkdown
+            remarkPlugins={[remarkFrontmatter, remarkGfm, remarkMath, remarkGemoji]}
+            rehypePlugins={[[rehypeHighlight, { plainText: ["mermaid"] }], rehypeKatex]}
+            components={{
+              ...headingComponents,
+              a: LinkComponent,
+              img: ImageComponent,
+              pre: CodeBlockComponent,
+            }}
+          >
+            {content}
+          </ReactMarkdown>
+        </div>
       </div>
     </div>
   );

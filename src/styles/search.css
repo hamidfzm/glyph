@@ -1,0 +1,89 @@
+.search-bar {
+  position: absolute;
+  top: 8px;
+  right: 24px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--glyph-radius);
+  box-shadow: var(--glyph-shadow), 0 4px 12px rgba(0, 0, 0, 0.08);
+  font-size: 13px;
+  animation: search-slide-in 0.15s ease-out;
+}
+
+@keyframes search-slide-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.search-bar input {
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--glyph-radius-sm);
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  width: 200px;
+  font-family: inherit;
+  outline: none;
+}
+
+.search-bar input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+
+.search-match-count {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  min-width: 60px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.search-match-count[data-no-results="true"] {
+  color: #e53e3e;
+}
+
+.search-nav-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--color-text-secondary);
+  border-radius: var(--glyph-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-nav-btn:hover {
+  background: var(--color-surface-tertiary);
+  color: var(--color-text-primary);
+}
+
+.search-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+  pointer-events: none;
+}
+
+mark.search-highlight {
+  background: color-mix(in srgb, var(--color-accent) 25%, transparent);
+  color: inherit;
+  padding: 1px 0;
+  border-radius: 2px;
+}
+
+mark.search-highlight.search-highlight-active {
+  background: var(--color-accent);
+  color: white;
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+  outline-offset: 1px;
+}

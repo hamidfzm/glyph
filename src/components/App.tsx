@@ -65,6 +65,7 @@ export function App() {
   const [sidebarVisible, setSidebarVisible] = useState(settings.layout.sidebarVisible);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aiPanelOpen, setAIPanelOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // TTS
   const tts = useTTS({ voice: settings.ai.ttsVoice, speed: settings.ai.ttsSpeed });
@@ -109,6 +110,9 @@ export function App() {
       const text = content ?? "";
       if (text) handleAIAction(event.payload, text);
     });
+    const unlistenFind = listen("menu-find", () => {
+      setSearchOpen(true);
+    });
     const unlistenReadAloud = listen("menu-ai-read-aloud", () => {
       if (tts.speaking) {
         tts.stop();
@@ -140,6 +144,7 @@ export function App() {
       unlistenZoomIn.then((fn) => fn());
       unlistenZoomOut.then((fn) => fn());
       unlistenZoomReset.then((fn) => fn());
+      unlistenFind.then((fn) => fn());
     };
   }, [
     openFileDialog,
@@ -199,6 +204,8 @@ export function App() {
             filePath={filePath}
             initialScrollTop={activeTab?.scrollTop ?? 0}
             onScrollChange={saveScrollPosition}
+            searchOpen={searchOpen}
+            onSearchClose={() => setSearchOpen(false)}
           />
         ) : !initializing ? (
           <div className="flex-1">

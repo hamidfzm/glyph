@@ -4,6 +4,7 @@
 @import "./markdown.css";
 @import "./settings.css";
 @import "./tabs.css";
+@import "./search.css";
 
 :root {
   --color-surface: #ffffff;
