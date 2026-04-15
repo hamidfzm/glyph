@@ -51,4 +51,8 @@ jobs:
           node-version-file: '.nvmrc'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npm audit --omit=dev --audit-level=high
+      # TODO: Revert to `pnpm audit --prod` when pnpm fixes bulk endpoint support
+      # Workaround: https://github.com/pnpm/pnpm/issues/11265
+      - run: npm install --package-lock-only --ignore-scripts
+      - run: npm audit
+      - run: rm package-lock.json
