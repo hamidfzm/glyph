@@ -28,8 +28,22 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .accelerator("CmdOrCtrl+B")
         .build(handle)?;
 
+    let zoom_in = MenuItemBuilder::with_id("zoom-in", "Zoom In")
+        .accelerator("CmdOrCtrl+=")
+        .build(handle)?;
+    let zoom_out = MenuItemBuilder::with_id("zoom-out", "Zoom Out")
+        .accelerator("CmdOrCtrl+-")
+        .build(handle)?;
+    let actual_size = MenuItemBuilder::with_id("actual-size", "Actual Size")
+        .accelerator("CmdOrCtrl+0")
+        .build(handle)?;
+
     let view_menu = SubmenuBuilder::new(handle, "View")
         .item(&toggle_sidebar)
+        .separator()
+        .item(&zoom_in)
+        .item(&zoom_out)
+        .item(&actual_size)
         .separator()
         .fullscreen()
         .build()?;
@@ -149,6 +163,15 @@ pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) 
         }
         "ai-read-aloud" => {
             let _ = app.emit("menu-ai-read-aloud", ());
+        }
+        "zoom-in" => {
+            let _ = app.emit("menu-zoom-in", ());
+        }
+        "zoom-out" => {
+            let _ = app.emit("menu-zoom-out", ());
+        }
+        "actual-size" => {
+            let _ = app.emit("menu-zoom-reset", ());
         }
         _ => {}
     }

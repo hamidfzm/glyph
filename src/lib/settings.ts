@@ -70,6 +70,11 @@ export const DEFAULT_SETTINGS: Settings = {
   },
 };
 
+export const ZOOM_DEFAULT = 16;
+export const ZOOM_MIN = 8;
+export const ZOOM_MAX = 32;
+export const ZOOM_STEP = 1;
+
 export const FONT_FAMILY_MAP: Record<string, string> = {
   system: "",
   serif: "Georgia, 'Times New Roman', serif",
