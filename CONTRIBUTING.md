@@ -61,6 +61,7 @@ cd src-tauri && cargo test      # Rust tests
 ### Pull Requests
 
 - Use the [PR template](.github/PULL_REQUEST_TEMPLATE.md) — fill in all sections
+- **Link to the issue** — include `Closes #N` in the PR body so the issue auto-closes on merge
 - Keep PRs focused — one feature or fix per PR
 - Include tests for new functionality
 - Ensure CI passes on all 3 platforms (macOS, Windows, Linux)
