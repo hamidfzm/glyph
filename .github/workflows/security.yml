@@ -51,4 +51,6 @@ jobs:
           node-version-file: '.nvmrc'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --prod
+      # TODO: Revert to `pnpm audit --prod` when pnpm fixes bulk endpoint support
+      # Workaround: https://github.com/pnpm/pnpm/issues/11265
+      - run: pnpm audit --prod --ignore-registry-errors
