@@ -3,6 +3,7 @@
 @import "./platform.css";
 @import "./markdown.css";
 @import "./settings.css";
+@import "./tabs.css";
 
 :root {
   --color-surface: #ffffff;

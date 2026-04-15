@@ -12,31 +12,40 @@ import { LinkComponent } from "./LinkComponent";
 interface MarkdownViewerProps {
   content: string;
   filePath?: string;
+  initialScrollTop?: number;
+  onScrollChange?: (scrollTop: number) => void;
 }
 
-export function MarkdownViewer({ content, filePath }: MarkdownViewerProps) {
+export function MarkdownViewer({
+  content,
+  filePath,
+  initialScrollTop = 0,
+  onScrollChange,
+}: MarkdownViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const scrollPosRef = useRef(0);
 
+  // Restore scroll position on mount
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — restore once when tab activates
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (el && initialScrollTop > 0) {
+      requestAnimationFrame(() => {
+        el.scrollTop = initialScrollTop;
+      });
+    }
+  }, []);
+
+  // Report scroll position changes to parent
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !onScrollChange) return;
 
     const handler = () => {
-      scrollPosRef.current = el.scrollTop;
+      onScrollChange(el.scrollTop);
     };
     el.addEventListener("scroll", handler, { passive: true });
     return () => el.removeEventListener("scroll", handler);
-  }, []);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el && scrollPosRef.current > 0) {
-      requestAnimationFrame(() => {
-        el.scrollTop = scrollPosRef.current;
-      });
-    }
-  });
+  }, [onScrollChange]);
 
   const ImageComponent = useImageComponent(filePath);
 
