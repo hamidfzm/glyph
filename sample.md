@@ -1,126 +1,159 @@
-# Glyph Sample Document
+---
+title: Glyph Sample Document
+author: Glyph Team
+date: 2026-04-15
+tags: [markdown, demo, sample]
+---
 
-A test file for verifying links and images.
+# Glyph Feature Showcase
 
-## Links
+This document demonstrates all the rendering features supported by Glyph. The YAML frontmatter above is automatically hidden from the rendered output.
 
-Here are some links to test external link opening:
+## GitHub Flavored Markdown
 
-- [Unsplash](https://unsplash.com) — Free photos
-- [GitHub](https://github.com/hamidfzm/glyph) — Glyph repository
-- [Rust Programming Language](https://www.rust-lang.org)
-- [Tauri Documentation](https://v2.tauri.app)
-- [React Docs](https://react.dev)
+### Tables
 
-### Anchor Links
+| Feature | Status | Priority |
+|---------|--------|----------|
+| GFM tables | Done | High |
+| Task lists | Done | High |
+| Footnotes | Done | Medium |
+| Strikethrough | Done | Medium |
 
-These should navigate within the page, not open externally:
+### Task Lists
 
-- [Go to Images](#images)
-- [Go to Code](#code-block)
+- [x] GitHub Flavored Markdown
+- [x] Syntax highlighting with copy button
+- [x] Math/LaTeX rendering
+- [x] Mermaid diagrams
+- [x] Tabs and in-document search
+- [ ] Presentation mode
 
-## Images
+### Strikethrough & Autolinks
 
-### Remote Images (Unsplash)
+This text has ~~strikethrough~~ formatting. Visit https://github.com/hamidfzm/glyph for more info.
 
-A mountain landscape:
+## Code Blocks
 
-![Mountain landscape](https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=400&fit=crop)
+Hover over a code block to see the **copy button** in the top-right corner.
 
-A forest path:
+```typescript
+function fibonacci(n: number): number {
+  if (n <= 1) return n;
+  return fibonacci(n - 1) + fibonacci(n - 2);
+}
 
-![Forest path](https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&h=400&fit=crop)
+console.log(fibonacci(10)); // 55
+```
 
-### Placeholder Images
-
-![Picsum 1](https://picsum.photos/800/300)
-
-## Code Block
+```python
+def quicksort(arr):
+    if len(arr) <= 1:
+        return arr
+    pivot = arr[len(arr) // 2]
+    left = [x for x in arr if x < pivot]
+    middle = [x for x in arr if x == pivot]
+    right = [x for x in arr if x > pivot]
+    return quicksort(left) + middle + quicksort(right)
+```
 
 ```rust
 fn main() {
-    println!("Hello from Glyph!");
+    let greeting = "Hello, Glyph!";
+    println!("{greeting}");
 }
 ```
 
-```typescript
-export function greet(name: string): string {
-  return `Hello, ${name}!`;
-}
-```
+## Math / LaTeX
 
-## Mermaid Diagrams
+Inline math: Einstein's famous equation $E = mc^2$ changed physics forever.
 
-### Flowchart
+Block equations:
 
-```mermaid
-graph TD
-    A[Open Markdown File] --> B{Valid File?}
-    B -->|Yes| C[Parse Markdown]
-    B -->|No| D[Show Error]
-    C --> E[Render HTML]
-    E --> F[Display in Viewer]
-    F --> G{File Changed?}
-    G -->|Yes| C
-    G -->|No| F
-```
+$$
+\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}
+$$
 
-### Sequence Diagram
+$$
+e^{i\pi} + 1 = 0
+$$
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant Frontend
-    participant Tauri
-    participant FileSystem
-
-    User->>Frontend: Open file dialog
-    Frontend->>Tauri: invoke("open_file")
-    Tauri->>FileSystem: Read file
-    FileSystem-->>Tauri: File contents
-    Tauri-->>Frontend: Markdown string
-    Frontend->>Frontend: Render markdown
-    Note over Frontend: Live reload on change
-```
-
-### Invalid Diagram (Error Fallback)
-
-```mermaid
-this is not valid mermaid syntax !!!
-```
-
-## Table
-
-| Feature | Status |
-|---------|--------|
-| Links open in browser | Testing |
-| External link icon | Testing |
-| Remote images | Testing |
-| Local images | Testing |
-| Confirm dialog | Testing |
-
-## Math
-
-Einstein's famous equation $E = mc^2$ changed physics forever. The fine-structure constant is approximately $\alpha \approx 1/137$.
-
-### Block Equations
-
-The Gaussian integral:
-
-$$\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}$$
-
-Euler's identity:
-
-$$e^{i\pi} + 1 = 0$$
-
-The Basel problem:
-
-$$\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}$$
-
-### Matrix
+Matrix notation:
 
 $$\begin{pmatrix} a & b \\ c & d \end{pmatrix} \begin{pmatrix} x \\ y \end{pmatrix} = \begin{pmatrix} ax + by \\ cx + dy \end{pmatrix}$$
 
+## Mermaid Diagrams
+
+```mermaid
+graph TD
+    A[Open File] --> B{File Type?}
+    B -->|Markdown| C[Render Content]
+    B -->|Other| D[Show Error]
+    C --> E[Display in Viewer]
+    E --> F[Watch for Changes]
+    F -->|File Modified| C
+```
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant G as Glyph
+    participant FS as File System
+    U->>G: Open file.md
+    G->>FS: Read file
+    FS-->>G: File content
+    G->>G: Render markdown
+    G-->>U: Display rendered view
+    FS->>G: File changed event
+    G->>FS: Re-read file
+    G-->>U: Update view
+```
+
+## Footnotes
+
+Glyph supports GitHub-style footnotes[^1]. You can reference them multiple times[^2].
+
+Footnotes can contain **rich text** and even code[^3].
+
+[^1]: This is a simple footnote rendered at the bottom of the document.
+[^2]: Footnotes include back-references so you can navigate back.
+[^3]: This footnote contains a code example: `console.log("Hello from a footnote!")`.
+
+## Emoji Shortcodes
+
+Glyph converts GitHub-style emoji shortcodes to Unicode:
+
+:wave: Hello! :rocket: Ship it! :tada: Celebration! :bug: Found a bug :white_check_mark: Tests passing :heart: Love it :thumbsup: Approved
+
+## Blockquotes
+
+> "The best way to predict the future is to invent it."
+> — Alan Kay
+
+## Images
+
+### Remote Images
+
+![Mountain landscape](https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=400&fit=crop)
+
+![Forest path](https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&h=400&fit=crop)
+
+## Links
+
+- [Glyph on GitHub](https://github.com/hamidfzm/glyph) — External links open in your system browser
+- [Go to Code Blocks](#code-blocks) — Anchor links navigate within the document
+
 ---
 
-*End of sample document*
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+O` | Open file(s) |
+| `Cmd+F` | Find in document |
+| `Cmd+=` / `Cmd+-` | Zoom in / out |
+| `Cmd+0` | Reset zoom |
+| `Cmd+B` | Toggle sidebar |
+| `Cmd+,` | Settings |
+
+*Try pressing `Cmd+F` to search this document, or `Cmd+=` to zoom in!*
