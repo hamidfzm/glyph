@@ -18,9 +18,15 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .build(handle)?;
 
     // Edit menu
+    let find = MenuItemBuilder::with_id("find", "Find\u{2026}")
+        .accelerator("CmdOrCtrl+F")
+        .build(handle)?;
+
     let edit_menu = SubmenuBuilder::new(handle, "Edit")
         .copy()
         .select_all()
+        .separator()
+        .item(&find)
         .build()?;
 
     // View menu
@@ -172,6 +178,9 @@ pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) 
         }
         "actual-size" => {
             let _ = app.emit("menu-zoom-reset", ());
+        }
+        "find" => {
+            let _ = app.emit("menu-find", ());
         }
         _ => {}
     }
