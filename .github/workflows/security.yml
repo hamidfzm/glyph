@@ -53,6 +53,4 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # TODO: Revert to `pnpm audit --prod` when pnpm fixes bulk endpoint support
       # Workaround: https://github.com/pnpm/pnpm/issues/11265
-      - run: npm install --package-lock-only --ignore-scripts
-      - run: npm audit
-      - run: rm package-lock.json
+      - run: pnpm audit --prod --ignore-registry-errors
