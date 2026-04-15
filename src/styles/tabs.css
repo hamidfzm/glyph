@@ -1,14 +1,20 @@
-.tab-bar {
+.tab-bar-container {
   display: flex;
-  overflow-x: auto;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface-secondary);
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  shrink: 0;
+  flex-shrink: 0;
 }
 
-.tab-bar::-webkit-scrollbar {
+.tab-bar-scroll {
+  display: flex;
+  overflow-x: auto;
+  flex: 1;
+  min-width: 0;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tab-bar-scroll::-webkit-scrollbar {
   display: none;
 }
 

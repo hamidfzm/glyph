@@ -10,6 +10,9 @@ const makeTabs = (count: number): Tab[] =>
     content: `# File ${i}`,
     metadata: { name: `file${i}.md`, path: `/path/to/file${i}.md`, size: 100, modified: 0 },
     scrollTop: 0,
+    mode: "view" as const,
+    editContent: null,
+    dirty: false,
   }));
 
 describe("TabBar", () => {
