@@ -2,11 +2,10 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type AIAction, useAI } from "../hooks/useAI";
 import { useContextMenu } from "../hooks/useContextMenu";
-import { useFileLoader } from "../hooks/useFileLoader";
-import { useFileWatcher } from "../hooks/useFileWatcher";
 import { usePlatform } from "../hooks/usePlatform";
 import { useSettings } from "../hooks/useSettings";
 import { useTableOfContents } from "../hooks/useTableOfContents";
+import { useTabs } from "../hooks/useTabs";
 import { useTheme } from "../hooks/useTheme";
 import { useTTS } from "../hooks/useTTS";
 import { ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../lib/settings";
@@ -20,6 +19,7 @@ import solarizedLightThemeCSS from "../styles/highlight-solarized-light.css?inli
 import { EmptyState } from "./layout/EmptyState";
 import { Sidebar } from "./layout/Sidebar";
 import { StatusBar } from "./layout/StatusBar";
+import { TabBar } from "./layout/TabBar";
 import { MarkdownViewer } from "./markdown/MarkdownViewer";
 import { AIPanel } from "./modals/AIPanel";
 import { SettingsModal } from "./modals/SettingsModal";
@@ -40,15 +40,26 @@ export function App() {
   // Pass settings theme override to useTheme
   useTheme(settings.appearance.theme);
 
-  const { content, metadata, initializing, loadFile, openFileDialog } = useFileLoader({
+  const {
+    tabs,
+    activeTab,
+    activeTabId,
+    initializing,
+    closeTab,
+    setActiveTab,
+    saveScrollPosition,
+    openFileDialog,
+  } = useTabs({
     reopenLastFile: settings.behavior.reopenLastFile,
+    openTabs: settings.behavior.openTabs,
+    activeTabPath: settings.behavior.activeTabPath,
     recentFiles: settings.behavior.recentFiles,
-    onRecentFilesChange: useCallback(
-      (files: string[]) => updateSettings("behavior.recentFiles", files),
-      [updateSettings],
-    ),
     autoReload: settings.behavior.autoReload,
+    onSettingsChange: updateSettings,
   });
+
+  const content = activeTab?.content ?? null;
+  const filePath = activeTab?.path;
 
   const tocEntries = useTableOfContents(content);
   const [sidebarVisible, setSidebarVisible] = useState(settings.layout.sidebarVisible);
@@ -61,15 +72,6 @@ export function App() {
   // AI
   const ai = useAI(settings.ai);
   const aiConfigured = settings.ai.provider !== "none";
-
-  // Reload file on external change (respecting autoReload setting)
-  useFileWatcher(
-    useCallback(() => {
-      if (metadata?.path && settings.behavior.autoReload) {
-        loadFile(metadata.path);
-      }
-    }, [metadata?.path, loadFile, settings.behavior.autoReload]),
-  );
 
   // Sync sidebar visibility with settings
   useEffect(() => {
@@ -187,10 +189,17 @@ export function App() {
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)]">
+      <TabBar tabs={tabs} activeTabId={activeTabId} onActivate={setActiveTab} onClose={closeTab} />
       <div className="flex flex-1 min-h-0">
         {sidebarPosition === "left" && sidebarElement}
-        {content ? (
-          <MarkdownViewer content={content} filePath={metadata?.path} />
+        {content && activeTabId ? (
+          <MarkdownViewer
+            key={activeTabId}
+            content={content}
+            filePath={filePath}
+            initialScrollTop={activeTab?.scrollTop ?? 0}
+            onScrollChange={saveScrollPosition}
+          />
         ) : !initializing ? (
           <div className="flex-1">
             <EmptyState platform={platform} onOpenFile={openFileDialog} />
@@ -200,7 +209,7 @@ export function App() {
         )}
         {sidebarPosition === "right" && sidebarElement}
       </div>
-      <StatusBar filePath={metadata?.path} content={content} />
+      <StatusBar filePath={filePath} content={content} />
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <AIPanel

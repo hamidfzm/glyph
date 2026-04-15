@@ -20,6 +20,8 @@ export interface BehaviorSettings {
   reopenLastFile: boolean;
   confirmExternalLinks: boolean;
   recentFiles: string[];
+  openTabs: string[];
+  activeTabPath: string;
 }
 
 export interface AISettings {
@@ -59,6 +61,8 @@ export const DEFAULT_SETTINGS: Settings = {
     reopenLastFile: false,
     confirmExternalLinks: true,
     recentFiles: [],
+    openTabs: [],
+    activeTabPath: "",
   },
   ai: {
     provider: "none",
