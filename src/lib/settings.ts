@@ -15,6 +15,8 @@ export interface LayoutSettings {
   sidebarWidth: number;
 }
 
+export type EditorMode = "view" | "edit" | "split";
+
 export interface BehaviorSettings {
   autoReload: boolean;
   reopenLastFile: boolean;
@@ -22,6 +24,7 @@ export interface BehaviorSettings {
   recentFiles: string[];
   openTabs: string[];
   activeTabPath: string;
+  defaultEditorMode: EditorMode;
 }
 
 export interface AISettings {
@@ -63,6 +66,7 @@ export const DEFAULT_SETTINGS: Settings = {
     recentFiles: [],
     openTabs: [],
     activeTabPath: "",
+    defaultEditorMode: "view",
   },
   ai: {
     provider: "none",

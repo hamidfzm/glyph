@@ -89,6 +89,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
+            commands::write_file,
             commands::get_file_metadata,
             commands::get_initial_file,
             watcher::watch_file,

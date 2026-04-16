@@ -27,6 +27,11 @@ pub fn read_file(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn write_file(path: String, content: String) -> Result<(), String> {
+    fs::write(&path, &content).map_err(|e| format!("Failed to write file: {e}"))
+}
+
+#[tauri::command]
 pub fn get_file_metadata(path: String) -> Result<FileMetadata, String> {
     let p = Path::new(&path);
     let metadata = fs::metadata(p).map_err(|e| format!("Failed to get metadata: {e}"))?;

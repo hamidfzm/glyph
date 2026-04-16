@@ -1,0 +1,105 @@
+.editor-container {
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.editor-container .cm-editor {
+  height: 100%;
+}
+
+.split-view {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.split-view-editor {
+  flex: 1;
+  min-width: 0;
+  border-right: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.split-view-preview {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding: 0 4px;
+}
+
+.mode-toggle-btn {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: var(--glyph-radius-sm);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.mode-toggle-btn:hover {
+  background: var(--color-surface-tertiary);
+  color: var(--color-text-primary);
+}
+
+.mode-toggle-btn[data-active] {
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+/* Syntax highlighting tokens — uses CSS variables for theme-aware colors */
+.cm-heading {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.cm-heading-1 { font-size: 1.4em; }
+.cm-heading-2 { font-size: 1.2em; }
+.cm-heading-3 { font-size: 1.1em; }
+
+.cm-strong { font-weight: 700; color: var(--color-text-primary); }
+.cm-emphasis { font-style: italic; }
+.cm-strikethrough { text-decoration: line-through; color: var(--color-text-tertiary); }
+
+.cm-link { color: var(--color-accent); text-decoration: underline; }
+.cm-url { color: var(--color-accent); opacity: 0.7; }
+
+.cm-code {
+  color: var(--color-text-secondary);
+}
+
+.cm-quote {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.cm-meta { color: var(--color-text-tertiary); }
+.cm-keyword { color: #c678dd; }
+.cm-string { color: #98c379; }
+.cm-number { color: #d19a66; }
+
+.dark .cm-keyword { color: #c792ea; }
+.dark .cm-string { color: #a5d6a7; }
+.dark .cm-number { color: #f5c06f; }
+
+.tab-dirty-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  flex-shrink: 0;
+}

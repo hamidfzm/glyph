@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type AIAction, useAI } from "../hooks/useAI";
+import { useAutoSave } from "../hooks/useAutoSave";
 import { useContextMenu } from "../hooks/useContextMenu";
 import { usePlatform } from "../hooks/usePlatform";
 import { useSettings } from "../hooks/useSettings";
@@ -16,6 +17,8 @@ import monokaiThemeCSS from "../styles/highlight-monokai.css?inline";
 import nordThemeCSS from "../styles/highlight-nord.css?inline";
 import solarizedDarkThemeCSS from "../styles/highlight-solarized-dark.css?inline";
 import solarizedLightThemeCSS from "../styles/highlight-solarized-light.css?inline";
+import { MarkdownEditor } from "./editor/MarkdownEditor";
+import { SplitView } from "./editor/SplitView";
 import { EmptyState } from "./layout/EmptyState";
 import { Sidebar } from "./layout/Sidebar";
 import { StatusBar } from "./layout/StatusBar";
@@ -47,6 +50,9 @@ export function App() {
     initializing,
     closeTab,
     setActiveTab,
+    setTabMode,
+    updateEditContent,
+    markSaved,
     saveScrollPosition,
     openFileDialog,
   } = useTabs({
@@ -55,17 +61,35 @@ export function App() {
     activeTabPath: settings.behavior.activeTabPath,
     recentFiles: settings.behavior.recentFiles,
     autoReload: settings.behavior.autoReload,
+    defaultEditorMode: settings.behavior.defaultEditorMode,
     onSettingsChange: updateSettings,
   });
 
   const content = activeTab?.content ?? null;
   const filePath = activeTab?.path;
+  const activeMode = activeTab?.mode ?? "view";
 
-  const tocEntries = useTableOfContents(content);
+  // For view/split, use file content; for edit, use editContent for preview
+  const displayContent = activeMode !== "view" ? (activeTab?.editContent ?? content) : content;
+
+  const tocEntries = useTableOfContents(displayContent);
   const [sidebarVisible, setSidebarVisible] = useState(settings.layout.sidebarVisible);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aiPanelOpen, setAIPanelOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // Auto-save for edit mode
+  useAutoSave({
+    path: filePath,
+    content: activeTab?.editContent ?? null,
+    dirty: activeTab?.dirty ?? false,
+    onSaved: useCallback(
+      (savedContent: string) => {
+        if (activeTabId) markSaved(activeTabId, savedContent);
+      },
+      [activeTabId, markSaved],
+    ),
+  });
 
   // TTS
   const tts = useTTS({ voice: settings.ai.ttsVoice, speed: settings.ai.ttsSpeed });
@@ -95,6 +119,16 @@ export function App() {
     [ai],
   );
 
+  // Handle editor content changes
+  const handleEditorChange = useCallback(
+    (newContent: string) => {
+      if (activeTabId) {
+        updateEditContent(activeTabId, newContent);
+      }
+    },
+    [activeTabId, updateEditContent],
+  );
+
   // Menu events from Rust
   useEffect(() => {
     const unlistenOpen = listen("menu-open-file", () => {
@@ -107,17 +141,22 @@ export function App() {
       setSettingsOpen(true);
     });
     const unlistenAI = listen<string>("menu-ai-action", (event) => {
-      const text = content ?? "";
+      const text = displayContent ?? "";
       if (text) handleAIAction(event.payload, text);
     });
     const unlistenFind = listen("menu-find", () => {
       setSearchOpen(true);
     });
+    const unlistenToggleEdit = listen("menu-toggle-edit", () => {
+      if (!activeTabId) return;
+      const nextMode = activeMode === "view" ? "edit" : activeMode === "edit" ? "split" : "view";
+      setTabMode(activeTabId, nextMode);
+    });
     const unlistenReadAloud = listen("menu-ai-read-aloud", () => {
       if (tts.speaking) {
         tts.stop();
-      } else if (content) {
-        tts.speak(content);
+      } else if (displayContent) {
+        tts.speak(displayContent);
       }
     });
     const unlistenZoomIn = listen("menu-zoom-in", () => {
@@ -145,15 +184,19 @@ export function App() {
       unlistenZoomOut.then((fn) => fn());
       unlistenZoomReset.then((fn) => fn());
       unlistenFind.then((fn) => fn());
+      unlistenToggleEdit.then((fn) => fn());
     };
   }, [
     openFileDialog,
     toggleSidebar,
-    content,
+    displayContent,
     handleAIAction,
     tts,
     settings.appearance.fontSize,
     updateSettings,
+    activeTabId,
+    activeMode,
+    setTabMode,
   ]);
 
   // Apply code theme via injected <style> element
@@ -179,34 +222,72 @@ export function App() {
       ttsAvailable: tts.available,
       aiAction: handleAIAction,
       aiConfigured,
-      content,
+      content: displayContent,
     }),
-    [openFileDialog, toggleSidebar, tts, handleAIAction, aiConfigured, content],
+    [openFileDialog, toggleSidebar, tts, handleAIAction, aiConfigured, displayContent],
   );
   useContextMenu(platform, contextMenuActions);
 
   const sidebarPosition = settings.layout.sidebarPosition;
   const sidebarWidth = settings.layout.sidebarWidth;
 
-  const sidebarElement = content ? (
+  const sidebarElement = displayContent ? (
     <Sidebar entries={tocEntries} visible={sidebarVisible} width={sidebarWidth} />
   ) : null;
 
-  return (
-    <div className="flex flex-col h-full bg-[var(--color-surface)]">
-      <TabBar tabs={tabs} activeTabId={activeTabId} onActivate={setActiveTab} onClose={closeTab} />
-      <div className="flex flex-1 min-h-0">
-        {sidebarPosition === "left" && sidebarElement}
-        {content && activeTabId ? (
-          <MarkdownViewer
-            key={activeTabId}
-            content={content}
+  const renderContent = () => {
+    if (!activeTabId || !content) return null;
+
+    const editorContent = activeTab?.editContent ?? content;
+
+    if (activeMode === "edit") {
+      return (
+        <div className="flex-1 overflow-hidden">
+          <MarkdownEditor content={editorContent} onChange={handleEditorChange} />
+        </div>
+      );
+    }
+
+    if (activeMode === "split") {
+      return (
+        <div className="flex-1 overflow-hidden">
+          <SplitView
+            content={editorContent}
             filePath={filePath}
-            initialScrollTop={activeTab?.scrollTop ?? 0}
-            onScrollChange={saveScrollPosition}
+            onChange={handleEditorChange}
             searchOpen={searchOpen}
             onSearchClose={() => setSearchOpen(false)}
           />
+        </div>
+      );
+    }
+
+    return (
+      <MarkdownViewer
+        key={activeTabId}
+        content={content}
+        filePath={filePath}
+        initialScrollTop={activeTab?.scrollTop ?? 0}
+        onScrollChange={saveScrollPosition}
+        searchOpen={searchOpen}
+        onSearchClose={() => setSearchOpen(false)}
+      />
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-[var(--color-surface)]">
+      <TabBar
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onActivate={setActiveTab}
+        onClose={closeTab}
+        onModeChange={setTabMode}
+      />
+      <div className="flex flex-1 min-h-0">
+        {sidebarPosition === "left" && sidebarElement}
+        {activeTabId && content ? (
+          renderContent()
         ) : !initializing ? (
           <div className="flex-1">
             <EmptyState platform={platform} onOpenFile={openFileDialog} />
@@ -216,7 +297,7 @@ export function App() {
         )}
         {sidebarPosition === "right" && sidebarElement}
       </div>
-      <StatusBar filePath={filePath} content={content} />
+      <StatusBar filePath={filePath} content={displayContent} />
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <AIPanel

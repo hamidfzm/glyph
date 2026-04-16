@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { EditorMode } from "../lib/settings";
 
 interface FileMetadata {
   name: string;
@@ -16,6 +17,9 @@ export interface Tab {
   content: string | null;
   metadata: FileMetadata | null;
   scrollTop: number;
+  mode: EditorMode;
+  editContent: string | null;
+  dirty: boolean;
 }
 
 interface TabsState {
@@ -37,6 +41,7 @@ interface UseTabsOptions {
   activeTabPath: string;
   recentFiles: string[];
   autoReload: boolean;
+  defaultEditorMode: EditorMode;
   onSettingsChange: (key: string, value: unknown) => void;
 }
 
@@ -88,7 +93,17 @@ export function useTabs(options: UseTabsOptions) {
       try {
         const { content, metadata } = await loadFileContent(path);
         await invoke("watch_file", { path });
-        const newTab: Tab = { id, path, content, metadata, scrollTop: 0 };
+        const mode = optionsRef.current.defaultEditorMode;
+        const newTab: Tab = {
+          id,
+          path,
+          content,
+          metadata,
+          scrollTop: 0,
+          mode,
+          editContent: null,
+          dirty: false,
+        };
         setState((prev) => {
           // Double-check inside updater
           if (prev.tabs.some((t) => t.path === path)) {
@@ -148,6 +163,34 @@ export function useTabs(options: UseTabsOptions) {
     },
     [activeTabId],
   );
+
+  const setTabMode = useCallback((id: string, mode: EditorMode) => {
+    setState((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) => {
+        if (t.id !== id) return t;
+        // When entering edit mode, initialize editContent from content
+        if (mode !== "view" && t.editContent === null) {
+          return { ...t, mode, editContent: t.content };
+        }
+        return { ...t, mode };
+      }),
+    }));
+  }, []);
+
+  const updateEditContent = useCallback((id: string, editContent: string) => {
+    setState((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) => (t.id === id ? { ...t, editContent, dirty: true } : t)),
+    }));
+  }, []);
+
+  const markSaved = useCallback((id: string, content: string) => {
+    setState((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) => (t.id === id ? { ...t, content, dirty: false } : t)),
+    }));
+  }, []);
 
   const openFileDialog = useCallback(async () => {
     const selected = await open({
@@ -215,6 +258,9 @@ export function useTabs(options: UseTabsOptions) {
       clearTimeout(timeout);
       timeout = setTimeout(async () => {
         const changedPath = event.payload;
+        // Skip reload if the tab is in edit mode with unsaved changes
+        const tab = stateRef.current.tabs.find((t) => t.path === changedPath);
+        if (tab && tab.mode !== "view" && tab.dirty) return;
         try {
           const { content, metadata } = await loadFileContent(changedPath);
           setState((prev) => ({
@@ -241,6 +287,9 @@ export function useTabs(options: UseTabsOptions) {
     openFile,
     closeTab,
     setActiveTab,
+    setTabMode,
+    updateEditContent,
+    markSaved,
     saveScrollPosition,
     openFileDialog,
   };

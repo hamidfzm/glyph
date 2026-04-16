@@ -44,8 +44,13 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .accelerator("CmdOrCtrl+0")
         .build(handle)?;
 
+    let toggle_edit = MenuItemBuilder::with_id("toggle-edit", "Toggle Edit Mode")
+        .accelerator("CmdOrCtrl+E")
+        .build(handle)?;
+
     let view_menu = SubmenuBuilder::new(handle, "View")
         .item(&toggle_sidebar)
+        .item(&toggle_edit)
         .separator()
         .item(&zoom_in)
         .item(&zoom_out)
@@ -181,6 +186,9 @@ pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) 
         }
         "find" => {
             let _ = app.emit("menu-find", ());
+        }
+        "toggle-edit" => {
+            let _ = app.emit("menu-toggle-edit", ());
         }
         _ => {}
     }

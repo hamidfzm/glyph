@@ -5,6 +5,7 @@
 @import "./settings.css";
 @import "./tabs.css";
 @import "./search.css";
+@import "./editor.css";
 
 :root {
   --color-surface: #ffffff;
