@@ -170,4 +170,4 @@ cd src-tauri && cargo clippy    # Lint Rust
 
 ## License
 
-MIT
+[MIT](LICENSE)
