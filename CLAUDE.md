@@ -31,17 +31,16 @@ When creating PRs, always follow the PR template. When creating issues, use the 
 
 ## Releases
 
-To create a new release:
+Run the **Create Release** workflow from GitHub Actions (`create-release.yml`) with the desired version number (e.g. `0.5.0`). It will:
 
-1. Bump version in `package.json` and `src-tauri/Cargo.toml` (keep in sync)
-2. Run `cargo check` in `src-tauri/` to update `Cargo.lock`
-3. Commit: `chore: bump version to X.Y.Z`
-4. Push to `main`
-5. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`
+1. Bump version in `package.json` and `src-tauri/Cargo.toml`
+2. Update `Cargo.lock`
+3. Commit and push to `main`
+4. Create and push the `vX.Y.Z` tag, which triggers `release.yml`
 
-The tag push triggers `.github/workflows/release.yml` which builds, creates the GitHub release, and publishes to Homebrew, Chocolatey, AUR, and PPA.
+The release workflow builds all platforms and publishes to Homebrew, Chocolatey, Scoop, AUR, PPA, and the Debian apt repo.
 
-Do **not** create releases manually with `gh release create` — let the CI workflow handle it.
+Do **not** create releases manually with `gh release create` or push tags by hand — use the workflow.
 
 ## Key Files
 
