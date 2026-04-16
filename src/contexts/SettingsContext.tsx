@@ -66,15 +66,24 @@ function setNestedValue(
 
   const result = { ...obj };
   let current: Record<string, unknown> = result;
+  let schemaCurrent: Record<string, unknown> = DEFAULT_SETTINGS as unknown as Record<string, unknown>;
 
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
     if (FORBIDDEN_OBJECT_KEYS.has(key)) {
       return obj;
     }
-    if (!isSafePlainObject(current)) {
+    if (!isSafePlainObject(current) || !isSafePlainObject(schemaCurrent)) {
       return obj;
     }
+    if (!Object.hasOwn(schemaCurrent, key)) {
+      return obj;
+    }
+    const schemaNext = schemaCurrent[key];
+    if (!isSafePlainObject(schemaNext)) {
+      return obj;
+    }
+
     const existing = Object.hasOwn(current, key) ? current[key] : undefined;
     if (isSafePlainObject(existing)) {
       current[key] = { ...existing };
@@ -86,13 +95,17 @@ function setNestedValue(
       return obj;
     }
     current = next;
+    schemaCurrent = schemaNext;
   }
 
   const lastKey = keys[keys.length - 1];
   if (FORBIDDEN_OBJECT_KEYS.has(lastKey)) {
     return obj;
   }
-  if (!isSafePlainObject(current)) {
+  if (!isSafePlainObject(current) || !isSafePlainObject(schemaCurrent)) {
+    return obj;
+  }
+  if (!Object.hasOwn(schemaCurrent, lastKey)) {
     return obj;
   }
 
