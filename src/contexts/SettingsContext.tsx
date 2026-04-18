@@ -1,11 +1,11 @@
-import { createContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { load, type Store } from "@tauri-apps/plugin-store";
+import { createContext, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
-  type Settings,
+  CONTENT_WIDTH_MAP,
   DEFAULT_SETTINGS,
   FONT_FAMILY_MAP,
   LINE_HEIGHT_MAP,
-  CONTENT_WIDTH_MAP,
+  type Settings,
 } from "../lib/settings";
 
 export interface SettingsContextValue {
@@ -66,13 +66,24 @@ function setNestedValue(
 
   const result = { ...obj };
   let current: Record<string, unknown> = result;
+  // Schema allowlist: each path segment must be an own property of DEFAULT_SETTINGS
+  // at the corresponding depth. This prevents prototype pollution even if the
+  // FORBIDDEN_OBJECT_KEYS denylist ever misses a dangerous name.
+  let schema: Record<string, unknown> = DEFAULT_SETTINGS as unknown as Record<string, unknown>;
 
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
     if (FORBIDDEN_OBJECT_KEYS.has(key)) {
       return obj;
     }
-    if (!isSafePlainObject(current)) {
+    if (!isSafePlainObject(current) || !isSafePlainObject(schema)) {
+      return obj;
+    }
+    if (!Object.hasOwn(schema, key)) {
+      return obj;
+    }
+    const schemaNext = schema[key];
+    if (!isSafePlainObject(schemaNext)) {
       return obj;
     }
     const existing = Object.hasOwn(current, key) ? current[key] : undefined;
@@ -86,13 +97,17 @@ function setNestedValue(
       return obj;
     }
     current = next;
+    schema = schemaNext;
   }
 
   const lastKey = keys[keys.length - 1];
   if (FORBIDDEN_OBJECT_KEYS.has(lastKey)) {
     return obj;
   }
-  if (!isSafePlainObject(current)) {
+  if (!isSafePlainObject(current) || !isSafePlainObject(schema)) {
+    return obj;
+  }
+  if (!Object.hasOwn(schema, lastKey)) {
     return obj;
   }
 
