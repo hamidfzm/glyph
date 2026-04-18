@@ -10,6 +10,9 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
     let open = MenuItemBuilder::with_id("open", "Open\u{2026}")
         .accelerator("CmdOrCtrl+O")
         .build(handle)?;
+    let print = MenuItemBuilder::with_id("print", "Print\u{2026}")
+        .accelerator("CmdOrCtrl+P")
+        .build(handle)?;
     let close = MenuItemBuilder::with_id("close", "Close Window")
         .accelerator("CmdOrCtrl+W")
         .build(handle)?;
@@ -97,6 +100,8 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         let file_menu = SubmenuBuilder::new(handle, "File")
             .item(&open)
             .separator()
+            .item(&print)
+            .separator()
             .item(&close)
             .build()?;
 
@@ -130,6 +135,8 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         let file_menu = SubmenuBuilder::new(handle, "File")
             .item(&open)
             .separator()
+            .item(&print)
+            .separator()
             .item(&settings)
             .separator()
             .item(&close)
@@ -151,6 +158,9 @@ pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) 
     match event.id().as_ref() {
         "open" => {
             let _ = app.emit("menu-open-file", ());
+        }
+        "print" => {
+            let _ = app.emit("menu-print", ());
         }
         "close" => {
             if let Some(window) = app.get_webview_window("main") {

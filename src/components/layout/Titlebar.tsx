@@ -6,6 +6,7 @@ export function Titlebar({ fileName }: TitlebarProps) {
   return (
     <div
       data-tauri-drag-region
+      data-print-hide="true"
       className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center border-b border-[var(--color-border)]"
       style={{
         height: "var(--glyph-titlebar-height)",

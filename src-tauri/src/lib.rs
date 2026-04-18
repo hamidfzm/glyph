@@ -92,6 +92,7 @@ pub fn run() {
             commands::write_file,
             commands::get_file_metadata,
             commands::get_initial_file,
+            commands::print_document,
             watcher::watch_file,
             watcher::unwatch_file,
         ])

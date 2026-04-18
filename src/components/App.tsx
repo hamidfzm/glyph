@@ -4,6 +4,7 @@ import { type AIAction, useAI } from "../hooks/useAI";
 import { useAutoSave } from "../hooks/useAutoSave";
 import { useContextMenu } from "../hooks/useContextMenu";
 import { usePlatform } from "../hooks/usePlatform";
+import { usePrint } from "../hooks/usePrint";
 import { useSettings } from "../hooks/useSettings";
 import { useTableOfContents } from "../hooks/useTableOfContents";
 import { useTabs } from "../hooks/useTabs";
@@ -98,6 +99,9 @@ export function App() {
   const ai = useAI(settings.ai);
   const aiConfigured = settings.ai.provider !== "none";
 
+  // Print
+  const printDoc = usePrint({ entries: tocEntries, settings: settings.print });
+
   // Sync sidebar visibility with settings
   useEffect(() => {
     setSidebarVisible(settings.layout.sidebarVisible);
@@ -152,6 +156,9 @@ export function App() {
       const nextMode = activeMode === "view" ? "edit" : activeMode === "edit" ? "split" : "view";
       setTabMode(activeTabId, nextMode);
     });
+    const unlistenPrint = listen("menu-print", () => {
+      printDoc();
+    });
     const unlistenReadAloud = listen("menu-ai-read-aloud", () => {
       if (tts.speaking) {
         tts.stop();
@@ -185,6 +192,7 @@ export function App() {
       unlistenZoomReset.then((fn) => fn());
       unlistenFind.then((fn) => fn());
       unlistenToggleEdit.then((fn) => fn());
+      unlistenPrint.then((fn) => fn());
     };
   }, [
     openFileDialog,
@@ -197,6 +205,7 @@ export function App() {
     activeTabId,
     activeMode,
     setTabMode,
+    printDoc,
   ]);
 
   // Apply code theme via injected <style> element

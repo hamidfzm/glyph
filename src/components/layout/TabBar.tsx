@@ -15,7 +15,7 @@ export function TabBar({ tabs, activeTabId, onActivate, onClose, onModeChange }:
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   return (
-    <div className="tab-bar-container">
+    <div className="tab-bar-container" data-print-hide="true">
       <div className="tab-bar-scroll">
         {tabs.map((tab) => (
           <button
