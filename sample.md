@@ -150,10 +150,11 @@ Glyph converts GitHub-style emoji shortcodes to Unicode:
 | Shortcut | Action |
 |----------|--------|
 | `Cmd+O` | Open file(s) |
+| `Cmd+P` | Print / Export to PDF |
 | `Cmd+F` | Find in document |
 | `Cmd+=` / `Cmd+-` | Zoom in / out |
 | `Cmd+0` | Reset zoom |
 | `Cmd+B` | Toggle sidebar |
 | `Cmd+,` | Settings |
 
-*Try pressing `Cmd+F` to search this document, or `Cmd+=` to zoom in!*
+*Try pressing `Cmd+F` to search this document, or `Cmd+P` to print / save as PDF.*

@@ -1,0 +1,152 @@
+@media print {
+  @page {
+    margin: 2cm;
+  }
+
+  html,
+  body,
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  [data-print-hide="true"],
+  .settings-overlay,
+  .search-bar,
+  .ai-panel {
+    display: none !important;
+  }
+
+  .markdown-body {
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+    padding-bottom: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  .markdown-body > *:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  [class*="overflow-y-auto"],
+  [class*="overflow-hidden"] {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3,
+  .markdown-body h4,
+  .markdown-body h5,
+  .markdown-body h6 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .markdown-body pre,
+  .markdown-body table,
+  .markdown-body figure,
+  .markdown-body img,
+  .markdown-body blockquote {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  [data-print-breaks="h1"] .markdown-body h1 {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  [data-print-breaks="h2"] .markdown-body h1,
+  [data-print-breaks="h2"] .markdown-body h2 {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  [data-print-breaks] .markdown-body > :first-child,
+  [data-print-breaks] .print-toc + * {
+    break-before: auto !important;
+    page-break-before: auto !important;
+  }
+
+  [data-print-bg="true"] .markdown-body,
+  [data-print-bg="true"] .markdown-body * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  [data-print-bg="false"] .markdown-body,
+  [data-print-bg="false"] .markdown-body * {
+    background: transparent !important;
+    color: #000000 !important;
+  }
+
+  [data-print-bg="false"] .markdown-body a {
+    color: #000000 !important;
+    text-decoration: underline;
+  }
+
+  [data-print-bg="false"] .markdown-body pre,
+  [data-print-bg="false"] .markdown-body code {
+    background: #f5f5f5 !important;
+    color: #000000 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .markdown-body a[href^="http"]::after,
+  .markdown-body a[href^="https"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    word-break: break-all;
+    color: inherit;
+  }
+
+  .markdown-body a[href^="#"]::after {
+    content: none;
+  }
+
+  .print-toc {
+    break-after: page;
+    page-break-after: always;
+    margin-bottom: 1.5rem;
+  }
+
+  .print-toc h2 {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+    font-size: 1.4rem;
+  }
+
+  .print-toc ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+  }
+
+  .print-toc li {
+    padding: 0.15rem 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-toc a {
+    text-decoration: none;
+    color: inherit;
+  }
+}
+
+.print-toc {
+  display: none;
+}
+
+@media print {
+  .print-toc {
+    display: block;
+  }
+}

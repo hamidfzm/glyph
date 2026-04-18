@@ -31,6 +31,7 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 - In-document search — `Cmd/Ctrl+F` with match highlighting and navigation
 - Zoom in/out — `Cmd/Ctrl+=/-/0` with zoom level in status bar
 - Table of Contents sidebar with active heading tracking
+- Print & PDF export — `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
 - Live reload — file watcher auto-updates on external changes
 - Drag and drop markdown files to open
 - File associations — double-click `.md` files to open in Glyph
@@ -160,6 +161,7 @@ cd src-tauri && cargo clippy    # Lint Rust
 | Shortcut | Action |
 |----------|--------|
 | `Cmd+O` / `Ctrl+O` | Open file(s) |
+| `Cmd+P` / `Ctrl+P` | Print / Export to PDF |
 | `Cmd+F` / `Ctrl+F` | Find in document |
 | `Cmd+=` / `Ctrl+=` | Zoom in |
 | `Cmd+-` / `Ctrl+-` | Zoom out |

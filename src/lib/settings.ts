@@ -36,11 +36,18 @@ export interface AISettings {
   ttsSpeed: number;
 }
 
+export interface PrintSettings {
+  pageBreakLevel: "none" | "h1" | "h2";
+  includeToc: boolean;
+  includeBackground: boolean;
+}
+
 export interface Settings {
   appearance: AppearanceSettings;
   layout: LayoutSettings;
   behavior: BehaviorSettings;
   ai: AISettings;
+  print: PrintSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -75,6 +82,11 @@ export const DEFAULT_SETTINGS: Settings = {
     model: "",
     ttsVoice: "",
     ttsSpeed: 1.0,
+  },
+  print: {
+    pageBreakLevel: "none",
+    includeToc: false,
+    includeBackground: false,
   },
 };
 

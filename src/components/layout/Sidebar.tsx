@@ -45,6 +45,7 @@ export function Sidebar({ entries, visible, width }: SidebarProps) {
 
   return (
     <nav
+      data-print-hide="true"
       className="shrink-0 overflow-y-auto border-r border-[var(--color-border)] select-none pt-3"
       style={{
         width: width ?? 224,
