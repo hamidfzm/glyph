@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useCallback } from "react";
 import type { PrintSettings } from "../lib/settings";
 import type { TocEntry } from "./useTableOfContents";
@@ -57,6 +58,12 @@ export function usePrint({ entries, settings }: UsePrintOptions) {
     };
 
     window.addEventListener("afterprint", cleanup);
-    window.print();
+
+    // Use the native Tauri webview print() — window.print() is unreliable
+    // on macOS WKWebView. Fall back to window.print() if the command fails
+    // (e.g. running in a plain browser for tests).
+    invoke("print_document").catch(() => {
+      window.print();
+    });
   }, [entries, settings.pageBreakLevel, settings.includeBackground, settings.includeToc]);
 }

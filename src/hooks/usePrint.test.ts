@@ -4,6 +4,11 @@ import type { PrintSettings } from "../lib/settings";
 import { usePrint } from "./usePrint";
 import type { TocEntry } from "./useTableOfContents";
 
+const invokeMock = vi.fn();
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => invokeMock(...args),
+}));
+
 const DEFAULT_PRINT: PrintSettings = {
   pageBreakLevel: "none",
   includeToc: false,
@@ -16,38 +21,25 @@ const ENTRIES: TocEntry[] = [
 ];
 
 describe("usePrint", () => {
-  let printMock: ReturnType<typeof vi.fn>;
-  let originalPrint: typeof window.print | undefined;
-
   beforeEach(() => {
     const body = document.createElement("div");
     body.className = "markdown-body";
     document.body.appendChild(body);
-    originalPrint = window.print;
-    printMock = vi.fn();
-    Object.defineProperty(window, "print", {
-      configurable: true,
-      writable: true,
-      value: printMock,
-    });
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     document.documentElement.removeAttribute("data-print-breaks");
     document.documentElement.removeAttribute("data-print-bg");
     document.body.innerHTML = "";
-    Object.defineProperty(window, "print", {
-      configurable: true,
-      writable: true,
-      value: originalPrint,
-    });
   });
 
   it("no-ops when no .markdown-body is present", () => {
     document.body.innerHTML = "";
     const { result } = renderHook(() => usePrint({ entries: ENTRIES, settings: DEFAULT_PRINT }));
     result.current();
-    expect(printMock).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
   it("sets html data attributes from settings before printing", () => {
@@ -60,7 +52,7 @@ describe("usePrint", () => {
     result.current();
     expect(document.documentElement.getAttribute("data-print-breaks")).toBe("h2");
     expect(document.documentElement.getAttribute("data-print-bg")).toBe("true");
-    expect(printMock).toHaveBeenCalledOnce();
+    expect(invokeMock).toHaveBeenCalledWith("print_document");
   });
 
   it("injects a print-toc when includeToc is true and entries exist", () => {
