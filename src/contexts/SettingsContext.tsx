@@ -1,11 +1,11 @@
-import { createContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { load, type Store } from "@tauri-apps/plugin-store";
+import { createContext, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
-  type Settings,
+  CONTENT_WIDTH_MAP,
   DEFAULT_SETTINGS,
   FONT_FAMILY_MAP,
   LINE_HEIGHT_MAP,
-  CONTENT_WIDTH_MAP,
+  type Settings,
 } from "../lib/settings";
 
 export interface SettingsContextValue {
