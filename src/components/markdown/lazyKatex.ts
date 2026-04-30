@@ -14,10 +14,9 @@ export function hasMath(content: string): boolean {
 
 export function loadKatex(): Promise<RehypePlugin> {
   if (!katexPromise) {
-    katexPromise = Promise.all([
-      import("rehype-katex"),
-      import("katex/dist/katex.min.css"),
-    ]).then(([mod]) => mod.default as RehypePlugin);
+    katexPromise = Promise.all([import("rehype-katex"), import("katex/dist/katex.min.css")]).then(
+      ([mod]) => mod.default as RehypePlugin,
+    );
   }
   return katexPromise;
 }

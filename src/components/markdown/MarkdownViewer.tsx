@@ -67,7 +67,9 @@ export function MarkdownViewer({
   };
 
   const rehypePlugins: NonNullable<Options["rehypePlugins"]> = useMemo(() => {
-    const plugins: NonNullable<Options["rehypePlugins"]> = [[rehypeHighlight, { plainText: ["mermaid"] }]];
+    const plugins: NonNullable<Options["rehypePlugins"]> = [
+      [rehypeHighlight, { plainText: ["mermaid"] }],
+    ];
     if (katexPlugin) plugins.push(katexPlugin);
     return plugins;
   }, [katexPlugin]);
