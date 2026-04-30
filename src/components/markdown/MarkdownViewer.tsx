@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
-import ReactMarkdown from "react-markdown";
+import { useEffect, useMemo, useRef } from "react";
+import ReactMarkdown, { type Options } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
-import rehypeKatex from "rehype-katex";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGemoji from "remark-gemoji";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import { useKatexPlugin } from "../../hooks/useKatexPlugin";
 import { useSearch } from "../../hooks/useSearch";
 import { SearchBar } from "../layout/SearchBar";
 import { CodeBlockComponent } from "./CodeBlockComponent";
@@ -34,6 +34,7 @@ export function MarkdownViewer({
   const contentRef = useRef<HTMLDivElement>(null);
 
   const search = useSearch({ containerRef: contentRef });
+  const katexPlugin = useKatexPlugin(content);
 
   // Restore scroll position on mount
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — restore once when tab activates
@@ -65,6 +66,12 @@ export function MarkdownViewer({
     onSearchClose();
   };
 
+  const rehypePlugins: NonNullable<Options["rehypePlugins"]> = useMemo(() => {
+    const plugins: NonNullable<Options["rehypePlugins"]> = [[rehypeHighlight, { plainText: ["mermaid"] }]];
+    if (katexPlugin) plugins.push(katexPlugin);
+    return plugins;
+  }, [katexPlugin]);
+
   return (
     <div className="flex-1 relative">
       {searchOpen && (
@@ -82,7 +89,7 @@ export function MarkdownViewer({
         <div ref={contentRef} className="markdown-body px-8 py-6 pb-[60vh]">
           <ReactMarkdown
             remarkPlugins={[remarkFrontmatter, remarkGfm, remarkMath, remarkGemoji]}
-            rehypePlugins={[[rehypeHighlight, { plainText: ["mermaid"] }], rehypeKatex]}
+            rehypePlugins={rehypePlugins}
             components={{
               ...headingComponents,
               a: LinkComponent,

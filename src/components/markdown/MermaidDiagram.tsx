@@ -1,7 +1,14 @@
-import mermaid from "mermaid";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 let idCounter = 0;
+let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
+
+function loadMermaid() {
+  if (!mermaidPromise) {
+    mermaidPromise = import("mermaid").then((m) => m.default);
+  }
+  return mermaidPromise;
+}
 
 interface MermaidDiagramProps {
   code: string;
@@ -16,6 +23,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
 
   const renderDiagram = useCallback(async () => {
     try {
+      const mermaid = await loadMermaid();
       mermaid.initialize({
         startOnLoad: false,
         theme: isDark() ? "dark" : "default",
