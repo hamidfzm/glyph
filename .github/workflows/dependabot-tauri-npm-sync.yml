@@ -1,0 +1,82 @@
+# Run from Actions → this workflow after a Dependabot Cargo PR bumps `tauri*` crates.
+# Two things happen on the Dependabot branch:
+#   1. `pnpm sync:tauri-npm` — re-aligns @tauri-apps/plugin-* npm packages with
+#      their matching Rust tauri-plugin-* crate versions.
+#   2. `cargo check` — invokes `tauri-build`, which regenerates the schemas under
+#      `src-tauri/gen/schemas/` (acl-manifests, capabilities, desktop-schema,
+#      macOS-schema). These are tracked for IDE autocomplete on capability files
+#      and drift whenever any tauri/tauri-plugin-* version changes.
+#
+# Any changes from either step are committed and pushed back to the branch in a
+# single commit so the PR ends up green and self-contained.
+#
+# Uses the default `GITHUB_TOKEN` (workflow_dispatch runs in your repo context,
+# unlike Dependabot-triggered workflows, which cannot access custom secrets or
+# push reliably to Dependabot branches).
+#
+# Input: branch name (e.g. `dependabot/cargo/src-tauri/tauri-plugins-…` or
+# `dependabot/cargo/src-tauri/all-dependencies-…`).
+
+name: Sync Tauri artifacts on Dependabot branches
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to update (e.g. dependabot/cargo/…)"
+        required: true
+        type: string
+
+concurrency:
+  group: tauri-sync-${{ inputs.branch }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      - name: Install Linux Tauri build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Align @tauri-apps plugins with Cargo
+        run: pnpm sync:tauri-npm
+
+      - name: Regenerate Tauri ACL / capabilities schemas
+        working-directory: src-tauri
+        run: cargo check
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json pnpm-lock.yaml src-tauri/gen/schemas/
+          if git diff --cached --quiet; then
+            echo "No changes from sync (already aligned)"
+            exit 0
+          fi
+          git commit -m "chore(deps): align @tauri-apps plugins and regenerate schemas"
+          git push

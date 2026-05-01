@@ -18,7 +18,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "sync:tauri-npm": "node scripts/sync-tauri-npm-versions.mjs",
+    "sync:tauri-npm:check": "node scripts/sync-tauri-npm-versions.mjs --check"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",
