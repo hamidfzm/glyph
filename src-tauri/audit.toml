@@ -1,0 +1,21 @@
+# cargo-audit configuration
+# https://docs.rs/cargo-audit/latest/cargo_audit/
+
+[advisories]
+ignore = [
+    # RUSTSEC-2026-0097 / GHSA-cq8v-f236-94qc — low-severity unsoundness in `rand`
+    # (ThreadRng reseeding under a custom logger that calls `rand::rng()` at
+    # trace level).
+    #
+    # Not exploitable in Glyph: `rand` 0.7.3 and 0.8.5 are transitive, build-time
+    # only, pulled in by `phf_generator` (via `cssparser`/`selectors`/`kuchikiki`
+    # in `tauri-utils`) to seed perfect-hash-function tables during proc-macro
+    # expansion. No custom logger is installed in that path and none of the
+    # conditions for the unsoundness are met.
+    #
+    # Upstream fix is rand >= 0.9.3, but the 0.7/0.8 chain is pinned by the
+    # `phf_generator` versions that `cssparser`/`selectors` depend on — not
+    # something we can force via Cargo.toml. Revisit when Tauri's HTML/CSS
+    # pipeline upgrades to newer `cssparser`/`selectors`.
+    "RUSTSEC-2026-0097",
+]
