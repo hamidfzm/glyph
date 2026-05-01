@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "katex/dist/katex.min.css";
 @import "./platform.css";
 @import "./markdown.css";
 @import "./settings.css";
