@@ -29,7 +29,7 @@
     "@codemirror/language-data": "^6.5.2",
     "@codemirror/state": "^6.6.0",
     "@codemirror/theme-one-dark": "^6.1.3",
-    "@codemirror/view": "^6.41.0",
+    "@codemirror/view": "^6.41.1",
     "@lezer/highlight": "^1.2.3",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-cli": "^2",
