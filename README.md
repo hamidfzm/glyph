@@ -3,7 +3,7 @@
 [![CI](https://github.com/hamidfzm/glyph/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hamidfzm/glyph/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/hamidfzm/glyph/graph/badge.svg)](https://codecov.io/gh/hamidfzm/glyph)
 
-A modern, cross-platform markdown viewer with platform-native styling.
+A modern, cross-platform markdown viewer and editor with platform-native styling.
 
 Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 
@@ -25,6 +25,11 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 - Emoji shortcodes — `:smile:` → 😊, `:+1:` → 👍
 - Local and remote image display
 - External links open in system browser with optional confirmation dialog
+
+### Editor
+- Markdown editor mode — syntax highlighting, line numbers, undo/redo history
+- Split view — edit and preview side-by-side, or switch between modes per tab
+- Live preview updates as you type
 
 ### Viewer
 - Multiple files in tabs — open, switch, close, middle-click to close
@@ -54,6 +59,55 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 - Cross-platform: macOS (universal), Windows (x64), Linux (amd64 + arm64)
 - Window state persistence across restarts
 - Native menu bar with keyboard shortcuts
+
+## Comparison with Other Markdown Apps
+
+Glyph is built around speed, native feel, and offline-first usage. The table below compares its current capabilities against widely used markdown apps. Items marked "planned" track to issues on the [roadmap](https://github.com/hamidfzm/glyph/issues).
+
+| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+|---|---|---|---|---|---|---|---|
+| **Rendering** | | | | | | | |
+| GitHub Flavored Markdown | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Math (KaTeX/MathJax) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | plugin |
+| Mermaid diagrams | ✅ | ✅ | ✅ | ✅ | partial | ✅ | plugin |
+| Syntax-highlighted code | ✅ (6 themes) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| GitHub-style alerts | planned | ✅ | partial | ❌ | ❌ | partial | ✅ |
+| YAML frontmatter | ✅ | ✅ | ✅ | ✅ | ✅ | partial | ✅ |
+| Emoji shortcodes | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | plugin |
+| **Editing** | | | | | | | |
+| Source editor | ✅ | ✅ | n/a | ✅ | ✅ | ✅ | ✅ |
+| WYSIWYG editing | ❌ | ✅ | ✅ | ✅ | partial | partial | ❌ |
+| Split view | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Spell check | planned | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Navigation** | | | | | | | |
+| Tabs | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ |
+| Folder / vault sidebar | planned | ✅ | partial | ✅ | ✅ | ✅ | ✅ |
+| Wikilinks & backlinks | planned | ✅ | ❌ | ❌ | ✅ | ❌ | plugin |
+| Tag / metadata search | planned | ✅ | ❌ | ❌ | ✅ | ✅ | plugin |
+| Command palette | planned | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| In-document search | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Table of contents | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Live reload on disk change | ✅ | partial | n/a | n/a | partial | n/a | ✅ |
+| **Output** | | | | | | | |
+| Print | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Export PDF | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | plugin |
+| Export HTML / DOCX / EPUB | planned | plugin | ✅ (Pandoc) | partial | ✅ (Pandoc) | partial | plugin |
+| **Power features** | | | | | | | |
+| AI (multi-provider, local) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
+| Text-to-speech | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
+| Plugin / extension API | planned | ✅ | ❌ | ❌ | partial | ✅ | ✅ |
+| Cloud sync | planned | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Graph view | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
+| **Platform** | | | | | | | |
+| Native window styling | ✅ (vibrancy/Mica) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
+| Tauri / native bundle | ✅ (~3 MB core) | Electron | Qt | Electron | Electron | Electron | Electron |
+| macOS / Windows / Linux | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Mobile (iOS / Android) | planned | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| File associations + CLI | ✅ | partial | ✅ | partial | partial | ❌ | ✅ |
+| Open source | ✅ MIT | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Free | ✅ | ✅ | $14.99 | ✅ | ✅ | ✅ | ✅ |
+
+Legend: ✅ supported · ⚠️ partial / inconsistent · ❌ not supported · plugin = third-party · planned = on roadmap
 
 ## Install
 
