@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import ReactMarkdown, { type Options } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize from "rehype-sanitize";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGemoji from "remark-gemoji";
 import remarkGfm from "remark-gfm";
@@ -12,6 +14,7 @@ import { CodeBlockComponent } from "./CodeBlockComponent";
 import { headingComponents } from "./HeadingComponent";
 import { useImageComponent } from "./ImageComponent";
 import { LinkComponent } from "./LinkComponent";
+import { markdownSanitizeSchema } from "./sanitizeSchema";
 
 interface MarkdownViewerProps {
   content: string;
@@ -68,6 +71,8 @@ export function MarkdownViewer({
 
   const rehypePlugins: NonNullable<Options["rehypePlugins"]> = useMemo(() => {
     const plugins: NonNullable<Options["rehypePlugins"]> = [
+      rehypeRaw,
+      [rehypeSanitize, markdownSanitizeSchema],
       [rehypeHighlight, { plainText: ["mermaid"] }],
     ];
     if (katexPlugin) plugins.push(katexPlugin);

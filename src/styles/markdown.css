@@ -254,3 +254,45 @@
   white-space: nowrap;
   border-width: 0;
 }
+
+.markdown-body kbd {
+  display: inline-block;
+  padding: 0.15em 0.4em;
+  font-family: var(--glyph-code-font, ui-monospace, monospace);
+  font-size: 0.85em;
+  line-height: 1;
+  color: var(--color-text-primary);
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  box-shadow: inset 0 -1px 0 var(--color-border);
+  vertical-align: middle;
+}
+
+.markdown-body details {
+  margin: 0 0 1em;
+  padding: 0.5em 0.75em;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.markdown-body details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: revert;
+}
+
+.markdown-body details[open] > summary {
+  margin-bottom: 0.5em;
+}
+
+.markdown-body details > summary::marker {
+  color: var(--color-text-secondary);
+}
+
+.markdown-body sub,
+.markdown-body sup {
+  font-size: 0.75em;
+  line-height: 0;
+}

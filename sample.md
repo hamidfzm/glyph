@@ -130,6 +130,23 @@ Glyph converts GitHub-style emoji shortcodes to Unicode:
 > "The best way to predict the future is to invent it."
 > — Alan Kay
 
+## Raw HTML
+
+Glyph allows a curated subset of inline HTML — the elements GitHub renders inside READMEs.
+
+Subscript: H<sub>2</sub>O. Superscript: E = mc<sup>2</sup>.
+
+Press <kbd>Cmd</kbd>+<kbd>K</kbd> to open the command palette.
+
+<details>
+<summary>Click to expand</summary>
+
+Hidden content lives inside `<details>` blocks. Useful for FAQs, troubleshooting steps, and changelog entries.
+
+</details>
+
+<p align="center">Centered paragraphs work too.</p>
+
 ## Images
 
 ### Remote Images

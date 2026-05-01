@@ -45,6 +45,8 @@
     "react-markdown": "^10",
     "rehype-highlight": "^7",
     "rehype-katex": "^7.0.1",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gemoji": "^8.0.0",
     "remark-gfm": "^4",

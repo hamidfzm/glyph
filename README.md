@@ -21,6 +21,7 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 - Copy button on code blocks
 - Math/LaTeX rendering — inline (`$...$`) and block (`$$...$$`) equations via KaTeX
 - Mermaid diagrams — flowcharts, sequence diagrams, Gantt charts, and more (theme-aware)
+- Inline HTML — `<kbd>`, `<sub>`, `<sup>`, `<details>`, alignment attributes (sanitised allowlist)
 - YAML frontmatter stripping — frontmatter is parsed and hidden from rendered output
 - Emoji shortcodes — `:smile:` → 😊, `:+1:` → 👍
 - Local and remote image display
