@@ -45,6 +45,7 @@ cd src-tauri && cargo test      # Rust tests
 - **Testing (TS)**: Vitest + Testing Library — test files colocated as `*.test.{ts,tsx}`
 - **Testing (Rust)**: `#[cfg(test)]` modules in source files
 - **Imports**: Named exports, no default exports
+- **Issue titles**: imperative mood (e.g. "Add search within document", not "Search feature" or "feat: search"). Always tag with `enhancement`/`bug` + a `priority: *` label + a category label (`markdown`/`ui`/`navigation`) where it fits. Add new issues to the **Glyph Roadmap** project board with status **Todo**.
 
 ## Workflow
 
@@ -93,6 +94,8 @@ Run the **Create Release** workflow from GitHub Actions (`create-release.yml`) w
 The release workflow builds all platforms and publishes to Homebrew, Chocolatey, Scoop, AUR, PPA, and the Debian apt repo.
 
 Do **not** create releases manually with `gh release create` or push tags by hand — use the workflow.
+
+**Wait for CI to pass on `main` before triggering Create Release.** The release workflow assumes the latest commit is green; running it on a red `main` produces broken artifacts that get published to every package manager simultaneously. Check the CI badge or `gh run list --branch main --limit 1` first.
 
 ## Reporting Issues
 
