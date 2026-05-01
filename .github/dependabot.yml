@@ -12,10 +12,19 @@ updates:
       # NPM @tauri-apps/plugin-* must match Rust tauri-plugin-* minor versions; separate Dependabot PRs drift and break `tauri build`.
       - dependency-name: "@tauri-apps/plugin-*"
     groups:
+      # Group all @tauri-apps/* (api in prod, cli in dev) into one PR so the
+      # JS bindings and the build CLI stay version-aligned.
+      tauri:
+        patterns:
+          - "@tauri-apps/*"
       dev-dependencies:
         dependency-type: "development"
+        exclude-patterns:
+          - "@tauri-apps/*"
       production-dependencies:
         dependency-type: "production"
+        exclude-patterns:
+          - "@tauri-apps/*"
 
   - package-ecosystem: "cargo"
     directory: "/src-tauri"
