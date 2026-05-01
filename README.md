@@ -60,55 +60,6 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 - Window state persistence across restarts
 - Native menu bar with keyboard shortcuts
 
-## Comparison with Other Markdown Apps
-
-Glyph is built around speed, native feel, and offline-first usage. The table below compares its current capabilities against widely used markdown apps. Items marked "planned" track to issues on the [roadmap](https://github.com/hamidfzm/glyph/issues).
-
-| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
-|---|---|---|---|---|---|---|---|
-| **Rendering** | | | | | | | |
-| GitHub Flavored Markdown | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Math (KaTeX/MathJax) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | plugin |
-| Mermaid diagrams | ✅ | ✅ | ✅ | ✅ | partial | ✅ | plugin |
-| Syntax-highlighted code | ✅ (6 themes) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| GitHub-style alerts | planned | ✅ | partial | ❌ | ❌ | partial | ✅ |
-| YAML frontmatter | ✅ | ✅ | ✅ | ✅ | ✅ | partial | ✅ |
-| Emoji shortcodes | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | plugin |
-| **Editing** | | | | | | | |
-| Source editor | ✅ | ✅ | n/a | ✅ | ✅ | ✅ | ✅ |
-| WYSIWYG editing | ❌ | ✅ | ✅ | ✅ | partial | partial | ❌ |
-| Split view | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Spell check | planned | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Navigation** | | | | | | | |
-| Tabs | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ |
-| Folder / vault sidebar | planned | ✅ | partial | ✅ | ✅ | ✅ | ✅ |
-| Wikilinks & backlinks | planned | ✅ | ❌ | ❌ | ✅ | ❌ | plugin |
-| Tag / metadata search | planned | ✅ | ❌ | ❌ | ✅ | ✅ | plugin |
-| Command palette | planned | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| In-document search | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Table of contents | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Live reload on disk change | ✅ | partial | n/a | n/a | partial | n/a | ✅ |
-| **Output** | | | | | | | |
-| Print | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Export PDF | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | plugin |
-| Export HTML / DOCX / EPUB | planned | plugin | ✅ (Pandoc) | partial | ✅ (Pandoc) | partial | plugin |
-| **Power features** | | | | | | | |
-| AI (multi-provider, local) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
-| Text-to-speech | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
-| Plugin / extension API | planned | ✅ | ❌ | ❌ | partial | ✅ | ✅ |
-| Cloud sync | planned | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Graph view | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
-| **Platform** | | | | | | | |
-| Native window styling | ✅ (vibrancy/Mica) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| Tauri / native bundle | ✅ (~3 MB core) | Electron | Qt | Electron | Electron | Electron | Electron |
-| macOS / Windows / Linux | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Mobile (iOS / Android) | planned | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| File associations + CLI | ✅ | partial | ✅ | partial | partial | ❌ | ✅ |
-| Open source | ✅ MIT | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Free | ✅ | ✅ | $14.99 | ✅ | ✅ | ✅ | ✅ |
-
-Legend: ✅ supported · ⚠️ partial / inconsistent · ❌ not supported · plugin = third-party · planned = on roadmap
-
 ## Install
 
 ### macOS (Homebrew)
@@ -223,6 +174,78 @@ cd src-tauri && cargo clippy    # Lint Rust
 | `Cmd+B` / `Ctrl+B` | Toggle sidebar |
 | `Cmd+,` / `Ctrl+,` | Settings |
 | `Cmd+W` / `Ctrl+W` | Close window |
+
+## Comparison with Other Markdown Apps
+
+Glyph is built around speed, native feel, and offline-first usage. The tables below compare its current capabilities against widely used markdown apps. Items marked "planned" track to issues on the [roadmap](https://github.com/hamidfzm/glyph/issues).
+
+### Rendering
+
+| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+|---|---|---|---|---|---|---|---|
+| GitHub Flavored Markdown | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Math (KaTeX/MathJax) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | plugin |
+| Mermaid diagrams | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | plugin |
+| Syntax-highlighted code | ✅ (6 themes) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| GitHub-style alerts | planned | ✅ | ⚠️ | ❌ | ❌ | ⚠️ | ✅ |
+| YAML frontmatter | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
+| Emoji shortcodes | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | plugin |
+
+### Editing
+
+| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+|---|---|---|---|---|---|---|---|
+| Source editor | ✅ | ✅ | n/a | ✅ | ✅ | ✅ | ✅ |
+| WYSIWYG / inline preview | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ❌ |
+| Split view | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Spell check | planned | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+### Navigation
+
+| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+|---|---|---|---|---|---|---|---|
+| Tabs | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ |
+| Folder / vault sidebar | planned | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
+| Wikilinks & backlinks | planned | ✅ | ❌ | ❌ | ✅ | ❌ | plugin |
+| Tag / metadata search | planned | ✅ | ❌ | ❌ | ✅ | ✅ | plugin |
+| Command palette | planned | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| In-document search | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Table of contents | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Live reload on disk change | ✅ | ⚠️ | n/a | n/a | ⚠️ | n/a | ✅ |
+
+### Output
+
+| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+|---|---|---|---|---|---|---|---|
+| Print | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Export PDF | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | plugin |
+| Export HTML / DOCX / EPUB | planned | plugin | ✅ (Pandoc) | ⚠️ | ✅ (Pandoc) | ⚠️ | plugin |
+
+### Power features
+
+| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+|---|---|---|---|---|---|---|---|
+| AI (multi-provider, local) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
+| Text-to-speech | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
+| Plugin / extension API | planned | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
+| Cloud sync | planned | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Graph view | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
+
+### Platform
+
+| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+|---|---|---|---|---|---|---|---|
+| Native window styling | ✅ (vibrancy/Mica) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
+| Native bundle (non-Electron) | ✅ Tauri (~3 MB core) | ❌ | ✅ Qt | ❌ | ❌ | ❌ | ❌ |
+| macOS / Windows / Linux | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Mobile (iOS / Android) | planned | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| File associations + CLI | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ❌ | ✅ |
+| Open source | ✅ MIT | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Free | ✅ | ✅ | $14.99 | ✅ | ✅ | ✅ | ✅ |
+
+Legend: ✅ supported · ⚠️ partial / inconsistent · ❌ not supported · plugin = third-party · planned = on roadmap
+
+Note on "WYSIWYG / inline preview": Glyph's editor has split-view live preview and styled markdown tokens (bold/italic render as bold/italic in source), but markdown markers remain visible — Typora-style fully inline rendering is not implemented.
 
 ## License
 
