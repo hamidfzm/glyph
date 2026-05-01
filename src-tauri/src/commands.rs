@@ -16,6 +16,15 @@ pub struct FileMetadata {
     pub modified: u64,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirEntry {
+    pub name: String,
+    pub path: String,
+    pub is_directory: bool,
+    pub modified: u64,
+}
+
 #[tauri::command]
 pub fn get_initial_file(state: State<'_, InitialFile>) -> Option<String> {
     state.0.lock().ok()?.clone()
@@ -34,6 +43,49 @@ pub fn print_document(window: tauri::WebviewWindow) -> Result<(), String> {
 #[tauri::command]
 pub fn write_file(path: String, content: String) -> Result<(), String> {
     fs::write(&path, &content).map_err(|e| format!("Failed to write file: {e}"))
+}
+
+#[tauri::command]
+pub fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
+    let dir = Path::new(&path);
+    let read_dir = fs::read_dir(dir).map_err(|e| format!("Failed to read directory: {e}"))?;
+
+    let mut entries: Vec<DirEntry> = Vec::new();
+    for entry in read_dir.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') {
+            continue;
+        }
+        let entry_path = entry.path();
+        let metadata = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let is_directory = metadata.is_dir();
+        if !is_directory && !crate::is_markdown_file(&entry_path) {
+            continue;
+        }
+        let modified = metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        entries.push(DirEntry {
+            name,
+            path: entry_path.to_string_lossy().to_string(),
+            is_directory,
+            modified,
+        });
+    }
+
+    entries.sort_by(|a, b| match (a.is_directory, b.is_directory) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+    });
+
+    Ok(entries)
 }
 
 #[tauri::command]
@@ -187,5 +239,97 @@ mod tests {
         let initial = InitialFile(Mutex::new(Some("/path/to/file.md".to_string())));
         let guard = initial.0.lock().unwrap();
         assert_eq!(guard.as_deref(), Some("/path/to/file.md"));
+    }
+
+    fn unique_tmp(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "glyph_test_{}_{}_{}",
+            name,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = fs::create_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn read_directory_lists_md_files_and_dirs() {
+        let dir = unique_tmp("read_dir_basic");
+        fs::write(dir.join("readme.md"), "x").unwrap();
+        fs::write(dir.join("notes.markdown"), "x").unwrap();
+        fs::write(dir.join("image.png"), b"x").unwrap();
+        fs::create_dir_all(dir.join("subdir")).unwrap();
+
+        let result = read_directory(dir.to_string_lossy().to_string()).unwrap();
+        let names: Vec<&str> = result.iter().map(|e| e.name.as_str()).collect();
+
+        assert!(names.contains(&"subdir"));
+        assert!(names.contains(&"readme.md"));
+        assert!(names.contains(&"notes.markdown"));
+        assert!(!names.contains(&"image.png"), "non-markdown files filtered out");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_directory_skips_hidden_entries() {
+        let dir = unique_tmp("read_dir_hidden");
+        fs::write(dir.join("visible.md"), "x").unwrap();
+        fs::write(dir.join(".hidden.md"), "x").unwrap();
+        fs::create_dir_all(dir.join(".git")).unwrap();
+
+        let result = read_directory(dir.to_string_lossy().to_string()).unwrap();
+        let names: Vec<&str> = result.iter().map(|e| e.name.as_str()).collect();
+
+        assert_eq!(names, vec!["visible.md"]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_directory_sorts_dirs_first_then_alpha() {
+        let dir = unique_tmp("read_dir_sort");
+        fs::write(dir.join("zeta.md"), "x").unwrap();
+        fs::write(dir.join("alpha.md"), "x").unwrap();
+        fs::create_dir_all(dir.join("beta")).unwrap();
+        fs::create_dir_all(dir.join("Apple")).unwrap();
+
+        let result = read_directory(dir.to_string_lossy().to_string()).unwrap();
+        let order: Vec<&str> = result.iter().map(|e| e.name.as_str()).collect();
+
+        assert_eq!(order, vec!["Apple", "beta", "alpha.md", "zeta.md"]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_directory_empty_dir_returns_empty() {
+        let dir = unique_tmp("read_dir_empty");
+        let result = read_directory(dir.to_string_lossy().to_string()).unwrap();
+        assert!(result.is_empty());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_directory_not_found_returns_err() {
+        let result = read_directory("/nonexistent/glyph/path/abc123".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to read directory"));
+    }
+
+    #[test]
+    fn dir_entry_camel_case_keys() {
+        let entry = DirEntry {
+            name: "file.md".to_string(),
+            path: "/p/file.md".to_string(),
+            is_directory: false,
+            modified: 1,
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("\"isDirectory\":false"));
+        assert!(!json.contains("is_directory"));
     }
 }

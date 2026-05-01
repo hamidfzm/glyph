@@ -7,7 +7,7 @@ import { usePlatform } from "../hooks/usePlatform";
 import { usePrint } from "../hooks/usePrint";
 import { useSettings } from "../hooks/useSettings";
 import { useTableOfContents } from "../hooks/useTableOfContents";
-import { useTabs } from "../hooks/useTabs";
+import { activeFileOf, useTabs } from "../hooks/useTabs";
 import { useTheme } from "../hooks/useTheme";
 import { useTTS } from "../hooks/useTTS";
 import { ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../lib/settings";
@@ -48,7 +48,12 @@ export function App() {
     tabs,
     activeTab,
     activeTabId,
+    activeFile,
     initializing,
+    openFile,
+    openFolder,
+    openFileInFolderTab,
+    toggleExpand,
     closeTab,
     setActiveTab,
     setTabMode,
@@ -66,24 +71,29 @@ export function App() {
     onSettingsChange: updateSettings,
   });
 
-  const content = activeTab?.content ?? null;
-  const filePath = activeTab?.path;
-  const activeMode = activeTab?.mode ?? "view";
+  const filePath = activeFile?.path;
+  const content = activeFile?.content ?? null;
+  const activeMode = activeFile?.mode ?? "view";
 
   // For view/split, use file content; for edit, use editContent for preview
-  const displayContent = activeMode !== "view" ? (activeTab?.editContent ?? content) : content;
+  const displayContent = activeMode !== "view" ? (activeFile?.editContent ?? content) : content;
 
   const tocEntries = useTableOfContents(displayContent);
-  const [sidebarVisible, setSidebarVisible] = useState(settings.layout.sidebarVisible);
+  const [filesSidebarVisible, setFilesSidebarVisible] = useState(
+    settings.layout.filesSidebarVisible,
+  );
+  const [outlineSidebarVisible, setOutlineSidebarVisible] = useState(
+    settings.layout.outlineSidebarVisible,
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aiPanelOpen, setAIPanelOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  // Auto-save for edit mode
+  // Auto-save for edit mode (operates on the active tab's active file)
   useAutoSave({
     path: filePath,
-    content: activeTab?.editContent ?? null,
-    dirty: activeTab?.dirty ?? false,
+    content: activeFile?.editContent ?? null,
+    dirty: activeFile?.dirty ?? false,
     onSaved: useCallback(
       (savedContent: string) => {
         if (activeTabId) markSaved(activeTabId, savedContent);
@@ -102,14 +112,24 @@ export function App() {
   // Print
   const printDoc = usePrint({ entries: tocEntries, settings: settings.print });
 
-  // Sync sidebar visibility with settings
+  // Sync sidebar visibility with settings (each panel independently)
   useEffect(() => {
-    setSidebarVisible(settings.layout.sidebarVisible);
-  }, [settings.layout.sidebarVisible]);
+    setFilesSidebarVisible(settings.layout.filesSidebarVisible);
+  }, [settings.layout.filesSidebarVisible]);
+  useEffect(() => {
+    setOutlineSidebarVisible(settings.layout.outlineSidebarVisible);
+  }, [settings.layout.outlineSidebarVisible]);
 
-  const toggleSidebar = useCallback(() => {
-    setSidebarVisible((v) => {
-      updateSettings("layout.sidebarVisible", !v);
+  const toggleFilesSidebar = useCallback(() => {
+    setFilesSidebarVisible((v) => {
+      updateSettings("layout.filesSidebarVisible", !v);
+      return !v;
+    });
+  }, [updateSettings]);
+
+  const toggleOutlineSidebar = useCallback(() => {
+    setOutlineSidebarVisible((v) => {
+      updateSettings("layout.outlineSidebarVisible", !v);
       return !v;
     });
   }, [updateSettings]);
@@ -133,13 +153,34 @@ export function App() {
     [activeTabId, updateEditContent],
   );
 
+  // Close the active tab (used by File → Close Folder which doubles as close-tab
+  // when the active tab is a folder; Cmd+W still closes the window).
+  const closeActiveTab = useCallback(() => {
+    if (activeTabId) closeTab(activeTabId);
+  }, [activeTabId, closeTab]);
+
   // Menu events from Rust
   useEffect(() => {
     const unlistenOpen = listen("menu-open-file", () => {
       openFileDialog();
     });
-    const unlistenSidebar = listen("menu-toggle-sidebar", () => {
-      toggleSidebar();
+    const unlistenOpenFolder = listen("menu-open-folder", () => {
+      openFolder();
+    });
+    const unlistenCloseTab = listen("menu-close-tab", () => {
+      closeActiveTab();
+    });
+    const unlistenFilesSidebar = listen("menu-toggle-files-sidebar", () => {
+      toggleFilesSidebar();
+    });
+    const unlistenOutlineSidebar = listen("menu-toggle-outline-sidebar", () => {
+      toggleOutlineSidebar();
+    });
+    const unlistenResetView = listen("menu-reset-view", () => {
+      updateSettings("layout.filesSidebarVisible", true);
+      updateSettings("layout.outlineSidebarVisible", true);
+      updateSettings("layout.sidebarLayout", "beside");
+      updateSettings("layout.swapSidebarSides", false);
     });
     const unlistenSettings = listen("menu-open-settings", () => {
       setSettingsOpen(true);
@@ -183,7 +224,11 @@ export function App() {
     });
     return () => {
       unlistenOpen.then((fn) => fn());
-      unlistenSidebar.then((fn) => fn());
+      unlistenOpenFolder.then((fn) => fn());
+      unlistenCloseTab.then((fn) => fn());
+      unlistenFilesSidebar.then((fn) => fn());
+      unlistenOutlineSidebar.then((fn) => fn());
+      unlistenResetView.then((fn) => fn());
       unlistenSettings.then((fn) => fn());
       unlistenAI.then((fn) => fn());
       unlistenReadAloud.then((fn) => fn());
@@ -196,7 +241,10 @@ export function App() {
     };
   }, [
     openFileDialog,
-    toggleSidebar,
+    openFolder,
+    closeActiveTab,
+    toggleFilesSidebar,
+    toggleOutlineSidebar,
     displayContent,
     handleAIAction,
     tts,
@@ -220,11 +268,11 @@ export function App() {
     styleEl.textContent = themeCSS;
   }, [settings.appearance.codeTheme]);
 
-  // Context menu (Win/Linux only)
+  // Context menu (Win/Linux only) — uses files-sidebar toggle for the legacy 'toggleSidebar' slot
   const contextMenuActions = useMemo(
     () => ({
       openFileDialog,
-      toggleSidebar,
+      toggleSidebar: toggleFilesSidebar,
       ttsSpeak: tts.speak,
       ttsStop: tts.stop,
       ttsSpeaking: tts.speaking,
@@ -233,23 +281,20 @@ export function App() {
       aiConfigured,
       content: displayContent,
     }),
-    [openFileDialog, toggleSidebar, tts, handleAIAction, aiConfigured, displayContent],
+    [openFileDialog, toggleFilesSidebar, tts, handleAIAction, aiConfigured, displayContent],
   );
   useContextMenu(platform, contextMenuActions);
 
-  const sidebarPosition = settings.layout.sidebarPosition;
   const sidebarWidth = settings.layout.sidebarWidth;
 
-  const sidebarElement = displayContent ? (
-    <Sidebar entries={tocEntries} visible={sidebarVisible} width={sidebarWidth} />
-  ) : null;
-
   const renderContent = () => {
-    if (!activeTabId || !content) return null;
+    if (!activeTab) return null;
+    const file = activeFileOf(activeTab);
+    if (!file || !file.content) return null;
 
-    const editorContent = activeTab?.editContent ?? content;
+    const editorContent = file.editContent ?? file.content;
 
-    if (activeMode === "edit") {
+    if (file.mode === "edit") {
       return (
         <div className="flex-1 overflow-hidden">
           <MarkdownEditor content={editorContent} onChange={handleEditorChange} />
@@ -257,12 +302,12 @@ export function App() {
       );
     }
 
-    if (activeMode === "split") {
+    if (file.mode === "split") {
       return (
         <div className="flex-1 overflow-hidden">
           <SplitView
             content={editorContent}
-            filePath={filePath}
+            filePath={file.path}
             onChange={handleEditorChange}
             searchOpen={searchOpen}
             onSearchClose={() => setSearchOpen(false)}
@@ -273,16 +318,22 @@ export function App() {
 
     return (
       <MarkdownViewer
-        key={activeTabId}
-        content={content}
-        filePath={filePath}
-        initialScrollTop={activeTab?.scrollTop ?? 0}
+        key={`${activeTab.id}:${file.path}`}
+        content={file.content}
+        filePath={file.path}
+        initialScrollTop={file.scrollTop}
         onScrollChange={saveScrollPosition}
         searchOpen={searchOpen}
         onSearchClose={() => setSearchOpen(false)}
       />
     );
   };
+
+  // Render the empty state when there's no active tab, or when a folder tab is
+  // active without a file selected yet.
+  const showEmptyState =
+    !initializing && (!activeTab || (activeTab.kind === "folder" && !activeFile));
+  const folderEmptyHint = activeTab?.kind === "folder" && !activeFile;
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)]">
@@ -294,17 +345,50 @@ export function App() {
         onModeChange={setTabMode}
       />
       <div className="flex flex-1 min-h-0">
-        {sidebarPosition === "left" && sidebarElement}
-        {activeTabId && content ? (
+        <Sidebar
+          side="left"
+          activeTab={activeTab}
+          tocEntries={tocEntries}
+          filesVisible={filesSidebarVisible}
+          outlineVisible={outlineSidebarVisible}
+          sidebarLayout={settings.layout.sidebarLayout}
+          swapSidebarSides={settings.layout.swapSidebarSides}
+          width={sidebarWidth}
+          onToggleFiles={toggleFilesSidebar}
+          onToggleOutline={toggleOutlineSidebar}
+          onToggleExpand={toggleExpand}
+          onOpenFileInTab={openFileInFolderTab}
+          onOpenFileInNewTab={openFile}
+        />
+        {activeTab && activeFile && content ? (
           renderContent()
-        ) : !initializing ? (
+        ) : showEmptyState ? (
           <div className="flex-1">
-            <EmptyState platform={platform} onOpenFile={openFileDialog} />
+            <EmptyState
+              platform={platform}
+              onOpenFile={openFileDialog}
+              onOpenFolder={() => openFolder()}
+              hint={folderEmptyHint ? "Pick a file from the sidebar to start reading." : undefined}
+            />
           </div>
         ) : (
           <div className="flex-1" />
         )}
-        {sidebarPosition === "right" && sidebarElement}
+        <Sidebar
+          side="right"
+          activeTab={activeTab}
+          tocEntries={tocEntries}
+          filesVisible={filesSidebarVisible}
+          outlineVisible={outlineSidebarVisible}
+          sidebarLayout={settings.layout.sidebarLayout}
+          swapSidebarSides={settings.layout.swapSidebarSides}
+          width={sidebarWidth}
+          onToggleFiles={toggleFilesSidebar}
+          onToggleOutline={toggleOutlineSidebar}
+          onToggleExpand={toggleExpand}
+          onOpenFileInTab={openFileInFolderTab}
+          onOpenFileInNewTab={openFile}
+        />
       </div>
       <StatusBar filePath={filePath} content={displayContent} />
 

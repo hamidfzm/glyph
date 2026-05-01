@@ -9,20 +9,44 @@ export interface AppearanceSettings {
   codeTheme: "glyph" | "github" | "monokai" | "nord" | "solarized-light" | "solarized-dark";
 }
 
+// How Files and Outline panels are arranged in folder tabs.
+//   split    — Files on one side, Outline on the other (default).
+//   combined — both stacked vertically in a single panel on the same side.
+//   beside   — two separate panels sitting next to each other on the same side.
+// File tabs only show Outline, so this only affects folder tabs.
+export type SidebarLayout = "split" | "combined" | "beside";
+
 export interface LayoutSettings {
-  sidebarVisible: boolean;
-  sidebarPosition: "left" | "right";
+  // Toggles the Files panel (only meaningful in folder tabs).
+  filesSidebarVisible: boolean;
+  // Toggles the Outline panel (visible in both file and folder tabs).
+  outlineSidebarVisible: boolean;
   sidebarWidth: number;
+  sidebarLayout: SidebarLayout;
+  // Mirrors the sidebar layout. Default Files-left / Outline-right; when true
+  // it becomes Files-right / Outline-left. Affects all layout modes.
+  swapSidebarSides: boolean;
 }
 
 export type EditorMode = "view" | "edit" | "split";
+
+export interface PersistedTab {
+  kind: "file" | "folder";
+  path: string;
+  filePath?: string;
+  expanded?: string[];
+}
 
 export interface BehaviorSettings {
   autoReload: boolean;
   reopenLastFile: boolean;
   confirmExternalLinks: boolean;
   recentFiles: string[];
-  openTabs: string[];
+  // Each entry is a tab to restore on launch; either a single file or a folder
+  // workspace with optional active-file + expanded subdir state.
+  openTabs: PersistedTab[];
+  // Path of the previously-active tab (root for folder tabs, file path for file
+  // tabs). Used to restore which tab is selected on launch.
   activeTabPath: string;
   defaultEditorMode: EditorMode;
 }
@@ -62,9 +86,11 @@ export const DEFAULT_SETTINGS: Settings = {
     codeTheme: "glyph",
   },
   layout: {
-    sidebarVisible: true,
-    sidebarPosition: "left",
+    filesSidebarVisible: true,
+    outlineSidebarVisible: true,
     sidebarWidth: 224,
+    sidebarLayout: "beside",
+    swapSidebarSides: false,
   },
   behavior: {
     autoReload: true,

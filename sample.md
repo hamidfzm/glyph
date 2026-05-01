@@ -167,6 +167,7 @@ Hidden content lives inside `<details>` blocks. Useful for FAQs, troubleshooting
 | Shortcut | Action |
 |----------|--------|
 | `Cmd+O` | Open file(s) |
+| `Cmd+Shift+O` | Open folder |
 | `Cmd+P` | Print / Export to PDF |
 | `Cmd+F` | Find in document |
 | `Cmd+=` / `Cmd+-` | Zoom in / out |

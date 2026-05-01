@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MARKDOWN_EXTENSIONS } from "../lib/markdownExtensions";
 import type { EditorMode } from "../lib/settings";
 
 interface FileMetadata {
@@ -11,8 +12,14 @@ interface FileMetadata {
   modified: number;
 }
 
-export interface Tab {
-  id: string;
+export interface DirEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  modified: number;
+}
+
+interface FileState {
   path: string;
   content: string | null;
   metadata: FileMetadata | null;
@@ -22,12 +29,37 @@ export interface Tab {
   dirty: boolean;
 }
 
+export interface FileTab {
+  id: string;
+  kind: "file";
+  file: FileState;
+}
+
+export interface FolderTab {
+  id: string;
+  kind: "folder";
+  root: string;
+  expanded: Set<string>;
+  nodes: Map<string, DirEntry[]>;
+  file: FileState | null;
+}
+
+export type Tab = FileTab | FolderTab;
+
 interface TabsState {
   tabs: Tab[];
   activeTabId: string | null;
 }
 
+interface PersistedTab {
+  kind: "file" | "folder";
+  path: string; // root for folder, file path for file
+  filePath?: string; // current file inside a folder tab
+  expanded?: string[]; // expanded subdirs for folder tab
+}
+
 const MAX_RECENT_FILES = 10;
+const DIRECTORY_REFRESH_DEBOUNCE = 300;
 
 let nextId = 0;
 function generateId() {
@@ -37,7 +69,7 @@ function generateId() {
 
 interface UseTabsOptions {
   reopenLastFile: boolean;
-  openTabs: string[];
+  openTabs: PersistedTab[] | string[]; // legacy: string[] = file-only persistence
   activeTabPath: string;
   recentFiles: string[];
   autoReload: boolean;
@@ -53,6 +85,41 @@ async function loadFileContent(path: string) {
   return { content, metadata };
 }
 
+function makeFileState(path: string, mode: EditorMode): FileState {
+  return {
+    path,
+    content: null,
+    metadata: null,
+    scrollTop: 0,
+    mode,
+    editContent: null,
+    dirty: false,
+  };
+}
+
+export function activeFileOf(tab: Tab | null | undefined): FileState | null {
+  if (!tab) return null;
+  return tab.file;
+}
+
+export function tabPathOf(tab: Tab): string {
+  return tab.kind === "folder" ? tab.root : tab.file.path;
+}
+
+function isInWorkspace(filePath: string, root: string): boolean {
+  if (filePath === root) return true;
+  return filePath.startsWith(`${root}/`) || filePath.startsWith(`${root}\\`);
+}
+
+function normalizePersistedTabs(value: PersistedTab[] | string[]): PersistedTab[] {
+  if (value.length === 0) return [];
+  // Legacy: array of file paths
+  if (typeof value[0] === "string") {
+    return (value as string[]).map((path) => ({ kind: "file" as const, path }));
+  }
+  return value as PersistedTab[];
+}
+
 export function useTabs(options: UseTabsOptions) {
   const [state, setState] = useState<TabsState>({ tabs: [], activeTabId: null });
   const [initializing, setInitializing] = useState(true);
@@ -64,15 +131,26 @@ export function useTabs(options: UseTabsOptions) {
 
   const { tabs, activeTabId } = state;
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+  const activeFile = activeFileOf(activeTab);
 
-  // Persist tabs to settings whenever state changes
+  // Persist tabs to settings whenever state changes (post-init)
   useEffect(() => {
     if (initializing) return;
-    const paths = tabs.map((t) => t.path);
-    const activePath = tabs.find((t) => t.id === activeTabId)?.path ?? "";
-    optionsRef.current.onSettingsChange("behavior.openTabs", paths);
-    optionsRef.current.onSettingsChange("behavior.activeTabPath", activePath);
-  }, [tabs, activeTabId, initializing]);
+    const persisted: PersistedTab[] = tabs.map((tab) => {
+      if (tab.kind === "folder") {
+        return {
+          kind: "folder",
+          path: tab.root,
+          filePath: tab.file?.path,
+          expanded: Array.from(tab.expanded),
+        };
+      }
+      return { kind: "file", path: tab.file.path };
+    });
+    optionsRef.current.onSettingsChange("behavior.openTabs", persisted);
+    const activeTabPath = activeTab ? tabPathOf(activeTab) : "";
+    optionsRef.current.onSettingsChange("behavior.activeTabPath", activeTabPath);
+  }, [tabs, activeTab, initializing]);
 
   const addToRecent = useCallback((path: string) => {
     const current = optionsRef.current.recentFiles ?? [];
@@ -80,10 +158,19 @@ export function useTabs(options: UseTabsOptions) {
     optionsRef.current.onSettingsChange("behavior.recentFiles", updated);
   }, []);
 
+  const loadDirectory = useCallback(async (path: string): Promise<DirEntry[]> => {
+    try {
+      return await invoke<DirEntry[]>("read_directory", { path });
+    } catch (err) {
+      console.error(`Failed to read directory ${path}:`, err);
+      return [];
+    }
+  }, []);
+
+  // Open a file as a new top-level tab; if already open as a top-level tab, activate it.
   const openFile = useCallback(
     async (path: string) => {
-      // Check for duplicate via ref (avoids stale closure)
-      const existing = stateRef.current.tabs.find((t) => t.path === path);
+      const existing = stateRef.current.tabs.find((t) => t.kind === "file" && t.file.path === path);
       if (existing) {
         setState((prev) => ({ ...prev, activeTabId: existing.id }));
         return;
@@ -94,20 +181,14 @@ export function useTabs(options: UseTabsOptions) {
         const { content, metadata } = await loadFileContent(path);
         await invoke("watch_file", { path });
         const mode = optionsRef.current.defaultEditorMode;
-        const newTab: Tab = {
+        const newTab: FileTab = {
           id,
-          path,
-          content,
-          metadata,
-          scrollTop: 0,
-          mode,
-          editContent: null,
-          dirty: false,
+          kind: "file",
+          file: { ...makeFileState(path, mode), content, metadata },
         };
         setState((prev) => {
-          // Double-check inside updater
-          if (prev.tabs.some((t) => t.path === path)) {
-            const match = prev.tabs.find((t) => t.path === path)!;
+          if (prev.tabs.some((t) => t.kind === "file" && t.file.path === path)) {
+            const match = prev.tabs.find((t) => t.kind === "file" && t.file.path === path)!;
             return { ...prev, activeTabId: match.id };
           }
           return { tabs: [...prev.tabs, newTab], activeTabId: id };
@@ -120,13 +201,134 @@ export function useTabs(options: UseTabsOptions) {
     [addToRecent],
   );
 
+  // Open a file inside a specific folder tab — replaces that tab's currently-viewed file.
+  // Watches the new file, unwatches the old. Folder's directory watcher stays.
+  const openFileInFolderTab = useCallback(
+    async (tabId: string, path: string) => {
+      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
+      if (!tab || tab.kind !== "folder") return;
+
+      const previousFilePath = tab.file?.path;
+      if (previousFilePath === path) return;
+
+      try {
+        const { content, metadata } = await loadFileContent(path);
+        if (previousFilePath) {
+          invoke("unwatch_file", { path: previousFilePath }).catch(() => {});
+        }
+        await invoke("watch_file", { path });
+        const mode = optionsRef.current.defaultEditorMode;
+        const newFile: FileState = { ...makeFileState(path, mode), content, metadata };
+        setState((prev) => ({
+          ...prev,
+          tabs: prev.tabs.map((t) =>
+            t.id === tabId && t.kind === "folder" ? { ...t, file: newFile } : t,
+          ),
+        }));
+        addToRecent(path);
+      } catch (err) {
+        console.error("Failed to open file in folder tab:", err);
+      }
+    },
+    [addToRecent],
+  );
+
+  // Open a new folder workspace as a top-level tab.
+  // If a path is provided, opens that path; otherwise prompts via dialog.
+  const openFolder = useCallback(
+    async (root?: string, options?: { expanded?: string[]; filePath?: string }) => {
+      let resolvedRoot = root;
+      if (!resolvedRoot) {
+        const selected = await open({ directory: true, multiple: false });
+        if (typeof selected !== "string") return;
+        resolvedRoot = selected;
+      }
+
+      // Activate existing folder tab for this root, don't duplicate.
+      const existing = stateRef.current.tabs.find(
+        (t) => t.kind === "folder" && t.root === resolvedRoot,
+      );
+      if (existing) {
+        setState((prev) => ({ ...prev, activeTabId: existing.id }));
+        return;
+      }
+
+      const id = generateId();
+      try {
+        await invoke("watch_directory", { path: resolvedRoot });
+      } catch (err) {
+        console.error("Failed to watch directory:", err);
+      }
+
+      const expanded = new Set<string>(options?.expanded ?? []);
+      const nodes = new Map<string, DirEntry[]>();
+      nodes.set(resolvedRoot, await loadDirectory(resolvedRoot));
+      for (const dir of expanded) {
+        nodes.set(dir, await loadDirectory(dir));
+      }
+
+      const newTab: FolderTab = {
+        id,
+        kind: "folder",
+        root: resolvedRoot,
+        expanded,
+        nodes,
+        file: null,
+      };
+      setState((prev) => ({ tabs: [...prev.tabs, newTab], activeTabId: id }));
+
+      if (options?.filePath) {
+        // Defer so the new tab is in state for openFileInFolderTab to find
+        await openFileInFolderTab(id, options.filePath);
+      }
+    },
+    [loadDirectory, openFileInFolderTab],
+  );
+
+  const toggleExpand = useCallback(
+    async (tabId: string, path: string) => {
+      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
+      if (!tab || tab.kind !== "folder") return;
+
+      const wasExpanded = tab.expanded.has(path);
+      const newExpanded = new Set(tab.expanded);
+      if (wasExpanded) {
+        newExpanded.delete(path);
+      } else {
+        newExpanded.add(path);
+      }
+
+      let newNodes = tab.nodes;
+      if (!wasExpanded && !tab.nodes.has(path)) {
+        const entries = await loadDirectory(path);
+        newNodes = new Map(tab.nodes);
+        newNodes.set(path, entries);
+      }
+
+      setState((prev) => ({
+        ...prev,
+        tabs: prev.tabs.map((t) =>
+          t.id === tabId && t.kind === "folder"
+            ? { ...t, expanded: newExpanded, nodes: newNodes }
+            : t,
+        ),
+      }));
+    },
+    [loadDirectory],
+  );
+
   const closeTab = useCallback((id: string) => {
     setState((prev) => {
       const idx = prev.tabs.findIndex((t) => t.id === id);
       if (idx === -1) return prev;
 
       const tab = prev.tabs[idx];
-      invoke("unwatch_file", { path: tab.path }).catch(() => {});
+      if (tab.kind === "folder") {
+        invoke("unwatch_directory", { path: tab.root }).catch(() => {});
+        if (tab.file) invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
+      } else {
+        invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
+      }
       scrollRefsMap.current.delete(id);
 
       const updated = prev.tabs.filter((t) => t.id !== id);
@@ -141,19 +343,63 @@ export function useTabs(options: UseTabsOptions) {
 
   const setActiveTab = useCallback((id: string) => {
     setState((prev) => {
-      // Save scroll position of current tab
+      // Save scroll position of current active tab's file
       if (prev.activeTabId) {
         const savedScroll = scrollRefsMap.current.get(prev.activeTabId) ?? 0;
         return {
-          tabs: prev.tabs.map((t) =>
-            t.id === prev.activeTabId ? { ...t, scrollTop: savedScroll } : t,
-          ),
+          tabs: prev.tabs.map((t) => {
+            if (t.id !== prev.activeTabId) return t;
+            const file = activeFileOf(t);
+            if (!file) return t;
+            const updatedFile = { ...file, scrollTop: savedScroll };
+            return t.kind === "folder" ? { ...t, file: updatedFile } : { ...t, file: updatedFile };
+          }),
           activeTabId: id,
         };
       }
       return { ...prev, activeTabId: id };
     });
   }, []);
+
+  const updateActiveFile = useCallback((id: string, mutator: (f: FileState) => FileState) => {
+    setState((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) => {
+        if (t.id !== id) return t;
+        const file = activeFileOf(t);
+        if (!file) return t;
+        const next = mutator(file);
+        return t.kind === "folder" ? { ...t, file: next } : { ...t, file: next };
+      }),
+    }));
+  }, []);
+
+  const setTabMode = useCallback(
+    (id: string, mode: EditorMode) => {
+      updateActiveFile(id, (f) => {
+        // When entering edit mode, initialize editContent from content
+        if (mode !== "view" && f.editContent === null) {
+          return { ...f, mode, editContent: f.content };
+        }
+        return { ...f, mode };
+      });
+    },
+    [updateActiveFile],
+  );
+
+  const updateEditContent = useCallback(
+    (id: string, editContent: string) => {
+      updateActiveFile(id, (f) => ({ ...f, editContent, dirty: true }));
+    },
+    [updateActiveFile],
+  );
+
+  const markSaved = useCallback(
+    (id: string, content: string) => {
+      updateActiveFile(id, (f) => ({ ...f, content, dirty: false }));
+    },
+    [updateActiveFile],
+  );
 
   const saveScrollPosition = useCallback(
     (scrollTop: number) => {
@@ -164,41 +410,13 @@ export function useTabs(options: UseTabsOptions) {
     [activeTabId],
   );
 
-  const setTabMode = useCallback((id: string, mode: EditorMode) => {
-    setState((prev) => ({
-      ...prev,
-      tabs: prev.tabs.map((t) => {
-        if (t.id !== id) return t;
-        // When entering edit mode, initialize editContent from content
-        if (mode !== "view" && t.editContent === null) {
-          return { ...t, mode, editContent: t.content };
-        }
-        return { ...t, mode };
-      }),
-    }));
-  }, []);
-
-  const updateEditContent = useCallback((id: string, editContent: string) => {
-    setState((prev) => ({
-      ...prev,
-      tabs: prev.tabs.map((t) => (t.id === id ? { ...t, editContent, dirty: true } : t)),
-    }));
-  }, []);
-
-  const markSaved = useCallback((id: string, content: string) => {
-    setState((prev) => ({
-      ...prev,
-      tabs: prev.tabs.map((t) => (t.id === id ? { ...t, content, dirty: false } : t)),
-    }));
-  }, []);
-
   const openFileDialog = useCallback(async () => {
     const selected = await open({
       multiple: true,
       filters: [
         {
           name: "Markdown",
-          extensions: ["md", "markdown", "mdown", "mkd", "mkdn"],
+          extensions: MARKDOWN_EXTENSIONS as string[],
         },
       ],
     });
@@ -219,13 +437,21 @@ export function useTabs(options: UseTabsOptions) {
         if (initialPath) {
           await openFile(initialPath);
         } else if (options.openTabs.length > 0) {
-          for (const path of options.openTabs) {
-            await openFile(path);
+          const persistedTabs = normalizePersistedTabs(options.openTabs);
+          for (const persisted of persistedTabs) {
+            if (persisted.kind === "folder") {
+              await openFolder(persisted.path, {
+                expanded: persisted.expanded ?? [],
+                filePath: persisted.filePath,
+              });
+            } else {
+              await openFile(persisted.path);
+            }
           }
-          // Activate the previously active tab
+          // Activate the previously-active tab by its primary path
           if (options.activeTabPath) {
             setState((prev) => {
-              const match = prev.tabs.find((t) => t.path === options.activeTabPath);
+              const match = prev.tabs.find((t) => tabPathOf(t) === options.activeTabPath);
               return match ? { ...prev, activeTabId: match.id } : prev;
             });
           }
@@ -249,7 +475,8 @@ export function useTabs(options: UseTabsOptions) {
     };
   }, [openFile]);
 
-  // Listen for file-changed events (auto-reload)
+  // Listen for file-changed events (auto-reload). Applies to any open file —
+  // top-level FileTabs and the active file inside FolderTabs alike.
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
 
@@ -258,14 +485,24 @@ export function useTabs(options: UseTabsOptions) {
       clearTimeout(timeout);
       timeout = setTimeout(async () => {
         const changedPath = event.payload;
-        // Skip reload if the tab is in edit mode with unsaved changes
-        const tab = stateRef.current.tabs.find((t) => t.path === changedPath);
-        if (tab && tab.mode !== "view" && tab.dirty) return;
+        const matchingTab = stateRef.current.tabs.find(
+          (t) => activeFileOf(t)?.path === changedPath,
+        );
+        if (!matchingTab) return;
+        const file = activeFileOf(matchingTab);
+        if (!file) return;
+        // Skip reload if the file is in edit mode with unsaved changes
+        if (file.mode !== "view" && file.dirty) return;
         try {
           const { content, metadata } = await loadFileContent(changedPath);
           setState((prev) => ({
             ...prev,
-            tabs: prev.tabs.map((t) => (t.path === changedPath ? { ...t, content, metadata } : t)),
+            tabs: prev.tabs.map((t) => {
+              const f = activeFileOf(t);
+              if (!f || f.path !== changedPath) return t;
+              const next: FileState = { ...f, content, metadata };
+              return t.kind === "folder" ? { ...t, file: next } : { ...t, file: next };
+            }),
           }));
         } catch {
           // ignore reload errors
@@ -279,12 +516,56 @@ export function useTabs(options: UseTabsOptions) {
     };
   }, []);
 
+  // Listen for directory-changed events: refresh the affected folder tab's tree.
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const unlisten = listen<string>("directory-changed", (event) => {
+      const watchedRoot = event.payload;
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(async () => {
+        const tab = stateRef.current.tabs.find(
+          (t) => t.kind === "folder" && t.root === watchedRoot,
+        );
+        if (!tab || tab.kind !== "folder") return;
+        // Refresh root + every currently-loaded subdirectory under this root.
+        const dirsToRefresh: string[] = [tab.root];
+        for (const dir of tab.nodes.keys()) {
+          if (dir !== tab.root && isInWorkspace(dir, tab.root)) {
+            dirsToRefresh.push(dir);
+          }
+        }
+        const fresh = await Promise.all(
+          dirsToRefresh.map(async (d) => [d, await loadDirectory(d)] as const),
+        );
+        setState((prev) => ({
+          ...prev,
+          tabs: prev.tabs.map((t) => {
+            if (t.id !== tab.id || t.kind !== "folder") return t;
+            const newNodes = new Map(t.nodes);
+            for (const [d, entries] of fresh) {
+              newNodes.set(d, entries);
+            }
+            return { ...t, nodes: newNodes };
+          }),
+        }));
+      }, DIRECTORY_REFRESH_DEBOUNCE);
+    });
+    return () => {
+      if (timeout) clearTimeout(timeout);
+      unlisten.then((fn) => fn());
+    };
+  }, [loadDirectory]);
+
   return {
     tabs,
     activeTab,
     activeTabId,
+    activeFile,
     initializing,
     openFile,
+    openFolder,
+    openFileInFolderTab,
+    toggleExpand,
     closeTab,
     setActiveTab,
     setTabMode,

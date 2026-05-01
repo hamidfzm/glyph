@@ -14,6 +14,22 @@ interface ContextMenuActions {
 }
 
 export function useContextMenu(platform: Platform, actions: ContextMenuActions) {
+  // Belt-and-braces: in production builds, suppress the WebView's default context menu
+  // entirely. Tauri disables devtools in release so Inspect/Reload shouldn't appear, but
+  // some platforms still surface page-level entries (Reload, View Source) that we don't
+  // want users seeing in the shipped app. macOS still gets its native text-selection
+  // submenu via the suppressor below skipping when there's a selection.
+  useEffect(() => {
+    if (!import.meta.env.PROD) return;
+    const suppress = (e: MouseEvent) => {
+      const hasSelection = (window.getSelection()?.toString() ?? "").length > 0;
+      if (platform === "macos" && hasSelection) return; // keep Look Up / Translate / Speech
+      e.preventDefault();
+    };
+    document.addEventListener("contextmenu", suppress);
+    return () => document.removeEventListener("contextmenu", suppress);
+  }, [platform]);
+
   useEffect(() => {
     // On macOS, keep native WebView context menu (has Look Up, Translate, Summarize, Speech, etc.)
     if (platform === "macos" || platform === "unknown") return;

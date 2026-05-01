@@ -9,7 +9,10 @@ use tauri::RunEvent;
 use tauri_plugin_cli::CliExt;
 use watcher::FileWatcherState;
 
-const MD_EXTENSIONS: &[&str] = &["md", "markdown", "mdown", "mkd", "mkdn"];
+// Single source of truth shared with the frontend
+// (src/lib/markdownExtensions.ts imports the same JSON).
+// build.rs reads markdown-extensions.json at compile time and emits this const.
+include!(concat!(env!("OUT_DIR"), "/md_extensions.rs"));
 
 pub fn is_markdown_file(path: &std::path::Path) -> bool {
     path.extension()
@@ -93,8 +96,11 @@ pub fn run() {
             commands::get_file_metadata,
             commands::get_initial_file,
             commands::print_document,
+            commands::read_directory,
             watcher::watch_file,
             watcher::unwatch_file,
+            watcher::watch_directory,
+            watcher::unwatch_directory,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Glyph");
@@ -152,6 +158,11 @@ mod tests {
     #[test]
     fn mkdn_extension() {
         assert!(is_markdown_file(Path::new("file.mkdn")));
+    }
+
+    #[test]
+    fn mdx_extension() {
+        assert!(is_markdown_file(Path::new("doc.mdx")));
     }
 
     #[test]

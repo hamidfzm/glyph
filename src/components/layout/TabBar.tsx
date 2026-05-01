@@ -1,5 +1,6 @@
-import type { Tab } from "../../hooks/useTabs";
+import { activeFileOf, type Tab, tabPathOf } from "../../hooks/useTabs";
 import type { EditorMode } from "../../lib/settings";
+import { FolderIcon } from "../icons/FolderIcon";
 
 interface TabBarProps {
   tabs: Tab[];
@@ -9,59 +10,76 @@ interface TabBarProps {
   onModeChange?: (id: string, mode: EditorMode) => void;
 }
 
+function tabLabel(tab: Tab): string {
+  if (tab.kind === "folder") {
+    const segments = tab.root.split(/[\\/]/).filter(Boolean);
+    return segments[segments.length - 1] ?? tab.root;
+  }
+  return tab.file.metadata?.name ?? "Untitled";
+}
+
 export function TabBar({ tabs, activeTabId, onActivate, onClose, onModeChange }: TabBarProps) {
   if (tabs.length === 0) return null;
 
-  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+  const activeFile = activeFileOf(activeTab);
+  const showModeToggle = activeTab !== null && activeFile !== null && onModeChange !== undefined;
 
   return (
     <div className="tab-bar-container" data-print-hide="true">
       <div className="tab-bar-scroll">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            className="tab-item"
-            data-active={tab.id === activeTabId || undefined}
-            onClick={() => onActivate(tab.id)}
-            onAuxClick={(e) => {
-              if (e.button === 1) {
-                e.preventDefault();
-                onClose(tab.id);
-              }
-            }}
-            title={tab.path}
-          >
-            {tab.dirty && <span className="tab-dirty-dot" />}
-            <span className="tab-label">{tab.metadata?.name ?? "Untitled"}</span>
+        {tabs.map((tab) => {
+          const file = activeFileOf(tab);
+          const dirty = file?.dirty ?? false;
+          const label = tabLabel(tab);
+          return (
             <button
+              key={tab.id}
               type="button"
-              className="tab-close"
-              tabIndex={-1}
-              aria-label={`Close ${tab.metadata?.name ?? "tab"}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose(tab.id);
+              className="tab-item"
+              data-active={tab.id === activeTabId || undefined}
+              data-tab-kind={tab.kind}
+              onClick={() => onActivate(tab.id)}
+              onAuxClick={(e) => {
+                if (e.button === 1) {
+                  e.preventDefault();
+                  onClose(tab.id);
+                }
               }}
+              title={tabPathOf(tab)}
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                <path
-                  d="M3 3L9 9M9 3L3 9"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </svg>
+              {dirty && <span className="tab-dirty-dot" />}
+              {tab.kind === "folder" && <FolderIcon className="opacity-70 -ml-0.5" />}
+              <span className="tab-label">{label}</span>
+              <button
+                type="button"
+                className="tab-close"
+                tabIndex={-1}
+                aria-label={`Close ${label}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose(tab.id);
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <path
+                    d="M3 3L9 9M9 3L3 9"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
             </button>
-          </button>
-        ))}
+          );
+        })}
       </div>
-      {activeTab && onModeChange && (
+      {showModeToggle && (
         <div className="mode-toggle">
           <button
             type="button"
             className="mode-toggle-btn"
-            data-active={activeTab.mode === "view" || undefined}
+            data-active={activeFile.mode === "view" || undefined}
             onClick={() => onModeChange(activeTab.id, "view")}
             aria-label="View mode"
             title="View"
@@ -78,7 +96,7 @@ export function TabBar({ tabs, activeTabId, onActivate, onClose, onModeChange }:
           <button
             type="button"
             className="mode-toggle-btn"
-            data-active={activeTab.mode === "edit" || undefined}
+            data-active={activeFile.mode === "edit" || undefined}
             onClick={() => onModeChange(activeTab.id, "edit")}
             aria-label="Edit mode"
             title="Edit"
@@ -95,7 +113,7 @@ export function TabBar({ tabs, activeTabId, onActivate, onClose, onModeChange }:
           <button
             type="button"
             className="mode-toggle-btn"
-            data-active={activeTab.mode === "split" || undefined}
+            data-active={activeFile.mode === "split" || undefined}
             onClick={() => onModeChange(activeTab.id, "split")}
             aria-label="Split mode"
             title="Split"

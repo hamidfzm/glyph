@@ -10,11 +10,18 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
     let open = MenuItemBuilder::with_id("open", "Open\u{2026}")
         .accelerator("CmdOrCtrl+O")
         .build(handle)?;
+    let open_folder = MenuItemBuilder::with_id("open-folder", "Open Folder\u{2026}")
+        .accelerator("CmdOrCtrl+Shift+O")
+        .build(handle)?;
+    let reset_view = MenuItemBuilder::with_id("reset-view", "Reset View").build(handle)?;
     let print = MenuItemBuilder::with_id("print", "Print\u{2026}")
         .accelerator("CmdOrCtrl+P")
         .build(handle)?;
-    let close = MenuItemBuilder::with_id("close", "Close Window")
+    let close_tab = MenuItemBuilder::with_id("close-tab", "Close Tab")
         .accelerator("CmdOrCtrl+W")
+        .build(handle)?;
+    let close = MenuItemBuilder::with_id("close", "Close Window")
+        .accelerator("CmdOrCtrl+Shift+W")
         .build(handle)?;
     let settings = MenuItemBuilder::with_id("open-settings", "Settings\u{2026}")
         .accelerator("CmdOrCtrl+,")
@@ -33,8 +40,11 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .build()?;
 
     // View menu
-    let toggle_sidebar = MenuItemBuilder::with_id("toggle-sidebar", "Toggle Sidebar")
+    let toggle_files_sidebar = MenuItemBuilder::with_id("toggle-files-sidebar", "Toggle Files Sidebar")
         .accelerator("CmdOrCtrl+B")
+        .build(handle)?;
+    let toggle_outline_sidebar = MenuItemBuilder::with_id("toggle-outline-sidebar", "Toggle Outline Sidebar")
+        .accelerator("CmdOrCtrl+\\")
         .build(handle)?;
 
     let zoom_in = MenuItemBuilder::with_id("zoom-in", "Zoom In")
@@ -52,12 +62,15 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .build(handle)?;
 
     let view_menu = SubmenuBuilder::new(handle, "View")
-        .item(&toggle_sidebar)
+        .item(&toggle_files_sidebar)
+        .item(&toggle_outline_sidebar)
         .item(&toggle_edit)
         .separator()
         .item(&zoom_in)
         .item(&zoom_out)
         .item(&actual_size)
+        .separator()
+        .item(&reset_view)
         .separator()
         .fullscreen()
         .build()?;
@@ -99,9 +112,11 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
     let menu = {
         let file_menu = SubmenuBuilder::new(handle, "File")
             .item(&open)
+            .item(&open_folder)
             .separator()
             .item(&print)
             .separator()
+            .item(&close_tab)
             .item(&close)
             .build()?;
 
@@ -134,11 +149,13 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
     let menu = {
         let file_menu = SubmenuBuilder::new(handle, "File")
             .item(&open)
+            .item(&open_folder)
             .separator()
             .item(&print)
             .separator()
             .item(&settings)
             .separator()
+            .item(&close_tab)
             .item(&close)
             .build()?;
 
@@ -159,6 +176,15 @@ pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) 
         "open" => {
             let _ = app.emit("menu-open-file", ());
         }
+        "open-folder" => {
+            let _ = app.emit("menu-open-folder", ());
+        }
+        "close-tab" => {
+            let _ = app.emit("menu-close-tab", ());
+        }
+        "reset-view" => {
+            let _ = app.emit("menu-reset-view", ());
+        }
         "print" => {
             let _ = app.emit("menu-print", ());
         }
@@ -167,8 +193,11 @@ pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) 
                 let _ = window.close();
             }
         }
-        "toggle-sidebar" => {
-            let _ = app.emit("menu-toggle-sidebar", ());
+        "toggle-files-sidebar" => {
+            let _ = app.emit("menu-toggle-files-sidebar", ());
+        }
+        "toggle-outline-sidebar" => {
+            let _ = app.emit("menu-toggle-outline-sidebar", ());
         }
         "open-settings" => {
             let _ = app.emit("menu-open-settings", ());

@@ -17,7 +17,6 @@ function mockSettings(fontSize: number) {
   }));
 }
 
-// Default mock at 100% zoom
 mockSettings(16);
 
 describe("StatusBar", () => {
