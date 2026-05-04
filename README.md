@@ -33,6 +33,7 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 - Live preview updates as you type
 
 ### Viewer
+- Folder / workspace tabs — open a folder as a tab; browse `.md` files in the sidebar tree; right-click a file to open it in a new top-level tab
 - Multiple files in tabs — open, switch, close, middle-click to close
 - In-document search — `Cmd/Ctrl+F` with match highlighting and navigation
 - Zoom in/out — `Cmd/Ctrl+=/-/0` with zoom level in status bar
@@ -167,14 +168,17 @@ cd src-tauri && cargo clippy    # Lint Rust
 | Shortcut | Action |
 |----------|--------|
 | `Cmd+O` / `Ctrl+O` | Open file(s) |
+| `Cmd+Shift+O` / `Ctrl+Shift+O` | Open folder |
 | `Cmd+P` / `Ctrl+P` | Print / Export to PDF |
 | `Cmd+F` / `Ctrl+F` | Find in document |
 | `Cmd+=` / `Ctrl+=` | Zoom in |
 | `Cmd+-` / `Ctrl+-` | Zoom out |
 | `Cmd+0` / `Ctrl+0` | Reset zoom |
-| `Cmd+B` / `Ctrl+B` | Toggle sidebar |
+| `Cmd+B` / `Ctrl+B` | Toggle files sidebar |
+| `Cmd+\` / `Ctrl+\` | Toggle outline sidebar |
 | `Cmd+,` / `Ctrl+,` | Settings |
-| `Cmd+W` / `Ctrl+W` | Close window |
+| `Cmd+W` / `Ctrl+W` | Close tab |
+| `Cmd+Shift+W` / `Ctrl+Shift+W` | Close window |
 
 ## Comparison with Other Markdown Apps
 

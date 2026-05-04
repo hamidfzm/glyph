@@ -11,7 +11,7 @@ function TestConsumer({ attack }: { attack?: { path: string; value: unknown } } 
       <span data-testid="loaded">{String(loaded)}</span>
       <span data-testid="theme">{settings.appearance.theme}</span>
       <span data-testid="font-size">{settings.appearance.fontSize}</span>
-      <span data-testid="sidebar">{String(settings.layout.sidebarVisible)}</span>
+      <span data-testid="sidebar">{String(settings.layout.filesSidebarVisible)}</span>
       <span data-testid="settings-keys">{Object.keys(settings).sort().join(",")}</span>
       <span data-testid="appearance-keys">{Object.keys(settings.appearance).sort().join(",")}</span>
       <button

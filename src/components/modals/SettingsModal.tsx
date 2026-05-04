@@ -268,27 +268,63 @@ function LayoutTab() {
 
   return (
     <div className="settings-section">
-      <div className="settings-section-title">Sidebar</div>
+      <div className="settings-section-title">Sidebars</div>
       <div className="settings-row">
         <div>
-          <span className="settings-label">Show Sidebar</span>
-          <div className="settings-description">Toggle the table of contents sidebar</div>
+          <span className="settings-label">Show Files Sidebar</span>
+          <div className="settings-description">
+            Workspace file tree (folder tabs only). Toggle with <kbd>Cmd/Ctrl+B</kbd>.
+          </div>
         </div>
         <Toggle
-          checked={layout.sidebarVisible}
-          onChange={(v) => updateSettings("layout.sidebarVisible", v)}
+          checked={layout.filesSidebarVisible}
+          onChange={(v) => updateSettings("layout.filesSidebarVisible", v)}
         />
       </div>
 
       <div className="settings-row">
-        <span className="settings-label">Sidebar Position</span>
+        <div>
+          <span className="settings-label">Show Outline Sidebar</span>
+          <div className="settings-description">
+            Document table of contents. Toggle with <kbd>Cmd/Ctrl+\</kbd>.
+          </div>
+        </div>
+        <Toggle
+          checked={layout.outlineSidebarVisible}
+          onChange={(v) => updateSettings("layout.outlineSidebarVisible", v)}
+        />
+      </div>
+
+      <div className="settings-row">
+        <div>
+          <span className="settings-label">Sidebar layout</span>
+          <div className="settings-description">
+            Folder tabs only. <b>Split</b>: Files and Outline on opposite sides. <b>Combined</b>:
+            stacked in one panel. <b>Beside</b>: two adjacent panels on the same side.
+          </div>
+        </div>
         <Segmented
-          value={layout.sidebarPosition}
+          value={layout.sidebarLayout}
           options={[
-            { value: "left", label: "Left" },
-            { value: "right", label: "Right" },
+            { value: "split", label: "Split" },
+            { value: "combined", label: "Combined" },
+            { value: "beside", label: "Beside" },
           ]}
-          onChange={(v) => updateSettings("layout.sidebarPosition", v)}
+          onChange={(v) => updateSettings("layout.sidebarLayout", v)}
+        />
+      </div>
+
+      <div className="settings-row">
+        <div>
+          <span className="settings-label">Swap sidebar sides</span>
+          <div className="settings-description">
+            Flip which side each panel lives on. Default is Files left / Outline right; on, it
+            becomes Files right / Outline left.
+          </div>
+        </div>
+        <Toggle
+          checked={layout.swapSidebarSides}
+          onChange={(v) => updateSettings("layout.swapSidebarSides", v)}
         />
       </div>
 

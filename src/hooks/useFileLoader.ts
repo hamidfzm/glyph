@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useState } from "react";
+import { MARKDOWN_EXTENSIONS } from "../lib/markdownExtensions";
 
 interface FileMetadata {
   name: string;
@@ -74,7 +75,7 @@ export function useFileLoader(options?: {
       filters: [
         {
           name: "Markdown",
-          extensions: ["md", "markdown", "mdown", "mkd", "mkdn"],
+          extensions: MARKDOWN_EXTENSIONS as string[],
         },
       ],
     });

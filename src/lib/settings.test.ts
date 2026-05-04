@@ -20,8 +20,10 @@ describe("DEFAULT_SETTINGS", () => {
   });
 
   it("has layout defaults", () => {
-    expect(DEFAULT_SETTINGS.layout.sidebarVisible).toBe(true);
-    expect(DEFAULT_SETTINGS.layout.sidebarPosition).toBe("left");
+    expect(DEFAULT_SETTINGS.layout.filesSidebarVisible).toBe(true);
+    expect(DEFAULT_SETTINGS.layout.outlineSidebarVisible).toBe(true);
+    expect(DEFAULT_SETTINGS.layout.sidebarLayout).toBe("beside");
+    expect(DEFAULT_SETTINGS.layout.swapSidebarSides).toBe(false);
     expect(DEFAULT_SETTINGS.layout.sidebarWidth).toBe(224);
   });
 
