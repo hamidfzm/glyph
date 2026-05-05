@@ -2,6 +2,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { type ComponentPropsWithoutRef, useCallback, useContext } from "react";
 import { SettingsContext } from "../../contexts/SettingsContext";
+import { scrollToHeading } from "../../lib/scrollToHeading";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 
 export function LinkComponent(props: ComponentPropsWithoutRef<"a">) {
@@ -15,9 +16,7 @@ export function LinkComponent(props: ComponentPropsWithoutRef<"a">) {
       if (href.startsWith("#")) {
         e.preventDefault();
         const id = decodeURIComponent(href.slice(1));
-        if (!id) return;
-        const target = document.getElementById(id);
-        target?.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (id) scrollToHeading(id);
         return;
       }
 

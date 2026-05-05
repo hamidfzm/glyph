@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TocEntry } from "../../hooks/useTableOfContents";
 import type { Tab } from "../../hooks/useTabs";
+import { onActiveHeadingChange, scrollToHeading } from "../../lib/scrollToHeading";
 import type { SidebarLayout } from "../../lib/settings";
 import { FolderIcon } from "../icons/FolderIcon";
 import { OutlineIcon } from "../icons/OutlineIcon";
@@ -55,6 +56,11 @@ function useActiveHeading(entries: TocEntry[]) {
     return () => observerRef.current?.disconnect();
   }, [entries]);
 
+  // Sync immediately on programmatic scrolls (anchor clicks, outline clicks).
+  // The observer alone lags during smooth scrolls and can land on the wrong
+  // heading because multiple headings can sit in the observation band at once.
+  useEffect(() => onActiveHeadingChange(setActiveId), []);
+
   return activeId;
 }
 
@@ -90,8 +96,7 @@ function PanelHeader({ label, side, onCollapse, collapseTitle }: PanelHeaderProp
 
 function OutlineSection({ entries, activeId }: { entries: TocEntry[]; activeId: string }) {
   const scrollTo = useCallback((id: string) => {
-    const el = document.getElementById(id);
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToHeading(id);
   }, []);
 
   if (entries.length === 0) return null;
