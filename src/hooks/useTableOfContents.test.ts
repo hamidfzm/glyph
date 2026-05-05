@@ -65,4 +65,10 @@ describe("useTableOfContents", () => {
     rerender();
     expect(result.current).toBe(first);
   });
+
+  it("disambiguates duplicate heading slugs (matches GitHub)", () => {
+    const content = "## Setup\n## Setup\n## Setup";
+    const { result } = renderHook(() => useTableOfContents(content));
+    expect(result.current.map((e) => e.id)).toEqual(["setup", "setup-1", "setup-2"]);
+  });
 });

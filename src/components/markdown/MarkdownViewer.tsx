@@ -3,6 +3,7 @@ import ReactMarkdown, { type Options } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
+import rehypeSlug from "rehype-slug";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGemoji from "remark-gemoji";
 import remarkGfm from "remark-gfm";
@@ -11,7 +12,6 @@ import { useKatexPlugin } from "../../hooks/useKatexPlugin";
 import { useSearch } from "../../hooks/useSearch";
 import { SearchBar } from "../layout/SearchBar";
 import { CodeBlockComponent } from "./CodeBlockComponent";
-import { headingComponents } from "./HeadingComponent";
 import { useImageComponent } from "./ImageComponent";
 import { LinkComponent } from "./LinkComponent";
 import { markdownSanitizeSchema } from "./sanitizeSchema";
@@ -73,6 +73,7 @@ export function MarkdownViewer({
     const plugins: NonNullable<Options["rehypePlugins"]> = [
       rehypeRaw,
       [rehypeSanitize, markdownSanitizeSchema],
+      rehypeSlug,
       [rehypeHighlight, { plainText: ["mermaid"] }],
     ];
     if (katexPlugin) plugins.push(katexPlugin);
@@ -98,7 +99,6 @@ export function MarkdownViewer({
             remarkPlugins={[remarkFrontmatter, remarkGfm, remarkMath, remarkGemoji]}
             rehypePlugins={rehypePlugins}
             components={{
-              ...headingComponents,
               a: LinkComponent,
               img: ImageComponent,
               pre: CodeBlockComponent,

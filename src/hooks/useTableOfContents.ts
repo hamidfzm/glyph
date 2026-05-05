@@ -1,3 +1,4 @@
+import GithubSlugger from "github-slugger";
 import { useMemo } from "react";
 
 export interface TocEntry {
@@ -6,26 +7,19 @@ export interface TocEntry {
   level: number;
 }
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
-}
-
 export function useTableOfContents(content: string | null): TocEntry[] {
   return useMemo(() => {
     if (!content) return [];
 
     const headingRegex = /^(#{1,6})\s+(.+)$/gm;
+    const slugger = new GithubSlugger();
     const entries: TocEntry[] = [];
 
     for (const match of content.matchAll(headingRegex)) {
+      const text = match[2];
       entries.push({
-        id: slugify(match[2]),
-        text: match[2],
+        id: slugger.slug(text),
+        text,
         level: match[1].length,
       });
     }

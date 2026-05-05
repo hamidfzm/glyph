@@ -9,6 +9,20 @@ tags: [markdown, demo, sample]
 
 This document demonstrates all the rendering features supported by Glyph. The YAML frontmatter above is automatically hidden from the rendered output.
 
+## Contents
+
+- [GitHub Flavored Markdown](#github-flavored-markdown)
+- [Code Blocks](#code-blocks)
+- [Math / LaTeX](#math--latex)
+- [Mermaid Diagrams](#mermaid-diagrams)
+- [Footnotes](#footnotes)
+- [Emoji Shortcodes](#emoji-shortcodes)
+- [Blockquotes](#blockquotes)
+- [Raw HTML](#raw-html)
+- [Images](#images)
+- [Links](#links)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+
 ## GitHub Flavored Markdown
 
 ### Tables

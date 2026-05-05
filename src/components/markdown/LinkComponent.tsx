@@ -10,7 +10,17 @@ export function LinkComponent(props: ComponentPropsWithoutRef<"a">) {
 
   const handleClick = useCallback(
     async (e: React.MouseEvent<HTMLAnchorElement>) => {
-      if (!href || href.startsWith("#")) return;
+      if (!href) return;
+
+      if (href.startsWith("#")) {
+        e.preventDefault();
+        const id = decodeURIComponent(href.slice(1));
+        if (!id) return;
+        const target = document.getElementById(id);
+        target?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+
       e.preventDefault();
 
       if (settings.behavior.confirmExternalLinks) {
