@@ -484,12 +484,51 @@ jobs:
           # Build source package
           cd /tmp/glyph-${VERSION}
           DEBUILD_LINTIAN=no debuild -S -sa -d -k"$GPG_KEY_ID"
+      - name: Set up SSH for Launchpad
+        env:
+          LAUNCHPAD_SSH_PRIVATE_KEY: ${{ secrets.LAUNCHPAD_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$LAUNCHPAD_SSH_PRIVATE_KEY" > ~/.ssh/id_launchpad
+          chmod 600 ~/.ssh/id_launchpad
+          ssh-keyscan -t rsa,ecdsa,ed25519 ppa.launchpad.net >> ~/.ssh/known_hosts 2>/dev/null
+          cat >> ~/.ssh/config <<'EOF'
+          Host ppa.launchpad.net
+            IdentityFile ~/.ssh/id_launchpad
+            IdentitiesOnly yes
+          EOF
+          chmod 600 ~/.ssh/config
+      - name: Configure dput for SFTP upload
+        run: |
+          cat > ~/.dput.cf <<'EOF'
+          [ssh-ppa]
+          fqdn = ppa.launchpad.net
+          method = sftp
+          incoming = ~%(ssh-ppa)s
+          login = hamidfzm
+          allow_unsigned_uploads = 0
+          EOF
       - name: Upload to PPA
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           SERIES="${{ matrix.series }}"
+          CHANGES="glyph_${VERSION}-1~${SERIES}1_source.changes"
           cd /tmp
-          dput ppa:hamidfzm/glyph glyph_${VERSION}-1~${SERIES}1_source.changes
+          # SFTP via ssh-ppa: avoids Launchpad's FTP endpoint, which
+          # intermittently returns 550 mid-upload or rejects connections
+          # entirely from GitHub Actions runners.
+          for attempt in 1 2 3; do
+            if dput "ssh-ppa:hamidfzm/glyph" "$CHANGES"; then
+              echo "Upload succeeded on attempt $attempt"
+              exit 0
+            fi
+            echo "Upload attempt $attempt failed; retrying in 30s..."
+            rm -f "/tmp/${CHANGES%.changes}.upload"
+            sleep 30
+          done
+          echo "All upload attempts failed"
+          exit 1
 
   publish-debian:
     needs: build
