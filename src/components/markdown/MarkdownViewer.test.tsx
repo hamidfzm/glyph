@@ -43,3 +43,24 @@ describe("MarkdownViewer raw HTML", () => {
     expect(href.toLowerCase()).not.toMatch(/^javascript:/);
   });
 });
+
+describe("MarkdownViewer GitHub alerts", () => {
+  const types = ["note", "tip", "important", "warning", "caution"] as const;
+
+  for (const type of types) {
+    it(`renders [!${type.toUpperCase()}] as a styled alert`, () => {
+      const { container } = renderMd(`> [!${type.toUpperCase()}]\n> body text`);
+      const alert = container.querySelector(`.markdown-alert.markdown-alert-${type}`);
+      expect(alert).not.toBeNull();
+      expect(alert?.querySelector(".markdown-alert-title")).not.toBeNull();
+      expect(alert?.querySelector("svg")).not.toBeNull();
+      expect(alert?.textContent).toContain("body text");
+    });
+  }
+
+  it("leaves plain blockquotes untouched", () => {
+    const { container } = renderMd("> just a quote");
+    expect(container.querySelector(".markdown-alert")).toBeNull();
+    expect(container.querySelector("blockquote")?.textContent?.trim()).toBe("just a quote");
+  });
+});

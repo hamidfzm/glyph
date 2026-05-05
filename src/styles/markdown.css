@@ -68,6 +68,39 @@
 
 .markdown-body blockquote p:last-child { margin-bottom: 0; }
 
+.markdown-body .markdown-alert {
+  margin: 0 0 1em;
+  padding: 0.5em 1em;
+  border-left: 4px solid var(--alert-accent, var(--color-accent));
+  background: color-mix(in srgb, var(--alert-accent, var(--color-accent)) 8%, transparent);
+  border-radius: 0 var(--glyph-radius-sm) var(--glyph-radius-sm) 0;
+  color: var(--color-text-primary);
+}
+
+.markdown-body .markdown-alert > :last-child { margin-bottom: 0; }
+
+.markdown-body .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  color: var(--alert-accent, var(--color-accent));
+  line-height: 1;
+}
+
+.markdown-body .markdown-alert-title svg {
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+}
+
+.markdown-body .markdown-alert-note      { --alert-accent: var(--color-alert-note); }
+.markdown-body .markdown-alert-tip       { --alert-accent: var(--color-alert-tip); }
+.markdown-body .markdown-alert-important { --alert-accent: var(--color-alert-important); }
+.markdown-body .markdown-alert-warning   { --alert-accent: var(--color-alert-warning); }
+.markdown-body .markdown-alert-caution   { --alert-accent: var(--color-alert-caution); }
+
 .markdown-body ul,
 .markdown-body ol {
   margin: 0 0 1em;

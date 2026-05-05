@@ -19,13 +19,17 @@ export const markdownSanitizeSchema = {
     "summary",
     "video",
     "source",
+    "svg",
+    "path",
   ],
   attributes: {
     ...defaultSchema.attributes,
-    "*": [...(defaultSchema.attributes?.["*"] ?? []), "align", "style"],
+    "*": [...(defaultSchema.attributes?.["*"] ?? []), "align", "style", "className", "dir"],
     img: [...(defaultSchema.attributes?.img ?? []), "align", "width", "height"],
     details: [...(defaultSchema.attributes?.details ?? []), "open"],
     video: ["src", "controls", "width", "height", "poster", "loop", "muted", "autoplay"],
     source: ["src", "type"],
+    svg: ["className", "viewBox", "width", "height", "ariaHidden", "fill"],
+    path: ["d", "fillRule", "clipRule"],
   },
 };
