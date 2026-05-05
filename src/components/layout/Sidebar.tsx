@@ -28,9 +28,16 @@ interface SidebarProps {
 
 const DEFAULT_WIDTH = 224;
 
+// How long to ignore observer updates after a programmatic scroll. Smooth
+// scrolls in modern browsers complete in ~300-500ms; during that window the
+// observer fires many times as intermediate headings cross the observation
+// band, and would override the heading the user actually clicked on.
+const SCROLL_LOCK_MS = 700;
+
 function useActiveHeading(entries: TocEntry[]) {
   const [activeId, setActiveId] = useState<string>("");
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const lockUntilRef = useRef(0);
 
   useEffect(() => {
     observerRef.current?.disconnect();
@@ -38,6 +45,7 @@ function useActiveHeading(entries: TocEntry[]) {
 
     observerRef.current = new IntersectionObserver(
       (intersections) => {
+        if (performance.now() < lockUntilRef.current) return;
         for (const entry of intersections) {
           if (entry.isIntersecting) {
             setActiveId(entry.target.id);
@@ -56,10 +64,16 @@ function useActiveHeading(entries: TocEntry[]) {
     return () => observerRef.current?.disconnect();
   }, [entries]);
 
-  // Sync immediately on programmatic scrolls (anchor clicks, outline clicks).
-  // The observer alone lags during smooth scrolls and can land on the wrong
-  // heading because multiple headings can sit in the observation band at once.
-  useEffect(() => onActiveHeadingChange(setActiveId), []);
+  // Sync immediately on programmatic scrolls and lock the observer so it
+  // doesn't override us while the smooth scroll is still in flight.
+  useEffect(
+    () =>
+      onActiveHeadingChange((id) => {
+        lockUntilRef.current = performance.now() + SCROLL_LOCK_MS;
+        setActiveId(id);
+      }),
+    [],
+  );
 
   return activeId;
 }
