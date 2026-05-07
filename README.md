@@ -13,6 +13,10 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 
 ![Demo](docs/assets/demo.gif)
 
+## Try It
+
+The [`samples/`](samples) directory is a tiny demo workspace — open it as a folder (`Cmd/Ctrl+Shift+O`) to see every rendering feature plus working wikilinks. [`samples/README.md`](samples/README.md) is the showcase document; the surrounding files exist so its `[[wikilinks]]` resolve.
+
 ## Features
 
 ### Markdown Rendering

@@ -193,14 +193,14 @@ Hidden content lives inside `<details>` blocks. Useful for FAQs, troubleshooting
 
 ### Wikilinks
 
-When you open a folder as a workspace, `[[note]]` style links resolve to other markdown files inside it.
+When you open a folder as a workspace, `[[note]]` style links resolve to other markdown files inside it. Open the `samples/` folder (`Cmd/Ctrl+Shift+O`) to make these resolve:
 
-- `[[Index]]` — links to `Index.md` anywhere in the workspace
-- `[[Notes/Cooking|kitchen notes]]` — display custom text, link to `Notes/Cooking.md`
-- `[[Index#Setup]]` — link to a heading inside another note
-- `[[Missing]]` — broken link, renders muted (no target in workspace)
+- [[Index]] — links to `Index.md` in this workspace
+- [[Notes/Cooking|kitchen notes]] — display custom text, link to `Notes/Cooking.md`
+- [[Index#setup]] — link to a heading inside another note
+- [[Missing]] — broken link, renders muted (no target in workspace)
 
-Open this file inside its containing folder to see resolved wikilinks; on its own, every wikilink is treated as broken.
+Opening this file on its own (no folder) treats every wikilink as broken.
 
 ---
 
