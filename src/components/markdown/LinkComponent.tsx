@@ -2,6 +2,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { type ComponentPropsWithoutRef, useCallback, useContext } from "react";
 import { SettingsContext } from "../../contexts/SettingsContext";
+import { scrollToHeading } from "../../lib/scrollToHeading";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 
 export function LinkComponent(props: ComponentPropsWithoutRef<"a">) {
@@ -10,7 +11,15 @@ export function LinkComponent(props: ComponentPropsWithoutRef<"a">) {
 
   const handleClick = useCallback(
     async (e: React.MouseEvent<HTMLAnchorElement>) => {
-      if (!href || href.startsWith("#")) return;
+      if (!href) return;
+
+      if (href.startsWith("#")) {
+        e.preventDefault();
+        const id = decodeURIComponent(href.slice(1));
+        if (id) scrollToHeading(id);
+        return;
+      }
+
       e.preventDefault();
 
       if (settings.behavior.confirmExternalLinks) {
