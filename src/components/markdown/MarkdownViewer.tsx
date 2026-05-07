@@ -7,6 +7,7 @@ import rehypeSlug from "rehype-slug";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGemoji from "remark-gemoji";
 import remarkGfm from "remark-gfm";
+import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
 import { useKatexPlugin } from "../../hooks/useKatexPlugin";
 import { useSearch } from "../../hooks/useSearch";
@@ -96,7 +97,7 @@ export function MarkdownViewer({
       <div ref={scrollRef} className="h-full overflow-y-auto">
         <div ref={contentRef} className="markdown-body px-8 py-6 pb-[60vh]">
           <ReactMarkdown
-            remarkPlugins={[remarkFrontmatter, remarkGfm, remarkMath, remarkGemoji]}
+            remarkPlugins={[remarkFrontmatter, remarkGfm, remarkMath, remarkGemoji, remarkAlert]}
             rehypePlugins={rehypePlugins}
             components={{
               a: LinkComponent,

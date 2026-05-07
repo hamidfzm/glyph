@@ -17,6 +17,11 @@
   --color-border: #d2d2d7;
   --color-accent: #007aff;
   --color-accent-hover: #0066d6;
+  --color-alert-note: #0969da;
+  --color-alert-tip: #1a7f37;
+  --color-alert-important: #8250df;
+  --color-alert-warning: #9a6700;
+  --color-alert-caution: #cf222e;
 }
 
 .dark {
@@ -29,6 +34,11 @@
   --color-border: #38383a;
   --color-accent: #0a84ff;
   --color-accent-hover: #409cff;
+  --color-alert-note: #58a6ff;
+  --color-alert-tip: #3fb950;
+  --color-alert-important: #bf8cff;
+  --color-alert-warning: #d29922;
+  --color-alert-caution: #f85149;
 }
 
 html,

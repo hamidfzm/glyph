@@ -17,6 +17,7 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 
 ### Markdown Rendering
 - GitHub Flavored Markdown — tables, task lists, strikethrough, autolinks, footnotes
+- GitHub-style alerts — `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`
 - Heading anchor links — every heading gets a GitHub-compatible slug; `[text](#heading)` scrolls smoothly to the target
 - Syntax highlighting for code blocks (6 themes: Glyph, GitHub, Monokai, Nord, Solarized Light/Dark)
 - Copy button on code blocks
