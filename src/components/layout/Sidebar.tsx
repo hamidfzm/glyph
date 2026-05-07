@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TocEntry } from "../../hooks/useTableOfContents";
 import type { Tab } from "../../hooks/useTabs";
+import { onActiveHeadingChange, scrollToHeading } from "../../lib/scrollToHeading";
 import type { SidebarLayout } from "../../lib/settings";
 import { FolderIcon } from "../icons/FolderIcon";
 import { OutlineIcon } from "../icons/OutlineIcon";
@@ -27,9 +28,16 @@ interface SidebarProps {
 
 const DEFAULT_WIDTH = 224;
 
+// How long to ignore observer updates after a programmatic scroll. Smooth
+// scrolls in modern browsers complete in ~300-500ms; during that window the
+// observer fires many times as intermediate headings cross the observation
+// band, and would override the heading the user actually clicked on.
+const SCROLL_LOCK_MS = 700;
+
 function useActiveHeading(entries: TocEntry[]) {
   const [activeId, setActiveId] = useState<string>("");
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const lockUntilRef = useRef(0);
 
   useEffect(() => {
     observerRef.current?.disconnect();
@@ -37,6 +45,7 @@ function useActiveHeading(entries: TocEntry[]) {
 
     observerRef.current = new IntersectionObserver(
       (intersections) => {
+        if (performance.now() < lockUntilRef.current) return;
         for (const entry of intersections) {
           if (entry.isIntersecting) {
             setActiveId(entry.target.id);
@@ -54,6 +63,17 @@ function useActiveHeading(entries: TocEntry[]) {
 
     return () => observerRef.current?.disconnect();
   }, [entries]);
+
+  // Sync immediately on programmatic scrolls and lock the observer so it
+  // doesn't override us while the smooth scroll is still in flight.
+  useEffect(
+    () =>
+      onActiveHeadingChange((id) => {
+        lockUntilRef.current = performance.now() + SCROLL_LOCK_MS;
+        setActiveId(id);
+      }),
+    [],
+  );
 
   return activeId;
 }
@@ -90,8 +110,7 @@ function PanelHeader({ label, side, onCollapse, collapseTitle }: PanelHeaderProp
 
 function OutlineSection({ entries, activeId }: { entries: TocEntry[]; activeId: string }) {
   const scrollTo = useCallback((id: string) => {
-    const el = document.getElementById(id);
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToHeading(id);
   }, []);
 
   if (entries.length === 0) return null;
