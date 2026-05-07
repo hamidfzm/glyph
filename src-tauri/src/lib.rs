@@ -97,6 +97,7 @@ pub fn run() {
             commands::get_initial_file,
             commands::print_document,
             commands::read_directory,
+            commands::list_markdown_files,
             watcher::watch_file,
             watcher::unwatch_file,
             watcher::watch_directory,

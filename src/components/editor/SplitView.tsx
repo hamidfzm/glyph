@@ -8,6 +8,8 @@ interface SplitViewProps {
   onChange: (content: string) => void;
   searchOpen: boolean;
   onSearchClose: () => void;
+  workspaceFiles?: string[];
+  onOpenWikilink?: (path: string, heading?: string) => void;
 }
 
 const PREVIEW_DEBOUNCE = 300;
@@ -18,6 +20,8 @@ export function SplitView({
   onChange,
   searchOpen,
   onSearchClose,
+  workspaceFiles,
+  onOpenWikilink,
 }: SplitViewProps) {
   const [previewContent, setPreviewContent] = useState(content);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -52,6 +56,8 @@ export function SplitView({
           filePath={filePath}
           searchOpen={searchOpen}
           onSearchClose={onSearchClose}
+          workspaceFiles={workspaceFiles}
+          onOpenWikilink={onOpenWikilink}
         />
       </div>
     </div>

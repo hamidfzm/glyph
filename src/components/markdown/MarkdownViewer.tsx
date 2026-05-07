@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import ReactMarkdown, { type Options } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
@@ -11,10 +11,11 @@ import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
 import { useKatexPlugin } from "../../hooks/useKatexPlugin";
 import { useSearch } from "../../hooks/useSearch";
+import { remarkWikilink } from "../../lib/wikilink";
 import { SearchBar } from "../layout/SearchBar";
 import { CodeBlockComponent } from "./CodeBlockComponent";
 import { useImageComponent } from "./ImageComponent";
-import { LinkComponent } from "./LinkComponent";
+import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
 import { markdownSanitizeSchema } from "./sanitizeSchema";
 
 interface MarkdownViewerProps {
@@ -24,6 +25,8 @@ interface MarkdownViewerProps {
   onScrollChange?: (scrollTop: number) => void;
   searchOpen: boolean;
   onSearchClose: () => void;
+  workspaceFiles?: string[];
+  onOpenWikilink?: (path: string, heading?: string) => void;
 }
 
 export function MarkdownViewer({
@@ -33,6 +36,8 @@ export function MarkdownViewer({
   onScrollChange,
   searchOpen,
   onSearchClose,
+  workspaceFiles,
+  onOpenWikilink,
 }: MarkdownViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -81,6 +86,23 @@ export function MarkdownViewer({
     return plugins;
   }, [katexPlugin]);
 
+  const remarkPlugins: NonNullable<Options["remarkPlugins"]> = useMemo(
+    () => [
+      remarkFrontmatter,
+      remarkGfm,
+      remarkMath,
+      remarkGemoji,
+      remarkAlert,
+      [remarkWikilink, { workspaceFiles, currentFilePath: filePath }],
+    ],
+    [workspaceFiles, filePath],
+  );
+
+  const LinkWithWikilink = useCallback(
+    (props: LinkComponentProps) => <LinkComponent {...props} onOpenWikilink={onOpenWikilink} />,
+    [onOpenWikilink],
+  );
+
   return (
     <div className="flex-1 relative">
       {searchOpen && (
@@ -97,10 +119,10 @@ export function MarkdownViewer({
       <div ref={scrollRef} className="h-full overflow-y-auto">
         <div ref={contentRef} className="markdown-body px-8 py-6 pb-[60vh]">
           <ReactMarkdown
-            remarkPlugins={[remarkFrontmatter, remarkGfm, remarkMath, remarkGemoji, remarkAlert]}
+            remarkPlugins={remarkPlugins}
             rehypePlugins={rehypePlugins}
             components={{
-              a: LinkComponent,
+              a: LinkWithWikilink,
               img: ImageComponent,
               pre: CodeBlockComponent,
             }}

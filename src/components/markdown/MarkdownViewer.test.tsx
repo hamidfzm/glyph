@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MarkdownViewer } from "./MarkdownViewer";
 
@@ -6,8 +6,13 @@ vi.mock("./MermaidDiagram", () => ({
   MermaidDiagram: ({ code }: { code: string }) => <div data-testid="mermaid-diagram">{code}</div>,
 }));
 
-function renderMd(content: string) {
-  return render(<MarkdownViewer content={content} searchOpen={false} onSearchClose={() => {}} />);
+function renderMd(
+  content: string,
+  extra: Partial<React.ComponentProps<typeof MarkdownViewer>> = {},
+) {
+  return render(
+    <MarkdownViewer content={content} searchOpen={false} onSearchClose={() => {}} {...extra} />,
+  );
 }
 
 describe("MarkdownViewer raw HTML", () => {
@@ -62,5 +67,37 @@ describe("MarkdownViewer GitHub alerts", () => {
     const { container } = renderMd("> just a quote");
     expect(container.querySelector(".markdown-alert")).toBeNull();
     expect(container.querySelector("blockquote")?.textContent?.trim()).toBe("just a quote");
+  });
+});
+
+describe("MarkdownViewer wikilinks", () => {
+  it("renders a resolved wikilink with the workspace path", () => {
+    const { container } = renderMd("Open [[Cooking]] now.", {
+      workspaceFiles: ["/vault/Cooking.md", "/vault/Other.md"],
+    });
+    const link = container.querySelector('a[data-wikilink="Cooking"]');
+    expect(link).not.toBeNull();
+    expect(link?.getAttribute("data-wikilink-path")).toBe("/vault/Cooking.md");
+    expect(link?.classList.contains("wikilink")).toBe(true);
+    expect(link?.classList.contains("wikilink--broken")).toBe(false);
+  });
+
+  it("renders a missing wikilink with the broken modifier", () => {
+    const { container } = renderMd("[[Missing]]", { workspaceFiles: ["/vault/Other.md"] });
+    const link = container.querySelector('a[data-wikilink="Missing"]');
+    expect(link).not.toBeNull();
+    expect(link?.classList.contains("wikilink--broken")).toBe(true);
+    expect(link?.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("calls onOpenWikilink with the resolved path on click", () => {
+    const onOpen = vi.fn();
+    const { container } = renderMd("[[Cooking]]", {
+      workspaceFiles: ["/vault/Cooking.md"],
+      onOpenWikilink: onOpen,
+    });
+    const link = container.querySelector('a[data-wikilink="Cooking"]') as HTMLAnchorElement;
+    fireEvent.click(link);
+    expect(onOpen).toHaveBeenCalledWith("/vault/Cooking.md", undefined);
   });
 });

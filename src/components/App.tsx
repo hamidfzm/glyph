@@ -50,6 +50,7 @@ export function App() {
     activeTabId,
     activeFile,
     initializing,
+    workspaceFiles,
     openFile,
     openFolder,
     openFileInFolderTab,
@@ -151,6 +152,19 @@ export function App() {
       }
     },
     [activeTabId, updateEditContent],
+  );
+
+  // Wikilink navigation: only meaningful inside a folder tab; outside one,
+  // we have no workspace to resolve against, so the call is dropped.
+  // TODO: cross-file heading scroll — `heading` is plumbed through but not yet
+  // applied after the target file finishes loading.
+  const handleOpenWikilink = useCallback(
+    (path: string, _heading?: string) => {
+      if (activeTabId && activeTab?.kind === "folder") {
+        openFileInFolderTab(activeTabId, path);
+      }
+    },
+    [activeTabId, activeTab, openFileInFolderTab],
   );
 
   // Close the active tab (used by File → Close Folder which doubles as close-tab
@@ -311,6 +325,8 @@ export function App() {
             onChange={handleEditorChange}
             searchOpen={searchOpen}
             onSearchClose={() => setSearchOpen(false)}
+            workspaceFiles={workspaceFiles}
+            onOpenWikilink={handleOpenWikilink}
           />
         </div>
       );
@@ -325,6 +341,8 @@ export function App() {
         onScrollChange={saveScrollPosition}
         searchOpen={searchOpen}
         onSearchClose={() => setSearchOpen(false)}
+        workspaceFiles={workspaceFiles}
+        onOpenWikilink={handleOpenWikilink}
       />
     );
   };
