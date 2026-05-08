@@ -191,6 +191,17 @@ Hidden content lives inside `<details>` blocks. Useful for FAQs, troubleshooting
 - [Glyph on GitHub](https://github.com/hamidfzm/glyph) — External links open in your system browser
 - [Go to Code Blocks](#code-blocks) — Anchor links navigate within the document
 
+### Wikilinks
+
+When you open a folder as a workspace, `[[note]]` style links resolve to other markdown files inside it. Open the `samples/` folder (`Cmd/Ctrl+Shift+O`) to make these resolve:
+
+- [[Index]] — links to `Index.md` in this workspace
+- [[Notes/Cooking|kitchen notes]] — display custom text, link to `Notes/Cooking.md`
+- [[Index#setup]] — link to a heading inside another note
+- [[Missing]] — broken link, renders muted (no target in workspace)
+
+Opening this file on its own (no folder) treats every wikilink as broken.
+
 ---
 
 ## Keyboard Shortcuts

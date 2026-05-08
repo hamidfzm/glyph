@@ -9,7 +9,7 @@ paths:
 When shipping a user-facing feature, update in the same commit:
 
 - **`README.md`** — add a bullet under the relevant `## Features` subsection; if the feature adds a keyboard shortcut, add a row to the `## Keyboard Shortcuts` table
-- **`sample.md`** — showcase the feature where applicable (new markdown syntax gets a demo section; new shortcuts go in sample.md's shortcuts table)
+- **`samples/README.md`** — showcase the feature where applicable (new markdown syntax gets a demo section; new shortcuts go in the shortcuts table). The `samples/` folder also doubles as a demo workspace, so add or update sibling files when introducing workspace-level features (wikilinks, backlinks, etc.)
 
 Treat these as part of the feature's definition of done, not a follow-up.
 

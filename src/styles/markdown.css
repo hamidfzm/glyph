@@ -49,6 +49,32 @@
   text-decoration: underline;
 }
 
+.markdown-body a.wikilink {
+  color: var(--color-accent);
+  text-decoration: none;
+  border-bottom: 1px dashed
+    color-mix(in srgb, var(--color-accent) 60%, transparent);
+}
+
+.markdown-body a.wikilink:hover {
+  text-decoration: none;
+  border-bottom-style: solid;
+}
+
+.markdown-body a.wikilink--broken {
+  color: var(--color-text-tertiary);
+  border-bottom-color: color-mix(
+    in srgb,
+    var(--color-text-tertiary) 50%,
+    transparent
+  );
+  cursor: not-allowed;
+}
+
+.markdown-body a.wikilink--broken:hover {
+  border-bottom-style: dashed;
+}
+
 .markdown-body strong { font-weight: 600; }
 
 .markdown-body img {

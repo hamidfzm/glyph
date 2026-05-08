@@ -25,6 +25,17 @@ export const markdownSanitizeSchema = {
   attributes: {
     ...defaultSchema.attributes,
     "*": [...(defaultSchema.attributes?.["*"] ?? []), "align", "style", "className", "dir"],
+    // Plain `className` (first entry wins in hast-util-sanitize) overrides the
+    // default `[className, data-footnote-backref]` allowlist so wikilink
+    // classes survive sanitization.
+    a: [
+      "className",
+      ...(defaultSchema.attributes?.a ?? []),
+      "dataWikilink",
+      "dataWikilinkPath",
+      "dataWikilinkHeading",
+      "dataWikilinkBroken",
+    ],
     img: [...(defaultSchema.attributes?.img ?? []), "align", "width", "height"],
     details: [...(defaultSchema.attributes?.details ?? []), "open"],
     video: ["src", "controls", "width", "height", "poster", "loop", "muted", "autoplay"],

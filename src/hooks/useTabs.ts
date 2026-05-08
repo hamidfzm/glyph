@@ -123,6 +123,8 @@ function normalizePersistedTabs(value: PersistedTab[] | string[]): PersistedTab[
 export function useTabs(options: UseTabsOptions) {
   const [state, setState] = useState<TabsState>({ tabs: [], activeTabId: null });
   const [initializing, setInitializing] = useState(true);
+  // Recursive markdown index per folder tab; ephemeral (rebuilt on open / dir change).
+  const [workspaceIndex, setWorkspaceIndex] = useState<Record<string, string[]>>({});
   const scrollRefsMap = useRef<Map<string, number>>(new Map());
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -132,6 +134,7 @@ export function useTabs(options: UseTabsOptions) {
   const { tabs, activeTabId } = state;
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
   const activeFile = activeFileOf(activeTab);
+  const workspaceFiles = activeTab?.kind === "folder" ? (workspaceIndex[activeTab.id] ?? []) : [];
 
   // Persist tabs to settings whenever state changes (post-init)
   useEffect(() => {
@@ -163,6 +166,15 @@ export function useTabs(options: UseTabsOptions) {
       return await invoke<DirEntry[]>("read_directory", { path });
     } catch (err) {
       console.error(`Failed to read directory ${path}:`, err);
+      return [];
+    }
+  }, []);
+
+  const loadWorkspaceFiles = useCallback(async (root: string): Promise<string[]> => {
+    try {
+      return await invoke<string[]>("list_markdown_files", { path: root });
+    } catch (err) {
+      console.error(`Failed to list markdown files for ${root}:`, err);
       return [];
     }
   }, []);
@@ -277,12 +289,17 @@ export function useTabs(options: UseTabsOptions) {
       };
       setState((prev) => ({ tabs: [...prev.tabs, newTab], activeTabId: id }));
 
+      // Build the workspace markdown index in the background so wikilinks can resolve.
+      loadWorkspaceFiles(resolvedRoot).then((files) => {
+        setWorkspaceIndex((prev) => ({ ...prev, [id]: files }));
+      });
+
       if (options?.filePath) {
         // Defer so the new tab is in state for openFileInFolderTab to find
         await openFileInFolderTab(id, options.filePath);
       }
     },
-    [loadDirectory, openFileInFolderTab],
+    [loadDirectory, loadWorkspaceFiles, openFileInFolderTab],
   );
 
   const toggleExpand = useCallback(
@@ -330,6 +347,12 @@ export function useTabs(options: UseTabsOptions) {
         invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
       }
       scrollRefsMap.current.delete(id);
+      setWorkspaceIndex((prevIdx) => {
+        if (!(id in prevIdx)) return prevIdx;
+        const next = { ...prevIdx };
+        delete next[id];
+        return next;
+      });
 
       const updated = prev.tabs.filter((t) => t.id !== id);
       let newActiveId = prev.activeTabId;
@@ -534,9 +557,10 @@ export function useTabs(options: UseTabsOptions) {
             dirsToRefresh.push(dir);
           }
         }
-        const fresh = await Promise.all(
-          dirsToRefresh.map(async (d) => [d, await loadDirectory(d)] as const),
-        );
+        const [fresh, freshFiles] = await Promise.all([
+          Promise.all(dirsToRefresh.map(async (d) => [d, await loadDirectory(d)] as const)),
+          loadWorkspaceFiles(tab.root),
+        ]);
         setState((prev) => ({
           ...prev,
           tabs: prev.tabs.map((t) => {
@@ -548,13 +572,14 @@ export function useTabs(options: UseTabsOptions) {
             return { ...t, nodes: newNodes };
           }),
         }));
+        setWorkspaceIndex((prev) => ({ ...prev, [tab.id]: freshFiles }));
       }, DIRECTORY_REFRESH_DEBOUNCE);
     });
     return () => {
       if (timeout) clearTimeout(timeout);
       unlisten.then((fn) => fn());
     };
-  }, [loadDirectory]);
+  }, [loadDirectory, loadWorkspaceFiles]);
 
   return {
     tabs,
@@ -562,6 +587,7 @@ export function useTabs(options: UseTabsOptions) {
     activeTabId,
     activeFile,
     initializing,
+    workspaceFiles,
     openFile,
     openFolder,
     openFileInFolderTab,
