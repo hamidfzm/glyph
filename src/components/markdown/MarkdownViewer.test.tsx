@@ -70,6 +70,19 @@ describe("MarkdownViewer GitHub alerts", () => {
   });
 });
 
+describe("MarkdownViewer task lists", () => {
+  it("renders GFM task lists as visible checkboxes", () => {
+    const { container } = renderMd("- [ ] todo\n- [x] done");
+    const checkboxes = container.querySelectorAll<HTMLInputElement>(
+      "li.task-list-item input[type=checkbox]",
+    );
+    expect(checkboxes.length).toBe(2);
+    expect(checkboxes[0].checked).toBe(false);
+    expect(checkboxes[1].checked).toBe(true);
+    expect(container.querySelector("ul.contains-task-list")).not.toBeNull();
+  });
+});
+
 describe("MarkdownViewer wikilinks", () => {
   it("renders a resolved wikilink with the workspace path", () => {
     const { container } = renderMd("Open [[Cooking]] now.", {
