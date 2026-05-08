@@ -30,7 +30,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Math/LaTeX rendering — inline (`$...$`) and block (`$$...$$`) equations via KaTeX
 - Mermaid diagrams — flowcharts, sequence diagrams, Gantt charts, and more (theme-aware)
 - Inline HTML — `<kbd>`, `<sub>`, `<sup>`, `<details>`, alignment attributes (sanitised allowlist)
-- YAML frontmatter stripping — frontmatter is parsed and hidden from rendered output
+- YAML frontmatter — title, author, date, and tags render as a metadata block above the document; tags get a per-tag colour
 - Emoji shortcodes — `:smile:` → 😊, `:+1:` → 👍
 - Local and remote image display
 - External links open in system browser with optional confirmation dialog

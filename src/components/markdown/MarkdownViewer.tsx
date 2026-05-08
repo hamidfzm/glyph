@@ -11,9 +11,11 @@ import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
 import { useKatexPlugin } from "../../hooks/useKatexPlugin";
 import { useSearch } from "../../hooks/useSearch";
+import { parseFrontmatter } from "../../lib/frontmatter";
 import { remarkWikilink } from "../../lib/wikilink";
 import { SearchBar } from "../layout/SearchBar";
 import { CodeBlockComponent } from "./CodeBlockComponent";
+import { FrontmatterBlock } from "./FrontmatterBlock";
 import { useImageComponent } from "./ImageComponent";
 import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
 import { markdownSanitizeSchema } from "./sanitizeSchema";
@@ -47,6 +49,7 @@ export function MarkdownViewer({
 
   const search = useSearch({ containerRef: contentRef });
   const katexPlugin = useKatexPlugin(content);
+  const frontmatter = useMemo(() => parseFrontmatter(content), [content]);
 
   // Restore scroll position on mount
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — restore once when tab activates
@@ -136,6 +139,7 @@ export function MarkdownViewer({
         style={{ scrollPaddingTop: "16px" }}
       >
         <div ref={contentRef} className="markdown-body px-8 py-6">
+          {frontmatter && <FrontmatterBlock data={frontmatter} />}
           <ReactMarkdown
             remarkPlugins={remarkPlugins}
             rehypePlugins={rehypePlugins}
