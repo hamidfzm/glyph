@@ -11,6 +11,7 @@ interface SplitViewProps {
   workspaceFiles?: string[];
   workspaceRoot?: string;
   onOpenWikilink?: (path: string, heading?: string) => void;
+  onTaskToggle?: (line: number) => void;
 }
 
 const PREVIEW_DEBOUNCE = 300;
@@ -24,6 +25,7 @@ export function SplitView({
   workspaceFiles,
   workspaceRoot,
   onOpenWikilink,
+  onTaskToggle,
 }: SplitViewProps) {
   const [previewContent, setPreviewContent] = useState(content);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -65,6 +67,7 @@ export function SplitView({
           onSearchClose={onSearchClose}
           workspaceFiles={workspaceFiles}
           onOpenWikilink={onOpenWikilink}
+          onTaskToggle={onTaskToggle}
         />
       </div>
     </div>

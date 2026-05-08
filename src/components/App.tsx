@@ -62,6 +62,7 @@ export function App() {
     setTabMode,
     updateEditContent,
     markSaved,
+    toggleTask,
     saveScrollPosition,
     openFileDialog,
   } = useTabs({
@@ -171,6 +172,13 @@ export function App() {
       }
     },
     [activeTabId, activeTab, openFileInFolderTab],
+  );
+
+  const handleTaskToggle = useCallback(
+    (line: number) => {
+      if (activeTabId) toggleTask(activeTabId, line);
+    },
+    [activeTabId, toggleTask],
   );
 
   // Close the active tab (used by File → Close Folder which doubles as close-tab
@@ -341,6 +349,7 @@ export function App() {
             workspaceFiles={workspaceFiles}
             workspaceRoot={workspaceRoot}
             onOpenWikilink={handleOpenWikilink}
+            onTaskToggle={handleTaskToggle}
           />
         </div>
       );
@@ -357,6 +366,7 @@ export function App() {
         onSearchClose={() => setSearchOpen(false)}
         workspaceFiles={workspaceFiles}
         onOpenWikilink={handleOpenWikilink}
+        onTaskToggle={handleTaskToggle}
       />
     );
   };

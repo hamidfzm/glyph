@@ -164,6 +164,10 @@
   height: 1em;
   margin: 0;
   flex-shrink: 0;
+  cursor: pointer;
+}
+
+.markdown-body li input[type="checkbox"]:disabled {
   cursor: default;
 }
 
