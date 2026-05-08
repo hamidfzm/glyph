@@ -9,10 +9,10 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
-import { Compartment, EditorState } from "@codemirror/state";
+import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { wikilinkCompletionSource } from "../../lib/wikilinkCompletion";
 
 interface MarkdownEditorProps {
@@ -33,18 +33,15 @@ export function MarkdownEditor({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  // Hot-swap the autocomplete extension when the workspace index changes
-  // without rebuilding the editor — destroying it would discard cursor and
-  // history state on every directory event.
-  const completionCompartment = useRef(new Compartment());
-  const wikilinkExtension = useMemo(() => {
-    if (!workspaceFiles || workspaceFiles.length === 0) return [];
-    return autocompletion({
-      override: [wikilinkCompletionSource({ workspaceFiles, workspaceRoot })],
-      activateOnTyping: true,
-      closeOnBlur: true,
-    });
-  }, [workspaceFiles, workspaceRoot]);
+  // Read workspace state through refs so the completion source — installed
+  // once at mount — picks up updates without reconfiguring the editor. The
+  // extension is intentionally NOT in a Compartment: directory-changed events
+  // produce a new array identity every time the watcher fires, and any
+  // reconfigure mid-completion would tear down the popup state.
+  const workspaceFilesRef = useRef<readonly string[]>(workspaceFiles ?? []);
+  const workspaceRootRef = useRef<string | undefined>(workspaceRoot);
+  workspaceFilesRef.current = workspaceFiles ?? [];
+  workspaceRootRef.current = workspaceRoot;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: content is synced via separate effect below to avoid destroying the editor on every keystroke
   useEffect(() => {
@@ -86,7 +83,15 @@ export function MarkdownEditor({
             ...defaultKeymap,
             ...historyKeymap,
           ]),
-          completionCompartment.current.of(wikilinkExtension),
+          autocompletion({
+            override: [
+              wikilinkCompletionSource({
+                workspaceFilesRef,
+                workspaceRootRef,
+              }),
+            ],
+            activateOnTyping: true,
+          }),
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(glyphHighlight),
           EditorView.lineWrapping,
@@ -159,15 +164,6 @@ export function MarkdownEditor({
       });
     }
   }, [content]);
-
-  // Hot-swap the autocomplete extension when the workspace index changes.
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view) return;
-    view.dispatch({
-      effects: completionCompartment.current.reconfigure(wikilinkExtension),
-    });
-  }, [wikilinkExtension]);
 
   return <div ref={containerRef} className="editor-container" />;
 }

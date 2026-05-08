@@ -85,14 +85,36 @@ export function buildWikilinkCompletions(
   return out;
 }
 
-interface CompletionOptions {
+// Either a snapshot (used in tests) or a pair of refs read live (used by
+// the editor — workspace state churns whenever the watcher fires, and we
+// don't want to reconfigure the editor on every refresh).
+interface SnapshotOptions {
   workspaceFiles: readonly string[];
   workspaceRoot?: string;
 }
 
-// Build a CodeMirror CompletionSource from the current workspace snapshot.
-export function wikilinkCompletionSource({ workspaceFiles, workspaceRoot }: CompletionOptions) {
+interface RefOptions {
+  workspaceFilesRef: { current: readonly string[] };
+  workspaceRootRef: { current: string | undefined };
+}
+
+type CompletionOptions = SnapshotOptions | RefOptions;
+
+function readWorkspace(options: CompletionOptions): {
+  files: readonly string[];
+  root: string | undefined;
+} {
+  if ("workspaceFilesRef" in options) {
+    return { files: options.workspaceFilesRef.current, root: options.workspaceRootRef.current };
+  }
+  return { files: options.workspaceFiles, root: options.workspaceRoot };
+}
+
+// Build a CodeMirror CompletionSource. Pass refs so it stays stable across
+// workspace updates, or a snapshot for one-off tests.
+export function wikilinkCompletionSource(options: CompletionOptions) {
   return (context: CompletionContext): CompletionResult | null => {
+    const { files: workspaceFiles, root: workspaceRoot } = readWorkspace(options);
     if (workspaceFiles.length === 0) return null;
     const opening = findWikilinkOpening(context.state, context.pos);
     if (!opening) return null;
