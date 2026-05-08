@@ -3,14 +3,16 @@ title: Glyph Sample Document
 author: Glyph Team
 date: 2026-04-15
 tags: [markdown, demo, sample]
+status: published
 ---
 
 # Glyph Feature Showcase
 
-This document demonstrates all the rendering features supported by Glyph. The YAML frontmatter above is automatically hidden from the rendered output.
+This document demonstrates all the rendering features supported by Glyph. The YAML frontmatter at the top is rendered as the metadata block you see above this paragraph — `title`, `author`, `date`, and `tags` are recognised; other string keys appear in a small key/value list.
 
 ## Contents
 
+- [Frontmatter](#frontmatter)
 - [GitHub Flavored Markdown](#github-flavored-markdown)
 - [Code Blocks](#code-blocks)
 - [Math / LaTeX](#math--latex)
@@ -22,6 +24,20 @@ This document demonstrates all the rendering features supported by Glyph. The YA
 - [Images](#images)
 - [Links](#links)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
+
+## Frontmatter
+
+Glyph reads YAML frontmatter at the top of a document and renders it as a heading block. Recognised keys:
+
+| Key | Renders as |
+|---|---|
+| `title` | Large gradient heading at the top |
+| `author` | Subtle line under the title with a person icon |
+| `date` | Same line as `author`, with a calendar icon (shown verbatim — no reformatting) |
+| `tags` | Chip-style pills, each in a deterministic colour derived from the tag name |
+| anything else | Small uppercase key / value list at the bottom of the block |
+
+Documents without frontmatter render as before — no extra spacing, no empty card.
 
 ## GitHub Flavored Markdown
 

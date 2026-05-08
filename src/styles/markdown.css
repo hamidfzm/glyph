@@ -395,3 +395,104 @@
   font-size: 0.75em;
   line-height: 0;
 }
+
+/* Frontmatter metadata block — bordered key/value table that visually sits
+ * apart from the body. Tag chips derive a per-tag hue from a hash of the tag
+ * name (see src/lib/tagColor.ts) so the same tag is always the same colour. */
+.markdown-body .frontmatter-table {
+  width: auto;
+  margin: 0 0 2em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--glyph-radius);
+  overflow: hidden;
+  background: var(--color-surface-secondary);
+  font-size: 0.9em;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.markdown-body .frontmatter-table th,
+.markdown-body .frontmatter-table td {
+  padding: 0.45em 0.9em;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: middle;
+  background: none;
+}
+
+.markdown-body .frontmatter-table tr:last-child > th,
+.markdown-body .frontmatter-table tr:last-child > td {
+  border-bottom: none;
+}
+
+.markdown-body .frontmatter-table tr:nth-child(even) {
+  background: none;
+}
+
+.markdown-body .frontmatter-table th {
+  width: 1%;
+  white-space: nowrap;
+  font-family: var(--glyph-code-font, ui-monospace, monospace);
+  font-size: 0.78em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-tertiary);
+  border-right: 1px solid var(--color-border);
+}
+
+.markdown-body .frontmatter-table td {
+  color: var(--color-text-primary);
+}
+
+.markdown-body .frontmatter-value-title {
+  font-weight: 600;
+  font-size: 1.05em;
+}
+
+.markdown-body .frontmatter-cell-icon {
+  margin-right: 0.45em;
+  vertical-align: -0.15em;
+  opacity: 0.6;
+}
+
+.markdown-body .frontmatter-tags {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35em;
+}
+
+.markdown-body .frontmatter-tag {
+  --tag-color: hsl(var(--tag-h, 220) 65% 42%);
+  --tag-bg: hsl(var(--tag-h, 220) 70% 96%);
+  --tag-border: hsl(var(--tag-h, 220) 55% 86%);
+  margin: 0;
+  padding: 0.15em 0.65em;
+  font-size: 0.85em;
+  font-weight: 500;
+  background: var(--tag-bg);
+  color: var(--tag-color);
+  border: 1px solid var(--tag-border);
+  border-radius: 999px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.markdown-body .frontmatter-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--tag-color) 30%, transparent);
+}
+
+.markdown-body .frontmatter-tag-hash {
+  opacity: 0.55;
+  margin-right: 0.05em;
+}
+
+.dark .markdown-body .frontmatter-tag {
+  --tag-color: hsl(var(--tag-h, 220) 65% 78%);
+  --tag-bg: hsl(var(--tag-h, 220) 35% 17%);
+  --tag-border: hsl(var(--tag-h, 220) 35% 28%);
+}
