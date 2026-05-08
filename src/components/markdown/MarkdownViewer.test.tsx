@@ -70,6 +70,38 @@ describe("MarkdownViewer GitHub alerts", () => {
   });
 });
 
+describe("MarkdownViewer task lists", () => {
+  it("renders GFM task lists as visible checkboxes", () => {
+    const { container } = renderMd("- [ ] todo\n- [x] done");
+    const checkboxes = container.querySelectorAll<HTMLInputElement>(
+      "li.task-list-item input[type=checkbox]",
+    );
+    expect(checkboxes.length).toBe(2);
+    expect(checkboxes[0].checked).toBe(false);
+    expect(checkboxes[1].checked).toBe(true);
+    expect(container.querySelector("ul.contains-task-list")).not.toBeNull();
+  });
+
+  it("calls onTaskToggle with the source line when a checkbox is clicked", () => {
+    const onTaskToggle = vi.fn();
+    const { container } = renderMd("- [ ] one\n- [x] two", { onTaskToggle });
+    const boxes = container.querySelectorAll<HTMLInputElement>(
+      "li.task-list-item input[type=checkbox]",
+    );
+    fireEvent.click(boxes[0]);
+    fireEvent.click(boxes[1]);
+    expect(onTaskToggle).toHaveBeenNthCalledWith(1, 1);
+    expect(onTaskToggle).toHaveBeenNthCalledWith(2, 2);
+  });
+
+  it("renders the clickable checkbox without the disabled attribute", () => {
+    const { container } = renderMd("- [ ] todo");
+    const box = container.querySelector<HTMLInputElement>("li.task-list-item input[type=checkbox]");
+    expect(box).not.toBeNull();
+    expect(box?.disabled).toBe(false);
+  });
+});
+
 describe("MarkdownViewer wikilinks", () => {
   it("renders a resolved wikilink with the workspace path", () => {
     const { container } = renderMd("Open [[Cooking]] now.", {

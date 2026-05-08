@@ -17,6 +17,7 @@ import { CodeBlockComponent } from "./CodeBlockComponent";
 import { useImageComponent } from "./ImageComponent";
 import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
 import { markdownSanitizeSchema } from "./sanitizeSchema";
+import { TaskListItem } from "./TaskListItem";
 
 interface MarkdownViewerProps {
   content: string;
@@ -27,6 +28,7 @@ interface MarkdownViewerProps {
   onSearchClose: () => void;
   workspaceFiles?: string[];
   onOpenWikilink?: (path: string, heading?: string) => void;
+  onTaskToggle?: (line: number) => void;
 }
 
 export function MarkdownViewer({
@@ -38,6 +40,7 @@ export function MarkdownViewer({
   onSearchClose,
   workspaceFiles,
   onOpenWikilink,
+  onTaskToggle,
 }: MarkdownViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -103,6 +106,13 @@ export function MarkdownViewer({
     [onOpenWikilink],
   );
 
+  const TaskListLi = useCallback(
+    (props: React.ComponentProps<typeof TaskListItem>) => (
+      <TaskListItem {...props} onTaskToggle={onTaskToggle} />
+    ),
+    [onTaskToggle],
+  );
+
   return (
     <div className="flex-1 relative">
       {searchOpen && (
@@ -125,6 +135,7 @@ export function MarkdownViewer({
               a: LinkWithWikilink,
               img: ImageComponent,
               pre: CodeBlockComponent,
+              li: TaskListLi,
             }}
           >
             {content}

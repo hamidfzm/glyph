@@ -8,6 +8,7 @@ import { usePrint } from "../hooks/usePrint";
 import { useSettings } from "../hooks/useSettings";
 import { useTableOfContents } from "../hooks/useTableOfContents";
 import { activeFileOf, useTabs } from "../hooks/useTabs";
+import { useTaskList } from "../hooks/useTaskList";
 import { useTheme } from "../hooks/useTheme";
 import { useTTS } from "../hooks/useTTS";
 import { filterBacklinks } from "../lib/backlinks";
@@ -62,6 +63,7 @@ export function App() {
     setTabMode,
     updateEditContent,
     markSaved,
+    toggleTask,
     saveScrollPosition,
     openFileDialog,
   } = useTabs({
@@ -172,6 +174,8 @@ export function App() {
     },
     [activeTabId, activeTab, openFileInFolderTab],
   );
+
+  const { handleToggle: handleTaskToggle } = useTaskList({ activeTabId, toggleTask });
 
   // Close the active tab (used by File → Close Folder which doubles as close-tab
   // when the active tab is a folder; Cmd+W still closes the window).
@@ -341,6 +345,7 @@ export function App() {
             workspaceFiles={workspaceFiles}
             workspaceRoot={workspaceRoot}
             onOpenWikilink={handleOpenWikilink}
+            onTaskToggle={handleTaskToggle}
           />
         </div>
       );
@@ -357,6 +362,7 @@ export function App() {
         onSearchClose={() => setSearchOpen(false)}
         workspaceFiles={workspaceFiles}
         onOpenWikilink={handleOpenWikilink}
+        onTaskToggle={handleTaskToggle}
       />
     );
   };

@@ -135,9 +135,40 @@
 
 .markdown-body li { margin: 0.25em 0; }
 
+/* GFM task lists. Tailwind's preflight strips the native checkbox chrome,
+ * so re-assert appearance + a visible frame so they look like GitHub's
+ * (square, accent fill when checked). The list itself loses its bullets to
+ * match the GFM rendering convention. */
+.markdown-body ul.contains-task-list {
+  list-style: none;
+  padding-left: 0.5em;
+}
+
+.markdown-body ul.contains-task-list ul,
+.markdown-body ul.contains-task-list ol {
+  padding-left: 1.5em;
+}
+
+.markdown-body li.task-list-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+}
+
+.markdown-body li.task-list-item > input[type="checkbox"],
 .markdown-body li input[type="checkbox"] {
-  margin-right: 0.5em;
+  appearance: auto;
+  -webkit-appearance: checkbox;
   accent-color: var(--color-accent);
+  width: 1em;
+  height: 1em;
+  margin: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.markdown-body li input[type="checkbox"]:disabled {
+  cursor: default;
 }
 
 .markdown-body code {

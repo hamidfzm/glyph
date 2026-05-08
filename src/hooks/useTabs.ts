@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { WikilinkRef } from "../lib/backlinks";
 import { MARKDOWN_EXTENSIONS } from "../lib/markdownExtensions";
 import type { EditorMode } from "../lib/settings";
+import { toggleTaskAtLine } from "../lib/taskList";
 
 interface FileMetadata {
   name: string;
@@ -456,6 +457,37 @@ export function useTabs(options: UseTabsOptions) {
     [updateActiveFile],
   );
 
+  // Toggle a checklist item by source line number. In view mode the change
+  // writes straight to disk; in edit/split mode it updates editContent so the
+  // editor reflects the toggle and auto-save flushes it as usual.
+  const toggleTask = useCallback(
+    async (id: string, line: number) => {
+      const tab = stateRef.current.tabs.find((t) => t.id === id);
+      if (!tab) return;
+      const file = activeFileOf(tab);
+      if (!file?.content) return;
+
+      const isEditing = file.mode !== "view";
+      const source = isEditing ? (file.editContent ?? file.content) : file.content;
+      const next = toggleTaskAtLine(source, line);
+      if (next === source) return;
+
+      if (isEditing) {
+        updateActiveFile(id, (f) => ({ ...f, editContent: next, dirty: true }));
+        return;
+      }
+
+      try {
+        await invoke("write_file", { path: file.path, content: next });
+        selfSaveTimes.current.set(file.path, Date.now());
+        updateActiveFile(id, (f) => ({ ...f, content: next }));
+      } catch (err) {
+        console.error("Failed to toggle task:", err);
+      }
+    },
+    [updateActiveFile],
+  );
+
   const saveScrollPosition = useCallback(
     (scrollTop: number) => {
       if (activeTabId) {
@@ -637,6 +669,7 @@ export function useTabs(options: UseTabsOptions) {
     setTabMode,
     updateEditContent,
     markSaved,
+    toggleTask,
     saveScrollPosition,
     openFileDialog,
   };
