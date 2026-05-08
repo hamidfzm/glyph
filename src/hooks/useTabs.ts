@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { WikilinkRef } from "../lib/backlinks";
 import { MARKDOWN_EXTENSIONS } from "../lib/markdownExtensions";
 import type { EditorMode } from "../lib/settings";
 
@@ -125,6 +126,8 @@ export function useTabs(options: UseTabsOptions) {
   const [initializing, setInitializing] = useState(true);
   // Recursive markdown index per folder tab; ephemeral (rebuilt on open / dir change).
   const [workspaceIndex, setWorkspaceIndex] = useState<Record<string, string[]>>({});
+  // Outbound wikilink references per folder tab; used to compute backlinks.
+  const [wikilinkIndex, setWikilinkIndex] = useState<Record<string, WikilinkRef[]>>({});
   const scrollRefsMap = useRef<Map<string, number>>(new Map());
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -135,6 +138,7 @@ export function useTabs(options: UseTabsOptions) {
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
   const activeFile = activeFileOf(activeTab);
   const workspaceFiles = activeTab?.kind === "folder" ? (workspaceIndex[activeTab.id] ?? []) : [];
+  const wikilinkRefs = activeTab?.kind === "folder" ? (wikilinkIndex[activeTab.id] ?? []) : [];
 
   // Persist tabs to settings whenever state changes (post-init)
   useEffect(() => {
@@ -175,6 +179,15 @@ export function useTabs(options: UseTabsOptions) {
       return await invoke<string[]>("list_markdown_files", { path: root });
     } catch (err) {
       console.error(`Failed to list markdown files for ${root}:`, err);
+      return [];
+    }
+  }, []);
+
+  const loadWikilinkRefs = useCallback(async (root: string): Promise<WikilinkRef[]> => {
+    try {
+      return await invoke<WikilinkRef[]>("scan_wikilinks", { path: root });
+    } catch (err) {
+      console.error(`Failed to scan wikilinks for ${root}:`, err);
       return [];
     }
   }, []);
@@ -293,13 +306,16 @@ export function useTabs(options: UseTabsOptions) {
       loadWorkspaceFiles(resolvedRoot).then((files) => {
         setWorkspaceIndex((prev) => ({ ...prev, [id]: files }));
       });
+      loadWikilinkRefs(resolvedRoot).then((refs) => {
+        setWikilinkIndex((prev) => ({ ...prev, [id]: refs }));
+      });
 
       if (options?.filePath) {
         // Defer so the new tab is in state for openFileInFolderTab to find
         await openFileInFolderTab(id, options.filePath);
       }
     },
-    [loadDirectory, loadWorkspaceFiles, openFileInFolderTab],
+    [loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFileInFolderTab],
   );
 
   const toggleExpand = useCallback(
@@ -348,6 +364,12 @@ export function useTabs(options: UseTabsOptions) {
       }
       scrollRefsMap.current.delete(id);
       setWorkspaceIndex((prevIdx) => {
+        if (!(id in prevIdx)) return prevIdx;
+        const next = { ...prevIdx };
+        delete next[id];
+        return next;
+      });
+      setWikilinkIndex((prevIdx) => {
         if (!(id in prevIdx)) return prevIdx;
         const next = { ...prevIdx };
         delete next[id];
@@ -557,9 +579,10 @@ export function useTabs(options: UseTabsOptions) {
             dirsToRefresh.push(dir);
           }
         }
-        const [fresh, freshFiles] = await Promise.all([
+        const [fresh, freshFiles, freshRefs] = await Promise.all([
           Promise.all(dirsToRefresh.map(async (d) => [d, await loadDirectory(d)] as const)),
           loadWorkspaceFiles(tab.root),
+          loadWikilinkRefs(tab.root),
         ]);
         setState((prev) => ({
           ...prev,
@@ -573,13 +596,14 @@ export function useTabs(options: UseTabsOptions) {
           }),
         }));
         setWorkspaceIndex((prev) => ({ ...prev, [tab.id]: freshFiles }));
+        setWikilinkIndex((prev) => ({ ...prev, [tab.id]: freshRefs }));
       }, DIRECTORY_REFRESH_DEBOUNCE);
     });
     return () => {
       if (timeout) clearTimeout(timeout);
       unlisten.then((fn) => fn());
     };
-  }, [loadDirectory, loadWorkspaceFiles]);
+  }, [loadDirectory, loadWikilinkRefs, loadWorkspaceFiles]);
 
   return {
     tabs,
@@ -588,6 +612,7 @@ export function useTabs(options: UseTabsOptions) {
     activeFile,
     initializing,
     workspaceFiles,
+    wikilinkRefs,
     openFile,
     openFolder,
     openFileInFolderTab,

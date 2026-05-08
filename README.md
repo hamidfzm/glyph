@@ -24,6 +24,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - GitHub-style alerts — `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`
 - Heading anchor links — every heading gets a GitHub-compatible slug; `[text](#heading)` scrolls smoothly to the target
 - Wikilinks — `[[note]]`, `[[note|alias]]`, `[[note#heading]]` resolve against the open folder workspace; broken links render with a distinct style
+- Backlinks panel — sidebar list of every workspace note that links to the current file, with surrounding-line snippets
 - Syntax highlighting for code blocks (6 themes: Glyph, GitHub, Monokai, Nord, Solarized Light/Dark)
 - Copy button on code blocks
 - Math/LaTeX rendering — inline (`$...$`) and block (`$$...$$`) equations via KaTeX
