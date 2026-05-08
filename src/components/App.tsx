@@ -10,6 +10,7 @@ import { useTableOfContents } from "../hooks/useTableOfContents";
 import { activeFileOf, useTabs } from "../hooks/useTabs";
 import { useTheme } from "../hooks/useTheme";
 import { useTTS } from "../hooks/useTTS";
+import { filterBacklinks } from "../lib/backlinks";
 import { ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../lib/settings";
 // Code theme CSS (inline imports for production compatibility)
 import glyphThemeCSS from "../styles/highlight.css?inline";
@@ -51,6 +52,7 @@ export function App() {
     activeFile,
     initializing,
     workspaceFiles,
+    wikilinkRefs,
     openFile,
     openFolder,
     openFileInFolderTab,
@@ -80,6 +82,10 @@ export function App() {
   const displayContent = activeMode !== "view" ? (activeFile?.editContent ?? content) : content;
 
   const tocEntries = useTableOfContents(displayContent);
+  const backlinks = useMemo(
+    () => (filePath ? filterBacklinks(wikilinkRefs, workspaceFiles, filePath) : []),
+    [wikilinkRefs, workspaceFiles, filePath],
+  );
   const [filesSidebarVisible, setFilesSidebarVisible] = useState(
     settings.layout.filesSidebarVisible,
   );
@@ -367,6 +373,7 @@ export function App() {
           side="left"
           activeTab={activeTab}
           tocEntries={tocEntries}
+          backlinks={backlinks}
           filesVisible={filesSidebarVisible}
           outlineVisible={outlineSidebarVisible}
           sidebarLayout={settings.layout.sidebarLayout}
@@ -396,6 +403,7 @@ export function App() {
           side="right"
           activeTab={activeTab}
           tocEntries={tocEntries}
+          backlinks={backlinks}
           filesVisible={filesSidebarVisible}
           outlineVisible={outlineSidebarVisible}
           sidebarLayout={settings.layout.sidebarLayout}

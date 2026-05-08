@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TocEntry } from "../../hooks/useTableOfContents";
 import type { Tab } from "../../hooks/useTabs";
+import type { Backlink } from "../../lib/backlinks";
 import { onActiveHeadingChange, scrollToHeading } from "../../lib/scrollToHeading";
 import type { SidebarLayout } from "../../lib/settings";
 import { FolderIcon } from "../icons/FolderIcon";
 import { OutlineIcon } from "../icons/OutlineIcon";
 import { PanelCollapseIcon } from "../icons/PanelCollapseIcon";
+import { BacklinksSection } from "./BacklinksSection";
 import { FileTree } from "./FileTree";
 
 interface SidebarProps {
   side: "left" | "right";
   activeTab: Tab | null;
   tocEntries: TocEntry[];
+  backlinks?: Backlink[];
   filesVisible: boolean;
   outlineVisible: boolean;
   sidebarLayout: SidebarLayout;
@@ -196,6 +199,7 @@ export function Sidebar({
   side,
   activeTab,
   tocEntries,
+  backlinks = [],
   filesVisible,
   outlineVisible,
   sidebarLayout,
@@ -244,6 +248,15 @@ export function Sidebar({
         onOpenFile={(path) => onOpenFileInTab(folder.id, path)}
         onOpenFileInNewTab={onOpenFileInNewTab}
       />
+      {backlinks.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-[var(--color-border)]">
+          <BacklinksSection
+            backlinks={backlinks}
+            workspaceRoot={folder.root}
+            onOpen={(path) => onOpenFileInTab(folder.id, path)}
+          />
+        </div>
+      )}
     </div>
   );
 

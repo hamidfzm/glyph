@@ -202,6 +202,10 @@ When you open a folder as a workspace, `[[note]]` style links resolve to other m
 
 Opening this file on its own (no folder) treats every wikilink as broken.
 
+### Backlinks
+
+When you have the `samples/` folder open, the **Backlinks** section under the file tree lists every other note that links to the current document. This file is referenced from [[Index]] and [[Notes/Cooking]], so opening either of them will show *this* file in their backlinks panel.
+
 ---
 
 ## Keyboard Shortcuts

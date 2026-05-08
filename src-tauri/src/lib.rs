@@ -98,6 +98,7 @@ pub fn run() {
             commands::print_document,
             commands::read_directory,
             commands::list_markdown_files,
+            commands::scan_wikilinks,
             watcher::watch_file,
             watcher::unwatch_file,
             watcher::watch_directory,
