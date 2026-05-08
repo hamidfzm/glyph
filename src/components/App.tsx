@@ -8,6 +8,7 @@ import { usePrint } from "../hooks/usePrint";
 import { useSettings } from "../hooks/useSettings";
 import { useTableOfContents } from "../hooks/useTableOfContents";
 import { activeFileOf, useTabs } from "../hooks/useTabs";
+import { useTaskList } from "../hooks/useTaskList";
 import { useTheme } from "../hooks/useTheme";
 import { useTTS } from "../hooks/useTTS";
 import { filterBacklinks } from "../lib/backlinks";
@@ -174,12 +175,7 @@ export function App() {
     [activeTabId, activeTab, openFileInFolderTab],
   );
 
-  const handleTaskToggle = useCallback(
-    (line: number) => {
-      if (activeTabId) toggleTask(activeTabId, line);
-    },
-    [activeTabId, toggleTask],
-  );
+  const { handleToggle: handleTaskToggle } = useTaskList({ activeTabId, toggleTask });
 
   // Close the active tab (used by File → Close Folder which doubles as close-tab
   // when the active tab is a folder; Cmd+W still closes the window).
