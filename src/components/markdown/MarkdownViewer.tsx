@@ -116,8 +116,16 @@ export function MarkdownViewer({
           onClose={handleSearchClose}
         />
       )}
-      <div ref={scrollRef} className="h-full overflow-y-auto">
-        <div ref={contentRef} className="markdown-body px-8 py-6 pb-[60vh]">
+      <div
+        ref={scrollRef}
+        className="h-full overflow-y-auto"
+        // Reserve room at the top so anchor scrolls land below the floating
+        // header area. With this, navigating to a heading or footnote near
+        // the end of the document doesn't leave a giant blank gap above the
+        // status bar — natural scroll positioning takes over.
+        style={{ scrollPaddingTop: "16px" }}
+      >
+        <div ref={contentRef} className="markdown-body px-8 py-6 pb-12">
           <ReactMarkdown
             remarkPlugins={remarkPlugins}
             rehypePlugins={rehypePlugins}
