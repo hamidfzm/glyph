@@ -10,6 +10,14 @@ import { defaultSchema } from "rehype-sanitize";
 // content this needs to be revisited.
 export const markdownSanitizeSchema = {
   ...defaultSchema,
+  // Disable id/name namespacing. The default schema rewrites these by
+  // prepending `user-content-`, but remark-gfm v4 already emits footnote
+  // ids with that prefix (`user-content-fn-1`). The double-prefix breaks
+  // footnote `[^1]` navigation because the href stays `#user-content-fn-1`
+  // while the target id becomes `#user-content-user-content-fn-1`.
+  // Glyph is a local viewer with no host-page collisions to worry about.
+  clobberPrefix: "",
+  clobber: [],
   tagNames: [
     ...(defaultSchema.tagNames ?? []),
     "kbd",

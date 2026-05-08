@@ -102,6 +102,24 @@ describe("MarkdownViewer task lists", () => {
   });
 });
 
+describe("MarkdownViewer footnotes", () => {
+  // Regression: rehype-sanitize's default `clobber` option used to prepend
+  // `user-content-` to every id, which doubled remark-gfm v4's already
+  // prefixed footnote ids and broke `[^1]` click navigation.
+  it("keeps footnote ref hrefs aligned with their target ids", () => {
+    const { container } = renderMd("Text[^1].\n\n[^1]: The note.");
+    const ref = container.querySelector("a[data-footnote-ref]") as HTMLAnchorElement | null;
+    expect(ref).not.toBeNull();
+    const targetId = ref!.getAttribute("href")!.slice(1);
+    expect(container.querySelector(`#${CSS.escape(targetId)}`)).not.toBeNull();
+
+    const back = container.querySelector("a[data-footnote-backref]") as HTMLAnchorElement | null;
+    expect(back).not.toBeNull();
+    const backTargetId = back!.getAttribute("href")!.slice(1);
+    expect(container.querySelector(`#${CSS.escape(backTargetId)}`)).not.toBeNull();
+  });
+});
+
 describe("MarkdownViewer wikilinks", () => {
   it("renders a resolved wikilink with the workspace path", () => {
     const { container } = renderMd("Open [[Cooking]] now.", {
