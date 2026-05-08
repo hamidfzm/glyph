@@ -91,6 +91,9 @@ export function MarkdownEditor({
               }),
             ],
             activateOnTyping: true,
+            // Don't dismiss on transient focus changes (e.g. theme/setting
+            // updates that re-render React siblings) — Esc still closes.
+            closeOnBlur: false,
           }),
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(glyphHighlight),
