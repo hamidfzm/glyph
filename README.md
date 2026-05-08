@@ -201,7 +201,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Math (KaTeX/MathJax) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | plugin |
 | Mermaid diagrams | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | plugin |
 | Syntax-highlighted code | ✅ (6 themes) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| GitHub-style alerts | planned | ✅ | ⚠️ | ❌ | ❌ | ⚠️ | ✅ |
+| GitHub-style alerts | ✅ | ✅ | ⚠️ | ❌ | ❌ | ⚠️ | ✅ |
 | YAML frontmatter | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
 | Emoji shortcodes | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | plugin |
 
@@ -219,8 +219,8 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
 |---|---|---|---|---|---|---|---|
 | Tabs | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ |
-| Folder / vault sidebar | planned | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
-| Wikilinks & backlinks | planned | ✅ | ❌ | ❌ | ✅ | ❌ | plugin |
+| Folder / vault sidebar | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
+| Wikilinks & backlinks | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | plugin |
 | Tag / metadata search | planned | ✅ | ❌ | ❌ | ✅ | ✅ | plugin |
 | Command palette | planned | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | In-document search | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
