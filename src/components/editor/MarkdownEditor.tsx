@@ -1,3 +1,10 @@
+import {
+  acceptCompletion,
+  autocompletion,
+  closeCompletion,
+  completionKeymap,
+  moveCompletionSelection,
+} from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
@@ -6,17 +13,35 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
+import { wikilinkCompletionSource } from "../../lib/wikilinkCompletion";
 
 interface MarkdownEditorProps {
   content: string;
   onChange: (content: string) => void;
+  workspaceFiles?: string[];
+  workspaceRoot?: string;
 }
 
-export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
+export function MarkdownEditor({
+  content,
+  onChange,
+  workspaceFiles,
+  workspaceRoot,
+}: MarkdownEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  // Read workspace state through refs so the completion source — installed
+  // once at mount — picks up updates without reconfiguring the editor. The
+  // extension is intentionally NOT in a Compartment: directory-changed events
+  // produce a new array identity every time the watcher fires, and any
+  // reconfigure mid-completion would tear down the popup state.
+  const workspaceFilesRef = useRef<readonly string[]>(workspaceFiles ?? []);
+  const workspaceRootRef = useRef<string | undefined>(workspaceRoot);
+  workspaceFilesRef.current = workspaceFiles ?? [];
+  workspaceRootRef.current = workspaceRoot;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: content is synced via separate effect below to avoid destroying the editor on every keystroke
   useEffect(() => {
@@ -47,7 +72,29 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         extensions: [
           lineNumbers(),
           history(),
-          keymap.of([...defaultKeymap, ...historyKeymap]),
+          // Completion keymap (Tab-accept, Esc-close, arrows-navigate) goes
+          // before defaultKeymap so it can claim Tab when the popup is open.
+          keymap.of([
+            { key: "Tab", run: acceptCompletion },
+            { key: "Escape", run: closeCompletion },
+            { key: "ArrowDown", run: (v) => moveCompletionSelection(true)(v) },
+            { key: "ArrowUp", run: (v) => moveCompletionSelection(false)(v) },
+            ...completionKeymap,
+            ...defaultKeymap,
+            ...historyKeymap,
+          ]),
+          autocompletion({
+            override: [
+              wikilinkCompletionSource({
+                workspaceFilesRef,
+                workspaceRootRef,
+              }),
+            ],
+            activateOnTyping: true,
+            // Don't dismiss on transient focus changes (e.g. theme/setting
+            // updates that re-render React siblings) — Esc still closes.
+            closeOnBlur: false,
+          }),
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(glyphHighlight),
           EditorView.lineWrapping,

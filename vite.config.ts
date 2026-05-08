@@ -19,7 +19,20 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      ignored: ["**/src-tauri/**"],
+      // Don't full-reload the dev webview when project content (Rust, demo
+      // markdown, top-level docs) changes. Only source under `src/` and
+      // editor config files should drive HMR. Without this, auto-save into
+      // samples/README.md while testing wikilinks bounces the webview and
+      // kills any in-flight UI state (autocomplete popup, cursor, etc.).
+      ignored: [
+        "**/src-tauri/**",
+        "**/samples/**",
+        "**/dist/**",
+        "**/.github/**",
+        "**/.claude/**",
+        "**/docs/**",
+        "**/*.md",
+      ],
     },
   },
 }));

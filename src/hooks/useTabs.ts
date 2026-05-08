@@ -439,9 +439,19 @@ export function useTabs(options: UseTabsOptions) {
     [updateActiveFile],
   );
 
+  // Track when each path was last written by our own auto-save so the
+  // file-changed event from that write doesn't re-enter as an external reload
+  // (which would re-dispatch the document into the editor and dismiss any
+  // open autocomplete popup).
+  const selfSaveTimes = useRef<Map<string, number>>(new Map());
+  const SELF_SAVE_GRACE_MS = 1500;
+
   const markSaved = useCallback(
     (id: string, content: string) => {
-      updateActiveFile(id, (f) => ({ ...f, content, dirty: false }));
+      updateActiveFile(id, (f) => {
+        selfSaveTimes.current.set(f.path, Date.now());
+        return { ...f, content, dirty: false };
+      });
     },
     [updateActiveFile],
   );
@@ -538,6 +548,11 @@ export function useTabs(options: UseTabsOptions) {
         if (!file) return;
         // Skip reload if the file is in edit mode with unsaved changes
         if (file.mode !== "view" && file.dirty) return;
+        // Skip if this file-changed was triggered by our own auto-save —
+        // re-syncing identical content into the editor would dismiss any
+        // active autocomplete popup mid-completion.
+        const lastSelfSave = selfSaveTimes.current.get(changedPath);
+        if (lastSelfSave && Date.now() - lastSelfSave < SELF_SAVE_GRACE_MS) return;
         try {
           const { content, metadata } = await loadFileContent(changedPath);
           setState((prev) => ({

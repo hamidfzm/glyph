@@ -314,10 +314,17 @@ export function App() {
 
     const editorContent = file.editContent ?? file.content;
 
+    const workspaceRoot = activeTab.kind === "folder" ? activeTab.root : undefined;
+
     if (file.mode === "edit") {
       return (
         <div className="flex-1 overflow-hidden">
-          <MarkdownEditor content={editorContent} onChange={handleEditorChange} />
+          <MarkdownEditor
+            content={editorContent}
+            onChange={handleEditorChange}
+            workspaceFiles={workspaceFiles}
+            workspaceRoot={workspaceRoot}
+          />
         </div>
       );
     }
@@ -332,6 +339,7 @@ export function App() {
             searchOpen={searchOpen}
             onSearchClose={() => setSearchOpen(false)}
             workspaceFiles={workspaceFiles}
+            workspaceRoot={workspaceRoot}
             onOpenWikilink={handleOpenWikilink}
           />
         </div>
