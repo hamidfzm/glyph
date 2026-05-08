@@ -293,6 +293,15 @@
   font-weight: 600;
 }
 
+/* Match GitHub: footnote refs render as `[1]` rather than a bare `1`. */
+.markdown-body [data-footnote-ref]::before {
+  content: "[";
+}
+
+.markdown-body [data-footnote-ref]::after {
+  content: "]";
+}
+
 .markdown-body [data-footnote-backref] {
   color: var(--color-text-secondary);
   text-decoration: none;
