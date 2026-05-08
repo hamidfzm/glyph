@@ -9,6 +9,7 @@ interface SplitViewProps {
   searchOpen: boolean;
   onSearchClose: () => void;
   workspaceFiles?: string[];
+  workspaceRoot?: string;
   onOpenWikilink?: (path: string, heading?: string) => void;
 }
 
@@ -21,6 +22,7 @@ export function SplitView({
   searchOpen,
   onSearchClose,
   workspaceFiles,
+  workspaceRoot,
   onOpenWikilink,
 }: SplitViewProps) {
   const [previewContent, setPreviewContent] = useState(content);
@@ -48,7 +50,12 @@ export function SplitView({
   return (
     <div className="split-view">
       <div className="split-view-editor">
-        <MarkdownEditor content={content} onChange={handleChange} />
+        <MarkdownEditor
+          content={content}
+          onChange={handleChange}
+          workspaceFiles={workspaceFiles}
+          workspaceRoot={workspaceRoot}
+        />
       </div>
       <div className="split-view-preview">
         <MarkdownViewer

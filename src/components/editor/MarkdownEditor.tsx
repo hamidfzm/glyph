@@ -1,22 +1,50 @@
+import {
+  acceptCompletion,
+  autocompletion,
+  closeCompletion,
+  completionKeymap,
+  moveCompletionSelection,
+} from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { wikilinkCompletionSource } from "../../lib/wikilinkCompletion";
 
 interface MarkdownEditorProps {
   content: string;
   onChange: (content: string) => void;
+  workspaceFiles?: string[];
+  workspaceRoot?: string;
 }
 
-export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
+export function MarkdownEditor({
+  content,
+  onChange,
+  workspaceFiles,
+  workspaceRoot,
+}: MarkdownEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  // Hot-swap the autocomplete extension when the workspace index changes
+  // without rebuilding the editor — destroying it would discard cursor and
+  // history state on every directory event.
+  const completionCompartment = useRef(new Compartment());
+  const wikilinkExtension = useMemo(() => {
+    if (!workspaceFiles || workspaceFiles.length === 0) return [];
+    return autocompletion({
+      override: [wikilinkCompletionSource({ workspaceFiles, workspaceRoot })],
+      activateOnTyping: true,
+      closeOnBlur: true,
+    });
+  }, [workspaceFiles, workspaceRoot]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: content is synced via separate effect below to avoid destroying the editor on every keystroke
   useEffect(() => {
@@ -47,7 +75,18 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         extensions: [
           lineNumbers(),
           history(),
-          keymap.of([...defaultKeymap, ...historyKeymap]),
+          // Completion keymap (Tab-accept, Esc-close, arrows-navigate) goes
+          // before defaultKeymap so it can claim Tab when the popup is open.
+          keymap.of([
+            { key: "Tab", run: acceptCompletion },
+            { key: "Escape", run: closeCompletion },
+            { key: "ArrowDown", run: (v) => moveCompletionSelection(true)(v) },
+            { key: "ArrowUp", run: (v) => moveCompletionSelection(false)(v) },
+            ...completionKeymap,
+            ...defaultKeymap,
+            ...historyKeymap,
+          ]),
+          completionCompartment.current.of(wikilinkExtension),
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(glyphHighlight),
           EditorView.lineWrapping,
@@ -120,6 +159,15 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       });
     }
   }, [content]);
+
+  // Hot-swap the autocomplete extension when the workspace index changes.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: completionCompartment.current.reconfigure(wikilinkExtension),
+    });
+  }, [wikilinkExtension]);
 
   return <div ref={containerRef} className="editor-container" />;
 }

@@ -206,6 +206,10 @@ Opening this file on its own (no folder) treats every wikilink as broken.
 
 When you have the `samples/` folder open, the **Backlinks** section under the file tree lists every other note that links to the current document. This file is referenced from [[Index]] and [[Notes/Cooking]], so opening either of them will show *this* file in their backlinks panel.
 
+### Wikilink autocomplete
+
+In the editor or split view, typing `[[` opens a popup with workspace files. Keep typing to filter, press **Tab** or **Enter** to insert; the closing `]]` is added for you. Open this file in split view (`Cmd+E` cycles modes) and try typing `[[Co` to see it.
+
 ---
 
 ## Keyboard Shortcuts
