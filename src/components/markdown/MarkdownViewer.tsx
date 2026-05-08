@@ -126,8 +126,16 @@ export function MarkdownViewer({
           onClose={handleSearchClose}
         />
       )}
-      <div ref={scrollRef} className="h-full overflow-y-auto">
-        <div ref={contentRef} className="markdown-body px-8 py-6 pb-[60vh]">
+      <div
+        ref={scrollRef}
+        className="h-full overflow-y-auto"
+        // Keep anchor targets a few pixels off the top edge when scrolled to
+        // via TOC / `#anchor`. Browsers cap scrollIntoView at maxScroll, so
+        // end-of-document targets land near the bottom of the viewport —
+        // no big empty padding under the content needed for that to work.
+        style={{ scrollPaddingTop: "16px" }}
+      >
+        <div ref={contentRef} className="markdown-body px-8 py-6">
           <ReactMarkdown
             remarkPlugins={remarkPlugins}
             rehypePlugins={rehypePlugins}

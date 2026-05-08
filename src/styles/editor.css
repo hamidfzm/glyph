@@ -33,6 +33,10 @@
   gap: 2px;
   margin-left: auto;
   padding: 0 4px;
+  /* Keep the toggle in the bar even if the tab list grows wide enough to
+   * fight for horizontal space (e.g. after a TOC scroll triggers a layout
+   * pass that re-measures the flex children). */
+  flex-shrink: 0;
 }
 
 .mode-toggle-btn {
