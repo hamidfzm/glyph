@@ -1,8 +1,8 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { SettingsContext } from "../../contexts/SettingsContext";
-import { DEFAULT_SETTINGS } from "../../lib/settings";
+import { SettingsContext } from "@/contexts/SettingsContext";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));

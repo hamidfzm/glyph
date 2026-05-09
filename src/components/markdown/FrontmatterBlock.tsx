@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import type { ParsedFrontmatter } from "../../lib/frontmatter";
-import { tagHue } from "../../lib/tagColor";
+import type { ParsedFrontmatter } from "@/lib/frontmatter";
+import { tagHue } from "@/lib/tagColor";
 import { CalendarIcon } from "../icons/CalendarIcon";
 import { UserIcon } from "../icons/UserIcon";
 

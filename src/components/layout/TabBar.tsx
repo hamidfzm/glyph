@@ -1,5 +1,5 @@
-import { activeFileOf, type Tab, tabPathOf } from "../../hooks/useTabs";
-import type { EditorMode } from "../../lib/settings";
+import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
+import type { EditorMode } from "@/lib/settings";
 import { FolderIcon } from "../icons/FolderIcon";
 
 interface TabBarProps {

@@ -1,6 +1,6 @@
-import { useSettings } from "../../hooks/useSettings";
-import { countWords, readingTime } from "../../lib/markdown";
-import { ZOOM_DEFAULT } from "../../lib/settings";
+import { useSettings } from "@/hooks/useSettings";
+import { countWords, readingTime } from "@/lib/markdown";
+import { ZOOM_DEFAULT } from "@/lib/settings";
 
 interface StatusBarProps {
   filePath?: string;

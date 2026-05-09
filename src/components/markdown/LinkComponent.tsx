@@ -1,8 +1,8 @@
 import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { type ComponentPropsWithoutRef, useCallback, useContext } from "react";
-import { SettingsContext } from "../../contexts/SettingsContext";
-import { scrollToHeading } from "../../lib/scrollToHeading";
+import { SettingsContext } from "@/contexts/SettingsContext";
+import { scrollToHeading } from "@/lib/scrollToHeading";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 
 export interface LinkComponentProps extends ComponentPropsWithoutRef<"a"> {

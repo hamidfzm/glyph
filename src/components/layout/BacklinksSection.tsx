@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Backlink } from "../../lib/backlinks";
+import type { Backlink } from "@/lib/backlinks";
 
 interface BacklinksSectionProps {
   backlinks: Backlink[];

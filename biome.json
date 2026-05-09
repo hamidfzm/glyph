@@ -26,7 +26,18 @@
       },
       "style": {
         "noNonNullAssertion": "off",
-        "useDefaultParameterLast": "off"
+        "useDefaultParameterLast": "off",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["../../**"],
+                "message": "Use the @/ alias for non-sibling imports — e.g. @/hooks/useTabs instead of ../../hooks/useTabs."
+              }
+            ]
+          }
+        }
       }
     }
   },

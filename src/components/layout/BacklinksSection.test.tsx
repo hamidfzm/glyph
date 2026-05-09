@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { Backlink } from "../../lib/backlinks";
+import type { Backlink } from "@/lib/backlinks";
 import { BacklinksSection } from "./BacklinksSection";
 
 const root = "/vault";

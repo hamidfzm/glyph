@@ -13,7 +13,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
-import { wikilinkCompletionSource } from "../../lib/wikilinkCompletion";
+import { wikilinkCompletionSource } from "@/lib/wikilinkCompletion";
 
 interface MarkdownEditorProps {
   content: string;

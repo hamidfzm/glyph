@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { DirEntry } from "../../hooks/useTabs";
+import type { DirEntry } from "@/hooks/useTabs";
 import { FileTree } from "./FileTree";
 
 const sampleEntries: DirEntry[] = [

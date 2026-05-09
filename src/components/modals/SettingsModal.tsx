@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { useSettings } from "../../hooks/useSettings";
-import { MODEL_SUGGESTIONS } from "../../lib/settings";
+import { useSettings } from "@/hooks/useSettings";
+import { MODEL_SUGGESTIONS } from "@/lib/settings";
 
 type Tab = "appearance" | "layout" | "behavior" | "ai" | "print";
 

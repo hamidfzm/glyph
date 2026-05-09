@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { TocEntry } from "../../hooks/useTableOfContents";
-import type { Tab } from "../../hooks/useTabs";
-import type { Backlink } from "../../lib/backlinks";
-import { onActiveHeadingChange, scrollToHeading } from "../../lib/scrollToHeading";
-import type { SidebarLayout } from "../../lib/settings";
+import type { TocEntry } from "@/hooks/useTableOfContents";
+import type { Tab } from "@/hooks/useTabs";
+import type { Backlink } from "@/lib/backlinks";
+import { onActiveHeadingChange, scrollToHeading } from "@/lib/scrollToHeading";
+import type { SidebarLayout } from "@/lib/settings";
 import { FolderIcon } from "../icons/FolderIcon";
 import { OutlineIcon } from "../icons/OutlineIcon";
 import { PanelCollapseIcon } from "../icons/PanelCollapseIcon";
