@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { FileTab, FolderTab, Tab } from "../../hooks/useTabs";
+import type { FileTab, FolderTab, Tab } from "@/hooks/useTabs";
 import { TabBar } from "./TabBar";
 
 const makeFileTab = (i: number): FileTab => ({

@@ -1,5 +1,5 @@
-import type { Platform } from "../../hooks/usePlatform";
-import { modKey } from "../../lib/platform";
+import type { Platform } from "@/hooks/usePlatform";
+import { modKey } from "@/lib/platform";
 
 interface EmptyStateProps {
   platform: Platform;

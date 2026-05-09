@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { DirEntry } from "../../hooks/useTabs";
+import type { DirEntry } from "@/hooks/useTabs";
 import { ChevronRightIcon } from "../icons/ChevronRightIcon";
 import { FileTextIcon } from "../icons/FileTextIcon";
 import { FolderIcon } from "../icons/FolderIcon";

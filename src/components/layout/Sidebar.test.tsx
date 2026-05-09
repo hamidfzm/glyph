@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { TocEntry } from "../../hooks/useTableOfContents";
-import type { FileTab, FolderTab, Tab } from "../../hooks/useTabs";
+import type { TocEntry } from "@/hooks/useTableOfContents";
+import type { FileTab, FolderTab, Tab } from "@/hooks/useTabs";
 import { Sidebar } from "./Sidebar";
 
 const mockEntries: TocEntry[] = [
