@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import ReactMarkdown, { type Options } from "react-markdown";
-import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import rehypeSlug from "rehype-slug";
@@ -9,6 +8,7 @@ import remarkGemoji from "remark-gemoji";
 import remarkGfm from "remark-gfm";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
+import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
 import { useKatexPlugin } from "@/hooks/useKatexPlugin";
 import { useSearch } from "@/hooks/useSearch";
 import { parseFrontmatter } from "@/lib/frontmatter";
@@ -49,6 +49,7 @@ export function MarkdownViewer({
 
   const search = useSearch({ containerRef: contentRef });
   const katexPlugin = useKatexPlugin(content);
+  const highlightPlugin = useHighlightPlugin(content);
   const frontmatter = useMemo(() => parseFrontmatter(content), [content]);
 
   // Restore scroll position on mount
@@ -86,11 +87,11 @@ export function MarkdownViewer({
       rehypeRaw,
       [rehypeSanitize, markdownSanitizeSchema],
       rehypeSlug,
-      [rehypeHighlight, { plainText: ["mermaid"] }],
     ];
+    if (highlightPlugin) plugins.push(highlightPlugin);
     if (katexPlugin) plugins.push(katexPlugin);
     return plugins;
-  }, [katexPlugin]);
+  }, [katexPlugin, highlightPlugin]);
 
   const remarkPlugins: NonNullable<Options["remarkPlugins"]> = useMemo(
     () => [
