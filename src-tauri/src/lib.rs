@@ -1,4 +1,5 @@
 mod commands;
+mod markdown;
 mod menu;
 mod watcher;
 
@@ -9,17 +10,7 @@ use tauri::RunEvent;
 use tauri_plugin_cli::CliExt;
 use watcher::FileWatcherState;
 
-// Single source of truth shared with the frontend
-// (src/lib/markdownExtensions.ts imports the same JSON).
-// build.rs reads markdown-extensions.json at compile time and emits this const.
-include!(concat!(env!("OUT_DIR"), "/md_extensions.rs"));
-
-pub fn is_markdown_file(path: &std::path::Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| MD_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
-        .unwrap_or(false)
-}
+pub use markdown::is_markdown_file;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -91,14 +82,14 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            commands::read_file,
-            commands::write_file,
-            commands::get_file_metadata,
-            commands::get_initial_file,
-            commands::print_document,
-            commands::read_directory,
-            commands::list_markdown_files,
-            commands::scan_wikilinks,
+            commands::file::read_file,
+            commands::file::write_file,
+            commands::file::get_file_metadata,
+            commands::file::get_initial_file,
+            commands::file::print_document,
+            commands::directory::read_directory,
+            commands::directory::list_markdown_files,
+            commands::wikilinks::scan_wikilinks,
             watcher::watch_file,
             watcher::unwatch_file,
             watcher::watch_directory,
@@ -130,77 +121,4 @@ pub fn run() {
             }
         }
     });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::Path;
-
-    #[test]
-    fn md_extension() {
-        assert!(is_markdown_file(Path::new("README.md")));
-    }
-
-    #[test]
-    fn markdown_extension() {
-        assert!(is_markdown_file(Path::new("notes.markdown")));
-    }
-
-    #[test]
-    fn mdown_extension() {
-        assert!(is_markdown_file(Path::new("doc.mdown")));
-    }
-
-    #[test]
-    fn mkd_extension() {
-        assert!(is_markdown_file(Path::new("file.mkd")));
-    }
-
-    #[test]
-    fn mkdn_extension() {
-        assert!(is_markdown_file(Path::new("file.mkdn")));
-    }
-
-    #[test]
-    fn mdx_extension() {
-        assert!(is_markdown_file(Path::new("doc.mdx")));
-    }
-
-    #[test]
-    fn case_insensitive() {
-        assert!(is_markdown_file(Path::new("README.MD")));
-        assert!(is_markdown_file(Path::new("readme.Md")));
-    }
-
-    #[test]
-    fn not_markdown_txt() {
-        assert!(!is_markdown_file(Path::new("file.txt")));
-    }
-
-    #[test]
-    fn not_markdown_rs() {
-        assert!(!is_markdown_file(Path::new("main.rs")));
-    }
-
-    #[test]
-    fn not_markdown_no_extension() {
-        assert!(!is_markdown_file(Path::new("Makefile")));
-    }
-
-    #[test]
-    fn not_markdown_hidden_file() {
-        assert!(!is_markdown_file(Path::new(".gitignore")));
-    }
-
-    #[test]
-    fn with_directory_path() {
-        assert!(is_markdown_file(Path::new("/home/user/docs/README.md")));
-        assert!(is_markdown_file(Path::new("./relative/path/notes.markdown")));
-    }
-
-    #[test]
-    fn empty_path() {
-        assert!(!is_markdown_file(Path::new("")));
-    }
 }
