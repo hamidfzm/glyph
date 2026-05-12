@@ -301,19 +301,29 @@ export function useTabs(options: UseTabsOptions) {
         nodes,
         file: null,
       };
-      setState((prev) => ({ tabs: [...prev.tabs, newTab], activeTabId: id }));
+      // Re-check after the awaits — a concurrent call (e.g. React 19 StrictMode
+      // double-mount, or rapid re-invocation) may have already added this folder.
+      let activeId = id;
+      setState((prev) => {
+        const match = prev.tabs.find((t) => t.kind === "folder" && t.root === resolvedRoot);
+        if (match) {
+          activeId = match.id;
+          return { ...prev, activeTabId: match.id };
+        }
+        return { tabs: [...prev.tabs, newTab], activeTabId: id };
+      });
 
       // Build the workspace markdown index in the background so wikilinks can resolve.
       loadWorkspaceFiles(resolvedRoot).then((files) => {
-        setWorkspaceIndex((prev) => ({ ...prev, [id]: files }));
+        setWorkspaceIndex((prev) => ({ ...prev, [activeId]: files }));
       });
       loadWikilinkRefs(resolvedRoot).then((refs) => {
-        setWikilinkIndex((prev) => ({ ...prev, [id]: refs }));
+        setWikilinkIndex((prev) => ({ ...prev, [activeId]: refs }));
       });
 
       if (options?.filePath) {
         // Defer so the new tab is in state for openFileInFolderTab to find
-        await openFileInFolderTab(id, options.filePath);
+        await openFileInFolderTab(activeId, options.filePath);
       }
     },
     [loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFileInFolderTab],
