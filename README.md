@@ -49,9 +49,9 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Table of Contents sidebar with active heading tracking
 - Print & PDF export — `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
 - Live reload — file watcher auto-updates on external changes
-- Drag and drop markdown files to open
+- Drag and drop markdown files or folders to open
 - File associations — double-click `.md` files to open in Glyph
-- CLI support — `glyph README.md`
+- CLI support — `glyph README.md` opens a file; `glyph ~/notes/` opens a folder as a workspace
 - Recent files list
 - Session restore — open tabs persist across restarts
 
@@ -143,10 +143,11 @@ pnpm install
 pnpm tauri dev
 ```
 
-Open a file via CLI argument:
+Open a file or folder via CLI argument:
 
 ```bash
 pnpm tauri dev -- -- /path/to/file.md
+pnpm tauri dev -- -- /path/to/folder
 ```
 
 Build for production:

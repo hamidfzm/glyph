@@ -301,19 +301,29 @@ export function useTabs(options: UseTabsOptions) {
         nodes,
         file: null,
       };
-      setState((prev) => ({ tabs: [...prev.tabs, newTab], activeTabId: id }));
+      // Re-check after the awaits — a concurrent call (e.g. React 19 StrictMode
+      // double-mount, or rapid re-invocation) may have already added this folder.
+      let activeId = id;
+      setState((prev) => {
+        const match = prev.tabs.find((t) => t.kind === "folder" && t.root === resolvedRoot);
+        if (match) {
+          activeId = match.id;
+          return { ...prev, activeTabId: match.id };
+        }
+        return { tabs: [...prev.tabs, newTab], activeTabId: id };
+      });
 
       // Build the workspace markdown index in the background so wikilinks can resolve.
       loadWorkspaceFiles(resolvedRoot).then((files) => {
-        setWorkspaceIndex((prev) => ({ ...prev, [id]: files }));
+        setWorkspaceIndex((prev) => ({ ...prev, [activeId]: files }));
       });
       loadWikilinkRefs(resolvedRoot).then((refs) => {
-        setWikilinkIndex((prev) => ({ ...prev, [id]: refs }));
+        setWikilinkIndex((prev) => ({ ...prev, [activeId]: refs }));
       });
 
       if (options?.filePath) {
         // Defer so the new tab is in state for openFileInFolderTab to find
-        await openFileInFolderTab(id, options.filePath);
+        await openFileInFolderTab(activeId, options.filePath);
       }
     },
     [loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFileInFolderTab],
@@ -520,6 +530,12 @@ export function useTabs(options: UseTabsOptions) {
   useEffect(() => {
     (async () => {
       try {
+        const initialFolder = await invoke<string | null>("get_initial_folder");
+        if (initialFolder) {
+          await openFolder(initialFolder);
+          setInitializing(false);
+          return;
+        }
         const initialPath = await invoke<string | null>("get_initial_file");
         if (initialPath) {
           await openFile(initialPath);
@@ -552,15 +568,19 @@ export function useTabs(options: UseTabsOptions) {
     })();
   }, []);
 
-  // Listen for open-file events (drag-drop, file associations)
+  // Listen for open-file and open-folder events (drag-drop, file associations)
   useEffect(() => {
-    const unlisten = listen<string>("open-file", (event) => {
+    const unlistenFile = listen<string>("open-file", (event) => {
       openFile(event.payload);
     });
+    const unlistenFolder = listen<string>("open-folder", (event) => {
+      openFolder(event.payload);
+    });
     return () => {
-      unlisten.then((fn) => fn());
+      unlistenFile.then((fn) => fn());
+      unlistenFolder.then((fn) => fn());
     };
-  }, [openFile]);
+  }, [openFile, openFolder]);
 
   // Listen for file-changed events (auto-reload). Applies to any open file —
   // top-level FileTabs and the active file inside FolderTabs alike.
