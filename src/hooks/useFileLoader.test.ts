@@ -71,9 +71,7 @@ describe("useFileLoader", () => {
 
   it("clears initializing without loading when no CLI file and no recent", async () => {
     setupInvokes({ initialFile: null });
-    const { result } = renderHook(() =>
-      useFileLoader({ reopenLastFile: true, recentFiles: [] }),
-    );
+    const { result } = renderHook(() => useFileLoader({ reopenLastFile: true, recentFiles: [] }));
     await waitFor(() => {
       expect(result.current.initializing).toBe(false);
     });
