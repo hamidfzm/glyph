@@ -1,7 +1,15 @@
 # Glyph
 
 [![CI](https://github.com/hamidfzm/glyph/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hamidfzm/glyph/actions/workflows/ci.yml)
+[![Release](https://github.com/hamidfzm/glyph/actions/workflows/release.yml/badge.svg)](https://github.com/hamidfzm/glyph/actions/workflows/release.yml)
+[![CodeQL](https://github.com/hamidfzm/glyph/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/hamidfzm/glyph/actions/workflows/security.yml)
 [![codecov](https://codecov.io/gh/hamidfzm/glyph/graph/badge.svg)](https://codecov.io/gh/hamidfzm/glyph)
+[![Latest release](https://img.shields.io/github/v/release/hamidfzm/glyph?sort=semver)](https://github.com/hamidfzm/glyph/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/hamidfzm/glyph/total?color=blue)](https://github.com/hamidfzm/glyph/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Tauri v2](https://img.shields.io/badge/Tauri-v2-24c8db?logo=tauri)](https://v2.tauri.app)
+[![React 19](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)](https://react.dev)
+[![Code style: Biome](https://img.shields.io/badge/code_style-biome-60a5fa?logo=biome)](https://biomejs.dev)
 
 A modern, cross-platform markdown viewer and editor with platform-native styling.
 
@@ -261,7 +269,3 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 Legend: ✅ supported · ⚠️ partial / inconsistent · ❌ not supported · plugin = third-party · planned = on roadmap
 
 Note on "WYSIWYG / inline preview": Glyph's editor has split-view live preview and styled markdown tokens (bold/italic render as bold/italic in source), but markdown markers remain visible — Typora-style fully inline rendering is not implemented.
-
-## License
-
-[MIT](LICENSE)

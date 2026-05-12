@@ -313,7 +313,7 @@ export function App() {
   const renderContent = () => {
     if (!activeTab) return null;
     const file = activeFileOf(activeTab);
-    if (!file || !file.content) return null;
+    if (!file?.content) return null;
 
     const editorContent = file.editContent ?? file.content;
 

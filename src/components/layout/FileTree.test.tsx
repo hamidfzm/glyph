@@ -28,8 +28,8 @@ describe("FileTree", () => {
     const buttons = screen.getAllByRole("button");
     // First button is the root header (none — it's an h3) so first interactive: subdir, then post.md
     const labels = buttons.map((b) => b.textContent?.trim());
-    const subdirIdx = labels.findIndex((t) => t === "subdir");
-    const fileIdx = labels.findIndex((t) => t === "post.md");
+    const subdirIdx = labels.indexOf("subdir");
+    const fileIdx = labels.indexOf("post.md");
     expect(subdirIdx).toBeGreaterThanOrEqual(0);
     expect(fileIdx).toBeGreaterThan(subdirIdx);
   });
