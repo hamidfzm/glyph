@@ -88,6 +88,7 @@ jobs:
           files: coverage/lcov.info
           flags: frontend
           token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
 
   test-rust:
     name: Test (Rust)
@@ -117,6 +118,7 @@ jobs:
           files: coverage-rust.lcov
           flags: rust
           token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
 
   clippy:
     name: Clippy
