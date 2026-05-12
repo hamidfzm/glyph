@@ -520,6 +520,12 @@ export function useTabs(options: UseTabsOptions) {
   useEffect(() => {
     (async () => {
       try {
+        const initialFolder = await invoke<string | null>("get_initial_folder");
+        if (initialFolder) {
+          await openFolder(initialFolder);
+          setInitializing(false);
+          return;
+        }
         const initialPath = await invoke<string | null>("get_initial_file");
         if (initialPath) {
           await openFile(initialPath);
@@ -552,15 +558,19 @@ export function useTabs(options: UseTabsOptions) {
     })();
   }, []);
 
-  // Listen for open-file events (drag-drop, file associations)
+  // Listen for open-file and open-folder events (drag-drop, file associations)
   useEffect(() => {
-    const unlisten = listen<string>("open-file", (event) => {
+    const unlistenFile = listen<string>("open-file", (event) => {
       openFile(event.payload);
     });
+    const unlistenFolder = listen<string>("open-folder", (event) => {
+      openFolder(event.payload);
+    });
     return () => {
-      unlisten.then((fn) => fn());
+      unlistenFile.then((fn) => fn());
+      unlistenFolder.then((fn) => fn());
     };
-  }, [openFile]);
+  }, [openFile, openFolder]);
 
   // Listen for file-changed events (auto-reload). Applies to any open file —
   // top-level FileTabs and the active file inside FolderTabs alike.

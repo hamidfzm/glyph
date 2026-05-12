@@ -1,10 +1,14 @@
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
+use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
+use tauri::State;
 use walkdir::WalkDir;
 
 use super::walk::{WALK_MAX_DEPTH, WALK_MAX_FILES, WALK_SKIP_DIRS};
+
+pub struct InitialFolder(pub Mutex<Option<String>>);
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,6 +17,11 @@ pub struct DirEntry {
     pub path: String,
     pub is_directory: bool,
     pub modified: u64,
+}
+
+#[tauri::command]
+pub fn get_initial_folder(state: State<'_, InitialFolder>) -> Option<String> {
+    state.0.lock().ok()?.clone()
 }
 
 #[tauri::command]
@@ -245,6 +254,20 @@ mod tests {
         assert!(result.is_err());
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn initial_folder_default_is_none() {
+        let initial = InitialFolder(Mutex::new(None));
+        let guard = initial.0.lock().unwrap();
+        assert!(guard.is_none());
+    }
+
+    #[test]
+    fn initial_folder_with_value() {
+        let initial = InitialFolder(Mutex::new(Some("/path/to/folder".to_string())));
+        let guard = initial.0.lock().unwrap();
+        assert_eq!(guard.as_deref(), Some("/path/to/folder"));
     }
 
     #[test]
