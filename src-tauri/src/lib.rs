@@ -1,12 +1,13 @@
+mod cli;
 mod commands;
 mod markdown;
 mod menu;
 mod watcher;
 
 use std::sync::{Arc, Mutex};
-use tauri::{DragDropEvent, Emitter, Manager, WindowEvent};
 #[cfg(target_os = "macos")]
 use tauri::RunEvent;
+use tauri::{DragDropEvent, Emitter, Manager, WindowEvent};
 use tauri_plugin_cli::CliExt;
 use watcher::FileWatcherState;
 
@@ -22,7 +23,9 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .manage(FileWatcherState(Arc::new(Mutex::new(std::collections::HashMap::new()))))
+        .manage(FileWatcherState(Arc::new(Mutex::new(
+            std::collections::HashMap::new(),
+        ))))
         .manage(commands::InitialFile(Mutex::new(None)))
         .manage(commands::InitialFolder(Mutex::new(None)))
         .setup(|app| {
@@ -33,41 +36,17 @@ pub fn run() {
             if let Ok(matches) = app.cli().matches() {
                 if let Some(file_arg) = matches.args.get("file") {
                     if let Some(path_str) = file_arg.value.as_str() {
-                        if !path_str.is_empty() {
-                            let path = std::path::Path::new(path_str);
-                            let absolute = if path.is_absolute() {
-                                path.to_path_buf()
+                        let cwd = std::env::current_dir().unwrap_or_default();
+                        if let Some(canonical) = cli::resolve_initial_path(path_str, &cwd) {
+                            let abs_str = canonical.to_string_lossy().to_string();
+                            if canonical.is_dir() {
+                                let state = app.state::<commands::InitialFolder>();
+                                let mut guard = state.0.lock().unwrap();
+                                *guard = Some(abs_str);
                             } else {
-                                // Try current dir first, then TAURI_INVOKE_ORIGIN or parent
-                                let from_cwd = std::env::current_dir()
-                                    .unwrap_or_default()
-                                    .join(path);
-                                if from_cwd.exists() {
-                                    from_cwd
-                                } else {
-                                    // In dev mode, cwd is src-tauri/ — try parent
-                                    let from_parent = std::env::current_dir()
-                                        .unwrap_or_default()
-                                        .join("..")
-                                        .join(path);
-                                    if from_parent.exists() {
-                                        from_parent
-                                    } else {
-                                        from_cwd
-                                    }
-                                }
-                            };
-                            if let Ok(canonical) = absolute.canonicalize() {
-                                let abs_str = canonical.to_string_lossy().to_string();
-                                if canonical.is_dir() {
-                                    let state = app.state::<commands::InitialFolder>();
-                                    let mut guard = state.0.lock().unwrap();
-                                    *guard = Some(abs_str);
-                                } else {
-                                    let state = app.state::<commands::InitialFile>();
-                                    let mut guard = state.0.lock().unwrap();
-                                    *guard = Some(abs_str);
-                                }
+                                let state = app.state::<commands::InitialFile>();
+                                let mut guard = state.0.lock().unwrap();
+                                *guard = Some(abs_str);
                             }
                         }
                     }
@@ -118,7 +97,11 @@ pub fn run() {
                 if let Ok(path) = url.to_file_path() {
                     let path_str = path.to_string_lossy().to_string();
                     let is_folder = path.is_dir();
-                    let event_name = if is_folder { "open-folder" } else { "open-file" };
+                    let event_name = if is_folder {
+                        "open-folder"
+                    } else {
+                        "open-file"
+                    };
 
                     // Try to emit to the frontend (works if webview is ready)
                     let emitted = _app_handle.emit(event_name, &path_str).is_ok();
@@ -127,11 +110,13 @@ pub fn run() {
                     // (cold-launch via Finder open-with).
                     if emitted {
                         if is_folder {
-                            if let Some(state) = _app_handle.try_state::<commands::InitialFolder>() {
+                            if let Some(state) = _app_handle.try_state::<commands::InitialFolder>()
+                            {
                                 let mut guard = state.0.lock().unwrap();
                                 *guard = Some(path_str);
                             }
-                        } else if let Some(state) = _app_handle.try_state::<commands::InitialFile>() {
+                        } else if let Some(state) = _app_handle.try_state::<commands::InitialFile>()
+                        {
                             let mut guard = state.0.lock().unwrap();
                             *guard = Some(path_str);
                         }

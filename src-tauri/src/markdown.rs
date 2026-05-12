@@ -75,7 +75,9 @@ mod tests {
     #[test]
     fn with_directory_path() {
         assert!(is_markdown_file(Path::new("/home/user/docs/README.md")));
-        assert!(is_markdown_file(Path::new("./relative/path/notes.markdown")));
+        assert!(is_markdown_file(Path::new(
+            "./relative/path/notes.markdown"
+        )));
     }
 
     #[test]
