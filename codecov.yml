@@ -4,9 +4,20 @@ coverage:
       default:
         target: auto
         threshold: 1%
+      frontend:
+        flags:
+          - frontend
+        target: 80%
+        threshold: 1%
+      rust:
+        flags:
+          - rust
+        target: 85%
+        threshold: 1%
     patch:
       default:
         target: 80%
+        threshold: 5%
 
 comment:
   layout: "reach,diff,flags,files"
@@ -25,3 +36,12 @@ flags:
     paths:
       - src-tauri/src/
     carryforward: true
+
+ignore:
+  - "src/main.tsx"
+  - "src/vite-env.d.ts"
+  - "src/test/**"
+  - "src/components/icons/**"
+  - "src-tauri/src/main.rs"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
