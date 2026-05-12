@@ -452,11 +452,23 @@ jobs:
           SERIES="${{ matrix.series }}"
           DATE=$(date -R)
 
-          # Set up source tree
-          mkdir -p /tmp/glyph-${VERSION}/debian
+          # Set up pristine source tree (no debian/ yet)
+          mkdir -p /tmp/glyph-${VERSION}
           cp -r /tmp/glyph-extracted/* /tmp/glyph-${VERSION}/
 
-          # Copy debian packaging files with version/date substitution
+          # Build orig tarball BEFORE adding debian/, with reproducible flags so
+          # every series in the matrix produces a byte-identical file. Launchpad
+          # rejects re-uploads of orig.tar.gz with differing contents.
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct "$GITHUB_REF_NAME")
+          tar --sort=name \
+              --mtime="@${SOURCE_DATE_EPOCH}" \
+              --owner=0 --group=0 --numeric-owner \
+              -cf - -C /tmp "glyph-${VERSION}" \
+            | gzip -n > /tmp/glyph_${VERSION}.orig.tar.gz
+
+          # Now add debian/ packaging (series-specific changelog lives here, but
+          # debuild ships it as the separate .debian.tar.xz, not in orig.tar.gz).
+          mkdir -p /tmp/glyph-${VERSION}/debian
           cp ppa/debian/control /tmp/glyph-${VERSION}/debian/
           cp ppa/debian/rules /tmp/glyph-${VERSION}/debian/
 
@@ -478,10 +490,7 @@ jobs:
           sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SERIES}}/$SERIES/g" -e "s/{{DATE}}/$DATE/g" \
             ppa/debian/changelog > /tmp/glyph-${VERSION}/debian/changelog
 
-          # Create orig tarball
-          tar czf /tmp/glyph_${VERSION}.orig.tar.gz -C /tmp glyph-${VERSION}
-
-          # Build source package
+          # Build source package (picks up the orig.tar.gz we created above)
           cd /tmp/glyph-${VERSION}
           DEBUILD_LINTIAN=no debuild -S -sa -d -k"$GPG_KEY_ID"
       - name: Upload to PPA
