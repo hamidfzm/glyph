@@ -154,7 +154,11 @@ mod tests {
     #[test]
     fn scan_wikilinks_finds_basic_targets() {
         let dir = unique_tmp("scan_basic");
-        fs::write(dir.join("a.md"), "Read [[B]] today.\nAlso [[B|the second]].\n").unwrap();
+        fs::write(
+            dir.join("a.md"),
+            "Read [[B]] today.\nAlso [[B|the second]].\n",
+        )
+        .unwrap();
         fs::write(dir.join("b.md"), "no links here").unwrap();
 
         let mut refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
@@ -206,7 +210,11 @@ mod tests {
     #[test]
     fn scan_wikilinks_records_line_and_snippet() {
         let dir = unique_tmp("scan_meta");
-        fs::write(dir.join("a.md"), "line one\nline two has [[Target#section|alias]] here\n").unwrap();
+        fs::write(
+            dir.join("a.md"),
+            "line one\nline two has [[Target#section|alias]] here\n",
+        )
+        .unwrap();
 
         let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
         assert_eq!(refs.len(), 1);

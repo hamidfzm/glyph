@@ -149,7 +149,10 @@ mod tests {
         assert!(names.contains(&"subdir"));
         assert!(names.contains(&"readme.md"));
         assert!(names.contains(&"notes.markdown"));
-        assert!(!names.contains(&"image.png"), "non-markdown files filtered out");
+        assert!(
+            !names.contains(&"image.png"),
+            "non-markdown files filtered out"
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -213,7 +216,13 @@ mod tests {
         result.sort();
         let names: Vec<String> = result
             .iter()
-            .map(|p| Path::new(p).file_name().unwrap().to_string_lossy().to_string())
+            .map(|p| {
+                Path::new(p)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            })
             .collect();
         assert!(names.contains(&"root.md".to_string()));
         assert!(names.contains(&"a.md".to_string()));
@@ -237,7 +246,13 @@ mod tests {
         let result = list_markdown_files(dir.to_string_lossy().to_string()).unwrap();
         let names: Vec<String> = result
             .iter()
-            .map(|p| Path::new(p).file_name().unwrap().to_string_lossy().to_string())
+            .map(|p| {
+                Path::new(p)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            })
             .collect();
         assert_eq!(names, vec!["keep.md".to_string()]);
 
