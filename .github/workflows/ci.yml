@@ -91,10 +91,11 @@ jobs:
           fail_ci_if_error: true
       - name: Upload frontend test results
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: junit-frontend.xml
           flags: frontend
+          report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
 
@@ -131,10 +132,11 @@ jobs:
           fail_ci_if_error: true
       - name: Upload Rust test results
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: src-tauri/target/nextest/ci/junit.xml
           flags: rust
+          report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
 
