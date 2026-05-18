@@ -1,26 +1,27 @@
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { type AIAction, useAI } from "@/hooks/useAI";
+import { useAutoSave } from "@/hooks/useAutoSave";
+import { useContextMenu } from "@/hooks/useContextMenu";
+import { useDocumentUndoRedo } from "@/hooks/useDocumentUndoRedo";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
-import { type AIAction, useAI } from "../hooks/useAI";
-import { useAutoSave } from "../hooks/useAutoSave";
-import { useContextMenu } from "../hooks/useContextMenu";
-import { usePlatform } from "../hooks/usePlatform";
-import { usePrint } from "../hooks/usePrint";
-import { useSettings } from "../hooks/useSettings";
-import { useTableOfContents } from "../hooks/useTableOfContents";
-import { activeFileOf, useTabs } from "../hooks/useTabs";
-import { useTaskList } from "../hooks/useTaskList";
-import { useTheme } from "../hooks/useTheme";
-import { useTTS } from "../hooks/useTTS";
-import { filterBacklinks } from "../lib/backlinks";
-import { ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../lib/settings";
+import { usePlatform } from "@/hooks/usePlatform";
+import { usePrint } from "@/hooks/usePrint";
+import { useSettings } from "@/hooks/useSettings";
+import { useTableOfContents } from "@/hooks/useTableOfContents";
+import { activeFileOf, useTabs } from "@/hooks/useTabs";
+import { useTaskList } from "@/hooks/useTaskList";
+import { useTheme } from "@/hooks/useTheme";
+import { useTTS } from "@/hooks/useTTS";
+import { filterBacklinks } from "@/lib/backlinks";
+import { ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "@/lib/settings";
 // Code theme CSS (inline imports for production compatibility)
-import glyphThemeCSS from "../styles/highlight.css?inline";
-import githubThemeCSS from "../styles/highlight-github.css?inline";
-import monokaiThemeCSS from "../styles/highlight-monokai.css?inline";
-import nordThemeCSS from "../styles/highlight-nord.css?inline";
-import solarizedDarkThemeCSS from "../styles/highlight-solarized-dark.css?inline";
-import solarizedLightThemeCSS from "../styles/highlight-solarized-light.css?inline";
+import glyphThemeCSS from "@/styles/highlight.css?inline";
+import githubThemeCSS from "@/styles/highlight-github.css?inline";
+import monokaiThemeCSS from "@/styles/highlight-monokai.css?inline";
+import nordThemeCSS from "@/styles/highlight-nord.css?inline";
+import solarizedDarkThemeCSS from "@/styles/highlight-solarized-dark.css?inline";
+import solarizedLightThemeCSS from "@/styles/highlight-solarized-light.css?inline";
 import { MarkdownEditor, SplitView } from "./editor/lazyEditor";
 import { EmptyState } from "./layout/EmptyState";
 import { Sidebar } from "./layout/Sidebar";
@@ -64,6 +65,8 @@ export function App() {
     updateEditContent,
     markSaved,
     toggleTask,
+    undoEdit,
+    redoEdit,
     saveScrollPosition,
     openFileDialog,
   } = useTabs({
@@ -184,6 +187,8 @@ export function App() {
   );
 
   const { handleToggle: handleTaskToggle } = useTaskList({ activeTabId, toggleTask });
+
+  useDocumentUndoRedo({ activeTabId, platform, onUndo: undoEdit, onRedo: redoEdit });
 
   // Close the active tab (used by File → Close Folder which doubles as close-tab
   // when the active tab is a folder; Cmd+W still closes the window).

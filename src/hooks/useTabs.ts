@@ -2,10 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WikilinkRef } from "../lib/backlinks";
-import { MARKDOWN_EXTENSIONS } from "../lib/markdownExtensions";
-import type { EditorMode } from "../lib/settings";
-import { toggleTaskAtLine } from "../lib/taskList";
+import type { WikilinkRef } from "@/lib/backlinks";
+import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/lib/editHistory";
+import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
+import type { EditorMode } from "@/lib/settings";
+import { toggleTaskAtLine } from "@/lib/taskList";
 
 interface FileMetadata {
   name: string;
@@ -374,6 +375,7 @@ export function useTabs(options: UseTabsOptions) {
         invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
       }
       scrollRefsMap.current.delete(id);
+      editHistory.current.delete(id);
       setWorkspaceIndex((prevIdx) => {
         if (!(id in prevIdx)) return prevIdx;
         const next = { ...prevIdx };
@@ -457,6 +459,10 @@ export function useTabs(options: UseTabsOptions) {
   const selfSaveTimes = useRef<Map<string, number>>(new Map());
   const SELF_SAVE_GRACE_MS = 1500;
 
+  // Per-tab undo/redo stack for programmatic edits (task toggles, future
+  // rename refactors). The editor's own history covers typed input.
+  const editHistory = useRef<Map<string, TabHistory>>(new Map());
+
   const markSaved = useCallback(
     (id: string, content: string) => {
       updateActiveFile(id, (f) => {
@@ -467,9 +473,37 @@ export function useTabs(options: UseTabsOptions) {
     [updateActiveFile],
   );
 
-  // Toggle a checklist item by source line number. In view mode the change
-  // writes straight to disk; in edit/split mode it updates editContent so the
-  // editor reflects the toggle and auto-save flushes it as usual.
+  // Apply a programmatic edit. In view mode writes straight to disk (with the
+  // self-save grace so the file-watcher doesn't re-enter); in edit/split mode
+  // it updates editContent so auto-save flushes it. Used by toggleTask and the
+  // undo/redo applier.
+  const applyProgrammaticEdit = useCallback(
+    async (id: string, next: string): Promise<boolean> => {
+      const tab = stateRef.current.tabs.find((t) => t.id === id);
+      if (!tab) return false;
+      const file = activeFileOf(tab);
+      if (!file) return false;
+
+      if (file.mode !== "view") {
+        updateActiveFile(id, (f) => ({ ...f, editContent: next, dirty: true }));
+        return true;
+      }
+
+      try {
+        await invoke("write_file", { path: file.path, content: next });
+        selfSaveTimes.current.set(file.path, Date.now());
+        updateActiveFile(id, (f) => ({ ...f, content: next }));
+        return true;
+      } catch (err) {
+        console.error("Failed to apply edit:", err);
+        return false;
+      }
+    },
+    [updateActiveFile],
+  );
+
+  // Toggle a checklist item by source line number. Pushes the change onto the
+  // tab's history stack so it can be undone.
   const toggleTask = useCallback(
     async (id: string, line: number) => {
       const tab = stateRef.current.tabs.find((t) => t.id === id);
@@ -482,20 +516,37 @@ export function useTabs(options: UseTabsOptions) {
       const next = toggleTaskAtLine(source, line);
       if (next === source) return;
 
-      if (isEditing) {
-        updateActiveFile(id, (f) => ({ ...f, editContent: next, dirty: true }));
-        return;
-      }
-
-      try {
-        await invoke("write_file", { path: file.path, content: next });
-        selfSaveTimes.current.set(file.path, Date.now());
-        updateActiveFile(id, (f) => ({ ...f, content: next }));
-      } catch (err) {
-        console.error("Failed to toggle task:", err);
+      const applied = await applyProgrammaticEdit(id, next);
+      if (applied) {
+        const current = editHistory.current.get(id) ?? emptyHistory();
+        editHistory.current.set(id, pushEntry(current, { before: source, after: next }));
       }
     },
-    [updateActiveFile],
+    [applyProgrammaticEdit],
+  );
+
+  const undoEdit = useCallback(
+    async (id: string) => {
+      const history = editHistory.current.get(id);
+      if (!history) return;
+      const result = popUndo(history);
+      if (!result) return;
+      const applied = await applyProgrammaticEdit(id, result.entry.before);
+      if (applied) editHistory.current.set(id, result.next);
+    },
+    [applyProgrammaticEdit],
+  );
+
+  const redoEdit = useCallback(
+    async (id: string) => {
+      const history = editHistory.current.get(id);
+      if (!history) return;
+      const result = popRedo(history);
+      if (!result) return;
+      const applied = await applyProgrammaticEdit(id, result.entry.after);
+      if (applied) editHistory.current.set(id, result.next);
+    },
+    [applyProgrammaticEdit],
   );
 
   const saveScrollPosition = useCallback(
@@ -612,6 +663,9 @@ export function useTabs(options: UseTabsOptions) {
             tabs: prev.tabs.map((t) => {
               const f = activeFileOf(t);
               if (!f || f.path !== changedPath) return t;
+              // External reload invalidates our edit history — replaying old
+              // diffs against changed content is unsafe.
+              editHistory.current.delete(t.id);
               const next: FileState = { ...f, content, metadata };
               return t.kind === "folder" ? { ...t, file: next } : { ...t, file: next };
             }),
@@ -690,6 +744,8 @@ export function useTabs(options: UseTabsOptions) {
     updateEditContent,
     markSaved,
     toggleTask,
+    undoEdit,
+    redoEdit,
     saveScrollPosition,
     openFileDialog,
   };

@@ -239,6 +239,7 @@ In the editor or split view, typing `[[` opens a popup with workspace files. Kee
 | `Cmd+F` | Find in document |
 | `Cmd+=` / `Cmd+-` | Zoom in / out |
 | `Cmd+0` | Reset zoom |
+| `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo task checkbox toggles |
 | `Cmd+B` | Toggle sidebar |
 | `Cmd+,` | Settings |
 
