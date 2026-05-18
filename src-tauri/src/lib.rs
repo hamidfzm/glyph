@@ -29,8 +29,19 @@ pub fn run() {
         .manage(commands::InitialFile(Mutex::new(None)))
         .manage(commands::InitialFolder(Mutex::new(None)))
         .setup(|app| {
-            let menu = menu::build_menu(app)?;
+            let (menu, menu_refs) = menu::build_menu(app)?;
             app.set_menu(menu)?;
+            // Start with everything disabled — the frontend reasserts state
+            // as soon as it mounts and learns about the active tab and settings.
+            let initial_flags = menu::MenuStateFlags {
+                has_tab: false,
+                has_file: false,
+                has_content: false,
+                ai_configured: false,
+                tts_available: false,
+            };
+            let _ = menu::apply_menu_state(&menu_refs, &initial_flags);
+            app.manage(menu_refs);
 
             // Parse CLI arguments and store initial file path
             if let Ok(matches) = app.cli().matches() {
@@ -86,6 +97,7 @@ pub fn run() {
             watcher::unwatch_file,
             watcher::watch_directory,
             watcher::unwatch_directory,
+            menu::set_menu_state,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Glyph");

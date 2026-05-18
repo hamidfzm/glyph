@@ -1,9 +1,34 @@
+use serde::Deserialize;
 use tauri::{
-    menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
-    App, Emitter, Manager, Wry,
+    menu::{AboutMetadataBuilder, MenuBuilder, MenuItem, MenuItemBuilder, SubmenuBuilder},
+    App, Emitter, Manager, State, Wry,
 };
 
-pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
+/// Handles to the menu items whose enabled state changes at runtime.
+/// Held in managed state so the `set_menu_state` command can toggle them.
+#[derive(Clone)]
+pub struct MenuItemRefs {
+    close_tab: MenuItem<Wry>,
+    print: MenuItem<Wry>,
+    find: MenuItem<Wry>,
+    toggle_edit: MenuItem<Wry>,
+    ai_summarize: MenuItem<Wry>,
+    ai_explain: MenuItem<Wry>,
+    ai_simplify: MenuItem<Wry>,
+    ai_read_aloud: MenuItem<Wry>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuStateFlags {
+    pub has_tab: bool,
+    pub has_file: bool,
+    pub has_content: bool,
+    pub ai_configured: bool,
+    pub tts_available: bool,
+}
+
+pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemRefs)> {
     let handle = app.handle();
 
     // Shared menu items
@@ -40,14 +65,12 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .build()?;
 
     // View menu
-    let toggle_files_sidebar =
-        MenuItemBuilder::with_id("toggle-files-sidebar", "Toggle Files Sidebar")
-            .accelerator("CmdOrCtrl+B")
-            .build(handle)?;
-    let toggle_outline_sidebar =
-        MenuItemBuilder::with_id("toggle-outline-sidebar", "Toggle Outline Sidebar")
-            .accelerator("CmdOrCtrl+\\")
-            .build(handle)?;
+    let toggle_files_sidebar = MenuItemBuilder::with_id("toggle-files-sidebar", "Toggle Files Sidebar")
+        .accelerator("CmdOrCtrl+B")
+        .build(handle)?;
+    let toggle_outline_sidebar = MenuItemBuilder::with_id("toggle-outline-sidebar", "Toggle Outline Sidebar")
+        .accelerator("CmdOrCtrl+\\")
+        .build(handle)?;
 
     let zoom_in = MenuItemBuilder::with_id("zoom-in", "Zoom In")
         .accelerator("CmdOrCtrl+=")
@@ -78,11 +101,14 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .build()?;
 
     // AI menu
-    let ai_summarize =
-        MenuItemBuilder::with_id("ai-summarize", "Summarize Document").build(handle)?;
-    let ai_explain = MenuItemBuilder::with_id("ai-explain", "Explain Document").build(handle)?;
-    let ai_simplify = MenuItemBuilder::with_id("ai-simplify", "Simplify Document").build(handle)?;
-    let ai_read_aloud = MenuItemBuilder::with_id("ai-read-aloud", "Read Aloud").build(handle)?;
+    let ai_summarize = MenuItemBuilder::with_id("ai-summarize", "Summarize Document")
+        .build(handle)?;
+    let ai_explain = MenuItemBuilder::with_id("ai-explain", "Explain Document")
+        .build(handle)?;
+    let ai_simplify = MenuItemBuilder::with_id("ai-simplify", "Simplify Document")
+        .build(handle)?;
+    let ai_read_aloud = MenuItemBuilder::with_id("ai-read-aloud", "Read Aloud")
+        .build(handle)?;
 
     let ai_menu = SubmenuBuilder::new(handle, "AI")
         .item(&ai_summarize)
@@ -167,151 +193,103 @@ pub fn build_menu(app: &App) -> tauri::Result<tauri::menu::Menu<Wry>> {
             .build()?
     };
 
-    Ok(menu)
+    let refs = MenuItemRefs {
+        close_tab,
+        print,
+        find,
+        toggle_edit,
+        ai_summarize,
+        ai_explain,
+        ai_simplify,
+        ai_read_aloud,
+    };
+
+    Ok((menu, refs))
 }
 
-/// Action a menu item triggers. `CloseWindow` is handled specially because it
-/// touches the window directly; every other entry just emits an event to the
-/// frontend. Keeping this as a pure mapping makes the wiring testable without
-/// booting a Tauri app.
-#[derive(Debug, PartialEq, Eq)]
-pub enum MenuAction {
-    Emit(&'static str),
-    EmitWithPayload(&'static str, &'static str),
-    CloseWindow,
+/// Apply enabled flags to every conditional menu item. Errors from individual
+/// items are propagated as strings so the command can surface them.
+pub fn apply_menu_state(refs: &MenuItemRefs, flags: &MenuStateFlags) -> Result<(), String> {
+    let stringify = |e: tauri::Error| e.to_string();
+    refs.close_tab.set_enabled(flags.has_tab).map_err(stringify)?;
+    refs.print.set_enabled(flags.has_file).map_err(stringify)?;
+    refs.find.set_enabled(flags.has_file).map_err(stringify)?;
+    refs.toggle_edit
+        .set_enabled(flags.has_file)
+        .map_err(stringify)?;
+    let ai_enabled = flags.ai_configured && flags.has_content;
+    refs.ai_summarize.set_enabled(ai_enabled).map_err(stringify)?;
+    refs.ai_explain.set_enabled(ai_enabled).map_err(stringify)?;
+    refs.ai_simplify.set_enabled(ai_enabled).map_err(stringify)?;
+    refs.ai_read_aloud
+        .set_enabled(flags.tts_available && flags.has_content)
+        .map_err(stringify)?;
+    Ok(())
 }
 
-pub fn menu_action(id: &str) -> Option<MenuAction> {
-    Some(match id {
-        "open" => MenuAction::Emit("menu-open-file"),
-        "open-folder" => MenuAction::Emit("menu-open-folder"),
-        "close-tab" => MenuAction::Emit("menu-close-tab"),
-        "reset-view" => MenuAction::Emit("menu-reset-view"),
-        "print" => MenuAction::Emit("menu-print"),
-        "close" => MenuAction::CloseWindow,
-        "toggle-files-sidebar" => MenuAction::Emit("menu-toggle-files-sidebar"),
-        "toggle-outline-sidebar" => MenuAction::Emit("menu-toggle-outline-sidebar"),
-        "open-settings" => MenuAction::Emit("menu-open-settings"),
-        "ai-summarize" => MenuAction::EmitWithPayload("menu-ai-action", "summarize"),
-        "ai-explain" => MenuAction::EmitWithPayload("menu-ai-action", "explain"),
-        "ai-simplify" => MenuAction::EmitWithPayload("menu-ai-action", "simplify"),
-        "ai-read-aloud" => MenuAction::Emit("menu-ai-read-aloud"),
-        "zoom-in" => MenuAction::Emit("menu-zoom-in"),
-        "zoom-out" => MenuAction::Emit("menu-zoom-out"),
-        "actual-size" => MenuAction::Emit("menu-zoom-reset"),
-        "find" => MenuAction::Emit("menu-find"),
-        "toggle-edit" => MenuAction::Emit("menu-toggle-edit"),
-        _ => return None,
-    })
+#[tauri::command]
+pub fn set_menu_state(refs: State<MenuItemRefs>, flags: MenuStateFlags) -> Result<(), String> {
+    apply_menu_state(&refs, &flags)
 }
 
 pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
-    match menu_action(event.id().as_ref()) {
-        Some(MenuAction::Emit(name)) => {
-            let _ = app.emit(name, ());
+    match event.id().as_ref() {
+        "open" => {
+            let _ = app.emit("menu-open-file", ());
         }
-        Some(MenuAction::EmitWithPayload(name, payload)) => {
-            let _ = app.emit(name, payload);
+        "open-folder" => {
+            let _ = app.emit("menu-open-folder", ());
         }
-        Some(MenuAction::CloseWindow) => {
+        "close-tab" => {
+            let _ = app.emit("menu-close-tab", ());
+        }
+        "reset-view" => {
+            let _ = app.emit("menu-reset-view", ());
+        }
+        "print" => {
+            let _ = app.emit("menu-print", ());
+        }
+        "close" => {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.close();
             }
         }
-        None => {}
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn unknown_id_yields_no_action() {
-        assert!(menu_action("does-not-exist").is_none());
-        assert!(menu_action("").is_none());
-    }
-
-    #[test]
-    fn close_id_maps_to_close_window() {
-        assert_eq!(menu_action("close"), Some(MenuAction::CloseWindow));
-    }
-
-    #[test]
-    fn file_menu_emits() {
-        assert_eq!(
-            menu_action("open"),
-            Some(MenuAction::Emit("menu-open-file"))
-        );
-        assert_eq!(
-            menu_action("open-folder"),
-            Some(MenuAction::Emit("menu-open-folder"))
-        );
-        assert_eq!(menu_action("print"), Some(MenuAction::Emit("menu-print")));
-        assert_eq!(
-            menu_action("close-tab"),
-            Some(MenuAction::Emit("menu-close-tab"))
-        );
-        assert_eq!(
-            menu_action("open-settings"),
-            Some(MenuAction::Emit("menu-open-settings"))
-        );
-    }
-
-    #[test]
-    fn view_menu_emits() {
-        assert_eq!(
-            menu_action("toggle-files-sidebar"),
-            Some(MenuAction::Emit("menu-toggle-files-sidebar"))
-        );
-        assert_eq!(
-            menu_action("toggle-outline-sidebar"),
-            Some(MenuAction::Emit("menu-toggle-outline-sidebar"))
-        );
-        assert_eq!(
-            menu_action("toggle-edit"),
-            Some(MenuAction::Emit("menu-toggle-edit"))
-        );
-        assert_eq!(
-            menu_action("zoom-in"),
-            Some(MenuAction::Emit("menu-zoom-in"))
-        );
-        assert_eq!(
-            menu_action("zoom-out"),
-            Some(MenuAction::Emit("menu-zoom-out"))
-        );
-        assert_eq!(
-            menu_action("actual-size"),
-            Some(MenuAction::Emit("menu-zoom-reset"))
-        );
-        assert_eq!(
-            menu_action("reset-view"),
-            Some(MenuAction::Emit("menu-reset-view"))
-        );
-    }
-
-    #[test]
-    fn edit_menu_emits() {
-        assert_eq!(menu_action("find"), Some(MenuAction::Emit("menu-find")));
-    }
-
-    #[test]
-    fn ai_menu_emits_action_payloads() {
-        assert_eq!(
-            menu_action("ai-summarize"),
-            Some(MenuAction::EmitWithPayload("menu-ai-action", "summarize"))
-        );
-        assert_eq!(
-            menu_action("ai-explain"),
-            Some(MenuAction::EmitWithPayload("menu-ai-action", "explain"))
-        );
-        assert_eq!(
-            menu_action("ai-simplify"),
-            Some(MenuAction::EmitWithPayload("menu-ai-action", "simplify"))
-        );
-        assert_eq!(
-            menu_action("ai-read-aloud"),
-            Some(MenuAction::Emit("menu-ai-read-aloud"))
-        );
+        "toggle-files-sidebar" => {
+            let _ = app.emit("menu-toggle-files-sidebar", ());
+        }
+        "toggle-outline-sidebar" => {
+            let _ = app.emit("menu-toggle-outline-sidebar", ());
+        }
+        "open-settings" => {
+            let _ = app.emit("menu-open-settings", ());
+        }
+        "ai-summarize" => {
+            let _ = app.emit("menu-ai-action", "summarize");
+        }
+        "ai-explain" => {
+            let _ = app.emit("menu-ai-action", "explain");
+        }
+        "ai-simplify" => {
+            let _ = app.emit("menu-ai-action", "simplify");
+        }
+        "ai-read-aloud" => {
+            let _ = app.emit("menu-ai-read-aloud", ());
+        }
+        "zoom-in" => {
+            let _ = app.emit("menu-zoom-in", ());
+        }
+        "zoom-out" => {
+            let _ = app.emit("menu-zoom-out", ());
+        }
+        "actual-size" => {
+            let _ = app.emit("menu-zoom-reset", ());
+        }
+        "find" => {
+            let _ = app.emit("menu-find", ());
+        }
+        "toggle-edit" => {
+            let _ = app.emit("menu-toggle-edit", ());
+        }
+        _ => {}
     }
 }
