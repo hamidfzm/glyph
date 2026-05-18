@@ -89,6 +89,14 @@ jobs:
           flags: frontend
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+      - name: Upload frontend test results
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v5
+        with:
+          files: junit-frontend.xml
+          flags: frontend
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
 
   test-rust:
     name: Test (Rust)
@@ -108,14 +116,24 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
       - name: Run Rust tests with coverage
         working-directory: src-tauri
-        run: cargo llvm-cov --lcov --output-path ../coverage-rust.lcov
+        run: cargo llvm-cov nextest --lcov --output-path ../coverage-rust.lcov --profile ci
       - name: Upload Rust coverage
         if: always()
         uses: codecov/codecov-action@v6
         with:
           files: coverage-rust.lcov
+          flags: rust
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+      - name: Upload Rust test results
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v5
+        with:
+          files: src-tauri/target/nextest/ci/junit.xml
           flags: rust
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
