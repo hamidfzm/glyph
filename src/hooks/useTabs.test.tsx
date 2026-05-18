@@ -323,6 +323,149 @@ describe("useTabs file operations", () => {
     }
   });
 
+  it("toggleTask in view mode writes to disk and records an undoable edit", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => "- [ ] task",
+        write_file: writeFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/tasks.md");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    await act(async () => {
+      await result.current.toggleTask(tabId, 1);
+    });
+    expect(writeFile).toHaveBeenCalledWith("write_file", {
+      path: "/p/tasks.md",
+      content: "- [x] task",
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.content).toBe("- [x] task");
+    }
+
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+    expect(writeFile).toHaveBeenLastCalledWith("write_file", {
+      path: "/p/tasks.md",
+      content: "- [ ] task",
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.content).toBe("- [ ] task");
+    }
+
+    await act(async () => {
+      await result.current.redoEdit(tabId);
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.content).toBe("- [x] task");
+    }
+  });
+
+  it("toggleTask in edit mode mutates editContent and is undoable", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => "- [ ] task",
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ defaultEditorMode: "edit" })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/tasks.md");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    await act(async () => {
+      await result.current.toggleTask(tabId, 1);
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.editContent).toBe("- [x] task");
+      expect(result.current.tabs[0].file.dirty).toBe(true);
+    }
+
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.editContent).toBe("- [ ] task");
+    }
+  });
+
+  it("undoEdit is a no-op when there is no history", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => "- [ ] task",
+        write_file: writeFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/tasks.md");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("an external file-changed reload drops the undo stack", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    let body = "- [ ] task";
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => body,
+        write_file: writeFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/tasks.md");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    await act(async () => {
+      await result.current.toggleTask(tabId, 1);
+    });
+    writeFile.mockClear();
+
+    // Skip past the self-save grace window (1500ms) so the file-changed event
+    // is treated as a true external reload rather than the echo of our write.
+    const realNow = Date.now;
+    const offset = 5000;
+    Date.now = () => realNow() + offset;
+    try {
+      body = "EXTERNAL EDIT";
+      await act(async () => {
+        fileChanged.handler?.({ payload: "/p/tasks.md" });
+        await new Promise((r) => setTimeout(r, 350));
+      });
+    } finally {
+      Date.now = realNow;
+    }
+
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
   it("saveScrollPosition + setActiveTab persists scrollTop to the leaving tab", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));

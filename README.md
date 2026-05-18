@@ -57,6 +57,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Table of Contents sidebar with active heading tracking
 - Print & PDF export — `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
 - Live reload — file watcher auto-updates on external changes
+- Undo / redo for in-document edits — `Cmd/Ctrl+Z` and `Cmd/Ctrl+Shift+Z` reverse task-list checkbox toggles and other programmatic edits per tab
 - Drag and drop markdown files or folders to open
 - File associations — double-click `.md` files to open in Glyph
 - CLI support — `glyph README.md` opens a file; `glyph ~/notes/` opens a folder as a workspace
@@ -192,6 +193,8 @@ cd src-tauri && cargo clippy    # Lint Rust
 | `Cmd+=` / `Ctrl+=` | Zoom in |
 | `Cmd+-` / `Ctrl+-` | Zoom out |
 | `Cmd+0` / `Ctrl+0` | Reset zoom |
+| `Cmd+Z` / `Ctrl+Z` | Undo last in-document edit (e.g. task checkbox toggle) |
+| `Cmd+Shift+Z` / `Ctrl+Shift+Z` (also `Ctrl+Y` on Windows/Linux) | Redo |
 | `Cmd+B` / `Ctrl+B` | Toggle files sidebar |
 | `Cmd+\` / `Ctrl+\` | Toggle outline sidebar |
 | `Cmd+,` / `Ctrl+,` | Settings |
