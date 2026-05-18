@@ -1,12 +1,22 @@
 import path from "node:path";
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { codecovVitePlugin } from "@codecov/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    codecovVitePlugin({
+      enableBundleAnalysis: Boolean(process.env.CODECOV_TOKEN),
+      bundleName: "glyph-frontend",
+      uploadToken: process.env.CODECOV_TOKEN,
+      gitService: "github",
+    }),
+  ],
   clearScreen: false,
   resolve: {
     alias: {

@@ -75,6 +75,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
+    "@codecov/vite-plugin": "^2.0.1",
     "@tailwindcss/vite": "^4",
     "@tauri-apps/cli": "^2.11.1",
     "@testing-library/jest-dom": "^6.9.1",
