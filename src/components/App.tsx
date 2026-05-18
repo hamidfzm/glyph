@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNativeMenuState } from "@/hooks/useNativeMenuState";
 import { type AIAction, useAI } from "../hooks/useAI";
 import { useAutoSave } from "../hooks/useAutoSave";
 import { useContextMenu } from "../hooks/useContextMenu";
@@ -119,6 +120,14 @@ export function App() {
 
   // Print
   const printDoc = usePrint({ entries: tocEntries, settings: settings.print });
+
+  useNativeMenuState({
+    hasTab: tabs.length > 0,
+    hasFile: activeFile?.content != null,
+    hasContent: (displayContent ?? "").length > 0,
+    aiConfigured,
+    ttsAvailable: tts.available,
+  });
 
   // Sync sidebar visibility with settings (each panel independently)
   useEffect(() => {
