@@ -3,6 +3,7 @@ dist/
 coverage/
 src-tauri/target/
 coverage/
+junit*.xml
 *.log
 .DS_Store
 
