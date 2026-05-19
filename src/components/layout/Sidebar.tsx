@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
+import { useTabsContext } from "@/contexts/TabsContext";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { Tab } from "@/hooks/useTabs";
-import type { Backlink } from "@/lib/backlinks";
 import { onActiveHeadingChange, scrollToHeading } from "@/lib/scrollToHeading";
-import type { SidebarLayout } from "@/lib/settings";
 import { FolderIcon } from "../icons/FolderIcon";
 import { OutlineIcon } from "../icons/OutlineIcon";
 import { PanelCollapseIcon } from "../icons/PanelCollapseIcon";
@@ -12,21 +12,6 @@ import { FileTree } from "./FileTree";
 
 interface SidebarProps {
   side: "left" | "right";
-  activeTab: Tab | null;
-  tocEntries: TocEntry[];
-  backlinks?: Backlink[];
-  filesVisible: boolean;
-  outlineVisible: boolean;
-  sidebarLayout: SidebarLayout;
-  // When true, swap which screen side each panel lives on. Default layout is
-  // Files-left / Outline-right; with this flag it becomes Files-right / Outline-left.
-  swapSidebarSides: boolean;
-  width?: number;
-  onToggleFiles: () => void;
-  onToggleOutline: () => void;
-  onToggleExpand: (tabId: string, path: string) => void;
-  onOpenFileInTab: (tabId: string, path: string) => void;
-  onOpenFileInNewTab: (path: string) => void;
 }
 
 const DEFAULT_WIDTH = 224;
@@ -195,26 +180,28 @@ function EdgeExpand({ side, onClick, title, panel }: EdgeExpandProps) {
   );
 }
 
-export function Sidebar({
-  side,
-  activeTab,
-  tocEntries,
-  backlinks = [],
-  filesVisible,
-  outlineVisible,
-  sidebarLayout,
-  swapSidebarSides,
-  width,
-  onToggleFiles,
-  onToggleOutline,
-  onToggleExpand,
-  onOpenFileInTab,
-  onOpenFileInNewTab,
-}: SidebarProps) {
+export function Sidebar({ side }: SidebarProps) {
+  const {
+    activeTab,
+    tocEntries,
+    backlinks,
+    toggleExpand: onToggleExpand,
+    openFileInFolderTab: onOpenFileInTab,
+    openFile: onOpenFileInNewTab,
+  } = useTabsContext();
+  const {
+    filesVisible,
+    outlineVisible,
+    sidebarLayout,
+    swapSidebarSides,
+    sidebarWidth,
+    toggleFiles: onToggleFiles,
+    toggleOutline: onToggleOutline,
+  } = useSidebarLayoutContext();
   const activeId = useActiveHeading(tocEntries);
 
   if (!activeTab) return null;
-  const w = width ?? DEFAULT_WIDTH;
+  const w = sidebarWidth ?? DEFAULT_WIDTH;
   const hasOutlineContent = tocEntries.length > 0;
   const showOutline = outlineVisible && hasOutlineContent;
 

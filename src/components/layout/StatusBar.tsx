@@ -1,19 +1,17 @@
+import { useTabsContext } from "@/contexts/TabsContext";
 import { useSettings } from "@/hooks/useSettings";
 import { countWords, readingTime } from "@/lib/markdown";
 import { ZOOM_DEFAULT } from "@/lib/settings";
 
-interface StatusBarProps {
-  filePath?: string;
-  content?: string | null;
-}
-
-export function StatusBar({ filePath, content }: StatusBarProps) {
+export function StatusBar() {
   const { settings } = useSettings();
+  const { activeFile, displayContent } = useTabsContext();
   const zoomPercent = Math.round((settings.appearance.fontSize / ZOOM_DEFAULT) * 100);
 
-  if (!content) return null;
+  if (!displayContent) return null;
 
-  const words = countWords(content);
+  const filePath = activeFile?.path;
+  const words = countWords(displayContent);
 
   return (
     <div

@@ -1,14 +1,6 @@
+import { useTabsContext } from "@/contexts/TabsContext";
 import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
-import type { EditorMode } from "@/lib/settings";
 import { FolderIcon } from "../icons/FolderIcon";
-
-interface TabBarProps {
-  tabs: Tab[];
-  activeTabId: string | null;
-  onActivate: (id: string) => void;
-  onClose: (id: string) => void;
-  onModeChange?: (id: string, mode: EditorMode) => void;
-}
 
 function tabLabel(tab: Tab): string {
   if (tab.kind === "folder") {
@@ -18,12 +10,19 @@ function tabLabel(tab: Tab): string {
   return tab.file.metadata?.name ?? "Untitled";
 }
 
-export function TabBar({ tabs, activeTabId, onActivate, onClose, onModeChange }: TabBarProps) {
+export function TabBar() {
+  const {
+    tabs,
+    activeTabId,
+    setActiveTab: onActivate,
+    closeTab: onClose,
+    setTabMode: onModeChange,
+  } = useTabsContext();
   if (tabs.length === 0) return null;
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
   const activeFile = activeFileOf(activeTab);
-  const showModeToggle = activeTab !== null && activeFile !== null && onModeChange !== undefined;
+  const showModeToggle = activeTab !== null && activeFile !== null;
 
   return (
     <div className="tab-bar-container" data-print-hide="true">

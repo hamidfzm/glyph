@@ -15,3 +15,5 @@ Keep files focused and readable. When a file starts to do more than one thing, s
 - Tests sit beside the file under test (`Foo.tsx` ↔ `Foo.test.tsx`).
 - Don't pre-split for hypothetical reuse — split when the current file actually has two responsibilities.
 - Use the `@/` path alias (resolves to `src/`) when importing across top-level dirs — `@/hooks/useTabs`, not `../../hooks/useTabs`. Sibling and child imports stay relative (`./Foo`, `./icons/Bar`). The alias is wired in `tsconfig.json`, `vite.config.ts`, and `vitest.config.ts`.
+
+The root shell (`App.tsx`) and its wiring component (`AppShell.tsx`) have additional rules in [app-shell.md](./app-shell.md) — read it before adding new effects, state, or props to either file.
