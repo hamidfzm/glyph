@@ -1,8 +1,14 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import type { ComponentProps } from "react";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import {
+  SidebarLayoutContext,
+  type SidebarLayoutContextValue,
+} from "@/contexts/SidebarLayoutContext";
+import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { FileTab, FolderTab, Tab } from "@/hooks/useTabs";
+import type { SidebarLayout } from "@/lib/settings";
 import { Sidebar } from "./Sidebar";
 
 const mockEntries: TocEntry[] = [
@@ -43,42 +49,93 @@ function makeFolderTab(overrides: Partial<FolderTab> = {}): FolderTab {
   };
 }
 
-function defaultProps(
-  overrides: Partial<ComponentProps<typeof Sidebar>> = {},
-): ComponentProps<typeof Sidebar> {
+interface RenderOpts {
+  side?: "left" | "right";
+  activeTab?: Tab | null;
+  tocEntries?: TocEntry[];
+  filesVisible?: boolean;
+  outlineVisible?: boolean;
+  sidebarLayout?: SidebarLayout;
+  swapSidebarSides?: boolean;
+  toggleFiles?: () => void;
+  toggleOutline?: () => void;
+}
+
+function buildTabsContext(opts: RenderOpts): TabsContextValue {
   return {
-    side: "left",
-    activeTab: makeFileTab(),
-    tocEntries: mockEntries,
-    filesVisible: true,
-    outlineVisible: true,
-    sidebarLayout: "split",
-    swapSidebarSides: false,
-    onToggleFiles: vi.fn(),
-    onToggleOutline: vi.fn(),
-    onToggleExpand: vi.fn(),
-    onOpenFileInTab: vi.fn(),
-    onOpenFileInNewTab: vi.fn(),
-    ...overrides,
+    tabs: opts.activeTab ? [opts.activeTab] : [],
+    activeTab: opts.activeTab ?? null,
+    activeTabId: opts.activeTab?.id ?? null,
+    activeFile: opts.activeTab
+      ? opts.activeTab.kind === "file"
+        ? opts.activeTab.file
+        : opts.activeTab.file
+      : null,
+    initializing: false,
+    workspaceFiles: [],
+    wikilinkRefs: [],
+    openFile: vi.fn(),
+    openFolder: vi.fn(),
+    openFileInFolderTab: vi.fn(),
+    toggleExpand: vi.fn(),
+    closeTab: vi.fn(),
+    setActiveTab: vi.fn(),
+    setTabMode: vi.fn(),
+    updateEditContent: vi.fn(),
+    markSaved: vi.fn(),
+    toggleTask: vi.fn(),
+    saveScrollPosition: vi.fn(),
+    openFileDialog: vi.fn(),
+    undoEdit: vi.fn(),
+    redoEdit: vi.fn(),
+    displayContent: null,
+    tocEntries: opts.tocEntries ?? mockEntries,
+    backlinks: [],
   };
 }
 
-function renderSidebar(overrides: Partial<ComponentProps<typeof Sidebar>> = {}) {
-  const props = defaultProps(overrides);
-  return { ...render(<Sidebar {...props} />), props };
+function buildSidebarContext(opts: RenderOpts): SidebarLayoutContextValue {
+  return {
+    filesVisible: opts.filesVisible ?? true,
+    outlineVisible: opts.outlineVisible ?? true,
+    toggleFiles: opts.toggleFiles ?? vi.fn(),
+    toggleOutline: opts.toggleOutline ?? vi.fn(),
+    resetLayout: vi.fn(),
+    sidebarLayout: opts.sidebarLayout ?? "split",
+    swapSidebarSides: opts.swapSidebarSides ?? false,
+    sidebarWidth: undefined,
+  };
 }
 
-// Render both sides at once to test the full layout (matches App.tsx).
-function renderBothSides(overrides: Partial<ComponentProps<typeof Sidebar>> = {}) {
-  const left = defaultProps({ ...overrides, side: "left" });
-  const right = defaultProps({ ...overrides, side: "right" });
-  const result = render(
-    <>
-      <Sidebar {...left} />
-      <Sidebar {...right} />
-    </>,
+function Wrapper({ opts, children }: { opts: RenderOpts; children: ReactNode }) {
+  const tabs = buildTabsContext(opts);
+  const sidebar = buildSidebarContext(opts);
+  return (
+    <TabsContext.Provider value={tabs}>
+      <SidebarLayoutContext.Provider value={sidebar}>{children}</SidebarLayoutContext.Provider>
+    </TabsContext.Provider>
   );
-  return { ...result, props: left };
+}
+
+function renderSidebar(opts: RenderOpts = {}) {
+  const fullOpts = { activeTab: makeFileTab(), ...opts };
+  const result = render(
+    <Wrapper opts={fullOpts}>
+      <Sidebar side={fullOpts.side ?? "left"} />
+    </Wrapper>,
+  );
+  return { ...result, opts: fullOpts };
+}
+
+function renderBothSides(opts: RenderOpts = {}) {
+  const fullOpts = { activeTab: makeFileTab(), ...opts };
+  const result = render(
+    <Wrapper opts={fullOpts}>
+      <Sidebar side="left" />
+      <Sidebar side="right" />
+    </Wrapper>,
+  );
+  return { ...result, opts: fullOpts };
 }
 
 describe("Sidebar", () => {
@@ -100,11 +157,12 @@ describe("Sidebar", () => {
   });
 
   it("shows an edge expand handle when outline is hidden but headings exist (file tab)", () => {
-    const { container, props } = renderSidebar({ outlineVisible: false });
+    const toggleOutline = vi.fn();
+    const { container } = renderSidebar({ outlineVisible: false, toggleOutline });
     const edge = container.querySelector('[data-sidebar-edge="left"]');
     expect(edge).toBeInTheDocument();
     fireEvent.click(edge as Element);
-    expect(props.onToggleOutline).toHaveBeenCalledOnce();
+    expect(toggleOutline).toHaveBeenCalledOnce();
   });
 
   it("renders nothing on a file tab when outline is hidden AND no headings", () => {
@@ -121,27 +179,30 @@ describe("Sidebar", () => {
 
   it("shows edge expand handle on the left when files panel is hidden (folder tab)", () => {
     const tab: Tab = makeFolderTab();
-    const { container, props } = renderSidebar({ activeTab: tab, filesVisible: false });
+    const toggleFiles = vi.fn();
+    const { container } = renderSidebar({ activeTab: tab, filesVisible: false, toggleFiles });
     const edge = container.querySelector('[data-sidebar-edge="left"]');
     expect(edge).toBeInTheDocument();
     fireEvent.click(edge as Element);
-    expect(props.onToggleFiles).toHaveBeenCalledOnce();
+    expect(toggleFiles).toHaveBeenCalledOnce();
   });
 
   it("shows edge expand handle on the right when outline panel is hidden (folder split)", () => {
     const tab: Tab = makeFolderTab();
-    const { container, props } = renderSidebar({
+    const toggleOutline = vi.fn();
+    const { container } = renderSidebar({
       activeTab: tab,
       side: "right",
       outlineVisible: false,
+      toggleOutline,
     });
     const edge = container.querySelector('[data-sidebar-edge="right"]');
     expect(edge).toBeInTheDocument();
     fireEvent.click(edge as Element);
-    expect(props.onToggleOutline).toHaveBeenCalledOnce();
+    expect(toggleOutline).toHaveBeenCalledOnce();
   });
 
-  it("renders Files + Outline combined when combineSidebars=true", () => {
+  it("renders Files + Outline combined when sidebarLayout='combined'", () => {
     const tab: Tab = makeFolderTab();
     const { container } = renderBothSides({ activeTab: tab, sidebarLayout: "combined" });
     expect(screen.getByText("readme.md")).toBeInTheDocument();
@@ -149,7 +210,7 @@ describe("Sidebar", () => {
     expect(container.querySelectorAll("nav").length).toBe(1);
   });
 
-  it("renders Files left + Outline right when combineSidebars=false (folder tab)", () => {
+  it("renders Files left + Outline right when sidebarLayout='split' (folder tab)", () => {
     const tab: Tab = makeFolderTab();
     const { container } = renderBothSides({ activeTab: tab, sidebarLayout: "split" });
     expect(container.querySelector('nav[data-sidebar="left"]')).toBeInTheDocument();
@@ -169,7 +230,6 @@ describe("Sidebar", () => {
       sidebarLayout: "split",
       swapSidebarSides: true,
     });
-    // Files now on the right; Outline now on the left
     const rightNav = container.querySelector('nav[data-sidebar="right"]');
     const leftNav = container.querySelector('nav[data-sidebar="left"]');
     expect(rightNav?.textContent).toContain("readme.md");

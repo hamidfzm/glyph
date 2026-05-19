@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { FileTab, FolderTab, Tab } from "@/hooks/useTabs";
+import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
+import { activeFileOf, type FileTab, type FolderTab, type Tab } from "@/hooks/useTabs";
 import { TabBar } from "./TabBar";
 
 const makeFileTab = (i: number): FileTab => ({
@@ -28,73 +30,118 @@ const makeFolderTab = (i: number, root: string): FolderTab => ({
 
 const makeTabs = (count: number): Tab[] => Array.from({ length: count }, (_, i) => makeFileTab(i));
 
+interface RenderOpts {
+  tabs?: Tab[];
+  activeTabId?: string | null;
+  setActiveTab?: (id: string) => void;
+  closeTab?: (id: string) => void;
+  setTabMode?: TabsContextValue["setTabMode"];
+}
+
+function buildContext(opts: RenderOpts): TabsContextValue {
+  const tabs = opts.tabs ?? [];
+  const activeTabId = opts.activeTabId ?? null;
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+  return {
+    tabs,
+    activeTab,
+    activeTabId,
+    activeFile: activeFileOf(activeTab),
+    initializing: false,
+    workspaceFiles: [],
+    wikilinkRefs: [],
+    openFile: vi.fn(),
+    openFolder: vi.fn(),
+    openFileInFolderTab: vi.fn(),
+    toggleExpand: vi.fn(),
+    closeTab: opts.closeTab ?? vi.fn(),
+    setActiveTab: opts.setActiveTab ?? vi.fn(),
+    setTabMode: opts.setTabMode ?? vi.fn(),
+    updateEditContent: vi.fn(),
+    markSaved: vi.fn(),
+    toggleTask: vi.fn(),
+    saveScrollPosition: vi.fn(),
+    openFileDialog: vi.fn(),
+    undoEdit: vi.fn(),
+    redoEdit: vi.fn(),
+    displayContent: null,
+    tocEntries: [],
+    backlinks: [],
+  };
+}
+
+function Wrapper({ value, children }: { value: TabsContextValue; children: ReactNode }) {
+  return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;
+}
+
+function renderTabBar(opts: RenderOpts = {}) {
+  const value = buildContext(opts);
+  return {
+    ...render(
+      <Wrapper value={value}>
+        <TabBar />
+      </Wrapper>,
+    ),
+    value,
+  };
+}
+
 describe("TabBar", () => {
   it("renders nothing when no tabs", () => {
-    const { container } = render(
-      <TabBar tabs={[]} activeTabId={null} onActivate={vi.fn()} onClose={vi.fn()} />,
-    );
+    const { container } = renderTabBar({ tabs: [] });
     expect(container.firstChild).toBeNull();
   });
 
   it("renders tab items with file names", () => {
-    const tabs = makeTabs(3);
-    render(<TabBar tabs={tabs} activeTabId="tab-0" onActivate={vi.fn()} onClose={vi.fn()} />);
+    renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-0" });
     expect(screen.getByText("file0.md")).toBeInTheDocument();
     expect(screen.getByText("file1.md")).toBeInTheDocument();
     expect(screen.getByText("file2.md")).toBeInTheDocument();
   });
 
   it("highlights the active tab", () => {
-    const tabs = makeTabs(2);
-    render(<TabBar tabs={tabs} activeTabId="tab-1" onActivate={vi.fn()} onClose={vi.fn()} />);
+    renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-1" });
     const activeTab = screen.getByText("file1.md").closest(".tab-item");
     expect(activeTab?.getAttribute("data-active")).toBe("true");
   });
 
-  it("calls onActivate when clicking a tab", () => {
-    const onActivate = vi.fn();
-    const tabs = makeTabs(2);
-    render(<TabBar tabs={tabs} activeTabId="tab-0" onActivate={onActivate} onClose={vi.fn()} />);
+  it("calls setActiveTab when clicking a tab", () => {
+    const setActiveTab = vi.fn();
+    renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0", setActiveTab });
     fireEvent.click(screen.getByText("file1.md"));
-    expect(onActivate).toHaveBeenCalledWith("tab-1");
+    expect(setActiveTab).toHaveBeenCalledWith("tab-1");
   });
 
-  it("calls onClose when clicking close button", () => {
-    const onClose = vi.fn();
-    const tabs = makeTabs(1);
-    render(<TabBar tabs={tabs} activeTabId="tab-0" onActivate={vi.fn()} onClose={onClose} />);
+  it("calls closeTab when clicking close button", () => {
+    const closeTab = vi.fn();
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0", closeTab });
     fireEvent.click(screen.getByRole("button", { name: "Close file0.md" }));
-    expect(onClose).toHaveBeenCalledWith("tab-0");
+    expect(closeTab).toHaveBeenCalledWith("tab-0");
   });
 
-  it("calls onClose on middle-click", () => {
-    const onClose = vi.fn();
-    const tabs = makeTabs(1);
-    render(<TabBar tabs={tabs} activeTabId="tab-0" onActivate={vi.fn()} onClose={onClose} />);
+  it("calls closeTab on middle-click", () => {
+    const closeTab = vi.fn();
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0", closeTab });
     const tabEl = screen.getByText("file0.md").closest(".tab-item")!;
     fireEvent(tabEl, new MouseEvent("auxclick", { bubbles: true, button: 1 }));
-    expect(onClose).toHaveBeenCalledWith("tab-0");
+    expect(closeTab).toHaveBeenCalledWith("tab-0");
   });
 
   it("renders folder tabs with the folder basename and folder kind marker", () => {
-    const tabs: Tab[] = [makeFolderTab(0, "/Users/me/notes")];
-    render(<TabBar tabs={tabs} activeTabId="tab-0" onActivate={vi.fn()} onClose={vi.fn()} />);
+    renderTabBar({
+      tabs: [makeFolderTab(0, "/Users/me/notes")],
+      activeTabId: "tab-0",
+    });
     expect(screen.getByText("notes")).toBeInTheDocument();
     const tabEl = screen.getByText("notes").closest(".tab-item");
     expect(tabEl?.getAttribute("data-tab-kind")).toBe("folder");
   });
 
   it("hides mode toggle when active tab is a folder with no current file", () => {
-    const tabs: Tab[] = [makeFolderTab(0, "/Users/me/notes")];
-    render(
-      <TabBar
-        tabs={tabs}
-        activeTabId="tab-0"
-        onActivate={vi.fn()}
-        onClose={vi.fn()}
-        onModeChange={vi.fn()}
-      />,
-    );
+    renderTabBar({
+      tabs: [makeFolderTab(0, "/Users/me/notes")],
+      activeTabId: "tab-0",
+    });
     expect(screen.queryByLabelText("View mode")).not.toBeInTheDocument();
   });
 });

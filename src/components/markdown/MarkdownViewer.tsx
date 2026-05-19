@@ -118,7 +118,7 @@ export function MarkdownViewer({
   );
 
   return (
-    <div className="flex-1 relative">
+    <div className="flex-1 relative min-h-0 min-w-0">
       {searchOpen && (
         <SearchBar
           query={search.query}
@@ -132,11 +132,11 @@ export function MarkdownViewer({
       )}
       <div
         ref={scrollRef}
-        className="h-full overflow-y-auto"
+        className="absolute inset-0 overflow-y-auto"
         // Keep anchor targets a few pixels off the top edge when scrolled to
-        // via TOC / `#anchor`. Browsers cap scrollIntoView at maxScroll, so
-        // end-of-document targets land near the bottom of the viewport —
-        // no big empty padding under the content needed for that to work.
+        // via TOC / `#anchor`. Extra scroll room past the last heading lives
+        // on `.markdown-body` as `padding-bottom` so end-of-document targets
+        // can still scroll to the top of the viewport.
         style={{ scrollPaddingTop: "16px" }}
       >
         <div ref={contentRef} className="markdown-body px-8 py-6">
