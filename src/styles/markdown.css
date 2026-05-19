@@ -4,6 +4,9 @@
   color: var(--color-text-primary);
   max-width: var(--glyph-content-width, 800px);
   margin: 0 auto;
+  /* Extra scroll room at the end so headings near the bottom can be
+     scrolled to the top of the viewport when clicked from the outline. */
+  padding-bottom: 70vh;
 }
 
 .markdown-body h1,

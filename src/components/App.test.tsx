@@ -1,6 +1,7 @@
+import { invoke } from "@tauri-apps/api/core";
 import { render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 
@@ -38,7 +39,40 @@ function withProviders(overrides: Partial<SettingsContextValue> = {}) {
   return { value, wrapper };
 }
 
+beforeEach(() => {
+  vi.mocked(invoke).mockReset();
+});
+
 describe("App", () => {
+  it("opens the CLI initial file and shows it in a tab", async () => {
+    vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
+      switch (cmd) {
+        case "get_initial_folder":
+          return Promise.resolve(null);
+        case "get_initial_file":
+          return Promise.resolve("/cli/test.md");
+        case "read_file":
+          return Promise.resolve("# Hello CLI");
+        case "get_file_metadata":
+          return Promise.resolve({
+            name: "test.md",
+            path: String(args?.path ?? ""),
+            size: 0,
+            modified: 0,
+          });
+        case "watch_file":
+        case "set_menu_state":
+          return Promise.resolve(undefined);
+        default:
+          return Promise.resolve(undefined);
+      }
+    }) as unknown as typeof invoke);
+
+    const { wrapper } = withProviders();
+    const { findByTestId } = render(<App />, { wrapper });
+    expect(await findByTestId("markdown-viewer")).toBeInTheDocument();
+  });
+
   it("renders the empty state when there are no tabs", async () => {
     const { wrapper } = withProviders();
     const { findByText } = render(<App />, { wrapper });
