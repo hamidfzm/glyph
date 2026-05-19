@@ -235,6 +235,7 @@ In the editor or split view, typing `[[` opens a popup with workspace files. Kee
 |----------|--------|
 | `Cmd+O` | Open file(s) |
 | `Cmd+Shift+O` | Open folder |
+| `Cmd+K` | Command palette |
 | `Cmd+P` | Print / Export to PDF |
 | `Cmd+F` | Find in document |
 | `Cmd+=` / `Cmd+-` | Zoom in / out |

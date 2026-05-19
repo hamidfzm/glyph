@@ -5,6 +5,7 @@
 @import "./tabs.css";
 @import "./search.css";
 @import "./editor.css";
+@import "./command-palette.css";
 @import "./print.css";
 
 :root {
