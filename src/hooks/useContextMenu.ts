@@ -3,7 +3,6 @@ import type { Platform } from "./usePlatform";
 
 interface ContextMenuActions {
   openFileDialog: () => void;
-  toggleSidebar: () => void;
   ttsSpeak?: (text: string) => void;
   ttsStop?: () => void;
   ttsSpeaking?: boolean;
@@ -111,18 +110,12 @@ export function useContextMenu(platform: Platform, actions: ContextMenuActions) 
         }
       }
 
-      // Open File + Toggle Sidebar
+      // Open File
       items.push(await PredefinedMenuItem.new({ item: "Separator" }));
       items.push(
         await MenuItem.new({
           text: "Open File\u2026",
           action: () => actions.openFileDialog(),
-        }),
-      );
-      items.push(
-        await MenuItem.new({
-          text: "Toggle Sidebar",
-          action: () => actions.toggleSidebar(),
         }),
       );
 

@@ -46,7 +46,7 @@ afterEach(() => {
 
 describe("useContextMenu", () => {
   it("attaches no contextmenu listener on macOS (defers to native)", async () => {
-    const actions = { openFileDialog: vi.fn(), toggleSidebar: vi.fn() };
+    const actions = { openFileDialog: vi.fn() };
     renderHook(() => useContextMenu("macos", actions));
 
     await fireContextMenu();
@@ -56,15 +56,15 @@ describe("useContextMenu", () => {
   });
 
   it("attaches no contextmenu listener on unknown platforms", async () => {
-    const actions = { openFileDialog: vi.fn(), toggleSidebar: vi.fn() };
+    const actions = { openFileDialog: vi.fn() };
     renderHook(() => useContextMenu("unknown", actions));
 
     await fireContextMenu();
     expect(menuItems).toHaveLength(0);
   });
 
-  it("builds a default menu (Copy, SelectAll, Open File, Toggle Sidebar) on Linux", async () => {
-    const actions = { openFileDialog: vi.fn(), toggleSidebar: vi.fn() };
+  it("builds a default menu (Copy, SelectAll, Open File) on Linux", async () => {
+    const actions = { openFileDialog: vi.fn() };
     renderHook(() => useContextMenu("linux", actions));
 
     await fireContextMenu();
@@ -73,7 +73,7 @@ describe("useContextMenu", () => {
     expect(labels).toContain("Copy");
     expect(labels).toContain("SelectAll");
     expect(labels.some((l) => l?.includes("Open File"))).toBe(true);
-    expect(labels).toContain("Toggle Sidebar");
+    expect(labels).not.toContain("Toggle Sidebar");
     expect(popupSpy).toHaveBeenCalled();
   });
 
@@ -82,7 +82,6 @@ describe("useContextMenu", () => {
     renderHook(() =>
       useContextMenu("linux", {
         openFileDialog: vi.fn(),
-        toggleSidebar: vi.fn(),
         ttsAvailable: true,
         ttsSpeaking: false,
         ttsSpeak,
@@ -103,7 +102,6 @@ describe("useContextMenu", () => {
     renderHook(() =>
       useContextMenu("linux", {
         openFileDialog: vi.fn(),
-        toggleSidebar: vi.fn(),
         ttsAvailable: true,
         ttsSpeaking: true,
         ttsStop,
@@ -124,7 +122,6 @@ describe("useContextMenu", () => {
     renderHook(() =>
       useContextMenu("linux", {
         openFileDialog: vi.fn(),
-        toggleSidebar: vi.fn(),
         aiConfigured: true,
         aiAction,
         content: "doc body",
@@ -146,24 +143,19 @@ describe("useContextMenu", () => {
     expect(aiAction).toHaveBeenCalledWith("summarize", "doc body");
   });
 
-  it("Open File and Toggle Sidebar fire the provided actions when invoked", async () => {
+  it("Open File fires the provided action when invoked", async () => {
     const openFileDialog = vi.fn();
-    const toggleSidebar = vi.fn();
-    renderHook(() => useContextMenu("linux", { openFileDialog, toggleSidebar }));
+    renderHook(() => useContextMenu("linux", { openFileDialog }));
 
     await fireContextMenu();
 
     menuItems.find((i) => i.text?.startsWith("Open File"))?.action?.();
-    menuItems.find((i) => i.text === "Toggle Sidebar")?.action?.();
     expect(openFileDialog).toHaveBeenCalled();
-    expect(toggleSidebar).toHaveBeenCalled();
   });
 
   it("removes its listener on unmount", async () => {
     const removeSpy = vi.spyOn(document, "removeEventListener");
-    const { unmount } = renderHook(() =>
-      useContextMenu("linux", { openFileDialog: vi.fn(), toggleSidebar: vi.fn() }),
-    );
+    const { unmount } = renderHook(() => useContextMenu("linux", { openFileDialog: vi.fn() }));
 
     act(() => {
       unmount();

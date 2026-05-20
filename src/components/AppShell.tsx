@@ -132,11 +132,11 @@ export function AppShell() {
   );
   useMenuEvents(menuHandlers);
 
-  // Context menu (Win/Linux only) — uses files-sidebar toggle for the legacy 'toggleSidebar' slot
+  // Context menu (Win/Linux only): text-content actions only. Sidebar/menu/zoom
+  // commands have their own keyboard shortcuts and titlebar buttons.
   const contextMenuActions = useMemo(
     () => ({
       openFileDialog,
-      toggleSidebar: sidebar.toggleFiles,
       ttsSpeak: tts.speak,
       ttsStop: tts.stop,
       ttsSpeaking: tts.speaking,
@@ -145,14 +145,7 @@ export function AppShell() {
       aiConfigured: aiController.configured,
       content: displayContent,
     }),
-    [
-      openFileDialog,
-      sidebar.toggleFiles,
-      tts,
-      handleAIActionFromMenu,
-      aiController.configured,
-      displayContent,
-    ],
+    [openFileDialog, tts, handleAIActionFromMenu, aiController.configured, displayContent],
   );
   useContextMenu(platform, contextMenuActions);
 
