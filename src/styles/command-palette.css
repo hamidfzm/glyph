@@ -84,6 +84,13 @@
 }
 
 .command-palette-item {
+  /* Reset <button> defaults so it lays out like a row, not a UA control. */
+  appearance: none;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  font: inherit;
   display: flex;
   align-items: center;
   gap: 12px;
