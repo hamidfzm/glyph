@@ -61,9 +61,36 @@ describe("fuzzyMatch", () => {
     expect(result).not.toBeNull();
   });
 
+  it("uses the greedy fallback for inputs above the DP threshold", () => {
+    // q.length * t.length must exceed MAX_DP * MAX_DP (256*256 = 65536) to
+    // route through greedyMatch. 10 * 10000 = 100000 trips the fallback.
+    const target = `${"x".repeat(9999)}q`;
+    const query = "xxxxxxxxxq";
+    const result = fuzzyMatch(query, target);
+    expect(result).not.toBeNull();
+    expect(result?.indices).toHaveLength(query.length);
+    expect(result?.indices[result.indices.length - 1]).toBe(target.length - 1);
+  });
+
+  it("greedy fallback returns null when the subsequence doesn't fit", () => {
+    const target = "x".repeat(70000);
+    expect(fuzzyMatch("xq", target)).toBeNull();
+  });
+
+  it("rejects when query is longer than target", () => {
+    expect(fuzzyMatch("abcdef", "abc")).toBeNull();
+  });
+
   it("recognizes camelCase boundaries", () => {
     const camel = fuzzyMatch("ot", "openTab")!;
     const flat = fuzzyMatch("ot", "opentab")!;
     expect(camel.score).toBeGreaterThan(flat.score);
+  });
+
+  it("treats a separator-then-letter as a word start", () => {
+    const result = fuzzyMatch("f", "foo/bar/file.md")!;
+    expect(result).not.toBeNull();
+    // first 'f' (prefix) should win over later word-start 'f's
+    expect(result.indices[0]).toBe(0);
   });
 });

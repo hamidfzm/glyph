@@ -58,4 +58,17 @@ describe("rankCommands", () => {
     expect(rankCommands("note", list, 5)).toHaveLength(5);
     expect(rankCommands("", list, 7)).toHaveLength(7);
   });
+
+  it("returns an empty list when no commands are supplied", () => {
+    expect(rankCommands("anything", [])).toEqual([]);
+    expect(rankCommands("", [])).toEqual([]);
+  });
+
+  it("treats a whitespace-only query as empty", () => {
+    const result = rankCommands("   ", [
+      cmd({ id: "a", title: "A", section: "Commands" }),
+      cmd({ id: "b", title: "B", section: "Files" }),
+    ]);
+    expect(result.map((r) => r.command.id)).toEqual(["b", "a"]);
+  });
 });

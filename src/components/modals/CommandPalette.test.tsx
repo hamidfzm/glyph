@@ -140,4 +140,97 @@ describe("CommandPalette", () => {
     });
     expect(container.querySelectorAll("mark").length).toBeGreaterThan(0);
   });
+
+  it("clicking inside the inner palette does not close it", () => {
+    const onClose = vi.fn();
+    const { container } = renderPalette({
+      onClose,
+      commands: [cmd({ title: "Anything" })],
+    });
+    fireEvent.click(container.querySelector(".command-palette") as Element);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("hovering an item moves selection to it", () => {
+    const a = vi.fn();
+    const b = vi.fn();
+    renderPalette({
+      commands: [
+        cmd({ id: "a", title: "Alpha", run: a }),
+        cmd({ id: "b", title: "Beta", run: b }),
+      ],
+    });
+    fireEvent.mouseEnter(screen.getByText("Beta"));
+    fireEvent.keyDown(screen.getByLabelText("Command palette query"), { key: "Enter" });
+    expect(b).toHaveBeenCalledOnce();
+    expect(a).not.toHaveBeenCalled();
+  });
+
+  it("Escape fired directly on the overlay also closes", () => {
+    const onClose = vi.fn();
+    const { container } = renderPalette({ onClose });
+    const overlay = container.querySelector(".command-palette-overlay") as Element;
+    fireEvent.keyDown(overlay, { key: "Escape" });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("non-Escape keys on the overlay are ignored", () => {
+    const onClose = vi.fn();
+    const { container } = renderPalette({ onClose });
+    const overlay = container.querySelector(".command-palette-overlay") as Element;
+    fireEvent.keyDown(overlay, { key: "a" });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("Enter with no matches is a no-op", () => {
+    const onClose = vi.fn();
+    renderPalette({
+      query: "zzz",
+      commands: [cmd({ title: "Open File" })],
+      onClose,
+    });
+    fireEvent.keyDown(screen.getByLabelText("Command palette query"), { key: "Enter" });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("other keys in the input are ignored by the palette handler", () => {
+    const onClose = vi.fn();
+    renderPalette({ onClose });
+    fireEvent.keyDown(screen.getByLabelText("Command palette query"), { key: "a" });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("ArrowDown does not go past the last item", () => {
+    const a = vi.fn();
+    const b = vi.fn();
+    renderPalette({
+      commands: [cmd({ id: "a", title: "Alpha", run: a }), cmd({ id: "b", title: "Beta", run: b })],
+    });
+    const input = screen.getByLabelText("Command palette query");
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(b).toHaveBeenCalledOnce();
+    expect(a).not.toHaveBeenCalled();
+  });
+
+  it("renders the shortcut hint when provided", () => {
+    renderPalette({
+      commands: [cmd({ title: "Open File", shortcut: "Cmd+O" })],
+    });
+    expect(screen.getByText("Cmd+O")).toBeInTheDocument();
+  });
+
+  it("renders the subtitle when provided", () => {
+    renderPalette({
+      commands: [cmd({ title: "note.md", subtitle: "/workspace/note.md", section: "Files" })],
+    });
+    expect(screen.getByText("/workspace/note.md")).toBeInTheDocument();
+  });
+
+  it("focuses the input when opened", () => {
+    renderPalette({});
+    expect(document.activeElement).toBe(screen.getByLabelText("Command palette query"));
+  });
 });

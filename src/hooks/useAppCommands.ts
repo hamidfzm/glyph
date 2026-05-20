@@ -26,7 +26,7 @@ export interface AppActions extends MenuEventHandlers {
 
 function basename(path: string): string {
   const segments = path.split(/[\\/]/);
-  return segments[segments.length - 1] ?? path;
+  return segments[segments.length - 1];
 }
 
 /**

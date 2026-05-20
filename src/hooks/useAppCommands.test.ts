@@ -111,10 +111,67 @@ describe("useAppCommands", () => {
     );
     const find = (title: string) => result.current.find((c) => c.title === title)!;
     find("Open File…").run();
+    find("Open Folder…").run();
+    find("Close Tab").run();
     find("Toggle Files Sidebar").run();
+    find("Toggle Outline Sidebar").run();
+    find("Reset View").run();
+    find("Settings…").run();
+    find("Find in Document").run();
+    find("Toggle Edit Mode").run();
+    find("Print / Export to PDF").run();
+    find("Zoom In").run();
+    find("Zoom Out").run();
     find("Reset Zoom").run();
+    find("Read Aloud").run();
     expect(actions.openFile).toHaveBeenCalledOnce();
+    expect(actions.openFolder).toHaveBeenCalledOnce();
+    expect(actions.closeTab).toHaveBeenCalledOnce();
     expect(actions.toggleFilesSidebar).toHaveBeenCalledOnce();
+    expect(actions.toggleOutlineSidebar).toHaveBeenCalledOnce();
+    expect(actions.resetView).toHaveBeenCalledOnce();
+    expect(actions.openSettings).toHaveBeenCalledOnce();
+    expect(actions.find).toHaveBeenCalledOnce();
+    expect(actions.toggleEdit).toHaveBeenCalledOnce();
+    expect(actions.print).toHaveBeenCalledOnce();
+    expect(actions.zoomIn).toHaveBeenCalledOnce();
+    expect(actions.zoomOut).toHaveBeenCalledOnce();
     expect(actions.zoomReset).toHaveBeenCalledOnce();
+    expect(actions.readAloud).toHaveBeenCalledOnce();
+  });
+
+  it("heading command's run scrolls to the entry's id", () => {
+    const target = document.createElement("h2");
+    target.id = "intro-heading";
+    document.body.appendChild(target);
+    const scrollIntoView = vi.fn();
+    target.scrollIntoView = scrollIntoView;
+
+    const { result } = renderHook(() =>
+      useAppCommands({
+        activeFolderTab: null,
+        workspaceFiles: [],
+        tocEntries: [{ id: "intro-heading", text: "Intro", level: 2 }],
+        actions: makeActions(),
+      }),
+    );
+    const heading = result.current.find((c) => c.section === "Headings")!;
+    heading.run();
+    expect(scrollIntoView).toHaveBeenCalled();
+    document.body.removeChild(target);
+  });
+
+  it("file titles fall back to the full path when there are no separators", () => {
+    const folder = makeFolderTab();
+    const { result } = renderHook(() =>
+      useAppCommands({
+        activeFolderTab: folder,
+        workspaceFiles: ["loose"],
+        tocEntries: [],
+        actions: makeActions(),
+      }),
+    );
+    const file = result.current.find((c) => c.section === "Files")!;
+    expect(file.title).toBe("loose");
   });
 });

@@ -72,4 +72,24 @@ describe("useCommandPalette", () => {
     expect(result.current.open).toBe(false);
     expect(result.current.query).toBe("file");
   });
+
+  it("ignores keys that don't match the palette shortcut", () => {
+    const { result } = renderHook(() => useCommandPalette({ platform: "macos" }));
+    dispatch({ key: "k" });
+    expect(result.current.open).toBe(false);
+    dispatch({ key: "k", metaKey: true, shiftKey: true });
+    expect(result.current.open).toBe(false);
+    dispatch({ key: "j", metaKey: true });
+    expect(result.current.open).toBe(false);
+  });
+
+  it("openPalette clears the previous query", () => {
+    const { result } = renderHook(() => useCommandPalette({ platform: "macos" }));
+    act(() => result.current.openPalette());
+    act(() => result.current.setQuery("stale"));
+    act(() => result.current.closePalette());
+    act(() => result.current.openPalette());
+    expect(result.current.open).toBe(true);
+    expect(result.current.query).toBe("");
+  });
 });
