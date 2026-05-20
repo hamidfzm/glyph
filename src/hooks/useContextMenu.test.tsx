@@ -155,9 +155,7 @@ describe("useContextMenu", () => {
 
   it("removes its listener on unmount", async () => {
     const removeSpy = vi.spyOn(document, "removeEventListener");
-    const { unmount } = renderHook(() =>
-      useContextMenu("linux", { openFileDialog: vi.fn() }),
-    );
+    const { unmount } = renderHook(() => useContextMenu("linux", { openFileDialog: vi.fn() }));
 
     act(() => {
       unmount();
