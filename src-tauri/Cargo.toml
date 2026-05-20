@@ -29,3 +29,6 @@ walkdir = "2.5.0"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
+
+[target."cfg(any(target_os = \"linux\", target_os = \"windows\"))".dependencies]
+tauri-plugin-single-instance = "2"

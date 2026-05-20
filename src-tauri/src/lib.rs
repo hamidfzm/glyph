@@ -16,7 +16,43 @@ pub use markdown::is_markdown_file;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
+    // On Windows and Linux a second launch (file association double-click,
+    // CLI invocation) should forward its argv to the running instance instead
+    // of spawning a fresh process. macOS routes this through RunEvent::Opened
+    // in app.run() below, so the plugin is unnecessary there.
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    let builder = tauri::Builder::default().plugin(tauri_plugin_single_instance::init(
+        |app_handle, argv, cwd_str| {
+            // Refocus the main window.
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+
+            let path_arg = match cli::pick_path_arg(&argv) {
+                Some(p) => p,
+                None => return,
+            };
+            let cwd = std::path::PathBuf::from(&cwd_str);
+            let canonical = match cli::resolve_initial_path(path_arg, &cwd) {
+                Some(p) => p,
+                None => return,
+            };
+            let path_str = canonical.to_string_lossy().to_string();
+            let event = if canonical.is_dir() {
+                "open-folder"
+            } else {
+                "open-file"
+            };
+            let _ = app_handle.emit(event, &path_str);
+        },
+    ));
+
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    let builder = tauri::Builder::default();
+
+    let app = builder
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())

@@ -1,5 +1,18 @@
 use std::path::{Path, PathBuf};
 
+/// Pick the first non-flag argument from a second-instance argv. The slice is
+/// expected to be the full argv including the program name at index 0, which
+/// `tauri-plugin-single-instance` hands to its callback verbatim.
+///
+/// Anything starting with `-` is treated as a flag and skipped, matching the
+/// way the OS hands us file-association launches: `glyph /path/to/file.md`.
+pub fn pick_path_arg(argv: &[String]) -> Option<&str> {
+    argv.iter()
+        .skip(1)
+        .find(|a| !a.is_empty() && !a.starts_with('-'))
+        .map(String::as_str)
+}
+
 /// Resolve a CLI-supplied path against the working directory. Returns the
 /// canonicalized path if it points at something on disk, otherwise `None`.
 ///
@@ -50,6 +63,37 @@ mod tests {
         ));
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn pick_path_arg_skips_program_name() {
+        let argv = vec!["glyph".to_string(), "notes.md".to_string()];
+        assert_eq!(pick_path_arg(&argv), Some("notes.md"));
+    }
+
+    #[test]
+    fn pick_path_arg_skips_flags() {
+        let argv = vec![
+            "glyph".to_string(),
+            "--verbose".to_string(),
+            "-q".to_string(),
+            "real.md".to_string(),
+        ];
+        assert_eq!(pick_path_arg(&argv), Some("real.md"));
+    }
+
+    #[test]
+    fn pick_path_arg_returns_none_when_no_path_arg() {
+        let argv = vec!["glyph".to_string()];
+        assert_eq!(pick_path_arg(&argv), None);
+        let only_flag = vec!["glyph".to_string(), "--help".to_string()];
+        assert_eq!(pick_path_arg(&only_flag), None);
+    }
+
+    #[test]
+    fn pick_path_arg_skips_empty_strings() {
+        let argv = vec!["glyph".to_string(), "".to_string(), "real.md".to_string()];
+        assert_eq!(pick_path_arg(&argv), Some("real.md"));
     }
 
     #[test]
