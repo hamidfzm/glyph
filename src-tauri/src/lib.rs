@@ -14,6 +14,30 @@ use watcher::FileWatcherState;
 
 pub use markdown::is_markdown_file;
 
+/// Handle a second-instance launch: refocus the main window and forward the
+/// file/folder argument (if any) to the frontend via the same `open-file` /
+/// `open-folder` events used by drag-and-drop and macOS RunEvent::Opened.
+///
+/// Generic over Tauri's runtime so we can drive it with `tauri::test::MockRuntime`
+/// in unit tests without a real window manager.
+pub fn handle_second_instance<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    argv: Vec<String>,
+    cwd_str: String,
+) {
+    if let Some(window) = app_handle.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+
+    if let Some(event) =
+        cli::second_instance_event(&argv, &std::path::PathBuf::from(&cwd_str))
+    {
+        let _ = app_handle.emit(event.event_name, &event.path);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // On Windows and Linux a second launch (file association double-click,
@@ -21,22 +45,8 @@ pub fn run() {
     // of spawning a fresh process. macOS routes this through RunEvent::Opened
     // in app.run() below, so the plugin is unnecessary there.
     #[cfg(any(target_os = "linux", target_os = "windows"))]
-    let builder = tauri::Builder::default().plugin(tauri_plugin_single_instance::init(
-        |app_handle, argv, cwd_str| {
-            // Refocus the main window.
-            if let Some(window) = app_handle.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-
-            if let Some(event) =
-                cli::second_instance_event(&argv, &std::path::PathBuf::from(&cwd_str))
-            {
-                let _ = app_handle.emit(event.event_name, &event.path);
-            }
-        },
-    ));
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(handle_second_instance));
 
     #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     let builder = tauri::Builder::default();
@@ -164,4 +174,144 @@ pub fn run() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use tauri::test::mock_app;
+    use tauri::Listener;
+
+    fn unique_tmp(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "glyph_lib_test_{}_{}_{}",
+            name,
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Subscribe to `event` on the mock app's handle, returning a shared
+    /// vector that the listener appends payloads into.
+    fn capture_event(
+        app_handle: &tauri::AppHandle<tauri::test::MockRuntime>,
+        event: &'static str,
+    ) -> Arc<Mutex<Vec<String>>> {
+        let bucket: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&bucket);
+        app_handle.listen(event, move |evt| {
+            // emit() serialises the payload as JSON; the raw payload string
+            // wraps the path in quotes which we strip for easier asserts.
+            let raw = evt.payload().to_string();
+            let trimmed = raw.trim_matches('"').to_string();
+            sink.lock().unwrap().push(trimmed);
+        });
+        bucket
+    }
+
+    #[test]
+    fn handle_second_instance_emits_open_file_for_an_existing_file() {
+        let cwd = unique_tmp("hsi_file");
+        let file = cwd.join("note.md");
+        fs::write(&file, "hi").unwrap();
+        let canonical = file.canonicalize().unwrap();
+
+        let app = mock_app();
+        let handle = app.handle().clone();
+        let files = capture_event(&handle, "open-file");
+        let folders = capture_event(&handle, "open-folder");
+
+        handle_second_instance(
+            &handle,
+            vec!["glyph".to_string(), "note.md".to_string()],
+            cwd.to_string_lossy().to_string(),
+        );
+
+        // Give the listener loop a beat to drain the emitted event.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        let files_seen = files.lock().unwrap().clone();
+        let folders_seen = folders.lock().unwrap().clone();
+        assert_eq!(files_seen.len(), 1, "expected one open-file emit");
+        assert_eq!(
+            PathBuf::from(&files_seen[0]).canonicalize().unwrap(),
+            canonical
+        );
+        assert!(folders_seen.is_empty(), "open-folder should not fire");
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn handle_second_instance_emits_open_folder_for_a_directory() {
+        let cwd = unique_tmp("hsi_dir");
+        let sub = cwd.join("workspace");
+        fs::create_dir_all(&sub).unwrap();
+
+        let app = mock_app();
+        let handle = app.handle().clone();
+        let files = capture_event(&handle, "open-file");
+        let folders = capture_event(&handle, "open-folder");
+
+        handle_second_instance(
+            &handle,
+            vec!["glyph".to_string(), "workspace".to_string()],
+            cwd.to_string_lossy().to_string(),
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        assert!(files.lock().unwrap().is_empty(), "open-file should not fire");
+        assert_eq!(
+            folders.lock().unwrap().len(),
+            1,
+            "expected one open-folder emit"
+        );
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn handle_second_instance_with_no_path_arg_is_a_noop() {
+        let cwd = unique_tmp("hsi_noop");
+        let app = mock_app();
+        let handle = app.handle().clone();
+        let files = capture_event(&handle, "open-file");
+        let folders = capture_event(&handle, "open-folder");
+
+        handle_second_instance(
+            &handle,
+            vec!["glyph".to_string(), "--help".to_string()],
+            cwd.to_string_lossy().to_string(),
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        assert!(files.lock().unwrap().is_empty());
+        assert!(folders.lock().unwrap().is_empty());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn handle_second_instance_silently_ignores_unresolvable_paths() {
+        let cwd = unique_tmp("hsi_missing");
+        let app = mock_app();
+        let handle = app.handle().clone();
+        let files = capture_event(&handle, "open-file");
+
+        handle_second_instance(
+            &handle,
+            vec!["glyph".to_string(), "nope.md".to_string()],
+            cwd.to_string_lossy().to_string(),
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        assert!(files.lock().unwrap().is_empty());
+        let _ = fs::remove_dir_all(&cwd);
+    }
 }

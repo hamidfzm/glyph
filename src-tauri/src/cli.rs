@@ -174,6 +174,27 @@ mod tests {
         let _ = fs::remove_dir_all(&cwd);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn second_instance_event_returns_none_for_non_file_non_dir_paths() {
+        // A named pipe (FIFO) `.exists()` and canonicalises, but is_file/is_dir
+        // both return false — exercises the fallthrough `return None` branch.
+        let cwd = unique_tmp("si_fifo");
+        let fifo = cwd.join("pipe");
+        let status = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .expect("mkfifo invocation should succeed on a unix runner");
+        if !status.success() {
+            let _ = fs::remove_dir_all(&cwd);
+            return;
+        }
+
+        let argv = vec!["glyph".to_string(), "pipe".to_string()];
+        assert!(second_instance_event(&argv, &cwd).is_none());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
     #[test]
     fn second_instance_event_skips_program_name_and_flags() {
         let cwd = unique_tmp("si_flags");
