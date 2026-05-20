@@ -11,3 +11,48 @@ $packageArgs = @{
 }
 
 Install-ChocolateyPackage @packageArgs
+
+# The Tauri WiX template should create Start Menu / Desktop shortcuts, but
+# we've seen MSI installs land Glyph in Program Files without surfacing it
+# in the Start Menu or Apps list (#188). Install shortcuts defensively from
+# the Chocolatey side so `choco install glyph` always leaves the app
+# discoverable. Idempotent: rerunning the install replaces the .lnks.
+
+# Locate the installed Glyph.exe. Prefer the registry uninstall key
+# (authoritative even if MSI changes install directory in the future) and
+# fall back to the Tauri default `Program Files\Glyph` per-machine path.
+$exePath = $null
+$keys = Get-UninstallRegistryKey -SoftwareName 'Glyph*'
+foreach ($key in $keys) {
+  $candidateDir = $key.InstallLocation
+  if ($candidateDir -and (Test-Path (Join-Path $candidateDir 'Glyph.exe'))) {
+    $exePath = Join-Path $candidateDir 'Glyph.exe'
+    break
+  }
+}
+if (-not $exePath) {
+  $fallback = Join-Path $env:ProgramFiles 'Glyph\Glyph.exe'
+  if (Test-Path $fallback) { $exePath = $fallback }
+}
+
+if ($exePath) {
+  $workingDir = Split-Path -Parent $exePath
+
+  $startMenuShortcut = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Glyph.lnk'
+  Install-ChocolateyShortcut `
+    -ShortcutFilePath $startMenuShortcut `
+    -TargetPath $exePath `
+    -WorkingDirectory $workingDir `
+    -Description 'Cross-platform markdown viewer' `
+    -IconLocation $exePath
+
+  $desktopShortcut = Join-Path $env:Public 'Desktop\Glyph.lnk'
+  Install-ChocolateyShortcut `
+    -ShortcutFilePath $desktopShortcut `
+    -TargetPath $exePath `
+    -WorkingDirectory $workingDir `
+    -Description 'Cross-platform markdown viewer' `
+    -IconLocation $exePath
+} else {
+  Write-Warning "Glyph.exe was not found after MSI install. Skipping shortcut creation."
+}

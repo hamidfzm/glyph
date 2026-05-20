@@ -14,3 +14,15 @@ if ($key.Count -eq 1) {
     Uninstall-ChocolateyPackage @packageArgs
   }
 }
+
+# Remove the Start Menu and Desktop shortcuts created by the install script.
+# Silent so a missing shortcut (e.g. user deleted it manually) is not an error.
+$shortcuts = @(
+  (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Glyph.lnk'),
+  (Join-Path $env:Public 'Desktop\Glyph.lnk')
+)
+foreach ($lnk in $shortcuts) {
+  if (Test-Path -LiteralPath $lnk) {
+    Remove-Item -LiteralPath $lnk -Force -ErrorAction SilentlyContinue
+  }
+}
