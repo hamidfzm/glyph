@@ -13,6 +13,36 @@ pub fn pick_path_arg(argv: &[String]) -> Option<&str> {
         .map(String::as_str)
 }
 
+/// The frontend event a second-instance launch should fire on the running
+/// window, plus the absolute path payload. Returned by [`second_instance_event`].
+#[derive(Debug, PartialEq, Eq)]
+pub struct SecondInstanceEvent {
+    pub event_name: &'static str,
+    pub path: String,
+}
+
+/// Decide what (if anything) a second instance should tell the running app to
+/// open. Picks the first non-flag arg out of `argv`, resolves it against
+/// `cwd`, and classifies the result as folder vs file so the caller can emit
+/// the matching event. Returns `None` if there's no path argument, the path
+/// can't be resolved on disk, or the resolved path is neither a file nor a
+/// directory (e.g. a broken symlink).
+pub fn second_instance_event(argv: &[String], cwd: &Path) -> Option<SecondInstanceEvent> {
+    let path_arg = pick_path_arg(argv)?;
+    let canonical = resolve_initial_path(path_arg, cwd)?;
+    let event_name = if canonical.is_dir() {
+        "open-folder"
+    } else if canonical.is_file() {
+        "open-file"
+    } else {
+        return None;
+    };
+    Some(SecondInstanceEvent {
+        event_name,
+        path: canonical.to_string_lossy().to_string(),
+    })
+}
+
 /// Resolve a CLI-supplied path against the working directory. Returns the
 /// canonicalized path if it points at something on disk, otherwise `None`.
 ///
@@ -94,6 +124,71 @@ mod tests {
     fn pick_path_arg_skips_empty_strings() {
         let argv = vec!["glyph".to_string(), "".to_string(), "real.md".to_string()];
         assert_eq!(pick_path_arg(&argv), Some("real.md"));
+    }
+
+    #[test]
+    fn second_instance_event_classifies_file_argv() {
+        let cwd = unique_tmp("si_file");
+        let file = cwd.join("note.md");
+        fs::write(&file, "x").unwrap();
+
+        let argv = vec!["glyph".to_string(), "note.md".to_string()];
+        let result = second_instance_event(&argv, &cwd).expect("should resolve");
+        assert_eq!(result.event_name, "open-file");
+        assert_eq!(
+            PathBuf::from(&result.path).canonicalize().unwrap(),
+            file.canonicalize().unwrap()
+        );
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn second_instance_event_classifies_folder_argv() {
+        let cwd = unique_tmp("si_folder");
+        let sub = cwd.join("workspace");
+        fs::create_dir_all(&sub).unwrap();
+
+        let argv = vec!["glyph".to_string(), "workspace".to_string()];
+        let result = second_instance_event(&argv, &cwd).expect("should resolve");
+        assert_eq!(result.event_name, "open-folder");
+        assert_eq!(
+            PathBuf::from(&result.path).canonicalize().unwrap(),
+            sub.canonicalize().unwrap()
+        );
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn second_instance_event_returns_none_when_no_path_arg() {
+        let cwd = unique_tmp("si_none");
+        let argv = vec!["glyph".to_string(), "--verbose".to_string()];
+        assert!(second_instance_event(&argv, &cwd).is_none());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn second_instance_event_returns_none_when_path_does_not_exist() {
+        let cwd = unique_tmp("si_missing");
+        let argv = vec!["glyph".to_string(), "nope.md".to_string()];
+        assert!(second_instance_event(&argv, &cwd).is_none());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn second_instance_event_skips_program_name_and_flags() {
+        let cwd = unique_tmp("si_flags");
+        let file = cwd.join("readme.md");
+        fs::write(&file, "x").unwrap();
+
+        let argv = vec![
+            "glyph".to_string(),
+            "--quiet".to_string(),
+            "-v".to_string(),
+            "readme.md".to_string(),
+        ];
+        let result = second_instance_event(&argv, &cwd).expect("should resolve");
+        assert_eq!(result.event_name, "open-file");
+        let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]

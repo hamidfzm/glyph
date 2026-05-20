@@ -30,22 +30,11 @@ pub fn run() {
                 let _ = window.set_focus();
             }
 
-            let path_arg = match cli::pick_path_arg(&argv) {
-                Some(p) => p,
-                None => return,
-            };
-            let cwd = std::path::PathBuf::from(&cwd_str);
-            let canonical = match cli::resolve_initial_path(path_arg, &cwd) {
-                Some(p) => p,
-                None => return,
-            };
-            let path_str = canonical.to_string_lossy().to_string();
-            let event = if canonical.is_dir() {
-                "open-folder"
-            } else {
-                "open-file"
-            };
-            let _ = app_handle.emit(event, &path_str);
+            if let Some(event) =
+                cli::second_instance_event(&argv, &std::path::PathBuf::from(&cwd_str))
+            {
+                let _ = app_handle.emit(event.event_name, &event.path);
+            }
         },
     ));
 
