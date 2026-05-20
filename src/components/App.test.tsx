@@ -210,9 +210,7 @@ describe("App", () => {
         case "get_initial_file":
           return Promise.resolve(null);
         case "read_directory":
-          return Promise.resolve([
-            { name: "a.md", path: "/workspace/a.md", isDirectory: false },
-          ]);
+          return Promise.resolve([{ name: "a.md", path: "/workspace/a.md", isDirectory: false }]);
         case "list_markdown_files":
           return Promise.resolve(["/workspace/a.md"]);
         case "scan_wikilinks":
