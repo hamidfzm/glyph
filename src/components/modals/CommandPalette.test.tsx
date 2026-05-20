@@ -155,10 +155,7 @@ describe("CommandPalette", () => {
     const a = vi.fn();
     const b = vi.fn();
     renderPalette({
-      commands: [
-        cmd({ id: "a", title: "Alpha", run: a }),
-        cmd({ id: "b", title: "Beta", run: b }),
-      ],
+      commands: [cmd({ id: "a", title: "Alpha", run: a }), cmd({ id: "b", title: "Beta", run: b })],
     });
     fireEvent.mouseEnter(screen.getByText("Beta"));
     fireEvent.keyDown(screen.getByLabelText("Command palette query"), { key: "Enter" });
