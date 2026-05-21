@@ -202,6 +202,40 @@ describe("App", () => {
     expect(listeners["menu-open-folder"]).toBeDefined();
   });
 
+  it("wires the command palette's activeFolderTab when a folder workspace is open", async () => {
+    vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
+      switch (cmd) {
+        case "get_initial_folder":
+          return Promise.resolve("/workspace");
+        case "get_initial_file":
+          return Promise.resolve(null);
+        case "read_directory":
+          return Promise.resolve([{ name: "a.md", path: "/workspace/a.md", isDirectory: false }]);
+        case "list_markdown_files":
+          return Promise.resolve(["/workspace/a.md"]);
+        case "scan_wikilinks":
+          return Promise.resolve([]);
+        case "get_file_metadata":
+          return Promise.resolve({
+            name: "a.md",
+            path: String(args?.path ?? ""),
+            size: 0,
+            modified: 0,
+          });
+        default:
+          return Promise.resolve(undefined);
+      }
+    }) as unknown as typeof invoke);
+
+    const { wrapper } = withProviders();
+    const { container } = render(<App />, { wrapper });
+    // Wait for the folder tab to land so the `activeTab?.kind === "folder"`
+    // branch in useCommandPaletteController's options is exercised.
+    await waitFor(() => {
+      expect(container.querySelector('[data-tab-kind="folder"]')).not.toBeNull();
+    });
+  });
+
   it("forwards menu-close-tab, menu-find, and menu-toggle-edit to AppShell handlers", async () => {
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
       switch (cmd) {

@@ -3,6 +3,7 @@ import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { useAIController } from "@/hooks/useAIController";
 import { useAutoSave } from "@/hooks/useAutoSave";
+import { useCommandPaletteController } from "@/hooks/useCommandPaletteController";
 import { useContextMenu } from "@/hooks/useContextMenu";
 import { useDocumentUndoRedo } from "@/hooks/useDocumentUndoRedo";
 import { useFontZoom } from "@/hooks/useFontZoom";
@@ -17,6 +18,7 @@ import { Sidebar } from "./layout/Sidebar";
 import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
 import { AIPanel } from "./modals/AIPanel";
+import { CommandPalette } from "./modals/CommandPalette";
 import { SettingsModal } from "./modals/SettingsModal";
 import { TabContent } from "./TabContent";
 
@@ -39,11 +41,14 @@ export function AppShell() {
     displayContent,
     openFolder,
     openFileDialog,
+    openFileInFolderTab,
     closeTab,
     setTabMode,
     markSaved,
     undoEdit,
     redoEdit,
+    workspaceFiles,
+    tocEntries,
   } = tabs;
 
   useDocumentUndoRedo({ activeTabId, platform, onUndo: undoEdit, onRedo: redoEdit });
@@ -132,6 +137,17 @@ export function AppShell() {
   );
   useMenuEvents(menuHandlers);
 
+  const palette = useCommandPaletteController({
+    platform,
+    activeFolderTab: activeTab?.kind === "folder" ? activeTab : null,
+    workspaceFiles,
+    tocEntries,
+    actions: useMemo(
+      () => ({ ...menuHandlers, openFileInFolderTab }),
+      [menuHandlers, openFileInFolderTab],
+    ),
+  });
+
   // Context menu (Win/Linux only): text-content actions only. Sidebar/menu/zoom
   // commands have their own keyboard shortcuts and titlebar buttons.
   const contextMenuActions = useMemo(
@@ -176,6 +192,14 @@ export function AppShell() {
         <Sidebar side="right" />
       </div>
       <StatusBar />
+
+      <CommandPalette
+        open={palette.open}
+        query={palette.query}
+        commands={palette.commands}
+        onQueryChange={palette.setQuery}
+        onClose={palette.close}
+      />
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <AIPanel

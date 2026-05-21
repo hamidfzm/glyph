@@ -2,6 +2,7 @@ mod cli;
 mod commands;
 mod markdown;
 mod menu;
+mod menu_runtime;
 mod watcher;
 
 use std::sync::{Arc, Mutex};
@@ -97,7 +98,7 @@ pub fn run() {
             watcher::unwatch_file,
             watcher::watch_directory,
             watcher::unwatch_directory,
-            menu::set_menu_state,
+            menu_runtime::set_menu_state,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Glyph");

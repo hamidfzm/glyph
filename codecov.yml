@@ -43,5 +43,9 @@ ignore:
   - "src/test/**"
   - "src/components/icons/**"
   - "src-tauri/src/main.rs"
+  # Tauri-runtime menu wiring (build_menu, apply_menu_state, handle_menu_event):
+  # every line drives the native menu manager and can't be exercised from
+  # MockRuntime. The testable halves live in menu.rs with direct tests.
+  - "src-tauri/src/menu_runtime.rs"
   - "**/*.test.ts"
   - "**/*.test.tsx"

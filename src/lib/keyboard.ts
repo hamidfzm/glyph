@@ -8,6 +8,7 @@ export const KEYBOARD_EVENT = {
 const Key = {
   Z: "z",
   Y: "y",
+  K: "k",
 } as const;
 
 function hasPlatformModifier(event: KeyboardEvent, platform: Platform): boolean {
@@ -25,4 +26,9 @@ export function matchesRedoShortcut(event: KeyboardEvent, platform: Platform): b
   if (key === Key.Z && event.shiftKey) return true;
   // Ctrl+Y is the Windows/Linux convention for redo; macOS uses Shift+Cmd+Z.
   return !isMac(platform) && key === Key.Y && !event.shiftKey;
+}
+
+export function matchesCommandPaletteShortcut(event: KeyboardEvent, platform: Platform): boolean {
+  if (!hasPlatformModifier(event, platform) || event.altKey || event.shiftKey) return false;
+  return event.key.toLowerCase() === Key.K;
 }

@@ -13,6 +13,7 @@
 
   [data-print-hide="true"],
   .settings-overlay,
+  .command-palette-overlay,
   .search-bar,
   .ai-panel {
     display: none !important;

@@ -52,6 +52,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 ### Viewer
 - Folder / workspace tabs — open a folder as a tab; browse `.md` files in the sidebar tree; right-click a file to open it in a new top-level tab
 - Multiple files in tabs — open, switch, close, middle-click to close
+- Command palette — `Cmd/Ctrl+K` to fuzzy-jump to any workspace file, document heading, or app action
 - In-document search — `Cmd/Ctrl+F` with match highlighting and navigation
 - Zoom in/out — `Cmd/Ctrl+=/-/0` with zoom level in status bar
 - Table of Contents sidebar with active heading tracking
@@ -188,6 +189,7 @@ cd src-tauri && cargo clippy    # Lint Rust
 |----------|--------|
 | `Cmd+O` / `Ctrl+O` | Open file(s) |
 | `Cmd+Shift+O` / `Ctrl+Shift+O` | Open folder |
+| `Cmd+K` / `Ctrl+K` | Command palette (files, headings, app actions) |
 | `Cmd+P` / `Ctrl+P` | Print / Export to PDF |
 | `Cmd+F` / `Ctrl+F` | Find in document |
 | `Cmd+=` / `Ctrl+=` | Zoom in |
