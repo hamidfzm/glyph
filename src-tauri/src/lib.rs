@@ -38,12 +38,13 @@ pub fn handle_second_instance<R: tauri::Runtime>(
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    // On Windows and Linux a second launch (file association double-click,
-    // CLI invocation) should forward its argv to the running instance instead
-    // of spawning a fresh process. macOS routes this through RunEvent::Opened
-    // in app.run() below, so the plugin is unnecessary there.
+/// Build a fresh `tauri::Builder` with the platform-conditional single-instance
+/// plugin registered on Windows and Linux. macOS routes second launches via
+/// `RunEvent::Opened`, so it gets a vanilla builder.
+///
+/// Extracted from `run()` so the cfg-gated branches can be unit-tested without
+/// actually starting the Tauri runtime.
+pub fn make_app_builder() -> tauri::Builder<tauri::Wry> {
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(handle_second_instance));
@@ -51,7 +52,12 @@ pub fn run() {
     #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     let builder = tauri::Builder::default();
 
-    let app = builder
+    builder
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let app = make_app_builder()
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -183,8 +189,20 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
-    use tauri::test::mock_app;
-    use tauri::Listener;
+    use tauri::test::{mock_app, MockRuntime};
+    use tauri::{Listener, WebviewWindowBuilder};
+
+    /// Build a mock app with a "main" webview window so the
+    /// `app_handle.get_webview_window("main")` branch in
+    /// [`handle_second_instance`] resolves to `Some(window)`. Tests that don't
+    /// care about that branch use [`mock_app`] directly.
+    fn mock_app_with_main_window() -> tauri::App<MockRuntime> {
+        let app = mock_app();
+        WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .expect("mock main window should build");
+        app
+    }
 
     fn unique_tmp(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -225,7 +243,9 @@ mod tests {
         fs::write(&file, "hi").unwrap();
         let canonical = file.canonicalize().unwrap();
 
-        let app = mock_app();
+        // Use a windowed mock app so the `get_webview_window("main")` Some-arm
+        // (unminimize / show / set_focus) is exercised.
+        let app = mock_app_with_main_window();
         let handle = app.handle().clone();
         let files = capture_event(&handle, "open-file");
         let folders = capture_event(&handle, "open-folder");
@@ -295,6 +315,14 @@ mod tests {
         assert!(files.lock().unwrap().is_empty());
         assert!(folders.lock().unwrap().is_empty());
         let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn make_app_builder_constructs_a_builder() {
+        // We can't run the resulting builder (would start a real window
+        // manager), but constructing it covers the cfg-gated plugin setup.
+        let builder = make_app_builder();
+        std::mem::drop(builder);
     }
 
     #[test]

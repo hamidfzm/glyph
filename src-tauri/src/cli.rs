@@ -185,10 +185,7 @@ mod tests {
             .arg(&fifo)
             .status()
             .expect("mkfifo invocation should succeed on a unix runner");
-        if !status.success() {
-            let _ = fs::remove_dir_all(&cwd);
-            return;
-        }
+        assert!(status.success(), "mkfifo should succeed on this runner");
 
         let argv = vec!["glyph".to_string(), "pipe".to_string()];
         assert!(second_instance_event(&argv, &cwd).is_none());
