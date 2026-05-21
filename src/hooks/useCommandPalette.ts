@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import type { Platform } from "@/hooks/usePlatform";
 import { KEYBOARD_EVENT, matchesCommandPaletteShortcut } from "@/lib/keyboard";
@@ -42,6 +43,15 @@ export function useCommandPalette({ platform }: UseCommandPaletteOptions) {
     document.addEventListener(KEYBOARD_EVENT.KeyDown, onKeyDown);
     return () => document.removeEventListener(KEYBOARD_EVENT.KeyDown, onKeyDown);
   }, [platform, toggle]);
+
+  // The native View menu's "Command Palette…" item emits this event so users
+  // who don't know the Cmd/Ctrl+K accelerator can still discover the feature.
+  useEffect(() => {
+    const unlisten = listen("menu-open-command-palette", () => openPalette());
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [openPalette]);
 
   return { open, query, setQuery, openPalette, closePalette };
 }

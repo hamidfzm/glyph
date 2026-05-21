@@ -1,5 +1,6 @@
-import { act, renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { listen } from "@tauri-apps/api/event";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useCommandPalette } from "./useCommandPalette";
 
 function dispatch(init: KeyboardEventInit, target?: Element) {
@@ -81,6 +82,37 @@ describe("useCommandPalette", () => {
     expect(result.current.open).toBe(false);
     dispatch({ key: "j", metaKey: true });
     expect(result.current.open).toBe(false);
+  });
+
+  it("opens when the menu-open-command-palette event fires", async () => {
+    const handlers = new Map<string, (event: { payload: unknown }) => void>();
+    vi.mocked(listen).mockImplementation(((name: string, cb: (e: { payload: unknown }) => void) => {
+      handlers.set(name, cb);
+      return Promise.resolve(() => handlers.delete(name));
+    }) as unknown as typeof listen);
+
+    const { result } = renderHook(() => useCommandPalette({ platform: "linux" }));
+    await waitFor(() => expect(handlers.has("menu-open-command-palette")).toBe(true));
+
+    act(() => {
+      handlers.get("menu-open-command-palette")?.({ payload: undefined });
+    });
+    expect(result.current.open).toBe(true);
+    expect(result.current.query).toBe("");
+  });
+
+  it("unsubscribes from the menu-open-command-palette listener on unmount", async () => {
+    const unlisten = vi.fn();
+    vi.mocked(listen).mockImplementation(((name: string) => {
+      if (name === "menu-open-command-palette") return Promise.resolve(unlisten);
+      return Promise.resolve(vi.fn());
+    }) as unknown as typeof listen);
+
+    const { unmount } = renderHook(() => useCommandPalette({ platform: "linux" }));
+    // Let the listener promise resolve before unmounting.
+    await Promise.resolve();
+    unmount();
+    await waitFor(() => expect(unlisten).toHaveBeenCalled());
   });
 
   it("openPalette clears the previous query", () => {

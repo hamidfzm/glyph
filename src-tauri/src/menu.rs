@@ -65,6 +65,9 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .build()?;
 
     // View menu
+    let command_palette = MenuItemBuilder::with_id("open-command-palette", "Command Palette\u{2026}")
+        .accelerator("CmdOrCtrl+K")
+        .build(handle)?;
     let toggle_files_sidebar = MenuItemBuilder::with_id("toggle-files-sidebar", "Toggle Files Sidebar")
         .accelerator("CmdOrCtrl+B")
         .build(handle)?;
@@ -87,6 +90,8 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .build(handle)?;
 
     let view_menu = SubmenuBuilder::new(handle, "View")
+        .item(&command_palette)
+        .separator()
         .item(&toggle_files_sidebar)
         .item(&toggle_outline_sidebar)
         .item(&toggle_edit)
@@ -232,64 +237,171 @@ pub fn set_menu_state(refs: State<MenuItemRefs>, flags: MenuStateFlags) -> Resul
     apply_menu_state(&refs, &flags)
 }
 
+/// What a native menu item id maps to. `Emit` forwards an event (with an
+/// optional string payload) to the frontend; `CloseWindow` closes the main
+/// window directly from Rust. Returning `None` from [`menu_action_for_id`]
+/// means the id isn't recognised, so `handle_menu_event` is a no-op.
+#[derive(Debug, PartialEq, Eq)]
+pub enum MenuAction {
+    Emit {
+        event: &'static str,
+        payload: Option<&'static str>,
+    },
+    CloseWindow,
+}
+
+/// Pure mapping from a native menu item id to the action `handle_menu_event`
+/// should perform. Split out so each arm is unit-testable without spinning up
+/// a Tauri runtime.
+pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
+    let emit = |event| {
+        Some(MenuAction::Emit {
+            event,
+            payload: None,
+        })
+    };
+    match id {
+        "open" => emit("menu-open-file"),
+        "open-folder" => emit("menu-open-folder"),
+        "close-tab" => emit("menu-close-tab"),
+        "reset-view" => emit("menu-reset-view"),
+        "print" => emit("menu-print"),
+        "close" => Some(MenuAction::CloseWindow),
+        "toggle-files-sidebar" => emit("menu-toggle-files-sidebar"),
+        "toggle-outline-sidebar" => emit("menu-toggle-outline-sidebar"),
+        "open-command-palette" => emit("menu-open-command-palette"),
+        "open-settings" => emit("menu-open-settings"),
+        "ai-summarize" => Some(MenuAction::Emit {
+            event: "menu-ai-action",
+            payload: Some("summarize"),
+        }),
+        "ai-explain" => Some(MenuAction::Emit {
+            event: "menu-ai-action",
+            payload: Some("explain"),
+        }),
+        "ai-simplify" => Some(MenuAction::Emit {
+            event: "menu-ai-action",
+            payload: Some("simplify"),
+        }),
+        "ai-read-aloud" => emit("menu-ai-read-aloud"),
+        "zoom-in" => emit("menu-zoom-in"),
+        "zoom-out" => emit("menu-zoom-out"),
+        "actual-size" => emit("menu-zoom-reset"),
+        "find" => emit("menu-find"),
+        "toggle-edit" => emit("menu-toggle-edit"),
+        _ => None,
+    }
+}
+
 pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
-    match event.id().as_ref() {
-        "open" => {
-            let _ = app.emit("menu-open-file", ());
+    match menu_action_for_id(event.id().as_ref()) {
+        Some(MenuAction::Emit { event, payload }) => {
+            let _ = app.emit(event, payload);
         }
-        "open-folder" => {
-            let _ = app.emit("menu-open-folder", ());
-        }
-        "close-tab" => {
-            let _ = app.emit("menu-close-tab", ());
-        }
-        "reset-view" => {
-            let _ = app.emit("menu-reset-view", ());
-        }
-        "print" => {
-            let _ = app.emit("menu-print", ());
-        }
-        "close" => {
+        Some(MenuAction::CloseWindow) => {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.close();
             }
         }
-        "toggle-files-sidebar" => {
-            let _ = app.emit("menu-toggle-files-sidebar", ());
+        None => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn emit(event: &'static str) -> MenuAction {
+        MenuAction::Emit {
+            event,
+            payload: None,
         }
-        "toggle-outline-sidebar" => {
-            let _ = app.emit("menu-toggle-outline-sidebar", ());
+    }
+
+    fn emit_with(event: &'static str, payload: &'static str) -> MenuAction {
+        MenuAction::Emit {
+            event,
+            payload: Some(payload),
         }
-        "open-settings" => {
-            let _ = app.emit("menu-open-settings", ());
-        }
-        "ai-summarize" => {
-            let _ = app.emit("menu-ai-action", "summarize");
-        }
-        "ai-explain" => {
-            let _ = app.emit("menu-ai-action", "explain");
-        }
-        "ai-simplify" => {
-            let _ = app.emit("menu-ai-action", "simplify");
-        }
-        "ai-read-aloud" => {
-            let _ = app.emit("menu-ai-read-aloud", ());
-        }
-        "zoom-in" => {
-            let _ = app.emit("menu-zoom-in", ());
-        }
-        "zoom-out" => {
-            let _ = app.emit("menu-zoom-out", ());
-        }
-        "actual-size" => {
-            let _ = app.emit("menu-zoom-reset", ());
-        }
-        "find" => {
-            let _ = app.emit("menu-find", ());
-        }
-        "toggle-edit" => {
-            let _ = app.emit("menu-toggle-edit", ());
-        }
-        _ => {}
+    }
+
+    #[test]
+    fn unknown_id_returns_none() {
+        assert!(menu_action_for_id("not-a-thing").is_none());
+        assert!(menu_action_for_id("").is_none());
+    }
+
+    #[test]
+    fn file_menu_ids_emit_their_events() {
+        assert_eq!(menu_action_for_id("open"), Some(emit("menu-open-file")));
+        assert_eq!(
+            menu_action_for_id("open-folder"),
+            Some(emit("menu-open-folder"))
+        );
+        assert_eq!(
+            menu_action_for_id("close-tab"),
+            Some(emit("menu-close-tab"))
+        );
+        assert_eq!(
+            menu_action_for_id("reset-view"),
+            Some(emit("menu-reset-view"))
+        );
+        assert_eq!(menu_action_for_id("print"), Some(emit("menu-print")));
+        assert_eq!(
+            menu_action_for_id("open-settings"),
+            Some(emit("menu-open-settings"))
+        );
+    }
+
+    #[test]
+    fn close_window_id_returns_close_window_action() {
+        assert_eq!(menu_action_for_id("close"), Some(MenuAction::CloseWindow));
+    }
+
+    #[test]
+    fn view_menu_ids_emit_their_events() {
+        assert_eq!(
+            menu_action_for_id("toggle-files-sidebar"),
+            Some(emit("menu-toggle-files-sidebar"))
+        );
+        assert_eq!(
+            menu_action_for_id("toggle-outline-sidebar"),
+            Some(emit("menu-toggle-outline-sidebar"))
+        );
+        assert_eq!(
+            menu_action_for_id("open-command-palette"),
+            Some(emit("menu-open-command-palette"))
+        );
+        assert_eq!(menu_action_for_id("zoom-in"), Some(emit("menu-zoom-in")));
+        assert_eq!(menu_action_for_id("zoom-out"), Some(emit("menu-zoom-out")));
+        assert_eq!(
+            menu_action_for_id("actual-size"),
+            Some(emit("menu-zoom-reset"))
+        );
+        assert_eq!(menu_action_for_id("find"), Some(emit("menu-find")));
+        assert_eq!(
+            menu_action_for_id("toggle-edit"),
+            Some(emit("menu-toggle-edit"))
+        );
+    }
+
+    #[test]
+    fn ai_action_ids_emit_with_their_payload() {
+        assert_eq!(
+            menu_action_for_id("ai-summarize"),
+            Some(emit_with("menu-ai-action", "summarize"))
+        );
+        assert_eq!(
+            menu_action_for_id("ai-explain"),
+            Some(emit_with("menu-ai-action", "explain"))
+        );
+        assert_eq!(
+            menu_action_for_id("ai-simplify"),
+            Some(emit_with("menu-ai-action", "simplify"))
+        );
+        assert_eq!(
+            menu_action_for_id("ai-read-aloud"),
+            Some(emit("menu-ai-read-aloud"))
+        );
     }
 }
