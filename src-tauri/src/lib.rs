@@ -2,6 +2,7 @@ mod cli;
 mod commands;
 mod markdown;
 mod menu;
+mod menu_runtime;
 mod watcher;
 
 use std::sync::{Arc, Mutex};
@@ -29,18 +30,18 @@ pub fn run() {
         .manage(commands::InitialFile(Mutex::new(None)))
         .manage(commands::InitialFolder(Mutex::new(None)))
         .setup(|app| {
-            let (menu, menu_refs) = menu::build_menu(app)?;
+            let (menu, menu_refs) = menu_runtime::build_menu(app)?;
             app.set_menu(menu)?;
             // Start with everything disabled — the frontend reasserts state
             // as soon as it mounts and learns about the active tab and settings.
-            let initial_flags = menu::MenuStateFlags {
+            let initial_flags = menu_runtime::MenuStateFlags {
                 has_tab: false,
                 has_file: false,
                 has_content: false,
                 ai_configured: false,
                 tts_available: false,
             };
-            let _ = menu::apply_menu_state(&menu_refs, &initial_flags);
+            let _ = menu_runtime::apply_menu_state(&menu_refs, &initial_flags);
             app.manage(menu_refs);
 
             // Parse CLI arguments and store initial file path
@@ -65,7 +66,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .on_menu_event(menu::handle_menu_event)
+        .on_menu_event(menu_runtime::handle_menu_event)
         .on_window_event(|window, event| {
             // Handle drag and drop of folders or markdown files. First match wins:
             // a directory opens as a workspace, a markdown file opens as a single-file tab.
@@ -97,7 +98,7 @@ pub fn run() {
             watcher::unwatch_file,
             watcher::watch_directory,
             watcher::unwatch_directory,
-            menu::set_menu_state,
+            menu_runtime::set_menu_state,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Glyph");
