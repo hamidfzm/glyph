@@ -9,3 +9,7 @@ junit*.xml
 
 # Claude Code local settings (keep .claude/ committed, ignore local overrides)
 .claude/settings.local.json
+
+# Linux-only Tauri ACL schema (regenerated locally on Linux builds; only the
+# macOS / desktop schemas are tracked upstream).
+src-tauri/gen/schemas/linux-schema.json
