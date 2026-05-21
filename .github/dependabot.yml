@@ -18,6 +18,8 @@ updates:
         patterns:
           - "@tauri-apps/*"
       dev-dependencies:
+        # Catches Biome, vitest, TypeScript, Tailwind, husky, lint-staged,
+        # and the rest of the tooling. Anything devDependencies sits here.
         dependency-type: "development"
         exclude-patterns:
           - "@tauri-apps/*"
