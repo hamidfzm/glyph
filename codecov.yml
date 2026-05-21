@@ -47,5 +47,12 @@ ignore:
   # every line drives the native menu manager and can't be exercised from
   # MockRuntime. The testable halves live in menu.rs with direct tests.
   - "src-tauri/src/menu_runtime.rs"
+  # lib.rs hosts the Tauri `run()` entry point — every line in that
+  # function calls into a real Builder/runtime, which can't be reached
+  # from MockRuntime unit tests. The testable functions (`handle_second_instance`,
+  # `make_app_builder`) keep their dedicated tests in lib.rs's own
+  # `#[cfg(test)] mod tests`; we just don't track lib.rs lines toward
+  # project / patch coverage.
+  - "src-tauri/src/lib.rs"
   - "**/*.test.ts"
   - "**/*.test.tsx"
