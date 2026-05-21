@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use crate::markdown::is_markdown_file;
+
 /// Pick the first non-flag argument from a second-instance argv. The slice is
 /// expected to be the full argv including the program name at index 0, which
 /// `tauri-plugin-single-instance` hands to its callback verbatim.
@@ -13,6 +15,55 @@ pub fn pick_path_arg(argv: &[String]) -> Option<&str> {
         .map(String::as_str)
 }
 
+/// What an initial-launch path resolves to. Shared by every entry that turns
+/// a user-supplied path into an "open this" intent — CLI args, macOS
+/// `RunEvent::Opened`, and the single-instance plugin callback. Callers pick
+/// what to do with each variant (store in managed state, emit a frontend
+/// event, or warn + skip).
+#[derive(Debug, PartialEq, Eq)]
+pub enum InitialOpenAction {
+    /// Open as a folder workspace. Inner is the absolute path.
+    Folder(String),
+    /// Open as a single markdown file. Inner is the absolute path.
+    File(String),
+    /// Path exists and resolves, but is not a markdown file (e.g. `.txt`,
+    /// `.html`). The caller should log a warning and skip it rather than
+    /// forwarding it to the renderer, which would otherwise treat the
+    /// content as markdown and allow embedded HTML / JS through the
+    /// sanitizer. Inner is the absolute path for the log message.
+    RejectedNotMarkdown(String),
+}
+
+/// Classify a path that's already been resolved to a canonical absolute form.
+/// Used by macOS `RunEvent::Opened` where the OS hands us a `file://` URL we
+/// can `to_file_path()` directly — no relative-to-cwd resolution needed.
+///
+/// Returns `None` for paths that don't exist or aren't regular files /
+/// directories (e.g. broken symlinks, sockets, FIFOs).
+pub fn classify_resolved_path(canonical: &Path) -> Option<InitialOpenAction> {
+    let abs = canonical.to_string_lossy().to_string();
+    if canonical.is_dir() {
+        Some(InitialOpenAction::Folder(abs))
+    } else if canonical.is_file() {
+        if is_markdown_file(canonical) {
+            Some(InitialOpenAction::File(abs))
+        } else {
+            Some(InitialOpenAction::RejectedNotMarkdown(abs))
+        }
+    } else {
+        None
+    }
+}
+
+/// Resolve a user-supplied path string against `cwd` and classify the
+/// result. Used by the CLI argument parser at first launch — the user may
+/// pass a relative path; classification needs to happen against the
+/// canonicalized form so symlinks and `..` traversal are normalised.
+pub fn classify_initial_arg(path_str: &str, cwd: &Path) -> Option<InitialOpenAction> {
+    let canonical = resolve_initial_path(path_str, cwd)?;
+    classify_resolved_path(&canonical)
+}
+
 /// The frontend event a second-instance launch should fire on the running
 /// window, plus the absolute path payload. Returned by [`second_instance_event`].
 #[derive(Debug, PartialEq, Eq)]
@@ -23,24 +74,22 @@ pub struct SecondInstanceEvent {
 
 /// Decide what (if anything) a second instance should tell the running app to
 /// open. Picks the first non-flag arg out of `argv`, resolves it against
-/// `cwd`, and classifies the result as folder vs file so the caller can emit
-/// the matching event. Returns `None` if there's no path argument, the path
-/// can't be resolved on disk, or the resolved path is neither a file nor a
-/// directory (e.g. a broken symlink).
+/// `cwd`, and classifies the result. Non-markdown files are silently rejected
+/// here (the running app already logged the warning at first launch if it
+/// hit one).
 pub fn second_instance_event(argv: &[String], cwd: &Path) -> Option<SecondInstanceEvent> {
     let path_arg = pick_path_arg(argv)?;
-    let canonical = resolve_initial_path(path_arg, cwd)?;
-    let event_name = if canonical.is_dir() {
-        "open-folder"
-    } else if canonical.is_file() {
-        "open-file"
-    } else {
-        return None;
-    };
-    Some(SecondInstanceEvent {
-        event_name,
-        path: canonical.to_string_lossy().to_string(),
-    })
+    match classify_initial_arg(path_arg, cwd)? {
+        InitialOpenAction::Folder(path) => Some(SecondInstanceEvent {
+            event_name: "open-folder",
+            path,
+        }),
+        InitialOpenAction::File(path) => Some(SecondInstanceEvent {
+            event_name: "open-file",
+            path,
+        }),
+        InitialOpenAction::RejectedNotMarkdown(_) => None,
+    }
 }
 
 /// Resolve a CLI-supplied path against the working directory. Returns the
@@ -189,6 +238,95 @@ mod tests {
 
         let argv = vec!["glyph".to_string(), "pipe".to_string()];
         assert!(second_instance_event(&argv, &cwd).is_none());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn classify_resolved_path_recognises_folders() {
+        let cwd = unique_tmp("cls_folder");
+        let result = classify_resolved_path(&cwd.canonicalize().unwrap()).expect("classifies");
+        assert!(matches!(result, InitialOpenAction::Folder(_)));
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn classify_resolved_path_recognises_markdown_files() {
+        let cwd = unique_tmp("cls_md");
+        let file = cwd.join("note.md");
+        fs::write(&file, "x").unwrap();
+        let result = classify_resolved_path(&file.canonicalize().unwrap()).expect("classifies");
+        match result {
+            InitialOpenAction::File(p) => assert!(p.ends_with("note.md")),
+            other => panic!("expected File, got {other:?}"),
+        }
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn classify_resolved_path_rejects_non_markdown_files() {
+        let cwd = unique_tmp("cls_txt");
+        let file = cwd.join("evil.txt");
+        fs::write(&file, "<script>alert('x')</script>").unwrap();
+        let result = classify_resolved_path(&file.canonicalize().unwrap()).expect("classifies");
+        match result {
+            InitialOpenAction::RejectedNotMarkdown(p) => assert!(p.ends_with("evil.txt")),
+            other => panic!("expected RejectedNotMarkdown, got {other:?}"),
+        }
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn classify_resolved_path_returns_none_for_missing_paths() {
+        let cwd = unique_tmp("cls_miss");
+        let missing = cwd.join("not-here.md");
+        // Don't actually create the file — passing the would-be path directly.
+        assert!(classify_resolved_path(&missing).is_none());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn classify_resolved_path_returns_none_for_non_file_non_dir_paths() {
+        // FIFO exists but is_file/is_dir both return false.
+        let cwd = unique_tmp("cls_fifo");
+        let fifo = cwd.join("pipe");
+        let status = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .expect("mkfifo invocation should succeed on a unix runner");
+        assert!(status.success());
+        let canonical = fifo.canonicalize().unwrap();
+        assert!(classify_resolved_path(&canonical).is_none());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn classify_initial_arg_resolves_then_classifies() {
+        let cwd = unique_tmp("cia_md");
+        let file = cwd.join("notes.md");
+        fs::write(&file, "x").unwrap();
+        let result = classify_initial_arg("notes.md", &cwd).expect("classifies");
+        match result {
+            InitialOpenAction::File(p) => assert!(p.ends_with("notes.md")),
+            other => panic!("expected File, got {other:?}"),
+        }
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn classify_initial_arg_rejects_non_markdown_extensions() {
+        let cwd = unique_tmp("cia_txt");
+        let file = cwd.join("evil.txt");
+        fs::write(&file, "x").unwrap();
+        let result = classify_initial_arg("evil.txt", &cwd).expect("classifies");
+        assert!(matches!(result, InitialOpenAction::RejectedNotMarkdown(_)));
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn classify_initial_arg_returns_none_for_unresolvable_paths() {
+        let cwd = unique_tmp("cia_missing");
+        assert!(classify_initial_arg("does_not_exist.md", &cwd).is_none());
         let _ = fs::remove_dir_all(&cwd);
     }
 

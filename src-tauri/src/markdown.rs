@@ -64,9 +64,7 @@ mod tests {
                 "expected .{ext} to be recognised"
             );
         }
-        for ext in [
-            "mmd", "mmD", "mMd", "mMD", "Mmd", "MmD", "MMd", "MMD",
-        ] {
+        for ext in ["mmd", "mmD", "mMd", "mMD", "Mmd", "MmD", "MMd", "MMD"] {
             assert!(
                 is_markdown_file(Path::new(&format!("diagram.{ext}"))),
                 "expected .{ext} to be recognised"

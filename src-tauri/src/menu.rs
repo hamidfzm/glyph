@@ -8,9 +8,7 @@
 // the surface here so callers can write `menu::build_menu(...)` and don't have
 // to know about the split.
 
-pub use crate::menu_runtime::{
-    apply_menu_state, build_menu, handle_menu_event, MenuStateFlags,
-};
+pub use crate::menu_runtime::{apply_menu_state, build_menu, handle_menu_event, MenuStateFlags};
 
 use tauri::{Emitter, Manager};
 
@@ -202,9 +200,7 @@ mod tests {
             let sink = Arc::clone(&bucket);
             handle.listen(event, move |evt| {
                 let raw = evt.payload().to_string();
-                sink.lock()
-                    .unwrap()
-                    .push(raw.trim_matches('"').to_string());
+                sink.lock().unwrap().push(raw.trim_matches('"').to_string());
             });
             bucket
         }

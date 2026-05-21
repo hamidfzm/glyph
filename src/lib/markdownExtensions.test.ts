@@ -24,16 +24,7 @@ describe("isMarkdownFile", () => {
     for (const ext of ["md", "mD", "Md", "MD"]) {
       expect(isMarkdownFile(`readme.${ext}`)).toBe(true);
     }
-    for (const ext of [
-      "mmd",
-      "mmD",
-      "mMd",
-      "mMD",
-      "Mmd",
-      "MmD",
-      "MMd",
-      "MMD",
-    ]) {
+    for (const ext of ["mmd", "mmD", "mMd", "mMD", "Mmd", "MmD", "MMd", "MMD"]) {
       expect(isMarkdownFile(`diagram.${ext}`)).toBe(true);
     }
   });

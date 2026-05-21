@@ -19,14 +19,12 @@ describe("isMermaidContent", () => {
   });
 
   it("recognises bare diagram keywords with no direction", () => {
-    expect(isMermaidContent("pie\n\"a\": 1\n\"b\": 2")).toBe(true);
+    expect(isMermaidContent('pie\n"a": 1\n"b": 2')).toBe(true);
     expect(isMermaidContent("mindmap\n  root\n    a\n    b")).toBe(true);
   });
 
   it("recognises diagrams after leading blanks and comments", () => {
-    expect(
-      isMermaidContent("\n%% title: my graph\n\nflowchart LR\nA --> B"),
-    ).toBe(true);
+    expect(isMermaidContent("\n%% title: my graph\n\nflowchart LR\nA --> B")).toBe(true);
   });
 
   it("returns false for prose that happens to contain a keyword", () => {
@@ -78,7 +76,7 @@ describe("adaptMmdContent", () => {
   });
 
   it("is case-insensitive on the extension", () => {
-    const result = adaptMmdContent("DIAGRAM.MMD", "pie\n\"a\": 1");
+    const result = adaptMmdContent("DIAGRAM.MMD", 'pie\n"a": 1');
     expect(result).toContain("```mermaid");
   });
 });

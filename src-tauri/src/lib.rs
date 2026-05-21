@@ -31,9 +31,7 @@ pub fn handle_second_instance<R: tauri::Runtime>(
         let _ = window.set_focus();
     }
 
-    if let Some(event) =
-        cli::second_instance_event(&argv, &std::path::PathBuf::from(&cwd_str))
-    {
+    if let Some(event) = cli::second_instance_event(&argv, &std::path::PathBuf::from(&cwd_str)) {
         let _ = app_handle.emit(event.event_name, &event.path);
     }
 }
@@ -85,30 +83,25 @@ pub fn run() {
             let _ = menu::apply_menu_state(&menu_refs, &initial_flags);
             app.manage(menu_refs);
 
-            // Parse CLI arguments and store initial file path. Reject any
-            // non-markdown file extension so `glyph some.txt` can't be used to
-            // load arbitrary HTML/JS into the renderer (defense in depth, the
-            // frontend also gates its open paths).
+            // Parse CLI arguments and store the initial file/folder. The pure
+            // classification logic lives in `cli::classify_initial_arg` (tested
+            // there); this block is the thin Tauri-runtime adapter that maps
+            // each variant to managed state or a warning.
             if let Ok(matches) = app.cli().matches() {
                 if let Some(file_arg) = matches.args.get("file") {
                     if let Some(path_str) = file_arg.value.as_str() {
                         let cwd = std::env::current_dir().unwrap_or_default();
-                        if let Some(canonical) = cli::resolve_initial_path(path_str, &cwd) {
-                            let abs_str = canonical.to_string_lossy().to_string();
-                            if canonical.is_dir() {
-                                let state = app.state::<commands::InitialFolder>();
-                                let mut guard = state.0.lock().unwrap();
-                                *guard = Some(abs_str);
-                            } else if is_markdown_file(&canonical) {
-                                let state = app.state::<commands::InitialFile>();
-                                let mut guard = state.0.lock().unwrap();
-                                *guard = Some(abs_str);
-                            } else {
-                                eprintln!(
-                                    "Refusing to open non-markdown file: {}",
-                                    canonical.display()
-                                );
+                        match cli::classify_initial_arg(path_str, &cwd) {
+                            Some(cli::InitialOpenAction::Folder(p)) => {
+                                *app.state::<commands::InitialFolder>().0.lock().unwrap() = Some(p);
                             }
+                            Some(cli::InitialOpenAction::File(p)) => {
+                                *app.state::<commands::InitialFile>().0.lock().unwrap() = Some(p);
+                            }
+                            Some(cli::InitialOpenAction::RejectedNotMarkdown(p)) => {
+                                eprintln!("Refusing to open non-markdown file: {p}");
+                            }
+                            None => {}
                         }
                     }
                 }
@@ -156,40 +149,36 @@ pub fn run() {
         #[cfg(target_os = "macos")]
         if let RunEvent::Opened { urls } = _event {
             for url in urls {
-                if let Ok(path) = url.to_file_path() {
-                    let path_str = path.to_string_lossy().to_string();
-                    let is_folder = path.is_dir();
-                    // Reject non-markdown files to keep arbitrary HTML/JS out
-                    // of the renderer (matches the CLI gate above).
-                    if !is_folder && !is_markdown_file(&path) {
-                        eprintln!("Refusing to open non-markdown file: {}", path.display());
-                        continue;
-                    }
-                    let event_name = if is_folder {
-                        "open-folder"
-                    } else {
-                        "open-file"
-                    };
-
-                    // Try to emit to the frontend (works if webview is ready)
-                    let emitted = _app_handle.emit(event_name, &path_str).is_ok();
-
-                    // Also store as fallback for when the webview hasn't loaded yet
-                    // (cold-launch via Finder open-with).
-                    if emitted {
-                        if is_folder {
+                let Ok(path) = url.to_file_path() else {
+                    continue;
+                };
+                // `cli::classify_resolved_path` is the same classifier the CLI
+                // arg block uses, so the file/folder gating and the
+                // non-markdown rejection stay in lockstep.
+                match cli::classify_resolved_path(&path) {
+                    Some(cli::InitialOpenAction::Folder(p)) => {
+                        if _app_handle.emit("open-folder", &p).is_ok() {
                             if let Some(state) = _app_handle.try_state::<commands::InitialFolder>()
                             {
-                                let mut guard = state.0.lock().unwrap();
-                                *guard = Some(path_str);
+                                *state.0.lock().unwrap() = Some(p);
                             }
-                        } else if let Some(state) = _app_handle.try_state::<commands::InitialFile>()
-                        {
-                            let mut guard = state.0.lock().unwrap();
-                            *guard = Some(path_str);
                         }
+                        break;
                     }
-                    break; // Only open the first path
+                    Some(cli::InitialOpenAction::File(p)) => {
+                        if _app_handle.emit("open-file", &p).is_ok() {
+                            if let Some(state) = _app_handle.try_state::<commands::InitialFile>() {
+                                *state.0.lock().unwrap() = Some(p);
+                            }
+                        }
+                        break;
+                    }
+                    Some(cli::InitialOpenAction::RejectedNotMarkdown(p)) => {
+                        eprintln!("Refusing to open non-markdown file: {p}");
+                        // Keep scanning the URL list — the user may have
+                        // dropped a mix of markdown and non-markdown files.
+                    }
+                    None => {}
                 }
             }
         }
@@ -302,7 +291,10 @@ mod tests {
         );
         std::thread::sleep(std::time::Duration::from_millis(50));
 
-        assert!(files.lock().unwrap().is_empty(), "open-file should not fire");
+        assert!(
+            files.lock().unwrap().is_empty(),
+            "open-file should not fire"
+        );
         assert_eq!(
             folders.lock().unwrap().len(),
             1,

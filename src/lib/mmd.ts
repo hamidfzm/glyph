@@ -65,11 +65,7 @@ export function isMermaidContent(text: string): boolean {
   const line = firstMeaningfulLine(text);
   if (line === null) return false;
   for (const keyword of MERMAID_DIAGRAM_KEYWORDS) {
-    if (
-      line === keyword ||
-      line.startsWith(`${keyword} `) ||
-      line.startsWith(`${keyword}\t`)
-    ) {
+    if (line === keyword || line.startsWith(`${keyword} `) || line.startsWith(`${keyword}\t`)) {
       return true;
     }
   }
