@@ -4,7 +4,13 @@
 // over `tauri::Runtime` so it can be driven by `tauri::test::MockRuntime`.
 //
 // The runtime-bound half (build_menu / apply_menu_state / handle_menu_event)
-// lives in [`crate::menu_runtime`] and is excluded from codecov.
+// lives in [`crate::menu_runtime`] and is excluded from codecov. We re-export
+// the surface here so callers can write `menu::build_menu(...)` and don't have
+// to know about the split.
+
+pub use crate::menu_runtime::{
+    apply_menu_state, build_menu, handle_menu_event, MenuStateFlags,
+};
 
 use tauri::{Emitter, Manager};
 
