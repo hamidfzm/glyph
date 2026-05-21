@@ -1,0 +1,9 @@
+%% A Mermaid-source .mmd file. Glyph sniffs the first non-comment line and
+%% renders it as a diagram (no fences needed).
+flowchart TD
+    Start([Open .mmd file]) --> Sniff{First line is a Mermaid keyword?}
+    Sniff -->|yes| Wrap[Wrap body in ```mermaid fence]
+    Wrap --> Render[Render as a diagram]
+    Sniff -->|no| Md[Render as MultiMarkdown text]
+    Render --> End([Done])
+    Md --> End

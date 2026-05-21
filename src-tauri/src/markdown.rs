@@ -47,9 +47,37 @@ mod tests {
     }
 
     #[test]
+    fn mmd_extension() {
+        // `.mmd` covers both MultiMarkdown text and Mermaid diagram sources.
+        assert!(is_markdown_file(Path::new("diagram.mmd")));
+        assert!(is_markdown_file(Path::new("note.MMD")));
+    }
+
+    #[test]
     fn case_insensitive() {
-        assert!(is_markdown_file(Path::new("README.MD")));
-        assert!(is_markdown_file(Path::new("readme.Md")));
+        // Exhaustive case combinations for the two common extensions so
+        // weird-cased file managers (macOS HFS+, USB sticks formatted with
+        // mixed case enforcement, etc.) all open correctly.
+        for ext in ["md", "mD", "Md", "MD"] {
+            assert!(
+                is_markdown_file(Path::new(&format!("readme.{ext}"))),
+                "expected .{ext} to be recognised"
+            );
+        }
+        for ext in [
+            "mmd", "mmD", "mMd", "mMD", "Mmd", "MmD", "MMd", "MMD",
+        ] {
+            assert!(
+                is_markdown_file(Path::new(&format!("diagram.{ext}"))),
+                "expected .{ext} to be recognised"
+            );
+        }
+        // Sample of long-form variants to confirm tolower-then-compare works
+        // for >2 char extensions too.
+        assert!(is_markdown_file(Path::new("doc.MARKDOWN")));
+        assert!(is_markdown_file(Path::new("doc.MarkDown")));
+        assert!(is_markdown_file(Path::new("doc.MdX")));
+        assert!(is_markdown_file(Path::new("doc.Mdown")));
     }
 
     #[test]

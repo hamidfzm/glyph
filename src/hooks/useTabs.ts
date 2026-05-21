@@ -4,7 +4,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/lib/editHistory";
-import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
+import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
+import { adaptMmdContent } from "@/lib/mmd";
 import type { EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
 
@@ -81,10 +82,14 @@ interface UseTabsOptions {
 }
 
 async function loadFileContent(path: string) {
-  const [content, metadata] = await Promise.all([
+  const [raw, metadata] = await Promise.all([
     invoke<string>("read_file", { path }),
     invoke<FileMetadata>("get_file_metadata", { path }),
   ]);
+  // `.mmd` files double as Mermaid diagram source. If the body sniffs as a
+  // Mermaid declaration, wrap it in a fence so the existing renderer turns
+  // it into a diagram; otherwise treat the file as plain markdown text.
+  const content = adaptMmdContent(path, raw);
   return { content, metadata };
 }
 
@@ -197,6 +202,14 @@ export function useTabs(options: UseTabsOptions) {
   // Open a file as a new top-level tab; if already open as a top-level tab, activate it.
   const openFile = useCallback(
     async (path: string) => {
+      // Defensive gate: never load a non-markdown file. Glyph rendering treats
+      // content as markdown (HTML included via the sanitizer), so opening a
+      // random `.txt` / `.html` / etc. is a code-injection vector. See
+      // memory/reject-unsupported-file-types.md.
+      if (!isMarkdownFile(path)) {
+        console.warn(`Refusing to open non-markdown file: ${path}`);
+        return;
+      }
       const existing = stateRef.current.tabs.find((t) => t.kind === "file" && t.file.path === path);
       if (existing) {
         setState((prev) => ({ ...prev, activeTabId: existing.id }));
@@ -232,6 +245,10 @@ export function useTabs(options: UseTabsOptions) {
   // Watches the new file, unwatches the old. Folder's directory watcher stays.
   const openFileInFolderTab = useCallback(
     async (tabId: string, path: string) => {
+      if (!isMarkdownFile(path)) {
+        console.warn(`Refusing to open non-markdown file in folder tab: ${path}`);
+        return;
+      }
       const tab = stateRef.current.tabs.find((t) => t.id === tabId);
       if (!tab || tab.kind !== "folder") return;
 

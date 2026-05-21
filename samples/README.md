@@ -139,6 +139,18 @@ sequenceDiagram
     G-->>U: Update view
 ```
 
+### `.mmd` source files
+
+`.mmd` is recognised as either a raw Mermaid diagram source or a
+MultiMarkdown document. Glyph sniffs the first non-comment line: if it
+starts with a Mermaid declaration (`flowchart`, `graph`, `sequenceDiagram`,
+`pie`, `mindmap`, `gantt`, etc.), the file is wrapped in a
+` ```mermaid ` fence and rendered as a diagram. Anything else is treated
+as plain markdown.
+
+Open [[Flowchart]] for the diagram variant and [[Notes/Cooking]] for the
+MultiMarkdown variant; both files use the `.mmd` extension.
+
 ## Footnotes
 
 Glyph supports GitHub-style footnotes[^1]. You can reference them multiple times[^2].

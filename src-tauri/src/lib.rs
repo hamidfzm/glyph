@@ -85,7 +85,10 @@ pub fn run() {
             let _ = menu::apply_menu_state(&menu_refs, &initial_flags);
             app.manage(menu_refs);
 
-            // Parse CLI arguments and store initial file path
+            // Parse CLI arguments and store initial file path. Reject any
+            // non-markdown file extension so `glyph some.txt` can't be used to
+            // load arbitrary HTML/JS into the renderer (defense in depth, the
+            // frontend also gates its open paths).
             if let Ok(matches) = app.cli().matches() {
                 if let Some(file_arg) = matches.args.get("file") {
                     if let Some(path_str) = file_arg.value.as_str() {
@@ -96,10 +99,15 @@ pub fn run() {
                                 let state = app.state::<commands::InitialFolder>();
                                 let mut guard = state.0.lock().unwrap();
                                 *guard = Some(abs_str);
-                            } else {
+                            } else if is_markdown_file(&canonical) {
                                 let state = app.state::<commands::InitialFile>();
                                 let mut guard = state.0.lock().unwrap();
                                 *guard = Some(abs_str);
+                            } else {
+                                eprintln!(
+                                    "Refusing to open non-markdown file: {}",
+                                    canonical.display()
+                                );
                             }
                         }
                     }
@@ -151,6 +159,12 @@ pub fn run() {
                 if let Ok(path) = url.to_file_path() {
                     let path_str = path.to_string_lossy().to_string();
                     let is_folder = path.is_dir();
+                    // Reject non-markdown files to keep arbitrary HTML/JS out
+                    // of the renderer (matches the CLI gate above).
+                    if !is_folder && !is_markdown_file(&path) {
+                        eprintln!("Refusing to open non-markdown file: {}", path.display());
+                        continue;
+                    }
                     let event_name = if is_folder {
                         "open-folder"
                     } else {
