@@ -28,6 +28,12 @@ pub struct MenuStateFlags {
     pub tts_available: bool,
 }
 
+// LCOV_EXCL_START
+// `build_menu` is pure Tauri-runtime wiring (every line is a builder call
+// against an `App` handle). It cannot be unit-tested from a MockRuntime
+// because the menu builders require a real GTK/AppKit/Win32 menu context.
+// Exclude it from coverage so the testable parts of this file (MenuAction,
+// menu_action_for_id, dispatch_menu_action) drive the file-level number.
 pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemRefs)> {
     let handle = app.handle();
 
@@ -211,6 +217,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
 
     Ok((menu, refs))
 }
+// LCOV_EXCL_STOP
 
 /// Apply enabled flags to every conditional menu item. Errors from individual
 /// items are propagated as strings so the command can surface them.
@@ -309,11 +316,17 @@ pub fn dispatch_menu_action<R: tauri::Runtime>(app: &tauri::AppHandle<R>, action
     }
 }
 
+// LCOV_EXCL_START
+// `handle_menu_event` is a 3-line glue that only fires when Tauri delivers a
+// MenuEvent at runtime. MenuEvent has no public constructor, so the function
+// itself isn't unit-testable; the testable halves (menu_action_for_id and
+// dispatch_menu_action) have dedicated tests below.
 pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
     if let Some(action) = menu_action_for_id(event.id().as_ref()) {
         dispatch_menu_action(app, action);
     }
 }
+// LCOV_EXCL_STOP
 
 #[cfg(test)]
 mod tests {
