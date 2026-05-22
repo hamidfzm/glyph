@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "./markdownExtensions";
+import { extractExtensions, isMarkdownFile, MARKDOWN_EXTENSIONS } from "./markdownExtensions";
 
 describe("MARKDOWN_EXTENSIONS", () => {
   it("includes at least the common markdown extensions", () => {
@@ -48,5 +48,41 @@ describe("isMarkdownFile", () => {
     expect(isMarkdownFile("/path/to/notes.md")).toBe(true);
     expect(isMarkdownFile("a.b.c.md")).toBe(true);
     expect(isMarkdownFile("README.md.bak")).toBe(false);
+  });
+});
+
+describe("extractExtensions", () => {
+  it("returns the ext array from a valid Tauri config", () => {
+    const config = { bundle: { fileAssociations: [{ ext: ["md", "mmd"] }] } };
+    expect(extractExtensions(config)).toEqual(["md", "mmd"]);
+  });
+
+  it("throws when bundle is missing", () => {
+    expect(() => extractExtensions({})).toThrow(/single source of truth/);
+  });
+
+  it("throws when fileAssociations is missing", () => {
+    expect(() => extractExtensions({ bundle: {} })).toThrow(/single source of truth/);
+  });
+
+  it("throws when fileAssociations is empty", () => {
+    expect(() => extractExtensions({ bundle: { fileAssociations: [] } })).toThrow(
+      /single source of truth/,
+    );
+  });
+
+  it("throws when ext is missing or not an array", () => {
+    expect(() => extractExtensions({ bundle: { fileAssociations: [{}] } })).toThrow(
+      /single source of truth/,
+    );
+    expect(() =>
+      extractExtensions({ bundle: { fileAssociations: [{ ext: "not-an-array" }] } }),
+    ).toThrow(/single source of truth/);
+  });
+
+  it("throws when ext is an empty array", () => {
+    expect(() => extractExtensions({ bundle: { fileAssociations: [{ ext: [] }] } })).toThrow(
+      /single source of truth/,
+    );
   });
 });

@@ -255,10 +255,10 @@ mod tests {
         let file = cwd.join("note.md");
         fs::write(&file, "x").unwrap();
         let result = classify_resolved_path(&file.canonicalize().unwrap()).expect("classifies");
-        match result {
-            InitialOpenAction::File(p) => assert!(p.ends_with("note.md")),
-            other => panic!("expected File, got {other:?}"),
-        }
+        assert!(
+            matches!(&result, InitialOpenAction::File(p) if p.ends_with("note.md")),
+            "expected File ending in note.md, got {result:?}"
+        );
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -268,10 +268,10 @@ mod tests {
         let file = cwd.join("evil.txt");
         fs::write(&file, "<script>alert('x')</script>").unwrap();
         let result = classify_resolved_path(&file.canonicalize().unwrap()).expect("classifies");
-        match result {
-            InitialOpenAction::RejectedNotMarkdown(p) => assert!(p.ends_with("evil.txt")),
-            other => panic!("expected RejectedNotMarkdown, got {other:?}"),
-        }
+        assert!(
+            matches!(&result, InitialOpenAction::RejectedNotMarkdown(p) if p.ends_with("evil.txt")),
+            "expected RejectedNotMarkdown ending in evil.txt, got {result:?}"
+        );
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -306,10 +306,10 @@ mod tests {
         let file = cwd.join("notes.md");
         fs::write(&file, "x").unwrap();
         let result = classify_initial_arg("notes.md", &cwd).expect("classifies");
-        match result {
-            InitialOpenAction::File(p) => assert!(p.ends_with("notes.md")),
-            other => panic!("expected File, got {other:?}"),
-        }
+        assert!(
+            matches!(&result, InitialOpenAction::File(p) if p.ends_with("notes.md")),
+            "expected File ending in notes.md, got {result:?}"
+        );
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -327,6 +327,18 @@ mod tests {
     fn classify_initial_arg_returns_none_for_unresolvable_paths() {
         let cwd = unique_tmp("cia_missing");
         assert!(classify_initial_arg("does_not_exist.md", &cwd).is_none());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn second_instance_event_returns_none_for_non_markdown_files() {
+        // Covers the RejectedNotMarkdown -> None arm in second_instance_event:
+        // a second instance pointed at evil.txt should not fire any event.
+        let cwd = unique_tmp("si_txt");
+        let file = cwd.join("evil.txt");
+        fs::write(&file, "<script>").unwrap();
+        let argv = vec!["glyph".to_string(), "evil.txt".to_string()];
+        assert!(second_instance_event(&argv, &cwd).is_none());
         let _ = fs::remove_dir_all(&cwd);
     }
 
