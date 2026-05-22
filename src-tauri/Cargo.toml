@@ -26,9 +26,14 @@ serde_json = "1"
 notify = "8"
 tauri-plugin-opener = "2.5.4"
 walkdir = "2.5.0"
+# Statically-linked libgit2 so end users don't need a system Git install.
+# `vendored-openssl` keeps SSH/HTTPS support self-contained too.
+git2 = { version = "0.20", default-features = false, features = ["vendored-libgit2", "vendored-openssl"] }
+thiserror = "2"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
+tempfile = "3"
 
 [target."cfg(any(target_os = \"linux\", target_os = \"windows\"))".dependencies]
 tauri-plugin-single-instance = "2"

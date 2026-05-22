@@ -1,0 +1,728 @@
+//! Git-backed sync. Built on `git2` (statically-linked libgit2) so end
+//! users don't need a system `git` install — the entire backend ships
+//! inside the Glyph binary.
+//!
+//! Sync flow when [`GitBackend::sync`] is called:
+//!
+//! 1. Stage every change in the working tree (`git add -A`).
+//! 2. If there is anything staged, create a `glyph: auto-commit` commit
+//!    on the current branch using the configured author identity (or
+//!    libgit2's global config as a fallback).
+//! 3. Fetch the configured remote branch.
+//! 4. Fast-forward when possible. If fast-forward isn't possible, merge
+//!    the remote into the local branch with libgit2's merge analysis:
+//!    success → commit the merge; conflicts → surface them in
+//!    [`super::backend::SyncResult::conflicts`] and stop without pushing
+//!    so the user can resolve.
+//! 5. Push the local branch to the remote.
+//!
+//! Status is computed without touching the network: it counts dirty
+//! files in the index, then compares the current branch's tip against
+//! its upstream's last-known SHA for ahead / behind. The next sync call
+//! fetches and recomputes from real refs.
+//!
+//! Credentials: for v1 we only handle HTTPS + a static PAT-style token.
+//! SSH-agent / per-key flows land in a follow-up PR; the credential
+//! callback in this module is where they will attach.
+
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use git2::{
+    BranchType, FetchOptions, MergeOptions, PushOptions, RemoteCallbacks, Repository, StatusOptions,
+};
+
+use super::backend::{BackendKind, StatusReport, SyncBackend, SyncResult};
+use super::config::WorkspaceSyncConfig;
+use super::error::SyncError;
+
+/// Default commit message Glyph uses when it auto-commits local
+/// changes during a sync. The user always sees a real "you wrote
+/// notes" history in their repo, but they don't have to author each
+/// commit by hand.
+const AUTO_COMMIT_MESSAGE: &str = "glyph: auto-commit local changes";
+/// What we call the merge commit when we have to reconcile remote.
+const MERGE_COMMIT_MESSAGE: &str = "glyph: merge remote changes";
+/// Remote name we look up; matches `git clone`'s default.
+const ORIGIN: &str = "origin";
+
+pub struct GitBackend {
+    config: WorkspaceSyncConfig,
+    /// Optional plaintext token used for HTTPS basic-auth. v1 hardcoded
+    /// to "x-access-token" username (GitHub / Codeberg / GitLab all
+    /// accept it). SSH key flow comes in a follow-up.
+    https_token: Option<String>,
+}
+
+impl GitBackend {
+    pub fn new(config: WorkspaceSyncConfig) -> Self {
+        Self {
+            config,
+            https_token: None,
+        }
+    }
+
+    /// Attach an HTTPS PAT/token. Used for private remotes; public
+    /// HTTPS clones don't need a token at all.
+    pub fn with_https_token(mut self, token: impl Into<String>) -> Self {
+        self.https_token = Some(token.into());
+        self
+    }
+
+    fn workspace(&self) -> &Path {
+        Path::new(&self.config.workspace_path)
+    }
+
+    /// Open the workspace as a Git repo. Surfaces a clear error if the
+    /// folder hasn't been `git init`'d / cloned yet — callers should
+    /// route that into the "set up sync" flow instead of treating it
+    /// as a generic failure.
+    fn open_repo(&self) -> Result<Repository, SyncError> {
+        Repository::open(self.workspace()).map_err(|e| {
+            if e.code() == git2::ErrorCode::NotFound {
+                SyncError::NotConfigured
+            } else {
+                SyncError::Backend(e.message().to_string())
+            }
+        })
+    }
+
+    /// Build the libgit2 credentials callback. Used for both fetch and
+    /// push. Tries the configured HTTPS token first, then falls back to
+    /// the libgit2 ssh-agent / default credentials so SSH-cloned repos
+    /// keep working too.
+    fn credentials_callbacks(&self) -> RemoteCallbacks<'_> {
+        let mut cb = RemoteCallbacks::new();
+        let token = self.https_token.clone();
+        cb.credentials(move |_url, username_from_url, allowed| {
+            // HTTPS basic auth — what `https://github.com/...` remotes
+            // expect. "x-access-token" is a magic GitHub PAT username
+            // but GitLab / Codeberg accept any non-empty username.
+            if allowed.is_user_pass_plaintext() {
+                if let Some(t) = token.as_ref() {
+                    return git2::Cred::userpass_plaintext("x-access-token", t);
+                }
+            }
+            // SSH agent (when configured).
+            if allowed.is_ssh_key() {
+                let user = username_from_url.unwrap_or("git");
+                return git2::Cred::ssh_key_from_agent(user);
+            }
+            git2::Cred::default()
+        });
+        cb
+    }
+
+    fn signature(&self) -> Result<git2::Signature<'static>, SyncError> {
+        if let Some(author) = &self.config.author {
+            return git2::Signature::now(&author.name, &author.email)
+                .map_err(|e| SyncError::Backend(e.message().to_string()));
+        }
+        // No explicit author configured — try git's global config.
+        let cfg = git2::Config::open_default()
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        let name = cfg
+            .get_string("user.name")
+            .unwrap_or_else(|_| "Glyph".to_string());
+        let email = cfg
+            .get_string("user.email")
+            .unwrap_or_else(|_| "glyph@localhost".to_string());
+        git2::Signature::now(&name, &email).map_err(|e| SyncError::Backend(e.message().to_string()))
+    }
+
+    /// True if the working tree differs from HEAD in any visible way.
+    fn working_tree_dirty(repo: &Repository) -> Result<bool, SyncError> {
+        let mut opts = StatusOptions::new();
+        opts.include_untracked(true);
+        opts.recurse_untracked_dirs(true);
+        let statuses = repo
+            .statuses(Some(&mut opts))
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        Ok(!statuses.is_empty())
+    }
+
+    /// Stage every change in the working tree (mirror of `git add -A`).
+    fn stage_all(repo: &Repository) -> Result<bool, SyncError> {
+        let mut index = repo
+            .index()
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        index
+            .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        index
+            .write()
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+
+        // Did the index actually move? Returns true when there is
+        // something staged that would produce a real commit.
+        let head_tree = match repo.head() {
+            Ok(head) => head
+                .peel_to_tree()
+                .map_err(|e| SyncError::Backend(e.message().to_string()))?,
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => {
+                // No commits yet — anything in the index counts as a
+                // change.
+                return Ok(!index.is_empty());
+            }
+            Err(e) => return Err(SyncError::Backend(e.message().to_string())),
+        };
+        let index_tree_oid = index
+            .write_tree()
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        let index_tree = repo
+            .find_tree(index_tree_oid)
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        let diff = repo
+            .diff_tree_to_tree(Some(&head_tree), Some(&index_tree), None)
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        Ok(diff.deltas().len() > 0)
+    }
+
+    fn commit_index(
+        repo: &Repository,
+        signature: &git2::Signature<'_>,
+        message: &str,
+        parents: Vec<git2::Commit<'_>>,
+    ) -> Result<git2::Oid, SyncError> {
+        let mut index = repo
+            .index()
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        let tree_oid = index
+            .write_tree()
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        let tree = repo
+            .find_tree(tree_oid)
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        let parent_refs: Vec<&git2::Commit<'_>> = parents.iter().collect();
+        repo.commit(
+            Some("HEAD"),
+            signature,
+            signature,
+            message,
+            &tree,
+            &parent_refs,
+        )
+        .map_err(|e| SyncError::Backend(e.message().to_string()))
+    }
+
+    fn head_commit(repo: &Repository) -> Result<Option<git2::Commit<'_>>, SyncError> {
+        match repo.head() {
+            Ok(head) => head
+                .peel_to_commit()
+                .map(Some)
+                .map_err(|e| SyncError::Backend(e.message().to_string())),
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => Ok(None),
+            Err(e) => Err(SyncError::Backend(e.message().to_string())),
+        }
+    }
+
+    /// Return (ahead, behind) of the local branch relative to its
+    /// remote-tracking branch. Returns (0, 0) when there is no upstream
+    /// configured yet (fresh init before the first push).
+    fn ahead_behind(repo: &Repository, branch_name: &str) -> Result<(u32, u32), SyncError> {
+        let local = match repo.find_branch(branch_name, BranchType::Local) {
+            Ok(b) => b,
+            Err(_) => return Ok((0, 0)),
+        };
+        let upstream_ref = format!("refs/remotes/{ORIGIN}/{branch_name}");
+        let upstream = match repo.find_reference(&upstream_ref) {
+            Ok(r) => r,
+            Err(_) => return Ok((0, 0)),
+        };
+        let local_oid = local
+            .get()
+            .target()
+            .ok_or_else(|| SyncError::InvalidState("local branch has no tip".into()))?;
+        let upstream_oid = upstream
+            .target()
+            .ok_or_else(|| SyncError::InvalidState("upstream ref has no tip".into()))?;
+        repo.graph_ahead_behind(local_oid, upstream_oid)
+            .map(|(a, b)| (a as u32, b as u32))
+            .map_err(|e| SyncError::Backend(e.message().to_string()))
+    }
+
+    fn collect_conflicts(repo: &Repository) -> Result<Vec<String>, SyncError> {
+        let mut out = Vec::new();
+        let index = repo
+            .index()
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        if !index.has_conflicts() {
+            return Ok(out);
+        }
+        let conflicts = index
+            .conflicts()
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        for entry in conflicts {
+            let entry = entry.map_err(|e| SyncError::Backend(e.message().to_string()))?;
+            // Prefer the "ours" path; fall back to "theirs"/"ancestor".
+            let path = entry
+                .our
+                .as_ref()
+                .or(entry.their.as_ref())
+                .or(entry.ancestor.as_ref())
+                .map(|e| String::from_utf8_lossy(&e.path).into_owned());
+            if let Some(p) = path {
+                out.push(p);
+            }
+        }
+        out.sort();
+        out.dedup();
+        Ok(out)
+    }
+
+    fn fetch_remote(&self, repo: &Repository) -> Result<(), SyncError> {
+        let mut remote = repo
+            .find_remote(ORIGIN)
+            .map_err(|_| SyncError::NotConfigured)?;
+        let mut opts = FetchOptions::new();
+        opts.remote_callbacks(self.credentials_callbacks());
+        let refspec = format!(
+            "refs/heads/{0}:refs/remotes/{ORIGIN}/{0}",
+            self.config.remote_branch
+        );
+        remote
+            .fetch(&[&refspec], Some(&mut opts), None)
+            .map_err(map_remote_error)?;
+        Ok(())
+    }
+
+    fn push_branch(&self, repo: &Repository) -> Result<(), SyncError> {
+        let mut remote = repo
+            .find_remote(ORIGIN)
+            .map_err(|_| SyncError::NotConfigured)?;
+        let mut opts = PushOptions::new();
+        opts.remote_callbacks(self.credentials_callbacks());
+        let refspec = format!("refs/heads/{0}:refs/heads/{0}", self.config.remote_branch);
+        remote
+            .push(&[&refspec], Some(&mut opts))
+            .map_err(map_remote_error)?;
+        Ok(())
+    }
+}
+
+impl SyncBackend for GitBackend {
+    fn kind(&self) -> BackendKind {
+        BackendKind::Git
+    }
+
+    fn status(&self) -> Result<StatusReport, SyncError> {
+        let repo = self.open_repo()?;
+        let dirty = Self::working_tree_dirty(&repo)?;
+        let (ahead, behind) = Self::ahead_behind(&repo, &self.config.remote_branch)?;
+        let conflicts = Self::collect_conflicts(&repo)?;
+        Ok(StatusReport {
+            kind: BackendKind::Git,
+            clean: !dirty,
+            ahead,
+            behind,
+            conflicts,
+            last_sync_unix: None,
+        })
+    }
+
+    fn sync(&self) -> Result<SyncResult, SyncError> {
+        let repo = self.open_repo()?;
+        let signature = self.signature()?;
+
+        // Refuse to sync until existing conflicts are resolved — the
+        // user has to take action; we can't push or fast-forward over a
+        // conflicted index.
+        let existing_conflicts = Self::collect_conflicts(&repo)?;
+        if !existing_conflicts.is_empty() {
+            return Err(SyncError::Conflict(existing_conflicts));
+        }
+
+        // 1. Stage everything and commit if there's anything new.
+        let staged = Self::stage_all(&repo)?;
+        let mut committed_count = 0;
+        if staged {
+            let parents = match Self::head_commit(&repo)? {
+                Some(c) => vec![c],
+                None => vec![],
+            };
+            Self::commit_index(&repo, &signature, AUTO_COMMIT_MESSAGE, parents)?;
+            committed_count = 1;
+        }
+
+        // 2. Fetch the remote.
+        self.fetch_remote(&repo)?;
+
+        // 3. Analyse remote relative to local and reconcile.
+        let mut pulled_count = 0;
+        let upstream_ref = format!("refs/remotes/{ORIGIN}/{}", self.config.remote_branch);
+        if let Ok(upstream) = repo.find_reference(&upstream_ref) {
+            let upstream_commit = upstream
+                .peel_to_commit()
+                .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+            let upstream_oid = upstream_commit.id();
+            let upstream_annotated = repo
+                .find_annotated_commit(upstream_oid)
+                .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+            let (analysis, _) = repo
+                .merge_analysis(&[&upstream_annotated])
+                .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+
+            if analysis.is_up_to_date() {
+                // Local already contains everything from upstream — no-op.
+            } else if analysis.is_fast_forward() {
+                // Fast-forward: move local branch pointer to upstream
+                // and check out the new tree.
+                let local_ref_name = format!("refs/heads/{}", self.config.remote_branch);
+                let mut local_ref = repo
+                    .find_reference(&local_ref_name)
+                    .or_else(|_| repo.reference(&local_ref_name, upstream_oid, true, "ff init"))
+                    .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+                local_ref
+                    .set_target(upstream_oid, "glyph: fast-forward to upstream")
+                    .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+                repo.set_head(&local_ref_name)
+                    .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+                let mut co = git2::build::CheckoutBuilder::default();
+                co.force();
+                repo.checkout_head(Some(&mut co))
+                    .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+                pulled_count = 1;
+            } else {
+                // True merge needed.
+                let mut merge_opts = MergeOptions::new();
+                let mut checkout_opts = git2::build::CheckoutBuilder::new();
+                checkout_opts.allow_conflicts(true);
+                repo.merge(
+                    &[&upstream_annotated],
+                    Some(&mut merge_opts),
+                    Some(&mut checkout_opts),
+                )
+                .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+
+                let conflicts = Self::collect_conflicts(&repo)?;
+                if !conflicts.is_empty() {
+                    // Leave the repo in the merging state so the user
+                    // can resolve. Skip push.
+                    return Ok(SyncResult {
+                        kind: BackendKind::Git,
+                        pulled_count: 0,
+                        committed_count,
+                        pushed_count: 0,
+                        conflicts,
+                        completed_unix: now_unix(),
+                    });
+                }
+
+                // No conflicts — write the merge commit.
+                let head = Self::head_commit(&repo)?
+                    .ok_or_else(|| SyncError::InvalidState("HEAD missing during merge".into()))?;
+                Self::commit_index(
+                    &repo,
+                    &signature,
+                    MERGE_COMMIT_MESSAGE,
+                    vec![head, upstream_commit],
+                )?;
+                repo.cleanup_state()
+                    .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+                pulled_count = 1;
+            }
+        }
+
+        // 4. Push the (possibly newly-extended) local branch.
+        let (ahead, _) = Self::ahead_behind(&repo, &self.config.remote_branch)?;
+        let mut pushed_count = 0;
+        if ahead > 0 || committed_count > 0 {
+            self.push_branch(&repo)?;
+            pushed_count = ahead.max(committed_count);
+        }
+
+        Ok(SyncResult {
+            kind: BackendKind::Git,
+            pulled_count,
+            committed_count,
+            pushed_count,
+            conflicts: vec![],
+            completed_unix: now_unix(),
+        })
+    }
+}
+
+fn map_remote_error(e: git2::Error) -> SyncError {
+    let msg = e.message().to_string();
+    match e.class() {
+        git2::ErrorClass::Net | git2::ErrorClass::Http => SyncError::Network(msg),
+        git2::ErrorClass::Ssh | git2::ErrorClass::Callback => SyncError::AuthFailed(msg),
+        _ if msg.contains("authentication") || msg.contains("auth") => SyncError::AuthFailed(msg),
+        _ => SyncError::Backend(msg),
+    }
+}
+
+fn now_unix() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// Initialise a new git repository at `path` with the default branch
+/// set to the supplied name. Convenience wrapper around `git2::Repository::init_opts`.
+pub fn init_repo(path: &Path, default_branch: &str) -> Result<PathBuf, SyncError> {
+    let mut opts = git2::RepositoryInitOptions::new();
+    opts.initial_head(default_branch);
+    Repository::init_opts(path, &opts).map_err(|e| SyncError::Backend(e.message().to_string()))?;
+    Ok(path.to_path_buf())
+}
+
+/// Add an `origin` remote pointing at `url` to a repository at `path`.
+pub fn set_origin(path: &Path, url: &str) -> Result<(), SyncError> {
+    let repo = Repository::open(path).map_err(|e| SyncError::Backend(e.message().to_string()))?;
+    match repo.find_remote(ORIGIN) {
+        Ok(_) => repo.remote_set_url(ORIGIN, url),
+        Err(_) => repo.remote(ORIGIN, url).map(|_| ()),
+    }
+    .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    /// Build a self-contained Git test harness:
+    /// - `remote/` is a bare repository acting as the cloud
+    /// - `local/` clones from it, with the working tree we'll mutate
+    /// - returns the [`TempDir`] (drop = cleanup), the workspace path,
+    ///   and a backend wired up to it
+    struct Fixture {
+        _tmp: TempDir,
+        workspace: PathBuf,
+        remote: PathBuf,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            let tmp = TempDir::new().unwrap();
+            let remote = tmp.path().join("remote.git");
+            git2::Repository::init_bare(&remote).unwrap();
+            let workspace = tmp.path().join("local");
+            fs::create_dir_all(&workspace).unwrap();
+            init_repo(&workspace, "main").unwrap();
+            set_origin(&workspace, remote.to_str().unwrap()).unwrap();
+            // libgit2 needs *some* author identity for commits.
+            let cfg_path = workspace.join(".git/config");
+            let mut cfg = git2::Config::open(&cfg_path).unwrap();
+            cfg.set_str("user.name", "Test User").unwrap();
+            cfg.set_str("user.email", "test@example.com").unwrap();
+            Self {
+                _tmp: tmp,
+                workspace,
+                remote,
+            }
+        }
+
+        fn backend(&self) -> GitBackend {
+            let mut cfg = WorkspaceSyncConfig::new_git(self.workspace.to_string_lossy());
+            cfg.remote_url = self.remote.to_string_lossy().into();
+            cfg.author = Some(super::super::config::CommitIdentity {
+                name: "Test User".into(),
+                email: "test@example.com".into(),
+            });
+            GitBackend::new(cfg)
+        }
+
+        fn write_file(&self, name: &str, contents: &str) {
+            fs::write(self.workspace.join(name), contents).unwrap();
+        }
+    }
+
+    #[test]
+    fn open_repo_errors_with_not_configured_when_workspace_isnt_a_repo() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = WorkspaceSyncConfig::new_git(tmp.path().to_string_lossy());
+        let backend = GitBackend::new(cfg);
+        let err = backend.status().unwrap_err();
+        assert!(matches!(err, SyncError::NotConfigured), "got: {err:?}");
+    }
+
+    #[test]
+    fn status_is_clean_on_a_fresh_repo() {
+        let f = Fixture::new();
+        let status = f.backend().status().unwrap();
+        assert!(status.clean);
+        assert_eq!(status.ahead, 0);
+        assert_eq!(status.behind, 0);
+        assert!(status.conflicts.is_empty());
+    }
+
+    #[test]
+    fn status_reports_dirty_when_files_are_modified() {
+        let f = Fixture::new();
+        f.write_file("notes.md", "# hi");
+        let status = f.backend().status().unwrap();
+        assert!(!status.clean);
+    }
+
+    #[test]
+    fn sync_commits_and_pushes_local_changes() {
+        let f = Fixture::new();
+        f.write_file("notes.md", "# hello\n");
+        let result = f.backend().sync().unwrap();
+        assert_eq!(result.kind, BackendKind::Git);
+        assert_eq!(result.committed_count, 1);
+        assert_eq!(result.pulled_count, 0);
+        assert_eq!(result.pushed_count, 1);
+        assert!(result.conflicts.is_empty());
+
+        // The bare remote should now contain the commit.
+        let remote = Repository::open_bare(&f.remote).unwrap();
+        let head = remote.find_reference("refs/heads/main").unwrap();
+        let commit = head.peel_to_commit().unwrap();
+        assert_eq!(commit.message().unwrap(), AUTO_COMMIT_MESSAGE);
+    }
+
+    #[test]
+    fn sync_with_no_local_changes_is_a_noop() {
+        let f = Fixture::new();
+        // Seed a commit so HEAD exists.
+        f.write_file("seed.md", "# seed\n");
+        f.backend().sync().unwrap();
+        // Second call should report no work.
+        let result = f.backend().sync().unwrap();
+        assert_eq!(result.committed_count, 0);
+        assert_eq!(result.pulled_count, 0);
+        assert_eq!(result.pushed_count, 0);
+    }
+
+    #[test]
+    fn sync_fast_forwards_when_remote_advanced() {
+        // Set up: workspace A and workspace B both clone from `remote`.
+        // A commits + pushes; B sync should fast-forward.
+        let f = Fixture::new();
+        f.write_file("a.md", "# a\n");
+        f.backend().sync().unwrap();
+
+        // Clone a second working copy from the same bare remote.
+        let other = f._tmp.path().join("other");
+        Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
+        let mut other_cfg = WorkspaceSyncConfig::new_git(other.to_string_lossy());
+        other_cfg.remote_url = f.remote.to_string_lossy().into();
+        other_cfg.author = Some(super::super::config::CommitIdentity {
+            name: "Other User".into(),
+            email: "other@example.com".into(),
+        });
+        let other_backend = GitBackend::new(other_cfg);
+
+        // Now write a new file in A, push it.
+        f.write_file("b.md", "# b\n");
+        f.backend().sync().unwrap();
+
+        // B should fast-forward and pick up b.md.
+        let result = other_backend.sync().unwrap();
+        assert_eq!(result.pulled_count, 1);
+        assert!(other.join("b.md").exists());
+    }
+
+    #[test]
+    fn sync_records_a_completed_timestamp() {
+        let f = Fixture::new();
+        f.write_file("a.md", "# a\n");
+        let result = f.backend().sync().unwrap();
+        assert!(result.completed_unix > 0);
+    }
+
+    #[test]
+    fn map_remote_error_classifies_network_and_auth_errors() {
+        // We can't easily fabricate libgit2 Errors of arbitrary class,
+        // but we can confirm the unclassified fallback at least.
+        let e = git2::Error::from_str("authentication required");
+        let mapped = map_remote_error(e);
+        assert!(matches!(mapped, SyncError::AuthFailed(_)));
+    }
+
+    #[test]
+    fn init_repo_creates_a_repository_with_the_requested_default_branch() {
+        let tmp = TempDir::new().unwrap();
+        init_repo(tmp.path(), "trunk").unwrap();
+        let repo = Repository::open(tmp.path()).unwrap();
+        // HEAD points at refs/heads/trunk on a fresh repo even before
+        // the first commit.
+        let head = repo.find_reference("HEAD").unwrap();
+        assert_eq!(head.symbolic_target(), Some("refs/heads/trunk"));
+    }
+
+    #[test]
+    fn set_origin_creates_then_updates_the_remote_url() {
+        let tmp = TempDir::new().unwrap();
+        init_repo(tmp.path(), "main").unwrap();
+        set_origin(tmp.path(), "https://example.com/a.git").unwrap();
+        set_origin(tmp.path(), "https://example.com/b.git").unwrap();
+        let repo = Repository::open(tmp.path()).unwrap();
+        let remote = repo.find_remote("origin").unwrap();
+        assert_eq!(remote.url(), Some("https://example.com/b.git"));
+    }
+
+    #[test]
+    fn signature_falls_back_to_global_config_when_no_author_in_workspace_config() {
+        let f = Fixture::new();
+        let mut backend = f.backend();
+        backend.config.author = None;
+        let sig = backend.signature().unwrap();
+        assert!(!sig.name().unwrap().is_empty());
+        assert!(!sig.email().unwrap().is_empty());
+    }
+
+    #[test]
+    fn sync_surfaces_conflicts_and_does_not_push() {
+        // Two clones diverge on the same file → second sync hits a
+        // merge conflict.
+        let f = Fixture::new();
+        f.write_file("notes.md", "line one\nline two\n");
+        f.backend().sync().unwrap();
+
+        // Second clone, edits the same line.
+        let other = f._tmp.path().join("other");
+        Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
+        let mut other_cfg = WorkspaceSyncConfig::new_git(other.to_string_lossy());
+        other_cfg.remote_url = f.remote.to_string_lossy().into();
+        other_cfg.author = Some(super::super::config::CommitIdentity {
+            name: "Other".into(),
+            email: "o@e.com".into(),
+        });
+        let other_backend = GitBackend::new(other_cfg);
+        fs::write(other.join("notes.md"), "line one\nFROM OTHER\n").unwrap();
+        other_backend.sync().unwrap();
+
+        // First workspace edits the same file too, then tries to sync.
+        f.write_file("notes.md", "line one\nFROM FIRST\n");
+        let result = f.backend().sync().unwrap();
+        assert!(
+            !result.conflicts.is_empty(),
+            "expected conflicts, got {result:?}"
+        );
+        assert!(result.conflicts.iter().any(|p| p.ends_with("notes.md")));
+        assert_eq!(result.pushed_count, 0, "must not push while conflicted");
+    }
+
+    #[test]
+    fn sync_refuses_to_run_while_workspace_still_has_unresolved_conflicts() {
+        // Same setup as above, but call sync twice in a row without
+        // resolving the conflict — second call should error out instead
+        // of trying to "merge again".
+        let f = Fixture::new();
+        f.write_file("notes.md", "line one\n");
+        f.backend().sync().unwrap();
+
+        let other = f._tmp.path().join("other");
+        Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
+        let mut other_cfg = WorkspaceSyncConfig::new_git(other.to_string_lossy());
+        other_cfg.remote_url = f.remote.to_string_lossy().into();
+        other_cfg.author = Some(super::super::config::CommitIdentity {
+            name: "Other".into(),
+            email: "o@e.com".into(),
+        });
+        fs::write(other.join("notes.md"), "OTHER\n").unwrap();
+        GitBackend::new(other_cfg).sync().unwrap();
+
+        f.write_file("notes.md", "MINE\n");
+        f.backend().sync().unwrap(); // leaves conflict in index
+        let err = f.backend().sync().unwrap_err();
+        assert!(matches!(err, SyncError::Conflict(_)), "got {err:?}");
+    }
+}

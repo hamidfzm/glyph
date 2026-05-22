@@ -3,6 +3,7 @@ mod commands;
 mod markdown;
 mod menu;
 mod menu_runtime;
+mod sync;
 mod watcher;
 
 use std::sync::{Arc, Mutex};
