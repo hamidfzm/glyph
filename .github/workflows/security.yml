@@ -1,10 +1,14 @@
 name: Security
 
 on:
+  # Push: only `main` so the weekly run is the source of truth for
+  # feature-branch security findings. Direct pushes to feature branches
+  # are still covered by their PR run.
   push:
     branches: [main]
+  # PR: any target branch (PRs to `feature/*` get the same scan as PRs
+  # to `main`).
   pull_request:
-    branches: [main]
   schedule:
     - cron: "0 6 * * 1" # Weekly on Monday at 6am UTC
 
