@@ -242,6 +242,26 @@ mod tests {
     }
 
     #[test]
+    fn initial_open_action_implements_debug_formatting() {
+        // Covers the auto-derived `Debug` impl for the enum. Without an
+        // explicit call site, the impl is only reached via the panic
+        // messages in the matches! tests below, which never fire when
+        // those tests pass.
+        let actions = [
+            InitialOpenAction::Folder("/workspace".to_string()),
+            InitialOpenAction::File("/workspace/notes.md".to_string()),
+            InitialOpenAction::RejectedNotMarkdown("/workspace/evil.txt".to_string()),
+        ];
+        for action in &actions {
+            let formatted = format!("{action:?}");
+            assert!(
+                !formatted.is_empty(),
+                "expected non-empty Debug for {action:?}"
+            );
+        }
+    }
+
+    #[test]
     fn classify_resolved_path_recognises_folders() {
         let cwd = unique_tmp("cls_folder");
         let result = classify_resolved_path(&cwd.canonicalize().unwrap()).expect("classifies");

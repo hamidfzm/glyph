@@ -559,6 +559,27 @@ describe("useTabs dialog and events", () => {
     expect(result.current.tabs).toHaveLength(1);
   });
 
+  it("openFileInFolderTab loads a markdown file into the folder tab", async () => {
+    // Covers the happy path through the same gate the rejection test below
+    // exercises, so both branches of the `isMarkdownFile` check show up
+    // covered. Without this the partial-branch sliver lingers on codecov.
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folderTab = result.current.tabs.find((t) => t.kind === "folder");
+    expect(folderTab).toBeDefined();
+
+    await act(async () => {
+      await result.current.openFileInFolderTab(folderTab!.id, "/p/ws/note.md");
+    });
+
+    const updated = result.current.tabs.find((t) => t.id === folderTab!.id);
+    expect(updated?.kind === "folder" ? updated.file?.path : null).toBe("/p/ws/note.md");
+  });
+
   it("openFileInFolderTab refuses to load a non-markdown extension", async () => {
     // Matches openFile: a `.txt` / `.html` / etc. dropped onto a folder tab
     // must not become the active file. Defends the renderer from arbitrary
