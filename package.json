@@ -20,7 +20,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "sync:tauri-npm": "node scripts/sync-tauri-npm-versions.mjs",
-    "sync:tauri-npm:check": "node scripts/sync-tauri-npm-versions.mjs --check"
+    "sync:tauri-npm:check": "node scripts/sync-tauri-npm-versions.mjs --check",
+    "prepare": "husky"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.2",
@@ -86,6 +87,8 @@
     "@vitejs/plugin-react": "^5",
     "@vitest/coverage-v8": "^4.1.6",
     "happy-dom": "^20.9.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.5",
     "rehype-stringify": "^10.0.1",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",

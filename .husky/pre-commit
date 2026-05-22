@@ -1,0 +1,37 @@
+# Pre-commit gate. Runs every check CI runs so a green commit is a green
+# PR build. Expect roughly 1–2 minutes on a clean working tree; the fast
+# parts (lint-staged) gate the slow parts so a formatter miss fails in
+# seconds before the whole suite kicks off.
+#
+# Steps:
+#   1. lint-staged: Biome on staged JS/TS/CSS (auto-fix + re-stage),
+#      `cargo fmt --check` once if any Rust file is staged.
+#   2. pnpm typecheck (tsc --noEmit)
+#   3. pnpm test --run (full vitest suite)
+#   4. cargo test --lib (Rust unit tests)
+#   5. cargo clippy --all-targets -- -D warnings
+#
+# To bypass in a genuine emergency: `git commit --no-verify`. Don't make
+# a habit of it — CI runs the same gate and will reject the PR.
+
+set -e
+
+# 1. Per-file frontend format/lint via Biome + workspace-level cargo fmt
+#    --check when any Rust file is staged. See .lintstagedrc.mjs.
+pnpm exec lint-staged
+
+# 2. Type-check the frontend.
+echo "→ pnpm typecheck"
+pnpm typecheck
+
+# 3. Frontend tests.
+echo "→ pnpm test --run"
+pnpm test --run
+
+# 4. Rust unit tests.
+echo "→ cargo test --lib (src-tauri)"
+(cd src-tauri && cargo test --lib)
+
+# 5. Clippy with warnings denied.
+echo "→ cargo clippy --all-targets -- -D warnings (src-tauri)"
+(cd src-tauri && cargo clippy --all-targets -- -D warnings)
