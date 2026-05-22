@@ -1,10 +1,14 @@
 name: CI
 
 on:
+  # Push: only protect `main`. Feature branches use PR runs for
+  # validation; direct pushes to feature branches don't need their own
+  # CI fire.
   push:
     branches: [main]
+  # PR: every PR runs the gate regardless of target branch so stacked
+  # PRs against `feature/*` get the same checks as PRs to `main`.
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
