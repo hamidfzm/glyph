@@ -194,6 +194,22 @@ describe("useTabs file operations", () => {
     expect(result.current.activeTab?.id).toBe(result.current.tabs[0].id);
   });
 
+  it("refuses to open a file whose extension isn't a supported markdown type", async () => {
+    // openFile gates non-markdown extensions so a random `.txt` / `.html`
+    // can't reach the renderer with embedded HTML / JS.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/evil.txt");
+    });
+
+    expect(result.current.tabs).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("non-markdown"));
+    warnSpy.mockRestore();
+  });
+
   it("activates the existing tab instead of duplicating", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
@@ -541,6 +557,51 @@ describe("useTabs dialog and events", () => {
     });
 
     expect(result.current.tabs).toHaveLength(1);
+  });
+
+  it("openFileInFolderTab loads a markdown file into the folder tab", async () => {
+    // Covers the happy path through the same gate the rejection test below
+    // exercises, so both branches of the `isMarkdownFile` check show up
+    // covered. Without this the partial-branch sliver lingers on codecov.
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folderTab = result.current.tabs.find((t) => t.kind === "folder");
+    expect(folderTab).toBeDefined();
+
+    await act(async () => {
+      await result.current.openFileInFolderTab(folderTab!.id, "/p/ws/note.md");
+    });
+
+    const updated = result.current.tabs.find((t) => t.id === folderTab!.id);
+    expect(updated?.kind === "folder" ? updated.file?.path : null).toBe("/p/ws/note.md");
+  });
+
+  it("openFileInFolderTab refuses to load a non-markdown extension", async () => {
+    // Matches openFile: a `.txt` / `.html` / etc. dropped onto a folder tab
+    // must not become the active file. Defends the renderer from arbitrary
+    // HTML/JS the same way the top-level openFile gate does.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folderTab = result.current.tabs.find((t) => t.kind === "folder");
+    expect(folderTab).toBeDefined();
+
+    await act(async () => {
+      await result.current.openFileInFolderTab(folderTab!.id, "/p/ws/evil.txt");
+    });
+
+    const updated = result.current.tabs.find((t) => t.id === folderTab!.id);
+    expect(updated?.kind === "folder" ? updated.file : null).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("non-markdown"));
+    warnSpy.mockRestore();
   });
 
   it("openFile is wired to the open-file event", async () => {

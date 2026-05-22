@@ -75,15 +75,18 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .build()?;
 
     // View menu
-    let command_palette = MenuItemBuilder::with_id("open-command-palette", "Command Palette\u{2026}")
-        .accelerator("CmdOrCtrl+K")
-        .build(handle)?;
-    let toggle_files_sidebar = MenuItemBuilder::with_id("toggle-files-sidebar", "Toggle Files Sidebar")
-        .accelerator("CmdOrCtrl+B")
-        .build(handle)?;
-    let toggle_outline_sidebar = MenuItemBuilder::with_id("toggle-outline-sidebar", "Toggle Outline Sidebar")
-        .accelerator("CmdOrCtrl+\\")
-        .build(handle)?;
+    let command_palette =
+        MenuItemBuilder::with_id("open-command-palette", "Command Palette\u{2026}")
+            .accelerator("CmdOrCtrl+K")
+            .build(handle)?;
+    let toggle_files_sidebar =
+        MenuItemBuilder::with_id("toggle-files-sidebar", "Toggle Files Sidebar")
+            .accelerator("CmdOrCtrl+B")
+            .build(handle)?;
+    let toggle_outline_sidebar =
+        MenuItemBuilder::with_id("toggle-outline-sidebar", "Toggle Outline Sidebar")
+            .accelerator("CmdOrCtrl+\\")
+            .build(handle)?;
 
     let zoom_in = MenuItemBuilder::with_id("zoom-in", "Zoom In")
         .accelerator("CmdOrCtrl+=")
@@ -116,14 +119,11 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .build()?;
 
     // AI menu
-    let ai_summarize = MenuItemBuilder::with_id("ai-summarize", "Summarize Document")
-        .build(handle)?;
-    let ai_explain = MenuItemBuilder::with_id("ai-explain", "Explain Document")
-        .build(handle)?;
-    let ai_simplify = MenuItemBuilder::with_id("ai-simplify", "Simplify Document")
-        .build(handle)?;
-    let ai_read_aloud = MenuItemBuilder::with_id("ai-read-aloud", "Read Aloud")
-        .build(handle)?;
+    let ai_summarize =
+        MenuItemBuilder::with_id("ai-summarize", "Summarize Document").build(handle)?;
+    let ai_explain = MenuItemBuilder::with_id("ai-explain", "Explain Document").build(handle)?;
+    let ai_simplify = MenuItemBuilder::with_id("ai-simplify", "Simplify Document").build(handle)?;
+    let ai_read_aloud = MenuItemBuilder::with_id("ai-read-aloud", "Read Aloud").build(handle)?;
 
     let ai_menu = SubmenuBuilder::new(handle, "AI")
         .item(&ai_summarize)
@@ -226,16 +226,22 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
 /// items are propagated as strings so the command can surface them.
 pub fn apply_menu_state(refs: &MenuItemRefs, flags: &MenuStateFlags) -> Result<(), String> {
     let stringify = |e: tauri::Error| e.to_string();
-    refs.close_tab.set_enabled(flags.has_tab).map_err(stringify)?;
+    refs.close_tab
+        .set_enabled(flags.has_tab)
+        .map_err(stringify)?;
     refs.print.set_enabled(flags.has_file).map_err(stringify)?;
     refs.find.set_enabled(flags.has_file).map_err(stringify)?;
     refs.toggle_edit
         .set_enabled(flags.has_file)
         .map_err(stringify)?;
     let ai_enabled = flags.ai_configured && flags.has_content;
-    refs.ai_summarize.set_enabled(ai_enabled).map_err(stringify)?;
+    refs.ai_summarize
+        .set_enabled(ai_enabled)
+        .map_err(stringify)?;
     refs.ai_explain.set_enabled(ai_enabled).map_err(stringify)?;
-    refs.ai_simplify.set_enabled(ai_enabled).map_err(stringify)?;
+    refs.ai_simplify
+        .set_enabled(ai_enabled)
+        .map_err(stringify)?;
     refs.ai_read_aloud
         .set_enabled(flags.tts_available && flags.has_content)
         .map_err(stringify)?;
