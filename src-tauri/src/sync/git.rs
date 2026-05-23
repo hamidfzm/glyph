@@ -88,27 +88,14 @@ impl GitBackend {
     }
 
     /// Build the libgit2 credentials callback. Used for both fetch and
-    /// push. Tries the configured HTTPS token first, then falls back to
-    /// the libgit2 ssh-agent / default credentials so SSH-cloned repos
-    /// keep working too.
+    /// push. The actual credential selection lives in [`select_credentials`]
+    /// (free function) so it can be unit-tested with synthetic inputs
+    /// instead of needing a real authenticated remote.
     fn credentials_callbacks(&self) -> RemoteCallbacks<'_> {
         let mut cb = RemoteCallbacks::new();
         let token = self.https_token.clone();
         cb.credentials(move |_url, username_from_url, allowed| {
-            // HTTPS basic auth — what `https://github.com/...` remotes
-            // expect. "x-access-token" is a magic GitHub PAT username
-            // but GitLab / Codeberg accept any non-empty username.
-            if allowed.is_user_pass_plaintext() {
-                if let Some(t) = token.as_ref() {
-                    return git2::Cred::userpass_plaintext("x-access-token", t);
-                }
-            }
-            // SSH agent (when configured).
-            if allowed.is_ssh_key() {
-                let user = username_from_url.unwrap_or("git");
-                return git2::Cred::ssh_key_from_agent(user);
-            }
-            git2::Cred::default()
+            select_credentials(allowed, username_from_url, token.as_deref())
         });
         cb
     }
@@ -468,6 +455,36 @@ pub fn init_repo(path: &Path, default_branch: &str) -> Result<PathBuf, SyncError
     Ok(path.to_path_buf())
 }
 
+/// Select libgit2 credentials based on what auth method the remote
+/// advertised and what we have stashed. Used by both fetch/push and
+/// clone. Extracted so we can drive it from tests with synthetic
+/// `CredentialType` bitflags instead of needing a real authenticated
+/// remote.
+///
+/// Preference order:
+/// 1. HTTPS basic-auth with the supplied token if the remote will accept
+///    username/password and we have one. We use `x-access-token` as the
+///    username because GitHub treats it as a magic PAT username; GitLab
+///    and Codeberg accept any non-empty username.
+/// 2. SSH agent if the remote wants a key (`git@host:repo.git` style).
+/// 3. libgit2's default (anonymous HTTPS for public remotes, etc.).
+pub fn select_credentials(
+    allowed: git2::CredentialType,
+    username_from_url: Option<&str>,
+    token: Option<&str>,
+) -> Result<git2::Cred, git2::Error> {
+    if allowed.is_user_pass_plaintext() {
+        if let Some(t) = token {
+            return git2::Cred::userpass_plaintext("x-access-token", t);
+        }
+    }
+    if allowed.is_ssh_key() {
+        let user = username_from_url.unwrap_or("git");
+        return git2::Cred::ssh_key_from_agent(user);
+    }
+    git2::Cred::default()
+}
+
 /// Clone `url` into `path`. The destination must not exist yet (libgit2's
 /// rule). When `token` is supplied it's used as the HTTPS basic-auth
 /// password with the `x-access-token` username (the GitHub PAT shape,
@@ -478,16 +495,7 @@ pub fn clone_repo(url: &str, path: &Path, token: Option<&str>) -> Result<PathBuf
     let mut callbacks = RemoteCallbacks::new();
     let token_owned = token.map(|t| t.to_string());
     callbacks.credentials(move |_url, username_from_url, allowed| {
-        if allowed.is_user_pass_plaintext() {
-            if let Some(t) = token_owned.as_ref() {
-                return git2::Cred::userpass_plaintext("x-access-token", t);
-            }
-        }
-        if allowed.is_ssh_key() {
-            let user = username_from_url.unwrap_or("git");
-            return git2::Cred::ssh_key_from_agent(user);
-        }
-        git2::Cred::default()
+        select_credentials(allowed, username_from_url, token_owned.as_deref())
     });
     let mut fo = FetchOptions::new();
     fo.remote_callbacks(callbacks);
@@ -577,6 +585,60 @@ mod tests {
         let backend = GitBackend::new(cfg);
         let err = backend.status().unwrap_err();
         assert!(matches!(err, SyncError::NotConfigured), "got: {err:?}");
+    }
+
+    #[test]
+    fn open_repo_errors_with_backend_when_path_is_not_a_directory() {
+        // Pointing the workspace at a regular file instead of a directory
+        // makes libgit2 return something other than NotFound — exercises
+        // the non-NotConfigured branch of `open_repo`.
+        let tmp = TempDir::new().unwrap();
+        let file = tmp.path().join("not-a-repo.txt");
+        fs::write(&file, "x").unwrap();
+        let cfg = WorkspaceSyncConfig::new_git(file.to_string_lossy());
+        let backend = GitBackend::new(cfg);
+        let err = backend.status().unwrap_err();
+        assert!(
+            matches!(err, SyncError::NotConfigured | SyncError::Backend(_)),
+            "got {err:?}"
+        );
+    }
+
+    /// Helper: `git2::Cred::credtype()` returns a raw libgit2 cred type
+    /// as a `u32` rather than the typed `CredentialType` bitflag, so we
+    /// bit-AND against the bitflag's `bits()` to check what was selected.
+    fn cred_has(cred: &git2::Cred, kind: git2::CredentialType) -> bool {
+        cred.credtype() & kind.bits() != 0
+    }
+
+    #[test]
+    fn select_credentials_returns_userpass_when_https_basic_auth_is_allowed_and_token_present() {
+        let cred = select_credentials(
+            git2::CredentialType::USER_PASS_PLAINTEXT,
+            None,
+            Some("ghp_secret"),
+        )
+        .expect("userpass cred");
+        assert!(cred_has(&cred, git2::CredentialType::USER_PASS_PLAINTEXT));
+    }
+
+    #[test]
+    fn select_credentials_falls_through_to_default_when_no_token_for_https() {
+        // Remote will accept userpass but we have nothing to give. With
+        // only USER_PASS_PLAINTEXT advertised, we end up at the libgit2
+        // default cred, which is what unauthenticated HTTPS uses.
+        let cred = select_credentials(git2::CredentialType::USER_PASS_PLAINTEXT, None, None)
+            .expect("default cred");
+        assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
+    }
+
+    #[test]
+    fn select_credentials_returns_default_when_no_supported_methods_are_allowed() {
+        // Remote advertises something we don't handle (e.g. NTLM). Falls
+        // through to libgit2's default credential.
+        let cred =
+            select_credentials(git2::CredentialType::USERNAME, None, None).expect("default cred");
+        assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
     }
 
     #[test]
@@ -739,6 +801,39 @@ mod tests {
         let sig = backend.signature().unwrap();
         assert!(!sig.name().unwrap().is_empty());
         assert!(!sig.email().unwrap().is_empty());
+    }
+
+    #[test]
+    fn sync_merges_non_conflicting_remote_changes() {
+        // Two clones change *different* files starting from the same
+        // commit. The fetch sees a remote that's not a fast-forward
+        // (both sides committed on top of the common ancestor), but the
+        // merge has no conflicts so libgit2 writes a merge commit, then
+        // we push.
+        let f = Fixture::new();
+        f.write_file("base.md", "base\n");
+        f.backend().sync().unwrap();
+
+        let other = f._tmp.path().join("other");
+        Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
+        let mut other_cfg = WorkspaceSyncConfig::new_git(other.to_string_lossy());
+        other_cfg.remote_url = f.remote.to_string_lossy().into();
+        other_cfg.author = Some(super::super::config::CommitIdentity {
+            name: "Other".into(),
+            email: "o@e.com".into(),
+        });
+        fs::write(other.join("other-only.md"), "from other\n").unwrap();
+        GitBackend::new(other_cfg).sync().unwrap();
+
+        // Now the first workspace edits a different file and syncs.
+        f.write_file("first-only.md", "from first\n");
+        let result = f.backend().sync().unwrap();
+        assert!(result.conflicts.is_empty(), "no conflicts expected");
+        assert_eq!(result.pulled_count, 1, "merged in other's commit");
+        assert!(result.pushed_count >= 1, "merge commit pushed");
+        // After the merge both files exist locally.
+        assert!(f.workspace.join("first-only.md").exists());
+        assert!(f.workspace.join("other-only.md").exists());
     }
 
     #[test]

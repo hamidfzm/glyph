@@ -11,6 +11,7 @@ pub mod commands;
 mod config;
 mod error;
 pub mod git;
+mod ops;
 mod state;
 
 pub use backend::{BackendKind, ConflictPolicy, StatusReport, SyncBackend, SyncResult};

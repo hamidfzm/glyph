@@ -149,13 +149,16 @@ mod tests {
 
     #[test]
     fn build_backend_errors_when_no_config_is_registered() {
-        // `Box<dyn SyncBackend>` isn't Debug, so we can't use the
-        // .unwrap_err() shortcut here; pattern-match instead.
+        // `Box<dyn SyncBackend>` isn't Debug, so the usual `unwrap_err`
+        // shortcut won't compile here. `.err()` collapses success/failure
+        // into a single `Option<SyncError>` we can pattern-match without
+        // a dead panic arm.
         let state = SyncState::new();
-        match state.build_backend("/missing") {
-            Err(SyncError::NotConfigured) => {}
-            other => panic!("expected NotConfigured, got Err/Ok variant: {:?}", other.err()),
-        }
+        let err = state.build_backend("/missing").err();
+        assert!(
+            matches!(err, Some(SyncError::NotConfigured)),
+            "expected NotConfigured, got {err:?}"
+        );
     }
 
     #[test]
