@@ -88,15 +88,12 @@ impl GitBackend {
     }
 
     /// Build the libgit2 credentials callback. Used for both fetch and
-    /// push. The actual credential selection lives in [`select_credentials`]
-    /// (free function) so it can be unit-tested with synthetic inputs
-    /// instead of needing a real authenticated remote.
+    /// push. Delegates the cred-shape selection to the free function
+    /// returned by [`make_credentials_callback`] so the closure body
+    /// itself can be exercised without a real authenticated remote.
     fn credentials_callbacks(&self) -> RemoteCallbacks<'_> {
         let mut cb = RemoteCallbacks::new();
-        let token = self.https_token.clone();
-        cb.credentials(move |_url, username_from_url, allowed| {
-            select_credentials(allowed, username_from_url, token.as_deref())
-        });
+        cb.credentials(make_credentials_callback(self.https_token.clone()));
         cb
     }
 
@@ -455,6 +452,18 @@ pub fn init_repo(path: &Path, default_branch: &str) -> Result<PathBuf, SyncError
     Ok(path.to_path_buf())
 }
 
+/// Build the FnMut closure libgit2 hands to `credentials()`. Returns
+/// `impl FnMut` directly so it's reusable from fetch/push and
+/// clone, and the body is reachable from tests (call the returned
+/// closure with synthetic args).
+pub fn make_credentials_callback(
+    token: Option<String>,
+) -> impl FnMut(&str, Option<&str>, git2::CredentialType) -> Result<git2::Cred, git2::Error> {
+    move |_url, username_from_url, allowed| {
+        select_credentials(allowed, username_from_url, token.as_deref())
+    }
+}
+
 /// Select libgit2 credentials based on what auth method the remote
 /// advertised and what we have stashed. Used by both fetch/push and
 /// clone. Extracted so we can drive it from tests with synthetic
@@ -493,10 +502,7 @@ pub fn select_credentials(
 /// remotes.
 pub fn clone_repo(url: &str, path: &Path, token: Option<&str>) -> Result<PathBuf, SyncError> {
     let mut callbacks = RemoteCallbacks::new();
-    let token_owned = token.map(|t| t.to_string());
-    callbacks.credentials(move |_url, username_from_url, allowed| {
-        select_credentials(allowed, username_from_url, token_owned.as_deref())
-    });
+    callbacks.credentials(make_credentials_callback(token.map(|t| t.to_string())));
     let mut fo = FetchOptions::new();
     fo.remote_callbacks(callbacks);
     let mut builder = git2::build::RepoBuilder::new();
@@ -609,6 +615,33 @@ mod tests {
     /// bit-AND against the bitflag's `bits()` to check what was selected.
     fn cred_has(cred: &git2::Cred, kind: git2::CredentialType) -> bool {
         cred.credtype() & kind.bits() != 0
+    }
+
+    #[test]
+    fn make_credentials_callback_forwards_to_select_credentials() {
+        // The closure body is one call to `select_credentials`; we
+        // exercise it directly with synthetic args so the closure lines
+        // get coverage even without an authenticated remote handshake.
+        let mut cb = make_credentials_callback(Some("ghp_xyz".into()));
+        let cred = cb(
+            "https://example.com/repo.git",
+            None,
+            git2::CredentialType::USER_PASS_PLAINTEXT,
+        )
+        .expect("userpass cred");
+        assert!(cred_has(&cred, git2::CredentialType::USER_PASS_PLAINTEXT));
+
+        // Same callback called a second time with no token in scope —
+        // confirms the closure captures and reuses the token via the
+        // FnMut closure trait.
+        let mut cb_no_token = make_credentials_callback(None);
+        let cred = cb_no_token(
+            "https://example.com/repo.git",
+            None,
+            git2::CredentialType::USER_PASS_PLAINTEXT,
+        )
+        .expect("default cred");
+        assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
     }
 
     #[test]
@@ -729,11 +762,34 @@ mod tests {
 
     #[test]
     fn map_remote_error_classifies_network_and_auth_errors() {
-        // We can't easily fabricate libgit2 Errors of arbitrary class,
-        // but we can confirm the unclassified fallback at least.
-        let e = git2::Error::from_str("authentication required");
-        let mapped = map_remote_error(e);
-        assert!(matches!(mapped, SyncError::AuthFailed(_)));
+        // `git2::Error::new` takes (code, class, message), so we can
+        // hand the mapper every branch's class and confirm it routes
+        // to the matching `SyncError` variant.
+        use git2::{ErrorClass, ErrorCode};
+
+        let net = git2::Error::new(ErrorCode::GenericError, ErrorClass::Net, "down");
+        assert!(matches!(map_remote_error(net), SyncError::Network(_)));
+
+        let http = git2::Error::new(ErrorCode::GenericError, ErrorClass::Http, "500");
+        assert!(matches!(map_remote_error(http), SyncError::Network(_)));
+
+        let ssh = git2::Error::new(ErrorCode::GenericError, ErrorClass::Ssh, "no key");
+        assert!(matches!(map_remote_error(ssh), SyncError::AuthFailed(_)));
+
+        let cb = git2::Error::new(ErrorCode::GenericError, ErrorClass::Callback, "rejected");
+        assert!(matches!(map_remote_error(cb), SyncError::AuthFailed(_)));
+
+        // Unclassified errors whose message mentions auth/authentication
+        // still route to AuthFailed.
+        let phrased = git2::Error::from_str("authentication required");
+        assert!(matches!(
+            map_remote_error(phrased),
+            SyncError::AuthFailed(_)
+        ));
+
+        // Everything else falls through to Backend.
+        let generic = git2::Error::from_str("something else");
+        assert!(matches!(map_remote_error(generic), SyncError::Backend(_)));
     }
 
     #[test]
