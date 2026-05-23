@@ -468,6 +468,35 @@ pub fn init_repo(path: &Path, default_branch: &str) -> Result<PathBuf, SyncError
     Ok(path.to_path_buf())
 }
 
+/// Clone `url` into `path`. The destination must not exist yet (libgit2's
+/// rule). When `token` is supplied it's used as the HTTPS basic-auth
+/// password with the `x-access-token` username (the GitHub PAT shape,
+/// also accepted by GitLab / Codeberg). Without a token, we fall back
+/// to the SSH agent for `git@` URLs and unauthenticated HTTPS for public
+/// remotes.
+pub fn clone_repo(url: &str, path: &Path, token: Option<&str>) -> Result<PathBuf, SyncError> {
+    let mut callbacks = RemoteCallbacks::new();
+    let token_owned = token.map(|t| t.to_string());
+    callbacks.credentials(move |_url, username_from_url, allowed| {
+        if allowed.is_user_pass_plaintext() {
+            if let Some(t) = token_owned.as_ref() {
+                return git2::Cred::userpass_plaintext("x-access-token", t);
+            }
+        }
+        if allowed.is_ssh_key() {
+            let user = username_from_url.unwrap_or("git");
+            return git2::Cred::ssh_key_from_agent(user);
+        }
+        git2::Cred::default()
+    });
+    let mut fo = FetchOptions::new();
+    fo.remote_callbacks(callbacks);
+    let mut builder = git2::build::RepoBuilder::new();
+    builder.fetch_options(fo);
+    builder.clone(url, path).map_err(map_remote_error)?;
+    Ok(path.to_path_buf())
+}
+
 /// Add an `origin` remote pointing at `url` to a repository at `path`.
 pub fn set_origin(path: &Path, url: &str) -> Result<(), SyncError> {
     let repo = Repository::open(path).map_err(|e| SyncError::Backend(e.message().to_string()))?;
@@ -654,6 +683,41 @@ mod tests {
         // the first commit.
         let head = repo.find_reference("HEAD").unwrap();
         assert_eq!(head.symbolic_target(), Some("refs/heads/trunk"));
+    }
+
+    #[test]
+    fn clone_repo_clones_an_unauthenticated_local_remote() {
+        // Seed: build a working repo, push a file, then clone the bare
+        // remote into a fresh path. The clone should contain the file.
+        let f = Fixture::new();
+        f.write_file("seed.md", "# seed\n");
+        f.backend().sync().unwrap();
+
+        let dest = f._tmp.path().join("cloned");
+        let resolved = clone_repo(f.remote.to_str().unwrap(), &dest, None).unwrap();
+        assert_eq!(resolved, dest);
+        assert!(dest.join("seed.md").exists());
+        assert!(dest.join(".git").exists());
+    }
+
+    #[test]
+    fn clone_repo_errors_when_target_exists_and_is_not_empty() {
+        let f = Fixture::new();
+        f.write_file("seed.md", "# seed\n");
+        f.backend().sync().unwrap();
+
+        // libgit2 refuses to clone into a non-empty directory.
+        let dest = f._tmp.path().join("existing");
+        fs::create_dir_all(&dest).unwrap();
+        fs::write(dest.join("blocker.txt"), "x").unwrap();
+        let err = clone_repo(f.remote.to_str().unwrap(), &dest, None).unwrap_err();
+        // Local-path bare remotes go through libgit2 directly without
+        // hitting the network classifier; we just confirm it failed
+        // with some backend-mapped error.
+        assert!(
+            matches!(err, SyncError::Backend(_) | SyncError::Network(_)),
+            "got {err:?}"
+        );
     }
 
     #[test]

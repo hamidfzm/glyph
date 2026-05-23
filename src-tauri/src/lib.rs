@@ -69,6 +69,7 @@ pub fn run() {
         ))))
         .manage(commands::InitialFile(Mutex::new(None)))
         .manage(commands::InitialFolder(Mutex::new(None)))
+        .manage(sync::SyncState::new())
         .setup(|app| {
             let (menu, menu_refs) = menu::build_menu(app)?;
             app.set_menu(menu)?;
@@ -142,6 +143,15 @@ pub fn run() {
             watcher::watch_directory,
             watcher::unwatch_directory,
             menu_runtime::set_menu_state,
+            sync::commands::sync_set_config,
+            sync::commands::sync_get_config,
+            sync::commands::sync_remove_config,
+            sync::commands::sync_set_token,
+            sync::commands::sync_clear_token,
+            sync::commands::sync_init_repo,
+            sync::commands::sync_clone_remote,
+            sync::commands::sync_status,
+            sync::commands::sync_run,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Glyph");
