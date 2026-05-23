@@ -13,6 +13,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::backend::{BackendKind, ConflictPolicy};
+use super::DEFAULT_REMOTE_BRANCH;
 
 /// What we keep on disk for a single workspace's sync setup.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,7 +53,7 @@ impl WorkspaceSyncConfig {
             workspace_path: workspace_path.into(),
             backend: BackendKind::Git,
             remote_url: String::new(),
-            remote_branch: "main".to_string(),
+            remote_branch: DEFAULT_REMOTE_BRANCH.to_string(),
             conflict_policy: ConflictPolicy::default(),
             auto_sync_seconds: None,
             author: None,
@@ -70,7 +71,7 @@ mod tests {
         assert_eq!(cfg.workspace_path, "/workspace/notes");
         assert_eq!(cfg.backend, BackendKind::Git);
         assert!(cfg.remote_url.is_empty());
-        assert_eq!(cfg.remote_branch, "main");
+        assert_eq!(cfg.remote_branch, DEFAULT_REMOTE_BRANCH);
         assert_eq!(cfg.conflict_policy, ConflictPolicy::Prompt);
         assert!(cfg.auto_sync_seconds.is_none());
         assert!(cfg.author.is_none());

@@ -500,10 +500,19 @@ mod tests {
         fn new() -> Self {
             let tmp = TempDir::new().unwrap();
             let remote = tmp.path().join("remote.git");
-            git2::Repository::init_bare(&remote).unwrap();
+            // `init_bare` alone honours the runner's `init.defaultBranch`
+            // config — GitHub Actions hosts default to "master" because
+            // they don't set `init.defaultBranch`, which makes
+            // `Repository::clone` resolve HEAD to a non-existent branch
+            // and breaks the merge scenarios below. Pin via init_opts so
+            // the fixture is deterministic regardless of host config.
+            let mut opts = git2::RepositoryInitOptions::new();
+            opts.bare(true);
+            opts.initial_head(super::super::DEFAULT_REMOTE_BRANCH);
+            git2::Repository::init_opts(&remote, &opts).unwrap();
             let workspace = tmp.path().join("local");
             fs::create_dir_all(&workspace).unwrap();
-            init_repo(&workspace, "main").unwrap();
+            init_repo(&workspace, super::super::DEFAULT_REMOTE_BRANCH).unwrap();
             set_origin(&workspace, remote.to_str().unwrap()).unwrap();
             // libgit2 needs *some* author identity for commits.
             let cfg_path = workspace.join(".git/config");
@@ -650,7 +659,7 @@ mod tests {
     #[test]
     fn set_origin_creates_then_updates_the_remote_url() {
         let tmp = TempDir::new().unwrap();
-        init_repo(tmp.path(), "main").unwrap();
+        init_repo(tmp.path(), super::super::DEFAULT_REMOTE_BRANCH).unwrap();
         set_origin(tmp.path(), "https://example.com/a.git").unwrap();
         set_origin(tmp.path(), "https://example.com/b.git").unwrap();
         let repo = Repository::open(tmp.path()).unwrap();
