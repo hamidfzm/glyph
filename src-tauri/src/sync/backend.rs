@@ -56,7 +56,7 @@ pub enum ConflictPolicy {
 /// Inspect-only snapshot of "where is this workspace at relative to
 /// its remote?". Computed without writing anything so it can refresh
 /// cheaply (status bar polling, manual refresh button).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatusReport {
     pub kind: BackendKind,
@@ -78,7 +78,7 @@ pub struct StatusReport {
 /// Outcome of a single [`SyncBackend::sync`] call. Frontend renders a
 /// short summary ("3 changes pulled, 1 committed locally") and stashes
 /// the timestamp so the next status check can show it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncResult {
     pub kind: BackendKind,

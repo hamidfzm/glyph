@@ -76,14 +76,12 @@ impl GitBackend {
     /// Open the workspace as a Git repo. Surfaces a clear error if the
     /// folder hasn't been `git init`'d / cloned yet — callers should
     /// route that into the "set up sync" flow instead of treating it
-    /// as a generic failure.
+    /// as a generic failure. Any other libgit2 error (corrupt `.git`,
+    /// permission issues, etc.) falls through to `Backend`.
     fn open_repo(&self) -> Result<Repository, SyncError> {
-        Repository::open(self.workspace()).map_err(|e| {
-            if e.code() == git2::ErrorCode::NotFound {
-                SyncError::NotConfigured
-            } else {
-                SyncError::Backend(e.message().to_string())
-            }
+        Repository::open(self.workspace()).map_err(|e| match e.code() {
+            git2::ErrorCode::NotFound => SyncError::NotConfigured,
+            _ => SyncError::Backend(e.message().to_string()),
         })
     }
 
@@ -148,6 +146,10 @@ impl GitBackend {
                 // change.
                 return Ok(!index.is_empty());
             }
+            // Defensive: libgit2's `repo.head()` either succeeds, returns
+            // `UnbornBranch` (handled above), or surfaces a lower-level
+            // I/O failure (corrupt refs file etc.) we don't try to
+            // recover from. Not reachable in normal use, so no test.
             Err(e) => return Err(SyncError::Backend(e.message().to_string())),
         };
         let index_tree_oid = index
@@ -196,6 +198,9 @@ impl GitBackend {
                 .map(Some)
                 .map_err(|e| SyncError::Backend(e.message().to_string())),
             Err(e) if e.code() == git2::ErrorCode::UnbornBranch => Ok(None),
+            // Same defensive fallthrough as `stage_all` — non-`UnbornBranch`
+            // `repo.head()` failures are corrupt-repo territory; we surface
+            // a Backend error and let the user re-clone.
             Err(e) => Err(SyncError::Backend(e.message().to_string())),
         }
     }
@@ -488,6 +493,11 @@ pub fn select_credentials(
         }
     }
     if allowed.is_ssh_key() {
+        // Defensive: requires a running ssh-agent on the host. CI hosts
+        // don't have one, so this arm isn't covered by the unit tests.
+        // Manual verification with `eval "$(ssh-agent)"; ssh-add` + a
+        // git@ remote is the validation path. The follow-up OS-keychain
+        // PR will replace this with a stored-key flow.
         let user = username_from_url.unwrap_or("git");
         return git2::Cred::ssh_key_from_agent(user);
     }
@@ -594,19 +604,21 @@ mod tests {
     }
 
     #[test]
-    fn open_repo_errors_with_backend_when_path_is_not_a_directory() {
-        // Pointing the workspace at a regular file instead of a directory
-        // makes libgit2 return something other than NotFound — exercises
-        // the non-NotConfigured branch of `open_repo`.
+    fn open_repo_errors_with_backend_when_dot_git_is_corrupt() {
+        // Replace the `.git` subdir libgit2 expects with a regular file
+        // containing garbage. `Repository::open` reaches it (so it's not
+        // NotFound) and reports something like `BadFile` / `Repository`
+        // — exercises the `_ => Backend` arm of `open_repo`.
         let tmp = TempDir::new().unwrap();
-        let file = tmp.path().join("not-a-repo.txt");
-        fs::write(&file, "x").unwrap();
-        let cfg = WorkspaceSyncConfig::new_git(file.to_string_lossy());
+        let workspace = tmp.path().join("corrupt");
+        fs::create_dir_all(&workspace).unwrap();
+        fs::write(workspace.join(".git"), "this is not a gitfile\n").unwrap();
+        let cfg = WorkspaceSyncConfig::new_git(workspace.to_string_lossy());
         let backend = GitBackend::new(cfg);
         let err = backend.status().unwrap_err();
         assert!(
-            matches!(err, SyncError::NotConfigured | SyncError::Backend(_)),
-            "got {err:?}"
+            matches!(err, SyncError::Backend(_)),
+            "expected Backend error from corrupt .git file, got {err:?}"
         );
     }
 

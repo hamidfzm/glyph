@@ -304,4 +304,181 @@ mod tests {
         assert_eq!(result.committed_count, 1);
         assert_eq!(result.pushed_count, 1);
     }
+
+    // -- Full IPC dispatch test -----------------------------------------
+    //
+    // The direct-call tests above exercise each wrapper's body, but the
+    // proc-macro-emitted `__cmd__sync_*` IPC marshalling lives in code
+    // generated at the `#[tauri::command]` attribute line and is only
+    // reached when an actual IPC message is delivered. The test below
+    // builds a real `mock_builder()` with `generate_handler!`, hands it
+    // a webview, and calls `tauri::test::get_ipc_response` for every
+    // command — covering the proc-macro lines so codecov's patch
+    // metric matches the real test surface.
+
+    use tauri::test::{get_ipc_response, mock_builder, mock_context, noop_assets, INVOKE_KEY};
+    use tauri::webview::InvokeRequest;
+    use tauri::WebviewWindowBuilder;
+
+    /// Build a fully-wired `App<MockRuntime>` with every sync command
+    /// registered and `SyncState` managed, plus a "main" webview ready
+    /// for IPC dispatch.
+    fn build_ipc_test_app() -> (
+        tauri::App<tauri::test::MockRuntime>,
+        tauri::WebviewWindow<tauri::test::MockRuntime>,
+    ) {
+        let app = mock_builder()
+            .invoke_handler(tauri::generate_handler![
+                sync_set_config,
+                sync_get_config,
+                sync_remove_config,
+                sync_set_token,
+                sync_clear_token,
+                sync_init_repo,
+                sync_clone_remote,
+                sync_status,
+                sync_run,
+            ])
+            .build(mock_context(noop_assets()))
+            .expect("mock app builds");
+        app.manage(SyncState::new());
+        let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .expect("webview builds");
+        (app, webview)
+    }
+
+    /// Send `cmd` with `args` over IPC and return the deserialized
+    /// `Ok` body. Panics on `Err` so the test fails with the libgit2 /
+    /// serde message inline.
+    fn invoke_ipc<T: serde::de::DeserializeOwned>(
+        webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: serde_json::Value,
+    ) -> T {
+        let url = if cfg!(any(windows, target_os = "android")) {
+            "http://tauri.localhost"
+        } else {
+            "tauri://localhost"
+        }
+        .parse()
+        .unwrap();
+        let response = get_ipc_response(
+            webview,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: tauri::ipc::CallbackFn(0),
+                error: tauri::ipc::CallbackFn(1),
+                url,
+                body: tauri::ipc::InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .unwrap_or_else(|e| panic!("ipc call `{cmd}` failed: {e}"));
+        response.deserialize().expect("response deserialises")
+    }
+
+    #[test]
+    fn ipc_dispatch_covers_every_sync_command() {
+        // One big sequential test rather than nine: building the mock
+        // app + webview is expensive (compiles the IPC init script), so
+        // share the setup and walk through every command's IPC arm.
+        let (_app, webview) = build_ipc_test_app();
+        let ws = Workspace::new();
+
+        // sync_init_repo
+        let _: () = invoke_ipc(
+            &webview,
+            "sync_init_repo",
+            serde_json::json!({
+                "workspacePath": ws.workspace_path,
+                "defaultBranch": null,
+                "remoteUrl": ws.remote_path,
+            }),
+        );
+        assert!(std::path::Path::new(&ws.workspace_path)
+            .join(".git")
+            .exists());
+
+        // sync_set_config
+        let _: () = invoke_ipc(
+            &webview,
+            "sync_set_config",
+            serde_json::json!({ "config": ws.config() }),
+        );
+
+        // sync_get_config
+        let got: Option<WorkspaceSyncConfig> = invoke_ipc(
+            &webview,
+            "sync_get_config",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        assert_eq!(got.unwrap().workspace_path, ws.workspace_path);
+
+        // sync_set_token
+        let _: () = invoke_ipc(
+            &webview,
+            "sync_set_token",
+            serde_json::json!({
+                "workspacePath": ws.workspace_path,
+                "token": "ipc-test-tok",
+            }),
+        );
+
+        // sync_status — clean working tree, no remote movement.
+        let status: crate::sync::backend::StatusReport = invoke_ipc(
+            &webview,
+            "sync_status",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        assert!(status.clean);
+
+        // Write a file, then sync_run — commits + pushes.
+        fs::write(
+            std::path::Path::new(&ws.workspace_path).join("note.md"),
+            "# hi\n",
+        )
+        .unwrap();
+        let result: crate::sync::backend::SyncResult = invoke_ipc(
+            &webview,
+            "sync_run",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        assert_eq!(result.committed_count, 1);
+        assert_eq!(result.pushed_count, 1);
+
+        // sync_clone_remote into a fresh path.
+        let dest = ws.tmp.path().join("ipc-clone");
+        let _: () = invoke_ipc(
+            &webview,
+            "sync_clone_remote",
+            serde_json::json!({
+                "workspacePath": dest.to_string_lossy(),
+                "remoteUrl": ws.remote_path,
+                "token": null,
+            }),
+        );
+        assert!(dest.join("note.md").exists());
+
+        // sync_clear_token
+        let _: () = invoke_ipc(
+            &webview,
+            "sync_clear_token",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+
+        // sync_remove_config — leaves the workspace unconfigured.
+        let _: () = invoke_ipc(
+            &webview,
+            "sync_remove_config",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        let after: Option<WorkspaceSyncConfig> = invoke_ipc(
+            &webview,
+            "sync_get_config",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        assert!(after.is_none());
+    }
 }
