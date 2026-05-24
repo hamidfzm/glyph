@@ -34,6 +34,9 @@ thiserror = "2"
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
 tempfile = "3"
+# `#[tokio::test]` macro for async unit tests. Tauri already pulls tokio
+# in transitively; we only need the macro / runtime entry points here.
+tokio = { version = "1", features = ["macros", "rt"] }
 
 [target."cfg(any(target_os = \"linux\", target_os = \"windows\"))".dependencies]
 tauri-plugin-single-instance = "2"

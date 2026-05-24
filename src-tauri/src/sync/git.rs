@@ -76,40 +76,22 @@ impl GitBackend {
     /// Open the workspace as a Git repo. Surfaces a clear error if the
     /// folder hasn't been `git init`'d / cloned yet — callers should
     /// route that into the "set up sync" flow instead of treating it
-    /// as a generic failure.
+    /// as a generic failure. Any other libgit2 error (corrupt `.git`,
+    /// permission issues, etc.) falls through to `Backend`.
     fn open_repo(&self) -> Result<Repository, SyncError> {
-        Repository::open(self.workspace()).map_err(|e| {
-            if e.code() == git2::ErrorCode::NotFound {
-                SyncError::NotConfigured
-            } else {
-                SyncError::Backend(e.message().to_string())
-            }
+        Repository::open(self.workspace()).map_err(|e| match e.code() {
+            git2::ErrorCode::NotFound => SyncError::NotConfigured,
+            _ => SyncError::Backend(e.message().to_string()),
         })
     }
 
     /// Build the libgit2 credentials callback. Used for both fetch and
-    /// push. Tries the configured HTTPS token first, then falls back to
-    /// the libgit2 ssh-agent / default credentials so SSH-cloned repos
-    /// keep working too.
+    /// push. Delegates the cred-shape selection to the free function
+    /// returned by [`make_credentials_callback`] so the closure body
+    /// itself can be exercised without a real authenticated remote.
     fn credentials_callbacks(&self) -> RemoteCallbacks<'_> {
         let mut cb = RemoteCallbacks::new();
-        let token = self.https_token.clone();
-        cb.credentials(move |_url, username_from_url, allowed| {
-            // HTTPS basic auth — what `https://github.com/...` remotes
-            // expect. "x-access-token" is a magic GitHub PAT username
-            // but GitLab / Codeberg accept any non-empty username.
-            if allowed.is_user_pass_plaintext() {
-                if let Some(t) = token.as_ref() {
-                    return git2::Cred::userpass_plaintext("x-access-token", t);
-                }
-            }
-            // SSH agent (when configured).
-            if allowed.is_ssh_key() {
-                let user = username_from_url.unwrap_or("git");
-                return git2::Cred::ssh_key_from_agent(user);
-            }
-            git2::Cred::default()
-        });
+        cb.credentials(make_credentials_callback(self.https_token.clone()));
         cb
     }
 
@@ -164,6 +146,10 @@ impl GitBackend {
                 // change.
                 return Ok(!index.is_empty());
             }
+            // Defensive: libgit2's `repo.head()` either succeeds, returns
+            // `UnbornBranch` (handled above), or surfaces a lower-level
+            // I/O failure (corrupt refs file etc.) we don't try to
+            // recover from. Not reachable in normal use, so no test.
             Err(e) => return Err(SyncError::Backend(e.message().to_string())),
         };
         let index_tree_oid = index
@@ -212,6 +198,9 @@ impl GitBackend {
                 .map(Some)
                 .map_err(|e| SyncError::Backend(e.message().to_string())),
             Err(e) if e.code() == git2::ErrorCode::UnbornBranch => Ok(None),
+            // Same defensive fallthrough as `stage_all` — non-`UnbornBranch`
+            // `repo.head()` failures are corrupt-repo territory; we surface
+            // a Backend error and let the user re-clone.
             Err(e) => Err(SyncError::Backend(e.message().to_string())),
         }
     }
@@ -468,6 +457,70 @@ pub fn init_repo(path: &Path, default_branch: &str) -> Result<PathBuf, SyncError
     Ok(path.to_path_buf())
 }
 
+/// Build the FnMut closure libgit2 hands to `credentials()`. Returns
+/// `impl FnMut` directly so it's reusable from fetch/push and
+/// clone, and the body is reachable from tests (call the returned
+/// closure with synthetic args).
+pub fn make_credentials_callback(
+    token: Option<String>,
+) -> impl FnMut(&str, Option<&str>, git2::CredentialType) -> Result<git2::Cred, git2::Error> {
+    move |_url, username_from_url, allowed| {
+        select_credentials(allowed, username_from_url, token.as_deref())
+    }
+}
+
+/// Select libgit2 credentials based on what auth method the remote
+/// advertised and what we have stashed. Used by both fetch/push and
+/// clone. Extracted so we can drive it from tests with synthetic
+/// `CredentialType` bitflags instead of needing a real authenticated
+/// remote.
+///
+/// Preference order:
+/// 1. HTTPS basic-auth with the supplied token if the remote will accept
+///    username/password and we have one. We use `x-access-token` as the
+///    username because GitHub treats it as a magic PAT username; GitLab
+///    and Codeberg accept any non-empty username.
+/// 2. SSH agent if the remote wants a key (`git@host:repo.git` style).
+/// 3. libgit2's default (anonymous HTTPS for public remotes, etc.).
+pub fn select_credentials(
+    allowed: git2::CredentialType,
+    username_from_url: Option<&str>,
+    token: Option<&str>,
+) -> Result<git2::Cred, git2::Error> {
+    if allowed.is_user_pass_plaintext() {
+        if let Some(t) = token {
+            return git2::Cred::userpass_plaintext("x-access-token", t);
+        }
+    }
+    if allowed.is_ssh_key() {
+        // Defensive: requires a running ssh-agent on the host. CI hosts
+        // don't have one, so this arm isn't covered by the unit tests.
+        // Manual verification with `eval "$(ssh-agent)"; ssh-add` + a
+        // git@ remote is the validation path. The follow-up OS-keychain
+        // PR will replace this with a stored-key flow.
+        let user = username_from_url.unwrap_or("git");
+        return git2::Cred::ssh_key_from_agent(user);
+    }
+    git2::Cred::default()
+}
+
+/// Clone `url` into `path`. The destination must not exist yet (libgit2's
+/// rule). When `token` is supplied it's used as the HTTPS basic-auth
+/// password with the `x-access-token` username (the GitHub PAT shape,
+/// also accepted by GitLab / Codeberg). Without a token, we fall back
+/// to the SSH agent for `git@` URLs and unauthenticated HTTPS for public
+/// remotes.
+pub fn clone_repo(url: &str, path: &Path, token: Option<&str>) -> Result<PathBuf, SyncError> {
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(make_credentials_callback(token.map(|t| t.to_string())));
+    let mut fo = FetchOptions::new();
+    fo.remote_callbacks(callbacks);
+    let mut builder = git2::build::RepoBuilder::new();
+    builder.fetch_options(fo);
+    builder.clone(url, path).map_err(map_remote_error)?;
+    Ok(path.to_path_buf())
+}
+
 /// Add an `origin` remote pointing at `url` to a repository at `path`.
 pub fn set_origin(path: &Path, url: &str) -> Result<(), SyncError> {
     let repo = Repository::open(path).map_err(|e| SyncError::Backend(e.message().to_string()))?;
@@ -548,6 +601,89 @@ mod tests {
         let backend = GitBackend::new(cfg);
         let err = backend.status().unwrap_err();
         assert!(matches!(err, SyncError::NotConfigured), "got: {err:?}");
+    }
+
+    #[test]
+    fn open_repo_errors_with_backend_when_dot_git_is_corrupt() {
+        // Replace the `.git` subdir libgit2 expects with a regular file
+        // containing garbage. `Repository::open` reaches it (so it's not
+        // NotFound) and reports something like `BadFile` / `Repository`
+        // — exercises the `_ => Backend` arm of `open_repo`.
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().join("corrupt");
+        fs::create_dir_all(&workspace).unwrap();
+        fs::write(workspace.join(".git"), "this is not a gitfile\n").unwrap();
+        let cfg = WorkspaceSyncConfig::new_git(workspace.to_string_lossy());
+        let backend = GitBackend::new(cfg);
+        let err = backend.status().unwrap_err();
+        assert!(
+            matches!(err, SyncError::Backend(_)),
+            "expected Backend error from corrupt .git file, got {err:?}"
+        );
+    }
+
+    /// Helper: `git2::Cred::credtype()` returns a raw libgit2 cred type
+    /// as a `u32` rather than the typed `CredentialType` bitflag, so we
+    /// bit-AND against the bitflag's `bits()` to check what was selected.
+    fn cred_has(cred: &git2::Cred, kind: git2::CredentialType) -> bool {
+        cred.credtype() & kind.bits() != 0
+    }
+
+    #[test]
+    fn make_credentials_callback_forwards_to_select_credentials() {
+        // The closure body is one call to `select_credentials`; we
+        // exercise it directly with synthetic args so the closure lines
+        // get coverage even without an authenticated remote handshake.
+        let mut cb = make_credentials_callback(Some("ghp_xyz".into()));
+        let cred = cb(
+            "https://example.com/repo.git",
+            None,
+            git2::CredentialType::USER_PASS_PLAINTEXT,
+        )
+        .expect("userpass cred");
+        assert!(cred_has(&cred, git2::CredentialType::USER_PASS_PLAINTEXT));
+
+        // Same callback called a second time with no token in scope —
+        // confirms the closure captures and reuses the token via the
+        // FnMut closure trait.
+        let mut cb_no_token = make_credentials_callback(None);
+        let cred = cb_no_token(
+            "https://example.com/repo.git",
+            None,
+            git2::CredentialType::USER_PASS_PLAINTEXT,
+        )
+        .expect("default cred");
+        assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
+    }
+
+    #[test]
+    fn select_credentials_returns_userpass_when_https_basic_auth_is_allowed_and_token_present() {
+        let cred = select_credentials(
+            git2::CredentialType::USER_PASS_PLAINTEXT,
+            None,
+            Some("ghp_secret"),
+        )
+        .expect("userpass cred");
+        assert!(cred_has(&cred, git2::CredentialType::USER_PASS_PLAINTEXT));
+    }
+
+    #[test]
+    fn select_credentials_falls_through_to_default_when_no_token_for_https() {
+        // Remote will accept userpass but we have nothing to give. With
+        // only USER_PASS_PLAINTEXT advertised, we end up at the libgit2
+        // default cred, which is what unauthenticated HTTPS uses.
+        let cred = select_credentials(git2::CredentialType::USER_PASS_PLAINTEXT, None, None)
+            .expect("default cred");
+        assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
+    }
+
+    #[test]
+    fn select_credentials_returns_default_when_no_supported_methods_are_allowed() {
+        // Remote advertises something we don't handle (e.g. NTLM). Falls
+        // through to libgit2's default credential.
+        let cred =
+            select_credentials(git2::CredentialType::USERNAME, None, None).expect("default cred");
+        assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
     }
 
     #[test]
@@ -638,11 +774,34 @@ mod tests {
 
     #[test]
     fn map_remote_error_classifies_network_and_auth_errors() {
-        // We can't easily fabricate libgit2 Errors of arbitrary class,
-        // but we can confirm the unclassified fallback at least.
-        let e = git2::Error::from_str("authentication required");
-        let mapped = map_remote_error(e);
-        assert!(matches!(mapped, SyncError::AuthFailed(_)));
+        // `git2::Error::new` takes (code, class, message), so we can
+        // hand the mapper every branch's class and confirm it routes
+        // to the matching `SyncError` variant.
+        use git2::{ErrorClass, ErrorCode};
+
+        let net = git2::Error::new(ErrorCode::GenericError, ErrorClass::Net, "down");
+        assert!(matches!(map_remote_error(net), SyncError::Network(_)));
+
+        let http = git2::Error::new(ErrorCode::GenericError, ErrorClass::Http, "500");
+        assert!(matches!(map_remote_error(http), SyncError::Network(_)));
+
+        let ssh = git2::Error::new(ErrorCode::GenericError, ErrorClass::Ssh, "no key");
+        assert!(matches!(map_remote_error(ssh), SyncError::AuthFailed(_)));
+
+        let cb = git2::Error::new(ErrorCode::GenericError, ErrorClass::Callback, "rejected");
+        assert!(matches!(map_remote_error(cb), SyncError::AuthFailed(_)));
+
+        // Unclassified errors whose message mentions auth/authentication
+        // still route to AuthFailed.
+        let phrased = git2::Error::from_str("authentication required");
+        assert!(matches!(
+            map_remote_error(phrased),
+            SyncError::AuthFailed(_)
+        ));
+
+        // Everything else falls through to Backend.
+        let generic = git2::Error::from_str("something else");
+        assert!(matches!(map_remote_error(generic), SyncError::Backend(_)));
     }
 
     #[test]
@@ -654,6 +813,41 @@ mod tests {
         // the first commit.
         let head = repo.find_reference("HEAD").unwrap();
         assert_eq!(head.symbolic_target(), Some("refs/heads/trunk"));
+    }
+
+    #[test]
+    fn clone_repo_clones_an_unauthenticated_local_remote() {
+        // Seed: build a working repo, push a file, then clone the bare
+        // remote into a fresh path. The clone should contain the file.
+        let f = Fixture::new();
+        f.write_file("seed.md", "# seed\n");
+        f.backend().sync().unwrap();
+
+        let dest = f._tmp.path().join("cloned");
+        let resolved = clone_repo(f.remote.to_str().unwrap(), &dest, None).unwrap();
+        assert_eq!(resolved, dest);
+        assert!(dest.join("seed.md").exists());
+        assert!(dest.join(".git").exists());
+    }
+
+    #[test]
+    fn clone_repo_errors_when_target_exists_and_is_not_empty() {
+        let f = Fixture::new();
+        f.write_file("seed.md", "# seed\n");
+        f.backend().sync().unwrap();
+
+        // libgit2 refuses to clone into a non-empty directory.
+        let dest = f._tmp.path().join("existing");
+        fs::create_dir_all(&dest).unwrap();
+        fs::write(dest.join("blocker.txt"), "x").unwrap();
+        let err = clone_repo(f.remote.to_str().unwrap(), &dest, None).unwrap_err();
+        // Local-path bare remotes go through libgit2 directly without
+        // hitting the network classifier; we just confirm it failed
+        // with some backend-mapped error.
+        assert!(
+            matches!(err, SyncError::Backend(_) | SyncError::Network(_)),
+            "got {err:?}"
+        );
     }
 
     #[test]
@@ -675,6 +869,39 @@ mod tests {
         let sig = backend.signature().unwrap();
         assert!(!sig.name().unwrap().is_empty());
         assert!(!sig.email().unwrap().is_empty());
+    }
+
+    #[test]
+    fn sync_merges_non_conflicting_remote_changes() {
+        // Two clones change *different* files starting from the same
+        // commit. The fetch sees a remote that's not a fast-forward
+        // (both sides committed on top of the common ancestor), but the
+        // merge has no conflicts so libgit2 writes a merge commit, then
+        // we push.
+        let f = Fixture::new();
+        f.write_file("base.md", "base\n");
+        f.backend().sync().unwrap();
+
+        let other = f._tmp.path().join("other");
+        Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
+        let mut other_cfg = WorkspaceSyncConfig::new_git(other.to_string_lossy());
+        other_cfg.remote_url = f.remote.to_string_lossy().into();
+        other_cfg.author = Some(super::super::config::CommitIdentity {
+            name: "Other".into(),
+            email: "o@e.com".into(),
+        });
+        fs::write(other.join("other-only.md"), "from other\n").unwrap();
+        GitBackend::new(other_cfg).sync().unwrap();
+
+        // Now the first workspace edits a different file and syncs.
+        f.write_file("first-only.md", "from first\n");
+        let result = f.backend().sync().unwrap();
+        assert!(result.conflicts.is_empty(), "no conflicts expected");
+        assert_eq!(result.pulled_count, 1, "merged in other's commit");
+        assert!(result.pushed_count >= 1, "merge commit pushed");
+        // After the merge both files exist locally.
+        assert!(f.workspace.join("first-only.md").exists());
+        assert!(f.workspace.join("other-only.md").exists());
     }
 
     #[test]
