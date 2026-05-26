@@ -29,10 +29,12 @@ vi.mock("@tauri-apps/api/menu", () => ({
   },
 }));
 
-async function fireContextMenu() {
-  document.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+async function fireContextMenu(target: EventTarget = document) {
+  const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+  target.dispatchEvent(event);
   await new Promise((r) => setTimeout(r, 0));
   await new Promise((r) => setTimeout(r, 0));
+  return event;
 }
 
 beforeEach(() => {
@@ -151,6 +153,37 @@ describe("useContextMenu", () => {
 
     menuItems.find((i) => i.text?.startsWith("Open File"))?.action?.();
     expect(openFileDialog).toHaveBeenCalled();
+  });
+
+  it("leaves the native menu alone when contextmenu fires inside an input", async () => {
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    renderHook(() => useContextMenu("linux", { openFileDialog: vi.fn() }));
+
+    const event = await fireContextMenu(input);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(menuItems).toHaveLength(0);
+    expect(popupSpy).not.toHaveBeenCalled();
+    document.body.removeChild(input);
+  });
+
+  it("leaves the native menu alone for textarea and contenteditable too", async () => {
+    const textarea = document.createElement("textarea");
+    const ce = document.createElement("div");
+    ce.setAttribute("contenteditable", "true");
+    document.body.appendChild(textarea);
+    document.body.appendChild(ce);
+    renderHook(() => useContextMenu("linux", { openFileDialog: vi.fn() }));
+
+    const fromTextarea = await fireContextMenu(textarea);
+    const fromContentEditable = await fireContextMenu(ce);
+
+    expect(fromTextarea.defaultPrevented).toBe(false);
+    expect(fromContentEditable.defaultPrevented).toBe(false);
+    expect(menuItems).toHaveLength(0);
+    document.body.removeChild(textarea);
+    document.body.removeChild(ce);
   });
 
   it("removes its listener on unmount", async () => {
