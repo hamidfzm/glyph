@@ -130,6 +130,16 @@ export function cloneSyncRemote(
   return invoke("sync_clone_remote", { workspacePath, remoteUrl, token });
 }
 
+/**
+ * Write `[remote "origin"] url = <remoteUrl>` into the workspace's
+ * `.git/config`. Called from the modal's Save flow when the workspace
+ * is already a git repo so libgit2's fetch/push uses Glyph's configured
+ * URL instead of whatever stale origin the existing repo carries.
+ */
+export function setSyncOrigin(workspacePath: string, remoteUrl: string): Promise<void> {
+  return invoke("sync_set_origin", { workspacePath, remoteUrl });
+}
+
 export function getSyncStatus(workspacePath: string): Promise<StatusReport> {
   return invoke("sync_status", { workspacePath });
 }

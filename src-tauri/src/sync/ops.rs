@@ -85,6 +85,19 @@ pub async fn clone_remote(
     .map_err(|e| SyncError::Backend(format!("task join error: {e}")))?
 }
 
+/// Write the remote URL into `<workspace>/.git/config` under
+/// `[remote "origin"]`. The Save flow in the modal calls this so that
+/// when the user edits the Remote URL field on an existing repo, the
+/// next fetch/push actually uses the new value instead of whatever the
+/// existing `.git/config` happens to carry.
+pub async fn set_origin(workspace_path: String, remote_url: String) -> Result<(), SyncError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        git::set_origin(&PathBuf::from(&workspace_path), &remote_url)
+    })
+    .await
+    .map_err(|e| SyncError::Backend(format!("task join error: {e}")))?
+}
+
 /// Inspect git's config for a default `user.name` and `user.email` to
 /// suggest in the Cloud Sync setup form. Tries the workspace-level
 /// `<path>/.git/config` first (so a per-repo identity wins over the

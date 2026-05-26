@@ -28,6 +28,7 @@ import {
   type StatusReport,
   type SyncResult,
   setSyncConfig,
+  setSyncOrigin,
   setSyncToken,
   type WorkspaceSyncConfig,
 } from "@/lib/sync";
@@ -64,6 +65,7 @@ export interface UseSyncConfigActions {
   clearToken: () => Promise<void>;
   initRepo: (defaultBranch: string | null, remoteUrl: string | null) => Promise<void>;
   cloneRemote: (remoteUrl: string, token: string | null) => Promise<void>;
+  setOrigin: (remoteUrl: string) => Promise<void>;
   runSync: (message?: string | null) => Promise<SyncResult>;
   refreshStatus: () => Promise<void>;
   refreshRepoPresent: () => Promise<void>;
@@ -193,6 +195,14 @@ export function useSyncConfig(workspacePath: string | null): UseSyncConfigReturn
     [guarded, workspacePath],
   );
 
+  const setOrigin = useCallback(
+    async (remoteUrl: string) => {
+      if (!workspacePath) return;
+      await guarded(() => setSyncOrigin(workspacePath, remoteUrl));
+    },
+    [guarded, workspacePath],
+  );
+
   const runSync = useCallback(
     async (message?: string | null): Promise<SyncResult> => {
       if (!workspacePath) {
@@ -251,6 +261,7 @@ export function useSyncConfig(workspacePath: string | null): UseSyncConfigReturn
     clearToken,
     initRepo,
     cloneRemote,
+    setOrigin,
     runSync,
     refreshStatus,
     refreshRepoPresent,

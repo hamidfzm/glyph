@@ -77,6 +77,15 @@ pub async fn sync_clone_remote(
     ops::clone_remote(workspace_path, remote_url, token).await
 }
 
+/// Write `[remote "origin"] url = <remote_url>` into the workspace's
+/// `.git/config`. The modal's Save flow calls this when the repo
+/// already exists so libgit2's fetch/push uses Glyph's configured URL
+/// instead of whatever stale origin the existing repo happens to carry.
+#[tauri::command]
+pub async fn sync_set_origin(workspace_path: String, remote_url: String) -> Result<(), SyncError> {
+    ops::set_origin(workspace_path, remote_url).await
+}
+
 #[tauri::command]
 pub async fn sync_status(
     workspace_path: String,

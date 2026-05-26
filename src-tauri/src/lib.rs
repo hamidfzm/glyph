@@ -150,6 +150,7 @@ pub fn run() {
             sync::commands::sync_clear_token,
             sync::commands::sync_init_repo,
             sync::commands::sync_clone_remote,
+            sync::commands::sync_set_origin,
             sync::commands::sync_status,
             sync::commands::sync_run,
             sync::commands::sync_default_author,

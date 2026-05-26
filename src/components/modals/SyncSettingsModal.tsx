@@ -117,6 +117,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
     remove,
     setToken,
     initRepo,
+    setOrigin,
     runSync,
     refreshStatus,
   } = useSyncConfig(workspacePath);
@@ -159,6 +160,16 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
     const next = configFromForm(workspacePath, form);
     if (!next.remoteUrl) return;
     await save(next);
+    // Glyph's stored config is advisory; libgit2 reads `remote.origin.url`
+    // from the workspace's .git/config for the actual transport. Push the
+    // form value over so a Save-then-Sync uses the URL the user just typed.
+    if (repoPresent) {
+      try {
+        await setOrigin(next.remoteUrl);
+      } catch {
+        // setOrigin failures already surface in the hook's error state.
+      }
+    }
     if (form.token.trim()) {
       await setToken(form.token.trim());
       setForm((prev) => ({ ...prev, token: "" }));
@@ -178,7 +189,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
 
   const handleInitRepo = async () => {
     try {
-      await initRepo(form.remoteBranch.trim() || "main", null);
+      await initRepo(form.remoteBranch.trim() || "main", form.remoteUrl.trim() || null);
     } catch {
       // hook captures the error
     }
