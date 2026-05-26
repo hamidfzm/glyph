@@ -37,6 +37,16 @@ async function fireContextMenu(target: EventTarget = document) {
   return event;
 }
 
+function mountMarkdown() {
+  const root = document.createElement("div");
+  root.className = "markdown-body";
+  const para = document.createElement("p");
+  para.textContent = "doc body";
+  root.appendChild(para);
+  document.body.appendChild(root);
+  return { root, para };
+}
+
 beforeEach(() => {
   menuItems.length = 0;
   popupSpy = vi.fn().mockResolvedValue(undefined);
@@ -68,8 +78,9 @@ describe("useContextMenu", () => {
   it("builds a default menu (Copy, SelectAll, Open File) on Linux", async () => {
     const actions = { openFileDialog: vi.fn() };
     renderHook(() => useContextMenu("linux", actions));
+    const { para, root } = mountMarkdown();
 
-    await fireContextMenu();
+    await fireContextMenu(para);
 
     const labels = menuItems.map((i) => i.text);
     expect(labels).toContain("Copy");
@@ -77,6 +88,7 @@ describe("useContextMenu", () => {
     expect(labels.some((l) => l?.includes("Open File"))).toBe(true);
     expect(labels).not.toContain("Toggle Sidebar");
     expect(popupSpy).toHaveBeenCalled();
+    document.body.removeChild(root);
   });
 
   it("adds the Read Aloud entry when TTS is available and there is content to read", async () => {
@@ -90,13 +102,15 @@ describe("useContextMenu", () => {
         content: "doc body",
       }),
     );
+    const { para, root } = mountMarkdown();
 
-    await fireContextMenu();
+    await fireContextMenu(para);
 
     const readAloud = menuItems.find((i) => i.text === "Read Aloud");
     expect(readAloud).toBeDefined();
     readAloud?.action?.();
     expect(ttsSpeak).toHaveBeenCalledWith("doc body");
+    document.body.removeChild(root);
   });
 
   it("adds Stop Reading when TTS is currently speaking", async () => {
@@ -110,13 +124,15 @@ describe("useContextMenu", () => {
         content: "doc body",
       }),
     );
+    const { para, root } = mountMarkdown();
 
-    await fireContextMenu();
+    await fireContextMenu(para);
 
     const stop = menuItems.find((i) => i.text === "Stop Reading");
     expect(stop).toBeDefined();
     stop?.action?.();
     expect(ttsStop).toHaveBeenCalled();
+    document.body.removeChild(root);
   });
 
   it("adds an AI submenu when an AI provider is configured and there's text", async () => {
@@ -129,8 +145,9 @@ describe("useContextMenu", () => {
         content: "doc body",
       }),
     );
+    const { para, root } = mountMarkdown();
 
-    await fireContextMenu();
+    await fireContextMenu(para);
 
     const aiLabels = menuItems.filter((i) => i.text && /Document$/.test(i.text)).map((i) => i.text);
     expect(aiLabels).toEqual([
@@ -143,16 +160,33 @@ describe("useContextMenu", () => {
     const summarize = menuItems.find((i) => i.text === "Summarize Document");
     summarize?.action?.();
     expect(aiAction).toHaveBeenCalledWith("summarize", "doc body");
+    document.body.removeChild(root);
   });
 
   it("Open File fires the provided action when invoked", async () => {
     const openFileDialog = vi.fn();
     renderHook(() => useContextMenu("linux", { openFileDialog }));
+    const { para, root } = mountMarkdown();
 
-    await fireContextMenu();
+    await fireContextMenu(para);
 
     menuItems.find((i) => i.text?.startsWith("Open File"))?.action?.();
     expect(openFileDialog).toHaveBeenCalled();
+    document.body.removeChild(root);
+  });
+
+  it("leaves the native menu alone for UI chrome (outside markdown-body)", async () => {
+    renderHook(() => useContextMenu("linux", { openFileDialog: vi.fn() }));
+    const chrome = document.createElement("div");
+    chrome.textContent = "Modal label";
+    document.body.appendChild(chrome);
+
+    const event = await fireContextMenu(chrome);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(menuItems).toHaveLength(0);
+    expect(popupSpy).not.toHaveBeenCalled();
+    document.body.removeChild(chrome);
   });
 
   it("leaves the native menu alone when contextmenu fires inside an input", async () => {

@@ -72,8 +72,15 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .accelerator("CmdOrCtrl+F")
         .build(handle)?;
 
+    // Cut / Copy / Paste are wired explicitly so their CmdOrCtrl shortcuts
+    // resolve on Linux + Windows. Without these entries the WebView's
+    // built-in keyboard handler doesn't see Ctrl+V / Ctrl+X inside form
+    // fields; the right-click "Paste" still works (it's a separate code
+    // path) but users naturally expect the hotkeys.
     let edit_menu = SubmenuBuilder::new(handle, "Edit")
+        .cut()
         .copy()
+        .paste()
         .select_all()
         .separator()
         .item(&find)
