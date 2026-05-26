@@ -27,6 +27,15 @@ choco install -y webview2-runtime
 
 After `rustup.install`, open a new shell and run `rustup default stable-msvc`. Then `nvm install` (reads `.nvmrc`) and `pnpm install`.
 
+> **Important:** Use the `stable-msvc` Rust toolchain, not `stable-gnu`. If MSYS2 is on your PATH (or rustup picked the GNU host during install), builds fail with errors like `C:\msys64\usr\bin\dlltool.exe ... Permission denied` when compiling `getrandom`, `parking_lot_core`, or `windows-sys`, especially if your user folder contains a space (e.g. `C:\Users\Jane Doe\...`), because MinGW's `dlltool` does not handle spaces in paths. Run `rustup show` to confirm the default host is `x86_64-pc-windows-msvc`. To switch:
+>
+> ```powershell
+> rustup toolchain install stable-msvc
+> rustup default stable-msvc
+> rustup set default-host x86_64-pc-windows-msvc
+> cd src-tauri; cargo clean   # remove gnu-built artifacts before rebuilding
+> ```
+
 **macOS**:
 
 ```bash
