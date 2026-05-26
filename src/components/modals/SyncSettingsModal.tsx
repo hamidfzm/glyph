@@ -46,6 +46,12 @@ interface FormState {
   autoSyncSeconds: string;
   /** Plain-text PAT. Never displayed back — re-entered each session. */
   token: string;
+  /**
+   * Per-sync commit subject. Lives in form state (not the persisted
+   * config) because it resets between runs; blank delegates to the
+   * backend's auto-generator.
+   */
+  commitMessage: string;
 }
 
 function formFromConfig(config: WorkspaceSyncConfig): FormState {
@@ -60,6 +66,7 @@ function formFromConfig(config: WorkspaceSyncConfig): FormState {
         ? ""
         : String(config.autoSyncSeconds),
     token: "",
+    commitMessage: "",
   };
 }
 
@@ -98,8 +105,21 @@ interface SyncSettingsModalProps {
 export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
   const { activeTab } = useTabsContext();
   const workspacePath = activeTab?.kind === "folder" ? activeTab.root : null;
-  const { config, status, loading, busy, error, save, remove, setToken, runSync, refreshStatus } =
-    useSyncConfig(workspacePath);
+  const {
+    config,
+    status,
+    defaultAuthor,
+    repoPresent,
+    loading,
+    busy,
+    error,
+    save,
+    remove,
+    setToken,
+    initRepo,
+    runSync,
+    refreshStatus,
+  } = useSyncConfig(workspacePath);
 
   const defaultForm = useMemo(
     () => formFromConfig(config ?? defaultConfigFor(workspacePath ?? "")),
@@ -147,8 +167,18 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
 
   const handleSyncNow = async () => {
     try {
-      const result = await runSync();
+      const result = await runSync(form.commitMessage.trim() || null);
       setLastSync(result);
+      // Clear the per-sync commit subject so the next run starts blank.
+      setForm((prev) => ({ ...prev, commitMessage: "" }));
+    } catch {
+      // hook captures the error
+    }
+  };
+
+  const handleInitRepo = async () => {
+    try {
+      await initRepo(form.remoteBranch.trim() || "main", null);
     } catch {
       // hook captures the error
     }
@@ -199,6 +229,20 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
               </p>
 
               {loading && <p className="settings-busy">Loading…</p>}
+
+              {!loading && repoPresent === false && (
+                <div className="settings-warning" data-testid="sync-init-banner">
+                  <div>This folder isn't a git repository yet.</div>
+                  <button
+                    type="button"
+                    className="settings-secondary-btn"
+                    onClick={handleInitRepo}
+                    disabled={busy}
+                  >
+                    Initialize repo
+                  </button>
+                </div>
+              )}
 
               {!loading && (
                 <>
@@ -251,7 +295,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                     <input
                       type="text"
                       className="settings-input"
-                      placeholder="defaults to your git config"
+                      placeholder={defaultAuthor?.name ?? "defaults to your git config"}
                       value={form.authorName}
                       onChange={(e) => update("authorName", e.target.value)}
                       spellCheck={false}
@@ -264,7 +308,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                     <input
                       type="email"
                       className="settings-input"
-                      placeholder="you@example.com"
+                      placeholder={defaultAuthor?.email ?? "you@example.com"}
                       value={form.authorEmail}
                       onChange={(e) => update("authorEmail", e.target.value)}
                       spellCheck={false}
@@ -303,6 +347,22 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                       placeholder="off"
                       value={form.autoSyncSeconds}
                       onChange={(e) => update("autoSyncSeconds", e.target.value)}
+                    />
+                  </label>
+
+                  <label className="settings-field">
+                    <span className="settings-field-label">
+                      Commit message{" "}
+                      <span className="settings-field-hint">
+                        (blank = auto-generated from changes)
+                      </span>
+                    </span>
+                    <input
+                      type="text"
+                      className="settings-input"
+                      placeholder="e.g. Update notes"
+                      value={form.commitMessage}
+                      onChange={(e) => update("commitMessage", e.target.value)}
                     />
                   </label>
 

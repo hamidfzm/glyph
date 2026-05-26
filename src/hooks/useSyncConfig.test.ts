@@ -69,7 +69,11 @@ describe("useSyncConfig", () => {
 
   it("loads the stored config on mount", async () => {
     const stored = config();
-    routeInvoke({ sync_get_config: () => stored });
+    routeInvoke({
+      sync_get_config: () => stored,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+    });
 
     const { result } = renderHook(() => useSyncConfig("/w"));
     expect(result.current.loading).toBe(true);
@@ -78,11 +82,27 @@ describe("useSyncConfig", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("loads defaultAuthor and repoPresent on mount", async () => {
+    const hint = { name: "Hamid", email: "h@example.com" };
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => hint,
+      sync_repo_present: () => false,
+    });
+
+    const { result } = renderHook(() => useSyncConfig("/w"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.defaultAuthor).toEqual(hint);
+    expect(result.current.repoPresent).toBe(false);
+  });
+
   it("surfaces load failures via describeSyncError", async () => {
     routeInvoke({
       sync_get_config: () => {
         throw { kind: "io", message: "permission denied" };
       },
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => false,
     });
 
     const { result } = renderHook(() => useSyncConfig("/w"));
@@ -95,6 +115,8 @@ describe("useSyncConfig", () => {
     routeInvoke({
       sync_get_config: () => null,
       sync_set_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
     });
     const { result } = renderHook(() => useSyncConfig("/w"));
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -113,6 +135,8 @@ describe("useSyncConfig", () => {
     routeInvoke({
       sync_get_config: () => config(),
       sync_remove_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
     });
     const { result } = renderHook(() => useSyncConfig("/w"));
     await waitFor(() => expect(result.current.config).not.toBeNull());
@@ -132,6 +156,8 @@ describe("useSyncConfig", () => {
       sync_get_config: () => config(),
       sync_run: () => result1,
       sync_status: () => stat,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
     });
     const { result } = renderHook(() => useSyncConfig("/w"));
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -144,11 +170,39 @@ describe("useSyncConfig", () => {
     expect(result.current.status).toEqual(stat);
   });
 
+  it("runSync(message) forwards the commit message to the command", async () => {
+    const result1 = syncResult({ committedCount: 1 });
+    routeInvoke({
+      sync_get_config: () => config(),
+      sync_run: (args) => {
+        // Capture and assert inside the handler so the message lands
+        // unfiltered by the routeInvoke happy-path serialisation.
+        expect(args).toEqual({ workspacePath: "/w", message: "fix typo" });
+        return result1;
+      },
+      sync_status: () => status(),
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+    });
+    const { result } = renderHook(() => useSyncConfig("/w"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.runSync("fix typo");
+    });
+    expect(invoke).toHaveBeenCalledWith("sync_run", {
+      workspacePath: "/w",
+      message: "fix typo",
+    });
+  });
+
   it("refreshStatus() captures the latest status report", async () => {
     const stat = status({ ahead: 3, behind: 1 });
     routeInvoke({
       sync_get_config: () => config(),
       sync_status: () => stat,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
     });
     const { result } = renderHook(() => useSyncConfig("/w"));
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -164,12 +218,64 @@ describe("useSyncConfig", () => {
     await expect(result.current.runSync()).rejects.toThrow(/no workspace open/);
   });
 
+  it("initRepo() invokes sync_init_repo and re-probes repo presence", async () => {
+    // First call: workspace isn't a repo yet. After init, the re-probe
+    // flips repoPresent to true.
+    let probeCount = 0;
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => {
+        probeCount += 1;
+        return probeCount !== 1;
+      },
+      sync_init_repo: () => null,
+    });
+
+    const { result } = renderHook(() => useSyncConfig("/w"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.repoPresent).toBe(false);
+
+    await act(async () => {
+      await result.current.initRepo("main", null);
+    });
+    expect(invoke).toHaveBeenCalledWith("sync_init_repo", {
+      workspacePath: "/w",
+      defaultBranch: "main",
+      remoteUrl: null,
+    });
+    expect(result.current.repoPresent).toBe(true);
+  });
+
+  it("refreshRepoPresent() re-checks repo presence on demand", async () => {
+    let probeCount = 0;
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => {
+        probeCount += 1;
+        return probeCount !== 1;
+      },
+    });
+
+    const { result } = renderHook(() => useSyncConfig("/w"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.repoPresent).toBe(false);
+
+    await act(async () => {
+      await result.current.refreshRepoPresent();
+    });
+    expect(result.current.repoPresent).toBe(true);
+  });
+
   it("guarded actions populate error and re-throw on failure", async () => {
     routeInvoke({
       sync_get_config: () => null,
       sync_set_config: () => {
         throw { kind: "auth-failed", message: "bad token" };
       },
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
     });
     const { result } = renderHook(() => useSyncConfig("/w"));
     await waitFor(() => expect(result.current.loading).toBe(false));

@@ -151,4 +151,104 @@ describe("SyncSettingsModal", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("shows the Initialize banner when the workspace isn't a git repo yet", async () => {
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => false,
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    expect(await screen.findByTestId("sync-init-banner")).toHaveTextContent(
+      /isn't a git repository yet/i,
+    );
+    expect(screen.getByRole("button", { name: "Initialize repo" })).toBeInTheDocument();
+  });
+
+  it("clicking Initialize calls sync_init_repo and hides the banner", async () => {
+    let probeCount = 0;
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => {
+        probeCount += 1;
+        return probeCount !== 1;
+      },
+      sync_init_repo: () => null,
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    const initBtn = await screen.findByRole("button", { name: "Initialize repo" });
+    fireEvent.click(initBtn);
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("sync_init_repo", expect.anything()));
+    await waitFor(() => expect(screen.queryByTestId("sync-init-banner")).toBeNull());
+  });
+
+  it("commit message field is empty by default and passes through to runSync", async () => {
+    const stored: WorkspaceSyncConfig = {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "https://example.com/r.git",
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      autoSyncSeconds: null,
+      author: null,
+    };
+    routeInvoke({
+      sync_get_config: () => stored,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_run: () => ({
+        kind: "git",
+        pulledCount: 0,
+        committedCount: 1,
+        pushedCount: 1,
+        conflicts: [],
+        completedUnix: 1000,
+      }),
+      sync_status: () => ({
+        kind: "git",
+        clean: true,
+        ahead: 0,
+        behind: 0,
+        conflicts: [],
+        lastSyncUnix: null,
+      }),
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    const msgInput = (await screen.findByPlaceholderText("e.g. Update notes")) as HTMLInputElement;
+    expect(msgInput.value).toBe("");
+
+    fireEvent.change(msgInput, { target: { value: "fix readme" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("sync_run", {
+        workspacePath: "/w",
+        message: "fix readme",
+      }),
+    );
+    // Cleared after the run, ready for the next sync.
+    await waitFor(() => expect(msgInput.value).toBe(""));
+  });
+
+  it("uses the git-config author name as the Author placeholder", async () => {
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: "Hamid", email: "h@example.com" }),
+      sync_repo_present: () => true,
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    const nameInput = (await screen.findByPlaceholderText("Hamid")) as HTMLInputElement;
+    expect(nameInput.value).toBe("");
+    const emailInput = screen.getByPlaceholderText("h@example.com") as HTMLInputElement;
+    expect(emailInput.value).toBe("");
+  });
 });

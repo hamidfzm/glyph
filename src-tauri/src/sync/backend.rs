@@ -111,7 +111,12 @@ pub trait SyncBackend: Send + Sync {
     /// Stage local changes, commit, fetch remote, merge, push. Returns a
     /// summary the frontend can show; surfaces conflicts via the
     /// `conflicts` field so the UI can open the resolution panel.
-    fn sync(&self) -> Result<SyncResult, SyncError>;
+    ///
+    /// `commit_message` lets the caller override the commit subject used
+    /// for the auto-commit step. `None` (or an all-whitespace string)
+    /// asks the backend to generate one from the staged diff, matching
+    /// GitHub's web editor conventions.
+    fn sync(&self, commit_message: Option<&str>) -> Result<SyncResult, SyncError>;
 }
 
 #[cfg(test)]

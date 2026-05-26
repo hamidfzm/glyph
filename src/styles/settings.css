@@ -554,6 +554,21 @@
   color: var(--color-warning, #b45309);
 }
 
+/* Init-repo banner shown when the workspace isn't a git repo yet. */
+.settings-sync > .settings-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-warning, #b45309);
+  border-radius: var(--glyph-radius-sm);
+  color: var(--color-warning, #b45309);
+  font-size: 13px;
+}
+
 /* Status-bar sync indicator */
 .status-sync-indicator {
   appearance: none;

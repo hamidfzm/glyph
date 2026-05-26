@@ -14,12 +14,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  type CommitAuthorHint,
   clearSyncToken as clearSyncTokenCommand,
   cloneSyncRemote,
   describeSyncError,
+  getDefaultSyncAuthor,
   getSyncConfig,
   getSyncStatus,
   initSyncRepo,
+  isSyncRepoPresent,
   removeSyncConfig,
   runSync as runSyncCommand,
   type StatusReport,
@@ -34,6 +37,18 @@ export interface UseSyncConfigState {
   config: WorkspaceSyncConfig | null;
   /** Last status report we successfully fetched. */
   status: StatusReport | null;
+  /**
+   * Author identity sourced from git's config, used as placeholder
+   * hints on the setup form. `null` while we haven't loaded it yet for
+   * the current workspace.
+   */
+  defaultAuthor: CommitAuthorHint | null;
+  /**
+   * Whether the workspace folder is already a git repository. `null`
+   * while we haven't checked yet; `false` shows the "Initialize repo"
+   * banner in the modal.
+   */
+  repoPresent: boolean | null;
   /** True while the initial load is in flight. */
   loading: boolean;
   /** Last error from any command call; cleared on the next success. */
@@ -49,8 +64,9 @@ export interface UseSyncConfigActions {
   clearToken: () => Promise<void>;
   initRepo: (defaultBranch: string | null, remoteUrl: string | null) => Promise<void>;
   cloneRemote: (remoteUrl: string, token: string | null) => Promise<void>;
-  runSync: () => Promise<SyncResult>;
+  runSync: (message?: string | null) => Promise<SyncResult>;
   refreshStatus: () => Promise<void>;
+  refreshRepoPresent: () => Promise<void>;
 }
 
 export type UseSyncConfigReturn = UseSyncConfigState & UseSyncConfigActions;
@@ -58,30 +74,46 @@ export type UseSyncConfigReturn = UseSyncConfigState & UseSyncConfigActions;
 export function useSyncConfig(workspacePath: string | null): UseSyncConfigReturn {
   const [config, setConfig] = useState<WorkspaceSyncConfig | null>(null);
   const [status, setStatus] = useState<StatusReport | null>(null);
+  const [defaultAuthor, setDefaultAuthor] = useState<CommitAuthorHint | null>(null);
+  const [repoPresent, setRepoPresent] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Initial load whenever the workspace flips to a new path.
+  // Initial load whenever the workspace flips to a new path. We fetch
+  // the stored config, the git-config author hint, and the "is this a
+  // repo?" probe in parallel — the modal needs all three to render.
   useEffect(() => {
     let cancelled = false;
     if (!workspacePath) {
       setConfig(null);
       setStatus(null);
+      setDefaultAuthor(null);
+      setRepoPresent(null);
       setLoading(false);
       setError(null);
       return;
     }
     setLoading(true);
     setError(null);
-    getSyncConfig(workspacePath)
-      .then((cfg) => {
+    Promise.allSettled([
+      getSyncConfig(workspacePath),
+      getDefaultSyncAuthor(workspacePath),
+      isSyncRepoPresent(workspacePath),
+    ])
+      .then(([cfgRes, hintRes, presentRes]) => {
         if (cancelled) return;
-        setConfig(cfg);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(describeSyncError(e));
+        if (cfgRes.status === "fulfilled") {
+          setConfig(cfgRes.value);
+        } else {
+          setError(describeSyncError(cfgRes.reason));
+        }
+        // Author hint and repo presence are advisory: a failure is not
+        // fatal, just leaves the field at its previous default.
+        if (hintRes.status === "fulfilled") setDefaultAuthor(hintRes.value);
+        else setDefaultAuthor(null);
+        if (presentRes.status === "fulfilled") setRepoPresent(presentRes.value);
+        else setRepoPresent(null);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -141,6 +173,14 @@ export function useSyncConfig(workspacePath: string | null): UseSyncConfigReturn
     async (defaultBranch: string | null, remoteUrl: string | null) => {
       if (!workspacePath) return;
       await guarded(() => initSyncRepo(workspacePath, defaultBranch, remoteUrl));
+      // Re-probe so the modal flips out of the "needs init" state once
+      // the underlying `.git` directory exists.
+      try {
+        const present = await isSyncRepoPresent(workspacePath);
+        setRepoPresent(present);
+      } catch {
+        // best-effort: leave the previous value in place
+      }
     },
     [guarded, workspacePath],
   );
@@ -153,20 +193,23 @@ export function useSyncConfig(workspacePath: string | null): UseSyncConfigReturn
     [guarded, workspacePath],
   );
 
-  const runSync = useCallback(async (): Promise<SyncResult> => {
-    if (!workspacePath) {
-      throw new Error("no workspace open");
-    }
-    const result = await guarded(() => runSyncCommand(workspacePath));
-    // Refresh status so the UI's "behind/ahead" counters update.
-    try {
-      const next = await getSyncStatus(workspacePath);
-      setStatus(next);
-    } catch {
-      // status refresh is best-effort; don't override the sync result.
-    }
-    return result;
-  }, [guarded, workspacePath]);
+  const runSync = useCallback(
+    async (message?: string | null): Promise<SyncResult> => {
+      if (!workspacePath) {
+        throw new Error("no workspace open");
+      }
+      const result = await guarded(() => runSyncCommand(workspacePath, message));
+      // Refresh status so the UI's "behind/ahead" counters update.
+      try {
+        const next = await getSyncStatus(workspacePath);
+        setStatus(next);
+      } catch {
+        // status refresh is best-effort; don't override the sync result.
+      }
+      return result;
+    },
+    [guarded, workspacePath],
+  );
 
   const refreshStatus = useCallback(async () => {
     if (!workspacePath) {
@@ -181,9 +224,24 @@ export function useSyncConfig(workspacePath: string | null): UseSyncConfigReturn
     }
   }, [guarded, workspacePath]);
 
+  const refreshRepoPresent = useCallback(async () => {
+    if (!workspacePath) {
+      setRepoPresent(null);
+      return;
+    }
+    try {
+      const present = await isSyncRepoPresent(workspacePath);
+      setRepoPresent(present);
+    } catch {
+      // best-effort: keep the previous value
+    }
+  }, [workspacePath]);
+
   return {
     config,
     status,
+    defaultAuthor,
+    repoPresent,
     loading,
     busy,
     error,
@@ -195,5 +253,6 @@ export function useSyncConfig(workspacePath: string | null): UseSyncConfigReturn
     cloneRemote,
     runSync,
     refreshStatus,
+    refreshRepoPresent,
   };
 }

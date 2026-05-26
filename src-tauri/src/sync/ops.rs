@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 
 use super::backend::{StatusReport, SyncResult};
-use super::config::WorkspaceSyncConfig;
+use super::config::{CommitAuthorHint, WorkspaceSyncConfig};
 use super::error::SyncError;
 use super::git;
 use super::state::SyncState;
@@ -85,6 +85,47 @@ pub async fn clone_remote(
     .map_err(|e| SyncError::Backend(format!("task join error: {e}")))?
 }
 
+/// Inspect git's config for a default `user.name` and `user.email` to
+/// suggest in the Cloud Sync setup form. Tries the workspace-level
+/// `<path>/.git/config` first (so a per-repo identity wins over the
+/// machine-global one), then falls back to libgit2's default chain
+/// (`$XDG_CONFIG_HOME/git/config`, `~/.gitconfig`, `/etc/gitconfig`).
+///
+/// Each field is independently optional and a missing value is *not*
+/// an error: the frontend just shows a generic placeholder.
+pub fn default_author(workspace_path: &str) -> CommitAuthorHint {
+    let workspace_cfg_path = PathBuf::from(workspace_path).join(".git/config");
+    let mut hint = CommitAuthorHint::default();
+
+    if let Ok(cfg) = git2::Config::open(&workspace_cfg_path) {
+        hint.name = cfg.get_string("user.name").ok().filter(|s| !s.is_empty());
+        hint.email = cfg.get_string("user.email").ok().filter(|s| !s.is_empty());
+    }
+
+    if hint.name.is_some() && hint.email.is_some() {
+        return hint;
+    }
+
+    if let Ok(cfg) = git2::Config::open_default() {
+        if hint.name.is_none() {
+            hint.name = cfg.get_string("user.name").ok().filter(|s| !s.is_empty());
+        }
+        if hint.email.is_none() {
+            hint.email = cfg.get_string("user.email").ok().filter(|s| !s.is_empty());
+        }
+    }
+
+    hint
+}
+
+/// True when `workspace_path` is already a git repository. Used by the
+/// Cloud Sync modal to decide whether to show the "Initialize repo"
+/// banner. Anything that prevents libgit2 from opening the repo
+/// (missing folder, no `.git` dir, corrupt refs) collapses to `false`.
+pub fn repo_present(workspace_path: &str) -> bool {
+    git2::Repository::open(workspace_path).is_ok()
+}
+
 /// Build the configured backend for `workspace_path` and ask it for its
 /// status. Errors with `NotConfigured` when no config has been stored
 /// yet — the frontend interprets that as "show the setup CTA".
@@ -98,12 +139,20 @@ pub async fn run_status(
         .map_err(|e| SyncError::Backend(format!("task join error: {e}")))?
 }
 
-/// Build the configured backend and run a full sync (stage → commit →
-/// fetch → merge → push). Conflicts come back via `SyncResult.conflicts`,
-/// not as an error — the frontend opens the conflict UI for those.
-pub async fn run_sync(state: &SyncState, workspace_path: &str) -> Result<SyncResult, SyncError> {
+/// Build the configured backend and run a full sync (stage, commit,
+/// fetch, merge, push). Conflicts come back via `SyncResult.conflicts`,
+/// not as an error: the frontend opens the conflict UI for those.
+///
+/// `message` is the optional commit subject for the auto-commit step.
+/// `None` (or a string that trims to empty inside the backend) asks the
+/// backend to generate a GitHub-style subject from the staged diff.
+pub async fn run_sync(
+    state: &SyncState,
+    workspace_path: &str,
+    message: Option<String>,
+) -> Result<SyncResult, SyncError> {
     let backend = state.build_backend(workspace_path)?;
-    tauri::async_runtime::spawn_blocking(move || backend.sync())
+    tauri::async_runtime::spawn_blocking(move || backend.sync(message.as_deref()))
         .await
         .map_err(|e| SyncError::Backend(format!("task join error: {e}")))?
 }
@@ -199,7 +248,9 @@ mod tests {
     async fn run_sync_errors_when_no_config_is_set() {
         let ws = Workspace::new();
         let state = SyncState::new();
-        let err = run_sync(&state, &ws.workspace_path).await.unwrap_err();
+        let err = run_sync(&state, &ws.workspace_path, None)
+            .await
+            .unwrap_err();
         assert!(matches!(err, SyncError::NotConfigured));
     }
 
@@ -243,7 +294,7 @@ mod tests {
 
         set_config(&state, ws.config());
 
-        let result = run_sync(&state, &ws.workspace_path).await.unwrap();
+        let result = run_sync(&state, &ws.workspace_path, None).await.unwrap();
         assert_eq!(result.kind, BackendKind::Git);
         assert_eq!(result.committed_count, 1);
         assert_eq!(result.pushed_count, 1);
@@ -272,7 +323,7 @@ mod tests {
         .unwrap();
         let state = SyncState::new();
         set_config(&state, ws.config());
-        run_sync(&state, &ws.workspace_path).await.unwrap();
+        run_sync(&state, &ws.workspace_path, None).await.unwrap();
 
         let dest = ws.tmp.path().join("clone-into-me");
         clone_remote(dest.to_string_lossy().into(), ws.remote_path.clone(), None)
@@ -301,5 +352,47 @@ mod tests {
         assert_eq!(state.get_token("/ws").as_deref(), Some("tok"));
         clear_token(&state, "/ws");
         assert!(state.get_token("/ws").is_none());
+    }
+
+    #[test]
+    fn repo_present_is_false_for_an_empty_directory() {
+        let tmp = TempDir::new().unwrap();
+        assert!(!repo_present(&tmp.path().to_string_lossy()));
+    }
+
+    #[test]
+    fn repo_present_is_true_after_git_init() {
+        let tmp = TempDir::new().unwrap();
+        git2::Repository::init(tmp.path()).unwrap();
+        assert!(repo_present(&tmp.path().to_string_lossy()));
+    }
+
+    #[test]
+    fn default_author_reads_workspace_level_user_name_and_email() {
+        // Build a repo so `<workspace>/.git/config` exists, then write
+        // both fields directly to that config. `git2::Config::open` on a
+        // single file gives us a deterministic, isolated config that
+        // doesn't depend on the host's `~/.gitconfig`.
+        let tmp = TempDir::new().unwrap();
+        git2::Repository::init(tmp.path()).unwrap();
+        let cfg_path = tmp.path().join(".git/config");
+        let mut cfg = git2::Config::open(&cfg_path).unwrap();
+        cfg.set_str("user.name", "Workspace Author").unwrap();
+        cfg.set_str("user.email", "ws@example.com").unwrap();
+
+        let hint = default_author(&tmp.path().to_string_lossy());
+        assert_eq!(hint.name.as_deref(), Some("Workspace Author"));
+        assert_eq!(hint.email.as_deref(), Some("ws@example.com"));
+    }
+
+    #[test]
+    fn default_author_returns_a_hint_for_a_directory_without_a_repo() {
+        // No `.git/config` available: we still get a hint, just one with
+        // whatever the host's global git config happens to carry (which
+        // we can't pin in a unit test). The contract is "no panic, no
+        // error" — both fields are `Option<String>` and the call must
+        // succeed regardless of what's on disk.
+        let tmp = TempDir::new().unwrap();
+        let _hint = default_author(&tmp.path().to_string_lossy());
     }
 }

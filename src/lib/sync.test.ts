@@ -5,9 +5,11 @@ import {
   cloneSyncRemote,
   defaultConfigFor,
   describeSyncError,
+  getDefaultSyncAuthor,
   getSyncConfig,
   getSyncStatus,
   initSyncRepo,
+  isSyncRepoPresent,
   removeSyncConfig,
   runSync,
   setSyncConfig,
@@ -79,7 +81,25 @@ describe("sync command wrappers", () => {
       { workspacePath: "/w", remoteUrl: "https://r", token: "tok" },
     ],
     ["getSyncStatus", () => getSyncStatus("/w"), "sync_status", { workspacePath: "/w" }],
-    ["runSync", () => runSync("/w"), "sync_run", { workspacePath: "/w" }],
+    ["runSync", () => runSync("/w"), "sync_run", { workspacePath: "/w", message: null }],
+    [
+      "runSync with message",
+      () => runSync("/w", "fix typo"),
+      "sync_run",
+      { workspacePath: "/w", message: "fix typo" },
+    ],
+    [
+      "getDefaultSyncAuthor",
+      () => getDefaultSyncAuthor("/w"),
+      "sync_default_author",
+      { workspacePath: "/w" },
+    ],
+    [
+      "isSyncRepoPresent",
+      () => isSyncRepoPresent("/w"),
+      "sync_repo_present",
+      { workspacePath: "/w" },
+    ],
   ] as const)("%s invokes %s with the expected args", async (_name, call, cmd, args) => {
     vi.mocked(invoke).mockResolvedValueOnce(null as unknown);
     await call();

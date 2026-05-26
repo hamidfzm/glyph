@@ -9,7 +9,7 @@
 use tauri::State;
 
 use super::backend::{StatusReport, SyncResult};
-use super::config::WorkspaceSyncConfig;
+use super::config::{CommitAuthorHint, WorkspaceSyncConfig};
 use super::error::SyncError;
 use super::ops;
 use super::state::SyncState;
@@ -88,9 +88,20 @@ pub async fn sync_status(
 #[tauri::command]
 pub async fn sync_run(
     workspace_path: String,
+    message: Option<String>,
     state: State<'_, SyncState>,
 ) -> Result<SyncResult, SyncError> {
-    ops::run_sync(&state, &workspace_path).await
+    ops::run_sync(&state, &workspace_path, message).await
+}
+
+#[tauri::command]
+pub async fn sync_default_author(workspace_path: String) -> Result<CommitAuthorHint, SyncError> {
+    Ok(ops::default_author(&workspace_path))
+}
+
+#[tauri::command]
+pub async fn sync_repo_present(workspace_path: String) -> Result<bool, SyncError> {
+    Ok(ops::repo_present(&workspace_path))
 }
 
 #[cfg(test)]
@@ -250,7 +261,7 @@ mod tests {
         let app = mock_app();
         app.manage(SyncState::new());
         app.state::<SyncState>().set_config(ws.config());
-        sync_run(ws.workspace_path.clone(), app.state::<SyncState>())
+        sync_run(ws.workspace_path.clone(), None, app.state::<SyncState>())
             .await
             .unwrap();
 
@@ -298,11 +309,34 @@ mod tests {
         )
         .unwrap();
         app.state::<SyncState>().set_config(ws.config());
-        let result = sync_run(ws.workspace_path.clone(), app.state::<SyncState>())
-            .await
-            .unwrap();
+        let result = sync_run(
+            ws.workspace_path.clone(),
+            Some("test commit".into()),
+            app.state::<SyncState>(),
+        )
+        .await
+        .unwrap();
         assert_eq!(result.committed_count, 1);
         assert_eq!(result.pushed_count, 1);
+    }
+
+    #[tokio::test]
+    async fn sync_default_author_wrapper_returns_a_hint() {
+        // We only assert the call shape (returns an Ok payload). The
+        // actual fields depend on whether the test host has any git
+        // config at all, which we can't pin from a unit test.
+        let ws = Workspace::new();
+        let _hint = sync_default_author(ws.workspace_path).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sync_repo_present_wrapper_reports_true_after_init() {
+        let ws = Workspace::new();
+        assert!(!sync_repo_present(ws.workspace_path.clone()).await.unwrap());
+        sync_init_repo(ws.workspace_path.clone(), None, None)
+            .await
+            .unwrap();
+        assert!(sync_repo_present(ws.workspace_path).await.unwrap());
     }
 
     // -- Full IPC dispatch test -----------------------------------------
@@ -338,6 +372,8 @@ mod tests {
                 sync_clone_remote,
                 sync_status,
                 sync_run,
+                sync_default_author,
+                sync_repo_present,
             ])
             .build(mock_context(noop_assets()))
             .expect("mock app builds");
@@ -443,10 +479,26 @@ mod tests {
         let result: crate::sync::backend::SyncResult = invoke_ipc(
             &webview,
             "sync_run",
-            serde_json::json!({ "workspacePath": ws.workspace_path }),
+            serde_json::json!({
+                "workspacePath": ws.workspace_path,
+                "message": "ipc commit",
+            }),
         );
         assert_eq!(result.committed_count, 1);
         assert_eq!(result.pushed_count, 1);
+
+        // sync_default_author and sync_repo_present round-trip through IPC.
+        let _: crate::sync::config::CommitAuthorHint = invoke_ipc(
+            &webview,
+            "sync_default_author",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        let present: bool = invoke_ipc(
+            &webview,
+            "sync_repo_present",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        assert!(present);
 
         // sync_clone_remote into a fresh path.
         let dest = ws.tmp.path().join("ipc-clone");

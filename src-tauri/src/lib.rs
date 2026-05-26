@@ -152,6 +152,8 @@ pub fn run() {
             sync::commands::sync_clone_remote,
             sync::commands::sync_status,
             sync::commands::sync_run,
+            sync::commands::sync_default_author,
+            sync::commands::sync_repo_present,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Glyph");

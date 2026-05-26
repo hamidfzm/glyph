@@ -45,6 +45,20 @@ pub struct CommitIdentity {
     pub email: String,
 }
 
+/// Best-effort hint of an author identity sourced from git's config.
+///
+/// Both fields are independently optional: `user.name` and `user.email`
+/// can be set in isolation, and a brand-new install has neither. The
+/// frontend uses these strings as placeholders on the author fields in
+/// the Cloud Sync setup form so users see what would be used if they
+/// leave the fields blank.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitAuthorHint {
+    pub name: Option<String>,
+    pub email: Option<String>,
+}
+
 impl WorkspaceSyncConfig {
     /// Default config for a brand new Git-backed workspace. Caller still
     /// has to fill in `remote_url`.

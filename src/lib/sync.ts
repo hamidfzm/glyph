@@ -17,6 +17,17 @@ export interface CommitIdentity {
   email: string;
 }
 
+/**
+ * Best-effort author identity sourced from git's config. Used as
+ * placeholder hints on the Cloud Sync setup form — both fields are
+ * independently nullable because `user.name` and `user.email` can be
+ * set in isolation and a brand-new install has neither.
+ */
+export interface CommitAuthorHint {
+  name: string | null;
+  email: string | null;
+}
+
 export interface WorkspaceSyncConfig {
   workspacePath: string;
   backend: BackendKind;
@@ -123,8 +134,16 @@ export function getSyncStatus(workspacePath: string): Promise<StatusReport> {
   return invoke("sync_status", { workspacePath });
 }
 
-export function runSync(workspacePath: string): Promise<SyncResult> {
-  return invoke("sync_run", { workspacePath });
+export function runSync(workspacePath: string, message?: string | null): Promise<SyncResult> {
+  return invoke("sync_run", { workspacePath, message: message ?? null });
+}
+
+export function getDefaultSyncAuthor(workspacePath: string): Promise<CommitAuthorHint> {
+  return invoke("sync_default_author", { workspacePath });
+}
+
+export function isSyncRepoPresent(workspacePath: string): Promise<boolean> {
+  return invoke("sync_repo_present", { workspacePath });
 }
 
 /**

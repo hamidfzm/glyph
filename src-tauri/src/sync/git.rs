@@ -309,11 +309,11 @@ impl SyncBackend for GitBackend {
         })
     }
 
-    fn sync(&self) -> Result<SyncResult, SyncError> {
+    fn sync(&self, commit_message: Option<&str>) -> Result<SyncResult, SyncError> {
         let repo = self.open_repo()?;
         let signature = self.signature()?;
 
-        // Refuse to sync until existing conflicts are resolved — the
+        // Refuse to sync until existing conflicts are resolved. The
         // user has to take action; we can't push or fast-forward over a
         // conflicted index.
         let existing_conflicts = Self::collect_conflicts(&repo)?;
@@ -329,7 +329,12 @@ impl SyncBackend for GitBackend {
                 Some(c) => vec![c],
                 None => vec![],
             };
-            Self::commit_index(&repo, &signature, AUTO_COMMIT_MESSAGE, parents)?;
+            let trimmed = commit_message.map(str::trim).filter(|s| !s.is_empty());
+            let message = match trimmed {
+                Some(m) => m.to_string(),
+                None => auto_commit_message(&repo)?,
+            };
+            Self::commit_index(&repo, &signature, &message, parents)?;
             committed_count = 1;
         }
 
@@ -446,6 +451,93 @@ fn now_unix() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+/// Generate a GitHub-style commit subject from the diff between HEAD
+/// and the current index. Mirrors what GitHub's web editor produces
+/// when you commit through the file browser:
+///
+/// - one add/delete/modify: `Create|Delete|Update <basename>`
+/// - two or three deltas: `Create|Delete|Update a, b[, c]` (verb
+///   matches when all deltas are the same kind, falls back to `Update`)
+/// - four or more: `Create|Delete|Update first, second and N more files`
+///
+/// Falls back to the legacy `AUTO_COMMIT_MESSAGE` when libgit2 reports
+/// no deltas (e.g. an unexpected state where the index didn't actually
+/// move). Callers only invoke this when `stage_all` returned `true`, so
+/// that path is defensive.
+pub fn auto_commit_message(repo: &Repository) -> Result<String, SyncError> {
+    let index = repo
+        .index()
+        .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+
+    // The diff source: index relative to HEAD's tree, or relative to no
+    // tree at all on an unborn branch (every path becomes an Added).
+    let head_tree = match repo.head() {
+        Ok(head) => Some(
+            head.peel_to_tree()
+                .map_err(|e| SyncError::Backend(e.message().to_string()))?,
+        ),
+        Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
+        Err(e) => return Err(SyncError::Backend(e.message().to_string())),
+    };
+    let diff = repo
+        .diff_tree_to_index(head_tree.as_ref(), Some(&index), None)
+        .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Kind {
+        Added,
+        Deleted,
+        Modified,
+    }
+
+    let mut entries: Vec<(Kind, String)> = Vec::new();
+    for delta in diff.deltas() {
+        let kind = match delta.status() {
+            git2::Delta::Added | git2::Delta::Copied | git2::Delta::Untracked => Kind::Added,
+            git2::Delta::Deleted => Kind::Deleted,
+            // Modified / Renamed / Typechange / anything else with content
+            // changes are presented as "Update".
+            _ => Kind::Modified,
+        };
+        // Prefer the new path; fall back to the old path for deletes.
+        let path = delta
+            .new_file()
+            .path()
+            .or_else(|| delta.old_file().path())
+            .and_then(|p| p.file_name())
+            .map(|s| s.to_string_lossy().into_owned());
+        if let Some(p) = path {
+            entries.push((kind, p));
+        }
+    }
+
+    if entries.is_empty() {
+        return Ok(AUTO_COMMIT_MESSAGE.to_string());
+    }
+
+    let all_added = entries.iter().all(|(k, _)| *k == Kind::Added);
+    let all_deleted = entries.iter().all(|(k, _)| *k == Kind::Deleted);
+    let verb = if all_added {
+        "Create"
+    } else if all_deleted {
+        "Delete"
+    } else {
+        "Update"
+    };
+
+    let names: Vec<&str> = entries.iter().map(|(_, n)| n.as_str()).collect();
+    let msg = match names.as_slice() {
+        [one] => format!("{verb} {one}"),
+        [a, b] => format!("{verb} {a}, {b}"),
+        [a, b, c] => format!("{verb} {a}, {b}, {c}"),
+        many => {
+            let rest = many.len() - 2;
+            format!("{verb} {}, {} and {rest} more files", many[0], many[1])
+        }
+    };
+    Ok(msg)
 }
 
 /// Initialise a new git repository at `path` with the default branch
@@ -708,18 +800,46 @@ mod tests {
     fn sync_commits_and_pushes_local_changes() {
         let f = Fixture::new();
         f.write_file("notes.md", "# hello\n");
-        let result = f.backend().sync().unwrap();
+        let result = f.backend().sync(None).unwrap();
         assert_eq!(result.kind, BackendKind::Git);
         assert_eq!(result.committed_count, 1);
         assert_eq!(result.pulled_count, 0);
         assert_eq!(result.pushed_count, 1);
         assert!(result.conflicts.is_empty());
 
-        // The bare remote should now contain the commit.
+        // The bare remote should now contain the commit. With `None` for
+        // the message, the backend auto-generates a GitHub-style subject
+        // from the staged diff — a single new file becomes "Create <name>".
         let remote = Repository::open_bare(&f.remote).unwrap();
         let head = remote.find_reference("refs/heads/main").unwrap();
         let commit = head.peel_to_commit().unwrap();
-        assert_eq!(commit.message().unwrap(), AUTO_COMMIT_MESSAGE);
+        assert_eq!(commit.message().unwrap(), "Create notes.md");
+    }
+
+    #[test]
+    fn sync_uses_an_explicit_commit_message_when_supplied() {
+        let f = Fixture::new();
+        f.write_file("notes.md", "# hello\n");
+        f.backend().sync(Some("test commit")).unwrap();
+        let remote = Repository::open_bare(&f.remote).unwrap();
+        let head = remote.find_reference("refs/heads/main").unwrap();
+        let commit = head.peel_to_commit().unwrap();
+        assert_eq!(commit.message().unwrap(), "test commit");
+    }
+
+    #[test]
+    fn sync_falls_back_to_auto_message_when_supplied_blank() {
+        // Whitespace-only is treated identically to `None`.
+        let f = Fixture::new();
+        f.write_file("notes.md", "# hello\n");
+        f.backend().sync(Some("   ")).unwrap();
+        let remote = Repository::open_bare(&f.remote).unwrap();
+        let commit = remote
+            .find_reference("refs/heads/main")
+            .unwrap()
+            .peel_to_commit()
+            .unwrap();
+        assert_eq!(commit.message().unwrap(), "Create notes.md");
     }
 
     #[test]
@@ -727,9 +847,9 @@ mod tests {
         let f = Fixture::new();
         // Seed a commit so HEAD exists.
         f.write_file("seed.md", "# seed\n");
-        f.backend().sync().unwrap();
+        f.backend().sync(None).unwrap();
         // Second call should report no work.
-        let result = f.backend().sync().unwrap();
+        let result = f.backend().sync(None).unwrap();
         assert_eq!(result.committed_count, 0);
         assert_eq!(result.pulled_count, 0);
         assert_eq!(result.pushed_count, 0);
@@ -741,7 +861,7 @@ mod tests {
         // A commits + pushes; B sync should fast-forward.
         let f = Fixture::new();
         f.write_file("a.md", "# a\n");
-        f.backend().sync().unwrap();
+        f.backend().sync(None).unwrap();
 
         // Clone a second working copy from the same bare remote.
         let other = f._tmp.path().join("other");
@@ -756,10 +876,10 @@ mod tests {
 
         // Now write a new file in A, push it.
         f.write_file("b.md", "# b\n");
-        f.backend().sync().unwrap();
+        f.backend().sync(None).unwrap();
 
         // B should fast-forward and pick up b.md.
-        let result = other_backend.sync().unwrap();
+        let result = other_backend.sync(None).unwrap();
         assert_eq!(result.pulled_count, 1);
         assert!(other.join("b.md").exists());
     }
@@ -768,7 +888,7 @@ mod tests {
     fn sync_records_a_completed_timestamp() {
         let f = Fixture::new();
         f.write_file("a.md", "# a\n");
-        let result = f.backend().sync().unwrap();
+        let result = f.backend().sync(None).unwrap();
         assert!(result.completed_unix > 0);
     }
 
@@ -821,7 +941,7 @@ mod tests {
         // remote into a fresh path. The clone should contain the file.
         let f = Fixture::new();
         f.write_file("seed.md", "# seed\n");
-        f.backend().sync().unwrap();
+        f.backend().sync(None).unwrap();
 
         let dest = f._tmp.path().join("cloned");
         let resolved = clone_repo(f.remote.to_str().unwrap(), &dest, None).unwrap();
@@ -834,7 +954,7 @@ mod tests {
     fn clone_repo_errors_when_target_exists_and_is_not_empty() {
         let f = Fixture::new();
         f.write_file("seed.md", "# seed\n");
-        f.backend().sync().unwrap();
+        f.backend().sync(None).unwrap();
 
         // libgit2 refuses to clone into a non-empty directory.
         let dest = f._tmp.path().join("existing");
@@ -880,7 +1000,7 @@ mod tests {
         // we push.
         let f = Fixture::new();
         f.write_file("base.md", "base\n");
-        f.backend().sync().unwrap();
+        f.backend().sync(None).unwrap();
 
         let other = f._tmp.path().join("other");
         Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
@@ -891,11 +1011,11 @@ mod tests {
             email: "o@e.com".into(),
         });
         fs::write(other.join("other-only.md"), "from other\n").unwrap();
-        GitBackend::new(other_cfg).sync().unwrap();
+        GitBackend::new(other_cfg).sync(None).unwrap();
 
         // Now the first workspace edits a different file and syncs.
         f.write_file("first-only.md", "from first\n");
-        let result = f.backend().sync().unwrap();
+        let result = f.backend().sync(None).unwrap();
         assert!(result.conflicts.is_empty(), "no conflicts expected");
         assert_eq!(result.pulled_count, 1, "merged in other's commit");
         assert!(result.pushed_count >= 1, "merge commit pushed");
@@ -910,7 +1030,7 @@ mod tests {
         // merge conflict.
         let f = Fixture::new();
         f.write_file("notes.md", "line one\nline two\n");
-        f.backend().sync().unwrap();
+        f.backend().sync(None).unwrap();
 
         // Second clone, edits the same line.
         let other = f._tmp.path().join("other");
@@ -923,11 +1043,11 @@ mod tests {
         });
         let other_backend = GitBackend::new(other_cfg);
         fs::write(other.join("notes.md"), "line one\nFROM OTHER\n").unwrap();
-        other_backend.sync().unwrap();
+        other_backend.sync(None).unwrap();
 
         // First workspace edits the same file too, then tries to sync.
         f.write_file("notes.md", "line one\nFROM FIRST\n");
-        let result = f.backend().sync().unwrap();
+        let result = f.backend().sync(None).unwrap();
         assert!(
             !result.conflicts.is_empty(),
             "expected conflicts, got {result:?}"
@@ -943,7 +1063,7 @@ mod tests {
         // of trying to "merge again".
         let f = Fixture::new();
         f.write_file("notes.md", "line one\n");
-        f.backend().sync().unwrap();
+        f.backend().sync(None).unwrap();
 
         let other = f._tmp.path().join("other");
         Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
@@ -954,11 +1074,109 @@ mod tests {
             email: "o@e.com".into(),
         });
         fs::write(other.join("notes.md"), "OTHER\n").unwrap();
-        GitBackend::new(other_cfg).sync().unwrap();
+        GitBackend::new(other_cfg).sync(None).unwrap();
 
         f.write_file("notes.md", "MINE\n");
-        f.backend().sync().unwrap(); // leaves conflict in index
-        let err = f.backend().sync().unwrap_err();
+        f.backend().sync(None).unwrap(); // leaves conflict in index
+        let err = f.backend().sync(None).unwrap_err();
         assert!(matches!(err, SyncError::Conflict(_)), "got {err:?}");
+    }
+
+    // -- auto_commit_message ------------------------------------------------
+    //
+    // Helpers for the GitHub-style auto-commit message generator. Each
+    // test stages a known diff into a fresh repo via `stage_all` and
+    // then asks `auto_commit_message` to summarise it.
+
+    /// Open the workspace repo for a fixture and stage everything,
+    /// returning the message `auto_commit_message` would produce.
+    fn auto_message_for(f: &Fixture) -> String {
+        let repo = Repository::open(&f.workspace).unwrap();
+        GitBackend::stage_all(&repo).unwrap();
+        auto_commit_message(&repo).unwrap()
+    }
+
+    #[test]
+    fn auto_commit_message_for_a_single_added_file_says_create() {
+        let f = Fixture::new();
+        f.write_file("notes.md", "# hi\n");
+        assert_eq!(auto_message_for(&f), "Create notes.md");
+    }
+
+    #[test]
+    fn auto_commit_message_on_unborn_branch_treats_paths_as_added() {
+        // No HEAD yet — the diff source is `None`, so libgit2 marks
+        // every index entry as `Added`. Two new files: "Create a, b".
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path();
+        init_repo(workspace, super::super::DEFAULT_REMOTE_BRANCH).unwrap();
+        fs::write(workspace.join("a.md"), "a").unwrap();
+        fs::write(workspace.join("b.md"), "b").unwrap();
+        let repo = Repository::open(workspace).unwrap();
+        GitBackend::stage_all(&repo).unwrap();
+        assert_eq!(auto_commit_message(&repo).unwrap(), "Create a.md, b.md");
+    }
+
+    #[test]
+    fn auto_commit_message_for_a_single_deleted_file_says_delete() {
+        let f = Fixture::new();
+        f.write_file("notes.md", "# hi\n");
+        f.backend().sync(None).unwrap();
+        fs::remove_file(f.workspace.join("notes.md")).unwrap();
+        assert_eq!(auto_message_for(&f), "Delete notes.md");
+    }
+
+    #[test]
+    fn auto_commit_message_for_a_single_modified_file_says_update() {
+        let f = Fixture::new();
+        f.write_file("notes.md", "# hi\n");
+        f.backend().sync(None).unwrap();
+        f.write_file("notes.md", "# changed\n");
+        assert_eq!(auto_message_for(&f), "Update notes.md");
+    }
+
+    #[test]
+    fn auto_commit_message_for_two_mixed_deltas_uses_update_with_a_comma() {
+        // One add + one modify on top of a clean repo. Mixed kinds, so
+        // the verb falls back to "Update".
+        let f = Fixture::new();
+        f.write_file("a.md", "a\n");
+        f.backend().sync(None).unwrap();
+        f.write_file("a.md", "changed\n");
+        f.write_file("b.md", "b\n");
+        let msg = auto_message_for(&f);
+        // Order of deltas isn't part of the API contract.
+        assert!(
+            msg == "Update a.md, b.md" || msg == "Update b.md, a.md",
+            "unexpected message: {msg}"
+        );
+    }
+
+    #[test]
+    fn auto_commit_message_for_three_added_files_lists_each_with_create() {
+        let f = Fixture::new();
+        f.write_file("seed.md", "seed\n");
+        f.backend().sync(None).unwrap();
+        f.write_file("a.md", "a\n");
+        f.write_file("b.md", "b\n");
+        f.write_file("c.md", "c\n");
+        let msg = auto_message_for(&f);
+        assert!(msg.starts_with("Create "), "got: {msg}");
+        for name in ["a.md", "b.md", "c.md"] {
+            assert!(msg.contains(name), "missing {name} in {msg}");
+        }
+    }
+
+    #[test]
+    fn auto_commit_message_for_four_plus_files_collapses_into_n_more() {
+        let f = Fixture::new();
+        f.write_file("seed.md", "seed\n");
+        f.backend().sync(None).unwrap();
+        for n in ["a.md", "b.md", "c.md", "d.md", "e.md"] {
+            fs::write(f.workspace.join(n), "x\n").unwrap();
+        }
+        let msg = auto_message_for(&f);
+        assert!(msg.starts_with("Create "), "got: {msg}");
+        assert!(msg.contains(" and 3 more files"), "got: {msg}");
     }
 }
