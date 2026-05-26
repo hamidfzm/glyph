@@ -5,12 +5,58 @@ Thanks for your interest in contributing!
 ## Development Setup
 
 ```bash
-# Prerequisites: Node.js (see .nvmrc), pnpm, Rust stable
+# Prerequisites: Node.js (see .nvmrc), pnpm, Rust stable, plus platform deps (below)
 git clone https://github.com/hamidfzm/glyph.git
 cd glyph
 nvm use          # or fnm use — reads .nvmrc
 pnpm install     # also installs the Husky git hooks via `prepare`
 pnpm tauri dev
+```
+
+### Platform prerequisites
+
+Glyph is built on [Tauri v2](https://v2.tauri.app/), which needs a system toolchain in addition to Node.js, pnpm, and Rust. See [Tauri's prerequisites page](https://v2.tauri.app/start/prerequisites/) for the canonical list. Quick reference per OS:
+
+**Windows** (via [Chocolatey](https://chocolatey.org/install), run PowerShell as Administrator):
+
+```powershell
+choco install -y visualstudio2022buildtools visualstudio2022-workload-vctools rustup.install nvm pnpm
+# WebView2 ships with Windows 10 1803+ and Windows 11. If missing:
+choco install -y webview2-runtime
+```
+
+After `rustup.install`, open a new shell and run `rustup default stable-msvc`. Then `nvm install` (reads `.nvmrc`) and `pnpm install`.
+
+**macOS**:
+
+```bash
+xcode-select --install                          # Command Line Tools
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+brew install node pnpm                          # or use nvm/fnm for Node
+```
+
+**Linux, Debian / Ubuntu**:
+
+```bash
+sudo apt update
+sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+  libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# Install Node via nvm/fnm (reads .nvmrc), then `npm i -g pnpm`
+```
+
+**Linux, Fedora**:
+
+```bash
+sudo dnf install -y webkit2gtk4.1-devel openssl-devel curl wget file \
+  libappindicator-gtk3-devel librsvg2-devel libxdo-devel gcc gcc-c++ make
+```
+
+**Linux, Arch**:
+
+```bash
+sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl \
+  appmenu-gtk-module libappindicator-gtk3 librsvg xdotool
 ```
 
 ### Git hooks
