@@ -64,7 +64,7 @@ function renderStatusBar(opts: Opts = {}) {
   const value = buildContext(opts);
   return render(
     <Wrapper value={value}>
-      <StatusBar />
+      <StatusBar onOpenSync={vi.fn()} />
     </Wrapper>,
   );
 }

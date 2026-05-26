@@ -9,6 +9,7 @@ export interface MenuEventHandlers {
   toggleOutlineSidebar: () => void;
   resetView: () => void;
   openSettings: () => void;
+  openSyncSettings: () => void;
   find: () => void;
   toggleEdit: () => void;
   print: () => void;
@@ -32,6 +33,7 @@ export function useMenuEvents(handlers: MenuEventHandlers) {
       listen("menu-toggle-outline-sidebar", handlers.toggleOutlineSidebar),
       listen("menu-reset-view", handlers.resetView),
       listen("menu-open-settings", handlers.openSettings),
+      listen("menu-open-sync-settings", handlers.openSyncSettings),
       listen("menu-find", handlers.find),
       listen("menu-toggle-edit", handlers.toggleEdit),
       listen("menu-print", handlers.print),

@@ -82,6 +82,7 @@ export function useAppCommands({
       },
       { title: "Reset View", run: actions.resetView },
       { title: "Settings…", shortcut: "Cmd/Ctrl+,", run: actions.openSettings },
+      { title: "Cloud Sync…", run: actions.openSyncSettings },
       { title: "Find in Document", shortcut: "Cmd/Ctrl+F", run: actions.find },
       { title: "Toggle Edit Mode", shortcut: "Cmd/Ctrl+E", run: actions.toggleEdit },
       { title: "Print / Export to PDF", shortcut: "Cmd/Ctrl+P", run: actions.print },

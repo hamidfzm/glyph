@@ -23,6 +23,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     toggleOutlineSidebar: vi.fn(),
     resetView: vi.fn(),
     openSettings: vi.fn(),
+    openSyncSettings: vi.fn(),
     find: vi.fn(),
     toggleEdit: vi.fn(),
     print: vi.fn(),

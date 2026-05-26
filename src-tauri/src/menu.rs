@@ -46,6 +46,7 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         "toggle-outline-sidebar" => emit("menu-toggle-outline-sidebar"),
         "open-command-palette" => emit("menu-open-command-palette"),
         "open-settings" => emit("menu-open-settings"),
+        "open-sync-settings" => emit("menu-open-sync-settings"),
         "ai-summarize" => Some(MenuAction::Emit {
             event: "menu-ai-action",
             payload: Some("summarize"),
@@ -127,6 +128,10 @@ mod tests {
         assert_eq!(
             menu_action_for_id("open-settings"),
             Some(emit("menu-open-settings"))
+        );
+        assert_eq!(
+            menu_action_for_id("open-sync-settings"),
+            Some(emit("menu-open-sync-settings"))
         );
     }
 

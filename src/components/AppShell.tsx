@@ -20,6 +20,7 @@ import { TabBar } from "./layout/TabBar";
 import { AIPanel } from "./modals/AIPanel";
 import { CommandPalette } from "./modals/CommandPalette";
 import { SettingsModal } from "./modals/SettingsModal";
+import { SyncSettingsModal } from "./modals/SyncSettingsModal";
 import { TabContent } from "./TabContent";
 
 // All the wiring that used to live inside App: menu events, AI/TTS/Print
@@ -54,6 +55,7 @@ export function AppShell() {
   useDocumentUndoRedo({ activeTabId, platform, onUndo: undoEdit, onRedo: redoEdit });
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [syncSettingsOpen, setSyncSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
   useAutoSave({
@@ -110,6 +112,7 @@ export function AppShell() {
       toggleOutlineSidebar: sidebar.toggleOutline,
       resetView: sidebar.resetLayout,
       openSettings: () => setSettingsOpen(true),
+      openSyncSettings: () => setSyncSettingsOpen(true),
       find: () => setSearchOpen(true),
       toggleEdit: handleToggleEdit,
       print: printDoc,
@@ -191,7 +194,7 @@ export function AppShell() {
         )}
         <Sidebar side="right" />
       </div>
-      <StatusBar />
+      <StatusBar onOpenSync={() => setSyncSettingsOpen(true)} />
 
       <CommandPalette
         open={palette.open}
@@ -202,6 +205,7 @@ export function AppShell() {
       />
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SyncSettingsModal open={syncSettingsOpen} onClose={() => setSyncSettingsOpen(false)} />
       <AIPanel
         open={aiController.panelOpen}
         onClose={aiController.closePanel}

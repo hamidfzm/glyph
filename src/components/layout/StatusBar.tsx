@@ -2,16 +2,22 @@ import { useTabsContext } from "@/contexts/TabsContext";
 import { useSettings } from "@/hooks/useSettings";
 import { countWords, readingTime } from "@/lib/markdown";
 import { ZOOM_DEFAULT } from "@/lib/settings";
+import { SyncStatusIndicator } from "./SyncStatusIndicator";
 
-export function StatusBar() {
+interface StatusBarProps {
+  onOpenSync: () => void;
+}
+
+export function StatusBar({ onOpenSync }: StatusBarProps) {
   const { settings } = useSettings();
-  const { activeFile, displayContent } = useTabsContext();
+  const { activeFile, activeTab, displayContent } = useTabsContext();
   const zoomPercent = Math.round((settings.appearance.fontSize / ZOOM_DEFAULT) * 100);
 
   if (!displayContent) return null;
 
   const filePath = activeFile?.path;
   const words = countWords(displayContent);
+  const workspacePath = activeTab?.kind === "folder" ? activeTab.root : null;
 
   return (
     <div
@@ -26,6 +32,7 @@ export function StatusBar() {
       <span className="ml-auto">{words.toLocaleString()} words</span>
       <span>{readingTime(words)}</span>
       {zoomPercent !== 100 && <span>{zoomPercent}%</span>}
+      <SyncStatusIndicator workspacePath={workspacePath} onOpenSync={onOpenSync} />
     </div>
   );
 }
