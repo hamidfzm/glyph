@@ -6,7 +6,7 @@ import { defineConfig } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
-export default defineConfig(async () => ({
+export default defineConfig(async ({ mode }) => ({
   plugins: [
     react(),
     tailwindcss(),
@@ -17,6 +17,13 @@ export default defineConfig(async () => ({
       gitService: "github",
     }),
   ],
+  // Strip `console.*` and `debugger` from production bundles so diagnostic
+  // logs added during debugging don't leak into shipped builds (and don't
+  // weigh down the bundle). Dev builds keep them so the in-app DevTools
+  // panel stays useful.
+  esbuild: {
+    drop: mode === "production" ? ["console", "debugger"] : [],
+  },
   clearScreen: false,
   resolve: {
     alias: {

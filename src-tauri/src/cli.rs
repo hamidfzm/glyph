@@ -462,8 +462,7 @@ mod tests {
         fs::create_dir_all(&argv_target).unwrap();
 
         let env_args = vec!["glyph".to_string(), "from-argv".to_string()];
-        let result =
-            initial_open_action(Some("from-plugin"), &env_args, &cwd).expect("classifies");
+        let result = initial_open_action(Some("from-plugin"), &env_args, &cwd).expect("classifies");
         assert!(
             matches!(&result, InitialOpenAction::Folder(p) if p.ends_with("from-plugin")),
             "expected the plugin-supplied path to win, got {result:?}"
