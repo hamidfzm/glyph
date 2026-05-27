@@ -13,6 +13,8 @@ interface UseCommandPaletteControllerOptions {
   tocEntries: readonly TocEntry[];
   /** App-level callbacks, e.g. the menu-handler object. */
   actions: AppActions;
+  /** Mirror of `settings.experimental.cloudSync`. */
+  cloudSyncEnabled: boolean;
 }
 
 export interface CommandPaletteController {
@@ -33,9 +35,16 @@ export function useCommandPaletteController({
   workspaceFiles,
   tocEntries,
   actions,
+  cloudSyncEnabled,
 }: UseCommandPaletteControllerOptions): CommandPaletteController {
   const palette = useCommandPalette({ platform });
-  const commands = useAppCommands({ activeFolderTab, workspaceFiles, tocEntries, actions });
+  const commands = useAppCommands({
+    activeFolderTab,
+    workspaceFiles,
+    tocEntries,
+    actions,
+    cloudSyncEnabled,
+  });
 
   return useMemo(
     () => ({

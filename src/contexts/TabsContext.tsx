@@ -30,6 +30,7 @@ export function TabsProvider({ settings, updateSettings, children }: TabsProvide
     recentFiles: settings.behavior.recentFiles,
     autoReload: settings.behavior.autoReload,
     defaultEditorMode: settings.behavior.defaultEditorMode,
+    workspaceLastFile: settings.behavior.workspaceLastFile,
     onSettingsChange: updateSettings,
   });
 

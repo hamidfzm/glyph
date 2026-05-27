@@ -46,6 +46,7 @@ describe("useAppCommands", () => {
         workspaceFiles: [],
         tocEntries: [],
         actions,
+        cloudSyncEnabled: true,
       }),
     );
     const titles = result.current.map((c) => c.title);
@@ -63,6 +64,7 @@ describe("useAppCommands", () => {
         workspaceFiles: ["/workspace/a.md", "/workspace/sub/b.md"],
         tocEntries: [],
         actions,
+        cloudSyncEnabled: true,
       }),
     );
     const files = result.current.filter((c) => c.section === "Files");
@@ -78,6 +80,7 @@ describe("useAppCommands", () => {
         workspaceFiles: ["/anywhere/note.md"],
         tocEntries: [],
         actions: makeActions(),
+        cloudSyncEnabled: true,
       }),
     );
     expect(result.current.some((c) => c.section === "Files")).toBe(false);
@@ -93,11 +96,38 @@ describe("useAppCommands", () => {
           { id: "details", text: "Details", level: 2 },
         ],
         actions: makeActions(),
+        cloudSyncEnabled: true,
       }),
     );
     const headings = result.current.filter((c) => c.section === "Headings");
     expect(headings.map((h) => h.title)).toEqual(["Introduction", "Details"]);
     expect(headings.map((h) => h.subtitle)).toEqual(["H1", "H2"]);
+  });
+
+  it("includes 'Cloud Sync…' when the experimental flag is on", () => {
+    const { result } = renderHook(() =>
+      useAppCommands({
+        activeFolderTab: null,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions: makeActions(),
+        cloudSyncEnabled: true,
+      }),
+    );
+    expect(result.current.map((c) => c.title)).toContain("Cloud Sync…");
+  });
+
+  it("omits 'Cloud Sync…' when the experimental flag is off", () => {
+    const { result } = renderHook(() =>
+      useAppCommands({
+        activeFolderTab: null,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions: makeActions(),
+        cloudSyncEnabled: false,
+      }),
+    );
+    expect(result.current.map((c) => c.title)).not.toContain("Cloud Sync…");
   });
 
   it("each app command's run invokes the matching action", () => {
@@ -108,6 +138,7 @@ describe("useAppCommands", () => {
         workspaceFiles: [],
         tocEntries: [],
         actions,
+        cloudSyncEnabled: true,
       }),
     );
     const find = (title: string) => result.current.find((c) => c.title === title)!;
@@ -154,6 +185,7 @@ describe("useAppCommands", () => {
         workspaceFiles: [],
         tocEntries: [{ id: "intro-heading", text: "Intro", level: 2 }],
         actions: makeActions(),
+        cloudSyncEnabled: true,
       }),
     );
     const heading = result.current.find((c) => c.section === "Headings")!;
@@ -170,6 +202,7 @@ describe("useAppCommands", () => {
         workspaceFiles: ["loose"],
         tocEntries: [],
         actions: makeActions(),
+        cloudSyncEnabled: true,
       }),
     );
     const file = result.current.find((c) => c.section === "Files")!;

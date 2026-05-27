@@ -9,6 +9,7 @@ const baseFlags: NativeMenuFlags = {
   hasContent: false,
   aiConfigured: false,
   ttsAvailable: false,
+  cloudSyncEnabled: false,
 };
 
 beforeEach(() => {
@@ -26,6 +27,7 @@ describe("useNativeMenuState", () => {
         hasContent: true,
         aiConfigured: true,
         ttsAvailable: true,
+        cloudSyncEnabled: true,
       }),
     );
     expect(invoke).toHaveBeenCalledWith("set_menu_state", {
@@ -35,6 +37,7 @@ describe("useNativeMenuState", () => {
         hasContent: true,
         aiConfigured: true,
         ttsAvailable: true,
+        cloudSyncEnabled: true,
       },
     });
   });

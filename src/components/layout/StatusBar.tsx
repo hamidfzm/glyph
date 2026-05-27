@@ -5,7 +5,9 @@ import { ZOOM_DEFAULT } from "@/lib/settings";
 import { SyncStatusIndicator } from "./SyncStatusIndicator";
 
 interface StatusBarProps {
-  onOpenSync: () => void;
+  // `null` when the cloud-sync feature flag is off, in which case the sync
+  // status pill is hidden entirely.
+  onOpenSync: (() => void) | null;
 }
 
 export function StatusBar({ onOpenSync }: StatusBarProps) {
@@ -32,7 +34,7 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
       <span className="ml-auto">{words.toLocaleString()} words</span>
       <span>{readingTime(words)}</span>
       {zoomPercent !== 100 && <span>{zoomPercent}%</span>}
-      <SyncStatusIndicator workspacePath={workspacePath} onOpenSync={onOpenSync} />
+      {onOpenSync && <SyncStatusIndicator workspacePath={workspacePath} onOpenSync={onOpenSync} />}
     </div>
   );
 }

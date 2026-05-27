@@ -32,6 +32,11 @@ describe("DEFAULT_SETTINGS", () => {
     expect(DEFAULT_SETTINGS.behavior.reopenLastFile).toBe(false);
     expect(DEFAULT_SETTINGS.behavior.confirmExternalLinks).toBe(true);
     expect(DEFAULT_SETTINGS.behavior.recentFiles).toEqual([]);
+    expect(DEFAULT_SETTINGS.behavior.workspaceLastFile).toEqual({});
+  });
+
+  it("has experimental defaults (cloud sync off)", () => {
+    expect(DEFAULT_SETTINGS.experimental.cloudSync).toBe(false);
   });
 
   it("has AI defaults", () => {

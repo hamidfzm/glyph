@@ -14,6 +14,8 @@ export interface AppCommandSources {
   tocEntries: readonly TocEntry[];
   /** App-level actions; same shape as the menu handlers plus tab navigation. */
   actions: AppActions;
+  /** Mirror of `settings.experimental.cloudSync`. Gates the "Cloud Sync…" entry. */
+  cloudSyncEnabled: boolean;
 }
 
 // Reuse the menu handler shape and add the folder-tab navigator used by Files
@@ -39,6 +41,7 @@ export function useAppCommands({
   workspaceFiles,
   tocEntries,
   actions,
+  cloudSyncEnabled,
 }: AppCommandSources): Command[] {
   return useMemo<Command[]>(() => {
     const out: Command[] = [];
@@ -82,7 +85,9 @@ export function useAppCommands({
       },
       { title: "Reset View", run: actions.resetView },
       { title: "Settings…", shortcut: "Cmd/Ctrl+,", run: actions.openSettings },
-      { title: "Cloud Sync…", run: actions.openSyncSettings },
+      // Hidden when the experimental.cloudSync flag is off so the palette
+      // never surfaces a command that's been disabled at every other layer.
+      ...(cloudSyncEnabled ? [{ title: "Cloud Sync…", run: actions.openSyncSettings }] : []),
       { title: "Find in Document", shortcut: "Cmd/Ctrl+F", run: actions.find },
       { title: "Toggle Edit Mode", shortcut: "Cmd/Ctrl+E", run: actions.toggleEdit },
       { title: "Print / Export to PDF", shortcut: "Cmd/Ctrl+P", run: actions.print },
@@ -102,5 +107,5 @@ export function useAppCommands({
     }
 
     return out;
-  }, [activeFolderTab, workspaceFiles, tocEntries, actions]);
+  }, [activeFolderTab, workspaceFiles, tocEntries, actions, cloudSyncEnabled]);
 }

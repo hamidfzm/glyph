@@ -78,6 +78,11 @@ interface UseTabsOptions {
   recentFiles: string[];
   autoReload: boolean;
   defaultEditorMode: EditorMode;
+  // Per-workspace memory of the last file the user had open. Looked up when
+  // a folder tab opens without an explicit filePath (CLI arg, drag-drop, or
+  // a persisted tab whose `filePath` was lost). Stale entries fall through
+  // to the first markdown file in the workspace.
+  workspaceLastFile: Record<string, string>;
   onSettingsChange: (key: string, value: unknown) => void;
 }
 
@@ -263,6 +268,7 @@ export function useTabs(options: UseTabsOptions) {
         await invoke("watch_file", { path });
         const mode = optionsRef.current.defaultEditorMode;
         const newFile: FileState = { ...makeFileState(path, mode), content, metadata };
+        const folderRoot = tab.root;
         setState((prev) => ({
           ...prev,
           tabs: prev.tabs.map((t) =>
@@ -270,6 +276,16 @@ export function useTabs(options: UseTabsOptions) {
           ),
         }));
         addToRecent(path);
+        // Remember this file for next time the same workspace is opened.
+        // Updating the whole map lets settings.workspaceLastFile keep entries
+        // for other workspaces untouched.
+        const currentMap = optionsRef.current.workspaceLastFile ?? {};
+        if (currentMap[folderRoot] !== path) {
+          optionsRef.current.onSettingsChange("behavior.workspaceLastFile", {
+            ...currentMap,
+            [folderRoot]: path,
+          });
+        }
       } catch (err) {
         console.error("Failed to open file in folder tab:", err);
       }
@@ -311,13 +327,52 @@ export function useTabs(options: UseTabsOptions) {
         nodes.set(dir, await loadDirectory(dir));
       }
 
+      // Pick the initial file BEFORE we add the tab, so the first render of the
+      // folder tab already shows content. Doing this after `setState` would race
+      // the React commit (stateRef.current wouldn't see the new tab yet inside
+      // an awaited continuation), causing openFileInFolderTab to bail out.
+      let initialFile: FileState | null = null;
+      let resolvedFiles: string[] | null = null;
+      const wantsAutoLoad = !options?.filePath;
+      if (wantsAutoLoad) {
+        resolvedFiles = await loadWorkspaceFiles(resolvedRoot);
+        if (resolvedFiles.length > 0) {
+          const remembered = optionsRef.current.workspaceLastFile?.[resolvedRoot];
+          const target =
+            remembered && resolvedFiles.includes(remembered) ? remembered : resolvedFiles[0];
+          if (isMarkdownFile(target)) {
+            try {
+              const { content, metadata } = await loadFileContent(target);
+              await invoke("watch_file", { path: target });
+              initialFile = {
+                ...makeFileState(target, optionsRef.current.defaultEditorMode),
+                content,
+                metadata,
+              };
+              addToRecent(target);
+              // Sync the per-workspace memory if we landed on a different file
+              // than the one remembered (e.g. stale entry, or first-time open).
+              const currentMap = optionsRef.current.workspaceLastFile ?? {};
+              if (currentMap[resolvedRoot] !== target) {
+                optionsRef.current.onSettingsChange("behavior.workspaceLastFile", {
+                  ...currentMap,
+                  [resolvedRoot]: target,
+                });
+              }
+            } catch (err) {
+              console.error("Failed to auto-load workspace file:", err);
+            }
+          }
+        }
+      }
+
       const newTab: FolderTab = {
         id,
         kind: "folder",
         root: resolvedRoot,
         expanded,
         nodes,
-        file: null,
+        file: initialFile,
       };
       // Re-check after the awaits — a concurrent call (e.g. React 19 StrictMode
       // double-mount, or rapid re-invocation) may have already added this folder.
@@ -331,8 +386,12 @@ export function useTabs(options: UseTabsOptions) {
         return { tabs: [...prev.tabs, newTab], activeTabId: id };
       });
 
-      // Build the workspace markdown index in the background so wikilinks can resolve.
-      loadWorkspaceFiles(resolvedRoot).then((files) => {
+      // Build the workspace markdown index in the background so wikilinks can
+      // resolve. Reuse the list we already fetched for the auto-load path.
+      const filesPromise = resolvedFiles
+        ? Promise.resolve(resolvedFiles)
+        : loadWorkspaceFiles(resolvedRoot);
+      filesPromise.then((files) => {
         setWorkspaceIndex((prev) => ({ ...prev, [activeId]: files }));
       });
       loadWikilinkRefs(resolvedRoot).then((refs) => {
@@ -340,11 +399,11 @@ export function useTabs(options: UseTabsOptions) {
       });
 
       if (options?.filePath) {
-        // Defer so the new tab is in state for openFileInFolderTab to find
+        // Defer so the new tab is in state for openFileInFolderTab to find.
         await openFileInFolderTab(activeId, options.filePath);
       }
     },
-    [loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFileInFolderTab],
+    [addToRecent, loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFileInFolderTab],
   );
 
   const toggleExpand = useCallback(

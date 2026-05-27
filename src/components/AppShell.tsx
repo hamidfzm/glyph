@@ -76,12 +76,15 @@ export function AppShell() {
   const printDoc = usePrint({ entries: tabs.tocEntries, settings: settings.print });
   const zoom = useFontZoom({ fontSize: settings.appearance.fontSize, updateSettings });
 
+  const cloudSyncEnabled = settings.experimental.cloudSync;
+
   useNativeMenuState({
     hasTab: openTabs.length > 0,
     hasFile: activeFile?.content != null,
     hasContent: (displayContent ?? "").length > 0,
     aiConfigured: aiController.configured,
     ttsAvailable: tts.available,
+    cloudSyncEnabled,
   });
 
   const closeActiveTab = useCallback(() => {
@@ -112,7 +115,11 @@ export function AppShell() {
       toggleOutlineSidebar: sidebar.toggleOutline,
       resetView: sidebar.resetLayout,
       openSettings: () => setSettingsOpen(true),
-      openSyncSettings: () => setSyncSettingsOpen(true),
+      // Gated by the experimental.cloudSync toggle: while the native menu
+      // item is hidden by `apply_menu_state`, the open-sync-settings event
+      // can still arrive (e.g. queued before the menu re-applied). Make the
+      // handler a no-op when the feature is off so we never expose the modal.
+      openSyncSettings: cloudSyncEnabled ? () => setSyncSettingsOpen(true) : () => {},
       find: () => setSearchOpen(true),
       toggleEdit: handleToggleEdit,
       print: printDoc,
@@ -136,6 +143,7 @@ export function AppShell() {
       zoom.zoomReset,
       handleAIActionFromMenu,
       readAloud.toggle,
+      cloudSyncEnabled,
     ],
   );
   useMenuEvents(menuHandlers);
@@ -149,6 +157,7 @@ export function AppShell() {
       () => ({ ...menuHandlers, openFileInFolderTab }),
       [menuHandlers, openFileInFolderTab],
     ),
+    cloudSyncEnabled,
   });
 
   // Context menu (Win/Linux only): text-content actions only. Sidebar/menu/zoom
@@ -194,7 +203,7 @@ export function AppShell() {
         )}
         <Sidebar side="right" />
       </div>
-      <StatusBar onOpenSync={() => setSyncSettingsOpen(true)} />
+      <StatusBar onOpenSync={cloudSyncEnabled ? () => setSyncSettingsOpen(true) : null} />
 
       <CommandPalette
         open={palette.open}
@@ -205,7 +214,10 @@ export function AppShell() {
       />
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <SyncSettingsModal open={syncSettingsOpen} onClose={() => setSyncSettingsOpen(false)} />
+      <SyncSettingsModal
+        open={syncSettingsOpen && cloudSyncEnabled}
+        onClose={() => setSyncSettingsOpen(false)}
+      />
       <AIPanel
         open={aiController.panelOpen}
         onClose={aiController.closePanel}

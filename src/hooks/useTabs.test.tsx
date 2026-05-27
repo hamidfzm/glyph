@@ -53,6 +53,7 @@ function defaultOptions(over: Partial<Parameters<typeof useTabs>[0]> = {}) {
     recentFiles: [],
     autoReload: false,
     defaultEditorMode: "view" as const,
+    workspaceLastFile: {},
     onSettingsChange: vi.fn(),
     ...over,
   };
@@ -617,6 +618,111 @@ describe("useTabs dialog and events", () => {
       expect(
         result.current.tabs.some((t) => t.kind === "file" && t.file.path === "/p/evt.md"),
       ).toBe(true);
+    });
+  });
+
+  it("auto-loads the first markdown file when opening a folder with no remembered file", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => {
+      const folder = result.current.tabs.find((t) => t.kind === "folder");
+      expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/a.md");
+    });
+  });
+
+  it("auto-loads the remembered file when it still exists in the workspace", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ workspaceLastFile: { "/p/ws": "/p/ws/b.md" } })),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => {
+      const folder = result.current.tabs.find((t) => t.kind === "folder");
+      expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/b.md");
+    });
+  });
+
+  it("falls back to the first file when the remembered file no longer exists", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ workspaceLastFile: { "/p/ws": "/p/ws/gone.md" } })),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => {
+      const folder = result.current.tabs.find((t) => t.kind === "folder");
+      expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/a.md");
+    });
+  });
+
+  it("does not auto-load anything when the workspace has no markdown files", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => [],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/empty");
+    });
+    const folder = result.current.tabs.find((t) => t.kind === "folder");
+    expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
+  });
+
+  it("openFileInFolderTab persists the choice via behavior.workspaceLastFile", async () => {
+    const onSettingsChange = vi.fn();
+    vi.mocked(invoke).mockImplementation(makeInvoker() as typeof invoke);
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          workspaceLastFile: { "/p/other": "/p/other/x.md" },
+          onSettingsChange,
+        }),
+      ),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folder = result.current.tabs.find((t) => t.kind === "folder");
+    expect(folder).toBeDefined();
+    onSettingsChange.mockClear();
+
+    await act(async () => {
+      await result.current.openFileInFolderTab(folder!.id, "/p/ws/note.md");
+    });
+
+    // The merged map must keep the other workspace's entry intact.
+    expect(onSettingsChange).toHaveBeenCalledWith("behavior.workspaceLastFile", {
+      "/p/other": "/p/other/x.md",
+      "/p/ws": "/p/ws/note.md",
     });
   });
 

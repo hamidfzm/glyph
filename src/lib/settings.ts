@@ -49,6 +49,11 @@ export interface BehaviorSettings {
   // tabs). Used to restore which tab is selected on launch.
   activeTabPath: string;
   defaultEditorMode: EditorMode;
+  // Maps a folder workspace's absolute root to the last file the user had
+  // open inside it. Looked up when a folder is opened with no explicit file
+  // (workspace restore, drag-drop folder, File > Open Folder). Files that no
+  // longer exist fall through to the first markdown file in the workspace.
+  workspaceLastFile: Record<string, string>;
 }
 
 export interface AISettings {
@@ -66,12 +71,22 @@ export interface PrintSettings {
   includeBackground: boolean;
 }
 
+// Feature flags for in-progress work. Each entry gates a UI surface (menus,
+// modals, status bar pills, palette commands) that we want to ship behind a
+// user-controlled toggle until it's stable.
+export interface ExperimentalSettings {
+  // Per-workspace git-backed sync. Hides the modal, status-bar pill, File
+  // menu item, and command-palette entry when off.
+  cloudSync: boolean;
+}
+
 export interface Settings {
   appearance: AppearanceSettings;
   layout: LayoutSettings;
   behavior: BehaviorSettings;
   ai: AISettings;
   print: PrintSettings;
+  experimental: ExperimentalSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -100,6 +115,7 @@ export const DEFAULT_SETTINGS: Settings = {
     openTabs: [],
     activeTabPath: "",
     defaultEditorMode: "view",
+    workspaceLastFile: {},
   },
   ai: {
     provider: "none",
@@ -113,6 +129,9 @@ export const DEFAULT_SETTINGS: Settings = {
     pageBreakLevel: "none",
     includeToc: false,
     includeBackground: false,
+  },
+  experimental: {
+    cloudSync: false,
   },
 };
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import { MODEL_SUGGESTIONS } from "@/lib/settings";
 
-type Tab = "appearance" | "layout" | "behavior" | "ai" | "print";
+type Tab = "appearance" | "layout" | "behavior" | "ai" | "print" | "experimental";
 
 interface SettingsModalProps {
   open: boolean;
@@ -73,6 +73,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     { id: "behavior", label: "Behavior" },
     { id: "ai", label: "AI" },
     { id: "print", label: "Print" },
+    { id: "experimental", label: "Experimental" },
   ];
 
   return (
@@ -119,6 +120,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           {tab === "behavior" && <BehaviorTab />}
           {tab === "ai" && <AITab />}
           {tab === "print" && <PrintTab />}
+          {tab === "experimental" && <ExperimentalTab />}
         </div>
 
         <div className="settings-footer">
@@ -455,6 +457,30 @@ function PrintTab() {
         <Toggle
           checked={print.includeBackground}
           onChange={(v) => updateSettings("print.includeBackground", v)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ExperimentalTab() {
+  const { settings, updateSettings } = useSettings();
+  const { experimental } = settings;
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-title">Experimental features</div>
+      <div className="settings-row">
+        <div>
+          <span className="settings-label">Cloud Sync</span>
+          <div className="settings-description">
+            Per-workspace git-backed sync. Experimental: data loss possible; back up your notes
+            elsewhere. Restart Glyph after enabling or disabling so the native menu re-registers.
+          </div>
+        </div>
+        <Toggle
+          checked={experimental.cloudSync}
+          onChange={(v) => updateSettings("experimental.cloudSync", v)}
         />
       </div>
     </div>

@@ -81,6 +81,7 @@ pub fn run() {
                 has_content: false,
                 ai_configured: false,
                 tts_available: false,
+                cloud_sync_enabled: false,
             };
             let _ = menu::apply_menu_state(&menu_refs, &initial_flags);
             app.manage(menu_refs);
