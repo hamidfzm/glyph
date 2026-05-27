@@ -16,24 +16,39 @@ interface MermaidDiagramProps {
 
 export function MermaidDiagram({ code }: MermaidDiagramProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const idRef = useRef(`mermaid-diagram-${idCounter++}`);
+  // Sentinel that lets us drop stale render results. Each call bumps it; if
+  // the call finishes and the sentinel has since changed, a newer render is
+  // in flight and we leave the DOM alone.
+  const renderSeqRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
 
   const isDark = useCallback(() => document.documentElement.classList.contains("dark"), []);
 
   const renderDiagram = useCallback(async () => {
+    const mySeq = ++renderSeqRef.current;
+    if (code.trim().length === 0) {
+      setError("Empty diagram source");
+      return;
+    }
+    // Always pass a fresh id to `mermaid.render`. Mermaid v11 keeps internal
+    // state keyed by id, and calling render twice with the same id (React
+    // double-mount, theme observer, parent re-render) makes the second call
+    // return a tiny ~5KB stub SVG that paints as a blank preview.
+    const id = `mermaid-diagram-${idCounter++}`;
     try {
       const mermaid = await loadMermaid();
       mermaid.initialize({
         startOnLoad: false,
         theme: isDark() ? "dark" : "default",
       });
-      const { svg } = await mermaid.render(idRef.current, code);
+      const { svg } = await mermaid.render(id, code);
+      if (renderSeqRef.current !== mySeq) return;
       if (containerRef.current) {
         containerRef.current.innerHTML = svg;
         setError(null);
       }
     } catch (err) {
+      if (renderSeqRef.current !== mySeq) return;
       setError(err instanceof Error ? err.message : "Diagram error");
     }
   }, [code, isDark]);
