@@ -69,15 +69,6 @@ pub fn run() {
         .manage(commands::InitialFile(Mutex::new(None)))
         .manage(commands::InitialFolder(Mutex::new(None)))
         .setup(|app| {
-            // Auto-open DevTools in debug builds (i.e. `tauri dev`) so users
-            // can inspect WebView console output without needing a separate
-            // tool. Webkit2gtk on Linux makes the right-click "Inspect" path
-            // unreliable, so we just open the panel ourselves.
-            #[cfg(debug_assertions)]
-            if let Some(window) = app.get_webview_window("main") {
-                window.open_devtools();
-            }
-
             let (menu, menu_refs) = menu::build_menu(app)?;
             app.set_menu(menu)?;
             // Start with everything disabled — the frontend reasserts state
