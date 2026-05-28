@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createRoot } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useIsDarkMode } from "./useIsDarkMode";
 
 describe("useIsDarkMode", () => {
@@ -41,6 +42,30 @@ describe("useIsDarkMode", () => {
       await Promise.resolve();
     });
     expect(result.current).toBe(false);
+  });
+
+  // SSR safety: in a non-DOM runtime `document` is undefined. The hook
+  // must fall back to `false` instead of dereferencing
+  // `document.documentElement` and crashing the render. We can't use
+  // `renderHook` here because the helper itself reads `document.body` to
+  // build its test container, so we mount the hook into a pre-created
+  // root and stub `document` only across the render call itself.
+  it("returns false and skips observer setup when document is undefined", () => {
+    const container = document.createElement("div");
+    let captured: boolean | null = null;
+    function Probe() {
+      captured = useIsDarkMode();
+      return null;
+    }
+    const root = createRoot(container);
+    vi.stubGlobal("document", undefined);
+    try {
+      act(() => root.render(<Probe />));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(captured).toBe(false);
+    expect(() => act(() => root.unmount())).not.toThrow();
   });
 
   it("disconnects the observer on unmount", async () => {

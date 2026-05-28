@@ -16,6 +16,7 @@ export function useIsDarkMode(): boolean {
   });
 
   useEffect(() => {
+    if (typeof document === "undefined") return;
     const root = document.documentElement;
     const update = () => setIsDark(root.classList.contains("dark"));
     update();
