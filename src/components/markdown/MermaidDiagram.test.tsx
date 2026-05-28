@@ -60,6 +60,33 @@ describe("MermaidDiagram", () => {
     expect(container.querySelector("pre code")?.textContent).toBe("garbage");
   });
 
+  it("falls back to a generic error message when render rejects with a non-Error value", async () => {
+    renderMermaid.mockRejectedValue("not an Error instance");
+    const { container } = render(<MermaidDiagram code="garbage" />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".mermaid-error")).not.toBeNull();
+    });
+    // We can't read the error string from the DOM (only "Failed to render
+    // diagram" is rendered), but reaching the error UI at all proves the
+    // non-Error branch in `setError(err instanceof Error ? ... : ...)` ran.
+    expect(container.querySelector(".mermaid-error-label")?.textContent).toContain(
+      "Failed to render diagram",
+    );
+  });
+
+  it("flags empty/whitespace-only diagram source without calling mermaid.render", async () => {
+    renderMermaid.mockResolvedValue({ svg: "<svg/>" });
+    // JSX string-attribute values don't process backslash escapes, so wrap
+    // in `{...}` to actually pass a tab+newline-bearing string.
+    const { container } = render(<MermaidDiagram code={"   \n\t  "} />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".mermaid-error")).not.toBeNull();
+    });
+    expect(renderMermaid).not.toHaveBeenCalled();
+  });
+
   it("re-renders when the html class list changes (theme toggle)", async () => {
     renderMermaid.mockResolvedValue({ svg: "<svg/>" });
     render(<MermaidDiagram code="graph TD; A-->B" />);

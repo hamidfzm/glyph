@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useIsDarkMode } from "@/hooks/useIsDarkMode";
 
 let idCounter = 0;
 let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
@@ -21,8 +22,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
   // in flight and we leave the DOM alone.
   const renderSeqRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
-
-  const isDark = useCallback(() => document.documentElement.classList.contains("dark"), []);
+  const isDark = useIsDarkMode();
 
   const renderDiagram = useCallback(async () => {
     const mySeq = ++renderSeqRef.current;
@@ -32,14 +32,14 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
     }
     // Always pass a fresh id to `mermaid.render`. Mermaid v11 keeps internal
     // state keyed by id, and calling render twice with the same id (React
-    // double-mount, theme observer, parent re-render) makes the second call
+    // double-mount, theme flip, parent re-render) makes the second call
     // return a tiny ~5KB stub SVG that paints as a blank preview.
     const id = `mermaid-diagram-${idCounter++}`;
     try {
       const mermaid = await loadMermaid();
       mermaid.initialize({
         startOnLoad: false,
-        theme: isDark() ? "dark" : "default",
+        theme: isDark ? "dark" : "default",
       });
       const { svg } = await mermaid.render(id, code);
       if (renderSeqRef.current !== mySeq) return;
@@ -55,17 +55,6 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
 
   useEffect(() => {
     renderDiagram();
-  }, [renderDiagram]);
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      renderDiagram();
-    });
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    return () => observer.disconnect();
   }, [renderDiagram]);
 
   if (error) {
