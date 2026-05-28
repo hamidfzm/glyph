@@ -150,4 +150,60 @@ describe("MermaidDiagram", () => {
     expect(container.querySelector("svg#stale")).toBeNull();
     expect(container.querySelector("svg#winner")).not.toBeNull();
   });
+
+  // Defensive nil-check: if the component unmounts while a render is in
+  // flight, `containerRef.current` is null by the time the await resolves
+  // and we must not try to write into it.
+  it("skips the DOM write when the container ref is null at resolution time", async () => {
+    type Resolver = (value: { svg: string }) => void;
+    const pending: { resolve: Resolver } = { resolve: () => {} };
+    renderMermaid.mockImplementationOnce(
+      () =>
+        new Promise<{ svg: string }>((resolve) => {
+          pending.resolve = resolve;
+        }),
+    );
+
+    const { unmount } = render(<MermaidDiagram code="graph TD; A-->B" />);
+    // Make sure renderDiagram actually reached the awaited `mermaid.render`
+    // before we tear down — otherwise unmount could happen before the
+    // function captures the (then-still-non-null) ref into its closure.
+    await waitFor(() => expect(renderMermaid).toHaveBeenCalled());
+    unmount();
+    // Now resolve. The awaited continuation runs as a microtask AFTER
+    // unmount, so `containerRef.current` is null and the false branch of
+    // the nil-check fires (skipping the DOM write).
+    pending.resolve({ svg: "<svg id='post-unmount'/>" });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(document.querySelector("svg#post-unmount")).toBeNull();
+  });
+
+  // Symmetry with the success-path guard: if a stale render REJECTS after
+  // a newer render has already painted a good SVG, the stale rejection
+  // must not flip the component into the error UI.
+  it("does not flip into the error UI when a stale render rejects after a newer one wins", async () => {
+    type Rejecter = (reason: unknown) => void;
+    const firstRender: { reject: Rejecter } = { reject: () => {} };
+    renderMermaid.mockImplementationOnce(
+      () =>
+        new Promise<{ svg: string }>((_resolve, reject) => {
+          firstRender.reject = reject;
+        }),
+    );
+    renderMermaid.mockResolvedValueOnce({ svg: "<svg id='winner'/>" });
+
+    const { container } = render(<MermaidDiagram code="graph TD; A-->B" />);
+    document.documentElement.classList.add("dark");
+
+    await waitFor(() => {
+      expect(container.querySelector("svg#winner")).not.toBeNull();
+    });
+
+    // The stale first render finally fails. The newer render has already
+    // settled successfully, so the rejection must be dropped.
+    firstRender.reject(new Error("stale failure"));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(container.querySelector(".mermaid-error")).toBeNull();
+    expect(container.querySelector("svg#winner")).not.toBeNull();
+  });
 });
