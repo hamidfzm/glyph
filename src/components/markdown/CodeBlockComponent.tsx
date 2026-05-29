@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { CsvTable } from "./CsvTable";
 import { MermaidDiagram } from "./MermaidDiagram";
 
 interface CodeProps {
@@ -89,6 +90,14 @@ export function CodeBlockComponent(props: ComponentPropsWithoutRef<"pre">) {
     if (/\blanguage-mermaid\b/.test(className)) {
       const code = extractText(children.props.children).trim();
       return <MermaidDiagram code={code} />;
+    }
+    if (/\blanguage-csv\b/.test(className)) {
+      const code = extractText(children.props.children).trim();
+      return <CsvTable code={code} delimiter="," />;
+    }
+    if (/\blanguage-tsv\b/.test(className)) {
+      const code = extractText(children.props.children).trim();
+      return <CsvTable code={code} delimiter={"\t"} />;
     }
   }
 

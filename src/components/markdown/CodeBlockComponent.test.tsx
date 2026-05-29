@@ -41,6 +41,35 @@ describe("CodeBlockComponent", () => {
     expect(screen.getByTestId("mermaid-diagram")).toHaveTextContent("graph LR; A-->B;");
   });
 
+  it("renders a CSV table for csv code blocks", () => {
+    render(
+      <CodeBlockComponent>
+        <code className="language-csv">{"name,age\nAlice,30"}</code>
+      </CodeBlockComponent>,
+    );
+    expect(screen.getByRole("columnheader", { name: "name" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Alice" })).toBeInTheDocument();
+  });
+
+  it("renders a table for tsv code blocks", () => {
+    render(
+      <CodeBlockComponent>
+        <code className="language-tsv">{"a\tb\n1\t2"}</code>
+      </CodeBlockComponent>,
+    );
+    expect(screen.getByRole("columnheader", { name: "a" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "1" })).toBeInTheDocument();
+  });
+
+  it("does not render a copy button for csv blocks", () => {
+    render(
+      <CodeBlockComponent>
+        <code className="language-csv">{"a,b\n1,2"}</code>
+      </CodeBlockComponent>,
+    );
+    expect(screen.queryByRole("button", { name: "Copy code" })).not.toBeInTheDocument();
+  });
+
   it("renders pre when children is not a valid element", () => {
     const { container } = render(<CodeBlockComponent>plain text</CodeBlockComponent>);
     const pre = container.querySelector("pre");

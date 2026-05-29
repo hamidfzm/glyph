@@ -17,6 +17,7 @@ This document demonstrates all the rendering features supported by Glyph. The YA
 - [Code Blocks](#code-blocks)
 - [Math / LaTeX](#math--latex)
 - [Mermaid Diagrams](#mermaid-diagrams)
+- [CSV / TSV Tables](#csv--tsv-tables)
 - [Footnotes](#footnotes)
 - [Emoji Shortcodes](#emoji-shortcodes)
 - [Blockquotes](#blockquotes)
@@ -150,6 +151,29 @@ as plain markdown.
 
 Open [[Flowchart]] for the diagram variant and [[Notes/Cooking]] for the
 MultiMarkdown variant; both files use the `.mmd` extension.
+
+## CSV / TSV Tables
+
+Fenced code blocks tagged `csv` or `tsv` render as styled, scrollable
+tables instead of raw text. The first row is treated as the header.
+Quoted fields with embedded commas, quotes, and newlines are supported.
+
+```csv
+Name,Role,Commits
+Alice,Maintainer,1240
+Bob,Contributor,87
+"Carol, Jr.",Reviewer,312
+```
+
+Tab-separated values work the same way with a `tsv` fence:
+
+```tsv
+Symbol	Price	Change
+AAPL	189.50	+1.2%
+GLPH	42.00	-0.4%
+```
+
+Malformed data falls back gracefully to the raw code block.
 
 ## Footnotes
 
