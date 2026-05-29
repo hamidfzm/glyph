@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { CsvTable } from "./CsvTable";
 
@@ -22,6 +22,25 @@ describe("CsvTable", () => {
     await screen.findByRole("table");
     const bodyCells = container.querySelectorAll("tbody td");
     expect(bodyCells).toHaveLength(3);
+  });
+
+  it("pads the header when a data row has more columns than the header", async () => {
+    const { container } = render(<CsvTable code={"a,b\n1,2,3"} delimiter="," />);
+    await screen.findByRole("table");
+    const headerCells = container.querySelectorAll("thead th");
+    expect(headerCells).toHaveLength(3);
+    expect(headerCells[2]?.textContent).toBe("");
+  });
+
+  it("does not render after unmounting before the parser resolves", async () => {
+    const { unmount } = render(<CsvTable code={"a,b\n1,2"} delimiter="," />);
+    unmount();
+    // Flush the pending lazy parse; the effect cleanup must keep it from
+    // setting state (and rendering a table) on the unmounted component.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.queryByRole("table")).toBeNull();
   });
 
   it("falls back to a raw code block for empty input", async () => {
