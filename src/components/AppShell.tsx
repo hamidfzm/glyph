@@ -76,6 +76,14 @@ export function AppShell() {
   const printDoc = usePrint({ entries: tabs.tocEntries, settings: settings.print });
   const zoom = useFontZoom({ fontSize: settings.appearance.fontSize, updateSettings });
 
+  // Coverage note: the experimental.cloudSync gating below is wired into
+  // four locations (menu handler, status pill, modal `open`, palette). A
+  // direct AppShell test would need a full app-shell harness (Tabs,
+  // Sidebar, Settings, Tauri menu, native event listeners) just to flip
+  // this flag, so we let the gating travel through the per-hook tests
+  // instead: useAppCommands + useNativeMenuState + StatusBar +
+  // SyncStatusIndicator each exercise their slice of `cloudSyncEnabled`
+  // independently.
   const cloudSyncEnabled = settings.experimental.cloudSync;
 
   useNativeMenuState({

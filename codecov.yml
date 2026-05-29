@@ -54,5 +54,12 @@ ignore:
   # `#[cfg(test)] mod tests`; we just don't track lib.rs lines toward
   # project / patch coverage.
   - "src-tauri/src/lib.rs"
+  # sync/commands.rs is one-line `#[tauri::command]` wrappers around
+  # `super::ops::*`. The proc-macro emits IPC marshalling shims attributed
+  # to each wrapper's signature line; those macro-generated branches aren't
+  # reachable from a direct call. Real logic lives in `ops.rs` and is
+  # covered there; the wrappers themselves have their own IPC-dispatch
+  # suite in `#[cfg(test)] mod tests` for sanity.
+  - "src-tauri/src/sync/commands.rs"
   - "**/*.test.ts"
   - "**/*.test.tsx"

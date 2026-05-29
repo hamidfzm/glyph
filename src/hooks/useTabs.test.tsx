@@ -726,6 +726,145 @@ describe("useTabs dialog and events", () => {
     });
   });
 
+  it("openFolder with an explicit filePath skips the auto-load probe", async () => {
+    // Covers the false arm of `wantsAutoLoad` on the openFolder branch:
+    // the caller already knows which file to land on, so we must not
+    // pre-fetch `list_markdown_files` for the auto-load path. Background
+    // indexing still happens (covers the `resolvedFiles ? ... : loadWorkspaceFiles(...)`
+    // false branch on line 391).
+    let listCalls = 0;
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => {
+          listCalls += 1;
+          return ["/p/ws/note.md"];
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws", { filePath: "/p/ws/note.md" });
+    });
+
+    // One call — the background-indexing branch, not the auto-load probe.
+    await waitFor(() => expect(listCalls).toBeGreaterThanOrEqual(1));
+    const folder = result.current.tabs.find((t) => t.kind === "folder");
+    // Auto-load skipped: folder.file stays null when filePath is provided.
+    expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
+  });
+
+  it("openFolder tolerates an undefined workspaceLastFile option", async () => {
+    // Defensive: the `?? {}` fallbacks on lines 282 and 355 keep the hook
+    // working when settings haven't materialised the workspaceLastFile map
+    // yet (e.g. first-run before defaults merge). Without the fallback,
+    // the spread `{ ...currentMap }` would throw a TypeError.
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/a.md"],
+      }) as typeof invoke,
+    );
+    const onSettingsChange = vi.fn();
+    const opts = defaultOptions({ onSettingsChange });
+    // Bypass the typed default via a cast — the runtime guard is what we
+    // actually want to exercise here.
+    (opts as { workspaceLastFile?: Record<string, string> }).workspaceLastFile =
+      undefined as unknown as Record<string, string>;
+    const { result } = renderHook(() => useTabs(opts));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => {
+      const folder = result.current.tabs.find((t) => t.kind === "folder");
+      expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/a.md");
+    });
+    // The persisted map seeds with a single entry rather than crashing.
+    expect(onSettingsChange).toHaveBeenCalledWith("behavior.workspaceLastFile", {
+      "/p/ws": "/p/ws/a.md",
+    });
+  });
+
+  it("openFolder skips auto-load when list_markdown_files returns a non-markdown target", async () => {
+    // Covers the false arm of `isMarkdownFile(target)` inside the auto-load
+    // branch (line 343). list_markdown_files in real life never returns
+    // non-md paths, but the guard exists for defence in depth and still
+    // counts toward the patch.
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/notes.txt"],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folder = result.current.tabs.find((t) => t.kind === "folder");
+    expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
+  });
+
+  it("openFolder logs and continues when auto-loading the remembered file fails", async () => {
+    // Covers the catch arm on line 363: the file lookup succeeds but
+    // `read_file` fails (deleted between list and load, or a transient
+    // I/O error). The folder tab still opens, just without a pre-loaded
+    // file, and the failure is surfaced to the console for debugging.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/a.md"],
+        read_file: async () => {
+          throw new Error("vanished");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => {
+      expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p/ws")).toBe(true);
+    });
+    const folder = result.current.tabs.find((t) => t.kind === "folder");
+    expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("auto-load workspace file"),
+      expect.anything(),
+    );
+    errorSpy.mockRestore();
+  });
+
+  it("openFileInFolderTab tolerates an undefined workspaceLastFile option", async () => {
+    // Same defensive fallback as openFolder (line 282): the spread must not
+    // throw when the map is missing from settings at runtime.
+    vi.mocked(invoke).mockImplementation(makeInvoker() as typeof invoke);
+    const onSettingsChange = vi.fn();
+    const opts = defaultOptions({ onSettingsChange });
+    (opts as { workspaceLastFile?: Record<string, string> }).workspaceLastFile =
+      undefined as unknown as Record<string, string>;
+    const { result } = renderHook(() => useTabs(opts));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folder = result.current.tabs.find((t) => t.kind === "folder");
+    expect(folder).toBeDefined();
+    onSettingsChange.mockClear();
+
+    await act(async () => {
+      await result.current.openFileInFolderTab(folder!.id, "/p/ws/note.md");
+    });
+    expect(onSettingsChange).toHaveBeenCalledWith("behavior.workspaceLastFile", {
+      "/p/ws": "/p/ws/note.md",
+    });
+  });
+
   it("openFolder is wired to the open-folder event", async () => {
     const ref = captureListener("open-folder");
     const { result } = renderHook(() => useTabs(defaultOptions()));

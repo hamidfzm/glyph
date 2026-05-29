@@ -453,4 +453,117 @@ mod tests {
         assert_eq!(hint.name.as_deref(), Some("Workspace Author"));
         assert_eq!(hint.email.as_deref(), Some("ws@example.com"));
     }
+
+    /// Serialises every test that touches libgit2's process-wide search
+    /// paths via `git2::opts::set_search_path`. Without this lock two
+    /// parallel tests would race to install their override and either
+    /// see the wrong global config or restore the host's path on top of
+    /// the other test's in-flight assertions.
+    fn search_path_guard() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// RAII helper: redirect libgit2's `Global` (and `Xdg` + `System`)
+    /// search path to a directory we control for the test and restore
+    /// the original paths on drop. Saves/restores via
+    /// `git2::opts::get_search_path` so the host's `.gitconfig`
+    /// lookup keeps working after the test finishes.
+    struct SearchPathOverride {
+        previous: Vec<(git2::ConfigLevel, std::ffi::CString)>,
+    }
+
+    impl SearchPathOverride {
+        fn install(dir: &std::path::Path) -> Self {
+            let levels = [
+                git2::ConfigLevel::Global,
+                git2::ConfigLevel::XDG,
+                git2::ConfigLevel::System,
+            ];
+            let mut previous = Vec::with_capacity(levels.len());
+            for level in levels {
+                // SAFETY: globally locked by `search_path_guard`. The
+                // pointer returned by `get_search_path` is copied into
+                // the owned CString before we mutate.
+                let prev = unsafe { git2::opts::get_search_path(level) }.unwrap_or_default();
+                previous.push((level, prev));
+                // SAFETY: same lock; `dir` outlives the call.
+                unsafe {
+                    git2::opts::set_search_path(level, dir.to_str().unwrap()).unwrap();
+                }
+            }
+            Self { previous }
+        }
+    }
+
+    impl Drop for SearchPathOverride {
+        fn drop(&mut self) {
+            for (level, prev) in &self.previous {
+                let s = prev.to_string_lossy().into_owned();
+                // SAFETY: still holding the search_path_guard lock for
+                // the duration of the test that owns this Drop.
+                unsafe {
+                    git2::opts::set_search_path(*level, s.as_str()).ok();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn default_author_falls_back_to_global_config_when_workspace_is_missing_a_field() {
+        // Drives the workspace-then-global merge: workspace knows the name
+        // only, global supplies the email. Covers the inner `is_none()`
+        // arms (lines 123-128) and the closing braces around them
+        // (lines 125, 128, 129).
+        let _g = search_path_guard();
+        let tmp = TempDir::new().unwrap();
+
+        // Workspace config: name set, email missing.
+        git2::Repository::init(tmp.path()).unwrap();
+        let workspace_cfg_path = tmp.path().join(".git/config");
+        let mut workspace_cfg = git2::Config::open(&workspace_cfg_path).unwrap();
+        workspace_cfg
+            .set_str("user.name", "Workspace Only")
+            .unwrap();
+
+        // Global config (libgit2 looks for `.gitconfig` in the dir we
+        // pointed `Global` at): email set, name absent.
+        let fake_home = tmp.path().join("fake-home");
+        std::fs::create_dir_all(&fake_home).unwrap();
+        std::fs::write(
+            fake_home.join(".gitconfig"),
+            "[user]\n\temail = global@example.com\n",
+        )
+        .unwrap();
+        let _override = SearchPathOverride::install(&fake_home);
+
+        let hint = default_author(&tmp.path().to_string_lossy());
+        assert_eq!(hint.name.as_deref(), Some("Workspace Only"));
+        assert_eq!(hint.email.as_deref(), Some("global@example.com"));
+    }
+
+    #[test]
+    fn default_author_returns_only_workspace_email_when_global_is_empty() {
+        // Workspace supplies email only; the redirected global config has
+        // nothing. Email comes through from the workspace, name stays None.
+        // Hits the lines 123-125 `is_none()` arm with the inner lookup
+        // returning None on line 124.
+        let _g = search_path_guard();
+        let tmp = TempDir::new().unwrap();
+        git2::Repository::init(tmp.path()).unwrap();
+        let workspace_cfg_path = tmp.path().join(".git/config");
+        let mut workspace_cfg = git2::Config::open(&workspace_cfg_path).unwrap();
+        workspace_cfg
+            .set_str("user.email", "ws@example.com")
+            .unwrap();
+
+        let fake_home = tmp.path().join("fake-home");
+        std::fs::create_dir_all(&fake_home).unwrap();
+        std::fs::write(fake_home.join(".gitconfig"), "").unwrap();
+        let _override = SearchPathOverride::install(&fake_home);
+
+        let hint = default_author(&tmp.path().to_string_lossy());
+        assert_eq!(hint.name, None);
+        assert_eq!(hint.email.as_deref(), Some("ws@example.com"));
+    }
 }

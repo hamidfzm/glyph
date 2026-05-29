@@ -506,6 +506,66 @@ describe("useSyncConfig", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("unmounting mid-load suppresses the trailing setState (cancelled=true branch)", async () => {
+    // The mount-effect's then() / finally() chain checks `cancelled` to
+    // decide whether to commit state. Unmounting before the in-flight
+    // Promise.allSettled resolves drives both flags to their cancelled
+    // branches (covers the partial on lines 107 and 121).
+    let resolveCfg: ((v: WorkspaceSyncConfig) => void) | null = null;
+    routeInvoke({
+      sync_get_config: () =>
+        new Promise<WorkspaceSyncConfig>((resolve) => {
+          resolveCfg = resolve;
+        }),
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+    });
+    const { result, unmount } = renderHook(() => useSyncConfig("/w"));
+    expect(result.current.loading).toBe(true);
+
+    // Unmount BEFORE the in-flight sync_get_config resolves, then flush.
+    unmount();
+    await act(async () => {
+      resolveCfg?.(config());
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // No assertion on result.current after unmount (React caches the last
+    // snapshot). The test passes if no act() warning fires.
+  });
+
+  it("remove() / initRepo() are no-ops once the workspace path has cleared", async () => {
+    // After the workspace path flips to null mid-session, the cached
+    // imperative actions still hold their old workspacePath in closure
+    // via the next render. Re-rendering with `null` rebuilds the
+    // callbacks with `workspacePath = null`, exercising the early-return
+    // guards on lines 155 (remove) and 176 (initRepo).
+    routeInvoke({
+      sync_get_config: () => config(),
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_remove_config: () => null,
+      sync_init_repo: () => null,
+    });
+    const { result, rerender } = renderHook(({ ws }) => useSyncConfig(ws), {
+      initialProps: { ws: "/w" as string | null },
+    });
+    await waitFor(() => expect(result.current.config).not.toBeNull());
+
+    rerender({ ws: null });
+    await waitFor(() => expect(result.current.config).toBeNull());
+
+    vi.mocked(invoke).mockClear();
+    await act(async () => {
+      await result.current.remove();
+      await result.current.initRepo("main", null);
+      await result.current.setToken("ghp_x");
+      await result.current.clearToken();
+    });
+    // The guards short-circuit before any Tauri command fires.
+    expect(vi.mocked(invoke)).not.toHaveBeenCalled();
+  });
+
   it("guarded actions populate error and re-throw on failure", async () => {
     routeInvoke({
       sync_get_config: () => null,

@@ -1179,6 +1179,22 @@ mod tests {
     }
 
     #[test]
+    fn auto_commit_message_falls_back_to_the_legacy_message_when_diff_is_empty() {
+        // Defensive fallback path: `auto_commit_message` only runs after
+        // `stage_all` flagged "something to commit", but if libgit2 ever
+        // reports zero deltas (a clean diff against HEAD) the function
+        // must still hand back a usable subject. Re-running it on a fresh
+        // post-sync repo with no edits hits that path.
+        let f = Fixture::new();
+        f.write_file("notes.md", "# hi\n");
+        f.backend().sync(None).unwrap();
+        let repo = Repository::open(&f.workspace).unwrap();
+        // No changes since the sync, so `diff_tree_to_index` is empty.
+        let msg = auto_commit_message(&repo).unwrap();
+        assert_eq!(msg, super::AUTO_COMMIT_MESSAGE);
+    }
+
+    #[test]
     fn auto_commit_message_for_four_plus_files_collapses_into_n_more() {
         let f = Fixture::new();
         f.write_file("seed.md", "seed\n");

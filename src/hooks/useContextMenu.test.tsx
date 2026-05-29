@@ -232,6 +232,25 @@ describe("useContextMenu", () => {
     removeSpy.mockRestore();
   });
 
+  it("isEditableTarget / isInsideMarkdownContent ignore non-Element targets", async () => {
+    // The guards on lines 21 and 31 of useContextMenu defend against the
+    // contextmenu event firing with a non-Element target (e.g. Document
+    // itself, or a Window node when bubbling). Firing the event directly
+    // on `document` lands here without any Element ancestor, so both
+    // helpers must return false and the custom menu must not open.
+    renderHook(() => useContextMenu("linux", { openFileDialog: vi.fn() }));
+
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    document.dispatchEvent(event);
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Custom menu never popped, native menu preserved.
+    expect(event.defaultPrevented).toBe(false);
+    expect(menuItems).toHaveLength(0);
+    expect(popupSpy).not.toHaveBeenCalled();
+  });
+
   it("recognises an empty-string contenteditable attribute as editable", async () => {
     // `contenteditable=""` and `contenteditable="true"` mean the same thing
     // per the HTML spec, so both must short-circuit the custom menu.
