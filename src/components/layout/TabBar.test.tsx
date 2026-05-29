@@ -144,4 +144,14 @@ describe("TabBar", () => {
     });
     expect(screen.queryByLabelText("View mode")).not.toBeInTheDocument();
   });
+
+  // Regression: <button> cannot be a descendant of <button> per the HTML
+  // spec, and React 19 logs a hydration error when it sees it. The close
+  // button used to sit inside the tab activate button; now it's a sibling.
+  it("does not nest a button inside another button", () => {
+    const { container } = renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
+    for (const button of container.querySelectorAll("button")) {
+      expect(button.querySelector("button")).toBeNull();
+    }
+  });
 });

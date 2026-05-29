@@ -32,13 +32,14 @@ export function TabBar() {
           const dirty = file?.dirty ?? false;
           const label = tabLabel(tab);
           return (
-            <button
+            // Wrapper is a div, not a button, so the close <button> below it
+            // is a valid sibling instead of an HTML-invalid nested button.
+            // Click-to-activate lives on the inner `tab-activate` button.
+            <div
               key={tab.id}
-              type="button"
               className="tab-item"
               data-active={tab.id === activeTabId || undefined}
               data-tab-kind={tab.kind}
-              onClick={() => onActivate(tab.id)}
               onAuxClick={(e) => {
                 if (e.button === 1) {
                   e.preventDefault();
@@ -47,18 +48,22 @@ export function TabBar() {
               }}
               title={tabPathOf(tab)}
             >
-              {dirty && <span className="tab-dirty-dot" />}
-              {tab.kind === "folder" && <FolderIcon className="opacity-70 -ml-0.5" />}
-              <span className="tab-label">{label}</span>
+              <button
+                type="button"
+                className="tab-activate"
+                onClick={() => onActivate(tab.id)}
+                aria-label={label}
+              >
+                {dirty && <span className="tab-dirty-dot" />}
+                {tab.kind === "folder" && <FolderIcon className="opacity-70 -ml-0.5" />}
+                <span className="tab-label">{label}</span>
+              </button>
               <button
                 type="button"
                 className="tab-close"
                 tabIndex={-1}
                 aria-label={`Close ${label}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClose(tab.id);
-                }}
+                onClick={() => onClose(tab.id)}
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                   <path
@@ -69,7 +74,7 @@ export function TabBar() {
                   />
                 </svg>
               </button>
-            </button>
+            </div>
           );
         })}
       </div>

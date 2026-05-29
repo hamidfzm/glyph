@@ -14,8 +14,9 @@ use tauri::{Emitter, Manager};
 
 /// What a native menu item id maps to. `Emit` forwards an event (with an
 /// optional string payload) to the frontend; `CloseWindow` closes the main
-/// window directly from Rust. Returning `None` from [`menu_action_for_id`]
-/// means the id isn't recognised, so `handle_menu_event` is a no-op.
+/// window; `ToggleDevTools` (debug builds only) toggles the WebView's
+/// DevTools panel. Returning `None` from [`menu_action_for_id`] means the id
+/// isn't recognised, so `handle_menu_event` is a no-op.
 #[derive(Debug, PartialEq, Eq)]
 pub enum MenuAction {
     Emit {
@@ -23,6 +24,8 @@ pub enum MenuAction {
         payload: Option<&'static str>,
     },
     CloseWindow,
+    #[cfg(debug_assertions)]
+    ToggleDevTools,
 }
 
 /// Pure mapping from a native menu item id to the action `handle_menu_event`
@@ -64,6 +67,8 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         "actual-size" => emit("menu-zoom-reset"),
         "find" => emit("menu-find"),
         "toggle-edit" => emit("menu-toggle-edit"),
+        #[cfg(debug_assertions)]
+        "toggle-devtools" => Some(MenuAction::ToggleDevTools),
         _ => None,
     }
 }
@@ -79,6 +84,16 @@ pub fn dispatch_menu_action<R: tauri::Runtime>(app: &tauri::AppHandle<R>, action
         MenuAction::CloseWindow => {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.close();
+            }
+        }
+        #[cfg(debug_assertions)]
+        MenuAction::ToggleDevTools => {
+            if let Some(window) = app.get_webview_window("main") {
+                if window.is_devtools_open() {
+                    window.close_devtools();
+                } else {
+                    window.open_devtools();
+                }
             }
         }
     }
@@ -133,6 +148,15 @@ mod tests {
     #[test]
     fn close_window_id_returns_close_window_action() {
         assert_eq!(menu_action_for_id("close"), Some(MenuAction::CloseWindow));
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn toggle_devtools_id_returns_toggle_devtools_action() {
+        assert_eq!(
+            menu_action_for_id("toggle-devtools"),
+            Some(MenuAction::ToggleDevTools)
+        );
     }
 
     #[test]

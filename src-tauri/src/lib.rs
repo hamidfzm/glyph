@@ -86,27 +86,35 @@ pub fn run() {
             app.manage(menu_refs);
 
             // Parse CLI arguments and store the initial file/folder. The pure
-            // classification logic lives in `cli::classify_initial_arg` (tested
+            // selection + classification logic lives in `cli` (tested
             // there); this block is the thin Tauri-runtime adapter that maps
             // each variant to managed state or a warning.
-            if let Ok(matches) = app.cli().matches() {
-                if let Some(file_arg) = matches.args.get("file") {
-                    if let Some(path_str) = file_arg.value.as_str() {
-                        let cwd = std::env::current_dir().unwrap_or_default();
-                        match cli::classify_initial_arg(path_str, &cwd) {
-                            Some(cli::InitialOpenAction::Folder(p)) => {
-                                *app.state::<commands::InitialFolder>().0.lock().unwrap() = Some(p);
-                            }
-                            Some(cli::InitialOpenAction::File(p)) => {
-                                *app.state::<commands::InitialFile>().0.lock().unwrap() = Some(p);
-                            }
-                            Some(cli::InitialOpenAction::RejectedNotMarkdown(p)) => {
-                                eprintln!("Refusing to open non-markdown file: {p}");
-                            }
-                            None => {}
-                        }
-                    }
+            //
+            // We pass both the `tauri-plugin-cli` value and raw `std::env::args()`
+            // into `cli::initial_open_action`; the helper prefers the plugin
+            // (so OS file-association launches still work) and falls back to
+            // argv. The fallback is what makes `pnpm tauri dev -- samples`
+            // work on Windows: pnpm's arg forwarding can land the positional
+            // arg in argv without ever populating the plugin's matches.
+            let cwd = std::env::current_dir().unwrap_or_default();
+            let plugin_path: Option<String> = app
+                .cli()
+                .matches()
+                .ok()
+                .and_then(|m| m.args.get("file").cloned())
+                .and_then(|a| a.value.as_str().map(str::to_string));
+            let env_args: Vec<String> = std::env::args().collect();
+            match cli::initial_open_action(plugin_path.as_deref(), &env_args, &cwd) {
+                Some(cli::InitialOpenAction::Folder(p)) => {
+                    *app.state::<commands::InitialFolder>().0.lock().unwrap() = Some(p);
                 }
+                Some(cli::InitialOpenAction::File(p)) => {
+                    *app.state::<commands::InitialFile>().0.lock().unwrap() = Some(p);
+                }
+                Some(cli::InitialOpenAction::RejectedNotMarkdown(p)) => {
+                    eprintln!("Refusing to open non-markdown file: {p}");
+                }
+                None => {}
             }
             Ok(())
         })

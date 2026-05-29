@@ -49,9 +49,16 @@ export function SplitView({
     };
   }, []);
 
+  // The preview wrapper must be a flex column with `min-h-0` so that the
+  // inner MarkdownViewer (which sizes itself with `flex-1` and positions its
+  // scroll layer absolutely) gets a real height. A plain block parent
+  // collapses to 0px and the preview renders empty.
   return (
-    <div className="split-view">
-      <div className="split-view-editor">
+    <div className="split-view flex h-full w-full">
+      <div
+        data-testid="split-view-editor"
+        className="split-view-editor flex flex-1 min-w-0 min-h-0 overflow-hidden border-r border-[var(--color-border)]"
+      >
         <MarkdownEditor
           content={content}
           onChange={handleChange}
@@ -59,7 +66,10 @@ export function SplitView({
           workspaceRoot={workspaceRoot}
         />
       </div>
-      <div className="split-view-preview">
+      <div
+        data-testid="split-view-preview"
+        className="split-view-preview flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden"
+      >
         <MarkdownViewer
           content={previewContent}
           filePath={filePath}

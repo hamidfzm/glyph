@@ -1523,7 +1523,7 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "glyph"
-version = "0.7.0"
+version = "0.8.1"
 dependencies = [
  "git2",
  "notify",
