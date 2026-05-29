@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { parseDelimited } from "./parseDelimited";
 
 interface CsvTableProps {
@@ -8,11 +8,21 @@ interface CsvTableProps {
 
 /**
  * Renders a CSV/TSV fenced code block as a styled table. The first row is
- * treated as the header. Falls back to the raw code fence if the data can't
- * be parsed into at least one row.
+ * treated as the header. Falls back to the raw code fence until the lazily
+ * loaded parser produces at least one row.
  */
 export function CsvTable({ code, delimiter }: CsvTableProps) {
-  const rows = useMemo(() => parseDelimited(code, delimiter), [code, delimiter]);
+  const [rows, setRows] = useState<string[][]>([]);
+
+  useEffect(() => {
+    let active = true;
+    parseDelimited(code, delimiter).then((parsed) => {
+      if (active) setRows(parsed);
+    });
+    return () => {
+      active = false;
+    };
+  }, [code, delimiter]);
 
   if (rows.length === 0) {
     return (
