@@ -1,8 +1,9 @@
+import { invoke } from "@tauri-apps/api/core";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import type { FileTab } from "@/hooks/useTabs";
+import type { FileTab, FolderTab } from "@/hooks/useTabs";
 import { StatusBar } from "./StatusBar";
 
 interface Opts {
@@ -99,5 +100,75 @@ describe("StatusBar", () => {
   it("does not show zoom percentage at default zoom (100%)", () => {
     renderStatusBar({ displayContent: "some content" });
     expect(screen.queryByText("100%")).toBeNull();
+  });
+});
+
+function buildFolderTab(root = "/ws"): FolderTab {
+  return {
+    id: "folder-1",
+    kind: "folder",
+    root,
+    expanded: new Set<string>(),
+    nodes: new Map(),
+    file: null,
+  };
+}
+
+function buildFolderContext(): TabsContextValue {
+  const activeTab = buildFolderTab();
+  return {
+    tabs: [activeTab],
+    activeTab,
+    activeTabId: activeTab.id,
+    activeFile: null,
+    initializing: false,
+    workspaceFiles: [],
+    wikilinkRefs: [],
+    openFile: vi.fn(),
+    openFolder: vi.fn(),
+    openFileInFolderTab: vi.fn(),
+    toggleExpand: vi.fn(),
+    closeTab: vi.fn(),
+    setActiveTab: vi.fn(),
+    setTabMode: vi.fn(),
+    updateEditContent: vi.fn(),
+    markSaved: vi.fn(),
+    toggleTask: vi.fn(),
+    saveScrollPosition: vi.fn(),
+    openFileDialog: vi.fn(),
+    undoEdit: vi.fn(),
+    redoEdit: vi.fn(),
+    displayContent: "some content",
+    tocEntries: [],
+    backlinks: [],
+  };
+}
+
+describe("StatusBar sync indicator gating", () => {
+  beforeEach(() => {
+    vi.mocked(invoke).mockReset();
+    // SyncStatusIndicator's useSyncConfig fires sync_get_config on mount;
+    // resolve to null so it renders the "Sync off" pill cleanly.
+    vi.mocked(invoke).mockResolvedValue(null as unknown as never);
+  });
+
+  it("does not render the sync pill when onOpenSync is null", () => {
+    const value = buildFolderContext();
+    render(
+      <Wrapper value={value}>
+        <StatusBar onOpenSync={null} />
+      </Wrapper>,
+    );
+    expect(screen.queryByText(/Sync/)).toBeNull();
+  });
+
+  it("renders the sync pill when onOpenSync is provided and a folder tab is active", async () => {
+    const value = buildFolderContext();
+    render(
+      <Wrapper value={value}>
+        <StatusBar onOpenSync={vi.fn()} />
+      </Wrapper>,
+    );
+    expect(await screen.findByText("Sync off")).toBeInTheDocument();
   });
 });

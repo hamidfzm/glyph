@@ -251,4 +251,457 @@ describe("SyncSettingsModal", () => {
     const emailInput = screen.getByPlaceholderText("h@example.com") as HTMLInputElement;
     expect(emailInput.value).toBe("");
   });
+
+  it("Initialize forwards the form's branch and remote URL to sync_init_repo", async () => {
+    let probeCount = 0;
+    let initArgs: unknown = null;
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => {
+        probeCount += 1;
+        return probeCount !== 1;
+      },
+      sync_init_repo: (args) => {
+        initArgs = args;
+        return null;
+      },
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    await screen.findByTestId("sync-init-banner");
+    fireEvent.change(screen.getByPlaceholderText("https://github.com/you/notes.git"), {
+      target: { value: "https://example.com/me.git" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("main"), { target: { value: "trunk" } });
+    fireEvent.click(screen.getByRole("button", { name: "Initialize repo" }));
+
+    await waitFor(() =>
+      expect(initArgs).toEqual({
+        workspacePath: "/w",
+        defaultBranch: "trunk",
+        remoteUrl: "https://example.com/me.git",
+      }),
+    );
+    await waitFor(() => expect(screen.queryByTestId("sync-init-banner")).toBeNull());
+  });
+
+  it("Sync now renders the lastSync block with pulled/committed/pushed counts", async () => {
+    const stored: WorkspaceSyncConfig = {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "https://example.com/r.git",
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      autoSyncSeconds: null,
+      author: null,
+    };
+    routeInvoke({
+      sync_get_config: () => stored,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_run: () => ({
+        kind: "git",
+        pulledCount: 4,
+        committedCount: 2,
+        pushedCount: 1,
+        conflicts: [],
+        completedUnix: 5000,
+      }),
+      sync_status: () => ({
+        kind: "git",
+        clean: true,
+        ahead: 0,
+        behind: 0,
+        conflicts: [],
+        lastSyncUnix: null,
+      }),
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+    const block = await screen.findByTestId("sync-status");
+    await waitFor(() => expect(block.textContent).toMatch(/pulled/));
+    expect(block.textContent).toMatch(/pulled/);
+    expect(block.textContent).toMatch(/2/);
+    expect(block.textContent).toMatch(/1/);
+  });
+
+  it("Sync now appends a conflict suffix to the lastSync block when conflicts come back", async () => {
+    const stored: WorkspaceSyncConfig = {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "https://example.com/r.git",
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      autoSyncSeconds: null,
+      author: null,
+    };
+    routeInvoke({
+      sync_get_config: () => stored,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_run: () => ({
+        kind: "git",
+        pulledCount: 0,
+        committedCount: 1,
+        pushedCount: 0,
+        conflicts: ["notes.md", "todo.md"],
+        completedUnix: 5000,
+      }),
+      sync_status: () => ({
+        kind: "git",
+        clean: true,
+        ahead: 0,
+        behind: 0,
+        conflicts: [],
+        lastSyncUnix: null,
+      }),
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+    const block = await screen.findByTestId("sync-status");
+    await waitFor(() => expect(block.textContent).toMatch(/2 conflict\(s\) need attention/));
+  });
+
+  it("Refresh status renders the clean/ahead/behind block", async () => {
+    const stored: WorkspaceSyncConfig = {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "https://example.com/r.git",
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      autoSyncSeconds: null,
+      author: null,
+    };
+    routeInvoke({
+      sync_get_config: () => stored,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_status: () => ({
+        kind: "git",
+        clean: true,
+        ahead: 2,
+        behind: 3,
+        conflicts: [],
+        lastSyncUnix: null,
+      }),
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh status" }));
+    const block = await screen.findByTestId("sync-status");
+    await waitFor(() => expect(block.textContent).toMatch(/Ahead:/));
+    expect(block.textContent).toMatch(/clean/);
+    expect(block.textContent).toMatch(/2/);
+    expect(block.textContent).toMatch(/3/);
+  });
+
+  it("Refresh status renders an unresolved-conflicts banner when conflicts are present", async () => {
+    const stored: WorkspaceSyncConfig = {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "https://example.com/r.git",
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      autoSyncSeconds: null,
+      author: null,
+    };
+    routeInvoke({
+      sync_get_config: () => stored,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_status: () => ({
+        kind: "git",
+        clean: false,
+        ahead: 0,
+        behind: 0,
+        conflicts: ["a.md", "b.md"],
+        lastSyncUnix: null,
+      }),
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh status" }));
+    const block = await screen.findByTestId("sync-status");
+    await waitFor(() => expect(block.textContent).toMatch(/Unresolved conflicts: a\.md, b\.md/));
+  });
+
+  it("Disable sync calls sync_remove_config and switches the modal back to the unconfigured form", async () => {
+    const stored: WorkspaceSyncConfig = {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "https://example.com/r.git",
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      autoSyncSeconds: null,
+      author: null,
+    };
+    routeInvoke({
+      sync_get_config: () => stored,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_remove_config: () => null,
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Disable sync" }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("sync_remove_config", { workspacePath: "/w" }),
+    );
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Disable sync" })).toBeNull());
+    expect(screen.getByRole("button", { name: "Save config" })).toBeInTheDocument();
+  });
+
+  it("Conflict policy segmented control updates data-active per option", async () => {
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_set_config: () => null,
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    const promptBtn = await screen.findByRole("button", { name: "Prompt me" });
+    const remoteBtn = screen.getByRole("button", { name: "Take remote" });
+    const localBtn = screen.getByRole("button", { name: "Keep local" });
+
+    // Default: "prompt" is selected.
+    expect(promptBtn).toHaveAttribute("data-active", "true");
+    expect(remoteBtn).toHaveAttribute("data-active", "false");
+    expect(localBtn).toHaveAttribute("data-active", "false");
+
+    fireEvent.click(remoteBtn);
+    expect(remoteBtn).toHaveAttribute("data-active", "true");
+    expect(promptBtn).toHaveAttribute("data-active", "false");
+
+    fireEvent.click(localBtn);
+    expect(localBtn).toHaveAttribute("data-active", "true");
+
+    // Save uses the latest chosen policy.
+    fireEvent.change(screen.getByPlaceholderText("https://github.com/you/notes.git"), {
+      target: { value: "https://example.com/r.git" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save config" }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        "sync_set_config",
+        expect.objectContaining({
+          config: expect.objectContaining({ conflictPolicy: "prefer-local" }),
+        }),
+      ),
+    );
+  });
+
+  it("Save with a non-empty token calls sync_set_token after sync_set_config and clears the field", async () => {
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => false,
+      sync_set_config: () => null,
+      sync_set_token: () => null,
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
+      target: { value: "https://example.com/r.git" },
+    });
+    const tokenInput = screen.getByPlaceholderText("ghp_…") as HTMLInputElement;
+    fireEvent.change(tokenInput, { target: { value: "ghp_secret" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save config" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("sync_set_token", {
+        workspacePath: "/w",
+        token: "ghp_secret",
+      }),
+    );
+    await waitFor(() => expect(tokenInput.value).toBe(""));
+  });
+
+  it("Save calls sync_set_origin after sync_set_config when the repo already exists", async () => {
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_set_config: () => null,
+      sync_set_origin: () => null,
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
+      target: { value: "https://example.com/r.git" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save config" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("sync_set_origin", {
+        workspacePath: "/w",
+        remoteUrl: "https://example.com/r.git",
+      }),
+    );
+  });
+
+  it("backdrop click closes the modal", async () => {
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+    });
+    const onClose = vi.fn();
+    const wrapper = withTabs(tabsValue(folderTab()));
+    const { container } = render(<SyncSettingsModal open={true} onClose={onClose} />, { wrapper });
+    await screen.findByText("Cloud Sync");
+
+    const overlay = container.querySelector(".settings-overlay") as HTMLElement;
+    expect(overlay).not.toBeNull();
+    fireEvent.click(overlay);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("surfaces sync errors under the form when runSync rejects", async () => {
+    const stored: WorkspaceSyncConfig = {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "https://example.com/r.git",
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      autoSyncSeconds: null,
+      author: null,
+    };
+    routeInvoke({
+      sync_get_config: () => stored,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_run: () => {
+        throw { kind: "auth-failed", message: "bad token" };
+      },
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+    expect(await screen.findByText(/Authentication failed: bad token/)).toBeInTheDocument();
+  });
+
+  it("autoSyncSeconds: positive integers are persisted as-is", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_set_config: (args) => {
+        calls.push(args as Record<string, unknown>);
+        return null;
+      },
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    const remote = await screen.findByPlaceholderText("https://github.com/you/notes.git");
+    fireEvent.change(remote, { target: { value: "https://example.com/r.git" } });
+    fireEvent.change(screen.getByPlaceholderText("off"), { target: { value: "30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save config" }));
+
+    await waitFor(() => expect(calls).toHaveLength(1));
+    const cfg = calls[0].config as WorkspaceSyncConfig;
+    expect(cfg.autoSyncSeconds).toBe(30);
+  });
+
+  it("autoSyncSeconds: 0, negative, and blank all collapse to null", async () => {
+    // Cases are independent renders so the React effect that syncs form
+    // state from the persisted config never overwrites a fresh edit
+    // mid-test.
+    for (const raw of ["0", "-5", ""]) {
+      const calls: Array<Record<string, unknown>> = [];
+      routeInvoke({
+        sync_get_config: () => null,
+        sync_default_author: () => ({ name: null, email: null }),
+        sync_repo_present: () => true,
+        sync_set_config: (args) => {
+          calls.push(args as Record<string, unknown>);
+          return null;
+        },
+      });
+      const wrapper = withTabs(tabsValue(folderTab()));
+      const { unmount } = render(<SyncSettingsModal open={true} onClose={vi.fn()} />, {
+        wrapper,
+      });
+
+      const remote = await screen.findByPlaceholderText("https://github.com/you/notes.git");
+      fireEvent.change(remote, { target: { value: "https://example.com/r.git" } });
+      fireEvent.change(screen.getByPlaceholderText("off"), { target: { value: raw } });
+      fireEvent.click(screen.getByRole("button", { name: "Save config" }));
+
+      await waitFor(() => expect(calls).toHaveLength(1));
+      const cfg = calls[0].config as WorkspaceSyncConfig;
+      expect(cfg.autoSyncSeconds).toBeNull();
+      unmount();
+    }
+  });
+
+  it("Author identity: name+email -> author object", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_set_config: (args) => {
+        calls.push(args as Record<string, unknown>);
+        return null;
+      },
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
+      target: { value: "https://example.com/r.git" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("defaults to your git config"), {
+      target: { value: "Hamid" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("you@example.com"), {
+      target: { value: "h@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save config" }));
+
+    await waitFor(() => expect(calls).toHaveLength(1));
+    const cfg = calls[0].config as WorkspaceSyncConfig;
+    expect(cfg.author).toEqual({ name: "Hamid", email: "h@example.com" });
+  });
+
+  it("Author identity: blank -> null", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_set_config: (args) => {
+        calls.push(args as Record<string, unknown>);
+        return null;
+      },
+    });
+    const wrapper = withTabs(tabsValue(folderTab()));
+    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
+      target: { value: "https://example.com/r.git" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save config" }));
+
+    await waitFor(() => expect(calls).toHaveLength(1));
+    const cfg = calls[0].config as WorkspaceSyncConfig;
+    expect(cfg.author).toBeNull();
+  });
 });

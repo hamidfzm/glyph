@@ -17,7 +17,7 @@ interface SyncStatusIndicatorProps {
   onOpenSync: () => void;
 }
 
-function relativeTime(unix: number): string {
+export function relativeTime(unix: number): string {
   const seconds = Math.max(0, Math.floor(Date.now() / 1000) - unix);
   if (seconds < 60) return `${seconds}s ago`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
@@ -25,7 +25,7 @@ function relativeTime(unix: number): string {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
-function summarise(
+export function summarise(
   config: ReturnType<typeof useSyncConfig>["config"],
   status: ReturnType<typeof useSyncConfig>["status"],
 ): { label: string; tone: "off" | "ok" | "warn" | "error" } {

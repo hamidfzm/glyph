@@ -339,6 +339,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sync_default_author_wrapper_returns_config_values() {
+        // With per-workspace `[user]` set we can pin the returned hint
+        // regardless of what the host's global git config carries.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
+        git2::Repository::init(tmp.path()).unwrap();
+        let cfg_path = tmp.path().join(".git/config");
+        let mut cfg = git2::Config::open(&cfg_path).unwrap();
+        cfg.set_str("user.name", "Cmd Author").unwrap();
+        cfg.set_str("user.email", "cmd@example.com").unwrap();
+
+        let hint = sync_default_author(workspace).await.unwrap();
+        assert_eq!(hint.name.as_deref(), Some("Cmd Author"));
+        assert_eq!(hint.email.as_deref(), Some("cmd@example.com"));
+    }
+
+    #[tokio::test]
+    async fn sync_set_origin_wrapper_writes_remote_url() {
+        let ws = Workspace::new();
+        // Init the workspace via the same wrapper the frontend would use.
+        sync_init_repo(ws.workspace_path.clone(), None, None)
+            .await
+            .unwrap();
+        sync_set_origin(
+            ws.workspace_path.clone(),
+            "https://example.com/x.git".into(),
+        )
+        .await
+        .unwrap();
+        let repo = git2::Repository::open(&ws.workspace_path).unwrap();
+        let remote = repo.find_remote("origin").unwrap();
+        assert_eq!(remote.url(), Some("https://example.com/x.git"));
+    }
+
+    #[tokio::test]
+    async fn sync_repo_present_wrapper_returns_true_after_init() {
+        let ws = Workspace::new();
+        sync_init_repo(ws.workspace_path.clone(), None, None)
+            .await
+            .unwrap();
+        assert!(sync_repo_present(ws.workspace_path).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn sync_repo_present_wrapper_returns_false_for_empty_dir() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        assert!(!sync_repo_present(tmp.path().to_string_lossy().into())
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
     async fn sync_repo_present_wrapper_reports_true_after_init() {
         let ws = Workspace::new();
         assert!(!sync_repo_present(ws.workspace_path.clone()).await.unwrap());
@@ -379,6 +431,7 @@ mod tests {
                 sync_clear_token,
                 sync_init_repo,
                 sync_clone_remote,
+                sync_set_origin,
                 sync_status,
                 sync_run,
                 sync_default_author,
@@ -508,6 +561,30 @@ mod tests {
             serde_json::json!({ "workspacePath": ws.workspace_path }),
         );
         assert!(present);
+
+        // sync_repo_present against an empty dir round-trips through IPC
+        // and returns the false arm.
+        let empty_dir = ws.tmp.path().join("nope");
+        std::fs::create_dir_all(&empty_dir).unwrap();
+        let absent: bool = invoke_ipc(
+            &webview,
+            "sync_repo_present",
+            serde_json::json!({ "workspacePath": empty_dir.to_string_lossy() }),
+        );
+        assert!(!absent);
+
+        // sync_set_origin updates `.git/config` over IPC.
+        let _: () = invoke_ipc(
+            &webview,
+            "sync_set_origin",
+            serde_json::json!({
+                "workspacePath": ws.workspace_path,
+                "remoteUrl": "https://example.com/ipc-set.git",
+            }),
+        );
+        let repo = git2::Repository::open(&ws.workspace_path).unwrap();
+        let remote = repo.find_remote("origin").unwrap();
+        assert_eq!(remote.url(), Some("https://example.com/ipc-set.git"));
 
         // sync_clone_remote into a fresh path.
         let dest = ws.tmp.path().join("ipc-clone");

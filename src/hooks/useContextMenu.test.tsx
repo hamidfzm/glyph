@@ -231,4 +231,87 @@ describe("useContextMenu", () => {
     expect(removeSpy).toHaveBeenCalledWith("contextmenu", expect.any(Function));
     removeSpy.mockRestore();
   });
+
+  it("recognises an empty-string contenteditable attribute as editable", async () => {
+    // `contenteditable=""` and `contenteditable="true"` mean the same thing
+    // per the HTML spec, so both must short-circuit the custom menu.
+    const ce = document.createElement("div");
+    ce.setAttribute("contenteditable", "");
+    document.body.appendChild(ce);
+    renderHook(() => useContextMenu("linux", { openFileDialog: vi.fn() }));
+
+    const event = await fireContextMenu(ce);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(menuItems).toHaveLength(0);
+    document.body.removeChild(ce);
+  });
+});
+
+describe("useContextMenu prod suppressor", () => {
+  beforeEach(() => {
+    vi.stubEnv("PROD", true);
+    menuItems.length = 0;
+    popupSpy = vi.fn().mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("suppresses the WebView's default menu inside the markdown body in production builds", async () => {
+    renderHook(() => useContextMenu("linux", { openFileDialog: vi.fn() }));
+    const { para, root } = mountMarkdown();
+
+    const event = await fireContextMenu(para);
+
+    expect(event.defaultPrevented).toBe(true);
+    document.body.removeChild(root);
+  });
+
+  it("does not suppress the native menu on UI chrome outside the markdown body", async () => {
+    renderHook(() => useContextMenu("linux", { openFileDialog: vi.fn() }));
+    const chrome = document.createElement("div");
+    chrome.textContent = "Modal label";
+    document.body.appendChild(chrome);
+
+    const event = await fireContextMenu(chrome);
+
+    // The Linux-specific custom-menu listener would normally early-out for
+    // UI chrome. The suppressor's "outside markdown -> leave alone" branch
+    // also fires here, so the native menu survives.
+    expect(event.defaultPrevented).toBe(false);
+    document.body.removeChild(chrome);
+  });
+
+  it("does not suppress the native menu inside an editable target", async () => {
+    renderHook(() => useContextMenu("linux", { openFileDialog: vi.fn() }));
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+
+    const event = await fireContextMenu(input);
+
+    expect(event.defaultPrevented).toBe(false);
+    document.body.removeChild(input);
+  });
+
+  it("keeps the native macOS text submenu when there's a text selection", async () => {
+    renderHook(() => useContextMenu("macos", { openFileDialog: vi.fn() }));
+    const { para, root } = mountMarkdown();
+
+    // Spoof window.getSelection() so the suppressor's macOS short-circuit
+    // sees a non-empty selection and leaves the native menu alone.
+    const realGetSelection = window.getSelection.bind(window);
+    window.getSelection = (() =>
+      ({
+        toString: () => "selected text",
+      }) as unknown as Selection) as typeof window.getSelection;
+    try {
+      const event = await fireContextMenu(para);
+      expect(event.defaultPrevented).toBe(false);
+    } finally {
+      window.getSelection = realGetSelection;
+      document.body.removeChild(root);
+    }
+  });
 });

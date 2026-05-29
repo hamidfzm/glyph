@@ -403,9 +403,54 @@ mod tests {
         // No `.git/config` available: we still get a hint, just one with
         // whatever the host's global git config happens to carry (which
         // we can't pin in a unit test). The contract is "no panic, no
-        // error" — both fields are `Option<String>` and the call must
+        // error" -- both fields are `Option<String>` and the call must
         // succeed regardless of what's on disk.
         let tmp = TempDir::new().unwrap();
         let _hint = default_author(&tmp.path().to_string_lossy());
+    }
+
+    #[tokio::test]
+    async fn set_origin_writes_remote_origin_into_the_workspace_git_config() {
+        // Initialise a plain workspace via `git2::Repository::init` (no
+        // remote configured), then drive `ops::set_origin`. The remote
+        // should land under `[remote "origin"]` in `.git/config`.
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
+        git2::Repository::init(tmp.path()).unwrap();
+
+        set_origin(workspace.clone(), "https://example.com/a.git".into())
+            .await
+            .unwrap();
+        let repo = git2::Repository::open(tmp.path()).unwrap();
+        let remote = repo.find_remote("origin").unwrap();
+        assert_eq!(remote.url(), Some("https://example.com/a.git"));
+
+        // A second call updates the URL in place rather than erroring on
+        // a duplicate remote (covers the `Ok(_) -> remote_set_url` arm).
+        set_origin(workspace, "https://example.com/b.git".into())
+            .await
+            .unwrap();
+        let repo = git2::Repository::open(tmp.path()).unwrap();
+        let remote = repo.find_remote("origin").unwrap();
+        assert_eq!(remote.url(), Some("https://example.com/b.git"));
+    }
+
+    #[test]
+    fn default_author_reads_workspace_user_config_when_repo_present() {
+        // Mirror of the same test in `git::tests`: write a per-repo
+        // `[user]` section into the workspace's `.git/config` and confirm
+        // `default_author` surfaces both fields. Worth the duplication
+        // because `ops::default_author` is the actual code path the Tauri
+        // command goes through, and it has its own fallback chain on top.
+        let tmp = TempDir::new().unwrap();
+        git2::Repository::init(tmp.path()).unwrap();
+        let cfg_path = tmp.path().join(".git/config");
+        let mut cfg = git2::Config::open(&cfg_path).unwrap();
+        cfg.set_str("user.name", "Workspace Author").unwrap();
+        cfg.set_str("user.email", "ws@example.com").unwrap();
+
+        let hint = default_author(&tmp.path().to_string_lossy());
+        assert_eq!(hint.name.as_deref(), Some("Workspace Author"));
+        assert_eq!(hint.email.as_deref(), Some("ws@example.com"));
     }
 }

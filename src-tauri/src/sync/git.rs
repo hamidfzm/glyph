@@ -982,6 +982,17 @@ mod tests {
     }
 
     #[test]
+    fn set_origin_errors_when_path_is_not_a_repo() {
+        // Covers the `Repository::open(...).map_err(SyncError::Backend)`
+        // arm at the top of `set_origin`: a directory that doesn't have
+        // a `.git` folder can't be opened, and the error gets surfaced
+        // as a Backend variant.
+        let tmp = TempDir::new().unwrap();
+        let err = set_origin(tmp.path(), "https://example.com/a.git").unwrap_err();
+        assert!(matches!(err, SyncError::Backend(_)), "got {err:?}");
+    }
+
+    #[test]
     fn signature_falls_back_to_global_config_when_no_author_in_workspace_config() {
         let f = Fixture::new();
         let mut backend = f.backend();
