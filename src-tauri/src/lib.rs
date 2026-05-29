@@ -238,11 +238,14 @@ mod tests {
         let bucket: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
         let sink = Arc::clone(&bucket);
         app_handle.listen(event, move |evt| {
-            // emit() serialises the payload as JSON; the raw payload string
-            // wraps the path in quotes which we strip for easier asserts.
-            let raw = evt.payload().to_string();
-            let trimmed = raw.trim_matches('"').to_string();
-            sink.lock().unwrap().push(trimmed);
+            // emit() serialises the payload as a JSON string. Deserialise it so
+            // platform-specific escaping is undone — on Windows the path's
+            // backslashes are JSON-escaped (`C:\\dir`), so naive quote-trimming
+            // would leave doubled separators and break `canonicalize`.
+            let payload = evt.payload();
+            let path = serde_json::from_str::<String>(payload)
+                .unwrap_or_else(|_| payload.trim_matches('"').to_string());
+            sink.lock().unwrap().push(path);
         });
         bucket
     }
