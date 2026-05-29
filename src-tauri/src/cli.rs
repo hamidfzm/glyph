@@ -64,6 +64,27 @@ pub fn classify_initial_arg(path_str: &str, cwd: &Path) -> Option<InitialOpenAct
     classify_resolved_path(&canonical)
 }
 
+/// Pick the initial path to open at first launch from the two sources we
+/// have available, in order:
+///
+/// 1. `plugin_path` — the value `tauri-plugin-cli` parsed out of its
+///    configured args. Works when the OS hands us the file via association,
+///    or when the user runs the binary directly.
+/// 2. `env_args` — the raw process argv, scanned by [`pick_path_arg`]. This
+///    is the Windows-friendly path: `pnpm tauri dev -- samples` can land
+///    `samples` in argv without ever populating the plugin's matches, so we
+///    fall back to argv when the plugin yields nothing.
+pub fn initial_open_action(
+    plugin_path: Option<&str>,
+    env_args: &[String],
+    cwd: &Path,
+) -> Option<InitialOpenAction> {
+    let path_str = plugin_path
+        .map(str::to_string)
+        .or_else(|| pick_path_arg(env_args).map(str::to_string))?;
+    classify_initial_arg(&path_str, cwd)
+}
+
 /// The frontend event a second-instance launch should fire on the running
 /// window, plus the absolute path payload. Returned by [`second_instance_event`].
 #[derive(Debug, PartialEq, Eq)]
@@ -430,6 +451,59 @@ mod tests {
         let resolved = resolve_initial_path("notes.md", &inner).expect("should resolve via parent");
         assert_eq!(resolved, root.join("notes.md").canonicalize().unwrap());
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn initial_open_action_prefers_plugin_value_over_argv() {
+        let cwd = unique_tmp("ioa_pref");
+        let plugin_target = cwd.join("from-plugin");
+        let argv_target = cwd.join("from-argv");
+        fs::create_dir_all(&plugin_target).unwrap();
+        fs::create_dir_all(&argv_target).unwrap();
+
+        let env_args = vec!["glyph".to_string(), "from-argv".to_string()];
+        let result = initial_open_action(Some("from-plugin"), &env_args, &cwd).expect("classifies");
+        assert!(
+            matches!(&result, InitialOpenAction::Folder(p) if p.ends_with("from-plugin")),
+            "expected the plugin-supplied path to win, got {result:?}"
+        );
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn initial_open_action_falls_back_to_argv_when_plugin_is_empty() {
+        // This is the Windows path: tauri-plugin-cli's `file` arg is
+        // None / null because pnpm's arg forwarding bypassed it, but the
+        // positional arg is still in argv. The fallback must pick it up.
+        let cwd = unique_tmp("ioa_fallback");
+        let target = cwd.join("samples");
+        fs::create_dir_all(&target).unwrap();
+
+        let env_args = vec!["glyph".to_string(), "samples".to_string()];
+        let result = initial_open_action(None, &env_args, &cwd).expect("classifies via argv");
+        assert!(
+            matches!(&result, InitialOpenAction::Folder(p) if p.ends_with("samples")),
+            "expected argv fallback to find samples, got {result:?}"
+        );
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn initial_open_action_returns_none_when_neither_source_yields_a_path() {
+        let cwd = unique_tmp("ioa_none");
+        let env_args = vec!["glyph".to_string(), "--verbose".to_string()];
+        assert!(initial_open_action(None, &env_args, &cwd).is_none());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn initial_open_action_returns_none_when_path_does_not_exist() {
+        // Plugin and argv agree on a path, but it isn't there. Should be
+        // None (and the caller decides whether to log).
+        let cwd = unique_tmp("ioa_missing");
+        let env_args = vec!["glyph".to_string(), "nope".to_string()];
+        assert!(initial_open_action(Some("nope"), &env_args, &cwd).is_none());
+        let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]

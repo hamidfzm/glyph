@@ -50,6 +50,20 @@ describe("SplitView", () => {
     expect(getByTestId("preview").textContent).toBe("v1");
   });
 
+  // Regression: the preview pane must be a flex column with `min-h-0` so the
+  // inner MarkdownViewer (which sizes itself with `flex-1` and positions its
+  // scrollable region absolutely) actually has a height. A plain block
+  // parent collapses to 0px and the preview appears empty.
+  it("renders the preview pane as a flex column so MarkdownViewer can stretch", () => {
+    const { getByTestId } = render(
+      <SplitView content="hello" onChange={() => {}} searchOpen={false} onSearchClose={() => {}} />,
+    );
+    const preview = getByTestId("split-view-preview");
+    expect(preview.className).toMatch(/\bflex\b/);
+    expect(preview.className).toMatch(/\bflex-col\b/);
+    expect(preview.className).toMatch(/\bmin-h-0\b/);
+  });
+
   it("syncs the preview from the content prop when it changes from outside", () => {
     const { getByTestId, rerender } = render(
       <SplitView

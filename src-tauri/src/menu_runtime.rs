@@ -111,21 +111,32 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .accelerator("CmdOrCtrl+E")
         .build(handle)?;
 
-    let view_menu = SubmenuBuilder::new(handle, "View")
-        .item(&command_palette)
-        .separator()
-        .item(&toggle_files_sidebar)
-        .item(&toggle_outline_sidebar)
-        .item(&toggle_edit)
-        .separator()
-        .item(&zoom_in)
-        .item(&zoom_out)
-        .item(&actual_size)
-        .separator()
-        .item(&reset_view)
-        .separator()
-        .fullscreen()
-        .build()?;
+    // DevTools menu item: only built into debug binaries so release builds
+    // don't expose an "Open Developer Tools" affordance to end users.
+    #[cfg(debug_assertions)]
+    let toggle_devtools = MenuItemBuilder::with_id("toggle-devtools", "Toggle Developer Tools")
+        .accelerator("CmdOrCtrl+Shift+I")
+        .build(handle)?;
+
+    let view_menu = {
+        let builder = SubmenuBuilder::new(handle, "View")
+            .item(&command_palette)
+            .separator()
+            .item(&toggle_files_sidebar)
+            .item(&toggle_outline_sidebar)
+            .item(&toggle_edit)
+            .separator()
+            .item(&zoom_in)
+            .item(&zoom_out)
+            .item(&actual_size)
+            .separator()
+            .item(&reset_view)
+            .separator()
+            .fullscreen();
+        #[cfg(debug_assertions)]
+        let builder = builder.separator().item(&toggle_devtools);
+        builder.build()?
+    };
 
     // AI menu
     let ai_summarize =
