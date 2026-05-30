@@ -13,6 +13,7 @@ import { usePlatform } from "@/hooks/usePlatform";
 import { usePrint } from "@/hooks/usePrint";
 import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
+import { useWindowReveal } from "@/hooks/useWindowReveal";
 import { EmptyState } from "./layout/EmptyState";
 import { Sidebar } from "./layout/Sidebar";
 import { StatusBar } from "./layout/StatusBar";
@@ -31,6 +32,10 @@ export function AppShell() {
   const { settings, updateSettings } = useSettings();
   const tabs = useTabsContext();
   const sidebar = useSidebarLayoutContext();
+
+  // Reveal the window (created hidden in tauri.conf.json) once settings/theme
+  // are loaded, avoiding the white flash + geometry jump on launch.
+  useWindowReveal();
 
   const {
     tabs: openTabs,
