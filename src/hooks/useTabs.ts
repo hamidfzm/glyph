@@ -250,7 +250,7 @@ export function useTabs(options: UseTabsOptions) {
         return;
       }
       const tab = stateRef.current.tabs.find((t) => t.id === tabId);
-      if (!tab || tab.kind !== "folder") return;
+      if (tab?.kind !== "folder") return;
 
       const previousFilePath = tab.file?.path;
       if (previousFilePath === path) return;
@@ -350,7 +350,7 @@ export function useTabs(options: UseTabsOptions) {
   const toggleExpand = useCallback(
     async (tabId: string, path: string) => {
       const tab = stateRef.current.tabs.find((t) => t.id === tabId);
-      if (!tab || tab.kind !== "folder") return;
+      if (tab?.kind !== "folder") return;
 
       const wasExpanded = tab.expanded.has(path);
       const newExpanded = new Set(tab.expanded);
@@ -709,7 +709,7 @@ export function useTabs(options: UseTabsOptions) {
         const tab = stateRef.current.tabs.find(
           (t) => t.kind === "folder" && t.root === watchedRoot,
         );
-        if (!tab || tab.kind !== "folder") return;
+        if (tab?.kind !== "folder") return;
         // Refresh root + every currently-loaded subdirectory under this root.
         const dirsToRefresh: string[] = [tab.root];
         for (const dir of tab.nodes.keys()) {
