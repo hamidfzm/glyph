@@ -4,7 +4,7 @@ import { hasCodeBlock, loadHighlight } from "@/components/markdown/lazyHighlight
 
 type RehypePlugin = NonNullable<Options["rehypePlugins"]>[number];
 
-const HIGHLIGHT_OPTIONS = { plainText: ["mermaid"] };
+const HIGHLIGHT_OPTIONS = { plainText: ["mermaid", "csv", "tsv"] };
 
 /**
  * Lazily loads `rehype-highlight` the first time `content` contains a fenced

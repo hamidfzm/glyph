@@ -294,6 +294,34 @@
   background: var(--color-surface-secondary);
 }
 
+/* CSV/TSV preview tables */
+.markdown-body .csv-table-wrapper {
+  margin: 0 0 1em;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--glyph-radius);
+  background: var(--color-surface-secondary);
+}
+
+.markdown-body .csv-table {
+  margin: 0;
+  border: none;
+}
+
+.markdown-body .csv-table th:first-child,
+.markdown-body .csv-table td:first-child {
+  border-left: none;
+}
+
+.markdown-body .csv-table th:last-child,
+.markdown-body .csv-table td:last-child {
+  border-right: none;
+}
+
+.markdown-body .csv-table tr:first-child th {
+  border-top: none;
+}
+
 .markdown-body hr {
   border: none;
   border-top: 1px solid var(--color-border);
