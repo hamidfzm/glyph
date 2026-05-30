@@ -1,53 +1,38 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { CsvTable } from "./CsvTable";
 
 describe("CsvTable", () => {
-  it("renders a table with the first row as header", async () => {
+  it("renders a table with the first row as header", () => {
     render(<CsvTable code={"name,age\nAlice,30"} delimiter="," />);
-    expect(await screen.findByRole("columnheader", { name: "name" })).toBeInTheDocument();
-    expect(await screen.findByRole("columnheader", { name: "age" })).toBeInTheDocument();
-    expect(await screen.findByRole("cell", { name: "Alice" })).toBeInTheDocument();
-    expect(await screen.findByRole("cell", { name: "30" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "name" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "age" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Alice" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "30" })).toBeInTheDocument();
   });
 
-  it("parses tab-separated values with the tab delimiter", async () => {
+  it("parses tab-separated values with the tab delimiter", () => {
     render(<CsvTable code={"a\tb\n1\t2"} delimiter={"\t"} />);
-    expect(await screen.findByRole("columnheader", { name: "a" })).toBeInTheDocument();
-    expect(await screen.findByRole("cell", { name: "1" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "a" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "1" })).toBeInTheDocument();
   });
 
-  it("pads short rows so every row has the column count", async () => {
+  it("pads short rows so every row has the column count", () => {
     const { container } = render(<CsvTable code={"a,b,c\n1,2"} delimiter="," />);
-    await screen.findByRole("table");
     const bodyCells = container.querySelectorAll("tbody td");
     expect(bodyCells).toHaveLength(3);
   });
 
-  it("pads the header when a data row has more columns than the header", async () => {
+  it("pads the header when a data row has more columns than the header", () => {
     const { container } = render(<CsvTable code={"a,b\n1,2,3"} delimiter="," />);
-    await screen.findByRole("table");
     const headerCells = container.querySelectorAll("thead th");
     expect(headerCells).toHaveLength(3);
     expect(headerCells[2]?.textContent).toBe("");
   });
 
-  it("does not render after unmounting before the parser resolves", async () => {
-    const { unmount } = render(<CsvTable code={"a,b\n1,2"} delimiter="," />);
-    unmount();
-    // Flush the pending lazy parse; the effect cleanup must keep it from
-    // setting state (and rendering a table) on the unmounted component.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(screen.queryByRole("table")).toBeNull();
-  });
-
-  it("falls back to a raw code block for empty input", async () => {
+  it("falls back to a raw code block for empty input", () => {
     const { container } = render(<CsvTable code={""} delimiter="," />);
-    await waitFor(() => {
-      expect(container.querySelector("table")).toBeNull();
-      expect(container.querySelector("pre")).toBeTruthy();
-    });
+    expect(container.querySelector("table")).toBeNull();
+    expect(container.querySelector("pre")).toBeTruthy();
   });
 });
