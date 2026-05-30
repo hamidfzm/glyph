@@ -61,7 +61,17 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_os::init())
-        .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(
+            // Restore size/position/etc, but NOT visibility: the window is
+            // created hidden (see tauri.conf.json) and revealed by the frontend
+            // once it has painted, so the plugin must not re-show it early.
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        & !tauri_plugin_window_state::StateFlags::VISIBLE,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_store::Builder::new().build())
         .manage(FileWatcherState(Arc::new(Mutex::new(
             std::collections::HashMap::new(),

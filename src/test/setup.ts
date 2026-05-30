@@ -39,3 +39,10 @@ vi.mock("@tauri-apps/api/menu", () => ({
   PredefinedMenuItem: { new: vi.fn() },
   Submenu: { new: vi.fn() },
 }));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    show: vi.fn(() => Promise.resolve()),
+    setFocus: vi.fn(() => Promise.resolve()),
+  }),
+}));
