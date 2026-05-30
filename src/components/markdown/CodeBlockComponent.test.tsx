@@ -177,6 +177,31 @@ describe("CodeBlockComponent", () => {
       vi.useRealTimers();
     });
 
+    it("restarts the revert timer when copied again before it fires", async () => {
+      vi.useFakeTimers();
+
+      render(
+        <CodeBlockComponent>
+          <code className="language-javascript">const x = 1;</code>
+        </CodeBlockComponent>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
+      await vi.waitFor(() => {
+        expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+      });
+
+      // Copy again while the 2s revert timer is still pending: the existing
+      // timer is cleared and restarted, so the button stays in "Copied".
+      fireEvent.click(screen.getByRole("button", { name: "Copied" }));
+      await vi.waitFor(() => {
+        expect(writeTextMock).toHaveBeenCalledTimes(2);
+      });
+      expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+
+      vi.useRealTimers();
+    });
+
     it("wraps pre in a code-block-wrapper div", () => {
       const { container } = render(
         <CodeBlockComponent>
