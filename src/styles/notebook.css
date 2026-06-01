@@ -62,17 +62,22 @@
   font-size: 0.8rem;
   line-height: 1.5;
   text-align: right;
-  padding-top: 0.65rem;
   color: var(--color-text-tertiary);
   user-select: none;
   white-space: nowrap;
 }
 
+/* The Out prompt sits next to plain output content (no inner padding), so it
+   aligns at the row top with no extra offset. */
+.nb-prompt-out {
+  padding-top: 0;
+}
+
 .nb-prompt-in {
   color: var(--color-accent);
   /* The source `pre` carries 1em of internal padding before its first line, so
-     the input prompt needs more top padding than the base (used by the plain
-     Out prompt) to line up with the first line of code. */
+     the input prompt needs that much top padding to line up with the first
+     line of code. */
   padding-top: 1rem;
 }
 
