@@ -76,6 +76,16 @@ describe("scrubBreadcrumb", () => {
     const crumb: Breadcrumb = { category: "ui.click", message: "clicked button" };
     expect(scrubBreadcrumb(crumb)).toEqual(crumb);
   });
+
+  it("keeps a breadcrumb that has no message", () => {
+    const crumb: Breadcrumb = { category: "ui.click" };
+    expect(scrubBreadcrumb(crumb)).toEqual({ category: "ui.click" });
+  });
+
+  it("leaves non-string url data untouched", () => {
+    const crumb: Breadcrumb = { category: "ui.click", data: { count: 3 } };
+    expect(scrubBreadcrumb(crumb)?.data).toEqual({ count: 3 });
+  });
 });
 
 describe("scrubEvent", () => {
@@ -101,6 +111,15 @@ describe("scrubEvent", () => {
     const scrubbed = scrubEvent(event);
     expect(scrubbed.message).toBe("failed at [redacted-path]");
     expect(scrubbed.exception?.values?.[0].value).toBe("ENOENT [redacted-path]");
+  });
+
+  it("handles exceptions that have no value", () => {
+    const event = {
+      exception: { values: [{ type: "Error" }] },
+    } as unknown as ErrorEvent;
+
+    const scrubbed = scrubEvent(event);
+    expect(scrubbed.exception?.values?.[0].value).toBeUndefined();
   });
 
   it("keeps only allowlisted contexts", () => {
