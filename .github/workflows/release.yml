@@ -49,6 +49,10 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Enables source-map upload from the Vite build (vite.config.ts). When
+          # unset (e.g. forks), the Sentry plugin is skipped and the build still
+          # succeeds.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Glyph ${{ github.ref_name }}"

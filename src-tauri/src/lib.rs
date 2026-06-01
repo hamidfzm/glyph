@@ -3,6 +3,7 @@ mod commands;
 mod markdown;
 mod menu;
 mod menu_runtime;
+mod telemetry;
 mod watcher;
 
 use std::sync::{Arc, Mutex};
@@ -78,6 +79,7 @@ pub fn run() {
         ))))
         .manage(commands::InitialFile(Mutex::new(None)))
         .manage(commands::InitialFolder(Mutex::new(None)))
+        .manage(telemetry::TelemetryState(Mutex::new(None)))
         .setup(|app| {
             let (menu, menu_refs) = menu::build_menu(app)?;
             app.set_menu(menu)?;
@@ -159,6 +161,7 @@ pub fn run() {
             watcher::watch_directory,
             watcher::unwatch_directory,
             menu_runtime::set_menu_state,
+            telemetry::set_error_reporting,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Glyph");

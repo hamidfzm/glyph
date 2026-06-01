@@ -1,1 +1,4 @@
-github: hamidfzm
+# GitHub Sponsors isn't enabled for this account, so we use a custom link.
+# It points at the README Sponsors section, which lists the crypto wallets
+# (FUNDING.yml's custom field only accepts URLs, not raw addresses).
+custom: ["https://github.com/hamidfzm/glyph#sponsors"]

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import { MODEL_SUGGESTIONS } from "@/lib/settings";
 
-type Tab = "appearance" | "layout" | "behavior" | "ai" | "print";
+type Tab = "appearance" | "layout" | "behavior" | "ai" | "print" | "privacy";
 
 interface SettingsModalProps {
   open: boolean;
@@ -73,6 +73,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     { id: "behavior", label: "Behavior" },
     { id: "ai", label: "AI" },
     { id: "print", label: "Print" },
+    { id: "privacy", label: "Privacy" },
   ];
 
   return (
@@ -119,6 +120,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           {tab === "behavior" && <BehaviorTab />}
           {tab === "ai" && <AITab />}
           {tab === "print" && <PrintTab />}
+          {tab === "privacy" && <PrivacyTab />}
         </div>
 
         <div className="settings-footer">
@@ -455,6 +457,31 @@ function PrintTab() {
         <Toggle
           checked={print.includeBackground}
           onChange={(v) => updateSettings("print.includeBackground", v)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function PrivacyTab() {
+  const { settings, updateSettings } = useSettings();
+  const { privacy } = settings;
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-title">Error Reporting</div>
+      <div className="settings-row">
+        <div>
+          <span className="settings-label">Send crash reports</span>
+          <div className="settings-description">
+            Off by default. When on, anonymous crash reports (stack traces, OS, and app version) are
+            sent to help fix bugs. Your files, file paths, and links are never included. Only active
+            in production builds. See SECURITY.md for the full policy.
+          </div>
+        </div>
+        <Toggle
+          checked={privacy.errorReporting}
+          onChange={(v) => updateSettings("privacy.errorReporting", v)}
         />
       </div>
     </div>

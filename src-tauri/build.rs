@@ -4,8 +4,34 @@ use std::path::PathBuf;
 
 fn main() {
     generate_md_extensions();
+    emit_sentry_dsn();
     embed_comctl32_v6_in_test_binaries();
     tauri_build::build();
+}
+
+/// Single source of truth for the Sentry DSN: `src-tauri/sentry.json` → `dsn`.
+///
+/// The frontend imports the same file (see `src/lib/telemetry.ts`) so both
+/// clients target the same project. Emitted as the `GLYPH_SENTRY_DSN` compile
+/// env so `telemetry.rs` can read it via `option_env!` with zero runtime cost.
+///
+/// Tolerant by design: a missing file or absent `dsn` yields an empty string,
+/// which disables reporting rather than failing the build (e.g. on forks).
+fn emit_sentry_dsn() {
+    println!("cargo:rerun-if-changed=sentry.json");
+
+    let dsn = fs::read_to_string("sentry.json")
+        .ok()
+        .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
+        .and_then(|value| {
+            value
+                .get("dsn")
+                .and_then(|d| d.as_str())
+                .map(str::to_string)
+        })
+        .unwrap_or_default();
+
+    println!("cargo:rustc-env=GLYPH_SENTRY_DSN={dsn}");
 }
 
 /// Embed the ComCtl32 v6 (Common-Controls 6.0.0.0) manifest dependency when

@@ -1,10 +1,18 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { codecovVitePlugin } from "@codecov/vite-plugin";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
+
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
+
+// Source-map upload is opt-in via the auth token (set in CI). Without it, the
+// plugin is skipped entirely so local/dev builds are unaffected.
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
 
 export default defineConfig(async ({ mode }) => ({
   plugins: [
@@ -16,7 +24,29 @@ export default defineConfig(async ({ mode }) => ({
       uploadToken: process.env.CODECOV_TOKEN,
       gitService: "github",
     }),
+    // Uploads source maps to Sentry so production stack traces are readable.
+    // Only active when SENTRY_AUTH_TOKEN is present; maps are deleted from the
+    // bundle after upload so they never ship to users.
+    ...(sentryAuthToken
+      ? [
+          sentryVitePlugin({
+            org: "glyph-md",
+            project: "glyph",
+            authToken: sentryAuthToken,
+            telemetry: false,
+            sourcemaps: { filesToDeleteAfterUpload: ["./dist/**/*.map"] },
+          }),
+        ]
+      : []),
   ],
+  // Expose package.json version to the app (Sentry release id).
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
+  // Source maps are only emitted when we're going to upload + delete them.
+  build: {
+    sourcemap: sentryAuthToken ? true : false,
+  },
   // Strip `console.*` and `debugger` from production bundles so diagnostic
   // logs added during debugging don't leak into shipped builds (and don't
   // weigh down the bundle). Dev builds keep them so the in-app DevTools

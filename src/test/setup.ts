@@ -2,7 +2,9 @@ import "@testing-library/jest-dom/vitest";
 import { vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
+  // Mirrors the real API: invoke always returns a Promise. Tests that need a
+  // specific resolved/rejected value override per-case with mockResolvedValue.
+  invoke: vi.fn(() => Promise.resolve()),
   convertFileSrc: vi.fn((path: string) => `asset://localhost/${path}`),
 }));
 
