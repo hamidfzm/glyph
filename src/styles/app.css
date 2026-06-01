@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./platform.css";
 @import "./markdown.css";
+@import "./notebook.css";
 @import "./settings.css";
 @import "./tabs.css";
 @import "./search.css";

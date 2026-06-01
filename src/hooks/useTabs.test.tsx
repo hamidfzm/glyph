@@ -194,8 +194,8 @@ describe("useTabs file operations", () => {
     expect(result.current.activeTab?.id).toBe(result.current.tabs[0].id);
   });
 
-  it("refuses to open a file whose extension isn't a supported markdown type", async () => {
-    // openFile gates non-markdown extensions so a random `.txt` / `.html`
+  it("refuses to open a file whose extension isn't a supported type", async () => {
+    // openFile gates unsupported extensions so a random `.txt` / `.html`
     // can't reach the renderer with embedded HTML / JS.
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -206,8 +206,47 @@ describe("useTabs file operations", () => {
     });
 
     expect(result.current.tabs).toHaveLength(0);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("non-markdown"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("unsupported"));
     warnSpy.mockRestore();
+  });
+
+  it("opens a Jupyter notebook in view mode", async () => {
+    // `.ipynb` is a supported type and is forced into view mode (read-only)
+    // regardless of the default editor mode.
+    const { result } = renderHook(() =>
+      useTabs({ ...defaultOptions(), defaultEditorMode: "edit" }),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/analysis.ipynb");
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+    const tab = result.current.tabs[0];
+    expect(tab.kind === "file" ? tab.file.mode : null).toBe("view");
+  });
+
+  it("never marks a notebook tab dirty when toggled into edit mode", async () => {
+    // Notebooks are read-only: switching modes shows the JSON source view, not
+    // an editor. The tab must never become dirty, or autosave would write the
+    // raw JSON back and could corrupt the notebook.
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/analysis.ipynb");
+    });
+    const id = result.current.tabs[0].id;
+
+    await act(async () => {
+      result.current.setTabMode(id, "edit");
+    });
+
+    const tab = result.current.tabs[0];
+    const file = tab.kind === "file" ? tab.file : null;
+    expect(file?.mode).toBe("edit");
+    expect(file?.dirty).toBe(false);
   });
 
   it("activates the existing tab instead of duplicating", async () => {
@@ -580,7 +619,7 @@ describe("useTabs dialog and events", () => {
     expect(updated?.kind === "folder" ? updated.file?.path : null).toBe("/p/ws/note.md");
   });
 
-  it("openFileInFolderTab refuses to load a non-markdown extension", async () => {
+  it("openFileInFolderTab refuses to load an unsupported extension", async () => {
     // Matches openFile: a `.txt` / `.html` / etc. dropped onto a folder tab
     // must not become the active file. Defends the renderer from arbitrary
     // HTML/JS the same way the top-level openFile gate does.
@@ -600,7 +639,7 @@ describe("useTabs dialog and events", () => {
 
     const updated = result.current.tabs.find((t) => t.id === folderTab!.id);
     expect(updated?.kind === "folder" ? updated.file : null).toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("non-markdown"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("unsupported"));
     warnSpy.mockRestore();
   });
 

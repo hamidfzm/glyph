@@ -24,6 +24,7 @@ This document demonstrates all the rendering features supported by Glyph. The YA
 - [Raw HTML](#raw-html)
 - [Images](#images)
 - [Links](#links)
+- [Jupyter Notebooks](#jupyter-notebooks)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 
 ## Frontmatter
@@ -262,6 +263,16 @@ When you have the `samples/` folder open, the **Backlinks** section under the fi
 ### Wikilink autocomplete
 
 In the editor or split view, typing `[[` opens a popup with workspace files. Keep typing to filter, press **Tab** or **Enter** to insert; the closing `]]` is added for you. Open this file in split view (`Cmd+E` cycles modes) and try typing `[[Co` to see it.
+
+## Jupyter Notebooks
+
+Glyph opens `.ipynb` files directly — no Jupyter required. Open `Notebook.ipynb` from the file tree (or run `glyph samples/Notebook.ipynb`) to see it. Notebooks are read-only and render each cell in order:
+
+- **Markdown cells** get the full markdown pipeline above — math, code, Mermaid, alerts, the lot.
+- **Code cells** are syntax-highlighted using the notebook's kernel language, with an `In [n]:` prompt in the gutter.
+- **Outputs** render under their cell by richest type: images (`image/png`, `image/jpeg`, `image/svg+xml`), sanitised HTML, markdown, and plain text. Stream output and exception tracebacks keep their ANSI colours instead of showing raw escape codes. An `Out [n]:` prompt marks execution results.
+
+Interactive outputs (Plotly, Vega, Jupyter widgets) aren't rendered yet — they show a short placeholder. Notebooks can't be edited in Glyph, so the mode toggle stays read-only: **view** shows the rendered cells, **edit** shows the raw `.ipynb` JSON as a syntax-highlighted source view, and **split** shows the JSON source and rendered cells side by side.
 
 ---
 

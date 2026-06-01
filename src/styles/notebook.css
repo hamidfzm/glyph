@@ -1,0 +1,274 @@
+/* Jupyter notebook viewer. The notebook is a vertical stack of cells; code
+   cells use a two-column grid (prompt gutter + body) so `In [n]:` / `Out [n]:`
+   line up the way they do in Jupyter/nbviewer. All colours go through the
+   theme custom properties so light/dark track the rest of the app. */
+
+.notebook-body {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding-bottom: 40vh;
+  color: var(--color-text-primary);
+}
+
+.nb-cell {
+  margin-bottom: 0.5rem;
+}
+
+/* Each cell embeds a `.markdown-body` for rendering. That class carries
+   document-level chrome meant for a whole file — a 70vh `padding-bottom` for
+   end-of-document scroll room — which would otherwise inject a huge empty gap
+   below every cell. Neutralise it (the notebook's own scroll room lives once on
+   `.notebook-body`) and collapse the body's outer first/last margins so the
+   only vertical rhythm between cells comes from `.nb-cell`. */
+.nb-cell .markdown-body {
+  padding-bottom: 0;
+}
+
+.nb-cell .markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.nb-cell .markdown-body > :last-child {
+  margin-bottom: 0;
+}
+
+/* Code cell layout: a fixed prompt gutter and a flexible body column. */
+.nb-row {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: start;
+}
+
+.nb-prompt {
+  font-family: var(--glyph-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  text-align: right;
+  padding-top: 0.65rem;
+  color: var(--color-text-tertiary);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.nb-prompt-in {
+  color: var(--color-accent);
+}
+
+.nb-row-body {
+  min-width: 0;
+}
+
+/* Code source: the inner <pre> already carries the highlight theme. Give the
+   input cell a subtle surface so it reads as an editor block. */
+.nb-code-source pre {
+  margin: 0;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-secondary);
+}
+
+.nb-output-row {
+  margin-top: 0.25rem;
+}
+
+/* Text outputs (stream, plain text, tracebacks) keep their whitespace and
+   wrap long lines so wide stdout doesn't force horizontal scroll. */
+.nb-output-text,
+.nb-raw {
+  margin: 0;
+  font-family: var(--glyph-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text-primary);
+}
+
+.nb-output-stderr {
+  background: color-mix(in srgb, var(--color-alert-caution) 8%, transparent);
+}
+
+.nb-output-error {
+  background: color-mix(in srgb, var(--color-alert-caution) 10%, transparent);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
+.nb-output-image {
+  max-width: 100%;
+  height: auto;
+  background: #fff; /* plots usually assume a white canvas */
+  border-radius: 4px;
+}
+
+.nb-output-unsupported {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--color-text-tertiary);
+  padding: 0.4rem 0;
+}
+
+/* Banner above the read-only JSON source view (edit/split mode on a notebook). */
+.nb-source-banner {
+  flex-shrink: 0;
+  padding: 0.4rem 2rem;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.nb-error-state,
+.nb-empty-state {
+  max-width: 40rem;
+  margin: 2rem auto;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.nb-error-title {
+  font-weight: 600;
+  color: var(--color-alert-caution);
+  margin-bottom: 0.25rem;
+}
+
+.nb-error-detail {
+  font-family: var(--glyph-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.82rem;
+}
+
+/* ANSI colours for stream output and tracebacks. Named colours map to the
+   conventional terminal palette, tuned for legibility on both themes. */
+.ansi-bold {
+  font-weight: 600;
+}
+.ansi-italic {
+  font-style: italic;
+}
+.ansi-underline {
+  text-decoration: underline;
+}
+
+.ansi-fg-black {
+  color: #1d1d1f;
+}
+.ansi-fg-red {
+  color: #cf222e;
+}
+.ansi-fg-green {
+  color: #1a7f37;
+}
+.ansi-fg-yellow {
+  color: #9a6700;
+}
+.ansi-fg-blue {
+  color: #0969da;
+}
+.ansi-fg-magenta {
+  color: #8250df;
+}
+.ansi-fg-cyan {
+  color: #1b7c83;
+}
+.ansi-fg-white {
+  color: #6e6e73;
+}
+.ansi-fg-bright-black {
+  color: #6e6e73;
+}
+.ansi-fg-bright-red {
+  color: #ff6b6b;
+}
+.ansi-fg-bright-green {
+  color: #3fb950;
+}
+.ansi-fg-bright-yellow {
+  color: #d4a72c;
+}
+.ansi-fg-bright-blue {
+  color: #58a6ff;
+}
+.ansi-fg-bright-magenta {
+  color: #bf8cff;
+}
+.ansi-fg-bright-cyan {
+  color: #56d4dd;
+}
+.ansi-fg-bright-white {
+  color: #f5f5f7;
+}
+
+.dark .ansi-fg-black {
+  color: #c9c9cd;
+}
+.dark .ansi-fg-red {
+  color: #ff7b72;
+}
+.dark .ansi-fg-green {
+  color: #3fb950;
+}
+.dark .ansi-fg-yellow {
+  color: #d29922;
+}
+.dark .ansi-fg-blue {
+  color: #58a6ff;
+}
+.dark .ansi-fg-magenta {
+  color: #bf8cff;
+}
+.dark .ansi-fg-cyan {
+  color: #56d4dd;
+}
+.dark .ansi-fg-white {
+  color: #f5f5f7;
+}
+
+.ansi-bg-black {
+  background-color: #1d1d1f;
+}
+.ansi-bg-red {
+  background-color: #cf222e;
+}
+.ansi-bg-green {
+  background-color: #1a7f37;
+}
+.ansi-bg-yellow {
+  background-color: #9a6700;
+}
+.ansi-bg-blue {
+  background-color: #0969da;
+}
+.ansi-bg-magenta {
+  background-color: #8250df;
+}
+.ansi-bg-cyan {
+  background-color: #1b7c83;
+}
+.ansi-bg-white {
+  background-color: #d2d2d7;
+}
+.ansi-bg-bright-black {
+  background-color: #6e6e73;
+}
+.ansi-bg-bright-red {
+  background-color: #ff6b6b;
+}
+.ansi-bg-bright-green {
+  background-color: #3fb950;
+}
+.ansi-bg-bright-yellow {
+  background-color: #d4a72c;
+}
+.ansi-bg-bright-blue {
+  background-color: #58a6ff;
+}
+.ansi-bg-bright-magenta {
+  background-color: #bf8cff;
+}
+.ansi-bg-bright-cyan {
+  background-color: #56d4dd;
+}
+.ansi-bg-bright-white {
+  background-color: #f5f5f7;
+}
