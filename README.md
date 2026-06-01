@@ -241,7 +241,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Folder / vault sidebar | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
 | Wikilinks & backlinks | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | plugin |
 | Tag / metadata search | planned | ✅ | ❌ | ❌ | ✅ | ✅ | plugin |
-| Command palette | planned | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Command palette | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | In-document search | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Table of contents | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Live reload on disk change | ✅ | ⚠️ | n/a | n/a | ⚠️ | n/a | ✅ |
