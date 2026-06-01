@@ -21,7 +21,7 @@ import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
 import { AIPanel } from "./modals/AIPanel";
 import { CommandPalette } from "./modals/CommandPalette";
-import { SettingsModal } from "./modals/settings/SettingsModal";
+import { SettingsModal } from "./modals/settings/lazySettings";
 import { TabContent } from "./TabContent";
 
 // All the wiring that used to live inside App: menu events, AI/TTS/Print
@@ -210,7 +210,8 @@ export function AppShell() {
         onClose={palette.close}
       />
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      {/* Mounted only when open so the settings chunk loads on first use. */}
+      {settingsOpen && <SettingsModal open onClose={() => setSettingsOpen(false)} />}
       <AIPanel
         open={aiController.panelOpen}
         onClose={aiController.closePanel}

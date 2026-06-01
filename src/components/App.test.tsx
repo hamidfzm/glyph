@@ -15,7 +15,7 @@ vi.mock("./markdown/MarkdownViewer", () => ({
   MarkdownViewer: () => <div data-testid="markdown-viewer" />,
 }));
 
-vi.mock("./modals/settings/SettingsModal", () => ({
+vi.mock("./modals/settings/lazySettings", () => ({
   SettingsModal: ({ open, onClose }: { open: boolean; onClose: () => void }) =>
     open ? (
       <button type="button" data-testid="settings-modal" onClick={onClose}>
