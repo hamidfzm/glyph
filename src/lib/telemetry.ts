@@ -1,11 +1,14 @@
 import type { Breadcrumb, ErrorEvent } from "@sentry/react";
 import * as Sentry from "@sentry/react";
 import { invoke } from "@tauri-apps/api/core";
+// Single source of truth for the Sentry DSN — `src-tauri/sentry.json`. The Rust
+// build script reads the same file (see build.rs) so the frontend and backend
+// clients always target the same project. DSNs are public client identifiers,
+// not secrets, so committing this is intentional.
+// biome-ignore lint/style/noRestrictedImports: lives outside src/, but it is the canonical config
+import sentryConfig from "../../src-tauri/sentry.json";
 
-// Public Sentry client identifier for the `glyph` project. DSNs are not secrets
-// (they ship in every client app), so hardcoding is fine and intentional.
-const SENTRY_DSN =
-  "https://0ae4d558b7b6fe1ec29b3ffb7c04fabb@o4511468551340032.ingest.us.sentry.io/4511491763470336";
+const SENTRY_DSN = sentryConfig.dsn;
 
 // Breadcrumb categories that carry navigation URLs / request paths — dropped
 // wholesale so we never ship the user's file locations or any remote URLs.

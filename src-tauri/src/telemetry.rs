@@ -11,10 +11,14 @@ use std::sync::{Arc, Mutex};
 use sentry::protocol::Event;
 use tauri::State;
 
-// Public Sentry client identifier for the `glyph` project. DSNs ship in every
-// client and are not secrets, so hardcoding is intentional.
-const SENTRY_DSN: &str =
-    "https://0ae4d558b7b6fe1ec29b3ffb7c04fabb@o4511468551340032.ingest.us.sentry.io/4511491763470336";
+// Single source of truth for the DSN — `src-tauri/sentry.json`, read at build
+// time by build.rs and injected as `GLYPH_SENTRY_DSN`. The frontend imports the
+// same file, so both clients target the same project. Empty (missing file or
+// `dsn`) disables reporting.
+const SENTRY_DSN: &str = match option_env!("GLYPH_SENTRY_DSN") {
+    Some(dsn) => dsn,
+    None => "",
+};
 
 /// Holds the live Sentry client guard while reporting is enabled. Dropping the
 /// guard (setting this to `None`) flushes and disables the client.
@@ -89,7 +93,7 @@ fn scrub_event(mut event: Event<'static>) -> Option<Event<'static>> {
 /// builds. The default integrations install the panic handler that captures
 /// Rust panics.
 fn init_guard() -> Option<sentry::ClientInitGuard> {
-    if cfg!(debug_assertions) {
+    if cfg!(debug_assertions) || SENTRY_DSN.is_empty() {
         return None;
     }
 
