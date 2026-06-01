@@ -5,7 +5,9 @@ export function AITab() {
   const { settings, updateSettings } = useSettings();
   const { ai } = settings;
 
-  const models = ai.provider !== "none" ? (MODEL_SUGGESTIONS[ai.provider] ?? []) : [];
+  // Every non-"none" provider has suggestions in MODEL_SUGGESTIONS, so the
+  // model section below can render the datalist unconditionally.
+  const models = ai.provider === "none" ? [] : MODEL_SUGGESTIONS[ai.provider];
 
   return (
     <>
@@ -70,13 +72,11 @@ export function AITab() {
                 placeholder="Select or type model name"
                 list="model-suggestions"
               />
-              {models.length > 0 && (
-                <datalist id="model-suggestions">
-                  {models.map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
-              )}
+              <datalist id="model-suggestions">
+                {models.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
             </div>
           </div>
         )}

@@ -78,6 +78,19 @@ describe("SettingsModal", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("handles keydown on the dialog overlay (Escape closes, other keys do not)", () => {
+    const onClose = vi.fn();
+    const { wrapper } = withSettings();
+    const { container } = render(<SettingsModal open={true} onClose={onClose} />, { wrapper });
+    const overlay = container.querySelector(".settings-overlay") as Element;
+
+    fireEvent.keyDown(overlay, { key: "Enter" });
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(overlay, { key: "Escape" });
+    expect(onClose).toHaveBeenCalled();
+  });
+
   it("calls onClose when the backdrop is clicked but not when content is clicked", () => {
     const onClose = vi.fn();
     const { wrapper } = withSettings();
