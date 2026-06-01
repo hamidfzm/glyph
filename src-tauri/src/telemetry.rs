@@ -238,4 +238,15 @@ mod tests {
         assert!(set_enabled(&state, false).is_ok());
         assert!(state.0.lock().unwrap().is_none());
     }
+
+    #[test]
+    fn set_error_reporting_command_runs_through_managed_state() {
+        use tauri::Manager;
+        // Drive the #[tauri::command] wrapper end to end against a managed
+        // TelemetryState, mirroring how lib.rs tests use a mock app.
+        let app = tauri::test::mock_app();
+        app.manage(TelemetryState(Mutex::new(None)));
+        assert!(set_error_reporting(true, app.state()).is_ok());
+        assert!(set_error_reporting(false, app.state()).is_ok());
+    }
 }
