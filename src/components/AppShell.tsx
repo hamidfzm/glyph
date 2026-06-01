@@ -21,7 +21,7 @@ import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
 import { AIPanel } from "./modals/AIPanel";
 import { CommandPalette } from "./modals/CommandPalette";
-import { SettingsModal } from "./modals/SettingsModal";
+import { SettingsModal } from "./modals/settings/SettingsModal";
 import { TabContent } from "./TabContent";
 
 // All the wiring that used to live inside App: menu events, AI/TTS/Print

@@ -40,7 +40,7 @@ describe("SettingsModal", () => {
     expect(screen.getByText("Privacy")).toBeInTheDocument();
   });
 
-  it("switches the active tab when a tab button is clicked", () => {
+  it("renders each tab's content when selected", () => {
     const { wrapper } = withSettings();
     render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
@@ -49,6 +49,15 @@ describe("SettingsModal", () => {
 
     fireEvent.click(screen.getByText("Behavior"));
     expect(screen.getByText("Auto-reload")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("AI"));
+    expect(screen.getByText("AI Provider")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Print"));
+    expect(screen.getByText("Print & PDF Export")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Privacy"));
+    expect(screen.getByText("Error Reporting")).toBeInTheDocument();
   });
 
   it("calls onClose when Escape is pressed", () => {
@@ -121,6 +130,36 @@ describe("SettingsModal", () => {
     const toggle = screen.getByRole("checkbox");
     fireEvent.click(toggle);
     expect(updateSettings).toHaveBeenCalledWith("privacy.errorReporting", true);
+  });
+
+  it("shows the custom font input when the font family is custom", () => {
+    const { wrapper } = withSettings({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        appearance: { ...DEFAULT_SETTINGS.appearance, fontFamily: "custom" },
+      },
+    });
+    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    expect(screen.getByText("Custom Font Name")).toBeInTheDocument();
+  });
+
+  it("shows the API key field for cloud AI providers", () => {
+    const { wrapper } = withSettings({
+      settings: { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "claude" } },
+    });
+    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    fireEvent.click(screen.getByText("AI"));
+    expect(screen.getByText("API Key")).toBeInTheDocument();
+    expect(screen.getByText("Model")).toBeInTheDocument();
+  });
+
+  it("shows the Ollama URL field for the local provider", () => {
+    const { wrapper } = withSettings({
+      settings: { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } },
+    });
+    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    fireEvent.click(screen.getByText("AI"));
+    expect(screen.getByText("Ollama URL")).toBeInTheDocument();
   });
 
   it("calls resetSettings from the footer Reset button", () => {
