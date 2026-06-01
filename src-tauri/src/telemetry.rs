@@ -88,6 +88,19 @@ fn scrub_event(mut event: Event<'static>) -> Option<Event<'static>> {
     Some(event)
 }
 
+/// The privacy-hardened client options: tagged release, no PII, no hostname,
+/// and the path-scrubbing `before_send`. Extracted from [`init_guard`] so the
+/// configuration can be asserted in tests without initializing a real client.
+fn client_options() -> sentry::ClientOptions {
+    sentry::ClientOptions {
+        release: Some(format!("glyph@{}", env!("CARGO_PKG_VERSION")).into()),
+        send_default_pii: false,
+        server_name: None,
+        before_send: Some(Arc::new(scrub_event)),
+        ..Default::default()
+    }
+}
+
 /// Build a Sentry client guard, or `None` if reporting must stay off. Returns
 /// `None` in debug builds (dev) so events are only ever sent from release
 /// builds. The default integrations install the panic handler that captures
@@ -97,16 +110,7 @@ fn init_guard() -> Option<sentry::ClientInitGuard> {
         return None;
     }
 
-    Some(sentry::init((
-        SENTRY_DSN,
-        sentry::ClientOptions {
-            release: Some(format!("glyph@{}", env!("CARGO_PKG_VERSION")).into()),
-            send_default_pii: false,
-            server_name: None,
-            before_send: Some(Arc::new(scrub_event)),
-            ..Default::default()
-        },
-    )))
+    Some(sentry::init((SENTRY_DSN, client_options())))
 }
 
 /// Reconcile the desired enabled state with the held guard. Extracted from the
@@ -122,13 +126,20 @@ fn apply_enabled(enabled: bool, guard: &mut Option<sentry::ClientInitGuard>) {
     }
 }
 
+/// Lock the guard and reconcile it with `enabled`. Takes `&TelemetryState`
+/// (constructible in tests) rather than a Tauri `State` so the lock + apply path
+/// is unit-testable; the command is a thin wrapper over this.
+fn set_enabled(state: &TelemetryState, enabled: bool) -> Result<(), String> {
+    let mut guard = state.0.lock().map_err(|e| e.to_string())?;
+    apply_enabled(enabled, &mut guard);
+    Ok(())
+}
+
 /// Frontend-driven toggle. Enabling initializes Sentry (release builds only);
 /// disabling drops the guard, which flushes and stops the client.
 #[tauri::command]
 pub fn set_error_reporting(enabled: bool, state: State<'_, TelemetryState>) -> Result<(), String> {
-    let mut guard = state.0.lock().map_err(|e| e.to_string())?;
-    apply_enabled(enabled, &mut guard);
-    Ok(())
+    set_enabled(&state, enabled)
 }
 
 #[cfg(test)]
@@ -204,5 +215,27 @@ mod tests {
         // Disable: clears the guard.
         apply_enabled(false, &mut guard);
         assert!(guard.is_none());
+    }
+
+    #[test]
+    fn client_options_are_privacy_hardened() {
+        let opts = client_options();
+        assert!(!opts.send_default_pii, "PII must never be sent");
+        assert!(opts.server_name.is_none(), "hostname must not be set");
+        assert!(opts.before_send.is_some(), "scrubber must be installed");
+        assert_eq!(
+            opts.release.as_deref(),
+            Some(concat!("glyph@", env!("CARGO_PKG_VERSION"))),
+        );
+    }
+
+    #[test]
+    fn set_enabled_toggles_without_a_tauri_state() {
+        let state = TelemetryState(Mutex::new(None));
+        // Enable then disable both succeed; the guard stays None in debug builds.
+        assert!(set_enabled(&state, true).is_ok());
+        assert!(state.0.lock().unwrap().is_none());
+        assert!(set_enabled(&state, false).is_ok());
+        assert!(state.0.lock().unwrap().is_none());
     }
 }
