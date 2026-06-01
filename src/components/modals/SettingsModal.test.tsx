@@ -37,6 +37,7 @@ describe("SettingsModal", () => {
     expect(screen.getByText("Behavior")).toBeInTheDocument();
     expect(screen.getByText("AI")).toBeInTheDocument();
     expect(screen.getByText("Print")).toBeInTheDocument();
+    expect(screen.getByText("Privacy")).toBeInTheDocument();
   });
 
   it("switches the active tab when a tab button is clicked", () => {
@@ -107,6 +108,19 @@ describe("SettingsModal", () => {
     fireEvent.click(screen.getByText("Behavior"));
     fireEvent.click(screen.getByText(/Clear Recent Files/i));
     expect(updateSettings).toHaveBeenCalledWith("behavior.recentFiles", []);
+  });
+
+  it("toggles error reporting from the Privacy tab", () => {
+    const updateSettings = vi.fn();
+    const { wrapper } = withSettings({ updateSettings });
+    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.click(screen.getByText("Privacy"));
+    expect(screen.getByText("Send crash reports")).toBeInTheDocument();
+
+    const toggle = screen.getByRole("checkbox");
+    fireEvent.click(toggle);
+    expect(updateSettings).toHaveBeenCalledWith("privacy.errorReporting", true);
   });
 
   it("calls resetSettings from the footer Reset button", () => {

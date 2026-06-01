@@ -6,6 +6,7 @@ import { useAutoSave } from "@/hooks/useAutoSave";
 import { useCommandPaletteController } from "@/hooks/useCommandPaletteController";
 import { useContextMenu } from "@/hooks/useContextMenu";
 import { useDocumentUndoRedo } from "@/hooks/useDocumentUndoRedo";
+import { useErrorReporting } from "@/hooks/useErrorReporting";
 import { useFontZoom } from "@/hooks/useFontZoom";
 import { useMenuEvents } from "@/hooks/useMenuEvents";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
@@ -29,9 +30,12 @@ import { TabContent } from "./TabContent";
 // real <App> is a tiny provider stack and we want both files to stay focused.
 export function AppShell() {
   const platform = usePlatform();
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, loaded } = useSettings();
   const tabs = useTabsContext();
   const sidebar = useSidebarLayoutContext();
+
+  // Opt-in crash/error reporting; inert in dev and until the user enables it.
+  useErrorReporting(settings.privacy.errorReporting, loaded);
 
   // Reveal the window (created hidden in tauri.conf.json) once settings/theme
   // are loaded, avoiding the white flash + geometry jump on launch.

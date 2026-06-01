@@ -82,6 +82,10 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Window state persistence across restarts
 - Native menu bar with keyboard shortcuts
 
+### Privacy
+- Local-first: your files never leave your machine
+- Opt-in crash reporting (off by default) to help fix bugs — see [Privacy & Error Reporting](#privacy--error-reporting)
+
 ## Install
 
 ### macOS (Homebrew)
@@ -275,3 +279,40 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 Legend: ✅ supported · ⚠️ partial / inconsistent · ❌ not supported · plugin = third-party · planned = on roadmap
 
 Note on "WYSIWYG / inline preview": Glyph's editor has split-view live preview and styled markdown tokens (bold/italic render as bold/italic in source), but markdown markers remain visible — Typora-style fully inline rendering is not implemented.
+
+## Privacy & Error Reporting
+
+Glyph is local-first: your documents are read and written on your machine and are never uploaded anywhere.
+
+Crash and error reporting is **opt-in and off by default**. Nothing is sent until you turn it on in **Settings → Privacy → Send crash reports**, and even then it is only active in production builds (never during development).
+
+When enabled, reports include only:
+
+- Stack traces of the crash or unhandled error
+- Operating system and Glyph version
+- The error message
+
+They never include your file contents, file paths, file names, or any links — these are stripped from every report before it is sent. You can turn reporting off again at any time from the same setting.
+
+## Sponsors
+
+Glyph is free and open source. These sponsors help keep it that way.
+
+<a href="https://sentry.io">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://sentry-brand.storage.googleapis.com/sentry-logo-white.png">
+    <img src="https://sentry-brand.storage.googleapis.com/sentry-logo-black.png" alt="Sentry" height="40">
+  </picture>
+</a>
+
+[**Sentry**](https://sentry.io) provides error monitoring through their Sponsored Business plan, which we use for the opt-in crash reporting above.
+
+### Support Glyph
+
+If Glyph is useful to you, donations are welcome via crypto:
+
+| Network | Asset | Address |
+|---|---|---|
+| Solana | SOL | `<pending>` |
+| BNB Smart Chain (BEP-20) | USDT | `<pending>` |
+| Tron (TRC-20) | USDT | `<pending>` |

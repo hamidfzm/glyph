@@ -66,12 +66,19 @@ export interface PrintSettings {
   includeBackground: boolean;
 }
 
+export interface PrivacySettings {
+  // Opt-in crash/error reporting to Sentry. Off by default — nothing leaves the
+  // machine until the user turns this on, and it stays inert in dev builds.
+  errorReporting: boolean;
+}
+
 export interface Settings {
   appearance: AppearanceSettings;
   layout: LayoutSettings;
   behavior: BehaviorSettings;
   ai: AISettings;
   print: PrintSettings;
+  privacy: PrivacySettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -113,6 +120,9 @@ export const DEFAULT_SETTINGS: Settings = {
     pageBreakLevel: "none",
     includeToc: false,
     includeBackground: false,
+  },
+  privacy: {
+    errorReporting: false,
   },
 };
 

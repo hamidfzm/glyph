@@ -26,6 +26,15 @@ serde_json = "1"
 notify = "8"
 tauri-plugin-opener = "2.5.4"
 walkdir = "2.5.0"
+# rustls (not native-tls) so release builds don't need OpenSSL system libs on
+# Linux. Default integrations include the panic handler we rely on.
+sentry = { version = "0.42", default-features = false, features = [
+    "backtrace",
+    "contexts",
+    "panic",
+    "reqwest",
+    "rustls",
+] }
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
