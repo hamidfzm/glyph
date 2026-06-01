@@ -11,24 +11,41 @@
 }
 
 .nb-cell {
-  margin-bottom: 0.5rem;
+  margin-bottom: 1.25rem;
 }
 
-/* Each cell embeds a `.markdown-body` for rendering. That class carries
-   document-level chrome meant for a whole file — a 70vh `padding-bottom` for
-   end-of-document scroll room — which would otherwise inject a huge empty gap
-   below every cell. Neutralise it (the notebook's own scroll room lives once on
-   `.notebook-body`) and collapse the body's outer first/last margins so the
-   only vertical rhythm between cells comes from `.nb-cell`. */
-.nb-cell .markdown-body {
+/* Cells render through `.markdown-body`, which carries document-level chrome
+   meant for a whole file — a 70vh `padding-bottom` for end-of-document scroll
+   room — that would otherwise inject a huge empty gap below every cell.
+   Neutralise it (the notebook's own scroll room lives once on `.notebook-body`)
+   and collapse the body's outer first/last margins so the only vertical rhythm
+   between cells comes from `.nb-cell`.
+
+   The selector must use `.notebook-body .markdown-body`, not
+   `.nb-cell .markdown-body`: a markdown cell puts `markdown-body` directly on
+   the `.nb-cell` element, so a descendant selector would miss it and leave the
+   70vh padding on every markdown (and Mermaid) cell. Both the cell-level body
+   and the nested code-source/output bodies are descendants of `.notebook-body`.
+
+   We also reset `.markdown-body`'s document-level `max-width` + horizontal
+   `margin: auto`: inside a cell (and especially the code cell's grid column)
+   those would centre and cap the content, so a code block shrink-wraps
+   mid-column instead of filling the row. The notebook's own width cap lives
+   once on `.notebook-body`. Use `margin-inline` so we only neutralise the
+   horizontal centring — zeroing all margins here (specificity 0,2,0) would
+   also clobber `.nb-cell`'s bottom margin on markdown cells, where
+   `markdown-body` sits on the cell element, collapsing the inter-cell gap. */
+.notebook-body .markdown-body {
   padding-bottom: 0;
+  max-width: none;
+  margin-inline: 0;
 }
 
-.nb-cell .markdown-body > :first-child {
+.notebook-body .markdown-body > :first-child {
   margin-top: 0;
 }
 
-.nb-cell .markdown-body > :last-child {
+.notebook-body .markdown-body > :last-child {
   margin-bottom: 0;
 }
 
@@ -53,23 +70,37 @@
 
 .nb-prompt-in {
   color: var(--color-accent);
+  /* The source `pre` carries 1em of internal padding before its first line, so
+     the input prompt needs more top padding than the base (used by the plain
+     Out prompt) to line up with the first line of code. */
+  padding-top: 1rem;
 }
 
 .nb-row-body {
   min-width: 0;
 }
 
-/* Code source: the inner <pre> already carries the highlight theme. Give the
-   input cell a subtle surface so it reads as an editor block. */
+/* Group a code cell's input and its outputs in one bordered block so they read
+   as a single connected cell (Jupyter/VS Code style), rather than a boxed input
+   floating above detached output. */
+.nb-cell-code {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 0.5rem 0.75rem;
+}
+
+/* Inside the grouped cell the source needs no box of its own; a subtle surface
+   tint is enough to set the input apart from the (transparent) output below. */
 .nb-code-source pre {
   margin: 0;
+  border: 0;
   border-radius: 6px;
-  border: 1px solid var(--color-border);
   background: var(--color-surface-secondary);
 }
 
 .nb-output-row {
-  margin-top: 0.25rem;
+  margin-top: 0.5rem;
 }
 
 /* Text outputs (stream, plain text, tracebacks) keep their whitespace and
