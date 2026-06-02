@@ -151,6 +151,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::file::read_file,
             commands::file::write_file,
+            commands::file::write_binary_file,
             commands::file::get_file_metadata,
             commands::file::get_initial_file,
             commands::file::print_document,

@@ -12,6 +12,9 @@ export interface MenuEventHandlers {
   find: () => void;
   toggleEdit: () => void;
   print: () => void;
+  exportHtml: () => void;
+  exportDocx: () => void;
+  exportEpub: () => void;
   zoomIn: () => void;
   zoomOut: () => void;
   zoomReset: () => void;
@@ -35,6 +38,9 @@ export function useMenuEvents(handlers: MenuEventHandlers) {
       listen("menu-find", handlers.find),
       listen("menu-toggle-edit", handlers.toggleEdit),
       listen("menu-print", handlers.print),
+      listen("menu-export-html", handlers.exportHtml),
+      listen("menu-export-docx", handlers.exportDocx),
+      listen("menu-export-epub", handlers.exportEpub),
       listen("menu-zoom-in", handlers.zoomIn),
       listen("menu-zoom-out", handlers.zoomOut),
       listen("menu-zoom-reset", handlers.zoomReset),

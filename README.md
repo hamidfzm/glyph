@@ -59,6 +59,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Zoom in/out — `Cmd/Ctrl+=/-/0` with zoom level in status bar
 - Table of Contents sidebar with active heading tracking
 - Print & PDF export — `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
+- Export to HTML, Word (DOCX), and EPUB — `File → Export`; reuses the rendered output (math, code highlighting, tables, images inlined) so files are self-contained and offline
 - Live reload — file watcher auto-updates on external changes
 - Undo / redo for in-document edits — `Cmd/Ctrl+Z` and `Cmd/Ctrl+Shift+Z` reverse task-list checkbox toggles and other programmatic edits per tab
 - Drag and drop markdown files, notebooks, or folders to open
@@ -254,7 +255,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 |---|---|---|---|---|---|---|---|
 | Print | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Export PDF | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | plugin |
-| Export HTML / DOCX / EPUB | planned | plugin | ✅ (Pandoc) | ⚠️ | ✅ (Pandoc) | ⚠️ | plugin |
+| Export HTML / DOCX / EPUB | ✅ | plugin | ✅ (Pandoc) | ⚠️ | ✅ (Pandoc) | ⚠️ | plugin |
 
 ### Power features
 

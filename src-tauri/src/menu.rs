@@ -44,6 +44,11 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         "close-tab" => emit("menu-close-tab"),
         "reset-view" => emit("menu-reset-view"),
         "print" => emit("menu-print"),
+        "export-html" => emit("menu-export-html"),
+        "export-docx" => emit("menu-export-docx"),
+        "export-epub" => emit("menu-export-epub"),
+        // PDF export reuses the existing print path.
+        "export-pdf" => emit("menu-print"),
         "close" => Some(MenuAction::CloseWindow),
         "toggle-files-sidebar" => emit("menu-toggle-files-sidebar"),
         "toggle-outline-sidebar" => emit("menu-toggle-outline-sidebar"),
@@ -143,6 +148,24 @@ mod tests {
             menu_action_for_id("open-settings"),
             Some(emit("menu-open-settings"))
         );
+    }
+
+    #[test]
+    fn export_ids_emit_their_events() {
+        assert_eq!(
+            menu_action_for_id("export-html"),
+            Some(emit("menu-export-html"))
+        );
+        assert_eq!(
+            menu_action_for_id("export-docx"),
+            Some(emit("menu-export-docx"))
+        );
+        assert_eq!(
+            menu_action_for_id("export-epub"),
+            Some(emit("menu-export-epub"))
+        );
+        // PDF export shares the print event so there's one print/PDF code path.
+        assert_eq!(menu_action_for_id("export-pdf"), Some(emit("menu-print")));
     }
 
     #[test]
