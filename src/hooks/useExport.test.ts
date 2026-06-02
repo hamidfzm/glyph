@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrintSettings } from "@/lib/settings";
 import { useExport } from "./useExport";
@@ -43,7 +43,9 @@ describe("useExport", () => {
   it("does nothing when there is no rendered body", async () => {
     vi.mocked(save).mockResolvedValue("/out.html");
     const { result } = renderHook(() => useExport(options()));
-    await result.current.exportHtml();
+    await act(async () => {
+      await result.current.exportHtml();
+    });
     expect(save).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
   });
@@ -52,7 +54,9 @@ describe("useExport", () => {
     setBody();
     vi.mocked(save).mockResolvedValue("/out.html");
     const { result } = renderHook(() => useExport(options()));
-    await result.current.exportHtml();
+    await act(async () => {
+      await result.current.exportHtml();
+    });
 
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: "note.html" }));
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_file");
@@ -64,7 +68,9 @@ describe("useExport", () => {
     setBody();
     vi.mocked(save).mockResolvedValue(null);
     const { result } = renderHook(() => useExport(options()));
-    await result.current.exportHtml();
+    await act(async () => {
+      await result.current.exportHtml();
+    });
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -72,7 +78,9 @@ describe("useExport", () => {
     setBody();
     vi.mocked(save).mockResolvedValue("/out.epub");
     const { result } = renderHook(() => useExport(options()));
-    await result.current.exportEpub();
+    await act(async () => {
+      await result.current.exportEpub();
+    });
 
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_binary_file");
     expect(call).toBeTruthy();
@@ -83,7 +91,9 @@ describe("useExport", () => {
     setBody();
     vi.mocked(save).mockResolvedValue("/out.docx");
     const { result } = renderHook(() => useExport(options()));
-    await result.current.exportDocx();
+    await act(async () => {
+      await result.current.exportDocx();
+    });
 
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_binary_file");
     expect(call).toBeTruthy();
@@ -96,8 +106,37 @@ describe("useExport", () => {
     vi.mocked(invoke).mockRejectedValue(new Error("disk full"));
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { result } = renderHook(() => useExport(options()));
-    await result.current.exportHtml();
+    await act(async () => {
+      await result.current.exportHtml();
+    });
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it("flags the active format while writing and clears it when done", async () => {
+    setBody();
+    vi.mocked(save).mockResolvedValue("/out.html");
+    let finishWrite!: () => void;
+    vi.mocked(invoke).mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishWrite = () => resolve();
+      }),
+    );
+
+    const { result } = renderHook(() => useExport(options()));
+    expect(result.current.exporting).toBeNull();
+
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = result.current.exportHtml();
+    });
+    // After the (mocked) dialog and content prep, the write is in flight.
+    expect(result.current.exporting).toBe("html");
+
+    await act(async () => {
+      finishWrite();
+      await pending;
+    });
+    expect(result.current.exporting).toBeNull();
   });
 });

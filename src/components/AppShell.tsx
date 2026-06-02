@@ -18,6 +18,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
 import { nextEditorMode } from "@/lib/settings";
 import { EmptyState } from "./layout/EmptyState";
+import { ExportProgress } from "./layout/ExportProgress";
 import { Sidebar } from "./layout/Sidebar";
 import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
@@ -215,6 +216,8 @@ export function AppShell() {
         <Sidebar side="right" />
       </div>
       <StatusBar />
+
+      {exporters.exporting && <ExportProgress format={exporters.exporting} />}
 
       <CommandPalette
         open={palette.open}

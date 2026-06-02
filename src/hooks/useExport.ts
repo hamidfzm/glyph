@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { collectStyles } from "@/lib/export/collectStyles";
 import { buildHtmlDocument } from "@/lib/export/html";
 import { deriveExportMeta } from "@/lib/export/meta";
@@ -27,6 +27,10 @@ export interface ExportHandlers {
   exportHtml: () => Promise<void>;
   exportDocx: () => Promise<void>;
   exportEpub: () => Promise<void>;
+  // The format currently being written, or null when idle. Drives the progress
+  // indicator; a document with many embedded images can take a noticeable
+  // moment to assemble.
+  exporting: ExportFormat | null;
 }
 
 /**
@@ -42,11 +46,12 @@ export function useExport({
   content,
 }: UseExportOptions): ExportHandlers {
   const includeToc = settings.includeToc;
+  const [exporting, setExporting] = useState<ExportFormat | null>(null);
 
-  return useMemo(() => {
-    const run = async (format: ExportFormat) => {
-      const body = await prepareContent({ entries, includeToc });
-      if (body == null) return; // nothing rendered to export
+  const run = useCallback(
+    async (format: ExportFormat) => {
+      // Cheap guard so we don't pop a save dialog with nothing to export.
+      if (!document.querySelector(".markdown-body")) return;
 
       const meta = deriveExportMeta(filePath, content);
       const { name, ext } = FILTERS[format];
@@ -56,7 +61,13 @@ export function useExport({
       });
       if (!path) return; // user cancelled
 
+      // Show the indicator only for the real work — after the (blocking) native
+      // dialog, covering image inlining and the build/write.
+      setExporting(format);
       try {
+        const body = await prepareContent({ entries, includeToc });
+        if (body == null) return;
+
         if (format === "html") {
           const html = buildHtmlDocument({
             bodyHtml: body,
@@ -89,13 +100,23 @@ export function useExport({
         }
       } catch (err) {
         console.error(`Failed to export ${format}:`, err);
+      } finally {
+        setExporting(null);
       }
-    };
+    },
+    [entries, includeToc, filePath, content],
+  );
 
-    return {
+  // Handler identities depend only on `run`, so they stay stable while
+  // `exporting` toggles — the menu-event subscription isn't torn down mid-export.
+  const handlers = useMemo(
+    () => ({
       exportHtml: () => run("html"),
       exportDocx: () => run("docx"),
       exportEpub: () => run("epub"),
-    };
-  }, [entries, includeToc, filePath, content]);
+    }),
+    [run],
+  );
+
+  return { ...handlers, exporting };
 }
