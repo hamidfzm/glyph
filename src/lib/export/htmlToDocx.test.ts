@@ -35,4 +35,53 @@ describe("convertHtmlToDocx", () => {
     expect(blocks).toHaveLength(1);
     expect(blocks[0]).toBeInstanceOf(Paragraph);
   });
+
+  it("renders an ordered list with one paragraph per item", () => {
+    const blocks = convertHtmlToDocx("<ol><li>one</li><li>two</li></ol>");
+    expect(blocks).toHaveLength(2);
+    expect(blocks.every((b) => b instanceof Paragraph)).toBe(true);
+  });
+
+  it("renders blockquote paragraphs", () => {
+    const blocks = convertHtmlToDocx("<blockquote><p>a</p><p>b</p></blockquote>");
+    expect(blocks).toHaveLength(2);
+    expect(blocks.every((b) => b instanceof Paragraph)).toBe(true);
+  });
+
+  it("renders a blockquote without inner paragraphs as one paragraph", () => {
+    const blocks = convertHtmlToDocx("<blockquote>just text</blockquote>");
+    expect(blocks).toHaveLength(1);
+  });
+
+  it("renders code blocks and horizontal rules as paragraphs", () => {
+    const code = convertHtmlToDocx("<pre>line1\nline2\n</pre>");
+    expect(code).toHaveLength(1);
+    expect(code[0]).toBeInstanceOf(Paragraph);
+
+    const hr = convertHtmlToDocx("<hr>");
+    expect(hr[0]).toBeInstanceOf(Paragraph);
+  });
+
+  it("drops standalone SVG diagrams", () => {
+    expect(convertHtmlToDocx("<svg><path/></svg>")).toHaveLength(0 + 1); // empty → one fallback block
+  });
+
+  it("preserves inline formatting and links inside paragraphs", () => {
+    const blocks = convertHtmlToDocx('<p><strong>x</strong> <a href="https://e.com">y</a></p>');
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toBeInstanceOf(Paragraph);
+  });
+
+  it("renders a top-level text node as a paragraph", () => {
+    const blocks = convertHtmlToDocx("loose text");
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toBeInstanceOf(Paragraph);
+  });
+
+  it("drops whitespace-only and empty inline elements", () => {
+    // Whitespace text node and an empty unknown element both contribute nothing,
+    // so the document falls back to a single empty paragraph.
+    expect(convertHtmlToDocx("   ")).toHaveLength(1);
+    expect(convertHtmlToDocx("<span></span>")).toHaveLength(1);
+  });
 });

@@ -4,6 +4,7 @@ const LABELS: Record<ExportFormat, string> = {
   html: "HTML",
   docx: "Word document",
   epub: "EPUB",
+  pdf: "PDF",
 };
 
 /**

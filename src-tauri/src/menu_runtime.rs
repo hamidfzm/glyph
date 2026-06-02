@@ -57,8 +57,9 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .accelerator("CmdOrCtrl+P")
         .build(handle)?;
 
-    // Export submenu items. HTML/DOCX/EPUB convert in the frontend; PDF reuses
-    // the existing print path so there is a single PDF entry point.
+    // Export submenu items — all convert in the frontend and write a file
+    // directly. PDF is a vector export here (the File > Print item, Cmd/Ctrl+P,
+    // is the separate print-dialog path).
     let export_html = MenuItemBuilder::with_id("export-html", "HTML\u{2026}").build(handle)?;
     let export_docx =
         MenuItemBuilder::with_id("export-docx", "Word (DOCX)\u{2026}").build(handle)?;
@@ -176,7 +177,6 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .item(&export_html)
         .item(&export_docx)
         .item(&export_epub)
-        .separator()
         .item(&export_pdf)
         .build()?;
 

@@ -41,4 +41,31 @@ describe("decodeDataUri", () => {
   it("returns null when dimensions can't be parsed", () => {
     expect(decodeDataUri(dataUri("image/png", [0x89, 0x50, 0, 0]))).toBeNull();
   });
+
+  it("reads BMP dimensions from the fixed header offsets", () => {
+    const bytes = new Array(26).fill(0);
+    bytes[18] = 4; // width (little-endian int32 at offset 18)
+    bytes[22] = 3; // height (little-endian int32 at offset 22)
+    const out = decodeDataUri(dataUri("image/bmp", bytes));
+    expect(out).toMatchObject({ type: "bmp", width: 4, height: 3 });
+  });
+
+  it("skips non-SOF JPEG segments before reading dimensions", () => {
+    // FFD8, APP0 (FFE0 len=4), then SOF0 (FFC0) with 9x7.
+    const bytes = [
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x07,
+      0x00, 0x09,
+    ];
+    expect(decodeDataUri(dataUri("image/jpeg", bytes))).toMatchObject({ width: 9, height: 7 });
+  });
+
+  it("decodes non-base64 (url-encoded) data URIs", () => {
+    // Supported type but undecodable as an image → exercises the text decode
+    // path and the null-dimension guard.
+    expect(decodeDataUri("data:image/png,hello%20world")).toBeNull();
+  });
+
+  it("returns null when base64 can't be decoded", () => {
+    expect(decodeDataUri("data:image/png;base64,@@not-base64@@")).toBeNull();
+  });
 });

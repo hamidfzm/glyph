@@ -84,7 +84,10 @@ describe("useExport", () => {
 
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_binary_file");
     expect(call).toBeTruthy();
-    expect((call?.[1] as { contents: Uint8Array }).contents).toBeInstanceOf(Uint8Array);
+    // Bytes are sent as a plain number array so Rust's Vec<u8> can deserialize.
+    const contents = (call?.[1] as { contents: number[] }).contents;
+    expect(Array.isArray(contents)).toBe(true);
+    expect(contents.length).toBeGreaterThan(0);
   });
 
   it("writes DOCX bytes via write_binary_file", async () => {
@@ -98,6 +101,21 @@ describe("useExport", () => {
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_binary_file");
     expect(call).toBeTruthy();
     expect((call?.[1] as { contents: Uint8Array }).contents.length).toBeGreaterThan(0);
+  });
+
+  it("writes PDF bytes via write_binary_file (no print dialog)", async () => {
+    setBody();
+    vi.mocked(save).mockResolvedValue("/out.pdf");
+    const { result } = renderHook(() => useExport(options()));
+    await act(async () => {
+      await result.current.exportPdf();
+    });
+
+    const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_binary_file");
+    expect(call).toBeTruthy();
+    expect((call?.[1] as { contents: Uint8Array }).contents.length).toBeGreaterThan(0);
+    // It must not fall back to the print path.
+    expect(vi.mocked(invoke).mock.calls.some((c) => c[0] === "print_document")).toBe(false);
   });
 
   it("logs and recovers when a write fails", async () => {

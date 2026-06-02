@@ -8,7 +8,7 @@ import { prepareContent } from "@/lib/export/prepareContent";
 import type { PrintSettings } from "@/lib/settings";
 import type { TocEntry } from "./useTableOfContents";
 
-export type ExportFormat = "html" | "docx" | "epub";
+export type ExportFormat = "html" | "docx" | "epub" | "pdf";
 
 interface UseExportOptions {
   entries: TocEntry[];
@@ -21,12 +21,22 @@ const FILTERS: Record<ExportFormat, { name: string; ext: string }> = {
   html: { name: "HTML", ext: "html" },
   docx: { name: "Word Document", ext: "docx" },
   epub: { name: "EPUB", ext: "epub" },
+  pdf: { name: "PDF", ext: "pdf" },
 };
+
+// Write binary export output via the Rust command. The bytes are sent as a
+// plain number array: `@tauri-apps/api`'s `invoke` JSON-serializes arguments,
+// and a nested `Uint8Array` would become an object (`{"0":..}`) that Rust's
+// `Vec<u8>` can't deserialize — so DOCX/EPUB/PDF must be converted first.
+function writeBinary(path: string, bytes: Uint8Array): Promise<void> {
+  return invoke("write_binary_file", { path, contents: Array.from(bytes) });
+}
 
 export interface ExportHandlers {
   exportHtml: () => Promise<void>;
   exportDocx: () => Promise<void>;
   exportEpub: () => Promise<void>;
+  exportPdf: () => Promise<void>;
   // The format currently being written, or null when idle. Drives the progress
   // indicator; a document with many embedded images can take a noticeable
   // moment to assemble.
@@ -34,10 +44,10 @@ export interface ExportHandlers {
 }
 
 /**
- * Export the active document to HTML/DOCX/EPUB. Reuses the rendered
- * `.markdown-body` DOM for fidelity, shows a native save dialog, and writes via
- * Rust commands (text for HTML, bytes for DOCX/EPUB). PDF is handled separately
- * by the print path.
+ * Export the active document to HTML/DOCX/EPUB/PDF. Reuses the rendered
+ * `.markdown-body` DOM for fidelity, shows a native save dialog, and writes a
+ * file via Rust commands (text for HTML, bytes for DOCX/EPUB/PDF) — no print
+ * dialog. The separate File > Print item is the print-dialog path.
  */
 export function useExport({
   entries,
@@ -77,26 +87,33 @@ export function useExport({
           });
           await invoke("write_file", { path, content: html });
         } else if (format === "epub") {
-          // Heavy deps (jszip / docx) load only when the user actually exports,
-          // keeping them out of the main bundle.
+          // Heavy deps (jszip / docx / pdfmake) load only when the user actually
+          // exports, keeping them out of the main bundle.
           const { buildEpub } = await import("@/lib/export/epub");
-          const bytes = await buildEpub({
-            bodyHtml: body,
-            css: collectStyles(),
-            entries,
-            metadata: {
-              title: meta.title,
-              author: meta.author,
-              language: "en",
-              identifier: crypto.randomUUID(),
-              modified: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-            },
-          });
-          await invoke("write_binary_file", { path, contents: bytes });
-        } else {
+          await writeBinary(
+            path,
+            await buildEpub({
+              bodyHtml: body,
+              css: collectStyles(),
+              entries,
+              metadata: {
+                title: meta.title,
+                author: meta.author,
+                language: "en",
+                identifier: crypto.randomUUID(),
+                modified: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+              },
+            }),
+          );
+        } else if (format === "docx") {
           const { buildDocx } = await import("@/lib/export/docx");
-          const bytes = await buildDocx(body, { title: meta.title, author: meta.author });
-          await invoke("write_binary_file", { path, contents: bytes });
+          await writeBinary(
+            path,
+            await buildDocx(body, { title: meta.title, author: meta.author }),
+          );
+        } else {
+          const { buildPdf } = await import("@/lib/export/pdf");
+          await writeBinary(path, await buildPdf(body, { title: meta.title, author: meta.author }));
         }
       } catch (err) {
         console.error(`Failed to export ${format}:`, err);
@@ -114,6 +131,7 @@ export function useExport({
       exportHtml: () => run("html"),
       exportDocx: () => run("docx"),
       exportEpub: () => run("epub"),
+      exportPdf: () => run("pdf"),
     }),
     [run],
   );

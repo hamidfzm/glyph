@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { prepareContent } from "./prepareContent";
 
@@ -13,6 +13,7 @@ function setBody(html: string): void {
 
 afterEach(() => {
   document.body.innerHTML = "";
+  vi.unstubAllGlobals();
 });
 
 describe("prepareContent", () => {
@@ -49,5 +50,41 @@ describe("prepareContent", () => {
     setBody(`<img src="data:image/png;base64,AAAA" alt="x">`);
     const html = await prepareContent({ entries: ENTRIES, includeToc: false });
     expect(html).toContain("data:image/png;base64,AAAA");
+  });
+
+  it("inlines fetched images as data URIs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        blob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }),
+      })),
+    );
+    setBody(`<img src="https://example.com/pic.png" alt="x">`);
+    const html = await prepareContent({ entries: ENTRIES, includeToc: false });
+    expect(html).toContain("data:image/png;base64,");
+    expect(html).not.toContain("https://example.com/pic.png");
+  });
+
+  it("leaves the original src when the fetch is not ok", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false })),
+    );
+    setBody(`<img src="https://example.com/missing.png">`);
+    const html = await prepareContent({ entries: ENTRIES, includeToc: false });
+    expect(html).toContain("https://example.com/missing.png");
+  });
+
+  it("leaves the original src when the fetch throws", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("network");
+      }),
+    );
+    setBody(`<img src="https://example.com/err.png">`);
+    const html = await prepareContent({ entries: ENTRIES, includeToc: false });
+    expect(html).toContain("https://example.com/err.png");
   });
 });
