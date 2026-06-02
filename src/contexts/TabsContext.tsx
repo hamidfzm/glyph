@@ -2,7 +2,8 @@ import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { type TocEntry, useTableOfContents } from "@/hooks/useTableOfContents";
 import { useTabs } from "@/hooks/useTabs";
 import { type Backlink, filterBacklinks } from "@/lib/backlinks";
-import type { Settings } from "@/lib/settings";
+import { isNotebookFile } from "@/lib/notebookExtensions";
+import { EDITOR_MODE, type Settings } from "@/lib/settings";
 
 type TabsApi = ReturnType<typeof useTabs>;
 
@@ -33,10 +34,23 @@ export function TabsProvider({ settings, updateSettings, children }: TabsProvide
     onSettingsChange: updateSettings,
   });
 
-  const activeMode = tabs.activeFile?.mode ?? "view";
+  const activeMode = tabs.activeFile?.mode ?? EDITOR_MODE.view;
   const content = tabs.activeFile?.content ?? null;
-  const displayContent =
-    activeMode !== "view" ? (tabs.activeFile?.editContent ?? content) : content;
+  const activePath = tabs.activeFile?.path;
+  // A notebook never has a markdown body — view mode shows the rich cell
+  // viewer, edit/split shows the raw `.ipynb` JSON read-only. Either way the
+  // features that read `displayContent` (word count, TOC, AI, read-aloud) would
+  // be chewing on raw JSON, which is worse than nothing. Suppress it in every
+  // mode so a notebook is never mistaken for editable markdown text.
+  const isNotebook = !!activePath && isNotebookFile(activePath);
+  const displayContent = isNotebook
+    ? null
+    : activeMode !== EDITOR_MODE.view
+      ? // editContent is seeded when entering edit mode, so the `?? content`
+        // fallback is defensive only.
+        /* c8 ignore next */
+        (tabs.activeFile?.editContent ?? content)
+      : content;
 
   const tocEntries = useTableOfContents(displayContent);
   const backlinks = useMemo(

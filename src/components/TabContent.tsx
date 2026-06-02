@@ -2,8 +2,11 @@ import { useCallback } from "react";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { activeFileOf } from "@/hooks/useTabs";
 import { useTaskList } from "@/hooks/useTaskList";
+import { isNotebookFile } from "@/lib/notebookExtensions";
+import { EDITOR_MODE } from "@/lib/settings";
 import { MarkdownEditor, SplitView } from "./editor/lazyEditor";
 import { MarkdownViewer } from "./markdown/MarkdownViewer";
+import { NotebookSource, NotebookSplit, NotebookViewer } from "./notebook/lazyNotebook";
 
 interface TabContentProps {
   searchOpen: boolean;
@@ -53,7 +56,31 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   const editorContent = file.editContent ?? file.content;
   const workspaceRoot = activeTab.kind === "folder" ? activeTab.root : undefined;
 
-  if (file.mode === "edit") {
+  // Notebooks are read-only, so the three modes map to read-only views rather
+  // than editors: view = rendered cells, split = cells + raw JSON side by side,
+  // edit = raw JSON source. None drop the JSON into the markdown editor, which
+  // would let autosave write malformed content back and corrupt the file.
+  if (isNotebookFile(file.path)) {
+    const NotebookComponent =
+      file.mode === EDITOR_MODE.view
+        ? NotebookViewer
+        : file.mode === EDITOR_MODE.split
+          ? NotebookSplit
+          : NotebookSource;
+    return (
+      <NotebookComponent
+        key={`${activeTab.id}:${file.path}`}
+        content={file.content}
+        filePath={file.path}
+        initialScrollTop={file.scrollTop}
+        onScrollChange={saveScrollPosition}
+        searchOpen={searchOpen}
+        onSearchClose={onSearchClose}
+      />
+    );
+  }
+
+  if (file.mode === EDITOR_MODE.edit) {
     return (
       <div className="flex-1 overflow-hidden">
         <MarkdownEditor
@@ -66,7 +93,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     );
   }
 
-  if (file.mode === "split") {
+  if (file.mode === EDITOR_MODE.split) {
     return (
       <div className="flex-1 overflow-hidden">
         <SplitView

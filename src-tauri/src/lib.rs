@@ -3,6 +3,7 @@ mod commands;
 mod markdown;
 mod menu;
 mod menu_runtime;
+mod notebook;
 mod telemetry;
 mod watcher;
 
@@ -14,6 +15,7 @@ use tauri_plugin_cli::CliExt;
 use watcher::FileWatcherState;
 
 pub use markdown::is_markdown_file;
+pub use notebook::{is_notebook_file, is_supported_file};
 
 /// Handle a second-instance launch: refocus the main window and forward the
 /// file/folder argument (if any) to the frontend via the same `open-file` /
@@ -121,8 +123,8 @@ pub fn run() {
                 Some(cli::InitialOpenAction::File(p)) => {
                     *app.state::<commands::InitialFile>().0.lock().unwrap() = Some(p);
                 }
-                Some(cli::InitialOpenAction::RejectedNotMarkdown(p)) => {
-                    eprintln!("Refusing to open non-markdown file: {p}");
+                Some(cli::InitialOpenAction::RejectedUnsupported(p)) => {
+                    eprintln!("Refusing to open unsupported file type: {p}");
                 }
                 None => {}
             }
@@ -139,7 +141,7 @@ pub fn run() {
                         let _ = window.emit("open-folder", &path_str);
                         break;
                     }
-                    if is_markdown_file(path) {
+                    if is_supported_file(path) {
                         let _ = window.emit("open-file", &path_str);
                         break;
                     }
@@ -194,10 +196,10 @@ pub fn run() {
                         }
                         break;
                     }
-                    Some(cli::InitialOpenAction::RejectedNotMarkdown(p)) => {
-                        eprintln!("Refusing to open non-markdown file: {p}");
+                    Some(cli::InitialOpenAction::RejectedUnsupported(p)) => {
+                        eprintln!("Refusing to open unsupported file type: {p}");
                         // Keep scanning the URL list — the user may have
-                        // dropped a mix of markdown and non-markdown files.
+                        // dropped a mix of supported and unsupported files.
                     }
                     None => {}
                 }

@@ -41,7 +41,7 @@ pub fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
             Err(_) => continue,
         };
         let is_directory = metadata.is_dir();
-        if !is_directory && !crate::is_markdown_file(&entry_path) {
+        if !is_directory && !crate::is_supported_file(&entry_path) {
             continue;
         }
         let modified = metadata
@@ -97,7 +97,7 @@ pub fn list_markdown_files(path: String) -> Result<Vec<String>, String> {
             continue;
         }
         let p = entry.path();
-        if !crate::is_markdown_file(p) {
+        if !crate::is_supported_file(p) {
             continue;
         }
         if results.len() >= WALK_MAX_FILES {

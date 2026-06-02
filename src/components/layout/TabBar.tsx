@@ -1,5 +1,6 @@
 import { useTabsContext } from "@/contexts/TabsContext";
 import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
+import { EDITOR_MODE } from "@/lib/settings";
 import { FolderIcon } from "../icons/FolderIcon";
 
 function tabLabel(tab: Tab): string {
@@ -83,8 +84,8 @@ export function TabBar() {
           <button
             type="button"
             className="mode-toggle-btn"
-            data-active={activeFile.mode === "view" || undefined}
-            onClick={() => onModeChange(activeTab.id, "view")}
+            data-active={activeFile.mode === EDITOR_MODE.view || undefined}
+            onClick={() => onModeChange(activeTab.id, EDITOR_MODE.view)}
             aria-label="View mode"
             title="View"
           >
@@ -100,8 +101,8 @@ export function TabBar() {
           <button
             type="button"
             className="mode-toggle-btn"
-            data-active={activeFile.mode === "edit" || undefined}
-            onClick={() => onModeChange(activeTab.id, "edit")}
+            data-active={activeFile.mode === EDITOR_MODE.edit || undefined}
+            onClick={() => onModeChange(activeTab.id, EDITOR_MODE.edit)}
             aria-label="Edit mode"
             title="Edit"
           >
@@ -117,8 +118,8 @@ export function TabBar() {
           <button
             type="button"
             className="mode-toggle-btn"
-            data-active={activeFile.mode === "split" || undefined}
-            onClick={() => onModeChange(activeTab.id, "split")}
+            data-active={activeFile.mode === EDITOR_MODE.split || undefined}
+            onClick={() => onModeChange(activeTab.id, EDITOR_MODE.split)}
             aria-label="Split mode"
             title="Split"
           >

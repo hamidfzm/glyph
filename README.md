@@ -51,6 +51,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Wikilink autocomplete — type `[[` in a folder workspace to pick from existing notes; Tab/Enter to insert
 
 ### Viewer
+- Jupyter notebooks — open `.ipynb` files directly; markdown cells render with full markdown (math, code, diagrams), code cells are syntax-highlighted, and image, HTML, plain-text, and colourised stream/traceback outputs show under each cell with `In [n]:` / `Out [n]:` prompts (read-only)
 - Folder / workspace tabs — open a folder as a tab; browse `.md` files in the sidebar tree; right-click a file to open it in a new top-level tab
 - Multiple files in tabs — open, switch, close, middle-click to close
 - Command palette — `Cmd/Ctrl+K` to fuzzy-jump to any workspace file, document heading, or app action
@@ -60,9 +61,9 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Print & PDF export — `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
 - Live reload — file watcher auto-updates on external changes
 - Undo / redo for in-document edits — `Cmd/Ctrl+Z` and `Cmd/Ctrl+Shift+Z` reverse task-list checkbox toggles and other programmatic edits per tab
-- Drag and drop markdown files or folders to open
+- Drag and drop markdown files, notebooks, or folders to open
 - File associations — double-click `.md` files to open in Glyph
-- CLI support — `glyph README.md` opens a file; `glyph ~/notes/` opens a folder as a workspace
+- CLI support — `glyph README.md` opens a file; `glyph notebook.ipynb` opens a notebook; `glyph ~/notes/` opens a folder as a workspace
 - Recent files list
 - Session restore — open tabs persist across restarts
 
@@ -223,6 +224,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | GitHub-style alerts | ✅ | ✅ | ⚠️ | ❌ | ❌ | ⚠️ | ✅ |
 | YAML frontmatter | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
 | Emoji shortcodes | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | plugin |
+| Jupyter notebooks (`.ipynb`) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ### Editing
 

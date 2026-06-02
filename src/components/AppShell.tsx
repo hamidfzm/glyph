@@ -15,6 +15,7 @@ import { usePrint } from "@/hooks/usePrint";
 import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
+import { nextEditorMode } from "@/lib/settings";
 import { EmptyState } from "./layout/EmptyState";
 import { Sidebar } from "./layout/Sidebar";
 import { StatusBar } from "./layout/StatusBar";
@@ -97,9 +98,9 @@ export function AppShell() {
 
   const handleToggleEdit = useCallback(() => {
     if (!activeTabId) return;
-    const current = activeFile?.mode ?? "view";
-    const next = current === "view" ? "edit" : current === "edit" ? "split" : "view";
-    setTabMode(activeTabId, next);
+    // nextEditorMode treats an undefined mode as view, so no fallback branch
+    // is needed at the call site.
+    setTabMode(activeTabId, nextEditorMode(activeFile?.mode));
   }, [activeTabId, activeFile?.mode, setTabMode]);
 
   const handleAIActionFromMenu = useCallback(

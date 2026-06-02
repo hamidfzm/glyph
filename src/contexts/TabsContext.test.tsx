@@ -1,9 +1,35 @@
 import { invoke } from "@tauri-apps/api/core";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { TabsProvider, useTabsContext } from "./TabsContext";
+
+// Mock invoke so opening a file resolves with content/metadata. `read_file`
+// echoes a marker derived from the path so we can assert which file is active.
+function mockInvokeOpening(content: string) {
+  vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
+    switch (cmd) {
+      case "get_initial_folder":
+      case "get_initial_file":
+        return Promise.resolve(null);
+      case "read_file":
+        return Promise.resolve(content);
+      case "get_file_metadata":
+        return Promise.resolve({
+          name:
+            String(args?.path ?? "")
+              .split("/")
+              .pop() ?? "",
+          path: String(args?.path ?? ""),
+          size: 0,
+          modified: 0,
+        });
+      default:
+        return Promise.resolve(undefined);
+    }
+  }) as unknown as typeof invoke);
+}
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
@@ -32,6 +58,45 @@ describe("TabsProvider", () => {
 
   it("throws a clear error when the hook is used outside the provider", () => {
     expect(() => renderHook(() => useTabsContext())).toThrow(/TabsProvider/);
+  });
+
+  it("suppresses displayContent for a notebook (raw JSON is never the body)", async () => {
+    mockInvokeOpening('{"cells": []}');
+    const { result } = renderHook(() => useTabsContext(), { wrapper: wrap() });
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/work/analysis.ipynb");
+    });
+    expect(result.current.activeFile?.path).toBe("/work/analysis.ipynb");
+    // Even though the file has content, displayContent is null for notebooks.
+    expect(result.current.displayContent).toBeNull();
+  });
+
+  it("derives displayContent from editContent in edit mode for markdown", async () => {
+    mockInvokeOpening("# saved");
+    const { result } = renderHook(() => useTabsContext(), { wrapper: wrap() });
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/work/notes.md");
+    });
+    const id = result.current.activeTabId as string;
+    // View mode → displayContent is the saved content.
+    expect(result.current.displayContent).toBe("# saved");
+
+    await act(async () => {
+      result.current.setTabMode(id, "edit");
+    });
+    // Entering edit mode seeds editContent from content; before any typing the
+    // `editContent ?? content` fallback resolves to the saved content.
+    expect(result.current.displayContent).toBe("# saved");
+
+    await act(async () => {
+      result.current.updateEditContent(id, "# editing");
+    });
+    // After typing, displayContent reflects the in-memory editContent.
+    expect(result.current.displayContent).toBe("# editing");
   });
 
   it("opens the file returned by get_initial_file (CLI path) on mount", async () => {
