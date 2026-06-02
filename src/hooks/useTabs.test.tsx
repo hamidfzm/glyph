@@ -348,6 +348,34 @@ describe("useTabs file operations", () => {
     }
   });
 
+  it("setTabMode preserves editContent when switching between non-view modes", async () => {
+    // Covers the branch where mode !== view but editContent is already set, so
+    // the first-time seeding is skipped and the existing edit buffer survives.
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    act(() => {
+      result.current.setTabMode(tabId, "edit");
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "TYPED");
+    });
+    act(() => {
+      result.current.setTabMode(tabId, "split");
+    });
+
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.mode).toBe("split");
+      // editContent is not re-seeded from content; the typed buffer is kept.
+      expect(result.current.tabs[0].file.editContent).toBe("TYPED");
+    }
+  });
+
   it("updateEditContent marks the file dirty and markSaved clears it", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
@@ -519,6 +547,44 @@ describe("useTabs file operations", () => {
       await result.current.undoEdit(tabId);
     });
     expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("skips an external reload while the file is dirty in edit mode", async () => {
+    // Covers the guard that protects unsaved edits: a file-changed event must
+    // not overwrite the in-memory editContent when the tab is dirty.
+    let body = "original";
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ read_file: async () => body }) as typeof invoke,
+    );
+
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    act(() => {
+      result.current.setTabMode(tabId, "edit");
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "unsaved work");
+    });
+
+    body = "EXTERNAL CHANGE";
+    await act(async () => {
+      fileChanged.handler?.({ payload: "/p/a.md" });
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    // The dirty edit buffer is preserved; the external change is not pulled in
+    // (content stays the originally-loaded body, not the EXTERNAL CHANGE).
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.editContent).toBe("unsaved work");
+      expect(result.current.tabs[0].file.content).toBe("original");
+    }
   });
 
   it("saveScrollPosition + setActiveTab persists scrollTop to the leaving tab", async () => {

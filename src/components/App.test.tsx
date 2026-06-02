@@ -274,12 +274,23 @@ describe("App", () => {
       listeners["menu-find"]?.({ payload: undefined });
     });
 
-    // menu-toggle-edit: cycles view → edit. The lazy editor mock renders for
-    // edit mode, so its appearance confirms setTabMode fired.
+    // menu-toggle-edit cycles view → edit → split → view. Each step renders a
+    // different mock (editor, split, viewer), confirming the full nextEditorMode
+    // cycle runs through setTabMode.
     await act(async () => {
       listeners["menu-toggle-edit"]?.({ payload: undefined });
     });
     expect(await findByTestId("lazy-editor")).toBeInTheDocument();
+
+    await act(async () => {
+      listeners["menu-toggle-edit"]?.({ payload: undefined });
+    });
+    expect(await findByTestId("lazy-split")).toBeInTheDocument();
+
+    await act(async () => {
+      listeners["menu-toggle-edit"]?.({ payload: undefined });
+    });
+    expect(await findByTestId("markdown-viewer")).toBeInTheDocument();
 
     // menu-close-tab: closes the open file (covers closeActiveTab path).
     await act(async () => {

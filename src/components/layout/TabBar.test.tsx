@@ -137,6 +137,20 @@ describe("TabBar", () => {
     expect(tabEl?.getAttribute("data-tab-kind")).toBe("folder");
   });
 
+  it("calls setTabMode with the chosen mode from each toggle button", () => {
+    const setTabMode = vi.fn();
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0", setTabMode });
+
+    fireEvent.click(screen.getByRole("button", { name: "View mode" }));
+    expect(setTabMode).toHaveBeenCalledWith("tab-0", "view");
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit mode" }));
+    expect(setTabMode).toHaveBeenCalledWith("tab-0", "edit");
+
+    fireEvent.click(screen.getByRole("button", { name: "Split mode" }));
+    expect(setTabMode).toHaveBeenCalledWith("tab-0", "split");
+  });
+
   it("hides mode toggle when active tab is a folder with no current file", () => {
     renderTabBar({
       tabs: [makeFolderTab(0, "/Users/me/notes")],

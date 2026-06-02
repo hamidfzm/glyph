@@ -39,6 +39,23 @@ export const EDITOR_MODE = {
 
 export type EditorMode = (typeof EDITOR_MODE)[keyof typeof EDITOR_MODE];
 
+// Order the per-tab mode toggle cycles through: view → edit → split → view.
+const EDITOR_MODE_CYCLE: readonly EditorMode[] = [
+  EDITOR_MODE.view,
+  EDITOR_MODE.edit,
+  EDITOR_MODE.split,
+];
+
+/**
+ * The next mode when cycling the editor toggle (wraps view → edit → split →
+ * view). An undefined/unknown current mode is treated as `view`, so the cycle
+ * starts at `edit`.
+ */
+export function nextEditorMode(current: EditorMode | undefined): EditorMode {
+  const idx = current ? EDITOR_MODE_CYCLE.indexOf(current) : 0;
+  return EDITOR_MODE_CYCLE[(idx + 1) % EDITOR_MODE_CYCLE.length];
+}
+
 export interface PersistedTab {
   kind: "file" | "folder";
   path: string;
