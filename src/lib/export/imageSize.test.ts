@@ -68,4 +68,19 @@ describe("decodeDataUri", () => {
   it("returns null when base64 can't be decoded", () => {
     expect(decodeDataUri("data:image/png;base64,@@not-base64@@")).toBeNull();
   });
+
+  it("advances past stray non-marker bytes in the JPEG scan", () => {
+    // A non-0xFF byte at the scan position (index 2) must be skipped before the
+    // SOF0 marker at index 3.
+    const bytes = [0xff, 0xd8, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x07, 0x00, 0x09];
+    expect(decodeDataUri(dataUri("image/jpeg", bytes))).toMatchObject({ width: 9, height: 7 });
+  });
+
+  it("skips non-frame markers (e.g. DHT 0xC4) when locating the JPEG SOF", () => {
+    const bytes = [
+      0xff, 0xd8, 0xff, 0xc4, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x07,
+      0x00, 0x09,
+    ];
+    expect(decodeDataUri(dataUri("image/jpeg", bytes))).toMatchObject({ width: 9, height: 7 });
+  });
 });

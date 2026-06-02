@@ -151,7 +151,13 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
     ];
   }
   if (tag === "p") {
-    const onlyImg = el.children.length === 1 && el.children[0].tagName.toLowerCase() === "img";
+    // A paragraph whose sole content is an image (the common `![](src)` case)
+    // becomes a block image. Mixed text+image paragraphs fall through to the
+    // inline path, where the image degrades to its alt text.
+    const onlyImg =
+      el.children.length === 1 &&
+      el.children[0].tagName.toLowerCase() === "img" &&
+      !(el.textContent ?? "").trim();
     if (onlyImg) {
       const img = imageNode(el.children[0]);
       return img ? [img] : [];

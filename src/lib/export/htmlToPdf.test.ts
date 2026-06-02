@@ -71,14 +71,70 @@ describe("convertHtmlToPdf", () => {
   });
 
   it("embeds a standalone block-level image", () => {
-    const png = new Array(24).fill(0);
-    png[0] = 0x89;
-    png[1] = 0x50;
-    png[19] = 4;
-    png[23] = 2;
-    let bin = "";
-    for (const b of png) bin += String.fromCharCode(b);
-    const content = convertHtmlToPdf(`<img src="data:image/png;base64,${btoa(bin)}">`);
+    const content = convertHtmlToPdf(`<img src="${pngDataUri()}">`);
     expect(JSON.stringify(content)).toContain('"image"');
   });
+
+  it("covers inline formatting, breaks, comments, and bare anchors", () => {
+    const content = convertHtmlToPdf(
+      "<p><strong>b</strong><em>i</em><del>s</del><code>c</code>plain" +
+        "<br><a>bare</a><!-- comment --><span>span</span></p>",
+    );
+    expect(content).toHaveLength(1);
+    // The strike run carries a lineThrough decoration.
+    expect(JSON.stringify(content)).toContain("lineThrough");
+  });
+
+  it("falls back to KaTeX textContent when there's no annotation", () => {
+    const content = convertHtmlToPdf('<p><span class="katex">x2</span></p>');
+    expect(JSON.stringify(content)).toContain("x2");
+  });
+
+  it("uses inline image alt text and skips alt-less inline images", () => {
+    const withAlt = convertHtmlToPdf('<p>see <img src="https://x/y.png" alt="chart"></p>');
+    expect(JSON.stringify(withAlt)).toContain("chart");
+    // Alt-less inline image contributes nothing but the surrounding text stays.
+    const noAlt = convertHtmlToPdf('<p>see <img src="https://x/y.png"></p>');
+    expect(JSON.stringify(noAlt)).toContain("see");
+  });
+
+  it("renders a paragraph that is only an undecodable image as empty", () => {
+    const content = convertHtmlToPdf('<p><img src="data:image/gif;base64,AAAA"></p>');
+    expect(JSON.stringify(content)).not.toContain('"image"');
+  });
+
+  it("builds tables with header and data rows, ignoring empty rows", () => {
+    const content = convertHtmlToPdf(
+      "<table><thead><tr><th>A</th><th>B</th></tr></thead>" +
+        "<tbody><tr></tr><tr><td>1</td><td>2</td></tr></tbody></table>",
+    );
+    const table = content.find(
+      (c) => typeof c === "object" && c !== null && "table" in (c as object),
+    ) as { table: { body: unknown[] } } | undefined;
+    // Header row + one data row; the empty <tr> is dropped.
+    expect(table?.table.body).toHaveLength(2);
+  });
+
+  it("renders every heading level", () => {
+    const content = convertHtmlToPdf(
+      "<h1>1</h1><h2>2</h2><h3>3</h3><h4>4</h4><h5>5</h5><h6>6</h6>",
+    );
+    expect(content).toHaveLength(6);
+  });
+
+  it("drops whitespace-only text nodes and empty paragraphs", () => {
+    expect(convertHtmlToPdf("   ")).toHaveLength(1); // fallback empty node
+    expect(convertHtmlToPdf("<p></p>")).toHaveLength(1);
+  });
 });
+
+function pngDataUri(): string {
+  const png = new Array(24).fill(0);
+  png[0] = 0x89;
+  png[1] = 0x50;
+  png[19] = 4;
+  png[23] = 2;
+  let bin = "";
+  for (const b of png) bin += String.fromCharCode(b);
+  return `data:image/png;base64,${btoa(bin)}`;
+}
