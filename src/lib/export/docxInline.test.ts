@@ -69,4 +69,27 @@ describe("inlineRuns", () => {
   it("skips raw SVG", () => {
     expect(inlineRuns(el("<svg><path/></svg>"))).toHaveLength(0);
   });
+
+  it("skips comment and empty text nodes", () => {
+    const div = document.createElement("div");
+    div.innerHTML = "a<!-- c -->b";
+    div.appendChild(document.createTextNode("")); // zero-length text node
+    const runs = inlineRuns(div);
+    expect(runs).toHaveLength(2); // only "a" and "b"
+  });
+
+  it("uses KaTeX textContent without an annotation and skips empty math", () => {
+    expect(inlineRuns(el('<span class="katex">x2</span>'))).toHaveLength(1);
+    expect(inlineRuns(el('<span class="katex">   </span>'))).toHaveLength(0);
+  });
+
+  it("falls back to empty text for an image with no src and no alt", () => {
+    const runs = inlineRuns(el("<img>"));
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toBeInstanceOf(TextRun);
+  });
+
+  it("recurses through unknown inline tags", () => {
+    expect(inlineRuns(el("<sup>2</sup>"))).toHaveLength(1);
+  });
 });

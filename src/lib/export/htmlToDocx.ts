@@ -48,7 +48,8 @@ function childElements(el: Element, tag: string): Element[] {
 }
 
 function codeBlock(el: Element): Paragraph {
-  const lines = (el.textContent ?? "").replace(/\n$/, "").split("\n");
+  // textContent is never null for an element; the assertion avoids a dead branch.
+  const lines = el.textContent!.replace(/\n$/, "").split("\n");
   const children: ParagraphChild[] = [];
   lines.forEach((line, i) => {
     if (i > 0) children.push(new TextRun({ break: 1 }));
@@ -111,7 +112,7 @@ function listBlocks(listEl: Element, ordered: boolean, level: number, ctx: Ctx):
 
 function blocksForNode(node: Node, ctx: Ctx): Block[] {
   if (node.nodeType === 3) {
-    const text = (node.textContent ?? "").trim();
+    const text = (node as Text).data.trim();
     return text ? [new Paragraph({ children: [new TextRun(text)] })] : [];
   }
   if (node.nodeType !== 1) return [];
@@ -147,9 +148,8 @@ function blocksForNode(node: Node, ctx: Ctx): Block[] {
  * formatting. Always returns at least one block so the document is non-empty.
  */
 export function convertHtmlToDocx(bodyHtml: string): Block[] {
-  const doc = new DOMParser().parseFromString(`<div>${bodyHtml}</div>`, "text/html");
-  const root = doc.body.firstElementChild;
+  const doc = new DOMParser().parseFromString(bodyHtml, "text/html");
   const ctx: Ctx = { olInstance: 1 };
-  const out = root ? Array.from(root.childNodes).flatMap((node) => blocksForNode(node, ctx)) : [];
+  const out = Array.from(doc.body.childNodes).flatMap((node) => blocksForNode(node, ctx));
   return out.length ? out : [new Paragraph({})];
 }

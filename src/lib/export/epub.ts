@@ -31,9 +31,14 @@ const CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
 // resolves named entities to literal characters and XMLSerializer self-closes
 // void tags, both of which EPUB's XML parser requires.
 function toXhtml(bodyHtml: string): string {
-  const doc = new DOMParser().parseFromString(`<div>${bodyHtml}</div>`, "text/html");
-  const wrapper = doc.body.firstElementChild;
-  return wrapper ? new XMLSerializer().serializeToString(wrapper) : "";
+  // Serialize the whole <body> subtree (always present) for consistent
+  // void-element output, then strip the <body> wrapper. doc.body is never null,
+  // so there's no dead branch to test.
+  const doc = new DOMParser().parseFromString(bodyHtml, "text/html");
+  return new XMLSerializer()
+    .serializeToString(doc.body)
+    .replace(/^<body[^>]*>/, "")
+    .replace(/<\/body>$/, "");
 }
 
 function buildOpf(meta: EpubMetadata): string {

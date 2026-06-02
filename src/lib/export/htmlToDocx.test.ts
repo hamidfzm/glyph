@@ -84,4 +84,35 @@ describe("convertHtmlToDocx", () => {
     expect(convertHtmlToDocx("   ")).toHaveLength(1);
     expect(convertHtmlToDocx("<span></span>")).toHaveLength(1);
   });
+
+  it("ignores empty table rows", () => {
+    const blocks = convertHtmlToDocx("<table><tr></tr><tr><td>1</td></tr></table>");
+    expect(blocks.some((b) => b instanceof Table)).toBe(true);
+  });
+
+  it("nests an ordered sublist inside a list item", () => {
+    const blocks = convertHtmlToDocx("<ul><li>a<ol><li>b</li></ol></li></ul>");
+    expect(blocks.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("skips comment nodes at the block level", () => {
+    expect(convertHtmlToDocx("<!-- c -->text")).toHaveLength(1);
+  });
+
+  it("renders an unknown block-ish element via its inline content", () => {
+    expect(convertHtmlToDocx("<kbd>x</kbd>")).toHaveLength(1);
+  });
+
+  it("keeps non-list element children of a list item", () => {
+    // Exercises the clone-removal loop's branch where a child is not ul/ol.
+    const blocks = convertHtmlToDocx("<ul><li><strong>bold</strong> text</li></ul>");
+    expect(blocks).toHaveLength(1);
+  });
+
+  it("handles text, comment, and whitespace nodes inside a container", () => {
+    // The container recurses into a real text node, a comment, and a
+    // whitespace-only text node — covering both block text-node branches.
+    const blocks = convertHtmlToDocx("<div>hello<!-- c --> </div>");
+    expect(blocks).toHaveLength(1);
+  });
 });

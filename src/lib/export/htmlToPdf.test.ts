@@ -126,7 +126,70 @@ describe("convertHtmlToPdf", () => {
     expect(convertHtmlToPdf("   ")).toHaveLength(1); // fallback empty node
     expect(convertHtmlToPdf("<p></p>")).toHaveLength(1);
   });
+
+  it("skips inline SVG and empty math while keeping surrounding text", () => {
+    const content = convertHtmlToPdf('<p>a<svg></svg><span class="katex">   </span>b</p>');
+    const json = JSON.stringify(content);
+    expect(json).toContain("a");
+    expect(json).toContain("b");
+  });
+
+  it("embeds a JPEG block image", () => {
+    const content = convertHtmlToPdf(`<p><img src="${jpgDataUri()}"></p>`);
+    expect(JSON.stringify(content)).toContain('"image"');
+  });
+
+  it("renders a paragraph whose only image is undecodable as empty", () => {
+    const content = convertHtmlToPdf('<p><img src="https://example.com/x.png"></p>');
+    expect(JSON.stringify(content)).not.toContain('"image"');
+  });
+
+  it("nests an ordered sublist in a PDF list", () => {
+    const content = convertHtmlToPdf("<ul><li>a<ol><li>b</li></ol></li></ul>");
+    expect(JSON.stringify(content)).toContain('"ol"');
+  });
+
+  it("handles a table that has only an empty row", () => {
+    const content = convertHtmlToPdf("<table><tr></tr></table>");
+    const table = content.find(
+      (c) => typeof c === "object" && c !== null && "table" in (c as object),
+    );
+    expect(table).toBeTruthy();
+  });
+
+  it("skips comment nodes and renders a blockquote without inner paragraphs", () => {
+    expect(convertHtmlToPdf("<!-- c -->text")).toHaveLength(1);
+    const quote = convertHtmlToPdf("<blockquote>quote text</blockquote>");
+    expect(JSON.stringify(quote)).toContain("quote text");
+  });
+
+  it("drops a standalone undecodable image", () => {
+    expect(convertHtmlToPdf('<img src="data:image/svg+xml;base64,AAAA">')).toHaveLength(1);
+  });
+
+  it("keeps non-list element children of a list item", () => {
+    const content = convertHtmlToPdf("<ul><li><strong>bold</strong> text</li></ul>");
+    expect(JSON.stringify(content)).toContain("bold");
+  });
+
+  it("renders a paragraph whose only image has no src as empty", () => {
+    const content = convertHtmlToPdf("<p><img></p>");
+    expect(JSON.stringify(content)).not.toContain('"image"');
+  });
+
+  it("handles text, comment, and whitespace nodes inside a container", () => {
+    const content = convertHtmlToPdf("<div>hello<!-- c --> </div>");
+    expect(JSON.stringify(content)).toContain("hello");
+  });
 });
+
+function jpgDataUri(): string {
+  // FFD8 ... SOF0 (FFC0) declaring 9x7, enough for pdfmake to accept it.
+  const bytes = [0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x07, 0x00, 0x09, 0xff, 0xd9];
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return `data:image/jpeg;base64,${btoa(bin)}`;
+}
 
 function pngDataUri(): string {
   const png = new Array(24).fill(0);

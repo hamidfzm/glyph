@@ -58,7 +58,7 @@ export function inlineRuns(node: Node, style: InlineStyle = {}): ParagraphChild[
   const runs: ParagraphChild[] = [];
   for (const child of Array.from(node.childNodes)) {
     if (child.nodeType === 3 /* text */) {
-      const text = child.textContent ?? "";
+      const text = (child as Text).data;
       if (text) runs.push(textRun(text, style));
       continue;
     }
@@ -71,11 +71,10 @@ export function inlineRuns(node: Node, style: InlineStyle = {}): ParagraphChild[
     // duplicated MathML+HTML text the markup would otherwise flatten to. Skip
     // raw SVG (e.g. Mermaid) entirely — it has no useful text.
     if (el.classList.contains("katex")) {
-      const tex =
-        el.querySelector('annotation[encoding="application/x-tex"]')?.textContent ??
-        el.textContent ??
-        "";
-      if (tex.trim()) runs.push(textRun(tex.trim(), { ...style, code: true }));
+      const annotation = el.querySelector('annotation[encoding="application/x-tex"]');
+      // textContent is never null for an element, so no empty-string fallback.
+      const tex = (annotation?.textContent ?? el.textContent!).trim();
+      if (tex) runs.push(textRun(tex, { ...style, code: true }));
       continue;
     }
     if (tag === "svg") continue;

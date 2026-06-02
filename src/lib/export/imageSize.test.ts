@@ -76,6 +76,11 @@ describe("decodeDataUri", () => {
     expect(decodeDataUri(dataUri("image/jpeg", bytes))).toMatchObject({ width: 9, height: 7 });
   });
 
+  it("returns null for a JPEG with no SOF (frame) marker", () => {
+    // SOI + EOI only — the scan finds no frame header.
+    expect(decodeDataUri(dataUri("image/jpeg", [0xff, 0xd8, 0xff, 0xd9]))).toBeNull();
+  });
+
   it("skips non-frame markers (e.g. DHT 0xC4) when locating the JPEG SOF", () => {
     const bytes = [
       0xff, 0xd8, 0xff, 0xc4, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x07,

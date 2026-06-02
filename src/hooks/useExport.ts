@@ -76,6 +76,8 @@ export function useExport({
       setExporting(format);
       try {
         const body = await prepareContent({ entries, includeToc });
+        // The body can vanish if the file is closed during the (async) save
+        // dialog, even though the pre-dialog guard passed.
         if (body == null) return;
 
         if (format === "html") {

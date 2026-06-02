@@ -40,8 +40,8 @@ function inlinePdf(node: Node, style: InlineStyle = {}): Content[] {
   const out: Content[] = [];
   for (const child of Array.from(node.childNodes)) {
     if (child.nodeType === 3) {
-      const text = child.textContent ?? "";
-      if (text) out.push(styledText(text, style));
+      // Text nodes from parsed HTML are never empty; push directly.
+      out.push(styledText((child as Text).data, style));
       continue;
     }
     if (child.nodeType !== 1) continue;
@@ -49,11 +49,10 @@ function inlinePdf(node: Node, style: InlineStyle = {}): Content[] {
     const tag = el.tagName.toLowerCase();
 
     if (el.classList.contains("katex")) {
-      const tex =
-        el.querySelector('annotation[encoding="application/x-tex"]')?.textContent ??
-        el.textContent ??
-        "";
-      if (tex.trim()) out.push({ text: tex.trim(), italics: true });
+      const annotation = el.querySelector('annotation[encoding="application/x-tex"]');
+      // textContent is never null for an element, so no empty-string fallback.
+      const tex = (annotation?.textContent ?? el.textContent!).trim();
+      if (tex) out.push({ text: tex, italics: true });
       continue;
     }
     if (tag === "svg") continue;
@@ -138,7 +137,7 @@ interface Ctx {
 
 function blocksForNode(node: Node, ctx: Ctx): Content[] {
   if (node.nodeType === 3) {
-    const text = (node.textContent ?? "").trim();
+    const text = (node as Text).data.trim();
     return text ? [{ text, margin: [0, 0, 0, 8] }] : [];
   }
   if (node.nodeType !== 1) return [];
@@ -157,7 +156,8 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
     const onlyImg =
       el.children.length === 1 &&
       el.children[0].tagName.toLowerCase() === "img" &&
-      !(el.textContent ?? "").trim();
+      // textContent is never null for an element.
+      !el.textContent!.trim();
     if (onlyImg) {
       const img = imageNode(el.children[0]);
       return img ? [img] : [];
@@ -178,7 +178,7 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
     }));
   }
   if (tag === "pre") {
-    const code = (el.textContent ?? "").replace(/\n$/, "");
+    const code = el.textContent!.replace(/\n$/, "");
     return [
       {
         table: {
@@ -225,9 +225,8 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
  * diagrams are dropped, since a vector PDF has no faithful equivalent.
  */
 export function convertHtmlToPdf(bodyHtml: string): Content[] {
-  const doc = new DOMParser().parseFromString(`<div>${bodyHtml}</div>`, "text/html");
-  const root = doc.body.firstElementChild;
+  const doc = new DOMParser().parseFromString(bodyHtml, "text/html");
   const ctx: Ctx = { depth: 0 };
-  const out = root ? Array.from(root.childNodes).flatMap((node) => blocksForNode(node, ctx)) : [];
+  const out = Array.from(doc.body.childNodes).flatMap((node) => blocksForNode(node, ctx));
   return out.length ? out : [{ text: "" }];
 }

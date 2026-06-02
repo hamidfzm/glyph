@@ -118,6 +118,21 @@ describe("useExport", () => {
     expect(vi.mocked(invoke).mock.calls.some((c) => c[0] === "print_document")).toBe(false);
   });
 
+  it("aborts without writing if the document is closed during the save dialog", async () => {
+    setBody();
+    // The file is closed (body removed) while the native dialog is open.
+    vi.mocked(save).mockImplementation(async () => {
+      document.body.innerHTML = "";
+      return "/out.html";
+    });
+    const { result } = renderHook(() => useExport(options()));
+    await act(async () => {
+      await result.current.exportHtml();
+    });
+    expect(save).toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("logs and recovers when a write fails", async () => {
     setBody();
     vi.mocked(save).mockResolvedValue("/out.html");

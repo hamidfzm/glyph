@@ -9,8 +9,8 @@ export interface ExportMeta {
 }
 
 function basename(path: string): string {
-  const name = path.split(/[\\/]/).pop() ?? "";
-  return name.replace(/\.[^.]+$/, "");
+  // Strip the directory prefix (POSIX or Windows separators) then the extension.
+  return path.replace(/^.*[\\/]/, "").replace(/\.[^.]+$/, "");
 }
 
 /**
