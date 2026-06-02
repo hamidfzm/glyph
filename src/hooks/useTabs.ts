@@ -7,7 +7,7 @@ import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/li
 import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
-import type { EditorMode } from "@/lib/settings";
+import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
 
 interface FileMetadata {
@@ -224,7 +224,7 @@ export function useTabs(options: UseTabsOptions) {
         await invoke("watch_file", { path });
         // Notebooks are read-only; open straight into the viewer regardless of
         // the user's default editor mode.
-        const mode = isNotebookFile(path) ? "view" : optionsRef.current.defaultEditorMode;
+        const mode = isNotebookFile(path) ? EDITOR_MODE.view : optionsRef.current.defaultEditorMode;
         const newTab: FileTab = {
           id,
           kind: "file",
@@ -265,7 +265,7 @@ export function useTabs(options: UseTabsOptions) {
           invoke("unwatch_file", { path: previousFilePath }).catch(() => {});
         }
         await invoke("watch_file", { path });
-        const mode = isNotebookFile(path) ? "view" : optionsRef.current.defaultEditorMode;
+        const mode = isNotebookFile(path) ? EDITOR_MODE.view : optionsRef.current.defaultEditorMode;
         const newFile: FileState = { ...makeFileState(path, mode), content, metadata };
         setState((prev) => ({
           ...prev,
@@ -457,7 +457,7 @@ export function useTabs(options: UseTabsOptions) {
     (id: string, mode: EditorMode) => {
       updateActiveFile(id, (f) => {
         // When entering edit mode, initialize editContent from content
-        if (mode !== "view" && f.editContent === null) {
+        if (mode !== EDITOR_MODE.view && f.editContent === null) {
           return { ...f, mode, editContent: f.content };
         }
         return { ...f, mode };
@@ -505,7 +505,7 @@ export function useTabs(options: UseTabsOptions) {
       const file = activeFileOf(tab);
       if (!file) return false;
 
-      if (file.mode !== "view") {
+      if (file.mode !== EDITOR_MODE.view) {
         updateActiveFile(id, (f) => ({ ...f, editContent: next, dirty: true }));
         return true;
       }
@@ -532,7 +532,7 @@ export function useTabs(options: UseTabsOptions) {
       const file = activeFileOf(tab);
       if (!file?.content) return;
 
-      const isEditing = file.mode !== "view";
+      const isEditing = file.mode !== EDITOR_MODE.view;
       const source = isEditing ? (file.editContent ?? file.content) : file.content;
       const next = toggleTaskAtLine(source, line);
       if (next === source) return;
@@ -679,7 +679,7 @@ export function useTabs(options: UseTabsOptions) {
         const file = activeFileOf(matchingTab);
         if (!file) return;
         // Skip reload if the file is in edit mode with unsaved changes
-        if (file.mode !== "view" && file.dirty) return;
+        if (file.mode !== EDITOR_MODE.view && file.dirty) return;
         // Skip if this file-changed was triggered by our own auto-save —
         // re-syncing identical content into the editor would dismiss any
         // active autocomplete popup mid-completion.

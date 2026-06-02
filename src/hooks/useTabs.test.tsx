@@ -619,6 +619,30 @@ describe("useTabs dialog and events", () => {
     expect(updated?.kind === "folder" ? updated.file?.path : null).toBe("/p/ws/note.md");
   });
 
+  it("opens a notebook inside a folder tab in view mode", async () => {
+    // Covers the notebook → view-mode branch in openFileInFolderTab, mirroring
+    // the top-level openFile case: a `.ipynb` is read-only regardless of the
+    // configured default editor mode.
+    const { result } = renderHook(() =>
+      useTabs({ ...defaultOptions(), defaultEditorMode: "edit" }),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folderTab = result.current.tabs.find((t) => t.kind === "folder");
+
+    await act(async () => {
+      await result.current.openFileInFolderTab(folderTab!.id, "/p/ws/analysis.ipynb");
+    });
+
+    const updated = result.current.tabs.find((t) => t.id === folderTab!.id);
+    const file = updated?.kind === "folder" ? updated.file : null;
+    expect(file?.path).toBe("/p/ws/analysis.ipynb");
+    expect(file?.mode).toBe("view");
+  });
+
   it("openFileInFolderTab refuses to load an unsupported extension", async () => {
     // Matches openFile: a `.txt` / `.html` / etc. dropped onto a folder tab
     // must not become the active file. Defends the renderer from arbitrary

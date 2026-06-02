@@ -3,6 +3,7 @@ import { useTabsContext } from "@/contexts/TabsContext";
 import { activeFileOf } from "@/hooks/useTabs";
 import { useTaskList } from "@/hooks/useTaskList";
 import { isNotebookFile } from "@/lib/notebookExtensions";
+import { EDITOR_MODE } from "@/lib/settings";
 import { MarkdownEditor, SplitView } from "./editor/lazyEditor";
 import { MarkdownViewer } from "./markdown/MarkdownViewer";
 import { NotebookSource, NotebookSplit, NotebookViewer } from "./notebook/lazyNotebook";
@@ -61,9 +62,9 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   // would let autosave write malformed content back and corrupt the file.
   if (isNotebookFile(file.path)) {
     const NotebookComponent =
-      file.mode === "view"
+      file.mode === EDITOR_MODE.view
         ? NotebookViewer
-        : file.mode === "split"
+        : file.mode === EDITOR_MODE.split
           ? NotebookSplit
           : NotebookSource;
     return (
@@ -79,7 +80,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     );
   }
 
-  if (file.mode === "edit") {
+  if (file.mode === EDITOR_MODE.edit) {
     return (
       <div className="flex-1 overflow-hidden">
         <MarkdownEditor
@@ -92,7 +93,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     );
   }
 
-  if (file.mode === "split") {
+  if (file.mode === EDITOR_MODE.split) {
     return (
       <div className="flex-1 overflow-hidden">
         <SplitView

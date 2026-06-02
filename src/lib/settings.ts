@@ -28,7 +28,16 @@ export interface LayoutSettings {
   swapSidebarSides: boolean;
 }
 
-export type EditorMode = "view" | "edit" | "split";
+// Editor modes for a document tab. Defined as a constant object so call sites
+// reference `EDITOR_MODE.view` etc. instead of bare string literals; the
+// `EditorMode` union is derived from it so the two never drift.
+export const EDITOR_MODE = {
+  view: "view",
+  edit: "edit",
+  split: "split",
+} as const;
+
+export type EditorMode = (typeof EDITOR_MODE)[keyof typeof EDITOR_MODE];
 
 export interface PersistedTab {
   kind: "file" | "folder";
@@ -106,7 +115,7 @@ export const DEFAULT_SETTINGS: Settings = {
     recentFiles: [],
     openTabs: [],
     activeTabPath: "",
-    defaultEditorMode: "view",
+    defaultEditorMode: EDITOR_MODE.view,
   },
   ai: {
     provider: "none",
