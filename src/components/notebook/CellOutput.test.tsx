@@ -49,6 +49,17 @@ describe("CellOutput", () => {
     expect(container.querySelector(".nb-output-error")?.textContent).toContain("ValueError: bad");
   });
 
+  it("falls back to ename: evalue when the traceback is empty", () => {
+    const out: NotebookOutput = {
+      kind: "error",
+      ename: "KeyError",
+      evalue: "'missing'",
+      traceback: [],
+    };
+    const { container } = render(<CellOutput output={out} />);
+    expect(container.querySelector(".nb-output-error")?.textContent).toBe("KeyError: 'missing'");
+  });
+
   it("shows a placeholder for unsupported interactive output", () => {
     const out: NotebookOutput = {
       kind: "data",

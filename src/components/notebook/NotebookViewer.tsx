@@ -43,6 +43,9 @@ export function NotebookViewer({
     } catch (err) {
       return {
         notebook: null,
+        // parseNotebook only throws NotebookParseError; the String(err) arm is a
+        // defensive fallback for any unexpected throw.
+        /* c8 ignore next */
         error: err instanceof NotebookParseError ? err.message : String(err),
       };
     }
@@ -74,6 +77,30 @@ export function NotebookViewer({
 
   const cellKey = makeCellKeyer();
 
+  const renderBody = () => {
+    if (parsed.error) {
+      return (
+        <div className="nb-error-state">
+          <p className="nb-error-title">Couldn't render this notebook</p>
+          <p className="nb-error-detail">{parsed.error}</p>
+        </div>
+      );
+    }
+    // On the non-error path the parser always returns a notebook.
+    const notebook = parsed.notebook as NonNullable<typeof parsed.notebook>;
+    if (notebook.cells.length === 0) {
+      return <div className="nb-empty-state">This notebook has no cells.</div>;
+    }
+    return notebook.cells.map((cell) => (
+      <NotebookCell
+        key={cellKey(cell.type)}
+        cell={cell}
+        language={notebook.languageHint}
+        filePath={filePath}
+      />
+    ));
+  };
+
   return (
     <div className="flex-1 relative min-h-0 min-w-0">
       {searchOpen && (
@@ -93,23 +120,7 @@ export function NotebookViewer({
         style={{ scrollPaddingTop: "16px" }}
       >
         <div ref={contentRef} className="notebook-body px-8 py-6">
-          {parsed.error ? (
-            <div className="nb-error-state">
-              <p className="nb-error-title">Couldn't render this notebook</p>
-              <p className="nb-error-detail">{parsed.error}</p>
-            </div>
-          ) : parsed.notebook && parsed.notebook.cells.length === 0 ? (
-            <div className="nb-empty-state">This notebook has no cells.</div>
-          ) : (
-            parsed.notebook?.cells.map((cell) => (
-              <NotebookCell
-                key={cellKey(cell.type)}
-                cell={cell}
-                language={parsed.notebook?.languageHint ?? "python"}
-                filePath={filePath}
-              />
-            ))
-          )}
+          {renderBody()}
         </div>
       </div>
     </div>

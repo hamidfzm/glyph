@@ -26,11 +26,15 @@ function mimeToString(value: unknown): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return joinSource(value);
   if (value && typeof value === "object") {
+    /* c8 ignore start -- defensive: input always comes from JSON.parse, which
+       cannot produce a value JSON.stringify would throw on (no circular refs,
+       no BigInt), so the catch is unreachable in practice. */
     try {
       return JSON.stringify(value, null, 2);
     } catch {
       return "";
     }
+    /* c8 ignore stop */
   }
   return value == null ? "" : String(value);
 }
@@ -139,7 +143,8 @@ export function parseNotebook(jsonText: string): Notebook {
   try {
     parsed = JSON.parse(jsonText);
   } catch (err) {
-    throw new NotebookParseError(`Not valid JSON: ${err instanceof Error ? err.message : err}`);
+    // JSON.parse only ever throws a SyntaxError, so `err` is always an Error.
+    throw new NotebookParseError(`Not valid JSON: ${(err as Error).message}`);
   }
   if (!parsed || typeof parsed !== "object") {
     throw new NotebookParseError("Notebook root is not an object");

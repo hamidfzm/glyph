@@ -199,4 +199,119 @@ describe("parseNotebook", () => {
   it("accepts an empty but well-formed notebook", () => {
     expect(parseNotebook(nb([])).cells).toEqual([]);
   });
+
+  it("throws when the root JSON is not an object", () => {
+    expect(() => parseNotebook("42")).toThrow(NotebookParseError);
+    expect(() => parseNotebook("null")).toThrow(NotebookParseError);
+  });
+
+  it("defaults nbformat to 4 when missing or non-numeric", () => {
+    const noVersion = JSON.stringify({ cells: [] });
+    expect(parseNotebook(noVersion).nbformat).toBe(4);
+  });
+
+  it("drops non-object cells and outputs", () => {
+    const json = JSON.stringify({
+      nbformat: 4,
+      cells: [
+        null,
+        "not a cell",
+        {
+          cell_type: "code",
+          source: "x",
+          outputs: [null, 5, { output_type: "stream", text: "ok" }],
+        },
+      ],
+    });
+    const result = parseNotebook(json);
+    expect(result.cells).toHaveLength(1);
+    const out = result.cells[0];
+    if (out.type === "code") expect(out.outputs).toHaveLength(1);
+  });
+
+  it("treats a non-array outputs field as empty", () => {
+    const result = parseNotebook(nb([{ cell_type: "code", source: "x", outputs: "oops" }]));
+    const out = result.cells[0];
+    if (out.type === "code") expect(out.outputs).toEqual([]);
+  });
+
+  it("classifies stderr stream output by name", () => {
+    const result = parseNotebook(
+      nb([
+        {
+          cell_type: "code",
+          source: "",
+          outputs: [{ output_type: "stream", name: "stderr", text: "boom" }],
+        },
+      ]),
+    );
+    const out = result.cells[0];
+    if (out.type === "code" && out.outputs[0].kind === "stream") {
+      expect(out.outputs[0].name).toBe("stderr");
+    }
+  });
+
+  it("defaults error fields when missing", () => {
+    const result = parseNotebook(
+      nb([{ cell_type: "code", source: "", outputs: [{ output_type: "error" }] }]),
+    );
+    const out = result.cells[0];
+    if (out.type === "code" && out.outputs[0].kind === "error") {
+      expect(out.outputs[0].ename).toBe("");
+      expect(out.outputs[0].evalue).toBe("");
+      expect(out.outputs[0].traceback).toEqual([]);
+    }
+  });
+
+  it("renders a v3 heading cell with a default level when level is missing", () => {
+    const result = parseNotebook(nb([{ cell_type: "heading", source: "Title" }]));
+    expect(result.cells[0]).toEqual({ type: "markdown", source: "# Title" });
+  });
+
+  it("ignores worksheets entries that lack a cells array", () => {
+    const json = JSON.stringify({
+      nbformat: 3,
+      worksheets: [null, { foo: 1 }, { cells: [{ cell_type: "markdown", source: "hi" }] }],
+    });
+    const result = parseNotebook(json);
+    expect(result.cells).toEqual([{ type: "markdown", source: "hi" }]);
+  });
+
+  it("coerces non-string array source elements to empty strings", () => {
+    // joinSource maps a non-string array element to "" before joining.
+    const result = parseNotebook(nb([{ cell_type: "markdown", source: ["a", 5, "b"] }]));
+    expect(result.cells[0]).toEqual({ type: "markdown", source: "ab" });
+  });
+
+  it("renders a null mimetype payload as an empty string", () => {
+    // mimeToString hits the `value == null ? "" : String(value)` null arm.
+    const result = parseNotebook(
+      nb([
+        {
+          cell_type: "code",
+          source: "",
+          outputs: [{ output_type: "execute_result", data: { "text/plain": null } }],
+        },
+      ]),
+    );
+    const out = result.cells[0];
+    if (out.type === "code" && out.outputs[0].kind === "data") {
+      expect(out.outputs[0].data["text/plain"]).toBe("");
+    }
+  });
+
+  it("ignores a non-array source/value in cells and outputs", () => {
+    // joinSource on a number → "", parseDataBundle on a non-object → {}.
+    const result = parseNotebook(
+      nb([
+        { cell_type: "markdown", source: 5 },
+        { cell_type: "code", source: "", outputs: [{ output_type: "execute_result", data: 7 }] },
+      ]),
+    );
+    expect(result.cells[0]).toEqual({ type: "markdown", source: "" });
+    const out = result.cells[1];
+    if (out.type === "code" && out.outputs[0].kind === "data") {
+      expect(out.outputs[0].data).toEqual({});
+    }
+  });
 });

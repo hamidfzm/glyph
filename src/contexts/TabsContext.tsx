@@ -46,7 +46,10 @@ export function TabsProvider({ settings, updateSettings, children }: TabsProvide
   const displayContent = isNotebook
     ? null
     : activeMode !== "view"
-      ? (tabs.activeFile?.editContent ?? content)
+      ? // editContent is seeded when entering edit mode, so the `?? content`
+        // fallback is defensive only.
+        /* c8 ignore next */
+        (tabs.activeFile?.editContent ?? content)
       : content;
 
   const tocEntries = useTableOfContents(displayContent);

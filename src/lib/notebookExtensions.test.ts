@@ -13,6 +13,10 @@ describe("isNotebookFile", () => {
     expect(isNotebookFile("data.json")).toBe(false);
     expect(isNotebookFile("noext")).toBe(false);
   });
+
+  it("rejects an empty path (no extension segment)", () => {
+    expect(isNotebookFile("")).toBe(false);
+  });
 });
 
 describe("isSupportedFile", () => {
