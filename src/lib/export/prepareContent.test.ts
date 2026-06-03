@@ -2,10 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { prepareContent } from "./prepareContent";
 
-// html2canvas needs a real layout engine; mock it so the rasterization
-// orchestration is testable without it.
-const html2canvasMock = vi.fn(async () => ({ toDataURL: () => "data:image/png;base64,RASTER" }));
-vi.mock("html2canvas", () => ({ default: () => html2canvasMock() }));
+// Rasterization needs a real layout/canvas engine; mock the helpers so the
+// orchestration is testable without them.
+const rasterizeElementMock = vi.fn(async () => "data:image/png;base64,MATH");
+const rasterizeMermaidMock = vi.fn(async () => "data:image/png;base64,MERMAID");
+const restoreMermaidMock = vi.fn(async () => {});
+vi.mock("./rasterize", () => ({
+  rasterizeElement: () => rasterizeElementMock(),
+  rasterizeMermaidLight: () => rasterizeMermaidMock(),
+  restoreMermaidTheme: () => restoreMermaidMock(),
+}));
 
 const ENTRIES: TocEntry[] = [{ id: "intro", text: "Intro", level: 1 }];
 
@@ -97,22 +103,35 @@ describe("prepareContent", () => {
     expect(result?.html).toContain("rgb(40, 42, 54)");
   });
 
-  it("rasterizes block math and Mermaid diagrams to images for PDF", async () => {
-    html2canvasMock.mockClear();
+  it("rasterizes block math (as-is) and Mermaid (light re-render) for PDF", async () => {
+    rasterizeElementMock.mockClear();
+    rasterizeMermaidMock.mockClear();
+    restoreMermaidMock.mockClear();
     setBody(
-      '<p><span class="katex-display">math</span></p><div class="mermaid-diagram"><svg></svg></div>',
+      '<p><span class="katex-display">math</span></p>' +
+        '<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg></svg></div>',
     );
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(html2canvasMock).toHaveBeenCalledTimes(2);
-    expect(result?.html).toContain("data:image/png;base64,RASTER");
-    // The original rich nodes are replaced by the rasterized images.
+    expect(rasterizeElementMock).toHaveBeenCalledTimes(1); // block math
+    expect(rasterizeMermaidMock).toHaveBeenCalledTimes(1); // diagram re-rendered light
+    expect(restoreMermaidMock).toHaveBeenCalledTimes(1); // app theme restored after
+    expect(result?.html).toContain("data:image/png;base64,MATH");
+    expect(result?.html).toContain("data:image/png;base64,MERMAID");
     expect(result?.html).not.toContain("katex-display");
     expect(result?.html).not.toContain("mermaid-diagram");
   });
 
+  it("leaves a Mermaid diagram untouched when its source is missing", async () => {
+    rasterizeMermaidMock.mockClear();
+    setBody('<div class="mermaid-diagram"><svg></svg></div>');
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(rasterizeMermaidMock).not.toHaveBeenCalled();
+    expect(result?.html).toContain("mermaid-diagram");
+  });
+
   it("keeps the original node when rasterization fails", async () => {
-    html2canvasMock.mockClear();
-    html2canvasMock.mockRejectedValueOnce(new Error("canvas tainted"));
+    rasterizeElementMock.mockClear();
+    rasterizeElementMock.mockRejectedValueOnce(new Error("canvas tainted"));
     setBody('<span class="katex-display">E=mc^2</span>');
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
     // Fallback: the math element survives (the walker turns it into LaTeX text).
@@ -121,10 +140,12 @@ describe("prepareContent", () => {
   });
 
   it("does not rasterize for non-PDF exports", async () => {
-    html2canvasMock.mockClear();
+    rasterizeElementMock.mockClear();
+    rasterizeMermaidMock.mockClear();
     setBody('<span class="katex-display">math</span>');
     await prepareContent({ entries: ENTRIES, includeToc: false });
-    expect(html2canvasMock).not.toHaveBeenCalled();
+    expect(rasterizeElementMock).not.toHaveBeenCalled();
+    expect(rasterizeMermaidMock).not.toHaveBeenCalled();
   });
 
   it("injects a table of contents when requested", async () => {

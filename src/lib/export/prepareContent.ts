@@ -1,4 +1,5 @@
 import type { TocEntry } from "@/hooks/useTableOfContents";
+import { rasterizeElement, rasterizeMermaidLight, restoreMermaidTheme } from "./rasterize";
 import { buildTocElement } from "./toc";
 
 export interface PrepareOptions {
@@ -14,26 +15,40 @@ export interface PrepareOptions {
 
 // Rasterize each block-math (`.katex-display`) and Mermaid diagram in the live
 // DOM to a PNG and swap the matching clone node for an <img>. Runs only for PDF
-// (HTML/EPUB render these natively). On any failure the original node is left
-// in place so the PDF walker can fall back (math → LaTeX source, diagram → dropped).
+// (HTML/EPUB render these natively). Block math is captured as rendered; Mermaid
+// is re-rendered light so it doesn't end up as a dark box on the white page. On
+// any failure the original node is left so the walker falls back (math → LaTeX,
+// diagram → dropped).
 async function rasterizeRichContent(liveBody: Element, clone: Element): Promise<void> {
   const selector = ".katex-display, .mermaid-diagram";
   const live = liveBody.querySelectorAll<HTMLElement>(selector);
   if (live.length === 0) return;
   const cloned = clone.querySelectorAll(selector);
-  const { default: html2canvas } = await import("html2canvas");
-  // Match the on-screen background so light-on-dark math stays legible.
-  const backgroundColor = getComputedStyle(liveBody).backgroundColor || "#ffffff";
+  const mathBackground = getComputedStyle(liveBody).backgroundColor || "#ffffff";
+  let mermaidRendered = false;
 
   for (let i = 0; i < live.length; i++) {
+    const el = live[i];
     try {
-      const canvas = await html2canvas(live[i], { backgroundColor, scale: 2, logging: false });
+      let dataUrl: string;
+      if (el.classList.contains("mermaid-diagram")) {
+        const source = el.getAttribute("data-mermaid-source");
+        if (!source) continue; // can't re-render without the source; leave as-is
+        dataUrl = await rasterizeMermaidLight(source);
+        mermaidRendered = true;
+      } else {
+        dataUrl = await rasterizeElement(el, mathBackground);
+      }
       const img = clone.ownerDocument.createElement("img");
-      img.setAttribute("src", canvas.toDataURL("image/png"));
+      img.setAttribute("src", dataUrl);
       cloned[i].replaceWith(img);
     } catch {
       // Leave the original node; the walker falls back.
     }
+  }
+
+  if (mermaidRendered) {
+    await restoreMermaidTheme(liveBody.ownerDocument.documentElement.classList.contains("dark"));
   }
 }
 
