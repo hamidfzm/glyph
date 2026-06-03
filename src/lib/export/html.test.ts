@@ -50,4 +50,13 @@ describe("buildHtmlDocument", () => {
     expect(out).toContain("prefers-color-scheme: dark");
     expect(out).toContain("classList.toggle('dark'");
   });
+
+  it("includes a dark/light toggle that persists the choice", () => {
+    const out = buildHtmlDocument({ bodyHtml: "", title: "t", css: "", dark: false });
+    expect(out).toContain('id="glyph-theme-toggle"');
+    // The toggle stores the user's choice so it survives reloads.
+    expect(out).toContain("localStorage");
+    // ...and is hidden when printing.
+    expect(out).toContain("@media print { #glyph-theme-toggle");
+  });
 });

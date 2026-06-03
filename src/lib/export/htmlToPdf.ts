@@ -82,13 +82,19 @@ function inlinePdf(node: Node, style: InlineStyle = {}): Content[] {
       continue;
     }
     if (tag === "a") {
-      const href = el.getAttribute("href");
-      const children = inlinePdf(el, style);
-      out.push(
-        href
-          ? { text: children, link: href, color: "#0066cc", decoration: "underline" }
-          : { text: children },
-      );
+      const href = el.getAttribute("href") ?? "";
+      // Only real external links become clickable PDF links. pdfmake renders a
+      // link most reliably on a single text leaf, so use the anchor's label
+      // (its child icon SVG contributes no text). In-page/relative links just
+      // render as their inline content.
+      if (/^https?:/i.test(href)) {
+        // textContent is never null for an element; fall back to the URL when
+        // the link has no visible label.
+        const label = el.textContent!.trim() || href;
+        out.push({ text: label, link: href, color: "#1a56db", decoration: "underline" });
+      } else {
+        out.push(...inlinePdf(el, style));
+      }
       continue;
     }
     const styleKey = STYLE_TAGS[tag];

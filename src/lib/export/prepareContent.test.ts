@@ -64,6 +64,19 @@ describe("prepareContent", () => {
     expect(html).toContain("checked");
   });
 
+  it("opens external links in a new tab but leaves in-page links alone", async () => {
+    setBody(
+      `<a href="https://example.com">ext</a>` +
+        `<a href="#section">jump</a>` +
+        `<a href="./other.md">rel</a>`,
+    );
+    const html = await prepareHtml();
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    // The in-page anchor is untouched.
+    expect(html).toMatch(/<a href="#section"[^>]*>jump<\/a>/);
+  });
+
   it("injects a table of contents when requested", async () => {
     setBody("<h1>Intro</h1>");
     const html = await prepareHtml(true);

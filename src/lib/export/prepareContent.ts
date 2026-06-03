@@ -73,6 +73,15 @@ export async function prepareContent({
     checkbox.setAttribute("disabled", "");
   }
 
+  // External links should open in a new tab/window from the exported file.
+  // The `a[href]` selector guarantees the attribute is present.
+  for (const anchor of Array.from(clone.querySelectorAll("a[href]"))) {
+    if (/^https?:/i.test(anchor.getAttribute("href")!)) {
+      anchor.setAttribute("target", "_blank");
+      anchor.setAttribute("rel", "noopener noreferrer");
+    }
+  }
+
   await Promise.all(Array.from(clone.querySelectorAll("img")).map(embedImage));
 
   if (includeToc && entries.length > 0) {

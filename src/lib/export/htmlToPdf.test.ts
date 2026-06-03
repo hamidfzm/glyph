@@ -209,6 +209,27 @@ describe("convertHtmlToPdf", () => {
     // <span></span> is inline-level with no content → contributes no block.
     expect(convertHtmlToPdf("<span></span>")).toHaveLength(1); // fallback empty node
   });
+
+  it("renders external links as a colored, clickable text leaf", () => {
+    const content = convertHtmlToPdf('<p><a href="https://example.com">site</a></p>');
+    const json = JSON.stringify(content);
+    expect(json).toContain('"link":"https://example.com"');
+    expect(json).toContain('"site"');
+    expect(json).toContain("1a56db");
+  });
+
+  it("falls back to the URL when an external link has no visible text", () => {
+    const content = convertHtmlToPdf('<p><a href="https://example.com"></a></p>');
+    expect(JSON.stringify(content)).toContain('"text":"https://example.com"');
+  });
+
+  it("renders in-page and relative links as plain text (no link node)", () => {
+    const content = convertHtmlToPdf('<p><a href="#h">jump</a> <a href="./x.md">rel</a></p>');
+    const json = JSON.stringify(content);
+    expect(json).toContain("jump");
+    expect(json).toContain("rel");
+    expect(json).not.toContain('"link"');
+  });
 });
 
 function jpgDataUri(): string {
