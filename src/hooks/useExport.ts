@@ -75,10 +75,11 @@ export function useExport({
       // dialog, covering image inlining and the build/write.
       setExporting(format);
       try {
-        const body = await prepareContent({ entries, includeToc });
+        const prepared = await prepareContent({ entries, includeToc });
         // The body can vanish if the file is closed during the (async) save
         // dialog, even though the pre-dialog guard passed.
-        if (body == null) return;
+        if (prepared == null) return;
+        const { html: body, bodyClass } = prepared;
 
         if (format === "html") {
           const html = buildHtmlDocument({
@@ -86,6 +87,7 @@ export function useExport({
             title: meta.title,
             css: collectStyles(),
             dark: document.documentElement.classList.contains("dark"),
+            bodyClass,
           });
           await invoke("write_file", { path, content: html });
         } else if (format === "epub") {
@@ -98,6 +100,7 @@ export function useExport({
               bodyHtml: body,
               css: collectStyles(),
               entries,
+              bodyClass,
               metadata: {
                 title: meta.title,
                 author: meta.author,

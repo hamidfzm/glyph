@@ -17,6 +17,7 @@ export interface EpubInput {
   css: string;
   entries: TocEntry[];
   metadata: EpubMetadata;
+  bodyClass?: "markdown-body" | "notebook-body";
 }
 
 const MIMETYPE = "application/epub+zip";
@@ -83,12 +84,12 @@ function buildNav(title: string, entries: TocEntry[]): string {
 </html>`;
 }
 
-function buildChapter(title: string, bodyHtml: string): string {
+function buildChapter(title: string, bodyHtml: string, bodyClass: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head><meta charset="utf-8"/><title>${escapeXml(title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
 <body>
-<div class="markdown-body">
+<div class="${bodyClass}">
 ${toXhtml(bodyHtml)}
 </div>
 </body>
@@ -108,6 +109,7 @@ export async function buildEpub({
   css,
   entries,
   metadata,
+  bodyClass = "markdown-body",
 }: EpubInput): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file("mimetype", MIMETYPE, { compression: "STORE" });
@@ -115,6 +117,6 @@ export async function buildEpub({
   zip.file("OEBPS/content.opf", buildOpf(metadata));
   zip.file("OEBPS/nav.xhtml", buildNav(metadata.title, entries));
   zip.file("OEBPS/style.css", css);
-  zip.file("OEBPS/chapter.xhtml", buildChapter(metadata.title, bodyHtml));
+  zip.file("OEBPS/chapter.xhtml", buildChapter(metadata.title, bodyHtml, bodyClass));
   return zip.generateAsync({ type: "uint8array" });
 }

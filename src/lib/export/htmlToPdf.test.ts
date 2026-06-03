@@ -181,6 +181,34 @@ describe("convertHtmlToPdf", () => {
     const content = convertHtmlToPdf("<div>hello<!-- c --> </div>");
     expect(JSON.stringify(content)).toContain("hello");
   });
+
+  // Mirrors KaTeX's real output: a MathML branch carrying the LaTeX annotation
+  // plus an aria-hidden HTML branch of rendered glyph spans.
+  const katex = (tex: string) =>
+    `<span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>z</mi></mrow>` +
+    `<annotation encoding="application/x-tex">${tex}</annotation></semantics></math></span>` +
+    `<span class="katex-html" aria-hidden="true">GLYPH_JUNK</span></span>`;
+
+  it("extracts block KaTeX as LaTeX source instead of its glyph spans", () => {
+    // `$$...$$` renders as a block-level katex-display wrapper.
+    const content = convertHtmlToPdf(`<span class="katex-display">${katex("a^2+b^2")}</span>`);
+    const json = JSON.stringify(content);
+    expect(json).toContain("a^2+b^2");
+    expect(json).not.toContain("GLYPH_JUNK");
+  });
+
+  it("extracts inline KaTeX inside a paragraph", () => {
+    const content = convertHtmlToPdf(`<p>see ${katex("x_1")} here</p>`);
+    const json = JSON.stringify(content);
+    expect(json).toContain("x_1");
+    expect(json).toContain("see");
+    expect(json).not.toContain("GLYPH_JUNK");
+  });
+
+  it("drops an empty inline-level element at block position", () => {
+    // <span></span> is inline-level with no content → contributes no block.
+    expect(convertHtmlToPdf("<span></span>")).toHaveLength(1); // fallback empty node
+  });
 });
 
 function jpgDataUri(): string {

@@ -30,7 +30,18 @@ describe("buildHtmlDocument", () => {
   it("resets the shell's locked viewport so the page scrolls", () => {
     const out = buildHtmlDocument({ bodyHtml: "", title: "t", css: "", dark: false });
     expect(out).toContain("html, body { height: auto; min-height: 100%; overflow: visible; }");
-    expect(out).toContain(".markdown-body { max-width: 820px");
+    expect(out).toContain(".markdown-body, .notebook-body { max-width: 820px");
+  });
+
+  it("uses the given body class so notebook styles apply", () => {
+    const out = buildHtmlDocument({
+      bodyHtml: "<p>cell</p>",
+      title: "nb",
+      css: "",
+      dark: false,
+      bodyClass: "notebook-body",
+    });
+    expect(out).toContain('<div class="notebook-body">');
   });
 
   it("syncs to the reader's system theme via prefers-color-scheme", () => {

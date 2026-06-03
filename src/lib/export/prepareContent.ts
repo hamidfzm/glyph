@@ -8,6 +8,13 @@ export interface PrepareOptions {
   doc?: Document;
 }
 
+export interface PreparedContent {
+  // Cleaned inner HTML of the rendered body.
+  html: string;
+  // The wrapper class to reuse so bundled styles apply (markdown vs notebook).
+  bodyClass: "markdown-body" | "notebook-body";
+}
+
 // Elements that exist only for interactive use in the app and should never
 // appear in an exported document.
 const STRIP_SELECTOR = ".code-copy-button, [data-export-ignore]";
@@ -37,25 +44,33 @@ async function embedImage(img: HTMLImageElement): Promise<void> {
 }
 
 /**
- * Clone the rendered `.markdown-body`, strip app-only UI, inline images, and
- * optionally prepend a table of contents. Returns the cleaned inner HTML, or
+ * Clone the rendered document body (markdown or notebook), strip app-only UI,
+ * make task checkboxes non-interactive, inline images, and optionally prepend a
+ * table of contents. Returns the cleaned inner HTML plus its wrapper class, or
  * `null` when there is no rendered body to export.
  *
  * Reusing the live DOM (rather than re-parsing markdown) means KaTeX math,
- * highlighted code, GFM tables, alerts, and Mermaid SVGs come through exactly
- * as the user sees them.
+ * highlighted code, GFM tables, alerts, Mermaid SVGs, and notebook cells come
+ * through exactly as the user sees them.
  */
 export async function prepareContent({
   entries,
   includeToc,
   doc = document,
-}: PrepareOptions): Promise<string | null> {
-  const body = doc.querySelector<HTMLElement>(".markdown-body");
+}: PrepareOptions): Promise<PreparedContent | null> {
+  const body = doc.querySelector<HTMLElement>(".markdown-body, .notebook-body");
   if (!body) return null;
+  const bodyClass = body.classList.contains("notebook-body") ? "notebook-body" : "markdown-body";
 
   const clone = body.cloneNode(true) as HTMLElement;
   for (const el of Array.from(clone.querySelectorAll(STRIP_SELECTOR))) {
     el.remove();
+  }
+
+  // Task-list checkboxes are interactive in the app; an exported document must
+  // show their state without being togglable.
+  for (const checkbox of Array.from(clone.querySelectorAll('input[type="checkbox"]'))) {
+    checkbox.setAttribute("disabled", "");
   }
 
   await Promise.all(Array.from(clone.querySelectorAll("img")).map(embedImage));
@@ -64,5 +79,5 @@ export async function prepareContent({
     clone.insertBefore(buildTocElement(entries), clone.firstChild);
   }
 
-  return clone.innerHTML;
+  return { html: clone.innerHTML, bodyClass };
 }

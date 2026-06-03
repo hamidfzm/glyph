@@ -115,4 +115,15 @@ describe("convertHtmlToDocx", () => {
     const blocks = convertHtmlToDocx("<div>hello<!-- c --> </div>");
     expect(blocks).toHaveLength(1);
   });
+
+  it("renders block KaTeX as a single paragraph (LaTeX source, no glyph spans)", () => {
+    const katexBlock =
+      `<span class="katex-display"><span class="katex"><span class="katex-mathml"><math>` +
+      `<semantics><mrow><mi>z</mi></mrow><annotation encoding="application/x-tex">a^2+b^2` +
+      `</annotation></semantics></math></span>` +
+      `<span class="katex-html" aria-hidden="true">GLYPH_JUNK</span></span></span>`;
+    const blocks = convertHtmlToDocx(katexBlock);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toBeInstanceOf(Paragraph);
+  });
 });

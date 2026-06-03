@@ -7,6 +7,8 @@ export interface HtmlDocOptions {
   // Export-time theme, used only as the no-JS fallback; the runtime script
   // below syncs to the reader's system preference.
   dark: boolean;
+  // Wrapper class so bundled styles apply (markdown vs notebook body).
+  bodyClass?: "markdown-body" | "notebook-body";
 }
 
 // The app's base styles lock the shell to the viewport (`html, body, #root {
@@ -16,7 +18,7 @@ export interface HtmlDocOptions {
 const LAYOUT_OVERRIDES = `
 html, body { height: auto; min-height: 100%; overflow: visible; }
 body { margin: 0; padding: 2rem 1.25rem; }
-.markdown-body { max-width: 820px; height: auto; margin: 0 auto; overflow: visible; }`;
+.markdown-body, .notebook-body { max-width: 820px; height: auto; margin: 0 auto; overflow: visible; }`;
 
 // Sync the `.dark` class to the reader's OS preference (the app's dark styles
 // are class-based, so this reuses every `.dark` rule already in the CSS). Runs
@@ -30,7 +32,13 @@ const THEME_SCRIPT = `(function(){try{var m=window.matchMedia&&window.matchMedia
  * JS). The `.markdown-body` wrapper mirrors the app shell so bundled styles
  * apply unchanged.
  */
-export function buildHtmlDocument({ bodyHtml, title, css, dark }: HtmlDocOptions): string {
+export function buildHtmlDocument({
+  bodyHtml,
+  title,
+  css,
+  dark,
+  bodyClass = "markdown-body",
+}: HtmlDocOptions): string {
   const initialClass = dark ? ' class="dark"' : "";
   return `<!doctype html>
 <html lang="en"${initialClass}>
@@ -46,7 +54,7 @@ ${LAYOUT_OVERRIDES}
 </style>
 </head>
 <body>
-<div class="markdown-body">
+<div class="${bodyClass}">
 ${bodyHtml}
 </div>
 </body>

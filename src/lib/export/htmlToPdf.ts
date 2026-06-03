@@ -22,6 +22,22 @@ const STYLE_TAGS: Record<string, keyof InlineStyle> = {
 
 const HEADING_SIZES: Record<string, number> = { h1: 24, h2: 20, h3: 16, h4: 14, h5: 12, h6: 11 };
 
+// Block-level wrappers whose children are themselves blocks. Anything else that
+// reaches the fallback (spans, KaTeX's `katex-display`, etc.) is inline-level
+// and must go through inlinePdf so math is extracted rather than its rendered
+// glyph spans being dumped as paragraphs.
+const CONTAINER_TAGS = new Set([
+  "div",
+  "section",
+  "article",
+  "figure",
+  "nav",
+  "header",
+  "footer",
+  "main",
+  "details",
+]);
+
 function styledText(text: string, style: InlineStyle): Content {
   if (!style.bold && !style.italics && !style.strike) return text;
   return {
@@ -215,8 +231,15 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
     return img ? [img] : [];
   }
 
-  // Containers and unknown wrappers: recurse into children.
-  return Array.from(el.childNodes).flatMap((c) => blocksForNode(c, ctx));
+  if (CONTAINER_TAGS.has(tag)) {
+    return Array.from(el.childNodes).flatMap((c) => blocksForNode(c, ctx));
+  }
+
+  // Inline-level element at block position (e.g. a bare <span> or KaTeX's
+  // `katex-display`): render its inline content so math is reduced to LaTeX
+  // rather than recursing into KaTeX's glyph spans.
+  const inline = inlinePdf(el);
+  return inline.length ? [{ text: inline, margin: [0, 0, 0, 8] }] : [];
 }
 
 /**
