@@ -1,6 +1,6 @@
 [package]
 name = "glyph"
-version = "0.8.1"
+version = "0.9.0"
 description = "A cross-platform markdown viewer"
 authors = ["hamidfzm"]
 edition = "2021"
