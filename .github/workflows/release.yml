@@ -293,17 +293,44 @@ jobs:
         shell: pwsh
         env:
           CHOCO_API_KEY: ${{ secrets.CHOCO_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           $version = "${{ steps.version.outputs.version }}"
           $sha = "${{ steps.sha.outputs.sha256 }}"
+          $repo = "${{ github.repository }}"
+          $tag = "${{ github.ref_name }}"
 
-          $nuspec = Get-Content chocolatey/glyph.nuspec -Raw
-          $nuspec = $nuspec.Replace('{{VERSION}}', $version)
-          Set-Content chocolatey/glyph.nuspec $nuspec
+          # Generate the version-specific changelog (same source as the GitHub
+          # release notes) so the Chocolatey package page shows what changed in
+          # this release instead of only linking to the releases list.
+          $prevTag = gh release list --repo $repo --limit 2 --json tagName --jq '.[1].tagName'
+          $changelog = gh api "repos/$repo/releases/generate-notes" `
+            -f tag_name="$tag" `
+            -f previous_tag_name="$prevTag" `
+            --jq .body
+
+          # Append a "Links" section so users can jump to the release page,
+          # docs, and issue tracker straight from the Chocolatey listing.
+          $links = @(
+            "## Links",
+            "",
+            "- Release page: https://github.com/$repo/releases/tag/$tag",
+            "- All releases: https://github.com/$repo/releases",
+            "- Documentation: https://github.com/$repo#readme",
+            "- Report an issue: https://github.com/$repo/issues"
+          ) -join "`n"
+          $notes = "$changelog`n`n$links"
 
           $install = Get-Content chocolatey/tools/chocolateyinstall.ps1 -Raw
           $install = $install.Replace('{{SHA256}}', $sha)
           Set-Content chocolatey/tools/chocolateyinstall.ps1 $install
+
+          # Set the version and inject the changelog via the XML DOM so any
+          # special characters in the notes are escaped correctly.
+          [xml]$nuspec = Get-Content chocolatey/glyph.nuspec -Raw
+          $nuspec.package.metadata.version = $version
+          $nuspec.package.metadata.releaseNotes = $notes
+          $nuspec.Save("$pwd\chocolatey\glyph.nuspec")
 
           cd chocolatey
           choco pack
