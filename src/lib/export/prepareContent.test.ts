@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { prepareContent } from "./prepareContent";
 
+// html2canvas needs a real layout engine; mock it so the rasterization
+// orchestration is testable without it.
+const html2canvasMock = vi.fn(async () => ({ toDataURL: () => "data:image/png;base64,RASTER" }));
+vi.mock("html2canvas", () => ({ default: () => html2canvasMock() }));
+
 const ENTRIES: TocEntry[] = [{ id: "intro", text: "Intro", level: 1 }];
 
 function setBody(html: string, className = "markdown-body"): void {
@@ -84,12 +89,38 @@ describe("prepareContent", () => {
       '<pre><code><span style="color: rgb(255,0,0)">kw</span> x</code></pre>' +
         "<pre>raw block</pre>",
     );
-    const result = await prepareContent({
-      entries: ENTRIES,
-      includeToc: false,
-      inlineCodeColors: true,
-    });
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
     expect(result?.html).toContain("rgb(255, 0, 0)");
+  });
+
+  it("rasterizes block math and Mermaid diagrams to images for PDF", async () => {
+    html2canvasMock.mockClear();
+    setBody(
+      '<p><span class="katex-display">math</span></p><div class="mermaid-diagram"><svg></svg></div>',
+    );
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(html2canvasMock).toHaveBeenCalledTimes(2);
+    expect(result?.html).toContain("data:image/png;base64,RASTER");
+    // The original rich nodes are replaced by the rasterized images.
+    expect(result?.html).not.toContain("katex-display");
+    expect(result?.html).not.toContain("mermaid-diagram");
+  });
+
+  it("keeps the original node when rasterization fails", async () => {
+    html2canvasMock.mockClear();
+    html2canvasMock.mockRejectedValueOnce(new Error("canvas tainted"));
+    setBody('<span class="katex-display">E=mc^2</span>');
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    // Fallback: the math element survives (the walker turns it into LaTeX text).
+    expect(result?.html).toContain("katex-display");
+    expect(result?.html).not.toContain("data:image/png");
+  });
+
+  it("does not rasterize for non-PDF exports", async () => {
+    html2canvasMock.mockClear();
+    setBody('<span class="katex-display">math</span>');
+    await prepareContent({ entries: ENTRIES, includeToc: false });
+    expect(html2canvasMock).not.toHaveBeenCalled();
   });
 
   it("injects a table of contents when requested", async () => {

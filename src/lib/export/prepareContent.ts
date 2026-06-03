@@ -6,9 +6,35 @@ export interface PrepareOptions {
   includeToc: boolean;
   // Overridable for tests; defaults to the live document.
   doc?: Document;
-  // PDF export: inline the rendered syntax-highlight colors onto code spans so
-  // the (computed-style-free) PDF walker can reproduce them.
-  inlineCodeColors?: boolean;
+  // PDF export needs extra work the vector walker can't do itself: inline the
+  // rendered syntax-highlight colors onto code spans, and rasterize block math
+  // and Mermaid diagrams (which pdfmake can't draw) to embedded images.
+  pdf?: boolean;
+}
+
+// Rasterize each block-math (`.katex-display`) and Mermaid diagram in the live
+// DOM to a PNG and swap the matching clone node for an <img>. Runs only for PDF
+// (HTML/EPUB render these natively). On any failure the original node is left
+// in place so the PDF walker can fall back (math → LaTeX source, diagram → dropped).
+async function rasterizeRichContent(liveBody: Element, clone: Element): Promise<void> {
+  const selector = ".katex-display, .mermaid-diagram";
+  const live = liveBody.querySelectorAll<HTMLElement>(selector);
+  if (live.length === 0) return;
+  const cloned = clone.querySelectorAll(selector);
+  const { default: html2canvas } = await import("html2canvas");
+  // Match the on-screen background so light-on-dark math stays legible.
+  const backgroundColor = getComputedStyle(liveBody).backgroundColor || "#ffffff";
+
+  for (let i = 0; i < live.length; i++) {
+    try {
+      const canvas = await html2canvas(live[i], { backgroundColor, scale: 2, logging: false });
+      const img = clone.ownerDocument.createElement("img");
+      img.setAttribute("src", canvas.toDataURL("image/png"));
+      cloned[i].replaceWith(img);
+    } catch {
+      // Leave the original node; the walker falls back.
+    }
+  }
 }
 
 // Copy the live computed text color of each highlighted code span onto the
@@ -81,14 +107,17 @@ export async function prepareContent({
   entries,
   includeToc,
   doc = document,
-  inlineCodeColors: withCodeColors = false,
+  pdf = false,
 }: PrepareOptions): Promise<PreparedContent | null> {
   const body = doc.querySelector<HTMLElement>(".markdown-body, .notebook-body");
   if (!body) return null;
   const bodyClass = body.classList.contains("notebook-body") ? "notebook-body" : "markdown-body";
 
   const clone = body.cloneNode(true) as HTMLElement;
-  if (withCodeColors) inlineCodeColors(body, clone);
+  if (pdf) {
+    inlineCodeColors(body, clone);
+    await rasterizeRichContent(body, clone);
+  }
   for (const el of Array.from(clone.querySelectorAll(STRIP_SELECTOR))) {
     el.remove();
   }
