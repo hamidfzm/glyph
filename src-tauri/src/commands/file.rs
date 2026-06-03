@@ -36,6 +36,14 @@ pub fn write_file(path: String, content: String) -> Result<(), String> {
     fs::write(&path, &content).map_err(|e| format!("Failed to write file: {e}"))
 }
 
+/// Write raw bytes to disk. Used by the export feature for binary formats
+/// (DOCX, EPUB) that the frontend builds in-memory; `write_file` only handles
+/// UTF-8 text.
+#[tauri::command]
+pub fn write_binary_file(path: String, contents: Vec<u8>) -> Result<(), String> {
+    fs::write(&path, &contents).map_err(|e| format!("Failed to write file: {e}"))
+}
+
 #[tauri::command]
 pub fn get_file_metadata(path: String) -> Result<FileMetadata, String> {
     let p = Path::new(&path);
@@ -116,6 +124,27 @@ mod tests {
         assert!(result.unwrap().contains("你好世界"));
 
         let _ = fs::remove_file(&file_path);
+    }
+
+    #[test]
+    fn write_binary_file_round_trips_bytes() {
+        let dir = std::env::temp_dir().join("glyph_test_write_binary");
+        let _ = fs::create_dir_all(&dir);
+        let file_path = dir.join("out.bin");
+        let bytes = vec![0u8, 1, 2, 255, 254, 0, 42];
+
+        let result = write_binary_file(file_path.to_string_lossy().to_string(), bytes.clone());
+        assert!(result.is_ok());
+        assert_eq!(fs::read(&file_path).unwrap(), bytes);
+
+        let _ = fs::remove_file(&file_path);
+    }
+
+    #[test]
+    fn write_binary_file_bad_path_errors() {
+        let result = write_binary_file("/nonexistent/dir/out.bin".to_string(), vec![1, 2, 3]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to write file"));
     }
 
     #[test]

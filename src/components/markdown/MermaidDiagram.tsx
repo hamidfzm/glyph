@@ -68,5 +68,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
     );
   }
 
-  return <div ref={containerRef} className="mermaid-diagram" />;
+  // The source is exposed so PDF export can re-render the diagram in a light
+  // theme (the rendered SVG bakes in the app theme's colors).
+  return <div ref={containerRef} className="mermaid-diagram" data-mermaid-source={code} />;
 }

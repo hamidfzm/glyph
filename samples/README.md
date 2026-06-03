@@ -291,4 +291,4 @@ Interactive outputs (Plotly, Vega, Jupyter widgets) aren't rendered yet — they
 | `Cmd+B` | Toggle sidebar |
 | `Cmd+,` | Settings |
 
-*Try pressing `Cmd+F` to search this document, or `Cmd+P` to print / save as PDF.*
+*Try pressing `Cmd+F` to search this document, or `Cmd+P` to print / save as PDF. Use `File → Export` to save this page as HTML, Word (DOCX), EPUB, or PDF — math, code highlighting, tables, and images are carried straight from the rendered view.*
