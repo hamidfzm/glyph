@@ -304,10 +304,17 @@ jobs:
           # release notes) so the Chocolatey package page shows what changed in
           # this release instead of only linking to the releases list.
           $prevTag = gh release list --repo $repo --limit 2 --json tagName --jq '.[1].tagName'
-          $changelog = gh api "repos/$repo/releases/generate-notes" `
+          # gh emits the body as multiple lines, which PowerShell captures as a
+          # string[]. Join it back with newlines so the Markdown survives (string
+          # interpolation would otherwise flatten the array with spaces and turn
+          # the whole changelog into one run-on paragraph).
+          $changelog = (gh api "repos/$repo/releases/generate-notes" `
             -f tag_name="$tag" `
             -f previous_tag_name="$prevTag" `
-            --jq .body
+            --jq .body) -join "`n"
+          # Drop the leading "<!-- Release notes generated ... -->" comment GitHub
+          # prepends; Chocolatey renders raw HTML as literal text, not a comment.
+          $changelog = ($changelog -replace '(?s)^\s*<!--.*?-->\s*', '').Trim()
 
           # Append a "Links" section so users can jump to the release page,
           # docs, and issue tracker straight from the Chocolatey listing.
