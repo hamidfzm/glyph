@@ -48,13 +48,14 @@ function inlineCodeColors(liveBody: Element, clone: Element): void {
     (cloneSpans[i] as HTMLElement).style.color = getComputedStyle(span).color;
   });
   // Block background + default text color, so the PDF cell matches the theme.
+  // The themed background is on <pre> (code has `background: none`); the code
+  // theme's base text color is on <code>.
   const livePres = liveBody.querySelectorAll("pre");
   const clonePres = clone.querySelectorAll("pre");
   livePres.forEach((pre, i) => {
-    const cs = getComputedStyle(pre.querySelector("code") ?? pre);
     const target = clonePres[i] as HTMLElement;
-    target.style.backgroundColor = cs.backgroundColor;
-    target.style.color = cs.color;
+    target.style.backgroundColor = getComputedStyle(pre).backgroundColor;
+    target.style.color = getComputedStyle(pre.querySelector("code") ?? pre).color;
   });
 }
 

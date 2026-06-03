@@ -86,11 +86,15 @@ describe("prepareContent", () => {
     // Inline styles are reflected by getComputedStyle, so the copy is observable.
     // The second <pre> has no <code>, exercising that fallback.
     setBody(
-      '<pre><code><span style="color: rgb(255,0,0)">kw</span> x</code></pre>' +
+      '<pre style="background-color: rgb(40, 42, 54)"><code style="color: rgb(248, 248, 242)">' +
+        '<span style="color: rgb(255,0,0)">kw</span> x</code></pre>' +
         "<pre>raw block</pre>",
     );
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    // Token color preserved, and the block background comes from <pre> (not the
+    // transparent <code>) so dark code themes get a dark box, not a light one.
     expect(result?.html).toContain("rgb(255, 0, 0)");
+    expect(result?.html).toContain("rgb(40, 42, 54)");
   });
 
   it("rasterizes block math and Mermaid diagrams to images for PDF", async () => {
