@@ -19,6 +19,9 @@
   --color-border: #d2d2d7;
   --color-accent: #007aff;
   --color-accent-hover: #0066d6;
+  /* Accent-tinted background for the update notification bar so it stands out
+     from the toolbar while keeping high-contrast primary text. */
+  --color-banner-bg: #e3eeff;
   --color-alert-note: #0969da;
   --color-alert-tip: #1a7f37;
   --color-alert-important: #8250df;
@@ -36,6 +39,7 @@
   --color-border: #38383a;
   --color-accent: #0a84ff;
   --color-accent-hover: #409cff;
+  --color-banner-bg: #12314f;
   --color-alert-note: #58a6ff;
   --color-alert-tip: #3fb950;
   --color-alert-important: #bf8cff;

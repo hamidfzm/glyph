@@ -13,6 +13,18 @@ vi.mock("@tauri-apps/api/event", () => ({
   emit: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/api/app", () => ({
+  getVersion: vi.fn(() => Promise.resolve("0.0.0")),
+}));
+
+// Default network stub so the on-launch update check (and any other fetch) never
+// hits the real network in tests. Resolves to a non-ok response, which the
+// update check treats as "no update". Tests that exercise fetch directly
+// reassign globalThis.fetch themselves.
+globalThis.fetch = vi.fn(() =>
+  Promise.resolve({ ok: false, json: () => Promise.resolve({}) } as Response),
+) as unknown as typeof fetch;
+
 vi.mock("@tauri-apps/plugin-os", () => ({
   platform: vi.fn(() => "macos"),
 }));

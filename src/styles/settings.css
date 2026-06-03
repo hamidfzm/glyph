@@ -31,6 +31,15 @@
   font-size: 13px;
   line-height: 1.5;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  /* Native apps don't let you select chrome text; keep the modal unselectable. */
+  user-select: none;
+}
+
+/* ...but editable fields stay selectable so users can copy/edit values such as
+   API keys, font names, and the Ollama URL. */
+.settings-modal input,
+.settings-modal textarea {
+  user-select: text;
 }
 
 @keyframes settings-slide-up {

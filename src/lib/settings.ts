@@ -67,6 +67,10 @@ export interface BehaviorSettings {
   autoReload: boolean;
   reopenLastFile: boolean;
   confirmExternalLinks: boolean;
+  // Check GitHub for a newer release on launch and show a banner when one is
+  // available. On by default; only the running version is compared, nothing is
+  // uploaded.
+  checkForUpdates: boolean;
   recentFiles: string[];
   // Each entry is a tab to restore on launch; either a single file or a folder
   // workspace with optional active-file + expanded subdir state.
@@ -129,6 +133,7 @@ export const DEFAULT_SETTINGS: Settings = {
     autoReload: true,
     reopenLastFile: false,
     confirmExternalLinks: true,
+    checkForUpdates: true,
     recentFiles: [],
     openTabs: [],
     activeTabPath: "",

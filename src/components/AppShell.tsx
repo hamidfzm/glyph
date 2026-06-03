@@ -15,6 +15,7 @@ import { usePlatform } from "@/hooks/usePlatform";
 import { usePrint } from "@/hooks/usePrint";
 import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
+import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
 import { nextEditorMode } from "@/lib/settings";
 import { EmptyState } from "./layout/EmptyState";
@@ -22,6 +23,7 @@ import { ExportProgress } from "./layout/ExportProgress";
 import { Sidebar } from "./layout/Sidebar";
 import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
+import { UpdateBanner } from "./layout/UpdateBanner";
 import { AIPanel } from "./modals/AIPanel";
 import { CommandPalette } from "./modals/CommandPalette";
 import { SettingsModal } from "./modals/settings/lazySettings";
@@ -43,6 +45,10 @@ export function AppShell() {
   // Reveal the window (created hidden in tauri.conf.json) once settings/theme
   // are loaded, avoiding the white flash + geometry jump on launch.
   useWindowReveal();
+
+  // Once-per-session check for a newer GitHub release; the banner shows only
+  // when the user has the feature on and an update is actually available.
+  const updateCheck = useUpdateCheck(settings.behavior.checkForUpdates, loaded);
 
   const {
     tabs: openTabs,
@@ -198,6 +204,7 @@ export function AppShell() {
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)]">
+      <UpdateBanner update={updateCheck.update} onDismiss={updateCheck.dismiss} />
       <TabBar />
       <div className="flex flex-1 min-h-0">
         <Sidebar side="left" />
