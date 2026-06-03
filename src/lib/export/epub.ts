@@ -21,6 +21,11 @@ export interface EpubInput {
 }
 
 const MIMETYPE = "application/epub+zip";
+
+// EPUB readers paginate to a fixed width, so wide code must wrap rather than
+// clip. Appended after the collected app CSS (which sets overflow-x: auto).
+const CODE_WRAP_CSS = `
+.markdown-body pre, .notebook-body pre, .markdown-body pre code, .notebook-body pre code { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: visible; }`;
 const CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles>
@@ -116,7 +121,7 @@ export async function buildEpub({
   zip.file("META-INF/container.xml", CONTAINER_XML);
   zip.file("OEBPS/content.opf", buildOpf(metadata));
   zip.file("OEBPS/nav.xhtml", buildNav(metadata.title, entries));
-  zip.file("OEBPS/style.css", css);
+  zip.file("OEBPS/style.css", css + CODE_WRAP_CSS);
   zip.file("OEBPS/chapter.xhtml", buildChapter(metadata.title, bodyHtml, bodyClass));
   return zip.generateAsync({ type: "uint8array" });
 }

@@ -88,6 +88,19 @@ describe("buildEpub", () => {
     expect(doc.querySelector("parsererror")).toBeNull();
   });
 
+  it("appends a code-wrap rule to the stylesheet so wide code wraps", async () => {
+    const bytes = await buildEpub({
+      bodyHtml: "<pre>x</pre>",
+      css: ".a{}",
+      entries: [],
+      metadata: META,
+    });
+    const style = await (await loadEpub(bytes)).file("OEBPS/style.css")?.async("string");
+    expect(style).toContain(".a{}");
+    expect(style).toContain("white-space: pre-wrap");
+    expect(style).toContain("overflow-wrap: anywhere");
+  });
+
   it("omits the creator element when there is no author", async () => {
     const bytes = await buildEpub({
       bodyHtml: "<p>x</p>",

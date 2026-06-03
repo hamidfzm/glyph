@@ -31,8 +31,14 @@ describe("buildHtmlDocument", () => {
     const out = buildHtmlDocument({ bodyHtml: "", title: "t", css: "", dark: false });
     expect(out).toContain("html, body { height: auto; min-height: 100%; overflow: visible; }");
     expect(out).toContain(".markdown-body, .notebook-body { max-width: 820px");
-    // Wide code blocks wrap instead of scrolling horizontally.
-    expect(out).toContain("white-space: pre-wrap");
+  });
+
+  it("wraps wide code blocks only when printing (keeps on-screen scroll)", () => {
+    const out = buildHtmlDocument({ bodyHtml: "", title: "t", css: "", dark: false });
+    // The wrap rule lives inside the @media print block, after its opening brace.
+    const printIdx = out.indexOf("@media print");
+    expect(printIdx).toBeGreaterThan(-1);
+    expect(out.indexOf("white-space: pre-wrap")).toBeGreaterThan(printIdx);
     expect(out).toContain("overflow-wrap: anywhere");
   });
 
@@ -60,6 +66,6 @@ describe("buildHtmlDocument", () => {
     // The toggle stores the user's choice so it survives reloads.
     expect(out).toContain("localStorage");
     // ...and is hidden when printing.
-    expect(out).toContain("@media print { #glyph-theme-toggle");
+    expect(out).toContain("#glyph-theme-toggle { display: none; }");
   });
 });
