@@ -32,4 +32,10 @@ describe("isNewerVersion", () => {
     expect(isNewerVersion("1.2.0-beta", "1.2.0")).toBe(false);
     expect(isNewerVersion("1.2.1-beta", "1.2.0")).toBe(true);
   });
+
+  it("treats a fully non-numeric component as zero", () => {
+    // "x" parses to NaN and is coerced to 0, so 1.x.0 === 1.0.0.
+    expect(isNewerVersion("1.2.0", "1.x.0")).toBe(true);
+    expect(isNewerVersion("1.x.0", "1.0.0")).toBe(false);
+  });
 });

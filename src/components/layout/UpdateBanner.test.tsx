@@ -18,7 +18,8 @@ describe("UpdateBanner", () => {
 
   it("shows the available and current versions", () => {
     render(<UpdateBanner update={UPDATE} onDismiss={vi.fn()} />);
-    expect(screen.getByText(/Glyph 0\.9\.0 is available/)).toBeInTheDocument();
+    expect(screen.getByText("Glyph 0.9.0")).toBeInTheDocument();
+    expect(screen.getByText(/is available/)).toBeInTheDocument();
     expect(screen.getByText(/you have 0\.8\.1/)).toBeInTheDocument();
   });
 

@@ -18,10 +18,10 @@ export function UpdateBanner({ update, onDismiss }: UpdateBannerProps) {
   return (
     <div
       data-print-hide="true"
-      className="flex items-center gap-3 px-4 py-1.5 border-b border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-xs text-[var(--color-text-primary)] shrink-0"
+      className="flex items-center gap-3 px-4 py-2 border-b border-[var(--color-border)] border-l-4 border-l-[var(--color-accent)] bg-[var(--color-banner-bg)] text-sm text-[var(--color-text-primary)] select-none shrink-0"
     >
       <span>
-        Glyph {update.latestVersion} is available
+        <span className="font-semibold">Glyph {update.latestVersion}</span> is available
         <span className="text-[var(--color-text-secondary)]">
           {" "}
           (you have {update.currentVersion})
@@ -29,14 +29,14 @@ export function UpdateBanner({ update, onDismiss }: UpdateBannerProps) {
       </span>
       <button
         type="button"
-        className="ml-auto font-medium text-[var(--color-accent)] hover:underline"
+        className="ml-auto cursor-pointer rounded-md bg-[var(--color-accent)] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[var(--color-accent-hover)]"
         onClick={() => void openUrl(update.url)}
       >
         Download
       </button>
       <button
         type="button"
-        className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+        className="cursor-pointer text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
         onClick={onDismiss}
         aria-label="Dismiss update notification"
       >

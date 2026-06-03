@@ -73,7 +73,7 @@ export function UpdatesSection() {
           <button
             type="button"
             onClick={() => void openUrl(status.url)}
-            style={{ color: "var(--color-accent)", textDecoration: "underline" }}
+            style={{ color: "var(--color-accent)", textDecoration: "underline", cursor: "pointer" }}
           >
             Download
           </button>
