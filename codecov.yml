@@ -42,6 +42,11 @@ ignore:
   - "src/vite-env.d.ts"
   - "src/test/**"
   - "src/components/icons/**"
+  # Export rasterization is browser-rendering glue (html2canvas, Mermaid SVG
+  # rendering, canvas/Image). It needs a real layout/canvas engine, so it can't
+  # run in the happy-dom test environment; its caller (prepareContent) is tested
+  # with these helpers mocked.
+  - "src/lib/export/rasterize.ts"
   - "src-tauri/src/main.rs"
   # Tauri-runtime menu wiring (build_menu, apply_menu_state, handle_menu_event):
   # every line drives the native menu manager and can't be exercised from

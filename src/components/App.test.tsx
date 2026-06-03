@@ -28,7 +28,20 @@ vi.mock("./modals/AIPanel", () => ({
   AIPanel: ({ open }: { open: boolean }) => (open ? <div data-testid="ai-panel" /> : null),
 }));
 
+// Mocked so a test can drive the in-progress-export state (the real hook never
+// sets it here — the mocked viewer renders no `.markdown-body` to export).
+vi.mock("@/hooks/useExport", () => ({ useExport: vi.fn() }));
+
+import { type ExportHandlers, useExport } from "@/hooks/useExport";
 import { App } from "./App";
+
+const IDLE_EXPORTERS: ExportHandlers = {
+  exportHtml: vi.fn(),
+  exportDocx: vi.fn(),
+  exportEpub: vi.fn(),
+  exportPdf: vi.fn(),
+  exporting: null,
+};
 
 interface MenuListeners {
   [event: string]: ((event: { payload: unknown }) => void) | undefined;
@@ -61,6 +74,7 @@ beforeEach(() => {
   vi.mocked(invoke).mockReset();
   vi.mocked(listen).mockReset();
   vi.mocked(listen).mockResolvedValue(() => {});
+  vi.mocked(useExport).mockReturnValue(IDLE_EXPORTERS);
 });
 
 describe("App", () => {
@@ -91,6 +105,15 @@ describe("App", () => {
     const { wrapper } = withProviders();
     const { findByTestId } = render(<App />, { wrapper });
     expect(await findByTestId("markdown-viewer")).toBeInTheDocument();
+  });
+
+  it("shows the export progress toast while an export is in flight", async () => {
+    vi.mocked(useExport).mockReturnValue({ ...IDLE_EXPORTERS, exporting: "docx" });
+    const { wrapper } = withProviders();
+    const { findByRole } = render(<App />, { wrapper });
+
+    const status = await findByRole("status");
+    expect(status).toHaveTextContent("Exporting Word document…");
   });
 
   it("renders the empty state when there are no tabs", async () => {

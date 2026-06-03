@@ -1,36 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback } from "react";
+import { buildTocElement } from "@/lib/export/toc";
 import type { PrintSettings } from "../lib/settings";
 import type { TocEntry } from "./useTableOfContents";
 
 interface UsePrintOptions {
   entries: TocEntry[];
   settings: PrintSettings;
-}
-
-const TOC_CLASS = "print-toc";
-
-function buildTocElement(entries: TocEntry[]): HTMLElement {
-  const nav = document.createElement("nav");
-  nav.className = TOC_CLASS;
-  nav.setAttribute("aria-label", "Table of contents");
-
-  const heading = document.createElement("h2");
-  heading.textContent = "Contents";
-  nav.appendChild(heading);
-
-  const list = document.createElement("ul");
-  for (const entry of entries) {
-    const li = document.createElement("li");
-    li.style.paddingLeft = `${(entry.level - 1) * 16}px`;
-    const a = document.createElement("a");
-    a.href = `#${entry.id}`;
-    a.textContent = entry.text;
-    li.appendChild(a);
-    list.appendChild(li);
-  }
-  nav.appendChild(list);
-  return nav;
 }
 
 export function usePrint({ entries, settings }: UsePrintOptions) {

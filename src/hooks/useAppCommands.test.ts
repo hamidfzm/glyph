@@ -26,6 +26,10 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     find: vi.fn(),
     toggleEdit: vi.fn(),
     print: vi.fn(),
+    exportHtml: vi.fn(),
+    exportDocx: vi.fn(),
+    exportEpub: vi.fn(),
+    exportPdf: vi.fn(),
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
     zoomReset: vi.fn(),
@@ -119,7 +123,7 @@ describe("useAppCommands", () => {
     find("Settings…").run();
     find("Find in Document").run();
     find("Toggle Edit Mode").run();
-    find("Print / Export to PDF").run();
+    find("Print…").run();
     find("Zoom In").run();
     find("Zoom Out").run();
     find("Reset Zoom").run();

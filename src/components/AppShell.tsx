@@ -7,6 +7,7 @@ import { useCommandPaletteController } from "@/hooks/useCommandPaletteController
 import { useContextMenu } from "@/hooks/useContextMenu";
 import { useDocumentUndoRedo } from "@/hooks/useDocumentUndoRedo";
 import { useErrorReporting } from "@/hooks/useErrorReporting";
+import { useExport } from "@/hooks/useExport";
 import { useFontZoom } from "@/hooks/useFontZoom";
 import { useMenuEvents } from "@/hooks/useMenuEvents";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
@@ -17,6 +18,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
 import { nextEditorMode } from "@/lib/settings";
 import { EmptyState } from "./layout/EmptyState";
+import { ExportProgress } from "./layout/ExportProgress";
 import { Sidebar } from "./layout/Sidebar";
 import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
@@ -82,6 +84,12 @@ export function AppShell() {
   const readAloud = useReadAloudController(settings.ai, () => displayContent);
   const tts = readAloud.tts;
   const printDoc = usePrint({ entries: tabs.tocEntries, settings: settings.print });
+  const exporters = useExport({
+    entries: tabs.tocEntries,
+    settings: settings.print,
+    filePath: activeFile?.path,
+    content: displayContent,
+  });
   const zoom = useFontZoom({ fontSize: settings.appearance.fontSize, updateSettings });
 
   useNativeMenuState({
@@ -123,6 +131,10 @@ export function AppShell() {
       find: () => setSearchOpen(true),
       toggleEdit: handleToggleEdit,
       print: printDoc,
+      exportHtml: exporters.exportHtml,
+      exportDocx: exporters.exportDocx,
+      exportEpub: exporters.exportEpub,
+      exportPdf: exporters.exportPdf,
       zoomIn: zoom.zoomIn,
       zoomOut: zoom.zoomOut,
       zoomReset: zoom.zoomReset,
@@ -138,6 +150,10 @@ export function AppShell() {
       sidebar.resetLayout,
       handleToggleEdit,
       printDoc,
+      exporters.exportHtml,
+      exporters.exportDocx,
+      exporters.exportEpub,
+      exporters.exportPdf,
       zoom.zoomIn,
       zoom.zoomOut,
       zoom.zoomReset,
@@ -202,6 +218,8 @@ export function AppShell() {
         <Sidebar side="right" />
       </div>
       <StatusBar />
+
+      {exporters.exporting && <ExportProgress format={exporters.exporting} />}
 
       <CommandPalette
         open={palette.open}
