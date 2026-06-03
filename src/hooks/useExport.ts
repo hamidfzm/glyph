@@ -75,7 +75,12 @@ export function useExport({
       // dialog, covering image inlining and the build/write.
       setExporting(format);
       try {
-        const prepared = await prepareContent({ entries, includeToc });
+        const prepared = await prepareContent({
+          entries,
+          includeToc,
+          // PDF can't compute styles itself; inline the code colors for it.
+          inlineCodeColors: format === "pdf",
+        });
         // The body can vanish if the file is closed during the (async) save
         // dialog, even though the pre-dialog guard passed.
         if (prepared == null) return;

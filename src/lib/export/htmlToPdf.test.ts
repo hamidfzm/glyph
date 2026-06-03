@@ -223,6 +223,48 @@ describe("convertHtmlToPdf", () => {
     expect(JSON.stringify(content)).toContain('"text":"https://example.com"');
   });
 
+  it("renders code blocks as colored runs using inlined token colors", () => {
+    const content = convertHtmlToPdf(
+      '<pre style="background-color: rgb(40,42,54); color: rgb(248,248,242)">' +
+        '<code><span style="color: rgb(255,121,198)">const</span> x = ' +
+        '<span style="color: rgb(241,250,140)">1</span>;\n</code></pre>',
+    );
+    const json = JSON.stringify(content);
+    // Keyword + number token colors converted to hex.
+    expect(json).toContain("#ff79c6");
+    expect(json).toContain("#f1fa8c");
+    expect(json).toContain("const");
+    // The block background comes from the <pre> (fillColor is a callback).
+    const block = content[0] as unknown as { layout: { fillColor: () => string } };
+    expect(block.layout.fillColor()).toBe("#282a36");
+  });
+
+  it("renders code without inlined colors as plain runs on the default fill", () => {
+    const content = convertHtmlToPdf("<pre><code>plain code</code></pre>");
+    expect(JSON.stringify(content)).toContain("plain code");
+    const block = content[0] as unknown as { layout: { fillColor: () => string } };
+    expect(block.layout.fillColor()).toBe("#f4f4f4"); // default fill
+  });
+
+  it("passes hex/named code colors through and treats transparent fill as default", () => {
+    const hexed = convertHtmlToPdf(
+      '<pre style="background-color: rgba(0,0,0,0)"><code>' +
+        '<span style="color: #abcdef">tok</span>x\n</code></pre>',
+    );
+    expect(JSON.stringify(hexed)).toContain("#abcdef");
+    const block = hexed[0] as unknown as { layout: { fillColor: () => string } };
+    expect(block.layout.fillColor()).toBe("#f4f4f4"); // transparent → default
+  });
+
+  it("handles a code block that is empty, has comments, or ends with a blank line", () => {
+    expect(convertHtmlToPdf("<pre></pre>")).toHaveLength(1);
+    // A trailing newline-only run is dropped; a comment node is ignored.
+    const content = convertHtmlToPdf(
+      '<pre><code><span style="color:#111">x</span><!-- c -->\n</code></pre>',
+    );
+    expect(JSON.stringify(content)).toContain("#111");
+  });
+
   it("renders in-page and relative links as plain text (no link node)", () => {
     const content = convertHtmlToPdf('<p><a href="#h">jump</a> <a href="./x.md">rel</a></p>');
     const json = JSON.stringify(content);

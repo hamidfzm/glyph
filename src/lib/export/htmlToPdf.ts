@@ -103,6 +103,42 @@ function inlinePdf(node: Node, style: InlineStyle = {}): Content[] {
   return out;
 }
 
+// Convert a computed CSS color (`rgb()/rgba()`) to the hex pdfmake expects.
+// Hex/named values pass through; fully transparent resolves to undefined.
+export function cssColorToHex(color: string | undefined): string | undefined {
+  if (!color) return undefined;
+  const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?/i.exec(color);
+  if (!m) return color;
+  if (m[4] !== undefined && Number(m[4]) === 0) return undefined;
+  const hex = (n: string) => Number(n).toString(16).padStart(2, "0");
+  return `#${hex(m[1])}${hex(m[2])}${hex(m[3])}`;
+}
+
+// Flatten a highlighted <pre> into colored text runs, carrying each span's
+// inlined syntax-highlight color (set by prepareContent for PDF export) down
+// the tree and preserving newlines. The trailing newline is dropped.
+function codeRuns(pre: Element, baseColor?: string): Content[] {
+  const runs: Content[] = [];
+  const walk = (node: Node, color?: string) => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3) {
+        const text = (child as Text).data;
+        runs.push(color ? { text, color } : { text });
+      } else if (child.nodeType === 1) {
+        const el = child as HTMLElement;
+        walk(el, cssColorToHex(el.style?.color) ?? color);
+      }
+    }
+  };
+  walk(pre, baseColor);
+  const last = runs[runs.length - 1] as { text?: string } | undefined;
+  if (last && typeof last.text === "string") {
+    last.text = last.text.replace(/\n$/, "");
+    if (!last.text) runs.pop();
+  }
+  return runs.length ? runs : [{ text: "" }];
+}
+
 function imageNode(el: Element): Content | null {
   const src = el.getAttribute("src") ?? "";
   const decoded = decodeDataUri(src);
@@ -200,14 +236,18 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
     }));
   }
   if (tag === "pre") {
-    const code = el.textContent!.replace(/\n$/, "");
+    // The code block's background and default text color are inlined onto the
+    // <pre> by prepareContent (PDF) so the cell matches the active code theme.
+    const style = (el as HTMLElement).style;
+    const fill = cssColorToHex(style?.backgroundColor) ?? "#f4f4f4";
+    const baseColor = cssColorToHex(style?.color);
     return [
       {
         table: {
           widths: ["*"],
-          body: [[{ text: code, preserveLeadingSpaces: true, fontSize: 9 }]],
+          body: [[{ text: codeRuns(el, baseColor), preserveLeadingSpaces: true, fontSize: 9 }]],
         },
-        layout: { fillColor: () => "#f4f4f4", hLineWidth: () => 0, vLineWidth: () => 0 },
+        layout: { fillColor: () => fill, hLineWidth: () => 0, vLineWidth: () => 0 },
         margin: [0, 0, 0, 8],
       },
     ];

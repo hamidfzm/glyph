@@ -6,6 +6,30 @@ export interface PrepareOptions {
   includeToc: boolean;
   // Overridable for tests; defaults to the live document.
   doc?: Document;
+  // PDF export: inline the rendered syntax-highlight colors onto code spans so
+  // the (computed-style-free) PDF walker can reproduce them.
+  inlineCodeColors?: boolean;
+}
+
+// Copy the live computed text color of each highlighted code span onto the
+// matching clone span as an inline style. The clone is detached, so the PDF
+// walker can't compute styles itself — it reads these inline colors instead.
+function inlineCodeColors(liveBody: Element, clone: Element): void {
+  // Per-token colors. The clone is a deep copy, so the node lists line up.
+  const liveSpans = liveBody.querySelectorAll("pre code span");
+  const cloneSpans = clone.querySelectorAll("pre code span");
+  liveSpans.forEach((span, i) => {
+    (cloneSpans[i] as HTMLElement).style.color = getComputedStyle(span).color;
+  });
+  // Block background + default text color, so the PDF cell matches the theme.
+  const livePres = liveBody.querySelectorAll("pre");
+  const clonePres = clone.querySelectorAll("pre");
+  livePres.forEach((pre, i) => {
+    const cs = getComputedStyle(pre.querySelector("code") ?? pre);
+    const target = clonePres[i] as HTMLElement;
+    target.style.backgroundColor = cs.backgroundColor;
+    target.style.color = cs.color;
+  });
 }
 
 export interface PreparedContent {
@@ -57,12 +81,14 @@ export async function prepareContent({
   entries,
   includeToc,
   doc = document,
+  inlineCodeColors: withCodeColors = false,
 }: PrepareOptions): Promise<PreparedContent | null> {
   const body = doc.querySelector<HTMLElement>(".markdown-body, .notebook-body");
   if (!body) return null;
   const bodyClass = body.classList.contains("notebook-body") ? "notebook-body" : "markdown-body";
 
   const clone = body.cloneNode(true) as HTMLElement;
+  if (withCodeColors) inlineCodeColors(body, clone);
   for (const el of Array.from(clone.querySelectorAll(STRIP_SELECTOR))) {
     el.remove();
   }

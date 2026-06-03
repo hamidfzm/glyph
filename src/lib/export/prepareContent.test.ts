@@ -77,6 +77,21 @@ describe("prepareContent", () => {
     expect(html).toMatch(/<a href="#section"[^>]*>jump<\/a>/);
   });
 
+  it("inlines code token colors when requested (PDF)", async () => {
+    // Inline styles are reflected by getComputedStyle, so the copy is observable.
+    // The second <pre> has no <code>, exercising that fallback.
+    setBody(
+      '<pre><code><span style="color: rgb(255,0,0)">kw</span> x</code></pre>' +
+        "<pre>raw block</pre>",
+    );
+    const result = await prepareContent({
+      entries: ENTRIES,
+      includeToc: false,
+      inlineCodeColors: true,
+    });
+    expect(result?.html).toContain("rgb(255, 0, 0)");
+  });
+
   it("injects a table of contents when requested", async () => {
     setBody("<h1>Intro</h1>");
     const html = await prepareHtml(true);
