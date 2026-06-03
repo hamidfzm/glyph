@@ -20,6 +20,7 @@ const LAYOUT_OVERRIDES = `
 html, body { height: auto; min-height: 100%; overflow: visible; }
 body { margin: 0; padding: 2rem 1.25rem; }
 .markdown-body, .notebook-body { max-width: 820px; height: auto; margin: 0 auto; overflow: visible; }
+.markdown-body pre, .notebook-body pre, .markdown-body pre code, .notebook-body pre code { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: visible; }
 #glyph-theme-toggle { position: fixed; top: 1rem; right: 1rem; z-index: 1000; width: 2.4rem; height: 2.4rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; border: 1px solid var(--color-border, #d0d0d0); background: var(--color-surface, #fff); color: var(--color-text-primary, #1d1d1f); font-size: 1.1rem; line-height: 1; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
 @media print { #glyph-theme-toggle { display: none; } }`;
 

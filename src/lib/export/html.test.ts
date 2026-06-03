@@ -31,6 +31,9 @@ describe("buildHtmlDocument", () => {
     const out = buildHtmlDocument({ bodyHtml: "", title: "t", css: "", dark: false });
     expect(out).toContain("html, body { height: auto; min-height: 100%; overflow: visible; }");
     expect(out).toContain(".markdown-body, .notebook-body { max-width: 820px");
+    // Wide code blocks wrap instead of scrolling horizontally.
+    expect(out).toContain("white-space: pre-wrap");
+    expect(out).toContain("overflow-wrap: anywhere");
   });
 
   it("uses the given body class so notebook styles apply", () => {
