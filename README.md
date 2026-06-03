@@ -82,6 +82,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Cross-platform: macOS (universal), Windows (x64), Linux (amd64 + arm64)
 - Window state persistence across restarts
 - Native menu bar with keyboard shortcuts
+- Update notifications — checks for a newer release on launch and shows a banner when one is available (toggle in Settings → Behavior)
 
 ### Privacy
 - Local-first: your files never leave your machine

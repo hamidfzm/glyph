@@ -1,5 +1,6 @@
 import { useSettings } from "@/hooks/useSettings";
 import { Toggle } from "./controls";
+import { UpdatesSection } from "./UpdatesSection";
 
 export function BehaviorTab() {
   const { settings, updateSettings } = useSettings();
@@ -42,6 +43,8 @@ export function BehaviorTab() {
           />
         </div>
       </div>
+
+      <UpdatesSection />
 
       {behavior.recentFiles.length > 0 && (
         <div className="settings-section">
