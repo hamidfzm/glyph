@@ -302,13 +302,24 @@ jobs:
 
           # Generate the version-specific changelog (same source as the GitHub
           # release notes) so the Chocolatey package page shows what changed in
-          # this release instead of just linking to the releases list.
+          # this release instead of only linking to the releases list.
           $prevTag = gh release list --repo $repo --limit 2 --json tagName --jq '.[1].tagName'
-          $notes = gh api "repos/$repo/releases/generate-notes" `
+          $changelog = gh api "repos/$repo/releases/generate-notes" `
             -f tag_name="$tag" `
             -f previous_tag_name="$prevTag" `
             --jq .body
-          $notes = "$notes`n`nFull changelog: https://github.com/$repo/releases/tag/$tag"
+
+          # Append a "Links" section so users can jump to the release page,
+          # docs, and issue tracker straight from the Chocolatey listing.
+          $links = @(
+            "## Links",
+            "",
+            "- Release page: https://github.com/$repo/releases/tag/$tag",
+            "- All releases: https://github.com/$repo/releases",
+            "- Documentation: https://github.com/$repo#readme",
+            "- Report an issue: https://github.com/$repo/issues"
+          ) -join "`n"
+          $notes = "$changelog`n`n$links"
 
           $install = Get-Content chocolatey/tools/chocolateyinstall.ps1 -Raw
           $install = $install.Replace('{{SHA256}}', $sha)
