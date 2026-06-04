@@ -117,6 +117,15 @@ pub trait SyncBackend: Send + Sync {
     /// asks the backend to generate one from the staged diff, matching
     /// GitHub's web editor conventions.
     fn sync(&self, commit_message: Option<&str>) -> Result<SyncResult, SyncError>;
+
+    /// Commit the workspace's local config directory into history when it
+    /// isn't tracked yet, so enabling sync persists the config immediately
+    /// (and it travels with clones) instead of waiting for the first
+    /// content sync. Returns `true` when a commit was created. Backends
+    /// with no notion of committed config keep the default no-op.
+    fn commit_config(&self) -> Result<bool, SyncError> {
+        Ok(false)
+    }
 }
 
 #[cfg(test)]

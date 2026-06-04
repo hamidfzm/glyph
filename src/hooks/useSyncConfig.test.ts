@@ -295,6 +295,34 @@ describe("useSyncConfig", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  it("commitConfig() forwards to sync_commit_config and is a no-op without a workspace", async () => {
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_commit_config: () => true,
+    });
+    const { result } = renderHook(() => useSyncConfig("/w"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let committed: boolean | undefined;
+    await act(async () => {
+      committed = await result.current.commitConfig();
+    });
+    expect(committed).toBe(true);
+    expect(invoke).toHaveBeenCalledWith("sync_commit_config", { workspacePath: "/w" });
+
+    // Null workspace -- no command call, resolves to false.
+    vi.mocked(invoke).mockClear();
+    const { result: noWs } = renderHook(() => useSyncConfig(null));
+    let result2: boolean | undefined;
+    await act(async () => {
+      result2 = await noWs.current.commitConfig();
+    });
+    expect(result2).toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("clearToken() forwards to sync_clear_token and is a no-op without a workspace", async () => {
     routeInvoke({
       sync_get_config: () => null,

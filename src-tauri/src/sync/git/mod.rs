@@ -44,15 +44,26 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::sync::SyncError;
 
-/// Default commit message Glyph uses when it auto-commits local
-/// changes during a sync. The user always sees a real "you wrote
-/// notes" history in their repo, but they don't have to author each
-/// commit by hand.
-pub(super) const AUTO_COMMIT_MESSAGE: &str = "glyph: auto-commit local changes";
-/// What we call the merge commit when we have to reconcile remote.
-pub(super) const MERGE_COMMIT_MESSAGE: &str = "glyph: merge remote changes";
 /// Remote name we look up; matches `git clone`'s default.
 pub(super) const ORIGIN: &str = "origin";
+
+/// Fallback commit subject when an auto-commit's diff comes back empty.
+/// The user always sees a real "you wrote notes" history in their repo,
+/// but they don't have to author each commit by hand.
+pub(super) fn auto_commit_fallback_message() -> String {
+    format!("{}: auto-commit local changes", crate::APP_NAME)
+}
+
+/// Subject for the merge commit we create when reconciling remote changes.
+pub(super) fn merge_commit_message() -> String {
+    format!("{}: merge remote changes", crate::APP_NAME)
+}
+
+/// Subject for the setup commit that lands the workspace config directory
+/// in history when sync is first enabled.
+pub(super) fn config_commit_message() -> String {
+    format!("{}: add workspace config", crate::APP_NAME)
+}
 
 /// Map a libgit2 transport error into a [`SyncError`] the UI can act on.
 pub(super) fn map_remote_error(e: git2::Error) -> SyncError {

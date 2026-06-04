@@ -20,7 +20,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::sync::{BackendKind, CommitIdentity, ConflictPolicy, WorkspaceSyncConfig};
 
-const GLYPH_DIR: &str = ".glyph";
 const CONFIG_FILE: &str = "config.json";
 const STATE_FILE: &str = "state.json";
 const GITIGNORE_FILE: &str = ".gitignore";
@@ -105,7 +104,7 @@ pub struct WorkspaceState {
 }
 
 fn glyph_dir(workspace_root: &Path) -> std::path::PathBuf {
-    workspace_root.join(GLYPH_DIR)
+    workspace_root.join(format!(".{}", crate::APP_NAME))
 }
 
 /// Read `.glyph/config.json`. `Ok(None)` when the file is absent (a workspace

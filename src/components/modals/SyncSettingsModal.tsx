@@ -107,18 +107,21 @@ export function resolveSaveConfig(
 
 interface CommitSaveDeps {
   repoPresent: boolean | null;
+  initRepo: (defaultBranch: string | null, remoteUrl: string | null) => Promise<void>;
   save: (config: WorkspaceSyncConfig) => Promise<void>;
   setOrigin: (remoteUrl: string) => Promise<void>;
   setToken: (token: string) => Promise<void>;
   clearTokenField: () => void;
+  commitConfig: () => Promise<boolean>;
 }
 
 /**
- * Persist `next` and propagate the remote URL + token to the backend. A no-op
- * when `next` is null (nothing actionable to save). Kept out of the component
- * — and exported — so the guard plus the repo-present / token branches can be
- * unit-tested directly; the same paths are awkward or impossible to reach by
- * driving the form (see `resolveSaveConfig`).
+ * Enable sync for the workspace: turn the folder into a git repo if it isn't
+ * one, persist `next`, propagate the remote URL + token, and land the config
+ * in history. A no-op when `next` is null (nothing actionable to save). Kept
+ * out of the component — and exported — so the guard plus the init / origin /
+ * token / commit branches can be unit-tested directly; the same paths are
+ * awkward or impossible to reach by driving the form (see `resolveSaveConfig`).
  */
 export async function commitSaveConfig(
   next: WorkspaceSyncConfig | null,
@@ -126,12 +129,17 @@ export async function commitSaveConfig(
   deps: CommitSaveDeps,
 ): Promise<void> {
   if (!next) return;
+  // Enabling sync on a plain folder turns it into a git repo first, so the
+  // commit step below (and later syncs) have a repository to write to.
+  if (!deps.repoPresent) {
+    await deps.initRepo(next.remoteBranch, next.remoteUrl || null);
+  }
   await deps.save(next);
   // Glyph's stored config is advisory; libgit2 reads `remote.origin.url`
   // from the workspace's .git/config for the actual transport. Push the
   // form value over so a Save-then-Sync uses the URL the user just typed.
   // Skipped for local-only setups (blank URL) — there's no origin to set.
-  if (deps.repoPresent && next.remoteUrl) {
+  if (next.remoteUrl) {
     try {
       await deps.setOrigin(next.remoteUrl);
     } catch {
@@ -142,6 +150,13 @@ export async function commitSaveConfig(
   if (trimmed) {
     await deps.setToken(trimmed);
     deps.clearTokenField();
+  }
+  // Commit the `.glyph/` config so it persists and travels with clones,
+  // rather than waiting for the first content sync.
+  try {
+    await deps.commitConfig();
+  } catch {
+    // commitConfig failures already surface in the hook's error state.
   }
 }
 
@@ -175,6 +190,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
     setToken,
     initRepo,
     setOrigin,
+    commitConfig,
     runSync,
     refreshStatus,
   } = useSyncConfig(workspacePath);
@@ -215,9 +231,11 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
   const handleSave = () =>
     commitSaveConfig(resolveSaveConfig(workspacePath, form), form.token, {
       repoPresent,
+      initRepo,
       save,
       setOrigin,
       setToken,
+      commitConfig,
       clearTokenField: () => setForm((prev) => ({ ...prev, token: "" })),
     });
 

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearSyncToken,
   cloneSyncRemote,
+  commitSyncConfig,
   defaultConfigFor,
   describeSyncError,
   getDefaultSyncAuthor,
@@ -79,6 +80,12 @@ describe("sync command wrappers", () => {
       () => cloneSyncRemote("/w", "https://r", "tok"),
       "sync_clone_remote",
       { workspacePath: "/w", remoteUrl: "https://r", token: "tok" },
+    ],
+    [
+      "commitSyncConfig",
+      () => commitSyncConfig("/w"),
+      "sync_commit_config",
+      { workspacePath: "/w" },
     ],
     ["getSyncStatus", () => getSyncStatus("/w"), "sync_status", { workspacePath: "/w" }],
     ["runSync", () => runSync("/w"), "sync_run", { workspacePath: "/w", message: null }],

@@ -240,6 +240,42 @@ fn sync_commits_locally_when_no_remote_is_configured() {
 }
 
 #[test]
+fn commit_config_commits_glyph_dir_once_then_is_a_noop() {
+    // Simulate enabling sync: write a `.glyph/` config, then commit it.
+    let f = Fixture::new();
+    let glyph = f.workspace.join(".glyph");
+    fs::create_dir_all(&glyph).unwrap();
+    fs::write(glyph.join("config.json"), "{\"version\":1}\n").unwrap();
+    fs::write(glyph.join(".gitignore"), "state.json\n").unwrap();
+    // A volatile state file that must NOT be committed (it's gitignored).
+    fs::write(glyph.join("state.json"), "{}\n").unwrap();
+
+    let backend = f.backend();
+    assert!(backend.commit_config().unwrap(), "first call commits");
+
+    // The commit contains the config + gitignore but not state.json.
+    let repo = Repository::open(&f.workspace).unwrap();
+    let tree = repo.head().unwrap().peel_to_tree().unwrap();
+    assert!(tree
+        .get_path(std::path::Path::new(".glyph/config.json"))
+        .is_ok());
+    assert!(tree
+        .get_path(std::path::Path::new(".glyph/.gitignore"))
+        .is_ok());
+    assert!(tree
+        .get_path(std::path::Path::new(".glyph/state.json"))
+        .is_err());
+    let tip = repo.head().unwrap().peel_to_commit().unwrap();
+    assert_eq!(tip.message().unwrap(), super::config_commit_message());
+
+    // Second call is a no-op: `.glyph/` is already tracked.
+    assert!(
+        !backend.commit_config().unwrap(),
+        "second call commits nothing"
+    );
+}
+
+#[test]
 fn sync_uses_an_explicit_commit_message_when_supplied() {
     let f = Fixture::new();
     f.write_file("notes.md", "# hello\n");
@@ -354,7 +390,7 @@ fn sync_merges_when_local_and_remote_have_diverged() {
         .peel_to_commit()
         .unwrap();
     assert_eq!(tip.parent_count(), 2);
-    assert_eq!(tip.message().unwrap(), MERGE_COMMIT_MESSAGE);
+    assert_eq!(tip.message().unwrap(), merge_commit_message().as_str());
 }
 
 #[test]
@@ -664,7 +700,7 @@ fn auto_commit_message_falls_back_to_the_legacy_message_when_diff_is_empty() {
     let repo = Repository::open(&f.workspace).unwrap();
     // No changes since the sync, so `diff_tree_to_index` is empty.
     let msg = auto_commit_message(&repo).unwrap();
-    assert_eq!(msg, super::AUTO_COMMIT_MESSAGE);
+    assert_eq!(msg, super::auto_commit_fallback_message());
 }
 
 #[test]

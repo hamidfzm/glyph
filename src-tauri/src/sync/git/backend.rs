@@ -9,8 +9,8 @@ use crate::sync::{
 };
 
 use super::{
-    auto_commit_message, make_credentials_callback, map_remote_error, now_unix,
-    MERGE_COMMIT_MESSAGE, ORIGIN,
+    auto_commit_message, config_commit_message, make_credentials_callback, map_remote_error,
+    merge_commit_message, now_unix, ORIGIN,
 };
 
 pub struct GitBackend {
@@ -75,7 +75,7 @@ impl GitBackend {
             .unwrap_or_else(|_| "Glyph".to_string());
         let email = cfg
             .get_string("user.email")
-            .unwrap_or_else(|_| "glyph@localhost".to_string());
+            .unwrap_or_else(|_| format!("{}@localhost", crate::APP_NAME));
         git2::Signature::now(&name, &email).map_err(|e| SyncError::Backend(e.message().to_string()))
     }
 
@@ -262,6 +262,21 @@ impl GitBackend {
             .map_err(map_remote_error)?;
         Ok(())
     }
+
+    /// Whether the `.glyph/` config directory is already present in HEAD.
+    /// `false` on an unborn branch (no commits yet).
+    fn config_tracked(repo: &Repository) -> Result<bool, SyncError> {
+        let head_tree = match repo.head() {
+            Ok(h) => h
+                .peel_to_tree()
+                .map_err(|e| SyncError::Backend(e.message().to_string()))?,
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => return Ok(false),
+            Err(e) => return Err(SyncError::Backend(e.message().to_string())),
+        };
+        Ok(head_tree
+            .get_path(Path::new(&format!(".{}", crate::APP_NAME)))
+            .is_ok())
+    }
 }
 
 impl SyncBackend for GitBackend {
@@ -357,7 +372,10 @@ impl SyncBackend for GitBackend {
                     .or_else(|_| repo.reference(&local_ref_name, upstream_oid, true, "ff init"))
                     .map_err(|e| SyncError::Backend(e.message().to_string()))?;
                 local_ref
-                    .set_target(upstream_oid, "glyph: fast-forward to upstream")
+                    .set_target(
+                        upstream_oid,
+                        &format!("{}: fast-forward to upstream", crate::APP_NAME),
+                    )
                     .map_err(|e| SyncError::Backend(e.message().to_string()))?;
                 repo.set_head(&local_ref_name)
                     .map_err(|e| SyncError::Backend(e.message().to_string()))?;
@@ -398,7 +416,7 @@ impl SyncBackend for GitBackend {
                 Self::commit_index(
                     &repo,
                     &signature,
-                    MERGE_COMMIT_MESSAGE,
+                    &merge_commit_message(),
                     vec![head, upstream_commit],
                 )?;
                 repo.cleanup_state()
@@ -423,5 +441,36 @@ impl SyncBackend for GitBackend {
             conflicts: vec![],
             completed_unix: now_unix(),
         })
+    }
+
+    fn commit_config(&self) -> Result<bool, SyncError> {
+        let repo = self.open_repo()?;
+        // Only the first enable lands a setup commit; later config edits ride
+        // along the next content sync.
+        if Self::config_tracked(&repo)? {
+            return Ok(false);
+        }
+        let signature = self.signature()?;
+        let mut index = repo
+            .index()
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        // Stage just the `.glyph/` directory. `.glyph/.gitignore` keeps
+        // `state.json` out, so this commits config.json + the .gitignore only.
+        index
+            .add_all(
+                [format!(".{}", crate::APP_NAME).as_str()].iter(),
+                git2::IndexAddOption::DEFAULT,
+                None,
+            )
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        index
+            .write()
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        let parents = match Self::head_commit(&repo)? {
+            Some(c) => vec![c],
+            None => vec![],
+        };
+        Self::commit_index(&repo, &signature, &config_commit_message(), parents)?;
+        Ok(true)
     }
 }

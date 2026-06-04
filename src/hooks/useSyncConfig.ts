@@ -17,6 +17,7 @@ import {
   type CommitAuthorHint,
   clearSyncToken as clearSyncTokenCommand,
   cloneSyncRemote,
+  commitSyncConfig,
   describeSyncError,
   getDefaultSyncAuthor,
   getSyncConfig,
@@ -66,6 +67,7 @@ export interface UseSyncConfigActions {
   initRepo: (defaultBranch: string | null, remoteUrl: string | null) => Promise<void>;
   cloneRemote: (remoteUrl: string, token: string | null) => Promise<void>;
   setOrigin: (remoteUrl: string) => Promise<void>;
+  commitConfig: () => Promise<boolean>;
   runSync: (message?: string | null) => Promise<SyncResult>;
   refreshStatus: () => Promise<void>;
   refreshRepoPresent: () => Promise<void>;
@@ -203,6 +205,11 @@ export function useSyncConfig(workspacePath: string | null): UseSyncConfigReturn
     [guarded, workspacePath],
   );
 
+  const commitConfig = useCallback(async (): Promise<boolean> => {
+    if (!workspacePath) return false;
+    return guarded(() => commitSyncConfig(workspacePath));
+  }, [guarded, workspacePath]);
+
   const runSync = useCallback(
     async (message?: string | null): Promise<SyncResult> => {
       if (!workspacePath) {
@@ -262,6 +269,7 @@ export function useSyncConfig(workspacePath: string | null): UseSyncConfigReturn
     initRepo,
     cloneRemote,
     setOrigin,
+    commitConfig,
     runSync,
     refreshStatus,
     refreshRepoPresent,

@@ -2,7 +2,7 @@ use git2::Repository;
 
 use crate::sync::SyncError;
 
-use super::AUTO_COMMIT_MESSAGE;
+use super::auto_commit_fallback_message;
 
 /// Generate a GitHub-style commit subject from the diff between HEAD
 /// and the current index. Mirrors what GitHub's web editor produces
@@ -13,7 +13,7 @@ use super::AUTO_COMMIT_MESSAGE;
 ///   matches when all deltas are the same kind, falls back to `Update`)
 /// - four or more: `Create|Delete|Update first, second and N more files`
 ///
-/// Falls back to the legacy `AUTO_COMMIT_MESSAGE` when libgit2 reports
+/// Falls back to [`auto_commit_fallback_message`] when libgit2 reports
 /// no deltas (e.g. an unexpected state where the index didn't actually
 /// move). Callers only invoke this when `stage_all` returned `true`, so
 /// that path is defensive.
@@ -65,7 +65,7 @@ pub fn auto_commit_message(repo: &Repository) -> Result<String, SyncError> {
     }
 
     if entries.is_empty() {
-        return Ok(AUTO_COMMIT_MESSAGE.to_string());
+        return Ok(auto_commit_fallback_message());
     }
 
     let all_added = entries.iter().all(|(k, _)| *k == Kind::Added);

@@ -461,6 +461,8 @@ describe("SyncSettingsModal", () => {
       sync_default_author: () => ({ name: null, email: null }),
       sync_repo_present: () => true,
       sync_set_config: () => null,
+      sync_set_origin: () => null,
+      sync_commit_config: () => false,
     });
     const wrapper = withTabs(tabsValue(folderTab()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
@@ -501,8 +503,11 @@ describe("SyncSettingsModal", () => {
       sync_get_config: () => null,
       sync_default_author: () => ({ name: null, email: null }),
       sync_repo_present: () => false,
+      sync_init_repo: () => null,
       sync_set_config: () => null,
+      sync_set_origin: () => null,
       sync_set_token: () => null,
+      sync_commit_config: () => false,
     });
     const wrapper = withTabs(tabsValue(folderTab()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
@@ -531,6 +536,7 @@ describe("SyncSettingsModal", () => {
       sync_repo_present: () => true,
       sync_set_config: () => null,
       sync_set_origin: () => null,
+      sync_commit_config: () => false,
     });
     const wrapper = withTabs(tabsValue(folderTab()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
@@ -600,6 +606,8 @@ describe("SyncSettingsModal", () => {
         calls.push(args as Record<string, unknown>);
         return null;
       },
+      sync_set_origin: () => null,
+      sync_commit_config: () => false,
     });
     const wrapper = withTabs(tabsValue(folderTab()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
@@ -628,6 +636,8 @@ describe("SyncSettingsModal", () => {
           calls.push(args as Record<string, unknown>);
           return null;
         },
+        sync_set_origin: () => null,
+        sync_commit_config: () => false,
       });
       const wrapper = withTabs(tabsValue(folderTab()));
       const { unmount } = render(<SyncSettingsModal open={true} onClose={vi.fn()} />, {
@@ -656,6 +666,8 @@ describe("SyncSettingsModal", () => {
         calls.push(args as Record<string, unknown>);
         return null;
       },
+      sync_set_origin: () => null,
+      sync_commit_config: () => false,
     });
     const wrapper = withTabs(tabsValue(folderTab()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
@@ -686,6 +698,8 @@ describe("SyncSettingsModal", () => {
         calls.push(args as Record<string, unknown>);
         return null;
       },
+      sync_set_origin: () => null,
+      sync_commit_config: () => false,
     });
     const wrapper = withTabs(tabsValue(folderTab()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
@@ -827,6 +841,7 @@ describe("SyncSettingsModal", () => {
       sync_default_author: () => ({ name: null, email: null }),
       sync_repo_present: () => true,
       sync_set_config: () => null,
+      sync_commit_config: () => false,
     });
     const wrapper = withTabs(tabsValue(folderTab()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
@@ -916,6 +931,8 @@ describe("SyncSettingsModal", () => {
         calls.push(args as Record<string, unknown>);
         return null;
       },
+      sync_set_origin: () => null,
+      sync_commit_config: () => false,
     });
     const wrapper = withTabs(tabsValue(folderTab()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
@@ -973,92 +990,88 @@ describe("commitSaveConfig", () => {
   function deps(overrides: Partial<Parameters<typeof commitSaveConfig>[2]> = {}) {
     return {
       repoPresent: true,
+      initRepo: vi.fn().mockResolvedValue(undefined),
       save: vi.fn().mockResolvedValue(undefined),
       setOrigin: vi.fn().mockResolvedValue(undefined),
       setToken: vi.fn().mockResolvedValue(undefined),
       clearTokenField: vi.fn(),
+      commitConfig: vi.fn().mockResolvedValue(true),
       ...overrides,
+    };
+  }
+
+  function configWith(remoteUrl: string): WorkspaceSyncConfig {
+    return {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl,
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      autoSyncSeconds: null,
+      author: null,
     };
   }
 
   it("is a no-op when there is nothing to save", async () => {
     const d = deps();
     await commitSaveConfig(null, "tok", d);
+    expect(d.initRepo).not.toHaveBeenCalled();
     expect(d.save).not.toHaveBeenCalled();
     expect(d.setOrigin).not.toHaveBeenCalled();
     expect(d.setToken).not.toHaveBeenCalled();
     expect(d.clearTokenField).not.toHaveBeenCalled();
+    expect(d.commitConfig).not.toHaveBeenCalled();
   });
 
-  it("saves, pushes origin, and stores the token when the repo exists", async () => {
+  it("saves, pushes origin, commits the config, and stores the token when the repo exists", async () => {
     const d = deps({ repoPresent: true });
-    const config: WorkspaceSyncConfig = {
-      workspacePath: "/w",
-      backend: "git",
-      remoteUrl: "https://example.com/r.git",
-      remoteBranch: "main",
-      conflictPolicy: "prompt",
-      autoSyncSeconds: null,
-      author: null,
-    };
-    await commitSaveConfig(config, "  ghp_secret  ", d);
-    expect(d.save).toHaveBeenCalledWith(config);
+    await commitSaveConfig(configWith("https://example.com/r.git"), "  ghp_secret  ", d);
+    expect(d.initRepo).not.toHaveBeenCalled();
+    expect(d.save).toHaveBeenCalledWith(configWith("https://example.com/r.git"));
     expect(d.setOrigin).toHaveBeenCalledWith("https://example.com/r.git");
     expect(d.setToken).toHaveBeenCalledWith("ghp_secret");
     expect(d.clearTokenField).toHaveBeenCalled();
+    expect(d.commitConfig).toHaveBeenCalled();
   });
 
-  it("skips setOrigin when the repo isn't present and leaves a blank token alone", async () => {
+  it("auto-initializes the repo (with the remote) when the folder isn't a git repo yet", async () => {
     const d = deps({ repoPresent: false });
-    const config: WorkspaceSyncConfig = {
-      workspacePath: "/w",
-      backend: "git",
-      remoteUrl: "https://example.com/r.git",
-      remoteBranch: "main",
-      conflictPolicy: "prompt",
-      autoSyncSeconds: null,
-      author: null,
-    };
-    await commitSaveConfig(config, "   ", d);
-    expect(d.save).toHaveBeenCalledWith(config);
-    expect(d.setOrigin).not.toHaveBeenCalled();
-    expect(d.setToken).not.toHaveBeenCalled();
-    expect(d.clearTokenField).not.toHaveBeenCalled();
+    await commitSaveConfig(configWith("https://example.com/r.git"), "", d);
+    expect(d.initRepo).toHaveBeenCalledWith("main", "https://example.com/r.git");
+    expect(d.save).toHaveBeenCalled();
+    // After init the repo exists, so origin is still written.
+    expect(d.setOrigin).toHaveBeenCalledWith("https://example.com/r.git");
+    expect(d.commitConfig).toHaveBeenCalled();
   });
 
-  it("saves but skips setOrigin for a local-only config (blank remoteUrl)", async () => {
+  it("auto-initializes a local-only repo (no remote) and skips setOrigin", async () => {
+    const d = deps({ repoPresent: false });
+    await commitSaveConfig(configWith(""), "", d);
+    // Blank remote -> init without an origin, and no setOrigin afterwards.
+    expect(d.initRepo).toHaveBeenCalledWith("main", null);
+    expect(d.save).toHaveBeenCalled();
+    expect(d.setOrigin).not.toHaveBeenCalled();
+    expect(d.commitConfig).toHaveBeenCalled();
+  });
+
+  it("saves but skips setOrigin for a local-only config (blank remoteUrl) when the repo exists", async () => {
     const d = deps({ repoPresent: true });
-    const config: WorkspaceSyncConfig = {
-      workspacePath: "/w",
-      backend: "git",
-      remoteUrl: "",
-      remoteBranch: "main",
-      conflictPolicy: "prompt",
-      autoSyncSeconds: null,
-      author: null,
-    };
-    await commitSaveConfig(config, "", d);
-    expect(d.save).toHaveBeenCalledWith(config);
+    await commitSaveConfig(configWith(""), "", d);
+    expect(d.initRepo).not.toHaveBeenCalled();
+    expect(d.save).toHaveBeenCalled();
     // No remote to write into .git/config, even though the repo exists.
     expect(d.setOrigin).not.toHaveBeenCalled();
+    expect(d.commitConfig).toHaveBeenCalled();
   });
 
-  it("swallows setOrigin failures so the save still resolves", async () => {
+  it("swallows setOrigin and commitConfig failures so the save still resolves", async () => {
     const d = deps({
       repoPresent: true,
       setOrigin: vi.fn().mockRejectedValue(new Error("network down")),
+      commitConfig: vi.fn().mockRejectedValue(new Error("commit failed")),
     });
-    const config: WorkspaceSyncConfig = {
-      workspacePath: "/w",
-      backend: "git",
-      remoteUrl: "https://example.com/r.git",
-      remoteBranch: "main",
-      conflictPolicy: "prompt",
-      autoSyncSeconds: null,
-      author: null,
-    };
-    await expect(commitSaveConfig(config, "", d)).resolves.toBeUndefined();
-    expect(d.save).toHaveBeenCalledWith(config);
-    expect(d.setToken).not.toHaveBeenCalled();
+    await expect(commitSaveConfig(configWith("https://example.com/r.git"), "", d)).resolves.toBeUndefined();
+    expect(d.save).toHaveBeenCalled();
+    expect(d.commitConfig).toHaveBeenCalled();
   });
 });

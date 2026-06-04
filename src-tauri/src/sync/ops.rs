@@ -156,6 +156,17 @@ pub async fn run_status(
         .map_err(|e| SyncError::Backend(format!("task join error: {e}")))?
 }
 
+/// Commit the workspace's `.glyph/` config directory into git history when
+/// it isn't tracked yet. Used at enable time so the config lands in history
+/// immediately instead of waiting for the first content sync. Returns `true`
+/// when a commit was created.
+pub async fn commit_config(state: &SyncState, workspace_path: &str) -> Result<bool, SyncError> {
+    let backend = state.build_backend(workspace_path)?;
+    tauri::async_runtime::spawn_blocking(move || backend.commit_config())
+        .await
+        .map_err(|e| SyncError::Backend(format!("task join error: {e}")))?
+}
+
 /// Build the configured backend and run a full sync (stage, commit,
 /// fetch, merge, push). Conflicts come back via `SyncResult.conflicts`,
 /// not as an error: the frontend opens the conflict UI for those.
@@ -321,6 +332,31 @@ mod tests {
         assert!(status.clean);
         assert_eq!(status.ahead, 0);
         assert_eq!(status.behind, 0);
+    }
+
+    #[tokio::test]
+    async fn commit_config_lands_the_glyph_dir_in_history_then_is_idempotent() {
+        let ws = Workspace::new();
+        let state = SyncState::new();
+        init_repo(
+            ws.workspace_path.clone(),
+            None,
+            Some(ws.remote_path.clone()),
+        )
+        .await
+        .unwrap();
+        // Enabling sync writes `.glyph/config.json`.
+        set_config(ws.config()).unwrap();
+
+        assert!(commit_config(&state, &ws.workspace_path).await.unwrap());
+        let repo = git2::Repository::open(&ws.workspace_path).unwrap();
+        let tree = repo.head().unwrap().peel_to_tree().unwrap();
+        assert!(tree
+            .get_path(std::path::Path::new(".glyph/config.json"))
+            .is_ok());
+
+        // Already tracked → no second commit.
+        assert!(!commit_config(&state, &ws.workspace_path).await.unwrap());
     }
 
     #[tokio::test]

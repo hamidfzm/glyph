@@ -78,6 +78,14 @@ pub async fn sync_set_origin(workspace_path: String, remote_url: String) -> Resu
 }
 
 #[tauri::command]
+pub async fn sync_commit_config(
+    workspace_path: String,
+    state: State<'_, SyncState>,
+) -> Result<bool, SyncError> {
+    ops::commit_config(&state, &workspace_path).await
+}
+
+#[tauri::command]
 pub async fn sync_status(
     workspace_path: String,
     state: State<'_, SyncState>,
@@ -414,6 +422,7 @@ mod tests {
                 sync_init_repo,
                 sync_clone_remote,
                 sync_set_origin,
+                sync_commit_config,
                 sync_status,
                 sync_run,
                 sync_default_author,
@@ -532,6 +541,15 @@ mod tests {
         );
         assert_eq!(result.committed_count, 1);
         assert_eq!(result.pushed_count, 1);
+
+        // sync_commit_config — the prior sync_run already committed `.glyph/`
+        // via `git add -A`, so this reports no new commit (false).
+        let committed: bool = invoke_ipc(
+            &webview,
+            "sync_commit_config",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        assert!(!committed);
 
         // sync_default_author and sync_repo_present round-trip through IPC.
         let _: crate::sync::config::CommitAuthorHint = invoke_ipc(

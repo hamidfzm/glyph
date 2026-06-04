@@ -140,6 +140,16 @@ export function setSyncOrigin(workspacePath: string, remoteUrl: string): Promise
   return invoke("sync_set_origin", { workspacePath, remoteUrl });
 }
 
+/**
+ * Commit the workspace's `.glyph/` config directory into git history when it
+ * isn't tracked yet. Called from the modal's Save flow so enabling sync lands
+ * the config in history immediately (and it travels with clones). Resolves to
+ * `true` when a commit was created.
+ */
+export function commitSyncConfig(workspacePath: string): Promise<boolean> {
+  return invoke("sync_commit_config", { workspacePath });
+}
+
 export function getSyncStatus(workspacePath: string): Promise<StatusReport> {
   return invoke("sync_status", { workspacePath });
 }
