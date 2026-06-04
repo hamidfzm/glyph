@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::markdown::is_markdown_file;
+use crate::is_supported_file;
 
 /// Pick the first non-flag argument from a second-instance argv. The slice is
 /// expected to be the full argv including the program name at index 0, which
@@ -26,12 +26,12 @@ pub enum InitialOpenAction {
     Folder(String),
     /// Open as a single markdown file. Inner is the absolute path.
     File(String),
-    /// Path exists and resolves, but is not a markdown file (e.g. `.txt`,
-    /// `.html`). The caller should log a warning and skip it rather than
-    /// forwarding it to the renderer, which would otherwise treat the
-    /// content as markdown and allow embedded HTML / JS through the
+    /// Path exists and resolves, but is not a supported document (markdown or
+    /// `.ipynb`) — e.g. `.txt`, `.html`. The caller should log a warning and
+    /// skip it rather than forwarding it to the renderer, which would otherwise
+    /// treat the content as markdown and allow embedded HTML / JS through the
     /// sanitizer. Inner is the absolute path for the log message.
-    RejectedNotMarkdown(String),
+    RejectedUnsupported(String),
 }
 
 /// Classify a path that's already been resolved to a canonical absolute form.
@@ -45,10 +45,10 @@ pub fn classify_resolved_path(canonical: &Path) -> Option<InitialOpenAction> {
     if canonical.is_dir() {
         Some(InitialOpenAction::Folder(abs))
     } else if canonical.is_file() {
-        if is_markdown_file(canonical) {
+        if is_supported_file(canonical) {
             Some(InitialOpenAction::File(abs))
         } else {
-            Some(InitialOpenAction::RejectedNotMarkdown(abs))
+            Some(InitialOpenAction::RejectedUnsupported(abs))
         }
     } else {
         None
@@ -109,7 +109,7 @@ pub fn second_instance_event(argv: &[String], cwd: &Path) -> Option<SecondInstan
             event_name: "open-file",
             path,
         }),
-        InitialOpenAction::RejectedNotMarkdown(_) => None,
+        InitialOpenAction::RejectedUnsupported(_) => None,
     }
 }
 
@@ -271,7 +271,7 @@ mod tests {
         let actions = [
             InitialOpenAction::Folder("/workspace".to_string()),
             InitialOpenAction::File("/workspace/notes.md".to_string()),
-            InitialOpenAction::RejectedNotMarkdown("/workspace/evil.txt".to_string()),
+            InitialOpenAction::RejectedUnsupported("/workspace/evil.txt".to_string()),
         ];
         for action in &actions {
             let formatted = format!("{action:?}");
@@ -310,8 +310,8 @@ mod tests {
         fs::write(&file, "<script>alert('x')</script>").unwrap();
         let result = classify_resolved_path(&file.canonicalize().unwrap()).expect("classifies");
         assert!(
-            matches!(&result, InitialOpenAction::RejectedNotMarkdown(p) if p.ends_with("evil.txt")),
-            "expected RejectedNotMarkdown ending in evil.txt, got {result:?}"
+            matches!(&result, InitialOpenAction::RejectedUnsupported(p) if p.ends_with("evil.txt")),
+            "expected RejectedUnsupported ending in evil.txt, got {result:?}"
         );
         let _ = fs::remove_dir_all(&cwd);
     }
@@ -360,7 +360,7 @@ mod tests {
         let file = cwd.join("evil.txt");
         fs::write(&file, "x").unwrap();
         let result = classify_initial_arg("evil.txt", &cwd).expect("classifies");
-        assert!(matches!(result, InitialOpenAction::RejectedNotMarkdown(_)));
+        assert!(matches!(result, InitialOpenAction::RejectedUnsupported(_)));
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -373,7 +373,7 @@ mod tests {
 
     #[test]
     fn second_instance_event_returns_none_for_non_markdown_files() {
-        // Covers the RejectedNotMarkdown -> None arm in second_instance_event:
+        // Covers the RejectedUnsupported -> None arm in second_instance_event:
         // a second instance pointed at evil.txt should not fire any event.
         let cwd = unique_tmp("si_txt");
         let file = cwd.join("evil.txt");

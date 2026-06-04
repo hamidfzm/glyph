@@ -44,6 +44,10 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         "close-tab" => emit("menu-close-tab"),
         "reset-view" => emit("menu-reset-view"),
         "print" => emit("menu-print"),
+        "export-html" => emit("menu-export-html"),
+        "export-docx" => emit("menu-export-docx"),
+        "export-epub" => emit("menu-export-epub"),
+        "export-pdf" => emit("menu-export-pdf"),
         "close" => Some(MenuAction::CloseWindow),
         "toggle-files-sidebar" => emit("menu-toggle-files-sidebar"),
         "toggle-outline-sidebar" => emit("menu-toggle-outline-sidebar"),
@@ -147,6 +151,26 @@ mod tests {
         assert_eq!(
             menu_action_for_id("open-sync-settings"),
             Some(emit("menu-open-sync-settings"))
+        );
+    }
+
+    #[test]
+    fn export_ids_emit_their_events() {
+        assert_eq!(
+            menu_action_for_id("export-html"),
+            Some(emit("menu-export-html"))
+        );
+        assert_eq!(
+            menu_action_for_id("export-docx"),
+            Some(emit("menu-export-docx"))
+        );
+        assert_eq!(
+            menu_action_for_id("export-epub"),
+            Some(emit("menu-export-epub"))
+        );
+        assert_eq!(
+            menu_action_for_id("export-pdf"),
+            Some(emit("menu-export-pdf"))
         );
     }
 

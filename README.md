@@ -37,6 +37,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Copy button on code blocks
 - Math/LaTeX rendering — inline (`$...$`) and block (`$$...$$`) equations via KaTeX
 - Mermaid diagrams — flowcharts, sequence diagrams, Gantt charts, and more (theme-aware); `.mmd` source files open directly as diagrams
+- CSV/TSV tables — ` ```csv ` and ` ```tsv ` code blocks render as styled, scrollable tables
 - Inline HTML — `<kbd>`, `<sub>`, `<sup>`, `<details>`, alignment attributes (sanitised allowlist)
 - YAML frontmatter — title, author, date, and tags render as a metadata block above the document; tags get a per-tag colour
 - Emoji shortcodes — `:smile:` → 😊, `:+1:` → 👍
@@ -50,18 +51,20 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Wikilink autocomplete — type `[[` in a folder workspace to pick from existing notes; Tab/Enter to insert
 
 ### Viewer
+- Jupyter notebooks — open `.ipynb` files directly; markdown cells render with full markdown (math, code, diagrams), code cells are syntax-highlighted, and image, HTML, plain-text, and colourised stream/traceback outputs show under each cell with `In [n]:` / `Out [n]:` prompts (read-only)
 - Folder / workspace tabs — open a folder as a tab; browse `.md` files in the sidebar tree; right-click a file to open it in a new top-level tab
 - Multiple files in tabs — open, switch, close, middle-click to close
 - Command palette — `Cmd/Ctrl+K` to fuzzy-jump to any workspace file, document heading, or app action
 - In-document search — `Cmd/Ctrl+F` with match highlighting and navigation
 - Zoom in/out — `Cmd/Ctrl+=/-/0` with zoom level in status bar
 - Table of Contents sidebar with active heading tracking
-- Print & PDF export — `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
+- Print — `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
+- Export to HTML, Word (DOCX), EPUB, and PDF — `File → Export`; works for markdown documents and Jupyter notebooks, writes a file directly (no print dialog), and reuses the rendered output (math, code highlighting, tables, images inlined) so files are self-contained and offline. Task-list checkboxes are read-only in exports; exported HTML follows the reader's light/dark system preference.
 - Live reload — file watcher auto-updates on external changes
 - Undo / redo for in-document edits — `Cmd/Ctrl+Z` and `Cmd/Ctrl+Shift+Z` reverse task-list checkbox toggles and other programmatic edits per tab
-- Drag and drop markdown files or folders to open
+- Drag and drop markdown files, notebooks, or folders to open
 - File associations — double-click `.md` files to open in Glyph
-- CLI support — `glyph README.md` opens a file; `glyph ~/notes/` opens a folder as a workspace
+- CLI support — `glyph README.md` opens a file; `glyph notebook.ipynb` opens a notebook; `glyph ~/notes/` opens a folder as a workspace
 - Recent files list
 - Session restore — open tabs persist across restarts
 
@@ -80,6 +83,11 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Cross-platform: macOS (universal), Windows (x64), Linux (amd64 + arm64)
 - Window state persistence across restarts
 - Native menu bar with keyboard shortcuts
+- Update notifications — checks for a newer release on launch and shows a banner when one is available (toggle in Settings → Behavior)
+
+### Privacy
+- Local-first: your files never leave your machine
+- Opt-in crash reporting (off by default) to help fix bugs — see [Privacy & Error Reporting](#privacy--error-reporting)
 
 ## Install
 
@@ -218,6 +226,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | GitHub-style alerts | ✅ | ✅ | ⚠️ | ❌ | ❌ | ⚠️ | ✅ |
 | YAML frontmatter | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
 | Emoji shortcodes | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | plugin |
+| Jupyter notebooks (`.ipynb`) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ### Editing
 
@@ -236,7 +245,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Folder / vault sidebar | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
 | Wikilinks & backlinks | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | plugin |
 | Tag / metadata search | planned | ✅ | ❌ | ❌ | ✅ | ✅ | plugin |
-| Command palette | planned | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Command palette | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | In-document search | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Table of contents | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Live reload on disk change | ✅ | ⚠️ | n/a | n/a | ⚠️ | n/a | ✅ |
@@ -247,7 +256,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 |---|---|---|---|---|---|---|---|
 | Print | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Export PDF | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | plugin |
-| Export HTML / DOCX / EPUB | planned | plugin | ✅ (Pandoc) | ⚠️ | ✅ (Pandoc) | ⚠️ | plugin |
+| Export HTML / DOCX / EPUB | ✅ | plugin | ✅ (Pandoc) | ⚠️ | ✅ (Pandoc) | ⚠️ | plugin |
 
 ### Power features
 
@@ -274,3 +283,40 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 Legend: ✅ supported · ⚠️ partial / inconsistent · ❌ not supported · plugin = third-party · planned = on roadmap
 
 Note on "WYSIWYG / inline preview": Glyph's editor has split-view live preview and styled markdown tokens (bold/italic render as bold/italic in source), but markdown markers remain visible — Typora-style fully inline rendering is not implemented.
+
+## Privacy & Error Reporting
+
+Glyph is local-first: your documents are read and written on your machine and are never uploaded anywhere.
+
+Crash and error reporting is **opt-in and off by default**. Nothing is sent until you turn it on in **Settings → Privacy → Send crash reports**, and even then it is only active in production builds (never during development).
+
+When enabled, reports include only:
+
+- Stack traces of the crash or unhandled error
+- Operating system and Glyph version
+- The error message
+
+They never include your file contents, file paths, file names, or any links — these are stripped from every report before it is sent. You can turn reporting off again at any time from the same setting.
+
+## Sponsors
+
+Glyph is free and open source. These sponsors help keep it that way.
+
+<a href="https://sentry.io">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://sentry-brand.storage.googleapis.com/sentry-logo-white.png">
+    <img src="https://sentry-brand.storage.googleapis.com/sentry-logo-black.png" alt="Sentry" height="40">
+  </picture>
+</a>
+
+[**Sentry**](https://sentry.io) provides error monitoring through their Sponsored Business plan, which we use for the opt-in crash reporting above.
+
+### Support Glyph
+
+If Glyph is useful to you, donations are welcome via crypto:
+
+| Network | Asset | Address |
+|---|---|---|
+| Solana | SOL | `<pending>` |
+| BNB Smart Chain (BEP-20) | USDT | `<pending>` |
+| Tron (TRC-20) | USDT | `<pending>` |

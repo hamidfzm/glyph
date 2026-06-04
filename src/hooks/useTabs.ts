@@ -6,7 +6,8 @@ import type { WikilinkRef } from "@/lib/backlinks";
 import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/lib/editHistory";
 import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
-import type { EditorMode } from "@/lib/settings";
+import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
+import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
 
 interface FileMetadata {
@@ -207,12 +208,13 @@ export function useTabs(options: UseTabsOptions) {
   // Open a file as a new top-level tab; if already open as a top-level tab, activate it.
   const openFile = useCallback(
     async (path: string) => {
-      // Defensive gate: never load a non-markdown file. Glyph rendering treats
+      // Defensive gate: never load an unsupported file. Glyph rendering treats
       // content as markdown (HTML included via the sanitizer), so opening a
-      // random `.txt` / `.html` / etc. is a code-injection vector. See
-      // memory/reject-unsupported-file-types.md.
-      if (!isMarkdownFile(path)) {
-        console.warn(`Refusing to open non-markdown file: ${path}`);
+      // random `.txt` / `.html` / etc. is a code-injection vector. Notebooks
+      // (`.ipynb`) are allowed — they take the dedicated NotebookViewer path.
+      // See memory/reject-unsupported-file-types.md.
+      if (!isSupportedFile(path)) {
+        console.warn(`Refusing to open unsupported file: ${path}`);
         return;
       }
       const existing = stateRef.current.tabs.find((t) => t.kind === "file" && t.file.path === path);
@@ -225,7 +227,9 @@ export function useTabs(options: UseTabsOptions) {
       try {
         const { content, metadata } = await loadFileContent(path);
         await invoke("watch_file", { path });
-        const mode = optionsRef.current.defaultEditorMode;
+        // Notebooks are read-only; open straight into the viewer regardless of
+        // the user's default editor mode.
+        const mode = isNotebookFile(path) ? EDITOR_MODE.view : optionsRef.current.defaultEditorMode;
         const newTab: FileTab = {
           id,
           kind: "file",
@@ -250,12 +254,12 @@ export function useTabs(options: UseTabsOptions) {
   // Watches the new file, unwatches the old. Folder's directory watcher stays.
   const openFileInFolderTab = useCallback(
     async (tabId: string, path: string) => {
-      if (!isMarkdownFile(path)) {
-        console.warn(`Refusing to open non-markdown file in folder tab: ${path}`);
+      if (!isSupportedFile(path)) {
+        console.warn(`Refusing to open unsupported file in folder tab: ${path}`);
         return;
       }
       const tab = stateRef.current.tabs.find((t) => t.id === tabId);
-      if (!tab || tab.kind !== "folder") return;
+      if (tab?.kind !== "folder") return;
 
       const previousFilePath = tab.file?.path;
       if (previousFilePath === path) return;
@@ -266,7 +270,7 @@ export function useTabs(options: UseTabsOptions) {
           invoke("unwatch_file", { path: previousFilePath }).catch(() => {});
         }
         await invoke("watch_file", { path });
-        const mode = optionsRef.current.defaultEditorMode;
+        const mode = isNotebookFile(path) ? EDITOR_MODE.view : optionsRef.current.defaultEditorMode;
         const newFile: FileState = { ...makeFileState(path, mode), content, metadata };
         const folderRoot = tab.root;
         setState((prev) => ({
@@ -409,7 +413,7 @@ export function useTabs(options: UseTabsOptions) {
   const toggleExpand = useCallback(
     async (tabId: string, path: string) => {
       const tab = stateRef.current.tabs.find((t) => t.id === tabId);
-      if (!tab || tab.kind !== "folder") return;
+      if (tab?.kind !== "folder") return;
 
       const wasExpanded = tab.expanded.has(path);
       const newExpanded = new Set(tab.expanded);
@@ -512,7 +516,7 @@ export function useTabs(options: UseTabsOptions) {
     (id: string, mode: EditorMode) => {
       updateActiveFile(id, (f) => {
         // When entering edit mode, initialize editContent from content
-        if (mode !== "view" && f.editContent === null) {
+        if (mode !== EDITOR_MODE.view && f.editContent === null) {
           return { ...f, mode, editContent: f.content };
         }
         return { ...f, mode };
@@ -560,7 +564,7 @@ export function useTabs(options: UseTabsOptions) {
       const file = activeFileOf(tab);
       if (!file) return false;
 
-      if (file.mode !== "view") {
+      if (file.mode !== EDITOR_MODE.view) {
         updateActiveFile(id, (f) => ({ ...f, editContent: next, dirty: true }));
         return true;
       }
@@ -587,7 +591,7 @@ export function useTabs(options: UseTabsOptions) {
       const file = activeFileOf(tab);
       if (!file?.content) return;
 
-      const isEditing = file.mode !== "view";
+      const isEditing = file.mode !== EDITOR_MODE.view;
       const source = isEditing ? (file.editContent ?? file.content) : file.content;
       const next = toggleTaskAtLine(source, line);
       if (next === source) return;
@@ -639,8 +643,16 @@ export function useTabs(options: UseTabsOptions) {
       multiple: true,
       filters: [
         {
+          name: "Documents",
+          extensions: [...MARKDOWN_EXTENSIONS, ...NOTEBOOK_EXTENSIONS] as string[],
+        },
+        {
           name: "Markdown",
           extensions: MARKDOWN_EXTENSIONS as string[],
+        },
+        {
+          name: "Jupyter Notebook",
+          extensions: NOTEBOOK_EXTENSIONS as string[],
         },
       ],
     });
@@ -726,7 +738,7 @@ export function useTabs(options: UseTabsOptions) {
         const file = activeFileOf(matchingTab);
         if (!file) return;
         // Skip reload if the file is in edit mode with unsaved changes
-        if (file.mode !== "view" && file.dirty) return;
+        if (file.mode !== EDITOR_MODE.view && file.dirty) return;
         // Skip if this file-changed was triggered by our own auto-save —
         // re-syncing identical content into the editor would dismiss any
         // active autocomplete popup mid-completion.
@@ -768,7 +780,7 @@ export function useTabs(options: UseTabsOptions) {
         const tab = stateRef.current.tabs.find(
           (t) => t.kind === "folder" && t.root === watchedRoot,
         );
-        if (!tab || tab.kind !== "folder") return;
+        if (tab?.kind !== "folder") return;
         // Refresh root + every currently-loaded subdirectory under this root.
         const dirsToRefresh: string[] = [tab.root];
         for (const dir of tab.nodes.keys()) {

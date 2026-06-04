@@ -40,6 +40,34 @@ vi.mock("./markdown/MarkdownViewer", () => ({
   ),
 }));
 
+vi.mock("./notebook/lazyNotebook", () => ({
+  NotebookViewer: ({ filePath }: { filePath?: string }) => (
+    <div data-testid="notebook-viewer">{filePath}</div>
+  ),
+  NotebookSource: ({ filePath }: { filePath?: string }) => (
+    <div data-testid="notebook-source">{filePath}</div>
+  ),
+  NotebookSplit: ({ filePath }: { filePath?: string }) => (
+    <div data-testid="notebook-split">{filePath}</div>
+  ),
+}));
+
+function makeNotebookTab(mode: EditorMode = "view"): FileTab {
+  return {
+    id: "tab-nb",
+    kind: "file",
+    file: {
+      path: "/p/analysis.ipynb",
+      content: '{"cells": []}',
+      metadata: { name: "analysis.ipynb", path: "/p/analysis.ipynb", size: 0, modified: 0 },
+      scrollTop: 0,
+      mode,
+      editContent: null,
+      dirty: false,
+    },
+  };
+}
+
 function makeFileTab(mode: EditorMode = "view"): FileTab {
   return {
     id: "tab-1",
@@ -189,5 +217,27 @@ describe("TabContent", () => {
     });
     getByTestId("split-wikilink").click();
     expect(openFileInFolderTab).not.toHaveBeenCalled();
+  });
+
+  it("renders the notebook viewer for an .ipynb tab in view mode", () => {
+    const tab = makeNotebookTab("view");
+    renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
+    expect(screen.getByTestId("notebook-viewer")).toHaveTextContent("/p/analysis.ipynb");
+    expect(screen.queryByTestId("markdown-viewer")).toBeNull();
+  });
+
+  it("renders the notebook source view for an .ipynb tab in edit mode", () => {
+    const tab = makeNotebookTab("edit");
+    renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
+    expect(screen.getByTestId("notebook-source")).toBeInTheDocument();
+    // Never the markdown editor — that would expose a write path.
+    expect(screen.queryByTestId("lazy-editor")).toBeNull();
+  });
+
+  it("renders the notebook split view for an .ipynb tab in split mode", () => {
+    const tab = makeNotebookTab("split");
+    renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
+    expect(screen.getByTestId("notebook-split")).toBeInTheDocument();
+    expect(screen.queryByTestId("lazy-split")).toBeNull();
   });
 });

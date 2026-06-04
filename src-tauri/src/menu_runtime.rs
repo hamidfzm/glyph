@@ -20,6 +20,10 @@ use crate::menu::{dispatch_menu_action, menu_action_for_id};
 pub struct MenuItemRefs {
     close_tab: MenuItem<Wry>,
     print: MenuItem<Wry>,
+    export_html: MenuItem<Wry>,
+    export_docx: MenuItem<Wry>,
+    export_epub: MenuItem<Wry>,
+    export_pdf: MenuItem<Wry>,
     find: MenuItem<Wry>,
     toggle_edit: MenuItem<Wry>,
     ai_summarize: MenuItem<Wry>,
@@ -56,6 +60,16 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
     let print = MenuItemBuilder::with_id("print", "Print\u{2026}")
         .accelerator("CmdOrCtrl+P")
         .build(handle)?;
+
+    // Export submenu items — all convert in the frontend and write a file
+    // directly. PDF is a vector export here (the File > Print item, Cmd/Ctrl+P,
+    // is the separate print-dialog path).
+    let export_html = MenuItemBuilder::with_id("export-html", "HTML\u{2026}").build(handle)?;
+    let export_docx =
+        MenuItemBuilder::with_id("export-docx", "Word (DOCX)\u{2026}").build(handle)?;
+    let export_epub = MenuItemBuilder::with_id("export-epub", "EPUB\u{2026}").build(handle)?;
+    let export_pdf = MenuItemBuilder::with_id("export-pdf", "PDF\u{2026}").build(handle)?;
+
     let close_tab = MenuItemBuilder::with_id("close-tab", "Close Tab")
         .accelerator("CmdOrCtrl+W")
         .build(handle)?;
@@ -167,6 +181,14 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .about(Some(about_metadata.clone()))
         .build()?;
 
+    // Export submenu — shared between the macOS and Windows/Linux File menus.
+    let export_menu = SubmenuBuilder::new(handle, "Export")
+        .item(&export_html)
+        .item(&export_docx)
+        .item(&export_epub)
+        .item(&export_pdf)
+        .build()?;
+
     // macOS: Settings goes in app menu, File menu is simple
     #[cfg(target_os = "macos")]
     let menu = {
@@ -175,6 +197,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .item(&open_folder)
             .separator()
             .item(&print)
+            .item(&export_menu)
             .separator()
             .item(&sync_settings)
             .separator()
@@ -214,6 +237,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .item(&open_folder)
             .separator()
             .item(&print)
+            .item(&export_menu)
             .separator()
             .item(&settings)
             .item(&sync_settings)
@@ -234,6 +258,10 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
     let refs = MenuItemRefs {
         close_tab,
         print,
+        export_html,
+        export_docx,
+        export_epub,
+        export_pdf,
         find,
         toggle_edit,
         ai_summarize,
@@ -254,6 +282,18 @@ pub fn apply_menu_state(refs: &MenuItemRefs, flags: &MenuStateFlags) -> Result<(
         .set_enabled(flags.has_tab)
         .map_err(stringify)?;
     refs.print.set_enabled(flags.has_file).map_err(stringify)?;
+    refs.export_html
+        .set_enabled(flags.has_file)
+        .map_err(stringify)?;
+    refs.export_docx
+        .set_enabled(flags.has_file)
+        .map_err(stringify)?;
+    refs.export_epub
+        .set_enabled(flags.has_file)
+        .map_err(stringify)?;
+    refs.export_pdf
+        .set_enabled(flags.has_file)
+        .map_err(stringify)?;
     refs.find.set_enabled(flags.has_file).map_err(stringify)?;
     refs.toggle_edit
         .set_enabled(flags.has_file)

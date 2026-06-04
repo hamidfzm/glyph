@@ -1,10 +1,22 @@
 import { invoke } from "@tauri-apps/api/core";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { FileTab, FolderTab } from "@/hooks/useTabs";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { StatusBar } from "./StatusBar";
+
+// useSettings is read for the zoom indicator. Mock it so a test can drive a
+// non-default font size; default to DEFAULT_SETTINGS otherwise.
+const settingsRef = { current: DEFAULT_SETTINGS };
+vi.mock("@/hooks/useSettings", () => ({
+  useSettings: () => ({ settings: settingsRef.current, updateSettings: vi.fn() }),
+}));
+
+afterEach(() => {
+  settingsRef.current = DEFAULT_SETTINGS;
+});
 
 interface Opts {
   filePath?: string;
@@ -100,6 +112,25 @@ describe("StatusBar", () => {
   it("does not show zoom percentage at default zoom (100%)", () => {
     renderStatusBar({ displayContent: "some content" });
     expect(screen.queryByText("100%")).toBeNull();
+  });
+
+  it("shows the zoom percentage when font size differs from default", () => {
+    settingsRef.current = {
+      ...DEFAULT_SETTINGS,
+      appearance: { ...DEFAULT_SETTINGS.appearance, fontSize: 20 },
+    };
+    renderStatusBar({ displayContent: "some content" });
+    // 20 / 16 = 125%
+    expect(screen.getByText("125%")).toBeInTheDocument();
+  });
+
+  it("shows a Jupyter Notebook label (not word count) for an .ipynb file", () => {
+    // Notebooks suppress displayContent, so the bar still renders via the
+    // isNotebook path and shows the document-type label instead of word count.
+    renderStatusBar({ filePath: "/path/to/analysis.ipynb", displayContent: null });
+    expect(screen.getByText("Jupyter Notebook")).toBeInTheDocument();
+    expect(screen.queryByText(/words$/)).toBeNull();
+    expect(screen.getByText("/path/to/analysis.ipynb")).toBeInTheDocument();
   });
 });
 

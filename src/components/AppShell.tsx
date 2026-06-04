@@ -6,6 +6,8 @@ import { useAutoSave } from "@/hooks/useAutoSave";
 import { useCommandPaletteController } from "@/hooks/useCommandPaletteController";
 import { useContextMenu } from "@/hooks/useContextMenu";
 import { useDocumentUndoRedo } from "@/hooks/useDocumentUndoRedo";
+import { useErrorReporting } from "@/hooks/useErrorReporting";
+import { useExport } from "@/hooks/useExport";
 import { useFontZoom } from "@/hooks/useFontZoom";
 import { useMenuEvents } from "@/hooks/useMenuEvents";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
@@ -13,13 +15,18 @@ import { usePlatform } from "@/hooks/usePlatform";
 import { usePrint } from "@/hooks/usePrint";
 import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
+import { useUpdateCheck } from "@/hooks/useUpdateCheck";
+import { useWindowReveal } from "@/hooks/useWindowReveal";
+import { nextEditorMode } from "@/lib/settings";
 import { EmptyState } from "./layout/EmptyState";
+import { ExportProgress } from "./layout/ExportProgress";
 import { Sidebar } from "./layout/Sidebar";
 import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
+import { UpdateBanner } from "./layout/UpdateBanner";
 import { AIPanel } from "./modals/AIPanel";
 import { CommandPalette } from "./modals/CommandPalette";
-import { SettingsModal } from "./modals/SettingsModal";
+import { SettingsModal } from "./modals/settings/lazySettings";
 import { SyncSettingsModal } from "./modals/SyncSettingsModal";
 import { TabContent } from "./TabContent";
 
@@ -29,9 +36,20 @@ import { TabContent } from "./TabContent";
 // real <App> is a tiny provider stack and we want both files to stay focused.
 export function AppShell() {
   const platform = usePlatform();
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, loaded } = useSettings();
   const tabs = useTabsContext();
   const sidebar = useSidebarLayoutContext();
+
+  // Opt-in crash/error reporting; inert in dev and until the user enables it.
+  useErrorReporting(settings.privacy.errorReporting, loaded);
+
+  // Reveal the window (created hidden in tauri.conf.json) once settings/theme
+  // are loaded, avoiding the white flash + geometry jump on launch.
+  useWindowReveal();
+
+  // Once-per-session check for a newer GitHub release; the banner shows only
+  // when the user has the feature on and an update is actually available.
+  const updateCheck = useUpdateCheck(settings.behavior.checkForUpdates, loaded);
 
   const {
     tabs: openTabs,
@@ -74,6 +92,12 @@ export function AppShell() {
   const readAloud = useReadAloudController(settings.ai, () => displayContent);
   const tts = readAloud.tts;
   const printDoc = usePrint({ entries: tabs.tocEntries, settings: settings.print });
+  const exporters = useExport({
+    entries: tabs.tocEntries,
+    settings: settings.print,
+    filePath: activeFile?.path,
+    content: displayContent,
+  });
   const zoom = useFontZoom({ fontSize: settings.appearance.fontSize, updateSettings });
 
   // Coverage note: the experimental.cloudSync gating below is wired into
@@ -101,9 +125,9 @@ export function AppShell() {
 
   const handleToggleEdit = useCallback(() => {
     if (!activeTabId) return;
-    const current = activeFile?.mode ?? "view";
-    const next = current === "view" ? "edit" : current === "edit" ? "split" : "view";
-    setTabMode(activeTabId, next);
+    // nextEditorMode treats an undefined mode as view, so no fallback branch
+    // is needed at the call site.
+    setTabMode(activeTabId, nextEditorMode(activeFile?.mode));
   }, [activeTabId, activeFile?.mode, setTabMode]);
 
   const handleAIActionFromMenu = useCallback(
@@ -131,6 +155,10 @@ export function AppShell() {
       find: () => setSearchOpen(true),
       toggleEdit: handleToggleEdit,
       print: printDoc,
+      exportHtml: exporters.exportHtml,
+      exportDocx: exporters.exportDocx,
+      exportEpub: exporters.exportEpub,
+      exportPdf: exporters.exportPdf,
       zoomIn: zoom.zoomIn,
       zoomOut: zoom.zoomOut,
       zoomReset: zoom.zoomReset,
@@ -146,6 +174,10 @@ export function AppShell() {
       sidebar.resetLayout,
       handleToggleEdit,
       printDoc,
+      exporters.exportHtml,
+      exporters.exportDocx,
+      exporters.exportEpub,
+      exporters.exportPdf,
       zoom.zoomIn,
       zoom.zoomOut,
       zoom.zoomReset,
@@ -192,6 +224,7 @@ export function AppShell() {
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)]">
+      <UpdateBanner update={updateCheck.update} onDismiss={updateCheck.dismiss} />
       <TabBar />
       <div className="flex flex-1 min-h-0">
         <Sidebar side="left" />
@@ -213,6 +246,8 @@ export function AppShell() {
       </div>
       <StatusBar onOpenSync={cloudSyncEnabled ? () => setSyncSettingsOpen(true) : null} />
 
+      {exporters.exporting && <ExportProgress format={exporters.exporting} />}
+
       <CommandPalette
         open={palette.open}
         query={palette.query}
@@ -221,11 +256,11 @@ export function AppShell() {
         onClose={palette.close}
       />
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <SyncSettingsModal
-        open={syncSettingsOpen && cloudSyncEnabled}
-        onClose={() => setSyncSettingsOpen(false)}
-      />
+      {/* Mounted only when open so the settings chunk loads on first use. */}
+      {settingsOpen && <SettingsModal open onClose={() => setSettingsOpen(false)} />}
+      {syncSettingsOpen && cloudSyncEnabled && (
+        <SyncSettingsModal open onClose={() => setSyncSettingsOpen(false)} />
+      )}
       <AIPanel
         open={aiController.panelOpen}
         onClose={aiController.closePanel}

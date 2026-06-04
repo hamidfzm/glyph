@@ -1,25 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import ReactMarkdown, { type Options } from "react-markdown";
-import rehypeRaw from "rehype-raw";
-import rehypeSanitize from "rehype-sanitize";
-import rehypeSlug from "rehype-slug";
-import remarkFrontmatter from "remark-frontmatter";
-import remarkGemoji from "remark-gemoji";
-import remarkGfm from "remark-gfm";
-import { remarkAlert } from "remark-github-blockquote-alert";
-import remarkMath from "remark-math";
-import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
-import { useKatexPlugin } from "@/hooks/useKatexPlugin";
+import { useEffect, useRef } from "react";
 import { useSearch } from "@/hooks/useSearch";
-import { parseFrontmatter } from "@/lib/frontmatter";
-import { remarkWikilink } from "@/lib/wikilink";
 import { SearchBar } from "../layout/SearchBar";
-import { CodeBlockComponent } from "./CodeBlockComponent";
-import { FrontmatterBlock } from "./FrontmatterBlock";
-import { useImageComponent } from "./ImageComponent";
-import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
-import { markdownSanitizeSchema } from "./sanitizeSchema";
-import { TaskListItem } from "./TaskListItem";
+import { MarkdownContent } from "./MarkdownContent";
 
 interface MarkdownViewerProps {
   content: string;
@@ -48,9 +30,6 @@ export function MarkdownViewer({
   const contentRef = useRef<HTMLDivElement>(null);
 
   const search = useSearch({ containerRef: contentRef });
-  const katexPlugin = useKatexPlugin(content);
-  const highlightPlugin = useHighlightPlugin(content);
-  const frontmatter = useMemo(() => parseFrontmatter(content), [content]);
 
   // Restore scroll position on mount
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — restore once when tab activates
@@ -75,47 +54,10 @@ export function MarkdownViewer({
     return () => el.removeEventListener("scroll", handler);
   }, [onScrollChange]);
 
-  const ImageComponent = useImageComponent(filePath);
-
   const handleSearchClose = () => {
     search.clear();
     onSearchClose();
   };
-
-  const rehypePlugins: NonNullable<Options["rehypePlugins"]> = useMemo(() => {
-    const plugins: NonNullable<Options["rehypePlugins"]> = [
-      rehypeRaw,
-      [rehypeSanitize, markdownSanitizeSchema],
-      rehypeSlug,
-    ];
-    if (highlightPlugin) plugins.push(highlightPlugin);
-    if (katexPlugin) plugins.push(katexPlugin);
-    return plugins;
-  }, [katexPlugin, highlightPlugin]);
-
-  const remarkPlugins: NonNullable<Options["remarkPlugins"]> = useMemo(
-    () => [
-      remarkFrontmatter,
-      remarkGfm,
-      remarkMath,
-      remarkGemoji,
-      remarkAlert,
-      [remarkWikilink, { workspaceFiles, currentFilePath: filePath }],
-    ],
-    [workspaceFiles, filePath],
-  );
-
-  const LinkWithWikilink = useCallback(
-    (props: LinkComponentProps) => <LinkComponent {...props} onOpenWikilink={onOpenWikilink} />,
-    [onOpenWikilink],
-  );
-
-  const TaskListLi = useCallback(
-    (props: React.ComponentProps<typeof TaskListItem>) => (
-      <TaskListItem {...props} onTaskToggle={onTaskToggle} />
-    ),
-    [onTaskToggle],
-  );
 
   return (
     <div className="flex-1 relative min-h-0 min-w-0">
@@ -140,19 +82,13 @@ export function MarkdownViewer({
         style={{ scrollPaddingTop: "16px" }}
       >
         <div ref={contentRef} className="markdown-body px-8 py-6">
-          {frontmatter && <FrontmatterBlock data={frontmatter} />}
-          <ReactMarkdown
-            remarkPlugins={remarkPlugins}
-            rehypePlugins={rehypePlugins}
-            components={{
-              a: LinkWithWikilink,
-              img: ImageComponent,
-              pre: CodeBlockComponent,
-              li: TaskListLi,
-            }}
-          >
-            {content}
-          </ReactMarkdown>
+          <MarkdownContent
+            content={content}
+            filePath={filePath}
+            workspaceFiles={workspaceFiles}
+            onOpenWikilink={onOpenWikilink}
+            onTaskToggle={onTaskToggle}
+          />
         </div>
       </div>
     </div>

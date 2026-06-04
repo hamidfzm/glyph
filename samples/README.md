@@ -17,12 +17,14 @@ This document demonstrates all the rendering features supported by Glyph. The YA
 - [Code Blocks](#code-blocks)
 - [Math / LaTeX](#math--latex)
 - [Mermaid Diagrams](#mermaid-diagrams)
+- [CSV / TSV Tables](#csv--tsv-tables)
 - [Footnotes](#footnotes)
 - [Emoji Shortcodes](#emoji-shortcodes)
 - [Blockquotes](#blockquotes)
 - [Raw HTML](#raw-html)
 - [Images](#images)
 - [Links](#links)
+- [Jupyter Notebooks](#jupyter-notebooks)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 
 ## Frontmatter
@@ -151,6 +153,29 @@ as plain markdown.
 Open [[Flowchart]] for the diagram variant and [[Notes/Cooking]] for the
 MultiMarkdown variant; both files use the `.mmd` extension.
 
+## CSV / TSV Tables
+
+Fenced code blocks tagged `csv` or `tsv` render as styled, scrollable
+tables instead of raw text. The first row is treated as the header.
+Quoted fields with embedded commas, quotes, and newlines are supported.
+
+```csv
+Name,Role,Commits
+Alice,Maintainer,1240
+Bob,Contributor,87
+"Carol, Jr.",Reviewer,312
+```
+
+Tab-separated values work the same way with a `tsv` fence:
+
+```tsv
+Symbol	Price	Change
+AAPL	189.50	+1.2%
+GLPH	42.00	-0.4%
+```
+
+Malformed data falls back gracefully to the raw code block.
+
 ## Footnotes
 
 Glyph supports GitHub-style footnotes[^1]. You can reference them multiple times[^2].
@@ -239,6 +264,16 @@ When you have the `samples/` folder open, the **Backlinks** section under the fi
 
 In the editor or split view, typing `[[` opens a popup with workspace files. Keep typing to filter, press **Tab** or **Enter** to insert; the closing `]]` is added for you. Open this file in split view (`Cmd+E` cycles modes) and try typing `[[Co` to see it.
 
+## Jupyter Notebooks
+
+Glyph opens `.ipynb` files directly — no Jupyter required. Open `Notebook.ipynb` from the file tree (or run `glyph samples/Notebook.ipynb`) to see it. Notebooks are read-only and render each cell in order:
+
+- **Markdown cells** get the full markdown pipeline above — math, code, Mermaid, alerts, the lot.
+- **Code cells** are syntax-highlighted using the notebook's kernel language, with an `In [n]:` prompt in the gutter.
+- **Outputs** render under their cell by richest type: images (`image/png`, `image/jpeg`, `image/svg+xml`), sanitised HTML, markdown, and plain text. Stream output and exception tracebacks keep their ANSI colours instead of showing raw escape codes. An `Out [n]:` prompt marks execution results.
+
+Interactive outputs (Plotly, Vega, Jupyter widgets) aren't rendered yet — they show a short placeholder. Notebooks can't be edited in Glyph, so the mode toggle stays read-only: **view** shows the rendered cells, **edit** shows the raw `.ipynb` JSON as a syntax-highlighted source view, and **split** shows the JSON source and rendered cells side by side.
+
 ---
 
 ## Keyboard Shortcuts
@@ -256,4 +291,4 @@ In the editor or split view, typing `[[` opens a popup with workspace files. Kee
 | `Cmd+B` | Toggle sidebar |
 | `Cmd+,` | Settings |
 
-*Try pressing `Cmd+F` to search this document, or `Cmd+P` to print / save as PDF.*
+*Try pressing `Cmd+F` to search this document, or `Cmd+P` to print / save as PDF. Use `File → Export` to save this page as HTML, Word (DOCX), EPUB, or PDF — math, code highlighting, tables, and images are carried straight from the rendered view.*
