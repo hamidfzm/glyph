@@ -115,4 +115,20 @@ mod tests {
         assert!(from_workspace_relative(root, r"notes\todo.md").is_err());
         assert!(from_workspace_relative(root, "C:/evil").is_err());
     }
+
+    #[test]
+    fn to_relative_keeps_only_normal_components() {
+        // A `..` in the stripped tail yields a ParentDir component, which is
+        // dropped (only `Normal` parts are joined).
+        let root = Path::new("/home/u/workspace");
+        let file = Path::new("/home/u/workspace/a/../b.md");
+        assert_eq!(to_workspace_relative(root, file).unwrap(), "a/b.md");
+    }
+
+    #[test]
+    fn from_relative_skips_empty_and_dot_segments() {
+        let root = Path::new("/home/u/workspace");
+        let out = from_workspace_relative(root, "a//.//b.md").unwrap();
+        assert_eq!(out, Path::new("/home/u/workspace/a/b.md"));
+    }
 }

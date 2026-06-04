@@ -309,4 +309,27 @@ mod tests {
         assert!(raw.contains("\"lastFile\""));
         assert_eq!(read_state(tmp.path()).unwrap(), state);
     }
+
+    #[test]
+    fn version_defaults_when_absent_in_json() {
+        // A file written without a `version` key falls back to the schema
+        // default via `default_version` instead of erroring.
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".glyph")).unwrap();
+        std::fs::write(tmp.path().join(".glyph/config.json"), "{}").unwrap();
+        assert_eq!(read_config(tmp.path()).unwrap().unwrap().version, 1);
+        std::fs::write(tmp.path().join(".glyph/state.json"), "{}").unwrap();
+        assert_eq!(read_state(tmp.path()).unwrap().version, 1);
+    }
+
+    #[test]
+    fn read_errors_when_the_file_is_unreadable() {
+        // Present but a directory: read fails with something other than
+        // NotFound, surfacing an Err rather than the "absent => Ok" path.
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".glyph/config.json")).unwrap();
+        assert!(read_config(tmp.path()).is_err());
+        std::fs::create_dir_all(tmp.path().join(".glyph/state.json")).unwrap();
+        assert!(read_state(tmp.path()).is_err());
+    }
 }
