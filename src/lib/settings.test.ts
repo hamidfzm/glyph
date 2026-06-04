@@ -36,10 +36,6 @@ describe("DEFAULT_SETTINGS", () => {
     expect(DEFAULT_SETTINGS.behavior.recentFiles).toEqual([]);
   });
 
-  it("has experimental defaults (cloud sync off)", () => {
-    expect(DEFAULT_SETTINGS.experimental.cloudSync).toBe(false);
-  });
-
   it("has AI defaults", () => {
     expect(DEFAULT_SETTINGS.ai.provider).toBe("none");
     expect(DEFAULT_SETTINGS.ai.apiKeys).toEqual({});

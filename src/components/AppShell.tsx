@@ -101,23 +101,12 @@ export function AppShell() {
   });
   const zoom = useFontZoom({ fontSize: settings.appearance.fontSize, updateSettings });
 
-  // Coverage note: the experimental.cloudSync gating below is wired into
-  // four locations (menu handler, status pill, modal `open`, palette). A
-  // direct AppShell test would need a full app-shell harness (Tabs,
-  // Sidebar, Settings, Tauri menu, native event listeners) just to flip
-  // this flag, so we let the gating travel through the per-hook tests
-  // instead: useAppCommands + useNativeMenuState + StatusBar +
-  // SyncStatusIndicator each exercise their slice of `cloudSyncEnabled`
-  // independently.
-  const cloudSyncEnabled = settings.experimental.cloudSync;
-
   useNativeMenuState({
     hasTab: openTabs.length > 0,
     hasFile: activeFile?.content != null,
     hasContent: (displayContent ?? "").length > 0,
     aiConfigured: aiController.configured,
     ttsAvailable: tts.available,
-    cloudSyncEnabled,
   });
 
   const closeActiveTab = useCallback(() => {
@@ -148,11 +137,7 @@ export function AppShell() {
       toggleOutlineSidebar: sidebar.toggleOutline,
       resetView: sidebar.resetLayout,
       openSettings: () => setSettingsOpen(true),
-      // Gated by the experimental.cloudSync toggle: while the native menu
-      // item is hidden by `apply_menu_state`, the open-sync-settings event
-      // can still arrive (e.g. queued before the menu re-applied). Make the
-      // handler a no-op when the feature is off so we never expose the modal.
-      openSyncSettings: cloudSyncEnabled ? () => setSyncSettingsOpen(true) : () => {},
+      openSyncSettings: () => setSyncSettingsOpen(true),
       find: () => setSearchOpen(true),
       toggleEdit: handleToggleEdit,
       print: printDoc,
@@ -184,7 +169,6 @@ export function AppShell() {
       zoom.zoomReset,
       handleAIActionFromMenu,
       readAloud.toggle,
-      cloudSyncEnabled,
     ],
   );
   useMenuEvents(menuHandlers);
@@ -198,7 +182,6 @@ export function AppShell() {
       () => ({ ...menuHandlers, openFileInFolderTab }),
       [menuHandlers, openFileInFolderTab],
     ),
-    cloudSyncEnabled,
   });
 
   // Context menu (Win/Linux only): text-content actions only. Sidebar/menu/zoom
@@ -249,7 +232,7 @@ export function AppShell() {
         )}
         <Sidebar side="right" />
       </div>
-      <StatusBar onOpenSync={cloudSyncEnabled ? () => setSyncSettingsOpen(true) : null} />
+      <StatusBar onOpenSync={() => setSyncSettingsOpen(true)} />
 
       {exporters.exporting && <ExportProgress format={exporters.exporting} />}
 
@@ -263,9 +246,7 @@ export function AppShell() {
 
       {/* Mounted only when open so the settings chunk loads on first use. */}
       {settingsOpen && <SettingsModal open onClose={() => setSettingsOpen(false)} />}
-      {syncSettingsOpen && cloudSyncEnabled && (
-        <SyncSettingsModal open onClose={() => setSyncSettingsOpen(false)} />
-      )}
+      {syncSettingsOpen && <SyncSettingsModal open onClose={() => setSyncSettingsOpen(false)} />}
       <AIPanel
         open={aiController.panelOpen}
         onClose={aiController.closePanel}

@@ -30,7 +30,6 @@ pub struct MenuItemRefs {
     ai_explain: MenuItem<Wry>,
     ai_simplify: MenuItem<Wry>,
     ai_read_aloud: MenuItem<Wry>,
-    sync_settings: MenuItem<Wry>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,9 +40,6 @@ pub struct MenuStateFlags {
     pub has_content: bool,
     pub ai_configured: bool,
     pub tts_available: bool,
-    // Gates the visibility of the File > Cloud Sync item behind the
-    // `experimental.cloudSync` toggle. The frontend mirrors the flag.
-    pub cloud_sync_enabled: bool,
 }
 
 pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemRefs)> {
@@ -268,7 +264,6 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         ai_explain,
         ai_simplify,
         ai_read_aloud,
-        sync_settings,
     };
 
     Ok((menu, refs))
@@ -308,13 +303,6 @@ pub fn apply_menu_state(refs: &MenuItemRefs, flags: &MenuStateFlags) -> Result<(
         .map_err(stringify)?;
     refs.ai_read_aloud
         .set_enabled(flags.tts_available && flags.has_content)
-        .map_err(stringify)?;
-    // Tauri's MenuItem has no `set_visible`, so the File > Cloud Sync entry
-    // stays present and just goes disabled when the experimental flag is off.
-    // The frontend additionally no-ops its event handler, so even if the user
-    // manages to fire the menu event the modal can't open.
-    refs.sync_settings
-        .set_enabled(flags.cloud_sync_enabled)
         .map_err(stringify)?;
     Ok(())
 }

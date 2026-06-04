@@ -38,30 +38,6 @@ describe("SettingsModal", () => {
     expect(screen.getByText("AI")).toBeInTheDocument();
     expect(screen.getByText("Print")).toBeInTheDocument();
     expect(screen.getByText("Privacy")).toBeInTheDocument();
-    expect(screen.getByText("Experimental")).toBeInTheDocument();
-  });
-
-  it("renders the Experimental tab with the Cloud Sync toggle", () => {
-    const { wrapper } = withSettings();
-    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
-
-    fireEvent.click(screen.getByText("Experimental"));
-    expect(screen.getByText("Experimental features")).toBeInTheDocument();
-    expect(screen.getByText("Cloud Sync")).toBeInTheDocument();
-    expect(screen.getByText(/git-backed sync/i)).toBeInTheDocument();
-  });
-
-  it("toggling the Cloud Sync switch calls updateSettings with the new value", () => {
-    const updateSettings = vi.fn();
-    const { wrapper } = withSettings({ updateSettings });
-    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
-
-    fireEvent.click(screen.getByText("Experimental"));
-    // The toggle is the only checkbox in the Experimental tab.
-    const toggle = screen.getByRole("checkbox") as HTMLInputElement;
-    expect(toggle.checked).toBe(false);
-    fireEvent.click(toggle);
-    expect(updateSettings).toHaveBeenCalledWith("experimental.cloudSync", true);
   });
 
   it("renders each tab's content when selected", () => {

@@ -96,15 +96,6 @@ export interface PrintSettings {
   includeBackground: boolean;
 }
 
-// Feature flags for in-progress work. Each entry gates a UI surface (menus,
-// modals, status bar pills, palette commands) that we want to ship behind a
-// user-controlled toggle until it's stable.
-export interface ExperimentalSettings {
-  // Per-workspace git-backed sync. Hides the modal, status-bar pill, File
-  // menu item, and command-palette entry when off.
-  cloudSync: boolean;
-}
-
 export interface PrivacySettings {
   // Opt-in crash/error reporting to Sentry. Off by default — nothing leaves the
   // machine until the user turns this on, and it stays inert in dev builds.
@@ -117,7 +108,6 @@ export interface Settings {
   behavior: BehaviorSettings;
   ai: AISettings;
   print: PrintSettings;
-  experimental: ExperimentalSettings;
   privacy: PrivacySettings;
 }
 
@@ -161,9 +151,6 @@ export const DEFAULT_SETTINGS: Settings = {
     pageBreakLevel: "none",
     includeToc: false,
     includeBackground: false,
-  },
-  experimental: {
-    cloudSync: false,
   },
   privacy: {
     errorReporting: false,

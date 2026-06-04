@@ -3,12 +3,11 @@ import { useSettings } from "@/hooks/useSettings";
 import { AITab } from "./AITab";
 import { AppearanceTab } from "./AppearanceTab";
 import { BehaviorTab } from "./BehaviorTab";
-import { ExperimentalTab } from "./ExperimentalTab";
 import { LayoutTab } from "./LayoutTab";
 import { PrintTab } from "./PrintTab";
 import { PrivacyTab } from "./PrivacyTab";
 
-type Tab = "appearance" | "layout" | "behavior" | "ai" | "print" | "privacy" | "experimental";
+type Tab = "appearance" | "layout" | "behavior" | "ai" | "print" | "privacy";
 
 interface SettingsModalProps {
   open: boolean;
@@ -45,7 +44,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     { id: "ai", label: "AI" },
     { id: "print", label: "Print" },
     { id: "privacy", label: "Privacy" },
-    { id: "experimental", label: "Experimental" },
   ];
 
   return (
@@ -93,7 +91,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           {tab === "ai" && <AITab />}
           {tab === "print" && <PrintTab />}
           {tab === "privacy" && <PrivacyTab />}
-          {tab === "experimental" && <ExperimentalTab />}
         </div>
 
         <div className="settings-footer">
