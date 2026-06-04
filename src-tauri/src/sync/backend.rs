@@ -133,6 +133,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn commit_config_defaults_to_a_noop() {
+        // A backend that doesn't override commit_config inherits the
+        // default: no committed-config concept, so it reports no commit.
+        struct Dummy;
+        impl SyncBackend for Dummy {
+            fn kind(&self) -> BackendKind {
+                BackendKind::Git
+            }
+            fn status(&self) -> Result<StatusReport, SyncError> {
+                Err(SyncError::NotConfigured)
+            }
+            fn sync(&self, _: Option<&str>) -> Result<SyncResult, SyncError> {
+                Err(SyncError::NotConfigured)
+            }
+        }
+        // Exercise every method so the trait impl carries no uncovered body.
+        assert_eq!(Dummy.kind(), BackendKind::Git);
+        assert!(Dummy.status().is_err());
+        assert!(Dummy.sync(None).is_err());
+        // The point of the test: the default commit_config is a no-op.
+        assert!(!Dummy.commit_config().unwrap());
+    }
+
+    #[test]
     fn backend_kind_serialises_kebab_case() {
         let v = serde_json::to_value(BackendKind::Git).unwrap();
         assert_eq!(v, serde_json::json!("git"));

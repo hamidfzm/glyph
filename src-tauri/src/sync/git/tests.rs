@@ -241,8 +241,11 @@ fn sync_commits_locally_when_no_remote_is_configured() {
 
 #[test]
 fn commit_config_commits_glyph_dir_once_then_is_a_noop() {
-    // Simulate enabling sync: write a `.glyph/` config, then commit it.
+    // Simulate enabling sync on a repo that already has history (so the
+    // setup commit gets a parent), then write a `.glyph/` config and commit it.
     let f = Fixture::new();
+    f.write_file("seed.md", "# seed\n");
+    f.backend().sync(None).unwrap();
     let glyph = f.workspace.join(".glyph");
     fs::create_dir_all(&glyph).unwrap();
     fs::write(glyph.join("config.json"), "{\"version\":1}\n").unwrap();
