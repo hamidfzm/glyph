@@ -12,6 +12,12 @@ Cross-platform markdown viewer built with Tauri v2 + React 19 + TypeScript.
 
 When creating PRs, always follow the PR template. When creating issues, use the appropriate issue template.
 
+### Closing issues from PRs and commits
+
+To auto-close an issue, GitHub only recognizes these keywords in a PR description or commit message, each followed directly by `#<number>`: `close`, `closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves`, `resolved`.
+
+Do **not** use `closing` (or `closed out`, `fixing`, `resolving`, or any other variant). GitHub does not treat those as keywords, so the issue silently stays open. Write `Closes #110`, never `closing #110`.
+
 ## Architecture
 
 - **Backend** (`src-tauri/src/`): Rust — Tauri commands, file watcher via `notify` crate, plugin setup, native menus
