@@ -131,6 +131,8 @@ function buildContext(over: Partial<TabsContextValue>): TabsContextValue {
     displayContent: null,
     tocEntries: [],
     backlinks: [],
+    workspaceNotice: null,
+    dismissWorkspaceNotice: vi.fn(),
     ...over,
   };
 }

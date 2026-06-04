@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { type TocEntry, useTableOfContents } from "@/hooks/useTableOfContents";
 import { useTabs } from "@/hooks/useTabs";
+import { useWorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { type Backlink, filterBacklinks } from "@/lib/backlinks";
 import { isNotebookFile } from "@/lib/notebookExtensions";
 import { EDITOR_MODE, type Settings } from "@/lib/settings";
@@ -13,6 +14,9 @@ export interface TabsContextValue extends TabsApi {
   displayContent: string | null;
   tocEntries: TocEntry[];
   backlinks: Backlink[];
+  // Transient message shown when a folder is refused as a workspace (#262).
+  workspaceNotice: string | null;
+  dismissWorkspaceNotice: () => void;
 }
 
 export const TabsContext = createContext<TabsContextValue | null>(null);
@@ -24,6 +28,7 @@ interface TabsProviderProps {
 }
 
 export function TabsProvider({ settings, updateSettings, children }: TabsProviderProps) {
+  const workspaceNotice = useWorkspaceNotice();
   const tabs = useTabs({
     reopenLastFile: settings.behavior.reopenLastFile,
     openTabs: settings.behavior.openTabs,
@@ -31,8 +36,8 @@ export function TabsProvider({ settings, updateSettings, children }: TabsProvide
     recentFiles: settings.behavior.recentFiles,
     autoReload: settings.behavior.autoReload,
     defaultEditorMode: settings.behavior.defaultEditorMode,
-    workspaceLastFile: settings.behavior.workspaceLastFile,
     onSettingsChange: updateSettings,
+    onWorkspaceRefusal: workspaceNotice.show,
   });
 
   const activeMode = tabs.activeFile?.mode ?? EDITOR_MODE.view;
@@ -63,8 +68,15 @@ export function TabsProvider({ settings, updateSettings, children }: TabsProvide
   );
 
   const value = useMemo<TabsContextValue>(
-    () => ({ ...tabs, displayContent, tocEntries, backlinks }),
-    [tabs, displayContent, tocEntries, backlinks],
+    () => ({
+      ...tabs,
+      displayContent,
+      tocEntries,
+      backlinks,
+      workspaceNotice: workspaceNotice.notice,
+      dismissWorkspaceNotice: workspaceNotice.dismiss,
+    }),
+    [tabs, displayContent, tocEntries, backlinks, workspaceNotice.notice, workspaceNotice.dismiss],
   );
 
   return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;

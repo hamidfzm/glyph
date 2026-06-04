@@ -66,6 +66,8 @@ function buildContext(opts: Opts): TabsContextValue {
     displayContent: opts.displayContent ?? null,
     tocEntries: [],
     backlinks: [],
+    workspaceNotice: null,
+    dismissWorkspaceNotice: vi.fn(),
   };
 }
 
@@ -172,6 +174,8 @@ function buildFolderContext(): TabsContextValue {
     displayContent: "some content",
     tocEntries: [],
     backlinks: [],
+    workspaceNotice: null,
+    dismissWorkspaceNotice: vi.fn(),
   };
 }
 

@@ -52,7 +52,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 
 ### Viewer
 - Jupyter notebooks — open `.ipynb` files directly; markdown cells render with full markdown (math, code, diagrams), code cells are syntax-highlighted, and image, HTML, plain-text, and colourised stream/traceback outputs show under each cell with `In [n]:` / `Out [n]:` prompts (read-only)
-- Folder / workspace tabs — open a folder as a tab; browse `.md` files in the sidebar tree; right-click a file to open it in a new top-level tab
+- Folder / workspace tabs — open a folder as a tab; browse `.md` files in the sidebar tree; right-click a file to open it in a new top-level tab. One folder is one workspace (a git repository's top level): a folder nested inside another repo, or overlapping an already-open one, is declined so links and search have an unambiguous scope
 - Multiple files in tabs — open, switch, close, middle-click to close
 - Command palette — `Cmd/Ctrl+K` to fuzzy-jump to any workspace file, document heading, or app action
 - In-document search — `Cmd/Ctrl+F` with match highlighting and navigation
@@ -242,7 +242,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
 |---|---|---|---|---|---|---|---|
 | Tabs | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ |
-| Folder / vault sidebar | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
+| Folder / workspace sidebar | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
 | Wikilinks & backlinks | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | plugin |
 | Tag / metadata search | planned | ✅ | ❌ | ❌ | ✅ | ✅ | plugin |
 | Command palette | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |

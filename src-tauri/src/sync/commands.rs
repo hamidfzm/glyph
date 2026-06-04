@@ -15,29 +15,20 @@ use super::ops;
 use super::state::SyncState;
 
 #[tauri::command]
-pub async fn sync_set_config(
-    config: WorkspaceSyncConfig,
-    state: State<'_, SyncState>,
-) -> Result<(), SyncError> {
-    ops::set_config(&state, config);
-    Ok(())
+pub async fn sync_set_config(config: WorkspaceSyncConfig) -> Result<(), SyncError> {
+    ops::set_config(config)
 }
 
 #[tauri::command]
 pub async fn sync_get_config(
     workspace_path: String,
-    state: State<'_, SyncState>,
 ) -> Result<Option<WorkspaceSyncConfig>, SyncError> {
-    Ok(ops::get_config(&state, &workspace_path))
+    ops::get_config(&workspace_path)
 }
 
 #[tauri::command]
-pub async fn sync_remove_config(
-    workspace_path: String,
-    state: State<'_, SyncState>,
-) -> Result<(), SyncError> {
-    ops::remove_config(&state, &workspace_path);
-    Ok(())
+pub async fn sync_remove_config(workspace_path: String) -> Result<(), SyncError> {
+    ops::remove_config(&workspace_path)
 }
 
 #[tauri::command]
@@ -170,27 +161,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sync_set_config_wrapper_writes_into_managed_state() {
-        let app = mock_app();
-        app.manage(SyncState::new());
+    async fn sync_set_config_wrapper_writes_the_workspace_config() {
         let ws = Workspace::new();
-        sync_set_config(ws.config(), app.state::<SyncState>())
+        sync_set_config(ws.config()).await.unwrap();
+        // Reads back through the same command surface from `.glyph/config.json`.
+        let got = sync_get_config(ws.workspace_path.clone())
             .await
-            .unwrap();
-        assert_eq!(
-            app.state::<SyncState>()
-                .get_config(&ws.workspace_path)
-                .unwrap()
-                .workspace_path,
-            ws.workspace_path
-        );
+            .unwrap()
+            .expect("config present");
+        assert_eq!(got.workspace_path, ws.workspace_path);
     }
 
     #[tokio::test]
     async fn sync_get_config_wrapper_returns_none_when_unconfigured() {
-        let app = mock_app();
-        app.manage(SyncState::new());
-        let result = sync_get_config("/missing".into(), app.state::<SyncState>())
+        let tmp = TempDir::new().unwrap();
+        let result = sync_get_config(tmp.path().to_string_lossy().into())
             .await
             .unwrap();
         assert!(result.is_none());
@@ -198,11 +183,9 @@ mod tests {
 
     #[tokio::test]
     async fn sync_get_config_wrapper_returns_the_stored_config() {
-        let app = mock_app();
-        app.manage(SyncState::new());
         let ws = Workspace::new();
-        app.state::<SyncState>().set_config(ws.config());
-        let result = sync_get_config(ws.workspace_path.clone(), app.state::<SyncState>())
+        crate::workspace::store_sync_config(&ws.config()).unwrap();
+        let result = sync_get_config(ws.workspace_path.clone())
             .await
             .unwrap()
             .expect("config present");
@@ -211,16 +194,12 @@ mod tests {
 
     #[tokio::test]
     async fn sync_remove_config_wrapper_drops_the_entry() {
-        let app = mock_app();
-        app.manage(SyncState::new());
         let ws = Workspace::new();
-        app.state::<SyncState>().set_config(ws.config());
-        sync_remove_config(ws.workspace_path.clone(), app.state::<SyncState>())
+        crate::workspace::store_sync_config(&ws.config()).unwrap();
+        sync_remove_config(ws.workspace_path.clone()).await.unwrap();
+        assert!(sync_get_config(ws.workspace_path.clone())
             .await
-            .unwrap();
-        assert!(app
-            .state::<SyncState>()
-            .get_config(&ws.workspace_path)
+            .unwrap()
             .is_none());
     }
 
@@ -269,7 +248,7 @@ mod tests {
         .unwrap();
         let app = mock_app();
         app.manage(SyncState::new());
-        app.state::<SyncState>().set_config(ws.config());
+        crate::workspace::store_sync_config(&ws.config()).unwrap();
         sync_run(ws.workspace_path.clone(), None, app.state::<SyncState>())
             .await
             .unwrap();
@@ -293,7 +272,7 @@ mod tests {
         )
         .await
         .unwrap();
-        app.state::<SyncState>().set_config(ws.config());
+        crate::workspace::store_sync_config(&ws.config()).unwrap();
         let status = sync_status(ws.workspace_path.clone(), app.state::<SyncState>())
             .await
             .unwrap();
@@ -317,7 +296,7 @@ mod tests {
             "# a\n",
         )
         .unwrap();
-        app.state::<SyncState>().set_config(ws.config());
+        crate::workspace::store_sync_config(&ws.config()).unwrap();
         let result = sync_run(
             ws.workspace_path.clone(),
             Some("test commit".into()),

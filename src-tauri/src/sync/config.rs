@@ -1,9 +1,9 @@
 //! Per-workspace sync configuration.
 //!
-//! Configuration lives outside the workspace folder (in the Tauri store
-//! plugin's app data dir) so users can opt into sync without polluting
-//! the repo with `.glyph/` files. The shape is one config per workspace
-//! root path.
+//! This is the in-memory / IPC shape. It is persisted inside the workspace as
+//! `.glyph/config.json` (see [`crate::workspace::config`]) — committed, so it
+//! travels with a `git clone` — minus the `workspace_path` field, which is
+//! implied by the file's location and injected back on read.
 //!
 //! Credentials (PAT / SSH passphrase / etc.) are *not* in this struct —
 //! a follow-up PR routes them through the OS keychain via

@@ -24,6 +24,7 @@ import { Sidebar } from "./layout/Sidebar";
 import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
 import { UpdateBanner } from "./layout/UpdateBanner";
+import { WorkspaceNoticeBanner } from "./layout/WorkspaceNoticeBanner";
 import { AIPanel } from "./modals/AIPanel";
 import { CommandPalette } from "./modals/CommandPalette";
 import { SettingsModal } from "./modals/settings/lazySettings";
@@ -225,6 +226,10 @@ export function AppShell() {
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)]">
       <UpdateBanner update={updateCheck.update} onDismiss={updateCheck.dismiss} />
+      <WorkspaceNoticeBanner
+        notice={tabs.workspaceNotice}
+        onDismiss={tabs.dismissWorkspaceNotice}
+      />
       <TabBar />
       <div className="flex flex-1 min-h-0">
         <Sidebar side="left" />

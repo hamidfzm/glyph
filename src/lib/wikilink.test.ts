@@ -48,14 +48,14 @@ function rawValueAt(md: string, options: WikilinkPluginOptions = {}, type: strin
 }
 
 describe("remarkWikilink", () => {
-  const files = ["/vault/Index.md", "/vault/Notes/Cooking.md"];
+  const files = ["/workspace/Index.md", "/workspace/Notes/Cooking.md"];
 
   it("decorates a resolved wikilink with data attributes", () => {
     const [node] = findWikilinks("See [[Cooking]] now.", { workspaceFiles: files });
     expect(node).toBeDefined();
     expect(node.data?.hProperties).toMatchObject({
       dataWikilink: "Cooking",
-      dataWikilinkPath: "/vault/Notes/Cooking.md",
+      dataWikilinkPath: "/workspace/Notes/Cooking.md",
       className: ["wikilink"],
     });
     expect(node.data?.hProperties).not.toHaveProperty("dataWikilinkBroken");
@@ -84,13 +84,13 @@ describe("remarkWikilink", () => {
     expect(node.data?.hProperties).toMatchObject({
       dataWikilink: "Cooking",
       dataWikilinkHeading: "Recipes",
-      dataWikilinkPath: "/vault/Notes/Cooking.md",
+      dataWikilinkPath: "/workspace/Notes/Cooking.md",
     });
   });
 
   it("strips a `.md` extension from the target during resolution", () => {
     const [node] = findWikilinks("[[Cooking.md]]", { workspaceFiles: files });
-    expect(node.data?.hProperties?.dataWikilinkPath).toBe("/vault/Notes/Cooking.md");
+    expect(node.data?.hProperties?.dataWikilinkPath).toBe("/workspace/Notes/Cooking.md");
   });
 
   it("treats every link as broken without a workspace", () => {
@@ -142,14 +142,14 @@ describe("remarkWikilink with rehype-sanitize", () => {
   }
 
   it("preserves className and data attributes through sanitize", async () => {
-    const out = await html("[[Cooking]]", { workspaceFiles: ["/vault/Cooking.md"] });
+    const out = await html("[[Cooking]]", { workspaceFiles: ["/workspace/Cooking.md"] });
     expect(out).toContain('class="wikilink"');
     expect(out).toContain('data-wikilink="Cooking"');
-    expect(out).toContain('data-wikilink-path="/vault/Cooking.md"');
+    expect(out).toContain('data-wikilink-path="/workspace/Cooking.md"');
   });
 
   it("preserves the broken modifier and marker", async () => {
-    const out = await html("[[Missing]]", { workspaceFiles: ["/vault/Cooking.md"] });
+    const out = await html("[[Missing]]", { workspaceFiles: ["/workspace/Cooking.md"] });
     expect(out).toContain("wikilink--broken");
     expect(out).toContain("data-wikilink-broken");
     expect(out).not.toContain("data-wikilink-path");

@@ -67,13 +67,13 @@ describe("LinkComponent wikilinks", () => {
       onOpenWikilink: onOpen,
       ...({
         "data-wikilink": "Cooking",
-        "data-wikilink-path": "/vault/Cooking.md",
+        "data-wikilink-path": "/workspace/Cooking.md",
       } as Record<string, string>),
     });
     const anchor = container.querySelector("a") as HTMLAnchorElement;
     fireEvent.click(anchor);
 
-    expect(onOpen).toHaveBeenCalledWith("/vault/Cooking.md", undefined);
+    expect(onOpen).toHaveBeenCalledWith("/workspace/Cooking.md", undefined);
     expect(openUrl).not.toHaveBeenCalled();
   });
 
@@ -83,13 +83,13 @@ describe("LinkComponent wikilinks", () => {
       onOpenWikilink: onOpen,
       ...({
         "data-wikilink": "Cooking",
-        "data-wikilink-path": "/vault/Cooking.md",
+        "data-wikilink-path": "/workspace/Cooking.md",
         "data-wikilink-heading": "Recipes",
       } as Record<string, string>),
     });
     fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
 
-    expect(onOpen).toHaveBeenCalledWith("/vault/Cooking.md", "Recipes");
+    expect(onOpen).toHaveBeenCalledWith("/workspace/Cooking.md", "Recipes");
   });
 
   it("does not call onOpenWikilink for broken wikilinks", () => {
@@ -116,7 +116,7 @@ describe("LinkComponent wikilinks", () => {
       onOpenWikilink: onOpen,
       ...({
         "data-wikilink": "Cooking",
-        "data-wikilink-path": "/vault/Cooking.md",
+        "data-wikilink-path": "/workspace/Cooking.md",
       } as Record<string, string>),
     });
     fireEvent.click(container.querySelector("a") as HTMLAnchorElement);

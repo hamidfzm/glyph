@@ -39,6 +39,19 @@ function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): Invoker 
         return [];
       case "scan_wikilinks":
         return [];
+      case "workspace_resolve":
+        // Default: a plain, non-nested folder that's always adoptable.
+        return {
+          selected: String(args?.selected ?? ""),
+          isGitRepo: false,
+          gitTopLevel: null,
+          nestedUnder: null,
+          glyphConflict: null,
+        };
+      case "workspace_get_last_file":
+        return null;
+      case "workspace_set_last_file":
+        return undefined;
       default:
         return undefined;
     }
@@ -53,8 +66,8 @@ function defaultOptions(over: Partial<Parameters<typeof useTabs>[0]> = {}) {
     recentFiles: [],
     autoReload: false,
     defaultEditorMode: "view" as const,
-    workspaceLastFile: {},
     onSettingsChange: vi.fn(),
+    onWorkspaceRefusal: vi.fn(),
     ...over,
   };
 }
@@ -772,11 +785,10 @@ describe("useTabs dialog and events", () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+        workspace_get_last_file: async () => "/p/ws/b.md",
       }) as typeof invoke,
     );
-    const { result } = renderHook(() =>
-      useTabs(defaultOptions({ workspaceLastFile: { "/p/ws": "/p/ws/b.md" } })),
-    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     await act(async () => {
@@ -792,11 +804,10 @@ describe("useTabs dialog and events", () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+        workspace_get_last_file: async () => "/p/ws/gone.md",
       }) as typeof invoke,
     );
-    const { result } = renderHook(() =>
-      useTabs(defaultOptions({ workspaceLastFile: { "/p/ws": "/p/ws/gone.md" } })),
-    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     await act(async () => {
@@ -824,17 +835,12 @@ describe("useTabs dialog and events", () => {
     expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
   });
 
-  it("openFileInFolderTab persists the choice via behavior.workspaceLastFile", async () => {
-    const onSettingsChange = vi.fn();
-    vi.mocked(invoke).mockImplementation(makeInvoker() as typeof invoke);
-    const { result } = renderHook(() =>
-      useTabs(
-        defaultOptions({
-          workspaceLastFile: { "/p/other": "/p/other/x.md" },
-          onSettingsChange,
-        }),
-      ),
+  it("openFileInFolderTab records the choice via workspace_set_last_file", async () => {
+    const setLastFile = vi.fn(async () => undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ workspace_set_last_file: setLastFile }) as typeof invoke,
     );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     await act(async () => {
@@ -842,17 +848,155 @@ describe("useTabs dialog and events", () => {
     });
     const folder = result.current.tabs.find((t) => t.kind === "folder");
     expect(folder).toBeDefined();
-    onSettingsChange.mockClear();
+    setLastFile.mockClear();
 
     await act(async () => {
       await result.current.openFileInFolderTab(folder!.id, "/p/ws/note.md");
     });
 
-    // The merged map must keep the other workspace's entry intact.
-    expect(onSettingsChange).toHaveBeenCalledWith("behavior.workspaceLastFile", {
-      "/p/other": "/p/other/x.md",
-      "/p/ws": "/p/ws/note.md",
+    expect(setLastFile).toHaveBeenCalledWith("workspace_set_last_file", {
+      workspaceRoot: "/p/ws",
+      filePath: "/p/ws/note.md",
     });
+  });
+
+  it("refuses a folder nested inside a parent git repo (#262)", async () => {
+    const onWorkspaceRefusal = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_resolve: async (_cmd, args) => ({
+          selected: String(args?.selected ?? ""),
+          isGitRepo: true,
+          gitTopLevel: "/p/repo",
+          nestedUnder: "/p/repo",
+          glyphConflict: null,
+        }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/repo/sub");
+    });
+
+    expect(result.current.tabs.some((t) => t.kind === "folder")).toBe(false);
+    expect(onWorkspaceRefusal).toHaveBeenCalledWith(expect.stringContaining("/p/repo"));
+  });
+
+  it("refuses a folder nested inside another workspace's .glyph (#262)", async () => {
+    const onWorkspaceRefusal = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_resolve: async (_cmd, args) => ({
+          selected: String(args?.selected ?? ""),
+          isGitRepo: false,
+          gitTopLevel: null,
+          nestedUnder: null,
+          glyphConflict: "/p/outer",
+        }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/outer/inner");
+    });
+
+    expect(result.current.tabs.some((t) => t.kind === "folder")).toBe(false);
+    expect(onWorkspaceRefusal).toHaveBeenCalledWith(expect.stringContaining("/p/outer"));
+  });
+
+  it("refuses a folder overlapping an already-open workspace (#262)", async () => {
+    const onWorkspaceRefusal = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p/ws")).toBe(true);
+    onWorkspaceRefusal.mockClear();
+
+    // A child of the open workspace overlaps it.
+    await act(async () => {
+      await result.current.openFolder("/p/ws/sub");
+    });
+    expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p/ws/sub")).toBe(
+      false,
+    );
+    // A parent of the open workspace also overlaps it.
+    await act(async () => {
+      await result.current.openFolder("/p");
+    });
+    expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p")).toBe(false);
+    expect(onWorkspaceRefusal).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-opening the same workspace activates it instead of refusing", async () => {
+    const onWorkspaceRefusal = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    expect(
+      result.current.tabs.filter((t) => t.kind === "folder" && t.root === "/p/ws"),
+    ).toHaveLength(1);
+    expect(onWorkspaceRefusal).not.toHaveBeenCalled();
+  });
+
+  it("silently skips a nested folder on restore without bannering", async () => {
+    const onWorkspaceRefusal = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_resolve: async (_cmd, args) => ({
+          selected: String(args?.selected ?? ""),
+          isGitRepo: true,
+          gitTopLevel: "/p/repo",
+          nestedUnder: "/p/repo",
+          glyphConflict: null,
+        }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          onWorkspaceRefusal,
+          openTabs: [{ kind: "folder", path: "/p/repo/sub" }],
+        }),
+      ),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    expect(result.current.tabs.some((t) => t.kind === "folder")).toBe(false);
+    expect(onWorkspaceRefusal).not.toHaveBeenCalled();
+  });
+
+  it("refuses and reports when workspace resolution fails", async () => {
+    const onWorkspaceRefusal = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_resolve: async () => {
+          throw new Error("unreadable path");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/broken");
+    });
+
+    expect(result.current.tabs.some((t) => t.kind === "folder")).toBe(false);
+    expect(onWorkspaceRefusal).toHaveBeenCalledWith(expect.stringContaining("Couldn't open"));
   });
 
   it("openFolder with an explicit filePath skips the auto-load probe", async () => {
@@ -882,38 +1026,6 @@ describe("useTabs dialog and events", () => {
     const folder = result.current.tabs.find((t) => t.kind === "folder");
     // Auto-load skipped: folder.file stays null when filePath is provided.
     expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
-  });
-
-  it("openFolder tolerates an undefined workspaceLastFile option", async () => {
-    // Defensive: the `?? {}` fallbacks on lines 282 and 355 keep the hook
-    // working when settings haven't materialised the workspaceLastFile map
-    // yet (e.g. first-run before defaults merge). Without the fallback,
-    // the spread `{ ...currentMap }` would throw a TypeError.
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        list_markdown_files: async () => ["/p/ws/a.md"],
-      }) as typeof invoke,
-    );
-    const onSettingsChange = vi.fn();
-    const opts = defaultOptions({ onSettingsChange });
-    // Bypass the typed default via a cast — the runtime guard is what we
-    // actually want to exercise here.
-    (opts as { workspaceLastFile?: Record<string, string> }).workspaceLastFile =
-      undefined as unknown as Record<string, string>;
-    const { result } = renderHook(() => useTabs(opts));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    await waitFor(() => {
-      const folder = result.current.tabs.find((t) => t.kind === "folder");
-      expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/a.md");
-    });
-    // The persisted map seeds with a single entry rather than crashing.
-    expect(onSettingsChange).toHaveBeenCalledWith("behavior.workspaceLastFile", {
-      "/p/ws": "/p/ws/a.md",
-    });
   });
 
   it("openFolder skips auto-load when list_markdown_files returns a non-markdown target", async () => {
@@ -966,32 +1078,6 @@ describe("useTabs dialog and events", () => {
       expect.anything(),
     );
     errorSpy.mockRestore();
-  });
-
-  it("openFileInFolderTab tolerates an undefined workspaceLastFile option", async () => {
-    // Same defensive fallback as openFolder (line 282): the spread must not
-    // throw when the map is missing from settings at runtime.
-    vi.mocked(invoke).mockImplementation(makeInvoker() as typeof invoke);
-    const onSettingsChange = vi.fn();
-    const opts = defaultOptions({ onSettingsChange });
-    (opts as { workspaceLastFile?: Record<string, string> }).workspaceLastFile =
-      undefined as unknown as Record<string, string>;
-    const { result } = renderHook(() => useTabs(opts));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    const folder = result.current.tabs.find((t) => t.kind === "folder");
-    expect(folder).toBeDefined();
-    onSettingsChange.mockClear();
-
-    await act(async () => {
-      await result.current.openFileInFolderTab(folder!.id, "/p/ws/note.md");
-    });
-    expect(onSettingsChange).toHaveBeenCalledWith("behavior.workspaceLastFile", {
-      "/p/ws": "/p/ws/note.md",
-    });
   });
 
   it("openFolder is wired to the open-folder event", async () => {

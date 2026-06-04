@@ -17,20 +17,24 @@ use super::git;
 use super::state::SyncState;
 use super::DEFAULT_REMOTE_BRANCH;
 
-/// Persist (or replace) the sync config for the workspace it names.
-pub fn set_config(state: &SyncState, config: WorkspaceSyncConfig) {
-    state.set_config(config);
+/// Persist (or replace) the sync config in the workspace's committed
+/// `.glyph/config.json`. This is the source of truth — it survives restart
+/// and travels with a `git clone`.
+pub fn set_config(config: WorkspaceSyncConfig) -> Result<(), SyncError> {
+    crate::workspace::store_sync_config(&config).map_err(SyncError::Backend)
 }
 
-/// Look up the stored config for a workspace. `None` is a clean "not
-/// configured yet" signal, distinct from an error.
-pub fn get_config(state: &SyncState, workspace_path: &str) -> Option<WorkspaceSyncConfig> {
-    state.get_config(workspace_path)
+/// Read the stored sync config from the workspace's `.glyph/config.json`.
+/// `Ok(None)` is a clean "not configured yet" signal; `Err` only when a
+/// config file exists but can't be read or parsed.
+pub fn get_config(workspace_path: &str) -> Result<Option<WorkspaceSyncConfig>, SyncError> {
+    crate::workspace::load_sync_config(workspace_path).map_err(SyncError::Backend)
 }
 
-/// Forget a workspace's config (e.g. user disabled sync for it).
-pub fn remove_config(state: &SyncState, workspace_path: &str) {
-    state.remove_config(workspace_path);
+/// Forget a workspace's sync config (user disabled sync). Drops the sync
+/// block from `.glyph/config.json`.
+pub fn remove_config(workspace_path: &str) -> Result<(), SyncError> {
+    crate::workspace::clear_sync_config(workspace_path).map_err(SyncError::Backend)
 }
 
 /// Stash a credential token in memory for `workspace_path`. The OS-keychain
@@ -281,7 +285,7 @@ mod tests {
             author: None,
         };
         let path = config.workspace_path.clone();
-        set_config(&state, config);
+        set_config(config).unwrap();
         let err = run_status(&state, &path).await.unwrap_err();
         assert!(matches!(err, SyncError::NotConfigured));
     }
@@ -305,7 +309,7 @@ mod tests {
         )
         .unwrap();
 
-        set_config(&state, ws.config());
+        set_config(ws.config()).unwrap();
 
         let result = run_sync(&state, &ws.workspace_path, None).await.unwrap();
         assert_eq!(result.kind, BackendKind::Git);
@@ -335,7 +339,7 @@ mod tests {
         )
         .unwrap();
         let state = SyncState::new();
-        set_config(&state, ws.config());
+        set_config(ws.config()).unwrap();
         run_sync(&state, &ws.workspace_path, None).await.unwrap();
 
         let dest = ws.tmp.path().join("clone-into-me");
@@ -348,14 +352,13 @@ mod tests {
     #[tokio::test]
     async fn config_set_then_get_round_trips_through_the_command_helpers() {
         let ws = Workspace::new();
-        let state = SyncState::new();
-        assert!(get_config(&state, &ws.workspace_path).is_none());
-        set_config(&state, ws.config());
-        let cfg = get_config(&state, &ws.workspace_path).unwrap();
+        assert!(get_config(&ws.workspace_path).unwrap().is_none());
+        set_config(ws.config()).unwrap();
+        let cfg = get_config(&ws.workspace_path).unwrap().unwrap();
         assert_eq!(cfg.workspace_path, ws.workspace_path);
         assert_eq!(cfg.backend, BackendKind::Git);
-        remove_config(&state, &ws.workspace_path);
-        assert!(get_config(&state, &ws.workspace_path).is_none());
+        remove_config(&ws.workspace_path).unwrap();
+        assert!(get_config(&ws.workspace_path).unwrap().is_none());
     }
 
     #[tokio::test]

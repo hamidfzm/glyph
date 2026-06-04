@@ -79,11 +79,6 @@ export interface BehaviorSettings {
   // tabs). Used to restore which tab is selected on launch.
   activeTabPath: string;
   defaultEditorMode: EditorMode;
-  // Maps a folder workspace's absolute root to the last file the user had
-  // open inside it. Looked up when a folder is opened with no explicit file
-  // (workspace restore, drag-drop folder, File > Open Folder). Files that no
-  // longer exist fall through to the first markdown file in the workspace.
-  workspaceLastFile: Record<string, string>;
 }
 
 export interface AISettings {
@@ -153,7 +148,6 @@ export const DEFAULT_SETTINGS: Settings = {
     openTabs: [],
     activeTabPath: "",
     defaultEditorMode: EDITOR_MODE.view,
-    workspaceLastFile: {},
   },
   ai: {
     provider: "none",

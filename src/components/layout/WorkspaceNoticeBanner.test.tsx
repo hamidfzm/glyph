@@ -1,0 +1,18 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { WorkspaceNoticeBanner } from "./WorkspaceNoticeBanner";
+
+describe("WorkspaceNoticeBanner", () => {
+  it("renders nothing when there is no notice", () => {
+    const { container } = render(<WorkspaceNoticeBanner notice={null} onDismiss={vi.fn()} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("shows the message and dismisses on click", () => {
+    const onDismiss = vi.fn();
+    render(<WorkspaceNoticeBanner notice="nested repo" onDismiss={onDismiss} />);
+    expect(screen.getByText("nested repo")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss workspace notice" }));
+    expect(onDismiss).toHaveBeenCalledOnce();
+  });
+});

@@ -64,6 +64,8 @@ function tabsValue(activeTab: FolderTab | null): TabsContextValue {
     displayContent: null,
     tocEntries: [],
     backlinks: [],
+    workspaceNotice: null,
+    dismissWorkspaceNotice: vi.fn(),
   };
 }
 

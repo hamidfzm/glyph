@@ -7,6 +7,7 @@ mod notebook;
 mod sync;
 mod telemetry;
 mod watcher;
+mod workspace;
 
 use std::sync::{Arc, Mutex};
 #[cfg(target_os = "macos")]
@@ -179,6 +180,9 @@ pub fn run() {
             sync::commands::sync_run,
             sync::commands::sync_default_author,
             sync::commands::sync_repo_present,
+            workspace::commands::workspace_resolve,
+            workspace::commands::workspace_get_last_file,
+            workspace::commands::workspace_set_last_file,
             telemetry::set_error_reporting,
         ])
         .build(tauri::generate_context!())
