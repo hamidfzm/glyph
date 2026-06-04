@@ -37,9 +37,10 @@ describe("SettingsModal", () => {
     expect(screen.getByText("Behavior")).toBeInTheDocument();
     expect(screen.getByText("AI")).toBeInTheDocument();
     expect(screen.getByText("Print")).toBeInTheDocument();
+    expect(screen.getByText("Privacy")).toBeInTheDocument();
   });
 
-  it("switches the active tab when a tab button is clicked", () => {
+  it("renders each tab's content when selected", () => {
     const { wrapper } = withSettings();
     render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
@@ -48,6 +49,15 @@ describe("SettingsModal", () => {
 
     fireEvent.click(screen.getByText("Behavior"));
     expect(screen.getByText("Auto-reload")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("AI"));
+    expect(screen.getByText("AI Provider")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Print"));
+    expect(screen.getByText("Print & PDF Export")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Privacy"));
+    expect(screen.getByText("Error Reporting")).toBeInTheDocument();
   });
 
   it("calls onClose when Escape is pressed", () => {
@@ -66,6 +76,19 @@ describe("SettingsModal", () => {
 
     fireEvent.keyDown(window, { key: "Enter" });
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("handles keydown on the dialog overlay (Escape closes, other keys do not)", () => {
+    const onClose = vi.fn();
+    const { wrapper } = withSettings();
+    const { container } = render(<SettingsModal open={true} onClose={onClose} />, { wrapper });
+    const overlay = container.querySelector(".settings-overlay") as Element;
+
+    fireEvent.keyDown(overlay, { key: "Enter" });
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(overlay, { key: "Escape" });
+    expect(onClose).toHaveBeenCalled();
   });
 
   it("calls onClose when the backdrop is clicked but not when content is clicked", () => {
@@ -107,6 +130,49 @@ describe("SettingsModal", () => {
     fireEvent.click(screen.getByText("Behavior"));
     fireEvent.click(screen.getByText(/Clear Recent Files/i));
     expect(updateSettings).toHaveBeenCalledWith("behavior.recentFiles", []);
+  });
+
+  it("toggles error reporting from the Privacy tab", () => {
+    const updateSettings = vi.fn();
+    const { wrapper } = withSettings({ updateSettings });
+    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.click(screen.getByText("Privacy"));
+    expect(screen.getByText("Send crash reports")).toBeInTheDocument();
+
+    const toggle = screen.getByRole("checkbox");
+    fireEvent.click(toggle);
+    expect(updateSettings).toHaveBeenCalledWith("privacy.errorReporting", true);
+  });
+
+  it("shows the custom font input when the font family is custom", () => {
+    const { wrapper } = withSettings({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        appearance: { ...DEFAULT_SETTINGS.appearance, fontFamily: "custom" },
+      },
+    });
+    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    expect(screen.getByText("Custom Font Name")).toBeInTheDocument();
+  });
+
+  it("shows the API key field for cloud AI providers", () => {
+    const { wrapper } = withSettings({
+      settings: { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "claude" } },
+    });
+    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    fireEvent.click(screen.getByText("AI"));
+    expect(screen.getByText("API Key")).toBeInTheDocument();
+    expect(screen.getByText("Model")).toBeInTheDocument();
+  });
+
+  it("shows the Ollama URL field for the local provider", () => {
+    const { wrapper } = withSettings({
+      settings: { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } },
+    });
+    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    fireEvent.click(screen.getByText("AI"));
+    expect(screen.getByText("Ollama URL")).toBeInTheDocument();
   });
 
   it("calls resetSettings from the footer Reset button", () => {

@@ -15,7 +15,7 @@ vi.mock("./markdown/MarkdownViewer", () => ({
   MarkdownViewer: () => <div data-testid="markdown-viewer" />,
 }));
 
-vi.mock("./modals/SettingsModal", () => ({
+vi.mock("./modals/settings/lazySettings", () => ({
   SettingsModal: ({ open, onClose }: { open: boolean; onClose: () => void }) =>
     open ? (
       <button type="button" data-testid="settings-modal" onClick={onClose}>
@@ -28,7 +28,20 @@ vi.mock("./modals/AIPanel", () => ({
   AIPanel: ({ open }: { open: boolean }) => (open ? <div data-testid="ai-panel" /> : null),
 }));
 
+// Mocked so a test can drive the in-progress-export state (the real hook never
+// sets it here — the mocked viewer renders no `.markdown-body` to export).
+vi.mock("@/hooks/useExport", () => ({ useExport: vi.fn() }));
+
+import { type ExportHandlers, useExport } from "@/hooks/useExport";
 import { App } from "./App";
+
+const IDLE_EXPORTERS: ExportHandlers = {
+  exportHtml: vi.fn(),
+  exportDocx: vi.fn(),
+  exportEpub: vi.fn(),
+  exportPdf: vi.fn(),
+  exporting: null,
+};
 
 interface MenuListeners {
   [event: string]: ((event: { payload: unknown }) => void) | undefined;
@@ -61,6 +74,7 @@ beforeEach(() => {
   vi.mocked(invoke).mockReset();
   vi.mocked(listen).mockReset();
   vi.mocked(listen).mockResolvedValue(() => {});
+  vi.mocked(useExport).mockReturnValue(IDLE_EXPORTERS);
 });
 
 describe("App", () => {
@@ -91,6 +105,15 @@ describe("App", () => {
     const { wrapper } = withProviders();
     const { findByTestId } = render(<App />, { wrapper });
     expect(await findByTestId("markdown-viewer")).toBeInTheDocument();
+  });
+
+  it("shows the export progress toast while an export is in flight", async () => {
+    vi.mocked(useExport).mockReturnValue({ ...IDLE_EXPORTERS, exporting: "docx" });
+    const { wrapper } = withProviders();
+    const { findByRole } = render(<App />, { wrapper });
+
+    const status = await findByRole("status");
+    expect(status).toHaveTextContent("Exporting Word document…");
   });
 
   it("renders the empty state when there are no tabs", async () => {
@@ -274,12 +297,23 @@ describe("App", () => {
       listeners["menu-find"]?.({ payload: undefined });
     });
 
-    // menu-toggle-edit: cycles view → edit. The lazy editor mock renders for
-    // edit mode, so its appearance confirms setTabMode fired.
+    // menu-toggle-edit cycles view → edit → split → view. Each step renders a
+    // different mock (editor, split, viewer), confirming the full nextEditorMode
+    // cycle runs through setTabMode.
     await act(async () => {
       listeners["menu-toggle-edit"]?.({ payload: undefined });
     });
     expect(await findByTestId("lazy-editor")).toBeInTheDocument();
+
+    await act(async () => {
+      listeners["menu-toggle-edit"]?.({ payload: undefined });
+    });
+    expect(await findByTestId("lazy-split")).toBeInTheDocument();
+
+    await act(async () => {
+      listeners["menu-toggle-edit"]?.({ payload: undefined });
+    });
+    expect(await findByTestId("markdown-viewer")).toBeInTheDocument();
 
     // menu-close-tab: closes the open file (covers closeActiveTab path).
     await act(async () => {

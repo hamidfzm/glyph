@@ -1,6 +1,6 @@
 [package]
 name = "glyph"
-version = "0.8.1"
+version = "0.9.0"
 description = "A cross-platform markdown viewer"
 authors = ["hamidfzm"]
 edition = "2021"
@@ -30,6 +30,15 @@ walkdir = "2.5.0"
 # `vendored-openssl` keeps SSH/HTTPS support self-contained too.
 git2 = { version = "0.20", default-features = false, features = ["vendored-libgit2", "vendored-openssl"] }
 thiserror = "2"
+# rustls (not native-tls) so release builds don't need OpenSSL system libs on
+# Linux. Default integrations include the panic handler we rely on.
+sentry = { version = "0.42", default-features = false, features = [
+    "backtrace",
+    "contexts",
+    "panic",
+    "reqwest",
+    "rustls",
+] }
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

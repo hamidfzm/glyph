@@ -1,6 +1,7 @@
 import { useTabsContext } from "@/contexts/TabsContext";
 import { useSettings } from "@/hooks/useSettings";
 import { countWords, readingTime } from "@/lib/markdown";
+import { isNotebookFile } from "@/lib/notebookExtensions";
 import { ZOOM_DEFAULT } from "@/lib/settings";
 
 export function StatusBar() {
@@ -8,10 +9,15 @@ export function StatusBar() {
   const { activeFile, displayContent } = useTabsContext();
   const zoomPercent = Math.round((settings.appearance.fontSize / ZOOM_DEFAULT) * 100);
 
-  if (!displayContent) return null;
-
   const filePath = activeFile?.path;
-  const words = countWords(displayContent);
+  // Notebooks suppress `displayContent` (it would be raw JSON) in every mode,
+  // so the word count / reading time don't apply — show a document-type label
+  // instead.
+  const isNotebook = !!filePath && isNotebookFile(filePath);
+
+  if (!displayContent && !isNotebook) return null;
+
+  const words = displayContent ? countWords(displayContent) : 0;
 
   return (
     <div
@@ -23,8 +29,14 @@ export function StatusBar() {
           {filePath}
         </span>
       )}
-      <span className="ml-auto">{words.toLocaleString()} words</span>
-      <span>{readingTime(words)}</span>
+      {isNotebook ? (
+        <span className="ml-auto">Jupyter Notebook</span>
+      ) : (
+        <>
+          <span className="ml-auto">{words.toLocaleString()} words</span>
+          <span>{readingTime(words)}</span>
+        </>
+      )}
       {zoomPercent !== 100 && <span>{zoomPercent}%</span>}
     </div>
   );

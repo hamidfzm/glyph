@@ -28,7 +28,33 @@ export interface LayoutSettings {
   swapSidebarSides: boolean;
 }
 
-export type EditorMode = "view" | "edit" | "split";
+// Editor modes for a document tab. Defined as a constant object so call sites
+// reference `EDITOR_MODE.view` etc. instead of bare string literals; the
+// `EditorMode` union is derived from it so the two never drift.
+export const EDITOR_MODE = {
+  view: "view",
+  edit: "edit",
+  split: "split",
+} as const;
+
+export type EditorMode = (typeof EDITOR_MODE)[keyof typeof EDITOR_MODE];
+
+// Order the per-tab mode toggle cycles through: view → edit → split → view.
+const EDITOR_MODE_CYCLE: readonly EditorMode[] = [
+  EDITOR_MODE.view,
+  EDITOR_MODE.edit,
+  EDITOR_MODE.split,
+];
+
+/**
+ * The next mode when cycling the editor toggle (wraps view → edit → split →
+ * view). An undefined/unknown current mode is treated as `view`, so the cycle
+ * starts at `edit`.
+ */
+export function nextEditorMode(current: EditorMode | undefined): EditorMode {
+  const idx = current ? EDITOR_MODE_CYCLE.indexOf(current) : 0;
+  return EDITOR_MODE_CYCLE[(idx + 1) % EDITOR_MODE_CYCLE.length];
+}
 
 export interface PersistedTab {
   kind: "file" | "folder";
@@ -41,6 +67,10 @@ export interface BehaviorSettings {
   autoReload: boolean;
   reopenLastFile: boolean;
   confirmExternalLinks: boolean;
+  // Check GitHub for a newer release on launch and show a banner when one is
+  // available. On by default; only the running version is compared, nothing is
+  // uploaded.
+  checkForUpdates: boolean;
   recentFiles: string[];
   // Each entry is a tab to restore on launch; either a single file or a folder
   // workspace with optional active-file + expanded subdir state.
@@ -66,12 +96,19 @@ export interface PrintSettings {
   includeBackground: boolean;
 }
 
+export interface PrivacySettings {
+  // Opt-in crash/error reporting to Sentry. Off by default — nothing leaves the
+  // machine until the user turns this on, and it stays inert in dev builds.
+  errorReporting: boolean;
+}
+
 export interface Settings {
   appearance: AppearanceSettings;
   layout: LayoutSettings;
   behavior: BehaviorSettings;
   ai: AISettings;
   print: PrintSettings;
+  privacy: PrivacySettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -96,10 +133,11 @@ export const DEFAULT_SETTINGS: Settings = {
     autoReload: true,
     reopenLastFile: false,
     confirmExternalLinks: true,
+    checkForUpdates: true,
     recentFiles: [],
     openTabs: [],
     activeTabPath: "",
-    defaultEditorMode: "view",
+    defaultEditorMode: EDITOR_MODE.view,
   },
   ai: {
     provider: "none",
@@ -113,6 +151,9 @@ export const DEFAULT_SETTINGS: Settings = {
     pageBreakLevel: "none",
     includeToc: false,
     includeBackground: false,
+  },
+  privacy: {
+    errorReporting: false,
   },
 };
 

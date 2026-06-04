@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   CONTENT_WIDTH_MAP,
   DEFAULT_SETTINGS,
+  EDITOR_MODE,
   FONT_FAMILY_MAP,
   LINE_HEIGHT_MAP,
   MODEL_SUGGESTIONS,
+  nextEditorMode,
 } from "./settings";
 
 describe("DEFAULT_SETTINGS", () => {
@@ -107,5 +109,17 @@ describe("MODEL_SUGGESTIONS", () => {
   it("has ollama models", () => {
     expect(MODEL_SUGGESTIONS.ollama).toBeInstanceOf(Array);
     expect(MODEL_SUGGESTIONS.ollama.length).toBeGreaterThan(0);
+  });
+});
+
+describe("nextEditorMode", () => {
+  it("cycles view → edit → split → view", () => {
+    expect(nextEditorMode(EDITOR_MODE.view)).toBe(EDITOR_MODE.edit);
+    expect(nextEditorMode(EDITOR_MODE.edit)).toBe(EDITOR_MODE.split);
+    expect(nextEditorMode(EDITOR_MODE.split)).toBe(EDITOR_MODE.view);
+  });
+
+  it("treats an undefined current mode as view (cycles to edit)", () => {
+    expect(nextEditorMode(undefined)).toBe(EDITOR_MODE.edit);
   });
 });

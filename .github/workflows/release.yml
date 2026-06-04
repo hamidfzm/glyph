@@ -49,6 +49,10 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Enables source-map upload from the Vite build (vite.config.ts). When
+          # unset (e.g. forks), the Sentry plugin is skipped and the build still
+          # succeeds.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Glyph ${{ github.ref_name }}"
@@ -289,17 +293,51 @@ jobs:
         shell: pwsh
         env:
           CHOCO_API_KEY: ${{ secrets.CHOCO_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           $version = "${{ steps.version.outputs.version }}"
           $sha = "${{ steps.sha.outputs.sha256 }}"
+          $repo = "${{ github.repository }}"
+          $tag = "${{ github.ref_name }}"
 
-          $nuspec = Get-Content chocolatey/glyph.nuspec -Raw
-          $nuspec = $nuspec.Replace('{{VERSION}}', $version)
-          Set-Content chocolatey/glyph.nuspec $nuspec
+          # Generate the version-specific changelog (same source as the GitHub
+          # release notes) so the Chocolatey package page shows what changed in
+          # this release instead of only linking to the releases list.
+          $prevTag = gh release list --repo $repo --limit 2 --json tagName --jq '.[1].tagName'
+          # gh emits the body as multiple lines, which PowerShell captures as a
+          # string[]. Join it back with newlines so the Markdown survives (string
+          # interpolation would otherwise flatten the array with spaces and turn
+          # the whole changelog into one run-on paragraph).
+          $changelog = (gh api "repos/$repo/releases/generate-notes" `
+            -f tag_name="$tag" `
+            -f previous_tag_name="$prevTag" `
+            --jq .body) -join "`n"
+          # Drop the leading "<!-- Release notes generated ... -->" comment GitHub
+          # prepends; Chocolatey renders raw HTML as literal text, not a comment.
+          $changelog = ($changelog -replace '(?s)^\s*<!--.*?-->\s*', '').Trim()
+
+          # Append a "Links" section so users can jump to the release page,
+          # docs, and issue tracker straight from the Chocolatey listing.
+          $links = @(
+            "## Links",
+            "",
+            "- Release page: https://github.com/$repo/releases/tag/$tag",
+            "- All releases: https://github.com/$repo/releases",
+            "- Documentation: https://github.com/$repo#readme",
+            "- Report an issue: https://github.com/$repo/issues"
+          ) -join "`n"
+          $notes = "$changelog`n`n$links"
 
           $install = Get-Content chocolatey/tools/chocolateyinstall.ps1 -Raw
           $install = $install.Replace('{{SHA256}}', $sha)
           Set-Content chocolatey/tools/chocolateyinstall.ps1 $install
+
+          # Set the version and inject the changelog via the XML DOM so any
+          # special characters in the notes are escaped correctly.
+          [xml]$nuspec = Get-Content chocolatey/glyph.nuspec -Raw
+          $nuspec.package.metadata.version = $version
+          $nuspec.package.metadata.releaseNotes = $notes
+          $nuspec.Save("$pwd\chocolatey\glyph.nuspec")
 
           cd chocolatey
           choco pack

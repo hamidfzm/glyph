@@ -4,7 +4,59 @@ use std::path::PathBuf;
 
 fn main() {
     generate_md_extensions();
+    emit_sentry_dsn();
+    embed_comctl32_v6_in_test_binaries();
     tauri_build::build();
+}
+
+/// Single source of truth for the Sentry DSN: `src-tauri/sentry.json` → `dsn`.
+///
+/// The frontend imports the same file (see `src/lib/telemetry.ts`) so both
+/// clients target the same project. Emitted as the `GLYPH_SENTRY_DSN` compile
+/// env so `telemetry.rs` can read it via `option_env!` with zero runtime cost.
+///
+/// Tolerant by design: a missing file or absent `dsn` yields an empty string,
+/// which disables reporting rather than failing the build (e.g. on forks).
+fn emit_sentry_dsn() {
+    println!("cargo:rerun-if-changed=sentry.json");
+
+    let dsn = fs::read_to_string("sentry.json")
+        .ok()
+        .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
+        .and_then(|value| {
+            value
+                .get("dsn")
+                .and_then(|d| d.as_str())
+                .map(str::to_string)
+        })
+        .unwrap_or_default();
+
+    println!("cargo:rustc-env=GLYPH_SENTRY_DSN={dsn}");
+}
+
+/// Embed the ComCtl32 v6 (Common-Controls 6.0.0.0) manifest dependency when
+/// linking on Windows.
+///
+/// Tauri embeds this manifest into the shipped `glyph.exe` so the modern
+/// (WinSxS) ComCtl32 v6 is loaded. The cargo unit-test harness binary, however,
+/// gets no such manifest, so it binds to the legacy System32 ComCtl32 v5.82 —
+/// which lacks `TaskDialogIndirect`, a v6-only export that `rfd` (pulled in via
+/// `tauri-plugin-dialog`) statically imports. The result is a load-time
+/// `STATUS_ENTRYPOINT_NOT_FOUND` (0xc0000139) crash before any test runs.
+///
+/// `cargo:rustc-link-arg` is the only directive that reaches the lib unit-test
+/// harness (the `-tests` variant covers `[[test]]` integration targets only,
+/// which this crate has none of). It also applies to the shipped binary and the
+/// cdylib, but both already declare (or are agnostic to) the v6 dependency, so
+/// the duplicate is merged harmlessly by the linker.
+fn embed_comctl32_v6_in_test_binaries() {
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        println!(
+            "cargo:rustc-link-arg=/MANIFESTDEPENDENCY:type='win32' \
+             name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
+             processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"
+        );
+    }
 }
 
 /// Single source of truth for the supported markdown extensions:
