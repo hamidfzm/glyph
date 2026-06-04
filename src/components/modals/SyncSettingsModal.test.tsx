@@ -855,9 +855,7 @@ describe("SyncSettingsModal", () => {
       const calls = vi.mocked(invoke).mock.calls.map((c) => c[0]);
       expect(calls).toContain("sync_set_config");
     });
-    const setConfigCall = vi
-      .mocked(invoke)
-      .mock.calls.find((c) => c[0] === "sync_set_config");
+    const setConfigCall = vi.mocked(invoke).mock.calls.find((c) => c[0] === "sync_set_config");
     expect((setConfigCall?.[1] as { config: { remoteUrl: string } }).config.remoteUrl).toBe("");
     const allCalls = vi.mocked(invoke).mock.calls.map((c) => c[0]);
     expect(allCalls).not.toContain("sync_set_origin");
@@ -1070,7 +1068,9 @@ describe("commitSaveConfig", () => {
       setOrigin: vi.fn().mockRejectedValue(new Error("network down")),
       commitConfig: vi.fn().mockRejectedValue(new Error("commit failed")),
     });
-    await expect(commitSaveConfig(configWith("https://example.com/r.git"), "", d)).resolves.toBeUndefined();
+    await expect(
+      commitSaveConfig(configWith("https://example.com/r.git"), "", d),
+    ).resolves.toBeUndefined();
     expect(d.save).toHaveBeenCalled();
     expect(d.commitConfig).toHaveBeenCalled();
   });
