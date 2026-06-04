@@ -276,7 +276,10 @@ mod tests {
         let status = sync_status(ws.workspace_path.clone(), app.state::<SyncState>())
             .await
             .unwrap();
-        assert!(status.clean);
+        // Storing the config wrote `.glyph/config.json` into the working
+        // tree, so a freshly-configured workspace reports as dirty until the
+        // first sync commits it.
+        assert!(!status.clean);
     }
 
     #[tokio::test]
@@ -503,13 +506,15 @@ mod tests {
             }),
         );
 
-        // sync_status — clean working tree, no remote movement.
+        // sync_status — the config we just set wrote `.glyph/config.json`
+        // into the working tree, so the workspace reads as dirty until the
+        // first sync commits it.
         let status: crate::sync::backend::StatusReport = invoke_ipc(
             &webview,
             "sync_status",
             serde_json::json!({ "workspacePath": ws.workspace_path }),
         );
-        assert!(status.clean);
+        assert!(!status.clean);
 
         // Write a file, then sync_run — commits + pushes.
         fs::write(
