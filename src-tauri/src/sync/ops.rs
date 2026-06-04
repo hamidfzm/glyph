@@ -543,6 +543,29 @@ mod tests {
     }
 
     #[test]
+    fn default_author_skips_workspace_config_when_it_cannot_be_opened() {
+        // `<ws>/.git/config` exists but is a *directory*, so
+        // `git2::Config::open` returns Err and `default_author` falls
+        // through to the global lookup instead of reading the workspace
+        // file. Exercises the Err arm of the workspace-config branch and
+        // re-enters the global-config block with an empty redirect.
+        let _g = search_path_guard();
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".git/config")).unwrap();
+
+        // Point the global lookup at an empty `.gitconfig` so the result is
+        // deterministic regardless of the host's real git identity.
+        let fake_home = tmp.path().join("fake-home");
+        std::fs::create_dir_all(&fake_home).unwrap();
+        std::fs::write(fake_home.join(".gitconfig"), "").unwrap();
+        let _override = SearchPathOverride::install(&fake_home);
+
+        let hint = default_author(&tmp.path().to_string_lossy());
+        assert_eq!(hint.name, None);
+        assert_eq!(hint.email, None);
+    }
+
+    #[test]
     fn default_author_returns_only_workspace_email_when_global_is_empty() {
         // Workspace supplies email only; the redirected global config has
         // nothing. Email comes through from the workspace, name stays None.

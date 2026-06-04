@@ -5,7 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { FolderTab } from "@/hooks/useTabs";
 import type { WorkspaceSyncConfig } from "@/lib/sync";
-import { SyncSettingsModal } from "./SyncSettingsModal";
+import {
+  commitSaveConfig,
+  type FormState,
+  resolveSaveConfig,
+  SyncSettingsModal,
+} from "./SyncSettingsModal";
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
@@ -932,5 +937,118 @@ describe("SyncSettingsModal", () => {
     await waitFor(() => expect(calls).toHaveLength(1));
     const cfg = calls[0].config as WorkspaceSyncConfig;
     expect(cfg.remoteBranch).toBe("main");
+  });
+});
+
+function makeForm(overrides: Partial<FormState> = {}): FormState {
+  return {
+    remoteUrl: "https://example.com/r.git",
+    remoteBranch: "main",
+    conflictPolicy: "prompt",
+    authorName: "",
+    authorEmail: "",
+    autoSyncSeconds: "",
+    token: "",
+    commitMessage: "",
+    ...overrides,
+  };
+}
+
+// The two guards inside the Save flow can't be reached by driving the form
+// (the Save button is hidden with no workspace and disabled with an empty
+// URL), so they're exercised here against the extracted helpers directly.
+describe("resolveSaveConfig", () => {
+  it("returns null when there is no workspace path", () => {
+    expect(resolveSaveConfig(null, makeForm())).toBeNull();
+  });
+
+  it("returns null when the remote URL is blank", () => {
+    expect(resolveSaveConfig("/w", makeForm({ remoteUrl: "   " }))).toBeNull();
+  });
+
+  it("returns the resolved config when workspace and URL are present", () => {
+    const next = resolveSaveConfig("/w", makeForm({ remoteUrl: "https://example.com/r.git" }));
+    expect(next).toMatchObject({
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "https://example.com/r.git",
+    });
+  });
+});
+
+describe("commitSaveConfig", () => {
+  function deps(overrides: Partial<Parameters<typeof commitSaveConfig>[2]> = {}) {
+    return {
+      repoPresent: true,
+      save: vi.fn().mockResolvedValue(undefined),
+      setOrigin: vi.fn().mockResolvedValue(undefined),
+      setToken: vi.fn().mockResolvedValue(undefined),
+      clearTokenField: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  it("is a no-op when there is nothing to save", async () => {
+    const d = deps();
+    await commitSaveConfig(null, "tok", d);
+    expect(d.save).not.toHaveBeenCalled();
+    expect(d.setOrigin).not.toHaveBeenCalled();
+    expect(d.setToken).not.toHaveBeenCalled();
+    expect(d.clearTokenField).not.toHaveBeenCalled();
+  });
+
+  it("saves, pushes origin, and stores the token when the repo exists", async () => {
+    const d = deps({ repoPresent: true });
+    const config: WorkspaceSyncConfig = {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "https://example.com/r.git",
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      autoSyncSeconds: null,
+      author: null,
+    };
+    await commitSaveConfig(config, "  ghp_secret  ", d);
+    expect(d.save).toHaveBeenCalledWith(config);
+    expect(d.setOrigin).toHaveBeenCalledWith("https://example.com/r.git");
+    expect(d.setToken).toHaveBeenCalledWith("ghp_secret");
+    expect(d.clearTokenField).toHaveBeenCalled();
+  });
+
+  it("skips setOrigin when the repo isn't present and leaves a blank token alone", async () => {
+    const d = deps({ repoPresent: false });
+    const config: WorkspaceSyncConfig = {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "https://example.com/r.git",
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      autoSyncSeconds: null,
+      author: null,
+    };
+    await commitSaveConfig(config, "   ", d);
+    expect(d.save).toHaveBeenCalledWith(config);
+    expect(d.setOrigin).not.toHaveBeenCalled();
+    expect(d.setToken).not.toHaveBeenCalled();
+    expect(d.clearTokenField).not.toHaveBeenCalled();
+  });
+
+  it("swallows setOrigin failures so the save still resolves", async () => {
+    const d = deps({
+      repoPresent: true,
+      setOrigin: vi.fn().mockRejectedValue(new Error("network down")),
+    });
+    const config: WorkspaceSyncConfig = {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "https://example.com/r.git",
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      autoSyncSeconds: null,
+      author: null,
+    };
+    await expect(commitSaveConfig(config, "", d)).resolves.toBeUndefined();
+    expect(d.save).toHaveBeenCalledWith(config);
+    expect(d.setToken).not.toHaveBeenCalled();
   });
 });

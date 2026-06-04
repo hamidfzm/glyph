@@ -717,8 +717,14 @@ mod tests {
     /// Helper: `git2::Cred::credtype()` returns a raw libgit2 cred type
     /// as a `u32` rather than the typed `CredentialType` bitflag, so we
     /// bit-AND against the bitflag's `bits()` to check what was selected.
+    ///
+    /// The raw type is libgit2's C `int` enum: the git2 binding surfaces it
+    /// as `u32` on Unix but `i32` on Windows MSVC. Widen both operands to
+    /// `i64` (a type neither already is, so clippy doesn't flag a redundant
+    /// cast on either platform) before the bit-AND to keep the helper
+    /// portable.
     fn cred_has(cred: &git2::Cred, kind: git2::CredentialType) -> bool {
-        cred.credtype() & kind.bits() != 0
+        i64::from(cred.credtype()) & i64::from(kind.bits()) != 0
     }
 
     #[test]
@@ -882,6 +888,56 @@ mod tests {
         let result = other_backend.sync(None).unwrap();
         assert_eq!(result.pulled_count, 1);
         assert!(other.join("b.md").exists());
+    }
+
+    #[test]
+    fn sync_merges_when_local_and_remote_have_diverged() {
+        // Seed a shared base, then let each copy commit a *different* file
+        // without pulling first. The second sync can neither no-op nor
+        // fast-forward, so it takes the true-merge branch and writes a
+        // merge commit (the `commit_index` call the other paths skip).
+        let f = Fixture::new();
+        f.write_file("seed.md", "# seed\n");
+        f.backend().sync(None).unwrap();
+
+        // Second working copy off the same remote, sharing the seed commit.
+        let other = f._tmp.path().join("other");
+        Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
+        let mut other_cfg = WorkspaceSyncConfig::new_git(other.to_string_lossy());
+        other_cfg.remote_url = f.remote.to_string_lossy().into();
+        other_cfg.author = Some(super::super::config::CommitIdentity {
+            name: "Other User".into(),
+            email: "other@example.com".into(),
+        });
+        let other_backend = GitBackend::new(other_cfg);
+
+        // A advances the remote with a.md.
+        f.write_file("a.md", "# a\n");
+        f.backend().sync(None).unwrap();
+
+        // B commits a different, non-conflicting file without pulling, so
+        // its branch has diverged from the remote (each side owns one
+        // unique commit on top of the shared seed).
+        fs::write(other.join("b.md"), "# b\n").unwrap();
+        let result = other_backend.sync(None).unwrap();
+
+        // True merge: B pulls A's commit, writes a conflict-free merge
+        // commit, and pushes the result. Both files survive.
+        assert_eq!(result.pulled_count, 1);
+        assert!(result.conflicts.is_empty());
+        assert!(other.join("a.md").exists());
+        assert!(other.join("b.md").exists());
+
+        // The remote tip is now the merge commit: two parents, and the
+        // dedicated merge message rather than an auto-generated subject.
+        let remote = Repository::open_bare(&f.remote).unwrap();
+        let tip = remote
+            .find_reference("refs/heads/main")
+            .unwrap()
+            .peel_to_commit()
+            .unwrap();
+        assert_eq!(tip.parent_count(), 2);
+        assert_eq!(tip.message().unwrap(), MERGE_COMMIT_MESSAGE);
     }
 
     #[test]

@@ -37,7 +37,7 @@ const CONFLICT_POLICIES: { id: ConflictPolicy; label: string; description: strin
   { id: "prefer-local", label: "Keep local", description: "Push local edits over the remote." },
 ];
 
-interface FormState {
+export interface FormState {
   remoteUrl: string;
   remoteBranch: string;
   conflictPolicy: ConflictPolicy;
@@ -86,6 +86,63 @@ function configFromForm(workspacePath: string, form: FormState): WorkspaceSyncCo
     autoSyncSeconds: parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null,
     author,
   };
+}
+
+/**
+ * Resolve the config to persist from the current form, or null when there's
+ * nothing actionable: no folder workspace selected, or no remote URL entered.
+ *
+ * Exported for direct unit testing — both null paths are unreachable through
+ * the rendered form (the Save button is hidden with no workspace and disabled
+ * with an empty URL), so a DOM-driven test can't exercise them.
+ */
+export function resolveSaveConfig(
+  workspacePath: string | null,
+  form: FormState,
+): WorkspaceSyncConfig | null {
+  if (!workspacePath) return null;
+  const next = configFromForm(workspacePath, form);
+  if (!next.remoteUrl) return null;
+  return next;
+}
+
+interface CommitSaveDeps {
+  repoPresent: boolean | null;
+  save: (config: WorkspaceSyncConfig) => Promise<void>;
+  setOrigin: (remoteUrl: string) => Promise<void>;
+  setToken: (token: string) => Promise<void>;
+  clearTokenField: () => void;
+}
+
+/**
+ * Persist `next` and propagate the remote URL + token to the backend. A no-op
+ * when `next` is null (nothing actionable to save). Kept out of the component
+ * — and exported — so the guard plus the repo-present / token branches can be
+ * unit-tested directly; the same paths are awkward or impossible to reach by
+ * driving the form (see `resolveSaveConfig`).
+ */
+export async function commitSaveConfig(
+  next: WorkspaceSyncConfig | null,
+  token: string,
+  deps: CommitSaveDeps,
+): Promise<void> {
+  if (!next) return;
+  await deps.save(next);
+  // Glyph's stored config is advisory; libgit2 reads `remote.origin.url`
+  // from the workspace's .git/config for the actual transport. Push the
+  // form value over so a Save-then-Sync uses the URL the user just typed.
+  if (deps.repoPresent) {
+    try {
+      await deps.setOrigin(next.remoteUrl);
+    } catch {
+      // setOrigin failures already surface in the hook's error state.
+    }
+  }
+  const trimmed = token.trim();
+  if (trimmed) {
+    await deps.setToken(trimmed);
+    deps.clearTokenField();
+  }
 }
 
 function relativeTime(unix: number | null): string {
@@ -155,26 +212,14 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const handleSave = async () => {
-    if (!workspacePath) return;
-    const next = configFromForm(workspacePath, form);
-    if (!next.remoteUrl) return;
-    await save(next);
-    // Glyph's stored config is advisory; libgit2 reads `remote.origin.url`
-    // from the workspace's .git/config for the actual transport. Push the
-    // form value over so a Save-then-Sync uses the URL the user just typed.
-    if (repoPresent) {
-      try {
-        await setOrigin(next.remoteUrl);
-      } catch {
-        // setOrigin failures already surface in the hook's error state.
-      }
-    }
-    if (form.token.trim()) {
-      await setToken(form.token.trim());
-      setForm((prev) => ({ ...prev, token: "" }));
-    }
-  };
+  const handleSave = () =>
+    commitSaveConfig(resolveSaveConfig(workspacePath, form), form.token, {
+      repoPresent,
+      save,
+      setOrigin,
+      setToken,
+      clearTokenField: () => setForm((prev) => ({ ...prev, token: "" })),
+    });
 
   const handleSyncNow = async () => {
     try {

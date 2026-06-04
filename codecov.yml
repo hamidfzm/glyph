@@ -42,6 +42,11 @@ ignore:
   - "src/vite-env.d.ts"
   - "src/test/**"
   - "src/components/icons/**"
+  # Export rasterization is browser-rendering glue (html2canvas, Mermaid SVG
+  # rendering, canvas/Image). It needs a real layout/canvas engine, so it can't
+  # run in the happy-dom test environment; its caller (prepareContent) is tested
+  # with these helpers mocked.
+  - "src/lib/export/rasterize.ts"
   - "src-tauri/src/main.rs"
   # Tauri-runtime menu wiring (build_menu, apply_menu_state, handle_menu_event):
   # every line drives the native menu manager and can't be exercised from
@@ -61,5 +66,15 @@ ignore:
   # covered there; the wrappers themselves have their own IPC-dispatch
   # suite in `#[cfg(test)] mod tests` for sanity.
   - "src-tauri/src/sync/commands.rs"
+  # AppShell.tsx is the frontend wiring shell (the analog of lib.rs on the
+  # Rust side): it only instantiates hooks, wires menu/command handlers, and
+  # renders children. Exercising its branches means standing up a full-app
+  # harness (Tabs, Sidebar, Settings, Tauri menu + native event listeners)
+  # just to flip flags like `experimental.cloudSync`. Each slice of that
+  # gating is already covered by the per-hook tests it delegates to
+  # (useAppCommands, useNativeMenuState, useMenuEvents, StatusBar,
+  # SyncStatusIndicator), so we don't track AppShell.tsx lines toward
+  # project / patch coverage. See .claude/rules/app-shell.md.
+  - "src/components/AppShell.tsx"
   - "**/*.test.ts"
   - "**/*.test.tsx"
