@@ -89,21 +89,20 @@ function configFromForm(workspacePath: string, form: FormState): WorkspaceSyncCo
 }
 
 /**
- * Resolve the config to persist from the current form, or null when there's
- * nothing actionable: no folder workspace selected, or no remote URL entered.
+ * Resolve the config to persist from the current form, or null when there's no
+ * folder workspace selected. A blank remote URL is allowed: it enables
+ * local-only sync (commit history without a remote to push to).
  *
- * Exported for direct unit testing — both null paths are unreachable through
- * the rendered form (the Save button is hidden with no workspace and disabled
- * with an empty URL), so a DOM-driven test can't exercise them.
+ * Exported for direct unit testing — the null path is unreachable through the
+ * rendered form (the Save button is hidden with no workspace), so a DOM-driven
+ * test can't exercise it.
  */
 export function resolveSaveConfig(
   workspacePath: string | null,
   form: FormState,
 ): WorkspaceSyncConfig | null {
   if (!workspacePath) return null;
-  const next = configFromForm(workspacePath, form);
-  if (!next.remoteUrl) return null;
-  return next;
+  return configFromForm(workspacePath, form);
 }
 
 interface CommitSaveDeps {
@@ -131,7 +130,8 @@ export async function commitSaveConfig(
   // Glyph's stored config is advisory; libgit2 reads `remote.origin.url`
   // from the workspace's .git/config for the actual transport. Push the
   // form value over so a Save-then-Sync uses the URL the user just typed.
-  if (deps.repoPresent) {
+  // Skipped for local-only setups (blank URL) — there's no origin to set.
+  if (deps.repoPresent && next.remoteUrl) {
     try {
       await deps.setOrigin(next.remoteUrl);
     } catch {
@@ -303,7 +303,10 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
               {!loading && (
                 <>
                   <label className="settings-field">
-                    <span className="settings-field-label">Remote URL</span>
+                    <span className="settings-field-label">
+                      Remote URL{" "}
+                      <span className="settings-field-hint">(blank = local-only history)</span>
+                    </span>
                     <input
                       type="url"
                       className="settings-input"
@@ -429,7 +432,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                       type="button"
                       className="settings-primary-btn"
                       onClick={handleSave}
-                      disabled={busy || !form.remoteUrl.trim()}
+                      disabled={busy}
                     >
                       {config ? "Save changes" : "Save config"}
                     </button>

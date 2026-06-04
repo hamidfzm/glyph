@@ -106,7 +106,8 @@ describe("SyncSettingsModal", () => {
     await waitFor(() => expect(screen.queryByText(/Loading/i)).not.toBeInTheDocument());
     const branch = screen.getByPlaceholderText("main") as HTMLInputElement;
     expect(branch.value).toBe("main");
-    expect(screen.getByRole("button", { name: "Save config" })).toBeDisabled();
+    // Save is enabled even with a blank Remote URL — local-only sync is valid.
+    expect(screen.getByRole("button", { name: "Save config" })).toBeEnabled();
     // The "Sync now"/"Disable" actions are configured-only.
     expect(screen.queryByRole("button", { name: /Sync now/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Disable sync/ })).toBeNull();
@@ -133,19 +134,6 @@ describe("SyncSettingsModal", () => {
       "https://github.com/you/notes.git",
     ) as HTMLInputElement;
     await waitFor(() => expect(remote.value).toBe("https://example.com/r.git"));
-  });
-
-  it("typing into Remote URL enables Save config", async () => {
-    routeInvoke({ sync_get_config: () => null });
-    const wrapper = withTabs(tabsValue(folderTab()));
-    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
-
-    const save = await screen.findByRole("button", { name: "Save config" });
-    expect(save).toBeDisabled();
-
-    const remote = screen.getByPlaceholderText("https://github.com/you/notes.git");
-    fireEvent.change(remote, { target: { value: "https://github.com/me/n.git" } });
-    expect(save).not.toBeDisabled();
   });
 
   it("Escape closes the modal", async () => {
@@ -829,12 +817,11 @@ describe("SyncSettingsModal", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("Save with no Remote URL is a no-op (does not invoke sync_set_config)", async () => {
-    // The Save button is disabled when remoteUrl is blank, so the user can't
-    // actually click it, but the modal still defends against an empty URL
-    // inside `handleSave` (line 161). Force the path by typing a value,
-    // wiping it back to blank, and dispatching the click programmatically
-    // before the disabled flag refreshes.
+  it("Save with no Remote URL enables local-only sync (saves config, skips set_origin)", async () => {
+    // A blank remote URL is valid: it configures local-only sync (commit
+    // history with no remote to push to). Save must persist the config with
+    // an empty remoteUrl and must NOT call sync_set_origin (there's no
+    // origin to write).
     routeInvoke({
       sync_get_config: () => null,
       sync_default_author: () => ({ name: null, email: null }),
@@ -845,17 +832,20 @@ describe("SyncSettingsModal", () => {
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     const save = await screen.findByRole("button", { name: "Save config" });
-    // The button stays disabled with no URL. Re-typing then clearing flushes
-    // the form state, and the disabled check stays asserting on the click.
-    expect(save).toBeDisabled();
-    // Hand-fire a click to exercise the early-return inside handleSave.
-    save.removeAttribute("disabled");
+    // No URL entered, yet the button is enabled — local-only is allowed.
+    expect(save).toBeEnabled();
     fireEvent.click(save);
-    // sync_get_config was the only call (no sync_set_config).
+
     await waitFor(() => {
       const calls = vi.mocked(invoke).mock.calls.map((c) => c[0]);
-      expect(calls).not.toContain("sync_set_config");
+      expect(calls).toContain("sync_set_config");
     });
+    const setConfigCall = vi
+      .mocked(invoke)
+      .mock.calls.find((c) => c[0] === "sync_set_config");
+    expect((setConfigCall?.[1] as { config: { remoteUrl: string } }).config.remoteUrl).toBe("");
+    const allCalls = vi.mocked(invoke).mock.calls.map((c) => c[0]);
+    expect(allCalls).not.toContain("sync_set_origin");
   });
 
   it("Save does nothing when the workspace tab is missing (handleSave workspacePath guard)", async () => {
@@ -956,16 +946,17 @@ function makeForm(overrides: Partial<FormState> = {}): FormState {
   };
 }
 
-// The two guards inside the Save flow can't be reached by driving the form
-// (the Save button is hidden with no workspace and disabled with an empty
-// URL), so they're exercised here against the extracted helpers directly.
+// The no-workspace guard inside the Save flow can't be reached by driving the
+// form (the Save button is hidden with no workspace), so it's exercised here
+// against the extracted helper directly.
 describe("resolveSaveConfig", () => {
   it("returns null when there is no workspace path", () => {
     expect(resolveSaveConfig(null, makeForm())).toBeNull();
   });
 
-  it("returns null when the remote URL is blank", () => {
-    expect(resolveSaveConfig("/w", makeForm({ remoteUrl: "   " }))).toBeNull();
+  it("returns a local-only config (empty remoteUrl) when the URL is blank", () => {
+    const next = resolveSaveConfig("/w", makeForm({ remoteUrl: "   " }));
+    expect(next).toMatchObject({ workspacePath: "/w", backend: "git", remoteUrl: "" });
   });
 
   it("returns the resolved config when workspace and URL are present", () => {
@@ -1033,6 +1024,23 @@ describe("commitSaveConfig", () => {
     expect(d.setOrigin).not.toHaveBeenCalled();
     expect(d.setToken).not.toHaveBeenCalled();
     expect(d.clearTokenField).not.toHaveBeenCalled();
+  });
+
+  it("saves but skips setOrigin for a local-only config (blank remoteUrl)", async () => {
+    const d = deps({ repoPresent: true });
+    const config: WorkspaceSyncConfig = {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "",
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      autoSyncSeconds: null,
+      author: null,
+    };
+    await commitSaveConfig(config, "", d);
+    expect(d.save).toHaveBeenCalledWith(config);
+    // No remote to write into .git/config, even though the repo exists.
+    expect(d.setOrigin).not.toHaveBeenCalled();
   });
 
   it("swallows setOrigin failures so the save still resolves", async () => {

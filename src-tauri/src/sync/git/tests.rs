@@ -198,6 +198,48 @@ fn sync_commits_and_pushes_local_changes() {
 }
 
 #[test]
+fn sync_commits_locally_when_no_remote_is_configured() {
+    // Sync enabled but no remote URL: the backend still stages and commits
+    // into local history, reporting nothing pushed or pulled, so the user
+    // gets versioned snapshots they can attach a remote to later.
+    let tmp = TempDir::new().unwrap();
+    let workspace = tmp.path().join("local-only");
+    fs::create_dir_all(&workspace).unwrap();
+    init_repo(&workspace, super::super::DEFAULT_REMOTE_BRANCH).unwrap();
+    let cfg_path = workspace.join(".git/config");
+    let mut gitcfg = git2::Config::open(&cfg_path).unwrap();
+    gitcfg.set_str("user.name", "Test User").unwrap();
+    gitcfg.set_str("user.email", "test@example.com").unwrap();
+
+    // remote_url stays empty => local-only.
+    let mut cfg = WorkspaceSyncConfig::new_git(workspace.to_string_lossy());
+    cfg.author = Some(super::super::config::CommitIdentity {
+        name: "Test User".into(),
+        email: "test@example.com".into(),
+    });
+    let backend = GitBackend::new(cfg);
+
+    fs::write(workspace.join("notes.md"), "# hi\n").unwrap();
+    let result = backend.sync(None).unwrap();
+    assert_eq!(result.committed_count, 1);
+    assert_eq!(result.pushed_count, 0);
+    assert_eq!(result.pulled_count, 0);
+    assert!(result.conflicts.is_empty());
+
+    // The commit landed in local history...
+    let repo = Repository::open(&workspace).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    assert_eq!(head.message().unwrap(), "Create notes.md");
+
+    // ...and the working tree reads clean afterwards, with no remote to be
+    // ahead of or behind.
+    let status = backend.status().unwrap();
+    assert!(status.clean);
+    assert_eq!(status.ahead, 0);
+    assert_eq!(status.behind, 0);
+}
+
+#[test]
 fn sync_uses_an_explicit_commit_message_when_supplied() {
     let f = Fixture::new();
     f.write_file("notes.md", "# hello\n");

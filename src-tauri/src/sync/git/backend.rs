@@ -226,6 +226,14 @@ impl GitBackend {
         Ok(out)
     }
 
+    /// Whether a remote is configured for this workspace. An empty
+    /// `remote_url` means local-only sync: Glyph still stages and commits
+    /// changes into the repo's history, but there is nothing to fetch,
+    /// merge, or push.
+    fn has_remote(&self) -> bool {
+        !self.config.remote_url.trim().is_empty()
+    }
+
     fn fetch_remote(&self, repo: &Repository) -> Result<(), SyncError> {
         let mut remote = repo
             .find_remote(ORIGIN)
@@ -303,6 +311,21 @@ impl SyncBackend for GitBackend {
             };
             Self::commit_index(&repo, &signature, &message, parents)?;
             committed_count = 1;
+        }
+
+        // Local-only sync: with no remote configured there is nothing to
+        // fetch, merge, or push. The commit above is the whole operation,
+        // so the user still gets a real version history they can later
+        // attach a remote to.
+        if !self.has_remote() {
+            return Ok(SyncResult {
+                kind: BackendKind::Git,
+                pulled_count: 0,
+                committed_count,
+                pushed_count: 0,
+                conflicts: vec![],
+                completed_unix: now_unix(),
+            });
         }
 
         // 2. Fetch the remote.
