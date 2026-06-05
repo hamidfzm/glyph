@@ -67,6 +67,8 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     displayContent: null,
     tocEntries: [],
     backlinks: [],
+    workspaceNotice: null,
+    dismissWorkspaceNotice: vi.fn(),
   };
 }
 

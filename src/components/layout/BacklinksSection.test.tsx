@@ -3,10 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { Backlink } from "@/lib/backlinks";
 import { BacklinksSection } from "./BacklinksSection";
 
-const root = "/vault";
+const root = "/workspace";
 const backlinks: Backlink[] = [
-  { source: "/vault/Index.md", line: 4, snippet: "see [[Cooking]]" },
-  { source: "/vault/Notes/Travel.md", line: 12, snippet: "ref to [[Cooking]] here" },
+  { source: "/workspace/Index.md", line: 4, snippet: "see [[Cooking]]" },
+  { source: "/workspace/Notes/Travel.md", line: 12, snippet: "ref to [[Cooking]] here" },
 ];
 
 describe("BacklinksSection", () => {
@@ -35,7 +35,7 @@ describe("BacklinksSection", () => {
     const onOpen = vi.fn();
     render(<BacklinksSection backlinks={backlinks} workspaceRoot={root} onOpen={onOpen} />);
     fireEvent.click(screen.getByText("Index.md"));
-    expect(onOpen).toHaveBeenCalledWith("/vault/Index.md", 4);
+    expect(onOpen).toHaveBeenCalledWith("/workspace/Index.md", 4);
   });
 
   it("collapses on header click", () => {

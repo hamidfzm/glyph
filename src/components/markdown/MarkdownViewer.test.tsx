@@ -123,17 +123,17 @@ describe("MarkdownViewer footnotes", () => {
 describe("MarkdownViewer wikilinks", () => {
   it("renders a resolved wikilink with the workspace path", () => {
     const { container } = renderMd("Open [[Cooking]] now.", {
-      workspaceFiles: ["/vault/Cooking.md", "/vault/Other.md"],
+      workspaceFiles: ["/workspace/Cooking.md", "/workspace/Other.md"],
     });
     const link = container.querySelector('a[data-wikilink="Cooking"]');
     expect(link).not.toBeNull();
-    expect(link?.getAttribute("data-wikilink-path")).toBe("/vault/Cooking.md");
+    expect(link?.getAttribute("data-wikilink-path")).toBe("/workspace/Cooking.md");
     expect(link?.classList.contains("wikilink")).toBe(true);
     expect(link?.classList.contains("wikilink--broken")).toBe(false);
   });
 
   it("renders a missing wikilink with the broken modifier", () => {
-    const { container } = renderMd("[[Missing]]", { workspaceFiles: ["/vault/Other.md"] });
+    const { container } = renderMd("[[Missing]]", { workspaceFiles: ["/workspace/Other.md"] });
     const link = container.querySelector('a[data-wikilink="Missing"]');
     expect(link).not.toBeNull();
     expect(link?.classList.contains("wikilink--broken")).toBe(true);
@@ -143,11 +143,11 @@ describe("MarkdownViewer wikilinks", () => {
   it("calls onOpenWikilink with the resolved path on click", () => {
     const onOpen = vi.fn();
     const { container } = renderMd("[[Cooking]]", {
-      workspaceFiles: ["/vault/Cooking.md"],
+      workspaceFiles: ["/workspace/Cooking.md"],
       onOpenWikilink: onOpen,
     });
     const link = container.querySelector('a[data-wikilink="Cooking"]') as HTMLAnchorElement;
     fireEvent.click(link);
-    expect(onOpen).toHaveBeenCalledWith("/vault/Cooking.md", undefined);
+    expect(onOpen).toHaveBeenCalledWith("/workspace/Cooking.md", undefined);
   });
 });

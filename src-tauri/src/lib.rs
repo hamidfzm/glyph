@@ -4,8 +4,10 @@ mod markdown;
 mod menu;
 mod menu_runtime;
 mod notebook;
+mod sync;
 mod telemetry;
 mod watcher;
+mod workspace;
 
 use std::sync::{Arc, Mutex};
 #[cfg(target_os = "macos")]
@@ -16,6 +18,8 @@ use watcher::FileWatcherState;
 
 pub use markdown::is_markdown_file;
 pub use notebook::{is_notebook_file, is_supported_file};
+
+pub const APP_NAME: &str = "glyph";
 
 /// Handle a second-instance launch: refocus the main window and forward the
 /// file/folder argument (if any) to the frontend via the same `open-file` /
@@ -81,6 +85,7 @@ pub fn run() {
         ))))
         .manage(commands::InitialFile(Mutex::new(None)))
         .manage(commands::InitialFolder(Mutex::new(None)))
+        .manage(sync::SyncState::new())
         .manage(telemetry::TelemetryState(Mutex::new(None)))
         .setup(|app| {
             let (menu, menu_refs) = menu::build_menu(app)?;
@@ -164,6 +169,22 @@ pub fn run() {
             watcher::watch_directory,
             watcher::unwatch_directory,
             menu_runtime::set_menu_state,
+            sync::commands::sync_set_config,
+            sync::commands::sync_get_config,
+            sync::commands::sync_remove_config,
+            sync::commands::sync_set_token,
+            sync::commands::sync_clear_token,
+            sync::commands::sync_init_repo,
+            sync::commands::sync_clone_remote,
+            sync::commands::sync_set_origin,
+            sync::commands::sync_commit_config,
+            sync::commands::sync_status,
+            sync::commands::sync_run,
+            sync::commands::sync_default_author,
+            sync::commands::sync_repo_present,
+            workspace::commands::workspace_resolve,
+            workspace::commands::workspace_get_last_file,
+            workspace::commands::workspace_set_last_file,
             telemetry::set_error_reporting,
         ])
         .build(tauri::generate_context!())

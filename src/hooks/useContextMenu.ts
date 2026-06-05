@@ -12,6 +12,26 @@ interface ContextMenuActions {
   content?: string | null;
 }
 
+// Text fields keep the WebView's native context menu so Cut / Copy / Paste
+// stays available. Without this, the global suppressor below kills the
+// native menu inside <input> / <textarea> / contenteditable surfaces and
+// the user is left with the document-level custom menu, which has
+// "Read Aloud" / AI entries that don't apply to a single form field.
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  const el = target.closest("input, textarea, [contenteditable=''], [contenteditable='true']");
+  return el !== null;
+}
+
+// The custom Read Aloud / AI / Search Google menu only makes sense inside
+// the markdown viewer. Anywhere else (modal copy, dialog text, sidebar
+// labels) gets the WebView's native menu so users can copy that text
+// without the irrelevant AI / TTS entries showing up.
+function isInsideMarkdownContent(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return target.closest(".markdown-body") !== null;
+}
+
 export function useContextMenu(platform: Platform, actions: ContextMenuActions) {
   // Belt-and-braces: in production builds, suppress the WebView's default context menu
   // entirely. Tauri disables devtools in release so Inspect/Reload shouldn't appear, but
@@ -21,6 +41,11 @@ export function useContextMenu(platform: Platform, actions: ContextMenuActions) 
   useEffect(() => {
     if (!import.meta.env.PROD) return;
     const suppress = (e: MouseEvent) => {
+      if (isEditableTarget(e.target)) return;
+      // UI chrome (modals, dialogs, sidebar) keeps the native menu so users
+      // can still copy that text. Only the markdown viewer hides the native
+      // menu in favour of our custom one.
+      if (!isInsideMarkdownContent(e.target)) return;
       const hasSelection = (window.getSelection()?.toString() ?? "").length > 0;
       if (platform === "macos" && hasSelection) return; // keep Look Up / Translate / Speech
       e.preventDefault();
@@ -34,6 +59,10 @@ export function useContextMenu(platform: Platform, actions: ContextMenuActions) 
     if (platform === "macos" || platform === "unknown") return;
 
     const handler = async (e: MouseEvent) => {
+      if (isEditableTarget(e.target)) return;
+      // The custom AI / TTS / Search Google menu is for prose in the
+      // markdown viewer. UI chrome falls through to the native menu.
+      if (!isInsideMarkdownContent(e.target)) return;
       e.preventDefault();
 
       const { Menu, MenuItem, PredefinedMenuItem, Submenu } = await import("@tauri-apps/api/menu");

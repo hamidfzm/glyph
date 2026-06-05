@@ -55,11 +55,6 @@
     }
   },
   "files": {
-    "includes": [
-      "src/**/*.ts",
-      "src/**/*.tsx",
-      "*.config.ts",
-      "*.json"
-    ]
+    "includes": ["src/**/*.ts", "src/**/*.tsx", "*.config.ts", "*.json"]
   }
 }

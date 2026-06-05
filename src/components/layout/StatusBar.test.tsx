@@ -1,8 +1,10 @@
+import { invoke } from "@tauri-apps/api/core";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SyncConfigProvider } from "@/contexts/SyncConfigContext";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import type { FileTab } from "@/hooks/useTabs";
+import type { FileTab, FolderTab } from "@/hooks/useTabs";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { StatusBar } from "./StatusBar";
 
@@ -65,18 +67,25 @@ function buildContext(opts: Opts): TabsContextValue {
     displayContent: opts.displayContent ?? null,
     tocEntries: [],
     backlinks: [],
+    workspaceNotice: null,
+    dismissWorkspaceNotice: vi.fn(),
   };
 }
 
 function Wrapper({ value, children }: { value: TabsContextValue; children: ReactNode }) {
-  return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;
+  // StatusBar renders the sync pill, which reads from SyncConfigContext.
+  return (
+    <TabsContext.Provider value={value}>
+      <SyncConfigProvider>{children}</SyncConfigProvider>
+    </TabsContext.Provider>
+  );
 }
 
 function renderStatusBar(opts: Opts = {}) {
   const value = buildContext(opts);
   return render(
     <Wrapper value={value}>
-      <StatusBar />
+      <StatusBar onOpenSync={vi.fn()} />
     </Wrapper>,
   );
 }
@@ -130,5 +139,77 @@ describe("StatusBar", () => {
     expect(screen.getByText("Jupyter Notebook")).toBeInTheDocument();
     expect(screen.queryByText(/words$/)).toBeNull();
     expect(screen.getByText("/path/to/analysis.ipynb")).toBeInTheDocument();
+  });
+});
+
+function buildFolderTab(root = "/ws"): FolderTab {
+  return {
+    id: "folder-1",
+    kind: "folder",
+    root,
+    expanded: new Set<string>(),
+    nodes: new Map(),
+    file: null,
+  };
+}
+
+function buildFolderContext(): TabsContextValue {
+  const activeTab = buildFolderTab();
+  return {
+    tabs: [activeTab],
+    activeTab,
+    activeTabId: activeTab.id,
+    activeFile: null,
+    initializing: false,
+    workspaceFiles: [],
+    wikilinkRefs: [],
+    openFile: vi.fn(),
+    openFolder: vi.fn(),
+    openFileInFolderTab: vi.fn(),
+    toggleExpand: vi.fn(),
+    closeTab: vi.fn(),
+    setActiveTab: vi.fn(),
+    setTabMode: vi.fn(),
+    updateEditContent: vi.fn(),
+    markSaved: vi.fn(),
+    toggleTask: vi.fn(),
+    saveScrollPosition: vi.fn(),
+    openFileDialog: vi.fn(),
+    undoEdit: vi.fn(),
+    redoEdit: vi.fn(),
+    displayContent: "some content",
+    tocEntries: [],
+    backlinks: [],
+    workspaceNotice: null,
+    dismissWorkspaceNotice: vi.fn(),
+  };
+}
+
+describe("StatusBar sync indicator gating", () => {
+  beforeEach(() => {
+    vi.mocked(invoke).mockReset();
+    // SyncStatusIndicator's useSyncConfig fires sync_get_config on mount;
+    // resolve to null so it renders the "Sync off" pill cleanly.
+    vi.mocked(invoke).mockResolvedValue(null as unknown as never);
+  });
+
+  it("does not render the sync pill when onOpenSync is null", () => {
+    const value = buildFolderContext();
+    render(
+      <Wrapper value={value}>
+        <StatusBar onOpenSync={null} />
+      </Wrapper>,
+    );
+    expect(screen.queryByText(/Sync/)).toBeNull();
+  });
+
+  it("renders the sync pill when onOpenSync is provided and a folder tab is active", async () => {
+    const value = buildFolderContext();
+    render(
+      <Wrapper value={value}>
+        <StatusBar onOpenSync={vi.fn()} />
+      </Wrapper>,
+    );
+    expect(await screen.findByText("Sync off")).toBeInTheDocument();
   });
 });

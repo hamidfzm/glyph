@@ -35,7 +35,12 @@ export function useCommandPaletteController({
   actions,
 }: UseCommandPaletteControllerOptions): CommandPaletteController {
   const palette = useCommandPalette({ platform });
-  const commands = useAppCommands({ activeFolderTab, workspaceFiles, tocEntries, actions });
+  const commands = useAppCommands({
+    activeFolderTab,
+    workspaceFiles,
+    tocEntries,
+    actions,
+  });
 
   return useMemo(
     () => ({

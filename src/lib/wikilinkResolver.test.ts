@@ -24,10 +24,10 @@ describe("wikilinkResolver helpers", () => {
 
 describe("resolveWikilink", () => {
   const files = [
-    "/vault/Index.md",
-    "/vault/Notes/Cooking.md",
-    "/vault/Notes/Travel.md",
-    "/vault/Archive/Travel.md",
+    "/workspace/Index.md",
+    "/workspace/Notes/Cooking.md",
+    "/workspace/Notes/Travel.md",
+    "/workspace/Archive/Travel.md",
   ];
 
   it("returns null when there are no workspace files", () => {
@@ -35,13 +35,13 @@ describe("resolveWikilink", () => {
   });
 
   it("matches by stem case-insensitively", () => {
-    expect(resolveWikilink("cooking", files).path).toBe("/vault/Notes/Cooking.md");
-    expect(resolveWikilink("INDEX", files).path).toBe("/vault/Index.md");
+    expect(resolveWikilink("cooking", files).path).toBe("/workspace/Notes/Cooking.md");
+    expect(resolveWikilink("INDEX", files).path).toBe("/workspace/Index.md");
   });
 
   it("strips a trailing .md", () => {
-    expect(resolveWikilink("Cooking.md", files).path).toBe("/vault/Notes/Cooking.md");
-    expect(resolveWikilink("Cooking.MD", files).path).toBe("/vault/Notes/Cooking.md");
+    expect(resolveWikilink("Cooking.md", files).path).toBe("/workspace/Notes/Cooking.md");
+    expect(resolveWikilink("Cooking.MD", files).path).toBe("/workspace/Notes/Cooking.md");
   });
 
   it("returns null on no match", () => {
@@ -50,28 +50,28 @@ describe("resolveWikilink", () => {
 
   it("returns the heading when present", () => {
     expect(resolveWikilink("Cooking#Recipes", files)).toEqual({
-      path: "/vault/Notes/Cooking.md",
+      path: "/workspace/Notes/Cooking.md",
       heading: "Recipes",
     });
   });
 
   it("disambiguates by current-file directory when names collide", () => {
-    expect(resolveWikilink("Travel", files, "/vault/Archive/today.md").path).toBe(
-      "/vault/Archive/Travel.md",
+    expect(resolveWikilink("Travel", files, "/workspace/Archive/today.md").path).toBe(
+      "/workspace/Archive/Travel.md",
     );
-    expect(resolveWikilink("Travel", files, "/vault/Notes/today.md").path).toBe(
-      "/vault/Notes/Travel.md",
+    expect(resolveWikilink("Travel", files, "/workspace/Notes/today.md").path).toBe(
+      "/workspace/Notes/Travel.md",
     );
   });
 
   it("falls back to shortest-path when no same-dir candidate", () => {
-    expect(resolveWikilink("Travel", files, "/vault/Other/today.md").path).toBe(
-      "/vault/Notes/Travel.md",
+    expect(resolveWikilink("Travel", files, "/workspace/Other/today.md").path).toBe(
+      "/workspace/Notes/Travel.md",
     );
   });
 
   it("matches by relative path suffix when target contains a slash", () => {
-    expect(resolveWikilink("Notes/Travel", files).path).toBe("/vault/Notes/Travel.md");
-    expect(resolveWikilink("Archive/Travel", files).path).toBe("/vault/Archive/Travel.md");
+    expect(resolveWikilink("Notes/Travel", files).path).toBe("/workspace/Notes/Travel.md");
+    expect(resolveWikilink("Archive/Travel", files).path).toBe("/workspace/Archive/Travel.md");
   });
 });

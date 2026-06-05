@@ -24,9 +24,11 @@ import { Sidebar } from "./layout/Sidebar";
 import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
 import { UpdateBanner } from "./layout/UpdateBanner";
+import { WorkspaceNoticeBanner } from "./layout/WorkspaceNoticeBanner";
 import { AIPanel } from "./modals/AIPanel";
 import { CommandPalette } from "./modals/CommandPalette";
 import { SettingsModal } from "./modals/settings/lazySettings";
+import { SyncSettingsModal } from "./modals/SyncSettingsModal";
 import { TabContent } from "./TabContent";
 
 // All the wiring that used to live inside App: menu events, AI/TTS/Print
@@ -72,6 +74,7 @@ export function AppShell() {
   useDocumentUndoRedo({ activeTabId, platform, onUndo: undoEdit, onRedo: redoEdit });
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [syncSettingsOpen, setSyncSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
   useAutoSave({
@@ -134,6 +137,7 @@ export function AppShell() {
       toggleOutlineSidebar: sidebar.toggleOutline,
       resetView: sidebar.resetLayout,
       openSettings: () => setSettingsOpen(true),
+      openSyncSettings: () => setSyncSettingsOpen(true),
       find: () => setSearchOpen(true),
       toggleEdit: handleToggleEdit,
       print: printDoc,
@@ -205,6 +209,10 @@ export function AppShell() {
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)]">
       <UpdateBanner update={updateCheck.update} onDismiss={updateCheck.dismiss} />
+      <WorkspaceNoticeBanner
+        notice={tabs.workspaceNotice}
+        onDismiss={tabs.dismissWorkspaceNotice}
+      />
       <TabBar />
       <div className="flex flex-1 min-h-0">
         <Sidebar side="left" />
@@ -224,7 +232,7 @@ export function AppShell() {
         )}
         <Sidebar side="right" />
       </div>
-      <StatusBar />
+      <StatusBar onOpenSync={() => setSyncSettingsOpen(true)} />
 
       {exporters.exporting && <ExportProgress format={exporters.exporting} />}
 
@@ -238,6 +246,7 @@ export function AppShell() {
 
       {/* Mounted only when open so the settings chunk loads on first use. */}
       {settingsOpen && <SettingsModal open onClose={() => setSettingsOpen(false)} />}
+      {syncSettingsOpen && <SyncSettingsModal open onClose={() => setSyncSettingsOpen(false)} />}
       <AIPanel
         open={aiController.panelOpen}
         onClose={aiController.closePanel}

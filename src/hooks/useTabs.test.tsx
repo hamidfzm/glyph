@@ -39,6 +39,19 @@ function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): Invoker 
         return [];
       case "scan_wikilinks":
         return [];
+      case "workspace_resolve":
+        // Default: a plain, non-nested folder that's always adoptable.
+        return {
+          selected: String(args?.selected ?? ""),
+          isGitRepo: false,
+          gitTopLevel: null,
+          nestedUnder: null,
+          glyphConflict: null,
+        };
+      case "workspace_get_last_file":
+        return null;
+      case "workspace_set_last_file":
+        return undefined;
       default:
         return undefined;
     }
@@ -54,6 +67,7 @@ function defaultOptions(over: Partial<Parameters<typeof useTabs>[0]> = {}) {
     autoReload: false,
     defaultEditorMode: "view" as const,
     onSettingsChange: vi.fn(),
+    onWorkspaceRefusal: vi.fn(),
     ...over,
   };
 }
@@ -747,6 +761,323 @@ describe("useTabs dialog and events", () => {
         result.current.tabs.some((t) => t.kind === "file" && t.file.path === "/p/evt.md"),
       ).toBe(true);
     });
+  });
+
+  it("auto-loads the first markdown file when opening a folder with no remembered file", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => {
+      const folder = result.current.tabs.find((t) => t.kind === "folder");
+      expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/a.md");
+    });
+  });
+
+  it("auto-loads the remembered file when it still exists in the workspace", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+        workspace_get_last_file: async () => "/p/ws/b.md",
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => {
+      const folder = result.current.tabs.find((t) => t.kind === "folder");
+      expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/b.md");
+    });
+  });
+
+  it("falls back to the first file when the remembered file no longer exists", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+        workspace_get_last_file: async () => "/p/ws/gone.md",
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => {
+      const folder = result.current.tabs.find((t) => t.kind === "folder");
+      expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/a.md");
+    });
+  });
+
+  it("does not auto-load anything when the workspace has no markdown files", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => [],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/empty");
+    });
+    const folder = result.current.tabs.find((t) => t.kind === "folder");
+    expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
+  });
+
+  it("openFileInFolderTab records the choice via workspace_set_last_file", async () => {
+    const setLastFile = vi.fn(async () => undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ workspace_set_last_file: setLastFile }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folder = result.current.tabs.find((t) => t.kind === "folder");
+    expect(folder).toBeDefined();
+    setLastFile.mockClear();
+
+    await act(async () => {
+      await result.current.openFileInFolderTab(folder!.id, "/p/ws/note.md");
+    });
+
+    expect(setLastFile).toHaveBeenCalledWith("workspace_set_last_file", {
+      workspaceRoot: "/p/ws",
+      filePath: "/p/ws/note.md",
+    });
+  });
+
+  it("refuses a folder nested inside a parent git repo (#262)", async () => {
+    const onWorkspaceRefusal = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_resolve: async (_cmd, args) => ({
+          selected: String(args?.selected ?? ""),
+          isGitRepo: true,
+          gitTopLevel: "/p/repo",
+          nestedUnder: "/p/repo",
+          glyphConflict: null,
+        }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/repo/sub");
+    });
+
+    expect(result.current.tabs.some((t) => t.kind === "folder")).toBe(false);
+    expect(onWorkspaceRefusal).toHaveBeenCalledWith(expect.stringContaining("/p/repo"));
+  });
+
+  it("refuses a folder nested inside another workspace's .glyph (#262)", async () => {
+    const onWorkspaceRefusal = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_resolve: async (_cmd, args) => ({
+          selected: String(args?.selected ?? ""),
+          isGitRepo: false,
+          gitTopLevel: null,
+          nestedUnder: null,
+          glyphConflict: "/p/outer",
+        }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/outer/inner");
+    });
+
+    expect(result.current.tabs.some((t) => t.kind === "folder")).toBe(false);
+    expect(onWorkspaceRefusal).toHaveBeenCalledWith(expect.stringContaining("/p/outer"));
+  });
+
+  it("refuses a folder overlapping an already-open workspace (#262)", async () => {
+    const onWorkspaceRefusal = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p/ws")).toBe(true);
+    onWorkspaceRefusal.mockClear();
+
+    // A child of the open workspace overlaps it.
+    await act(async () => {
+      await result.current.openFolder("/p/ws/sub");
+    });
+    expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p/ws/sub")).toBe(
+      false,
+    );
+    // A parent of the open workspace also overlaps it.
+    await act(async () => {
+      await result.current.openFolder("/p");
+    });
+    expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p")).toBe(false);
+    expect(onWorkspaceRefusal).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-opening the same workspace activates it instead of refusing", async () => {
+    const onWorkspaceRefusal = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    expect(
+      result.current.tabs.filter((t) => t.kind === "folder" && t.root === "/p/ws"),
+    ).toHaveLength(1);
+    expect(onWorkspaceRefusal).not.toHaveBeenCalled();
+  });
+
+  it("silently skips a nested folder on restore without bannering", async () => {
+    const onWorkspaceRefusal = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_resolve: async (_cmd, args) => ({
+          selected: String(args?.selected ?? ""),
+          isGitRepo: true,
+          gitTopLevel: "/p/repo",
+          nestedUnder: "/p/repo",
+          glyphConflict: null,
+        }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          onWorkspaceRefusal,
+          openTabs: [{ kind: "folder", path: "/p/repo/sub" }],
+        }),
+      ),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    expect(result.current.tabs.some((t) => t.kind === "folder")).toBe(false);
+    expect(onWorkspaceRefusal).not.toHaveBeenCalled();
+  });
+
+  it("refuses and reports when workspace resolution fails", async () => {
+    const onWorkspaceRefusal = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_resolve: async () => {
+          throw new Error("unreadable path");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/broken");
+    });
+
+    expect(result.current.tabs.some((t) => t.kind === "folder")).toBe(false);
+    expect(onWorkspaceRefusal).toHaveBeenCalledWith(expect.stringContaining("Couldn't open"));
+  });
+
+  it("openFolder with an explicit filePath skips the auto-load probe", async () => {
+    // Covers the false arm of `wantsAutoLoad` on the openFolder branch:
+    // the caller already knows which file to land on, so we must not
+    // pre-fetch `list_markdown_files` for the auto-load path. Background
+    // indexing still happens (covers the `resolvedFiles ? ... : loadWorkspaceFiles(...)`
+    // false branch on line 391).
+    let listCalls = 0;
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => {
+          listCalls += 1;
+          return ["/p/ws/note.md"];
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws", { filePath: "/p/ws/note.md" });
+    });
+
+    // One call — the background-indexing branch, not the auto-load probe.
+    await waitFor(() => expect(listCalls).toBeGreaterThanOrEqual(1));
+    const folder = result.current.tabs.find((t) => t.kind === "folder");
+    // Auto-load skipped: folder.file stays null when filePath is provided.
+    expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
+  });
+
+  it("openFolder skips auto-load when list_markdown_files returns a non-markdown target", async () => {
+    // Covers the false arm of `isMarkdownFile(target)` inside the auto-load
+    // branch (line 343). list_markdown_files in real life never returns
+    // non-md paths, but the guard exists for defence in depth and still
+    // counts toward the patch.
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/notes.txt"],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folder = result.current.tabs.find((t) => t.kind === "folder");
+    expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
+  });
+
+  it("openFolder logs and continues when auto-loading the remembered file fails", async () => {
+    // Covers the catch arm on line 363: the file lookup succeeds but
+    // `read_file` fails (deleted between list and load, or a transient
+    // I/O error). The folder tab still opens, just without a pre-loaded
+    // file, and the failure is surfaced to the console for debugging.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/a.md"],
+        read_file: async () => {
+          throw new Error("vanished");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => {
+      expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p/ws")).toBe(true);
+    });
+    const folder = result.current.tabs.find((t) => t.kind === "folder");
+    expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("auto-load workspace file"),
+      expect.anything(),
+    );
+    errorSpy.mockRestore();
   });
 
   it("openFolder is wired to the open-folder event", async () => {

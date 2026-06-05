@@ -4,11 +4,17 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/lib/editHistory";
-import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
+import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
+import {
+  getWorkspaceLastFile,
+  resolveWorkspace,
+  setWorkspaceLastFile,
+  type WorkspaceResolution,
+} from "@/lib/workspace";
 
 interface FileMetadata {
   name: string;
@@ -80,6 +86,9 @@ interface UseTabsOptions {
   autoReload: boolean;
   defaultEditorMode: EditorMode;
   onSettingsChange: (key: string, value: unknown) => void;
+  // Called when a folder is refused as a workspace (nested git repo / overlapping
+  // workspace, see #262). The provider surfaces it as a transient banner.
+  onWorkspaceRefusal: (message: string) => void;
 }
 
 async function loadFileContent(path: string) {
@@ -267,6 +276,7 @@ export function useTabs(options: UseTabsOptions) {
         await invoke("watch_file", { path });
         const mode = isNotebookFile(path) ? EDITOR_MODE.view : optionsRef.current.defaultEditorMode;
         const newFile: FileState = { ...makeFileState(path, mode), content, metadata };
+        const folderRoot = tab.root;
         setState((prev) => ({
           ...prev,
           tabs: prev.tabs.map((t) =>
@@ -274,6 +284,10 @@ export function useTabs(options: UseTabsOptions) {
           ),
         }));
         addToRecent(path);
+        // Remember this file in the workspace's `.glyph/state.json` (git-ignored)
+        // so it re-opens next time. Fire-and-forget: a failure here is never
+        // fatal to opening the file.
+        setWorkspaceLastFile(folderRoot, path).catch(() => {});
       } catch (err) {
         console.error("Failed to open file in folder tab:", err);
       }
@@ -284,7 +298,10 @@ export function useTabs(options: UseTabsOptions) {
   // Open a new folder workspace as a top-level tab.
   // If a path is provided, opens that path; otherwise prompts via dialog.
   const openFolder = useCallback(
-    async (root?: string, options?: { expanded?: string[]; filePath?: string }) => {
+    async (
+      root?: string,
+      options?: { expanded?: string[]; filePath?: string; silent?: boolean },
+    ) => {
       let resolvedRoot = root;
       if (!resolvedRoot) {
         const selected = await open({ directory: true, multiple: false });
@@ -298,6 +315,46 @@ export function useTabs(options: UseTabsOptions) {
       );
       if (existing) {
         setState((prev) => ({ ...prev, activeTabId: existing.id }));
+        return;
+      }
+
+      // A workspace is one git repo's top level (#262). Refuse a folder nested
+      // inside a parent repo / another workspace, or one overlapping an open
+      // workspace, so every workspace-wide feature has an unambiguous owner. The
+      // `silent` path (persisted-tab restore) skips the banner.
+      const refuse = (message: string) => {
+        if (!options?.silent) optionsRef.current.onWorkspaceRefusal(message);
+      };
+      let resolution: WorkspaceResolution;
+      try {
+        resolution = await resolveWorkspace(resolvedRoot);
+      } catch (err) {
+        refuse(`Couldn't open this folder: ${String(err)}`);
+        return;
+      }
+      if (resolution.nestedUnder) {
+        refuse(
+          `This folder is inside the git repository at "${resolution.nestedUnder}". Open that folder instead — Glyph treats one repository as one workspace.`,
+        );
+        return;
+      }
+      if (resolution.glyphConflict) {
+        refuse(
+          `This folder sits inside another Glyph workspace ("${resolution.glyphConflict}"). Nested workspaces aren't supported.`,
+        );
+        return;
+      }
+      const overlap = stateRef.current.tabs.find(
+        (t): t is FolderTab =>
+          t.kind === "folder" &&
+          t.root !== resolvedRoot &&
+          (isInWorkspace(resolvedRoot as string, t.root) ||
+            isInWorkspace(t.root, resolvedRoot as string)),
+      );
+      if (overlap) {
+        refuse(
+          `This folder overlaps the open workspace "${overlap.root}". Close it first or pick a non-overlapping folder.`,
+        );
         return;
       }
 
@@ -315,13 +372,49 @@ export function useTabs(options: UseTabsOptions) {
         nodes.set(dir, await loadDirectory(dir));
       }
 
+      // Pick the initial file BEFORE we add the tab, so the first render of the
+      // folder tab already shows content. Doing this after `setState` would race
+      // the React commit (stateRef.current wouldn't see the new tab yet inside
+      // an awaited continuation), causing openFileInFolderTab to bail out.
+      let initialFile: FileState | null = null;
+      let resolvedFiles: string[] | null = null;
+      const wantsAutoLoad = !options?.filePath;
+      if (wantsAutoLoad) {
+        resolvedFiles = await loadWorkspaceFiles(resolvedRoot);
+        if (resolvedFiles.length > 0) {
+          // The workspace remembers its last-opened file (absolute path) in
+          // `.glyph/state.json`. Fall through to the first markdown file when
+          // it's missing or stale.
+          const remembered = await getWorkspaceLastFile(resolvedRoot).catch(() => null);
+          const target =
+            remembered && resolvedFiles.includes(remembered) ? remembered : resolvedFiles[0];
+          if (isMarkdownFile(target)) {
+            try {
+              const { content, metadata } = await loadFileContent(target);
+              await invoke("watch_file", { path: target });
+              initialFile = {
+                ...makeFileState(target, optionsRef.current.defaultEditorMode),
+                content,
+                metadata,
+              };
+              addToRecent(target);
+              // Record what we actually landed on (e.g. first-time open or a
+              // stale remembered entry). Fire-and-forget.
+              setWorkspaceLastFile(resolvedRoot, target).catch(() => {});
+            } catch (err) {
+              console.error("Failed to auto-load workspace file:", err);
+            }
+          }
+        }
+      }
+
       const newTab: FolderTab = {
         id,
         kind: "folder",
         root: resolvedRoot,
         expanded,
         nodes,
-        file: null,
+        file: initialFile,
       };
       // Re-check after the awaits — a concurrent call (e.g. React 19 StrictMode
       // double-mount, or rapid re-invocation) may have already added this folder.
@@ -335,8 +428,12 @@ export function useTabs(options: UseTabsOptions) {
         return { tabs: [...prev.tabs, newTab], activeTabId: id };
       });
 
-      // Build the workspace markdown index in the background so wikilinks can resolve.
-      loadWorkspaceFiles(resolvedRoot).then((files) => {
+      // Build the workspace markdown index in the background so wikilinks can
+      // resolve. Reuse the list we already fetched for the auto-load path.
+      const filesPromise = resolvedFiles
+        ? Promise.resolve(resolvedFiles)
+        : loadWorkspaceFiles(resolvedRoot);
+      filesPromise.then((files) => {
         setWorkspaceIndex((prev) => ({ ...prev, [activeId]: files }));
       });
       loadWikilinkRefs(resolvedRoot).then((refs) => {
@@ -344,11 +441,11 @@ export function useTabs(options: UseTabsOptions) {
       });
 
       if (options?.filePath) {
-        // Defer so the new tab is in state for openFileInFolderTab to find
+        // Defer so the new tab is in state for openFileInFolderTab to find.
         await openFileInFolderTab(activeId, options.filePath);
       }
     },
-    [loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFileInFolderTab],
+    [addToRecent, loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFileInFolderTab],
   );
 
   const toggleExpand = useCallback(
@@ -623,9 +720,13 @@ export function useTabs(options: UseTabsOptions) {
           const persistedTabs = normalizePersistedTabs(options.openTabs);
           for (const persisted of persistedTabs) {
             if (persisted.kind === "folder") {
+              // Restoring a saved session: if a folder became nested or
+              // overlapping between sessions, skip it silently rather than
+              // banner the user on every launch.
               await openFolder(persisted.path, {
                 expanded: persisted.expanded ?? [],
                 filePath: persisted.filePath,
+                silent: true,
               });
             } else {
               await openFile(persisted.path);
