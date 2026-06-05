@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SyncConfigProvider } from "@/contexts/SyncConfigContext";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { FileTab, FolderTab } from "@/hooks/useTabs";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
@@ -72,7 +73,12 @@ function buildContext(opts: Opts): TabsContextValue {
 }
 
 function Wrapper({ value, children }: { value: TabsContextValue; children: ReactNode }) {
-  return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;
+  // StatusBar renders the sync pill, which reads from SyncConfigContext.
+  return (
+    <TabsContext.Provider value={value}>
+      <SyncConfigProvider>{children}</SyncConfigProvider>
+    </TabsContext.Provider>
+  );
 }
 
 function renderStatusBar(opts: Opts = {}) {

@@ -6,14 +6,14 @@
 // "+1/-3", "dirty"). Clicking opens the Cloud Sync modal so the user can
 // inspect or trigger a sync.
 //
-// We deliberately don't poll for fresh status here — background fetch is
-// the scheduler PR's job. For now the indicator shows whatever the user
-// last refreshed (or just "Sync configured" until they hit refresh once).
+// Config/status come from the shared `SyncConfigContext`, the same instance
+// the Cloud Sync modal writes to, so enabling sync there updates this pill
+// immediately. We deliberately don't poll for fresh status here — the pill
+// shows whatever was last loaded or refreshed.
 
-import { useSyncConfig } from "@/hooks/useSyncConfig";
+import { useSyncConfigContext } from "@/contexts/SyncConfigContext";
 
 interface SyncStatusIndicatorProps {
-  workspacePath: string | null;
   onOpenSync: () => void;
 }
 
@@ -26,8 +26,8 @@ export function relativeTime(unix: number): string {
 }
 
 export function summarise(
-  config: ReturnType<typeof useSyncConfig>["config"],
-  status: ReturnType<typeof useSyncConfig>["status"],
+  config: ReturnType<typeof useSyncConfigContext>["config"],
+  status: ReturnType<typeof useSyncConfigContext>["status"],
 ): { label: string; tone: "off" | "ok" | "warn" | "error" } {
   if (!config) return { label: "Sync off", tone: "off" };
   if (!status) return { label: "Sync configured", tone: "ok" };
@@ -44,8 +44,8 @@ export function summarise(
   return { label: "Synced", tone: "ok" };
 }
 
-export function SyncStatusIndicator({ workspacePath, onOpenSync }: SyncStatusIndicatorProps) {
-  const { config, status } = useSyncConfig(workspacePath);
+export function SyncStatusIndicator({ onOpenSync }: SyncStatusIndicatorProps) {
+  const { config, status, workspacePath } = useSyncConfigContext();
   if (!workspacePath) return null;
 
   const { label, tone } = summarise(config, status);

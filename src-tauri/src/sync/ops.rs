@@ -223,7 +223,6 @@ mod tests {
                 remote_url: self.remote_path.clone(),
                 remote_branch: DEFAULT_REMOTE_BRANCH.to_string(),
                 conflict_policy: ConflictPolicy::Prompt,
-                auto_sync_seconds: None,
                 author: Some(CommitIdentity {
                     name: "Test User".into(),
                     email: "test@example.com".into(),
@@ -292,7 +291,6 @@ mod tests {
             remote_url: String::new(),
             remote_branch: DEFAULT_REMOTE_BRANCH.into(),
             conflict_policy: ConflictPolicy::Prompt,
-            auto_sync_seconds: None,
             author: None,
         };
         let path = config.workspace_path.clone();

@@ -81,7 +81,6 @@ mod tests {
             remote_url: "https://example.com/n.git".to_string(),
             remote_branch: "main".to_string(),
             conflict_policy: ConflictPolicy::Prompt,
-            auto_sync_seconds: None,
             author: None,
         })
         .unwrap();

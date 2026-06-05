@@ -1,4 +1,5 @@
 import { SidebarLayoutProvider } from "@/contexts/SidebarLayoutContext";
+import { SyncConfigProvider } from "@/contexts/SyncConfigContext";
 import { TabsProvider } from "@/contexts/TabsContext";
 import { useCodeThemeStyle } from "@/hooks/useCodeThemeStyle";
 import { useSettings } from "@/hooks/useSettings";
@@ -16,7 +17,9 @@ export function App() {
   return (
     <TabsProvider settings={settings} updateSettings={updateSettings}>
       <SidebarLayoutProvider settings={settings} updateSettings={updateSettings}>
-        <AppShell />
+        <SyncConfigProvider>
+          <AppShell />
+        </SyncConfigProvider>
       </SidebarLayoutProvider>
     </TabsProvider>
   );
