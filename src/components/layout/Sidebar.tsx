@@ -188,6 +188,9 @@ export function Sidebar({ side }: SidebarProps) {
     toggleExpand: onToggleExpand,
     openFileInFolderTab: onOpenFileInTab,
     openFile: onOpenFileInNewTab,
+    createNote,
+    createFolder,
+    renamePath,
   } = useTabsContext();
   const {
     filesVisible,
@@ -234,6 +237,9 @@ export function Sidebar({ side }: SidebarProps) {
         onToggle={(path) => onToggleExpand(folder.id, path)}
         onOpenFile={(path) => onOpenFileInTab(folder.id, path)}
         onOpenFileInNewTab={onOpenFileInNewTab}
+        onCreateNote={(dir) => createNote(folder.id, dir)}
+        onCreateFolder={(dir) => createFolder(folder.id, dir)}
+        onRename={(path, newName) => renamePath(folder.id, path, newName)}
       />
       {backlinks.length > 0 && (
         <div className="mt-4 pt-3 border-t border-[var(--color-border)]">

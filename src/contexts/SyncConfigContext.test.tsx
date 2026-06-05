@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import type { FolderTab } from "@/hooks/useTabs";
 import type { WorkspaceSyncConfig } from "@/lib/sync";
-import { TabsContext, type TabsContextValue } from "./TabsContext";
 import { SyncConfigProvider, useSyncConfigContext } from "./SyncConfigContext";
+import { TabsContext, type TabsContextValue } from "./TabsContext";
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
@@ -37,6 +37,9 @@ function tabsValue(activeTab: FolderTab | null): TabsContextValue {
     openFolder: vi.fn(),
     openFileInFolderTab: vi.fn(),
     toggleExpand: vi.fn(),
+    createNote: vi.fn(),
+    createFolder: vi.fn(),
+    renamePath: vi.fn(),
     closeTab: vi.fn(),
     setActiveTab: vi.fn(),
     setTabMode: vi.fn(),

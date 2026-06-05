@@ -664,6 +664,128 @@ describe("useTabs dialog and events", () => {
     expect(invoke).toHaveBeenCalledWith("watch_directory", { path: "/p/ws" });
   });
 
+  it("createNote invokes create_note and refreshes the target directory", async () => {
+    const created = {
+      name: "Untitled.md",
+      path: "/p/ws/Untitled.md",
+      isDirectory: false,
+      modified: 0,
+    };
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        create_note: async () => "/p/ws/Untitled.md",
+        read_directory: async () => [created],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+
+    let newPath: string | null = null;
+    await act(async () => {
+      newPath = await result.current.createNote(folderId, "/p/ws");
+    });
+
+    expect(newPath).toBe("/p/ws/Untitled.md");
+    expect(invoke).toHaveBeenCalledWith("create_note", { dir: "/p/ws", root: "/p/ws" });
+    const folder = result.current.tabs.find((t) => t.id === folderId);
+    const entries = folder?.kind === "folder" ? folder.nodes.get("/p/ws") : null;
+    expect(entries?.some((e) => e.path === "/p/ws/Untitled.md")).toBe(true);
+  });
+
+  it("createFolder invokes create_folder and expands the target directory", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        create_folder: async () => "/p/ws/sub/Untitled Folder",
+        read_directory: async () => [],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+
+    let newPath: string | null = null;
+    await act(async () => {
+      newPath = await result.current.createFolder(folderId, "/p/ws/sub");
+    });
+
+    expect(newPath).toBe("/p/ws/sub/Untitled Folder");
+    const folder = result.current.tabs.find((t) => t.id === folderId);
+    expect(folder?.kind === "folder" ? folder.expanded.has("/p/ws/sub") : false).toBe(true);
+  });
+
+  it("renamePath invokes rename_path and returns the final path", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        rename_path: async () => "/p/ws/My Note.md",
+        read_directory: async () => [],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+
+    let finalPath: string | null = null;
+    await act(async () => {
+      finalPath = await result.current.renamePath(folderId, "/p/ws/Untitled.md", "My Note");
+    });
+
+    expect(finalPath).toBe("/p/ws/My Note.md");
+    expect(invoke).toHaveBeenCalledWith("rename_path", {
+      path: "/p/ws/Untitled.md",
+      newName: "My Note",
+      root: "/p/ws",
+    });
+  });
+
+  it("create/rename are no-ops for an unknown tab id", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    let a: string | null = "x";
+    let b: string | null = "x";
+    let c: string | null = "x";
+    await act(async () => {
+      a = await result.current.createNote("nope", "/p/ws");
+      b = await result.current.createFolder("nope", "/p/ws");
+      c = await result.current.renamePath("nope", "/p/ws/x.md", "y");
+    });
+    expect([a, b, c]).toEqual([null, null, null]);
+  });
+
+  it("createNote returns null and logs when the command fails", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        create_note: async () => {
+          throw new Error("denied");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+
+    let newPath: string | null = "x";
+    await act(async () => {
+      newPath = await result.current.createNote(folderId, "/p/ws");
+    });
+    expect(newPath).toBeNull();
+    expect(spy).toHaveBeenCalled();
+  });
+
   it("does not duplicate a folder tab when the same root is opened twice", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));

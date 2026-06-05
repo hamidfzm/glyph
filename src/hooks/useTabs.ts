@@ -480,6 +480,75 @@ export function useTabs(options: UseTabsOptions) {
     [loadDirectory],
   );
 
+  // Create a note/folder inside `dir`, then expand `dir` and refresh its listing
+  // so the new entry shows immediately (rather than waiting on the directory
+  // watcher's debounce). Returns the created path, or null on failure.
+  const createEntry = useCallback(
+    async (tabId: string, dir: string, kind: "note" | "folder"): Promise<string | null> => {
+      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
+      if (tab?.kind !== "folder") return null;
+      try {
+        const command = kind === "note" ? "create_note" : "create_folder";
+        const newPath = await invoke<string>(command, { dir, root: tab.root });
+        const entries = await loadDirectory(dir);
+        setState((prev) => ({
+          ...prev,
+          tabs: prev.tabs.map((t) => {
+            if (t.id !== tabId || t.kind !== "folder") return t;
+            const nodes = new Map(t.nodes);
+            nodes.set(dir, entries);
+            const expanded = new Set(t.expanded);
+            if (dir !== t.root) expanded.add(dir);
+            return { ...t, nodes, expanded };
+          }),
+        }));
+        return newPath;
+      } catch (err) {
+        console.error(`Failed to create ${kind}:`, err);
+        return null;
+      }
+    },
+    [loadDirectory],
+  );
+
+  const createNote = useCallback(
+    (tabId: string, dir: string) => createEntry(tabId, dir, "note"),
+    [createEntry],
+  );
+  const createFolder = useCallback(
+    (tabId: string, dir: string) => createEntry(tabId, dir, "folder"),
+    [createEntry],
+  );
+
+  // Rename a freshly-created entry (inline rename). Refreshes the parent listing
+  // so the new name shows. Returns the final (collision-safe) path, or null.
+  const renamePath = useCallback(
+    async (tabId: string, path: string, newName: string): Promise<string | null> => {
+      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
+      if (tab?.kind !== "folder") return null;
+      try {
+        const finalPath = await invoke<string>("rename_path", { path, newName, root: tab.root });
+        const sep = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+        const parent = sep > 0 ? path.slice(0, sep) : tab.root;
+        const entries = await loadDirectory(parent);
+        setState((prev) => ({
+          ...prev,
+          tabs: prev.tabs.map((t) => {
+            if (t.id !== tabId || t.kind !== "folder") return t;
+            const nodes = new Map(t.nodes);
+            nodes.set(parent, entries);
+            return { ...t, nodes };
+          }),
+        }));
+        return finalPath;
+      } catch (err) {
+        console.error("Failed to rename:", err);
+        return null;
+      }
+    },
+    [loadDirectory],
+  );
+
   const closeTab = useCallback((id: string) => {
     setState((prev) => {
       const idx = prev.tabs.findIndex((t) => t.id === id);
@@ -868,6 +937,9 @@ export function useTabs(options: UseTabsOptions) {
     openFolder,
     openFileInFolderTab,
     toggleExpand,
+    createNote,
+    createFolder,
+    renamePath,
     closeTab,
     setActiveTab,
     setTabMode,
