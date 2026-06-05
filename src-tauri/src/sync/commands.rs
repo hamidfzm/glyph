@@ -159,7 +159,6 @@ mod tests {
                 remote_url: self.remote_path.clone(),
                 remote_branch: DEFAULT_REMOTE_BRANCH.into(),
                 conflict_policy: ConflictPolicy::Prompt,
-                auto_sync_seconds: None,
                 author: Some(CommitIdentity {
                     name: "Test User".into(),
                     email: "test@example.com".into(),

@@ -15,7 +15,6 @@ function config(overrides: Partial<WorkspaceSyncConfig> = {}): WorkspaceSyncConf
     remoteUrl: "https://example.com/r.git",
     remoteBranch: "main",
     conflictPolicy: "prompt",
-    autoSyncSeconds: null,
     author: null,
     ...overrides,
   };

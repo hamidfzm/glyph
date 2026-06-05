@@ -120,7 +120,6 @@ describe("SyncSettingsModal", () => {
       remoteUrl: "https://example.com/r.git",
       remoteBranch: "develop",
       conflictPolicy: "prefer-remote",
-      autoSyncSeconds: 300,
       author: { name: "A", email: "a@example.com" },
     };
     routeInvoke({ sync_get_config: () => stored });
@@ -189,7 +188,6 @@ describe("SyncSettingsModal", () => {
       remoteUrl: "https://example.com/r.git",
       remoteBranch: "main",
       conflictPolicy: "prompt",
-      autoSyncSeconds: null,
       author: null,
     };
     routeInvoke({
@@ -289,7 +287,6 @@ describe("SyncSettingsModal", () => {
       remoteUrl: "https://example.com/r.git",
       remoteBranch: "main",
       conflictPolicy: "prompt",
-      autoSyncSeconds: null,
       author: null,
     };
     routeInvoke({
@@ -331,7 +328,6 @@ describe("SyncSettingsModal", () => {
       remoteUrl: "https://example.com/r.git",
       remoteBranch: "main",
       conflictPolicy: "prompt",
-      autoSyncSeconds: null,
       author: null,
     };
     routeInvoke({
@@ -370,7 +366,6 @@ describe("SyncSettingsModal", () => {
       remoteUrl: "https://example.com/r.git",
       remoteBranch: "main",
       conflictPolicy: "prompt",
-      autoSyncSeconds: null,
       author: null,
     };
     routeInvoke({
@@ -404,7 +399,6 @@ describe("SyncSettingsModal", () => {
       remoteUrl: "https://example.com/r.git",
       remoteBranch: "main",
       conflictPolicy: "prompt",
-      autoSyncSeconds: null,
       author: null,
     };
     routeInvoke({
@@ -435,7 +429,6 @@ describe("SyncSettingsModal", () => {
       remoteUrl: "https://example.com/r.git",
       remoteBranch: "main",
       conflictPolicy: "prompt",
-      autoSyncSeconds: null,
       author: null,
     };
     routeInvoke({
@@ -578,7 +571,6 @@ describe("SyncSettingsModal", () => {
       remoteUrl: "https://example.com/r.git",
       remoteBranch: "main",
       conflictPolicy: "prompt",
-      autoSyncSeconds: null,
       author: null,
     };
     routeInvoke({
@@ -594,66 +586,6 @@ describe("SyncSettingsModal", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Sync now" }));
     expect(await screen.findByText(/Authentication failed: bad token/)).toBeInTheDocument();
-  });
-
-  it("autoSyncSeconds: positive integers are persisted as-is", async () => {
-    const calls: Array<Record<string, unknown>> = [];
-    routeInvoke({
-      sync_get_config: () => null,
-      sync_default_author: () => ({ name: null, email: null }),
-      sync_repo_present: () => true,
-      sync_set_config: (args) => {
-        calls.push(args as Record<string, unknown>);
-        return null;
-      },
-      sync_set_origin: () => null,
-      sync_commit_config: () => false,
-    });
-    const wrapper = withTabs(tabsValue(folderTab()));
-    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
-
-    const remote = await screen.findByPlaceholderText("https://github.com/you/notes.git");
-    fireEvent.change(remote, { target: { value: "https://example.com/r.git" } });
-    fireEvent.change(screen.getByPlaceholderText("off"), { target: { value: "30" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save config" }));
-
-    await waitFor(() => expect(calls).toHaveLength(1));
-    const cfg = calls[0].config as WorkspaceSyncConfig;
-    expect(cfg.autoSyncSeconds).toBe(30);
-  });
-
-  it("autoSyncSeconds: 0, negative, and blank all collapse to null", async () => {
-    // Cases are independent renders so the React effect that syncs form
-    // state from the persisted config never overwrites a fresh edit
-    // mid-test.
-    for (const raw of ["0", "-5", ""]) {
-      const calls: Array<Record<string, unknown>> = [];
-      routeInvoke({
-        sync_get_config: () => null,
-        sync_default_author: () => ({ name: null, email: null }),
-        sync_repo_present: () => true,
-        sync_set_config: (args) => {
-          calls.push(args as Record<string, unknown>);
-          return null;
-        },
-        sync_set_origin: () => null,
-        sync_commit_config: () => false,
-      });
-      const wrapper = withTabs(tabsValue(folderTab()));
-      const { unmount } = render(<SyncSettingsModal open={true} onClose={vi.fn()} />, {
-        wrapper,
-      });
-
-      const remote = await screen.findByPlaceholderText("https://github.com/you/notes.git");
-      fireEvent.change(remote, { target: { value: "https://example.com/r.git" } });
-      fireEvent.change(screen.getByPlaceholderText("off"), { target: { value: raw } });
-      fireEvent.click(screen.getByRole("button", { name: "Save config" }));
-
-      await waitFor(() => expect(calls).toHaveLength(1));
-      const cfg = calls[0].config as WorkspaceSyncConfig;
-      expect(cfg.autoSyncSeconds).toBeNull();
-      unmount();
-    }
   });
 
   it("Author identity: name+email -> author object", async () => {
@@ -724,7 +656,6 @@ describe("SyncSettingsModal", () => {
       remoteUrl: "https://example.com/r.git",
       remoteBranch: "main",
       conflictPolicy: "prompt",
-      autoSyncSeconds: null,
       author: null,
     };
     const cases: Array<{ delta: number; expectMatch: RegExp }> = [
@@ -769,7 +700,6 @@ describe("SyncSettingsModal", () => {
       remoteUrl: "https://example.com/r.git",
       remoteBranch: "main",
       conflictPolicy: "prompt",
-      autoSyncSeconds: null,
       author: null,
     };
     routeInvoke({
@@ -954,7 +884,6 @@ function makeForm(overrides: Partial<FormState> = {}): FormState {
     conflictPolicy: "prompt",
     authorName: "",
     authorEmail: "",
-    autoSyncSeconds: "",
     token: "",
     commitMessage: "",
     ...overrides,
@@ -1005,7 +934,6 @@ describe("commitSaveConfig", () => {
       remoteUrl,
       remoteBranch: "main",
       conflictPolicy: "prompt",
-      autoSyncSeconds: null,
       author: null,
     };
   }

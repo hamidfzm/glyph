@@ -43,7 +43,6 @@ export interface FormState {
   conflictPolicy: ConflictPolicy;
   authorName: string;
   authorEmail: string;
-  autoSyncSeconds: string;
   /** Plain-text PAT. Never displayed back — re-entered each session. */
   token: string;
   /**
@@ -61,18 +60,12 @@ function formFromConfig(config: WorkspaceSyncConfig): FormState {
     conflictPolicy: config.conflictPolicy,
     authorName: config.author?.name ?? "",
     authorEmail: config.author?.email ?? "",
-    autoSyncSeconds:
-      config.autoSyncSeconds === null || config.autoSyncSeconds === undefined
-        ? ""
-        : String(config.autoSyncSeconds),
     token: "",
     commitMessage: "",
   };
 }
 
 function configFromForm(workspacePath: string, form: FormState): WorkspaceSyncConfig {
-  const auto = form.autoSyncSeconds.trim();
-  const parsed = auto === "" ? null : Number.parseInt(auto, 10);
   const author =
     form.authorName.trim() || form.authorEmail.trim()
       ? { name: form.authorName.trim(), email: form.authorEmail.trim() }
@@ -83,7 +76,6 @@ function configFromForm(workspacePath: string, form: FormState): WorkspaceSyncCo
     remoteUrl: form.remoteUrl.trim(),
     remoteBranch: form.remoteBranch.trim() || "main",
     conflictPolicy: form.conflictPolicy,
-    autoSyncSeconds: parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null,
     author,
   };
 }
@@ -410,21 +402,6 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                       Stored in memory only for now. The next release routes it through your OS
                       keychain.
                     </span>
-                  </label>
-
-                  <label className="settings-field">
-                    <span className="settings-field-label">
-                      Auto-sync interval{" "}
-                      <span className="settings-field-hint">(seconds, blank = off)</span>
-                    </span>
-                    <input
-                      type="number"
-                      className="settings-input"
-                      min={30}
-                      placeholder="off"
-                      value={form.autoSyncSeconds}
-                      onChange={(e) => update("autoSyncSeconds", e.target.value)}
-                    />
                   </label>
 
                   <label className="settings-field">

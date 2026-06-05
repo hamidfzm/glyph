@@ -61,8 +61,6 @@ pub struct SyncSettings {
     pub remote_branch: String,
     pub conflict_policy: ConflictPolicy,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auto_sync_seconds: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub author: Option<CommitIdentity>,
 }
 
@@ -73,7 +71,6 @@ impl SyncSettings {
             remote_url: c.remote_url.clone(),
             remote_branch: c.remote_branch.clone(),
             conflict_policy: c.conflict_policy,
-            auto_sync_seconds: c.auto_sync_seconds,
             author: c.author.clone(),
         }
     }
@@ -85,7 +82,6 @@ impl SyncSettings {
             remote_url: self.remote_url,
             remote_branch: self.remote_branch,
             conflict_policy: self.conflict_policy,
-            auto_sync_seconds: self.auto_sync_seconds,
             author: self.author,
         }
     }
@@ -213,7 +209,6 @@ mod tests {
             remote_url: "https://example.com/n.git".to_string(),
             remote_branch: "main".to_string(),
             conflict_policy: ConflictPolicy::PreferLocal,
-            auto_sync_seconds: Some(120),
             author: Some(CommitIdentity {
                 name: "Hamid".into(),
                 email: "h@example.com".into(),
@@ -229,7 +224,6 @@ mod tests {
         let raw = std::fs::read_to_string(tmp.path().join(".glyph/config.json")).unwrap();
         assert!(raw.contains("\"remoteUrl\""));
         assert!(raw.contains("\"conflictPolicy\""));
-        assert!(raw.contains("\"autoSyncSeconds\""));
         // The implied root is never written to disk.
         assert!(!raw.contains("workspacePath"));
 
@@ -240,7 +234,6 @@ mod tests {
         assert_eq!(loaded.workspace_path, tmp.path().to_string_lossy());
         assert_eq!(loaded.remote_url, "https://example.com/n.git");
         assert_eq!(loaded.conflict_policy, ConflictPolicy::PreferLocal);
-        assert_eq!(loaded.auto_sync_seconds, Some(120));
     }
 
     #[test]

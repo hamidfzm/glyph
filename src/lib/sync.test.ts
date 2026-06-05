@@ -29,7 +29,6 @@ function makeConfig(): WorkspaceSyncConfig {
     remoteUrl: "https://example.com/n.git",
     remoteBranch: "main",
     conflictPolicy: "prompt",
-    autoSyncSeconds: null,
     author: null,
   };
 }
@@ -42,7 +41,6 @@ describe("defaultConfigFor", () => {
     expect(cfg.remoteUrl).toBe("");
     expect(cfg.remoteBranch).toBe("main");
     expect(cfg.conflictPolicy).toBe("prompt");
-    expect(cfg.autoSyncSeconds).toBeNull();
     expect(cfg.author).toBeNull();
   });
 });

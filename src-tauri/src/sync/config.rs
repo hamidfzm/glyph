@@ -29,9 +29,6 @@ pub struct WorkspaceSyncConfig {
     pub remote_branch: String,
     /// What to do when local and remote disagree on the same file.
     pub conflict_policy: ConflictPolicy,
-    /// Auto-sync interval in seconds, or `None` to disable background
-    /// sync. The scheduler lives in a follow-up PR.
-    pub auto_sync_seconds: Option<u32>,
     /// Author identity used for commits Glyph creates on the user's
     /// behalf. Optional — falls back to libgit2's global config when
     /// `None`.
@@ -69,7 +66,6 @@ impl WorkspaceSyncConfig {
             remote_url: String::new(),
             remote_branch: DEFAULT_REMOTE_BRANCH.to_string(),
             conflict_policy: ConflictPolicy::default(),
-            auto_sync_seconds: None,
             author: None,
         }
     }
@@ -87,7 +83,6 @@ mod tests {
         assert!(cfg.remote_url.is_empty());
         assert_eq!(cfg.remote_branch, DEFAULT_REMOTE_BRANCH);
         assert_eq!(cfg.conflict_policy, ConflictPolicy::Prompt);
-        assert!(cfg.auto_sync_seconds.is_none());
         assert!(cfg.author.is_none());
     }
 
@@ -99,7 +94,6 @@ mod tests {
             remote_url: "https://example.com/notes.git".to_string(),
             remote_branch: "trunk".to_string(),
             conflict_policy: ConflictPolicy::PreferRemote,
-            auto_sync_seconds: Some(300),
             author: Some(CommitIdentity {
                 name: "Hamid".into(),
                 email: "h@example.com".into(),
@@ -110,7 +104,6 @@ mod tests {
         assert_eq!(v["remoteUrl"], "https://example.com/notes.git");
         assert_eq!(v["remoteBranch"], "trunk");
         assert_eq!(v["conflictPolicy"], "prefer-remote");
-        assert_eq!(v["autoSyncSeconds"], 300);
         assert_eq!(v["author"]["name"], "Hamid");
 
         let round: WorkspaceSyncConfig = serde_json::from_value(v).unwrap();
@@ -125,11 +118,9 @@ mod tests {
             "remoteUrl": "https://example.com/n.git",
             "remoteBranch": "main",
             "conflictPolicy": "prompt",
-            "autoSyncSeconds": null,
             "author": null,
         });
         let cfg: WorkspaceSyncConfig = serde_json::from_value(json).unwrap();
-        assert!(cfg.auto_sync_seconds.is_none());
         assert!(cfg.author.is_none());
     }
 }
