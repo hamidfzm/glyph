@@ -48,13 +48,6 @@ vi.mock("@tauri-apps/plugin-store", () => ({
   ),
 }));
 
-vi.mock("@tauri-apps/api/menu", () => ({
-  Menu: { new: vi.fn() },
-  MenuItem: { new: vi.fn() },
-  PredefinedMenuItem: { new: vi.fn() },
-  Submenu: { new: vi.fn() },
-}));
-
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     show: vi.fn(() => Promise.resolve()),

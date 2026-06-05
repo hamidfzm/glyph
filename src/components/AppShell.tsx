@@ -25,6 +25,7 @@ import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
 import { UpdateBanner } from "./layout/UpdateBanner";
 import { WorkspaceNoticeBanner } from "./layout/WorkspaceNoticeBanner";
+import { ContextMenu } from "./menu/ContextMenu";
 import { AIPanel } from "./modals/AIPanel";
 import { CommandPalette } from "./modals/CommandPalette";
 import { SettingsModal } from "./modals/settings/lazySettings";
@@ -184,8 +185,8 @@ export function AppShell() {
     ),
   });
 
-  // Context menu (Win/Linux only): text-content actions only. Sidebar/menu/zoom
-  // commands have their own keyboard shortcuts and titlebar buttons.
+  // In-app right-click menu (all platforms): text-content actions only.
+  // Sidebar/menu/zoom commands have their own shortcuts and titlebar buttons.
   const contextMenuActions = useMemo(
     () => ({
       openFileDialog,
@@ -199,7 +200,7 @@ export function AppShell() {
     }),
     [openFileDialog, tts, handleAIActionFromMenu, aiController.configured, displayContent],
   );
-  useContextMenu(platform, contextMenuActions);
+  const contextMenu = useContextMenu(contextMenuActions);
 
   const showEmptyState =
     !initializing && (!activeTab || (activeTab.kind === "folder" && !activeFile));
@@ -243,6 +244,8 @@ export function AppShell() {
         onQueryChange={palette.setQuery}
         onClose={palette.close}
       />
+
+      <ContextMenu menu={contextMenu.menu} onClose={contextMenu.close} />
 
       {/* Mounted only when open so the settings chunk loads on first use. */}
       {settingsOpen && <SettingsModal open onClose={() => setSettingsOpen(false)} />}
