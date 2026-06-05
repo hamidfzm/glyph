@@ -25,10 +25,11 @@ import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
 import { UpdateBanner } from "./layout/UpdateBanner";
 import { WorkspaceNoticeBanner } from "./layout/WorkspaceNoticeBanner";
+import { ContextMenu } from "./menu/ContextMenu";
 import { AIPanel } from "./modals/AIPanel";
 import { CommandPalette } from "./modals/CommandPalette";
-import { SettingsModal } from "./modals/settings/lazySettings";
 import { SyncSettingsModal } from "./modals/SyncSettingsModal";
+import { SettingsModal } from "./modals/settings/lazySettings";
 import { TabContent } from "./TabContent";
 
 // All the wiring that used to live inside App: menu events, AI/TTS/Print
@@ -184,11 +185,10 @@ export function AppShell() {
     ),
   });
 
-  // Context menu (Win/Linux only): text-content actions only. Sidebar/menu/zoom
-  // commands have their own keyboard shortcuts and titlebar buttons.
+  // Themed right-click menu for the markdown viewer: text-content actions only.
+  // The file tree owns its own menu; menu/zoom commands have shortcuts/buttons.
   const contextMenuActions = useMemo(
     () => ({
-      openFileDialog,
       ttsSpeak: tts.speak,
       ttsStop: tts.stop,
       ttsSpeaking: tts.speaking,
@@ -197,9 +197,9 @@ export function AppShell() {
       aiConfigured: aiController.configured,
       content: displayContent,
     }),
-    [openFileDialog, tts, handleAIActionFromMenu, aiController.configured, displayContent],
+    [tts, handleAIActionFromMenu, aiController.configured, displayContent],
   );
-  useContextMenu(platform, contextMenuActions);
+  const contextMenu = useContextMenu(contextMenuActions);
 
   const showEmptyState =
     !initializing && (!activeTab || (activeTab.kind === "folder" && !activeFile));
@@ -243,6 +243,8 @@ export function AppShell() {
         onQueryChange={palette.setQuery}
         onClose={palette.close}
       />
+
+      <ContextMenu menu={contextMenu.menu} onClose={contextMenu.close} />
 
       {/* Mounted only when open so the settings chunk loads on first use. */}
       {settingsOpen && <SettingsModal open onClose={() => setSettingsOpen(false)} />}

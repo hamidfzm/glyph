@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { DirEntry } from "@/hooks/useTabs";
+import type { ContextMenuItem } from "@/lib/contextMenuItems";
 import { ChevronRightIcon } from "../icons/ChevronRightIcon";
 import { FileTextIcon } from "../icons/FileTextIcon";
 import { FolderIcon } from "../icons/FolderIcon";
 import { FolderOpenIcon } from "../icons/FolderOpenIcon";
+import { ContextMenu, type ContextMenuModel } from "../menu/ContextMenu";
 
 interface FileTreeProps {
   root: string;
@@ -102,20 +104,19 @@ export function FileTree({
     setContextMenu({ x: e.clientX, y: e.clientY, path });
   };
 
-  // Dismiss the context menu on any outside click or Escape.
-  useEffect(() => {
-    if (!contextMenu) return;
-    const dismiss = () => setContextMenu(null);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") dismiss();
-    };
-    window.addEventListener("click", dismiss);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("click", dismiss);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [contextMenu]);
+  const closeMenu = useCallback(() => setContextMenu(null), []);
+
+  // File-specific menu, rendered through the shared themed ContextMenu so the
+  // sidebar matches the viewer's right-click menu.
+  const menu = useMemo<ContextMenuModel | null>(() => {
+    if (!contextMenu) return null;
+    const { x, y, path } = contextMenu;
+    const items: ContextMenuItem[] = [
+      { kind: "action", label: "Open", onSelect: () => onOpenFile(path) },
+      { kind: "action", label: "Open in New Tab", onSelect: () => onOpenFileInNewTab(path) },
+    ];
+    return { x, y, items };
+  }, [contextMenu, onOpenFile, onOpenFileInNewTab]);
 
   const childProps: EntryRenderProps = {
     nodes,
@@ -129,43 +130,7 @@ export function FileTree({
   return (
     <div>
       <ul className="space-y-0.5">{entries.map((entry) => renderEntry(entry, 0, childProps))}</ul>
-
-      {contextMenu && (
-        <div
-          role="menu"
-          className="fixed z-50 min-w-40 py-1 rounded-[var(--glyph-radius)] border border-[var(--color-border)] shadow-lg text-sm"
-          style={{
-            top: contextMenu.y,
-            left: contextMenu.x,
-            background: "var(--color-surface)",
-          }}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-surface-tertiary)] text-[var(--color-text-primary)]"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenFile(contextMenu.path);
-              setContextMenu(null);
-            }}
-          >
-            Open
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="w-full text-left px-3 py-1.5 hover:bg-[var(--color-surface-tertiary)] text-[var(--color-text-primary)]"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenFileInNewTab(contextMenu.path);
-              setContextMenu(null);
-            }}
-          >
-            Open in New Tab
-          </button>
-        </div>
-      )}
+      <ContextMenu menu={menu} onClose={closeMenu} />
     </div>
   );
 }

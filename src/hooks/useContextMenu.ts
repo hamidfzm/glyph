@@ -1,158 +1,61 @@
-import { useEffect } from "react";
-import type { Platform } from "./usePlatform";
+import { useCallback, useEffect, useState } from "react";
+import {
+  buildContextMenuItems,
+  type ContextMenuActions,
+  type ContextMenuItem,
+} from "@/lib/contextMenuItems";
 
-interface ContextMenuActions {
-  openFileDialog: () => void;
-  ttsSpeak?: (text: string) => void;
-  ttsStop?: () => void;
-  ttsSpeaking?: boolean;
-  ttsAvailable?: boolean;
-  aiAction?: (action: string, text: string) => void;
-  aiConfigured?: boolean;
-  content?: string | null;
+export type { ContextMenuActions } from "@/lib/contextMenuItems";
+
+export interface ContextMenuState {
+  x: number;
+  y: number;
+  items: ContextMenuItem[];
 }
 
-// Text fields keep the WebView's native context menu so Cut / Copy / Paste
-// stays available. Without this, the global suppressor below kills the
-// native menu inside <input> / <textarea> / contenteditable surfaces and
-// the user is left with the document-level custom menu, which has
-// "Read Aloud" / AI entries that don't apply to a single form field.
+// Editable surfaces keep the WebView's native menu so Cut / Copy / Paste and
+// spell-check suggestions stay available; our themed menu doesn't edit text.
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
-  const el = target.closest("input, textarea, [contenteditable=''], [contenteditable='true']");
-  return el !== null;
+  return target.closest("input, textarea, [contenteditable=''], [contenteditable='true']") !== null;
 }
 
-// The custom Read Aloud / AI / Search Google menu only makes sense inside
-// the markdown viewer. Anywhere else (modal copy, dialog text, sidebar
-// labels) gets the WebView's native menu so users can copy that text
-// without the irrelevant AI / TTS entries showing up.
+// The themed text menu (Copy / Search / Read Aloud / AI) only makes sense over
+// rendered prose. Other surfaces own their own menus: the file tree shows file
+// actions, and the rest of the chrome falls through to the native menu.
 function isInsideMarkdownContent(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
   return target.closest(".markdown-body") !== null;
 }
 
-export function useContextMenu(platform: Platform, actions: ContextMenuActions) {
-  // Belt-and-braces: in production builds, suppress the WebView's default context menu
-  // entirely. Tauri disables devtools in release so Inspect/Reload shouldn't appear, but
-  // some platforms still surface page-level entries (Reload, View Source) that we don't
-  // want users seeing in the shipped app. macOS still gets its native text-selection
-  // submenu via the suppressor below skipping when there's a selection.
-  useEffect(() => {
-    if (!import.meta.env.PROD) return;
-    const suppress = (e: MouseEvent) => {
-      if (isEditableTarget(e.target)) return;
-      // UI chrome (modals, dialogs, sidebar) keeps the native menu so users
-      // can still copy that text. Only the markdown viewer hides the native
-      // menu in favour of our custom one.
-      if (!isInsideMarkdownContent(e.target)) return;
-      const hasSelection = (window.getSelection()?.toString() ?? "").length > 0;
-      if (platform === "macos" && hasSelection) return; // keep Look Up / Translate / Speech
-      e.preventDefault();
-    };
-    document.addEventListener("contextmenu", suppress);
-    return () => document.removeEventListener("contextmenu", suppress);
-  }, [platform]);
+/**
+ * Drives the themed right-click menu for the markdown viewer.
+ *
+ * The menu only opens over rendered prose (`.markdown-body`); editable fields,
+ * surfaces that already claimed the event via preventDefault (the file tree),
+ * and the rest of the app chrome keep their own / the native menu. Inside the
+ * viewer it suppresses the native menu so the two never stack.
+ */
+export function useContextMenu(actions: ContextMenuActions) {
+  const [menu, setMenu] = useState<ContextMenuState | null>(null);
+  const close = useCallback(() => setMenu(null), []);
 
   useEffect(() => {
-    // On macOS, keep native WebView context menu (has Look Up, Translate, Summarize, Speech, etc.)
-    if (platform === "macos" || platform === "unknown") return;
-
-    const handler = async (e: MouseEvent) => {
+    const handler = (e: MouseEvent) => {
+      // A more specific handler already took this event and called
+      // preventDefault; don't stack our menu on top of theirs.
+      if (e.defaultPrevented) return;
+      // Editable fields keep the native Cut / Copy / Paste menu.
       if (isEditableTarget(e.target)) return;
-      // The custom AI / TTS / Search Google menu is for prose in the
-      // markdown viewer. UI chrome falls through to the native menu.
+      // Only the markdown viewer gets the themed text menu.
       if (!isInsideMarkdownContent(e.target)) return;
       e.preventDefault();
-
-      const { Menu, MenuItem, PredefinedMenuItem, Submenu } = await import("@tauri-apps/api/menu");
-
-      const selection = window.getSelection()?.toString() ?? "";
-      const items: Array<
-        | Awaited<ReturnType<typeof MenuItem.new>>
-        | Awaited<ReturnType<typeof PredefinedMenuItem.new>>
-        | Awaited<ReturnType<typeof Submenu.new>>
-      > = [];
-
-      // Copy + Select All
-      items.push(await PredefinedMenuItem.new({ item: "Copy" }));
-      items.push(await PredefinedMenuItem.new({ item: "SelectAll" }));
-      items.push(await PredefinedMenuItem.new({ item: "Separator" }));
-
-      // Search Google (if selection)
-      if (selection) {
-        items.push(
-          await MenuItem.new({
-            text: `Search Google for "${selection.slice(0, 30)}${selection.length > 30 ? "\u2026" : ""}"`,
-            action: () => {
-              const url = `https://www.google.com/search?q=${encodeURIComponent(selection)}`;
-              window.open(url, "_blank");
-            },
-          }),
-        );
-        items.push(await PredefinedMenuItem.new({ item: "Separator" }));
-      }
-
-      // TTS
-      if (actions.ttsAvailable) {
-        if (actions.ttsSpeaking) {
-          items.push(
-            await MenuItem.new({
-              text: "Stop Reading",
-              action: () => actions.ttsStop?.(),
-            }),
-          );
-        } else {
-          const textToRead = selection || actions.content || "";
-          if (textToRead) {
-            items.push(
-              await MenuItem.new({
-                text: selection ? "Read Selection Aloud" : "Read Aloud",
-                action: () => actions.ttsSpeak?.(textToRead),
-              }),
-            );
-          }
-        }
-      }
-
-      // AI actions (if provider configured)
-      if (actions.aiConfigured) {
-        const textForAI = selection || actions.content || "";
-        if (textForAI) {
-          const aiItems = [];
-          for (const action of ["Summarize", "Explain", "Translate", "Simplify"]) {
-            aiItems.push(
-              await MenuItem.new({
-                text: selection ? `${action} Selection` : `${action} Document`,
-                action: () => actions.aiAction?.(action.toLowerCase(), textForAI),
-              }),
-            );
-          }
-
-          items.push(await PredefinedMenuItem.new({ item: "Separator" }));
-          items.push(
-            await Submenu.new({
-              text: "AI",
-              items: aiItems,
-            }),
-          );
-        }
-      }
-
-      // Open File
-      items.push(await PredefinedMenuItem.new({ item: "Separator" }));
-      items.push(
-        await MenuItem.new({
-          text: "Open File\u2026",
-          action: () => actions.openFileDialog(),
-        }),
-      );
-
-      const menu = await Menu.new({ items });
-      await menu.popup();
+      const selection = window.getSelection()?.toString().trim() ?? "";
+      setMenu({ x: e.clientX, y: e.clientY, items: buildContextMenuItems(actions, selection) });
     };
-
     document.addEventListener("contextmenu", handler);
     return () => document.removeEventListener("contextmenu", handler);
-  }, [platform, actions]);
+  }, [actions]);
+
+  return { menu, close };
 }
