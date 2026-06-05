@@ -4,6 +4,7 @@ import {
   type ContextMenuItem,
   copySelection,
   searchGoogle,
+  selectAllContent,
 } from "./contextMenuItems";
 
 function actionLabels(items: ContextMenuItem[]): string[] {
@@ -16,6 +17,8 @@ function find(items: ContextMenuItem[], label: string) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  document.body.innerHTML = "";
 });
 
 describe("buildContextMenuItems", () => {
@@ -105,6 +108,67 @@ describe("buildContextMenuItems", () => {
     const open = find(items, "Open File…");
     if (open?.kind === "action") open.onSelect();
     expect(openFileDialog).toHaveBeenCalled();
+  });
+
+  it("Copy invokes the clipboard with the captured selection", () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const items = buildContextMenuItems({ openFileDialog: vi.fn() }, "abc");
+    const copy = find(items, "Copy");
+    if (copy?.kind === "action") copy.onSelect();
+    expect(writeText).toHaveBeenCalledWith("abc");
+  });
+
+  it("Search Google opens the encoded query", () => {
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+    const items = buildContextMenuItems({ openFileDialog: vi.fn() }, "term");
+    const search = items.find((i) => i.kind === "action" && i.label.startsWith("Search Google"));
+    if (search?.kind === "action") search.onSelect();
+    expect(open).toHaveBeenCalledWith("https://www.google.com/search?q=term", "_blank");
+  });
+
+  it("Stop Reading invokes ttsStop", () => {
+    const ttsStop = vi.fn();
+    const items = buildContextMenuItems(
+      { openFileDialog: vi.fn(), ttsAvailable: true, ttsSpeaking: true, ttsStop },
+      "",
+    );
+    const stop = find(items, "Stop Reading");
+    if (stop?.kind === "action") stop.onSelect();
+    expect(ttsStop).toHaveBeenCalled();
+  });
+
+  it("omits the read entry when TTS is available but there is no text to read", () => {
+    const items = buildContextMenuItems(
+      { openFileDialog: vi.fn(), ttsAvailable: true, ttsSpeak: vi.fn(), content: "" },
+      "",
+    );
+    expect(find(items, "Read Aloud")).toBeUndefined();
+    expect(find(items, "Read Selection Aloud")).toBeUndefined();
+  });
+});
+
+describe("selectAllContent", () => {
+  it("selects the rendered markdown body when present", () => {
+    const body = document.createElement("div");
+    body.className = "markdown-body";
+    body.textContent = "hello world";
+    document.body.appendChild(body);
+
+    selectAllContent();
+    expect(window.getSelection()?.rangeCount).toBe(1);
+  });
+
+  it("falls back to the document body when there is no markdown body", () => {
+    document.body.textContent = "plain";
+    selectAllContent();
+    expect(window.getSelection()?.rangeCount).toBe(1);
+  });
+
+  it("does nothing when there is no selection object", () => {
+    vi.spyOn(window, "getSelection").mockReturnValue(null);
+    expect(() => selectAllContent()).not.toThrow();
   });
 });
 

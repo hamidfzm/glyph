@@ -81,6 +81,20 @@ describe("useContextMenu", () => {
     document.removeEventListener("contextmenu", claim, { capture: true });
   });
 
+  it("opens with default items when there is no selection object", () => {
+    vi.spyOn(window, "getSelection").mockReturnValue(null);
+    const { result } = renderHook(() => useContextMenu(baseActions));
+
+    act(() => {
+      fireContextMenu(document);
+    });
+
+    const labels = result.current.menu?.items.flatMap((i) =>
+      i.kind === "action" ? [i.label] : [],
+    );
+    expect(labels).toContain("Select All");
+  });
+
   it("close() clears the open menu", () => {
     const { result } = renderHook(() => useContextMenu(baseActions));
     act(() => {

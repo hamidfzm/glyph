@@ -27,24 +27,23 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const [pos, setPos] = useState({ x: 0, y: 0 });
 
-  // Each right-click produces a fresh menu object; reset transient state and
-  // seed the position from the click coordinates.
-  useEffect(() => {
-    setOpenSubmenu(null);
-    if (menu) setPos({ x: menu.x, y: menu.y });
-  }, [menu]);
-
-  // Keep the menu inside the viewport once its real size is known.
+  // Each right-click produces a fresh menu object. Reset transient state and
+  // position it in one layout effect (before paint) so the clamp isn't undone
+  // by a later passive effect. Clamps the menu back inside the viewport once
+  // its real size is known.
   useLayoutEffect(() => {
-    if (!menu || !rootRef.current) return;
-    const rect = rootRef.current.getBoundingClientRect();
+    if (!menu) return;
+    setOpenSubmenu(null);
     let x = menu.x;
     let y = menu.y;
-    if (x + rect.width > window.innerWidth - VIEWPORT_MARGIN) {
-      x = Math.max(VIEWPORT_MARGIN, window.innerWidth - rect.width - VIEWPORT_MARGIN);
-    }
-    if (y + rect.height > window.innerHeight - VIEWPORT_MARGIN) {
-      y = Math.max(VIEWPORT_MARGIN, window.innerHeight - rect.height - VIEWPORT_MARGIN);
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (rect) {
+      if (x + rect.width > window.innerWidth - VIEWPORT_MARGIN) {
+        x = Math.max(VIEWPORT_MARGIN, window.innerWidth - rect.width - VIEWPORT_MARGIN);
+      }
+      if (y + rect.height > window.innerHeight - VIEWPORT_MARGIN) {
+        y = Math.max(VIEWPORT_MARGIN, window.innerHeight - rect.height - VIEWPORT_MARGIN);
+      }
     }
     setPos({ x, y });
   }, [menu]);

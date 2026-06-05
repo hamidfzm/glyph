@@ -42,7 +42,7 @@ describe("ContextMenu", () => {
     expect(screen.getByRole("separator")).toBeInTheDocument();
   });
 
-  it("closes on Escape", () => {
+  it("closes on Escape but ignores other keys", () => {
     const onClose = vi.fn();
     render(
       <ContextMenu
@@ -50,6 +50,9 @@ describe("ContextMenu", () => {
         onClose={onClose}
       />,
     );
+    fireEvent.keyDown(window, { key: "a" });
+    expect(onClose).not.toHaveBeenCalled();
+
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
   });
@@ -93,5 +96,65 @@ describe("ContextMenu", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Summarize Document" }));
     expect(onSelect).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("toggles a submenu closed when its parent is clicked again", () => {
+    render(
+      <ContextMenu
+        menu={menu([
+          {
+            kind: "submenu",
+            label: "AI",
+            items: [{ kind: "action", label: "Summarize Document", onSelect: vi.fn() }],
+          },
+        ])}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "AI" }));
+    expect(screen.getByRole("menuitem", { name: "Summarize Document" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "AI" }));
+    expect(screen.queryByRole("menuitem", { name: "Summarize Document" })).toBeNull();
+  });
+
+  it("clamps the menu back inside the viewport when it would overflow", () => {
+    const big = {
+      width: 10000,
+      height: 10000,
+      top: 0,
+      left: 0,
+      right: 10000,
+      bottom: 10000,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(big);
+
+    render(
+      <ContextMenu
+        menu={{ x: 99999, y: 99999, items: [{ kind: "action", label: "X", onSelect: vi.fn() }] }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const surface = screen.getByRole("menu");
+    expect(surface.style.left).toBe("4px");
+    expect(surface.style.top).toBe("4px");
+    vi.restoreAllMocks();
+  });
+
+  it("suppresses the native menu on a right-click inside the surface", () => {
+    render(
+      <ContextMenu
+        menu={menu([{ kind: "action", label: "Open File…", onSelect: vi.fn() }])}
+        onClose={vi.fn()}
+      />,
+    );
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    screen.getByRole("menu").dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
   });
 });
