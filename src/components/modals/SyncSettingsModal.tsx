@@ -18,8 +18,7 @@
 // component stays a thin form view.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTabsContext } from "@/contexts/TabsContext";
-import { useSyncConfig } from "@/hooks/useSyncConfig";
+import { useSyncConfigContext } from "@/contexts/SyncConfigContext";
 import {
   type ConflictPolicy,
   defaultConfigFor,
@@ -167,9 +166,8 @@ interface SyncSettingsModalProps {
 }
 
 export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
-  const { activeTab } = useTabsContext();
-  const workspacePath = activeTab?.kind === "folder" ? activeTab.root : null;
   const {
+    workspacePath,
     config,
     status,
     defaultAuthor,
@@ -185,7 +183,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
     commitConfig,
     runSync,
     refreshStatus,
-  } = useSyncConfig(workspacePath);
+  } = useSyncConfigContext();
 
   const defaultForm = useMemo(
     () => formFromConfig(config ?? defaultConfigFor(workspacePath ?? "")),

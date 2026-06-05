@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SyncConfigProvider } from "@/contexts/SyncConfigContext";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { FolderTab } from "@/hooks/useTabs";
 import type { WorkspaceSyncConfig } from "@/lib/sync";
@@ -70,8 +71,13 @@ function tabsValue(activeTab: FolderTab | null): TabsContextValue {
 }
 
 function withTabs(value: TabsContextValue) {
+  // The modal reads sync state from SyncConfigContext, which derives the
+  // workspace path from TabsContext and drives the (mocked) sync commands —
+  // so wrap children in the real provider.
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <TabsContext.Provider value={value}>{children}</TabsContext.Provider>
+    <TabsContext.Provider value={value}>
+      <SyncConfigProvider>{children}</SyncConfigProvider>
+    </TabsContext.Provider>
   );
   return wrapper;
 }

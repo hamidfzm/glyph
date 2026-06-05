@@ -13,7 +13,7 @@ interface StatusBarProps {
 
 export function StatusBar({ onOpenSync }: StatusBarProps) {
   const { settings } = useSettings();
-  const { activeFile, activeTab, displayContent } = useTabsContext();
+  const { activeFile, displayContent } = useTabsContext();
   const zoomPercent = Math.round((settings.appearance.fontSize / ZOOM_DEFAULT) * 100);
 
   const filePath = activeFile?.path;
@@ -25,7 +25,6 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
   if (!displayContent && !isNotebook) return null;
 
   const words = displayContent ? countWords(displayContent) : 0;
-  const workspacePath = activeTab?.kind === "folder" ? activeTab.root : null;
 
   return (
     <div
@@ -46,7 +45,7 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
         </>
       )}
       {zoomPercent !== 100 && <span>{zoomPercent}%</span>}
-      {onOpenSync && <SyncStatusIndicator workspacePath={workspacePath} onOpenSync={onOpenSync} />}
+      {onOpenSync && <SyncStatusIndicator onOpenSync={onOpenSync} />}
     </div>
   );
 }

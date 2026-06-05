@@ -1,20 +1,8 @@
-import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SyncConfigContext, type SyncConfigContextValue } from "@/contexts/SyncConfigContext";
 import type { StatusReport, WorkspaceSyncConfig } from "@/lib/sync";
 import { relativeTime, summarise, SyncStatusIndicator } from "./SyncStatusIndicator";
-
-beforeEach(() => {
-  vi.mocked(invoke).mockReset();
-});
-
-function routeInvoke(handlers: Record<string, (args: unknown) => unknown>) {
-  vi.mocked(invoke).mockImplementation((cmd: string, args?: unknown) => {
-    const handler = handlers[cmd];
-    if (!handler) return Promise.reject(new Error(`no handler for ${cmd}`));
-    return Promise.resolve(handler(args) as never);
-  });
-}
 
 function cfg(overrides: Partial<WorkspaceSyncConfig> = {}): WorkspaceSyncConfig {
   return {
@@ -28,32 +16,60 @@ function cfg(overrides: Partial<WorkspaceSyncConfig> = {}): WorkspaceSyncConfig 
   };
 }
 
+/** Build a full context value; the indicator only reads config/status/path. */
+function ctxValue(over: Partial<SyncConfigContextValue> = {}): SyncConfigContextValue {
+  return {
+    workspacePath: "/w",
+    config: null,
+    status: null,
+    defaultAuthor: null,
+    repoPresent: null,
+    loading: false,
+    busy: false,
+    error: null,
+    save: vi.fn(),
+    remove: vi.fn(),
+    setToken: vi.fn(),
+    clearToken: vi.fn(),
+    initRepo: vi.fn(),
+    cloneRemote: vi.fn(),
+    setOrigin: vi.fn(),
+    commitConfig: vi.fn(),
+    runSync: vi.fn(),
+    refreshStatus: vi.fn(),
+    refreshRepoPresent: vi.fn(),
+    ...over,
+  };
+}
+
+function renderIndicator(over: Partial<SyncConfigContextValue>, onOpenSync = vi.fn()) {
+  return render(
+    <SyncConfigContext.Provider value={ctxValue(over)}>
+      <SyncStatusIndicator onOpenSync={onOpenSync} />
+    </SyncConfigContext.Provider>,
+  );
+}
+
 describe("SyncStatusIndicator", () => {
   it("renders nothing when there is no workspace path", () => {
-    const { container } = render(<SyncStatusIndicator workspacePath={null} onOpenSync={vi.fn()} />);
+    const { container } = renderIndicator({ workspacePath: null });
     expect(container.firstChild).toBeNull();
   });
 
-  it("shows 'Sync off' for an unconfigured workspace", async () => {
-    routeInvoke({ sync_get_config: () => null });
-    render(<SyncStatusIndicator workspacePath="/w" onOpenSync={vi.fn()} />);
-    const btn = await screen.findByText("Sync off");
-    expect(btn).toHaveAttribute("data-tone", "off");
+  it("shows 'Sync off' for an unconfigured workspace", () => {
+    renderIndicator({ workspacePath: "/w", config: null, status: null });
+    expect(screen.getByText("Sync off")).toHaveAttribute("data-tone", "off");
   });
 
-  it("shows 'Sync configured' when config is loaded but no status fetched yet", async () => {
-    routeInvoke({ sync_get_config: () => cfg() });
-    render(<SyncStatusIndicator workspacePath="/w" onOpenSync={vi.fn()} />);
-    const btn = await screen.findByText("Sync configured");
-    expect(btn).toHaveAttribute("data-tone", "ok");
+  it("shows 'Sync configured' when config is loaded but no status fetched yet", () => {
+    renderIndicator({ config: cfg(), status: null });
+    expect(screen.getByText("Sync configured")).toHaveAttribute("data-tone", "ok");
   });
 
-  it("clicking the indicator calls onOpenSync", async () => {
-    routeInvoke({ sync_get_config: () => null });
+  it("clicking the indicator calls onOpenSync", () => {
     const onOpenSync = vi.fn();
-    render(<SyncStatusIndicator workspacePath="/w" onOpenSync={onOpenSync} />);
-    const btn = await screen.findByRole("button");
-    fireEvent.click(btn);
+    renderIndicator({ config: cfg() }, onOpenSync);
+    fireEvent.click(screen.getByRole("button"));
     expect(onOpenSync).toHaveBeenCalledTimes(1);
   });
 });
