@@ -23,7 +23,6 @@ function cfg(overrides: Partial<WorkspaceSyncConfig> = {}): WorkspaceSyncConfig 
     remoteUrl: "https://example.com/r.git",
     remoteBranch: "main",
     conflictPolicy: "prompt",
-    autoSyncSeconds: null,
     author: null,
     ...overrides,
   };

@@ -34,7 +34,6 @@ export interface WorkspaceSyncConfig {
   remoteUrl: string;
   remoteBranch: string;
   conflictPolicy: ConflictPolicy;
-  autoSyncSeconds: number | null;
   author: CommitIdentity | null;
 }
 
@@ -83,7 +82,6 @@ export function defaultConfigFor(workspacePath: string): WorkspaceSyncConfig {
     remoteUrl: "",
     remoteBranch: "main",
     conflictPolicy: "prompt",
-    autoSyncSeconds: null,
     author: null,
   };
 }
