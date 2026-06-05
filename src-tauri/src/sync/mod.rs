@@ -15,7 +15,7 @@ mod ops;
 mod state;
 
 pub use backend::{BackendKind, ConflictPolicy, StatusReport, SyncBackend, SyncResult};
-pub use config::{CommitIdentity, WorkspaceSyncConfig};
+pub use config::{CommitAuthorHint, CommitIdentity, WorkspaceSyncConfig};
 pub use error::SyncError;
 pub use state::SyncState;
 

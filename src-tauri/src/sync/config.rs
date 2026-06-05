@@ -1,9 +1,9 @@
 //! Per-workspace sync configuration.
 //!
-//! Configuration lives outside the workspace folder (in the Tauri store
-//! plugin's app data dir) so users can opt into sync without polluting
-//! the repo with `.glyph/` files. The shape is one config per workspace
-//! root path.
+//! This is the in-memory / IPC shape. It is persisted inside the workspace as
+//! `.glyph/config.json` (see [`crate::workspace::config`]) — committed, so it
+//! travels with a `git clone` — minus the `workspace_path` field, which is
+//! implied by the file's location and injected back on read.
 //!
 //! Credentials (PAT / SSH passphrase / etc.) are *not* in this struct —
 //! a follow-up PR routes them through the OS keychain via
@@ -43,6 +43,20 @@ pub struct WorkspaceSyncConfig {
 pub struct CommitIdentity {
     pub name: String,
     pub email: String,
+}
+
+/// Best-effort hint of an author identity sourced from git's config.
+///
+/// Both fields are independently optional: `user.name` and `user.email`
+/// can be set in isolation, and a brand-new install has neither. The
+/// frontend uses these strings as placeholders on the author fields in
+/// the Cloud Sync setup form so users see what would be used if they
+/// leave the fields blank.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitAuthorHint {
+    pub name: Option<String>,
+    pub email: Option<String>,
 }
 
 impl WorkspaceSyncConfig {

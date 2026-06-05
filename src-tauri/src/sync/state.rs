@@ -1,11 +1,10 @@
-//! Process-lifetime state for the sync subsystem: per-workspace configs
-//! and per-workspace credentials.
+//! Process-lifetime state for the sync subsystem: per-workspace
+//! credentials.
 //!
-//! Configs and tokens are held in memory only in this PR. The next PR in
-//! the series moves persistent config into `tauri-plugin-store`, and the
-//! one after that routes credentials through the OS keychain. The shape
-//! of [`SyncState`] doesn't change as those land — only the read/write
-//! implementations behind it.
+//! Sync *config* now lives in the workspace's committed `.glyph/config.json`
+//! (see [`crate::workspace`]) — `build_backend` reads it from there. Only
+//! tokens remain in memory; the OS-keychain PR will replace that storage
+//! while keeping the lookup API identical.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -17,7 +16,6 @@ use super::git::GitBackend;
 
 #[derive(Default)]
 pub struct SyncState {
-    configs: Mutex<HashMap<String, WorkspaceSyncConfig>>,
     /// Per-workspace HTTPS PAT / token. Memory only — wiped on app
     /// restart. The OS-keychain PR will replace this storage while
     /// keeping the lookup API identical.
@@ -27,21 +25,6 @@ pub struct SyncState {
 impl SyncState {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub fn set_config(&self, config: WorkspaceSyncConfig) {
-        self.configs
-            .lock()
-            .unwrap()
-            .insert(config.workspace_path.clone(), config);
-    }
-
-    pub fn get_config(&self, workspace_path: &str) -> Option<WorkspaceSyncConfig> {
-        self.configs.lock().unwrap().get(workspace_path).cloned()
-    }
-
-    pub fn remove_config(&self, workspace_path: &str) {
-        self.configs.lock().unwrap().remove(workspace_path);
     }
 
     pub fn set_token(&self, workspace_path: String, token: String) {
@@ -57,11 +40,12 @@ impl SyncState {
     }
 
     /// Build a backend matching the workspace's configured `BackendKind`,
-    /// pre-loaded with the stored token if any. Returns `NotConfigured`
-    /// when no config is registered for the workspace.
+    /// pre-loaded with the stored token if any. Reads config from the
+    /// workspace's `.glyph/config.json`; returns `NotConfigured` when the workspace
+    /// has no sync config, or `Backend` when the config file is unreadable.
     pub fn build_backend(&self, workspace_path: &str) -> Result<Box<dyn SyncBackend>, SyncError> {
-        let config = self
-            .get_config(workspace_path)
+        let config = crate::workspace::load_sync_config(workspace_path)
+            .map_err(SyncError::Backend)?
             .ok_or(SyncError::NotConfigured)?;
         let token = self.get_token(workspace_path);
         Ok(build_backend(config, token))
@@ -88,9 +72,10 @@ fn build_backend(config: WorkspaceSyncConfig, token: Option<String>) -> Box<dyn 
 mod tests {
     use super::*;
     use crate::sync::backend::{BackendKind, ConflictPolicy};
+    use tempfile::TempDir;
 
-    fn make_config(workspace: &str) -> WorkspaceSyncConfig {
-        WorkspaceSyncConfig {
+    fn write_config(workspace: &str) {
+        crate::workspace::store_sync_config(&WorkspaceSyncConfig {
             workspace_path: workspace.to_string(),
             backend: BackendKind::Git,
             remote_url: "https://example.com/n.git".to_string(),
@@ -98,41 +83,8 @@ mod tests {
             conflict_policy: ConflictPolicy::Prompt,
             auto_sync_seconds: None,
             author: None,
-        }
-    }
-
-    #[test]
-    fn empty_state_has_no_config() {
-        let state = SyncState::new();
-        assert!(state.get_config("/anywhere").is_none());
-    }
-
-    #[test]
-    fn set_then_get_config_round_trips() {
-        let state = SyncState::new();
-        state.set_config(make_config("/workspace/notes"));
-        let cfg = state.get_config("/workspace/notes").unwrap();
-        assert_eq!(cfg.workspace_path, "/workspace/notes");
-        assert_eq!(cfg.backend, BackendKind::Git);
-    }
-
-    #[test]
-    fn set_config_replaces_an_existing_entry_for_the_same_workspace() {
-        let state = SyncState::new();
-        state.set_config(make_config("/w"));
-        let mut updated = make_config("/w");
-        updated.remote_url = "https://other.example/n.git".into();
-        state.set_config(updated);
-        let cfg = state.get_config("/w").unwrap();
-        assert_eq!(cfg.remote_url, "https://other.example/n.git");
-    }
-
-    #[test]
-    fn remove_config_drops_the_entry() {
-        let state = SyncState::new();
-        state.set_config(make_config("/w"));
-        state.remove_config("/w");
-        assert!(state.get_config("/w").is_none());
+        })
+        .unwrap();
     }
 
     #[test]
@@ -152,9 +104,10 @@ mod tests {
         // `Box<dyn SyncBackend>` isn't Debug, so the usual `unwrap_err`
         // shortcut won't compile here. `.err()` collapses success/failure
         // into a single `Option<SyncError>` we can pattern-match without
-        // a dead panic arm.
+        // a dead panic arm. An empty tempdir has no `.glyph/config.json`.
+        let tmp = TempDir::new().unwrap();
         let state = SyncState::new();
-        let err = state.build_backend("/missing").err();
+        let err = state.build_backend(&tmp.path().to_string_lossy()).err();
         assert!(
             matches!(err, Some(SyncError::NotConfigured)),
             "expected NotConfigured, got {err:?}"
@@ -163,10 +116,12 @@ mod tests {
 
     #[test]
     fn build_backend_constructs_a_git_backend_with_the_stored_token() {
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
         let state = SyncState::new();
-        state.set_config(make_config("/w"));
-        state.set_token("/w".into(), "tok".into());
-        let backend = state.build_backend("/w").unwrap();
+        write_config(&workspace);
+        state.set_token(workspace.clone(), "tok".into());
+        let backend = state.build_backend(&workspace).unwrap();
         assert_eq!(backend.kind(), BackendKind::Git);
         // The token is consumed inside the credential callback; we can
         // only verify it was wired in by exercising a fetch/push, which

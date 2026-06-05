@@ -58,14 +58,14 @@ describe("findWikilinkOpening", () => {
 
 describe("buildWikilinkCompletions", () => {
   const files = [
-    "/vault/Index.md",
-    "/vault/Notes/Cooking.md",
-    "/vault/Notes/Travel.md",
-    "/vault/Archive/Travel.md",
+    "/workspace/Index.md",
+    "/workspace/Notes/Cooking.md",
+    "/workspace/Notes/Travel.md",
+    "/workspace/Archive/Travel.md",
   ];
 
   it("returns all files when the typed prefix is empty", () => {
-    const completions = buildWikilinkCompletions(files, "/vault", "");
+    const completions = buildWikilinkCompletions(files, "/workspace", "");
     expect(completions.map((c) => c.label).sort()).toEqual([
       "Cooking",
       "Index",
@@ -75,19 +75,19 @@ describe("buildWikilinkCompletions", () => {
   });
 
   it("matches by stem prefix case-insensitively", () => {
-    const completions = buildWikilinkCompletions(files, "/vault", "co");
+    const completions = buildWikilinkCompletions(files, "/workspace", "co");
     expect(completions.map((c) => c.label)).toEqual(["Cooking"]);
   });
 
   it("falls back to relative-path substring match", () => {
-    const completions = buildWikilinkCompletions(files, "/vault", "archive");
+    const completions = buildWikilinkCompletions(files, "/workspace", "archive");
     expect(completions.map((c) => c.label)).toContain("Travel");
   });
 
   it("orders prefix matches ahead of substring matches", () => {
     const completions = buildWikilinkCompletions(
-      ["/vault/Notes/recipes-cookbook.md", "/vault/Cookbook.md"],
-      "/vault",
+      ["/workspace/Notes/recipes-cookbook.md", "/workspace/Cookbook.md"],
+      "/workspace",
       "cook",
     );
     // Cookbook prefix-matches; recipes-cookbook only substring-matches.
@@ -96,7 +96,7 @@ describe("buildWikilinkCompletions", () => {
   });
 
   it("includes the relative path as detail when it differs from the stem", () => {
-    const completions = buildWikilinkCompletions(files, "/vault", "");
+    const completions = buildWikilinkCompletions(files, "/workspace", "");
     const cooking = completions.find((c) => c.label === "Cooking");
     expect(cooking?.detail).toBe("Notes/Cooking.md");
   });
@@ -105,12 +105,12 @@ describe("buildWikilinkCompletions", () => {
 function runSource(doc: string, cursor: number, files: string[], explicit = false) {
   const state = stateWithCursor(doc, cursor);
   const ctx = new CompletionContext(state, cursor, explicit);
-  const source = wikilinkCompletionSource({ workspaceFiles: files, workspaceRoot: "/vault" });
+  const source = wikilinkCompletionSource({ workspaceFiles: files, workspaceRoot: "/workspace" });
   return source(ctx);
 }
 
 describe("wikilinkCompletionSource", () => {
-  const files = ["/vault/Index.md", "/vault/Notes/Cooking.md"];
+  const files = ["/workspace/Index.md", "/workspace/Notes/Cooking.md"];
 
   it("returns null when there are no workspace files", () => {
     const result = runSource("see [[Co", 8, []);

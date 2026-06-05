@@ -91,6 +91,8 @@ function buildTabsContext(opts: RenderOpts): TabsContextValue {
     displayContent: null,
     tocEntries: opts.tocEntries ?? mockEntries,
     backlinks: [],
+    workspaceNotice: null,
+    dismissWorkspaceNotice: vi.fn(),
   };
 }
 

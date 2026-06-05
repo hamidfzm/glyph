@@ -9,35 +9,26 @@
 use tauri::State;
 
 use super::backend::{StatusReport, SyncResult};
-use super::config::WorkspaceSyncConfig;
+use super::config::{CommitAuthorHint, WorkspaceSyncConfig};
 use super::error::SyncError;
 use super::ops;
 use super::state::SyncState;
 
 #[tauri::command]
-pub async fn sync_set_config(
-    config: WorkspaceSyncConfig,
-    state: State<'_, SyncState>,
-) -> Result<(), SyncError> {
-    ops::set_config(&state, config);
-    Ok(())
+pub async fn sync_set_config(config: WorkspaceSyncConfig) -> Result<(), SyncError> {
+    ops::set_config(config)
 }
 
 #[tauri::command]
 pub async fn sync_get_config(
     workspace_path: String,
-    state: State<'_, SyncState>,
 ) -> Result<Option<WorkspaceSyncConfig>, SyncError> {
-    Ok(ops::get_config(&state, &workspace_path))
+    ops::get_config(&workspace_path)
 }
 
 #[tauri::command]
-pub async fn sync_remove_config(
-    workspace_path: String,
-    state: State<'_, SyncState>,
-) -> Result<(), SyncError> {
-    ops::remove_config(&state, &workspace_path);
-    Ok(())
+pub async fn sync_remove_config(workspace_path: String) -> Result<(), SyncError> {
+    ops::remove_config(&workspace_path)
 }
 
 #[tauri::command]
@@ -77,6 +68,23 @@ pub async fn sync_clone_remote(
     ops::clone_remote(workspace_path, remote_url, token).await
 }
 
+/// Write `[remote "origin"] url = <remote_url>` into the workspace's
+/// `.git/config`. The modal's Save flow calls this when the repo
+/// already exists so libgit2's fetch/push uses Glyph's configured URL
+/// instead of whatever stale origin the existing repo happens to carry.
+#[tauri::command]
+pub async fn sync_set_origin(workspace_path: String, remote_url: String) -> Result<(), SyncError> {
+    ops::set_origin(workspace_path, remote_url).await
+}
+
+#[tauri::command]
+pub async fn sync_commit_config(
+    workspace_path: String,
+    state: State<'_, SyncState>,
+) -> Result<bool, SyncError> {
+    ops::commit_config(&state, &workspace_path).await
+}
+
 #[tauri::command]
 pub async fn sync_status(
     workspace_path: String,
@@ -88,9 +96,20 @@ pub async fn sync_status(
 #[tauri::command]
 pub async fn sync_run(
     workspace_path: String,
+    message: Option<String>,
     state: State<'_, SyncState>,
 ) -> Result<SyncResult, SyncError> {
-    ops::run_sync(&state, &workspace_path).await
+    ops::run_sync(&state, &workspace_path, message).await
+}
+
+#[tauri::command]
+pub async fn sync_default_author(workspace_path: String) -> Result<CommitAuthorHint, SyncError> {
+    Ok(ops::default_author(&workspace_path))
+}
+
+#[tauri::command]
+pub async fn sync_repo_present(workspace_path: String) -> Result<bool, SyncError> {
+    Ok(ops::repo_present(&workspace_path))
 }
 
 #[cfg(test)]
@@ -150,27 +169,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sync_set_config_wrapper_writes_into_managed_state() {
-        let app = mock_app();
-        app.manage(SyncState::new());
+    async fn sync_set_config_wrapper_writes_the_workspace_config() {
         let ws = Workspace::new();
-        sync_set_config(ws.config(), app.state::<SyncState>())
+        sync_set_config(ws.config()).await.unwrap();
+        // Reads back through the same command surface from `.glyph/config.json`.
+        let got = sync_get_config(ws.workspace_path.clone())
             .await
-            .unwrap();
-        assert_eq!(
-            app.state::<SyncState>()
-                .get_config(&ws.workspace_path)
-                .unwrap()
-                .workspace_path,
-            ws.workspace_path
-        );
+            .unwrap()
+            .expect("config present");
+        assert_eq!(got.workspace_path, ws.workspace_path);
     }
 
     #[tokio::test]
     async fn sync_get_config_wrapper_returns_none_when_unconfigured() {
-        let app = mock_app();
-        app.manage(SyncState::new());
-        let result = sync_get_config("/missing".into(), app.state::<SyncState>())
+        let tmp = TempDir::new().unwrap();
+        let result = sync_get_config(tmp.path().to_string_lossy().into())
             .await
             .unwrap();
         assert!(result.is_none());
@@ -178,11 +191,9 @@ mod tests {
 
     #[tokio::test]
     async fn sync_get_config_wrapper_returns_the_stored_config() {
-        let app = mock_app();
-        app.manage(SyncState::new());
         let ws = Workspace::new();
-        app.state::<SyncState>().set_config(ws.config());
-        let result = sync_get_config(ws.workspace_path.clone(), app.state::<SyncState>())
+        crate::workspace::store_sync_config(&ws.config()).unwrap();
+        let result = sync_get_config(ws.workspace_path.clone())
             .await
             .unwrap()
             .expect("config present");
@@ -191,16 +202,12 @@ mod tests {
 
     #[tokio::test]
     async fn sync_remove_config_wrapper_drops_the_entry() {
-        let app = mock_app();
-        app.manage(SyncState::new());
         let ws = Workspace::new();
-        app.state::<SyncState>().set_config(ws.config());
-        sync_remove_config(ws.workspace_path.clone(), app.state::<SyncState>())
+        crate::workspace::store_sync_config(&ws.config()).unwrap();
+        sync_remove_config(ws.workspace_path.clone()).await.unwrap();
+        assert!(sync_get_config(ws.workspace_path.clone())
             .await
-            .unwrap();
-        assert!(app
-            .state::<SyncState>()
-            .get_config(&ws.workspace_path)
+            .unwrap()
             .is_none());
     }
 
@@ -249,8 +256,8 @@ mod tests {
         .unwrap();
         let app = mock_app();
         app.manage(SyncState::new());
-        app.state::<SyncState>().set_config(ws.config());
-        sync_run(ws.workspace_path.clone(), app.state::<SyncState>())
+        crate::workspace::store_sync_config(&ws.config()).unwrap();
+        sync_run(ws.workspace_path.clone(), None, app.state::<SyncState>())
             .await
             .unwrap();
 
@@ -273,11 +280,14 @@ mod tests {
         )
         .await
         .unwrap();
-        app.state::<SyncState>().set_config(ws.config());
+        crate::workspace::store_sync_config(&ws.config()).unwrap();
         let status = sync_status(ws.workspace_path.clone(), app.state::<SyncState>())
             .await
             .unwrap();
-        assert!(status.clean);
+        // Storing the config wrote `.glyph/config.json` into the working
+        // tree, so a freshly-configured workspace reports as dirty until the
+        // first sync commits it.
+        assert!(!status.clean);
     }
 
     #[tokio::test]
@@ -297,12 +307,87 @@ mod tests {
             "# a\n",
         )
         .unwrap();
-        app.state::<SyncState>().set_config(ws.config());
-        let result = sync_run(ws.workspace_path.clone(), app.state::<SyncState>())
-            .await
-            .unwrap();
+        crate::workspace::store_sync_config(&ws.config()).unwrap();
+        let result = sync_run(
+            ws.workspace_path.clone(),
+            Some("test commit".into()),
+            app.state::<SyncState>(),
+        )
+        .await
+        .unwrap();
         assert_eq!(result.committed_count, 1);
         assert_eq!(result.pushed_count, 1);
+    }
+
+    #[tokio::test]
+    async fn sync_default_author_wrapper_returns_a_hint() {
+        // We only assert the call shape (returns an Ok payload). The
+        // actual fields depend on whether the test host has any git
+        // config at all, which we can't pin from a unit test.
+        let ws = Workspace::new();
+        let _hint = sync_default_author(ws.workspace_path).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn sync_default_author_wrapper_returns_config_values() {
+        // With per-workspace `[user]` set we can pin the returned hint
+        // regardless of what the host's global git config carries.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
+        git2::Repository::init(tmp.path()).unwrap();
+        let cfg_path = tmp.path().join(".git/config");
+        let mut cfg = git2::Config::open(&cfg_path).unwrap();
+        cfg.set_str("user.name", "Cmd Author").unwrap();
+        cfg.set_str("user.email", "cmd@example.com").unwrap();
+
+        let hint = sync_default_author(workspace).await.unwrap();
+        assert_eq!(hint.name.as_deref(), Some("Cmd Author"));
+        assert_eq!(hint.email.as_deref(), Some("cmd@example.com"));
+    }
+
+    #[tokio::test]
+    async fn sync_set_origin_wrapper_writes_remote_url() {
+        let ws = Workspace::new();
+        // Init the workspace via the same wrapper the frontend would use.
+        sync_init_repo(ws.workspace_path.clone(), None, None)
+            .await
+            .unwrap();
+        sync_set_origin(
+            ws.workspace_path.clone(),
+            "https://example.com/x.git".into(),
+        )
+        .await
+        .unwrap();
+        let repo = git2::Repository::open(&ws.workspace_path).unwrap();
+        let remote = repo.find_remote("origin").unwrap();
+        assert_eq!(remote.url(), Some("https://example.com/x.git"));
+    }
+
+    #[tokio::test]
+    async fn sync_repo_present_wrapper_returns_true_after_init() {
+        let ws = Workspace::new();
+        sync_init_repo(ws.workspace_path.clone(), None, None)
+            .await
+            .unwrap();
+        assert!(sync_repo_present(ws.workspace_path).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn sync_repo_present_wrapper_returns_false_for_empty_dir() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        assert!(!sync_repo_present(tmp.path().to_string_lossy().into())
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn sync_repo_present_wrapper_reports_true_after_init() {
+        let ws = Workspace::new();
+        assert!(!sync_repo_present(ws.workspace_path.clone()).await.unwrap());
+        sync_init_repo(ws.workspace_path.clone(), None, None)
+            .await
+            .unwrap();
+        assert!(sync_repo_present(ws.workspace_path).await.unwrap());
     }
 
     // -- Full IPC dispatch test -----------------------------------------
@@ -336,8 +421,12 @@ mod tests {
                 sync_clear_token,
                 sync_init_repo,
                 sync_clone_remote,
+                sync_set_origin,
+                sync_commit_config,
                 sync_status,
                 sync_run,
+                sync_default_author,
+                sync_repo_present,
             ])
             .build(mock_context(noop_assets()))
             .expect("mock app builds");
@@ -426,13 +515,15 @@ mod tests {
             }),
         );
 
-        // sync_status — clean working tree, no remote movement.
+        // sync_status — the config we just set wrote `.glyph/config.json`
+        // into the working tree, so the workspace reads as dirty until the
+        // first sync commits it.
         let status: crate::sync::backend::StatusReport = invoke_ipc(
             &webview,
             "sync_status",
             serde_json::json!({ "workspacePath": ws.workspace_path }),
         );
-        assert!(status.clean);
+        assert!(!status.clean);
 
         // Write a file, then sync_run — commits + pushes.
         fs::write(
@@ -443,10 +534,59 @@ mod tests {
         let result: crate::sync::backend::SyncResult = invoke_ipc(
             &webview,
             "sync_run",
-            serde_json::json!({ "workspacePath": ws.workspace_path }),
+            serde_json::json!({
+                "workspacePath": ws.workspace_path,
+                "message": "ipc commit",
+            }),
         );
         assert_eq!(result.committed_count, 1);
         assert_eq!(result.pushed_count, 1);
+
+        // sync_commit_config — the prior sync_run already committed `.glyph/`
+        // via `git add -A`, so this reports no new commit (false).
+        let committed: bool = invoke_ipc(
+            &webview,
+            "sync_commit_config",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        assert!(!committed);
+
+        // sync_default_author and sync_repo_present round-trip through IPC.
+        let _: crate::sync::config::CommitAuthorHint = invoke_ipc(
+            &webview,
+            "sync_default_author",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        let present: bool = invoke_ipc(
+            &webview,
+            "sync_repo_present",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        assert!(present);
+
+        // sync_repo_present against an empty dir round-trips through IPC
+        // and returns the false arm.
+        let empty_dir = ws.tmp.path().join("nope");
+        std::fs::create_dir_all(&empty_dir).unwrap();
+        let absent: bool = invoke_ipc(
+            &webview,
+            "sync_repo_present",
+            serde_json::json!({ "workspacePath": empty_dir.to_string_lossy() }),
+        );
+        assert!(!absent);
+
+        // sync_set_origin updates `.git/config` over IPC.
+        let _: () = invoke_ipc(
+            &webview,
+            "sync_set_origin",
+            serde_json::json!({
+                "workspacePath": ws.workspace_path,
+                "remoteUrl": "https://example.com/ipc-set.git",
+            }),
+        );
+        let repo = git2::Repository::open(&ws.workspace_path).unwrap();
+        let remote = repo.find_remote("origin").unwrap();
+        assert_eq!(remote.url(), Some("https://example.com/ipc-set.git"));
 
         // sync_clone_remote into a fresh path.
         let dest = ws.tmp.path().join("ipc-clone");

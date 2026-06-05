@@ -3,10 +3,17 @@ import { useSettings } from "@/hooks/useSettings";
 import { countWords, readingTime } from "@/lib/markdown";
 import { isNotebookFile } from "@/lib/notebookExtensions";
 import { ZOOM_DEFAULT } from "@/lib/settings";
+import { SyncStatusIndicator } from "./SyncStatusIndicator";
 
-export function StatusBar() {
+interface StatusBarProps {
+  // `null` when the cloud-sync feature flag is off, in which case the sync
+  // status pill is hidden entirely.
+  onOpenSync: (() => void) | null;
+}
+
+export function StatusBar({ onOpenSync }: StatusBarProps) {
   const { settings } = useSettings();
-  const { activeFile, displayContent } = useTabsContext();
+  const { activeFile, activeTab, displayContent } = useTabsContext();
   const zoomPercent = Math.round((settings.appearance.fontSize / ZOOM_DEFAULT) * 100);
 
   const filePath = activeFile?.path;
@@ -18,6 +25,7 @@ export function StatusBar() {
   if (!displayContent && !isNotebook) return null;
 
   const words = displayContent ? countWords(displayContent) : 0;
+  const workspacePath = activeTab?.kind === "folder" ? activeTab.root : null;
 
   return (
     <div
@@ -38,6 +46,7 @@ export function StatusBar() {
         </>
       )}
       {zoomPercent !== 100 && <span>{zoomPercent}%</span>}
+      {onOpenSync && <SyncStatusIndicator workspacePath={workspacePath} onOpenSync={onOpenSync} />}
     </div>
   );
 }

@@ -238,6 +238,14 @@ describe("App", () => {
           return Promise.resolve(["/workspace/a.md"]);
         case "scan_wikilinks":
           return Promise.resolve([]);
+        case "workspace_resolve":
+          return Promise.resolve({
+            selected: String(args?.selected ?? ""),
+            isGitRepo: false,
+            gitTopLevel: null,
+            nestedUnder: null,
+            glyphConflict: null,
+          });
         case "get_file_metadata":
           return Promise.resolve({
             name: "a.md",

@@ -111,12 +111,50 @@ pub trait SyncBackend: Send + Sync {
     /// Stage local changes, commit, fetch remote, merge, push. Returns a
     /// summary the frontend can show; surfaces conflicts via the
     /// `conflicts` field so the UI can open the resolution panel.
-    fn sync(&self) -> Result<SyncResult, SyncError>;
+    ///
+    /// `commit_message` lets the caller override the commit subject used
+    /// for the auto-commit step. `None` (or an all-whitespace string)
+    /// asks the backend to generate one from the staged diff, matching
+    /// GitHub's web editor conventions.
+    fn sync(&self, commit_message: Option<&str>) -> Result<SyncResult, SyncError>;
+
+    /// Commit the workspace's local config directory into history when it
+    /// isn't tracked yet, so enabling sync persists the config immediately
+    /// (and it travels with clones) instead of waiting for the first
+    /// content sync. Returns `true` when a commit was created. Backends
+    /// with no notion of committed config keep the default no-op.
+    fn commit_config(&self) -> Result<bool, SyncError> {
+        Ok(false)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn commit_config_defaults_to_a_noop() {
+        // A backend that doesn't override commit_config inherits the
+        // default: no committed-config concept, so it reports no commit.
+        struct Dummy;
+        impl SyncBackend for Dummy {
+            fn kind(&self) -> BackendKind {
+                BackendKind::Git
+            }
+            fn status(&self) -> Result<StatusReport, SyncError> {
+                Err(SyncError::NotConfigured)
+            }
+            fn sync(&self, _: Option<&str>) -> Result<SyncResult, SyncError> {
+                Err(SyncError::NotConfigured)
+            }
+        }
+        // Exercise every method so the trait impl carries no uncovered body.
+        assert_eq!(Dummy.kind(), BackendKind::Git);
+        assert!(Dummy.status().is_err());
+        assert!(Dummy.sync(None).is_err());
+        // The point of the test: the default commit_config is a no-op.
+        assert!(!Dummy.commit_config().unwrap());
+    }
 
     #[test]
     fn backend_kind_serialises_kebab_case() {

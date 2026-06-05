@@ -451,3 +451,154 @@
   background: rgba(229, 62, 62, 0.08);
   border-radius: var(--glyph-radius-sm);
 }
+
+/* Cloud Sync modal */
+.settings-sync .settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.settings-sync .settings-field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+.settings-sync .settings-field-hint {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-weight: normal;
+}
+.settings-sync .settings-section-description {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.settings-sync .settings-empty,
+.settings-sync .settings-busy {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+.settings-sync .settings-error {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--color-error);
+  background: rgba(229, 62, 62, 0.08);
+  border-radius: var(--glyph-radius-sm);
+}
+.settings-sync .settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+.settings-sync .settings-segmented {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--glyph-radius-sm);
+  overflow: hidden;
+  width: fit-content;
+}
+.settings-sync .settings-segmented-option {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.settings-sync .settings-segmented-option:not(:first-child) {
+  border-left: 1px solid var(--color-border);
+}
+.settings-sync .settings-segmented-option[data-active="true"] {
+  background: var(--color-accent);
+  color: white;
+}
+.settings-primary-btn,
+.settings-secondary-btn,
+.settings-danger-btn {
+  appearance: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--glyph-radius-sm);
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+.settings-primary-btn {
+  background: var(--color-accent);
+  color: white;
+  border-color: transparent;
+}
+.settings-primary-btn:disabled,
+.settings-secondary-btn:disabled,
+.settings-danger-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.settings-danger-btn {
+  color: var(--color-error);
+  border-color: rgba(229, 62, 62, 0.4);
+}
+.settings-sync-status {
+  margin-top: 18px;
+  padding: 12px;
+  background: var(--color-surface-secondary);
+  border-radius: var(--glyph-radius-sm);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-sync-status .settings-warning {
+  color: var(--color-warning, #b45309);
+}
+
+/* Init-repo banner shown when the workspace isn't a git repo yet. */
+.settings-sync > .settings-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-warning, #b45309);
+  border-radius: var(--glyph-radius-sm);
+  color: var(--color-warning, #b45309);
+  font-size: 13px;
+}
+
+/* Status-bar sync indicator */
+.status-sync-indicator {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0 6px;
+  font: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--glyph-radius-sm);
+}
+.status-sync-indicator:hover {
+  background: var(--color-surface);
+}
+.status-sync-indicator[data-tone="off"] {
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+}
+.status-sync-indicator[data-tone="warn"] {
+  color: var(--color-warning, #b45309);
+}
+.status-sync-indicator[data-tone="error"] {
+  color: var(--color-error);
+}

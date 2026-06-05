@@ -23,6 +23,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     toggleOutlineSidebar: vi.fn(),
     resetView: vi.fn(),
     openSettings: vi.fn(),
+    openSyncSettings: vi.fn(),
     find: vi.fn(),
     toggleEdit: vi.fn(),
     print: vi.fn(),
@@ -101,6 +102,18 @@ describe("useAppCommands", () => {
     const headings = result.current.filter((c) => c.section === "Headings");
     expect(headings.map((h) => h.title)).toEqual(["Introduction", "Details"]);
     expect(headings.map((h) => h.subtitle)).toEqual(["H1", "H2"]);
+  });
+
+  it("includes 'Cloud Sync…'", () => {
+    const { result } = renderHook(() =>
+      useAppCommands({
+        activeFolderTab: null,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions: makeActions(),
+      }),
+    );
+    expect(result.current.map((c) => c.title)).toContain("Cloud Sync…");
   });
 
   it("each app command's run invokes the matching action", () => {

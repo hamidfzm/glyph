@@ -75,6 +75,11 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
     let settings = MenuItemBuilder::with_id("open-settings", "Settings\u{2026}")
         .accelerator("CmdOrCtrl+,")
         .build(handle)?;
+    // Cloud Sync is per-workspace; the modal handles the no-folder
+    // case with an empty state, so the item is always enabled and a
+    // first-time click teaches the user what it needs.
+    let sync_settings =
+        MenuItemBuilder::with_id("open-sync-settings", "Cloud Sync\u{2026}").build(handle)?;
 
     // Edit menu
     let find = MenuItemBuilder::with_id("find", "Find\u{2026}")
@@ -190,6 +195,8 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .item(&print)
             .item(&export_menu)
             .separator()
+            .item(&sync_settings)
+            .separator()
             .item(&close_tab)
             .item(&close)
             .build()?;
@@ -229,6 +236,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .item(&export_menu)
             .separator()
             .item(&settings)
+            .item(&sync_settings)
             .separator()
             .item(&close_tab)
             .item(&close)
