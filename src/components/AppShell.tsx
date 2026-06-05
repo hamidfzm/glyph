@@ -28,8 +28,8 @@ import { WorkspaceNoticeBanner } from "./layout/WorkspaceNoticeBanner";
 import { ContextMenu } from "./menu/ContextMenu";
 import { AIPanel } from "./modals/AIPanel";
 import { CommandPalette } from "./modals/CommandPalette";
-import { SettingsModal } from "./modals/settings/lazySettings";
 import { SyncSettingsModal } from "./modals/SyncSettingsModal";
+import { SettingsModal } from "./modals/settings/lazySettings";
 import { TabContent } from "./TabContent";
 
 // All the wiring that used to live inside App: menu events, AI/TTS/Print
@@ -185,11 +185,10 @@ export function AppShell() {
     ),
   });
 
-  // In-app right-click menu (all platforms): text-content actions only.
-  // Sidebar/menu/zoom commands have their own shortcuts and titlebar buttons.
+  // Themed right-click menu for the markdown viewer: text-content actions only.
+  // The file tree owns its own menu; menu/zoom commands have shortcuts/buttons.
   const contextMenuActions = useMemo(
     () => ({
-      openFileDialog,
       ttsSpeak: tts.speak,
       ttsStop: tts.stop,
       ttsSpeaking: tts.speaking,
@@ -198,7 +197,7 @@ export function AppShell() {
       aiConfigured: aiController.configured,
       content: displayContent,
     }),
-    [openFileDialog, tts, handleAIActionFromMenu, aiController.configured, displayContent],
+    [tts, handleAIActionFromMenu, aiController.configured, displayContent],
   );
   const contextMenu = useContextMenu(contextMenuActions);
 

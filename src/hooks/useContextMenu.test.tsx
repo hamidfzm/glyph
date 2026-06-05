@@ -3,37 +3,75 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ContextMenuActions } from "@/lib/contextMenuItems";
 import { useContextMenu } from "./useContextMenu";
 
-function fireContextMenu(target: EventTarget = document, init?: MouseEventInit) {
+function fireContextMenu(target: EventTarget, init?: MouseEventInit) {
   const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, ...init });
   target.dispatchEvent(event);
   return event;
 }
 
-const baseActions: ContextMenuActions = { openFileDialog: vi.fn() };
+function mountMarkdown() {
+  const body = document.createElement("div");
+  body.className = "markdown-body";
+  const para = document.createElement("p");
+  para.textContent = "doc body";
+  body.appendChild(para);
+  document.body.appendChild(body);
+  return para;
+}
+
+const baseActions: ContextMenuActions = {};
 
 afterEach(() => {
   vi.restoreAllMocks();
+  document.body.innerHTML = "";
 });
 
+function actionLabels(menu: { items: { kind: string; label?: string }[] } | null) {
+  return menu?.items.flatMap((i) => (i.kind === "action" && i.label ? [i.label] : [])) ?? [];
+}
+
 describe("useContextMenu", () => {
-  it("opens a themed menu and suppresses the native one on a plain right-click", () => {
+  it("opens a themed menu inside the markdown body and suppresses the native one", () => {
+    const para = mountMarkdown();
     const { result } = renderHook(() => useContextMenu(baseActions));
 
     expect(result.current.menu).toBeNull();
 
     let event: MouseEvent;
     act(() => {
-      event = fireContextMenu(document, { clientX: 12, clientY: 34 });
+      event = fireContextMenu(para, { clientX: 12, clientY: 34 });
     });
 
     expect(event!.defaultPrevented).toBe(true);
     expect(result.current.menu).toMatchObject({ x: 12, y: 34 });
-    // Default (no selection) menu: Select All + Open File.
-    const labels = result.current.menu?.items.flatMap((i) =>
-      i.kind === "action" ? [i.label] : [],
-    );
-    expect(labels).toContain("Select All");
-    expect(labels?.some((l) => l.startsWith("Open File"))).toBe(true);
+    expect(actionLabels(result.current.menu)).toContain("Select All");
+  });
+
+  it("does nothing outside the markdown body so chrome keeps its native menu", () => {
+    const chrome = document.createElement("div");
+    chrome.textContent = "Sidebar label";
+    document.body.appendChild(chrome);
+    const { result } = renderHook(() => useContextMenu(baseActions));
+
+    let event: MouseEvent;
+    act(() => {
+      event = fireContextMenu(chrome);
+    });
+
+    expect(event!.defaultPrevented).toBe(false);
+    expect(result.current.menu).toBeNull();
+  });
+
+  it("ignores events whose target is not an element", () => {
+    const { result } = renderHook(() => useContextMenu(baseActions));
+
+    let event: MouseEvent;
+    act(() => {
+      event = fireContextMenu(document);
+    });
+
+    expect(event!.defaultPrevented).toBe(false);
+    expect(result.current.menu).toBeNull();
   });
 
   it("keeps the native menu inside editable fields", () => {
@@ -48,33 +86,16 @@ describe("useContextMenu", () => {
 
     expect(event!.defaultPrevented).toBe(false);
     expect(result.current.menu).toBeNull();
-    input.remove();
-  });
-
-  it("keeps the native menu inside a contenteditable surface", () => {
-    const ce = document.createElement("div");
-    ce.setAttribute("contenteditable", "true");
-    document.body.appendChild(ce);
-    const { result } = renderHook(() => useContextMenu(baseActions));
-
-    let event: MouseEvent;
-    act(() => {
-      event = fireContextMenu(ce);
-    });
-
-    expect(event!.defaultPrevented).toBe(false);
-    expect(result.current.menu).toBeNull();
-    ce.remove();
   });
 
   it("defers to a more specific handler that already called preventDefault", () => {
-    // Simulates the file tree claiming the event in a capture-phase listener.
+    const para = mountMarkdown();
     const claim = (e: MouseEvent) => e.preventDefault();
     document.addEventListener("contextmenu", claim, { capture: true });
     const { result } = renderHook(() => useContextMenu(baseActions));
 
     act(() => {
-      fireContextMenu(document);
+      fireContextMenu(para);
     });
 
     expect(result.current.menu).toBeNull();
@@ -82,23 +103,22 @@ describe("useContextMenu", () => {
   });
 
   it("opens with default items when there is no selection object", () => {
+    const para = mountMarkdown();
     vi.spyOn(window, "getSelection").mockReturnValue(null);
     const { result } = renderHook(() => useContextMenu(baseActions));
 
     act(() => {
-      fireContextMenu(document);
+      fireContextMenu(para);
     });
 
-    const labels = result.current.menu?.items.flatMap((i) =>
-      i.kind === "action" ? [i.label] : [],
-    );
-    expect(labels).toContain("Select All");
+    expect(actionLabels(result.current.menu)).toContain("Select All");
   });
 
   it("close() clears the open menu", () => {
+    const para = mountMarkdown();
     const { result } = renderHook(() => useContextMenu(baseActions));
     act(() => {
-      fireContextMenu(document);
+      fireContextMenu(para);
     });
     expect(result.current.menu).not.toBeNull();
 

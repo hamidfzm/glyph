@@ -17,10 +17,10 @@ const VIEWPORT_MARGIN = 4;
 // A single in-app context menu, themed with the app's own fonts and CSS color
 // variables so it matches the rest of the UI instead of the OS-native menu.
 const SURFACE_CLASS =
-  "fixed z-50 min-w-44 py-1 rounded-[var(--glyph-radius)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg text-sm text-[var(--color-text-primary)]";
+  "fixed z-50 min-w-[12rem] p-1 rounded-[var(--glyph-radius)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_10px_30px_rgba(0,0,0,0.22)] text-[13px] text-[var(--color-text-primary)] select-none";
 
 const ITEM_CLASS =
-  "flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left hover:bg-[var(--color-surface-tertiary)] focus:bg-[var(--color-surface-tertiary)] focus:outline-none";
+  "flex w-full items-center justify-between gap-6 rounded-[var(--glyph-radius-sm)] px-2.5 py-1.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] focus:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] focus:outline-none";
 
 export function ContextMenu({ menu, onClose }: ContextMenuProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -84,7 +84,7 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
       rendered.push(
         <hr
           key={`separator-${separatorCount}`}
-          className="my-1 border-0 border-t border-[var(--color-border)]"
+          className="-mx-1 my-1 border-0 border-t border-[var(--color-border)]"
         />,
       );
       continue;

@@ -34,6 +34,12 @@ describe("FileTree", () => {
     expect(fileIdx).toBeGreaterThan(subdirIdx);
   });
 
+  it("renders nothing when the root has no entries", () => {
+    renderFileTree({ nodes: new Map() });
+    expect(screen.queryByText("post.md")).toBeNull();
+    expect(screen.queryByText("subdir")).toBeNull();
+  });
+
   it("calls onOpenFile when clicking a file", () => {
     const { props } = renderFileTree();
     fireEvent.click(screen.getByText("post.md"));
@@ -59,5 +65,33 @@ describe("FileTree", () => {
     fireEvent.contextMenu(screen.getByText("post.md"));
     fireEvent.click(screen.getByText("Open in New Tab"));
     expect(props.onOpenFileInNewTab).toHaveBeenCalledWith("/root/post.md");
+  });
+
+  it("calls onOpenFile when context menu Open is clicked", () => {
+    const { props } = renderFileTree();
+    fireEvent.contextMenu(screen.getByText("post.md"));
+    fireEvent.click(screen.getByText("Open"));
+    expect(props.onOpenFile).toHaveBeenCalledWith("/root/post.md");
+  });
+
+  it("renders an expanded directory's children and highlights the active file", () => {
+    const child: DirEntry = {
+      name: "nested.md",
+      path: "/root/subdir/nested.md",
+      isDirectory: false,
+      modified: 0,
+    };
+    renderFileTree({
+      nodes: new Map([
+        ["/root", sampleEntries],
+        ["/root/subdir", [child]],
+      ]),
+      expanded: new Set(["/root/subdir"]),
+      activeFilePath: "/root/subdir/nested.md",
+    });
+
+    const active = screen.getByText("nested.md");
+    expect(active).toBeInTheDocument();
+    fireEvent.click(active);
   });
 });

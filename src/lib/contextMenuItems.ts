@@ -3,7 +3,6 @@
 // and free of any React or OS-native menu API.
 
 export interface ContextMenuActions {
-  openFileDialog: () => void;
   ttsSpeak?: (text: string) => void;
   ttsStop?: () => void;
   ttsSpeaking?: boolean;
@@ -117,9 +116,5 @@ export function buildContextMenuItems(
     }
   }
 
-  const open: ContextMenuItem[] = [
-    { kind: "action", label: "Open File…", onSelect: () => actions.openFileDialog() },
-  ];
-
-  return joinGroups([text, tts, ai, open]);
+  return joinGroups([text, tts, ai]);
 }
