@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ContextMenuItem } from "@/lib/contextMenuItems";
+import type { ContextMenuActionItem, ContextMenuItem } from "@/lib/contextMenuItems";
 
 export interface ContextMenuModel {
   x: number;
@@ -21,6 +21,22 @@ const SURFACE_CLASS =
 
 const ITEM_CLASS =
   "flex w-full items-center justify-between gap-6 rounded-[var(--glyph-radius-sm)] px-2.5 py-1.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] focus:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] focus:outline-none";
+
+function ActionButton({ item, onSelect }: { item: ContextMenuActionItem; onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className={`${ITEM_CLASS}${item.danger ? " text-[#e5484d]" : ""}`}
+      onClick={onSelect}
+    >
+      <span className="flex items-center gap-2.5 truncate">
+        {item.icon && <span className="opacity-80">{item.icon}</span>}
+        <span className="truncate">{item.label}</span>
+      </span>
+    </button>
+  );
+}
 
 export function ContextMenu({ menu, onClose }: ContextMenuProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -109,15 +125,7 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
           {open && (
             <div role="menu" className={`${SURFACE_CLASS} top-0 left-full -mt-1 ml-1`}>
               {item.items.map((sub) => (
-                <button
-                  key={sub.label}
-                  type="button"
-                  role="menuitem"
-                  className={ITEM_CLASS}
-                  onClick={() => run(sub.onSelect)}
-                >
-                  <span className="truncate">{sub.label}</span>
-                </button>
+                <ActionButton key={sub.label} item={sub} onSelect={() => run(sub.onSelect)} />
               ))}
             </div>
           )}
@@ -126,15 +134,7 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
       continue;
     }
     rendered.push(
-      <button
-        key={item.label}
-        type="button"
-        role="menuitem"
-        className={ITEM_CLASS}
-        onClick={() => run(item.onSelect)}
-      >
-        <span className="truncate">{item.label}</span>
-      </button>,
+      <ActionButton key={item.label} item={item} onSelect={() => run(item.onSelect)} />,
     );
   }
 

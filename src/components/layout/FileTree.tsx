@@ -1,10 +1,22 @@
-import { useCallback, useMemo, useState } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from "react";
 import type { DirEntry } from "@/hooks/useTabs";
 import type { ContextMenuItem } from "@/lib/contextMenuItems";
 import { ChevronRightIcon } from "../icons/ChevronRightIcon";
 import { FileTextIcon } from "../icons/FileTextIcon";
 import { FolderIcon } from "../icons/FolderIcon";
 import { FolderOpenIcon } from "../icons/FolderOpenIcon";
+import {
+  CopyPathIcon,
+  DeleteIcon,
+  DuplicateIcon,
+  MoveIcon,
+  NewFolderIcon,
+  NewNoteIcon,
+  NewTabIcon,
+  OpenIcon,
+  RenameIcon,
+  RevealIcon,
+} from "../icons/menuIcons";
 import { ContextMenu, type ContextMenuModel } from "../menu/ContextMenu";
 import { InlineRenameInput } from "./InlineRenameInput";
 
@@ -22,8 +34,22 @@ interface FileTreeProps {
   // Create an untitled note/folder inside `dir`; resolves to the new path.
   onCreateNote: (dir: string) => Promise<string | null>;
   onCreateFolder: (dir: string) => Promise<string | null>;
-  // Rename a just-created entry to the inline-typed name; resolves to the final path.
+  // Rename an entry to the inline-typed name; resolves to the final path.
   onRename: (path: string, newName: string) => Promise<string | null>;
+  // Duplicate an entry next to itself; resolves to the new path.
+  onDuplicate: (path: string) => Promise<string | null>;
+  // Move an entry: prompt for a destination folder, then relocate it.
+  onMove: (path: string) => void;
+  // Reveal an entry in the OS file manager.
+  onReveal: (path: string) => void;
+  // Delete a note/folder (confirms first); resolves true when removed.
+  onDelete: (path: string) => Promise<boolean>;
+}
+
+/** Imperative handle so the panel toolbar can create at the workspace root. */
+export interface FileTreeHandle {
+  createNote: () => void;
+  createFolder: () => void;
 }
 
 const INDENT_PX = 12;
@@ -33,11 +59,16 @@ interface ContextMenuState {
   y: number;
   dir: string;
   filePath?: string;
+  entryPath?: string;
+  entryIsDir?: boolean;
 }
 
 interface EditingState {
   path: string;
   kind: CreateKind;
+  // Open the note after naming. True for fresh creates, false for renames
+  // (renaming the open file is handled by re-pointing the existing tab).
+  openOnCommit: boolean;
 }
 
 const INPUT_CLASS =
@@ -49,8 +80,8 @@ type EntryRenderProps = Pick<
 > & {
   onContextMenu: (e: React.MouseEvent, entry: DirEntry) => void;
   editing: EditingState | null;
-  onEditCommit: (value: string) => void;
-  onEditCancel: () => void;
+  onEditCommit: (editing: EditingState, value: string) => void;
+  onEditCancel: (editing: EditingState) => void;
 };
 
 /** Default inline-rename text: the file stem (no extension) or the folder name. */
@@ -67,8 +98,8 @@ function renderEntry(entry: DirEntry, depth: number, props: EntryRenderProps): R
       <li key={entry.path}>
         <InlineRenameInput
           initialValue={editInitialValue(entry, editing.kind)}
-          onCommit={props.onEditCommit}
-          onCancel={props.onEditCancel}
+          onCommit={(value) => props.onEditCommit(editing, value)}
+          onCancel={() => props.onEditCancel(editing)}
           className={INPUT_CLASS}
           style={indentStyle}
         />
@@ -133,69 +164,111 @@ function parentDir(path: string, fallback: string): string {
   return sep > 0 ? path.slice(0, sep) : fallback;
 }
 
-export function FileTree({
-  root,
-  nodes,
-  expanded,
-  activeFilePath,
-  onToggle,
-  onOpenFile,
-  onOpenFileInNewTab,
-  onCreateNote,
-  onCreateFolder,
-  onRename,
-}: FileTreeProps) {
+export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileTree(
+  {
+    root,
+    nodes,
+    expanded,
+    activeFilePath,
+    onToggle,
+    onOpenFile,
+    onOpenFileInNewTab,
+    onCreateNote,
+    onCreateFolder,
+    onRename,
+    onDuplicate,
+    onMove,
+    onReveal,
+    onDelete,
+  },
+  ref,
+) {
   const entries = nodes.get(root) ?? [];
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [editing, setEditing] = useState<EditingState | null>(null);
   const closeMenu = useCallback(() => setContextMenu(null), []);
 
+  // Enter inline-naming for a freshly-created entry (null = creation failed).
+  const beginNaming = useCallback((path: string | null, kind: CreateKind) => {
+    if (path) setEditing({ path, kind, openOnCommit: true });
+  }, []);
+
   const startCreate = useCallback(
     async (kind: CreateKind, dir: string) => {
       const path = kind === "note" ? await onCreateNote(dir) : await onCreateFolder(dir);
-      if (path) setEditing({ path, kind });
+      beginNaming(path, kind);
     },
-    [onCreateNote, onCreateFolder],
+    [onCreateNote, onCreateFolder, beginNaming],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      createNote: () => startCreate("note", root),
+      createFolder: () => startCreate("folder", root),
+    }),
+    [startCreate, root],
+  );
+
+  const startRename = useCallback((path: string, isDir: boolean) => {
+    setEditing({ path, kind: isDir ? "folder" : "note", openOnCommit: false });
+  }, []);
+
+  // Copy the entry's path: relative to the workspace root, or absolute.
+  const copyPath = useCallback(
+    (path: string, absolute: boolean) => {
+      const relative = path.startsWith(root)
+        ? path.slice(root.length).replace(/^[\\/]+/, "")
+        : path;
+      void navigator.clipboard.writeText(absolute ? path : relative).catch(() => undefined);
+    },
+    [root],
   );
 
   // Commit the inline name. An empty name keeps the collision-safe default
-  // ("Untitled.md"); a note is opened either way so creation lands on content.
+  // ("Untitled.md"); a freshly-created note is opened so creation lands on
+  // content (renames don't re-open; the open tab is re-pointed instead).
   const handleEditCommit = useCallback(
-    async (value: string) => {
-      // Defensive: commit only fires while a row is being edited.
-      if (!editing) return;
-      const { path, kind } = editing;
+    async ({ path, kind, openOnCommit }: EditingState, value: string) => {
       setEditing(null);
       const name = value.trim();
       if (name) {
         const finalPath = await onRename(path, name);
-        if (kind === "note") onOpenFile(finalPath ?? path);
-      } else if (kind === "note") {
+        if (kind === "note" && openOnCommit) onOpenFile(finalPath ?? path);
+      } else if (kind === "note" && openOnCommit) {
         onOpenFile(path);
       }
     },
-    [editing, onRename, onOpenFile],
+    [onRename, onOpenFile],
   );
 
-  const handleEditCancel = useCallback(() => {
-    // Defensive: cancel only fires while a row is being edited.
-    if (!editing) return;
-    const { path, kind } = editing;
-    setEditing(null);
-    if (kind === "note") onOpenFile(path);
-  }, [editing, onOpenFile]);
+  const handleEditCancel = useCallback(
+    ({ path, kind, openOnCommit }: EditingState) => {
+      setEditing(null);
+      if (kind === "note" && openOnCommit) onOpenFile(path);
+    },
+    [onOpenFile],
+  );
 
   const handleEntryContextMenu = useCallback(
     (e: React.MouseEvent, entry: DirEntry) => {
       e.preventDefault();
       if (entry.isDirectory) {
-        setContextMenu({ x: e.clientX, y: e.clientY, dir: entry.path });
+        setContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          dir: entry.path,
+          entryPath: entry.path,
+          entryIsDir: true,
+        });
       } else {
         setContextMenu({
           x: e.clientX,
           y: e.clientY,
           dir: parentDir(entry.path, root),
           filePath: entry.path,
+          entryPath: entry.path,
+          entryIsDir: false,
         });
       }
     },
@@ -215,21 +288,106 @@ export function FileTree({
 
   const menu = useMemo<ContextMenuModel | null>(() => {
     if (!contextMenu) return null;
-    const { x, y, dir, filePath } = contextMenu;
-    const items: ContextMenuItem[] = [];
+    const { x, y, dir, filePath, entryPath, entryIsDir } = contextMenu;
+    const groups: ContextMenuItem[][] = [];
+
     if (filePath) {
-      items.push({ kind: "action", label: "Open", onSelect: () => onOpenFile(filePath) });
-      items.push({
-        kind: "action",
-        label: "Open in New Tab",
-        onSelect: () => onOpenFileInNewTab(filePath),
-      });
-      items.push({ kind: "separator" });
+      groups.push([
+        { kind: "action", label: "Open", icon: <OpenIcon />, onSelect: () => onOpenFile(filePath) },
+        {
+          kind: "action",
+          label: "Open in New Tab",
+          icon: <NewTabIcon />,
+          onSelect: () => onOpenFileInNewTab(filePath),
+        },
+      ]);
     }
-    items.push({ kind: "action", label: "New Note", onSelect: () => startCreate("note", dir) });
-    items.push({ kind: "action", label: "New Folder", onSelect: () => startCreate("folder", dir) });
+
+    groups.push([
+      {
+        kind: "action",
+        label: "New Note",
+        icon: <NewNoteIcon />,
+        onSelect: () => startCreate("note", dir),
+      },
+      {
+        kind: "action",
+        label: "New Folder",
+        icon: <NewFolderIcon />,
+        onSelect: () => startCreate("folder", dir),
+      },
+    ]);
+
+    if (entryPath) {
+      groups.push([
+        {
+          kind: "action",
+          label: "Rename",
+          icon: <RenameIcon />,
+          onSelect: () => startRename(entryPath, !!entryIsDir),
+        },
+        {
+          kind: "action",
+          label: "Make a copy",
+          icon: <DuplicateIcon />,
+          onSelect: () => onDuplicate(entryPath),
+        },
+        {
+          kind: "action",
+          label: "Move to…",
+          icon: <MoveIcon />,
+          onSelect: () => onMove(entryPath),
+        },
+      ]);
+      groups.push([
+        {
+          kind: "action",
+          label: "Copy path",
+          icon: <CopyPathIcon />,
+          onSelect: () => copyPath(entryPath, false),
+        },
+        {
+          kind: "action",
+          label: "Copy absolute path",
+          icon: <CopyPathIcon />,
+          onSelect: () => copyPath(entryPath, true),
+        },
+        {
+          kind: "action",
+          label: "Show in system explorer",
+          icon: <RevealIcon />,
+          onSelect: () => onReveal(entryPath),
+        },
+      ]);
+      groups.push([
+        {
+          kind: "action",
+          label: "Delete",
+          icon: <DeleteIcon />,
+          danger: true,
+          onSelect: () => onDelete(entryPath),
+        },
+      ]);
+    }
+
+    const items: ContextMenuItem[] = [];
+    for (const group of groups) {
+      if (items.length > 0) items.push({ kind: "separator" });
+      items.push(...group);
+    }
     return { x, y, items };
-  }, [contextMenu, onOpenFile, onOpenFileInNewTab, startCreate]);
+  }, [
+    contextMenu,
+    onOpenFile,
+    onOpenFileInNewTab,
+    onDelete,
+    onDuplicate,
+    onMove,
+    onReveal,
+    startCreate,
+    startRename,
+    copyPath,
+  ]);
 
   const childProps: EntryRenderProps = {
     nodes,
@@ -245,9 +403,9 @@ export function FileTree({
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: container only suppresses the native menu for empty-area right-clicks; keyboard users create via the menu reached from focusable rows
-    <div className="min-h-20" onContextMenu={handleRootContextMenu}>
+    <div data-filetree-root className="min-h-20 flex-1" onContextMenu={handleRootContextMenu}>
       <ul className="space-y-0.5">{entries.map((entry) => renderEntry(entry, 0, childProps))}</ul>
       <ContextMenu menu={menu} onClose={closeMenu} />
     </div>
   );
-}
+});

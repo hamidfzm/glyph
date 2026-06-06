@@ -1,3 +1,5 @@
+import { open } from "@tauri-apps/plugin-dialog";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
@@ -5,10 +7,11 @@ import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { Tab } from "@/hooks/useTabs";
 import { onActiveHeadingChange, scrollToHeading } from "@/lib/scrollToHeading";
 import { FolderIcon } from "../icons/FolderIcon";
+import { CollapseAllIcon, ExpandAllIcon, NewFolderIcon, NewNoteIcon } from "../icons/menuIcons";
 import { OutlineIcon } from "../icons/OutlineIcon";
 import { PanelCollapseIcon } from "../icons/PanelCollapseIcon";
 import { BacklinksSection } from "./BacklinksSection";
-import { FileTree } from "./FileTree";
+import { FileTree, type FileTreeHandle } from "./FileTree";
 
 interface SidebarProps {
   side: "left" | "right";
@@ -71,9 +74,12 @@ interface PanelHeaderProps {
   side: "left" | "right";
   onCollapse: () => void;
   collapseTitle: string;
+  // Extra action buttons rendered before the hide-panel button (e.g. the
+  // file-explorer toolbar).
+  actions?: React.ReactNode;
 }
 
-function PanelHeader({ label, side, onCollapse, collapseTitle }: PanelHeaderProps) {
+function PanelHeader({ label, side, onCollapse, collapseTitle, actions }: PanelHeaderProps) {
   const chevronDirection = side === "left" ? "left" : "right";
   return (
     <div className="flex items-center justify-between gap-2 px-2 mb-2">
@@ -83,16 +89,41 @@ function PanelHeader({ label, side, onCollapse, collapseTitle }: PanelHeaderProp
       >
         {label}
       </h3>
-      <button
-        type="button"
-        onClick={onCollapse}
-        className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] p-0.5 rounded-[var(--glyph-radius-sm)] hover:bg-[var(--color-surface-tertiary)] transition-colors"
-        title={collapseTitle}
-        aria-label={collapseTitle}
-      >
-        <PanelCollapseIcon direction={chevronDirection} />
-      </button>
+      <div className="flex items-center gap-0.5 shrink-0">
+        {actions}
+        <button
+          type="button"
+          onClick={onCollapse}
+          className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] p-0.5 rounded-[var(--glyph-radius-sm)] hover:bg-[var(--color-surface-tertiary)] transition-colors"
+          title={collapseTitle}
+          aria-label={collapseTitle}
+        >
+          <PanelCollapseIcon direction={chevronDirection} />
+        </button>
+      </div>
     </div>
+  );
+}
+
+function ToolbarButton({
+  onClick,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] p-0.5 rounded-[var(--glyph-radius-sm)] hover:bg-[var(--color-surface-tertiary)] transition-colors"
+      title={title}
+      aria-label={title}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -140,7 +171,7 @@ function SidebarPanel({
     <nav
       data-print-hide="true"
       data-sidebar={side}
-      className={`shrink-0 overflow-y-auto ${borderClass} border-[var(--color-border)] select-none pt-3`}
+      className={`shrink-0 flex flex-col overflow-y-auto ${borderClass} border-[var(--color-border)] select-none pt-3`}
       style={{ width, background: "var(--glyph-sidebar-bg)" }}
     >
       {children}
@@ -191,7 +222,22 @@ export function Sidebar({ side }: SidebarProps) {
     createNote,
     createFolder,
     renamePath,
+    duplicatePath,
+    movePath,
+    collapseAll,
+    expandAll,
+    deletePath,
   } = useTabsContext();
+  const fileTreeRef = useRef<FileTreeHandle>(null);
+
+  // "Move to…": pick a destination folder (within the workspace), then relocate.
+  const handleMove = useCallback(
+    async (tabId: string, root: string, from: string) => {
+      const dir = await open({ directory: true, defaultPath: root });
+      if (typeof dir === "string") movePath(tabId, from, dir);
+    },
+    [movePath],
+  );
   const {
     filesVisible,
     outlineVisible,
@@ -222,14 +268,34 @@ export function Sidebar({ side }: SidebarProps) {
     folder: Extract<Tab, { kind: "folder" }>,
     headerSide: "left" | "right",
   ) => (
-    <div className="px-3 pb-3">
+    <div className="px-3 pb-3 flex-1 flex flex-col min-h-0">
       <PanelHeader
         label={folderName(folder.root)}
         side={headerSide}
         onCollapse={onToggleFiles}
         collapseTitle="Hide files sidebar"
+        actions={
+          <>
+            <ToolbarButton title="New note" onClick={() => fileTreeRef.current?.createNote()}>
+              <NewNoteIcon />
+            </ToolbarButton>
+            <ToolbarButton title="New folder" onClick={() => fileTreeRef.current?.createFolder()}>
+              <NewFolderIcon />
+            </ToolbarButton>
+            {folder.expanded.size > 0 ? (
+              <ToolbarButton title="Collapse all" onClick={() => collapseAll(folder.id)}>
+                <CollapseAllIcon />
+              </ToolbarButton>
+            ) : (
+              <ToolbarButton title="Expand all" onClick={() => expandAll(folder.id)}>
+                <ExpandAllIcon />
+              </ToolbarButton>
+            )}
+          </>
+        }
       />
       <FileTree
+        ref={fileTreeRef}
         root={folder.root}
         nodes={folder.nodes}
         expanded={folder.expanded}
@@ -240,6 +306,12 @@ export function Sidebar({ side }: SidebarProps) {
         onCreateNote={(dir) => createNote(folder.id, dir)}
         onCreateFolder={(dir) => createFolder(folder.id, dir)}
         onRename={(path, newName) => renamePath(folder.id, path, newName)}
+        onDuplicate={(path) => duplicatePath(folder.id, path)}
+        onMove={(path) => handleMove(folder.id, folder.root, path)}
+        onReveal={(path) => {
+          void revealItemInDir(path);
+        }}
+        onDelete={(path) => deletePath(folder.id, path)}
       />
       {backlinks.length > 0 && (
         <div className="mt-4 pt-3 border-t border-[var(--color-border)]">

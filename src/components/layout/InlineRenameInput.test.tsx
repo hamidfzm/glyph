@@ -44,6 +44,15 @@ describe("InlineRenameInput", () => {
     expect(onCommit).toHaveBeenCalledTimes(1);
   });
 
+  it("cancels at most once across repeated Escape presses", () => {
+    const onCancel = vi.fn();
+    render(<InlineRenameInput initialValue="x" onCommit={vi.fn()} onCancel={onCancel} />);
+    const input = screen.getByRole("textbox");
+    fireEvent.keyDown(input, { key: "Escape" });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
   it("ignores other keys", () => {
     const onCommit = vi.fn();
     const onCancel = vi.fn();

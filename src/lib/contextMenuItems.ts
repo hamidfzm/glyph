@@ -2,6 +2,8 @@
 // the hook and the component so the menu's contents are pure, easy to unit test,
 // and free of any React or OS-native menu API.
 
+import type { ReactNode } from "react";
+
 export interface ContextMenuActions {
   ttsSpeak?: (text: string) => void;
   ttsStop?: () => void;
@@ -16,6 +18,10 @@ export interface ContextMenuActionItem {
   kind: "action";
   label: string;
   onSelect: () => void;
+  /** Optional leading icon (used by the file-tree menu). */
+  icon?: ReactNode;
+  /** Render with destructive emphasis, e.g. a red "Delete". */
+  danger?: boolean;
 }
 
 export type ContextMenuItem =

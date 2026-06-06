@@ -26,9 +26,9 @@ export function InlineRenameInput({
   const [value, setValue] = useState(initialValue);
 
   useEffect(() => {
-    const el = ref.current;
-    // Defensive: the ref is always attached once mounted.
-    if (!el) return;
+    // The input is rendered with this ref, so it's attached by the time the
+    // mount effect runs.
+    const el = ref.current as HTMLInputElement;
     el.focus();
     el.select();
   }, []);
