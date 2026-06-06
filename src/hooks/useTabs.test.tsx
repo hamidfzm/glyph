@@ -3,7 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useTabs } from "./useTabs";
+import type { FolderTab, Tab } from "./useTabs";
+import { mapFolderTab, useTabs } from "./useTabs";
 
 type Invoker = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -93,6 +94,36 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("mapFolderTab", () => {
+  const folder: FolderTab = {
+    id: "d",
+    kind: "folder",
+    root: "/r",
+    expanded: new Set(),
+    nodes: new Map(),
+    file: null,
+  };
+  const fileTab = { id: "f", kind: "file" } as unknown as Tab;
+
+  it("updates the matching folder tab and leaves others untouched", () => {
+    const out = mapFolderTab([fileTab, folder], "d", (t) => ({ ...t, root: "/x" }));
+    expect((out[1] as FolderTab).root).toBe("/x");
+    expect(out[0]).toBe(fileTab);
+  });
+
+  it("does nothing when no folder tab has the id", () => {
+    const update = vi.fn((t: FolderTab) => t);
+    mapFolderTab([fileTab, folder], "missing", update);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("does not update a non-folder tab whose id matches", () => {
+    const update = vi.fn((t: FolderTab) => t);
+    mapFolderTab([{ ...fileTab, id: "d" }], "d", update);
+    expect(update).not.toHaveBeenCalled();
+  });
 });
 
 describe("useTabs initialization", () => {
@@ -994,6 +1025,113 @@ describe("useTabs dialog and events", () => {
       p = await result.current.movePath(folderId, "/p/ws/note.md", "/p/ws");
     });
     expect(p).toBe("/p/ws/note.md");
+  });
+
+  it("movePath prunes cached listings under the moved folder", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        move_path: async () => "/p/ws/dest/sub",
+        read_directory: async (_cmd, args) => {
+          const p = String(args?.path ?? "");
+          if (p === "/p/ws")
+            return [
+              { name: "sub", path: "/p/ws/sub", isDirectory: true, modified: 0 },
+              { name: "dest", path: "/p/ws/dest", isDirectory: true, modified: 0 },
+            ];
+          return [];
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+    await act(async () => {
+      await result.current.toggleExpand(folderId, "/p/ws/sub");
+    });
+
+    await act(async () => {
+      await result.current.movePath(folderId, "/p/ws/sub", "/p/ws/dest");
+    });
+
+    const folder = result.current.tabs.find((t) => t.id === folderId);
+    expect(folder?.kind === "folder" ? folder.nodes.has("/p/ws/sub") : true).toBe(false);
+  });
+
+  it("deletePath prunes only the deleted folder, keeping unrelated expanded siblings", async () => {
+    vi.mocked(ask).mockResolvedValue(true);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        delete_path: async () => undefined,
+        read_directory: async (_cmd, args) => {
+          const p = String(args?.path ?? "");
+          if (p === "/p/ws")
+            return [
+              { name: "sub", path: "/p/ws/sub", isDirectory: true, modified: 0 },
+              { name: "other", path: "/p/ws/other", isDirectory: true, modified: 0 },
+            ];
+          return [];
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+    await act(async () => {
+      await result.current.toggleExpand(folderId, "/p/ws/sub");
+      await result.current.toggleExpand(folderId, "/p/ws/other");
+    });
+
+    await act(async () => {
+      await result.current.deletePath(folderId, "/p/ws/sub");
+    });
+
+    const folder = result.current.tabs.find((t) => t.id === folderId);
+    const f = folder?.kind === "folder" ? folder : null;
+    expect(f?.nodes.has("/p/ws/sub")).toBe(false);
+    expect(f?.expanded.has("/p/ws/sub")).toBe(false);
+    // The unrelated expanded sibling is kept (covers the "not inside" branch).
+    expect(f?.expanded.has("/p/ws/other")).toBe(true);
+  });
+
+  it("deletePath copes with a path that has no name component", async () => {
+    vi.mocked(ask).mockResolvedValue(true);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        delete_path: async () => undefined,
+        read_directory: async () => [],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.deletePath(folderId, "/");
+    });
+    expect(ok).toBe(true);
+  });
+
+  it("duplicate/move are no-ops for an unknown tab id", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    let d: string | null = "x";
+    let mv: string | null = "x";
+    await act(async () => {
+      d = await result.current.duplicatePath("nope", "/p/ws/a.md");
+      mv = await result.current.movePath("nope", "/p/ws/a.md", "/p/ws/sub");
+    });
+    expect([d, mv]).toEqual([null, null]);
   });
 
   it("collapseAll clears the expanded directories", async () => {

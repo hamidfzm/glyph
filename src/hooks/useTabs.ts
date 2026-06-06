@@ -7,6 +7,7 @@ import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/li
 import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
+import { isPathInside, parentDir } from "@/lib/paths";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
 import {
@@ -56,6 +57,15 @@ export interface FolderTab {
 }
 
 export type Tab = FileTab | FolderTab;
+
+/** Replace the folder tab with `tabId` via `update`, leaving other tabs as-is. */
+export function mapFolderTab(
+  tabs: Tab[],
+  tabId: string,
+  update: (tab: FolderTab) => FolderTab,
+): Tab[] {
+  return tabs.map((t) => (t.id === tabId && t.kind === "folder" ? update(t) : t));
+}
 
 interface TabsState {
   tabs: Tab[];
@@ -495,8 +505,7 @@ export function useTabs(options: UseTabsOptions) {
         const entries = await loadDirectory(dir);
         setState((prev) => ({
           ...prev,
-          tabs: prev.tabs.map((t) => {
-            if (t.id !== tabId || t.kind !== "folder") return t;
+          tabs: mapFolderTab(prev.tabs, tabId, (t) => {
             const nodes = new Map(t.nodes);
             nodes.set(dir, entries);
             const expanded = new Set(t.expanded);
@@ -530,30 +539,23 @@ export function useTabs(options: UseTabsOptions) {
       if (tab?.kind !== "folder") return null;
       try {
         const finalPath = await invoke<string>("rename_path", { path, newName, root: tab.root });
-        const sep = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-        const parent = sep > 0 ? path.slice(0, sep) : tab.root;
+        const parent = parentDir(path, tab.root);
         const entries = await loadDirectory(parent);
         // If the renamed entry is (or contains) the open file, re-point the tab
         // to its new path and move the file watcher with it.
         const openPath = tab.file?.path;
-        const renamedOpen =
-          !!openPath &&
-          (openPath === path ||
-            openPath.startsWith(`${path}/`) ||
-            openPath.startsWith(`${path}\\`));
-        const newOpenPath =
-          renamedOpen && openPath ? finalPath + openPath.slice(path.length) : null;
-        if (newOpenPath && openPath) {
+        let newOpenPath: string | null = null;
+        if (openPath && isPathInside(openPath, path)) {
+          newOpenPath = finalPath + openPath.slice(path.length);
           invoke("unwatch_file", { path: openPath }).catch(() => {});
           invoke("watch_file", { path: newOpenPath }).catch(() => {});
         }
         setState((prev) => ({
           ...prev,
-          tabs: prev.tabs.map((t) => {
-            if (t.id !== tabId || t.kind !== "folder") return t;
+          tabs: mapFolderTab(prev.tabs, tabId, (t) => {
             const nodes = new Map(t.nodes);
             nodes.set(parent, entries);
-            const file = newOpenPath && t.file ? { ...t.file, path: newOpenPath } : t.file;
+            const file = newOpenPath ? { ...(t.file as FileState), path: newOpenPath } : t.file;
             return { ...t, nodes, file };
           }),
         }));
@@ -573,13 +575,11 @@ export function useTabs(options: UseTabsOptions) {
       if (tab?.kind !== "folder") return null;
       try {
         const newPath = await invoke<string>("duplicate_path", { path, root: tab.root });
-        const sep = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-        const parent = sep > 0 ? path.slice(0, sep) : tab.root;
+        const parent = parentDir(path, tab.root);
         const entries = await loadDirectory(parent);
         setState((prev) => ({
           ...prev,
-          tabs: prev.tabs.map((t) => {
-            if (t.id !== tabId || t.kind !== "folder") return t;
+          tabs: mapFolderTab(prev.tabs, tabId, (t) => {
             const nodes = new Map(t.nodes);
             nodes.set(parent, entries);
             return { ...t, nodes };
@@ -604,34 +604,29 @@ export function useTabs(options: UseTabsOptions) {
       try {
         const newPath = await invoke<string>("move_path", { from, toDir, root: tab.root });
         if (newPath === from) return newPath;
-        const sep = Math.max(from.lastIndexOf("/"), from.lastIndexOf("\\"));
-        const sourceParent = sep > 0 ? from.slice(0, sep) : tab.root;
+        const sourceParent = parentDir(from, tab.root);
         const [sourceEntries, destEntries] = await Promise.all([
           loadDirectory(sourceParent),
           loadDirectory(toDir),
         ]);
         const openPath = tab.file?.path;
-        const movedOpen =
-          !!openPath &&
-          (openPath === from ||
-            openPath.startsWith(`${from}/`) ||
-            openPath.startsWith(`${from}\\`));
-        const newOpenPath = movedOpen && openPath ? newPath + openPath.slice(from.length) : null;
-        if (newOpenPath && openPath) {
+        let newOpenPath: string | null = null;
+        if (openPath && isPathInside(openPath, from)) {
+          newOpenPath = newPath + openPath.slice(from.length);
           invoke("unwatch_file", { path: openPath }).catch(() => {});
           invoke("watch_file", { path: newOpenPath }).catch(() => {});
         }
         setState((prev) => ({
           ...prev,
-          tabs: prev.tabs.map((t) => {
-            if (t.id !== tabId || t.kind !== "folder") return t;
+          tabs: mapFolderTab(prev.tabs, tabId, (t) => {
             const nodes = new Map(t.nodes);
             nodes.set(sourceParent, sourceEntries);
             nodes.set(toDir, destEntries);
+            // Drop cached listings for the moved entry and anything under it.
             for (const key of [...nodes.keys()]) {
-              if (key.startsWith(`${from}/`) || key.startsWith(`${from}\\`)) nodes.delete(key);
+              if (isPathInside(key, from)) nodes.delete(key);
             }
-            const file = newOpenPath && t.file ? { ...t.file, path: newOpenPath } : t.file;
+            const file = newOpenPath ? { ...(t.file as FileState), path: newOpenPath } : t.file;
             return { ...t, nodes, file };
           }),
         }));
@@ -648,9 +643,7 @@ export function useTabs(options: UseTabsOptions) {
   const collapseAll = useCallback((tabId: string) => {
     setState((prev) => ({
       ...prev,
-      tabs: prev.tabs.map((t) =>
-        t.id === tabId && t.kind === "folder" ? { ...t, expanded: new Set<string>() } : t,
-      ),
+      tabs: mapFolderTab(prev.tabs, tabId, (t) => ({ ...t, expanded: new Set<string>() })),
     }));
   }, []);
 
@@ -681,9 +674,7 @@ export function useTabs(options: UseTabsOptions) {
       }
       setState((prev) => ({
         ...prev,
-        tabs: prev.tabs.map((t) =>
-          t.id === tabId && t.kind === "folder" ? { ...t, nodes, expanded } : t,
-        ),
+        tabs: mapFolderTab(prev.tabs, tabId, (t) => ({ ...t, nodes, expanded })),
       }));
     },
     [loadDirectory],
@@ -708,28 +699,24 @@ export function useTabs(options: UseTabsOptions) {
         return false;
       }
 
-      const isAtOrUnder = (candidate: string) =>
-        candidate === path || candidate.startsWith(`${path}/`) || candidate.startsWith(`${path}\\`);
-      const sep = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-      const parent = sep > 0 ? path.slice(0, sep) : tab.root;
+      const parent = parentDir(path, tab.root);
       const entries = await loadDirectory(parent);
       const openPath = tab.file?.path;
-      const removedOpen = !!openPath && isAtOrUnder(openPath);
-      if (removedOpen && openPath) {
-        invoke("unwatch_file", { path: openPath }).catch(() => {});
+      const removedOpen = openPath !== undefined && isPathInside(openPath, path);
+      if (removedOpen) {
+        invoke("unwatch_file", { path: openPath as string }).catch(() => {});
       }
       setState((prev) => ({
         ...prev,
-        tabs: prev.tabs.map((t) => {
-          if (t.id !== tabId || t.kind !== "folder") return t;
+        tabs: mapFolderTab(prev.tabs, tabId, (t) => {
           const nodes = new Map(t.nodes);
           nodes.set(parent, entries);
           for (const key of [...nodes.keys()]) {
-            if (isAtOrUnder(key)) nodes.delete(key);
+            if (isPathInside(key, path)) nodes.delete(key);
           }
           const expanded = new Set(t.expanded);
           for (const key of [...expanded]) {
-            if (isAtOrUnder(key)) expanded.delete(key);
+            if (isPathInside(key, path)) expanded.delete(key);
           }
           return { ...t, nodes, expanded, file: removedOpen ? null : t.file };
         }),
