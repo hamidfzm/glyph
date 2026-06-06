@@ -296,6 +296,30 @@ describe("Sidebar", () => {
     );
   });
 
+  it("renames an entry from the file menu", async () => {
+    const renamePath = vi.fn();
+    renderSidebar({ activeTab: makeFolderTab(), tabs: { renamePath } });
+
+    fireEvent.contextMenu(screen.getByText("readme.md"));
+    fireEvent.click(screen.getByText("Rename"));
+    const input = await screen.findByRole("textbox");
+    fireEvent.change(input, { target: { value: "renamed" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(renamePath).toHaveBeenCalledWith("tab-2", "/tmp/notes/readme.md", "renamed"),
+    );
+  });
+
+  it("deletes an entry from the file menu", async () => {
+    const deletePath = vi.fn();
+    renderSidebar({ activeTab: makeFolderTab(), tabs: { deletePath } });
+
+    fireEvent.contextMenu(screen.getByText("readme.md"));
+    fireEvent.click(screen.getByText("Delete"));
+    await waitFor(() => expect(deletePath).toHaveBeenCalledWith("tab-2", "/tmp/notes/readme.md"));
+  });
+
   it("Move to… does nothing when the picker is cancelled", async () => {
     vi.mocked(open).mockResolvedValue(null);
     const movePath = vi.fn();
