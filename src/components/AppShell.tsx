@@ -10,6 +10,7 @@ import { useErrorReporting } from "@/hooks/useErrorReporting";
 import { useExport } from "@/hooks/useExport";
 import { useFontZoom } from "@/hooks/useFontZoom";
 import { useMenuEvents } from "@/hooks/useMenuEvents";
+import { useNativeKeybindings } from "@/hooks/useNativeKeybindings";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
 import { usePlatform } from "@/hooks/usePlatform";
 import { usePrint } from "@/hooks/usePrint";
@@ -173,6 +174,7 @@ export function AppShell() {
     ],
   );
   useMenuEvents(menuHandlers);
+  useNativeKeybindings();
 
   const palette = useCommandPaletteController({
     platform,

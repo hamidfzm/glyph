@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  KEYBOARD_EVENT,
-  matchesCommandPaletteShortcut,
-  matchesRedoShortcut,
-  matchesUndoShortcut,
-} from "./keyboard";
+import { KEYBOARD_EVENT, matchesRedoShortcut, matchesUndoShortcut } from "./keyboard";
 
 function makeEvent(init: KeyboardEventInit): KeyboardEvent {
   return new KeyboardEvent(KEYBOARD_EVENT.KeyDown, init);
@@ -60,40 +55,5 @@ describe("matchesRedoShortcut", () => {
 
   it("rejects plain Cmd+Z without shift", () => {
     expect(matchesRedoShortcut(makeEvent({ key: "z", metaKey: true }), "macos")).toBe(false);
-  });
-});
-
-describe("matchesCommandPaletteShortcut", () => {
-  it("matches Cmd+K on macOS", () => {
-    expect(matchesCommandPaletteShortcut(makeEvent({ key: "k", metaKey: true }), "macos")).toBe(
-      true,
-    );
-  });
-
-  it("matches Ctrl+K on windows and linux", () => {
-    expect(matchesCommandPaletteShortcut(makeEvent({ key: "k", ctrlKey: true }), "windows")).toBe(
-      true,
-    );
-    expect(matchesCommandPaletteShortcut(makeEvent({ key: "k", ctrlKey: true }), "linux")).toBe(
-      true,
-    );
-  });
-
-  it("rejects when shift or alt is held", () => {
-    expect(
-      matchesCommandPaletteShortcut(
-        makeEvent({ key: "k", metaKey: true, shiftKey: true }),
-        "macos",
-      ),
-    ).toBe(false);
-    expect(
-      matchesCommandPaletteShortcut(makeEvent({ key: "k", metaKey: true, altKey: true }), "macos"),
-    ).toBe(false);
-  });
-
-  it("rejects the wrong platform modifier", () => {
-    expect(matchesCommandPaletteShortcut(makeEvent({ key: "k", ctrlKey: true }), "macos")).toBe(
-      false,
-    );
   });
 });

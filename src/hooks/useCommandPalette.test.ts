@@ -25,22 +25,22 @@ describe("useCommandPalette", () => {
 
   it("opens on Cmd+K (macOS)", () => {
     const { result } = renderHook(() => useCommandPalette({ platform: "macos" }));
-    const event = dispatch({ key: "k", metaKey: true });
+    const event = dispatch({ code: "KeyK", key: "k", metaKey: true });
     expect(result.current.open).toBe(true);
     expect(event.defaultPrevented).toBe(true);
   });
 
   it("opens on Ctrl+K (windows / linux)", () => {
     const { result } = renderHook(() => useCommandPalette({ platform: "linux" }));
-    dispatch({ key: "k", ctrlKey: true });
+    dispatch({ code: "KeyK", key: "k", ctrlKey: true });
     expect(result.current.open).toBe(true);
   });
 
   it("toggles closed on repeat shortcut", () => {
     const { result } = renderHook(() => useCommandPalette({ platform: "macos" }));
-    dispatch({ key: "k", metaKey: true });
+    dispatch({ code: "KeyK", key: "k", metaKey: true });
     expect(result.current.open).toBe(true);
-    dispatch({ key: "k", metaKey: true });
+    dispatch({ code: "KeyK", key: "k", metaKey: true });
     expect(result.current.open).toBe(false);
   });
 
@@ -49,7 +49,7 @@ describe("useCommandPalette", () => {
     editor.className = "cm-editor";
     document.body.appendChild(editor);
     const { result } = renderHook(() => useCommandPalette({ platform: "macos" }));
-    const event = dispatch({ key: "k", metaKey: true }, editor);
+    const event = dispatch({ code: "KeyK", key: "k", metaKey: true }, editor);
     expect(result.current.open).toBe(false);
     expect(event.defaultPrevented).toBe(false);
   });
@@ -60,7 +60,7 @@ describe("useCommandPalette", () => {
     act(() => result.current.setQuery("foo"));
     expect(result.current.query).toBe("foo");
     act(() => result.current.closePalette());
-    dispatch({ key: "k", metaKey: true });
+    dispatch({ code: "KeyK", key: "k", metaKey: true });
     expect(result.current.open).toBe(true);
     expect(result.current.query).toBe("");
   });
@@ -76,11 +76,11 @@ describe("useCommandPalette", () => {
 
   it("ignores keys that don't match the palette shortcut", () => {
     const { result } = renderHook(() => useCommandPalette({ platform: "macos" }));
-    dispatch({ key: "k" });
+    dispatch({ code: "KeyK", key: "k" });
     expect(result.current.open).toBe(false);
-    dispatch({ key: "k", metaKey: true, shiftKey: true });
+    dispatch({ code: "KeyK", key: "k", metaKey: true, shiftKey: true });
     expect(result.current.open).toBe(false);
-    dispatch({ key: "j", metaKey: true });
+    dispatch({ code: "KeyJ", key: "j", metaKey: true });
     expect(result.current.open).toBe(false);
   });
 

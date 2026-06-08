@@ -211,6 +211,9 @@ cd src-tauri && cargo clippy    # Lint Rust
 | `Cmd+W` / `Ctrl+W` | Close tab |
 | `Cmd+Shift+W` / `Ctrl+Shift+W` | Close window |
 
+Most of these shortcuts are customizable in **Settings → Hotkeys**: record a new
+key combo for any command, reset it to the default, and spot conflicts inline.
+
 ## Comparison with Other Markdown Apps
 
 Glyph is built around speed, native feel, and offline-first usage. The tables below compare its current capabilities against widely used markdown apps. Items marked "planned" track to issues on the [roadmap](https://github.com/hamidfzm/glyph/issues).
