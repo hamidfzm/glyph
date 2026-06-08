@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncConfigContext, type SyncConfigContextValue } from "@/contexts/SyncConfigContext";
 import type { StatusReport, WorkspaceSyncConfig } from "@/lib/sync";
-import { relativeTime, summarise, SyncStatusIndicator } from "./SyncStatusIndicator";
+import { relativeTime, SyncStatusIndicator, summarise } from "./SyncStatusIndicator";
 
 function cfg(overrides: Partial<WorkspaceSyncConfig> = {}): WorkspaceSyncConfig {
   return {

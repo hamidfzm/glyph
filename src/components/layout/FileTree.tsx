@@ -2,21 +2,19 @@ import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from 
 import type { DirEntry } from "@/hooks/useTabs";
 import type { ContextMenuItem } from "@/lib/contextMenuItems";
 import { ChevronRightIcon } from "../icons/ChevronRightIcon";
+import { CopyPathIcon } from "../icons/CopyPathIcon";
+import { DeleteIcon } from "../icons/DeleteIcon";
+import { DuplicateIcon } from "../icons/DuplicateIcon";
 import { FileTextIcon } from "../icons/FileTextIcon";
 import { FolderIcon } from "../icons/FolderIcon";
 import { FolderOpenIcon } from "../icons/FolderOpenIcon";
-import {
-  CopyPathIcon,
-  DeleteIcon,
-  DuplicateIcon,
-  MoveIcon,
-  NewFolderIcon,
-  NewNoteIcon,
-  NewTabIcon,
-  OpenIcon,
-  RenameIcon,
-  RevealIcon,
-} from "../icons/menuIcons";
+import { MoveIcon } from "../icons/MoveIcon";
+import { NewFolderIcon } from "../icons/NewFolderIcon";
+import { NewNoteIcon } from "../icons/NewNoteIcon";
+import { NewTabIcon } from "../icons/NewTabIcon";
+import { OpenIcon } from "../icons/OpenIcon";
+import { RenameIcon } from "../icons/RenameIcon";
+import { RevealIcon } from "../icons/RevealIcon";
 import { ContextMenu, type ContextMenuModel } from "../menu/ContextMenu";
 import { InlineRenameInput } from "./InlineRenameInput";
 

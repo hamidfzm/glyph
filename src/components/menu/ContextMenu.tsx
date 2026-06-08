@@ -1,5 +1,7 @@
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ContextMenuActionItem, ContextMenuItem } from "@/lib/contextMenuItems";
+import type { ContextMenuItem } from "@/lib/contextMenuItems";
+import { ActionButton } from "./ActionButton";
+import { ITEM_CLASS, SURFACE_CLASS } from "./contextMenuStyles";
 
 export interface ContextMenuModel {
   x: number;
@@ -13,30 +15,6 @@ interface ContextMenuProps {
 }
 
 const VIEWPORT_MARGIN = 4;
-
-// A single in-app context menu, themed with the app's own fonts and CSS color
-// variables so it matches the rest of the UI instead of the OS-native menu.
-const SURFACE_CLASS =
-  "fixed z-50 min-w-[12rem] p-1 rounded-[var(--glyph-radius)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_10px_30px_rgba(0,0,0,0.22)] text-[13px] text-[var(--color-text-primary)] select-none";
-
-const ITEM_CLASS =
-  "flex w-full items-center justify-between gap-6 rounded-[var(--glyph-radius-sm)] px-2.5 py-1.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] focus:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] focus:outline-none";
-
-function ActionButton({ item, onSelect }: { item: ContextMenuActionItem; onSelect: () => void }) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      className={`${ITEM_CLASS}${item.danger ? " text-[#e5484d]" : ""}`}
-      onClick={onSelect}
-    >
-      <span className="flex items-center gap-2.5 truncate">
-        {item.icon && <span className="opacity-80">{item.icon}</span>}
-        <span className="truncate">{item.label}</span>
-      </span>
-    </button>
-  );
-}
 
 export function ContextMenu({ menu, onClose }: ContextMenuProps) {
   const rootRef = useRef<HTMLDivElement>(null);

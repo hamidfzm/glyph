@@ -1,215 +1,27 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
-import type { TocEntry } from "@/hooks/useTableOfContents";
+import { useActiveHeading } from "@/hooks/useActiveHeading";
 import type { Tab } from "@/hooks/useTabs";
-import { onActiveHeadingChange, scrollToHeading } from "@/lib/scrollToHeading";
-import { FolderIcon } from "../icons/FolderIcon";
-import { CollapseAllIcon, ExpandAllIcon, NewFolderIcon, NewNoteIcon } from "../icons/menuIcons";
-import { OutlineIcon } from "../icons/OutlineIcon";
-import { PanelCollapseIcon } from "../icons/PanelCollapseIcon";
+import { CollapseAllIcon } from "../icons/CollapseAllIcon";
+import { ExpandAllIcon } from "../icons/ExpandAllIcon";
+import { NewFolderIcon } from "../icons/NewFolderIcon";
+import { NewNoteIcon } from "../icons/NewNoteIcon";
 import { BacklinksSection } from "./BacklinksSection";
+import { EdgeExpand } from "./EdgeExpand";
 import { FileTree, type FileTreeHandle } from "./FileTree";
+import { OutlineSection } from "./OutlineSection";
+import { PanelHeader } from "./PanelHeader";
+import { SidebarPanel } from "./SidebarPanel";
+import { ToolbarButton } from "./ToolbarButton";
 
 interface SidebarProps {
   side: "left" | "right";
 }
 
 const DEFAULT_WIDTH = 224;
-
-// How long to ignore observer updates after a programmatic scroll. Smooth
-// scrolls in modern browsers complete in ~300-500ms; during that window the
-// observer fires many times as intermediate headings cross the observation
-// band, and would override the heading the user actually clicked on.
-const SCROLL_LOCK_MS = 700;
-
-function useActiveHeading(entries: TocEntry[]) {
-  const [activeId, setActiveId] = useState<string>("");
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const lockUntilRef = useRef(0);
-
-  useEffect(() => {
-    observerRef.current?.disconnect();
-    if (entries.length === 0) return;
-
-    observerRef.current = new IntersectionObserver(
-      (intersections) => {
-        if (performance.now() < lockUntilRef.current) return;
-        for (const entry of intersections) {
-          if (entry.isIntersecting) {
-            setActiveId(entry.target.id);
-            break;
-          }
-        }
-      },
-      { rootMargin: "-20px 0px -60% 0px", threshold: 0.1 },
-    );
-
-    for (const entry of entries) {
-      const el = document.getElementById(entry.id);
-      if (el) observerRef.current.observe(el);
-    }
-
-    return () => observerRef.current?.disconnect();
-  }, [entries]);
-
-  // Sync immediately on programmatic scrolls and lock the observer so it
-  // doesn't override us while the smooth scroll is still in flight.
-  useEffect(
-    () =>
-      onActiveHeadingChange((id) => {
-        lockUntilRef.current = performance.now() + SCROLL_LOCK_MS;
-        setActiveId(id);
-      }),
-    [],
-  );
-
-  return activeId;
-}
-
-interface PanelHeaderProps {
-  label: string;
-  side: "left" | "right";
-  onCollapse: () => void;
-  collapseTitle: string;
-  // Extra action buttons rendered before the hide-panel button (e.g. the
-  // file-explorer toolbar).
-  actions?: React.ReactNode;
-}
-
-function PanelHeader({ label, side, onCollapse, collapseTitle, actions }: PanelHeaderProps) {
-  const chevronDirection = side === "left" ? "left" : "right";
-  return (
-    <div className="flex items-center justify-between gap-2 px-2 mb-2">
-      <h3
-        className="text-xs font-semibold text-[var(--color-text-tertiary)] uppercase tracking-wider truncate"
-        title={label}
-      >
-        {label}
-      </h3>
-      <div className="flex items-center gap-0.5 shrink-0">
-        {actions}
-        <button
-          type="button"
-          onClick={onCollapse}
-          className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] p-0.5 rounded-[var(--glyph-radius-sm)] hover:bg-[var(--color-surface-tertiary)] transition-colors"
-          title={collapseTitle}
-          aria-label={collapseTitle}
-        >
-          <PanelCollapseIcon direction={chevronDirection} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ToolbarButton({
-  onClick,
-  title,
-  children,
-}: {
-  onClick: () => void;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] p-0.5 rounded-[var(--glyph-radius-sm)] hover:bg-[var(--color-surface-tertiary)] transition-colors"
-      title={title}
-      aria-label={title}
-    >
-      {children}
-    </button>
-  );
-}
-
-function OutlineSection({ entries, activeId }: { entries: TocEntry[]; activeId: string }) {
-  const scrollTo = useCallback((id: string) => {
-    scrollToHeading(id);
-  }, []);
-
-  if (entries.length === 0) return null;
-
-  return (
-    <ul className="space-y-0.5">
-      {entries.map((entry) => (
-        <li key={entry.id}>
-          <button
-            type="button"
-            onClick={() => scrollTo(entry.id)}
-            className={`w-full text-left text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors ${
-              activeId === entry.id
-                ? "bg-[var(--color-accent)] text-white font-medium"
-                : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)]"
-            }`}
-            style={{ paddingLeft: `${(entry.level - 1) * 12 + 8}px` }}
-            title={entry.text}
-          >
-            {entry.text}
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function SidebarPanel({
-  width,
-  side,
-  children,
-}: {
-  width: number;
-  side: "left" | "right";
-  children: React.ReactNode;
-}) {
-  const borderClass = side === "left" ? "border-r" : "border-l";
-  return (
-    <nav
-      data-print-hide="true"
-      data-sidebar={side}
-      className={`shrink-0 flex flex-col overflow-y-auto ${borderClass} border-[var(--color-border)] select-none pt-3`}
-      style={{ width, background: "var(--glyph-sidebar-bg)" }}
-    >
-      {children}
-    </nav>
-  );
-}
-
-interface EdgeExpandProps {
-  side: "left" | "right";
-  onClick: () => void;
-  title: string;
-  // Glyph for the panel that's hidden — folder icon for Files, outline icon
-  // for Outline. More meaningful than a generic chevron.
-  panel: "files" | "outline";
-}
-
-// Vertical strip on the screen edge, shown when a sidebar panel is hidden but
-// its content is available. Shows the panel's own icon so it reads as
-// "click to bring back the [folder/outline] panel".
-function EdgeExpand({ side, onClick, title, panel }: EdgeExpandProps) {
-  const borderClass = side === "left" ? "border-r" : "border-l";
-  const Icon = panel === "files" ? FolderIcon : OutlineIcon;
-  return (
-    <button
-      type="button"
-      data-print-hide="true"
-      data-sidebar-edge={side}
-      data-sidebar-edge-panel={panel}
-      onClick={onClick}
-      title={title}
-      aria-label={title}
-      className={`shrink-0 w-7 flex items-center justify-center ${borderClass} border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-tertiary)] transition-colors cursor-pointer`}
-      style={{ background: "var(--color-surface-secondary)" }}
-    >
-      <Icon />
-    </button>
-  );
-}
 
 export function Sidebar({ side }: SidebarProps) {
   const {
