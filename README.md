@@ -82,7 +82,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 ### Platform
 - Cross-platform: macOS (universal), Windows (x64), Linux (amd64 + arm64)
 - Window state persistence across restarts
-- Native menu bar with keyboard shortcuts
+- Native menu bar with customizable keyboard shortcuts (remap any command in Settings → Hotkeys)
 - Update notifications — checks for a newer release on launch and shows a banner when one is available (toggle in Settings → Behavior)
 
 ### Privacy
@@ -210,9 +210,6 @@ cd src-tauri && cargo clippy    # Lint Rust
 | `Cmd+,` / `Ctrl+,` | Settings |
 | `Cmd+W` / `Ctrl+W` | Close tab |
 | `Cmd+Shift+W` / `Ctrl+Shift+W` | Close window |
-
-Most of these shortcuts are customizable in **Settings → Hotkeys**: record a new
-key combo for any command, reset it to the default, and spot conflicts inline.
 
 ## Comparison with Other Markdown Apps
 
