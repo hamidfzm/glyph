@@ -1,5 +1,5 @@
 import { useSettings } from "@/hooks/useSettings";
-import { Segmented } from "./controls";
+import { Segmented } from "./Segmented";
 
 export function AppearanceTab() {
   const { settings, updateSettings } = useSettings();

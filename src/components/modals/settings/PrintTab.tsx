@@ -1,5 +1,6 @@
 import { useSettings } from "@/hooks/useSettings";
-import { Segmented, Toggle } from "./controls";
+import { Segmented } from "./Segmented";
+import { Toggle } from "./Toggle";
 
 export function PrintTab() {
   const { settings, updateSettings } = useSettings();

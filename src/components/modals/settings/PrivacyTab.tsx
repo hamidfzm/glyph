@@ -1,5 +1,5 @@
 import { useSettings } from "@/hooks/useSettings";
-import { Toggle } from "./controls";
+import { Toggle } from "./Toggle";
 
 export function PrivacyTab() {
   const { settings, updateSettings } = useSettings();
