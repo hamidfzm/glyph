@@ -47,6 +47,22 @@ describe("HotkeysTab", () => {
     expect(updateSettings).not.toHaveBeenCalled();
   });
 
+  it("cancels recording on Escape without writing an override", () => {
+    const { updateSettings } = setup();
+    fireEvent.click(screen.getByLabelText("Change shortcut for Open File"));
+    expect(screen.getByLabelText("Recording shortcut for Open File")).toBeInTheDocument();
+    fireEvent.keyDown(document, { code: "Escape" });
+    expect(updateSettings).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Change shortcut for Open File")).toBeInTheDocument();
+  });
+
+  it("ignores a modifier combined with an unmappable key while recording", () => {
+    const { updateSettings } = setup();
+    fireEvent.click(screen.getByLabelText("Change shortcut for Open File"));
+    fireEvent.keyDown(document, { code: "F13", ctrlKey: true });
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
   it("resets an overridden binding by removing its key", () => {
     const { updateSettings } = setup({ open: "CmdOrCtrl+G" });
     fireEvent.click(screen.getByLabelText("Reset shortcut for Open File"));

@@ -35,6 +35,7 @@ describe("SettingsModal", () => {
     expect(screen.getByText("Appearance")).toBeInTheDocument();
     expect(screen.getByText("Layout")).toBeInTheDocument();
     expect(screen.getByText("Behavior")).toBeInTheDocument();
+    expect(screen.getByText("Hotkeys")).toBeInTheDocument();
     expect(screen.getByText("AI")).toBeInTheDocument();
     expect(screen.getByText("Print")).toBeInTheDocument();
     expect(screen.getByText("Privacy")).toBeInTheDocument();
@@ -49,6 +50,9 @@ describe("SettingsModal", () => {
 
     fireEvent.click(screen.getByText("Behavior"));
     expect(screen.getByText("Auto-reload")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Hotkeys"));
+    expect(screen.getByText("Open File")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("AI"));
     expect(screen.getByText("AI Provider")).toBeInTheDocument();

@@ -81,6 +81,10 @@ describe("acceleratorFromEvent", () => {
     expect(acceleratorFromEvent(kd("ShiftLeft", { shift: true }))).toBeNull();
     expect(acceleratorFromEvent(kd("MetaLeft", { meta: true }))).toBeNull();
   });
+
+  it("maps function keys", () => {
+    expect(acceleratorFromEvent(kd("F5", { ctrl: true }))).toBe("CmdOrCtrl+F5");
+  });
 });
 
 describe("matchesAccelerator", () => {
@@ -113,6 +117,10 @@ describe("matchesAccelerator", () => {
   it("returns false for an unmappable key", () => {
     expect(matchesAccelerator(kd("ShiftLeft", { meta: true }), "CmdOrCtrl+O", "macos")).toBe(false);
   });
+
+  it("returns false for an invalid accelerator string", () => {
+    expect(matchesAccelerator(kd("KeyO", { meta: true }), "CmdOrCtrl", "macos")).toBe(false);
+  });
 });
 
 describe("formatAccelerator", () => {
@@ -125,6 +133,19 @@ describe("formatAccelerator", () => {
   it("renders a +-joined label elsewhere", () => {
     expect(formatAccelerator("CmdOrCtrl+Shift+O", "windows")).toBe("Ctrl+Shift+O");
     expect(formatAccelerator("CmdOrCtrl+\\", "linux")).toBe("Ctrl+\\");
+  });
+
+  it("renders the macOS Option glyph and modifier-less combos", () => {
+    expect(formatAccelerator("CmdOrCtrl+Alt+O", "macos")).toBe("⌘⌥O");
+    expect(formatAccelerator("Alt+Shift+O", "macos")).toBe("⌥⇧O");
+  });
+
+  it("renders Alt and modifier-less combos elsewhere", () => {
+    expect(formatAccelerator("Alt+Shift+5", "windows")).toBe("Alt+Shift+5");
+  });
+
+  it("returns the raw string for an invalid accelerator", () => {
+    expect(formatAccelerator("CmdOrCtrl", "macos")).toBe("CmdOrCtrl");
   });
 });
 
@@ -151,6 +172,28 @@ describe("findConflicts", () => {
     const conflicts = findConflicts(resolveBindings({ open: "CmdOrCtrl+F" }));
     expect(conflicts.has("open")).toBe(true);
     expect(conflicts.has("find")).toBe(true);
+  });
+
+  it("skips entries whose accelerator is invalid", () => {
+    const conflicts = findConflicts(
+      new Map([
+        ["a", "CmdOrCtrl+O"],
+        ["bad", "CmdOrCtrl"],
+        ["b", "CmdOrCtrl+O"],
+      ]),
+    );
+    expect(conflicts).toEqual(new Set(["a", "b"]));
+  });
+
+  it("detects conflicts among Alt / modifier-less bindings", () => {
+    const conflicts = findConflicts(
+      new Map([
+        ["x", "Alt+P"],
+        ["y", "Alt+P"],
+      ]),
+    );
+    expect(conflicts.has("x")).toBe(true);
+    expect(conflicts.has("y")).toBe(true);
   });
 });
 

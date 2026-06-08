@@ -189,7 +189,6 @@ const MODIFIER_TOKENS = new Set(["CmdOrCtrl", "Cmd", "Ctrl", "Control", "Command
 /** Parse a Tauri-style accelerator string into its parts, or null if invalid. */
 export function parseAccelerator(accelerator: string): ParsedAccelerator | null {
   const parts = accelerator.split("+").map((p) => p.trim());
-  if (parts.length === 0) return null;
   let cmdOrCtrl = false;
   let alt = false;
   let shift = false;
