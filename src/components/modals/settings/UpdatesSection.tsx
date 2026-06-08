@@ -2,7 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useState } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import { checkForUpdate } from "@/lib/updateCheck";
-import { Toggle } from "./controls";
+import { Toggle } from "./Toggle";
 
 // Outcome of a manual "Check Now": idle before the first click, then the
 // resolved state of the most recent check.

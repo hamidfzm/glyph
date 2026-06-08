@@ -1,21 +1,4 @@
-// Shared form primitives used across the settings tabs.
-
-export function Toggle({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="settings-toggle">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span className="settings-toggle-track" />
-      <span className="settings-toggle-thumb" />
-    </label>
-  );
-}
-
+// Settings form primitive: a segmented single-choice button group.
 export function Segmented<T extends string>({
   value,
   options,

@@ -1,5 +1,5 @@
 import { useSettings } from "@/hooks/useSettings";
-import { Toggle } from "./controls";
+import { Toggle } from "./Toggle";
 import { UpdatesSection } from "./UpdatesSection";
 
 export function BehaviorTab() {
