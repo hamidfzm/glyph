@@ -95,10 +95,10 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5",
-    "@vitest/coverage-v8": "^4.1.7",
-    "happy-dom": "^20.9.0",
+    "@vitest/coverage-v8": "^4.1.8",
+    "happy-dom": "^20.10.2",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.5",
+    "lint-staged": "^17.0.7",
     "rehype-stringify": "^10.0.1",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
@@ -106,6 +106,6 @@
     "typescript": "^5.7",
     "unified": "^11.0.5",
     "vite": "^7",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   }
 }
