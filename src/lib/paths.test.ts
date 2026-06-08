@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPathInside, parentDir } from "./paths";
+import { isPathInside, parentDir, pruneInside } from "./paths";
 
 describe("parentDir", () => {
   it("returns the directory of a nested posix path", () => {
@@ -38,5 +38,19 @@ describe("isPathInside", () => {
 
   it("rejects a sibling that only shares a name prefix", () => {
     expect(isPathInside("/a/bc", "/a/b")).toBe(false);
+  });
+});
+
+describe("pruneInside", () => {
+  it("removes the base and its descendants, keeping unrelated keys", () => {
+    const removed: string[] = [];
+    pruneInside(["/a/b", "/a/b/c.md", "/a/x"], "/a/b", (k) => removed.push(k));
+    expect(removed).toEqual(["/a/b", "/a/b/c.md"]);
+  });
+
+  it("removes nothing when no key is inside the base", () => {
+    const removed: string[] = [];
+    pruneInside(["/x", "/y/z"], "/a/b", (k) => removed.push(k));
+    expect(removed).toEqual([]);
   });
 });

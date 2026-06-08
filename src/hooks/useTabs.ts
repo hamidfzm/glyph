@@ -7,7 +7,7 @@ import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/li
 import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
-import { isPathInside, parentDir } from "@/lib/paths";
+import { isPathInside, parentDir, pruneInside } from "@/lib/paths";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
 import {
@@ -623,9 +623,7 @@ export function useTabs(options: UseTabsOptions) {
             nodes.set(sourceParent, sourceEntries);
             nodes.set(toDir, destEntries);
             // Drop cached listings for the moved entry and anything under it.
-            for (const key of [...nodes.keys()]) {
-              if (isPathInside(key, from)) nodes.delete(key);
-            }
+            pruneInside(nodes.keys(), from, (key) => nodes.delete(key));
             const file = newOpenPath ? { ...(t.file as FileState), path: newOpenPath } : t.file;
             return { ...t, nodes, file };
           }),
@@ -711,13 +709,9 @@ export function useTabs(options: UseTabsOptions) {
         tabs: mapFolderTab(prev.tabs, tabId, (t) => {
           const nodes = new Map(t.nodes);
           nodes.set(parent, entries);
-          for (const key of [...nodes.keys()]) {
-            if (isPathInside(key, path)) nodes.delete(key);
-          }
+          pruneInside(nodes.keys(), path, (key) => nodes.delete(key));
           const expanded = new Set(t.expanded);
-          for (const key of [...expanded]) {
-            if (isPathInside(key, path)) expanded.delete(key);
-          }
+          pruneInside(expanded, path, (key) => expanded.delete(key));
           return { ...t, nodes, expanded, file: removedOpen ? null : t.file };
         }),
       }));

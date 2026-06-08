@@ -92,24 +92,30 @@ pub fn rename_path(path: String, new_name: String, root: String) -> Result<Strin
     // Preserve the source extension when the typed name omits one and the source
     // is a file (folders never get an extension).
     let typed = Path::new(&sanitized);
-    let target = if typed.extension().is_none() && source.is_file() {
-        if let Some(ext) = source.extension().and_then(|e| e.to_str()) {
-            unique_path(parent, &sanitized, Some(ext))
-        } else {
-            unique_path(parent, &sanitized, None)
-        }
+    let (stem, ext) = if typed.extension().is_none() && source.is_file() {
+        (
+            sanitized.as_str(),
+            source.extension().and_then(|e| e.to_str()),
+        )
     } else {
         let stem = typed
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or(&sanitized);
-        let ext = typed.extension().and_then(|e| e.to_str());
-        unique_path(parent, stem, ext)
+        (stem, typed.extension().and_then(|e| e.to_str()))
     };
 
-    if target == source {
+    // Renaming to the current name (including typing it without its extension) is
+    // a no-op; return before unique_path would bump it to "<name> 1".
+    let desired = match ext {
+        Some(ext) => parent.join(format!("{stem}.{ext}")),
+        None => parent.join(stem),
+    };
+    if desired == source {
         return Ok(path);
     }
+
+    let target = unique_path(parent, stem, ext);
     fs::rename(source, &target).map_err(|e| format!("Failed to rename: {e}"))?;
     Ok(target.to_string_lossy().to_string())
 }
@@ -520,6 +526,73 @@ mod tests {
         assert!(root.join("note.md").exists());
         let _ = fs::remove_dir_all(&root);
         let _ = fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn rename_to_same_name_is_a_noop() {
+        let dir = unique_tmp("rename_noop");
+        let root = dir.to_string_lossy().to_string();
+        fs::write(dir.join("note.md"), "body").unwrap();
+        let path = dir.join("note.md").to_string_lossy().to_string();
+        // Typing the name without its extension resolves to the same file.
+        let renamed = rename_path(path.clone(), "note".to_string(), root.clone()).unwrap();
+        assert_eq!(renamed, path);
+        assert!(dir.join("note.md").is_file());
+        assert!(!dir.join("note 1.md").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_file_without_extension() {
+        let dir = unique_tmp("rename_noext");
+        let root = dir.to_string_lossy().to_string();
+        fs::write(dir.join("LICENSE"), "x").unwrap();
+        let renamed = rename_path(
+            dir.join("LICENSE").to_string_lossy().to_string(),
+            "COPYING".to_string(),
+            root.clone(),
+        )
+        .unwrap();
+        assert!(renamed.ends_with("COPYING"));
+        assert!(!renamed.ends_with(".md"));
+        assert!(Path::new(&renamed).is_file());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn duplicate_folder_copies_nested_subdirs() {
+        let root = unique_tmp("dupe_nested");
+        let root_s = root.to_string_lossy().to_string();
+        let docs = root.join("Docs");
+        fs::create_dir(&docs).unwrap();
+        let nested = docs.join("nested");
+        fs::create_dir(&nested).unwrap();
+        fs::write(nested.join("deep.md"), "deep").unwrap();
+        let copy = duplicate_path(docs.to_string_lossy().to_string(), root_s.clone()).unwrap();
+        assert!(copy.ends_with("Docs copy"));
+        assert!(Path::new(&copy).join("nested").join("deep.md").is_file());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn move_relocates_a_folder_without_extension() {
+        let root = unique_tmp("move_folder");
+        let root_s = root.to_string_lossy().to_string();
+        let docs = root.join("Docs");
+        fs::create_dir(&docs).unwrap();
+        fs::write(docs.join("a.md"), "x").unwrap();
+        let sub = root.join("sub");
+        fs::create_dir(&sub).unwrap();
+        let moved = move_path(
+            docs.to_string_lossy().to_string(),
+            sub.to_string_lossy().to_string(),
+            root_s.clone(),
+        )
+        .unwrap();
+        assert_eq!(Path::new(&moved), sub.join("Docs"));
+        assert!(sub.join("Docs").join("a.md").is_file());
+        assert!(!docs.exists());
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

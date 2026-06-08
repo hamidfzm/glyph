@@ -14,3 +14,19 @@ export function isPathInside(candidate: string, base: string): boolean {
     candidate === base || candidate.startsWith(`${base}/`) || candidate.startsWith(`${base}\\`)
   );
 }
+
+/**
+ * Call `remove` for every key that is `base` itself or inside it. Used to drop
+ * cached directory listings / expanded entries when a folder is moved or
+ * deleted. Kept as a synchronous helper so its branch is credited by coverage
+ * (v8 doesn't credit branches that run after an `await`).
+ */
+export function pruneInside(
+  keys: Iterable<string>,
+  base: string,
+  remove: (key: string) => void,
+): void {
+  for (const key of [...keys]) {
+    if (isPathInside(key, base)) remove(key);
+  }
+}
