@@ -1,5 +1,8 @@
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ContextMenuItem } from "@/lib/contextMenuItems";
+import { ActionButton } from "./ActionButton";
+import { SURFACE_CLASS } from "./contextMenuStyles";
+import { SubmenuItem } from "./SubmenuItem";
 
 export interface ContextMenuModel {
   x: number;
@@ -13,14 +16,6 @@ interface ContextMenuProps {
 }
 
 const VIEWPORT_MARGIN = 4;
-
-// A single in-app context menu, themed with the app's own fonts and CSS color
-// variables so it matches the rest of the UI instead of the OS-native menu.
-const SURFACE_CLASS =
-  "fixed z-50 min-w-[12rem] p-1 rounded-[var(--glyph-radius)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_10px_30px_rgba(0,0,0,0.22)] text-[13px] text-[var(--color-text-primary)] select-none";
-
-const ITEM_CLASS =
-  "flex w-full items-center justify-between gap-6 rounded-[var(--glyph-radius-sm)] px-2.5 py-1.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] focus:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] focus:outline-none";
 
 export function ContextMenu({ menu, onClose }: ContextMenuProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -92,49 +87,18 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
     if (item.kind === "submenu") {
       const open = openSubmenu === item.label;
       rendered.push(
-        <div key={item.label} className="relative">
-          <button
-            type="button"
-            role="menuitem"
-            aria-haspopup="menu"
-            aria-expanded={open}
-            className={ITEM_CLASS}
-            onClick={() => setOpenSubmenu(open ? null : item.label)}
-          >
-            <span className="truncate">{item.label}</span>
-            <span aria-hidden="true" className="opacity-60">
-              ›
-            </span>
-          </button>
-          {open && (
-            <div role="menu" className={`${SURFACE_CLASS} top-0 left-full -mt-1 ml-1`}>
-              {item.items.map((sub) => (
-                <button
-                  key={sub.label}
-                  type="button"
-                  role="menuitem"
-                  className={ITEM_CLASS}
-                  onClick={() => run(sub.onSelect)}
-                >
-                  <span className="truncate">{sub.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>,
+        <SubmenuItem
+          key={item.label}
+          item={item}
+          open={open}
+          onToggle={() => setOpenSubmenu(open ? null : item.label)}
+          onRun={run}
+        />,
       );
       continue;
     }
     rendered.push(
-      <button
-        key={item.label}
-        type="button"
-        role="menuitem"
-        className={ITEM_CLASS}
-        onClick={() => run(item.onSelect)}
-      >
-        <span className="truncate">{item.label}</span>
-      </button>,
+      <ActionButton key={item.label} item={item} onSelect={() => run(item.onSelect)} />,
     );
   }
 

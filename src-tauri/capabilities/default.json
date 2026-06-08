@@ -18,6 +18,7 @@
     "cli:allow-cli-matches",
     "window-state:default",
     "store:default",
-    "opener:default"
+    "opener:default",
+    "opener:allow-reveal-item-in-dir"
   ]
 }

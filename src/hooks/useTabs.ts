@@ -1,12 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/lib/editHistory";
 import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
+import { isPathInside, parentDir, pruneInside } from "@/lib/paths";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
 import {
@@ -57,6 +58,15 @@ export interface FolderTab {
 
 export type Tab = FileTab | FolderTab;
 
+/** Replace the folder tab with `tabId` via `update`, leaving other tabs as-is. */
+export function mapFolderTab(
+  tabs: Tab[],
+  tabId: string,
+  update: (tab: FolderTab) => FolderTab,
+): Tab[] {
+  return tabs.map((t) => (t.id === tabId && t.kind === "folder" ? update(t) : t));
+}
+
 interface TabsState {
   tabs: Tab[];
   activeTabId: string | null;
@@ -71,6 +81,8 @@ interface PersistedTab {
 
 const MAX_RECENT_FILES = 10;
 const DIRECTORY_REFRESH_DEBOUNCE = 300;
+// Safety bound on the "expand all" walk so a pathological tree can't spin forever.
+const EXPAND_ALL_MAX_DIRS = 5000;
 
 let nextId = 0;
 function generateId() {
@@ -480,6 +492,234 @@ export function useTabs(options: UseTabsOptions) {
     [loadDirectory],
   );
 
+  // Create a note/folder inside `dir`, then expand `dir` and refresh its listing
+  // so the new entry shows immediately (rather than waiting on the directory
+  // watcher's debounce). Returns the created path, or null on failure.
+  const createEntry = useCallback(
+    async (tabId: string, dir: string, kind: "note" | "folder"): Promise<string | null> => {
+      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
+      if (tab?.kind !== "folder") return null;
+      try {
+        const command = kind === "note" ? "create_note" : "create_folder";
+        const newPath = await invoke<string>(command, { dir, root: tab.root });
+        const entries = await loadDirectory(dir);
+        setState((prev) => ({
+          ...prev,
+          tabs: mapFolderTab(prev.tabs, tabId, (t) => {
+            const nodes = new Map(t.nodes);
+            nodes.set(dir, entries);
+            const expanded = new Set(t.expanded);
+            if (dir !== t.root) expanded.add(dir);
+            return { ...t, nodes, expanded };
+          }),
+        }));
+        return newPath;
+      } catch (err) {
+        console.error(`Failed to create ${kind}:`, err);
+        return null;
+      }
+    },
+    [loadDirectory],
+  );
+
+  const createNote = useCallback(
+    (tabId: string, dir: string) => createEntry(tabId, dir, "note"),
+    [createEntry],
+  );
+  const createFolder = useCallback(
+    (tabId: string, dir: string) => createEntry(tabId, dir, "folder"),
+    [createEntry],
+  );
+
+  // Rename a freshly-created entry (inline rename). Refreshes the parent listing
+  // so the new name shows. Returns the final (collision-safe) path, or null.
+  const renamePath = useCallback(
+    async (tabId: string, path: string, newName: string): Promise<string | null> => {
+      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
+      if (tab?.kind !== "folder") return null;
+      try {
+        const finalPath = await invoke<string>("rename_path", { path, newName, root: tab.root });
+        const parent = parentDir(path, tab.root);
+        const entries = await loadDirectory(parent);
+        // If the renamed entry is (or contains) the open file, re-point the tab
+        // to its new path and move the file watcher with it.
+        const openPath = tab.file?.path;
+        let newOpenPath: string | null = null;
+        if (openPath && isPathInside(openPath, path)) {
+          newOpenPath = finalPath + openPath.slice(path.length);
+          invoke("unwatch_file", { path: openPath }).catch(() => {});
+          invoke("watch_file", { path: newOpenPath }).catch(() => {});
+        }
+        setState((prev) => ({
+          ...prev,
+          tabs: mapFolderTab(prev.tabs, tabId, (t) => {
+            const nodes = new Map(t.nodes);
+            nodes.set(parent, entries);
+            const file = newOpenPath ? { ...(t.file as FileState), path: newOpenPath } : t.file;
+            return { ...t, nodes, file };
+          }),
+        }));
+        return finalPath;
+      } catch (err) {
+        console.error("Failed to rename:", err);
+        return null;
+      }
+    },
+    [loadDirectory],
+  );
+
+  // Duplicate a note/folder next to itself, then refresh the parent listing.
+  const duplicatePath = useCallback(
+    async (tabId: string, path: string): Promise<string | null> => {
+      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
+      if (tab?.kind !== "folder") return null;
+      try {
+        const newPath = await invoke<string>("duplicate_path", { path, root: tab.root });
+        const parent = parentDir(path, tab.root);
+        const entries = await loadDirectory(parent);
+        setState((prev) => ({
+          ...prev,
+          tabs: mapFolderTab(prev.tabs, tabId, (t) => {
+            const nodes = new Map(t.nodes);
+            nodes.set(parent, entries);
+            return { ...t, nodes };
+          }),
+        }));
+        return newPath;
+      } catch (err) {
+        console.error("Failed to duplicate:", err);
+        return null;
+      }
+    },
+    [loadDirectory],
+  );
+
+  // Move a note/folder into `toDir`. Refreshes both the source and destination
+  // listings, prunes cached child listings under the old location, and
+  // re-points the open file (and its watcher) if it moved.
+  const movePath = useCallback(
+    async (tabId: string, from: string, toDir: string): Promise<string | null> => {
+      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
+      if (tab?.kind !== "folder") return null;
+      try {
+        const newPath = await invoke<string>("move_path", { from, toDir, root: tab.root });
+        if (newPath === from) return newPath;
+        const sourceParent = parentDir(from, tab.root);
+        const [sourceEntries, destEntries] = await Promise.all([
+          loadDirectory(sourceParent),
+          loadDirectory(toDir),
+        ]);
+        const openPath = tab.file?.path;
+        let newOpenPath: string | null = null;
+        if (openPath && isPathInside(openPath, from)) {
+          newOpenPath = newPath + openPath.slice(from.length);
+          invoke("unwatch_file", { path: openPath }).catch(() => {});
+          invoke("watch_file", { path: newOpenPath }).catch(() => {});
+        }
+        setState((prev) => ({
+          ...prev,
+          tabs: mapFolderTab(prev.tabs, tabId, (t) => {
+            const nodes = new Map(t.nodes);
+            nodes.set(sourceParent, sourceEntries);
+            nodes.set(toDir, destEntries);
+            // Drop cached listings for the moved entry and anything under it.
+            pruneInside(nodes.keys(), from, (key) => nodes.delete(key));
+            const file = newOpenPath ? { ...(t.file as FileState), path: newOpenPath } : t.file;
+            return { ...t, nodes, file };
+          }),
+        }));
+        return newPath;
+      } catch (err) {
+        console.error("Failed to move:", err);
+        return null;
+      }
+    },
+    [loadDirectory],
+  );
+
+  // Collapse every expanded directory in a folder tab.
+  const collapseAll = useCallback((tabId: string) => {
+    setState((prev) => ({
+      ...prev,
+      tabs: mapFolderTab(prev.tabs, tabId, (t) => ({ ...t, expanded: new Set<string>() })),
+    }));
+  }, []);
+
+  // Expand every directory in a folder tab, loading any not-yet-read listings.
+  // Bounded so a pathological tree can't spin forever.
+  const expandAll = useCallback(
+    async (tabId: string, limit: number = EXPAND_ALL_MAX_DIRS) => {
+      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
+      if (tab?.kind !== "folder") return;
+      const nodes = new Map(tab.nodes);
+      const expanded = new Set<string>();
+      const queue: string[] = [tab.root];
+      let visited = 0;
+      while (queue.length > 0 && visited < limit) {
+        const dir = queue.shift() as string;
+        visited += 1;
+        let entries = nodes.get(dir);
+        if (!entries) {
+          entries = await loadDirectory(dir);
+          nodes.set(dir, entries);
+        }
+        for (const entry of entries) {
+          if (entry.isDirectory) {
+            expanded.add(entry.path);
+            queue.push(entry.path);
+          }
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        tabs: mapFolderTab(prev.tabs, tabId, (t) => ({ ...t, nodes, expanded })),
+      }));
+    },
+    [loadDirectory],
+  );
+
+  // Delete a note/folder after confirming. Closes the open file if it (or its
+  // containing folder) was removed, and prunes the tree's cached listings.
+  const deletePath = useCallback(
+    async (tabId: string, path: string): Promise<boolean> => {
+      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
+      if (tab?.kind !== "folder") return false;
+      const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+      const confirmed = await ask(`Delete "${name}"? This can't be undone.`, {
+        title: "Delete",
+        kind: "warning",
+      });
+      if (!confirmed) return false;
+      try {
+        await invoke("delete_path", { path, root: tab.root });
+      } catch (err) {
+        console.error("Failed to delete:", err);
+        return false;
+      }
+
+      const parent = parentDir(path, tab.root);
+      const entries = await loadDirectory(parent);
+      const openPath = tab.file?.path;
+      const removedOpen = openPath !== undefined && isPathInside(openPath, path);
+      if (removedOpen) {
+        invoke("unwatch_file", { path: openPath as string }).catch(() => {});
+      }
+      setState((prev) => ({
+        ...prev,
+        tabs: mapFolderTab(prev.tabs, tabId, (t) => {
+          const nodes = new Map(t.nodes);
+          nodes.set(parent, entries);
+          pruneInside(nodes.keys(), path, (key) => nodes.delete(key));
+          const expanded = new Set(t.expanded);
+          pruneInside(expanded, path, (key) => expanded.delete(key));
+          return { ...t, nodes, expanded, file: removedOpen ? null : t.file };
+        }),
+      }));
+      return true;
+    },
+    [loadDirectory],
+  );
+
   const closeTab = useCallback((id: string) => {
     setState((prev) => {
       const idx = prev.tabs.findIndex((t) => t.id === id);
@@ -868,6 +1108,14 @@ export function useTabs(options: UseTabsOptions) {
     openFolder,
     openFileInFolderTab,
     toggleExpand,
+    createNote,
+    createFolder,
+    renamePath,
+    duplicatePath,
+    movePath,
+    collapseAll,
+    expandAll,
+    deletePath,
     closeTab,
     setActiveTab,
     setTabMode,

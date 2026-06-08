@@ -1,4 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { open } from "@tauri-apps/plugin-dialog";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -59,6 +61,7 @@ interface RenderOpts {
   swapSidebarSides?: boolean;
   toggleFiles?: () => void;
   toggleOutline?: () => void;
+  tabs?: Partial<TabsContextValue>;
 }
 
 function buildTabsContext(opts: RenderOpts): TabsContextValue {
@@ -78,6 +81,14 @@ function buildTabsContext(opts: RenderOpts): TabsContextValue {
     openFolder: vi.fn(),
     openFileInFolderTab: vi.fn(),
     toggleExpand: vi.fn(),
+    createNote: vi.fn(),
+    createFolder: vi.fn(),
+    renamePath: vi.fn(),
+    duplicatePath: vi.fn(),
+    movePath: vi.fn(),
+    collapseAll: vi.fn(),
+    expandAll: vi.fn(),
+    deletePath: vi.fn(),
     closeTab: vi.fn(),
     setActiveTab: vi.fn(),
     setTabMode: vi.fn(),
@@ -93,6 +104,7 @@ function buildTabsContext(opts: RenderOpts): TabsContextValue {
     backlinks: [],
     workspaceNotice: null,
     dismissWorkspaceNotice: vi.fn(),
+    ...opts.tabs,
   };
 }
 
@@ -236,5 +248,86 @@ describe("Sidebar", () => {
     const leftNav = container.querySelector('nav[data-sidebar="left"]');
     expect(rightNav?.textContent).toContain("readme.md");
     expect(leftNav?.textContent).toContain("Outline");
+  });
+
+  it("file toolbar creates at the root and collapses all when expanded", async () => {
+    const createNote = vi.fn();
+    const createFolder = vi.fn();
+    const collapseAll = vi.fn();
+    renderSidebar({
+      activeTab: makeFolderTab({ expanded: new Set(["/tmp/notes/sub"]) }),
+      tabs: { createNote, createFolder, collapseAll },
+    });
+
+    fireEvent.click(screen.getByTitle("New note"));
+    await waitFor(() => expect(createNote).toHaveBeenCalledWith("tab-2", "/tmp/notes"));
+    fireEvent.click(screen.getByTitle("New folder"));
+    await waitFor(() => expect(createFolder).toHaveBeenCalledWith("tab-2", "/tmp/notes"));
+
+    fireEvent.click(screen.getByTitle("Collapse all"));
+    expect(collapseAll).toHaveBeenCalledWith("tab-2");
+  });
+
+  it("file toolbar expands all when nothing is expanded", () => {
+    const expandAll = vi.fn();
+    renderSidebar({ activeTab: makeFolderTab(), tabs: { expandAll } });
+    fireEvent.click(screen.getByTitle("Expand all"));
+    expect(expandAll).toHaveBeenCalledWith("tab-2");
+  });
+
+  it("file menu duplicates, reveals, and moves an entry", async () => {
+    vi.mocked(open).mockResolvedValue("/tmp/notes/sub");
+    const duplicatePath = vi.fn();
+    const movePath = vi.fn();
+    renderSidebar({ activeTab: makeFolderTab(), tabs: { duplicatePath, movePath } });
+
+    fireEvent.contextMenu(screen.getByText("readme.md"));
+    fireEvent.click(screen.getByText("Make a copy"));
+    expect(duplicatePath).toHaveBeenCalledWith("tab-2", "/tmp/notes/readme.md");
+
+    fireEvent.contextMenu(screen.getByText("readme.md"));
+    fireEvent.click(screen.getByText("Show in system explorer"));
+    expect(revealItemInDir).toHaveBeenCalledWith("/tmp/notes/readme.md");
+
+    fireEvent.contextMenu(screen.getByText("readme.md"));
+    fireEvent.click(screen.getByText("Move to…"));
+    await waitFor(() =>
+      expect(movePath).toHaveBeenCalledWith("tab-2", "/tmp/notes/readme.md", "/tmp/notes/sub"),
+    );
+  });
+
+  it("renames an entry from the file menu", async () => {
+    const renamePath = vi.fn();
+    renderSidebar({ activeTab: makeFolderTab(), tabs: { renamePath } });
+
+    fireEvent.contextMenu(screen.getByText("readme.md"));
+    fireEvent.click(screen.getByText("Rename"));
+    const input = await screen.findByRole("textbox");
+    fireEvent.change(input, { target: { value: "renamed" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(renamePath).toHaveBeenCalledWith("tab-2", "/tmp/notes/readme.md", "renamed"),
+    );
+  });
+
+  it("deletes an entry from the file menu", async () => {
+    const deletePath = vi.fn();
+    renderSidebar({ activeTab: makeFolderTab(), tabs: { deletePath } });
+
+    fireEvent.contextMenu(screen.getByText("readme.md"));
+    fireEvent.click(screen.getByText("Delete"));
+    await waitFor(() => expect(deletePath).toHaveBeenCalledWith("tab-2", "/tmp/notes/readme.md"));
+  });
+
+  it("Move to… does nothing when the picker is cancelled", async () => {
+    vi.mocked(open).mockResolvedValue(null);
+    const movePath = vi.fn();
+    renderSidebar({ activeTab: makeFolderTab(), tabs: { movePath } });
+
+    fireEvent.contextMenu(screen.getByText("readme.md"));
+    fireEvent.click(screen.getByText("Move to…"));
+    await waitFor(() => expect(open).toHaveBeenCalled());
+    expect(movePath).not.toHaveBeenCalled();
   });
 });

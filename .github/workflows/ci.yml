@@ -93,6 +93,9 @@ jobs:
           flags: frontend
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+          # Install the uploader from PyPI instead of the GPG-verified binary,
+          # which intermittently fails when Codecov's keyserver can't be reached.
+          use_pypi: true
       - name: Upload frontend test results
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v6
@@ -102,6 +105,9 @@ jobs:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+          # Install the uploader from PyPI instead of the GPG-verified binary,
+          # which intermittently fails when Codecov's keyserver can't be reached.
+          use_pypi: true
 
   test-rust:
     name: Test (Rust)
@@ -134,6 +140,9 @@ jobs:
           flags: rust
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+          # Install the uploader from PyPI instead of the GPG-verified binary,
+          # which intermittently fails when Codecov's keyserver can't be reached.
+          use_pypi: true
       - name: Upload Rust test results
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v6
@@ -143,6 +152,9 @@ jobs:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+          # Install the uploader from PyPI instead of the GPG-verified binary,
+          # which intermittently fails when Codecov's keyserver can't be reached.
+          use_pypi: true
 
   clippy:
     name: Clippy

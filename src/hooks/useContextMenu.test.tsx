@@ -47,7 +47,7 @@ describe("useContextMenu", () => {
     expect(actionLabels(result.current.menu)).toContain("Select All");
   });
 
-  it("does nothing outside the markdown body so chrome keeps its native menu", () => {
+  it("suppresses the native menu outside the markdown body without showing a themed menu", () => {
     const chrome = document.createElement("div");
     chrome.textContent = "Sidebar label";
     document.body.appendChild(chrome);
@@ -58,11 +58,11 @@ describe("useContextMenu", () => {
       event = fireContextMenu(chrome);
     });
 
-    expect(event!.defaultPrevented).toBe(false);
+    expect(event!.defaultPrevented).toBe(true);
     expect(result.current.menu).toBeNull();
   });
 
-  it("ignores events whose target is not an element", () => {
+  it("suppresses the native menu and shows nothing for non-element targets", () => {
     const { result } = renderHook(() => useContextMenu(baseActions));
 
     let event: MouseEvent;
@@ -70,7 +70,7 @@ describe("useContextMenu", () => {
       event = fireContextMenu(document);
     });
 
-    expect(event!.defaultPrevented).toBe(false);
+    expect(event!.defaultPrevented).toBe(true);
     expect(result.current.menu).toBeNull();
   });
 

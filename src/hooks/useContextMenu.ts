@@ -29,12 +29,14 @@ function isInsideMarkdownContent(target: EventTarget | null): boolean {
 }
 
 /**
- * Drives the themed right-click menu for the markdown viewer.
+ * Suppresses the WebView's native ("browser") context menu app-wide and drives
+ * the themed menu for the markdown viewer.
  *
- * The menu only opens over rendered prose (`.markdown-body`); editable fields,
- * surfaces that already claimed the event via preventDefault (the file tree),
- * and the rest of the app chrome keep their own / the native menu. Inside the
- * viewer it suppresses the native menu so the two never stack.
+ * The native menu (with its Back / Reload / Save as / Inspect entries) is
+ * never useful in the app, so it's suppressed everywhere except editable fields
+ * (which keep Cut / Copy / Paste) and surfaces that already claimed the event
+ * via preventDefault (the file tree). The themed menu itself only opens over
+ * rendered prose (`.markdown-body`); other chrome simply shows nothing.
  */
 export function useContextMenu(actions: ContextMenuActions) {
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
@@ -42,14 +44,15 @@ export function useContextMenu(actions: ContextMenuActions) {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      // A more specific handler already took this event and called
-      // preventDefault; don't stack our menu on top of theirs.
+      // A more specific handler (the file tree) already took this event and
+      // suppressed the native menu; leave it be.
       if (e.defaultPrevented) return;
       // Editable fields keep the native Cut / Copy / Paste menu.
       if (isEditableTarget(e.target)) return;
-      // Only the markdown viewer gets the themed text menu.
-      if (!isInsideMarkdownContent(e.target)) return;
+      // Suppress the native browser menu everywhere else.
       e.preventDefault();
+      // Only the markdown viewer shows a themed menu; other chrome shows none.
+      if (!isInsideMarkdownContent(e.target)) return;
       const selection = window.getSelection()?.toString().trim() ?? "";
       setMenu({ x: e.clientX, y: e.clientY, items: buildContextMenuItems(actions, selection) });
     };
