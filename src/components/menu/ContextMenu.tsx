@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ContextMenuItem } from "@/lib/contextMenuItems";
 import { ActionButton } from "./ActionButton";
-import { ITEM_CLASS, SURFACE_CLASS } from "./contextMenuStyles";
+import { SURFACE_CLASS } from "./contextMenuStyles";
+import { SubmenuItem } from "./SubmenuItem";
 
 export interface ContextMenuModel {
   x: number;
@@ -86,28 +87,13 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
     if (item.kind === "submenu") {
       const open = openSubmenu === item.label;
       rendered.push(
-        <div key={item.label} className="relative">
-          <button
-            type="button"
-            role="menuitem"
-            aria-haspopup="menu"
-            aria-expanded={open}
-            className={ITEM_CLASS}
-            onClick={() => setOpenSubmenu(open ? null : item.label)}
-          >
-            <span className="truncate">{item.label}</span>
-            <span aria-hidden="true" className="opacity-60">
-              ›
-            </span>
-          </button>
-          {open && (
-            <div role="menu" className={`${SURFACE_CLASS} top-0 left-full -mt-1 ml-1`}>
-              {item.items.map((sub) => (
-                <ActionButton key={sub.label} item={sub} onSelect={() => run(sub.onSelect)} />
-              ))}
-            </div>
-          )}
-        </div>,
+        <SubmenuItem
+          key={item.label}
+          item={item}
+          open={open}
+          onToggle={() => setOpenSubmenu(open ? null : item.label)}
+          onRun={run}
+        />,
       );
       continue;
     }

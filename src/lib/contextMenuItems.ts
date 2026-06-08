@@ -24,10 +24,16 @@ export interface ContextMenuActionItem {
   danger?: boolean;
 }
 
+export interface ContextMenuSubmenuItem {
+  kind: "submenu";
+  label: string;
+  items: ContextMenuActionItem[];
+}
+
 export type ContextMenuItem =
   | ContextMenuActionItem
   | { kind: "separator" }
-  | { kind: "submenu"; label: string; items: ContextMenuActionItem[] };
+  | ContextMenuSubmenuItem;
 
 const SELECTION_PREVIEW_MAX = 30;
 const AI_ACTIONS = ["Summarize", "Explain", "Translate", "Simplify"] as const;
