@@ -102,6 +102,14 @@ export interface PrivacySettings {
   errorReporting: boolean;
 }
 
+export interface KeybindingSettings {
+  // Map of bindable command id -> accelerator override (Tauri "CmdOrCtrl+..."
+  // format). Command ids absent from the map fall back to their default
+  // binding. Stored and updated as a whole object, not per-key, because the
+  // settings validator allowlists path segments against the defaults shape.
+  overrides: Record<string, string>;
+}
+
 export interface Settings {
   appearance: AppearanceSettings;
   layout: LayoutSettings;
@@ -109,6 +117,7 @@ export interface Settings {
   ai: AISettings;
   print: PrintSettings;
   privacy: PrivacySettings;
+  keybindings: KeybindingSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -154,6 +163,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   privacy: {
     errorReporting: false,
+  },
+  keybindings: {
+    overrides: {},
   },
 };
 
