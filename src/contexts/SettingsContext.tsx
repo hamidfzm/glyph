@@ -24,7 +24,7 @@ export const SettingsContext = createContext<SettingsContextValue>({
 
 const FORBIDDEN_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
-function isSafePlainObject(value: unknown): value is Record<string, unknown> {
+export function isSafePlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
@@ -35,7 +35,7 @@ function isSafePlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
-function deepMerge(
+export function deepMerge(
   target: Record<string, unknown>,
   source: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -54,7 +54,7 @@ function deepMerge(
   return result;
 }
 
-function setNestedValue(
+export function setNestedValue(
   obj: Record<string, unknown>,
   path: string,
   value: unknown,
@@ -76,9 +76,14 @@ function setNestedValue(
     if (FORBIDDEN_OBJECT_KEYS.has(key)) {
       return obj;
     }
+    // Defensive: `current` and `schema` are always plain objects here (the loop
+    // only advances them to verified-plain values), so this guard cannot trip
+    // given the fixed DEFAULT_SETTINGS schema.
+    /* v8 ignore start */
     if (!isSafePlainObject(current) || !isSafePlainObject(schema)) {
       return obj;
     }
+    /* v8 ignore stop */
     if (!Object.hasOwn(schema, key)) {
       return obj;
     }
@@ -93,9 +98,13 @@ function setNestedValue(
       current[key] = {};
     }
     const next = current[key] as Record<string, unknown>;
+    // Defensive: `next` was just assigned a fresh plain object (a spread copy or
+    // `{}`), so it is always a safe plain object.
+    /* v8 ignore start */
     if (!isSafePlainObject(next)) {
       return obj;
     }
+    /* v8 ignore stop */
     current = next;
     schema = schemaNext;
   }
@@ -104,9 +113,13 @@ function setNestedValue(
   if (FORBIDDEN_OBJECT_KEYS.has(lastKey)) {
     return obj;
   }
+  // Defensive: `current` and `schema` are always plain objects when the loop
+  // exits, so this final guard cannot trip.
+  /* v8 ignore start */
   if (!isSafePlainObject(current) || !isSafePlainObject(schema)) {
     return obj;
   }
+  /* v8 ignore stop */
   if (!Object.hasOwn(schema, lastKey)) {
     return obj;
   }
