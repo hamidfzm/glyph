@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import type { EditorKeymap } from "@/lib/settings";
 import { Segmented } from "./Segmented";
@@ -8,9 +9,53 @@ const KEYMAP_OPTIONS: { value: EditorKeymap; label: string }[] = [
   { value: "vscode", label: "VSCode" },
 ];
 
+interface KeymapTip {
+  keys?: string;
+  text: string;
+}
+
+// Short, per-preset cheat sheet shown under the selector. Modifier-bearing
+// shortcuts are written generically ("Cmd/Ctrl") since the bindings are the same
+// across platforms apart from the primary modifier.
+const KEYMAP_HELP: Record<EditorKeymap, { title: string; tips: KeymapTip[] }> = {
+  default: {
+    title: "Default (Glyph) shortcuts",
+    tips: [
+      { keys: "[[", text: "in a folder workspace opens wikilink autocomplete" },
+      { keys: "Tab / Enter", text: "accept the highlighted completion" },
+      { keys: "Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z", text: "undo / redo" },
+      { text: "Standard OS text-editing shortcuts otherwise" },
+    ],
+  },
+  vim: {
+    title: "Vim quick reference",
+    tips: [
+      { keys: "Esc / i / a / v", text: "normal, insert, insert-after, visual modes" },
+      { keys: "w b e 0 $ gg G", text: "motions; f + char to jump; / to search" },
+      { keys: "d c y p", text: 'operators with counts and text objects (diw, ci")' },
+      {
+        text: "File commands like :w, :q, and :wq don't apply here — Glyph autosaves, and you close a tab with the Close Tab shortcut.",
+      },
+    ],
+  },
+  vscode: {
+    title: "VSCode shortcuts",
+    tips: [
+      { keys: "Alt+Up / Alt+Down", text: "move the current line up / down" },
+      { keys: "Shift+Alt+Up / Down", text: "copy the line up / down" },
+      { keys: "Cmd/Ctrl+/", text: "toggle line comment" },
+      {
+        keys: "Cmd/Ctrl+D",
+        text: "select the next occurrence; Cmd/Ctrl+] or [ to indent / outdent",
+      },
+    ],
+  },
+};
+
 export function EditorTab() {
   const { settings, updateSettings } = useSettings();
   const { editor } = settings;
+  const help = KEYMAP_HELP[editor.keymap];
 
   return (
     <div className="settings-section">
@@ -30,29 +75,21 @@ export function EditorTab() {
         />
       </div>
 
-      {editor.keymap === "vim" && (
-        <div className="settings-description settings-vim-help">
-          <strong>Vim quick reference</strong>
-          <ul>
-            <li>
-              Modes: <code>Esc</code> normal, <code>i</code>/<code>a</code> insert, <code>v</code>{" "}
-              visual
+      <div className="settings-description settings-keymap-help">
+        <strong>{help.title}</strong>
+        <ul>
+          {help.tips.map((tip) => (
+            <li key={tip.text}>
+              {tip.keys && (
+                <Fragment>
+                  <code>{tip.keys}</code>{" "}
+                </Fragment>
+              )}
+              {tip.text}
             </li>
-            <li>
-              Motions: <code>w b e 0 $ gg G</code>, <code>f</code> + char to jump, <code>/</code> to
-              search
-            </li>
-            <li>
-              Operators: <code>d c y p</code> with counts and text objects (e.g. <code>diw</code>,{" "}
-              <code>ci"</code>)
-            </li>
-            <li>
-              File commands like <code>:w</code>, <code>:q</code>, and <code>:wq</code> don't apply
-              here — Glyph autosaves, and you close a tab with the Close Tab shortcut.
-            </li>
-          </ul>
-        </div>
-      )}
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

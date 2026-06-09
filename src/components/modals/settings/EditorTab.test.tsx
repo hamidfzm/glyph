@@ -35,13 +35,19 @@ describe("EditorTab", () => {
     expect(updateSettings).toHaveBeenCalledWith("editor.keymap", "vim");
   });
 
-  it("hides the Vim quick reference for non-Vim keymaps", () => {
+  it("shows the Default quick reference for the default keymap", () => {
     setup();
+    expect(screen.getByText("Default (Glyph) shortcuts")).toBeInTheDocument();
     expect(screen.queryByText("Vim quick reference")).toBeNull();
   });
 
   it("shows the Vim quick reference when Vim is selected", () => {
     setup({ ...DEFAULT_SETTINGS, editor: { keymap: "vim" } });
     expect(screen.getByText("Vim quick reference")).toBeInTheDocument();
+  });
+
+  it("shows the VSCode quick reference when VSCode is selected", () => {
+    setup({ ...DEFAULT_SETTINGS, editor: { keymap: "vscode" } });
+    expect(screen.getByText("VSCode shortcuts")).toBeInTheDocument();
   });
 });
