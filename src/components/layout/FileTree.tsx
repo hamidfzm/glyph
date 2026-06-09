@@ -9,6 +9,7 @@ import { FileTextIcon } from "../icons/FileTextIcon";
 import { FolderIcon } from "../icons/FolderIcon";
 import { FolderOpenIcon } from "../icons/FolderOpenIcon";
 import { MoveIcon } from "../icons/MoveIcon";
+import { NewCanvasIcon } from "../icons/NewCanvasIcon";
 import { NewFolderIcon } from "../icons/NewFolderIcon";
 import { NewNoteIcon } from "../icons/NewNoteIcon";
 import { NewTabIcon } from "../icons/NewTabIcon";
@@ -18,7 +19,7 @@ import { RevealIcon } from "../icons/RevealIcon";
 import { ContextMenu, type ContextMenuModel } from "../menu/ContextMenu";
 import { InlineRenameInput } from "./InlineRenameInput";
 
-type CreateKind = "note" | "folder";
+type CreateKind = "note" | "canvas" | "folder";
 
 interface FileTreeProps {
   root: string;
@@ -29,8 +30,9 @@ interface FileTreeProps {
   onOpenFile: (path: string) => void;
   // Right-click "Open in New Tab" — pops the file out as a new top-level tab.
   onOpenFileInNewTab: (path: string) => void;
-  // Create an untitled note/folder inside `dir`; resolves to the new path.
+  // Create an untitled note/canvas/folder inside `dir`; resolves to the new path.
   onCreateNote: (dir: string) => Promise<string | null>;
+  onCreateCanvas: (dir: string) => Promise<string | null>;
   onCreateFolder: (dir: string) => Promise<string | null>;
   // Rename an entry to the inline-typed name; resolves to the final path.
   onRename: (path: string, newName: string) => Promise<string | null>;
@@ -84,7 +86,7 @@ type EntryRenderProps = Pick<
 
 /** Default inline-rename text: the file stem (no extension) or the folder name. */
 function editInitialValue(entry: DirEntry, kind: CreateKind): string {
-  return kind === "note" ? entry.name.replace(/\.[^.]+$/, "") : entry.name;
+  return kind === "folder" ? entry.name : entry.name.replace(/\.[^.]+$/, "");
 }
 
 function renderEntry(entry: DirEntry, depth: number, props: EntryRenderProps): React.ReactNode {
@@ -172,6 +174,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
     onOpenFile,
     onOpenFileInNewTab,
     onCreateNote,
+    onCreateCanvas,
     onCreateFolder,
     onRename,
     onDuplicate,
@@ -193,10 +196,11 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
 
   const startCreate = useCallback(
     async (kind: CreateKind, dir: string) => {
-      const path = kind === "note" ? await onCreateNote(dir) : await onCreateFolder(dir);
-      beginNaming(path, kind);
+      const create =
+        kind === "note" ? onCreateNote : kind === "canvas" ? onCreateCanvas : onCreateFolder;
+      beginNaming(await create(dir), kind);
     },
-    [onCreateNote, onCreateFolder, beginNaming],
+    [onCreateNote, onCreateCanvas, onCreateFolder, beginNaming],
   );
 
   useImperativeHandle(
@@ -232,8 +236,8 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
       const name = value.trim();
       if (name) {
         const finalPath = await onRename(path, name);
-        if (kind === "note" && openOnCommit) onOpenFile(finalPath ?? path);
-      } else if (kind === "note" && openOnCommit) {
+        if (kind !== "folder" && openOnCommit) onOpenFile(finalPath ?? path);
+      } else if (kind !== "folder" && openOnCommit) {
         onOpenFile(path);
       }
     },
@@ -243,7 +247,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
   const handleEditCancel = useCallback(
     ({ path, kind, openOnCommit }: EditingState) => {
       setEditing(null);
-      if (kind === "note" && openOnCommit) onOpenFile(path);
+      if (kind !== "folder" && openOnCommit) onOpenFile(path);
     },
     [onOpenFile],
   );
@@ -307,6 +311,12 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
         label: "New Note",
         icon: <NewNoteIcon />,
         onSelect: () => startCreate("note", dir),
+      },
+      {
+        kind: "action",
+        label: "New Canvas",
+        icon: <NewCanvasIcon />,
+        onSelect: () => startCreate("canvas", dir),
       },
       {
         kind: "action",

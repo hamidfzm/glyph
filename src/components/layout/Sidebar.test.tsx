@@ -82,6 +82,8 @@ function buildTabsContext(opts: RenderOpts): TabsContextValue {
     openFileInFolderTab: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),
+    createCanvas: vi.fn(),
+    commitEdit: vi.fn(),
     createFolder: vi.fn(),
     renamePath: vi.fn(),
     duplicatePath: vi.fn(),

@@ -25,6 +25,7 @@ This document demonstrates all the rendering features supported by Glyph. The YA
 - [Images](#images)
 - [Links](#links)
 - [Jupyter Notebooks](#jupyter-notebooks)
+- [Canvas](#canvas)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 
 ## Frontmatter
@@ -273,6 +274,23 @@ Glyph opens `.ipynb` files directly — no Jupyter required. Open `Notebook.ipyn
 - **Outputs** render under their cell by richest type: images (`image/png`, `image/jpeg`, `image/svg+xml`), sanitised HTML, markdown, and plain text. Stream output and exception tracebacks keep their ANSI colours instead of showing raw escape codes. An `Out [n]:` prompt marks execution results.
 
 Interactive outputs (Plotly, Vega, Jupyter widgets) aren't rendered yet — they show a short placeholder. Notebooks can't be edited in Glyph, so the mode toggle stays read-only: **view** shows the rendered cells, **edit** shows the raw `.ipynb` JSON as a syntax-highlighted source view, and **split** shows the JSON source and rendered cells side by side.
+
+---
+
+## Canvas
+
+Glyph opens [JSON Canvas](https://jsoncanvas.org) (`.canvas`) files as an infinite, pan-and-zoom board. Open `canvas-demo.canvas` from the file tree (or run `glyph samples/canvas-demo.canvas`) to see it.
+
+- **Cards** render markdown text, embedded images, links, and labelled groups.
+- **Connections** are drawn as arrows between card sides, with optional labels.
+- **Navigate** by scrolling to pan and `Cmd/Ctrl`+scroll (or pinch) to zoom; the toolbar has zoom and fit-to-content controls.
+
+The mode toggle switches between reading and editing:
+
+- **View** is the read-only board.
+- **Edit** (and **split**) is the full editor — drag to move cards, drag the corner handle to resize, drag a side connector to draw an edge, double-click a card to edit its markdown inline, and use the selection toolbar to recolour or delete. `+ Card` adds a node; `Delete`/`Backspace` removes the selection. Edits save as standard `.canvas` JSON (interoperable with Obsidian) and undo/redo with `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z`.
+
+Create a fresh board from the file tree: right-click a folder (or the empty panel) and choose **New Canvas**.
 
 ---
 

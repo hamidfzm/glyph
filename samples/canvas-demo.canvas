@@ -1,0 +1,76 @@
+{
+	"nodes": [
+		{
+			"id": "title",
+			"type": "text",
+			"x": -200,
+			"y": -260,
+			"width": 400,
+			"height": 100,
+			"color": "6",
+			"text": "# Glyph Canvas\nAn infinite board of connected cards."
+		},
+		{
+			"id": "idea",
+			"type": "text",
+			"x": -360,
+			"y": -40,
+			"width": 300,
+			"height": 120,
+			"color": "4",
+			"text": "## Ideas\n- Pan with scroll\n- Zoom with ⌘ + scroll\n- Drag the background"
+		},
+		{
+			"id": "tasks",
+			"type": "text",
+			"x": 80,
+			"y": -40,
+			"width": 300,
+			"height": 120,
+			"color": "3",
+			"text": "## Tasks\n- [x] Render nodes\n- [x] Draw edges\n- [ ] Edit nodes"
+		},
+		{
+			"id": "link",
+			"type": "link",
+			"x": -120,
+			"y": 200,
+			"width": 320,
+			"height": 80,
+			"url": "https://jsoncanvas.org"
+		},
+		{
+			"id": "group",
+			"type": "group",
+			"x": -420,
+			"y": -100,
+			"width": 820,
+			"height": 240,
+			"label": "Planning"
+		}
+	],
+	"edges": [
+		{
+			"id": "e1",
+			"fromNode": "title",
+			"fromSide": "bottom",
+			"toNode": "idea",
+			"toSide": "top"
+		},
+		{
+			"id": "e2",
+			"fromNode": "title",
+			"fromSide": "bottom",
+			"toNode": "tasks",
+			"toSide": "top"
+		},
+		{
+			"id": "e3",
+			"fromNode": "idea",
+			"fromSide": "bottom",
+			"toNode": "link",
+			"toSide": "left",
+			"label": "spec"
+		}
+	]
+}

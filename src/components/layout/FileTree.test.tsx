@@ -18,6 +18,7 @@ function renderFileTree(overrides: Partial<ComponentProps<typeof FileTree>> = {}
     onOpenFile: vi.fn(),
     onOpenFileInNewTab: vi.fn(),
     onCreateNote: vi.fn(async () => null),
+    onCreateCanvas: vi.fn(async () => null),
     onCreateFolder: vi.fn(async () => null),
     onRename: vi.fn(async () => null),
     onDuplicate: vi.fn(async () => null),

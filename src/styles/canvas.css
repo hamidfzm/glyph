@@ -1,0 +1,292 @@
+/* JSON Canvas board. The stage is a fixed viewport; the world layer inside it
+   is translated/scaled to pan and zoom. All colours route through the shared
+   custom properties so the board tracks light/dark themes. */
+
+.glyph-canvas {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.glyph-canvas-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  background-color: var(--color-surface);
+  /* Dotted grid for spatial reference. */
+  background-image: radial-gradient(
+    circle,
+    var(--color-border) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+}
+
+.glyph-canvas-stage[data-panning] {
+  cursor: grabbing;
+}
+
+.glyph-canvas-world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+/* Groups sit behind everything and read as labelled regions. */
+.glyph-canvas-group {
+  position: absolute;
+  border: 2px solid var(--color-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface-secondary) 60%, transparent);
+}
+
+.glyph-canvas-group-label {
+  position: absolute;
+  top: -1.6em;
+  left: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* Content cards. */
+.glyph-canvas-node {
+  position: absolute;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+}
+
+.glyph-canvas-node-text {
+  padding: 10px 14px;
+}
+
+.glyph-canvas-node-link,
+.glyph-canvas-node-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.glyph-canvas-node-link-url,
+.glyph-canvas-node-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glyph-canvas-node-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Edges. */
+.glyph-canvas-edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+  color: var(--color-text-tertiary);
+}
+
+.glyph-canvas-edge-label {
+  font-size: 12px;
+  fill: var(--color-text-secondary);
+  paint-order: stroke;
+}
+
+/* Floating zoom controls. */
+.glyph-canvas-toolbar {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+}
+
+.glyph-canvas-toolbar button {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.glyph-canvas-toolbar button:hover {
+  background: var(--color-surface-tertiary);
+}
+
+.glyph-canvas-zoom-level {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.glyph-canvas-error {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.glyph-canvas-error code {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+/* ---- Editor mode ---- */
+
+.glyph-canvas[data-editing] .glyph-canvas-node[data-selected] {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+
+/* Inline text/label editor. */
+.glyph-canvas-node-editor {
+  width: 100%;
+  height: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  resize: none;
+  outline: none;
+}
+
+/* Bottom-right resize handle. */
+.glyph-canvas-resize {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--color-surface);
+  border-radius: 2px;
+  background: var(--color-accent);
+  cursor: nwse-resize;
+}
+
+/* Side connectors for drawing edges. */
+.glyph-canvas-connector {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  background: var(--color-accent);
+  cursor: crosshair;
+}
+.glyph-canvas-connector[data-side="top"] {
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.glyph-canvas-connector[data-side="bottom"] {
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.glyph-canvas-connector[data-side="left"] {
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.glyph-canvas-connector[data-side="right"] {
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Edges become clickable in editor mode. */
+.glyph-canvas-edges[data-interactive] .glyph-canvas-edge-hit {
+  cursor: pointer;
+}
+
+.glyph-canvas-temp-edge {
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+/* Selection toolbar (recolour + delete). */
+.glyph-canvas-selection-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+}
+
+.glyph-canvas-swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.glyph-canvas-swatch[data-clear] {
+  background:
+    linear-gradient(to top left, transparent 45%, var(--color-alert-caution) 46%, var(--color-alert-caution) 54%, transparent 55%),
+    var(--color-surface);
+}
+
+.glyph-canvas-delete {
+  margin-left: 4px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--color-alert-caution);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.glyph-canvas-toolbar-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--color-border);
+}

@@ -1,3 +1,4 @@
+mod canvas;
 mod cli;
 mod commands;
 mod markdown;
@@ -16,6 +17,7 @@ use tauri::{DragDropEvent, Emitter, Manager, WindowEvent};
 use tauri_plugin_cli::CliExt;
 use watcher::FileWatcherState;
 
+pub use canvas::is_canvas_file;
 pub use markdown::is_markdown_file;
 pub use notebook::{is_notebook_file, is_supported_file};
 
@@ -164,6 +166,7 @@ pub fn run() {
             commands::directory::read_directory,
             commands::directory::list_markdown_files,
             commands::create::create_note,
+            commands::create::create_canvas,
             commands::create::create_folder,
             commands::create::rename_path,
             commands::create::duplicate_path,

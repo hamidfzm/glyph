@@ -32,6 +32,7 @@ export function Sidebar({ side }: SidebarProps) {
     openFileInFolderTab: onOpenFileInTab,
     openFile: onOpenFileInNewTab,
     createNote,
+    createCanvas,
     createFolder,
     renamePath,
     duplicatePath,
@@ -116,6 +117,7 @@ export function Sidebar({ side }: SidebarProps) {
         onOpenFile={(path) => onOpenFileInTab(folder.id, path)}
         onOpenFileInNewTab={onOpenFileInNewTab}
         onCreateNote={(dir) => createNote(folder.id, dir)}
+        onCreateCanvas={(dir) => createCanvas(folder.id, dir)}
         onCreateFolder={(dir) => createFolder(folder.id, dir)}
         onRename={(path, newName) => renamePath(folder.id, path, newName)}
         onDuplicate={(path) => duplicatePath(folder.id, path)}

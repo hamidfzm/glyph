@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WikilinkRef } from "@/lib/backlinks";
+import { isCanvasFile } from "@/lib/canvasExtensions";
 import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/lib/editHistory";
 import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
@@ -245,7 +246,10 @@ export function useTabs(options: UseTabsOptions) {
         await invoke("watch_file", { path });
         // Notebooks are read-only; open straight into the viewer regardless of
         // the user's default editor mode.
-        const mode = isNotebookFile(path) ? EDITOR_MODE.view : optionsRef.current.defaultEditorMode;
+        const mode =
+          isNotebookFile(path) || isCanvasFile(path)
+            ? EDITOR_MODE.view
+            : optionsRef.current.defaultEditorMode;
         const newTab: FileTab = {
           id,
           kind: "file",
@@ -286,7 +290,10 @@ export function useTabs(options: UseTabsOptions) {
           invoke("unwatch_file", { path: previousFilePath }).catch(() => {});
         }
         await invoke("watch_file", { path });
-        const mode = isNotebookFile(path) ? EDITOR_MODE.view : optionsRef.current.defaultEditorMode;
+        const mode =
+          isNotebookFile(path) || isCanvasFile(path)
+            ? EDITOR_MODE.view
+            : optionsRef.current.defaultEditorMode;
         const newFile: FileState = { ...makeFileState(path, mode), content, metadata };
         const folderRoot = tab.root;
         setState((prev) => ({
@@ -496,11 +503,16 @@ export function useTabs(options: UseTabsOptions) {
   // so the new entry shows immediately (rather than waiting on the directory
   // watcher's debounce). Returns the created path, or null on failure.
   const createEntry = useCallback(
-    async (tabId: string, dir: string, kind: "note" | "folder"): Promise<string | null> => {
+    async (
+      tabId: string,
+      dir: string,
+      kind: "note" | "canvas" | "folder",
+    ): Promise<string | null> => {
       const tab = stateRef.current.tabs.find((t) => t.id === tabId);
       if (tab?.kind !== "folder") return null;
       try {
-        const command = kind === "note" ? "create_note" : "create_folder";
+        const command =
+          kind === "note" ? "create_note" : kind === "canvas" ? "create_canvas" : "create_folder";
         const newPath = await invoke<string>(command, { dir, root: tab.root });
         const entries = await loadDirectory(dir);
         setState((prev) => ({
@@ -524,6 +536,10 @@ export function useTabs(options: UseTabsOptions) {
 
   const createNote = useCallback(
     (tabId: string, dir: string) => createEntry(tabId, dir, "note"),
+    [createEntry],
+  );
+  const createCanvas = useCallback(
+    (tabId: string, dir: string) => createEntry(tabId, dir, "canvas"),
     [createEntry],
   );
   const createFolder = useCallback(
@@ -883,6 +899,29 @@ export function useTabs(options: UseTabsOptions) {
     [applyProgrammaticEdit],
   );
 
+  // Commit a finished document edit produced by a non-text editor (e.g. the
+  // canvas board): apply it and push one undo entry, exactly like toggleTask.
+  // `next` is the full new content; a no-op (unchanged content) is ignored.
+  const commitEdit = useCallback(
+    async (id: string, next: string) => {
+      const tab = stateRef.current.tabs.find((t) => t.id === id);
+      if (!tab) return;
+      const file = activeFileOf(tab);
+      if (!file) return;
+      const before =
+        file.mode !== EDITOR_MODE.view
+          ? (file.editContent ?? file.content ?? "")
+          : (file.content ?? "");
+      if (next === before) return;
+      const applied = await applyProgrammaticEdit(id, next);
+      if (applied) {
+        const current = editHistory.current.get(id) ?? emptyHistory();
+        editHistory.current.set(id, pushEntry(current, { before, after: next }));
+      }
+    },
+    [applyProgrammaticEdit],
+  );
+
   const undoEdit = useCallback(
     async (id: string) => {
       const history = editHistory.current.get(id);
@@ -1109,7 +1148,9 @@ export function useTabs(options: UseTabsOptions) {
     openFileInFolderTab,
     toggleExpand,
     createNote,
+    createCanvas,
     createFolder,
+    commitEdit,
     renamePath,
     duplicatePath,
     movePath,
