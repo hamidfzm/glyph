@@ -22,7 +22,7 @@ describe("useDocumentUndoRedo", () => {
     renderHook(() =>
       useDocumentUndoRedo({ activeTabId: "tab-1", platform: "macos", onUndo, onRedo }),
     );
-    const event = dispatch({ key: "z", metaKey: true });
+    const event = dispatch({ code: "KeyZ", key: "z", metaKey: true });
     expect(onUndo).toHaveBeenCalledWith("tab-1");
     expect(onRedo).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(true);
@@ -34,9 +34,29 @@ describe("useDocumentUndoRedo", () => {
     renderHook(() =>
       useDocumentUndoRedo({ activeTabId: "tab-1", platform: "macos", onUndo, onRedo }),
     );
-    dispatch({ key: "z", metaKey: true, shiftKey: true });
+    dispatch({ code: "KeyZ", key: "z", metaKey: true, shiftKey: true });
     expect(onRedo).toHaveBeenCalledWith("tab-1");
     expect(onUndo).not.toHaveBeenCalled();
+  });
+
+  it("treats Ctrl+Y as redo on Windows/Linux", () => {
+    const onUndo = vi.fn();
+    const onRedo = vi.fn();
+    renderHook(() =>
+      useDocumentUndoRedo({ activeTabId: "tab-1", platform: "windows", onUndo, onRedo }),
+    );
+    dispatch({ code: "KeyY", key: "y", ctrlKey: true });
+    expect(onRedo).toHaveBeenCalledWith("tab-1");
+  });
+
+  it("does not treat Ctrl+Y as redo on macOS", () => {
+    const onUndo = vi.fn();
+    const onRedo = vi.fn();
+    renderHook(() =>
+      useDocumentUndoRedo({ activeTabId: "tab-1", platform: "macos", onUndo, onRedo }),
+    );
+    dispatch({ code: "KeyY", key: "y", metaKey: true });
+    expect(onRedo).not.toHaveBeenCalled();
   });
 
   it("defers to CodeMirror when focus is inside .cm-editor", () => {
@@ -51,7 +71,7 @@ describe("useDocumentUndoRedo", () => {
     renderHook(() =>
       useDocumentUndoRedo({ activeTabId: "tab-1", platform: "macos", onUndo, onRedo }),
     );
-    const event = dispatch({ key: "z", metaKey: true }, input);
+    const event = dispatch({ code: "KeyZ", key: "z", metaKey: true }, input);
     expect(onUndo).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
   });
@@ -60,7 +80,7 @@ describe("useDocumentUndoRedo", () => {
     const onUndo = vi.fn();
     const onRedo = vi.fn();
     renderHook(() => useDocumentUndoRedo({ activeTabId: null, platform: "macos", onUndo, onRedo }));
-    dispatch({ key: "z", metaKey: true });
+    dispatch({ code: "KeyZ", key: "z", metaKey: true });
     expect(onUndo).not.toHaveBeenCalled();
   });
 
@@ -70,8 +90,8 @@ describe("useDocumentUndoRedo", () => {
     renderHook(() =>
       useDocumentUndoRedo({ activeTabId: "tab-1", platform: "macos", onUndo, onRedo }),
     );
-    dispatch({ key: "a", metaKey: true });
-    dispatch({ key: "z" }); // no modifier
+    dispatch({ code: "KeyA", key: "a", metaKey: true });
+    dispatch({ code: "KeyZ", key: "z" }); // no modifier
     expect(onUndo).not.toHaveBeenCalled();
     expect(onRedo).not.toHaveBeenCalled();
   });

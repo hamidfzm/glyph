@@ -33,6 +33,21 @@ describe("HotkeysTab", () => {
     expect(screen.getByText("View")).toBeInTheDocument();
   });
 
+  it("filters the list to commands matching the search query", () => {
+    setup();
+    fireEvent.change(screen.getByLabelText("Search shortcuts"), { target: { value: "palette" } });
+    expect(screen.getByText("Command Palette")).toBeInTheDocument();
+    expect(screen.queryByText("Open File")).toBeNull();
+    expect(screen.queryByText("File")).toBeNull();
+  });
+
+  it("shows nothing when the query matches no command", () => {
+    setup();
+    fireEvent.change(screen.getByLabelText("Search shortcuts"), { target: { value: "zzzzz" } });
+    expect(screen.queryByText("Open File")).toBeNull();
+    expect(screen.queryByText("View")).toBeNull();
+  });
+
   it("records a new shortcut and writes it to the overrides", () => {
     const { updateSettings } = setup();
     fireEvent.click(screen.getByLabelText("Change shortcut for Open File"));
