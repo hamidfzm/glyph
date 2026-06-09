@@ -6,6 +6,8 @@
 // [`crate::menu`] and have direct tests there; this file is excluded from
 // codecov so it doesn't drag the patch coverage down.
 
+use std::collections::HashMap;
+
 use serde::Deserialize;
 use tauri::{
     menu::{AboutMetadataBuilder, MenuBuilder, MenuItem, MenuItemBuilder, SubmenuBuilder},
@@ -14,10 +16,13 @@ use tauri::{
 
 use crate::menu::{dispatch_menu_action, menu_action_for_id};
 
-/// Handles to the menu items whose enabled state changes at runtime.
-/// Held in managed state so the `set_menu_state` command can toggle them.
+/// Handles to the menu items whose enabled state or accelerator changes at
+/// runtime. Held in managed state so the `set_menu_state` and
+/// `apply_keybindings` commands can mutate them.
 #[derive(Clone)]
 pub struct MenuItemRefs {
+    open: MenuItem<Wry>,
+    open_folder: MenuItem<Wry>,
     close_tab: MenuItem<Wry>,
     print: MenuItem<Wry>,
     export_html: MenuItem<Wry>,
@@ -25,7 +30,14 @@ pub struct MenuItemRefs {
     export_epub: MenuItem<Wry>,
     export_pdf: MenuItem<Wry>,
     find: MenuItem<Wry>,
+    command_palette: MenuItem<Wry>,
+    toggle_files_sidebar: MenuItem<Wry>,
+    toggle_outline_sidebar: MenuItem<Wry>,
     toggle_edit: MenuItem<Wry>,
+    zoom_in: MenuItem<Wry>,
+    zoom_out: MenuItem<Wry>,
+    actual_size: MenuItem<Wry>,
+    settings: MenuItem<Wry>,
     ai_summarize: MenuItem<Wry>,
     ai_explain: MenuItem<Wry>,
     ai_simplify: MenuItem<Wry>,
@@ -252,6 +264,8 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
     };
 
     let refs = MenuItemRefs {
+        open,
+        open_folder,
         close_tab,
         print,
         export_html,
@@ -259,7 +273,14 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         export_epub,
         export_pdf,
         find,
+        command_palette,
+        toggle_files_sidebar,
+        toggle_outline_sidebar,
         toggle_edit,
+        zoom_in,
+        zoom_out,
+        actual_size,
+        settings,
         ai_summarize,
         ai_explain,
         ai_simplify,
@@ -267,6 +288,52 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
     };
 
     Ok((menu, refs))
+}
+
+/// Maps a bindable command id to its menu item, for accelerator updates.
+fn accelerator_target<'a>(refs: &'a MenuItemRefs, id: &str) -> Option<&'a MenuItem<Wry>> {
+    let item = match id {
+        "open" => &refs.open,
+        "open-folder" => &refs.open_folder,
+        "print" => &refs.print,
+        "close-tab" => &refs.close_tab,
+        "find" => &refs.find,
+        "open-command-palette" => &refs.command_palette,
+        "toggle-files-sidebar" => &refs.toggle_files_sidebar,
+        "toggle-outline-sidebar" => &refs.toggle_outline_sidebar,
+        "toggle-edit" => &refs.toggle_edit,
+        "zoom-in" => &refs.zoom_in,
+        "zoom-out" => &refs.zoom_out,
+        "actual-size" => &refs.actual_size,
+        "open-settings" => &refs.settings,
+        _ => return None,
+    };
+    Some(item)
+}
+
+/// Apply user-resolved accelerators to the native menu items. `bindings` maps a
+/// command id to a Tauri accelerator string ("CmdOrCtrl+O"); unknown ids are
+/// ignored. The frontend resolves defaults + overrides before calling this, so
+/// the map is the full source of truth.
+pub fn apply_keybindings_impl(
+    refs: &MenuItemRefs,
+    bindings: &HashMap<String, String>,
+) -> Result<(), String> {
+    for (id, accelerator) in bindings {
+        if let Some(item) = accelerator_target(refs, id) {
+            item.set_accelerator(Some(accelerator.as_str()))
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn apply_keybindings(
+    refs: State<MenuItemRefs>,
+    bindings: HashMap<String, String>,
+) -> Result<(), String> {
+    apply_keybindings_impl(&refs, &bindings)
 }
 
 /// Apply enabled flags to every conditional menu item. Errors from individual

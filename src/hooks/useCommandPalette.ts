@@ -1,7 +1,9 @@
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import type { Platform } from "@/hooks/usePlatform";
-import { KEYBOARD_EVENT, matchesCommandPaletteShortcut } from "@/lib/keyboard";
+import { useSettings } from "@/hooks/useSettings";
+import { matchesAccelerator, resolveBindings } from "@/lib/keybindings";
+import { KEYBOARD_EVENT } from "@/lib/keyboard";
 
 interface UseCommandPaletteOptions {
   platform: Platform;
@@ -12,6 +14,8 @@ interface UseCommandPaletteOptions {
 // inside the editor pane so users can still type "k" with the modifier without
 // hijacking the editor's chord-style shortcuts.
 export function useCommandPalette({ platform }: UseCommandPaletteOptions) {
+  const { settings } = useSettings();
+  const overrides = settings.keybindings.overrides;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -33,8 +37,9 @@ export function useCommandPalette({ platform }: UseCommandPaletteOptions) {
   }, []);
 
   useEffect(() => {
+    const binding = resolveBindings(overrides).get("open-command-palette");
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!matchesCommandPaletteShortcut(event, platform)) return;
+      if (!binding || !matchesAccelerator(event, binding, platform)) return;
       const target = event.target as Element | null;
       if (target?.closest(".cm-editor")) return;
       event.preventDefault();
@@ -42,7 +47,7 @@ export function useCommandPalette({ platform }: UseCommandPaletteOptions) {
     };
     document.addEventListener(KEYBOARD_EVENT.KeyDown, onKeyDown);
     return () => document.removeEventListener(KEYBOARD_EVENT.KeyDown, onKeyDown);
-  }, [platform, toggle]);
+  }, [platform, toggle, overrides]);
 
   // The native View menu's "Command Palette…" item emits this event so users
   // who don't know the Cmd/Ctrl+K accelerator can still discover the feature.

@@ -175,6 +175,7 @@ pub fn run() {
             watcher::watch_directory,
             watcher::unwatch_directory,
             menu_runtime::set_menu_state,
+            menu_runtime::apply_keybindings,
             sync::commands::sync_set_config,
             sync::commands::sync_get_config,
             sync::commands::sync_remove_config,
