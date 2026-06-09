@@ -102,6 +102,14 @@ export interface PrivacySettings {
   errorReporting: boolean;
 }
 
+// Editor keymap preset for the markdown editor pane. "default" is Glyph's own
+// (CodeMirror default) bindings; "vim" and "vscode" load the matching keymap.
+export type EditorKeymap = "default" | "vim" | "vscode";
+
+export interface EditorSettings {
+  keymap: EditorKeymap;
+}
+
 export interface KeybindingSettings {
   // Map of bindable command id -> accelerator override (Tauri "CmdOrCtrl+..."
   // format). Command ids absent from the map fall back to their default
@@ -118,6 +126,7 @@ export interface Settings {
   print: PrintSettings;
   privacy: PrivacySettings;
   keybindings: KeybindingSettings;
+  editor: EditorSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -166,6 +175,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   keybindings: {
     overrides: {},
+  },
+  editor: {
+    keymap: "default",
   },
 };
 

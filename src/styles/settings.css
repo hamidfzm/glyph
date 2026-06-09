@@ -168,6 +168,25 @@
   margin-top: 2px;
 }
 
+/* Per-preset keymap quick-reference shown under the keymap selector. */
+.settings-keymap-help {
+  margin-top: 10px;
+  line-height: 1.6;
+}
+
+.settings-keymap-help ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+
+.settings-keymap-help code {
+  font-family: var(--glyph-code-font, ui-monospace, monospace);
+  background: var(--color-surface-tertiary);
+  border-radius: var(--glyph-radius-sm);
+  padding: 0 4px;
+}
+
 /* Controls — native macOS style select */
 .settings-select {
   appearance: auto;

@@ -76,5 +76,11 @@ ignore:
   # SyncStatusIndicator), so we don't track AppShell.tsx lines toward
   # project / patch coverage. See .claude/rules/app-shell.md.
   - "src/components/AppShell.tsx"
+  # MarkdownEditor.tsx instantiates a CodeMirror EditorView, which needs a real
+  # browser layout/measurement engine (getBoundingClientRect, focus, key
+  # dispatch) that happy-dom doesn't provide — every consumer (SplitView) mocks
+  # it for the same reason. The testable piece (keymap-preset resolution) is
+  # extracted to src/lib/editorKeymap.ts and covered there.
+  - "src/components/editor/MarkdownEditor.tsx"
   - "**/*.test.ts"
   - "**/*.test.tsx"
