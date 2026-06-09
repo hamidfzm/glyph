@@ -34,4 +34,14 @@ describe("EditorTab", () => {
     fireEvent.click(screen.getByText("Vim"));
     expect(updateSettings).toHaveBeenCalledWith("editor.keymap", "vim");
   });
+
+  it("hides the Vim quick reference for non-Vim keymaps", () => {
+    setup();
+    expect(screen.queryByText("Vim quick reference")).toBeNull();
+  });
+
+  it("shows the Vim quick reference when Vim is selected", () => {
+    setup({ ...DEFAULT_SETTINGS, editor: { keymap: "vim" } });
+    expect(screen.getByText("Vim quick reference")).toBeInTheDocument();
+  });
 });
