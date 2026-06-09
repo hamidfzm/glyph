@@ -7,6 +7,7 @@ import {
   LINE_HEIGHT_MAP,
   type Settings,
 } from "../lib/settings";
+import { deepMerge, setNestedValue } from "../lib/settingsObject";
 
 export interface SettingsContextValue {
   settings: Settings;
@@ -21,99 +22,6 @@ export const SettingsContext = createContext<SettingsContextValue>({
   resetSettings: () => {},
   loaded: false,
 });
-
-const FORBIDDEN_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-
-function isSafePlainObject(value: unknown): value is Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-  if (value === Object.prototype) {
-    return false;
-  }
-  const proto = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
-}
-
-function deepMerge(
-  target: Record<string, unknown>,
-  source: Record<string, unknown>,
-): Record<string, unknown> {
-  const result = { ...target };
-  for (const key of Object.keys(source)) {
-    if (FORBIDDEN_OBJECT_KEYS.has(key)) continue;
-    if (isSafePlainObject(source[key]) && isSafePlainObject(target[key])) {
-      result[key] = deepMerge(
-        target[key] as Record<string, unknown>,
-        source[key] as Record<string, unknown>,
-      );
-    } else {
-      result[key] = source[key];
-    }
-  }
-  return result;
-}
-
-function setNestedValue(
-  obj: Record<string, unknown>,
-  path: string,
-  value: unknown,
-): Record<string, unknown> {
-  const keys = path.split(".");
-  if (keys.length === 0 || keys.some((k) => k === "")) {
-    return obj;
-  }
-
-  const result = { ...obj };
-  let current: Record<string, unknown> = result;
-  // Schema allowlist: each path segment must be an own property of DEFAULT_SETTINGS
-  // at the corresponding depth. This prevents prototype pollution even if the
-  // FORBIDDEN_OBJECT_KEYS denylist ever misses a dangerous name.
-  let schema: Record<string, unknown> = DEFAULT_SETTINGS as unknown as Record<string, unknown>;
-
-  for (let i = 0; i < keys.length - 1; i++) {
-    const key = keys[i];
-    if (FORBIDDEN_OBJECT_KEYS.has(key)) {
-      return obj;
-    }
-    if (!isSafePlainObject(current) || !isSafePlainObject(schema)) {
-      return obj;
-    }
-    if (!Object.hasOwn(schema, key)) {
-      return obj;
-    }
-    const schemaNext = schema[key];
-    if (!isSafePlainObject(schemaNext)) {
-      return obj;
-    }
-    const existing = Object.hasOwn(current, key) ? current[key] : undefined;
-    if (isSafePlainObject(existing)) {
-      current[key] = { ...existing };
-    } else {
-      current[key] = {};
-    }
-    const next = current[key] as Record<string, unknown>;
-    if (!isSafePlainObject(next)) {
-      return obj;
-    }
-    current = next;
-    schema = schemaNext;
-  }
-
-  const lastKey = keys[keys.length - 1];
-  if (FORBIDDEN_OBJECT_KEYS.has(lastKey)) {
-    return obj;
-  }
-  if (!isSafePlainObject(current) || !isSafePlainObject(schema)) {
-    return obj;
-  }
-  if (!Object.hasOwn(schema, lastKey)) {
-    return obj;
-  }
-
-  current[lastKey] = value;
-  return result;
-}
 
 function applyTheme(theme: Settings["appearance"]["theme"]) {
   if (theme === "system") {
