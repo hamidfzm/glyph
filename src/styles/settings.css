@@ -78,35 +78,47 @@
   color: var(--color-text-primary);
 }
 
-/* Tab Navigation */
+/* Main row: vertical tab sidebar + scrollable body */
+.settings-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Tab Navigation — vertical sidebar down the left edge */
 .settings-nav {
   display: flex;
-  gap: 0;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--color-border);
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+  width: 148px;
   flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-border);
 }
 
 .settings-tab {
   appearance: none;
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
   cursor: pointer;
-  padding: 8px 14px;
+  padding: 7px 12px;
   font-size: 12px;
+  text-align: left;
   color: var(--color-text-secondary);
   font-weight: 500;
-  transition: color 0.15s, border-color 0.15s;
+  border-radius: var(--glyph-radius-sm);
+  transition: color 0.15s, background-color 0.15s;
 }
 
 .settings-tab:hover {
   color: var(--color-text-primary);
+  background: var(--color-surface-tertiary);
 }
 
 .settings-tab[data-active="true"] {
   color: var(--color-accent);
-  border-bottom-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
 /* Settings Body — native macOS overlay scrollbar */
