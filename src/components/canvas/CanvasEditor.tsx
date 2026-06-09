@@ -70,7 +70,7 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
 
   const worldAt = (e: { clientX: number; clientY: number }): Point =>
     screenToWorld(viewport, toStagePoint(e.clientX, e.clientY));
-  const capture = (e: ReactPointerEvent) => stageRef.current?.setPointerCapture(e.pointerId);
+  const capture = (e: ReactPointerEvent) => stageRef.current?.setPointerCapture?.(e.pointerId);
 
   // --- selection ---------------------------------------------------------
   const selectNode = (id: string, additive: boolean) => {

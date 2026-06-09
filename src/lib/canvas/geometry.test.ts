@@ -3,11 +3,13 @@ import {
   arrowheadPoints,
   bezierPath,
   inferSide,
+  nodeAtPoint,
   nodeCenter,
+  nodeContainsPoint,
   nodesBoundingBox,
   sideAnchor,
 } from "./geometry";
-import type { CanvasNode, TextNode } from "./types";
+import type { CanvasNode, GroupNode, TextNode } from "./types";
 
 const node = (over: Partial<TextNode>): TextNode => ({
   id: "n",
@@ -69,6 +71,82 @@ describe("arrowheadPoints", () => {
     expect(points[0]).toEqual({ x: 100, y: 50 });
     expect(points[1].x).toBeGreaterThan(100);
     expect(points[2].x).toBeGreaterThan(100);
+  });
+
+  const tipAndBase = (side: "left" | "top" | "bottom") => {
+    const [tip, p1, p2] = arrowheadPoints({ x: 50, y: 50 }, side, 9)
+      .split(" ")
+      .map((p) => {
+        const [x, y] = p.split(",").map(Number);
+        return { x, y };
+      });
+    return { tip, p1, p2 };
+  };
+
+  it("points a left-side tip rightward (base corners left of the tip)", () => {
+    const { tip, p1, p2 } = tipAndBase("left");
+    expect(tip).toEqual({ x: 50, y: 50 });
+    expect(p1.x).toBeLessThan(50);
+    expect(p2.x).toBeLessThan(50);
+  });
+
+  it("points a top-side tip downward (base corners above the tip)", () => {
+    const { tip, p1, p2 } = tipAndBase("top");
+    expect(tip).toEqual({ x: 50, y: 50 });
+    expect(p1.y).toBeLessThan(50);
+    expect(p2.y).toBeLessThan(50);
+  });
+
+  it("points a bottom-side tip upward (base corners below the tip)", () => {
+    const { tip, p1, p2 } = tipAndBase("bottom");
+    expect(tip).toEqual({ x: 50, y: 50 });
+    expect(p1.y).toBeGreaterThan(50);
+    expect(p2.y).toBeGreaterThan(50);
+  });
+});
+
+describe("nodeContainsPoint", () => {
+  const n = node({ x: 0, y: 0, width: 100, height: 50 });
+  it("is true for a point inside the rectangle", () => {
+    expect(nodeContainsPoint(n, { x: 50, y: 25 })).toBe(true);
+  });
+  it("is false for a point outside the rectangle", () => {
+    expect(nodeContainsPoint(n, { x: 150, y: 25 })).toBe(false);
+  });
+});
+
+describe("nodeAtPoint", () => {
+  const group = (over: Partial<GroupNode>): GroupNode => ({
+    id: "g",
+    type: "group",
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 50,
+    ...over,
+  });
+
+  it("returns the topmost (last-painted) node under the point", () => {
+    const nodes: CanvasNode[] = [
+      node({ id: "under", x: 0, y: 0, width: 100, height: 50 }),
+      node({ id: "over", x: 0, y: 0, width: 100, height: 50 }),
+    ];
+    expect(nodeAtPoint(nodes, { x: 10, y: 10 })?.id).toBe("over");
+  });
+
+  it("skips group nodes", () => {
+    const nodes: CanvasNode[] = [group({ id: "g", x: 0, y: 0, width: 100, height: 50 })];
+    expect(nodeAtPoint(nodes, { x: 10, y: 10 })).toBeNull();
+  });
+
+  it("skips excluded ids", () => {
+    const nodes: CanvasNode[] = [node({ id: "a", x: 0, y: 0, width: 100, height: 50 })];
+    expect(nodeAtPoint(nodes, { x: 10, y: 10 }, new Set(["a"]))).toBeNull();
+  });
+
+  it("returns null when no node is hit", () => {
+    const nodes: CanvasNode[] = [node({ id: "a", x: 0, y: 0, width: 100, height: 50 })];
+    expect(nodeAtPoint(nodes, { x: 500, y: 500 })).toBeNull();
   });
 });
 

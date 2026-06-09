@@ -40,6 +40,17 @@ vi.mock("./markdown/MarkdownViewer", () => ({
   ),
 }));
 
+vi.mock("./canvas/lazyCanvas", () => ({
+  CanvasViewer: ({ filePath }: { filePath?: string }) => (
+    <div data-testid="canvas-viewer">{filePath}</div>
+  ),
+  CanvasEditor: ({ filePath, onChange }: { filePath?: string; onChange: (s: string) => void }) => (
+    <button type="button" data-testid="canvas-editor" onClick={() => onChange("CANVAS")}>
+      {filePath}
+    </button>
+  ),
+}));
+
 vi.mock("./notebook/lazyNotebook", () => ({
   NotebookViewer: ({ filePath }: { filePath?: string }) => (
     <div data-testid="notebook-viewer">{filePath}</div>
@@ -60,6 +71,22 @@ function makeNotebookTab(mode: EditorMode = "view"): FileTab {
       path: "/p/analysis.ipynb",
       content: '{"cells": []}',
       metadata: { name: "analysis.ipynb", path: "/p/analysis.ipynb", size: 0, modified: 0 },
+      scrollTop: 0,
+      mode,
+      editContent: null,
+      dirty: false,
+    },
+  };
+}
+
+function makeCanvasTab(mode: EditorMode = "view"): FileTab {
+  return {
+    id: "tab-canvas",
+    kind: "file",
+    file: {
+      path: "/p/board.canvas",
+      content: '{"nodes":[],"edges":[]}',
+      metadata: { name: "board.canvas", path: "/p/board.canvas", size: 0, modified: 0 },
       scrollTop: 0,
       mode,
       editContent: null,
@@ -250,6 +277,36 @@ describe("TabContent", () => {
     const tab = makeNotebookTab("split");
     renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
     expect(screen.getByTestId("notebook-split")).toBeInTheDocument();
+    expect(screen.queryByTestId("lazy-split")).toBeNull();
+  });
+
+  it("renders the read-only canvas viewer for a .canvas tab in view mode", () => {
+    const tab = makeCanvasTab("view");
+    renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
+    expect(screen.getByTestId("canvas-viewer")).toHaveTextContent("/p/board.canvas");
+    expect(screen.queryByTestId("markdown-viewer")).toBeNull();
+  });
+
+  it("renders the canvas editor in edit mode and commits changes via commitEdit", () => {
+    const tab = makeCanvasTab("edit");
+    const commitEdit = vi.fn();
+    const { getByTestId } = renderTabContent({
+      activeTab: tab,
+      activeTabId: tab.id,
+      activeFile: tab.file,
+      commitEdit,
+    });
+    expect(getByTestId("canvas-editor")).toBeInTheDocument();
+    // Canvas JSON must never reach the markdown editor.
+    expect(screen.queryByTestId("lazy-editor")).toBeNull();
+    getByTestId("canvas-editor").click();
+    expect(commitEdit).toHaveBeenCalledWith(tab.id, "CANVAS");
+  });
+
+  it("renders the canvas editor in split mode too", () => {
+    const tab = makeCanvasTab("split");
+    renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
+    expect(screen.getByTestId("canvas-editor")).toBeInTheDocument();
     expect(screen.queryByTestId("lazy-split")).toBeNull();
   });
 });

@@ -527,6 +527,79 @@ describe("useTabs file operations", () => {
     }
   });
 
+  it("commitEdit in view mode writes to disk and is undoable", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => "A",
+        write_file: writeFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/board.canvas");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    await act(async () => {
+      await result.current.commitEdit(tabId, "B");
+    });
+    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/board.canvas", content: "B" });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.content).toBe("B");
+    }
+
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.content).toBe("A");
+    }
+  });
+
+  it("commitEdit in edit mode mutates editContent and ignores no-op writes", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => "A",
+        write_file: writeFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ defaultEditorMode: "edit" })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/doc.md");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    // No-op: committing the unchanged content does nothing.
+    await act(async () => {
+      await result.current.commitEdit(tabId, "A");
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.dirty).toBe(false);
+    }
+
+    await act(async () => {
+      await result.current.commitEdit(tabId, "B");
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.editContent).toBe("B");
+      expect(result.current.tabs[0].file.dirty).toBe(true);
+    }
+  });
+
+  it("commitEdit is a no-op for an unknown tab id", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.commitEdit("nope", "X");
+    });
+  });
+
   it("undoEdit is a no-op when there is no history", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
     vi.mocked(invoke).mockImplementation(
@@ -725,6 +798,38 @@ describe("useTabs dialog and events", () => {
     const folder = result.current.tabs.find((t) => t.id === folderId);
     const entries = folder?.kind === "folder" ? folder.nodes.get("/p/ws") : null;
     expect(entries?.some((e) => e.path === "/p/ws/Untitled.md")).toBe(true);
+  });
+
+  it("createCanvas invokes create_canvas and refreshes the target directory", async () => {
+    const created = {
+      name: "Untitled.canvas",
+      path: "/p/ws/Untitled.canvas",
+      isDirectory: false,
+      modified: 0,
+    };
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        create_canvas: async () => "/p/ws/Untitled.canvas",
+        read_directory: async () => [created],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+
+    let newPath: string | null = null;
+    await act(async () => {
+      newPath = await result.current.createCanvas(folderId, "/p/ws");
+    });
+
+    expect(newPath).toBe("/p/ws/Untitled.canvas");
+    expect(invoke).toHaveBeenCalledWith("create_canvas", { dir: "/p/ws", root: "/p/ws" });
+    const folder = result.current.tabs.find((t) => t.id === folderId);
+    const entries = folder?.kind === "folder" ? folder.nodes.get("/p/ws") : null;
+    expect(entries?.some((e) => e.path === "/p/ws/Untitled.canvas")).toBe(true);
   });
 
   it("createFolder invokes create_folder and expands the target directory", async () => {

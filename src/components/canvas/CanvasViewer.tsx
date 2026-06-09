@@ -56,7 +56,7 @@ export function CanvasViewer({ content, filePath, onOpenFile }: CanvasViewerProp
     if (e.button !== 0) return;
     panState.current = { x: e.clientX, y: e.clientY };
     setPanning(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const last = panState.current;
