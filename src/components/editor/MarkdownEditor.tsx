@@ -13,6 +13,8 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
+import { useSettings } from "@/hooks/useSettings";
+import { editorKeymapExtensions } from "@/lib/editorKeymap";
 import { wikilinkCompletionSource } from "@/lib/wikilinkCompletion";
 
 interface MarkdownEditorProps {
@@ -43,9 +45,14 @@ export function MarkdownEditor({
   workspaceFilesRef.current = workspaceFiles ?? [];
   workspaceRootRef.current = workspaceRoot;
 
+  const { settings } = useSettings();
+  const keymapPreset = settings.editor.keymap;
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: content is synced via separate effect below to avoid destroying the editor on every keystroke
   useEffect(() => {
     if (!containerRef.current) return;
+
+    const { leading, extraKeys } = editorKeymapExtensions(keymapPreset);
 
     const glyphHighlight = HighlightStyle.define([
       { tag: tags.heading1, class: "cm-heading cm-heading-1" },
@@ -70,6 +77,8 @@ export function MarkdownEditor({
       state: EditorState.create({
         doc: content,
         extensions: [
+          // Vim (when selected) installs first so its modal handler wins.
+          ...leading,
           lineNumbers(),
           history(),
           // Completion keymap (Tab-accept, Esc-close, arrows-navigate) goes
@@ -80,6 +89,9 @@ export function MarkdownEditor({
             { key: "ArrowDown", run: (v) => moveCompletionSelection(true)(v) },
             { key: "ArrowUp", run: (v) => moveCompletionSelection(false)(v) },
             ...completionKeymap,
+            // VSCode preset bindings (empty for other presets) take precedence
+            // over the CodeMirror defaults below.
+            ...extraKeys,
             ...defaultKeymap,
             ...historyKeymap,
           ]),
@@ -154,7 +166,7 @@ export function MarkdownEditor({
       view.destroy();
       viewRef.current = null;
     };
-  }, []);
+  }, [keymapPreset]);
 
   // Sync content from outside (e.g., file reload) without losing cursor
   useEffect(() => {
