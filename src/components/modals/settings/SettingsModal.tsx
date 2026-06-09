@@ -72,28 +72,30 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           </button>
         </div>
 
-        <nav className="settings-nav">
-          {tabs.map((t) => (
-            <button
-              type="button"
-              key={t.id}
-              className="settings-tab"
-              data-active={tab === t.id}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
+        <div className="settings-main">
+          <nav className="settings-nav">
+            {tabs.map((t) => (
+              <button
+                type="button"
+                key={t.id}
+                className="settings-tab"
+                data-active={tab === t.id}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
 
-        <div className="settings-body">
-          {tab === "appearance" && <AppearanceTab />}
-          {tab === "layout" && <LayoutTab />}
-          {tab === "behavior" && <BehaviorTab />}
-          {tab === "hotkeys" && <HotkeysTab />}
-          {tab === "ai" && <AITab />}
-          {tab === "print" && <PrintTab />}
-          {tab === "privacy" && <PrivacyTab />}
+          <div className="settings-body">
+            {tab === "appearance" && <AppearanceTab />}
+            {tab === "layout" && <LayoutTab />}
+            {tab === "behavior" && <BehaviorTab />}
+            {tab === "hotkeys" && <HotkeysTab />}
+            {tab === "ai" && <AITab />}
+            {tab === "print" && <PrintTab />}
+            {tab === "privacy" && <PrivacyTab />}
+          </div>
         </div>
 
         <div className="settings-footer">
