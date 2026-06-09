@@ -3,12 +3,13 @@ import { useSettings } from "@/hooks/useSettings";
 import { AITab } from "./AITab";
 import { AppearanceTab } from "./AppearanceTab";
 import { BehaviorTab } from "./BehaviorTab";
+import { EditorTab } from "./EditorTab";
 import { HotkeysTab } from "./HotkeysTab";
 import { LayoutTab } from "./LayoutTab";
 import { PrintTab } from "./PrintTab";
 import { PrivacyTab } from "./PrivacyTab";
 
-type Tab = "appearance" | "layout" | "behavior" | "hotkeys" | "ai" | "print" | "privacy";
+type Tab = "appearance" | "layout" | "behavior" | "editor" | "hotkeys" | "ai" | "print" | "privacy";
 
 interface SettingsModalProps {
   open: boolean;
@@ -42,6 +43,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     { id: "appearance", label: "Appearance" },
     { id: "layout", label: "Layout" },
     { id: "behavior", label: "Behavior" },
+    { id: "editor", label: "Editor" },
     { id: "hotkeys", label: "Hotkeys" },
     { id: "ai", label: "AI" },
     { id: "print", label: "Print" },
@@ -72,28 +74,31 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           </button>
         </div>
 
-        <nav className="settings-nav">
-          {tabs.map((t) => (
-            <button
-              type="button"
-              key={t.id}
-              className="settings-tab"
-              data-active={tab === t.id}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
+        <div className="settings-main">
+          <nav className="settings-nav">
+            {tabs.map((t) => (
+              <button
+                type="button"
+                key={t.id}
+                className="settings-tab"
+                data-active={tab === t.id}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
 
-        <div className="settings-body">
-          {tab === "appearance" && <AppearanceTab />}
-          {tab === "layout" && <LayoutTab />}
-          {tab === "behavior" && <BehaviorTab />}
-          {tab === "hotkeys" && <HotkeysTab />}
-          {tab === "ai" && <AITab />}
-          {tab === "print" && <PrintTab />}
-          {tab === "privacy" && <PrivacyTab />}
+          <div className="settings-body">
+            {tab === "appearance" && <AppearanceTab />}
+            {tab === "layout" && <LayoutTab />}
+            {tab === "behavior" && <BehaviorTab />}
+            {tab === "editor" && <EditorTab />}
+            {tab === "hotkeys" && <HotkeysTab />}
+            {tab === "ai" && <AITab />}
+            {tab === "print" && <PrintTab />}
+            {tab === "privacy" && <PrivacyTab />}
+          </div>
         </div>
 
         <div className="settings-footer">

@@ -49,6 +49,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Split view — edit and preview side-by-side, or switch between modes per tab
 - Live preview updates as you type
 - Wikilink autocomplete — type `[[` in a folder workspace to pick from existing notes; Tab/Enter to insert
+- Editor keymaps — choose Default, Vim, or VSCode bindings in Settings → Editor
 
 ### Viewer
 - Jupyter notebooks — open `.ipynb` files directly; markdown cells render with full markdown (math, code, diagrams), code cells are syntax-highlighted, and image, HTML, plain-text, and colourised stream/traceback outputs show under each cell with `In [n]:` / `Out [n]:` prompts (read-only)
