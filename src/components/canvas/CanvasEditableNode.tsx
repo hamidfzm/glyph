@@ -63,21 +63,49 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
   const { node, canvasPath, selected, editing } = props;
   const editable = node.type !== "file";
   const textRef = useRef<HTMLTextAreaElement | null>(null);
+  // Latest typed value, tracked outside the DOM. Editing can end without a
+  // blur event (clicking the stage clears editingId and React unmounts the
+  // textarea; removed elements never fire blur), so the commit-on-end path
+  // below must not depend on reading the element.
+  const valueRef = useRef("");
+  const done = useRef(false);
 
   useEffect(() => {
     if (editing && textRef.current) {
+      valueRef.current = textRef.current.value;
+      done.current = false;
       textRef.current.focus();
       textRef.current.select();
     }
   }, [editing]);
 
-  const commit = () =>
-    props.onTextCommit(
-      // v8 ignore next -- defensive: textarea ref is always set while editing
-      textRef.current?.value ?? "",
-    );
+  const commit = () => {
+    if (done.current) return;
+    done.current = true;
+    props.onTextCommit(valueRef.current);
+  };
+
+  // Safety net: when editing ends any way other than blur/Enter/Escape —
+  // clicking the background, double-clicking another card, switching the tab
+  // to view mode — commit the pending value instead of silently dropping it.
+  const onTextCommitRef = useRef(props.onTextCommit);
+  onTextCommitRef.current = props.onTextCommit;
+  useEffect(() => {
+    if (!editing) return;
+    return () => {
+      if (!done.current) {
+        done.current = true;
+        onTextCommitRef.current(valueRef.current);
+      }
+    };
+  }, [editing]);
+
   const onKeyDown = (e: ReactKeyboardEvent) => {
-    if (e.key === "Escape") props.onEditCancel();
+    if (e.key === "Escape") {
+      // Discard: mark the edit finished so the end-of-editing commit skips.
+      done.current = true;
+      props.onEditCancel();
+    }
     // ⌘/Ctrl+Enter commits multi-line text; for single-line values (group
     // label, link URL) plain Enter commits too.
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey || node.type !== "text")) {
@@ -117,6 +145,9 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
             className="glyph-canvas-node-editor"
             defaultValue={editValue(node)}
             placeholder={editPlaceholder(node)}
+            onChange={(e) => {
+              valueRef.current = e.target.value;
+            }}
             onPointerDown={(e) => e.stopPropagation()}
             onBlur={commit}
             onKeyDown={onKeyDown}

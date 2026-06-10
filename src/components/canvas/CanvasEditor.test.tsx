@@ -211,6 +211,42 @@ describe("CanvasEditor", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("clicking the canvas background while editing commits the typed text", () => {
+    // Regression: unmounting a focused textarea fires no blur event, so
+    // ending an edit via the stage used to silently drop the typed content.
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
+    fireEvent.doubleClick(nodesOf(container)[0]);
+    const textarea = container.querySelector(".glyph-canvas-node-editor") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "Typed then clicked away" } });
+    fireEvent.pointerDown(stageOf(container), { clientX: 500, clientY: 400, button: 0 });
+    expect(lastData(onChange).nodes[0]).toMatchObject({ text: "Typed then clicked away" });
+  });
+
+  it("unmounting the editor mid-edit commits the pending text", () => {
+    // Same loss path when the tab switches to view mode while typing.
+    const onChange = vi.fn();
+    const { container, unmount } = render(<CanvasEditor content={oneText} onChange={onChange} />);
+    fireEvent.doubleClick(nodesOf(container)[0]);
+    const textarea = container.querySelector(".glyph-canvas-node-editor") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "Typed then switched mode" } });
+    unmount();
+    expect(onChange).toHaveBeenCalled();
+    const data = parseCanvas(onChange.mock.calls.at(-1)?.[0] as string);
+    expect(data.nodes[0]).toMatchObject({ text: "Typed then switched mode" });
+  });
+
+  it("double-clicking another card mid-edit commits the first card's text", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={twoNodes} onChange={onChange} />);
+    const [a, b] = nodesOf(container);
+    fireEvent.doubleClick(a);
+    const textarea = container.querySelector(".glyph-canvas-node-editor") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "First card edit" } });
+    fireEvent.doubleClick(b);
+    expect(lastData(onChange).nodes[0]).toMatchObject({ text: "First card edit" });
+  });
+
   it("cancels an inline edit on Escape without committing", () => {
     const onChange = vi.fn();
     const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
