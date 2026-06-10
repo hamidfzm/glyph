@@ -12,6 +12,12 @@ interface CanvasNodeViewProps {
   canvasPath?: string;
   /** Open an embedded file node in the workspace (folder tabs only). */
   onOpenFile?: (path: string) => void;
+  /**
+   * When false (the editor), link/file cards render inert: clicking selects
+   * and drags the card instead of opening the URL or embedded file.
+   * Defaults to true (the read-only viewer).
+   */
+  interactive?: boolean;
 }
 
 /** Resolve a canvas-relative file reference against the .canvas file's folder. */
@@ -24,7 +30,12 @@ function resolveRelative(file: string, canvasPath: string | undefined): string {
 // Renders the inner content of a single canvas node by type. Positioning,
 // borders, and selection chrome are applied by the parent layer; this component
 // owns only what goes *inside* the card.
-export function CanvasNodeView({ node, canvasPath, onOpenFile }: CanvasNodeViewProps) {
+export function CanvasNodeView({
+  node,
+  canvasPath,
+  onOpenFile,
+  interactive = true,
+}: CanvasNodeViewProps) {
   const accent = canvasColorToCss(node.color);
 
   switch (node.type) {
@@ -35,7 +46,15 @@ export function CanvasNodeView({ node, canvasPath, onOpenFile }: CanvasNodeViewP
         </div>
       );
 
-    case "link":
+    case "link": {
+      const label = <span className="glyph-canvas-node-link-url">{node.url}</span>;
+      if (!interactive) {
+        return (
+          <div className="glyph-canvas-node-link" title={node.url}>
+            {label}
+          </div>
+        );
+      }
       return (
         <button
           type="button"
@@ -43,9 +62,10 @@ export function CanvasNodeView({ node, canvasPath, onOpenFile }: CanvasNodeViewP
           onClick={() => void openUrl(node.url)}
           title={node.url}
         >
-          <span className="glyph-canvas-node-link-url">{node.url}</span>
+          {label}
         </button>
       );
+    }
 
     case "file": {
       const resolved = resolveRelative(node.file, canvasPath);
@@ -61,6 +81,16 @@ export function CanvasNodeView({ node, canvasPath, onOpenFile }: CanvasNodeViewP
           />
         );
       }
+      const name = (
+        <span className="glyph-canvas-node-file-name">{node.file.split(/[/\\]/).pop()}</span>
+      );
+      if (!interactive) {
+        return (
+          <div className="glyph-canvas-node-file" title={node.file}>
+            {name}
+          </div>
+        );
+      }
       return (
         <button
           type="button"
@@ -68,7 +98,7 @@ export function CanvasNodeView({ node, canvasPath, onOpenFile }: CanvasNodeViewP
           onClick={() => onOpenFile?.(node.file)}
           title={node.file}
         >
-          <span className="glyph-canvas-node-file-name">{node.file.split(/[/\\]/).pop()}</span>
+          {name}
         </button>
       );
     }

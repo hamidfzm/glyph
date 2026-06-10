@@ -80,4 +80,24 @@ describe("CanvasNodeView", () => {
     expect(label).toBeInTheDocument();
     expect(label.getAttribute("style")).toBeFalsy();
   });
+
+  it("renders an inert link card when not interactive (no navigation in editor)", () => {
+    vi.mocked(openUrl).mockClear();
+    const node: CanvasNode = { ...base, type: "link", url: "https://glyph.dev" };
+    render(<CanvasNodeView node={node} interactive={false} />);
+    const url = screen.getByText("https://glyph.dev");
+    expect(url).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    fireEvent.click(url);
+    expect(openUrl).not.toHaveBeenCalled();
+  });
+
+  it("renders an inert file card when not interactive", () => {
+    const onOpenFile = vi.fn();
+    const node: CanvasNode = { ...base, type: "file", file: "doc.md" };
+    render(<CanvasNodeView node={node} onOpenFile={onOpenFile} interactive={false} />);
+    fireEvent.click(screen.getByText("doc.md"));
+    expect(onOpenFile).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
 });

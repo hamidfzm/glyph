@@ -285,10 +285,10 @@ Glyph opens [JSON Canvas](https://jsoncanvas.org) (`.canvas`) files as an infini
 - **Connections** are drawn as arrows between card sides, with optional labels.
 - **Navigate** by scrolling to pan and `Cmd/Ctrl`+scroll (or pinch) to zoom; the toolbar has zoom and fit-to-content controls.
 
-The mode toggle switches between reading and editing:
+The mode toggle switches between reading and editing (split is hidden for canvas — the board itself is the editor):
 
 - **View** is the read-only board.
-- **Edit** (and **split**) is the full editor — drag to move cards, drag the corner handle to resize, drag a side connector to draw an edge, double-click a card to edit its markdown inline, and use the selection toolbar to recolour or delete. `+ Card` adds a node; `Delete`/`Backspace` removes the selection. Edits save as standard `.canvas` JSON (interoperable with Obsidian) and undo/redo with `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z`.
+- **Edit** is the full editor — drag to move cards, drag the corner handle to resize, drag a side connector to draw an edge, double-click a card to edit its markdown (or a link's URL, or a group's label) inline, and use the selection toolbar to recolour or delete. Double-click empty board space to drop a new card right there, or use the `+ Card` / `+ Group` / `+ Link` toolbar buttons; `Delete`/`Backspace` removes the selection. Edits save as standard `.canvas` JSON (interoperable with Obsidian) and undo/redo with `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z`.
 
 Create a fresh board from the file tree: right-click a folder (or the empty panel) and choose **New Canvas**.
 

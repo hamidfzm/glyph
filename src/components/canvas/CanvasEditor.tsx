@@ -23,6 +23,7 @@ import {
   resizeNode,
   setNodesColor,
   updateGroupLabel,
+  updateLinkUrl,
   updateTextNode,
 } from "@/lib/canvas/mutations";
 import type { CanvasData, CanvasNode, NodeSide } from "@/lib/canvas/types";
@@ -32,7 +33,15 @@ import { CanvasEditableNode } from "./CanvasEditableNode";
 import { CanvasSelectionToolbar } from "./CanvasSelectionToolbar";
 
 const MIN_SIZE = 60;
-const NEW_NODE = { width: 250, height: 120 };
+
+type CreatableType = "text" | "group" | "link";
+
+/** Default sizes for freshly created nodes, per type. */
+const NEW_NODE_SIZE: Record<CreatableType, { width: number; height: number }> = {
+  text: { width: 250, height: 120 },
+  group: { width: 420, height: 300 },
+  link: { width: 320, height: 64 },
+};
 
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `n${Math.round(Math.random() * 1e9)}`;
@@ -191,21 +200,30 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
   };
 
   // --- discrete operations -----------------------------------------------
-  const addCard = () => {
+  // Create a node centred on `at` (world coordinates), defaulting to the
+  // middle of the stage, then immediately open it for inline naming.
+  const addNodeAt = (type: CreatableType, at?: Point) => {
     const stage = stageRef.current;
-    const center = stage
-      ? screenToWorld(viewport, { x: stage.clientWidth / 2, y: stage.clientHeight / 2 })
-      : // v8 ignore next -- defensive: stageRef is always attached once rendered
-        { x: 0, y: 0 };
+    const center =
+      at ??
+      (stage
+        ? screenToWorld(viewport, { x: stage.clientWidth / 2, y: stage.clientHeight / 2 })
+        : // v8 ignore next -- defensive: stageRef is always attached once rendered
+          { x: 0, y: 0 });
+    const size = NEW_NODE_SIZE[type];
     const id = newId();
-    const node: CanvasNode = {
+    const base = {
       id,
-      type: "text",
-      x: Math.round(center.x - NEW_NODE.width / 2),
-      y: Math.round(center.y - NEW_NODE.height / 2),
-      ...NEW_NODE,
-      text: "",
+      x: Math.round(center.x - size.width / 2),
+      y: Math.round(center.y - size.height / 2),
+      ...size,
     };
+    const node: CanvasNode =
+      type === "text"
+        ? { ...base, type, text: "" }
+        : type === "group"
+          ? { ...base, type }
+          : { ...base, type, url: "" };
     commit(addNode(dataRef.current, node));
     setSelection(new Set([id]));
     setEditingId(id);
@@ -231,6 +249,7 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
     /* v8 ignore start -- defensive: id always references a node currently being edited */
     if (node?.type === "text") commit(updateTextNode(dataRef.current, id, value));
     else if (node?.type === "group") commit(updateGroupLabel(dataRef.current, id, value));
+    else if (node?.type === "link") commit(updateLinkUrl(dataRef.current, id, value));
     /* v8 ignore stop */
     setEditingId(null);
   };
@@ -278,6 +297,7 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
 
   return (
     <div className="glyph-canvas" data-editing>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: the stage is a custom spatial surface (pan by drag, double-click to create); keyboard users create nodes via the toolbar buttons below */}
       <div
         ref={stageRef}
         className="glyph-canvas-stage"
@@ -285,6 +305,7 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
         onPointerMove={onStagePointerMove}
         onPointerUp={onStagePointerUp}
         onPointerCancel={onStagePointerUp}
+        onDoubleClick={(e) => addNodeAt("text", worldAt(e))}
       >
         <div
           className="glyph-canvas-world"
@@ -344,8 +365,14 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
       )}
 
       <div className="glyph-canvas-toolbar">
-        <button type="button" onClick={addCard} aria-label="Add card">
+        <button type="button" onClick={() => addNodeAt("text")} aria-label="Add card">
           + Card
+        </button>
+        <button type="button" onClick={() => addNodeAt("group")} aria-label="Add group">
+          + Group
+        </button>
+        <button type="button" onClick={() => addNodeAt("link")} aria-label="Add link">
+          + Link
         </button>
         <span className="glyph-canvas-toolbar-sep" />
         <button type="button" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom out">

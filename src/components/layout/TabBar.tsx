@@ -1,5 +1,6 @@
 import { useTabsContext } from "@/contexts/TabsContext";
 import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
+import { isCanvasFile } from "@/lib/canvasExtensions";
 import { EDITOR_MODE } from "@/lib/settings";
 import { FolderIcon } from "../icons/FolderIcon";
 
@@ -24,6 +25,9 @@ export function TabBar() {
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
   const activeFile = activeFileOf(activeTab);
   const showModeToggle = activeTab !== null && activeFile !== null;
+  // Canvas has no source-beside-preview split: the board itself is the editor,
+  // so split would duplicate edit mode. Only markdown gets the third button.
+  const showSplit = activeFile !== null && !isCanvasFile(activeFile.path);
 
   return (
     <div className="tab-bar-container" data-print-hide="true">
@@ -115,27 +119,29 @@ export function TabBar() {
               />
             </svg>
           </button>
-          <button
-            type="button"
-            className="mode-toggle-btn"
-            data-active={activeFile.mode === EDITOR_MODE.split || undefined}
-            onClick={() => onModeChange(activeTab.id, EDITOR_MODE.split)}
-            aria-label="Split mode"
-            title="Split"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <rect
-                x="1.5"
-                y="2"
-                width="11"
-                height="10"
-                rx="1.5"
-                stroke="currentColor"
-                strokeWidth="1.3"
-              />
-              <line x1="7" y1="2" x2="7" y2="12" stroke="currentColor" strokeWidth="1.3" />
-            </svg>
-          </button>
+          {showSplit && (
+            <button
+              type="button"
+              className="mode-toggle-btn"
+              data-active={activeFile.mode === EDITOR_MODE.split || undefined}
+              onClick={() => onModeChange(activeTab.id, EDITOR_MODE.split)}
+              aria-label="Split mode"
+              title="Split"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <rect
+                  x="1.5"
+                  y="2"
+                  width="11"
+                  height="10"
+                  rx="1.5"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                />
+                <line x1="7" y1="2" x2="7" y2="12" stroke="currentColor" strokeWidth="1.3" />
+              </svg>
+            </button>
+          )}
         </div>
       )}
     </div>

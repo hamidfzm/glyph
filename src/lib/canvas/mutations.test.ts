@@ -9,6 +9,7 @@ import {
   setNodesColor,
   updateEdgeLabel,
   updateGroupLabel,
+  updateLinkUrl,
   updateTextNode,
 } from "./mutations";
 import type { CanvasData, TextNode } from "./types";
@@ -103,5 +104,25 @@ describe("edges", () => {
     const next = updateEdgeLabel(two, "e", "rel");
     expect(next.edges[0].label).toBe("rel");
     expect(next.edges[1]).toBe(two.edges[1]);
+  });
+});
+
+describe("updateLinkUrl", () => {
+  it("updates a link node's url", () => {
+    const withLink = addNode(base, {
+      id: "l",
+      type: "link",
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      url: "https://old.example",
+    });
+    const next = updateLinkUrl(withLink, "l", "https://glyph.dev");
+    expect(next.nodes.at(-1)).toMatchObject({ type: "link", url: "https://glyph.dev" });
+  });
+
+  it("ignores non-link nodes", () => {
+    expect(updateLinkUrl(base, "a", "https://x.dev").nodes[0]).not.toHaveProperty("url");
   });
 });

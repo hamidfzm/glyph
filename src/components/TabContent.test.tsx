@@ -41,8 +41,10 @@ vi.mock("./markdown/MarkdownViewer", () => ({
 }));
 
 vi.mock("./canvas/lazyCanvas", () => ({
-  CanvasViewer: ({ filePath }: { filePath?: string }) => (
-    <div data-testid="canvas-viewer">{filePath}</div>
+  CanvasViewer: ({ filePath, content }: { filePath?: string; content: string }) => (
+    <div data-testid="canvas-viewer" data-content={content}>
+      {filePath}
+    </div>
   ),
   CanvasEditor: ({ filePath, onChange }: { filePath?: string; onChange: (s: string) => void }) => (
     <button type="button" data-testid="canvas-editor" onClick={() => onChange("CANVAS")}>
@@ -285,6 +287,17 @@ describe("TabContent", () => {
     renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
     expect(screen.getByTestId("canvas-viewer")).toHaveTextContent("/p/board.canvas");
     expect(screen.queryByTestId("markdown-viewer")).toBeNull();
+  });
+
+  it("shows unsaved edits in the canvas viewer (editContent wins over content)", () => {
+    const tab = makeCanvasTab("view");
+    tab.file.editContent = '{"nodes":[{"id":"new"}],"edges":[]}';
+    tab.file.dirty = true;
+    renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
+    expect(screen.getByTestId("canvas-viewer")).toHaveAttribute(
+      "data-content",
+      tab.file.editContent,
+    );
   });
 
   it("renders the canvas editor in edit mode and commits changes via commitEdit", () => {

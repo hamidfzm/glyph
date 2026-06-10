@@ -163,6 +163,23 @@ describe("TabBar", () => {
     expect(setTabMode).toHaveBeenCalledWith("tab-0", "split");
   });
 
+  it("hides the Split button for canvas files (the board is the editor)", () => {
+    const tab = makeFileTab(0);
+    const canvasTab: FileTab = {
+      ...tab,
+      file: { ...tab.file, path: "/path/to/board.canvas" },
+    };
+    renderTabBar({ tabs: [canvasTab], activeTabId: "tab-0" });
+    expect(screen.getByLabelText("View mode")).toBeInTheDocument();
+    expect(screen.getByLabelText("Edit mode")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Split mode")).not.toBeInTheDocument();
+  });
+
+  it("keeps the Split button for markdown files", () => {
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0" });
+    expect(screen.getByLabelText("Split mode")).toBeInTheDocument();
+  });
+
   it("hides mode toggle when active tab is a folder with no current file", () => {
     renderTabBar({
       tabs: [makeFolderTab(0, "/Users/me/notes")],

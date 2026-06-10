@@ -24,12 +24,30 @@ interface CanvasEditableNodeProps {
   onEditCancel: () => void;
 }
 
+/** The inline-editable value for a node: markdown body, group label, or URL. */
+function editValue(node: CanvasNode): string {
+  switch (node.type) {
+    case "text":
+      return node.text;
+    case "group":
+      return node.label ?? "";
+    case "link":
+      return node.url;
+    /* v8 ignore start -- defensive: file nodes are not editable, so this is never read */
+    default:
+      return "";
+    /* v8 ignore stop */
+  }
+}
+
 // A node in edit mode: the read-only content plus selection chrome, a
 // bottom-right resize handle, four side connectors for drawing edges, and an
-// inline textarea for editing text-node bodies / group labels.
+// inline textarea for editing text bodies, group labels, and link URLs.
+// The chrome hangs outside the border, so clipping happens on the inner
+// content wrapper, never on the node itself.
 export function CanvasEditableNode(props: CanvasEditableNodeProps) {
   const { node, canvasPath, selected, editing } = props;
-  const editable = node.type === "text" || node.type === "group";
+  const editable = node.type !== "file";
   const textRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -46,12 +64,13 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
     );
   const onKeyDown = (e: ReactKeyboardEvent) => {
     if (e.key === "Escape") props.onEditCancel();
-    // ⌘/Ctrl+Enter commits multi-line text without inserting a newline.
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) commit();
+    // ⌘/Ctrl+Enter commits multi-line text; for single-line values (group
+    // label, link URL) plain Enter commits too.
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey || node.type !== "text")) {
+      e.preventDefault();
+      commit();
+    }
   };
-
-  const initial =
-    node.type === "text" ? node.text : node.type === "group" ? (node.label ?? "") : "";
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: a canvas card is a custom spatial surface — selection/move via pointer, double-click to edit; keyboard editing is reached via the selection and inline textarea
@@ -76,18 +95,20 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
         if (editable) props.onStartEdit();
       }}
     >
-      {editing && editable ? (
-        <textarea
-          ref={textRef}
-          className="glyph-canvas-node-editor"
-          defaultValue={initial}
-          onPointerDown={(e) => e.stopPropagation()}
-          onBlur={commit}
-          onKeyDown={onKeyDown}
-        />
-      ) : (
-        <CanvasNodeView node={node} canvasPath={canvasPath} />
-      )}
+      <div className="glyph-canvas-node-content">
+        {editing && editable ? (
+          <textarea
+            ref={textRef}
+            className="glyph-canvas-node-editor"
+            defaultValue={editValue(node)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onBlur={commit}
+            onKeyDown={onKeyDown}
+          />
+        ) : (
+          <CanvasNodeView node={node} canvasPath={canvasPath} interactive={false} />
+        )}
+      </div>
 
       {selected && !editing && (
         <>

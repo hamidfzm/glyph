@@ -138,7 +138,9 @@ export function CanvasViewer({ content, filePath, onOpenFile }: CanvasViewerProp
               }}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              <CanvasNodeView node={node} canvasPath={filePath} onOpenFile={onOpenFile} />
+              <div className="glyph-canvas-node-content">
+                <CanvasNodeView node={node} canvasPath={filePath} onOpenFile={onOpenFile} />
+              </div>
             </div>
           ))}
         </div>

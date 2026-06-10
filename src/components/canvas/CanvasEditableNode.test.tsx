@@ -96,10 +96,39 @@ describe("CanvasEditableNode", () => {
     expect(onStartEdit).toHaveBeenCalledTimes(1);
   });
 
-  it("does not call onStartEdit on doubleClick of a non-editable link node", () => {
+  it("calls onStartEdit on doubleClick of a link node (URL is editable)", () => {
     const { container, onStartEdit } = setup({ node: linkNode });
     fireEvent.doubleClick(container.querySelector(".glyph-canvas-node")!);
+    expect(onStartEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call onStartEdit on doubleClick of a file node", () => {
+    const fileNode: CanvasNode = {
+      id: "f",
+      type: "file",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 50,
+      file: "doc.md",
+    };
+    const { container, onStartEdit } = setup({ node: fileNode });
+    fireEvent.doubleClick(container.querySelector(".glyph-canvas-node")!);
     expect(onStartEdit).not.toHaveBeenCalled();
+  });
+
+  it("shows the URL in the textarea when editing a link node and commits on plain Enter", () => {
+    const { container, onTextCommit } = setup({ node: linkNode, editing: true });
+    const ta = container.querySelector<HTMLTextAreaElement>(".glyph-canvas-node-editor")!;
+    expect(ta.value).toBe("https://x.dev");
+    fireEvent.change(ta, { target: { value: "https://glyph.dev" } });
+    fireEvent.keyDown(ta, { key: "Enter" });
+    expect(onTextCommit).toHaveBeenCalledWith("https://glyph.dev");
+  });
+
+  it("wraps content in the clipping wrapper so chrome never causes scrollbars", () => {
+    const { container } = setup({ selected: true });
+    expect(container.querySelector(".glyph-canvas-node-content")).toBeInTheDocument();
   });
 
   it("renders a textarea with the text node's text when editing", () => {

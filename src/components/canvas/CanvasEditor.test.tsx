@@ -233,6 +233,38 @@ describe("CanvasEditor", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("adds a group via the toolbar and commits it", () => {
+    const onChange = vi.fn();
+    render(<CanvasEditor content={empty} onChange={onChange} />);
+    fireEvent.click(screen.getByLabelText("Add group"));
+    const data = lastData(onChange);
+    expect(data.nodes).toHaveLength(1);
+    expect(data.nodes[0].type).toBe("group");
+  });
+
+  it("adds a link via the toolbar and edits its URL inline", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={empty} onChange={onChange} />);
+    fireEvent.click(screen.getByLabelText("Add link"));
+    expect(lastData(onChange).nodes[0].type).toBe("link");
+    // The new link opens in inline edit; type the URL and commit with Enter.
+    const ta = container.querySelector(".glyph-canvas-node-editor") as HTMLTextAreaElement;
+    fireEvent.change(ta, { target: { value: "https://glyph.dev" } });
+    fireEvent.keyDown(ta, { key: "Enter" });
+    expect(lastData(onChange).nodes[0]).toMatchObject({ type: "link", url: "https://glyph.dev" });
+  });
+
+  it("creates a card centred on the cursor on stage double-click", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={empty} onChange={onChange} />);
+    fireEvent.doubleClick(stageOf(container), { clientX: 100, clientY: 60 });
+    const data = lastData(onChange);
+    expect(data.nodes).toHaveLength(1);
+    // Viewport starts untransformed, so world == stage coords: the 250x120
+    // card is centred on (100, 60).
+    expect(data.nodes[0]).toMatchObject({ type: "text", x: -25, y: 0 });
+  });
+
   it("re-selecting the only selected node keeps the same selection", () => {
     const onChange = vi.fn();
     const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);

@@ -63,6 +63,14 @@ export function updateGroupLabel(data: CanvasData, id: string, label: string): C
   };
 }
 
+/** Replace a link node's URL. */
+export function updateLinkUrl(data: CanvasData, id: string, url: string): CanvasData {
+  return {
+    ...data,
+    nodes: data.nodes.map((n) => (n.id === id && n.type === "link" ? { ...n, url } : n)),
+  };
+}
+
 /** Append a node. */
 export function addNode(data: CanvasData, node: CanvasNode): CanvasData {
   return { ...data, nodes: [...data.nodes, node] };
