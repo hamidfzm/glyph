@@ -1,5 +1,8 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from "react";
+import { CanvasIcon } from "@/components/icons/CanvasIcon";
+import { NewCanvasIcon } from "@/components/icons/NewCanvasIcon";
 import type { DirEntry } from "@/hooks/useTabs";
+import { isCanvasFile } from "@/lib/canvasExtensions";
 import type { ContextMenuItem } from "@/lib/contextMenuItems";
 import { ChevronRightIcon } from "../icons/ChevronRightIcon";
 import { CopyPathIcon } from "../icons/CopyPathIcon";
@@ -9,7 +12,6 @@ import { FileTextIcon } from "../icons/FileTextIcon";
 import { FolderIcon } from "../icons/FolderIcon";
 import { FolderOpenIcon } from "../icons/FolderOpenIcon";
 import { MoveIcon } from "../icons/MoveIcon";
-import { NewCanvasIcon } from "../icons/NewCanvasIcon";
 import { NewFolderIcon } from "../icons/NewFolderIcon";
 import { NewNoteIcon } from "../icons/NewNoteIcon";
 import { NewTabIcon } from "../icons/NewTabIcon";
@@ -151,7 +153,11 @@ function renderEntry(entry: DirEntry, depth: number, props: EntryRenderProps): R
         title={entry.path}
       >
         <span className="w-[10px]" aria-hidden="true" />
-        <FileTextIcon className={isActive ? "opacity-90" : "opacity-60"} />
+        {isCanvasFile(entry.name) ? (
+          <CanvasIcon className={isActive ? "opacity-90" : "opacity-60"} />
+        ) : (
+          <FileTextIcon className={isActive ? "opacity-90" : "opacity-60"} />
+        )}
         <span className="truncate">{entry.name}</span>
       </button>
     </li>

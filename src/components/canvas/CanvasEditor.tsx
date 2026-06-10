@@ -47,11 +47,15 @@ function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `n${Math.round(Math.random() * 1e9)}`;
 }
 
-type Gesture =
+type Gesture = (
   | { kind: "pan"; lastX: number; lastY: number }
   | { kind: "move"; start: Point; base: CanvasData; ids: ReadonlySet<string>; latest: CanvasData }
   | { kind: "resize"; id: string; start: Point; base: CanvasData; latest: CanvasData }
-  | { kind: "connect"; fromId: string; fromSide: NodeSide };
+  | { kind: "connect"; fromId: string; fromSide: NodeSide }
+) & {
+  /** Set once the pointer is captured (deferred to the first real movement). */
+  captured?: boolean;
+};
 
 interface CanvasEditorProps {
   content: string;
@@ -79,7 +83,17 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
 
   const worldAt = (e: { clientX: number; clientY: number }): Point =>
     screenToWorld(viewport, toStagePoint(e.clientX, e.clientY));
-  const capture = (e: ReactPointerEvent) => stageRef.current?.setPointerCapture?.(e.pointerId);
+
+  // Pointer capture is deferred until the first real movement of a gesture.
+  // Capturing on pointerdown retargets the browser's compatibility mouse
+  // events (including dblclick) to the stage, so double-clicking a card would
+  // fire the stage's create-card handler instead of opening the card's inline
+  // editor. A clean double-click never moves, so it never captures.
+  const captureOnFirstMove = (g: Gesture, e: ReactPointerEvent) => {
+    if (g.captured) return;
+    g.captured = true;
+    stageRef.current?.setPointerCapture?.(e.pointerId);
+  };
 
   // --- selection ---------------------------------------------------------
   const selectNode = (id: string, additive: boolean) => {
@@ -103,7 +117,6 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
       ids,
       latest: dataRef.current,
     };
-    capture(e);
   };
 
   const startResize = (id: string, e: ReactPointerEvent) => {
@@ -114,7 +127,6 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
       base: dataRef.current,
       latest: dataRef.current,
     };
-    capture(e);
   };
 
   const startConnect = (fromId: string, side: NodeSide, e: ReactPointerEvent) => {
@@ -124,7 +136,6 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
     /* v8 ignore stop */
     gesture.current = { kind: "connect", fromId, fromSide: side };
     setTempEdge({ from: sideAnchor(node, side), to: worldAt(e) });
-    capture(e);
   };
 
   // --- stage pointer handling --------------------------------------------
@@ -134,12 +145,12 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
     setSelectedEdge(null);
     setEditingId(null);
     gesture.current = { kind: "pan", lastX: e.clientX, lastY: e.clientY };
-    capture(e);
   };
 
   const onStagePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const g = gesture.current;
     if (!g) return;
+    captureOnFirstMove(g, e);
     if (g.kind === "pan") {
       panBy(e.clientX - g.lastX, e.clientY - g.lastY);
       g.lastX = e.clientX;
@@ -173,8 +184,8 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
   const onStagePointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     const g = gesture.current;
     gesture.current = null;
-    stageRef.current?.releasePointerCapture?.(e.pointerId);
     if (!g) return;
+    if (g.captured) stageRef.current?.releasePointerCapture?.(e.pointerId);
     if ((g.kind === "move" || g.kind === "resize") && g.latest !== g.base) {
       commit(g.latest);
     } else if (g.kind === "connect") {

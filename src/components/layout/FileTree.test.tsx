@@ -48,6 +48,17 @@ describe("FileTree", () => {
     expect(screen.queryByText("subdir")).toBeNull();
   });
 
+  it("renders the canvas icon for .canvas entries and the text icon for notes", () => {
+    const entries: DirEntry[] = [
+      { name: "board.canvas", path: "/root/board.canvas", isDirectory: false, modified: 0 },
+      { name: "note.md", path: "/root/note.md", isDirectory: false, modified: 0 },
+    ];
+    renderFileTree({ nodes: new Map([["/root", entries]]) });
+    // The canvas glyph is built from <rect> cards; the document icon is not.
+    expect(screen.getByTitle("/root/board.canvas").querySelector("svg rect")).toBeTruthy();
+    expect(screen.getByTitle("/root/note.md").querySelector("svg rect")).toBeNull();
+  });
+
   it("calls onOpenFile when clicking a file", () => {
     const { props } = renderFileTree();
     fireEvent.click(screen.getByText("post.md"));

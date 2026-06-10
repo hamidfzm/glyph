@@ -254,6 +254,33 @@ describe("CanvasEditor", () => {
     expect(lastData(onChange).nodes[0]).toMatchObject({ type: "link", url: "https://glyph.dev" });
   });
 
+  it("double-clicking a card opens its editor without creating a new card", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
+    fireEvent.doubleClick(nodesOf(container)[0]);
+    expect(container.querySelector(".glyph-canvas-node-editor")).toBeTruthy();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(nodesOf(container)).toHaveLength(1);
+  });
+
+  it("defers pointer capture until the gesture actually moves", () => {
+    // Regression: capturing on pointerdown retargets the browser's dblclick to
+    // the stage, so double-clicking a card created a new card instead of
+    // opening the inline editor.
+    const { container } = render(<CanvasEditor content={oneText} onChange={vi.fn()} />);
+    const stage = stageOf(container) as HTMLElement & { setPointerCapture: () => void };
+    const spy = vi.fn();
+    stage.setPointerCapture = spy;
+    fireEvent.pointerDown(nodesOf(container)[0], { clientX: 0, clientY: 0, button: 0 });
+    expect(spy).not.toHaveBeenCalled();
+    fireEvent.pointerMove(stage, { clientX: 10, clientY: 10 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    // Further moves don't recapture.
+    fireEvent.pointerMove(stage, { clientX: 20, clientY: 20 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    fireEvent.pointerUp(stage, { clientX: 20, clientY: 20 });
+  });
+
   it("creates a card centred on the cursor on stage double-click", () => {
     const onChange = vi.fn();
     const { container } = render(<CanvasEditor content={empty} onChange={onChange} />);
