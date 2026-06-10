@@ -250,6 +250,89 @@ mod tests {
     }
 
     #[test]
+    fn scan_wikilinks_skips_hidden_and_noisy_dirs() {
+        let dir = unique_tmp("scan_skip_dirs");
+        fs::write(dir.join("keep.md"), "see [[Kept]]").unwrap();
+        for skip in WALK_SKIP_DIRS {
+            fs::create_dir_all(dir.join(skip)).unwrap();
+            fs::write(dir.join(skip).join("ignored.md"), "see [[Skipped]]").unwrap();
+        }
+        fs::create_dir_all(dir.join(".hidden")).unwrap();
+        fs::write(dir.join(".hidden/ignored.md"), "see [[Hidden]]").unwrap();
+
+        let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
+        assert_eq!(targets, vec!["Kept"]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_wikilinks_skips_non_markdown_files() {
+        let dir = unique_tmp("scan_non_md");
+        fs::write(dir.join("a.md"), "see [[FromMd]]").unwrap();
+        fs::write(dir.join("notes.txt"), "see [[FromTxt]]").unwrap();
+
+        let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
+        assert_eq!(targets, vec!["FromMd"]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_wikilinks_skips_oversized_files() {
+        let dir = unique_tmp("scan_oversize");
+        let mut big = String::from("see [[FromBig]]\n");
+        big.push_str(&"x".repeat(SCAN_MAX_FILE_BYTES as usize + 1));
+        fs::write(dir.join("big.md"), big).unwrap();
+        fs::write(dir.join("small.md"), "see [[FromSmall]]").unwrap();
+
+        let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
+        assert_eq!(targets, vec!["FromSmall"]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_wikilinks_skips_files_that_are_not_valid_utf8() {
+        let dir = unique_tmp("scan_bad_utf8");
+        fs::write(
+            dir.join("bad.md"),
+            [0xff, 0xfe, b'[', b'[', b'X', b']', b']'],
+        )
+        .unwrap();
+        fs::write(dir.join("good.md"), "see [[Good]]").unwrap();
+
+        let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
+        assert_eq!(targets, vec!["Good"]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_wikilinks_in_file_ignores_unclosed_brackets() {
+        let mut out = Vec::new();
+        scan_wikilinks_in_file("an [[Unclosed link\nthen [[Closed]]\n", "/x/a.md", &mut out);
+        let targets: Vec<&str> = out.iter().map(|r| r.target.as_str()).collect();
+        assert_eq!(targets, vec!["Closed"]);
+    }
+
+    #[test]
+    fn scan_wikilinks_in_file_ignores_empty_targets() {
+        let mut out = Vec::new();
+        scan_wikilinks_in_file(
+            "empty [[]] and blank [[   ]] but [[Real]]\n",
+            "/x/a.md",
+            &mut out,
+        );
+        let targets: Vec<&str> = out.iter().map(|r| r.target.as_str()).collect();
+        assert_eq!(targets, vec!["Real"]);
+    }
+
+    #[test]
     fn wikilink_ref_camel_case_keys() {
         let r = WikilinkRef {
             source: "/x/a.md".to_string(),

@@ -286,6 +286,28 @@ mod tests {
     }
 
     #[test]
+    fn get_initial_folder_returns_managed_value() {
+        use tauri::test::mock_app;
+        use tauri::Manager;
+
+        let app = mock_app();
+        app.manage(InitialFolder(Mutex::new(Some("/ws/folder".to_string()))));
+        let result = get_initial_folder(app.state::<InitialFolder>());
+        assert_eq!(result.as_deref(), Some("/ws/folder"));
+    }
+
+    #[test]
+    fn get_initial_folder_returns_none_when_unset() {
+        use tauri::test::mock_app;
+        use tauri::Manager;
+
+        let app = mock_app();
+        app.manage(InitialFolder(Mutex::new(None)));
+        let result = get_initial_folder(app.state::<InitialFolder>());
+        assert!(result.is_none());
+    }
+
+    #[test]
     fn dir_entry_camel_case_keys() {
         let entry = DirEntry {
             name: "file.md".to_string(),
