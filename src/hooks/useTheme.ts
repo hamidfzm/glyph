@@ -2,13 +2,18 @@ import { useEffect, useState } from "react";
 
 export type Theme = "light" | "dark";
 
+// Theme for the first render, from the OS preference. Falls back to light
+// when there's no window. Exported because the fallback can't be reached
+// through the hook: React itself needs a window to render.
+export function systemTheme(): Theme {
+  if (typeof window !== "undefined") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return "light";
+}
+
 export function useTheme(override?: "system" | "light" | "dark") {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window !== "undefined") {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-    return "light";
-  });
+  const [theme, setTheme] = useState<Theme>(systemTheme);
 
   useEffect(() => {
     // If settings are managing theme, skip standalone behavior

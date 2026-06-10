@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useTheme } from "./useTheme";
+import { systemTheme, useTheme } from "./useTheme";
 
 describe("useTheme", () => {
   let matchMediaMock: ReturnType<typeof vi.fn>;
@@ -83,6 +83,15 @@ describe("useTheme", () => {
     });
     expect(result.current).toBe("light");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
+
+  it("systemTheme falls back to light when window is unavailable", () => {
+    vi.stubGlobal("window", undefined);
+    try {
+      expect(systemTheme()).toBe("light");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("cleans up event listener on unmount", () => {

@@ -23,7 +23,13 @@ pub struct WikilinkRef {
 
 #[tauri::command]
 pub fn scan_wikilinks(path: String) -> Result<Vec<WikilinkRef>, String> {
-    let root = Path::new(&path);
+    scan_wikilinks_capped(&path, WALK_MAX_FILES)
+}
+
+/// Body of [`scan_wikilinks`] with the file cap as a parameter, so the
+/// truncation branch is testable without creating `WALK_MAX_FILES` real files.
+fn scan_wikilinks_capped(path: &str, max_files: usize) -> Result<Vec<WikilinkRef>, String> {
+    let root = Path::new(path);
     if !root.is_dir() {
         return Err(format!("Not a directory: {path}"));
     }
@@ -53,7 +59,7 @@ pub fn scan_wikilinks(path: String) -> Result<Vec<WikilinkRef>, String> {
         if !crate::is_markdown_file(p) {
             continue;
         }
-        if files_scanned >= WALK_MAX_FILES {
+        if files_scanned >= max_files {
             break;
         }
         files_scanned += 1;
@@ -308,6 +314,18 @@ mod tests {
         let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert_eq!(targets, vec!["Good"]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_wikilinks_stops_scanning_at_the_file_cap() {
+        let dir = unique_tmp("scan_cap");
+        fs::write(dir.join("a.md"), "see [[FromA]]").unwrap();
+        fs::write(dir.join("b.md"), "see [[FromB]]").unwrap();
+
+        let refs = scan_wikilinks_capped(&dir.to_string_lossy(), 1).unwrap();
+        assert_eq!(refs.len(), 1);
 
         let _ = fs::remove_dir_all(&dir);
     }

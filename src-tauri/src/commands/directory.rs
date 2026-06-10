@@ -69,7 +69,13 @@ pub fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
 
 #[tauri::command]
 pub fn list_markdown_files(path: String) -> Result<Vec<String>, String> {
-    let root = Path::new(&path);
+    list_markdown_files_capped(&path, WALK_MAX_FILES)
+}
+
+/// Body of [`list_markdown_files`] with the file cap as a parameter, so the
+/// truncation branch is testable without creating `WALK_MAX_FILES` real files.
+fn list_markdown_files_capped(path: &str, max_files: usize) -> Result<Vec<String>, String> {
+    let root = Path::new(path);
     if !root.is_dir() {
         return Err(format!("Not a directory: {path}"));
     }
@@ -100,7 +106,7 @@ pub fn list_markdown_files(path: String) -> Result<Vec<String>, String> {
         if !crate::is_supported_file(p) {
             continue;
         }
-        if results.len() >= WALK_MAX_FILES {
+        if results.len() >= max_files {
             truncated = true;
             break;
         }
@@ -109,8 +115,7 @@ pub fn list_markdown_files(path: String) -> Result<Vec<String>, String> {
 
     if truncated {
         eprintln!(
-            "list_markdown_files: workspace at {} exceeds {} files; results truncated",
-            path, WALK_MAX_FILES
+            "list_markdown_files: workspace at {path} exceeds {max_files} files; results truncated"
         );
     }
 
@@ -255,6 +260,19 @@ mod tests {
             })
             .collect();
         assert_eq!(names, vec!["keep.md".to_string()]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn list_markdown_files_truncates_at_the_cap() {
+        let dir = unique_tmp("list_md_cap");
+        for i in 0..3 {
+            fs::write(dir.join(format!("f{i}.md")), "x").unwrap();
+        }
+
+        let result = list_markdown_files_capped(&dir.to_string_lossy(), 2).unwrap();
+        assert_eq!(result.len(), 2);
 
         let _ = fs::remove_dir_all(&dir);
     }

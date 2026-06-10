@@ -27,7 +27,7 @@ pub fn read_file(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn print_document(window: tauri::WebviewWindow) -> Result<(), String> {
+pub fn print_document<R: tauri::Runtime>(window: tauri::WebviewWindow<R>) -> Result<(), String> {
     window.print().map_err(|e| format!("Failed to print: {e}"))
 }
 
@@ -202,6 +202,63 @@ mod tests {
         let json = serde_json::to_string(&metadata).unwrap();
         assert!(!json.contains("file_name"));
         assert!(json.contains("name"));
+    }
+
+    #[test]
+    fn get_initial_file_returns_managed_value() {
+        use tauri::test::mock_app;
+        use tauri::Manager;
+
+        let app = mock_app();
+        app.manage(InitialFile(Mutex::new(Some("/ws/file.md".to_string()))));
+        let result = get_initial_file(app.state::<InitialFile>());
+        assert_eq!(result.as_deref(), Some("/ws/file.md"));
+    }
+
+    #[test]
+    fn get_initial_file_returns_none_when_unset() {
+        use tauri::test::mock_app;
+        use tauri::Manager;
+
+        let app = mock_app();
+        app.manage(InitialFile(Mutex::new(None)));
+        let result = get_initial_file(app.state::<InitialFile>());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn write_file_round_trips_text() {
+        let dir = std::env::temp_dir().join("glyph_test_write_text");
+        let _ = fs::create_dir_all(&dir);
+        let file_path = dir.join("out.md");
+
+        let result = write_file(
+            file_path.to_string_lossy().to_string(),
+            "# Saved\n".to_string(),
+        );
+        assert!(result.is_ok());
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "# Saved\n");
+
+        let _ = fs::remove_file(&file_path);
+    }
+
+    #[test]
+    fn write_file_bad_path_errors() {
+        let result = write_file("/nonexistent/dir/out.md".to_string(), "x".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to write file"));
+    }
+
+    #[test]
+    fn print_document_succeeds_on_a_mock_window() {
+        use tauri::test::mock_app;
+        use tauri::WebviewWindowBuilder;
+
+        let app = mock_app();
+        let window = WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .expect("mock window should build");
+        assert!(print_document(window).is_ok());
     }
 
     #[test]
