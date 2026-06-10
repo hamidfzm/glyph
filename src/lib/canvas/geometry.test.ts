@@ -6,6 +6,7 @@ import {
   nodeAtPoint,
   nodeCenter,
   nodeContainsPoint,
+  nodeIdsInGroup,
   nodesBoundingBox,
   sideAnchor,
 } from "./geometry";
@@ -147,6 +148,24 @@ describe("nodeAtPoint", () => {
   it("returns null when no node is hit", () => {
     const nodes: CanvasNode[] = [node({ id: "a", x: 0, y: 0, width: 100, height: 50 })];
     expect(nodeAtPoint(nodes, { x: 500, y: 500 })).toBeNull();
+  });
+});
+
+describe("nodeIdsInGroup", () => {
+  const group: GroupNode = { id: "g", type: "group", x: 0, y: 0, width: 400, height: 300 };
+  it("contains nodes fully inside the bounds and excludes the group itself", () => {
+    const nodes: CanvasNode[] = [
+      group,
+      node({ id: "inside", x: 50, y: 50 }),
+      node({ id: "partial", x: 350, y: 50 }), // sticks out on the right
+      node({ id: "outside", x: 600, y: 0 }),
+    ];
+    expect([...nodeIdsInGroup(nodes, group)]).toEqual(["inside"]);
+  });
+
+  it("includes a nested group that fits entirely inside", () => {
+    const inner: GroupNode = { id: "g2", type: "group", x: 10, y: 10, width: 100, height: 100 };
+    expect(nodeIdsInGroup([group, inner], group).has("g2")).toBe(true);
   });
 });
 

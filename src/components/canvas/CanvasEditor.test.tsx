@@ -233,6 +233,27 @@ describe("CanvasEditor", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("dragging a group carries the cards inside it, leaving outside cards alone", () => {
+    const onChange = vi.fn();
+    const content = JSON.stringify({
+      nodes: [
+        { id: "g", type: "group", x: 0, y: 0, width: 400, height: 300, label: "Area" },
+        { id: "in", type: "text", x: 50, y: 50, width: 200, height: 80, text: "inside" },
+        { id: "out", type: "text", x: 600, y: 0, width: 200, height: 80, text: "outside" },
+      ],
+      edges: [],
+    });
+    const { container } = render(<CanvasEditor content={content} onChange={onChange} />);
+    const group = container.querySelector('.glyph-canvas-node[data-type="group"]') as Element;
+    fireEvent.pointerDown(group, { clientX: 10, clientY: 290, button: 0 });
+    fireEvent.pointerMove(stageOf(container), { clientX: 30, clientY: 300 });
+    fireEvent.pointerUp(stageOf(container), { clientX: 30, clientY: 300 });
+    const nodes = lastData(onChange).nodes;
+    expect(nodes.find((n) => n.id === "g")).toMatchObject({ x: 20, y: 10 });
+    expect(nodes.find((n) => n.id === "in")).toMatchObject({ x: 70, y: 60 });
+    expect(nodes.find((n) => n.id === "out")).toMatchObject({ x: 600, y: 0 });
+  });
+
   it("adds a group via the toolbar and commits it", () => {
     const onChange = vi.fn();
     render(<CanvasEditor content={empty} onChange={onChange} />);

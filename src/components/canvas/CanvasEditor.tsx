@@ -10,6 +10,7 @@ import { useCanvasViewport } from "@/hooks/useCanvasViewport";
 import {
   inferSide,
   nodeAtPoint,
+  nodeIdsInGroup,
   nodesBoundingBox,
   type Point,
   sideAnchor,
@@ -109,7 +110,18 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
 
   // --- gesture starts (invoked from nodes) -------------------------------
   const startMove = (id: string, e: ReactPointerEvent) => {
-    const ids = selection.has(id) ? selection : new Set([id]);
+    let ids: ReadonlySet<string>;
+    if (selection.has(id)) {
+      ids = selection;
+    } else {
+      const node = dataRef.current.nodes.find((n) => n.id === id);
+      // Dragging a group carries everything inside its bounds along with it —
+      // that containment is what makes a group a group rather than a card.
+      ids =
+        node?.type === "group"
+          ? new Set([id, ...nodeIdsInGroup(dataRef.current.nodes, node)])
+          : new Set([id]);
+    }
     gesture.current = {
       kind: "move",
       start: worldAt(e),

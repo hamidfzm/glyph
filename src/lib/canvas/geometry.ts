@@ -129,6 +129,28 @@ export function nodeAtPoint(
   return null;
 }
 
+/**
+ * Ids of the nodes a group contains: everything whose rectangle lies fully
+ * inside the group's bounds (the group itself excluded). JSON Canvas has no
+ * explicit membership — like Obsidian, containment is geometric, so dragging
+ * a group carries these nodes along with it.
+ */
+export function nodeIdsInGroup(nodes: readonly CanvasNode[], group: BaseNode): Set<string> {
+  const ids = new Set<string>();
+  for (const n of nodes) {
+    if (n.id === group.id) continue;
+    if (
+      n.x >= group.x &&
+      n.y >= group.y &&
+      n.x + n.width <= group.x + group.width &&
+      n.y + n.height <= group.y + group.height
+    ) {
+      ids.add(n.id);
+    }
+  }
+  return ids;
+}
+
 /** Axis-aligned bounding box covering every node; null for an empty canvas. */
 export function nodesBoundingBox(nodes: readonly CanvasNode[]): Rect | null {
   if (nodes.length === 0) return null;
