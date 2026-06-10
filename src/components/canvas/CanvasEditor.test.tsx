@@ -233,6 +233,41 @@ describe("CanvasEditor", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("right-clicking a card opens its menu; Delete removes it", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
+    fireEvent.contextMenu(nodesOf(container)[0]);
+    expect(screen.getByRole("menuitem", { name: "Edit text" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    expect(lastData(onChange).nodes).toHaveLength(0);
+  });
+
+  it("right-clicking a card recolours it through the Colour submenu", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
+    fireEvent.contextMenu(nodesOf(container)[0]);
+    fireEvent.click(screen.getByText("Colour"));
+    fireEvent.click(screen.getByText("Yellow"));
+    expect(lastData(onChange).nodes[0]).toMatchObject({ color: "3" });
+  });
+
+  it("right-clicking empty board space creates a node at the cursor", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={empty} onChange={onChange} />);
+    fireEvent.contextMenu(stageOf(container), { clientX: 100, clientY: 60 });
+    fireEvent.click(screen.getByText("New card"));
+    // 250x120 card centred on the click point (untransformed viewport).
+    expect(lastData(onChange).nodes[0]).toMatchObject({ type: "text", x: -25, y: 0 });
+  });
+
+  it("right-clicking an edge offers Delete connection", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={withEdge} onChange={onChange} />);
+    fireEvent.contextMenu(container.querySelector(".glyph-canvas-edge-hit") as Element);
+    fireEvent.click(screen.getByText("Delete connection"));
+    expect(lastData(onChange).edges).toHaveLength(0);
+  });
+
   it("dragging a group carries the cards inside it, leaving outside cards alone", () => {
     const onChange = vi.fn();
     const content = JSON.stringify({

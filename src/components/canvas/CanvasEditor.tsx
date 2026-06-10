@@ -1,10 +1,12 @@
 import {
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { ContextMenu, type ContextMenuModel } from "@/components/menu/ContextMenu";
 import { useCanvasDocument } from "@/hooks/useCanvasDocument";
 import { useCanvasViewport } from "@/hooks/useCanvasViewport";
 import {
@@ -32,6 +34,11 @@ import { screenToWorld } from "@/lib/canvas/viewport";
 import { CanvasEdges } from "./CanvasEdges";
 import { CanvasEditableNode } from "./CanvasEditableNode";
 import { CanvasSelectionToolbar } from "./CanvasSelectionToolbar";
+import {
+  buildCanvasMenuItems,
+  type CanvasMenuActions,
+  type CanvasMenuTarget,
+} from "./canvasMenuItems";
 
 const MIN_SIZE = 60;
 
@@ -77,6 +84,7 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tempEdge, setTempEdge] = useState<{ from: Point; to: Point } | null>(null);
+  const [menu, setMenu] = useState<ContextMenuModel | null>(null);
 
   const gesture = useRef<Gesture | null>(null);
   const dataRef = useRef(data);
@@ -277,6 +285,29 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
     setEditingId(null);
   };
 
+  // Right-click menu. preventDefault marks the event as claimed so the
+  // app-level handler leaves it alone; stopPropagation keeps a node's menu
+  // from also opening the stage's. Creation lands at the clicked world point.
+  const openMenu = (e: ReactMouseEvent, target: CanvasMenuTarget) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const at = worldAt(e);
+    const actions: CanvasMenuActions = {
+      createNode: (type) => addNodeAt(type, at),
+      startEdit: (id) => setEditingId(id),
+      setNodeColor: (id, color) => commit(setNodesColor(dataRef.current, new Set([id]), color)),
+      deleteNode: (id) => {
+        commit(removeNodes(dataRef.current, new Set([id])));
+        setSelection(new Set());
+      },
+      deleteEdge: (id) => {
+        commit(removeEdge(dataRef.current, id));
+        setSelectedEdge(null);
+      },
+    };
+    setMenu({ x: e.clientX, y: e.clientY, items: buildCanvasMenuItems(target, actions) });
+  };
+
   // Delete/Backspace removes the selection. Bound on the document (like the
   // app's undo/redo shortcut) so the stage needs no tabIndex; ignored while a
   // text field is focused.
@@ -316,6 +347,10 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
     onStartEdit: () => setEditingId(node.id),
     onTextCommit: (v: string) => commitText(node.id, v),
     onEditCancel: () => setEditingId(null),
+    onContextMenu: (e: ReactMouseEvent) => {
+      selectNode(node.id, false);
+      openMenu(e, { kind: "node", node });
+    },
   });
 
   return (
@@ -329,6 +364,7 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
         onPointerUp={onStagePointerUp}
         onPointerCancel={onStagePointerUp}
         onDoubleClick={(e) => addNodeAt("text", worldAt(e))}
+        onContextMenu={(e) => openMenu(e, { kind: "stage" })}
       >
         <div
           className="glyph-canvas-world"
@@ -352,6 +388,11 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
             onSelectEdge={(id) => {
               setSelectedEdge(id);
               setSelection(new Set());
+            }}
+            onEdgeContextMenu={(id, e) => {
+              setSelectedEdge(id);
+              setSelection(new Set());
+              openMenu(e, { kind: "edge", id });
             }}
           />
 
@@ -409,6 +450,8 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
           Fit
         </button>
       </div>
+
+      <ContextMenu menu={menu} onClose={() => setMenu(null)} />
     </div>
   );
 }

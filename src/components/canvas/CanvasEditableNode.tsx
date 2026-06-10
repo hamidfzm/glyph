@@ -1,5 +1,6 @@
 import {
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useEffect,
   useRef,
@@ -22,6 +23,7 @@ interface CanvasEditableNodeProps {
   onStartEdit: () => void;
   onTextCommit: (value: string) => void;
   onEditCancel: () => void;
+  onContextMenu: (e: ReactMouseEvent) => void;
 }
 
 /** The inline-editable value for a node: markdown body, group label, or URL. */
@@ -106,6 +108,7 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
         e.stopPropagation();
         if (editable) props.onStartEdit();
       }}
+      onContextMenu={props.onContextMenu}
     >
       <div className="glyph-canvas-node-content">
         {editing && editable ? (

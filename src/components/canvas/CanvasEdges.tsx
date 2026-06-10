@@ -1,4 +1,8 @@
-import { type PointerEvent as ReactPointerEvent, useMemo } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  useMemo,
+} from "react";
 import { canvasColorToCss } from "@/lib/canvas/color";
 import { arrowheadPoints, bezierPath, inferSide, sideAnchor } from "@/lib/canvas/geometry";
 import type { CanvasEdge, CanvasNode } from "@/lib/canvas/types";
@@ -8,6 +12,8 @@ interface CanvasEdgesProps {
   edges: readonly CanvasEdge[];
   /** When set, edges become clickable for selection (editor mode). */
   onSelectEdge?: (id: string, e: ReactPointerEvent) => void;
+  /** Right-click on an edge (editor mode) — opens the edge context menu. */
+  onEdgeContextMenu?: (id: string, e: ReactMouseEvent) => void;
   /** The currently selected edge id, drawn highlighted. */
   selectedId?: string | null;
 }
@@ -19,7 +25,13 @@ interface CanvasEdgesProps {
 // nominal box. In read-only mode pointer events pass through to the nodes
 // beneath; when `onSelectEdge` is given, a transparent thick hit-path makes
 // each edge clickable.
-export function CanvasEdges({ nodes, edges, onSelectEdge, selectedId }: CanvasEdgesProps) {
+export function CanvasEdges({
+  nodes,
+  edges,
+  onSelectEdge,
+  onEdgeContextMenu,
+  selectedId,
+}: CanvasEdgesProps) {
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const interactive = !!onSelectEdge;
 
@@ -50,6 +62,7 @@ export function CanvasEdges({ nodes, edges, onSelectEdge, selectedId }: CanvasEd
         return (
           <g key={edge.id} stroke={color} fill={color}>
             {interactive && (
+              // biome-ignore lint/a11y/noStaticElementInteractions: invisible hit-area widening a decorative (aria-hidden) edge path; keyboard users reach edge actions via selection plus the Delete key and toolbar
               <path
                 d={d}
                 className="glyph-canvas-edge-hit"
@@ -60,6 +73,7 @@ export function CanvasEdges({ nodes, edges, onSelectEdge, selectedId }: CanvasEd
                   e.stopPropagation();
                   onSelectEdge?.(edge.id, e);
                 }}
+                onContextMenu={(e) => onEdgeContextMenu?.(edge.id, e)}
               />
             )}
             <path d={d} fill="none" strokeWidth={edge.id === selectedId ? 3 : 2} />

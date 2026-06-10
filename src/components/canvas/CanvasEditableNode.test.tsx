@@ -42,6 +42,7 @@ function setup(over: Partial<React.ComponentProps<typeof CanvasEditableNode>> = 
     onStartEdit: vi.fn(),
     onTextCommit: vi.fn(),
     onEditCancel: vi.fn(),
+    onContextMenu: vi.fn(),
   };
   const { container } = render(
     <CanvasEditableNode node={textNode} selected={false} editing={false} {...spies} {...over} />,
