@@ -76,6 +76,16 @@ describe("add/remove nodes", () => {
     expect(next.nodes.map((n) => n.id)).toEqual(["b"]);
     expect(next.edges).toHaveLength(0);
   });
+  it("returns the same reference when the id set is empty", () => {
+    expect(removeNodes(base, new Set())).toBe(base);
+  });
+  it("drops an edge when only its toNode is removed", () => {
+    // fromNode "a" survives, toNode "b" is removed: exercises the second
+    // operand of the edge-retention predicate.
+    const next = removeNodes(base, new Set(["b"]));
+    expect(next.nodes.map((n) => n.id)).toEqual(["a"]);
+    expect(next.edges).toHaveLength(0);
+  });
 });
 
 describe("edges", () => {
@@ -87,5 +97,11 @@ describe("edges", () => {
   it("sets and clears an edge label", () => {
     expect(updateEdgeLabel(base, "e", "rel").edges[0].label).toBe("rel");
     expect(updateEdgeLabel(base, "e", "").edges[0]).not.toHaveProperty("label");
+  });
+  it("leaves non-matching edges untouched when relabelling", () => {
+    const two = addEdge(base, { id: "e2", fromNode: "b", toNode: "a", label: "keep" });
+    const next = updateEdgeLabel(two, "e", "rel");
+    expect(next.edges[0].label).toBe("rel");
+    expect(next.edges[1]).toBe(two.edges[1]);
   });
 });

@@ -232,4 +232,131 @@ describe("CanvasEditor", () => {
     fireEvent.pointerUp(stage, { clientX: 60, clientY: 40 });
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it("re-selecting the only selected node keeps the same selection", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
+    const node = nodesOf(container)[0];
+    // Select once, then click the same node again with no drag.
+    fireEvent.pointerDown(node, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerUp(stageOf(container), { clientX: 0, clientY: 0 });
+    fireEvent.pointerDown(node, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerUp(stageOf(container), { clientX: 0, clientY: 0 });
+    // Still selected: its resize handle remains visible.
+    expect(container.querySelector(".glyph-canvas-resize")).toBeTruthy();
+  });
+
+  it("shift-clicking an already-selected node deselects it", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={twoNodes} onChange={onChange} />);
+    const [a, b] = nodesOf(container);
+    fireEvent.pointerDown(a, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerUp(stageOf(container), { clientX: 0, clientY: 0 });
+    fireEvent.pointerDown(b, { clientX: 300, clientY: 0, button: 0, shiftKey: true });
+    fireEvent.pointerUp(stageOf(container), { clientX: 300, clientY: 0 });
+    // Shift-click B again to remove it from the selection.
+    fireEvent.pointerDown(b, { clientX: 300, clientY: 0, button: 0, shiftKey: true });
+    fireEvent.pointerUp(stageOf(container), { clientX: 300, clientY: 0 });
+    // Only A remains selected: the toolbar count reads 1, so no "(n)" suffix.
+    expect(screen.getByText("Delete")).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: "Delete" });
+    expect(lastData(onChange).nodes.map((n) => n.id)).toEqual(["b"]);
+  });
+
+  it("dragging an already-selected node moves the existing selection", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={twoNodes} onChange={onChange} />);
+    const [a, b] = nodesOf(container);
+    // Select both nodes.
+    fireEvent.pointerDown(a, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerUp(stageOf(container), { clientX: 0, clientY: 0 });
+    fireEvent.pointerDown(b, { clientX: 300, clientY: 0, button: 0, shiftKey: true });
+    fireEvent.pointerUp(stageOf(container), { clientX: 300, clientY: 0 });
+    // Drag node A: both selected nodes shift together.
+    fireEvent.pointerDown(a, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerMove(stageOf(container), { clientX: 10, clientY: 20 });
+    fireEvent.pointerUp(stageOf(container), { clientX: 10, clientY: 20 });
+    const data = lastData(onChange);
+    expect(data.nodes.find((n) => n.id === "a")).toMatchObject({ x: 10, y: 20 });
+    expect(data.nodes.find((n) => n.id === "b")).toMatchObject({ x: 310, y: 20 });
+  });
+
+  it("ignores a non-primary button pointerDown on the stage", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
+    const stage = stageOf(container);
+    // Middle button: should neither pan nor clear selection nor commit.
+    fireEvent.pointerDown(stage, { clientX: 10, clientY: 10, button: 1 });
+    fireEvent.pointerMove(stage, { clientX: 80, clientY: 80 });
+    fireEvent.pointerUp(stage, { clientX: 80, clientY: 80 });
+    const world = container.querySelector(".glyph-canvas-world") as HTMLElement;
+    expect(world.style.transform).toContain("translate(0px, 0px)");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("ignores a stage pointerMove with no active gesture", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
+    const world = container.querySelector(".glyph-canvas-world") as HTMLElement;
+    // No pointerDown first: the move is a no-op (no pan, no commit).
+    fireEvent.pointerMove(stageOf(container), { clientX: 50, clientY: 50 });
+    expect(world.style.transform).toContain("translate(0px, 0px)");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("ignores a stage pointerUp with no active gesture", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
+    fireEvent.pointerUp(stageOf(container), { clientX: 0, clientY: 0 });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("clamps a resize below the minimum size to MIN_SIZE", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
+    const node = nodesOf(container)[0];
+    fireEvent.pointerDown(node, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerUp(stageOf(container), { clientX: 0, clientY: 0 });
+    const handle = container.querySelector(".glyph-canvas-resize") as Element;
+    fireEvent.pointerDown(handle, { clientX: 0, clientY: 0, button: 0 });
+    // Drag far in the negative direction so width/height clamp to MIN_SIZE (60).
+    fireEvent.pointerMove(stageOf(container), { clientX: -500, clientY: -500 });
+    fireEvent.pointerUp(stageOf(container), { clientX: -500, clientY: -500 });
+    expect(lastData(onChange).nodes[0]).toMatchObject({ width: 60, height: 60 });
+  });
+
+  it("ignores Delete while a node is being edited", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
+    const node = nodesOf(container)[0];
+    fireEvent.doubleClick(node);
+    expect(container.querySelector(".glyph-canvas-node-editor")).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: "Delete" });
+    expect(onChange).not.toHaveBeenCalled();
+    // Node is still present (not deleted).
+    expect(nodesOf(container)).toHaveLength(1);
+  });
+
+  it("ignores Delete when nothing is selected", () => {
+    const onChange = vi.fn();
+    render(<CanvasEditor content={oneText} onChange={onChange} />);
+    fireEvent.keyDown(document.body, { key: "Delete" });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("generates an id when crypto.randomUUID is unavailable", () => {
+    const onChange = vi.fn();
+    const original = globalThis.crypto.randomUUID;
+    // biome-ignore lint/suspicious/noExplicitAny: temporarily clear the API to hit the fallback
+    (globalThis.crypto as any).randomUUID = undefined;
+    try {
+      render(<CanvasEditor content={empty} onChange={onChange} />);
+      fireEvent.click(screen.getByLabelText("Add card"));
+      const data = lastData(onChange);
+      expect(data.nodes).toHaveLength(1);
+      expect(data.nodes[0].id).toBeTruthy();
+    } finally {
+      globalThis.crypto.randomUUID = original;
+    }
+  });
 });

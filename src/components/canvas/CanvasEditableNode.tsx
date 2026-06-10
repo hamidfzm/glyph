@@ -39,7 +39,11 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
     }
   }, [editing]);
 
-  const commit = () => props.onTextCommit(textRef.current?.value ?? "");
+  const commit = () =>
+    props.onTextCommit(
+      // v8 ignore next -- defensive: textarea ref is always set while editing
+      textRef.current?.value ?? "",
+    );
   const onKeyDown = (e: ReactKeyboardEvent) => {
     if (e.key === "Escape") props.onEditCancel();
     // ⌘/Ctrl+Enter commits multi-line text without inserting a newline.

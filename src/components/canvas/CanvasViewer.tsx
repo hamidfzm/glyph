@@ -31,7 +31,11 @@ export function CanvasViewer({ content, filePath, onOpenFile }: CanvasViewerProp
     } catch (err) {
       return {
         data: null,
-        error: err instanceof CanvasParseError ? err.message : String(err),
+        error:
+          err instanceof CanvasParseError
+            ? err.message
+            : // v8 ignore next -- defensive: parseCanvas only throws CanvasParseError
+              String(err),
       };
     }
   }, [content]);
@@ -78,7 +82,9 @@ export function CanvasViewer({ content, filePath, onOpenFile }: CanvasViewerProp
       </div>
     );
   }
+  /* v8 ignore start -- defensive: data is null only when parsed.error is set, handled above */
   if (!data) return null;
+  /* v8 ignore stop */
 
   const groups = data.nodes.filter((n) => n.type === "group");
   const items = data.nodes.filter((n) => n.type !== "group");

@@ -13,6 +13,7 @@ describe("isCanvasFile", () => {
     expect(isCanvasFile("note.md")).toBe(false);
     expect(isCanvasFile("nb.ipynb")).toBe(false);
     expect(isCanvasFile("noext")).toBe(false);
+    expect(isCanvasFile("")).toBe(false);
   });
 
   it("exposes the canonical extension list", () => {

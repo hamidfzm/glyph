@@ -28,11 +28,29 @@ describe("serializeCanvas", () => {
     expect(out).toContain("\t");
   });
 
+  it("serializes a link node's url", () => {
+    const data: CanvasData = {
+      nodes: [{ id: "l", type: "link", x: 0, y: 0, width: 10, height: 10, url: "https://x.dev" }],
+      edges: [],
+    };
+    const json = JSON.parse(serializeCanvas(data));
+    expect(json.nodes[0]).toEqual({
+      id: "l",
+      type: "link",
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      url: "https://x.dev",
+    });
+  });
+
   it("round-trips parse → serialize → parse", () => {
     const source: CanvasData = {
       nodes: [
         { id: "t", type: "text", x: 1, y: 2, width: 3, height: 4, text: "x", color: "2" },
         { id: "f", type: "file", x: 0, y: 0, width: 5, height: 5, file: "a.md", subpath: "#h" },
+        { id: "l", type: "link", x: 7, y: 8, width: 5, height: 5, url: "https://x.dev" },
         { id: "g", type: "group", x: -10, y: -10, width: 99, height: 99, label: "G" },
       ],
       edges: [{ id: "e", fromNode: "t", toNode: "f", fromSide: "right", toSide: "left" }],

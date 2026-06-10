@@ -54,7 +54,10 @@ export function CanvasNodeView({ node, canvasPath, onOpenFile }: CanvasNodeViewP
           <img
             className="glyph-canvas-node-image"
             src={convertFileSrc(resolved)}
-            alt={node.file.split(/[/\\]/).pop() ?? node.file}
+            alt={
+              // v8 ignore next -- defensive: split of a matched image path always yields a basename
+              node.file.split(/[/\\]/).pop() ?? node.file
+            }
           />
         );
       }
