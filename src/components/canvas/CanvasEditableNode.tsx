@@ -40,6 +40,18 @@ function editValue(node: CanvasNode): string {
   }
 }
 
+/** Placeholder hinting what the inline editor expects, per node type. */
+function editPlaceholder(node: CanvasNode): string {
+  switch (node.type) {
+    case "group":
+      return "Group name";
+    case "link":
+      return "https://example.com";
+    default:
+      return "Type markdown…";
+  }
+}
+
 // A node in edit mode: the read-only content plus selection chrome, a
 // bottom-right resize handle, four side connectors for drawing edges, and an
 // inline textarea for editing text bodies, group labels, and link URLs.
@@ -101,6 +113,7 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
             ref={textRef}
             className="glyph-canvas-node-editor"
             defaultValue={editValue(node)}
+            placeholder={editPlaceholder(node)}
             onPointerDown={(e) => e.stopPropagation()}
             onBlur={commit}
             onKeyDown={onKeyDown}

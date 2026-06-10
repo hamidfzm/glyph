@@ -117,6 +117,21 @@ describe("CanvasEditableNode", () => {
     expect(onStartEdit).not.toHaveBeenCalled();
   });
 
+  it("shows a type-specific placeholder in the inline editor", () => {
+    const link = setup({ node: linkNode, editing: true });
+    expect(
+      link.container.querySelector<HTMLTextAreaElement>(".glyph-canvas-node-editor")!.placeholder,
+    ).toBe("https://example.com");
+    const group = setup({ node: groupNode, editing: true });
+    expect(
+      group.container.querySelector<HTMLTextAreaElement>(".glyph-canvas-node-editor")!.placeholder,
+    ).toBe("Group name");
+    const text = setup({ editing: true });
+    expect(
+      text.container.querySelector<HTMLTextAreaElement>(".glyph-canvas-node-editor")!.placeholder,
+    ).toBe("Type markdown…");
+  });
+
   it("shows the URL in the textarea when editing a link node and commits on plain Enter", () => {
     const { container, onTextCommit } = setup({ node: linkNode, editing: true });
     const ta = container.querySelector<HTMLTextAreaElement>(".glyph-canvas-node-editor")!;

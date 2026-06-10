@@ -211,6 +211,16 @@
   outline: none;
 }
 
+.glyph-canvas-node-editor::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+/* The inline editor scrolls but draws no gutter; a permanent thumb inside a
+   small card reads as noise (long text still scrolls with the caret). */
+.glyph-canvas-node-editor {
+  scrollbar-width: none;
+}
+
 /* Bottom-right resize handle. */
 .glyph-canvas-resize {
   position: absolute;
