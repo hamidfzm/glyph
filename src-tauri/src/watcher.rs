@@ -21,6 +21,29 @@ pub fn is_relevant_directory_change(event: &Event) -> bool {
         .any(|p| crate::is_markdown_file(p) || p.is_dir())
 }
 
+/// A file watch should fire when the watched file's content changes. Editors
+/// commonly save by replacing the file, so creations count as changes too.
+/// Extracted as a pure helper so the filter is testable without a live watcher.
+pub fn is_relevant_file_change(event: &Event) -> bool {
+    matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_))
+}
+
+/// Shared body of the `notify` callbacks: drop watcher errors, filter the
+/// event through `is_relevant`, and emit when it passes. Extracted so the
+/// error and filtered-out arms are testable — a live watcher only delivers
+/// them on hard-to-reproduce filesystem conditions.
+fn forward_watch_event(
+    res: Result<Event, notify::Error>,
+    is_relevant: fn(&Event) -> bool,
+    emit: impl FnOnce(),
+) {
+    if let Ok(event) = res {
+        if is_relevant(&event) {
+            emit();
+        }
+    }
+}
+
 #[tauri::command]
 pub fn watch_file<R: Runtime>(path: String, app: AppHandle<R>) -> Result<(), String> {
     let state = app.state::<FileWatcherState>();
@@ -34,14 +57,9 @@ pub fn watch_file<R: Runtime>(path: String, app: AppHandle<R>) -> Result<(), Str
     let app_handle = app.clone();
     let watched_path = path.clone();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-        if let Ok(event) = res {
-            match event.kind {
-                EventKind::Modify(_) | EventKind::Create(_) => {
-                    let _ = app_handle.emit("file-changed", &watched_path);
-                }
-                _ => {}
-            }
-        }
+        forward_watch_event(res, is_relevant_file_change, || {
+            let _ = app_handle.emit("file-changed", &watched_path);
+        });
     })
     .map_err(|e| format!("Failed to create watcher: {e}"))?;
 
@@ -73,11 +91,9 @@ pub fn watch_directory<R: Runtime>(path: String, app: AppHandle<R>) -> Result<()
     let app_handle = app.clone();
     let watched_path = path.clone();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-        if let Ok(event) = res {
-            if is_relevant_directory_change(&event) {
-                let _ = app_handle.emit("directory-changed", &watched_path);
-            }
-        }
+        forward_watch_event(res, is_relevant_directory_change, || {
+            let _ = app_handle.emit("directory-changed", &watched_path);
+        });
     })
     .map_err(|e| format!("Failed to create watcher: {e}"))?;
 
@@ -174,6 +190,62 @@ mod tests {
             }
             std::thread::sleep(Duration::from_millis(20));
         }
+    }
+
+    #[test]
+    fn file_change_relevant_for_modify_and_create() {
+        let md = PathBuf::from("/watch/note.md");
+        assert!(is_relevant_file_change(&event(
+            EventKind::Modify(ModifyKind::Any),
+            vec![md.clone()]
+        )));
+        assert!(is_relevant_file_change(&event(
+            EventKind::Create(CreateKind::Any),
+            vec![md.clone()]
+        )));
+        assert!(!is_relevant_file_change(&event(
+            EventKind::Remove(RemoveKind::Any),
+            vec![md]
+        )));
+    }
+
+    #[test]
+    fn forward_watch_event_emits_for_relevant_events() {
+        let mut fired = false;
+        forward_watch_event(
+            Ok(event(
+                EventKind::Modify(ModifyKind::Any),
+                vec![PathBuf::from("/watch/note.md")],
+            )),
+            is_relevant_file_change,
+            || fired = true,
+        );
+        assert!(fired);
+    }
+
+    #[test]
+    fn forward_watch_event_skips_irrelevant_events() {
+        let mut fired = false;
+        forward_watch_event(
+            Ok(event(
+                EventKind::Remove(RemoveKind::Any),
+                vec![PathBuf::from("/watch/note.md")],
+            )),
+            is_relevant_file_change,
+            || fired = true,
+        );
+        assert!(!fired);
+    }
+
+    #[test]
+    fn forward_watch_event_drops_watcher_errors() {
+        let mut fired = false;
+        forward_watch_event(
+            Err(notify::Error::generic("backend failure")),
+            is_relevant_file_change,
+            || fired = true,
+        );
+        assert!(!fired);
     }
 
     #[test]
