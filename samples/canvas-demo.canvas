@@ -16,7 +16,7 @@
 			"x": -360,
 			"y": -40,
 			"width": 300,
-			"height": 120,
+			"height": 170,
 			"color": "4",
 			"text": "## Ideas\n- Pan with scroll\n- Zoom with ⌘ + scroll\n- Drag the background"
 		},
@@ -26,7 +26,7 @@
 			"x": 80,
 			"y": -40,
 			"width": 300,
-			"height": 120,
+			"height": 170,
 			"color": "3",
 			"text": "## Tasks\n- [x] Render nodes\n- [x] Draw edges\n- [ ] Edit nodes"
 		},
