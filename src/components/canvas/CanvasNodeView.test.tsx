@@ -19,6 +19,12 @@ describe("CanvasNodeView", () => {
     expect(screen.getByRole("heading", { name: "Hi" })).toBeInTheDocument();
   });
 
+  it("opts text cards into the shared markdown-body styling", () => {
+    const node: CanvasNode = { ...base, type: "text", text: "styled" };
+    const { container } = render(<CanvasNodeView node={node} />);
+    expect(container.querySelector(".glyph-canvas-node-text.markdown-body")).toBeInTheDocument();
+  });
+
   it("renders a text node's plain paragraph text", () => {
     const node: CanvasNode = { ...base, type: "text", text: "hello" };
     render(<CanvasNodeView node={node} />);

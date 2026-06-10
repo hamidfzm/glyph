@@ -41,7 +41,9 @@ export function CanvasNodeView({
   switch (node.type) {
     case "text":
       return (
-        <div className="glyph-canvas-node-text">
+        // markdown-body opts the card into the full document styling
+        // (headings, lists, code blocks); canvas.css strips its page chrome.
+        <div className="glyph-canvas-node-text markdown-body">
           <MarkdownContent content={node.text} filePath={canvasPath} showFrontmatter={false} />
         </div>
       );

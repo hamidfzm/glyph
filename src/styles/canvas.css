@@ -43,14 +43,15 @@
   background: color-mix(in srgb, var(--color-surface-secondary) 60%, transparent);
 }
 
-.glyph-canvas-group-label {
-  position: absolute;
-  top: -1.6em;
-  left: 0;
+/* Region header inside the group's top-left corner. */
+.glyph-canvas-node-group-label {
+  padding: 8px 14px;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-secondary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Content cards. The selection chrome (side connectors, resize handle) hangs
@@ -80,13 +81,25 @@
   box-shadow: none;
 }
 
-/* The group label floats above the box; don't clip it away. */
-.glyph-canvas-node[data-type="group"] .glyph-canvas-node-content {
-  overflow: visible;
+/* Card markdown: the shared `.markdown-body` styling gives cards the full
+   document rendering (headings, lists, code, tables), but its document-level
+   chrome — centring max-width and the huge end-of-document scroll padding —
+   has no place inside a card. Text is slightly smaller than the document,
+   like Obsidian's cards, and edge margins collapse into the card padding. */
+.glyph-canvas-node-text.markdown-body {
+  max-width: none;
+  margin: 0;
+  padding: 10px 14px;
+  font-size: calc(var(--glyph-font-size, 16px) * 0.875);
+  line-height: 1.5;
 }
 
-.glyph-canvas-node-text {
-  padding: 10px 14px;
+.glyph-canvas-node-text > :first-child {
+  margin-top: 0;
+}
+
+.glyph-canvas-node-text > :last-child {
+  margin-bottom: 0;
 }
 
 .glyph-canvas-node-link,
@@ -304,6 +317,22 @@
   background:
     linear-gradient(to top left, transparent 45%, var(--color-alert-caution) 46%, var(--color-alert-caution) 54%, transparent 55%),
     var(--color-surface);
+}
+
+/* The custom-colour picker poses as a rainbow swatch; the input's own swatch
+   box is hidden so only the wheel shows, and clicking opens the OS picker. */
+.glyph-canvas-swatch[data-custom] {
+  appearance: none;
+  background: conic-gradient(#fb464c, #e9973f, #e0de71, #44cf6e, #53dfdd, #a882ff, #fb464c);
+}
+
+.glyph-canvas-swatch[data-custom]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.glyph-canvas-swatch[data-custom]::-webkit-color-swatch {
+  border: none;
+  opacity: 0;
 }
 
 .glyph-canvas-delete {
