@@ -5,6 +5,7 @@ const LABELS: Record<ExportFormat, string> = {
   docx: "Word document",
   epub: "EPUB",
   pdf: "PDF",
+  png: "PNG image",
 };
 
 /**

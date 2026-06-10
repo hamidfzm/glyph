@@ -14,6 +14,7 @@ export type CanvasMenuTarget =
 export interface CanvasMenuActions {
   createNode: (type: "text" | "group" | "link") => void;
   startEdit: (id: string) => void;
+  editEdgeLabel: (id: string) => void;
   setNodeColor: (id: string, color: string | undefined) => void;
   deleteNode: (id: string) => void;
   deleteEdge: (id: string) => void;
@@ -45,6 +46,12 @@ export function buildCanvasMenuItems(
 
   if (target.kind === "edge") {
     return [
+      {
+        kind: "action",
+        label: "Edit label",
+        onSelect: () => actions.editEdgeLabel(target.id),
+      },
+      { kind: "separator" },
       {
         kind: "action",
         label: "Delete connection",

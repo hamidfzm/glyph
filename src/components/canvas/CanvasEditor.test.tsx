@@ -296,6 +296,90 @@ describe("CanvasEditor", () => {
     expect(lastData(onChange).nodes[0]).toMatchObject({ type: "text", x: -25, y: 0 });
   });
 
+  it("double-clicking an edge opens the label editor; Enter commits the label", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={withEdge} onChange={onChange} />);
+    fireEvent.doubleClick(container.querySelector(".glyph-canvas-edge-hit") as Element);
+    const input = container.querySelector(".glyph-canvas-edge-label-editor") as HTMLInputElement;
+    expect(input).toBeTruthy();
+    fireEvent.change(input, { target: { value: "depends on" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(lastData(onChange).edges[0]).toMatchObject({ label: "depends on" });
+  });
+
+  it("clicking the stage while editing an edge label commits it", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={withEdge} onChange={onChange} />);
+    fireEvent.doubleClick(container.querySelector(".glyph-canvas-edge-hit") as Element);
+    const input = container.querySelector(".glyph-canvas-edge-label-editor") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "spec" } });
+    fireEvent.pointerDown(stageOf(container), { clientX: 600, clientY: 500, button: 0 });
+    expect(lastData(onChange).edges[0]).toMatchObject({ label: "spec" });
+  });
+
+  it("Escape discards an edge label edit", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={withEdge} onChange={onChange} />);
+    fireEvent.doubleClick(container.querySelector(".glyph-canvas-edge-hit") as Element);
+    const input = container.querySelector(".glyph-canvas-edge-label-editor") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "discarded" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(container.querySelector(".glyph-canvas-edge-label-editor")).toBeNull();
+  });
+
+  it("clears an edge label by committing an empty value", () => {
+    const onChange = vi.fn();
+    const labelled = JSON.stringify({
+      nodes: [
+        { id: "a", type: "text", x: 0, y: 0, width: 200, height: 80, text: "A" },
+        { id: "b", type: "text", x: 300, y: 0, width: 200, height: 80, text: "B" },
+      ],
+      edges: [{ id: "e", fromNode: "a", toNode: "b", label: "old" }],
+    });
+    const { container } = render(<CanvasEditor content={labelled} onChange={onChange} />);
+    fireEvent.doubleClick(container.querySelector(".glyph-canvas-edge-hit") as Element);
+    const input = container.querySelector(".glyph-canvas-edge-label-editor") as HTMLInputElement;
+    expect(input.value).toBe("old");
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(lastData(onChange).edges[0]).not.toHaveProperty("label");
+  });
+
+  it("right-clicking a card and choosing Edit text opens the inline editor", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
+    fireEvent.contextMenu(nodesOf(container)[0]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit text" }));
+    expect(container.querySelector(".glyph-canvas-node-editor")).toBeTruthy();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("right-clicking an edge and choosing Edit label opens the label editor", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={withEdge} onChange={onChange} />);
+    fireEvent.contextMenu(container.querySelector(".glyph-canvas-edge-hit") as Element);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit label" }));
+    const input = container.querySelector(".glyph-canvas-edge-label-editor") as HTMLInputElement;
+    expect(input).toBeTruthy();
+    fireEvent.change(input, { target: { value: "labelled" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(lastData(onChange).edges[0]).toMatchObject({ label: "labelled" });
+  });
+
+  it("deleting the edge while its label editor is open closes the editor", () => {
+    const onChange = vi.fn();
+    const { container } = render(<CanvasEditor content={withEdge} onChange={onChange} />);
+    fireEvent.doubleClick(container.querySelector(".glyph-canvas-edge-hit") as Element);
+    expect(container.querySelector(".glyph-canvas-edge-label-editor")).toBeTruthy();
+    // The edge vanishes out from under the editor; the editing id briefly
+    // points at a no-longer-existing edge, which must render as "no editor".
+    fireEvent.contextMenu(container.querySelector(".glyph-canvas-edge-hit") as Element);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete connection" }));
+    expect(lastData(onChange).edges).toHaveLength(0);
+    expect(container.querySelector(".glyph-canvas-edge-label-editor")).toBeNull();
+  });
+
   it("right-clicking an edge offers Delete connection", () => {
     const onChange = vi.fn();
     const { container } = render(<CanvasEditor content={withEdge} onChange={onChange} />);

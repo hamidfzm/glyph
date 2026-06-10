@@ -6,6 +6,7 @@ import { buildCanvasMenuItems, type CanvasMenuActions } from "./canvasMenuItems"
 const makeActions = (): CanvasMenuActions => ({
   createNode: vi.fn(),
   startEdit: vi.fn(),
+  editEdgeLabel: vi.fn(),
   setNodeColor: vi.fn(),
   deleteNode: vi.fn(),
   deleteEdge: vi.fn(),
@@ -21,8 +22,12 @@ describe("buildCanvasMenuItems", () => {
     const actions = makeActions();
     const items = buildCanvasMenuItems({ kind: "stage" }, actions);
     expect(labels(items)).toEqual(["New card", "New group", "New link"]);
+    (items[0] as ContextMenuActionItem).onSelect();
+    expect(actions.createNode).toHaveBeenCalledWith("text");
     (items[1] as ContextMenuActionItem).onSelect();
     expect(actions.createNode).toHaveBeenCalledWith("group");
+    (items[2] as ContextMenuActionItem).onSelect();
+    expect(actions.createNode).toHaveBeenCalledWith("link");
   });
 
   it("offers edit, colour, and delete for a text node", () => {
@@ -80,11 +85,13 @@ describe("buildCanvasMenuItems", () => {
     expect(actions.setNodeColor).toHaveBeenCalledWith("a", undefined);
   });
 
-  it("offers delete for an edge", () => {
+  it("offers label editing and delete for an edge", () => {
     const actions = makeActions();
     const items = buildCanvasMenuItems({ kind: "edge", id: "e1" }, actions);
-    expect(labels(items)).toEqual(["Delete connection"]);
+    expect(labels(items)).toEqual(["Edit label", "—", "Delete connection"]);
     (items[0] as ContextMenuActionItem).onSelect();
+    expect(actions.editEdgeLabel).toHaveBeenCalledWith("e1");
+    (items[2] as ContextMenuActionItem).onSelect();
     expect(actions.deleteEdge).toHaveBeenCalledWith("e1");
   });
 });

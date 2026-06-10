@@ -130,6 +130,22 @@ export function nodeAtPoint(
 }
 
 /**
+ * Midpoint of an edge's bezier chord — where its label renders and where the
+ * inline label editor opens. Null when either endpoint is missing.
+ */
+export function edgeMidpoint(
+  nodes: readonly CanvasNode[],
+  edge: { fromNode: string; toNode: string; fromSide?: NodeSide; toSide?: NodeSide },
+): Point | null {
+  const from = nodes.find((n) => n.id === edge.fromNode);
+  const to = nodes.find((n) => n.id === edge.toNode);
+  if (!from || !to) return null;
+  const start = sideAnchor(from, edge.fromSide ?? inferSide(from, to));
+  const end = sideAnchor(to, edge.toSide ?? inferSide(to, from));
+  return { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+}
+
+/**
  * Ids of the nodes a group contains: everything whose rectangle lies fully
  * inside the group's bounds (the group itself excluded). JSON Canvas has no
  * explicit membership — like Obsidian, containment is geometric, so dragging

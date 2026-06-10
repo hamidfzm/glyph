@@ -3,6 +3,8 @@ import { type TocEntry, useTableOfContents } from "@/hooks/useTableOfContents";
 import { useTabs } from "@/hooks/useTabs";
 import { useWorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { type Backlink, filterBacklinks } from "@/lib/backlinks";
+import { canvasDisplayText } from "@/lib/canvas/canvasText";
+import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isNotebookFile } from "@/lib/notebookExtensions";
 import { EDITOR_MODE, type Settings } from "@/lib/settings";
 
@@ -49,16 +51,26 @@ export function TabsProvider({ settings, updateSettings, children }: TabsProvide
   // be chewing on raw JSON, which is worse than nothing. Suppress it in every
   // mode so a notebook is never mistaken for editable markdown text.
   const isNotebook = !!activePath && isNotebookFile(activePath);
-  const displayContent = isNotebook
-    ? null
-    : activeMode !== EDITOR_MODE.view
+  // A canvas is JSON too, but its boards carry real prose: project the text
+  // cards, group labels, and link URLs so word count, AI, and read-aloud work
+  // on the content rather than the syntax.
+  const isCanvas = !!activePath && isCanvasFile(activePath);
+  const liveContent =
+    activeMode !== EDITOR_MODE.view
       ? // editContent is seeded when entering edit mode, so the `?? content`
         // fallback is defensive only.
         /* c8 ignore next */
         (tabs.activeFile?.editContent ?? content)
       : content;
+  const displayContent = useMemo(() => {
+    if (isNotebook) return null;
+    if (isCanvas) return liveContent ? canvasDisplayText(liveContent) : null;
+    return liveContent;
+  }, [isNotebook, isCanvas, liveContent]);
 
-  const tocEntries = useTableOfContents(displayContent);
+  // TOC entries navigate by scrolling the document; the board has no heading
+  // scroll targets, so a canvas keeps the outline empty.
+  const tocEntries = useTableOfContents(isCanvas ? null : displayContent);
   const backlinks = useMemo(
     () =>
       tabs.activeFile?.path

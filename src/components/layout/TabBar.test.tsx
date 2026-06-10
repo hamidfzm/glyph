@@ -139,6 +139,39 @@ describe("TabBar", () => {
     expect(closeTab).toHaveBeenCalledWith("tab-0");
   });
 
+  it("ignores aux clicks from buttons other than middle", () => {
+    const closeTab = vi.fn();
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0", closeTab });
+    const tabEl = screen.getByText("file0.md").closest(".tab-item")!;
+    fireEvent(tabEl, new MouseEvent("auxclick", { bubbles: true, button: 2 }));
+    expect(closeTab).not.toHaveBeenCalled();
+  });
+
+  it("shows a dirty dot for tabs with unsaved edits", () => {
+    const tab = makeFileTab(0);
+    const dirtyTab: FileTab = { ...tab, file: { ...tab.file, dirty: true } };
+    const { container } = renderTabBar({ tabs: [dirtyTab], activeTabId: "tab-0" });
+    expect(container.querySelector(".tab-dirty-dot")).toBeInTheDocument();
+  });
+
+  it("falls back to Untitled when a file tab has no metadata", () => {
+    const tab = makeFileTab(0);
+    const bare: FileTab = { ...tab, file: { ...tab.file, metadata: null } };
+    renderTabBar({ tabs: [bare], activeTabId: "tab-0" });
+    expect(screen.getByText("Untitled")).toBeInTheDocument();
+  });
+
+  it("labels a root-only folder tab with its raw path", () => {
+    renderTabBar({ tabs: [makeFolderTab(0, "/")], activeTabId: "tab-0" });
+    expect(screen.getByText("/")).toBeInTheDocument();
+  });
+
+  it("hides the mode toggle when no tab id is active", () => {
+    renderTabBar({ tabs: makeTabs(1), activeTabId: null });
+    expect(screen.getByText("file0.md")).toBeInTheDocument();
+    expect(screen.queryByLabelText("View mode")).not.toBeInTheDocument();
+  });
+
   it("renders folder tabs with the folder basename and folder kind marker", () => {
     renderTabBar({
       tabs: [makeFolderTab(0, "/Users/me/notes")],

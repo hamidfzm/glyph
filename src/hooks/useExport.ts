@@ -8,7 +8,7 @@ import { prepareContent } from "@/lib/export/prepareContent";
 import type { PrintSettings } from "@/lib/settings";
 import type { TocEntry } from "./useTableOfContents";
 
-export type ExportFormat = "html" | "docx" | "epub" | "pdf";
+export type ExportFormat = "html" | "docx" | "epub" | "pdf" | "png";
 
 interface UseExportOptions {
   entries: TocEntry[];
@@ -22,6 +22,7 @@ const FILTERS: Record<ExportFormat, { name: string; ext: string }> = {
   docx: { name: "Word Document", ext: "docx" },
   epub: { name: "EPUB", ext: "epub" },
   pdf: { name: "PDF", ext: "pdf" },
+  png: { name: "PNG Image", ext: "png" },
 };
 
 // Write binary export output via the Rust command. The bytes are sent as a
@@ -60,6 +61,30 @@ export function useExport({
 
   const run = useCallback(
     async (format: ExportFormat) => {
+      // A canvas tab exports the rendered board as a PNG image, whichever
+      // export entry was chosen — there is no document flow to convert to
+      // HTML/DOCX/EPUB/PDF. The check runs first: cards contain their own
+      // small `.markdown-body` elements which would fool the document guard.
+      if (document.querySelector(".glyph-canvas")) {
+        const meta = deriveExportMeta(filePath, content);
+        const path = await save({
+          defaultPath: `${meta.baseName}.png`,
+          filters: [{ name: FILTERS.png.name, extensions: [FILTERS.png.ext] }],
+        });
+        if (!path) return;
+        setExporting("png");
+        try {
+          const { exportCanvasPng } = await import("@/lib/canvas/exportPng");
+          const bytes = await exportCanvasPng();
+          if (bytes) await writeBinary(path, bytes);
+        } catch (err) {
+          console.error("Failed to export canvas PNG:", err);
+        } finally {
+          setExporting(null);
+        }
+        return;
+      }
+
       // Cheap guard so we don't pop a save dialog with nothing to export.
       if (!document.querySelector(".markdown-body")) return;
 

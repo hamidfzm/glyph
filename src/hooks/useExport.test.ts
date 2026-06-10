@@ -6,6 +6,12 @@ import type { PrintSettings } from "@/lib/settings";
 import { useExport } from "./useExport";
 import type { TocEntry } from "./useTableOfContents";
 
+// Canvas capture goes through this mock so html2canvas never loads in tests.
+const exportCanvasPngMock = vi.fn();
+vi.mock("@/lib/canvas/exportPng", () => ({
+  exportCanvasPng: (...args: unknown[]) => exportCanvasPngMock(...args),
+}));
+
 const PRINT: PrintSettings = {
   pageBreakLevel: "none",
   includeToc: false,
@@ -30,9 +36,16 @@ function setBody(html = "<h1>Intro</h1>"): void {
   document.body.appendChild(body);
 }
 
+function setCanvas(): void {
+  const board = document.createElement("div");
+  board.className = "glyph-canvas";
+  document.body.appendChild(board);
+}
+
 beforeEach(() => {
   vi.mocked(invoke).mockReset().mockResolvedValue(undefined);
   vi.mocked(save).mockReset();
+  exportCanvasPngMock.mockReset().mockResolvedValue(new Uint8Array([7, 8, 9]));
 });
 
 afterEach(() => {
@@ -144,6 +157,88 @@ describe("useExport", () => {
     });
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it("exports a canvas tab as PNG whichever export entry was chosen", async () => {
+    setCanvas();
+    vi.mocked(save).mockResolvedValue("/out.png");
+    const { result } = renderHook(() => useExport(options({ filePath: "/docs/board.canvas" })));
+    await act(async () => {
+      await result.current.exportHtml();
+    });
+
+    expect(save).toHaveBeenCalledWith({
+      defaultPath: "board.png",
+      filters: [{ name: "PNG Image", extensions: ["png"] }],
+    });
+    const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_binary_file");
+    expect(call).toBeTruthy();
+    expect((call?.[1] as { path: string }).path).toBe("/out.png");
+    expect((call?.[1] as { contents: number[] }).contents).toEqual([7, 8, 9]);
+  });
+
+  it("does not write when the canvas save dialog is cancelled", async () => {
+    setCanvas();
+    vi.mocked(save).mockResolvedValue(null);
+    const { result } = renderHook(() => useExport(options()));
+    await act(async () => {
+      await result.current.exportPdf();
+    });
+    expect(exportCanvasPngMock).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("skips the write when the canvas capture yields no image", async () => {
+    setCanvas();
+    vi.mocked(save).mockResolvedValue("/out.png");
+    exportCanvasPngMock.mockResolvedValue(null);
+    const { result } = renderHook(() => useExport(options()));
+    await act(async () => {
+      await result.current.exportHtml();
+    });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(result.current.exporting).toBeNull();
+  });
+
+  it("logs and recovers when the canvas capture fails", async () => {
+    setCanvas();
+    vi.mocked(save).mockResolvedValue("/out.png");
+    exportCanvasPngMock.mockRejectedValue(new Error("render failed"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderHook(() => useExport(options()));
+    await act(async () => {
+      await result.current.exportHtml();
+    });
+    expect(spy).toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(result.current.exporting).toBeNull();
+    spy.mockRestore();
+  });
+
+  it("flags png while the canvas write is in flight and clears it when done", async () => {
+    setCanvas();
+    vi.mocked(save).mockResolvedValue("/out.png");
+    let finishWrite!: () => void;
+    vi.mocked(invoke).mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishWrite = () => resolve();
+      }),
+    );
+
+    const { result } = renderHook(() => useExport(options()));
+    expect(result.current.exporting).toBeNull();
+
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = result.current.exportHtml();
+    });
+    expect(result.current.exporting).toBe("png");
+
+    await act(async () => {
+      finishWrite();
+      await pending;
+    });
+    expect(result.current.exporting).toBeNull();
   });
 
   it("flags the active format while writing and clears it when done", async () => {

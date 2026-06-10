@@ -12,7 +12,9 @@ interface UsePrintOptions {
 export function usePrint({ entries, settings }: UsePrintOptions) {
   return useCallback(() => {
     const body = document.querySelector<HTMLElement>(".markdown-body");
-    if (!body) return;
+    // Canvas cards carry their own small markdown bodies; printing one of
+    // those is never what the user wants. Export the board as PNG instead.
+    if (!body || body.closest(".glyph-canvas")) return;
 
     const root = document.documentElement;
     root.setAttribute("data-print-breaks", settings.pageBreakLevel);

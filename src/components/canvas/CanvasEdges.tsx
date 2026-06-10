@@ -14,6 +14,8 @@ interface CanvasEdgesProps {
   onSelectEdge?: (id: string, e: ReactPointerEvent) => void;
   /** Right-click on an edge (editor mode) — opens the edge context menu. */
   onEdgeContextMenu?: (id: string, e: ReactMouseEvent) => void;
+  /** Double-click on an edge (editor mode) — opens the inline label editor. */
+  onEdgeDoubleClick?: (id: string, e: ReactMouseEvent) => void;
   /** The currently selected edge id, drawn highlighted. */
   selectedId?: string | null;
 }
@@ -30,6 +32,7 @@ export function CanvasEdges({
   edges,
   onSelectEdge,
   onEdgeContextMenu,
+  onEdgeDoubleClick,
   selectedId,
 }: CanvasEdgesProps) {
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
@@ -74,6 +77,10 @@ export function CanvasEdges({
                   onSelectEdge?.(edge.id, e);
                 }}
                 onContextMenu={(e) => onEdgeContextMenu?.(edge.id, e)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  onEdgeDoubleClick?.(edge.id, e);
+                }}
               />
             )}
             <path d={d} fill="none" strokeWidth={edge.id === selectedId ? 3 : 2} />

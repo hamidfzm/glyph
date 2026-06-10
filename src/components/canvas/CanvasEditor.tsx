@@ -10,6 +10,7 @@ import { ContextMenu, type ContextMenuModel } from "@/components/menu/ContextMen
 import { useCanvasDocument } from "@/hooks/useCanvasDocument";
 import { useCanvasViewport } from "@/hooks/useCanvasViewport";
 import {
+  edgeMidpoint,
   inferSide,
   nodeAtPoint,
   nodeIdsInGroup,
@@ -25,12 +26,14 @@ import {
   removeNodes,
   resizeNode,
   setNodesColor,
+  updateEdgeLabel,
   updateGroupLabel,
   updateLinkUrl,
   updateTextNode,
 } from "@/lib/canvas/mutations";
 import type { CanvasData, CanvasNode, NodeSide } from "@/lib/canvas/types";
 import { screenToWorld } from "@/lib/canvas/viewport";
+import { CanvasEdgeLabelEditor } from "./CanvasEdgeLabelEditor";
 import { CanvasEdges } from "./CanvasEdges";
 import { CanvasEditableNode } from "./CanvasEditableNode";
 import { CanvasSelectionToolbar } from "./CanvasSelectionToolbar";
@@ -83,6 +86,7 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
   const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null);
   const [tempEdge, setTempEdge] = useState<{ from: Point; to: Point } | null>(null);
   const [menu, setMenu] = useState<ContextMenuModel | null>(null);
 
@@ -164,6 +168,7 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
     setSelection(new Set());
     setSelectedEdge(null);
     setEditingId(null);
+    setEditingEdgeId(null);
     gesture.current = { kind: "pan", lastX: e.clientX, lastY: e.clientY };
   };
 
@@ -285,6 +290,11 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
     setEditingId(null);
   };
 
+  const commitEdgeLabel = (id: string, value: string) => {
+    commit(updateEdgeLabel(dataRef.current, id, value));
+    setEditingEdgeId(null);
+  };
+
   // Right-click menu. preventDefault marks the event as claimed so the
   // app-level handler leaves it alone; stopPropagation keeps a node's menu
   // from also opening the stage's. Creation lands at the clicked world point.
@@ -295,6 +305,7 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
     const actions: CanvasMenuActions = {
       createNode: (type) => addNodeAt(type, at),
       startEdit: (id) => setEditingId(id),
+      editEdgeLabel: (id) => setEditingEdgeId(id),
       setNodeColor: (id, color) => commit(setNodesColor(dataRef.current, new Set([id]), color)),
       deleteNode: (id) => {
         commit(removeNodes(dataRef.current, new Set([id])));
@@ -336,6 +347,10 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
   const boundingBox = useMemo(() => nodesBoundingBox(data.nodes), [data.nodes]);
   const groups = data.nodes.filter((n) => n.type === "group");
   const items = data.nodes.filter((n) => n.type !== "group");
+  const editingEdge = editingEdgeId
+    ? (data.edges.find((ed) => ed.id === editingEdgeId) ?? null)
+    : null;
+  const editingEdgeAt = editingEdge ? edgeMidpoint(data.nodes, editingEdge) : null;
 
   const nodeHandlers = (node: CanvasNode) => ({
     selected: selection.has(node.id),
@@ -394,7 +409,21 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
               setSelection(new Set());
               openMenu(e, { kind: "edge", id });
             }}
+            onEdgeDoubleClick={(id) => {
+              setSelectedEdge(id);
+              setSelection(new Set());
+              setEditingEdgeId(id);
+            }}
           />
+
+          {editingEdge && editingEdgeAt && (
+            <CanvasEdgeLabelEditor
+              at={editingEdgeAt}
+              initial={editingEdge.label ?? ""}
+              onCommit={(v) => commitEdgeLabel(editingEdge.id, v)}
+              onCancel={() => setEditingEdgeId(null)}
+            />
+          )}
 
           {tempEdge && (
             <svg className="glyph-canvas-edges" width={1} height={1} aria-hidden>

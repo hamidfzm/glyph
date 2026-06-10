@@ -183,6 +183,14 @@ describe("CanvasEditableNode", () => {
     expect(onTextCommit).toHaveBeenCalledWith("hi");
   });
 
+  it("does not double-commit when blur follows a Ctrl+Enter commit", () => {
+    const { container, onTextCommit } = setup({ editing: true });
+    const ta = container.querySelector(".glyph-canvas-node-editor")!;
+    fireEvent.keyDown(ta, { key: "Enter", ctrlKey: true });
+    fireEvent.blur(ta);
+    expect(onTextCommit).toHaveBeenCalledTimes(1);
+  });
+
   it("does not commit or cancel on a plain Enter", () => {
     const { container, onTextCommit, onEditCancel } = setup({ editing: true });
     const ta = container.querySelector(".glyph-canvas-node-editor")!;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   arrowheadPoints,
   bezierPath,
+  edgeMidpoint,
   inferSide,
   nodeAtPoint,
   nodeCenter,
@@ -148,6 +149,26 @@ describe("nodeAtPoint", () => {
   it("returns null when no node is hit", () => {
     const nodes: CanvasNode[] = [node({ id: "a", x: 0, y: 0, width: 100, height: 50 })];
     expect(nodeAtPoint(nodes, { x: 500, y: 500 })).toBeNull();
+  });
+});
+
+describe("edgeMidpoint", () => {
+  const nodes: CanvasNode[] = [
+    node({ id: "a", x: 0, y: 0, width: 100, height: 100 }),
+    node({ id: "b", x: 400, y: 0, width: 100, height: 100 }),
+  ];
+  it("returns the midpoint between the side anchors", () => {
+    // a's right anchor (100,50) to b's left anchor (400,50).
+    expect(edgeMidpoint(nodes, { fromNode: "a", toNode: "b" })).toEqual({ x: 250, y: 50 });
+  });
+  it("honours explicit sides", () => {
+    // a's top (50,0) to b's bottom (450,100).
+    expect(
+      edgeMidpoint(nodes, { fromNode: "a", toNode: "b", fromSide: "top", toSide: "bottom" }),
+    ).toEqual({ x: 250, y: 50 });
+  });
+  it("returns null when an endpoint is missing", () => {
+    expect(edgeMidpoint(nodes, { fromNode: "a", toNode: "ghost" })).toBeNull();
   });
 });
 

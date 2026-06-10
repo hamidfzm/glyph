@@ -316,6 +316,32 @@ describe("TabContent", () => {
     expect(commitEdit).toHaveBeenCalledWith(tab.id, "CANVAS");
   });
 
+  it("drops canvas commits when no tab id is active", () => {
+    const tab = makeCanvasTab("edit");
+    const commitEdit = vi.fn();
+    const { getByTestId } = renderTabContent({
+      activeTab: tab,
+      activeTabId: null,
+      activeFile: tab.file,
+      commitEdit,
+    });
+    getByTestId("canvas-editor").click();
+    expect(commitEdit).not.toHaveBeenCalled();
+  });
+
+  it("drops editor changes when no tab id is active", () => {
+    const tab = makeFileTab("edit");
+    const updateEditContent = vi.fn();
+    const { getByTestId } = renderTabContent({
+      activeTab: tab,
+      activeTabId: null,
+      activeFile: tab.file,
+      updateEditContent,
+    });
+    getByTestId("lazy-editor").click();
+    expect(updateEditContent).not.toHaveBeenCalled();
+  });
+
   it("renders the canvas editor in split mode too", () => {
     const tab = makeCanvasTab("split");
     renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });

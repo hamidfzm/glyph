@@ -25,8 +25,9 @@ export function CanvasSelectionToolbar({
   // history with an entry per tick.
   useEffect(() => {
     const input = customRef.current;
-    /* v8 ignore next -- defensive: the input is always rendered with the toolbar */
+    /* v8 ignore start -- defensive: the input is always rendered with the toolbar */
     if (!input) return;
+    /* v8 ignore stop */
     const commit = () => onSetColorRef.current(input.value);
     input.addEventListener("change", commit);
     return () => input.removeEventListener("change", commit);
