@@ -78,6 +78,12 @@ jobs:
 
             ### Linux
             ```bash
+            # Flathub (Flatpak)
+            flatpak install flathub com.hamidfzm.glyph
+
+            # Snap Store
+            sudo snap install glyph
+
             # Arch (AUR)
             yay -S glyph-md-bin
 
@@ -134,6 +140,12 @@ jobs:
 
           ### Linux
           ```bash
+          # Flathub (Flatpak)
+          flatpak install flathub com.hamidfzm.glyph
+
+          # Snap Store
+          sudo snap install glyph
+
           # Arch (AUR)
           yay -S glyph-md-bin
 
