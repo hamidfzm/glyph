@@ -7,6 +7,7 @@
 // markdown is). They open via the CLI, the open dialog, drag-and-drop, and the
 // workspace file tree. The Rust side mirrors this in src-tauri/src/notebook.rs.
 
+import { isCanvasFile } from "./canvasExtensions";
 import { isMarkdownFile } from "./markdownExtensions";
 
 export const NOTEBOOK_EXTENSIONS: readonly string[] = ["ipynb"];
@@ -16,7 +17,7 @@ export function isNotebookFile(path: string): boolean {
   return ext ? NOTEBOOK_EXTENSIONS.includes(ext) : false;
 }
 
-/** Any document Glyph can open: markdown or a Jupyter notebook. */
+/** Any document Glyph can open: markdown, a Jupyter notebook, or a canvas. */
 export function isSupportedFile(path: string): boolean {
-  return isMarkdownFile(path) || isNotebookFile(path);
+  return isMarkdownFile(path) || isNotebookFile(path) || isCanvasFile(path);
 }

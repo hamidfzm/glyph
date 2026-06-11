@@ -69,7 +69,13 @@ pub fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
 
 #[tauri::command]
 pub fn list_markdown_files(path: String) -> Result<Vec<String>, String> {
-    let root = Path::new(&path);
+    list_markdown_files_capped(&path, WALK_MAX_FILES)
+}
+
+/// Body of [`list_markdown_files`] with the file cap as a parameter, so the
+/// truncation branch is testable without creating `WALK_MAX_FILES` real files.
+fn list_markdown_files_capped(path: &str, max_files: usize) -> Result<Vec<String>, String> {
+    let root = Path::new(path);
     if !root.is_dir() {
         return Err(format!("Not a directory: {path}"));
     }
@@ -100,7 +106,7 @@ pub fn list_markdown_files(path: String) -> Result<Vec<String>, String> {
         if !crate::is_supported_file(p) {
             continue;
         }
-        if results.len() >= WALK_MAX_FILES {
+        if results.len() >= max_files {
             truncated = true;
             break;
         }
@@ -109,8 +115,7 @@ pub fn list_markdown_files(path: String) -> Result<Vec<String>, String> {
 
     if truncated {
         eprintln!(
-            "list_markdown_files: workspace at {} exceeds {} files; results truncated",
-            path, WALK_MAX_FILES
+            "list_markdown_files: workspace at {path} exceeds {max_files} files; results truncated"
         );
     }
 
@@ -260,6 +265,19 @@ mod tests {
     }
 
     #[test]
+    fn list_markdown_files_truncates_at_the_cap() {
+        let dir = unique_tmp("list_md_cap");
+        for i in 0..3 {
+            fs::write(dir.join(format!("f{i}.md")), "x").unwrap();
+        }
+
+        let result = list_markdown_files_capped(&dir.to_string_lossy(), 2).unwrap();
+        assert_eq!(result.len(), 2);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn list_markdown_files_errors_on_non_directory() {
         let dir = unique_tmp("list_md_not_dir");
         let file = dir.join("file.md");
@@ -283,6 +301,28 @@ mod tests {
         let initial = InitialFolder(Mutex::new(Some("/path/to/folder".to_string())));
         let guard = initial.0.lock().unwrap();
         assert_eq!(guard.as_deref(), Some("/path/to/folder"));
+    }
+
+    #[test]
+    fn get_initial_folder_returns_managed_value() {
+        use tauri::test::mock_app;
+        use tauri::Manager;
+
+        let app = mock_app();
+        app.manage(InitialFolder(Mutex::new(Some("/ws/folder".to_string()))));
+        let result = get_initial_folder(app.state::<InitialFolder>());
+        assert_eq!(result.as_deref(), Some("/ws/folder"));
+    }
+
+    #[test]
+    fn get_initial_folder_returns_none_when_unset() {
+        use tauri::test::mock_app;
+        use tauri::Manager;
+
+        let app = mock_app();
+        app.manage(InitialFolder(Mutex::new(None)));
+        let result = get_initial_folder(app.state::<InitialFolder>());
+        assert!(result.is_none());
     }
 
     #[test]

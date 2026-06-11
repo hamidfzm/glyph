@@ -1,0 +1,377 @@
+/* JSON Canvas board. The stage is a fixed viewport; the world layer inside it
+   is translated/scaled to pan and zoom. All colours route through the shared
+   custom properties so the board tracks light/dark themes. */
+
+.glyph-canvas {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.glyph-canvas-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  background-color: var(--color-surface);
+  /* Dotted grid for spatial reference. */
+  background-image: radial-gradient(
+    circle,
+    var(--color-border) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+}
+
+.glyph-canvas-stage[data-panning] {
+  cursor: grabbing;
+}
+
+.glyph-canvas-world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+/* Groups sit behind everything and read as labelled regions. */
+.glyph-canvas-group {
+  position: absolute;
+  border: 2px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--glyph-canvas-group-bg);
+}
+
+/* Region header inside the group's top-left corner. */
+.glyph-canvas-node-group-label {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Content cards. The selection chrome (side connectors, resize handle) hangs
+   just outside the border, so the node itself must never clip or scroll —
+   otherwise selecting a card grows permanent scrollbars. The inner content
+   wrapper owns the clipping instead. */
+.glyph-canvas-node {
+  position: absolute;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+}
+
+.glyph-canvas-node-content {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  border-radius: inherit;
+}
+
+/* In the editor, group cards read as a labelled region, not a solid card. */
+.glyph-canvas-node[data-type="group"] {
+  border-width: 2px;
+  border-radius: 12px;
+  background: var(--glyph-canvas-group-bg);
+  box-shadow: none;
+}
+
+/* Card markdown: the shared `.markdown-body` styling gives cards the full
+   document rendering (headings, lists, code, tables), but its document-level
+   chrome — centring max-width and the huge end-of-document scroll padding —
+   has no place inside a card. Text is slightly smaller than the document,
+   like Obsidian's cards, and edge margins collapse into the card padding. */
+.glyph-canvas-node-text.markdown-body {
+  max-width: none;
+  margin: 0;
+  padding: 10px 14px;
+  font-size: calc(var(--glyph-font-size, 16px) * 0.875);
+  line-height: 1.5;
+}
+
+.glyph-canvas-node-text > :first-child {
+  margin-top: 0;
+}
+
+.glyph-canvas-node-text > :last-child {
+  margin-bottom: 0;
+}
+
+.glyph-canvas-node-link,
+.glyph-canvas-node-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.glyph-canvas-node-link-url,
+.glyph-canvas-node-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glyph-canvas-node-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Edges. */
+.glyph-canvas-edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+  color: var(--color-text-tertiary);
+}
+
+/* Edge labels knock out the line and grid behind them with a halo in the
+   stage colour (paint-order draws the stroke underneath the fill). */
+.glyph-canvas-edge-label {
+  font-size: 12px;
+  fill: var(--color-text-secondary);
+  stroke: var(--color-surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+/* Floating zoom controls. */
+.glyph-canvas-toolbar {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+}
+
+.glyph-canvas-toolbar button {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.glyph-canvas-toolbar button:hover {
+  background: var(--color-surface-tertiary);
+}
+
+.glyph-canvas-zoom-level {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.glyph-canvas-error {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.glyph-canvas-error code {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+/* ---- Editor mode ---- */
+
+.glyph-canvas[data-editing] .glyph-canvas-node[data-selected] {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--glyph-canvas-selection);
+}
+
+/* Inline text/label editor. */
+.glyph-canvas-node-editor {
+  width: 100%;
+  height: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  resize: none;
+  outline: none;
+}
+
+.glyph-canvas-node-editor::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+/* The inline editor scrolls but draws no gutter; a permanent thumb inside a
+   small card reads as noise (long text still scrolls with the caret). */
+.glyph-canvas-node-editor {
+  scrollbar-width: none;
+}
+
+/* Bottom-right resize handle. */
+.glyph-canvas-resize {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--color-surface);
+  border-radius: 2px;
+  background: var(--color-accent);
+  cursor: nwse-resize;
+}
+
+/* Side connectors for drawing edges. */
+.glyph-canvas-connector {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  background: var(--color-accent);
+  cursor: crosshair;
+}
+.glyph-canvas-connector[data-side="top"] {
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.glyph-canvas-connector[data-side="bottom"] {
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.glyph-canvas-connector[data-side="left"] {
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.glyph-canvas-connector[data-side="right"] {
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Edges become clickable in editor mode. The svg root keeps
+   `pointer-events: none` so empty overlay space stays click-through, but the
+   widened hit path must opt back in — inherited `none` would make every edge
+   deaf to clicks, double-clicks, and the context menu. */
+.glyph-canvas-edges[data-interactive] .glyph-canvas-edge-hit {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.glyph-canvas-temp-edge {
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+/* Inline edge-label editor, centred on the edge midpoint. */
+.glyph-canvas-edge-label-editor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 140px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-accent);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  text-align: center;
+  outline: none;
+}
+
+/* Selection toolbar (recolour + delete). */
+.glyph-canvas-selection-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+}
+
+.glyph-canvas-swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.glyph-canvas-swatch[data-clear] {
+  background:
+    linear-gradient(to top left, transparent 45%, var(--color-alert-caution) 46%, var(--color-alert-caution) 54%, transparent 55%),
+    var(--color-surface);
+}
+
+/* The custom-colour picker poses as a rainbow swatch; the input's own swatch
+   box is hidden so only the wheel shows, and clicking opens the OS picker. */
+.glyph-canvas-swatch[data-custom] {
+  appearance: none;
+  background: conic-gradient(#fb464c, #e9973f, #e0de71, #44cf6e, #53dfdd, #a882ff, #fb464c);
+}
+
+.glyph-canvas-swatch[data-custom]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.glyph-canvas-swatch[data-custom]::-webkit-color-swatch {
+  border: none;
+  opacity: 0;
+}
+
+.glyph-canvas-delete {
+  margin-left: 4px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--color-alert-caution);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.glyph-canvas-toolbar-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--color-border);
+}

@@ -28,6 +28,39 @@ describe("scrollToHeading", () => {
     expect(["start", "end"]).toContain(arg.block);
   });
 
+  it("scrolls to start when the target fits the scroll container's range", () => {
+    const scroller = document.createElement("div");
+    scroller.style.overflowY = "auto";
+    const heading = document.createElement("h2");
+    heading.id = "in-scroller";
+    scroller.appendChild(heading);
+    document.body.appendChild(scroller);
+    const spy = vi.spyOn(heading, "scrollIntoView").mockImplementation(() => {});
+
+    expect(scrollToHeading("in-scroller")).toBe(true);
+    const arg = spy.mock.calls[0][0] as ScrollIntoViewOptions;
+    expect(arg.block).toBe("start");
+  });
+
+  it("scrolls to end when the target sits past the container's max scroll", () => {
+    const scroller = document.createElement("div");
+    scroller.style.overflowY = "scroll";
+    const heading = document.createElement("h2");
+    heading.id = "past-end";
+    scroller.appendChild(heading);
+    document.body.appendChild(scroller);
+    const spy = vi.spyOn(heading, "scrollIntoView").mockImplementation(() => {});
+    // happy-dom reports zero layout boxes; push the target's top past the
+    // container's max scroll (0) so the end branch is taken.
+    vi.spyOn(heading, "getBoundingClientRect").mockReturnValue({
+      top: 100,
+    } as DOMRect);
+
+    expect(scrollToHeading("past-end")).toBe(true);
+    const arg = spy.mock.calls[0][0] as ScrollIntoViewOptions;
+    expect(arg.block).toBe("end");
+  });
+
   it("dispatches a glyph:active-heading event with the target id", () => {
     const heading = document.createElement("h2");
     heading.id = "section";

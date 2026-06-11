@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { useSettings } from "@/hooks/useSettings";
 import { AITab } from "./AITab";
 import { AppearanceTab } from "./AppearanceTab";
@@ -63,14 +64,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         <div className="settings-header">
           <h2>Settings</h2>
           <button type="button" className="settings-close" onClick={onClose}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <path
-                d="M3 3l8 8M11 3l-8 8"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <ModalCloseIcon />
           </button>
         </div>
 

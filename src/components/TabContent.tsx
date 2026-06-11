@@ -2,8 +2,10 @@ import { useCallback } from "react";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { activeFileOf, type FolderTab } from "@/hooks/useTabs";
 import { useTaskList } from "@/hooks/useTaskList";
+import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isNotebookFile } from "@/lib/notebookExtensions";
 import { EDITOR_MODE } from "@/lib/settings";
+import { CanvasEditor, CanvasViewer } from "./canvas/lazyCanvas";
 import { MarkdownEditor, SplitView } from "./editor/lazyEditor";
 import { GraphView } from "./graph/lazyGraph";
 import { MarkdownViewer } from "./markdown/MarkdownViewer";
@@ -28,8 +30,16 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     openFileInFolderTab,
     saveScrollPosition,
     updateEditContent,
+    commitEdit,
     toggleTask,
   } = useTabsContext();
+
+  const handleCanvasChange = useCallback(
+    (serialized: string) => {
+      if (activeTabId) commitEdit(activeTabId, serialized);
+    },
+    [activeTabId, commitEdit],
+  );
 
   const { handleToggle: handleTaskToggle } = useTaskList({ activeTabId, toggleTask });
 
@@ -108,6 +118,37 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
         onScrollChange={saveScrollPosition}
         searchOpen={searchOpen}
         onSearchClose={onSearchClose}
+      />
+    );
+  }
+
+  // Canvas files (JSON Canvas spec) render on an infinite pan/zoom board rather
+  // than as text. View mode is the read-only board; edit mode is the full
+  // editor (the split button is hidden for canvas — the board IS the editor).
+  // The serialized JSON never flows through the markdown editor — edits are
+  // committed straight to the tab content pipeline via commitEdit. The viewer
+  // renders editorContent, not file.content, so switching back to view right
+  // after an edit shows the latest board instead of the last autosaved one.
+  if (isCanvasFile(file.path)) {
+    if (file.mode === EDITOR_MODE.view) {
+      return (
+        <CanvasViewer
+          key={`${activeTab.id}:${file.path}`}
+          content={editorContent}
+          filePath={file.path}
+          onOpenFile={handleOpenWikilink}
+          onChange={handleCanvasChange}
+          viewportKey={`${activeTab.id}:${file.path}`}
+        />
+      );
+    }
+    return (
+      <CanvasEditor
+        key={`${activeTab.id}:${file.path}`}
+        content={editorContent}
+        filePath={file.path}
+        onChange={handleCanvasChange}
+        viewportKey={`${activeTab.id}:${file.path}`}
       />
     );
   }

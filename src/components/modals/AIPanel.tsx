@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import type { AIAction } from "@/hooks/useAI";
 
 interface AIPanelProps {
@@ -44,14 +45,7 @@ export function AIPanel({
       <div className="ai-panel-header">
         <h3>{action ? ACTION_LABELS[action] : "AI"}</h3>
         <button type="button" className="settings-close" onClick={onClose}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path
-              d="M3 3l8 8M11 3l-8 8"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
+          <ModalCloseIcon />
         </button>
       </div>
 
