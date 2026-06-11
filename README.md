@@ -94,6 +94,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Window state persistence across restarts
 - Native menu bar with customizable keyboard shortcuts (remap any command in Settings → Hotkeys)
 - Update notifications — checks for a newer release on launch and shows a banner when one is available (toggle in Settings → Behavior)
+- Plugins (experimental) — install JavaScript plugins that add palette commands and status bar items; see [examples/plugins](examples/plugins/)
 
 ### Privacy
 - Local-first: your files never leave your machine unless you opt into Cloud Sync (per workspace, to a Git remote you control)

@@ -1,3 +1,4 @@
+import { PluginsProvider } from "@/contexts/PluginsContext";
 import { SidebarLayoutProvider } from "@/contexts/SidebarLayoutContext";
 import { SyncConfigProvider } from "@/contexts/SyncConfigContext";
 import { TabsProvider } from "@/contexts/TabsContext";
@@ -19,12 +20,14 @@ export function App() {
   useLocale(settings.appearance.locale);
 
   return (
-    <TabsProvider>
-      <SidebarLayoutProvider>
-        <SyncConfigProvider>
-          <AppShell />
-        </SyncConfigProvider>
-      </SidebarLayoutProvider>
-    </TabsProvider>
+    <PluginsProvider>
+      <TabsProvider>
+        <SidebarLayoutProvider>
+          <SyncConfigProvider>
+            <AppShell />
+          </SyncConfigProvider>
+        </SidebarLayoutProvider>
+      </TabsProvider>
+    </PluginsProvider>
   );
 }

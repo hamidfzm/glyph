@@ -61,4 +61,13 @@ describe("createRegistry", () => {
     reg.register("b");
     expect(snapshot).toEqual(["a"]);
   });
+
+  it("returns the same snapshot reference until the registry changes", () => {
+    const reg = createRegistry<string>();
+    reg.register("a");
+    // Stable between mutations, required for useSyncExternalStore snapshots.
+    expect(reg.list()).toBe(reg.list());
+    reg.register("b");
+    expect(reg.list()).toBe(reg.list());
+  });
 });

@@ -29,5 +29,6 @@
   "zoomIn": "Zoom In",
   "zoomOut": "Zoom Out",
   "zoomReset": "Reset Zoom",
-  "readAloud": "Read Aloud"
+  "readAloud": "Read Aloud",
+  "installPlugin": "Install Plugin from Folder…"
 }

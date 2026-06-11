@@ -1,9 +1,11 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { usePluginsOptional } from "@/contexts/PluginsContext";
 import type { MenuEventHandlers } from "@/hooks/useMenuEvents";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { Command } from "@/lib/commands";
 import { scrollToHeading } from "@/lib/scrollToHeading";
+import { useRegistryEntries } from "./usePluginRegistry";
 
 export interface AppCommandSources {
   /** True when the window has a folder workspace open. */
@@ -41,6 +43,11 @@ export function useAppCommands({
   actions,
 }: AppCommandSources): Command[] {
   const { t } = useTranslation("commands");
+  // Optional so the palette keeps working without a PluginsProvider (tests,
+  // isolated rendering); both are empty/null in that case.
+  const plugins = usePluginsOptional();
+  const pluginCommands = useRegistryEntries(plugins?.commands ?? null);
+
   return useMemo<Command[]>(() => {
     const out: Command[] = [];
 
@@ -191,6 +198,28 @@ export function useAppCommands({
       { id: "cmd:readAloud", title: t("readAloud"), section: "Commands", run: actions.readAloud },
     );
 
+    // Plugin-contributed commands, plus the install entry point itself.
+    for (const c of pluginCommands) {
+      out.push({
+        id: `plugin:${c.id}`,
+        title: c.title,
+        section: "Commands",
+        run: () => {
+          void c.run();
+        },
+      });
+    }
+    if (plugins) {
+      out.push({
+        id: "cmd:install-plugin",
+        title: t("installPlugin"),
+        section: "Commands",
+        run: () => {
+          void plugins.installFromFolder();
+        },
+      });
+    }
+
     return out;
-  }, [workspaceOpen, workspaceFiles, tocEntries, actions, t]);
+  }, [workspaceOpen, workspaceFiles, tocEntries, actions, t, plugins, pluginCommands]);
 }

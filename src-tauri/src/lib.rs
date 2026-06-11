@@ -224,6 +224,8 @@ pub fn run() {
             commands::create::move_path,
             commands::create::delete_path,
             commands::wikilinks::scan_wikilinks,
+            commands::plugins::list_plugins,
+            commands::plugins::install_plugin,
             watcher::watch_file,
             watcher::unwatch_file,
             watcher::watch_directory,

@@ -1,5 +1,9 @@
 import { renderHook } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
+import { createRegistry } from "@/lib/plugins/registry";
+import type { CommandContribution, StatusBarItemContribution } from "@/lib/plugins/types";
 import { type AppActions, useAppCommands } from "./useAppCommands";
 
 function makeActions(over: Partial<AppActions> = {}): AppActions {
@@ -179,5 +183,41 @@ describe("useAppCommands", () => {
     );
     const file = result.current.find((c) => c.section === "Files")!;
     expect(file.title).toBe("loose");
+  });
+
+  it("surfaces plugin commands and the install command when a plugins provider is present", () => {
+    const commands = createRegistry<CommandContribution>();
+    const run = vi.fn();
+    commands.register({ id: "demo.greet", title: "Greet", run });
+    const installFromFolder = vi.fn(async () => {});
+    const value: PluginsContextValue = {
+      commands,
+      statusBarItems: createRegistry<StatusBarItemContribution>(),
+      loaded: [],
+      installFromFolder,
+    };
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(PluginsContext.Provider, { value }, children);
+
+    const { result } = renderHook(
+      () =>
+        useAppCommands({
+          workspaceOpen: false,
+          workspaceFiles: [],
+          tocEntries: [],
+          actions: makeActions(),
+        }),
+      { wrapper },
+    );
+
+    const greet = result.current.find((c) => c.id === "plugin:demo.greet")!;
+    expect(greet.title).toBe("Greet");
+    greet.run();
+    expect(run).toHaveBeenCalledOnce();
+
+    const install = result.current.find((c) => c.id === "cmd:install-plugin")!;
+    expect(install).toBeTruthy();
+    install.run();
+    expect(installFromFolder).toHaveBeenCalledOnce();
   });
 });

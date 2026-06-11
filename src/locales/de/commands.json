@@ -29,5 +29,6 @@
   "zoomIn": "Vergrößern",
   "zoomOut": "Verkleinern",
   "zoomReset": "Zoom zurücksetzen",
-  "readAloud": "Vorlesen"
+  "readAloud": "Vorlesen",
+  "installPlugin": "Plugin aus Ordner installieren…"
 }
