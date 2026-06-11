@@ -23,13 +23,21 @@ interface CanvasViewerProps {
   onOpenFile?: (path: string) => void;
   /** Persist a checkbox toggle (the only edit view mode allows). */
   onChange?: (serialized: string) => void;
+  /** Keeps the pan/zoom transform across view/edit mode switches. */
+  viewportKey?: string;
 }
 
 // Read-only canvas stage: parses the .canvas content, lays nodes out in an
 // infinite pan/zoom world, and draws edges between them. Groups render behind
 // edges, edges behind nodes. Editing interactions are layered on separately.
-export function CanvasViewer({ content, filePath, onOpenFile, onChange }: CanvasViewerProps) {
-  const { viewport, stageRef, panBy, zoomBy, fitTo } = useCanvasViewport();
+export function CanvasViewer({
+  content,
+  filePath,
+  onOpenFile,
+  onChange,
+  viewportKey,
+}: CanvasViewerProps) {
+  const { viewport, restored, stageRef, panBy, zoomBy, fitTo } = useCanvasViewport(viewportKey);
 
   const parsed = useMemo(() => {
     try {
@@ -49,8 +57,10 @@ export function CanvasViewer({ content, filePath, onOpenFile, onChange }: Canvas
   const data = parsed.data;
   const boundingBox = useMemo(() => (data ? nodesBoundingBox(data.nodes) : null), [data]);
 
-  // Fit the board to the viewport once, after the first successful parse.
-  const didFit = useRef(false);
+  // Fit the board to the viewport once, after the first successful parse —
+  // unless a persisted viewport was restored, in which case the user's last
+  // viewpoint wins over a recentre.
+  const didFit = useRef(restored);
   useEffect(() => {
     if (data && !didFit.current) {
       didFit.current = true;

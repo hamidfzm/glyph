@@ -159,4 +159,41 @@ describe("useCanvasViewport", () => {
       fireEvent(stage, wheelEvent({ deltaY: -10, clientX: 0, clientY: 0 }, "ctrlKey")),
     ).not.toThrow();
   });
+
+  describe("persistence", () => {
+    it("restores a persisted viewport and reports it as restored", () => {
+      const first = renderHook(() => useCanvasViewport("persist:a"));
+      expect(first.result.current.restored).toBe(false);
+      act(() => {
+        first.result.current.panBy(120, -40);
+      });
+      first.unmount();
+
+      const second = renderHook(() => useCanvasViewport("persist:a"));
+      expect(second.result.current.restored).toBe(true);
+      expect(second.result.current.viewport).toMatchObject({ x: 120, y: -40, zoom: 1 });
+    });
+
+    it("keeps independent viewpoints per key", () => {
+      const a = renderHook(() => useCanvasViewport("persist:b"));
+      act(() => {
+        a.result.current.panBy(10, 10);
+      });
+      a.unmount();
+
+      const c = renderHook(() => useCanvasViewport("persist:c"));
+      expect(c.result.current.restored).toBe(false);
+      expect(c.result.current.viewport).toMatchObject({ x: 0, y: 0, zoom: 1 });
+    });
+
+    it("does not persist anything without a key", () => {
+      const anon = renderHook(() => useCanvasViewport());
+      act(() => {
+        anon.result.current.panBy(5, 5);
+      });
+      anon.unmount();
+      const again = renderHook(() => useCanvasViewport());
+      expect(again.result.current.viewport).toMatchObject({ x: 0, y: 0, zoom: 1 });
+    });
+  });
 });

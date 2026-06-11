@@ -106,6 +106,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
           filePath={file.path}
           onOpenFile={handleOpenWikilink}
           onChange={handleCanvasChange}
+          viewportKey={`${activeTab.id}:${file.path}`}
         />
       );
     }
@@ -115,6 +116,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
         content={editorContent}
         filePath={file.path}
         onChange={handleCanvasChange}
+        viewportKey={`${activeTab.id}:${file.path}`}
       />
     );
   }

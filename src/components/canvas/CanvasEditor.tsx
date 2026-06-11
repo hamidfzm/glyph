@@ -54,14 +54,17 @@ interface CanvasEditorProps {
   filePath?: string;
   /** Persist a finished edit (serialized canvas JSON) into the tab pipeline. */
   onChange: (serialized: string) => void;
+  /** Keeps the pan/zoom transform across view/edit mode switches. */
+  viewportKey?: string;
 }
 
 // Editable canvas board: select, move, resize, recolour, create/delete nodes
 // and edges, and edit text inline. The pointer-gesture state machine lives in
 // useCanvasGestures; this component owns selection, inline editing, the
 // context menu, and the discrete board operations.
-export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps) {
-  const { viewport, stageRef, panBy, zoomBy, fitTo, toStagePoint } = useCanvasViewport();
+export function CanvasEditor({ content, filePath, onChange, viewportKey }: CanvasEditorProps) {
+  const { viewport, restored, stageRef, panBy, zoomBy, fitTo, toStagePoint } =
+    useCanvasViewport(viewportKey);
   const { data, setData, commit } = useCanvasDocument(content, onChange);
 
   const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
@@ -235,6 +238,17 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
   }, [selection, selectedEdge, editingId, commit]);
 
   const boundingBox = useMemo(() => nodesBoundingBox(data.nodes), [data.nodes]);
+
+  // Fit the board once on mount — unless a persisted viewport was restored
+  // (switching from view mode keeps the user's viewpoint instead).
+  const didFit = useRef(restored);
+  useEffect(() => {
+    if (!didFit.current) {
+      didFit.current = true;
+      fitTo(boundingBox);
+    }
+  }, [boundingBox, fitTo]);
+
   const groups = data.nodes.filter((n) => n.type === "group");
   const items = data.nodes.filter((n) => n.type !== "group");
   const editingEdge = editingEdgeId

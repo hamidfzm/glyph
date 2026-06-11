@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { parseCanvas } from "@/lib/canvas/parse";
+import { saveViewport } from "@/lib/canvas/viewportStore";
 import { CanvasEditor } from "./CanvasEditor";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
@@ -614,6 +615,38 @@ describe("CanvasEditor", () => {
       expect(data.nodes[0].id).toBeTruthy();
     } finally {
       globalThis.crypto.randomUUID = original;
+    }
+  });
+
+  it("restores the viewer's persisted viewport when switching to edit mode", () => {
+    saveViewport("tab:restore-edit", { x: -150, y: 60, zoom: 0.5 });
+    const { container } = render(
+      <CanvasEditor content={oneText} onChange={vi.fn()} viewportKey="tab:restore-edit" />,
+    );
+    const world = container.querySelector<HTMLElement>(".glyph-canvas-world");
+    expect(world?.style.transform).toBe("translate(-150px, 60px) scale(0.5)");
+  });
+
+  it("fits the board on first mount when no viewpoint was persisted", () => {
+    // happy-dom reports zero-sized elements, and fitToContent treats a
+    // zero-sized stage as "nothing to fit" — give the stage real dimensions.
+    const dims = {
+      clientWidth: { configurable: true, get: () => 1000 },
+      clientHeight: { configurable: true, get: () => 800 },
+    };
+    const proto = HTMLElement.prototype;
+    const originalW = Object.getOwnPropertyDescriptor(proto, "clientWidth");
+    const originalH = Object.getOwnPropertyDescriptor(proto, "clientHeight");
+    Object.defineProperties(proto, dims);
+    try {
+      const { container } = render(
+        <CanvasEditor content={oneText} onChange={vi.fn()} viewportKey="tab:fresh-edit" />,
+      );
+      const world = container.querySelector<HTMLElement>(".glyph-canvas-world");
+      expect(world?.style.transform).not.toBe("translate(0px, 0px) scale(1)");
+    } finally {
+      if (originalW) Object.defineProperty(proto, "clientWidth", originalW);
+      if (originalH) Object.defineProperty(proto, "clientHeight", originalH);
     }
   });
 });

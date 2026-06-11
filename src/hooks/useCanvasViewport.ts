@@ -6,11 +6,14 @@ import {
   type Viewport,
   zoomAt,
 } from "@/lib/canvas/viewport";
+import { loadViewport, saveViewport } from "@/lib/canvas/viewportStore";
 
 const WHEEL_ZOOM_INTENSITY = 0.0015;
 
 interface UseCanvasViewport {
   viewport: Viewport;
+  /** True when a persisted viewport was restored — callers skip the initial fit. */
+  restored: boolean;
   /** Attach to the stage element — owns the (non-passive) wheel listener. */
   stageRef: RefObject<HTMLDivElement | null>;
   /** Pan by a screen-space delta (used by background-drag panning). */
@@ -28,14 +31,25 @@ interface UseCanvasViewport {
  * pinch, which the OS delivers as ctrl+wheel) zooms toward the cursor. The
  * wheel listener is attached natively with `{ passive: false }` so it can
  * `preventDefault` and stop the page from scrolling.
+ *
+ * `persistKey` keeps the transform alive across remounts: the viewer and
+ * editor are different components, so switching view/edit modes would
+ * otherwise reset the board to the origin. Same key → same viewpoint.
  */
-export function useCanvasViewport(): UseCanvasViewport {
+export function useCanvasViewport(persistKey?: string): UseCanvasViewport {
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
+  const [viewport, setViewport] = useState<Viewport>(
+    () => (persistKey ? loadViewport(persistKey) : undefined) ?? { x: 0, y: 0, zoom: 1 },
+  );
+  const restored = useRef(persistKey ? loadViewport(persistKey) !== undefined : false).current;
   // Mirror state into a ref so the native wheel handler always reads fresh
   // values without being re-bound on every viewport change.
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
+
+  useEffect(() => {
+    if (persistKey) saveViewport(persistKey, viewport);
+  }, [persistKey, viewport]);
 
   const toStagePoint = useCallback((clientX: number, clientY: number): Point => {
     const rect = stageRef.current?.getBoundingClientRect();
@@ -77,5 +91,5 @@ export function useCanvasViewport(): UseCanvasViewport {
     return () => stage.removeEventListener("wheel", onWheel);
   }, [toStagePoint]);
 
-  return { viewport, stageRef, panBy, zoomBy, fitTo, toStagePoint };
+  return { viewport, restored, stageRef, panBy, zoomBy, fitTo, toStagePoint };
 }

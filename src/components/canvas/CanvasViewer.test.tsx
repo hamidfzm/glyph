@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { saveViewport } from "@/lib/canvas/viewportStore";
 import { CanvasViewer } from "./CanvasViewer";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
@@ -126,5 +127,15 @@ describe("CanvasViewer", () => {
     const box = screen.getByRole("checkbox");
     fireEvent.click(box);
     expect(screen.getByText("read")).toBeInTheDocument();
+  });
+
+  it("restores a persisted viewport instead of refitting", () => {
+    saveViewport("tab:restore-view", { x: 77, y: -33, zoom: 2 });
+    const content = canvas({
+      nodes: [{ id: "a", type: "text", x: 0, y: 0, width: 200, height: 80, text: "hi" }],
+    });
+    const { container } = render(<CanvasViewer content={content} viewportKey="tab:restore-view" />);
+    const world = container.querySelector<HTMLElement>(".glyph-canvas-world");
+    expect(world?.style.transform).toBe("translate(77px, -33px) scale(2)");
   });
 });
