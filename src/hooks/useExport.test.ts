@@ -6,12 +6,20 @@ import type { PrintSettings } from "@/lib/settings";
 import { useExport } from "./useExport";
 import type { TocEntry } from "./useTableOfContents";
 
-// Canvas export sources are mocked so the tests control the produced HTML.
+// Canvas export sources are mocked so the tests control the produced output.
 const buildBoardMock = vi.fn();
 const buildDocumentMock = vi.fn();
+const buildModelMock = vi.fn();
+const buildCanvasPdfMock = vi.fn();
 vi.mock("@/lib/canvas/exportDoc", () => ({
   buildCanvasBoardHtml: (...args: unknown[]) => buildBoardMock(...args),
   buildCanvasDocumentHtml: (...args: unknown[]) => buildDocumentMock(...args),
+}));
+vi.mock("@/lib/canvas/exportModel", () => ({
+  buildCanvasBoardModel: (...args: unknown[]) => buildModelMock(...args),
+}));
+vi.mock("@/lib/export/canvasPdf", () => ({
+  buildCanvasPdf: (...args: unknown[]) => buildCanvasPdfMock(...args),
 }));
 
 const PRINT: PrintSettings = {
@@ -49,6 +57,10 @@ beforeEach(() => {
   vi.mocked(save).mockReset();
   buildBoardMock.mockReset().mockResolvedValue('<div class="glyph-canvas-export">board</div>');
   buildDocumentMock.mockReset().mockResolvedValue("<section><h1>Card</h1></section>");
+  buildModelMock
+    .mockReset()
+    .mockResolvedValue({ width: 10, height: 10, cards: [], edgesSvg: "<svg/>" });
+  buildCanvasPdfMock.mockReset().mockResolvedValue(new Uint8Array([1, 2, 3]));
 });
 
 afterEach(() => {
@@ -182,7 +194,7 @@ describe("useExport", () => {
     expect(content).toContain('class="glyph-canvas-page"');
   });
 
-  it("exports a canvas tab to PDF as a linearised vector document", async () => {
+  it("exports a canvas tab to PDF as the spatial vector board", async () => {
     setCanvas();
     vi.mocked(save).mockResolvedValue("/out.pdf");
     const { result } = renderHook(() => useExport(options({ filePath: "/docs/board.canvas" })));
@@ -194,10 +206,28 @@ describe("useExport", () => {
       defaultPath: "board.pdf",
       filters: [{ name: "PDF", extensions: ["pdf"] }],
     });
-    expect(buildDocumentMock).toHaveBeenCalled();
+    expect(buildModelMock).toHaveBeenCalled();
+    expect(buildCanvasPdfMock).toHaveBeenCalledWith(
+      expect.objectContaining({ edgesSvg: "<svg/>" }),
+      expect.objectContaining({ title: expect.any(String) }),
+    );
+    // The linearised document path belongs to DOCX/EPUB, not PDF.
+    expect(buildDocumentMock).not.toHaveBeenCalled();
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_binary_file");
     expect(call).toBeTruthy();
-    expect((call?.[1] as { contents: number[] }).contents.length).toBeGreaterThan(0);
+    expect((call?.[1] as { contents: number[] }).contents).toEqual([1, 2, 3]);
+  });
+
+  it("skips the PDF write when the board model is empty", async () => {
+    setCanvas();
+    vi.mocked(save).mockResolvedValue("/out.pdf");
+    buildModelMock.mockResolvedValue(null);
+    const { result } = renderHook(() => useExport(options()));
+    await act(async () => {
+      await result.current.exportPdf();
+    });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(result.current.exporting).toBeNull();
   });
 
   it("exports a canvas tab to EPUB and DOCX from the linearised document", async () => {
@@ -242,7 +272,7 @@ describe("useExport", () => {
       await result.current.exportHtml();
     });
     await act(async () => {
-      await result.current.exportPdf();
+      await result.current.exportEpub();
     });
     expect(invoke).not.toHaveBeenCalled();
     expect(result.current.exporting).toBeNull();

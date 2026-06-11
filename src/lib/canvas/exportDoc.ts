@@ -5,92 +5,17 @@
 // export, where the app stylesheet travels along and renders it 1:1.
 // `buildCanvasDocumentHtml` linearises the cards into a flowing article
 // (group labels as headings, card markdown verbatim, links and files as
-// paragraphs) for the PDF/DOCX/EPUB pipelines, which are documents, not
-// boards. Both inline local images as data URIs so the output is portable.
+// paragraphs) for the DOCX/EPUB pipelines, which are documents, not boards.
+// (The PDF export is spatial too — see exportModel.ts.) Both inline local
+// images as data URIs so the output is portable.
 
-const PADDING = 48;
-
-/** Editor chrome that must never appear in an export. */
-const CHROME_SELECTOR =
-  ".glyph-canvas-connector, .glyph-canvas-resize, .glyph-canvas-node-editor, .glyph-canvas-edge-label-editor, .glyph-canvas-edge-hit, .glyph-canvas-temp-edge";
-
-interface Board {
-  world: HTMLElement;
-  minX: number;
-  minY: number;
-  width: number;
-  height: number;
-}
-
-function measureBoard(): Board | null {
-  const world = document.querySelector<HTMLElement>(".glyph-canvas-world");
-  if (!world) return null;
-  const boxes = world.querySelectorAll<HTMLElement>(".glyph-canvas-node, .glyph-canvas-group");
-  if (boxes.length === 0) return null;
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const el of boxes) {
-    minX = Math.min(minX, el.offsetLeft);
-    minY = Math.min(minY, el.offsetTop);
-    maxX = Math.max(maxX, el.offsetLeft + el.offsetWidth);
-    maxY = Math.max(maxY, el.offsetTop + el.offsetHeight);
-  }
-  return {
-    world,
-    minX,
-    minY,
-    width: maxX - minX + PADDING * 2,
-    height: maxY - minY + PADDING * 2,
-  };
-}
-
-/**
- * Copy live checkbox state onto a clone's attributes. React drives the
- * `checked` DOM property, but serialization (cloneNode, innerHTML) reads the
- * attribute, which goes stale after the first toggle — without this, exports
- * would show every task list as it looked when the card first rendered.
- */
-function syncCheckboxes(live: Element, clone: Element): void {
-  const liveBoxes = live.querySelectorAll<HTMLInputElement>("input[type=checkbox]");
-  const cloneBoxes = clone.querySelectorAll<HTMLInputElement>("input[type=checkbox]");
-  liveBoxes.forEach((box, i) => {
-    const target = cloneBoxes[i];
-    /* v8 ignore start -- defensive: the clone mirrors the live tree, so the lists always pair up */
-    if (!target) return;
-    /* v8 ignore stop */
-    if (box.checked) target.setAttribute("checked", "");
-    else target.removeAttribute("checked");
-  });
-}
-
-/** Replace local image sources with data URIs so the export stands alone. */
-async function inlineImages(root: HTMLElement): Promise<void> {
-  const images = root.querySelectorAll("img");
-  await Promise.all(
-    Array.from(images).map(async (img) => {
-      const src = img.getAttribute("src");
-      // Already-portable sources stay; everything local — including Tauri's
-      // `asset.localhost` protocol URLs — gets embedded.
-      if (!src || /^data:/i.test(src)) return;
-      if (/^https?:/i.test(src) && !/^https?:\/\/asset\.localhost\//i.test(src)) return;
-      try {
-        const blob = await (await fetch(src)).blob();
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(blob);
-        });
-        img.setAttribute("src", dataUrl);
-      } catch {
-        // Unreadable image: drop it rather than embedding a broken reference.
-        img.remove();
-      }
-    }),
-  );
-}
+import {
+  BOARD_PADDING,
+  CHROME_SELECTOR,
+  inlineImages,
+  measureBoard,
+  syncCheckboxes,
+} from "./boardDom";
 
 /**
  * The board as a self-contained spatial fragment: a sized, clipped container
@@ -109,8 +34,8 @@ export async function buildCanvasBoardHtml(): Promise<string | null> {
     el.removeAttribute("data-selected");
   }
   clone.style.transform = "none";
-  clone.style.left = `${PADDING - board.minX}px`;
-  clone.style.top = `${PADDING - board.minY}px`;
+  clone.style.left = `${BOARD_PADDING - board.minX}px`;
+  clone.style.top = `${BOARD_PADDING - board.minY}px`;
   // Cards scroll on the live board, but a static page should clip without
   // drawing scrollbars.
   for (const el of clone.querySelectorAll<HTMLElement>(".glyph-canvas-node-content")) {
@@ -141,7 +66,7 @@ function escapeHtml(text: string): string {
  * The board linearised into a flowing document, in board order: group labels
  * become headings, text cards contribute their rendered markdown verbatim,
  * link and file cards become paragraphs. Spatial information (positions,
- * connections) is the spatial HTML export's job and is omitted here.
+ * connections) is the spatial HTML and PDF exports' job and is omitted here.
  */
 export async function buildCanvasDocumentHtml(): Promise<string | null> {
   const board = measureBoard();

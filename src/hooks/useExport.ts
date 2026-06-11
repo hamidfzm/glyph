@@ -60,11 +60,12 @@ export function useExport({
 
   const run = useCallback(
     async (format: ExportFormat) => {
-      // A canvas tab exports as vectors, never rasterised: HTML keeps the
-      // spatial board 1:1 (the app stylesheet travels along); PDF, DOCX, and
-      // EPUB are flowing documents, so the cards are linearised in board
-      // order. The check runs first: cards contain their own small
-      // `.markdown-body` elements which would fool the document guard.
+      // A canvas tab exports as vectors, never rasterised: HTML and PDF keep
+      // the spatial board 1:1 (HTML via the app stylesheet, PDF via vector
+      // primitives on a board-sized page); DOCX and EPUB are flowing
+      // documents, so the cards are linearised in board order. The check runs
+      // first: cards contain their own small `.markdown-body` elements which
+      // would fool the document guard.
       if (document.querySelector(".glyph-canvas")) {
         const meta = deriveExportMeta(filePath, content);
         const { name, ext } = FILTERS[format];
@@ -89,6 +90,17 @@ export function useExport({
               bodyClass: "glyph-canvas-page",
             });
             await invoke("write_file", { path, content: html });
+          } else if (format === "pdf") {
+            // The PDF keeps the spatial board too — cards, edges, and labels
+            // as vectors on one board-sized page.
+            const { buildCanvasBoardModel } = await import("@/lib/canvas/exportModel");
+            const model = await buildCanvasBoardModel();
+            if (model == null) return;
+            const { buildCanvasPdf } = await import("@/lib/export/canvasPdf");
+            await writeBinary(
+              path,
+              await buildCanvasPdf(model, { title: meta.title, author: meta.author }),
+            );
           } else {
             const body = await buildCanvasDocumentHtml();
             if (body == null) return;
@@ -109,17 +121,11 @@ export function useExport({
                   },
                 }),
               );
-            } else if (format === "docx") {
+            } else {
               const { buildDocx } = await import("@/lib/export/docx");
               await writeBinary(
                 path,
                 await buildDocx(body, { title: meta.title, author: meta.author }),
-              );
-            } else {
-              const { buildPdf } = await import("@/lib/export/pdf");
-              await writeBinary(
-                path,
-                await buildPdf(body, { title: meta.title, author: meta.author }),
               );
             }
           }

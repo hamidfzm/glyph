@@ -17,6 +17,10 @@ export interface HtmlDocOptions {
 // to normal document flow and give the content a centered, padded column. The
 // floating theme toggle is hidden when printing.
 const LAYOUT_OVERRIDES = `
+/* Native controls (checkboxes, scrollbars) follow the toggled class, not just
+   the OS preference — without this the dark toggle leaves them light. */
+:root { color-scheme: light; }
+:root.dark { color-scheme: dark; }
 html, body { height: auto; min-height: 100%; overflow: visible; }
 body { margin: 0; padding: 2rem 1.25rem; }
 .markdown-body, .notebook-body { max-width: 820px; height: auto; margin: 0 auto; overflow: visible; }

@@ -154,6 +154,18 @@ describe("checkbox state sync", () => {
     expect(inputs).toEqual([false, true, false]);
   });
 
+  it("exports checkboxes disabled — a static page cannot persist a toggle", async () => {
+    const world = mountWorld();
+    const node = addBox(world, "glyph-canvas-node", [0, 0, 100, 50]);
+    node.innerHTML =
+      '<div class="glyph-canvas-node-text markdown-body"><input type="checkbox" /></div>';
+
+    const board = (await buildCanvasBoardHtml()) ?? "";
+    const doc = (await buildCanvasDocumentHtml()) ?? "";
+    expect(board).toMatch(/<input[^>]*disabled/);
+    expect(doc).toMatch(/<input[^>]*disabled/);
+  });
+
   it("document export reflects live checkbox properties too", async () => {
     const world = mountWorld();
     const card = addBox(world, "glyph-canvas-node", [0, 0, 100, 50]);
