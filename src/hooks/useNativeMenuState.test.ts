@@ -7,6 +7,7 @@ const baseFlags: NativeMenuFlags = {
   hasTab: false,
   hasFile: false,
   hasContent: false,
+  hasWorkspace: false,
   aiConfigured: false,
   ttsAvailable: false,
 };
@@ -24,6 +25,7 @@ describe("useNativeMenuState", () => {
         hasTab: true,
         hasFile: true,
         hasContent: true,
+        hasWorkspace: true,
         aiConfigured: true,
         ttsAvailable: true,
       }),
@@ -33,6 +35,7 @@ describe("useNativeMenuState", () => {
         hasTab: true,
         hasFile: true,
         hasContent: true,
+        hasWorkspace: true,
         aiConfigured: true,
         ttsAvailable: true,
       },

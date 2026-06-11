@@ -79,6 +79,7 @@ function buildTabsContext(opts: RenderOpts): TabsContextValue {
     wikilinkRefs: [],
     openFile: vi.fn(),
     openFolder: vi.fn(),
+    openGraph: vi.fn(),
     openFileInFolderTab: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),

@@ -18,6 +18,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
   return {
     openFile: vi.fn(),
     openFolder: vi.fn(),
+    openGraph: vi.fn(),
     closeTab: vi.fn(),
     toggleFilesSidebar: vi.fn(),
     toggleOutlineSidebar: vi.fn(),
@@ -136,6 +137,7 @@ describe("useAppCommands", () => {
     find("Settings…").run();
     find("Find in Document").run();
     find("Toggle Edit Mode").run();
+    find("Open Graph").run();
     find("Print…").run();
     find("Zoom In").run();
     find("Zoom Out").run();
@@ -150,6 +152,7 @@ describe("useAppCommands", () => {
     expect(actions.openSettings).toHaveBeenCalledOnce();
     expect(actions.find).toHaveBeenCalledOnce();
     expect(actions.toggleEdit).toHaveBeenCalledOnce();
+    expect(actions.openGraph).toHaveBeenCalledOnce();
     expect(actions.print).toHaveBeenCalledOnce();
     expect(actions.zoomIn).toHaveBeenCalledOnce();
     expect(actions.zoomOut).toHaveBeenCalledOnce();

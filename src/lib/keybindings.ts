@@ -99,6 +99,14 @@ export const BINDABLE_COMMANDS: readonly BindableCommand[] = [
     nativeMenu: true,
   },
   {
+    id: "open-graph",
+    label: "Open Graph",
+    category: "View",
+    defaultAccelerator: "CmdOrCtrl+G",
+    event: "menu-open-graph",
+    nativeMenu: true,
+  },
+  {
     id: "zoom-in",
     label: "Zoom In",
     category: "View",

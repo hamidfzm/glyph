@@ -1700,3 +1700,137 @@ describe("useTabs dialog and events", () => {
     });
   });
 });
+describe("useTabs graph tabs", () => {
+  async function openWorkspace(over: Partial<Parameters<typeof useTabs>[0]> = {}) {
+    const { result } = renderHook(() => useTabs(defaultOptions(over)));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    return result;
+  }
+
+  it("openGraph creates and activates a graph tab for the active workspace", async () => {
+    const result = await openWorkspace();
+    act(() => result.current.openGraph());
+    expect(result.current.tabs.map((t) => t.kind)).toEqual(["folder", "graph"]);
+    expect(result.current.activeTab?.kind).toBe("graph");
+    expect(result.current.activeTab?.kind === "graph" ? result.current.activeTab.root : null).toBe(
+      "/p/ws",
+    );
+  });
+
+  it("openGraph re-activates an existing graph tab instead of duplicating", async () => {
+    const result = await openWorkspace();
+    act(() => result.current.openGraph());
+    const graphId = result.current.activeTabId;
+    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+    act(() => result.current.setActiveTab(folderId));
+    act(() => result.current.openGraph());
+    expect(result.current.tabs.filter((t) => t.kind === "graph")).toHaveLength(1);
+    expect(result.current.activeTabId).toBe(graphId);
+  });
+
+  it("openGraph from an active graph tab keeps it active", async () => {
+    const result = await openWorkspace();
+    act(() => result.current.openGraph());
+    const graphId = result.current.activeTabId;
+    act(() => result.current.openGraph());
+    expect(result.current.activeTabId).toBe(graphId);
+    expect(result.current.tabs).toHaveLength(2);
+  });
+
+  it("openGraph is a no-op without an active workspace", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    act(() => result.current.openGraph());
+    expect(result.current.tabs).toHaveLength(0);
+  });
+
+  it("openGraph with an explicit root requires a matching folder tab", async () => {
+    const result = await openWorkspace();
+    act(() => result.current.openGraph("/elsewhere"));
+    expect(result.current.tabs.filter((t) => t.kind === "graph")).toHaveLength(0);
+  });
+
+  it("a graph tab exposes its folder tab's workspace index", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+        scan_wikilinks: async () => [
+          { source: "/p/ws/a.md", target: "b", line: 1, snippet: "[[b]]" },
+        ],
+      }) as typeof invoke,
+    );
+    const result = await openWorkspace();
+    await waitFor(() => expect(result.current.workspaceFiles).toHaveLength(2));
+
+    act(() => result.current.openGraph());
+    expect(result.current.activeTab?.kind).toBe("graph");
+    expect(result.current.workspaceFiles).toEqual(["/p/ws/a.md", "/p/ws/b.md"]);
+    expect(result.current.wikilinkRefs).toEqual([
+      { source: "/p/ws/a.md", target: "b", line: 1, snippet: "[[b]]" },
+    ]);
+  });
+
+  it("closing the folder tab also closes its graph tab", async () => {
+    const result = await openWorkspace();
+    act(() => result.current.openGraph());
+    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+    act(() => result.current.closeTab(folderId));
+    expect(result.current.tabs).toHaveLength(0);
+    expect(result.current.activeTabId).toBeNull();
+  });
+
+  it("closing the graph tab keeps the folder tab open", async () => {
+    const result = await openWorkspace();
+    act(() => result.current.openGraph());
+    const graphId = result.current.activeTabId!;
+    act(() => result.current.closeTab(graphId));
+    expect(result.current.tabs.map((t) => t.kind)).toEqual(["folder"]);
+    expect(result.current.activeTab?.kind).toBe("folder");
+  });
+
+  it("persists graph tabs and restores them after their folder tab", async () => {
+    const onSettingsChange = vi.fn();
+    const result = await openWorkspace({ onSettingsChange });
+    act(() => result.current.openGraph());
+    await waitFor(() => {
+      const calls = onSettingsChange.mock.calls.filter((c) => c[0] === "behavior.openTabs");
+      const last = calls[calls.length - 1]?.[1];
+      expect(last).toEqual([
+        expect.objectContaining({ kind: "folder", path: "/p/ws" }),
+        { kind: "graph", path: "/p/ws" },
+      ]);
+    });
+
+    // Restore from that persisted state: folder first, then its graph tab.
+    const { result: restored } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          openTabs: [
+            { kind: "folder", path: "/p/ws" },
+            { kind: "graph", path: "/p/ws" },
+          ] as never,
+          activeTabPath: "/p/ws",
+        }),
+      ),
+    );
+    await waitFor(() => expect(restored.current.initializing).toBe(false));
+    await waitFor(() =>
+      expect(restored.current.tabs.map((t) => t.kind)).toEqual(["folder", "graph"]),
+    );
+  });
+
+  it("skips restoring a graph tab whose folder tab is missing", async () => {
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          openTabs: [{ kind: "graph", path: "/p/ws" }] as never,
+        }),
+      ),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    expect(result.current.tabs).toHaveLength(0);
+  });
+});

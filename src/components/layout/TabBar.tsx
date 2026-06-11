@@ -2,11 +2,13 @@ import { useTabsContext } from "@/contexts/TabsContext";
 import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
 import { EDITOR_MODE } from "@/lib/settings";
 import { FolderIcon } from "../icons/FolderIcon";
+import { GraphIcon } from "../icons/GraphIcon";
 
 function tabLabel(tab: Tab): string {
-  if (tab.kind === "folder") {
+  if (tab.kind === "folder" || tab.kind === "graph") {
     const segments = tab.root.split(/[\\/]/).filter(Boolean);
-    return segments[segments.length - 1] ?? tab.root;
+    const name = segments[segments.length - 1] ?? tab.root;
+    return tab.kind === "graph" ? `Graph: ${name}` : name;
   }
   return tab.file.metadata?.name ?? "Untitled";
 }
@@ -57,6 +59,7 @@ export function TabBar() {
               >
                 {dirty && <span className="tab-dirty-dot" />}
                 {tab.kind === "folder" && <FolderIcon className="opacity-70 -ml-0.5" />}
+                {tab.kind === "graph" && <GraphIcon className="opacity-70 -ml-0.5" />}
                 <span className="tab-label">{label}</span>
               </button>
               <button

@@ -1,10 +1,11 @@
 import { useCallback } from "react";
 import { useTabsContext } from "@/contexts/TabsContext";
-import { activeFileOf } from "@/hooks/useTabs";
+import { activeFileOf, type FolderTab } from "@/hooks/useTabs";
 import { useTaskList } from "@/hooks/useTaskList";
 import { isNotebookFile } from "@/lib/notebookExtensions";
 import { EDITOR_MODE } from "@/lib/settings";
 import { MarkdownEditor, SplitView } from "./editor/lazyEditor";
+import { GraphView } from "./graph/lazyGraph";
 import { MarkdownViewer } from "./markdown/MarkdownViewer";
 import { NotebookSource, NotebookSplit, NotebookViewer } from "./notebook/lazyNotebook";
 
@@ -20,7 +21,10 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   const {
     activeTab,
     activeTabId,
+    tabs,
+    setActiveTab,
     workspaceFiles,
+    wikilinkRefs,
     openFileInFolderTab,
     saveScrollPosition,
     updateEditContent,
@@ -49,7 +53,35 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     [activeTabId, activeTab, openFileInFolderTab],
   );
 
+  // Graph node click: open the note inside the folder tab that owns the
+  // graph's workspace, then bring that tab to the front.
+  const handleOpenGraphNode = useCallback(
+    (path: string) => {
+      if (activeTab?.kind !== "graph") return;
+      const folderTab = tabs.find(
+        (t): t is FolderTab => t.kind === "folder" && t.root === activeTab.root,
+      );
+      if (!folderTab) return;
+      openFileInFolderTab(folderTab.id, path);
+      setActiveTab(folderTab.id);
+    },
+    [activeTab, tabs, openFileInFolderTab, setActiveTab],
+  );
+
   if (!activeTab) return null;
+
+  // Graph tabs have no document; they render the workspace graph and route
+  // node clicks into the folder tab that owns the workspace.
+  if (activeTab.kind === "graph") {
+    return (
+      <GraphView
+        workspaceFiles={workspaceFiles}
+        wikilinkRefs={wikilinkRefs}
+        onOpenFile={handleOpenGraphNode}
+      />
+    );
+  }
+
   const file = activeFileOf(activeTab);
   if (!file?.content) return null;
 

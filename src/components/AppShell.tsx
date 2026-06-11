@@ -62,6 +62,7 @@ export function AppShell() {
     initializing,
     displayContent,
     openFolder,
+    openGraph,
     openFileDialog,
     openFileInFolderTab,
     closeTab,
@@ -107,6 +108,7 @@ export function AppShell() {
     hasTab: openTabs.length > 0,
     hasFile: activeFile?.content != null,
     hasContent: (displayContent ?? "").length > 0,
+    hasWorkspace: activeTab?.kind === "folder" || activeTab?.kind === "graph",
     aiConfigured: aiController.configured,
     ttsAvailable: tts.available,
   });
@@ -134,6 +136,9 @@ export function AppShell() {
     () => ({
       openFile: openFileDialog,
       openFolder: () => openFolder(),
+      // No-arg wrapper: menu/palette callers must not leak their event
+      // payload into openGraph's optional root parameter.
+      openGraph: () => openGraph(),
       closeTab: closeActiveTab,
       toggleFilesSidebar: sidebar.toggleFiles,
       toggleOutlineSidebar: sidebar.toggleOutline,
@@ -156,6 +161,7 @@ export function AppShell() {
     [
       openFileDialog,
       openFolder,
+      openGraph,
       closeActiveTab,
       sidebar.toggleFiles,
       sidebar.toggleOutline,
@@ -206,7 +212,8 @@ export function AppShell() {
   const showEmptyState =
     !initializing && (!activeTab || (activeTab.kind === "folder" && !activeFile));
   const folderEmptyHint = activeTab?.kind === "folder" && !activeFile;
-  const showContent = !!activeTab && !!activeFile?.content;
+  // Graph tabs have no file but always render content (the canvas).
+  const showContent = !!activeTab && (activeTab.kind === "graph" || !!activeFile?.content);
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)]">

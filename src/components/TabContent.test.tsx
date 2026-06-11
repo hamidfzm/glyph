@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import type { FileTab, FolderTab } from "@/hooks/useTabs";
+import type { FileTab, FolderTab, GraphTab } from "@/hooks/useTabs";
 import type { EditorMode } from "@/lib/settings";
 import { TabContent } from "./TabContent";
 
@@ -29,6 +29,23 @@ vi.mock("./editor/lazyEditor", () => ({
         onClick={() => onOpenWikilink?.("/note.md")}
       >
         wikilink
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock("./graph/lazyGraph", () => ({
+  GraphView: ({
+    workspaceFiles,
+    onOpenFile,
+  }: {
+    workspaceFiles: readonly string[];
+    onOpenFile: (path: string) => void;
+  }) => (
+    <div data-testid="graph-view">
+      <span data-testid="graph-file-count">{workspaceFiles.length}</span>
+      <button type="button" data-testid="graph-node" onClick={() => onOpenFile("/workspace/b.md")}>
+        node
       </button>
     </div>
   ),
@@ -105,6 +122,10 @@ function makeFolderTab(filePath?: string): FolderTab {
   };
 }
 
+function makeGraphTab(root = "/workspace"): GraphTab {
+  return { id: "tab-g", kind: "graph", root, file: null };
+}
+
 function buildContext(over: Partial<TabsContextValue>): TabsContextValue {
   return {
     tabs: [],
@@ -116,6 +137,7 @@ function buildContext(over: Partial<TabsContextValue>): TabsContextValue {
     wikilinkRefs: [],
     openFile: vi.fn(),
     openFolder: vi.fn(),
+    openGraph: vi.fn(),
     openFileInFolderTab: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),
@@ -174,6 +196,51 @@ describe("TabContent", () => {
       activeFile: null,
     });
     expect(container.firstChild).toBeNull();
+  });
+
+  it("renders the graph view for a graph tab", () => {
+    const graph = makeGraphTab();
+    renderTabContent({
+      tabs: [makeFolderTab(), graph],
+      activeTab: graph,
+      activeTabId: graph.id,
+      workspaceFiles: ["/workspace/a.md", "/workspace/b.md"],
+    });
+    expect(screen.getByTestId("graph-view")).toBeInTheDocument();
+    expect(screen.getByTestId("graph-file-count")).toHaveTextContent("2");
+  });
+
+  it("opens a clicked graph node inside the owning folder tab and activates it", () => {
+    const folder = makeFolderTab();
+    const graph = makeGraphTab(folder.root);
+    const openFileInFolderTab = vi.fn();
+    const setActiveTab = vi.fn();
+    const { getByTestId } = renderTabContent({
+      tabs: [folder, graph],
+      activeTab: graph,
+      activeTabId: graph.id,
+      openFileInFolderTab,
+      setActiveTab,
+    });
+    getByTestId("graph-node").click();
+    expect(openFileInFolderTab).toHaveBeenCalledWith(folder.id, "/workspace/b.md");
+    expect(setActiveTab).toHaveBeenCalledWith(folder.id);
+  });
+
+  it("ignores graph node clicks when the owning folder tab is gone", () => {
+    const graph = makeGraphTab();
+    const openFileInFolderTab = vi.fn();
+    const setActiveTab = vi.fn();
+    const { getByTestId } = renderTabContent({
+      tabs: [graph],
+      activeTab: graph,
+      activeTabId: graph.id,
+      openFileInFolderTab,
+      setActiveTab,
+    });
+    getByTestId("graph-node").click();
+    expect(openFileInFolderTab).not.toHaveBeenCalled();
+    expect(setActiveTab).not.toHaveBeenCalled();
   });
 
   it("renders MarkdownViewer in view mode", () => {

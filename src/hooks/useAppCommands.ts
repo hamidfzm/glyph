@@ -85,6 +85,7 @@ export function useAppCommands({
       { title: "Cloud Sync…", run: actions.openSyncSettings },
       { title: "Find in Document", shortcut: "Cmd/Ctrl+F", run: actions.find },
       { title: "Toggle Edit Mode", shortcut: "Cmd/Ctrl+E", run: actions.toggleEdit },
+      { title: "Open Graph", shortcut: "Cmd/Ctrl+G", run: actions.openGraph },
       { title: "Print…", shortcut: "Cmd/Ctrl+P", run: actions.print },
       { title: "Export to HTML…", run: actions.exportHtml },
       { title: "Export to Word (DOCX)…", run: actions.exportDocx },

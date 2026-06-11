@@ -50,6 +50,7 @@ function tabsValue(activeTab: FolderTab | null): TabsContextValue {
     wikilinkRefs: [],
     openFile: vi.fn(),
     openFolder: vi.fn(),
+    openGraph: vi.fn(),
     openFileInFolderTab: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),

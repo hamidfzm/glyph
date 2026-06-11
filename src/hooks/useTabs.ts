@@ -56,7 +56,17 @@ export interface FolderTab {
   file: FileState | null;
 }
 
-export type Tab = FileTab | FolderTab;
+export interface GraphTab {
+  id: string;
+  kind: "graph";
+  /** Workspace root this graph visualizes; its folder tab owns the data. */
+  root: string;
+  /** Graph tabs never display a document. Present so `activeFileOf` stays a
+   *  plain field read across all tab kinds. */
+  file: null;
+}
+
+export type Tab = FileTab | FolderTab | GraphTab;
 
 /** Replace the folder tab with `tabId` via `update`, leaving other tabs as-is. */
 export function mapFolderTab(
@@ -73,8 +83,8 @@ interface TabsState {
 }
 
 interface PersistedTab {
-  kind: "file" | "folder";
-  path: string; // root for folder, file path for file
+  kind: "file" | "folder" | "graph";
+  path: string; // root for folder/graph, file path for file
   filePath?: string; // current file inside a folder tab
   expanded?: string[]; // expanded subdirs for folder tab
 }
@@ -133,7 +143,7 @@ export function activeFileOf(tab: Tab | null | undefined): FileState | null {
 }
 
 export function tabPathOf(tab: Tab): string {
-  return tab.kind === "folder" ? tab.root : tab.file.path;
+  return tab.kind === "file" ? tab.file.path : tab.root;
 }
 
 function isInWorkspace(filePath: string, root: string): boolean {
@@ -166,8 +176,18 @@ export function useTabs(options: UseTabsOptions) {
   const { tabs, activeTabId } = state;
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
   const activeFile = activeFileOf(activeTab);
-  const workspaceFiles = activeTab?.kind === "folder" ? (workspaceIndex[activeTab.id] ?? []) : [];
-  const wikilinkRefs = activeTab?.kind === "folder" ? (wikilinkIndex[activeTab.id] ?? []) : [];
+  // The workspace index lives on the folder tab. A graph tab reads the index
+  // of the folder tab that shares its root, so both stay in sync through the
+  // same directory watcher without scanning twice.
+  const indexOwner =
+    activeTab?.kind === "folder"
+      ? activeTab
+      : activeTab?.kind === "graph"
+        ? (tabs.find((t): t is FolderTab => t.kind === "folder" && t.root === activeTab.root) ??
+          null)
+        : null;
+  const workspaceFiles = indexOwner ? (workspaceIndex[indexOwner.id] ?? []) : [];
+  const wikilinkRefs = indexOwner ? (wikilinkIndex[indexOwner.id] ?? []) : [];
 
   // Persist tabs to settings whenever state changes (post-init)
   useEffect(() => {
@@ -180,6 +200,9 @@ export function useTabs(options: UseTabsOptions) {
           filePath: tab.file?.path,
           expanded: Array.from(tab.expanded),
         };
+      }
+      if (tab.kind === "graph") {
+        return { kind: "graph", path: tab.root };
       }
       return { kind: "file", path: tab.file.path };
     });
@@ -460,6 +483,26 @@ export function useTabs(options: UseTabsOptions) {
     [addToRecent, loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFileInFolderTab],
   );
 
+  // Open (or re-activate) the graph view for a workspace. With no explicit
+  // root, targets the active workspace (folder or graph tab). The graph
+  // renders the folder tab's wikilink index, so it requires that folder tab
+  // to be open — without one the call is a no-op (the menu item is disabled
+  // in that state anyway).
+  const openGraph = useCallback((root?: string) => {
+    const current = stateRef.current;
+    const active = current.tabs.find((t) => t.id === current.activeTabId);
+    const resolvedRoot = root ?? (active && active.kind !== "file" ? active.root : undefined);
+    if (!resolvedRoot) return;
+    const id = generateId();
+    setState((prev) => {
+      if (!prev.tabs.some((t) => t.kind === "folder" && t.root === resolvedRoot)) return prev;
+      const existing = prev.tabs.find((t) => t.kind === "graph" && t.root === resolvedRoot);
+      if (existing) return { ...prev, activeTabId: existing.id };
+      const newTab: GraphTab = { id, kind: "graph", root: resolvedRoot, file: null };
+      return { tabs: [...prev.tabs, newTab], activeTabId: id };
+    });
+  }, []);
+
   const toggleExpand = useCallback(
     async (tabId: string, path: string) => {
       const tab = stateRef.current.tabs.find((t) => t.id === tabId);
@@ -726,14 +769,22 @@ export function useTabs(options: UseTabsOptions) {
       if (idx === -1) return prev;
 
       const tab = prev.tabs[idx];
+      const removedIds = new Set([id]);
       if (tab.kind === "folder") {
         invoke("unwatch_directory", { path: tab.root }).catch(() => {});
         if (tab.file) invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
-      } else {
+        // A graph tab renders this folder's index; without the folder it
+        // would be a dead view, so it closes alongside.
+        for (const t of prev.tabs) {
+          if (t.kind === "graph" && t.root === tab.root) removedIds.add(t.id);
+        }
+      } else if (tab.kind === "file") {
         invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
       }
-      scrollRefsMap.current.delete(id);
-      editHistory.current.delete(id);
+      for (const removedId of removedIds) {
+        scrollRefsMap.current.delete(removedId);
+        editHistory.current.delete(removedId);
+      }
       setWorkspaceIndex((prevIdx) => {
         if (!(id in prevIdx)) return prevIdx;
         const next = { ...prevIdx };
@@ -747,9 +798,9 @@ export function useTabs(options: UseTabsOptions) {
         return next;
       });
 
-      const updated = prev.tabs.filter((t) => t.id !== id);
+      const updated = prev.tabs.filter((t) => !removedIds.has(t.id));
       let newActiveId = prev.activeTabId;
-      if (prev.activeTabId === id) {
+      if (prev.activeTabId !== null && removedIds.has(prev.activeTabId)) {
         const newActive = updated[Math.min(idx, updated.length - 1)] ?? null;
         newActiveId = newActive?.id ?? null;
       }
@@ -764,7 +815,7 @@ export function useTabs(options: UseTabsOptions) {
         const savedScroll = scrollRefsMap.current.get(prev.activeTabId) ?? 0;
         return {
           tabs: prev.tabs.map((t) => {
-            if (t.id !== prev.activeTabId) return t;
+            if (t.id !== prev.activeTabId || t.kind === "graph") return t;
             const file = activeFileOf(t);
             if (!file) return t;
             const updatedFile = { ...file, scrollTop: savedScroll };
@@ -781,7 +832,7 @@ export function useTabs(options: UseTabsOptions) {
     setState((prev) => ({
       ...prev,
       tabs: prev.tabs.map((t) => {
-        if (t.id !== id) return t;
+        if (t.id !== id || t.kind === "graph") return t;
         const file = activeFileOf(t);
         if (!file) return t;
         const next = mutator(file);
@@ -968,6 +1019,11 @@ export function useTabs(options: UseTabsOptions) {
                 filePath: persisted.filePath,
                 silent: true,
               });
+            } else if (persisted.kind === "graph") {
+              // Restores only when its folder tab restored earlier in this
+              // loop (persistence preserves tab order, so the folder comes
+              // first); otherwise silently skipped.
+              openGraph(persisted.path);
             } else {
               await openFile(persisted.path);
             }
@@ -1031,6 +1087,7 @@ export function useTabs(options: UseTabsOptions) {
           setState((prev) => ({
             ...prev,
             tabs: prev.tabs.map((t) => {
+              if (t.kind === "graph") return t;
               const f = activeFileOf(t);
               if (!f || f.path !== changedPath) return t;
               // External reload invalidates our edit history — replaying old
@@ -1106,6 +1163,7 @@ export function useTabs(options: UseTabsOptions) {
     wikilinkRefs,
     openFile,
     openFolder,
+    openGraph,
     openFileInFolderTab,
     toggleExpand,
     createNote,

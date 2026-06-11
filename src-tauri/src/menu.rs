@@ -41,6 +41,7 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
     match id {
         "open" => emit("menu-open-file"),
         "open-folder" => emit("menu-open-folder"),
+        "open-graph" => emit("menu-open-graph"),
         "close-tab" => emit("menu-close-tab"),
         "reset-view" => emit("menu-reset-view"),
         "print" => emit("menu-print"),
@@ -201,6 +202,10 @@ mod tests {
         assert_eq!(
             menu_action_for_id("open-command-palette"),
             Some(emit("menu-open-command-palette"))
+        );
+        assert_eq!(
+            menu_action_for_id("open-graph"),
+            Some(emit("menu-open-graph"))
         );
         assert_eq!(menu_action_for_id("zoom-in"), Some(emit("menu-zoom-in")));
         assert_eq!(menu_action_for_id("zoom-out"), Some(emit("menu-zoom-out")));

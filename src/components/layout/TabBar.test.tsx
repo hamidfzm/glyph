@@ -2,7 +2,13 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import { activeFileOf, type FileTab, type FolderTab, type Tab } from "@/hooks/useTabs";
+import {
+  activeFileOf,
+  type FileTab,
+  type FolderTab,
+  type GraphTab,
+  type Tab,
+} from "@/hooks/useTabs";
 import { TabBar } from "./TabBar";
 
 const makeFileTab = (i: number): FileTab => ({
@@ -25,6 +31,13 @@ const makeFolderTab = (i: number, root: string): FolderTab => ({
   root,
   expanded: new Set(),
   nodes: new Map(),
+  file: null,
+});
+
+const makeGraphTab = (i: number, root: string): GraphTab => ({
+  id: `tab-${i}`,
+  kind: "graph",
+  root,
   file: null,
 });
 
@@ -52,6 +65,7 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     wikilinkRefs: [],
     openFile: vi.fn(),
     openFolder: vi.fn(),
+    openGraph: vi.fn(),
     openFileInFolderTab: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),
@@ -145,6 +159,24 @@ describe("TabBar", () => {
     expect(screen.getByText("notes")).toBeInTheDocument();
     const tabEl = screen.getByText("notes").closest(".tab-item");
     expect(tabEl?.getAttribute("data-tab-kind")).toBe("folder");
+  });
+
+  it("renders graph tabs with a Graph label and graph kind marker", () => {
+    renderTabBar({
+      tabs: [makeGraphTab(0, "/Users/me/notes")],
+      activeTabId: "tab-0",
+    });
+    expect(screen.getByText("Graph: notes")).toBeInTheDocument();
+    const tabEl = screen.getByText("Graph: notes").closest(".tab-item");
+    expect(tabEl?.getAttribute("data-tab-kind")).toBe("graph");
+  });
+
+  it("hides the mode toggle when a graph tab is active", () => {
+    renderTabBar({
+      tabs: [makeGraphTab(0, "/Users/me/notes")],
+      activeTabId: "tab-0",
+    });
+    expect(screen.queryByLabelText("View mode")).not.toBeInTheDocument();
   });
 
   it("calls setTabMode with the chosen mode from each toggle button", () => {
