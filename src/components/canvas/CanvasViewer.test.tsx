@@ -106,4 +106,25 @@ describe("CanvasViewer", () => {
     const world = container.querySelector(".glyph-canvas-world") as HTMLElement;
     expect(world.style.transform).toContain("translate(0px, 0px)");
   });
+
+  it("toggles a task-list checkbox and reports the updated board", () => {
+    const content = canvas({
+      nodes: [{ id: "a", type: "text", x: 0, y: 0, width: 200, height: 80, text: "- [x] ship it" }],
+    });
+    const onChange = vi.fn();
+    render(<CanvasViewer content={content} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0]).toContain("- [ ] ship it");
+  });
+
+  it("renders task checkboxes inert when no onChange is provided", () => {
+    const content = canvas({
+      nodes: [{ id: "a", type: "text", x: 0, y: 0, width: 200, height: 80, text: "- [ ] read" }],
+    });
+    render(<CanvasViewer content={content} />);
+    const box = screen.getByRole("checkbox");
+    fireEvent.click(box);
+    expect(screen.getByText("read")).toBeInTheDocument();
+  });
 });

@@ -6,10 +6,12 @@ import type { PrintSettings } from "@/lib/settings";
 import { useExport } from "./useExport";
 import type { TocEntry } from "./useTableOfContents";
 
-// Canvas capture goes through this mock so html2canvas never loads in tests.
-const exportCanvasPngMock = vi.fn();
-vi.mock("@/lib/canvas/exportPng", () => ({
-  exportCanvasPng: (...args: unknown[]) => exportCanvasPngMock(...args),
+// Canvas export sources are mocked so the tests control the produced HTML.
+const buildBoardMock = vi.fn();
+const buildDocumentMock = vi.fn();
+vi.mock("@/lib/canvas/exportDoc", () => ({
+  buildCanvasBoardHtml: (...args: unknown[]) => buildBoardMock(...args),
+  buildCanvasDocumentHtml: (...args: unknown[]) => buildDocumentMock(...args),
 }));
 
 const PRINT: PrintSettings = {
@@ -45,7 +47,8 @@ function setCanvas(): void {
 beforeEach(() => {
   vi.mocked(invoke).mockReset().mockResolvedValue(undefined);
   vi.mocked(save).mockReset();
-  exportCanvasPngMock.mockReset().mockResolvedValue(new Uint8Array([7, 8, 9]));
+  buildBoardMock.mockReset().mockResolvedValue('<div class="glyph-canvas-export">board</div>');
+  buildDocumentMock.mockReset().mockResolvedValue("<section><h1>Card</h1></section>");
 });
 
 afterEach(() => {
@@ -159,22 +162,63 @@ describe("useExport", () => {
     spy.mockRestore();
   });
 
-  it("exports a canvas tab as PNG whichever export entry was chosen", async () => {
+  it("exports a canvas tab as a spatial vector HTML page", async () => {
     setCanvas();
-    vi.mocked(save).mockResolvedValue("/out.png");
+    vi.mocked(save).mockResolvedValue("/out.html");
     const { result } = renderHook(() => useExport(options({ filePath: "/docs/board.canvas" })));
     await act(async () => {
       await result.current.exportHtml();
     });
 
     expect(save).toHaveBeenCalledWith({
-      defaultPath: "board.png",
-      filters: [{ name: "PNG Image", extensions: ["png"] }],
+      defaultPath: "board.html",
+      filters: [{ name: "HTML", extensions: ["html"] }],
     });
+    expect(buildBoardMock).toHaveBeenCalled();
+    const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_file");
+    expect(call).toBeTruthy();
+    const content = (call?.[1] as { content: string }).content;
+    expect(content).toContain("glyph-canvas-export");
+    expect(content).toContain('class="glyph-canvas-page"');
+  });
+
+  it("exports a canvas tab to PDF as a linearised vector document", async () => {
+    setCanvas();
+    vi.mocked(save).mockResolvedValue("/out.pdf");
+    const { result } = renderHook(() => useExport(options({ filePath: "/docs/board.canvas" })));
+    await act(async () => {
+      await result.current.exportPdf();
+    });
+
+    expect(save).toHaveBeenCalledWith({
+      defaultPath: "board.pdf",
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    });
+    expect(buildDocumentMock).toHaveBeenCalled();
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_binary_file");
     expect(call).toBeTruthy();
-    expect((call?.[1] as { path: string }).path).toBe("/out.png");
-    expect((call?.[1] as { contents: number[] }).contents).toEqual([7, 8, 9]);
+    expect((call?.[1] as { contents: number[] }).contents.length).toBeGreaterThan(0);
+  });
+
+  it("exports a canvas tab to EPUB and DOCX from the linearised document", async () => {
+    setCanvas();
+    vi.mocked(save).mockResolvedValue("/out.epub");
+    const { result } = renderHook(() => useExport(options({ filePath: "/docs/board.canvas" })));
+    await act(async () => {
+      await result.current.exportEpub();
+    });
+    expect(vi.mocked(invoke).mock.calls.filter((c) => c[0] === "write_binary_file")).toHaveLength(
+      1,
+    );
+
+    vi.mocked(invoke).mockClear();
+    vi.mocked(save).mockResolvedValue("/out.docx");
+    await act(async () => {
+      await result.current.exportDocx();
+    });
+    expect(vi.mocked(invoke).mock.calls.filter((c) => c[0] === "write_binary_file")).toHaveLength(
+      1,
+    );
   });
 
   it("does not write when the canvas save dialog is cancelled", async () => {
@@ -184,26 +228,30 @@ describe("useExport", () => {
     await act(async () => {
       await result.current.exportPdf();
     });
-    expect(exportCanvasPngMock).not.toHaveBeenCalled();
+    expect(buildDocumentMock).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("skips the write when the canvas capture yields no image", async () => {
+  it("skips the write when the board yields no exportable content", async () => {
     setCanvas();
-    vi.mocked(save).mockResolvedValue("/out.png");
-    exportCanvasPngMock.mockResolvedValue(null);
+    vi.mocked(save).mockResolvedValue("/out.html");
+    buildBoardMock.mockResolvedValue(null);
+    buildDocumentMock.mockResolvedValue(null);
     const { result } = renderHook(() => useExport(options()));
     await act(async () => {
       await result.current.exportHtml();
+    });
+    await act(async () => {
+      await result.current.exportPdf();
     });
     expect(invoke).not.toHaveBeenCalled();
     expect(result.current.exporting).toBeNull();
   });
 
-  it("logs and recovers when the canvas capture fails", async () => {
+  it("logs and recovers when the canvas export fails", async () => {
     setCanvas();
-    vi.mocked(save).mockResolvedValue("/out.png");
-    exportCanvasPngMock.mockRejectedValue(new Error("render failed"));
+    vi.mocked(save).mockResolvedValue("/out.html");
+    buildBoardMock.mockRejectedValue(new Error("render failed"));
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { result } = renderHook(() => useExport(options()));
     await act(async () => {
@@ -215,9 +263,9 @@ describe("useExport", () => {
     spy.mockRestore();
   });
 
-  it("flags png while the canvas write is in flight and clears it when done", async () => {
+  it("flags the chosen format while a canvas write is in flight", async () => {
     setCanvas();
-    vi.mocked(save).mockResolvedValue("/out.png");
+    vi.mocked(save).mockResolvedValue("/out.html");
     let finishWrite!: () => void;
     vi.mocked(invoke).mockReturnValue(
       new Promise<void>((resolve) => {
@@ -232,7 +280,7 @@ describe("useExport", () => {
     await act(async () => {
       pending = result.current.exportHtml();
     });
-    expect(result.current.exporting).toBe("png");
+    expect(result.current.exporting).toBe("html");
 
     await act(async () => {
       finishWrite();

@@ -25,14 +25,24 @@ export function CanvasEdgeLabelEditor({
   const onCommitRef = useRef(onCommit);
   onCommitRef.current = onCommit;
 
+  // The cleanup commit is deferred one microtask and cancelled if the effect
+  // re-runs: under StrictMode the mount effect is invoked, cleaned up, and
+  // invoked again, so an immediate cleanup commit would close the editor the
+  // moment it opened. Only a real unmount leaves the scheduled commit alive.
+  const pendingCommit = useRef<{ cancelled: boolean } | null>(null);
   useEffect(() => {
+    if (pendingCommit.current) pendingCommit.current.cancelled = true;
     inputRef.current?.focus();
     inputRef.current?.select();
     return () => {
-      if (!done.current) {
-        done.current = true;
-        onCommitRef.current(valueRef.current);
-      }
+      const token = { cancelled: false };
+      pendingCommit.current = token;
+      queueMicrotask(() => {
+        if (!token.cancelled && !done.current) {
+          done.current = true;
+          onCommitRef.current(valueRef.current);
+        }
+      });
     };
   }, []);
 

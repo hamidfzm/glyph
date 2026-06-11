@@ -283,8 +283,12 @@
   transform: translateY(-50%);
 }
 
-/* Edges become clickable in editor mode. */
+/* Edges become clickable in editor mode. The svg root keeps
+   `pointer-events: none` so empty overlay space stays click-through, but the
+   widened hit path must opt back in — inherited `none` would make every edge
+   deaf to clicks, double-clicks, and the context menu. */
 .glyph-canvas-edges[data-interactive] .glyph-canvas-edge-hit {
+  pointer-events: stroke;
   cursor: pointer;
 }
 

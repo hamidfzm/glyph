@@ -105,6 +105,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
           content={editorContent}
           filePath={file.path}
           onOpenFile={handleOpenWikilink}
+          onChange={handleCanvasChange}
         />
       );
     }

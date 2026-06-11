@@ -8,7 +8,7 @@ import { prepareContent } from "@/lib/export/prepareContent";
 import type { PrintSettings } from "@/lib/settings";
 import type { TocEntry } from "./useTableOfContents";
 
-export type ExportFormat = "html" | "docx" | "epub" | "pdf" | "png";
+export type ExportFormat = "html" | "docx" | "epub" | "pdf";
 
 interface UseExportOptions {
   entries: TocEntry[];
@@ -22,7 +22,6 @@ const FILTERS: Record<ExportFormat, { name: string; ext: string }> = {
   docx: { name: "Word Document", ext: "docx" },
   epub: { name: "EPUB", ext: "epub" },
   pdf: { name: "PDF", ext: "pdf" },
-  png: { name: "PNG Image", ext: "png" },
 };
 
 // Write binary export output via the Rust command. The bytes are sent as a
@@ -61,24 +60,71 @@ export function useExport({
 
   const run = useCallback(
     async (format: ExportFormat) => {
-      // A canvas tab exports the rendered board as a PNG image, whichever
-      // export entry was chosen — there is no document flow to convert to
-      // HTML/DOCX/EPUB/PDF. The check runs first: cards contain their own
-      // small `.markdown-body` elements which would fool the document guard.
+      // A canvas tab exports as vectors, never rasterised: HTML keeps the
+      // spatial board 1:1 (the app stylesheet travels along); PDF, DOCX, and
+      // EPUB are flowing documents, so the cards are linearised in board
+      // order. The check runs first: cards contain their own small
+      // `.markdown-body` elements which would fool the document guard.
       if (document.querySelector(".glyph-canvas")) {
         const meta = deriveExportMeta(filePath, content);
+        const { name, ext } = FILTERS[format];
         const path = await save({
-          defaultPath: `${meta.baseName}.png`,
-          filters: [{ name: FILTERS.png.name, extensions: [FILTERS.png.ext] }],
+          defaultPath: `${meta.baseName}.${ext}`,
+          filters: [{ name, extensions: [ext] }],
         });
         if (!path) return;
-        setExporting("png");
+        setExporting(format);
         try {
-          const { exportCanvasPng } = await import("@/lib/canvas/exportPng");
-          const bytes = await exportCanvasPng();
-          if (bytes) await writeBinary(path, bytes);
+          const { buildCanvasBoardHtml, buildCanvasDocumentHtml } = await import(
+            "@/lib/canvas/exportDoc"
+          );
+          if (format === "html") {
+            const body = await buildCanvasBoardHtml();
+            if (body == null) return;
+            const html = buildHtmlDocument({
+              bodyHtml: body,
+              title: meta.title,
+              css: collectStyles(),
+              dark: document.documentElement.classList.contains("dark"),
+              bodyClass: "glyph-canvas-page",
+            });
+            await invoke("write_file", { path, content: html });
+          } else {
+            const body = await buildCanvasDocumentHtml();
+            if (body == null) return;
+            if (format === "epub") {
+              const { buildEpub } = await import("@/lib/export/epub");
+              await writeBinary(
+                path,
+                await buildEpub({
+                  bodyHtml: body,
+                  css: collectStyles(),
+                  entries: [],
+                  metadata: {
+                    title: meta.title,
+                    author: meta.author,
+                    language: "en",
+                    identifier: crypto.randomUUID(),
+                    modified: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+                  },
+                }),
+              );
+            } else if (format === "docx") {
+              const { buildDocx } = await import("@/lib/export/docx");
+              await writeBinary(
+                path,
+                await buildDocx(body, { title: meta.title, author: meta.author }),
+              );
+            } else {
+              const { buildPdf } = await import("@/lib/export/pdf");
+              await writeBinary(
+                path,
+                await buildPdf(body, { title: meta.title, author: meta.author }),
+              );
+            }
+          }
         } catch (err) {
-          console.error("Failed to export canvas PNG:", err);
+          console.error(`Failed to export canvas ${format}:`, err);
         } finally {
           setExporting(null);
         }

@@ -866,7 +866,14 @@ export function useTabs(options: UseTabsOptions) {
       try {
         await invoke("write_file", { path: file.path, content: next });
         selfSaveTimes.current.set(file.path, Date.now());
-        updateActiveFile(id, (f) => ({ ...f, content: next }));
+        // A leftover editContent from an earlier edit-mode session would
+        // shadow the fresh content for consumers that render
+        // `editContent ?? content` (the canvas viewer), so keep it in sync.
+        updateActiveFile(id, (f) => ({
+          ...f,
+          content: next,
+          ...(f.editContent != null ? { editContent: next } : {}),
+        }));
         return true;
       } catch (err) {
         console.error("Failed to apply edit:", err);

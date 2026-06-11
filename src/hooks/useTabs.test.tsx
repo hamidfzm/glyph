@@ -527,6 +527,44 @@ describe("useTabs file operations", () => {
     }
   });
 
+  it("commitEdit in view mode refreshes a stale editContent shadow", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => "A",
+        write_file: async () => undefined,
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/board.canvas");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    // Editing seeds editContent; switching back to view leaves it behind.
+    act(() => {
+      result.current.setTabMode(tabId, "edit");
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "EDIT-MODE-STATE");
+    });
+    act(() => {
+      result.current.setTabMode(tabId, "view");
+    });
+
+    await act(async () => {
+      await result.current.commitEdit(tabId, "VIEW-MODE-COMMIT");
+    });
+    if (result.current.tabs[0].kind === "file") {
+      // Both content and the leftover shadow must advance, or consumers that
+      // render `editContent ?? content` (the canvas viewer) would show the
+      // pre-commit board.
+      expect(result.current.tabs[0].file.content).toBe("VIEW-MODE-COMMIT");
+      expect(result.current.tabs[0].file.editContent).toBe("VIEW-MODE-COMMIT");
+    }
+  });
+
   it("commitEdit in view mode writes to disk and is undoable", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
     vi.mocked(invoke).mockImplementation(

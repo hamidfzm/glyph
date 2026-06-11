@@ -8,8 +8,11 @@ import {
 import { useCanvasViewport } from "@/hooks/useCanvasViewport";
 import { canvasColorToCss } from "@/lib/canvas/color";
 import { nodesBoundingBox } from "@/lib/canvas/geometry";
+import { updateTextNode } from "@/lib/canvas/mutations";
 import { parseCanvas } from "@/lib/canvas/parse";
+import { serializeCanvas } from "@/lib/canvas/serialize";
 import { CanvasParseError } from "@/lib/canvas/types";
+import { toggleTaskAtLine } from "@/lib/taskList";
 import { CanvasEdges } from "./CanvasEdges";
 import { CanvasNodeView } from "./CanvasNodeView";
 import { CanvasToolbar } from "./CanvasToolbar";
@@ -18,12 +21,14 @@ interface CanvasViewerProps {
   content: string;
   filePath?: string;
   onOpenFile?: (path: string) => void;
+  /** Persist a checkbox toggle (the only edit view mode allows). */
+  onChange?: (serialized: string) => void;
 }
 
 // Read-only canvas stage: parses the .canvas content, lays nodes out in an
 // infinite pan/zoom world, and draws edges between them. Groups render behind
 // edges, edges behind nodes. Editing interactions are layered on separately.
-export function CanvasViewer({ content, filePath, onOpenFile }: CanvasViewerProps) {
+export function CanvasViewer({ content, filePath, onOpenFile, onChange }: CanvasViewerProps) {
   const { viewport, stageRef, panBy, zoomBy, fitTo } = useCanvasViewport();
 
   const parsed = useMemo(() => {
@@ -140,7 +145,21 @@ export function CanvasViewer({ content, filePath, onOpenFile }: CanvasViewerProp
               onPointerDown={(e) => e.stopPropagation()}
             >
               <div className="glyph-canvas-node-content">
-                <CanvasNodeView node={node} canvasPath={filePath} onOpenFile={onOpenFile} />
+                <CanvasNodeView
+                  node={node}
+                  canvasPath={filePath}
+                  onOpenFile={onOpenFile}
+                  onTaskToggle={
+                    onChange && node.type === "text"
+                      ? (line) =>
+                          onChange(
+                            serializeCanvas(
+                              updateTextNode(data, node.id, toggleTaskAtLine(node.text, line)),
+                            ),
+                          )
+                      : undefined
+                  }
+                />
               </div>
             </div>
           ))}

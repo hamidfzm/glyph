@@ -24,6 +24,7 @@ import {
 } from "@/lib/canvas/mutations";
 import type { CanvasNode, NodeSide } from "@/lib/canvas/types";
 import { screenToWorld } from "@/lib/canvas/viewport";
+import { toggleTaskAtLine } from "@/lib/taskList";
 import { CanvasEdgeLabelEditor } from "./CanvasEdgeLabelEditor";
 import { CanvasEdges } from "./CanvasEdges";
 import { CanvasEditableNode } from "./CanvasEditableNode";
@@ -255,6 +256,13 @@ export function CanvasEditor({ content, filePath, onChange }: CanvasEditorProps)
     onContextMenu: (e: ReactMouseEvent) => {
       selectNode(node.id, false);
       openMenu(e, { kind: "node", node });
+    },
+    onTaskToggle: (line: number) => {
+      const current = dataRef.current.nodes.find((n) => n.id === node.id);
+      /* v8 ignore start -- defensive: checkboxes only render inside text cards */
+      if (current?.type !== "text") return;
+      /* v8 ignore stop */
+      commit(updateTextNode(dataRef.current, node.id, toggleTaskAtLine(current.text, line)));
     },
   });
 

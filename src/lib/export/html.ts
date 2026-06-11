@@ -8,7 +8,7 @@ export interface HtmlDocOptions {
   // below syncs to the reader's system preference.
   dark: boolean;
   // Wrapper class so bundled styles apply (markdown vs notebook body).
-  bodyClass?: "markdown-body" | "notebook-body";
+  bodyClass?: "markdown-body" | "notebook-body" | "glyph-canvas-page";
 }
 
 // The app's base styles lock the shell to the viewport (`html, body, #root {

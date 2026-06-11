@@ -1,5 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useCallback, useRef } from "react";
 import { MarkdownContent } from "@/components/markdown/MarkdownContent";
 import { canvasColorToCss } from "@/lib/canvas/color";
 import type { CanvasNode } from "@/lib/canvas/types";
@@ -18,6 +19,8 @@ interface CanvasNodeViewProps {
    * Defaults to true (the read-only viewer).
    */
   interactive?: boolean;
+  /** Toggle a task-list checkbox at a 1-based line within this card's text. */
+  onTaskToggle?: (line: number) => void;
 }
 
 /** Resolve a canvas-relative file reference against the .canvas file's folder. */
@@ -35,8 +38,18 @@ export function CanvasNodeView({
   canvasPath,
   onOpenFile,
   interactive = true,
+  onTaskToggle,
 }: CanvasNodeViewProps) {
   const accent = canvasColorToCss(node.color);
+
+  // The toggle handler must keep a stable identity: parents rebuild their
+  // per-node closures every render, and MarkdownContent remounts the whole
+  // markdown DOM when its onTaskToggle identity changes — replacing the
+  // checkbox between pointerdown (which selects the card and re-renders) and
+  // mouseup, so the click would never fire.
+  const taskToggleRef = useRef(onTaskToggle);
+  taskToggleRef.current = onTaskToggle;
+  const stableTaskToggle = useCallback((line: number) => taskToggleRef.current?.(line), []);
 
   switch (node.type) {
     case "text":
@@ -44,7 +57,12 @@ export function CanvasNodeView({
         // markdown-body opts the card into the full document styling
         // (headings, lists, code blocks); canvas.css strips its page chrome.
         <div className="glyph-canvas-node-text markdown-body">
-          <MarkdownContent content={node.text} filePath={canvasPath} showFrontmatter={false} />
+          <MarkdownContent
+            content={node.text}
+            filePath={canvasPath}
+            showFrontmatter={false}
+            onTaskToggle={onTaskToggle ? stableTaskToggle : undefined}
+          />
         </div>
       );
 

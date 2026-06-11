@@ -24,6 +24,7 @@ interface CanvasEditableNodeProps {
   onTextCommit: (value: string) => void;
   onEditCancel: () => void;
   onContextMenu: (e: ReactMouseEvent) => void;
+  onTaskToggle: (line: number) => void;
 }
 
 /** The inline-editable value for a node: markdown body, group label, or URL. */
@@ -88,15 +89,25 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
   // Safety net: when editing ends any way other than blur/Enter/Escape —
   // clicking the background, double-clicking another card, switching the tab
   // to view mode — commit the pending value instead of silently dropping it.
+  // The cleanup commit is deferred one microtask and cancelled if the effect
+  // re-runs: under StrictMode a card created in edit mode mounts, cleans up,
+  // and mounts again, so an immediate cleanup commit would end the edit (and
+  // commit an empty card) the moment it started.
   const onTextCommitRef = useRef(props.onTextCommit);
   onTextCommitRef.current = props.onTextCommit;
+  const pendingCommit = useRef<{ cancelled: boolean } | null>(null);
   useEffect(() => {
     if (!editing) return;
+    if (pendingCommit.current) pendingCommit.current.cancelled = true;
     return () => {
-      if (!done.current) {
-        done.current = true;
-        onTextCommitRef.current(valueRef.current);
-      }
+      const token = { cancelled: false };
+      pendingCommit.current = token;
+      queueMicrotask(() => {
+        if (!token.cancelled && !done.current) {
+          done.current = true;
+          onTextCommitRef.current(valueRef.current);
+        }
+      });
     };
   }, [editing]);
 
@@ -153,7 +164,12 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
             onKeyDown={onKeyDown}
           />
         ) : (
-          <CanvasNodeView node={node} canvasPath={canvasPath} interactive={false} />
+          <CanvasNodeView
+            node={node}
+            canvasPath={canvasPath}
+            interactive={false}
+            onTaskToggle={props.onTaskToggle}
+          />
         )}
       </div>
 

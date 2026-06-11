@@ -25,6 +25,10 @@ const withEdge = JSON.stringify({
   edges: [{ id: "e", fromNode: "a", toNode: "b" }],
 });
 
+// Commit-on-end is deferred one microtask (StrictMode-safe cleanup), so
+// tests ending an edit indirectly must flush before asserting.
+const flushMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 const lastData = (onChange: ReturnType<typeof vi.fn>) =>
   parseCanvas(onChange.mock.calls.at(-1)?.[0] as string);
 const stageOf = (c: HTMLElement) => c.querySelector(".glyph-canvas-stage") as Element;
@@ -211,7 +215,7 @@ describe("CanvasEditor", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("clicking the canvas background while editing commits the typed text", () => {
+  it("clicking the canvas background while editing commits the typed text", async () => {
     // Regression: unmounting a focused textarea fires no blur event, so
     // ending an edit via the stage used to silently drop the typed content.
     const onChange = vi.fn();
@@ -220,10 +224,11 @@ describe("CanvasEditor", () => {
     const textarea = container.querySelector(".glyph-canvas-node-editor") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Typed then clicked away" } });
     fireEvent.pointerDown(stageOf(container), { clientX: 500, clientY: 400, button: 0 });
+    await flushMicrotasks();
     expect(lastData(onChange).nodes[0]).toMatchObject({ text: "Typed then clicked away" });
   });
 
-  it("unmounting the editor mid-edit commits the pending text", () => {
+  it("unmounting the editor mid-edit commits the pending text", async () => {
     // Same loss path when the tab switches to view mode while typing.
     const onChange = vi.fn();
     const { container, unmount } = render(<CanvasEditor content={oneText} onChange={onChange} />);
@@ -231,12 +236,13 @@ describe("CanvasEditor", () => {
     const textarea = container.querySelector(".glyph-canvas-node-editor") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Typed then switched mode" } });
     unmount();
+    await flushMicrotasks();
     expect(onChange).toHaveBeenCalled();
     const data = parseCanvas(onChange.mock.calls.at(-1)?.[0] as string);
     expect(data.nodes[0]).toMatchObject({ text: "Typed then switched mode" });
   });
 
-  it("double-clicking another card mid-edit commits the first card's text", () => {
+  it("double-clicking another card mid-edit commits the first card's text", async () => {
     const onChange = vi.fn();
     const { container } = render(<CanvasEditor content={twoNodes} onChange={onChange} />);
     const [a, b] = nodesOf(container);
@@ -244,6 +250,7 @@ describe("CanvasEditor", () => {
     const textarea = container.querySelector(".glyph-canvas-node-editor") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "First card edit" } });
     fireEvent.doubleClick(b);
+    await flushMicrotasks();
     expect(lastData(onChange).nodes[0]).toMatchObject({ text: "First card edit" });
   });
 
@@ -307,13 +314,14 @@ describe("CanvasEditor", () => {
     expect(lastData(onChange).edges[0]).toMatchObject({ label: "depends on" });
   });
 
-  it("clicking the stage while editing an edge label commits it", () => {
+  it("clicking the stage while editing an edge label commits it", async () => {
     const onChange = vi.fn();
     const { container } = render(<CanvasEditor content={withEdge} onChange={onChange} />);
     fireEvent.doubleClick(container.querySelector(".glyph-canvas-edge-hit") as Element);
     const input = container.querySelector(".glyph-canvas-edge-label-editor") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "spec" } });
     fireEvent.pointerDown(stageOf(container), { clientX: 600, clientY: 500, button: 0 });
+    await flushMicrotasks();
     expect(lastData(onChange).edges[0]).toMatchObject({ label: "spec" });
   });
 
@@ -577,6 +585,20 @@ describe("CanvasEditor", () => {
     render(<CanvasEditor content={oneText} onChange={onChange} />);
     fireEvent.keyDown(document.body, { key: "Delete" });
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("toggles a task-list checkbox inside a card and commits the new text", () => {
+    const tasks = JSON.stringify({
+      nodes: [
+        { id: "a", type: "text", x: 0, y: 0, width: 200, height: 80, text: "- [ ] buy milk" },
+      ],
+      edges: [],
+    });
+    const onChange = vi.fn();
+    render(<CanvasEditor content={tasks} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("checkbox"));
+    const data = lastData(onChange);
+    expect(data.nodes[0]).toMatchObject({ id: "a", text: "- [x] buy milk" });
   });
 
   it("generates an id when crypto.randomUUID is unavailable", () => {

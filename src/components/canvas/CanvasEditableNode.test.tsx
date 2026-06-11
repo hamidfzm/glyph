@@ -1,5 +1,9 @@
 import { fireEvent, render } from "@testing-library/react";
+import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
+const flushMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 import type { CanvasNode } from "@/lib/canvas/types";
 import { CanvasEditableNode } from "./CanvasEditableNode";
 
@@ -43,6 +47,7 @@ function setup(over: Partial<React.ComponentProps<typeof CanvasEditableNode>> = 
     onTextCommit: vi.fn(),
     onEditCancel: vi.fn(),
     onContextMenu: vi.fn(),
+    onTaskToggle: vi.fn(),
   };
   const { container } = render(
     <CanvasEditableNode node={textNode} selected={false} editing={false} {...spies} {...over} />,
@@ -217,5 +222,43 @@ describe("CanvasEditableNode", () => {
     const { container } = setup({ node: noLabel, editing: true });
     const ta = container.querySelector<HTMLTextAreaElement>(".glyph-canvas-node-editor")!;
     expect(ta.value).toBe("");
+  });
+
+  it("does not commit when a card mounts already editing under StrictMode", async () => {
+    // A freshly created card mounts with editing=true; StrictMode's
+    // mount-cleanup-mount cycle must not fire the commit-on-end safety net,
+    // which would instantly end the edit and commit an empty card.
+    const onTextCommit = vi.fn();
+    const { container } = render(
+      <StrictMode>
+        <CanvasEditableNode
+          node={textNode}
+          selected
+          editing
+          onSelect={vi.fn()}
+          onMoveStart={vi.fn()}
+          onResizeStart={vi.fn()}
+          onConnectStart={vi.fn()}
+          onStartEdit={vi.fn()}
+          onTextCommit={onTextCommit}
+          onEditCancel={vi.fn()}
+          onContextMenu={vi.fn()}
+          onTaskToggle={vi.fn()}
+        />
+      </StrictMode>,
+    );
+    await flushMicrotasks();
+    expect(onTextCommit).not.toHaveBeenCalled();
+    expect(container.querySelector(".glyph-canvas-node-editor")).toBeInTheDocument();
+  });
+
+  it("commits the pending value when editing ends without blur", async () => {
+    const { container, onTextCommit } = setup({ editing: true });
+    const ta = container.querySelector<HTMLTextAreaElement>(".glyph-canvas-node-editor")!;
+    fireEvent.change(ta, { target: { value: "typed then closed" } });
+    render(<div />, { container });
+    await flushMicrotasks();
+    expect(onTextCommit).toHaveBeenCalledTimes(1);
+    expect(onTextCommit).toHaveBeenCalledWith("typed then closed");
   });
 });
