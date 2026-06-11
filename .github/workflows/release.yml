@@ -625,3 +625,50 @@ jobs:
             git commit -m "chore: update packages to $VERSION"
             git push
           }
+
+  publish-snap:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      # The snap is built from the released .deb (see snap/snapcraft.yaml), so
+      # this job needs no toolchain. It is a no-op until the maintainer adds the
+      # SNAPCRAFT_STORE_CREDENTIALS secret (snapcraft export-login), so it never
+      # fails releases before the Snap Store account is set up.
+      - name: Check for store credentials
+        id: gate
+        env:
+          CREDS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        run: |
+          if [ -n "$CREDS" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No SNAPCRAFT_STORE_CREDENTIALS secret; skipping snap publish."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Get version
+        if: steps.gate.outputs.enabled == 'true'
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Build snap
+        if: steps.gate.outputs.enabled == 'true'
+        id: build
+        uses: snapcore/action-build@v1
+        env:
+          GLYPH_VERSION: ${{ steps.version.outputs.version }}
+      - name: Publish snap to stable
+        if: steps.gate.outputs.enabled == 'true'
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: stable

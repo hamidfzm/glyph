@@ -1,0 +1,68 @@
+# Snapcraft recipe for Glyph.
+#
+# Like the AUR/PPA/Flatpak packaging, this reuses the released Debian package
+# instead of recompiling. The `publish-snap` job in
+# `.github/workflows/release.yml` sets GLYPH_VERSION from the release tag and
+# builds one snap per architecture.
+#
+# Validate locally with:
+#   GLYPH_VERSION=0.10.0 snapcraft --build-for amd64
+#
+# See the Tauri Snapcraft guide: https://v2.tauri.app/distribute/snapcraft/
+name: glyph
+base: core22
+adopt-info: glyph
+summary: Cross-platform markdown viewer and editor
+description: |
+  Glyph is a modern, cross-platform markdown viewer and editor with
+  platform-native styling. Built with Tauri v2, React 19, and TypeScript.
+
+  Features GitHub Flavored Markdown with syntax highlighting, KaTeX math,
+  Mermaid diagrams, multi-file tabs, a table-of-contents outline, live file
+  watching, wikilinks and backlinks, optional AI summarization
+  (Claude/OpenAI/Ollama), text-to-speech, and light/dark themes that follow
+  the system appearance.
+
+grade: stable
+confinement: strict
+license: MIT
+website: https://github.com/hamidfzm/glyph
+issues: https://github.com/hamidfzm/glyph/issues
+source-code: https://github.com/hamidfzm/glyph
+compression: lzo
+
+apps:
+  glyph:
+    command: usr/bin/glyph
+    desktop: usr/share/applications/glyph.desktop
+    extensions:
+      - gnome
+    plugs:
+      - home
+      - removable-media
+      - network
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+
+parts:
+  glyph:
+    plugin: dump
+    source: .
+    build-packages:
+      - curl
+      - dpkg
+    override-pull: |
+      craftctl default
+      VERSION="${GLYPH_VERSION:?set GLYPH_VERSION to the release version, e.g. 0.10.0}"
+      case "$CRAFT_ARCH_BUILD_FOR" in
+        amd64) DEB_ARCH=amd64 ;;
+        arm64) DEB_ARCH=arm64 ;;
+        *) echo "unsupported arch: $CRAFT_ARCH_BUILD_FOR" >&2; exit 1 ;;
+      esac
+      curl -fSL -o glyph.deb \
+        "https://github.com/hamidfzm/glyph/releases/download/v${VERSION}/Glyph_${VERSION}_${DEB_ARCH}.deb"
+      dpkg-deb -x glyph.deb .
+      rm glyph.deb
+      craftctl set version="$VERSION"

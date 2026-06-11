@@ -178,6 +178,24 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy -- -D warnings
 
+  validate-packaging:
+    name: Validate packaging metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install validators
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y appstream desktop-file-utils python3-yaml
+      - name: Validate Flatpak AppStream metainfo
+        run: appstreamcli validate --no-net flatpak/com.hamidfzm.glyph.metainfo.xml
+      - name: Validate Flatpak desktop entry
+        run: desktop-file-validate flatpak/com.hamidfzm.glyph.desktop
+      - name: Validate YAML manifests parse
+        run: |
+          python3 -c "import yaml,sys; yaml.safe_load(open('flatpak/com.hamidfzm.glyph.yml'))"
+          python3 -c "import yaml,sys; yaml.safe_load(open('snap/snapcraft.yaml'))"
+
   build:
     name: Build (${{ matrix.platform }})
     needs: [lint, typecheck, test-frontend, test-rust, clippy]
