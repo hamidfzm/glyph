@@ -102,6 +102,7 @@ pub fn run() {
                 has_tab: false,
                 has_file: false,
                 has_content: false,
+                has_workspace: false,
                 ai_configured: false,
                 tts_available: false,
             };

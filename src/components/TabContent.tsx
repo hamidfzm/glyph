@@ -7,6 +7,7 @@ import { isNotebookFile } from "@/lib/notebookExtensions";
 import { EDITOR_MODE } from "@/lib/settings";
 import { CanvasEditor, CanvasViewer } from "./canvas/lazyCanvas";
 import { MarkdownEditor, SplitView } from "./editor/lazyEditor";
+import { GraphView } from "./graph/lazyGraph";
 import { MarkdownViewer } from "./markdown/MarkdownViewer";
 import { NotebookSource, NotebookSplit, NotebookViewer } from "./notebook/lazyNotebook";
 
@@ -22,8 +23,10 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   const {
     activeTab,
     activeTabId,
+    workspace,
     workspaceFiles,
-    openFileInFolderTab,
+    wikilinkRefs,
+    openFile,
     saveScrollPosition,
     updateEditContent,
     commitEdit,
@@ -46,25 +49,37 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     [activeTabId, updateEditContent],
   );
 
-  // Wikilink navigation: only meaningful inside a folder tab; outside one,
-  // there's no workspace to resolve against, so the call is dropped.
+  // Wikilink and graph-node navigation: the target resolved against the
+  // window's workspace, so it opens as a regular document tab (activating the
+  // existing tab when the note is already open).
   // TODO: cross-file heading scroll — `heading` is plumbed through but not yet
   // applied after the target file finishes loading.
   const handleOpenWikilink = useCallback(
     (path: string, _heading?: string) => {
-      if (activeTabId && activeTab?.kind === "folder") {
-        openFileInFolderTab(activeTabId, path);
-      }
+      openFile(path);
     },
-    [activeTabId, activeTab, openFileInFolderTab],
+    [openFile],
   );
 
   if (!activeTab) return null;
+
+  // Graph tabs have no document; they render the workspace graph and open
+  // clicked notes as document tabs.
+  if (activeTab.kind === "graph") {
+    return (
+      <GraphView
+        workspaceFiles={workspaceFiles}
+        wikilinkRefs={wikilinkRefs}
+        onOpenFile={handleOpenWikilink}
+      />
+    );
+  }
+
   const file = activeFileOf(activeTab);
   if (!file?.content) return null;
 
   const editorContent = file.editContent ?? file.content;
-  const workspaceRoot = activeTab.kind === "folder" ? activeTab.root : undefined;
+  const workspaceRoot = workspace?.root;
 
   // Notebooks are read-only, so the three modes map to read-only views rather
   // than editors: view = rendered cells, split = cells + raw JSON side by side,

@@ -207,4 +207,12 @@ describe("BINDABLE_COMMANDS", () => {
     expect(getBindableCommand("open")?.label).toBe("Open File");
     expect(getBindableCommand("nope")).toBeUndefined();
   });
+
+  it("binds the graph view to CmdOrCtrl+G by default", () => {
+    const command = getBindableCommand("open-graph");
+    expect(command?.label).toBe("Open Graph");
+    expect(command?.defaultAccelerator).toBe("CmdOrCtrl+G");
+    expect(command?.event).toBe("menu-open-graph");
+    expect(command?.nativeMenu).toBe(true);
+  });
 });

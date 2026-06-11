@@ -1,14 +1,13 @@
 import { useMemo } from "react";
 import type { MenuEventHandlers } from "@/hooks/useMenuEvents";
 import type { TocEntry } from "@/hooks/useTableOfContents";
-import type { FolderTab } from "@/hooks/useTabs";
 import type { Command } from "@/lib/commands";
 import { scrollToHeading } from "@/lib/scrollToHeading";
 
 export interface AppCommandSources {
-  /** Active folder tab (for opening workspace files inside it). */
-  activeFolderTab: FolderTab | null;
-  /** Markdown files in the active workspace, if any. */
+  /** True when the window has a folder workspace open. */
+  workspaceOpen: boolean;
+  /** Markdown files in the workspace, if any. */
   workspaceFiles: readonly string[];
   /** Table-of-contents entries of the active document. */
   tocEntries: readonly TocEntry[];
@@ -16,12 +15,12 @@ export interface AppCommandSources {
   actions: AppActions;
 }
 
-// Reuse the menu handler shape and add the folder-tab navigator used by Files
+// Reuse the menu handler shape and add the document opener used by Files
 // rows. Keeping a single canonical shape means AppShell can pass the same
 // `menuHandlers` to both `useMenuEvents` and the palette controller.
 export interface AppActions extends MenuEventHandlers {
-  /** Open the given workspace file in a folder tab. Used by file-source rows. */
-  openFileInFolderTab: (tabId: string, path: string) => void;
+  /** Open the given workspace file as a document tab. Used by file rows. */
+  openWorkspaceFile: (path: string) => void;
 }
 
 function basename(path: string): string {
@@ -35,7 +34,7 @@ function basename(path: string): string {
  * input reference; callers should memoise their `actions` object.
  */
 export function useAppCommands({
-  activeFolderTab,
+  workspaceOpen,
   workspaceFiles,
   tocEntries,
   actions,
@@ -43,16 +42,15 @@ export function useAppCommands({
   return useMemo<Command[]>(() => {
     const out: Command[] = [];
 
-    // Workspace files — only navigable when a folder tab is active.
-    if (activeFolderTab) {
-      const folderId = activeFolderTab.id;
+    // Workspace files — only navigable when a workspace is open.
+    if (workspaceOpen) {
       for (const path of workspaceFiles) {
         out.push({
           id: `file:${path}`,
           title: basename(path),
           subtitle: path,
           section: "Files",
-          run: () => actions.openFileInFolderTab(folderId, path),
+          run: () => actions.openWorkspaceFile(path),
         });
       }
     }
@@ -85,6 +83,7 @@ export function useAppCommands({
       { title: "Cloud Sync…", run: actions.openSyncSettings },
       { title: "Find in Document", shortcut: "Cmd/Ctrl+F", run: actions.find },
       { title: "Toggle Edit Mode", shortcut: "Cmd/Ctrl+E", run: actions.toggleEdit },
+      { title: "Open Graph", shortcut: "Cmd/Ctrl+G", run: actions.openGraph },
       { title: "Print…", shortcut: "Cmd/Ctrl+P", run: actions.print },
       { title: "Export to HTML…", run: actions.exportHtml },
       { title: "Export to Word (DOCX)…", run: actions.exportDocx },
@@ -106,5 +105,5 @@ export function useAppCommands({
     }
 
     return out;
-  }, [activeFolderTab, workspaceFiles, tocEntries, actions]);
+  }, [workspaceOpen, workspaceFiles, tocEntries, actions]);
 }

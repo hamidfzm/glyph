@@ -81,6 +81,9 @@ importers:
       codemirror:
         specifier: ^6.0.2
         version: 6.0.2
+      d3-force:
+        specifier: ^3.0.0
+        version: 3.0.0
       docx:
         specifier: ^9.7.1
         version: 9.7.1
@@ -175,6 +178,9 @@ importers:
       '@testing-library/user-event':
         specifier: ^14.6.1
         version: 14.6.1(@testing-library/dom@10.4.1)
+      '@types/d3-force':
+        specifier: ^3.0.10
+        version: 3.0.10
       '@types/papaparse':
         specifier: ^5.5.2
         version: 5.5.2

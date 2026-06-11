@@ -4,6 +4,7 @@ import { useEffect } from "react";
 export interface MenuEventHandlers {
   openFile: () => void;
   openFolder: () => void;
+  openGraph: () => void;
   closeTab: () => void;
   toggleFilesSidebar: () => void;
   toggleOutlineSidebar: () => void;
@@ -32,6 +33,7 @@ export function useMenuEvents(handlers: MenuEventHandlers) {
     const subscriptions = [
       listen("menu-open-file", handlers.openFile),
       listen("menu-open-folder", handlers.openFolder),
+      listen("menu-open-graph", handlers.openGraph),
       listen("menu-close-tab", handlers.closeTab),
       listen("menu-toggle-files-sidebar", handlers.toggleFilesSidebar),
       listen("menu-toggle-outline-sidebar", handlers.toggleOutlineSidebar),

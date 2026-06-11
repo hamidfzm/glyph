@@ -54,7 +54,8 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 ### Viewer
 - Jupyter notebooks — open `.ipynb` files directly; markdown cells render with full markdown (math, code, diagrams), code cells are syntax-highlighted, and image, HTML, plain-text, and colourised stream/traceback outputs show under each cell with `In [n]:` / `Out [n]:` prompts (read-only)
 - Canvas — open [JSON Canvas](https://jsoncanvas.org) (`.canvas`) files as an infinite, pan-and-zoom board; cards render markdown, embedded images, links, and labelled groups, connected by arrows. View mode is read-only; switch to edit mode to move, resize, recolour (presets or any custom colour), and connect cards, edit text and connection labels inline, and add or delete nodes and edges via toolbar, double-click, or right-click menus. Task-list checkboxes toggle right on the cards in either mode. File → Export saves the board as a self-contained vector HTML page or a board-sized vector PDF (both keep the 1:1 spatial layout, with selectable text), or as a Word or EPUB document with the cards laid out as a flowing article. Edits save back as standard `.canvas` JSON that round-trips with Obsidian, with undo/redo per tab
-- Folder / workspace tabs — open a folder as a tab; browse `.md` and `.canvas` files in the sidebar tree; right-click a file to open it in a new top-level tab. Right-click a folder, a file, or the empty panel to create a new note, canvas, or folder there, then type its name inline. Right-click any note, canvas, or folder to rename, duplicate, move, copy its path, reveal it in the system file manager, or delete it (with confirmation), and use the files-panel toolbar for new note, new folder, and collapse all. One folder is one workspace (a git repository's top level): a folder nested inside another repo, or overlapping an already-open one, is declined so links and search have an unambiguous scope
+- Folder workspaces — open a folder and it becomes the window's workspace: the sidebar tree shows its `.md` and `.canvas` files, and clicking a note opens it as a regular tab, so any number of workspace notes can be open side by side (loose external files mix into the same tab strip). Wikilinks, backlinks, the graph, and the command palette always resolve against the open workspace, whichever tab is active. Right-click a folder, a file, or the empty panel to create a new note, canvas, or folder there, then type its name inline. Right-click any note, canvas, or folder to rename, duplicate, move, copy its path, reveal it in the system file manager, or delete it (with confirmation), and use the files-panel toolbar for new note, new folder, collapse all, and close workspace. One window holds one workspace (a git repository's top level): opening another folder switches to it, and a folder nested inside another repo is declined so links and search have an unambiguous scope
+- Graph view — `Cmd/Ctrl+G` (or View → Open Graph) maps the workspace as a force-directed graph: notes are nodes, wikilinks are edges, orphan notes render muted. Hover a note to highlight its neighbours, click to open it, drag to pan, scroll to zoom, and reset the view with one button. The graph updates live as notes change
 - Multiple files in tabs — open, switch, close, middle-click to close
 - Command palette — `Cmd/Ctrl+K` to fuzzy-jump to any workspace file, document heading, or app action
 - In-document search — `Cmd/Ctrl+F` with match highlighting and navigation
@@ -203,6 +204,7 @@ cd src-tauri && cargo clippy    # Lint Rust
 | `Cmd+O` / `Ctrl+O` | Open file(s) |
 | `Cmd+Shift+O` / `Ctrl+Shift+O` | Open folder |
 | `Cmd+K` / `Ctrl+K` | Command palette (files, headings, app actions) |
+| `Cmd+G` / `Ctrl+G` | Open workspace graph |
 | `Cmd+P` / `Ctrl+P` | Print / Export to PDF |
 | `Cmd+F` / `Ctrl+F` | Find in document |
 | `Cmd+=` / `Ctrl+=` | Zoom in |
@@ -250,6 +252,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Tabs | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ |
 | Folder / workspace (vault) sidebar | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
 | Wikilinks & backlinks | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | plugin |
+| Graph view | ✅ | ✅ | ❌ | ❌ | ❌ | plugin | plugin |
 | Tag / metadata search | planned | ✅ | ❌ | ❌ | ✅ | ✅ | plugin |
 | Command palette | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | In-document search | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |

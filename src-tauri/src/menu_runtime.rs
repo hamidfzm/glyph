@@ -34,6 +34,7 @@ pub struct MenuItemRefs {
     toggle_files_sidebar: MenuItem<Wry>,
     toggle_outline_sidebar: MenuItem<Wry>,
     toggle_edit: MenuItem<Wry>,
+    open_graph: MenuItem<Wry>,
     zoom_in: MenuItem<Wry>,
     zoom_out: MenuItem<Wry>,
     actual_size: MenuItem<Wry>,
@@ -50,6 +51,7 @@ pub struct MenuStateFlags {
     pub has_tab: bool,
     pub has_file: bool,
     pub has_content: bool,
+    pub has_workspace: bool,
     pub ai_configured: bool,
     pub tts_available: bool,
 }
@@ -133,6 +135,12 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .accelerator("CmdOrCtrl+E")
         .build(handle)?;
 
+    // Workspace graph view; only meaningful with a folder workspace open, so
+    // it's gated by `has_workspace` in apply_menu_state.
+    let open_graph = MenuItemBuilder::with_id("open-graph", "Open Graph")
+        .accelerator("CmdOrCtrl+G")
+        .build(handle)?;
+
     // DevTools menu item: only built into debug binaries so release builds
     // don't expose an "Open Developer Tools" affordance to end users.
     #[cfg(debug_assertions)]
@@ -147,6 +155,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .item(&toggle_files_sidebar)
             .item(&toggle_outline_sidebar)
             .item(&toggle_edit)
+            .item(&open_graph)
             .separator()
             .item(&zoom_in)
             .item(&zoom_out)
@@ -277,6 +286,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         toggle_files_sidebar,
         toggle_outline_sidebar,
         toggle_edit,
+        open_graph,
         zoom_in,
         zoom_out,
         actual_size,
@@ -302,6 +312,7 @@ fn accelerator_target<'a>(refs: &'a MenuItemRefs, id: &str) -> Option<&'a MenuIt
         "toggle-files-sidebar" => &refs.toggle_files_sidebar,
         "toggle-outline-sidebar" => &refs.toggle_outline_sidebar,
         "toggle-edit" => &refs.toggle_edit,
+        "open-graph" => &refs.open_graph,
         "zoom-in" => &refs.zoom_in,
         "zoom-out" => &refs.zoom_out,
         "actual-size" => &refs.actual_size,
@@ -359,6 +370,9 @@ pub fn apply_menu_state(refs: &MenuItemRefs, flags: &MenuStateFlags) -> Result<(
     refs.find.set_enabled(flags.has_file).map_err(stringify)?;
     refs.toggle_edit
         .set_enabled(flags.has_file)
+        .map_err(stringify)?;
+    refs.open_graph
+        .set_enabled(flags.has_workspace)
         .map_err(stringify)?;
     let ai_enabled = flags.ai_configured && flags.has_content;
     refs.ai_summarize

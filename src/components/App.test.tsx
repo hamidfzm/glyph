@@ -225,7 +225,7 @@ describe("App", () => {
     expect(listeners["menu-open-folder"]).toBeDefined();
   });
 
-  it("wires the command palette's activeFolderTab when a folder workspace is open", async () => {
+  it("opens the workspace's first note as a document tab when a folder is opened", async () => {
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
       switch (cmd) {
         case "get_initial_folder":
@@ -260,10 +260,12 @@ describe("App", () => {
 
     const { wrapper } = withProviders();
     const { container } = render(<App />, { wrapper });
-    // Wait for the folder tab to land so the `activeTab?.kind === "folder"`
-    // branch in useCommandPaletteController's options is exercised.
+    // The workspace lands at window level (sidebar tree) and its first note
+    // auto-opens as a plain document tab, exercising the workspaceOpen branch
+    // in useCommandPaletteController's options.
     await waitFor(() => {
-      expect(container.querySelector('[data-tab-kind="folder"]')).not.toBeNull();
+      const tab = container.querySelector('[data-tab-kind="file"]');
+      expect(tab?.textContent).toContain("a.md");
     });
   });
 
