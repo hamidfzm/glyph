@@ -3,6 +3,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { countWords, readingTime } from "@/lib/markdown";
 import { isNotebookFile } from "@/lib/notebookExtensions";
 import { ZOOM_DEFAULT } from "@/lib/settings";
+import { PluginStatusBarItems } from "../plugins/PluginStatusBarItems";
 
 export function StatusBar() {
   const { settings } = useSettings();
@@ -38,6 +39,7 @@ export function StatusBar() {
         </>
       )}
       {zoomPercent !== 100 && <span>{zoomPercent}%</span>}
+      <PluginStatusBarItems />
     </div>
   );
 }

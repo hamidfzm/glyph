@@ -1,9 +1,11 @@
 import { useMemo } from "react";
+import { usePluginsOptional } from "@/contexts/PluginsContext";
 import type { MenuEventHandlers } from "@/hooks/useMenuEvents";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { FolderTab } from "@/hooks/useTabs";
 import type { Command } from "@/lib/commands";
 import { scrollToHeading } from "@/lib/scrollToHeading";
+import { useRegistryEntries } from "./usePluginRegistry";
 
 export interface AppCommandSources {
   /** Active folder tab (for opening workspace files inside it). */
@@ -40,6 +42,11 @@ export function useAppCommands({
   tocEntries,
   actions,
 }: AppCommandSources): Command[] {
+  // Optional so the palette keeps working without a PluginsProvider (tests,
+  // isolated rendering); both are empty/null in that case.
+  const plugins = usePluginsOptional();
+  const pluginCommands = useRegistryEntries(plugins?.commands ?? null);
+
   return useMemo<Command[]>(() => {
     const out: Command[] = [];
 
@@ -104,6 +111,28 @@ export function useAppCommands({
       });
     }
 
+    // Plugin-contributed commands, plus the install entry point itself.
+    for (const c of pluginCommands) {
+      out.push({
+        id: `plugin:${c.id}`,
+        title: c.title,
+        section: "Commands",
+        run: () => {
+          void c.run();
+        },
+      });
+    }
+    if (plugins) {
+      out.push({
+        id: "cmd:install-plugin",
+        title: "Install Plugin from Folder…",
+        section: "Commands",
+        run: () => {
+          void plugins.installFromFolder();
+        },
+      });
+    }
+
     return out;
-  }, [activeFolderTab, workspaceFiles, tocEntries, actions]);
+  }, [activeFolderTab, workspaceFiles, tocEntries, actions, plugins, pluginCommands]);
 }
