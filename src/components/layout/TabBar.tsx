@@ -1,5 +1,4 @@
 import { EditModeIcon } from "@/components/icons/EditModeIcon";
-import { FolderIcon } from "@/components/icons/FolderIcon";
 import { GraphIcon } from "@/components/icons/GraphIcon";
 import { SplitModeIcon } from "@/components/icons/SplitModeIcon";
 import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
@@ -10,10 +9,9 @@ import { isCanvasFile } from "@/lib/canvasExtensions";
 import { EDITOR_MODE } from "@/lib/settings";
 
 function tabLabel(tab: Tab): string {
-  if (tab.kind === "folder" || tab.kind === "graph") {
+  if (tab.kind === "graph") {
     const segments = tab.root.split(/[\\/]/).filter(Boolean);
-    const name = segments[segments.length - 1] ?? tab.root;
-    return tab.kind === "graph" ? `Graph: ${name}` : name;
+    return `Graph: ${segments[segments.length - 1] ?? tab.root}`;
   }
   return tab.file.metadata?.name ?? "Untitled";
 }
@@ -66,7 +64,6 @@ export function TabBar() {
                 aria-label={label}
               >
                 {dirty && <span className="tab-dirty-dot" />}
-                {tab.kind === "folder" && <FolderIcon className="opacity-70 -ml-0.5" />}
                 {tab.kind === "graph" && <GraphIcon className="opacity-70 -ml-0.5" />}
                 <span className="tab-label">{label}</span>
               </button>

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useTabsContext } from "@/contexts/TabsContext";
-import { activeFileOf, type FolderTab } from "@/hooks/useTabs";
+import { activeFileOf } from "@/hooks/useTabs";
 import { useTaskList } from "@/hooks/useTaskList";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isNotebookFile } from "@/lib/notebookExtensions";
@@ -23,11 +23,10 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   const {
     activeTab,
     activeTabId,
-    tabs,
-    setActiveTab,
+    workspace,
     workspaceFiles,
     wikilinkRefs,
-    openFileInFolderTab,
+    openFile,
     saveScrollPosition,
     updateEditContent,
     commitEdit,
@@ -50,44 +49,28 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     [activeTabId, updateEditContent],
   );
 
-  // Wikilink navigation: only meaningful inside a folder tab; outside one,
-  // there's no workspace to resolve against, so the call is dropped.
+  // Wikilink and graph-node navigation: the target resolved against the
+  // window's workspace, so it opens as a regular document tab (activating the
+  // existing tab when the note is already open).
   // TODO: cross-file heading scroll — `heading` is plumbed through but not yet
   // applied after the target file finishes loading.
   const handleOpenWikilink = useCallback(
     (path: string, _heading?: string) => {
-      if (activeTabId && activeTab?.kind === "folder") {
-        openFileInFolderTab(activeTabId, path);
-      }
+      openFile(path);
     },
-    [activeTabId, activeTab, openFileInFolderTab],
-  );
-
-  // Graph node click: open the note inside the folder tab that owns the
-  // graph's workspace, then bring that tab to the front.
-  const handleOpenGraphNode = useCallback(
-    (path: string) => {
-      if (activeTab?.kind !== "graph") return;
-      const folderTab = tabs.find(
-        (t): t is FolderTab => t.kind === "folder" && t.root === activeTab.root,
-      );
-      if (!folderTab) return;
-      openFileInFolderTab(folderTab.id, path);
-      setActiveTab(folderTab.id);
-    },
-    [activeTab, tabs, openFileInFolderTab, setActiveTab],
+    [openFile],
   );
 
   if (!activeTab) return null;
 
-  // Graph tabs have no document; they render the workspace graph and route
-  // node clicks into the folder tab that owns the workspace.
+  // Graph tabs have no document; they render the workspace graph and open
+  // clicked notes as document tabs.
   if (activeTab.kind === "graph") {
     return (
       <GraphView
         workspaceFiles={workspaceFiles}
         wikilinkRefs={wikilinkRefs}
-        onOpenFile={handleOpenGraphNode}
+        onOpenFile={handleOpenWikilink}
       />
     );
   }
@@ -96,7 +79,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   if (!file?.content) return null;
 
   const editorContent = file.editContent ?? file.content;
-  const workspaceRoot = activeTab.kind === "folder" ? activeTab.root : undefined;
+  const workspaceRoot = workspace?.root;
 
   // Notebooks are read-only, so the three modes map to read-only views rather
   // than editors: view = rendered cells, split = cells + raw JSON side by side,

@@ -1,18 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { FolderTab } from "@/hooks/useTabs";
 import { type AppActions, useAppCommands } from "./useAppCommands";
-
-function makeFolderTab(): FolderTab {
-  return {
-    id: "folder-1",
-    kind: "folder",
-    root: "/workspace",
-    expanded: new Set(),
-    nodes: new Map(),
-    file: null,
-  };
-}
 
 function makeActions(over: Partial<AppActions> = {}): AppActions {
   return {
@@ -37,7 +25,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     zoomReset: vi.fn(),
     aiAction: vi.fn(),
     readAloud: vi.fn(),
-    openFileInFolderTab: vi.fn(),
+    openWorkspaceFile: vi.fn(),
     ...over,
   };
 }
@@ -47,7 +35,7 @@ describe("useAppCommands", () => {
     const actions = makeActions();
     const { result } = renderHook(() =>
       useAppCommands({
-        activeFolderTab: null,
+        workspaceOpen: false,
         workspaceFiles: [],
         tocEntries: [],
         actions,
@@ -59,12 +47,11 @@ describe("useAppCommands", () => {
     expect(result.current.every((c) => c.section === "Commands")).toBe(true);
   });
 
-  it("emits one Files command per workspace file when a folder tab is active", () => {
-    const folder = makeFolderTab();
+  it("emits one Files command per workspace file when a workspace is open", () => {
     const actions = makeActions();
     const { result } = renderHook(() =>
       useAppCommands({
-        activeFolderTab: folder,
+        workspaceOpen: true,
         workspaceFiles: ["/workspace/a.md", "/workspace/sub/b.md"],
         tocEntries: [],
         actions,
@@ -73,13 +60,13 @@ describe("useAppCommands", () => {
     const files = result.current.filter((c) => c.section === "Files");
     expect(files.map((f) => f.title)).toEqual(["a.md", "b.md"]);
     files[0].run();
-    expect(actions.openFileInFolderTab).toHaveBeenCalledWith("folder-1", "/workspace/a.md");
+    expect(actions.openWorkspaceFile).toHaveBeenCalledWith("/workspace/a.md");
   });
 
-  it("omits Files commands when there's no folder tab", () => {
+  it("omits Files commands when there's no workspace", () => {
     const { result } = renderHook(() =>
       useAppCommands({
-        activeFolderTab: null,
+        workspaceOpen: false,
         workspaceFiles: ["/anywhere/note.md"],
         tocEntries: [],
         actions: makeActions(),
@@ -91,7 +78,7 @@ describe("useAppCommands", () => {
   it("emits a Heading command per TOC entry", () => {
     const { result } = renderHook(() =>
       useAppCommands({
-        activeFolderTab: null,
+        workspaceOpen: false,
         workspaceFiles: [],
         tocEntries: [
           { id: "intro", text: "Introduction", level: 1 },
@@ -108,7 +95,7 @@ describe("useAppCommands", () => {
   it("includes 'Cloud Sync…'", () => {
     const { result } = renderHook(() =>
       useAppCommands({
-        activeFolderTab: null,
+        workspaceOpen: false,
         workspaceFiles: [],
         tocEntries: [],
         actions: makeActions(),
@@ -121,7 +108,7 @@ describe("useAppCommands", () => {
     const actions = makeActions();
     const { result } = renderHook(() =>
       useAppCommands({
-        activeFolderTab: null,
+        workspaceOpen: false,
         workspaceFiles: [],
         tocEntries: [],
         actions,
@@ -169,7 +156,7 @@ describe("useAppCommands", () => {
 
     const { result } = renderHook(() =>
       useAppCommands({
-        activeFolderTab: null,
+        workspaceOpen: false,
         workspaceFiles: [],
         tocEntries: [{ id: "intro-heading", text: "Intro", level: 2 }],
         actions: makeActions(),
@@ -182,10 +169,9 @@ describe("useAppCommands", () => {
   });
 
   it("file titles fall back to the full path when there are no separators", () => {
-    const folder = makeFolderTab();
     const { result } = renderHook(() =>
       useAppCommands({
-        activeFolderTab: folder,
+        workspaceOpen: true,
         workspaceFiles: ["loose"],
         tocEntries: [],
         actions: makeActions(),

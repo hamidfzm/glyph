@@ -18,8 +18,8 @@ export interface SyncConfigContextValue extends SyncConfigApi {
 export const SyncConfigContext = createContext<SyncConfigContextValue | null>(null);
 
 export function SyncConfigProvider({ children }: { children: ReactNode }) {
-  const { activeTab } = useTabsContext();
-  const workspacePath = activeTab?.kind === "folder" ? activeTab.root : null;
+  const { workspace } = useTabsContext();
+  const workspacePath = workspace?.root ?? null;
   const sync = useSyncConfig(workspacePath);
 
   const value = useMemo<SyncConfigContextValue>(

@@ -61,10 +61,11 @@ export function AppShell() {
     activeTabId,
     initializing,
     displayContent,
+    workspace,
     openFolder,
     openGraph,
+    openFile,
     openFileDialog,
-    openFileInFolderTab,
     closeTab,
     setTabMode,
     markSaved,
@@ -108,7 +109,7 @@ export function AppShell() {
     hasTab: openTabs.length > 0,
     hasFile: activeFile?.content != null,
     hasContent: (displayContent ?? "").length > 0,
-    hasWorkspace: activeTab?.kind === "folder" || activeTab?.kind === "graph",
+    hasWorkspace: workspace !== null,
     aiConfigured: aiController.configured,
     ttsAvailable: tts.available,
   });
@@ -184,12 +185,12 @@ export function AppShell() {
 
   const palette = useCommandPaletteController({
     platform,
-    activeFolderTab: activeTab?.kind === "folder" ? activeTab : null,
+    workspaceOpen: workspace !== null,
     workspaceFiles,
     tocEntries,
     actions: useMemo(
-      () => ({ ...menuHandlers, openFileInFolderTab }),
-      [menuHandlers, openFileInFolderTab],
+      () => ({ ...menuHandlers, openWorkspaceFile: openFile }),
+      [menuHandlers, openFile],
     ),
   });
 
@@ -209,9 +210,9 @@ export function AppShell() {
   );
   const contextMenu = useContextMenu(contextMenuActions);
 
-  const showEmptyState =
-    !initializing && (!activeTab || (activeTab.kind === "folder" && !activeFile));
-  const folderEmptyHint = activeTab?.kind === "folder" && !activeFile;
+  const showEmptyState = !initializing && !activeTab;
+  // With a workspace open but no tabs, nudge toward the sidebar tree.
+  const folderEmptyHint = workspace !== null && !activeTab;
   // Graph tabs have no file but always render content (the canvas).
   const showContent = !!activeTab && (activeTab.kind === "graph" || !!activeFile?.content);
 

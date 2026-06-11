@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncConfigProvider } from "@/contexts/SyncConfigContext";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import type { FileTab, FolderTab } from "@/hooks/useTabs";
+import type { FileTab, Workspace } from "@/hooks/useTabs";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { StatusBar } from "./StatusBar";
 
@@ -50,10 +50,11 @@ function buildContext(opts: Opts): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    workspace: null,
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),
-    openFileInFolderTab: vi.fn(),
+    closeWorkspace: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),
     createCanvas: vi.fn(),
@@ -153,31 +154,24 @@ describe("StatusBar", () => {
   });
 });
 
-function buildFolderTab(root = "/ws"): FolderTab {
-  return {
-    id: "folder-1",
-    kind: "folder",
-    root,
-    expanded: new Set<string>(),
-    nodes: new Map(),
-    file: null,
-  };
+function makeWorkspace(root = "/ws"): Workspace {
+  return { root, expanded: new Set<string>(), nodes: new Map() };
 }
 
-function buildFolderContext(): TabsContextValue {
-  const activeTab = buildFolderTab();
+function buildWorkspaceContext(): TabsContextValue {
   return {
-    tabs: [activeTab],
-    activeTab,
-    activeTabId: activeTab.id,
+    tabs: [],
+    activeTab: null,
+    activeTabId: null,
     activeFile: null,
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    workspace: makeWorkspace(),
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),
-    openFileInFolderTab: vi.fn(),
+    closeWorkspace: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),
     createCanvas: vi.fn(),
@@ -216,7 +210,7 @@ describe("StatusBar sync indicator gating", () => {
   });
 
   it("does not render the sync pill when onOpenSync is null", () => {
-    const value = buildFolderContext();
+    const value = buildWorkspaceContext();
     render(
       <Wrapper value={value}>
         <StatusBar onOpenSync={null} />
@@ -225,8 +219,8 @@ describe("StatusBar sync indicator gating", () => {
     expect(screen.queryByText(/Sync/)).toBeNull();
   });
 
-  it("renders the sync pill when onOpenSync is provided and a folder tab is active", async () => {
-    const value = buildFolderContext();
+  it("renders the sync pill when onOpenSync is provided and a workspace is open", async () => {
+    const value = buildWorkspaceContext();
     render(
       <Wrapper value={value}>
         <StatusBar onOpenSync={vi.fn()} />

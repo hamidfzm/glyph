@@ -2,13 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import {
-  activeFileOf,
-  type FileTab,
-  type FolderTab,
-  type GraphTab,
-  type Tab,
-} from "@/hooks/useTabs";
+import { activeFileOf, type FileTab, type GraphTab, type Tab } from "@/hooks/useTabs";
 import { TabBar } from "./TabBar";
 
 const makeFileTab = (i: number): FileTab => ({
@@ -23,15 +17,6 @@ const makeFileTab = (i: number): FileTab => ({
     editContent: null,
     dirty: false,
   },
-});
-
-const makeFolderTab = (i: number, root: string): FolderTab => ({
-  id: `tab-${i}`,
-  kind: "folder",
-  root,
-  expanded: new Set(),
-  nodes: new Map(),
-  file: null,
 });
 
 const makeGraphTab = (i: number, root: string): GraphTab => ({
@@ -63,10 +48,11 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    workspace: null,
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),
-    openFileInFolderTab: vi.fn(),
+    closeWorkspace: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),
     createCanvas: vi.fn(),
@@ -175,25 +161,15 @@ describe("TabBar", () => {
     expect(screen.getByText("Untitled")).toBeInTheDocument();
   });
 
-  it("labels a root-only folder tab with its raw path", () => {
-    renderTabBar({ tabs: [makeFolderTab(0, "/")], activeTabId: "tab-0" });
-    expect(screen.getByText("/")).toBeInTheDocument();
+  it("labels a root-only graph tab with its raw path", () => {
+    renderTabBar({ tabs: [makeGraphTab(0, "/")], activeTabId: "tab-0" });
+    expect(screen.getByText("Graph: /")).toBeInTheDocument();
   });
 
   it("hides the mode toggle when no tab id is active", () => {
     renderTabBar({ tabs: makeTabs(1), activeTabId: null });
     expect(screen.getByText("file0.md")).toBeInTheDocument();
     expect(screen.queryByLabelText("View mode")).not.toBeInTheDocument();
-  });
-
-  it("renders folder tabs with the folder basename and folder kind marker", () => {
-    renderTabBar({
-      tabs: [makeFolderTab(0, "/Users/me/notes")],
-      activeTabId: "tab-0",
-    });
-    expect(screen.getByText("notes")).toBeInTheDocument();
-    const tabEl = screen.getByText("notes").closest(".tab-item");
-    expect(tabEl?.getAttribute("data-tab-kind")).toBe("folder");
   });
 
   it("renders graph tabs with a Graph label and graph kind marker", () => {
@@ -245,9 +221,9 @@ describe("TabBar", () => {
     expect(screen.getByLabelText("Split mode")).toBeInTheDocument();
   });
 
-  it("hides mode toggle when active tab is a folder with no current file", () => {
+  it("hides mode toggle when the active tab is a graph tab", () => {
     renderTabBar({
-      tabs: [makeFolderTab(0, "/Users/me/notes")],
+      tabs: [makeGraphTab(0, "/Users/me/notes")],
       activeTabId: "tab-0",
     });
     expect(screen.queryByLabelText("View mode")).not.toBeInTheDocument();

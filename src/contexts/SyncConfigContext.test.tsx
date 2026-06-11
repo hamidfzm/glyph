@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
-import type { FolderTab } from "@/hooks/useTabs";
+import type { Workspace } from "@/hooks/useTabs";
 import type { WorkspaceSyncConfig } from "@/lib/sync";
 import { SyncConfigProvider, useSyncConfigContext } from "./SyncConfigContext";
 import { TabsContext, type TabsContextValue } from "./TabsContext";
@@ -20,23 +20,24 @@ function routeInvoke(handlers: Record<string, (args: unknown) => unknown>) {
   });
 }
 
-function folderTab(root = "/w"): FolderTab {
-  return { id: "t1", kind: "folder", root, expanded: new Set(), nodes: new Map(), file: null };
+function makeWorkspace(root = "/w"): Workspace {
+  return { root, expanded: new Set(), nodes: new Map() };
 }
 
-function tabsValue(activeTab: FolderTab | null): TabsContextValue {
+function tabsValue(workspace: Workspace | null): TabsContextValue {
   return {
-    tabs: activeTab ? [activeTab] : [],
-    activeTab,
-    activeTabId: activeTab?.id ?? null,
+    tabs: [],
+    activeTab: null,
+    activeTabId: null,
     activeFile: null,
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    workspace,
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),
-    openFileInFolderTab: vi.fn(),
+    closeWorkspace: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),
     createCanvas: vi.fn(),
@@ -66,9 +67,9 @@ function tabsValue(activeTab: FolderTab | null): TabsContextValue {
   };
 }
 
-function wrap(activeTab: FolderTab | null) {
+function wrap(workspace: Workspace | null) {
   return ({ children }: { children: ReactNode }) => (
-    <TabsContext.Provider value={tabsValue(activeTab)}>
+    <TabsContext.Provider value={tabsValue(workspace)}>
       <SyncConfigProvider>{children}</SyncConfigProvider>
     </TabsContext.Provider>
   );
@@ -109,7 +110,7 @@ describe("SyncConfigContext", () => {
         <SyncStatusIndicator onOpenSync={vi.fn()} />
         <EnableButton />
       </>,
-      { wrapper: wrap(folderTab()) },
+      { wrapper: wrap(makeWorkspace()) },
     );
 
     // The pill starts on "Sync off" (no config loaded).
@@ -122,7 +123,7 @@ describe("SyncConfigContext", () => {
     expect(screen.queryByText("Sync off")).toBeNull();
   });
 
-  it("exposes a null workspace path when no folder tab is active", async () => {
+  it("exposes a null workspace path when no workspace is open", async () => {
     let seen: string | null | undefined;
     function Probe() {
       seen = useSyncConfigContext().workspacePath;
@@ -130,7 +131,7 @@ describe("SyncConfigContext", () => {
     }
     render(<Probe />, { wrapper: wrap(null) });
     await waitFor(() => expect(seen).toBeNull());
-    // No folder => no sync commands fire on mount.
+    // No workspace => no sync commands fire on mount.
     expect(invoke).not.toHaveBeenCalled();
   });
 

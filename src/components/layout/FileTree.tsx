@@ -14,7 +14,6 @@ import { FolderOpenIcon } from "../icons/FolderOpenIcon";
 import { MoveIcon } from "../icons/MoveIcon";
 import { NewFolderIcon } from "../icons/NewFolderIcon";
 import { NewNoteIcon } from "../icons/NewNoteIcon";
-import { NewTabIcon } from "../icons/NewTabIcon";
 import { OpenIcon } from "../icons/OpenIcon";
 import { RenameIcon } from "../icons/RenameIcon";
 import { RevealIcon } from "../icons/RevealIcon";
@@ -30,8 +29,6 @@ interface FileTreeProps {
   activeFilePath?: string;
   onToggle: (path: string) => void;
   onOpenFile: (path: string) => void;
-  // Right-click "Open in New Tab" — pops the file out as a new top-level tab.
-  onOpenFileInNewTab: (path: string) => void;
   // Create an untitled note/canvas/folder inside `dir`; resolves to the new path.
   onCreateNote: (dir: string) => Promise<string | null>;
   onCreateCanvas: (dir: string) => Promise<string | null>;
@@ -178,7 +175,6 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
     activeFilePath,
     onToggle,
     onOpenFile,
-    onOpenFileInNewTab,
     onCreateNote,
     onCreateCanvas,
     onCreateFolder,
@@ -302,12 +298,6 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
     if (filePath) {
       groups.push([
         { kind: "action", label: "Open", icon: <OpenIcon />, onSelect: () => onOpenFile(filePath) },
-        {
-          kind: "action",
-          label: "Open in New Tab",
-          icon: <NewTabIcon />,
-          onSelect: () => onOpenFileInNewTab(filePath),
-        },
       ]);
     }
 
@@ -393,7 +383,6 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
   }, [
     contextMenu,
     onOpenFile,
-    onOpenFileInNewTab,
     onDelete,
     onDuplicate,
     onMove,
