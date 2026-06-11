@@ -159,6 +159,8 @@ pub fn run() {
             commands::directory::read_directory,
             commands::directory::list_markdown_files,
             commands::wikilinks::scan_wikilinks,
+            commands::plugins::list_plugins,
+            commands::plugins::install_plugin,
             watcher::watch_file,
             watcher::unwatch_file,
             watcher::watch_directory,

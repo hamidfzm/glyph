@@ -1,3 +1,4 @@
+import { PluginsProvider } from "@/contexts/PluginsContext";
 import { SidebarLayoutProvider } from "@/contexts/SidebarLayoutContext";
 import { TabsProvider } from "@/contexts/TabsContext";
 import { useCodeThemeStyle } from "@/hooks/useCodeThemeStyle";
@@ -14,10 +15,12 @@ export function App() {
   useCodeThemeStyle(settings.appearance.codeTheme);
 
   return (
-    <TabsProvider settings={settings} updateSettings={updateSettings}>
-      <SidebarLayoutProvider settings={settings} updateSettings={updateSettings}>
-        <AppShell />
-      </SidebarLayoutProvider>
-    </TabsProvider>
+    <PluginsProvider>
+      <TabsProvider settings={settings} updateSettings={updateSettings}>
+        <SidebarLayoutProvider settings={settings} updateSettings={updateSettings}>
+          <AppShell />
+        </SidebarLayoutProvider>
+      </TabsProvider>
+    </PluginsProvider>
   );
 }

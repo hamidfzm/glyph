@@ -1,5 +1,6 @@
 pub mod directory;
 pub mod file;
+pub mod plugins;
 mod walk;
 pub mod wikilinks;
 
