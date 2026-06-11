@@ -43,16 +43,24 @@ function drawEdges(ctx: CanvasRenderingContext2D, world: HTMLElement): void {
         ctx.closePath();
         ctx.fill();
       } else {
-        ctx.fillStyle = cs.fill;
+        /* v8 ignore next -- defensive: textContent of an element is never null */
+        const text = el.textContent ?? "";
+        const x = Number(el.getAttribute("x"));
+        const y = Number(el.getAttribute("y"));
         ctx.font = `${cs.fontSize} ${cs.fontFamily}`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(
-          /* v8 ignore next -- defensive: textContent of an element is never null */
-          el.textContent ?? "",
-          Number(el.getAttribute("x")),
-          Number(el.getAttribute("y")),
-        );
+        // Replicate the on-screen halo (paint-order: stroke): the stage-
+        // coloured outline goes down first, the fill on top.
+        const halo = Number.parseFloat(cs.strokeWidth);
+        if (halo > 0 && cs.stroke !== "none") {
+          ctx.lineWidth = halo;
+          ctx.strokeStyle = cs.stroke;
+          ctx.lineJoin = "round";
+          ctx.strokeText(text, x, y);
+        }
+        ctx.fillStyle = cs.fill;
+        ctx.fillText(text, x, y);
       }
     }
   }

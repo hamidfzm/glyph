@@ -1,8 +1,12 @@
+import { EditModeIcon } from "@/components/icons/EditModeIcon";
+import { FolderIcon } from "@/components/icons/FolderIcon";
+import { SplitModeIcon } from "@/components/icons/SplitModeIcon";
+import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
+import { ViewModeIcon } from "@/components/icons/ViewModeIcon";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { EDITOR_MODE } from "@/lib/settings";
-import { FolderIcon } from "../icons/FolderIcon";
 
 function tabLabel(tab: Tab): string {
   if (tab.kind === "folder") {
@@ -70,14 +74,7 @@ export function TabBar() {
                 aria-label={`Close ${label}`}
                 onClick={() => onClose(tab.id)}
               >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                  <path
-                    d="M3 3L9 9M9 3L3 9"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                <TabCloseIcon />
               </button>
             </div>
           );
@@ -93,14 +90,7 @@ export function TabBar() {
             aria-label="View mode"
             title="View"
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <path
-                d="M1 7s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4z"
-                stroke="currentColor"
-                strokeWidth="1.3"
-              />
-              <circle cx="7" cy="7" r="2" stroke="currentColor" strokeWidth="1.3" />
-            </svg>
+            <ViewModeIcon />
           </button>
           <button
             type="button"
@@ -110,14 +100,7 @@ export function TabBar() {
             aria-label="Edit mode"
             title="Edit"
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <path
-                d="M10.5 1.5l2 2-8 8H2.5v-2l8-8z"
-                stroke="currentColor"
-                strokeWidth="1.3"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <EditModeIcon />
           </button>
           {showSplit && (
             <button
@@ -128,18 +111,7 @@ export function TabBar() {
               aria-label="Split mode"
               title="Split"
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                <rect
-                  x="1.5"
-                  y="2"
-                  width="11"
-                  height="10"
-                  rx="1.5"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                />
-                <line x1="7" y1="2" x2="7" y2="12" stroke="currentColor" strokeWidth="1.3" />
-              </svg>
+              <SplitModeIcon />
             </button>
           )}
         </div>

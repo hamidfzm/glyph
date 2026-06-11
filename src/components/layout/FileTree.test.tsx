@@ -59,6 +59,19 @@ describe("FileTree", () => {
     expect(screen.getByTitle("/root/note.md").querySelector("svg rect")).toBeNull();
   });
 
+  it("highlights the active canvas entry", () => {
+    const entries: DirEntry[] = [
+      { name: "board.canvas", path: "/root/board.canvas", isDirectory: false, modified: 0 },
+    ];
+    renderFileTree({
+      nodes: new Map([["/root", entries]]),
+      activeFilePath: "/root/board.canvas",
+    });
+    const row = screen.getByTitle("/root/board.canvas");
+    expect(row.className).toContain("bg-[var(--color-accent)]");
+    expect(row.querySelector("svg rect")).toBeTruthy();
+  });
+
   it("calls onOpenFile when clicking a file", () => {
     const { props } = renderFileTree();
     fireEvent.click(screen.getByText("post.md"));
@@ -170,6 +183,36 @@ describe("FileTree", () => {
 
     await waitFor(() => expect(onRename).toHaveBeenCalledWith("/root/Untitled.md", "My Note"));
     await waitFor(() => expect(onOpenFile).toHaveBeenCalledWith("/root/My Note.md"));
+  });
+
+  it("creates a canvas via the context menu, inline-renames, and opens it", async () => {
+    const created: DirEntry = {
+      name: "Untitled.canvas",
+      path: "/root/Untitled.canvas",
+      isDirectory: false,
+      modified: 0,
+    };
+    const onCreateCanvas = vi.fn(async () => "/root/Untitled.canvas");
+    const onRename = vi.fn(async () => "/root/Board.canvas");
+    const onOpenFile = vi.fn();
+    renderFileTree({
+      nodes: new Map([["/root", [...sampleEntries, created]]]),
+      onCreateCanvas,
+      onRename,
+      onOpenFile,
+    });
+
+    fireEvent.contextMenu(screen.getByText("post.md"));
+    fireEvent.click(screen.getByText("New Canvas"));
+    await waitFor(() => expect(onCreateCanvas).toHaveBeenCalledWith("/root"));
+
+    const input = await screen.findByRole("textbox");
+    expect(input).toHaveValue("Untitled");
+    fireEvent.change(input, { target: { value: "Board" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith("/root/Untitled.canvas", "Board"));
+    await waitFor(() => expect(onOpenFile).toHaveBeenCalledWith("/root/Board.canvas"));
   });
 
   it("keeps the default name and opens the note when rename is cancelled with Escape", async () => {

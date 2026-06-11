@@ -93,7 +93,6 @@ export function CanvasEdges({
                 className="glyph-canvas-edge-label"
                 textAnchor="middle"
                 dominantBaseline="central"
-                stroke="none"
               >
                 {edge.label}
               </text>

@@ -12,6 +12,7 @@ import { parseCanvas } from "@/lib/canvas/parse";
 import { CanvasParseError } from "@/lib/canvas/types";
 import { CanvasEdges } from "./CanvasEdges";
 import { CanvasNodeView } from "./CanvasNodeView";
+import { CanvasToolbar } from "./CanvasToolbar";
 
 interface CanvasViewerProps {
   content: string;
@@ -146,18 +147,12 @@ export function CanvasViewer({ content, filePath, onOpenFile }: CanvasViewerProp
         </div>
       </div>
 
-      <div className="glyph-canvas-toolbar">
-        <button type="button" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom out">
-          −
-        </button>
-        <span className="glyph-canvas-zoom-level">{Math.round(viewport.zoom * 100)}%</span>
-        <button type="button" onClick={() => zoomBy(1.2)} aria-label="Zoom in">
-          +
-        </button>
-        <button type="button" onClick={() => fitTo(boundingBox)} aria-label="Fit to content">
-          Fit
-        </button>
-      </div>
+      <CanvasToolbar
+        zoom={viewport.zoom}
+        onZoomIn={() => zoomBy(1.2)}
+        onZoomOut={() => zoomBy(1 / 1.2)}
+        onFit={() => fitTo(boundingBox)}
+      />
     </div>
   );
 }

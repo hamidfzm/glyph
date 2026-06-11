@@ -142,9 +142,14 @@
   color: var(--color-text-tertiary);
 }
 
+/* Edge labels knock out the line and grid behind them with a halo in the
+   stage colour (paint-order draws the stroke underneath the fill). */
 .glyph-canvas-edge-label {
   font-size: 12px;
   fill: var(--color-text-secondary);
+  stroke: var(--color-surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
   paint-order: stroke;
 }
 

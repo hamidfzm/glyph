@@ -42,6 +42,8 @@ function fakeContext() {
     lineTo: vi.fn(),
     closePath: vi.fn(),
     fillText: vi.fn(),
+    strokeText: vi.fn(),
+    lineJoin: "",
     lineWidth: 0,
     strokeStyle: "",
     fillStyle: "",
@@ -224,6 +226,23 @@ describe("exportCanvasPng", () => {
     expect(ctx.fillText).toHaveBeenCalledWith("spec", 15, 15);
     expect(ctx.save).toHaveBeenCalled();
     expect(ctx.restore).toHaveBeenCalled();
+  });
+
+  it("halos the edge label in the stage colour before filling it", async () => {
+    const { world } = buildBoard();
+    addBox(world, "glyph-canvas-node", { left: 0, top: 0, width: 10, height: 10 });
+    const svg = addEdgesSvg(world);
+    const label = svg.querySelector("text") as SVGTextElement;
+    label.style.stroke = "rgb(28, 28, 30)";
+    label.style.strokeWidth = "4px";
+    const canvas = fakeCanvas(new Uint8Array([7]));
+    html2canvasMock.mockResolvedValue(canvas);
+
+    await exportCanvasPng();
+
+    expect(canvas.ctx.strokeText).toHaveBeenCalledWith("spec", 15, 15);
+    expect(canvas.ctx.fillText).toHaveBeenCalledWith("spec", 15, 15);
+    expect(canvas.ctx.lineJoin).toBe("round");
   });
 
   it("defaults the line width when an edge path has no stroke-width", async () => {

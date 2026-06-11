@@ -908,10 +908,10 @@ export function useTabs(options: UseTabsOptions) {
       if (!tab) return;
       const file = activeFileOf(tab);
       if (!file) return;
-      const before =
-        file.mode !== EDITOR_MODE.view
-          ? (file.editContent ?? file.content ?? "")
-          : (file.content ?? "");
+      /* v8 ignore start -- defensive: every open file has content loaded, so the null fallback is unreachable */
+      const disk = file.content ?? "";
+      /* v8 ignore stop */
+      const before = file.mode !== EDITOR_MODE.view ? (file.editContent ?? disk) : disk;
       if (next === before) return;
       const applied = await applyProgrammaticEdit(id, next);
       if (applied) {

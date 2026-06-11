@@ -600,6 +600,98 @@ describe("useTabs file operations", () => {
     });
   });
 
+  it("commitEdit is a no-op for a folder tab with no open file", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/ws");
+    });
+    const tabId = result.current.tabs[0].id;
+    expect(result.current.tabs[0].kind).toBe("folder");
+
+    await act(async () => {
+      await result.current.commitEdit(tabId, "X");
+    });
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("commitEdit diffs against the live edit buffer when one exists", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ read_file: async () => "A" }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ defaultEditorMode: "edit" })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/doc.md");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    act(() => {
+      result.current.updateEditContent(tabId, "DRAFT");
+    });
+    // No-op: the committed content matches the edit buffer, not the disk content.
+    await act(async () => {
+      await result.current.commitEdit(tabId, "DRAFT");
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.editContent).toBe("DRAFT");
+    }
+
+    await act(async () => {
+      await result.current.commitEdit(tabId, "NEW");
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.editContent).toBe("NEW");
+    }
+
+    // Undo restores the edit buffer the commit was diffed against.
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.editContent).toBe("DRAFT");
+    }
+  });
+
+  it("commitEdit records no undo entry when the disk write fails", async () => {
+    const writeFile = vi.fn().mockRejectedValue(new Error("disk full"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => "A",
+        write_file: writeFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/board.canvas");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    await act(async () => {
+      await result.current.commitEdit(tabId, "B");
+    });
+    expect(writeFile).toHaveBeenCalledOnce();
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.content).toBe("A");
+    }
+
+    // Nothing was pushed onto the history stack, so undo has nothing to write.
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+    expect(writeFile).toHaveBeenCalledOnce();
+    errorSpy.mockRestore();
+  });
+
   it("undoEdit is a no-op when there is no history", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
     vi.mocked(invoke).mockImplementation(

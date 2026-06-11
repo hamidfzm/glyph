@@ -298,6 +298,15 @@ describe("Sidebar", () => {
     );
   });
 
+  it("creates a canvas in the entry's directory from the file menu", async () => {
+    const createCanvas = vi.fn(async () => null);
+    renderSidebar({ activeTab: makeFolderTab(), tabs: { createCanvas } });
+
+    fireEvent.contextMenu(screen.getByText("readme.md"));
+    fireEvent.click(screen.getByText("New Canvas"));
+    await waitFor(() => expect(createCanvas).toHaveBeenCalledWith("tab-2", "/tmp/notes"));
+  });
+
   it("renames an entry from the file menu", async () => {
     const renamePath = vi.fn();
     renderSidebar({ activeTab: makeFolderTab(), tabs: { renamePath } });
