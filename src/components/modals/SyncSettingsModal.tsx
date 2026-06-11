@@ -18,6 +18,7 @@
 // component stays a thin form view.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { useSyncConfigContext } from "@/contexts/SyncConfigContext";
 import {
   type ConflictPolicy,
@@ -268,14 +269,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
             onClick={onClose}
             aria-label="Close cloud sync settings"
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <path
-                d="M3 3l8 8M11 3l-8 8"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <ModalCloseIcon />
           </button>
         </div>
 

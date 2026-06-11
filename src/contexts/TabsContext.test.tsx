@@ -73,6 +73,39 @@ describe("TabsProvider", () => {
     expect(result.current.displayContent).toBeNull();
   });
 
+  it("projects canvas card text into displayContent and keeps the outline empty", async () => {
+    mockInvokeOpening(
+      JSON.stringify({
+        nodes: [
+          { id: "a", type: "text", text: "# Hi from card", x: 0, y: 0, width: 200, height: 80 },
+        ],
+        edges: [],
+      }),
+    );
+    const { result } = renderHook(() => useTabsContext(), { wrapper: wrap() });
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/work/board.canvas");
+    });
+    // Word count / AI / read-aloud see the card prose, not the raw JSON.
+    expect(result.current.displayContent).toBe("# Hi from card");
+    // The board has no heading scroll targets, so the heading above must not
+    // produce a TOC entry.
+    expect(result.current.tocEntries).toEqual([]);
+  });
+
+  it("suppresses displayContent for an empty canvas file", async () => {
+    mockInvokeOpening("");
+    const { result } = renderHook(() => useTabsContext(), { wrapper: wrap() });
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/work/blank.canvas");
+    });
+    expect(result.current.displayContent).toBeNull();
+  });
+
   it("derives displayContent from editContent in edit mode for markdown", async () => {
     mockInvokeOpening("# saved");
     const { result } = renderHook(() => useTabsContext(), { wrapper: wrap() });

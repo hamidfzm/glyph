@@ -60,6 +60,83 @@ export function useExport({
 
   const run = useCallback(
     async (format: ExportFormat) => {
+      // A canvas tab exports as vectors, never rasterised: HTML and PDF keep
+      // the spatial board 1:1 (HTML via the app stylesheet, PDF via vector
+      // primitives on a board-sized page); DOCX and EPUB are flowing
+      // documents, so the cards are linearised in board order. The check runs
+      // first: cards contain their own small `.markdown-body` elements which
+      // would fool the document guard.
+      if (document.querySelector(".glyph-canvas")) {
+        const meta = deriveExportMeta(filePath, content);
+        const { name, ext } = FILTERS[format];
+        const path = await save({
+          defaultPath: `${meta.baseName}.${ext}`,
+          filters: [{ name, extensions: [ext] }],
+        });
+        if (!path) return;
+        setExporting(format);
+        try {
+          const { buildCanvasBoardHtml, buildCanvasDocumentHtml } = await import(
+            "@/lib/canvas/exportDoc"
+          );
+          if (format === "html") {
+            const body = await buildCanvasBoardHtml();
+            if (body == null) return;
+            const html = buildHtmlDocument({
+              bodyHtml: body,
+              title: meta.title,
+              css: collectStyles(),
+              dark: document.documentElement.classList.contains("dark"),
+              bodyClass: "glyph-canvas-page",
+            });
+            await invoke("write_file", { path, content: html });
+          } else if (format === "pdf") {
+            // The PDF keeps the spatial board too — cards, edges, and labels
+            // as vectors on one board-sized page.
+            const { buildCanvasBoardModel } = await import("@/lib/canvas/exportModel");
+            const model = await buildCanvasBoardModel();
+            if (model == null) return;
+            const { buildCanvasPdf } = await import("@/lib/export/canvasPdf");
+            await writeBinary(
+              path,
+              await buildCanvasPdf(model, { title: meta.title, author: meta.author }),
+            );
+          } else {
+            const body = await buildCanvasDocumentHtml();
+            if (body == null) return;
+            if (format === "epub") {
+              const { buildEpub } = await import("@/lib/export/epub");
+              await writeBinary(
+                path,
+                await buildEpub({
+                  bodyHtml: body,
+                  css: collectStyles(),
+                  entries: [],
+                  metadata: {
+                    title: meta.title,
+                    author: meta.author,
+                    language: "en",
+                    identifier: crypto.randomUUID(),
+                    modified: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+                  },
+                }),
+              );
+            } else {
+              const { buildDocx } = await import("@/lib/export/docx");
+              await writeBinary(
+                path,
+                await buildDocx(body, { title: meta.title, author: meta.author }),
+              );
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to export canvas ${format}:`, err);
+        } finally {
+          setExporting(null);
+        }
+        return;
+      }
+
       // Cheap guard so we don't pop a save dialog with nothing to export.
       if (!document.querySelector(".markdown-body")) return;
 

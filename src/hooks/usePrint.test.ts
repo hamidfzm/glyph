@@ -42,6 +42,21 @@ describe("usePrint", () => {
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
+  it("no-ops when the only markdown body belongs to a canvas card", () => {
+    document.body.innerHTML = "";
+    const board = document.createElement("div");
+    board.className = "glyph-canvas";
+    const card = document.createElement("div");
+    card.className = "markdown-body";
+    board.appendChild(card);
+    document.body.appendChild(board);
+
+    const { result } = renderHook(() => usePrint({ entries: ENTRIES, settings: DEFAULT_PRINT }));
+    result.current();
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(document.documentElement.hasAttribute("data-print-breaks")).toBe(false);
+  });
+
   it("sets html data attributes from settings before printing", () => {
     const { result } = renderHook(() =>
       usePrint({
@@ -80,6 +95,17 @@ describe("usePrint", () => {
     );
     result.current();
     expect(document.querySelector(".print-toc")).toBeNull();
+  });
+
+  it("falls back to window.print when the native print command fails", async () => {
+    invokeMock.mockRejectedValue(new Error("not available"));
+    const printSpy = vi.fn();
+    window.print = printSpy;
+
+    const { result } = renderHook(() => usePrint({ entries: ENTRIES, settings: DEFAULT_PRINT }));
+    result.current();
+
+    await vi.waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
   });
 
   it("cleans up attributes and toc on afterprint", () => {

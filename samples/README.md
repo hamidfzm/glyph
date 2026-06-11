@@ -25,6 +25,7 @@ This document demonstrates all the rendering features supported by Glyph. The YA
 - [Images](#images)
 - [Links](#links)
 - [Jupyter Notebooks](#jupyter-notebooks)
+- [Canvas](#canvas)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 
 ## Frontmatter
@@ -273,6 +274,25 @@ Glyph opens `.ipynb` files directly — no Jupyter required. Open `Notebook.ipyn
 - **Outputs** render under their cell by richest type: images (`image/png`, `image/jpeg`, `image/svg+xml`), sanitised HTML, markdown, and plain text. Stream output and exception tracebacks keep their ANSI colours instead of showing raw escape codes. An `Out [n]:` prompt marks execution results.
 
 Interactive outputs (Plotly, Vega, Jupyter widgets) aren't rendered yet — they show a short placeholder. Notebooks can't be edited in Glyph, so the mode toggle stays read-only: **view** shows the rendered cells, **edit** shows the raw `.ipynb` JSON as a syntax-highlighted source view, and **split** shows the JSON source and rendered cells side by side.
+
+---
+
+## Canvas
+
+Glyph opens [JSON Canvas](https://jsoncanvas.org) (`.canvas`) files as an infinite, pan-and-zoom board. Open `canvas-demo.canvas` from the file tree (or run `glyph samples/canvas-demo.canvas`) to see it.
+
+- **Cards** render markdown text, embedded images, links, and labelled groups.
+- **Connections** are drawn as arrows between card sides, with optional labels.
+- **Navigate** by scrolling to pan and `Cmd/Ctrl`+scroll (or pinch) to zoom; the toolbar has zoom and fit-to-content controls.
+
+The mode toggle switches between reading and editing (split is hidden for canvas — the board itself is the editor):
+
+- **View** is the read-only board.
+- **Edit** is the full editor — drag to move cards, drag the corner handle to resize, drag a side connector to draw an edge, double-click a card to edit its markdown (or a link's URL, or a group's label) inline, and double-click a connection to label it. Use the selection toolbar to recolour (six presets or any custom colour) or delete. Dragging a group carries every card inside it, so groups work as movable regions, not just backdrops. Double-click empty board space to drop a new card right there, or use the `+ Card` / `+ Group` / `+ Link` toolbar buttons; `Delete`/`Backspace` removes the selection. Right-click works everywhere: empty space offers New card / New group / New link at the cursor, a card offers edit, colour, and delete, and a connection offers label editing and delete. Edits save as standard `.canvas` JSON (interoperable with Obsidian) and undo/redo with `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z`.
+
+Canvas boards integrate with the rest of the app: `File → Export` saves the board as a vector HTML page or a board-sized vector PDF that mirror the spatial layout, or linearises the cards into a Word or EPUB document; task-list checkboxes on cards are clickable in both view and edit mode, the status bar word count (and AI / read-aloud) reads the board's cards rather than its JSON, and canvases sync and back up like any other workspace file.
+
+Create a fresh board from the file tree: right-click a folder (or the empty panel) and choose **New Canvas**.
 
 ---
 

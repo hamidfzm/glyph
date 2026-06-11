@@ -68,4 +68,10 @@ describe("buildHtmlDocument", () => {
     // ...and is hidden when printing.
     expect(out).toContain("#glyph-theme-toggle { display: none; }");
   });
+
+  it("switches native-control color-scheme with the dark class", () => {
+    const html = buildHtmlDocument({ bodyHtml: "<p>x</p>", title: "t", css: "", dark: false });
+    expect(html).toContain(":root { color-scheme: light; }");
+    expect(html).toContain(":root.dark { color-scheme: dark; }");
+  });
 });

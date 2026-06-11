@@ -1,4 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { BannerCloseIcon } from "@/components/icons/BannerCloseIcon";
 import type { AvailableUpdate } from "@/lib/updateCheck";
 
 interface UpdateBannerProps {
@@ -40,14 +41,7 @@ export function UpdateBanner({ update, onDismiss }: UpdateBannerProps) {
         onClick={onDismiss}
         aria-label="Dismiss update notification"
       >
-        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-          <path
-            d="M3 3l8 8M11 3l-8 8"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          />
-        </svg>
+        <BannerCloseIcon />
       </button>
     </div>
   );

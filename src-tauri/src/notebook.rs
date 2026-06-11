@@ -15,11 +15,12 @@ pub fn is_notebook_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Any document Glyph can open: a markdown file or a Jupyter notebook. Used by
-/// the open-gating paths (CLI args, drag-drop, file-tree walking) so both
-/// document types reach the renderer while everything else is rejected.
+/// Any document Glyph can open: a markdown file, a Jupyter notebook, or a JSON
+/// Canvas. Used by the open-gating paths (CLI args, drag-drop, file-tree
+/// walking) so every supported document type reaches the renderer while
+/// everything else is rejected.
 pub fn is_supported_file(path: &Path) -> bool {
-    crate::is_markdown_file(path) || is_notebook_file(path)
+    crate::is_markdown_file(path) || is_notebook_file(path) || crate::is_canvas_file(path)
 }
 
 #[cfg(test)]
@@ -41,10 +42,11 @@ mod tests {
     }
 
     #[test]
-    fn supported_covers_markdown_and_notebooks() {
+    fn supported_covers_markdown_notebooks_and_canvas() {
         assert!(is_supported_file(Path::new("README.md")));
         assert!(is_supported_file(Path::new("notes.markdown")));
         assert!(is_supported_file(Path::new("analysis.ipynb")));
+        assert!(is_supported_file(Path::new("board.canvas")));
     }
 
     #[test]

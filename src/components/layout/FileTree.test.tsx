@@ -18,6 +18,7 @@ function renderFileTree(overrides: Partial<ComponentProps<typeof FileTree>> = {}
     onOpenFile: vi.fn(),
     onOpenFileInNewTab: vi.fn(),
     onCreateNote: vi.fn(async () => null),
+    onCreateCanvas: vi.fn(async () => null),
     onCreateFolder: vi.fn(async () => null),
     onRename: vi.fn(async () => null),
     onDuplicate: vi.fn(async () => null),
@@ -45,6 +46,30 @@ describe("FileTree", () => {
     renderFileTree({ nodes: new Map() });
     expect(screen.queryByText("post.md")).toBeNull();
     expect(screen.queryByText("subdir")).toBeNull();
+  });
+
+  it("renders the canvas icon for .canvas entries and the text icon for notes", () => {
+    const entries: DirEntry[] = [
+      { name: "board.canvas", path: "/root/board.canvas", isDirectory: false, modified: 0 },
+      { name: "note.md", path: "/root/note.md", isDirectory: false, modified: 0 },
+    ];
+    renderFileTree({ nodes: new Map([["/root", entries]]) });
+    // The canvas glyph is built from <rect> cards; the document icon is not.
+    expect(screen.getByTitle("/root/board.canvas").querySelector("svg rect")).toBeTruthy();
+    expect(screen.getByTitle("/root/note.md").querySelector("svg rect")).toBeNull();
+  });
+
+  it("highlights the active canvas entry", () => {
+    const entries: DirEntry[] = [
+      { name: "board.canvas", path: "/root/board.canvas", isDirectory: false, modified: 0 },
+    ];
+    renderFileTree({
+      nodes: new Map([["/root", entries]]),
+      activeFilePath: "/root/board.canvas",
+    });
+    const row = screen.getByTitle("/root/board.canvas");
+    expect(row.className).toContain("bg-[var(--color-accent)]");
+    expect(row.querySelector("svg rect")).toBeTruthy();
   });
 
   it("calls onOpenFile when clicking a file", () => {
@@ -158,6 +183,36 @@ describe("FileTree", () => {
 
     await waitFor(() => expect(onRename).toHaveBeenCalledWith("/root/Untitled.md", "My Note"));
     await waitFor(() => expect(onOpenFile).toHaveBeenCalledWith("/root/My Note.md"));
+  });
+
+  it("creates a canvas via the context menu, inline-renames, and opens it", async () => {
+    const created: DirEntry = {
+      name: "Untitled.canvas",
+      path: "/root/Untitled.canvas",
+      isDirectory: false,
+      modified: 0,
+    };
+    const onCreateCanvas = vi.fn(async () => "/root/Untitled.canvas");
+    const onRename = vi.fn(async () => "/root/Board.canvas");
+    const onOpenFile = vi.fn();
+    renderFileTree({
+      nodes: new Map([["/root", [...sampleEntries, created]]]),
+      onCreateCanvas,
+      onRename,
+      onOpenFile,
+    });
+
+    fireEvent.contextMenu(screen.getByText("post.md"));
+    fireEvent.click(screen.getByText("New Canvas"));
+    await waitFor(() => expect(onCreateCanvas).toHaveBeenCalledWith("/root"));
+
+    const input = await screen.findByRole("textbox");
+    expect(input).toHaveValue("Untitled");
+    fireEvent.change(input, { target: { value: "Board" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith("/root/Untitled.canvas", "Board"));
+    await waitFor(() => expect(onOpenFile).toHaveBeenCalledWith("/root/Board.canvas"));
   });
 
   it("keeps the default name and opens the note when rename is cancelled with Escape", async () => {
