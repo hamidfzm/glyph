@@ -70,6 +70,9 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Recent files list
 - Session restore — open tabs persist across restarts
 
+### Sync (experimental)
+- Cloud Sync (per-workspace, Git-backed): sync a folder workspace to any Git remote you control (GitHub, GitLab, or self-hosted). Pull, commit, and push changes against a chosen branch and commit identity, with a conflict policy you pick (prompt, prefer remote, or prefer local). A status-bar pill shows ahead/behind/dirty state, and **Cloud Sync…** in the command palette (`Cmd/Ctrl+K`) opens the setup. Single-file tabs sync as part of their folder workspace. Still maturing, so expect rough edges.
+
 ### Appearance
 - System / Light / Dark themes
 - Customizable font family, size, line height, and content width
@@ -88,7 +91,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Update notifications — checks for a newer release on launch and shows a banner when one is available (toggle in Settings → Behavior)
 
 ### Privacy
-- Local-first: your files never leave your machine
+- Local-first: your files never leave your machine unless you opt into Cloud Sync (per workspace, to a Git remote you control)
 - Opt-in crash reporting (off by default) to help fix bugs — see [Privacy & Error Reporting](#privacy--error-reporting)
 
 ## Install
@@ -268,7 +271,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | AI (multi-provider, local) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
 | Text-to-speech | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
 | Plugin / extension API | planned | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
-| Cloud sync | planned | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Cloud sync | ⚠️ Git-backed | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Graph view | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
 
 ### Platform
@@ -289,7 +292,7 @@ Note on "WYSIWYG / inline preview": Glyph's editor has split-view live preview a
 
 ## Privacy & Error Reporting
 
-Glyph is local-first: your documents are read and written on your machine and are never uploaded anywhere.
+Glyph is local-first: your documents are read and written on your machine. Nothing is uploaded anywhere unless you opt into Cloud Sync for a workspace, which pushes that workspace to a Git remote you control.
 
 Crash and error reporting is **opt-in and off by default**. Nothing is sent until you turn it on in **Settings → Privacy → Send crash reports**, and even then it is only active in production builds (never during development).
 
