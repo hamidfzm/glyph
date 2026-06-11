@@ -14,7 +14,7 @@ describe("DisposerBag", () => {
     expect(order).toEqual([3, 2, 1]);
   });
 
-  it("is idempotent — disposing twice runs each disposer once", () => {
+  it("is idempotent, disposing twice runs each disposer once", () => {
     const fn = vi.fn();
     const bag = new DisposerBag();
     bag.add(fn);
@@ -41,7 +41,7 @@ describe("DisposerBag", () => {
     const after = vi.fn();
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const bag = new DisposerBag();
-    // `after` is added first, so it runs last (reverse order) — after the throw.
+    // `after` is added first, so it runs last (reverse order), after the throw.
     bag.add(after);
     bag.add(() => {
       throw new Error("boom");

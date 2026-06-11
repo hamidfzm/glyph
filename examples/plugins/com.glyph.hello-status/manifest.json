@@ -1,0 +1,7 @@
+{
+  "id": "com.glyph.hello-status",
+  "name": "Hello Status",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "Sample plugin: a status bar greeting and a command palette entry."
+}

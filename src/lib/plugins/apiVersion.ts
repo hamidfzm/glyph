@@ -25,7 +25,7 @@ function parse(version: string): SemVer | null {
 /**
  * Does the host API satisfy a plugin's required range? Supports an exact
  * version (`"1.2.3"`) or a caret range (`"^1.2.3"`: same major, with host
- * `minor.patch >= required`). Intentionally tiny — the plugin contract only
+ * `minor.patch >= required`). Intentionally tiny: the plugin contract only
  * needs caret/exact, not the full semver grammar. Unparseable input is treated
  * as incompatible rather than throwing.
  */
