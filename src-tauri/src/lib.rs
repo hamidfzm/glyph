@@ -49,14 +49,18 @@ pub fn handle_second_instance<R: tauri::Runtime>(
 /// plugin registered on Windows and Linux. macOS routes second launches via
 /// `RunEvent::Opened`, so it gets a vanilla builder.
 ///
+/// Debug builds skip the plugin everywhere: with it registered, `tauri dev`
+/// silently forwards to any glyph.exe left over from an earlier session and
+/// exits, which both kills the dev run and leaves stale code on screen.
+///
 /// Extracted from `run()` so the cfg-gated branches can be unit-tested without
 /// actually starting the Tauri runtime.
 pub fn make_app_builder() -> tauri::Builder<tauri::Wry> {
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    #[cfg(all(not(debug_assertions), any(target_os = "linux", target_os = "windows")))]
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(handle_second_instance));
 
-    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    #[cfg(not(all(not(debug_assertions), any(target_os = "linux", target_os = "windows"))))]
     let builder = tauri::Builder::default();
 
     builder
