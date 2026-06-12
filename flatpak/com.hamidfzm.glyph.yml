@@ -38,18 +38,15 @@ modules:
       - install -Dm755 usr/bin/glyph /app/bin/glyph
       - install -Dm644 com.hamidfzm.glyph.desktop /app/share/applications/com.hamidfzm.glyph.desktop
       - install -Dm644 com.hamidfzm.glyph.metainfo.xml /app/share/metainfo/com.hamidfzm.glyph.metainfo.xml
-      # Re-home the Tauri-generated PNG icons under the Flatpak app-id.
+      # Re-home every Tauri-generated PNG icon under the Flatpak app-id,
+      # preserving its hicolor size directory (the .deb ships 32x32, 128x128,
+      # and 256x256@2). Iterating over whatever exists avoids hardcoding the
+      # exact set of sizes the bundler emits.
       - |
-        for size in 32 128 256; do
-          src="usr/share/icons/hicolor/${size}x${size}/apps/glyph.png"
-          if [ -f "$src" ]; then
-            install -Dm644 "$src" "/app/share/icons/hicolor/${size}x${size}/apps/com.hamidfzm.glyph.png"
-          fi
+        for src in $(find usr/share/icons -name glyph.png); do
+          dest="/app/${src#usr/}"
+          install -Dm644 "$src" "${dest%/glyph.png}/com.hamidfzm.glyph.png"
         done
-        if [ -f usr/share/icons/hicolor/128x128@2x/apps/glyph.png ]; then
-          install -Dm644 usr/share/icons/hicolor/128x128@2x/apps/glyph.png \
-            /app/share/icons/hicolor/256x256/apps/com.hamidfzm.glyph.png
-        fi
     sources:
       - type: archive
         only-arches:

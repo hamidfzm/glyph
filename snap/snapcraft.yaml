@@ -1,12 +1,19 @@
 # Snapcraft recipe for Glyph.
 #
 # Like the AUR/PPA/Flatpak packaging, this reuses the released Debian package
-# instead of recompiling. The `publish-snap` job in
-# `.github/workflows/release.yml` sets GLYPH_VERSION from the release tag and
-# builds one snap per architecture.
+# instead of recompiling. By default it discovers the latest GitHub release and
+# pulls the .deb matching the build architecture, so it needs no inputs and
+# works under any snapcraft provider (LXD, multipass, destructive mode) and in
+# `snapcore/action-build` — none of which forward arbitrary host env vars into
+# the build instance. To pin a specific version (e.g. for a local test build of
+# an older release), export GLYPH_VERSION *and* build in --destructive-mode so
+# the variable reaches the build environment.
+#
+# The `publish-snap` job in `.github/workflows/release.yml` runs after the
+# release is published, so "latest" there is the tag that triggered the run.
 #
 # Validate locally with:
-#   GLYPH_VERSION=0.10.0 snapcraft --build-for amd64
+#   snapcraft --build-for amd64        # builds the latest release for amd64
 #
 # See the Tauri Snapcraft guide: https://v2.tauri.app/distribute/snapcraft/
 name: glyph
@@ -34,7 +41,7 @@ compression: lzo
 apps:
   glyph:
     command: usr/bin/glyph
-    desktop: usr/share/applications/glyph.desktop
+    desktop: usr/share/applications/Glyph.desktop
     extensions:
       - gnome
     plugs:
@@ -55,14 +62,23 @@ parts:
       - dpkg
     override-pull: |
       craftctl default
-      VERSION="${GLYPH_VERSION:?set GLYPH_VERSION to the release version, e.g. 0.10.0}"
       case "$CRAFT_ARCH_BUILD_FOR" in
         amd64) DEB_ARCH=amd64 ;;
         arm64) DEB_ARCH=arm64 ;;
         *) echo "unsupported arch: $CRAFT_ARCH_BUILD_FOR" >&2; exit 1 ;;
       esac
-      curl -fSL -o glyph.deb \
-        "https://github.com/hamidfzm/glyph/releases/download/v${VERSION}/Glyph_${VERSION}_${DEB_ARCH}.deb"
+      REPO="hamidfzm/glyph"
+      if [ -n "${GLYPH_VERSION:-}" ]; then
+        VERSION="$GLYPH_VERSION"
+        URL="https://github.com/${REPO}/releases/download/v${VERSION}/Glyph_${VERSION}_${DEB_ARCH}.deb"
+      else
+        # Discover the .deb for this arch from the latest published release.
+        URL=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+          | grep -oE "https://github.com/${REPO}/releases/download/[^\"]+_${DEB_ARCH}\.deb")
+        VERSION=$(printf '%s' "$URL" | sed -E "s#.*/Glyph_([^_]+)_${DEB_ARCH}\.deb#\1#")
+      fi
+      test -n "$URL" || { echo "could not resolve a .deb URL for $DEB_ARCH" >&2; exit 1; }
+      curl -fSL -o glyph.deb "$URL"
       dpkg-deb -x glyph.deb .
       rm glyph.deb
       craftctl set version="$VERSION"

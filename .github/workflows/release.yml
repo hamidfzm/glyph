@@ -666,16 +666,15 @@ jobs:
             echo "No SNAPCRAFT_STORE_CREDENTIALS secret; skipping snap publish."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Get version
-        if: steps.gate.outputs.enabled == 'true'
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      # snapcraft.yaml discovers the latest release and pulls the .deb for the
+      # build architecture. This job runs after the release is published, so
+      # "latest" is the tag that triggered this run. (Host env vars are not
+      # forwarded into the snapcraft build instance, so the version can't be
+      # passed that way.)
       - name: Build snap
         if: steps.gate.outputs.enabled == 'true'
         id: build
         uses: snapcore/action-build@v1
-        env:
-          GLYPH_VERSION: ${{ steps.version.outputs.version }}
       - name: Publish snap to stable
         if: steps.gate.outputs.enabled == 'true'
         uses: snapcore/action-publish@v1
