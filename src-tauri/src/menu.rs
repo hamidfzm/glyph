@@ -321,5 +321,29 @@ mod tests {
 
             dispatch_menu_action(&handle, MenuAction::CloseWindow);
         }
+
+        #[cfg(debug_assertions)]
+        #[test]
+        fn toggle_devtools_with_no_main_window_is_a_silent_noop() {
+            let app = mock_app();
+            let handle = app.handle().clone();
+            dispatch_menu_action(&handle, MenuAction::ToggleDevTools);
+        }
+
+        #[cfg(debug_assertions)]
+        #[test]
+        fn toggle_devtools_opens_devtools_when_a_main_window_exists() {
+            // MockRuntime reports is_devtools_open() as false and implements
+            // open_devtools() as a no-op, so this drives the open arm. The
+            // close arm needs a runtime that reports devtools as open, which
+            // the mock can't do.
+            let app = mock_app();
+            WebviewWindowBuilder::new(&app, "main", Default::default())
+                .build()
+                .expect("mock main window should build");
+            let handle = app.handle().clone();
+
+            dispatch_menu_action(&handle, MenuAction::ToggleDevTools);
+        }
     }
 }

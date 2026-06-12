@@ -1,6 +1,6 @@
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useTheme } from "./useTheme";
+import { systemTheme, useTheme } from "./useTheme";
 
 describe("useTheme", () => {
   let matchMediaMock: ReturnType<typeof vi.fn>;
@@ -57,6 +57,41 @@ describe("useTheme", () => {
 
     renderHook(() => useTheme());
     expect(document.documentElement.classList.contains("dark")).toBe(true);
+  });
+
+  it("updates theme when the system preference changes", () => {
+    let changeHandler: ((e: { matches: boolean }) => void) | undefined;
+    matchMediaMock.mockReturnValue({
+      matches: false,
+      addEventListener: vi.fn((_event: string, handler: (e: { matches: boolean }) => void) => {
+        changeHandler = handler;
+      }),
+      removeEventListener: vi.fn(),
+    });
+
+    const { result } = renderHook(() => useTheme());
+    expect(result.current).toBe("light");
+
+    act(() => {
+      changeHandler?.({ matches: true });
+    });
+    expect(result.current).toBe("dark");
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+
+    act(() => {
+      changeHandler?.({ matches: false });
+    });
+    expect(result.current).toBe("light");
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
+
+  it("systemTheme falls back to light when window is unavailable", () => {
+    vi.stubGlobal("window", undefined);
+    try {
+      expect(systemTheme()).toBe("light");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("cleans up event listener on unmount", () => {

@@ -3,7 +3,7 @@ import { type TocEntry, useTableOfContents } from "@/hooks/useTableOfContents";
 import { useTabs } from "@/hooks/useTabs";
 import { useWorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { type Backlink, filterBacklinks } from "@/lib/backlinks";
-import { isNotebookFile } from "@/lib/notebookExtensions";
+import { displayContentFor, tocContentFor } from "@/lib/displayContent";
 import { EDITOR_MODE, type Settings } from "@/lib/settings";
 
 type TabsApi = ReturnType<typeof useTabs>;
@@ -43,22 +43,21 @@ export function TabsProvider({ settings, updateSettings, children }: TabsProvide
   const activeMode = tabs.activeFile?.mode ?? EDITOR_MODE.view;
   const content = tabs.activeFile?.content ?? null;
   const activePath = tabs.activeFile?.path;
-  // A notebook never has a markdown body — view mode shows the rich cell
-  // viewer, edit/split shows the raw `.ipynb` JSON read-only. Either way the
-  // features that read `displayContent` (word count, TOC, AI, read-aloud) would
-  // be chewing on raw JSON, which is worse than nothing. Suppress it in every
-  // mode so a notebook is never mistaken for editable markdown text.
-  const isNotebook = !!activePath && isNotebookFile(activePath);
-  const displayContent = isNotebook
-    ? null
-    : activeMode !== EDITOR_MODE.view
-      ? // editContent is seeded when entering edit mode, so the `?? content`
-        // fallback is defensive only.
-        /* c8 ignore next */
+  // View mode shows saved content; edit/split shows the in-memory editContent
+  // so previews reflect typing. editContent is seeded when entering edit mode,
+  // so the `?? content` fallback is defensive only.
+  const liveContent =
+    activeMode !== EDITOR_MODE.view
+      ? /* c8 ignore next */
         (tabs.activeFile?.editContent ?? content)
       : content;
-
-  const tocEntries = useTableOfContents(displayContent);
+  // Per-file-type derivation (markdown passthrough, notebook suppression,
+  // canvas prose projection) lives in lib/displayContent.
+  const displayContent = useMemo(
+    () => displayContentFor(activePath, liveContent),
+    [activePath, liveContent],
+  );
+  const tocEntries = useTableOfContents(tocContentFor(activePath, displayContent));
   const backlinks = useMemo(
     () =>
       tabs.activeFile?.path

@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 
 const DEFAULT_NOTE_STEM: &str = "Untitled";
 const DEFAULT_FOLDER_NAME: &str = "Untitled Folder";
+/// A blank but spec-valid JSON Canvas, so the new file opens as an empty board
+/// rather than tripping the parser.
+const EMPTY_CANVAS: &str = "{\n\t\"nodes\": [],\n\t\"edges\": []\n}\n";
 
 /// Ensure `target_parent` resolves to a directory inside `root`. Both are
 /// canonicalized so `..` segments and symlinks can't escape the workspace.
@@ -60,6 +63,15 @@ pub fn create_note(dir: String, root: String) -> Result<String, String> {
     ensure_within_root(dir, Path::new(&root))?;
     let path = unique_path(dir, DEFAULT_NOTE_STEM, Some("md"));
     fs::write(&path, "").map_err(|e| format!("Failed to create note: {e}"))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn create_canvas(dir: String, root: String) -> Result<String, String> {
+    let dir = Path::new(&dir);
+    ensure_within_root(dir, Path::new(&root))?;
+    let path = unique_path(dir, DEFAULT_NOTE_STEM, Some("canvas"));
+    fs::write(&path, EMPTY_CANVAS).map_err(|e| format!("Failed to create canvas: {e}"))?;
     Ok(path.to_string_lossy().to_string())
 }
 
@@ -249,6 +261,18 @@ mod tests {
         let path = create_note(root.clone(), root.clone()).unwrap();
         assert!(path.ends_with("Untitled.md"));
         assert!(Path::new(&path).is_file());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn create_canvas_makes_untitled_canvas_with_blank_board() {
+        let dir = unique_tmp("canvas");
+        let root = dir.to_string_lossy().to_string();
+        let path = create_canvas(root.clone(), root.clone()).unwrap();
+        assert!(path.ends_with("Untitled.canvas"));
+        let contents = fs::read_to_string(&path).unwrap();
+        assert!(contents.contains("\"nodes\""));
+        assert!(contents.contains("\"edges\""));
         let _ = fs::remove_dir_all(&dir);
     }
 

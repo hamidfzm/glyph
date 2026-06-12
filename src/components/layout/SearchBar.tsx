@@ -1,4 +1,7 @@
 import { type KeyboardEvent, useEffect, useRef } from "react";
+import { SearchCloseIcon } from "@/components/icons/SearchCloseIcon";
+import { SearchNextIcon } from "@/components/icons/SearchNextIcon";
+import { SearchPrevIcon } from "@/components/icons/SearchPrevIcon";
 
 interface SearchBarProps {
   query: string;
@@ -64,15 +67,7 @@ export function SearchBar({
         disabled={matchCount === 0}
         aria-label="Previous match"
       >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-          <path
-            d="M3.5 8.75L7 5.25L10.5 8.75"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <SearchPrevIcon />
       </button>
       <button
         type="button"
@@ -81,25 +76,10 @@ export function SearchBar({
         disabled={matchCount === 0}
         aria-label="Next match"
       >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-          <path
-            d="M3.5 5.25L7 8.75L10.5 5.25"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <SearchNextIcon />
       </button>
       <button type="button" className="search-nav-btn" onClick={onClose} aria-label="Close search">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-          <path
-            d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          />
-        </svg>
+        <SearchCloseIcon />
       </button>
     </search>
   );

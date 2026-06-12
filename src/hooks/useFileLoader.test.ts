@@ -125,6 +125,21 @@ describe("useFileLoader", () => {
     expect(onRecentFilesChange).toHaveBeenLastCalledWith(["/p/new.md", "/p/old.md"]);
   });
 
+  it("starts the recent list from scratch when recentFiles is not provided", async () => {
+    setupInvokes({ initialFile: null });
+    const onRecentFilesChange = vi.fn();
+    const { result } = renderHook(() => useFileLoader({ onRecentFilesChange }));
+    await waitFor(() => {
+      expect(result.current.initializing).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.loadFile("/p/new.md");
+    });
+
+    expect(onRecentFilesChange).toHaveBeenLastCalledWith(["/p/new.md"]);
+  });
+
   it("dedupes recent files and caps the list at 10 entries", async () => {
     setupInvokes({ initialFile: null });
     const recent = Array.from({ length: 10 }, (_, i) => `/p/${i}.md`);

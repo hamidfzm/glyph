@@ -53,7 +53,8 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 
 ### Viewer
 - Jupyter notebooks — open `.ipynb` files directly; markdown cells render with full markdown (math, code, diagrams), code cells are syntax-highlighted, and image, HTML, plain-text, and colourised stream/traceback outputs show under each cell with `In [n]:` / `Out [n]:` prompts (read-only)
-- Folder / workspace tabs — open a folder as a tab; browse `.md` files in the sidebar tree; right-click a file to open it in a new top-level tab. Right-click a folder, a file, or the empty panel to create a new note or folder there, then type its name inline. Right-click any note or folder to rename, duplicate, move, copy its path, reveal it in the system file manager, or delete it (with confirmation), and use the files-panel toolbar for new note, new folder, and collapse all. One folder is one workspace (a git repository's top level): a folder nested inside another repo, or overlapping an already-open one, is declined so links and search have an unambiguous scope
+- Canvas — open [JSON Canvas](https://jsoncanvas.org) (`.canvas`) files as an infinite, pan-and-zoom board; cards render markdown, embedded images, links, and labelled groups, connected by arrows. View mode is read-only; switch to edit mode to move, resize, recolour (presets or any custom colour), and connect cards, edit text and connection labels inline, and add or delete nodes and edges via toolbar, double-click, or right-click menus. Task-list checkboxes toggle right on the cards in either mode. File → Export saves the board as a self-contained vector HTML page or a board-sized vector PDF (both keep the 1:1 spatial layout, with selectable text), or as a Word or EPUB document with the cards laid out as a flowing article. Edits save back as standard `.canvas` JSON that round-trips with Obsidian, with undo/redo per tab
+- Folder / workspace tabs — open a folder as a tab; browse `.md` and `.canvas` files in the sidebar tree; right-click a file to open it in a new top-level tab. Right-click a folder, a file, or the empty panel to create a new note, canvas, or folder there, then type its name inline. Right-click any note, canvas, or folder to rename, duplicate, move, copy its path, reveal it in the system file manager, or delete it (with confirmation), and use the files-panel toolbar for new note, new folder, and collapse all. One folder is one workspace (a git repository's top level): a folder nested inside another repo, or overlapping an already-open one, is declined so links and search have an unambiguous scope
 - Multiple files in tabs — open, switch, close, middle-click to close
 - Command palette — `Cmd/Ctrl+K` to fuzzy-jump to any workspace file, document heading, or app action
 - In-document search — `Cmd/Ctrl+F` with match highlighting and navigation
@@ -63,11 +64,14 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Export to HTML, Word (DOCX), EPUB, and PDF — `File → Export`; works for markdown documents and Jupyter notebooks, writes a file directly (no print dialog), and reuses the rendered output (math, code highlighting, tables, images inlined) so files are self-contained and offline. Task-list checkboxes are read-only in exports; exported HTML follows the reader's light/dark system preference.
 - Live reload — file watcher auto-updates on external changes
 - Undo / redo for in-document edits — `Cmd/Ctrl+Z` and `Cmd/Ctrl+Shift+Z` reverse task-list checkbox toggles and other programmatic edits per tab
-- Drag and drop markdown files, notebooks, or folders to open
+- Drag and drop markdown files, notebooks, canvases, or folders to open
 - File associations — double-click `.md` files to open in Glyph
-- CLI support — `glyph README.md` opens a file; `glyph notebook.ipynb` opens a notebook; `glyph ~/notes/` opens a folder as a workspace
+- CLI support — `glyph README.md` opens a file; `glyph notebook.ipynb` opens a notebook; `glyph board.canvas` opens a canvas; `glyph ~/notes/` opens a folder as a workspace
 - Recent files list
 - Session restore — open tabs persist across restarts
+
+### Sync (experimental)
+- Cloud Sync (per-workspace, Git-backed): sync a folder workspace to any Git remote you control (GitHub, GitLab, or self-hosted). Pull, commit, and push changes against a chosen branch and commit identity, with a conflict policy you pick (prompt, prefer remote, or prefer local). A status-bar pill shows ahead/behind/dirty state, and **Cloud Sync…** in the command palette (`Cmd/Ctrl+K`) opens the setup. Single-file tabs sync as part of their folder workspace. Still maturing, so expect rough edges.
 
 ### Appearance
 - System / Light / Dark themes
@@ -87,7 +91,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Update notifications — checks for a newer release on launch and shows a banner when one is available (toggle in Settings → Behavior)
 
 ### Privacy
-- Local-first: your files never leave your machine
+- Local-first: your files never leave your machine unless you opt into Cloud Sync (per workspace, to a Git remote you control)
 - Opt-in crash reporting (off by default) to help fix bugs — see [Privacy & Error Reporting](#privacy--error-reporting)
 
 ## Install
@@ -228,6 +232,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | YAML frontmatter | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
 | Emoji shortcodes | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | plugin |
 | Jupyter notebooks (`.ipynb`) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | ✅ |
+| JSON Canvas (`.canvas`) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
 
 ### Editing
 
@@ -266,7 +271,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | AI (multi-provider, local) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
 | Text-to-speech | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
 | Plugin / extension API | planned | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
-| Cloud sync | planned | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Cloud sync | ⚠️ Git-backed | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Graph view | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
 
 ### Platform
@@ -287,7 +292,7 @@ Note on "WYSIWYG / inline preview": Glyph's editor has split-view live preview a
 
 ## Privacy & Error Reporting
 
-Glyph is local-first: your documents are read and written on your machine and are never uploaded anywhere.
+Glyph is local-first: your documents are read and written on your machine. Nothing is uploaded anywhere unless you opt into Cloud Sync for a workspace, which pushes that workspace to a Git remote you control.
 
 Crash and error reporting is **opt-in and off by default**. Nothing is sent until you turn it on in **Settings → Privacy → Send crash reports**, and even then it is only active in production builds (never during development).
 
