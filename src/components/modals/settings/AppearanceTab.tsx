@@ -1,4 +1,5 @@
 import { useSettings } from "@/hooks/useSettings";
+import { LanguageSetting } from "./LanguageSetting";
 import { Segmented } from "./Segmented";
 
 export function AppearanceTab() {
@@ -7,6 +8,8 @@ export function AppearanceTab() {
 
   return (
     <>
+      <LanguageSetting />
+
       <div className="settings-section">
         <div className="settings-section-title">Theme</div>
         <div className="settings-row">

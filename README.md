@@ -75,6 +75,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 
 ### Appearance
 - System / Light / Dark themes
+- Localized interface — follows your system language, or pick one in Settings → Appearance (community translations welcome)
 - Customizable font family, size, line height, and content width
 - Custom code font support
 - Platform-native styling (macOS vibrancy, Windows Mica)
