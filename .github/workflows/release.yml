@@ -78,6 +78,12 @@ jobs:
 
             ### Linux
             ```bash
+            # Flathub (Flatpak)
+            flatpak install flathub com.hamidfzm.glyph
+
+            # Snap Store
+            sudo snap install glyph
+
             # Arch (AUR)
             yay -S glyph-md-bin
 
@@ -134,6 +140,12 @@ jobs:
 
           ### Linux
           ```bash
+          # Flathub (Flatpak)
+          flatpak install flathub com.hamidfzm.glyph
+
+          # Snap Store
+          sudo snap install glyph
+
           # Arch (AUR)
           yay -S glyph-md-bin
 
@@ -625,3 +637,49 @@ jobs:
             git commit -m "chore: update packages to $VERSION"
             git push
           }
+
+  publish-snap:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      # The snap is built from the released .deb (see snap/snapcraft.yaml), so
+      # this job needs no toolchain. It is a no-op until the maintainer adds the
+      # SNAPCRAFT_STORE_CREDENTIALS secret (snapcraft export-login), so it never
+      # fails releases before the Snap Store account is set up.
+      - name: Check for store credentials
+        id: gate
+        env:
+          CREDS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        run: |
+          if [ -n "$CREDS" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No SNAPCRAFT_STORE_CREDENTIALS secret; skipping snap publish."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+      # snapcraft.yaml discovers the latest release and pulls the .deb for the
+      # build architecture. This job runs after the release is published, so
+      # "latest" is the tag that triggered this run. (Host env vars are not
+      # forwarded into the snapcraft build instance, so the version can't be
+      # passed that way.)
+      - name: Build snap
+        if: steps.gate.outputs.enabled == 'true'
+        id: build
+        uses: snapcore/action-build@v1
+      - name: Publish snap to stable
+        if: steps.gate.outputs.enabled == 'true'
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: stable

@@ -116,6 +116,19 @@ scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
 scoop install glyph
 ```
 
+### Linux (Flathub)
+
+```bash
+flatpak install flathub com.hamidfzm.glyph
+flatpak run com.hamidfzm.glyph
+```
+
+### Linux (Snap)
+
+```bash
+sudo snap install glyph
+```
+
 ### Arch Linux (AUR)
 
 ```bash
@@ -195,26 +208,6 @@ pnpm format:check               # Check formatting (Biome)
 pnpm check                      # Lint + format + organize imports
 cd src-tauri && cargo clippy    # Lint Rust
 ```
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Cmd+O` / `Ctrl+O` | Open file(s) |
-| `Cmd+Shift+O` / `Ctrl+Shift+O` | Open folder |
-| `Cmd+K` / `Ctrl+K` | Command palette (files, headings, app actions) |
-| `Cmd+P` / `Ctrl+P` | Print / Export to PDF |
-| `Cmd+F` / `Ctrl+F` | Find in document |
-| `Cmd+=` / `Ctrl+=` | Zoom in |
-| `Cmd+-` / `Ctrl+-` | Zoom out |
-| `Cmd+0` / `Ctrl+0` | Reset zoom |
-| `Cmd+Z` / `Ctrl+Z` | Undo last in-document edit (e.g. task checkbox toggle) |
-| `Cmd+Shift+Z` / `Ctrl+Shift+Z` (also `Ctrl+Y` on Windows/Linux) | Redo |
-| `Cmd+B` / `Ctrl+B` | Toggle files sidebar |
-| `Cmd+\` / `Ctrl+\` | Toggle outline sidebar |
-| `Cmd+,` / `Ctrl+,` | Settings |
-| `Cmd+W` / `Ctrl+W` | Close tab |
-| `Cmd+Shift+W` / `Ctrl+Shift+W` | Close window |
 
 ## Comparison with Other Markdown Apps
 
