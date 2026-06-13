@@ -17,10 +17,11 @@ export interface BindableCommand {
   category: CommandCategory;
   /** Default accelerator in Tauri format, e.g. "CmdOrCtrl+O". */
   defaultAccelerator: string;
-  /** The `menu-*` event this command dispatches (the existing action bus). */
-  event: string;
-  /** True when the command also appears in the native menu, so a remap must
-   *  rebuild the native accelerator. */
+  /** The `menu-*` event this command dispatches, when it routes through the menu
+   *  action bus. Omitted for in-app-only commands like undo/redo. */
+  event?: string;
+  /** True when the command appears in the native menu, so a remap rebuilds the
+   *  native accelerator (via the Rust `apply_keybindings` command). */
   nativeMenu: boolean;
 }
 
@@ -59,12 +60,33 @@ export const BINDABLE_COMMANDS: readonly BindableCommand[] = [
     nativeMenu: true,
   },
   {
+    id: "close",
+    label: "Close Window",
+    category: "File",
+    defaultAccelerator: "CmdOrCtrl+Shift+W",
+    nativeMenu: true,
+  },
+  {
     id: "find",
     label: "Find in Document",
     category: "Edit",
     defaultAccelerator: "CmdOrCtrl+F",
     event: "menu-find",
     nativeMenu: true,
+  },
+  {
+    id: "undo",
+    label: "Undo (document edits)",
+    category: "Edit",
+    defaultAccelerator: "CmdOrCtrl+Z",
+    nativeMenu: false,
+  },
+  {
+    id: "redo",
+    label: "Redo (document edits)",
+    category: "Edit",
+    defaultAccelerator: "CmdOrCtrl+Shift+Z",
+    nativeMenu: false,
   },
   {
     id: "open-command-palette",
