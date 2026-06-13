@@ -27,7 +27,8 @@ describe("AppearanceTab", () => {
     fireEvent.click(screen.getByText("Light"));
     expect(updateSettings).toHaveBeenCalledWith("appearance.theme", "light");
 
-    const [fontFamily, codeTheme] = screen.getAllByRole("combobox");
+    // First combobox is the language picker; font family and code theme follow.
+    const [, fontFamily, codeTheme] = screen.getAllByRole("combobox");
     fireEvent.change(fontFamily, { target: { value: "serif" } });
     expect(updateSettings).toHaveBeenCalledWith("appearance.fontFamily", "serif");
 

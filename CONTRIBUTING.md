@@ -116,6 +116,22 @@ cd src-tauri && cargo test      # Rust tests
 - **Imports**: Named exports, no default exports
 - **Issue titles**: imperative mood (e.g. "Add search within document", not "Search feature" or "feat: search"). Always tag with `enhancement`/`bug` + a `priority: *` label + a category label (`markdown`/`ui`/`navigation`) where it fits. Add new issues to the **Glyph Roadmap** project board with status **Todo**.
 
+## Translations
+
+The UI is localized with [react-i18next](https://react.i18next.com/). Translations live **in this repo** under `src/locales/<code>/`, one JSON file per namespace (`common`, `settings`, ...). English (`src/locales/en/`) is the source of truth and the runtime fallback for any missing key.
+
+**Adding a UI string:**
+1. Add the key to the relevant `src/locales/en/<namespace>.json`.
+2. Reference it with `useTranslation("<namespace>")` → `t("my.key")`, or `<Trans>` when the copy contains inline markup (see `EmptyState.tsx`).
+3. Add the same key to the other locale files (or leave them to translators — the English fallback keeps the UI working meanwhile).
+
+**Translating into a new language:**
+1. Create `src/locales/<code>/` (a BCP-47 tag, e.g. `fr`, `pt-BR`, `zh-Hans`) and copy the `en` JSON files into it, translating the values.
+2. Register the bundle in `src/lib/i18n.ts` and add a `{ code, name, nativeName, dir }` entry to `LOCALES` in `src/lib/locales.ts`.
+3. Run `pnpm typecheck && pnpm test`. The language then appears in Settings → Appearance.
+
+Right-to-left locales (Arabic, Hebrew, Persian) need the layout audit tracked in [#264](https://github.com/hamidfzm/glyph/issues/264) before they render correctly.
+
 ## Workflow
 
 1. Check the [GitHub Issues](https://github.com/hamidfzm/glyph/issues) for open tasks

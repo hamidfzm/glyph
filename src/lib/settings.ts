@@ -1,4 +1,7 @@
 export interface AppearanceSettings {
+  // UI language. "system" follows the OS locale (see useLocale); otherwise a
+  // BCP-47 code from the supported set in src/lib/locales.ts.
+  locale: string;
   theme: "system" | "light" | "dark";
   fontFamily: "system" | "serif" | "sans" | "mono" | "custom";
   customFont: string;
@@ -131,6 +134,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   appearance: {
+    locale: "system",
     theme: "system",
     fontFamily: "system",
     customFont: "",
