@@ -61,7 +61,7 @@ jobs:
 
             ### macOS
             ```bash
-            brew tap hamidfzm/tap && brew install --cask glyph
+            brew tap hamidfzm/tap && brew trust hamidfzm/tap && brew install --cask glyph
             ```
             Or download `Glyph_*_universal.dmg` below.
 
@@ -117,7 +117,7 @@ jobs:
 
           ### macOS
           ```bash
-          brew tap hamidfzm/tap && brew install --cask glyph
+          brew tap hamidfzm/tap && brew trust hamidfzm/tap && brew install --cask glyph
           ```
           Or download `Glyph_*_universal.dmg` below.
 

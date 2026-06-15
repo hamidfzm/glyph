@@ -101,8 +101,11 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 
 ```bash
 brew tap hamidfzm/tap
+brew trust hamidfzm/tap
 brew install --cask glyph
 ```
+
+`brew trust` is required once because Glyph ships from a third-party tap; recent Homebrew refuses to load casks from untrusted taps.
 
 ### Windows (Chocolatey)
 
