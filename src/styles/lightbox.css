@@ -1,17 +1,10 @@
-.markdown-image-button {
-  display: inline-block;
-  max-width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
+.markdown-body img[data-zoomable] {
   cursor: zoom-in;
-  line-height: 0;
 }
 
-.markdown-image-button:focus-visible {
+.markdown-body img[data-zoomable]:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
-  border-radius: var(--glyph-radius);
 }
 
 .lightbox-overlay {
