@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import { ActualSizeIcon } from "@/components/icons/ActualSizeIcon";
 import { ChevronLeftIcon } from "@/components/icons/ChevronLeftIcon";
 import { ChevronRightIcon } from "@/components/icons/ChevronRightIcon";
@@ -25,6 +25,9 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
   const stageRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [isFit, setIsFit] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  // Intrinsic pixel size, or null when the image has none (SVGs with only a
+  // `viewBox` report naturalWidth/Height === 0). Drives the sizing model below.
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
 
   const hasMultiple = images.length > 1;
@@ -60,6 +63,7 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
   const goTo = useCallback(
     (next: number) => {
       if (next < 0 || next >= images.length) return;
+      setLoaded(false);
       setNatural(null);
       onIndexChange(next);
     },
@@ -68,7 +72,14 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
 
   const handleLoad = useCallback(() => {
     const img = imgRef.current;
-    if (img) setNatural({ w: img.naturalWidth, h: img.naturalHeight });
+    setLoaded(true);
+    // SVGs with only a viewBox report no intrinsic pixel size; fall back to a
+    // contained layout (see `imageStyle`) so they still display and zoom.
+    setNatural(
+      img && img.naturalWidth > 0 && img.naturalHeight > 0
+        ? { w: img.naturalWidth, h: img.naturalHeight }
+        : null,
+    );
     applyFit();
   }, [applyFit]);
 
@@ -125,7 +136,16 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
 
   if (!image) return null;
 
-  const displayWidth = natural ? natural.w * scale : undefined;
+  // With an intrinsic size we lay the image out at `natural × scale` so zooming
+  // past the viewport pans. Without one (SVG), contain it in `scale × 100%` of
+  // the stage so it stays visible and still grows on zoom.
+  const imageStyle: CSSProperties = natural
+    ? { width: natural.w * scale, opacity: loaded ? 1 : 0 }
+    : {
+        maxWidth: `${scale * 100}%`,
+        maxHeight: `${scale * 100}%`,
+        opacity: loaded ? 1 : 0,
+      };
 
   // The dialog is the scroll container and the backdrop: clicking it directly
   // (i.e. the empty area around the image) closes. The controls below are
@@ -176,7 +196,7 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
         src={image.src}
         alt={image.alt}
         className="lightbox-image"
-        style={{ width: displayWidth, opacity: natural ? 1 : 0 }}
+        style={imageStyle}
         onLoad={handleLoad}
         draggable={false}
       />

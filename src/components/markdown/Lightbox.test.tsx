@@ -73,6 +73,21 @@ describe("Lightbox", () => {
     expect(screen.getByText("80%")).toBeInTheDocument();
   });
 
+  it("contains an image with no intrinsic size (SVG) instead of collapsing to zero width", () => {
+    render(<Harness />);
+    const img = screen.getByAltText("first") as HTMLImageElement;
+    // jsdom reports naturalWidth/Height === 0, like an SVG with only a viewBox.
+    fireEvent.load(img);
+
+    // Visible and contained (not width: 0), and zoom grows the contain box.
+    expect(img.style.opacity).toBe("1");
+    expect(img.style.width).toBe("");
+    expect(img.style.maxWidth).toBe("100%");
+
+    fireEvent.keyDown(window, { key: "+" });
+    expect(img.style.maxWidth).toBe("125%");
+  });
+
   it("zooms with the keyboard", () => {
     render(<Harness />);
     fireEvent.keyDown(window, { key: "+" });
