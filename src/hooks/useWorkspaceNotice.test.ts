@@ -21,6 +21,20 @@ describe("useWorkspaceNotice", () => {
     expect(result.current.notice).toBeNull();
   });
 
+  it("keeps a persistent notice up past the auto-dismiss timeout", () => {
+    const { result } = renderHook(() => useWorkspaceNotice());
+
+    act(() => result.current.show("heads up", { persistent: true }));
+    expect(result.current.notice).toBe("heads up");
+
+    // Well past the transient timeout: a persistent notice stays until dismissed.
+    act(() => vi.advanceTimersByTime(60000));
+    expect(result.current.notice).toBe("heads up");
+
+    act(() => result.current.dismiss());
+    expect(result.current.notice).toBeNull();
+  });
+
   it("dismiss clears the notice immediately", () => {
     const { result } = renderHook(() => useWorkspaceNotice());
     act(() => result.current.show("nope"));
