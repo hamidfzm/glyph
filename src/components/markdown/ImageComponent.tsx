@@ -1,26 +1,11 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { type ComponentPropsWithoutRef, useCallback } from "react";
+import { MarkdownImage } from "./MarkdownImage";
 
-function resolveImageSrc(
-  src: string | undefined,
-  filePath: string | undefined,
-): string | undefined {
-  if (!src) return src;
-  if (/^(https?:|data:)/i.test(src)) return src;
-  if (filePath) {
-    const dir = filePath.replace(/[/\\][^/\\]*$/, "");
-    const resolved = `${dir}/${src}`.replace(/\/\.\//g, "/");
-    return convertFileSrc(resolved);
-  }
-  return src;
-}
-
+// Binds the document's file path into the `img` component ReactMarkdown
+// renders, so relative image paths resolve against the right directory.
 export function useImageComponent(filePath: string | undefined) {
   return useCallback(
-    (props: ComponentPropsWithoutRef<"img">) => {
-      const { src, alt, ...rest } = props;
-      return <img src={resolveImageSrc(src, filePath)} alt={alt} {...rest} />;
-    },
+    (props: ComponentPropsWithoutRef<"img">) => <MarkdownImage {...props} filePath={filePath} />,
     [filePath],
   );
 }

@@ -14,7 +14,8 @@ export interface TabsContextValue extends TabsApi {
   displayContent: string | null;
   tocEntries: TocEntry[];
   backlinks: Backlink[];
-  // Transient message shown when a folder is refused as a workspace (#262).
+  // Message shown for a workspace event (#262): a refusal, or a persistent
+  // warning when a folder is opened inside a parent git repo.
   workspaceNotice: string | null;
   dismissWorkspaceNotice: () => void;
 }
@@ -37,7 +38,7 @@ export function TabsProvider({ settings, updateSettings, children }: TabsProvide
     autoReload: settings.behavior.autoReload,
     defaultEditorMode: settings.behavior.defaultEditorMode,
     onSettingsChange: updateSettings,
-    onWorkspaceRefusal: workspaceNotice.show,
+    onWorkspaceNotice: workspaceNotice.show,
   });
 
   const activeMode = tabs.activeFile?.mode ?? EDITOR_MODE.view;

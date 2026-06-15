@@ -8,6 +8,7 @@ import remarkGemoji from "remark-gemoji";
 import remarkGfm from "remark-gfm";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
+import { LightboxProvider } from "@/contexts/LightboxContext";
 import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
 import { useKatexPlugin } from "@/hooks/useKatexPlugin";
 import { parseFrontmatter } from "@/lib/frontmatter";
@@ -87,7 +88,7 @@ export function MarkdownContent({
   );
 
   return (
-    <>
+    <LightboxProvider>
       {frontmatter && <FrontmatterBlock data={frontmatter} />}
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
@@ -101,6 +102,6 @@ export function MarkdownContent({
       >
         {content}
       </ReactMarkdown>
-    </>
+    </LightboxProvider>
   );
 }

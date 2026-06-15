@@ -35,6 +35,16 @@ describe("useImageComponent", () => {
     expect(src).toContain("/notes/img/cover.png");
   });
 
+  it("strips a Windows verbatim prefix and normalizes separators", () => {
+    const { result } = renderHook(() => useImageComponent("\\\\?\\C:\\Users\\me\\notes\\doc.md"));
+    const Img = result.current;
+    const { container } = render(<Img src="./diagram.svg" alt="d" />);
+    const decoded = decodeURIComponent(container.querySelector("img")?.getAttribute("src") ?? "");
+    // The unreadable "\\?\" prefix and the stray forward slash from the join are gone.
+    expect(decoded).not.toContain("\\\\?\\");
+    expect(decoded).toContain("C:\\Users\\me\\notes\\diagram.svg");
+  });
+
   it("leaves the src alone when no file path is known", () => {
     const { result } = renderHook(() => useImageComponent(undefined));
     const Img = result.current;
