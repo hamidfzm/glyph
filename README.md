@@ -42,6 +42,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - YAML frontmatter — title, author, date, and tags render as a metadata block above the document; tags get a per-tag colour
 - Emoji shortcodes — `:smile:` → 😊, `:+1:` → 👍
 - Local and remote image display
+- Image lightbox — click any image to view it full-size over a dark backdrop, with zoom controls (fit, actual size, zoom in/out), arrow-key navigation between the document's images, and Escape or click-outside to close
 - External links open in system browser with optional confirmation dialog
 
 ### Editor

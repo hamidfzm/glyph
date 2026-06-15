@@ -240,6 +240,8 @@ Hidden content lives inside `<details>` blocks. Useful for FAQs, troubleshooting
 
 ![Forest path](https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&h=400&fit=crop)
 
+Click either image to open it in the lightbox: zoom in/out, fit or actual size, and use the arrow keys to move between the two. Press `Esc` or click the backdrop to close.
+
 ## Links
 
 - [Glyph on GitHub](https://github.com/hamidfzm/glyph) — External links open in your system browser
