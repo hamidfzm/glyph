@@ -38,7 +38,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Math/LaTeX rendering — inline (`$...$`) and block (`$$...$$`) equations via KaTeX
 - Mermaid diagrams — flowcharts, sequence diagrams, Gantt charts, and more (theme-aware); `.mmd` source files open directly as diagrams
 - CSV/TSV tables — ` ```csv ` and ` ```tsv ` code blocks render as styled, scrollable tables
-- Inline HTML — `<kbd>`, `<sub>`, `<sup>`, `<details>`, alignment attributes (sanitised allowlist)
+- Inline HTML — `<kbd>`, `<sub>`, `<sup>`, `<details>`, inline `<svg>` drawings, alignment attributes (sanitised allowlist)
 - YAML frontmatter — title, author, date, and tags render as a metadata block above the document; tags get a per-tag colour
 - Emoji shortcodes — `:smile:` → 😊, `:+1:` → 👍
 - Local and remote image display
