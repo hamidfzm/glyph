@@ -154,6 +154,29 @@ describe("Lightbox", () => {
     expect(screen.getByText("100%")).toBeInTheDocument();
   });
 
+  it("ignores arrow keys and hides nav when there is a single image", () => {
+    render(
+      <Lightbox
+        images={[{ src: "only.png", alt: "only" }]}
+        index={0}
+        onIndexChange={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.queryByLabelText("Next image (→)")).not.toBeInTheDocument();
+    // Arrow keys are no-ops with one image (the counter isn't shown either).
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(screen.getByAltText("only")).toBeInTheDocument();
+  });
+
+  it("ignores non-Escape keys dispatched on the dialog", () => {
+    const onClose = vi.fn();
+    render(<Harness onClose={onClose} />);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "a" });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("renders nothing when the index is out of range", () => {
     const { container } = render(
       <Lightbox images={IMAGES} index={99} onIndexChange={() => {}} onClose={() => {}} />,

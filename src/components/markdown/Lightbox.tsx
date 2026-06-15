@@ -141,7 +141,9 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
   // no pixels to multiply, so fill the stage with object-fit contain and zoom
   // via transform — max-width alone caps the size but can't enlarge it.
   const imageStyle: CSSProperties = natural
-    ? { width: natural.w * scale, opacity: loaded ? 1 : 0 }
+    ? // `natural` is only set together with `loaded` in handleLoad, so it's
+      // always loaded by the time this branch renders.
+      { width: natural.w * scale, opacity: 1 }
     : {
         width: "100%",
         height: "100%",

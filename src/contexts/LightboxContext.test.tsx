@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { MarkdownImage } from "@/components/markdown/MarkdownImage";
-import { LightboxProvider } from "./LightboxContext";
+import { LightboxProvider, useLightbox } from "./LightboxContext";
 
 function renderDoc() {
   return render(
@@ -53,11 +53,26 @@ describe("LightboxProvider", () => {
         <MarkdownImage filePath={undefined} src="https://example.com/loose.png" alt="loose" />
       </LightboxProvider>,
     );
-    const img = screen.getByAltText("loose");
-    // currentSrc wins over src when the browser has resolved it; jsdom leaves it
-    // empty, so set it to exercise that path.
-    Object.defineProperty(img, "currentSrc", { value: "https://cdn.example/loose.png" });
-    fireEvent.click(img);
+    fireEvent.click(screen.getByAltText("loose"));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("does nothing when opening an image that isn't in the document", () => {
+    function Probe() {
+      const lightbox = useLightbox();
+      return (
+        <button type="button" onClick={() => lightbox?.open(document.createElement("img"))}>
+          probe
+        </button>
+      );
+    }
+    render(
+      <LightboxProvider>
+        <Probe />
+      </LightboxProvider>,
+    );
+    fireEvent.click(screen.getByText("probe"));
+    // A detached image isn't found in the scope, so no lightbox opens.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

@@ -26,13 +26,15 @@ export function LightboxProvider({ children }: { children: ReactNode }) {
     const imgs = Array.from(scope.querySelectorAll("img"));
     const index = imgs.indexOf(img);
     if (index < 0) return;
-    const images = imgs.map((el) => ({ src: el.currentSrc || el.src, alt: el.alt }));
+    // `el.src` is the webview-resolved URL (markdown images have no srcset).
+    const images = imgs.map((el) => ({ src: el.src, alt: el.alt }));
     setState({ images, index });
   }, []);
 
   const close = useCallback(() => setState(null), []);
   const setIndex = useCallback(
-    (next: number) => setState((s) => (s ? { ...s, index: next } : s)),
+    // setIndex is only wired to the open lightbox, so the state is non-null here.
+    (next: number) => setState((s) => ({ ...s!, index: next })),
     [],
   );
 
