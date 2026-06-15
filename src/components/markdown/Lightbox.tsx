@@ -137,13 +137,16 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
   if (!image) return null;
 
   // With an intrinsic size we lay the image out at `natural × scale` so zooming
-  // past the viewport pans. Without one (SVG), contain it in `scale × 100%` of
-  // the stage so it stays visible and still grows on zoom.
+  // past the viewport pans. Without one (an SVG with only a viewBox) there are
+  // no pixels to multiply, so fill the stage with object-fit contain and zoom
+  // via transform — max-width alone caps the size but can't enlarge it.
   const imageStyle: CSSProperties = natural
     ? { width: natural.w * scale, opacity: loaded ? 1 : 0 }
     : {
-        maxWidth: `${scale * 100}%`,
-        maxHeight: `${scale * 100}%`,
+        width: "100%",
+        height: "100%",
+        objectFit: "contain",
+        transform: `scale(${scale})`,
         opacity: loaded ? 1 : 0,
       };
 
