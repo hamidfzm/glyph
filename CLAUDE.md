@@ -23,14 +23,14 @@ The spec stays current throughout: acceptance-criteria and task checkboxes on th
 
 - **Plan before non-trivial work.** Anything beyond a one-line change starts from a spec (`/spec`) or an existing issue, not freeform edits.
 - **Ask, don't guess.** When acceptance criteria or scope are ambiguous, ask the user before writing code.
-- **Follow the rules in `.claude/rules/`**, which are authoritative for code organization, frontend, Rust, app-shell, docs, cleanup, and CI hygiene.
+- **Follow the rules in `.claude/rules/`**, which are authoritative for code organization, frontend, Rust, app-shell, docs, cleanup, CI hygiene, and the worktree workflow.
 - **Run the gates before every PR** (the same gate the Husky pre-commit hook and CI enforce):
   ```bash
   pnpm typecheck && pnpm check && pnpm test
   cd src-tauri && cargo clippy --all-targets -- -D warnings
   ```
   Fix Biome warnings by applying the suggested fix, never by suppressing.
-- **Branches** are cut from `main` as `feat/<slug>` or `fix/<slug>` (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+- **Branches** are cut from `main` as `feat/<slug>` or `fix/<slug>`, each in its own git worktree under `.claude/worktrees/`. See [.claude/rules/worktrees.md](.claude/rules/worktrees.md) for the GitHub Flow worktree workflow and how to clean up merged worktrees (see [CONTRIBUTING.md](CONTRIBUTING.md) for the wider conventions).
 - **No co-authored-by lines** in commits, and no em dashes anywhere in output.
 
 ### Agents
