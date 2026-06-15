@@ -95,4 +95,81 @@ describe("Lightbox", () => {
     fireEvent.keyDown(window, { key: "1" });
     expect(screen.getByText("100%")).toBeInTheDocument();
   });
+
+  it("zooms in with the = key (no shift needed)", () => {
+    render(<Harness />);
+    fireEvent.keyDown(window, { key: "=" });
+    expect(screen.getByText("125%")).toBeInTheDocument();
+  });
+
+  it("zooms out and refits with the keyboard", () => {
+    render(<Harness />);
+    fireEvent.keyDown(window, { key: "+" });
+    expect(screen.getByText("125%")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "-" });
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "+" });
+    fireEvent.keyDown(window, { key: "0" });
+    expect(screen.getByText("100%")).toBeInTheDocument();
+  });
+
+  it("closes on Escape dispatched from the dialog itself", () => {
+    const onClose = vi.fn();
+    render(<Harness onClose={onClose} />);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("navigates back with the prev button when past the first image", () => {
+    render(<Harness start={1} />);
+    expect(screen.getByText("2 / 3")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Previous image (←)"));
+    expect(screen.getByText("1 / 3")).toBeInTheDocument();
+  });
+
+  it("lays out an image with intrinsic pixel size and scales its width on zoom", () => {
+    render(<Harness />);
+    const img = screen.getByAltText("first") as HTMLImageElement;
+    // Mock a real intrinsic size (jsdom reports 0 otherwise) to hit the pixel path.
+    Object.defineProperty(img, "naturalWidth", { value: 800, configurable: true });
+    Object.defineProperty(img, "naturalHeight", { value: 600, configurable: true });
+    fireEvent.load(img);
+
+    // Intrinsic branch: explicit pixel width, no object-fit contain.
+    const fitWidth = parseFloat(img.style.width);
+    expect(fitWidth).toBeGreaterThan(0);
+    expect(img.style.objectFit).toBe("");
+
+    fireEvent.keyDown(window, { key: "+" });
+    expect(parseFloat(img.style.width)).toBeCloseTo(fitWidth * 1.25);
+  });
+
+  it("recomputes the fit on window resize while fitted", () => {
+    render(<Harness />);
+    const img = screen.getByAltText("first") as HTMLImageElement;
+    Object.defineProperty(img, "naturalWidth", { value: 800, configurable: true });
+    Object.defineProperty(img, "naturalHeight", { value: 600, configurable: true });
+    fireEvent.load(img);
+    fireEvent(window, new Event("resize"));
+    expect(screen.getByText("100%")).toBeInTheDocument();
+  });
+
+  it("renders nothing when the index is out of range", () => {
+    const { container } = render(
+      <Lightbox images={IMAGES} index={99} onIndexChange={() => {}} onClose={() => {}} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("uses a generic label when the image has no alt text", () => {
+    render(
+      <Lightbox
+        images={[{ src: "a.png", alt: "" }]}
+        index={0}
+        onIndexChange={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByRole("dialog", { name: "Image viewer" })).toBeInTheDocument();
+  });
 });

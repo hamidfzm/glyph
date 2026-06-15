@@ -38,4 +38,26 @@ describe("LightboxProvider", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
+
+  it("navigates between the document's images, updating the index", () => {
+    renderDoc();
+    fireEvent.click(screen.getByAltText("first"));
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(screen.getByText("2 / 2")).toBeInTheDocument();
+  });
+
+  it("falls back to the whole document when no image sits in a markdown-body", () => {
+    render(
+      <LightboxProvider>
+        <MarkdownImage filePath={undefined} src="https://example.com/loose.png" alt="loose" />
+      </LightboxProvider>,
+    );
+    const img = screen.getByAltText("loose");
+    // currentSrc wins over src when the browser has resolved it; jsdom leaves it
+    // empty, so set it to exercise that path.
+    Object.defineProperty(img, "currentSrc", { value: "https://cdn.example/loose.png" });
+    fireEvent.click(img);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
 });
