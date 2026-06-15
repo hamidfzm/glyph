@@ -240,7 +240,13 @@ Hidden content lives inside `<details>` blocks. Useful for FAQs, troubleshooting
 
 ![Forest path](https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&h=400&fit=crop)
 
-Click either image to open it in the lightbox: zoom in/out, fit or actual size, and use the arrow keys to move between the two. Press `Esc` or click the backdrop to close.
+### Local Images
+
+Relative paths resolve against this file's folder, so SVGs and other images committed next to your notes render inline:
+
+![Glyph turns Markdown into styled documents](./diagram.svg)
+
+Click any image to open it in the lightbox: zoom in/out, fit or actual size, and use the arrow keys to move between them. Press `Esc` or click the backdrop to close.
 
 ## Links
 
