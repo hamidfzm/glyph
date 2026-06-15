@@ -6,10 +6,11 @@ interface WorkspaceNoticeBannerProps {
 }
 
 /**
- * Transient bar shown when a folder can't be opened as a workspace (it's nested
- * inside a parent git repo, or overlaps an already-open workspace — see #262).
- * Mirrors {@link UpdateBanner}'s layout; the close button hides it, and it
- * also auto-dismisses (see `useWorkspaceNotice`).
+ * Bar shown for a workspace notice (see #262): a refusal (the folder overlaps an
+ * open workspace, or sits inside another workspace's `.glyph/`) or a warning
+ * (the folder opened despite sitting inside a parent git repo). Mirrors
+ * {@link UpdateBanner}'s layout; the close button always hides it. Refusals also
+ * auto-dismiss, while warnings stay up until dismissed (see `useWorkspaceNotice`).
  */
 export function WorkspaceNoticeBanner({ notice, onDismiss }: WorkspaceNoticeBannerProps) {
   if (!notice) return null;
