@@ -9,6 +9,10 @@
       "Bash(git log*)",
       "Bash(git add *)",
       "Bash(git commit *)",
+      "Bash(gh issue *)",
+      "Bash(gh pr *)",
+      "Bash(gh project *)",
+      "Bash(gh label *)",
       "Bash(lsof *)",
       "Bash(kill *)"
     ]
