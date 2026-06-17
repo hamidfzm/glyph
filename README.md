@@ -38,10 +38,11 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Math/LaTeX rendering — inline (`$...$`) and block (`$$...$$`) equations via KaTeX
 - Mermaid diagrams — flowcharts, sequence diagrams, Gantt charts, and more (theme-aware); `.mmd` source files open directly as diagrams
 - CSV/TSV tables — ` ```csv ` and ` ```tsv ` code blocks render as styled, scrollable tables
-- Inline HTML — `<kbd>`, `<sub>`, `<sup>`, `<details>`, alignment attributes (sanitised allowlist)
+- Inline HTML — `<kbd>`, `<sub>`, `<sup>`, `<details>`, inline `<svg>` drawings, alignment attributes (sanitised allowlist)
 - YAML frontmatter — title, author, date, and tags render as a metadata block above the document; tags get a per-tag colour
 - Emoji shortcodes — `:smile:` → 😊, `:+1:` → 👍
 - Local and remote image display
+- Image lightbox — click any image to view it full-size over a dark backdrop, with zoom controls (fit, actual size, zoom in/out), arrow-key navigation between the document's images, and Escape or click-outside to close
 - External links open in system browser with optional confirmation dialog
 
 ### Editor
@@ -101,8 +102,11 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 
 ```bash
 brew tap hamidfzm/tap
+brew trust hamidfzm/tap
 brew install --cask glyph
 ```
+
+`brew trust` is required once because Glyph ships from a third-party tap; recent Homebrew refuses to load casks from untrusted taps.
 
 ### Windows (Chocolatey)
 

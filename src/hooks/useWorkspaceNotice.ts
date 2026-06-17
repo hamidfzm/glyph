@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/** How long a refusal notice stays up before auto-dismissing. */
+/** How long a transient notice stays up before auto-dismissing. */
 const AUTO_DISMISS_MS = 6000;
 
 /**
- * Transient one-line notice shown when a folder is refused as a workspace
- * (nested git repo / overlapping workspace, see #262). There's no toast system
- * in the app, so this is the lightest surface: a single message that
- * auto-dismisses after a few seconds and can be closed manually.
+ * One-line notice surfacing a workspace event (see #262). There's no toast
+ * system in the app, so this is the lightest surface: a single message that can
+ * always be closed manually. A refusal (folder rejected) auto-dismisses after a
+ * few seconds; a `persistent` warning (e.g. a folder opened despite sitting
+ * inside a parent git repo) stays up until the user dismisses it.
  */
 export function useWorkspaceNotice() {
   const [notice, setNotice] = useState<string | null>(null);
@@ -26,10 +27,12 @@ export function useWorkspaceNotice() {
   }, [clearTimer]);
 
   const show = useCallback(
-    (message: string) => {
+    (message: string, options?: { persistent?: boolean }) => {
       clearTimer();
       setNotice(message);
-      timerRef.current = setTimeout(() => setNotice(null), AUTO_DISMISS_MS);
+      if (!options?.persistent) {
+        timerRef.current = setTimeout(() => setNotice(null), AUTO_DISMISS_MS);
+      }
     },
     [clearTimer],
   );

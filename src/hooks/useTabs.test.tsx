@@ -67,7 +67,7 @@ function defaultOptions(over: Partial<Parameters<typeof useTabs>[0]> = {}) {
     autoReload: false,
     defaultEditorMode: "view" as const,
     onSettingsChange: vi.fn(),
-    onWorkspaceRefusal: vi.fn(),
+    onWorkspaceNotice: vi.fn(),
     ...over,
   };
 }
@@ -1898,8 +1898,8 @@ describe("useTabs dialog and events", () => {
     errorSpy.mockRestore();
   });
 
-  it("refuses a folder nested inside a parent git repo (#262)", async () => {
-    const onWorkspaceRefusal = vi.fn();
+  it("opens a folder nested inside a parent git repo with a persistent warning (#262)", async () => {
+    const onWorkspaceNotice = vi.fn();
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         workspace_resolve: async (_cmd, args) => ({
@@ -1911,19 +1911,22 @@ describe("useTabs dialog and events", () => {
         }),
       }) as typeof invoke,
     );
-    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     await act(async () => {
       await result.current.openFolder("/p/repo/sub");
     });
 
-    expect(result.current.workspace).toBeNull();
-    expect(onWorkspaceRefusal).toHaveBeenCalledWith(expect.stringContaining("/p/repo"));
+    // The folder opens (no longer refused) but a persistent warning is shown.
+    expect(result.current.workspace?.root).toBe("/p/repo/sub");
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(expect.stringContaining("/p/repo"), {
+      persistent: true,
+    });
   });
 
   it("refuses a folder nested inside another workspace's .glyph (#262)", async () => {
-    const onWorkspaceRefusal = vi.fn();
+    const onWorkspaceNotice = vi.fn();
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         workspace_resolve: async (_cmd, args) => ({
@@ -1935,7 +1938,7 @@ describe("useTabs dialog and events", () => {
         }),
       }) as typeof invoke,
     );
-    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     await act(async () => {
@@ -1943,11 +1946,11 @@ describe("useTabs dialog and events", () => {
     });
 
     expect(result.current.workspace).toBeNull();
-    expect(onWorkspaceRefusal).toHaveBeenCalledWith(expect.stringContaining("/p/outer"));
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(expect.stringContaining("/p/outer"));
   });
 
-  it("silently skips a nested folder on restore without bannering", async () => {
-    const onWorkspaceRefusal = vi.fn();
+  it("restores a nested folder silently without bannering", async () => {
+    const onWorkspaceNotice = vi.fn();
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         workspace_resolve: async (_cmd, args) => ({
@@ -1962,19 +1965,20 @@ describe("useTabs dialog and events", () => {
     const { result } = renderHook(() =>
       useTabs(
         defaultOptions({
-          onWorkspaceRefusal,
+          onWorkspaceNotice,
           openTabs: [{ kind: "folder", path: "/p/repo/sub" }],
         }),
       ),
     );
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
-    expect(result.current.workspace).toBeNull();
-    expect(onWorkspaceRefusal).not.toHaveBeenCalled();
+    // A nested folder reopens on restore, but the warning banner stays silent.
+    expect(result.current.workspace?.root).toBe("/p/repo/sub");
+    expect(onWorkspaceNotice).not.toHaveBeenCalled();
   });
 
   it("refuses and reports when workspace resolution fails", async () => {
-    const onWorkspaceRefusal = vi.fn();
+    const onWorkspaceNotice = vi.fn();
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         workspace_resolve: async () => {
@@ -1982,7 +1986,7 @@ describe("useTabs dialog and events", () => {
         },
       }) as typeof invoke,
     );
-    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     await act(async () => {
@@ -1990,7 +1994,7 @@ describe("useTabs dialog and events", () => {
     });
 
     expect(result.current.workspace).toBeNull();
-    expect(onWorkspaceRefusal).toHaveBeenCalledWith(expect.stringContaining("Couldn't open"));
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(expect.stringContaining("Couldn't open"));
   });
 
   it("openFolder is wired to the open-folder event", async () => {

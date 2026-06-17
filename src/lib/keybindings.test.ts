@@ -215,4 +215,13 @@ describe("BINDABLE_COMMANDS", () => {
     expect(command?.event).toBe("menu-open-graph");
     expect(command?.nativeMenu).toBe(true);
   });
+
+  it("includes the in-app undo/redo and Close Window commands", () => {
+    expect(getBindableCommand("undo")?.defaultAccelerator).toBe("CmdOrCtrl+Z");
+    expect(getBindableCommand("redo")?.defaultAccelerator).toBe("CmdOrCtrl+Shift+Z");
+    expect(getBindableCommand("close")?.defaultAccelerator).toBe("CmdOrCtrl+Shift+W");
+    // undo/redo are in-app only, not native-menu commands.
+    expect(getBindableCommand("undo")?.nativeMenu).toBe(false);
+    expect(getBindableCommand("close")?.nativeMenu).toBe(true);
+  });
 });

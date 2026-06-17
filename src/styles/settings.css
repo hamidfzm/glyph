@@ -168,6 +168,11 @@
   margin-top: 2px;
 }
 
+/* Full-width search box at the top of the Hotkeys pane. */
+.settings-hotkey-search {
+  width: 100%;
+}
+
 /* Per-preset keymap quick-reference shown under the keymap selector. */
 .settings-keymap-help {
   margin-top: 10px;

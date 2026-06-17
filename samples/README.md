@@ -240,6 +240,31 @@ Hidden content lives inside `<details>` blocks. Useful for FAQs, troubleshooting
 
 ![Forest path](https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&h=400&fit=crop)
 
+### Local Images
+
+Relative paths resolve against this file's folder, so SVGs and other images committed next to your notes render inline:
+
+![Glyph turns Markdown into styled documents](./diagram.svg)
+
+Click any image to open it in the lightbox: zoom in/out, fit or actual size, and use the arrow keys to move between them. Press `Esc` or click the backdrop to close.
+
+### Inline SVG
+
+You can also embed SVG straight into the markdown. It renders inline from a sanitised allowlist (shapes, gradients, and text — no scripts or external references), which is handy for small, theme-friendly diagrams:
+
+<svg viewBox="0 0 320 120" width="320" height="120" role="img" aria-label="Inline SVG gradient badge">
+  <defs>
+    <linearGradient id="demo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366f1" />
+      <stop offset="1" stop-color="#0ea5e9" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="312" height="112" rx="16" fill="url(#demo)" />
+  <circle cx="64" cy="60" r="34" fill="#ffffff" fill-opacity="0.18" />
+  <path d="M50 60 l10 10 l20 -24" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+  <text x="190" y="68" text-anchor="middle" font-family="sans-serif" font-size="24" font-weight="700" fill="#ffffff">Inline SVG</text>
+</svg>
+
 ## Links
 
 - [Glyph on GitHub](https://github.com/hamidfzm/glyph) — External links open in your system browser

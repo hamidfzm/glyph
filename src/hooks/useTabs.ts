@@ -103,9 +103,11 @@ interface UseTabsOptions {
   autoReload: boolean;
   defaultEditorMode: EditorMode;
   onSettingsChange: (key: string, value: unknown) => void;
-  // Called when a folder is refused as a workspace (nested git repo, see
-  // #262). The provider surfaces it as a transient banner.
-  onWorkspaceRefusal: (message: string) => void;
+  // Called to surface a workspace notice (see #262): a refusal (a folder nested
+  // inside another Glyph workspace) or a `persistent` warning (a folder opened
+  // despite sitting inside a parent git repo). The provider surfaces it as a
+  // banner.
+  onWorkspaceNotice: (message: string, options?: { persistent?: boolean }) => void;
 }
 
 async function loadFileContent(path: string) {
@@ -363,31 +365,39 @@ export function useTabs(options: UseTabsOptions) {
         return;
       }
 
-      // A workspace is one git repo's top level (#262). Refuse a folder
-      // nested inside a parent repo or another Glyph workspace so every
-      // workspace-wide feature has an unambiguous owner. The `silent` path
-      // (persisted-tab restore) skips the banner.
-      const refuse = (message: string) => {
-        if (!openOptions?.silent) optionsRef.current.onWorkspaceRefusal(message);
+      // A workspace is one git repo's top level (#262). Refuse a folder nested
+      // inside another Glyph workspace's `.glyph/` so workspace-wide features
+      // have an unambiguous owner. A folder merely sitting inside a parent git
+      // repo is still allowed (so `samples/` inside this repo opens) but earns a
+      // persistent warning. Switching to a folder that overlaps the open one
+      // just replaces the workspace, so there's nothing to refuse there. The
+      // `silent` path (persisted-tab restore) skips the banner.
+      const notify = (message: string, persistent = false) => {
+        if (openOptions?.silent) return;
+        if (persistent) optionsRef.current.onWorkspaceNotice(message, { persistent: true });
+        else optionsRef.current.onWorkspaceNotice(message);
       };
       let resolution: WorkspaceResolution;
       try {
         resolution = await resolveWorkspace(resolvedRoot);
       } catch (err) {
-        refuse(`Couldn't open this folder: ${String(err)}`);
-        return;
-      }
-      if (resolution.nestedUnder) {
-        refuse(
-          `This folder is inside the git repository at "${resolution.nestedUnder}". Open that folder instead — Glyph treats one repository as one workspace.`,
-        );
+        notify(`Couldn't open this folder: ${String(err)}`);
         return;
       }
       if (resolution.glyphConflict) {
-        refuse(
+        notify(
           `This folder sits inside another Glyph workspace ("${resolution.glyphConflict}"). Nested workspaces aren't supported.`,
         );
         return;
+      }
+      // Allowed, but a folder inside a parent git repo means workspace-wide
+      // features (Sync, `.glyph/` config) resolve against that repo, so warn and
+      // keep the notice up until the user dismisses it.
+      if (resolution.nestedUnder) {
+        notify(
+          `This folder is inside the git repository at "${resolution.nestedUnder}". Glyph treats one repository as one workspace, so some workspace features may act on the whole repository.`,
+          true,
+        );
       }
 
       folderOpenInFlight.current = resolvedRoot;
