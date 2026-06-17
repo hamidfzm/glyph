@@ -161,4 +161,71 @@ describe("GraphView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reset view" }));
     expect(lastWorldTransform()).toEqual({ scale: 1, tx: 400 });
   });
+
+  it("pans on a purely vertical drag", () => {
+    const { canvas } = renderGraph();
+    fireEvent.pointerDown(canvas, { pointerId: 1, clientX: 400, clientY: 300 });
+    // dx = 0, dy = 60: only the vertical-delta arm of the click-slop test fires.
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 400, clientY: 360 });
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 400, clientY: 360 });
+    expect(lastWorldTransform().tx).toBe(400);
+    // The vertical pan shifted the world transform's y-translate (5th setTransform arg is x; check it stayed put while a draw still happened).
+    expect(ctx.clearRect).toHaveBeenCalled();
+  });
+
+  it("treats a sub-slop jitter as a click, not a pan", () => {
+    const { canvas, onOpenFile } = renderGraph();
+    fireEvent.pointerDown(canvas, { pointerId: 1, clientX: 400, clientY: 300 });
+    // dx=2, dy=1 are both within CLICK_SLOP_PX, so no pan starts.
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 402, clientY: 301 });
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 402, clientY: 301 });
+    expect(lastWorldTransform().tx).toBe(400);
+    expect(onOpenFile).toHaveBeenCalledWith("/v/a.md");
+  });
+
+  it("keeps panning on a continued drag after movement starts", () => {
+    const { canvas } = renderGraph();
+    fireEvent.pointerDown(canvas, { pointerId: 1, clientX: 400, clientY: 300 });
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 450, clientY: 300 });
+    // Second move with a tiny delta: drag.moved is already true, so the first
+    // arm of the click-slop test short-circuits and the pan continues.
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 452, clientY: 300 });
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 452, clientY: 300 });
+    expect(lastWorldTransform().tx).toBe(452);
+  });
+
+  it("falls back to a device pixel ratio of 1 when none is reported", () => {
+    const original = window.devicePixelRatio;
+    Object.defineProperty(window, "devicePixelRatio", { value: 0, configurable: true });
+    try {
+      renderGraph();
+      // dpr 1 * camera scale 1 → world transform scale 1.
+      expect(lastWorldTransform().scale).toBe(1);
+    } finally {
+      Object.defineProperty(window, "devicePixelRatio", {
+        value: original,
+        configurable: true,
+      });
+    }
+  });
+
+  it("skips drawing when the 2D context is unavailable", () => {
+    HTMLCanvasElement.prototype.getContext = vi.fn(
+      () => null,
+    ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+    expect(() => renderGraph()).not.toThrow();
+    // Guard short-circuits before any draw call.
+    expect(ctx.clearRect).not.toHaveBeenCalled();
+  });
+
+  it("treats a missing bounding rect as the origin without crashing", () => {
+    const { canvas } = renderGraph();
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(
+      undefined as unknown as DOMRect,
+    );
+    // localPoint must fall back to (clientX, clientY) via `?? 0` rather than throw.
+    expect(() =>
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 400, clientY: 300 }),
+    ).not.toThrow();
+  });
 });

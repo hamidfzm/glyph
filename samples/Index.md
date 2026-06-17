@@ -4,6 +4,7 @@ A small linked workspace used to demo Glyph's wikilink resolution. Browse to:
 
 - [[README|Feature showcase]] — every renderer feature in one file
 - [[Notes/Cooking]] — example note in a subdirectory
+- [[Graph View]] is a guide to the workspace graph (press `Cmd/Ctrl+G` to see this workspace mapped)
 
 ## Setup
 

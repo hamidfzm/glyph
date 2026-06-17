@@ -136,4 +136,13 @@ describe("capturePositions", () => {
       expect(second.nodes[i].y).toBe(first.nodes[i].y);
     }
   });
+
+  it("defaults missing coordinates to the origin", () => {
+    const layout = createGraphLayout(makeGraph());
+    // Simulate a node d3 hasn't positioned yet (coords still undefined).
+    layout.nodes[0].x = undefined;
+    layout.nodes[0].y = undefined;
+    const snapshot = capturePositions(layout);
+    expect(snapshot.get(layout.nodes[0].id)).toEqual({ x: 0, y: 0 });
+  });
 });

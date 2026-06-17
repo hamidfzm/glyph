@@ -98,6 +98,12 @@ describe("hitTestNode", () => {
     const screen = worldToScreen(camera, VIEWPORT, 100, 0);
     expect(hitTestNode(nodes, camera, VIEWPORT, screen.x, screen.y)?.id).toBe("b");
   });
+
+  it("treats a node without coordinates as the origin", () => {
+    const n: LayoutNode = { id: "a", label: "a", degree: 0, orphan: true };
+    // Origin maps to the viewport centre (400, 300) under the default camera.
+    expect(hitTestNode([n], DEFAULT_CAMERA, VIEWPORT, 400, 300)?.id).toBe("a");
+  });
 });
 
 describe("readGraphTheme", () => {
@@ -244,5 +250,94 @@ describe("drawGraph", () => {
     const ctx = stubContext();
     drawGraph(ctx as unknown as CanvasRenderingContext2D, makeLayout(), drawOptions("/v/a.md"));
     expect(ctx.globalAlpha).toBe(1);
+  });
+
+  it("dims everything when hovering an orphan absent from the neighbour map", () => {
+    // "lone" has no entry in `neighbors`, so isActive falls through its `?? false`.
+    const ctx = stubContext();
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, makeLayout(), drawOptions("/v/lone.md"));
+    expect(ctx.arc).toHaveBeenCalledTimes(3);
+  });
+
+  // A node whose simulation hasn't assigned coordinates yet exercises the
+  // defensive `?? 0` fallbacks in the edge, node, label, and arrow-tip paths.
+  it("treats nodes without computed coordinates as the origin", () => {
+    const a: LayoutNode = { id: "a", label: "a", degree: 1, orphan: false };
+    const b: LayoutNode = { id: "b", label: "b", degree: 1, orphan: false };
+    const layout = {
+      nodes: [a, b],
+      links: [{ source: a, target: b }],
+      simulation: null,
+    } as unknown as GraphLayout;
+    const neighbors = new Map<string, ReadonlySet<string>>([
+      ["a", new Set(["b"])],
+      ["b", new Set(["a"])],
+    ]);
+    const ctx = stubContext();
+    // Hover "a" so the arrow-tip path (which also reads `?? 0`) runs.
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, layout, {
+      viewport: VIEWPORT,
+      dpr: 1,
+      camera: DEFAULT_CAMERA,
+      theme: THEME,
+      hoveredId: "a",
+      neighbors,
+    });
+    // Both endpoints collapse to (0, 0); the line and arc still draw finite coords.
+    for (const call of [
+      ...ctx.moveTo.mock.calls,
+      ...ctx.lineTo.mock.calls,
+      ...ctx.arc.mock.calls,
+    ]) {
+      for (const arg of call) expect(Number.isFinite(arg)).toBe(true);
+    }
+    expect(ctx.arc).toHaveBeenCalledTimes(2);
+  });
+
+  // Hovering with an edge that does NOT touch the hovered node, plus an inactive
+  // non-orphan node, covers the dimmed-edge and plain-node colour branches that
+  // the 3-node fixture never reaches.
+  it("dims non-neighbour edges and keeps inactive non-orphan nodes plain", () => {
+    const mk = (id: string): LayoutNode => ({ id, label: id, degree: 1, orphan: false });
+    const [a, b, c, d] = [mk("a"), mk("b"), mk("c"), mk("d")].map((n, i) => ({
+      ...n,
+      x: i * 50,
+      y: 0,
+    }));
+    const layout = {
+      nodes: [a, b, c, d],
+      links: [
+        { source: a, target: b },
+        { source: c, target: d },
+      ],
+      simulation: null,
+    } as unknown as GraphLayout;
+    const neighbors = new Map<string, ReadonlySet<string>>([
+      ["a", new Set(["b"])],
+      ["b", new Set(["a"])],
+      ["c", new Set(["d"])],
+      ["d", new Set(["c"])],
+    ]);
+    const ctx = stubContext();
+    const fills: string[] = [];
+    const alphas: number[] = [];
+    Object.defineProperty(ctx, "fillStyle", { set: (v: string) => fills.push(v), get: () => "" });
+    Object.defineProperty(ctx, "globalAlpha", {
+      set: (v: number) => alphas.push(v),
+      get: () => 1,
+    });
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, layout, {
+      viewport: VIEWPORT,
+      dpr: 1,
+      camera: DEFAULT_CAMERA,
+      theme: THEME,
+      hoveredId: "a",
+      neighbors,
+    });
+    // c and d are inactive but not orphans → plain node colour while dimmed.
+    expect(fills).toContain("node");
+    expect(fills).not.toContain("orphan");
+    // The c–d edge doesn't touch the hovered node, so it draws at the dimmed alpha.
+    expect(alphas).toContain(0.18);
   });
 });
