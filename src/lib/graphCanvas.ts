@@ -21,6 +21,11 @@ export interface Viewport {
 export const DEFAULT_CAMERA: Camera = { dx: 0, dy: 0, scale: 1 };
 export const MIN_SCALE = 0.1;
 export const MAX_SCALE = 8;
+// Auto-fit never zooms in past this, so a tiny graph fills the viewport
+// comfortably instead of blowing a couple of nodes up to fill the screen.
+const FIT_MAX_SCALE = 1.6;
+// Breathing room (screen px) left around the graph when fitting.
+const FIT_PADDING = 48;
 
 /** Labels are unreadable clutter when zoomed far out; hide them below this. */
 const LABEL_MIN_SCALE = 0.7;
@@ -78,6 +83,48 @@ export function screenToWorld(
 /** Node radius in world units, growing gently with connectivity. */
 export function nodeRadius(degree: number): number {
   return Math.min(14, 4 + Math.sqrt(degree) * 1.8);
+}
+
+/**
+ * Camera that frames every node within the viewport (with padding), centred.
+ * Used to auto-fit the graph on open and to re-frame it on "Reset view", so
+ * the user never has to hunt for an off-screen or clumped layout. Returns the
+ * default camera for an empty graph.
+ */
+export function fitCameraToNodes(
+  nodes: readonly LayoutNode[],
+  viewport: Viewport,
+  padding = FIT_PADDING,
+): Camera {
+  if (nodes.length === 0 || viewport.width === 0 || viewport.height === 0) {
+    return DEFAULT_CAMERA;
+  }
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const node of nodes) {
+    const x = node.x ?? 0;
+    const y = node.y ?? 0;
+    const r = nodeRadius(node.degree);
+    if (x - r < minX) minX = x - r;
+    if (x + r > maxX) maxX = x + r;
+    if (y - r < minY) minY = y - r;
+    if (y + r > maxY) maxY = y + r;
+  }
+  // Guard against a zero-size span (single node, or all stacked) so the scale
+  // stays finite.
+  const spanX = Math.max(maxX - minX, 1);
+  const spanY = Math.max(maxY - minY, 1);
+  const usableW = Math.max(viewport.width - padding * 2, 1);
+  const usableH = Math.max(viewport.height - padding * 2, 1);
+  const rawScale = Math.min(usableW / spanX, usableH / spanY);
+  const scale = Math.min(FIT_MAX_SCALE, Math.max(MIN_SCALE, rawScale));
+  // Map the graph's world centre onto the viewport centre: with
+  // screen = world * scale + viewport/2 + d, centring needs d = -centre * scale.
+  const centreX = (minX + maxX) / 2;
+  const centreY = (minY + maxY) / 2;
+  return { scale, dx: -centreX * scale, dy: -centreY * scale };
 }
 
 /**

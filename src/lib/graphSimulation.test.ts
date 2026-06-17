@@ -5,6 +5,8 @@ import {
   capturePositions,
   createGraphLayout,
   LAYOUT_MAX_TICKS,
+  pinNode,
+  releaseNode,
   tickLayout,
 } from "./graphSimulation";
 
@@ -144,5 +146,27 @@ describe("capturePositions", () => {
     layout.nodes[0].y = undefined;
     const snapshot = capturePositions(layout);
     expect(snapshot.get(layout.nodes[0].id)).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe("pinNode / releaseNode", () => {
+  it("pins a node to a fixed position and releases it", () => {
+    const layout = createGraphLayout(makeGraph());
+    const node = layout.nodes[0];
+    pinNode(node, 42, -7);
+    expect(node.fx).toBe(42);
+    expect(node.fy).toBe(-7);
+    releaseNode(node);
+    expect(node.fx).toBeNull();
+    expect(node.fy).toBeNull();
+  });
+
+  it("holds a pinned node in place while the simulation ticks", () => {
+    const layout = createGraphLayout(makeGraph());
+    const node = layout.nodes[0];
+    pinNode(node, 100, 100);
+    tickLayout(layout, 20);
+    expect(node.x).toBe(100);
+    expect(node.y).toBe(100);
   });
 });

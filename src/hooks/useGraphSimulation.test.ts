@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { buildWorkspaceGraph } from "@/lib/graph";
@@ -86,6 +86,23 @@ describe("useGraphSimulation", () => {
     for (const node of result.current.layout.nodes) {
       expect(Number.isFinite(node.x)).toBe(true);
     }
+    unmount();
+  });
+
+  it("resumes animating when reheated after settling", async () => {
+    const graph = buildWorkspaceGraph(FILES, REFS);
+    const { result, unmount } = renderHook(() => useGraphSimulation(graph, FAST));
+    await waitFor(() => expect(result.current.settled).toBe(true), { timeout: 5000 });
+    const versionWhenSettled = result.current.version;
+
+    // Two synchronous reheats: the second hits the "loop already running" guard.
+    act(() => {
+      result.current.reheat();
+      result.current.reheat();
+    });
+    // Reheat un-settles the simulation and runs at least one more frame.
+    await waitFor(() => expect(result.current.settled).toBe(true), { timeout: 5000 });
+    expect(result.current.version).toBeGreaterThan(versionWhenSettled);
     unmount();
   });
 });

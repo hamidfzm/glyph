@@ -105,6 +105,19 @@ export function tickLayout(layout: GraphLayout, ticks: number): boolean {
   return sim.alpha() < sim.alphaMin();
 }
 
+/** Pin a node to a fixed world position so the simulation holds it there
+ *  (used while the user drags it). d3 honours fx/fy on every tick. */
+export function pinNode(node: LayoutNode, x: number, y: number): void {
+  node.fx = x;
+  node.fy = y;
+}
+
+/** Release a pinned node back into the flow of the simulation. */
+export function releaseNode(node: LayoutNode): void {
+  node.fx = null;
+  node.fy = null;
+}
+
 /** Snapshot node positions, used to seed the next layout pass. */
 export function capturePositions(layout: GraphLayout): Map<string, NodePosition> {
   const out = new Map<string, NodePosition>();

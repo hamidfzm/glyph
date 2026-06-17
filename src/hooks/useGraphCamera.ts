@@ -13,8 +13,8 @@ export interface GraphCameraApi {
   pan: (dx: number, dy: number) => void;
   /** Zoom by `factor`, anchored on the screen point (sx, sy). */
   zoomAt: (sx: number, sy: number, factor: number, viewport: Viewport) => void;
-  /** Back to centered, 1:1 scale. */
-  reset: () => void;
+  /** Replace the camera outright (used to seed manual control from auto-fit). */
+  set: (camera: Camera) => void;
 }
 
 /** Pan/zoom camera state for the graph view; the math lives in lib/graphCanvas. */
@@ -26,6 +26,6 @@ export function useGraphCamera(): GraphCameraApi {
   const zoomAt = useCallback((sx: number, sy: number, factor: number, viewport: Viewport) => {
     setCamera((c) => zoomCameraAt(c, sx, sy, factor, viewport));
   }, []);
-  const reset = useCallback(() => setCamera(DEFAULT_CAMERA), []);
-  return useMemo(() => ({ camera, pan, zoomAt, reset }), [camera, pan, zoomAt, reset]);
+  const set = useCallback((next: Camera) => setCamera(next), []);
+  return useMemo(() => ({ camera, pan, zoomAt, set }), [camera, pan, zoomAt, set]);
 }

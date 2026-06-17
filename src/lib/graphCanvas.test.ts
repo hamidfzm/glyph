@@ -5,6 +5,7 @@ import {
   type Camera,
   DEFAULT_CAMERA,
   drawGraph,
+  fitCameraToNodes,
   hitTestNode,
   MAX_SCALE,
   MIN_SCALE,
@@ -67,6 +68,66 @@ describe("nodeRadius", () => {
     expect(nodeRadius(0)).toBe(4);
     expect(nodeRadius(4)).toBeGreaterThan(nodeRadius(1));
     expect(nodeRadius(10_000)).toBe(14);
+  });
+});
+
+describe("fitCameraToNodes", () => {
+  const mk = (x: number, y: number, degree = 1): LayoutNode => ({
+    id: `${x},${y}`,
+    label: "n",
+    degree,
+    orphan: false,
+    x,
+    y,
+  });
+
+  it("centres the graph's bounding box on the viewport", () => {
+    const nodes = [mk(-100, -50), mk(100, 50)];
+    const cam = fitCameraToNodes(nodes, VIEWPORT);
+    // The world centre (0, 0) lands on the viewport centre.
+    const centre = worldToScreen(cam, VIEWPORT, 0, 0);
+    expect(centre.x).toBeCloseTo(VIEWPORT.width / 2);
+    expect(centre.y).toBeCloseTo(VIEWPORT.height / 2);
+  });
+
+  it("keeps every node inside the viewport with padding", () => {
+    const nodes = [mk(-500, -300), mk(500, 300), mk(0, 0)];
+    const cam = fitCameraToNodes(nodes, VIEWPORT, 48);
+    for (const n of nodes) {
+      const s = worldToScreen(cam, VIEWPORT, n.x ?? 0, n.y ?? 0);
+      expect(s.x).toBeGreaterThanOrEqual(0);
+      expect(s.x).toBeLessThanOrEqual(VIEWPORT.width);
+      expect(s.y).toBeGreaterThanOrEqual(0);
+      expect(s.y).toBeLessThanOrEqual(VIEWPORT.height);
+    }
+  });
+
+  it("does not zoom a tiny graph past the fit-max scale", () => {
+    const cam = fitCameraToNodes([mk(0, 0), mk(2, 0)], VIEWPORT);
+    expect(cam.scale).toBeLessThanOrEqual(1.6);
+  });
+
+  it("scales a large graph down to fit", () => {
+    const cam = fitCameraToNodes([mk(-2000, -2000), mk(2000, 2000)], VIEWPORT);
+    expect(cam.scale).toBeLessThan(1);
+    expect(cam.scale).toBeGreaterThanOrEqual(MIN_SCALE);
+  });
+
+  it("returns the default camera for an empty graph or zero viewport", () => {
+    expect(fitCameraToNodes([], VIEWPORT)).toEqual(DEFAULT_CAMERA);
+    expect(fitCameraToNodes([mk(0, 0)], { width: 0, height: 0 })).toEqual(DEFAULT_CAMERA);
+  });
+
+  it("handles a single node without producing NaNs", () => {
+    const cam = fitCameraToNodes([mk(25, -10)], VIEWPORT);
+    expect(Number.isFinite(cam.scale)).toBe(true);
+    expect(Number.isFinite(cam.dx)).toBe(true);
+    expect(Number.isFinite(cam.dy)).toBe(true);
+  });
+
+  it("falls back to the origin for nodes without coordinates", () => {
+    const node: LayoutNode = { id: "a", label: "a", degree: 0, orphan: true };
+    expect(() => fitCameraToNodes([node], VIEWPORT)).not.toThrow();
   });
 });
 

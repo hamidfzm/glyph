@@ -26,14 +26,14 @@ describe("useGraphCamera", () => {
     expect(result.current.camera.scale).toBe(MAX_SCALE);
   });
 
-  it("resets to the default camera", () => {
+  it("replaces the camera outright via set", () => {
     const { result } = renderHook(() => useGraphCamera());
     act(() => {
       result.current.pan(50, 50);
       result.current.zoomAt(0, 0, 3, VIEWPORT);
     });
-    act(() => result.current.reset());
-    expect(result.current.camera).toEqual(DEFAULT_CAMERA);
+    act(() => result.current.set({ dx: -10, dy: 7, scale: 1.5 }));
+    expect(result.current.camera).toEqual({ dx: -10, dy: 7, scale: 1.5 });
   });
 
   it("keeps callback identities stable across camera changes", () => {
@@ -42,6 +42,6 @@ describe("useGraphCamera", () => {
     act(() => result.current.pan(1, 1));
     expect(result.current.pan).toBe(first.pan);
     expect(result.current.zoomAt).toBe(first.zoomAt);
-    expect(result.current.reset).toBe(first.reset);
+    expect(result.current.set).toBe(first.set);
   });
 });

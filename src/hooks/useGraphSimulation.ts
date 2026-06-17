@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WorkspaceGraph } from "@/lib/graph";
 import {
   capturePositions,
@@ -22,9 +22,14 @@ export interface GraphSimulationState {
   version: number;
   /** True once the current layout pass has finished. */
   settled: boolean;
+  /** Warm the simulation back up and resume animating (used while dragging a
+   *  node). Resets the per-pass tick budget so an interaction is never cut off
+   *  by the anti-spin cap. */
+  reheat: (alpha?: number) => void;
 }
 
 const DEFAULT_TICKS_PER_FRAME = 10;
+const REHEAT_ALPHA = 0.5;
 
 /**
  * Runs the d3-force layout for `graph` in requestAnimationFrame batches so
@@ -45,35 +50,59 @@ export function useGraphSimulation(
   const previousPositions = useRef<Map<string, NodePosition> | null>(null);
   const [version, setVersion] = useState(0);
   const [settled, setSettled] = useState(false);
+  // rAF handle + whether a loop is in flight, so reheat can resume a settled
+  // simulation without ever stacking two loops.
+  const frameRef = useRef(0);
+  const runningRef = useRef(false);
+  // Remaining tick budget for the current pass; reheat refills it.
+  const budgetRef = useRef(maxTicks);
 
   const layout = useMemo(
     () => createGraphLayout(graph, previousPositions.current ?? undefined),
     [graph],
   );
 
-  useEffect(() => {
+  const runLoop = useCallback(() => {
+    if (runningRef.current) return;
+    runningRef.current = true;
     setSettled(false);
-    let elapsed = 0;
-    let frame = 0;
 
     const step = () => {
       const done = tickLayout(layout, ticksPerFrame);
-      elapsed += ticksPerFrame;
+      budgetRef.current -= ticksPerFrame;
       previousPositions.current = capturePositions(layout);
       setVersion((v) => v + 1);
-      if (done || elapsed >= maxTicks) {
+      if (done || budgetRef.current <= 0) {
+        runningRef.current = false;
         setSettled(true);
         return;
       }
-      frame = requestAnimationFrame(step);
+      frameRef.current = requestAnimationFrame(step);
     };
-    frame = requestAnimationFrame(step);
+    frameRef.current = requestAnimationFrame(step);
+  }, [layout, ticksPerFrame]);
 
+  // Fresh layout (mount or graph change): refill the budget and run.
+  useEffect(() => {
+    budgetRef.current = maxTicks;
+    runLoop();
     return () => {
-      cancelAnimationFrame(frame);
+      cancelAnimationFrame(frameRef.current);
+      runningRef.current = false;
       layout.simulation.stop();
     };
-  }, [layout, ticksPerFrame, maxTicks]);
+  }, [layout, maxTicks, runLoop]);
 
-  return { layout, version, settled };
+  const reheat = useCallback(
+    (alpha = REHEAT_ALPHA) => {
+      const sim = layout.simulation;
+      sim.alpha(Math.max(sim.alpha(), alpha));
+      // Refill the budget so a sustained drag keeps animating, then resume.
+      budgetRef.current = maxTicks;
+      runLoop();
+    },
+    [layout, maxTicks, runLoop],
+  );
+
+  return { layout, version, settled, reheat };
 }
