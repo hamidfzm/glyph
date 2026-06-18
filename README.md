@@ -123,6 +123,13 @@ scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
 scoop install glyph
 ```
 
+### Linux (Flathub)
+
+```bash
+flatpak install flathub com.hamidfzm.glyph
+flatpak run com.hamidfzm.glyph
+```
+
 ### Linux (Snap)
 
 ```bash
