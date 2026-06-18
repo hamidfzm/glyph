@@ -13,6 +13,13 @@ cask "glyph" do
   end
 
   app "Glyph.app"
+  binary "#{appdir}/Glyph.app/Contents/MacOS/Glyph", target: "glyph"
+
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-cr", "#{appdir}/Glyph.app"],
+                   sudo: false
+  end
 
   zap trash: [
     "~/Library/Application Support/com.hamidfzm.glyph",

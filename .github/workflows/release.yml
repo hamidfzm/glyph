@@ -185,39 +185,8 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           SHA="${{ steps.sha.outputs.sha256 }}"
 
-          cat > /tmp/glyph.rb << 'CASK'
-          cask "glyph" do
-          CASK
-
-          cat >> /tmp/glyph.rb << CASK
-            version "$VERSION"
-            sha256 "$SHA"
-
-            url "https://github.com/hamidfzm/glyph/releases/download/v#{version}/Glyph_#{version}_universal.dmg"
-            name "Glyph"
-            desc "Cross-platform markdown viewer"
-            homepage "https://github.com/hamidfzm/glyph"
-
-            livecheck do
-              url :url
-              strategy :github_latest
-            end
-
-            app "Glyph.app"
-
-            postflight do
-              system_command "/usr/bin/xattr",
-                             args: ["-cr", "#{appdir}/Glyph.app"],
-                             sudo: false
-            end
-
-            zap trash: [
-              "~/Library/Application Support/com.hamidfzm.glyph",
-              "~/Library/Caches/com.hamidfzm.glyph",
-              "~/Library/Preferences/com.hamidfzm.glyph.plist",
-            ]
-          end
-          CASK
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" \
+            homebrew/glyph.rb.template > /tmp/glyph.rb
 
           # Get current file SHA for update
           FILE_SHA=$(gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb --jq .sha)

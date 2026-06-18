@@ -53,6 +53,13 @@ if ($exePath) {
     -WorkingDirectory $workingDir `
     -Description 'Cross-platform markdown viewer' `
     -IconLocation $exePath
+
+  # Expose a `glyph` command on PATH so `glyph file.md` works from a terminal,
+  # matching macOS (Homebrew cask binary) and Linux (deb /usr/bin/glyph). The
+  # MSI itself does not add the exe to PATH. Install-BinFile creates a shim in
+  # the Chocolatey bin directory (already on PATH); shimgen detects the GUI
+  # subsystem so the shim launches Glyph and returns instead of blocking.
+  Install-BinFile -Name 'glyph' -Path $exePath
 } else {
-  Write-Warning "Glyph.exe was not found after MSI install. Skipping shortcut creation."
+  Write-Warning "Glyph.exe was not found after MSI install. Skipping shortcut and shim creation."
 }
