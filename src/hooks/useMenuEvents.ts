@@ -1,5 +1,5 @@
-import { listen } from "@tauri-apps/api/event";
 import { useEffect } from "react";
+import { subscribe } from "@/lib/tauriEvent";
 
 export interface MenuEventHandlers {
   openFile: () => void;
@@ -30,32 +30,32 @@ export interface MenuEventHandlers {
 // any handler reference changes, so callers should memoise.
 export function useMenuEvents(handlers: MenuEventHandlers) {
   useEffect(() => {
-    const subscriptions = [
-      listen("menu-open-file", handlers.openFile),
-      listen("menu-open-folder", handlers.openFolder),
-      listen("menu-open-graph", handlers.openGraph),
-      listen("menu-close-tab", handlers.closeTab),
-      listen("menu-toggle-files-sidebar", handlers.toggleFilesSidebar),
-      listen("menu-toggle-outline-sidebar", handlers.toggleOutlineSidebar),
-      listen("menu-reset-view", handlers.resetView),
-      listen("menu-open-settings", handlers.openSettings),
-      listen("menu-open-sync-settings", handlers.openSyncSettings),
-      listen("menu-find", handlers.find),
-      listen("menu-toggle-edit", handlers.toggleEdit),
-      listen("menu-print", handlers.print),
-      listen("menu-export-html", handlers.exportHtml),
-      listen("menu-export-docx", handlers.exportDocx),
-      listen("menu-export-epub", handlers.exportEpub),
-      listen("menu-export-pdf", handlers.exportPdf),
-      listen("menu-zoom-in", handlers.zoomIn),
-      listen("menu-zoom-out", handlers.zoomOut),
-      listen("menu-zoom-reset", handlers.zoomReset),
-      listen<string>("menu-ai-action", (event) => handlers.aiAction(event.payload)),
-      listen("menu-ai-read-aloud", handlers.readAloud),
+    const unsubscribes = [
+      subscribe("menu-open-file", handlers.openFile),
+      subscribe("menu-open-folder", handlers.openFolder),
+      subscribe("menu-open-graph", handlers.openGraph),
+      subscribe("menu-close-tab", handlers.closeTab),
+      subscribe("menu-toggle-files-sidebar", handlers.toggleFilesSidebar),
+      subscribe("menu-toggle-outline-sidebar", handlers.toggleOutlineSidebar),
+      subscribe("menu-reset-view", handlers.resetView),
+      subscribe("menu-open-settings", handlers.openSettings),
+      subscribe("menu-open-sync-settings", handlers.openSyncSettings),
+      subscribe("menu-find", handlers.find),
+      subscribe("menu-toggle-edit", handlers.toggleEdit),
+      subscribe("menu-print", handlers.print),
+      subscribe("menu-export-html", handlers.exportHtml),
+      subscribe("menu-export-docx", handlers.exportDocx),
+      subscribe("menu-export-epub", handlers.exportEpub),
+      subscribe("menu-export-pdf", handlers.exportPdf),
+      subscribe("menu-zoom-in", handlers.zoomIn),
+      subscribe("menu-zoom-out", handlers.zoomOut),
+      subscribe("menu-zoom-reset", handlers.zoomReset),
+      subscribe<string>("menu-ai-action", (event) => handlers.aiAction(event.payload)),
+      subscribe("menu-ai-read-aloud", handlers.readAloud),
     ];
     return () => {
-      for (const sub of subscriptions) {
-        sub.then((fn) => fn());
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe();
       }
     };
   }, [handlers]);

@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WikilinkRef } from "@/lib/backlinks";
@@ -11,6 +10,7 @@ import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/note
 import { isPathInside, parentDir, pruneInside } from "@/lib/paths";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
+import { subscribe } from "@/lib/tauriEvent";
 import { injectedOpen, isPrimaryWindow } from "@/lib/windowContext";
 import {
   getWorkspaceLastFile,
@@ -1019,15 +1019,15 @@ export function useTabs(options: UseTabsOptions) {
 
   // Listen for open-file and open-folder events (drag-drop, file associations)
   useEffect(() => {
-    const unlistenFile = listen<string>("open-file", (event) => {
+    const unsubscribeFile = subscribe<string>("open-file", (event) => {
       openFile(event.payload);
     });
-    const unlistenFolder = listen<string>("open-folder", (event) => {
+    const unsubscribeFolder = subscribe<string>("open-folder", (event) => {
       openFolder(event.payload);
     });
     return () => {
-      unlistenFile.then((fn) => fn());
-      unlistenFolder.then((fn) => fn());
+      unsubscribeFile();
+      unsubscribeFolder();
     };
   }, [openFile, openFolder]);
 
@@ -1035,7 +1035,7 @@ export function useTabs(options: UseTabsOptions) {
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
 
-    const unlisten = listen<string>("file-changed", (event) => {
+    const unsubscribe = subscribe<string>("file-changed", (event) => {
       if (!optionsRef.current.autoReload) return;
       clearTimeout(timeout);
       timeout = setTimeout(async () => {
@@ -1073,14 +1073,14 @@ export function useTabs(options: UseTabsOptions) {
 
     return () => {
       clearTimeout(timeout);
-      unlisten.then((fn) => fn());
+      unsubscribe();
     };
   }, []);
 
   // Listen for directory-changed events: refresh the workspace tree + indexes.
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | null = null;
-    const unlisten = listen<string>("directory-changed", (event) => {
+    const unsubscribe = subscribe<string>("directory-changed", (event) => {
       const watchedRoot = event.payload;
       if (timeout) clearTimeout(timeout);
       timeout = setTimeout(async () => {
@@ -1112,7 +1112,7 @@ export function useTabs(options: UseTabsOptions) {
     });
     return () => {
       if (timeout) clearTimeout(timeout);
-      unlisten.then((fn) => fn());
+      unsubscribe();
     };
   }, [loadDirectory, loadWikilinkRefs, loadWorkspaceFiles]);
 

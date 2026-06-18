@@ -1,5 +1,5 @@
-import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef } from "react";
+import { subscribe } from "@/lib/tauriEvent";
 
 export function useFileWatcher(onFileChanged: () => void) {
   const callbackRef = useRef(onFileChanged);
@@ -8,7 +8,7 @@ export function useFileWatcher(onFileChanged: () => void) {
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
 
-    const unlisten = listen("file-changed", () => {
+    const unsubscribe = subscribe("file-changed", () => {
       clearTimeout(timeout);
       timeout = setTimeout(() => {
         callbackRef.current();
@@ -17,7 +17,7 @@ export function useFileWatcher(onFileChanged: () => void) {
 
     return () => {
       clearTimeout(timeout);
-      unlisten.then((fn) => fn());
+      unsubscribe();
     };
   }, []);
 }
