@@ -6,6 +6,7 @@ import { ViewModeIcon } from "@/components/icons/ViewModeIcon";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
 import { isCanvasFile } from "@/lib/canvasExtensions";
+import { isLooseFilePath } from "@/lib/looseFile";
 import { EDITOR_MODE } from "@/lib/settings";
 
 function tabLabel(tab: Tab): string {
@@ -20,6 +21,7 @@ export function TabBar() {
   const {
     tabs,
     activeTabId,
+    workspace,
     setActiveTab: onActivate,
     closeTab: onClose,
     setTabMode: onModeChange,
@@ -40,6 +42,9 @@ export function TabBar() {
           const file = activeFileOf(tab);
           const dirty = file?.dirty ?? false;
           const label = tabLabel(tab);
+          // Mark file tabs opened from outside the workspace so they read as
+          // independent documents, not part of the project tree.
+          const loose = tab.kind === "file" && isLooseFilePath(tab.file.path, workspace?.root);
           return (
             // Wrapper is a div, not a button, so the close <button> below it
             // is a valid sibling instead of an HTML-invalid nested button.
@@ -49,6 +54,7 @@ export function TabBar() {
               className="tab-item"
               data-active={tab.id === activeTabId || undefined}
               data-tab-kind={tab.kind}
+              data-loose={loose || undefined}
               onAuxClick={(e) => {
                 if (e.button === 1) {
                   e.preventDefault();

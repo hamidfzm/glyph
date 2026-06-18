@@ -2470,7 +2470,7 @@ describe("useTabs concurrent opens", () => {
 });
 
 describe("useTabs workspace interactions", () => {
-  it("openFolder with no path prompts with a directory dialog", async () => {
+  it("openFolder with no path prompts a dialog and routes the choice via the window manager", async () => {
     vi.mocked(open).mockResolvedValue("/p/picked");
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
@@ -2480,7 +2480,9 @@ describe("useTabs workspace interactions", () => {
     });
 
     expect(open).toHaveBeenCalledWith({ directory: true, multiple: false });
-    expect(result.current.workspace?.root).toBe("/p/picked");
+    // The pick is handed to Rust routing (which may focus, adopt, or spawn a
+    // window); the frontend does not adopt it directly here.
+    expect(invoke).toHaveBeenCalledWith("request_open", { kind: "folder", path: "/p/picked" });
   });
 
   it("openFolder bails when the directory dialog is cancelled", async () => {
@@ -3257,5 +3259,61 @@ describe("useTabs graph tabs", () => {
     await waitFor(() => expect(result.current.initializing).toBe(false));
     expect(result.current.workspace?.root).toBe("/p/ws");
     expect(result.current.tabs).toHaveLength(0);
+  });
+});
+
+describe("useTabs multi-window", () => {
+  type Injectable = { __GLYPH_OPEN__?: unknown; __GLYPH_PRIMARY__?: unknown };
+  afterEach(() => {
+    const g = window as unknown as Injectable;
+    g.__GLYPH_OPEN__ = undefined;
+    g.__GLYPH_PRIMARY__ = undefined;
+  });
+
+  it("a spawned window adopts its injected folder and skips session restore", async () => {
+    const g = window as unknown as Injectable;
+    g.__GLYPH_OPEN__ = { kind: "folder", path: "/p/spawned" };
+    g.__GLYPH_PRIMARY__ = false;
+    const onSettingsChange = vi.fn();
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          onSettingsChange,
+          // Would be restored on a primary window; the spawned window ignores it.
+          openTabs: [{ kind: "folder", path: "/p/other" }] as never,
+          activeTabPath: "/p/other",
+        }),
+      ),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    expect(result.current.workspace?.root).toBe("/p/spawned");
+    // Secondary windows are ephemeral: they never persist the open-tabs session.
+    await act(async () => {});
+    expect(onSettingsChange.mock.calls.some((c) => c[0] === "behavior.openTabs")).toBe(false);
+  });
+
+  it("a spawned window can adopt an injected single file", async () => {
+    const g = window as unknown as Injectable;
+    g.__GLYPH_OPEN__ = { kind: "file", path: "/p/loose.md" };
+    g.__GLYPH_PRIMARY__ = false;
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    expect(
+      result.current.tabs.some((t) => t.kind === "file" && t.file.path === "/p/loose.md"),
+    ).toBe(true);
+  });
+
+  it("the primary window still persists the session", async () => {
+    const onSettingsChange = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onSettingsChange })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    await waitFor(() =>
+      expect(onSettingsChange.mock.calls.some((c) => c[0] === "behavior.openTabs")).toBe(true),
+    );
   });
 });

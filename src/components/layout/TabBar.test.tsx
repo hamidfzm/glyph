@@ -31,6 +31,7 @@ const makeTabs = (count: number): Tab[] => Array.from({ length: count }, (_, i) 
 interface RenderOpts {
   tabs?: Tab[];
   activeTabId?: string | null;
+  workspace?: TabsContextValue["workspace"];
   setActiveTab?: (id: string) => void;
   closeTab?: (id: string) => void;
   setTabMode?: TabsContextValue["setTabMode"];
@@ -48,7 +49,7 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
-    workspace: null,
+    workspace: opts.workspace ?? null,
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),
@@ -145,6 +146,35 @@ describe("TabBar", () => {
     const tabEl = screen.getByText("file0.md").closest(".tab-item")!;
     fireEvent(tabEl, new MouseEvent("auxclick", { bubbles: true, button: 2 }));
     expect(closeTab).not.toHaveBeenCalled();
+  });
+
+  it("marks file tabs outside the workspace as loose", () => {
+    const inside = makeFileTab(0); // /path/to/file0.md
+    const base = makeFileTab(1);
+    const outside: FileTab = {
+      ...base,
+      file: {
+        ...base.file,
+        path: "/elsewhere/loose.md",
+        metadata: { name: "loose.md", path: "/elsewhere/loose.md", size: 0, modified: 0 },
+      },
+    };
+    renderTabBar({
+      tabs: [inside, outside],
+      activeTabId: "tab-0",
+      workspace: { root: "/path/to", expanded: new Set(), nodes: new Map() },
+    });
+    const insideEl = screen.getByText("file0.md").closest(".tab-item");
+    const outsideEl = screen.getByText("loose.md").closest(".tab-item");
+    expect(insideEl?.hasAttribute("data-loose")).toBe(false);
+    expect(outsideEl?.getAttribute("data-loose")).toBe("true");
+  });
+
+  it("does not mark file tabs as loose when no workspace is open", () => {
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0", workspace: null });
+    expect(screen.getByText("file0.md").closest(".tab-item")?.hasAttribute("data-loose")).toBe(
+      false,
+    );
   });
 
   it("shows a dirty dot for tabs with unsaved edits", () => {

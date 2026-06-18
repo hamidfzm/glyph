@@ -11,6 +11,7 @@ import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/note
 import { isPathInside, parentDir, pruneInside } from "@/lib/paths";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
+import { injectedOpen, isPrimaryWindow } from "@/lib/windowContext";
 import {
   getWorkspaceLastFile,
   resolveWorkspace,
@@ -197,7 +198,9 @@ export function useTabs(options: UseTabsOptions) {
   // The workspace travels as a leading "folder" entry in the same list the
   // old multi-folder model used, so stale sessions migrate without a new key.
   useEffect(() => {
-    if (initializing) return;
+    // Secondary windows are ephemeral: only the primary window owns session
+    // restore, so it alone persists the open-tabs list (#295 multi-window).
+    if (initializing || !isPrimaryWindow()) return;
     const persisted: PersistedTab[] = [];
     if (workspace) {
       persisted.push({
@@ -217,6 +220,12 @@ export function useTabs(options: UseTabsOptions) {
     const activeTabPath = activeTab ? tabPathOf(activeTab) : "";
     optionsRef.current.onSettingsChange("behavior.activeTabPath", activeTabPath);
   }, [tabs, activeTab, workspace, initializing]);
+
+  // Report this window's workspace to the Rust window registry so open-folder
+  // routing knows which folder each window shows (focus vs new window).
+  useEffect(() => {
+    invoke("set_window_workspace", { root: workspace?.root ?? null }).catch(() => {});
+  }, [workspace?.root]);
 
   const addToRecent = useCallback((path: string) => {
     const current = optionsRef.current.recentFiles ?? [];
@@ -344,19 +353,28 @@ export function useTabs(options: UseTabsOptions) {
   // mount, rapid re-invocation) so the folder is only watched/loaded once.
   const folderOpenInFlight = useRef<string | null>(null);
 
-  // Open a folder as the window's workspace. If a path is provided, opens
-  // that path; otherwise prompts via dialog. An already-open different
-  // workspace is replaced (its tabs close); same root is a no-op.
+  // Open a folder as this window's workspace. With an explicit `root` (CLI,
+  // session restore, a spawned window's injected open, or an `open-folder`
+  // event) the folder is adopted into this window. With no root (the user's
+  // Open Folder dialog) the choice is routed through the window manager so a
+  // different folder opens a new window instead of replacing this one.
   const openFolder = useCallback(
     async (
       root?: string,
       openOptions?: { expanded?: string[]; silent?: boolean; autoLoad?: boolean },
     ) => {
-      let resolvedRoot = root;
+      const resolvedRoot = root;
       if (!resolvedRoot) {
         const selected = await open({ directory: true, multiple: false });
         if (typeof selected !== "string") return;
-        resolvedRoot = selected;
+        // No explicit root means a user "Open Folder" action: route it through
+        // the window manager. A folder already open elsewhere focuses that
+        // window; an empty current window adopts it (Rust emits `open-folder`
+        // back to us); a different folder in an occupied window opens a new
+        // window. This is what stops a second folder silently replacing the
+        // current workspace.
+        await invoke("request_open", { kind: "folder", path: selected });
+        return;
       }
       if (
         workspaceRef.current?.root === resolvedRoot ||
@@ -936,6 +954,16 @@ export function useTabs(options: UseTabsOptions) {
   useEffect(() => {
     (async () => {
       try {
+        // A spawned secondary window was created to open one specific path.
+        // Adopt it and skip the CLI / session-restore path entirely (those
+        // belong to the primary window).
+        const injected = injectedOpen();
+        if (injected) {
+          if (injected.kind === "folder") await openFolder(injected.path);
+          else await openFile(injected.path);
+          setInitializing(false);
+          return;
+        }
         const initialFolder = await invoke<string | null>("get_initial_folder");
         if (initialFolder) {
           await openFolder(initialFolder);

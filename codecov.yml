@@ -52,6 +52,11 @@ ignore:
   # every line drives the native menu manager and can't be exercised from
   # MockRuntime. The testable halves live in menu.rs with direct tests.
   - "src-tauri/src/menu_runtime.rs"
+  # Multi-window runtime wiring (focus/spawn/emit_to real windows + the
+  # set_window_workspace / request_open command shims): every line drives the
+  # live window manager and can't be reached from MockRuntime. The routing
+  # decision (route_open) and the registry live in windows.rs with direct tests.
+  - "src-tauri/src/windows_runtime.rs"
   # lib.rs hosts the Tauri `run()` entry point — every line in that
   # function calls into a real Builder/runtime, which can't be reached
   # from MockRuntime unit tests. The testable functions (`handle_second_instance`,
