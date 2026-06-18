@@ -16,7 +16,6 @@ function renderFileTree(overrides: Partial<ComponentProps<typeof FileTree>> = {}
     expanded: new Set(),
     onToggle: vi.fn(),
     onOpenFile: vi.fn(),
-    onOpenFileInNewTab: vi.fn(),
     onCreateNote: vi.fn(async () => null),
     onCreateCanvas: vi.fn(async () => null),
     onCreateFolder: vi.fn(async () => null),
@@ -84,21 +83,13 @@ describe("FileTree", () => {
     expect(props.onToggle).toHaveBeenCalledWith("/root/subdir");
   });
 
-  it("opens a file menu with Open, Open in New Tab, and create actions", () => {
+  it("opens a file menu with Open and create actions", () => {
     renderFileTree();
     fireEvent.contextMenu(screen.getByText("post.md"));
     expect(screen.getByRole("menu")).toBeInTheDocument();
     expect(screen.getByText("Open")).toBeInTheDocument();
-    expect(screen.getByText("Open in New Tab")).toBeInTheDocument();
     expect(screen.getByText("New Note")).toBeInTheDocument();
     expect(screen.getByText("New Folder")).toBeInTheDocument();
-  });
-
-  it("calls onOpenFileInNewTab when context menu Open in New Tab is clicked", () => {
-    const { props } = renderFileTree();
-    fireEvent.contextMenu(screen.getByText("post.md"));
-    fireEvent.click(screen.getByText("Open in New Tab"));
-    expect(props.onOpenFileInNewTab).toHaveBeenCalledWith("/root/post.md");
   });
 
   it("calls onOpenFile when context menu Open is clicked", () => {
@@ -114,7 +105,7 @@ describe("FileTree", () => {
     expect(screen.getByText("New Note")).toBeInTheDocument();
     expect(screen.getByText("New Folder")).toBeInTheDocument();
     expect(screen.getByText("Delete")).toBeInTheDocument();
-    expect(screen.queryByText("Open in New Tab")).toBeNull();
+    expect(screen.queryByText("Open")).toBeNull();
   });
 
   it("deletes a file via the context menu", () => {

@@ -1,14 +1,13 @@
 import { useMemo } from "react";
 import type { Platform } from "@/hooks/usePlatform";
 import type { TocEntry } from "@/hooks/useTableOfContents";
-import type { FolderTab } from "@/hooks/useTabs";
 import type { Command } from "@/lib/commands";
 import { type AppActions, useAppCommands } from "./useAppCommands";
 import { useCommandPalette } from "./useCommandPalette";
 
 interface UseCommandPaletteControllerOptions {
   platform: Platform;
-  activeFolderTab: FolderTab | null;
+  workspaceOpen: boolean;
   workspaceFiles: readonly string[];
   tocEntries: readonly TocEntry[];
   /** App-level callbacks, e.g. the menu-handler object. */
@@ -29,14 +28,14 @@ export interface CommandPaletteController {
  */
 export function useCommandPaletteController({
   platform,
-  activeFolderTab,
+  workspaceOpen,
   workspaceFiles,
   tocEntries,
   actions,
 }: UseCommandPaletteControllerOptions): CommandPaletteController {
   const palette = useCommandPalette({ platform });
   const commands = useAppCommands({
-    activeFolderTab,
+    workspaceOpen,
     workspaceFiles,
     tocEntries,
     actions,

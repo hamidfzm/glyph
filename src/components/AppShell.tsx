@@ -61,9 +61,11 @@ export function AppShell() {
     activeTabId,
     initializing,
     displayContent,
+    workspace,
     openFolder,
+    openGraph,
+    openFile,
     openFileDialog,
-    openFileInFolderTab,
     closeTab,
     setTabMode,
     markSaved,
@@ -107,6 +109,7 @@ export function AppShell() {
     hasTab: openTabs.length > 0,
     hasFile: activeFile?.content != null,
     hasContent: (displayContent ?? "").length > 0,
+    hasWorkspace: workspace !== null,
     aiConfigured: aiController.configured,
     ttsAvailable: tts.available,
   });
@@ -134,6 +137,9 @@ export function AppShell() {
     () => ({
       openFile: openFileDialog,
       openFolder: () => openFolder(),
+      // No-arg wrapper: menu/palette callers must not leak their event
+      // payload into openGraph's optional root parameter.
+      openGraph: () => openGraph(),
       closeTab: closeActiveTab,
       toggleFilesSidebar: sidebar.toggleFiles,
       toggleOutlineSidebar: sidebar.toggleOutline,
@@ -156,6 +162,7 @@ export function AppShell() {
     [
       openFileDialog,
       openFolder,
+      openGraph,
       closeActiveTab,
       sidebar.toggleFiles,
       sidebar.toggleOutline,
@@ -178,12 +185,12 @@ export function AppShell() {
 
   const palette = useCommandPaletteController({
     platform,
-    activeFolderTab: activeTab?.kind === "folder" ? activeTab : null,
+    workspaceOpen: workspace !== null,
     workspaceFiles,
     tocEntries,
     actions: useMemo(
-      () => ({ ...menuHandlers, openFileInFolderTab }),
-      [menuHandlers, openFileInFolderTab],
+      () => ({ ...menuHandlers, openWorkspaceFile: openFile }),
+      [menuHandlers, openFile],
     ),
   });
 
@@ -203,10 +210,11 @@ export function AppShell() {
   );
   const contextMenu = useContextMenu(contextMenuActions);
 
-  const showEmptyState =
-    !initializing && (!activeTab || (activeTab.kind === "folder" && !activeFile));
-  const folderEmptyHint = activeTab?.kind === "folder" && !activeFile;
-  const showContent = !!activeTab && !!activeFile?.content;
+  const showEmptyState = !initializing && !activeTab;
+  // With a workspace open but no tabs, nudge toward the sidebar tree.
+  const folderEmptyHint = workspace !== null && !activeTab;
+  // Graph tabs have no file but always render content (the canvas).
+  const showContent = !!activeTab && (activeTab.kind === "graph" || !!activeFile?.content);
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)]">

@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncConfigProvider } from "@/contexts/SyncConfigContext";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import type { FolderTab } from "@/hooks/useTabs";
+import type { Workspace } from "@/hooks/useTabs";
 import type { WorkspaceSyncConfig } from "@/lib/sync";
 import {
   commitSaveConfig,
@@ -28,29 +28,24 @@ function routeInvoke(handlers: Record<string, (args: unknown) => unknown>) {
   });
 }
 
-function folderTab(root = "/w"): FolderTab {
-  return {
-    id: "tab-1",
-    kind: "folder",
-    root,
-    expanded: new Set<string>(),
-    nodes: new Map(),
-    file: null,
-  };
+function makeWorkspace(root = "/w"): Workspace {
+  return { root, expanded: new Set<string>(), nodes: new Map() };
 }
 
-function tabsValue(activeTab: FolderTab | null): TabsContextValue {
+function tabsValue(workspace: Workspace | null): TabsContextValue {
   return {
-    tabs: activeTab ? [activeTab] : [],
-    activeTab,
-    activeTabId: activeTab?.id ?? null,
+    tabs: [],
+    activeTab: null,
+    activeTabId: null,
     activeFile: null,
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    workspace,
     openFile: vi.fn(),
     openFolder: vi.fn(),
-    openFileInFolderTab: vi.fn(),
+    openGraph: vi.fn(),
+    closeWorkspace: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),
     createCanvas: vi.fn(),
@@ -94,7 +89,7 @@ function withTabs(value: TabsContextValue) {
 
 describe("SyncSettingsModal", () => {
   it("renders nothing when closed", async () => {
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     const { container } = render(<SyncSettingsModal open={false} onClose={vi.fn()} />, {
       wrapper,
     });
@@ -115,7 +110,7 @@ describe("SyncSettingsModal", () => {
 
   it("renders the setup form prefilled with defaults for an unconfigured workspace", async () => {
     routeInvoke({ sync_get_config: () => null });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     expect(await screen.findByText("Cloud Sync")).toBeInTheDocument();
@@ -139,7 +134,7 @@ describe("SyncSettingsModal", () => {
       author: { name: "A", email: "a@example.com" },
     };
     routeInvoke({ sync_get_config: () => stored });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     expect(await screen.findByRole("button", { name: "Save changes" })).toBeInTheDocument();
@@ -154,7 +149,7 @@ describe("SyncSettingsModal", () => {
   it("Escape closes the modal", async () => {
     routeInvoke({ sync_get_config: () => null });
     const onClose = vi.fn();
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={onClose} />, { wrapper });
     await screen.findByText("Cloud Sync");
 
@@ -168,7 +163,7 @@ describe("SyncSettingsModal", () => {
       sync_default_author: () => ({ name: null, email: null }),
       sync_repo_present: () => false,
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     expect(await screen.findByTestId("sync-init-banner")).toHaveTextContent(
@@ -188,7 +183,7 @@ describe("SyncSettingsModal", () => {
       },
       sync_init_repo: () => null,
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     const initBtn = await screen.findByRole("button", { name: "Initialize repo" });
@@ -227,7 +222,7 @@ describe("SyncSettingsModal", () => {
         lastSyncUnix: null,
       }),
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     const msgInput = (await screen.findByPlaceholderText("e.g. Update notes")) as HTMLInputElement;
@@ -252,7 +247,7 @@ describe("SyncSettingsModal", () => {
       sync_default_author: () => ({ name: "Hamid", email: "h@example.com" }),
       sync_repo_present: () => true,
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     const nameInput = (await screen.findByPlaceholderText("Hamid")) as HTMLInputElement;
@@ -276,7 +271,7 @@ describe("SyncSettingsModal", () => {
         return null;
       },
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     await screen.findByTestId("sync-init-banner");
@@ -326,7 +321,7 @@ describe("SyncSettingsModal", () => {
         lastSyncUnix: null,
       }),
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(await screen.findByRole("button", { name: "Sync now" }));
@@ -367,7 +362,7 @@ describe("SyncSettingsModal", () => {
         lastSyncUnix: null,
       }),
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(await screen.findByRole("button", { name: "Sync now" }));
@@ -397,7 +392,7 @@ describe("SyncSettingsModal", () => {
         lastSyncUnix: null,
       }),
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(await screen.findByRole("button", { name: "Refresh status" }));
@@ -430,7 +425,7 @@ describe("SyncSettingsModal", () => {
         lastSyncUnix: null,
       }),
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(await screen.findByRole("button", { name: "Refresh status" }));
@@ -453,7 +448,7 @@ describe("SyncSettingsModal", () => {
       sync_repo_present: () => true,
       sync_remove_config: () => null,
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(await screen.findByRole("button", { name: "Disable sync" }));
@@ -473,7 +468,7 @@ describe("SyncSettingsModal", () => {
       sync_set_origin: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     const promptBtn = await screen.findByRole("button", { name: "Prompt me" });
@@ -518,7 +513,7 @@ describe("SyncSettingsModal", () => {
       sync_set_token: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
@@ -547,7 +542,7 @@ describe("SyncSettingsModal", () => {
       sync_set_origin: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
@@ -570,7 +565,7 @@ describe("SyncSettingsModal", () => {
       sync_repo_present: () => true,
     });
     const onClose = vi.fn();
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     const { container } = render(<SyncSettingsModal open={true} onClose={onClose} />, { wrapper });
     await screen.findByText("Cloud Sync");
 
@@ -597,7 +592,7 @@ describe("SyncSettingsModal", () => {
         throw { kind: "auth-failed", message: "bad token" };
       },
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(await screen.findByRole("button", { name: "Sync now" }));
@@ -617,7 +612,7 @@ describe("SyncSettingsModal", () => {
       sync_set_origin: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
@@ -649,7 +644,7 @@ describe("SyncSettingsModal", () => {
       sync_set_origin: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
@@ -695,7 +690,7 @@ describe("SyncSettingsModal", () => {
           lastSyncUnix: now - delta,
         }),
       });
-      const wrapper = withTabs(tabsValue(folderTab()));
+      const wrapper = withTabs(tabsValue(makeWorkspace()));
       const { unmount } = render(<SyncSettingsModal open={true} onClose={vi.fn()} />, {
         wrapper,
       });
@@ -731,7 +726,7 @@ describe("SyncSettingsModal", () => {
         lastSyncUnix: null,
       }),
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(await screen.findByRole("button", { name: "Refresh status" }));
@@ -749,7 +744,7 @@ describe("SyncSettingsModal", () => {
       sync_repo_present: () => true,
     });
     const onClose = vi.fn();
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     const { container } = render(<SyncSettingsModal open={true} onClose={onClose} />, { wrapper });
     await screen.findByText("Cloud Sync");
 
@@ -769,7 +764,7 @@ describe("SyncSettingsModal", () => {
       sync_repo_present: () => true,
     });
     const onClose = vi.fn();
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={onClose} />, { wrapper });
     await screen.findByText("Cloud Sync");
 
@@ -789,7 +784,7 @@ describe("SyncSettingsModal", () => {
       sync_set_config: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     const save = await screen.findByRole("button", { name: "Save config" });
@@ -845,7 +840,7 @@ describe("SyncSettingsModal", () => {
         return null;
       },
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     await screen.findByTestId("sync-init-banner");
@@ -878,7 +873,7 @@ describe("SyncSettingsModal", () => {
       sync_set_origin: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsValue(folderTab()));
+    const wrapper = withTabs(tabsValue(makeWorkspace()));
     render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {

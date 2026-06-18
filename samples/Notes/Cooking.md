@@ -10,6 +10,11 @@ A short list, just enough to demonstrate that headings inside a target work as a
 - Resting meat — five minutes off the pan redistributes juices.
 - Salt early — pasta water should taste like the sea.
 
+## See also
+
+This note anchors a small cluster: [[Ingredients]] and [[Techniques]] link back
+here and to each other, so the three pull together in the [[Graph View]].
+
 ## Why this lives here
 
 `Notes/Cooking.md` exists so wikilinks in [[README]] and [[Index]] resolve to a real file. Replace it with your own content, or delete it once you have your own workspace set up.

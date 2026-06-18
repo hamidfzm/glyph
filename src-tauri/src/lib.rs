@@ -8,12 +8,14 @@ mod notebook;
 mod sync;
 mod telemetry;
 mod watcher;
+mod windows;
+mod windows_runtime;
 mod workspace;
 
 use std::sync::{Arc, Mutex};
 #[cfg(target_os = "macos")]
 use tauri::RunEvent;
-use tauri::{DragDropEvent, Emitter, Manager, WindowEvent};
+use tauri::{DragDropEvent, Manager, WindowEvent};
 use tauri_plugin_cli::CliExt;
 use watcher::FileWatcherState;
 
@@ -34,14 +36,20 @@ pub fn handle_second_instance<R: tauri::Runtime>(
     argv: Vec<String>,
     cwd_str: String,
 ) {
-    if let Some(window) = app_handle.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
+    // Focus whatever window is current first, so a bare relaunch (no path) just
+    // resurfaces the app.
+    let current = windows_runtime::current_window_label(app_handle);
+    windows_runtime::focus_window(app_handle, &current);
 
     if let Some(event) = cli::second_instance_event(&argv, &std::path::PathBuf::from(&cwd_str)) {
-        let _ = app_handle.emit(event.event_name, &event.path);
+        let kind = if event.event_name == "open-folder" {
+            windows::OpenKind::Folder
+        } else {
+            windows::OpenKind::File
+        };
+        if let Some(registry) = app_handle.try_state::<windows::WindowRegistry>() {
+            windows_runtime::open_in_app(app_handle, &registry, kind, event.path, &current);
+        }
     }
 }
 
@@ -93,6 +101,7 @@ pub fn run() {
         .manage(commands::InitialFolder(Mutex::new(None)))
         .manage(sync::SyncState::new())
         .manage(telemetry::TelemetryState(Mutex::new(None)))
+        .manage(windows::WindowRegistry::new())
         .setup(|app| {
             let (menu, menu_refs) = menu::build_menu(app)?;
             app.set_menu(menu)?;
@@ -102,6 +111,7 @@ pub fn run() {
                 has_tab: false,
                 has_file: false,
                 has_content: false,
+                has_workspace: false,
                 ai_configured: false,
                 tts_available: false,
             };
@@ -127,33 +137,68 @@ pub fn run() {
                 .and_then(|m| m.args.get("file").cloned())
                 .and_then(|a| a.value.as_str().map(str::to_string));
             let env_args: Vec<String> = std::env::args().collect();
+            // Seed the window registry's "main" entry so routing knows what the
+            // first window shows before its frontend reports back. A folder
+            // launch pre-registers the workspace; everything else leaves main
+            // empty (loose file / no document).
+            let registry = app.state::<windows::WindowRegistry>();
             match cli::initial_open_action(plugin_path.as_deref(), &env_args, &cwd) {
                 Some(cli::InitialOpenAction::Folder(p)) => {
+                    registry.set_workspace("main", Some(p.clone()));
                     *app.state::<commands::InitialFolder>().0.lock().unwrap() = Some(p);
                 }
                 Some(cli::InitialOpenAction::File(p)) => {
+                    registry.set_workspace("main", None);
                     *app.state::<commands::InitialFile>().0.lock().unwrap() = Some(p);
                 }
                 Some(cli::InitialOpenAction::RejectedUnsupported(p)) => {
+                    registry.set_workspace("main", None);
                     eprintln!("Refusing to open unsupported file type: {p}");
                 }
-                None => {}
+                None => {
+                    registry.set_workspace("main", None);
+                }
             }
             Ok(())
         })
         .on_menu_event(menu::handle_menu_event)
         .on_window_event(|window, event| {
-            // Handle drag and drop of folders or markdown files. First match wins:
-            // a directory opens as a workspace, a markdown file opens as a single-file tab.
+            // A closed window leaves the routing registry so its workspace no
+            // longer counts toward "is this folder already open".
+            if matches!(event, WindowEvent::Destroyed) {
+                if let Some(registry) = window.try_state::<windows::WindowRegistry>() {
+                    registry.remove(window.label());
+                }
+            }
+            // Drag and drop of folders or markdown files, routed the same way as
+            // any other open request: a folder may spawn or focus a window, a
+            // file opens as a loose tab in this window. First match wins.
             if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
+                let app = window.app_handle();
+                let Some(registry) = app.try_state::<windows::WindowRegistry>() else {
+                    return;
+                };
+                let label = window.label().to_string();
                 for path in paths {
                     let path_str = path.to_string_lossy().to_string();
                     if path.is_dir() {
-                        let _ = window.emit("open-folder", &path_str);
+                        windows_runtime::open_in_app(
+                            app,
+                            &registry,
+                            windows::OpenKind::Folder,
+                            path_str,
+                            &label,
+                        );
                         break;
                     }
                     if is_supported_file(path) {
-                        let _ = window.emit("open-file", &path_str);
+                        windows_runtime::open_in_app(
+                            app,
+                            &registry,
+                            windows::OpenKind::File,
+                            path_str,
+                            &label,
+                        );
                         break;
                     }
                 }
@@ -183,6 +228,8 @@ pub fn run() {
             watcher::unwatch_directory,
             menu_runtime::set_menu_state,
             menu_runtime::apply_keybindings,
+            windows_runtime::set_window_workspace,
+            windows_runtime::request_open,
             sync::commands::sync_set_config,
             sync::commands::sync_get_config,
             sync::commands::sync_remove_config,
@@ -207,29 +254,37 @@ pub fn run() {
     app.run(|_app_handle, _event| {
         #[cfg(target_os = "macos")]
         if let RunEvent::Opened { urls } = _event {
+            let Some(registry) = _app_handle.try_state::<windows::WindowRegistry>() else {
+                return;
+            };
+            let current = windows_runtime::current_window_label(_app_handle);
             for url in urls {
                 let Ok(path) = url.to_file_path() else {
                     continue;
                 };
                 // `cli::classify_resolved_path` is the same classifier the CLI
                 // arg block uses, so the file/folder gating and the
-                // non-markdown rejection stay in lockstep.
+                // non-markdown rejection stay in lockstep. Routing decides
+                // whether to focus, adopt, or spawn a window.
                 match cli::classify_resolved_path(&path) {
                     Some(cli::InitialOpenAction::Folder(p)) => {
-                        if _app_handle.emit("open-folder", &p).is_ok() {
-                            if let Some(state) = _app_handle.try_state::<commands::InitialFolder>()
-                            {
-                                *state.0.lock().unwrap() = Some(p);
-                            }
-                        }
+                        windows_runtime::open_in_app(
+                            _app_handle,
+                            &registry,
+                            windows::OpenKind::Folder,
+                            p,
+                            &current,
+                        );
                         break;
                     }
                     Some(cli::InitialOpenAction::File(p)) => {
-                        if _app_handle.emit("open-file", &p).is_ok() {
-                            if let Some(state) = _app_handle.try_state::<commands::InitialFile>() {
-                                *state.0.lock().unwrap() = Some(p);
-                            }
-                        }
+                        windows_runtime::open_in_app(
+                            _app_handle,
+                            &registry,
+                            windows::OpenKind::File,
+                            p,
+                            &current,
+                        );
                         break;
                     }
                     Some(cli::InitialOpenAction::RejectedUnsupported(p)) => {
@@ -249,10 +304,17 @@ mod tests {
     use super::*;
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::{Arc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
     use tauri::test::{mock_app, MockRuntime};
-    use tauri::{Listener, WebviewWindowBuilder};
+    use tauri::WebviewWindowBuilder;
+
+    /// A mock app with a "main" window and a managed window registry, so
+    /// `handle_second_instance`'s focus + routing path can run end to end.
+    fn routed_app() -> tauri::App<MockRuntime> {
+        let app = mock_app_with_main_window();
+        app.manage(crate::windows::WindowRegistry::new());
+        app
+    }
 
     /// Build a mock app with a "main" webview window so the
     /// `app_handle.get_webview_window("main")` branch in
@@ -280,108 +342,58 @@ mod tests {
         dir
     }
 
-    /// Subscribe to `event` on the mock app's handle, returning a shared
-    /// vector that the listener appends payloads into.
-    fn capture_event(
-        app_handle: &tauri::AppHandle<tauri::test::MockRuntime>,
-        event: &'static str,
-    ) -> Arc<Mutex<Vec<String>>> {
-        let bucket: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-        let sink = Arc::clone(&bucket);
-        app_handle.listen(event, move |evt| {
-            // emit() serialises the payload as a JSON string. Deserialise it so
-            // platform-specific escaping is undone — on Windows the path's
-            // backslashes are JSON-escaped (`C:\\dir`), so naive quote-trimming
-            // would leave doubled separators and break `canonicalize`.
-            let payload = evt.payload();
-            let path = serde_json::from_str::<String>(payload)
-                .unwrap_or_else(|_| payload.trim_matches('"').to_string());
-            sink.lock().unwrap().push(path);
-        });
-        bucket
-    }
-
+    // handle_second_instance is thin glue over `cli::second_instance_event`
+    // (classification, tested in cli.rs) and `windows::route_open` (routing,
+    // tested in windows.rs). Its own runtime effects (focus / emit_to / window
+    // spawn) can't be observed under MockRuntime, so these tests assert it
+    // drives that pipeline for each argv shape without panicking.
     #[test]
-    fn handle_second_instance_emits_open_file_for_an_existing_file() {
+    fn handle_second_instance_routes_a_file_without_panicking() {
         let cwd = unique_tmp("hsi_file");
-        let file = cwd.join("note.md");
-        fs::write(&file, "hi").unwrap();
-        let canonical = file.canonicalize().unwrap();
-
-        // Use a windowed mock app so the `get_webview_window("main")` Some-arm
-        // (unminimize / show / set_focus) is exercised.
-        let app = mock_app_with_main_window();
-        let handle = app.handle().clone();
-        let files = capture_event(&handle, "open-file");
-        let folders = capture_event(&handle, "open-folder");
-
+        fs::write(cwd.join("note.md"), "hi").unwrap();
+        let app = routed_app();
         handle_second_instance(
-            &handle,
+            &app.handle().clone(),
             vec!["glyph".to_string(), "note.md".to_string()],
             cwd.to_string_lossy().to_string(),
         );
-
-        // Give the listener loop a beat to drain the emitted event.
-        std::thread::sleep(std::time::Duration::from_millis(50));
-
-        let files_seen = files.lock().unwrap().clone();
-        let folders_seen = folders.lock().unwrap().clone();
-        assert_eq!(files_seen.len(), 1, "expected one open-file emit");
-        assert_eq!(
-            PathBuf::from(&files_seen[0]).canonicalize().unwrap(),
-            canonical
-        );
-        assert!(folders_seen.is_empty(), "open-folder should not fire");
         let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]
-    fn handle_second_instance_emits_open_folder_for_a_directory() {
+    fn handle_second_instance_routes_a_folder_without_panicking() {
         let cwd = unique_tmp("hsi_dir");
-        let sub = cwd.join("workspace");
-        fs::create_dir_all(&sub).unwrap();
-
-        let app = mock_app();
-        let handle = app.handle().clone();
-        let files = capture_event(&handle, "open-file");
-        let folders = capture_event(&handle, "open-folder");
-
+        fs::create_dir_all(cwd.join("workspace")).unwrap();
+        let app = routed_app();
         handle_second_instance(
-            &handle,
+            &app.handle().clone(),
             vec!["glyph".to_string(), "workspace".to_string()],
             cwd.to_string_lossy().to_string(),
         );
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        let _ = fs::remove_dir_all(&cwd);
+    }
 
-        assert!(
-            files.lock().unwrap().is_empty(),
-            "open-file should not fire"
-        );
-        assert_eq!(
-            folders.lock().unwrap().len(),
-            1,
-            "expected one open-folder emit"
+    #[test]
+    fn handle_second_instance_with_no_path_arg_only_focuses() {
+        let cwd = unique_tmp("hsi_noop");
+        let app = routed_app();
+        handle_second_instance(
+            &app.handle().clone(),
+            vec!["glyph".to_string(), "--help".to_string()],
+            cwd.to_string_lossy().to_string(),
         );
         let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]
-    fn handle_second_instance_with_no_path_arg_is_a_noop() {
-        let cwd = unique_tmp("hsi_noop");
-        let app = mock_app();
-        let handle = app.handle().clone();
-        let files = capture_event(&handle, "open-file");
-        let folders = capture_event(&handle, "open-folder");
-
+    fn handle_second_instance_silently_ignores_unresolvable_paths() {
+        let cwd = unique_tmp("hsi_missing");
+        let app = routed_app();
         handle_second_instance(
-            &handle,
-            vec!["glyph".to_string(), "--help".to_string()],
+            &app.handle().clone(),
+            vec!["glyph".to_string(), "nope.md".to_string()],
             cwd.to_string_lossy().to_string(),
         );
-        std::thread::sleep(std::time::Duration::from_millis(50));
-
-        assert!(files.lock().unwrap().is_empty());
-        assert!(folders.lock().unwrap().is_empty());
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -391,23 +403,5 @@ mod tests {
         // manager), but constructing it covers the cfg-gated plugin setup.
         let builder = make_app_builder();
         std::mem::drop(builder);
-    }
-
-    #[test]
-    fn handle_second_instance_silently_ignores_unresolvable_paths() {
-        let cwd = unique_tmp("hsi_missing");
-        let app = mock_app();
-        let handle = app.handle().clone();
-        let files = capture_event(&handle, "open-file");
-
-        handle_second_instance(
-            &handle,
-            vec!["glyph".to_string(), "nope.md".to_string()],
-            cwd.to_string_lossy().to_string(),
-        );
-        std::thread::sleep(std::time::Duration::from_millis(50));
-
-        assert!(files.lock().unwrap().is_empty());
-        let _ = fs::remove_dir_all(&cwd);
     }
 }

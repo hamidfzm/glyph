@@ -1,17 +1,18 @@
 import { EditModeIcon } from "@/components/icons/EditModeIcon";
-import { FolderIcon } from "@/components/icons/FolderIcon";
+import { GraphIcon } from "@/components/icons/GraphIcon";
 import { SplitModeIcon } from "@/components/icons/SplitModeIcon";
 import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
 import { ViewModeIcon } from "@/components/icons/ViewModeIcon";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
 import { isCanvasFile } from "@/lib/canvasExtensions";
+import { isLooseFilePath } from "@/lib/looseFile";
 import { EDITOR_MODE } from "@/lib/settings";
 
 function tabLabel(tab: Tab): string {
-  if (tab.kind === "folder") {
+  if (tab.kind === "graph") {
     const segments = tab.root.split(/[\\/]/).filter(Boolean);
-    return segments[segments.length - 1] ?? tab.root;
+    return `Graph: ${segments[segments.length - 1] ?? tab.root}`;
   }
   return tab.file.metadata?.name ?? "Untitled";
 }
@@ -20,6 +21,7 @@ export function TabBar() {
   const {
     tabs,
     activeTabId,
+    workspace,
     setActiveTab: onActivate,
     closeTab: onClose,
     setTabMode: onModeChange,
@@ -40,6 +42,9 @@ export function TabBar() {
           const file = activeFileOf(tab);
           const dirty = file?.dirty ?? false;
           const label = tabLabel(tab);
+          // Mark file tabs opened from outside the workspace so they read as
+          // independent documents, not part of the project tree.
+          const loose = tab.kind === "file" && isLooseFilePath(tab.file.path, workspace?.root);
           return (
             // Wrapper is a div, not a button, so the close <button> below it
             // is a valid sibling instead of an HTML-invalid nested button.
@@ -49,6 +54,7 @@ export function TabBar() {
               className="tab-item"
               data-active={tab.id === activeTabId || undefined}
               data-tab-kind={tab.kind}
+              data-loose={loose || undefined}
               onAuxClick={(e) => {
                 if (e.button === 1) {
                   e.preventDefault();
@@ -64,7 +70,7 @@ export function TabBar() {
                 aria-label={label}
               >
                 {dirty && <span className="tab-dirty-dot" />}
-                {tab.kind === "folder" && <FolderIcon className="opacity-70 -ml-0.5" />}
+                {tab.kind === "graph" && <GraphIcon className="opacity-70 -ml-0.5" />}
                 <span className="tab-label">{label}</span>
               </button>
               <button

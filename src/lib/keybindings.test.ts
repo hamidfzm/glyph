@@ -208,6 +208,14 @@ describe("BINDABLE_COMMANDS", () => {
     expect(getBindableCommand("nope")).toBeUndefined();
   });
 
+  it("binds the graph view to CmdOrCtrl+G by default", () => {
+    const command = getBindableCommand("open-graph");
+    expect(command?.label).toBe("Open Graph");
+    expect(command?.defaultAccelerator).toBe("CmdOrCtrl+G");
+    expect(command?.event).toBe("menu-open-graph");
+    expect(command?.nativeMenu).toBe(true);
+  });
+
   it("includes the in-app undo/redo and Close Window commands", () => {
     expect(getBindableCommand("undo")?.defaultAccelerator).toBe("CmdOrCtrl+Z");
     expect(getBindableCommand("redo")?.defaultAccelerator).toBe("CmdOrCtrl+Shift+Z");

@@ -286,6 +286,12 @@ Opening this file on its own (no folder) treats every wikilink as broken.
 
 When you have the `samples/` folder open, the **Backlinks** section under the file tree lists every other note that links to the current document. This file is referenced from [[Index]] and [[Notes/Cooking]], so opening either of them will show *this* file in their backlinks panel.
 
+### Graph view
+
+With the `samples/` folder open, press `Cmd/Ctrl+G` (or View → Open Graph) to see this workspace as a graph: every note is a node, every wikilink an edge. Hover a node to highlight its neighbours, click one to open that note, drag to pan, and scroll to zoom. `Missing` targets never appear (broken links are dropped), and notes nothing links to render muted.
+
+This workspace is wired to make the graph worth a look: [[Index]] and [[Graph View]] act as hubs, the cooking notes ([[Notes/Cooking]], [[Ingredients]], [[Techniques]]) form a tight cluster, and `Scratchpad` sits off on its own as a muted orphan. The [[Graph View]] note is a full walkthrough of the feature.
+
 ### Wikilink autocomplete
 
 In the editor or split view, typing `[[` opens a popup with workspace files. Keep typing to filter, press **Tab** or **Enter** to insert; the closing `]]` is added for you. Open this file in split view (`Cmd+E` cycles modes) and try typing `[[Co` to see it.
@@ -328,6 +334,7 @@ Create a fresh board from the file tree: right-click a folder (or the empty pane
 | `Cmd+O` | Open file(s) |
 | `Cmd+Shift+O` | Open folder |
 | `Cmd+K` | Command palette |
+| `Cmd+G` | Workspace graph |
 | `Cmd+P` | Print / Export to PDF |
 | `Cmd+F` | Find in document |
 | `Cmd+=` / `Cmd+-` | Zoom in / out |
