@@ -164,6 +164,17 @@ chmod +x Glyph_*.AppImage
 ./Glyph_*.AppImage
 ```
 
+### Command-line usage
+
+Installing from a package manager puts a `glyph` command on your `PATH`:
+
+```bash
+glyph README.md      # open a file
+glyph ~/notes/       # open a folder as a workspace
+```
+
+The command is provided by the Homebrew cask (macOS), Chocolatey or Scoop (Windows), and the deb package or Homebrew formula (Linux). The macOS `.dmg` and Windows MSI install the app only; use a package manager for the terminal command.
+
 ## Development
 
 ```bash
