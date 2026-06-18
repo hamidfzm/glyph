@@ -188,14 +188,21 @@ jobs:
           sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" \
             homebrew/glyph.rb.template > /tmp/glyph.rb
 
-          # Get current file SHA for update
-          FILE_SHA=$(gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb --jq .sha)
+          # Get current file SHA for update (or empty for first push)
+          FILE_SHA=$(gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb --jq .sha 2>/dev/null || echo "")
 
-          gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb \
-            --method PUT \
-            --field message="chore: update glyph to $VERSION" \
-            --field content="$(base64 -w0 /tmp/glyph.rb)" \
-            --field sha="$FILE_SHA"
+          if [ -n "$FILE_SHA" ]; then
+            gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb \
+              --method PUT \
+              --field message="chore: update glyph to $VERSION" \
+              --field content="$(base64 -w0 /tmp/glyph.rb)" \
+              --field sha="$FILE_SHA"
+          else
+            gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb \
+              --method PUT \
+              --field message="chore: add glyph cask $VERSION" \
+              --field content="$(base64 -w0 /tmp/glyph.rb)"
+          fi
       - name: Download Linux debs and compute sha256
         id: linux_sha
         env:
