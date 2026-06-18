@@ -1,9 +1,9 @@
-import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import type { Platform } from "@/hooks/usePlatform";
 import { useSettings } from "@/hooks/useSettings";
 import { matchesAccelerator, resolveBindings } from "@/lib/keybindings";
 import { KEYBOARD_EVENT } from "@/lib/keyboard";
+import { subscribe } from "@/lib/tauriEvent";
 
 interface UseCommandPaletteOptions {
   platform: Platform;
@@ -52,9 +52,9 @@ export function useCommandPalette({ platform }: UseCommandPaletteOptions) {
   // The native View menu's "Command Palette…" item emits this event so users
   // who don't know the Cmd/Ctrl+K accelerator can still discover the feature.
   useEffect(() => {
-    const unlisten = listen("menu-open-command-palette", () => openPalette());
+    const unsubscribe = subscribe("menu-open-command-palette", () => openPalette());
     return () => {
-      unlisten.then((fn) => fn());
+      unsubscribe();
     };
   }, [openPalette]);
 
