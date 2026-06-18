@@ -161,4 +161,13 @@ describe("CanvasNodeView", () => {
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByText("pic.png")).toBeInTheDocument();
   });
+
+  it("refuses an unresolvable file node when a workspace root is set but the canvas path is unknown", () => {
+    const onOpenFile = vi.fn();
+    const node: CanvasNode = { ...base, type: "file", file: "../secret/todo.md" };
+    render(<CanvasNodeView node={node} workspaceRoot="/ws" onOpenFile={onOpenFile} />);
+    expect(screen.getByText("todo.md")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(onOpenFile).not.toHaveBeenCalled();
+  });
 });

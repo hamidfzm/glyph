@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MarkdownViewer } from "../markdown/MarkdownViewer";
+import { MarkdownViewer } from "@/components/markdown/MarkdownViewer";
 import { MarkdownEditor } from "./MarkdownEditor";
 
 interface SplitViewProps {

@@ -62,7 +62,9 @@ export function MarkdownContent({
 
   // Resolve a relative link against this document's directory and open it only
   // when it stays inside the opened workspace. Gating on workspaceRoot keeps
-  // single-file mode a no-op (the callback is never wired up there).
+  // single-file mode a no-op (the callback is never wired up there). A trailing
+  // `#heading` is dropped during resolution: cross-file heading scroll isn't
+  // wired up yet, matching wikilink behavior (see TabContent's open handler).
   const handleOpenRelativeFile = useCallback(
     (href: string) => {
       if (!filePath || !workspaceRoot || !onOpenRelativeFile) return;

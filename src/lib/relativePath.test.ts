@@ -43,6 +43,14 @@ describe("normalizeRelativePath", () => {
     // resolution stays well-formed.
     expect(normalizeRelativePath("/ws/doc.md", "../../../etc/passwd")).toBe("/etc/passwd");
   });
+
+  it("treats a percent-encoded ../ literally rather than decoding it to traversal", () => {
+    // %2E%2E is the encoded form of "..". We do not URL-decode, so it stays a
+    // literal path segment and cannot be used to climb out of the workspace.
+    expect(normalizeRelativePath("/ws/notes/doc.md", "%2E%2E/secret.md")).toBe(
+      "/ws/notes/%2E%2E/secret.md",
+    );
+  });
 });
 
 describe("isRelativeLocalHref", () => {

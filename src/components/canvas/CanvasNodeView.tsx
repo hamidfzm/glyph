@@ -64,6 +64,9 @@ export function CanvasNodeView({
       return (
         // markdown-body opts the card into the full document styling
         // (headings, lists, code blocks); canvas.css strips its page chrome.
+        // workspaceRoot/onOpenRelativeFile are intentionally not threaded here:
+        // relative-link opening is a document-tab affordance; embedded canvas
+        // text cards render their markdown inline without in-app navigation.
         <div className="glyph-canvas-node-text markdown-body">
           <MarkdownContent
             content={node.text}
@@ -98,8 +101,10 @@ export function CanvasNodeView({
     case "file": {
       const resolved = resolveRelative(node.file, canvasPath);
       // A file ref that resolves outside the opened workspace is refused: the
-      // image isn't loaded and the open button degrades to an inert card.
-      const outsideRoot = !!workspaceRoot && !!canvasPath && !isPathInside(resolved, workspaceRoot);
+      // image isn't loaded and the open button degrades to an inert card. With
+      // no canvasPath, `resolved` is the raw relative ref, which `isPathInside`
+      // correctly reports as outside the root, so it's refused too.
+      const outsideRoot = !!workspaceRoot && !isPathInside(resolved, workspaceRoot);
 
       if (IMAGE_EXT.test(node.file)) {
         const src = resolveImageSrc(node.file, canvasPath, workspaceRoot);

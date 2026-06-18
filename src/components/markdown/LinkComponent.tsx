@@ -1,12 +1,12 @@
 import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { type ComponentPropsWithoutRef, useCallback, useContext } from "react";
+import { ExternalLinkIcon } from "@/components/icons/ExternalLinkIcon";
 import { SettingsContext } from "@/contexts/SettingsContext";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { isRelativeLocalHref } from "@/lib/relativePath";
 import { scrollToHeading } from "@/lib/scrollToHeading";
-import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 
 // A relative link Glyph opens in the workspace rather than the browser: a local
 // path (not a URL or anchor) pointing at a markdown or canvas document.

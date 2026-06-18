@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
+import { SearchBar } from "@/components/layout/SearchBar";
 import { useSearch } from "@/hooks/useSearch";
-import { SearchBar } from "../layout/SearchBar";
 import { MarkdownContent } from "./MarkdownContent";
 
 interface MarkdownViewerProps {
