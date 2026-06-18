@@ -11,7 +11,9 @@ interface MarkdownViewerProps {
   searchOpen: boolean;
   onSearchClose: () => void;
   workspaceFiles?: string[];
+  workspaceRoot?: string;
   onOpenWikilink?: (path: string, heading?: string) => void;
+  onOpenRelativeFile?: (path: string) => void;
   onTaskToggle?: (line: number) => void;
 }
 
@@ -23,7 +25,9 @@ export function MarkdownViewer({
   searchOpen,
   onSearchClose,
   workspaceFiles,
+  workspaceRoot,
   onOpenWikilink,
+  onOpenRelativeFile,
   onTaskToggle,
 }: MarkdownViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -86,7 +90,9 @@ export function MarkdownViewer({
             content={content}
             filePath={filePath}
             workspaceFiles={workspaceFiles}
+            workspaceRoot={workspaceRoot}
             onOpenWikilink={onOpenWikilink}
+            onOpenRelativeFile={onOpenRelativeFile}
             onTaskToggle={onTaskToggle}
           />
         </div>

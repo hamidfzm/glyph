@@ -11,6 +11,7 @@ interface SplitViewProps {
   workspaceFiles?: string[];
   workspaceRoot?: string;
   onOpenWikilink?: (path: string, heading?: string) => void;
+  onOpenRelativeFile?: (path: string) => void;
   onTaskToggle?: (line: number) => void;
 }
 
@@ -25,6 +26,7 @@ export function SplitView({
   workspaceFiles,
   workspaceRoot,
   onOpenWikilink,
+  onOpenRelativeFile,
   onTaskToggle,
 }: SplitViewProps) {
   const [previewContent, setPreviewContent] = useState(content);
@@ -76,7 +78,9 @@ export function SplitView({
           searchOpen={searchOpen}
           onSearchClose={onSearchClose}
           workspaceFiles={workspaceFiles}
+          workspaceRoot={workspaceRoot}
           onOpenWikilink={onOpenWikilink}
+          onOpenRelativeFile={onOpenRelativeFile}
           onTaskToggle={onTaskToggle}
         />
       </div>

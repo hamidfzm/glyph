@@ -119,6 +119,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
           key={`${activeTab.id}:${file.path}`}
           content={editorContent}
           filePath={file.path}
+          workspaceRoot={workspaceRoot}
           onOpenFile={handleOpenWikilink}
           onChange={handleCanvasChange}
           viewportKey={`${activeTab.id}:${file.path}`}
@@ -161,6 +162,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
           workspaceFiles={workspaceFiles}
           workspaceRoot={workspaceRoot}
           onOpenWikilink={handleOpenWikilink}
+          onOpenRelativeFile={openFile}
           onTaskToggle={handleTaskToggle}
         />
       </div>
@@ -177,7 +179,9 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
       searchOpen={searchOpen}
       onSearchClose={onSearchClose}
       workspaceFiles={workspaceFiles}
+      workspaceRoot={workspaceRoot}
       onOpenWikilink={handleOpenWikilink}
+      onOpenRelativeFile={openFile}
       onTaskToggle={handleTaskToggle}
     />
   );

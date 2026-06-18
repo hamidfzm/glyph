@@ -282,6 +282,19 @@ When you open a folder as a workspace, `[[note]]` style links resolve to other m
 
 Opening this file on its own (no folder) treats every wikilink as broken.
 
+### Relative links
+
+Standard markdown links with relative paths resolve against this document's
+folder and open in the workspace, including paths that walk up with `../`. With
+the `samples/` folder open, these all open in-app:
+
+- [the index](./Index.md) — a sibling markdown file
+- [kitchen notes](Notes/Cooking.md) — a file in a subfolder
+- [the canvas demo](./canvas-demo.canvas) — opens as a canvas board
+
+Targets that would resolve outside the open folder are not followed. Opening
+this file on its own (no folder) leaves relative links to the browser.
+
 ### Backlinks
 
 When you have the `samples/` folder open, the **Backlinks** section under the file tree lists every other note that links to the current document. This file is referenced from [[Index]] and [[Notes/Cooking]], so opening either of them will show *this* file in their backlinks panel.

@@ -12,6 +12,8 @@ import { LightboxProvider } from "@/contexts/LightboxContext";
 import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
 import { useKatexPlugin } from "@/hooks/useKatexPlugin";
 import { parseFrontmatter } from "@/lib/frontmatter";
+import { isPathInside } from "@/lib/paths";
+import { normalizeRelativePath } from "@/lib/relativePath";
 import { remarkWikilink } from "@/lib/wikilink";
 import { CodeBlockComponent } from "./CodeBlockComponent";
 import { FrontmatterBlock } from "./FrontmatterBlock";
@@ -24,7 +26,11 @@ interface MarkdownContentProps {
   content: string;
   filePath?: string;
   workspaceFiles?: string[];
+  /** Opened workspace root; enables and constrains relative link/image resolution. */
+  workspaceRoot?: string;
   onOpenWikilink?: (path: string, heading?: string) => void;
+  /** Open a workspace document by absolute path (used for resolved relative links). */
+  onOpenRelativeFile?: (path: string) => void;
   onTaskToggle?: (line: number) => void;
   /** Render a YAML frontmatter block when present. Defaults to true. */
   showFrontmatter?: boolean;
@@ -39,7 +45,9 @@ export function MarkdownContent({
   content,
   filePath,
   workspaceFiles,
+  workspaceRoot,
   onOpenWikilink,
+  onOpenRelativeFile,
   onTaskToggle,
   showFrontmatter = true,
 }: MarkdownContentProps) {
@@ -50,7 +58,19 @@ export function MarkdownContent({
     [content, showFrontmatter],
   );
 
-  const ImageComponent = useImageComponent(filePath);
+  const ImageComponent = useImageComponent(filePath, workspaceRoot);
+
+  // Resolve a relative link against this document's directory and open it only
+  // when it stays inside the opened workspace. Gating on workspaceRoot keeps
+  // single-file mode a no-op (the callback is never wired up there).
+  const handleOpenRelativeFile = useCallback(
+    (href: string) => {
+      if (!filePath || !workspaceRoot || !onOpenRelativeFile) return;
+      const resolved = normalizeRelativePath(filePath, href);
+      if (isPathInside(resolved, workspaceRoot)) onOpenRelativeFile(resolved);
+    },
+    [filePath, workspaceRoot, onOpenRelativeFile],
+  );
 
   const rehypePlugins: NonNullable<Options["rehypePlugins"]> = useMemo(() => {
     const plugins: NonNullable<Options["rehypePlugins"]> = [
@@ -76,8 +96,14 @@ export function MarkdownContent({
   );
 
   const LinkWithWikilink = useCallback(
-    (props: LinkComponentProps) => <LinkComponent {...props} onOpenWikilink={onOpenWikilink} />,
-    [onOpenWikilink],
+    (props: LinkComponentProps) => (
+      <LinkComponent
+        {...props}
+        onOpenWikilink={onOpenWikilink}
+        onOpenRelativeFile={workspaceRoot ? handleOpenRelativeFile : undefined}
+      />
+    ),
+    [onOpenWikilink, handleOpenRelativeFile, workspaceRoot],
   );
 
   const TaskListLi = useCallback(

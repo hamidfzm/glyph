@@ -106,4 +106,59 @@ describe("CanvasNodeView", () => {
     expect(onOpenFile).not.toHaveBeenCalled();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  it("opens a ../ markdown file node at its resolved absolute path", () => {
+    const onOpenFile = vi.fn();
+    const node: CanvasNode = { ...base, type: "file", file: "../notes/todo.md" };
+    render(
+      <CanvasNodeView
+        node={node}
+        canvasPath="/ws/board/diagram.canvas"
+        workspaceRoot="/ws"
+        onOpenFile={onOpenFile}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "todo.md" }));
+    expect(onOpenFile).toHaveBeenCalledWith("/ws/notes/todo.md");
+  });
+
+  it("opens a ../ canvas file node as a canvas at its resolved path", () => {
+    const onOpenFile = vi.fn();
+    const node: CanvasNode = { ...base, type: "file", file: "../other.canvas" };
+    render(
+      <CanvasNodeView
+        node={node}
+        canvasPath="/ws/a/board.canvas"
+        workspaceRoot="/ws"
+        onOpenFile={onOpenFile}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "other.canvas" }));
+    expect(onOpenFile).toHaveBeenCalledWith("/ws/other.canvas");
+  });
+
+  it("renders an inert card for a file node that escapes the workspace root", () => {
+    const onOpenFile = vi.fn();
+    const node: CanvasNode = { ...base, type: "file", file: "../../secret/todo.md" };
+    render(
+      <CanvasNodeView
+        node={node}
+        canvasPath="/ws/board/diagram.canvas"
+        workspaceRoot="/ws"
+        onOpenFile={onOpenFile}
+      />,
+    );
+    expect(screen.getByText("todo.md")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(onOpenFile).not.toHaveBeenCalled();
+  });
+
+  it("does not render an image whose path escapes the workspace root", () => {
+    const node: CanvasNode = { ...base, type: "file", file: "../../secret/pic.png" };
+    render(
+      <CanvasNodeView node={node} canvasPath="/ws/board/diagram.canvas" workspaceRoot="/ws" />,
+    );
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByText("pic.png")).toBeInTheDocument();
+  });
 });
