@@ -39,6 +39,9 @@ jobs:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - name: Install Linux dependencies
         if: startsWith(matrix.platform, 'ubuntu')
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
@@ -438,6 +441,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install packaging tools
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: sudo apt-get update && sudo apt-get install -y devscripts debhelper dput
       - name: Get version
         id: version
@@ -520,6 +526,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install packaging tools
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: sudo apt-get update && sudo apt-get install -y dpkg-dev gpg
       - name: Get version
         id: version
