@@ -857,3 +857,79 @@ jobs:
             git commit -m "chore: update packages to $VERSION"
             git push
           }
+
+  publish-flathub:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # The canonical Flatpak manifest lives in this repo (flatpak/). Flathub
+      # builds from its own app repo (flathub/com.hamidfzm.glyph), so each
+      # release we rewrite the version + per-arch sha256 in the manifest and
+      # push it (with the desktop + metainfo files) to that repo, whose
+      # buildbot then builds and publishes. No-op until FLATHUB_TOKEN (a PAT
+      # with push access to the Flathub app repo) is set, so it never fails a
+      # release before the Flathub submission is accepted.
+      - name: Check for Flathub token
+        id: gate
+        env:
+          TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No FLATHUB_TOKEN secret; skipping Flathub publish."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Get version
+        if: steps.gate.outputs.enabled == 'true'
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Download debs and compute sha256
+        if: steps.gate.outputs.enabled == 'true'
+        id: sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release download "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "Glyph_${VERSION}_amd64.deb" \
+            --pattern "Glyph_${VERSION}_arm64.deb"
+          echo "amd64=$(sha256sum "Glyph_${VERSION}_amd64.deb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "arm64=$(sha256sum "Glyph_${VERSION}_arm64.deb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+      - name: Update manifest and push to the Flathub app repo
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA_AMD64="${{ steps.sha.outputs.amd64 }}"
+          SHA_ARM64="${{ steps.sha.outputs.arm64 }}"
+
+          # Rewrite the version in both download URLs and the per-arch sha256.
+          # Each `url:` line is immediately followed by its `sha256:` line, so
+          # tag the arch on the url and replace the next sha256 accordingly.
+          awk -v v="$VERSION" -v a="$SHA_AMD64" -v r="$SHA_ARM64" '
+            /releases\/download\/.*_amd64\.deb/ { sub(/v[0-9][0-9.]*\/Glyph_[0-9][0-9.]*_/, "v" v "/Glyph_" v "_"); arch="amd64" }
+            /releases\/download\/.*_arm64\.deb/ { sub(/v[0-9][0-9.]*\/Glyph_[0-9][0-9.]*_/, "v" v "/Glyph_" v "_"); arch="arm64" }
+            /^[[:space:]]*sha256:/ {
+              if (arch == "amd64") { sub(/sha256:.*/, "sha256: " a); arch="" }
+              else if (arch == "arm64") { sub(/sha256:.*/, "sha256: " r); arch="" }
+            }
+            { print }
+          ' flatpak/com.hamidfzm.glyph.yml > /tmp/manifest.yml
+
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/flathub/com.hamidfzm.glyph.git" /tmp/flathub
+          cp /tmp/manifest.yml /tmp/flathub/com.hamidfzm.glyph.yml
+          cp flatpak/com.hamidfzm.glyph.desktop /tmp/flathub/
+          cp flatpak/com.hamidfzm.glyph.metainfo.xml /tmp/flathub/
+
+          cd /tmp/flathub
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || {
+            git commit -m "Update to $VERSION"
+            git push
+          }

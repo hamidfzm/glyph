@@ -140,6 +140,13 @@ scoop bucket add glyph-md https://github.com/glyph-md/scoop-bucket
 scoop install glyph
 ```
 
+### Linux (Flathub)
+
+```bash
+flatpak install flathub com.hamidfzm.glyph
+flatpak run com.hamidfzm.glyph
+```
+
 ### Linux (Snap)
 
 ```bash
