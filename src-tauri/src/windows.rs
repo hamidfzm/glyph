@@ -108,24 +108,25 @@ impl WindowRegistry {
 
     /// Record (or clear) the workspace a window shows.
     pub fn set_workspace(&self, label: &str, root: Option<String>) {
-        if let Ok(mut map) = self.workspaces.lock() {
-            map.insert(label.to_string(), root);
-        }
+        self.workspaces
+            .lock()
+            .unwrap()
+            .insert(label.to_string(), root);
     }
 
     /// Forget a window that has closed.
     pub fn remove(&self, label: &str) {
-        if let Ok(mut map) = self.workspaces.lock() {
-            map.remove(label);
-        }
+        self.workspaces.lock().unwrap().remove(label);
     }
 
     /// A stable snapshot of (label, workspace) pairs for routing.
     pub fn snapshot(&self) -> Vec<(String, Option<String>)> {
         self.workspaces
             .lock()
-            .map(|map| map.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-            .unwrap_or_default()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     /// Mint a unique label for a new window (`w1`, `w2`, …). `main` is reserved
@@ -259,5 +260,11 @@ mod tests {
         assert_ne!(a, b);
         assert_ne!(a, "main");
         assert_ne!(b, "main");
+    }
+
+    #[test]
+    fn default_registry_is_empty() {
+        let reg = WindowRegistry::default();
+        assert!(reg.snapshot().is_empty());
     }
 }

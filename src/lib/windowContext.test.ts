@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { injectedOpen, isPrimaryWindow } from "./windowContext";
 
 type Injectable = {
@@ -40,5 +40,15 @@ describe("windowContext", () => {
     expect(isPrimaryWindow()).toBe(false);
     (window as unknown as Injectable).__GLYPH_PRIMARY__ = true;
     expect(isPrimaryWindow()).toBe(true);
+  });
+
+  it("degrades gracefully when there is no window (SSR guard)", () => {
+    vi.stubGlobal("window", undefined);
+    try {
+      expect(injectedOpen()).toBeNull();
+      expect(isPrimaryWindow()).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
