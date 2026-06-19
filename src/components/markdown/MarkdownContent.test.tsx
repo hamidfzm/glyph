@@ -1,6 +1,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { WorkspaceRootContext } from "@/contexts/WorkspaceRootContext";
 import { MarkdownContent } from "./MarkdownContent";
+
+// Render with an opened workspace root in context (the value MarkdownContent now
+// reads via useWorkspaceRoot instead of a prop).
+function renderInWorkspace(ui: ReactNode, root = "/ws") {
+  return render(<WorkspaceRootContext.Provider value={root}>{ui}</WorkspaceRootContext.Provider>);
+}
 
 // MarkdownContent is the shared rendering core (frontmatter + ReactMarkdown with
 // the full plugin set). MarkdownViewer.test covers the sanitiser/alert paths via
@@ -38,11 +46,10 @@ describe("MarkdownContent", () => {
 
   it("resolves a relative link against the document and opens it in the workspace", () => {
     const onOpen = vi.fn();
-    const { container } = render(
+    const { container } = renderInWorkspace(
       <MarkdownContent
         content={"[sib](./sibling.md)"}
         filePath="/ws/notes/doc.md"
-        workspaceRoot="/ws"
         onOpenRelativeFile={onOpen}
         showFrontmatter={false}
       />,
@@ -53,11 +60,10 @@ describe("MarkdownContent", () => {
 
   it("blocks a relative link that resolves outside the workspace root", () => {
     const onOpen = vi.fn();
-    const { container } = render(
+    const { container } = renderInWorkspace(
       <MarkdownContent
         content={"[esc](../../etc/passwd.md)"}
         filePath="/ws/notes/doc.md"
-        workspaceRoot="/ws"
         onOpenRelativeFile={onOpen}
         showFrontmatter={false}
       />,

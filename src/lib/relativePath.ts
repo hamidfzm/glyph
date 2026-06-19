@@ -1,3 +1,6 @@
+import { isCanvasFile } from "@/lib/canvasExtensions";
+import { isMarkdownFile } from "@/lib/markdownExtensions";
+
 // Resolving relative file references (markdown links, image sources, canvas
 // file nodes) against the directory of the document that contains them. Pair
 // these with isPathInside from @/lib/paths to constrain the result to the
@@ -42,4 +45,13 @@ export function isRelativeLocalHref(href: string): boolean {
   // A URL scheme (`http:`, `mailto:`, `data:`) or a Windows drive (`C:\`).
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(href)) return false;
   return true;
+}
+
+// A relative link Glyph opens in the workspace rather than the browser: a local
+// path (not a URL or anchor) pointing at a markdown or canvas document. The
+// trailing `#heading` (if any) is ignored when classifying the target.
+export function isOpenableRelativeHref(href: string | undefined): href is string {
+  if (!href || !isRelativeLocalHref(href)) return false;
+  const target = href.split("#")[0];
+  return isMarkdownFile(target) || isCanvasFile(target);
 }

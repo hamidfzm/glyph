@@ -1,6 +1,7 @@
 import { SidebarLayoutProvider } from "@/contexts/SidebarLayoutContext";
 import { SyncConfigProvider } from "@/contexts/SyncConfigContext";
 import { TabsProvider } from "@/contexts/TabsContext";
+import { WorkspaceRootProvider } from "@/contexts/WorkspaceRootContext";
 import { useCodeThemeStyle } from "@/hooks/useCodeThemeStyle";
 import { useSettings } from "@/hooks/useSettings";
 import { useTheme } from "@/hooks/useTheme";
@@ -16,11 +17,13 @@ export function App() {
 
   return (
     <TabsProvider settings={settings} updateSettings={updateSettings}>
-      <SidebarLayoutProvider settings={settings} updateSettings={updateSettings}>
-        <SyncConfigProvider>
-          <AppShell />
-        </SyncConfigProvider>
-      </SidebarLayoutProvider>
+      <WorkspaceRootProvider>
+        <SidebarLayoutProvider settings={settings} updateSettings={updateSettings}>
+          <SyncConfigProvider>
+            <AppShell />
+          </SyncConfigProvider>
+        </SidebarLayoutProvider>
+      </WorkspaceRootProvider>
     </TabsProvider>
   );
 }

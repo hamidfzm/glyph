@@ -9,7 +9,6 @@ interface SplitViewProps {
   searchOpen: boolean;
   onSearchClose: () => void;
   workspaceFiles?: string[];
-  workspaceRoot?: string;
   onOpenWikilink?: (path: string, heading?: string) => void;
   onOpenRelativeFile?: (path: string) => void;
   onTaskToggle?: (line: number) => void;
@@ -24,7 +23,6 @@ export function SplitView({
   searchOpen,
   onSearchClose,
   workspaceFiles,
-  workspaceRoot,
   onOpenWikilink,
   onOpenRelativeFile,
   onTaskToggle,
@@ -61,12 +59,7 @@ export function SplitView({
         data-testid="split-view-editor"
         className="split-view-editor flex flex-1 min-w-0 min-h-0 overflow-hidden border-r border-[var(--color-border)]"
       >
-        <MarkdownEditor
-          content={content}
-          onChange={handleChange}
-          workspaceFiles={workspaceFiles}
-          workspaceRoot={workspaceRoot}
-        />
+        <MarkdownEditor content={content} onChange={handleChange} workspaceFiles={workspaceFiles} />
       </div>
       <div
         data-testid="split-view-preview"
@@ -78,7 +71,6 @@ export function SplitView({
           searchOpen={searchOpen}
           onSearchClose={onSearchClose}
           workspaceFiles={workspaceFiles}
-          workspaceRoot={workspaceRoot}
           onOpenWikilink={onOpenWikilink}
           onOpenRelativeFile={onOpenRelativeFile}
           onTaskToggle={onTaskToggle}

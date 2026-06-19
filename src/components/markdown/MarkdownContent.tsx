@@ -9,6 +9,7 @@ import remarkGfm from "remark-gfm";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
 import { LightboxProvider } from "@/contexts/LightboxContext";
+import { useWorkspaceRoot } from "@/contexts/WorkspaceRootContext";
 import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
 import { useKatexPlugin } from "@/hooks/useKatexPlugin";
 import { parseFrontmatter } from "@/lib/frontmatter";
@@ -26,8 +27,6 @@ interface MarkdownContentProps {
   content: string;
   filePath?: string;
   workspaceFiles?: string[];
-  /** Opened workspace root; enables and constrains relative link/image resolution. */
-  workspaceRoot?: string;
   onOpenWikilink?: (path: string, heading?: string) => void;
   /** Open a workspace document by absolute path (used for resolved relative links). */
   onOpenRelativeFile?: (path: string) => void;
@@ -45,12 +44,12 @@ export function MarkdownContent({
   content,
   filePath,
   workspaceFiles,
-  workspaceRoot,
   onOpenWikilink,
   onOpenRelativeFile,
   onTaskToggle,
   showFrontmatter = true,
 }: MarkdownContentProps) {
+  const workspaceRoot = useWorkspaceRoot();
   const katexPlugin = useKatexPlugin(content);
   const highlightPlugin = useHighlightPlugin(content);
   const frontmatter = useMemo(
@@ -58,7 +57,7 @@ export function MarkdownContent({
     [content, showFrontmatter],
   );
 
-  const ImageComponent = useImageComponent(filePath, workspaceRoot);
+  const ImageComponent = useImageComponent(filePath);
 
   // Resolve a relative link against this document's directory and open it only
   // when it stays inside the opened workspace. Gating on workspaceRoot keeps

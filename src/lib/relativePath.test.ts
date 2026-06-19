@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isRelativeLocalHref, normalizeRelativePath } from "./relativePath";
+import { isOpenableRelativeHref, isRelativeLocalHref, normalizeRelativePath } from "./relativePath";
 
 describe("normalizeRelativePath", () => {
   it("joins a bare relative path onto the document's directory", () => {
@@ -76,5 +76,27 @@ describe("isRelativeLocalHref", () => {
     "",
   ])("treats %s as not a relative local href", (href) => {
     expect(isRelativeLocalHref(href)).toBe(false);
+  });
+});
+
+describe("isOpenableRelativeHref", () => {
+  it.each([
+    "./sibling.md",
+    "../notes.markdown",
+    "../diagrams/board.canvas",
+    "sub/note.md#heading",
+  ])("opens %s in the workspace", (href) => {
+    expect(isOpenableRelativeHref(href)).toBe(true);
+  });
+
+  it.each([
+    "./image.png", // relative, but not a markdown/canvas target
+    "./data.txt",
+    "https://example.com/page.md", // external URL ending in .md
+    "#heading",
+    "/abs/note.md",
+    undefined,
+  ])("does not open %s in the workspace", (href) => {
+    expect(isOpenableRelativeHref(href)).toBe(false);
   });
 });

@@ -2,6 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useRef } from "react";
 import { MarkdownContent } from "@/components/markdown/MarkdownContent";
 import { resolveImageSrc } from "@/components/markdown/resolveImageSrc";
+import { useWorkspaceRoot } from "@/contexts/WorkspaceRootContext";
 import { canvasColorToCss } from "@/lib/canvas/color";
 import type { CanvasNode } from "@/lib/canvas/types";
 import { isPathInside } from "@/lib/paths";
@@ -13,8 +14,6 @@ interface CanvasNodeViewProps {
   node: CanvasNode;
   /** Absolute path of the .canvas file, for resolving relative file refs. */
   canvasPath?: string;
-  /** Opened workspace root; constrains resolved file refs to the folder. */
-  workspaceRoot?: string;
   /** Open an embedded file node in the workspace, by absolute path. */
   onOpenFile?: (path: string) => void;
   /**
@@ -43,11 +42,11 @@ function fileBasename(file: string): string {
 export function CanvasNodeView({
   node,
   canvasPath,
-  workspaceRoot,
   onOpenFile,
   interactive = true,
   onTaskToggle,
 }: CanvasNodeViewProps) {
+  const workspaceRoot = useWorkspaceRoot();
   const accent = canvasColorToCss(node.color);
 
   // The toggle handler must keep a stable identity: parents rebuild their

@@ -23,7 +23,6 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   const {
     activeTab,
     activeTabId,
-    workspace,
     workspaceFiles,
     wikilinkRefs,
     openFile,
@@ -79,7 +78,6 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   if (!file?.content) return null;
 
   const editorContent = file.editContent ?? file.content;
-  const workspaceRoot = workspace?.root;
 
   // Notebooks are read-only, so the three modes map to read-only views rather
   // than editors: view = rendered cells, split = cells + raw JSON side by side,
@@ -119,7 +117,6 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
           key={`${activeTab.id}:${file.path}`}
           content={editorContent}
           filePath={file.path}
-          workspaceRoot={workspaceRoot}
           onOpenFile={handleOpenWikilink}
           onChange={handleCanvasChange}
           viewportKey={`${activeTab.id}:${file.path}`}
@@ -144,7 +141,6 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
           content={editorContent}
           onChange={handleEditorChange}
           workspaceFiles={workspaceFiles}
-          workspaceRoot={workspaceRoot}
         />
       </div>
     );
@@ -160,7 +156,6 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
           searchOpen={searchOpen}
           onSearchClose={onSearchClose}
           workspaceFiles={workspaceFiles}
-          workspaceRoot={workspaceRoot}
           onOpenWikilink={handleOpenWikilink}
           onOpenRelativeFile={openFile}
           onTaskToggle={handleTaskToggle}
@@ -179,7 +174,6 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
       searchOpen={searchOpen}
       onSearchClose={onSearchClose}
       workspaceFiles={workspaceFiles}
-      workspaceRoot={workspaceRoot}
       onOpenWikilink={handleOpenWikilink}
       onOpenRelativeFile={openFile}
       onTaskToggle={handleTaskToggle}

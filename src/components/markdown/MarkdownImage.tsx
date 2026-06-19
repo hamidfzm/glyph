@@ -1,11 +1,10 @@
 import type { ComponentPropsWithoutRef, MouseEvent } from "react";
 import { useLightbox } from "@/contexts/LightboxContext";
+import { useWorkspaceRoot } from "@/contexts/WorkspaceRootContext";
 import { resolveImageSrc } from "./resolveImageSrc";
 
 interface MarkdownImageProps extends ComponentPropsWithoutRef<"img"> {
   filePath: string | undefined;
-  /** Opened workspace root; constrains relative images to the folder. */
-  workspaceRoot?: string;
 }
 
 // A markdown <img> with its src resolved for the webview. When a lightbox
@@ -13,8 +12,9 @@ interface MarkdownImageProps extends ComponentPropsWithoutRef<"img"> {
 // image itself (no wrapper element) so it renders identically to a plain image
 // and stays valid inside a linked image (<a>). Without a provider it renders as
 // a plain image (e.g. printing, export).
-export function MarkdownImage({ filePath, workspaceRoot, src, alt, ...rest }: MarkdownImageProps) {
+export function MarkdownImage({ filePath, src, alt, ...rest }: MarkdownImageProps) {
   const lightbox = useLightbox();
+  const workspaceRoot = useWorkspaceRoot();
   const resolved = resolveImageSrc(src, filePath, workspaceRoot);
 
   if (!lightbox || !resolved) {

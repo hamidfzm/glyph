@@ -13,6 +13,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
+import { useWorkspaceRoot } from "@/contexts/WorkspaceRootContext";
 import { useSettings } from "@/hooks/useSettings";
 import { editorKeymapExtensions } from "@/lib/editorKeymap";
 import { wikilinkCompletionSource } from "@/lib/wikilinkCompletion";
@@ -21,15 +22,10 @@ interface MarkdownEditorProps {
   content: string;
   onChange: (content: string) => void;
   workspaceFiles?: string[];
-  workspaceRoot?: string;
 }
 
-export function MarkdownEditor({
-  content,
-  onChange,
-  workspaceFiles,
-  workspaceRoot,
-}: MarkdownEditorProps) {
+export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEditorProps) {
+  const workspaceRoot = useWorkspaceRoot();
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);

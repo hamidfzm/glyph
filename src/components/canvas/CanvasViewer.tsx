@@ -20,8 +20,6 @@ import { CanvasToolbar } from "./CanvasToolbar";
 interface CanvasViewerProps {
   content: string;
   filePath?: string;
-  /** Opened workspace root; constrains resolved file refs to the folder. */
-  workspaceRoot?: string;
   onOpenFile?: (path: string) => void;
   /** Persist a checkbox toggle (the only edit view mode allows). */
   onChange?: (serialized: string) => void;
@@ -35,7 +33,6 @@ interface CanvasViewerProps {
 export function CanvasViewer({
   content,
   filePath,
-  workspaceRoot,
   onOpenFile,
   onChange,
   viewportKey,
@@ -137,12 +134,7 @@ export function CanvasViewer({
                 borderColor: canvasColorToCss(node.color),
               }}
             >
-              <CanvasNodeView
-                node={node}
-                canvasPath={filePath}
-                workspaceRoot={workspaceRoot}
-                onOpenFile={onOpenFile}
-              />
+              <CanvasNodeView node={node} canvasPath={filePath} onOpenFile={onOpenFile} />
             </div>
           ))}
 
@@ -166,7 +158,6 @@ export function CanvasViewer({
                 <CanvasNodeView
                   node={node}
                   canvasPath={filePath}
-                  workspaceRoot={workspaceRoot}
                   onOpenFile={onOpenFile}
                   onTaskToggle={
                     onChange && node.type === "text"
