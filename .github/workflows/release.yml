@@ -37,11 +37,23 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - name: Cache apt packages
+        if: startsWith(matrix.platform, 'ubuntu')
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-cache/*.deb
+          key: apt-webkit-${{ matrix.platform }}-v1
       - name: Install Linux dependencies
         if: startsWith(matrix.platform, 'ubuntu')
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
+          mkdir -p ~/apt-cache/partial
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+          sudo apt-get -o Dir::Cache::archives="$HOME/apt-cache" \
+            -o Binary::apt::APT::Keep-Downloaded-Packages=true \
+            install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -444,6 +456,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install packaging tools
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: sudo apt-get update && sudo apt-get install -y devscripts debhelper dput
       - name: Get version
         id: version
@@ -526,6 +541,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install packaging tools
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: sudo apt-get update && sudo apt-get install -y dpkg-dev gpg
       - name: Get version
         id: version
