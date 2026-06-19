@@ -27,12 +27,11 @@ describe("LanguageSetting", () => {
     expect(select.value).toBe("system");
     expect(screen.getByRole("option", { name: "System" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "English" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Deutsch" })).toBeInTheDocument();
   });
 
   it("persists the chosen locale", () => {
     const { updateSettings } = setup();
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "de" } });
-    expect(updateSettings).toHaveBeenCalledWith("appearance.locale", "de");
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "en" } });
+    expect(updateSettings).toHaveBeenCalledWith("appearance.locale", "en");
   });
 });

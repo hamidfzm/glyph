@@ -15,18 +15,17 @@ describe("useLocale", () => {
   });
 
   it("applies an explicit override without consulting the OS", async () => {
-    renderHook(() => useLocale("de"));
-    await waitFor(() => expect(i18n.language).toBe("de"));
-    expect(document.documentElement.lang).toBe("de");
+    renderHook(() => useLocale("en"));
+    await waitFor(() => expect(document.documentElement.lang).toBe("en"));
     expect(document.documentElement.dir).toBe("ltr");
     expect(mockOsLocale).not.toHaveBeenCalled();
   });
 
-  it("follows the OS locale when set to system", async () => {
-    mockOsLocale.mockResolvedValue("de-DE");
+  it("consults the OS locale when set to system", async () => {
+    mockOsLocale.mockResolvedValue("en-GB");
     renderHook(() => useLocale("system"));
-    await waitFor(() => expect(i18n.language).toBe("de"));
-    expect(document.documentElement.lang).toBe("de");
+    await waitFor(() => expect(mockOsLocale).toHaveBeenCalled());
+    expect(document.documentElement.lang).toBe("en");
   });
 
   it("resolves an unsupported OS locale to English", async () => {

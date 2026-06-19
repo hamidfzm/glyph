@@ -17,9 +17,10 @@ export interface LocaleMeta {
 }
 
 // Order here is the order shown in the picker (after the "System" entry).
+// Only fully-translated locales belong here — the string-migration PR adds the
+// rest (German, etc.) once their bundles are complete. See #127.
 export const LOCALES: LocaleMeta[] = [
   { code: "en", name: "English", nativeName: "English", dir: "ltr" },
-  { code: "de", name: "German", nativeName: "Deutsch", dir: "ltr" },
 ];
 
 const SUPPORTED_CODES = LOCALES.map((l) => l.code);

@@ -1,8 +1,6 @@
 import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
 import { FALLBACK_LOCALE } from "@/lib/locales";
-import deCommon from "@/locales/de/common.json";
-import deSettings from "@/locales/de/settings.json";
 import enCommon from "@/locales/en/common.json";
 import enSettings from "@/locales/en/settings.json";
 
@@ -17,7 +15,6 @@ export const i18n = i18next;
 i18n.use(initReactI18next).init({
   resources: {
     en: { common: enCommon, settings: enSettings },
-    de: { common: deCommon, settings: deSettings },
   },
   lng: FALLBACK_LOCALE,
   fallbackLng: FALLBACK_LOCALE,
