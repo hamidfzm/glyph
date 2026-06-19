@@ -292,8 +292,21 @@ the `samples/` folder open, these all open in-app:
 - [kitchen notes](Notes/Cooking.md) — a file in a subfolder
 - [the canvas demo](./canvas-demo.canvas) — opens as a canvas board
 
-Targets that would resolve outside the open folder are not followed. Opening
-this file on its own (no folder) leaves relative links to the browser.
+Relative image paths resolve the same way. This SVG sits in a sibling folder:
+
+![A relative image from a sibling folder](./assets/relative-image.svg)
+
+`../` and `../../` are best seen from a nested note, where they have somewhere
+to climb to:
+
+- [Notes/Relative-Links](Notes/Relative-Links.md) — one level deep; uses `../` to reach the root
+- [Notes/Deep/Deeper-Relative-Links](Notes/Deep/Deeper-Relative-Links.md) — two levels deep; uses `../../`
+
+Targets that resolve **outside** the open folder are refused. From this root
+README, `../` already points above `samples/`, so links like
+`[escape](../outside.md)` and images like `![](../outside.svg)` are not
+followed and render nothing. Opening any of these files on its own (no folder)
+leaves every relative link to the browser instead.
 
 ### Backlinks
 

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 240" width="480" height="240" role="img" aria-label="A local image resolved through a relative path">
+  <defs>
+    <linearGradient id="rel-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="480" height="240" rx="18" fill="url(#rel-bg)"/>
+
+  <rect x="36" y="40" width="408" height="160" rx="12" fill="#0f172a" opacity="0.88"/>
+  <text x="60" y="92" font-family="monospace" font-size="18" fill="#e2e8f0">samples/assets/relative-image.svg</text>
+  <text x="60" y="128" font-family="monospace" font-size="15" fill="#94a3b8">reached from Notes/ as ../assets/...</text>
+  <text x="60" y="152" font-family="monospace" font-size="15" fill="#94a3b8">and from Notes/Deep/ as ../../assets/...</text>
+  <text x="60" y="180" font-family="sans-serif" font-size="15" fill="#38bdf8">Relative image, rendered inline.</text>
+</svg>
