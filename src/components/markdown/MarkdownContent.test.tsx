@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { MarkdownContent } from "./MarkdownContent";
 
 // MarkdownContent is the shared rendering core (frontmatter + ReactMarkdown with
@@ -34,5 +35,60 @@ describe("MarkdownContent", () => {
       <MarkdownContent content={"inline $x^2$ math"} showFrontmatter={false} />,
     );
     await waitFor(() => expect(container.querySelector(".katex")).toBeTruthy());
+  });
+
+  it("resolves a relative link against the document and opens it in the workspace", () => {
+    const onOpen = vi.fn();
+    const { container } = renderInWorkspace(
+      <MarkdownContent
+        content={"[sib](./sibling.md)"}
+        filePath="/ws/notes/doc.md"
+        onOpenRelativeFile={onOpen}
+        showFrontmatter={false}
+      />,
+    );
+    fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
+    expect(onOpen).toHaveBeenCalledWith("/ws/notes/sibling.md");
+  });
+
+  it("blocks a relative link that resolves outside the workspace root", () => {
+    const onOpen = vi.fn();
+    const { container } = renderInWorkspace(
+      <MarkdownContent
+        content={"[esc](../../etc/passwd.md)"}
+        filePath="/ws/notes/doc.md"
+        onOpenRelativeFile={onOpen}
+        showFrontmatter={false}
+      />,
+    );
+    fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("does not wire relative-link opening without a workspace root (single-file mode)", () => {
+    const onOpen = vi.fn();
+    const { container } = render(
+      <MarkdownContent
+        content={"[sib](./sibling.md)"}
+        filePath="/loose/doc.md"
+        onOpenRelativeFile={onOpen}
+        showFrontmatter={false}
+      />,
+    );
+    fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("does not resolve a relative link when the document has no file path", () => {
+    const onOpen = vi.fn();
+    const { container } = renderInWorkspace(
+      <MarkdownContent
+        content={"[sib](./sibling.md)"}
+        onOpenRelativeFile={onOpen}
+        showFrontmatter={false}
+      />,
+    );
+    fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
+    expect(onOpen).not.toHaveBeenCalled();
   });
 });

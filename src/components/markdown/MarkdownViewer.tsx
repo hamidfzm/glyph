@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
+import { SearchBar } from "@/components/layout/SearchBar";
 import { useSearch } from "@/hooks/useSearch";
-import { SearchBar } from "../layout/SearchBar";
 import { MarkdownContent } from "./MarkdownContent";
 
 interface MarkdownViewerProps {
@@ -12,6 +12,7 @@ interface MarkdownViewerProps {
   onSearchClose: () => void;
   workspaceFiles?: string[];
   onOpenWikilink?: (path: string, heading?: string) => void;
+  onOpenRelativeFile?: (path: string) => void;
   onTaskToggle?: (line: number) => void;
 }
 
@@ -24,6 +25,7 @@ export function MarkdownViewer({
   onSearchClose,
   workspaceFiles,
   onOpenWikilink,
+  onOpenRelativeFile,
   onTaskToggle,
 }: MarkdownViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -87,6 +89,7 @@ export function MarkdownViewer({
             filePath={filePath}
             workspaceFiles={workspaceFiles}
             onOpenWikilink={onOpenWikilink}
+            onOpenRelativeFile={onOpenRelativeFile}
             onTaskToggle={onTaskToggle}
           />
         </div>

@@ -1,10 +1,11 @@
 import { createContext, type ReactNode, useContext, useMemo } from "react";
+import { useSettings } from "@/hooks/useSettings";
 import { type TocEntry, useTableOfContents } from "@/hooks/useTableOfContents";
 import { useTabs } from "@/hooks/useTabs";
 import { useWorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { type Backlink, filterBacklinks } from "@/lib/backlinks";
 import { displayContentFor, tocContentFor } from "@/lib/displayContent";
-import { EDITOR_MODE, type Settings } from "@/lib/settings";
+import { EDITOR_MODE } from "@/lib/settings";
 
 type TabsApi = ReturnType<typeof useTabs>;
 
@@ -22,13 +23,8 @@ export interface TabsContextValue extends TabsApi {
 
 export const TabsContext = createContext<TabsContextValue | null>(null);
 
-interface TabsProviderProps {
-  settings: Settings;
-  updateSettings: (key: string, value: unknown) => void;
-  children: ReactNode;
-}
-
-export function TabsProvider({ settings, updateSettings, children }: TabsProviderProps) {
+export function TabsProvider({ children }: { children: ReactNode }) {
+  const { settings, updateSettings } = useSettings();
   const workspaceNotice = useWorkspaceNotice();
   const tabs = useTabs({
     reopenLastFile: settings.behavior.reopenLastFile,
@@ -86,4 +82,13 @@ export function useTabsContext(): TabsContextValue {
   const ctx = useContext(TabsContext);
   if (!ctx) throw new Error("useTabsContext must be used inside <TabsProvider>");
   return ctx;
+}
+
+// The opened workspace folder's root (or undefined when only loose files are
+// open), read straight from the tabs context. Uses optional chaining rather
+// than useTabsContext so the shared renderers (notebooks, canvas, print, and
+// isolated tests) can read it with no provider and simply skip workspace
+// resolution.
+export function useWorkspaceRoot(): string | undefined {
+  return useContext(TabsContext)?.workspace?.root;
 }

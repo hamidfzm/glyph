@@ -1,9 +1,12 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useRef } from "react";
 import { MarkdownContent } from "@/components/markdown/MarkdownContent";
+import { resolveImageSrc } from "@/components/markdown/resolveImageSrc";
+import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { canvasColorToCss } from "@/lib/canvas/color";
 import type { CanvasNode } from "@/lib/canvas/types";
+import { basename, isPathInside } from "@/lib/paths";
+import { normalizeRelativePath } from "@/lib/relativePath";
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i;
 
@@ -11,7 +14,7 @@ interface CanvasNodeViewProps {
   node: CanvasNode;
   /** Absolute path of the .canvas file, for resolving relative file refs. */
   canvasPath?: string;
-  /** Open an embedded file node in the workspace (folder tabs only). */
+  /** Open an embedded file node in the workspace, by absolute path. */
   onOpenFile?: (path: string) => void;
   /**
    * When false (the editor), link/file cards render inert: clicking selects
@@ -25,9 +28,7 @@ interface CanvasNodeViewProps {
 
 /** Resolve a canvas-relative file reference against the .canvas file's folder. */
 function resolveRelative(file: string, canvasPath: string | undefined): string {
-  if (!canvasPath) return file;
-  const dir = canvasPath.replace(/[/\\][^/\\]*$/, "");
-  return `${dir}/${file}`.replace(/\/\.\//g, "/");
+  return canvasPath ? normalizeRelativePath(canvasPath, file) : file;
 }
 
 // Renders the inner content of a single canvas node by type. Positioning,
@@ -40,6 +41,7 @@ export function CanvasNodeView({
   interactive = true,
   onTaskToggle,
 }: CanvasNodeViewProps) {
+  const workspaceRoot = useWorkspaceRoot();
   const accent = canvasColorToCss(node.color);
 
   // The toggle handler must keep a stable identity: parents rebuild their
@@ -56,6 +58,9 @@ export function CanvasNodeView({
       return (
         // markdown-body opts the card into the full document styling
         // (headings, lists, code blocks); canvas.css strips its page chrome.
+        // workspaceRoot/onOpenRelativeFile are intentionally not threaded here:
+        // relative-link opening is a document-tab affordance; embedded canvas
+        // text cards render their markdown inline without in-app navigation.
         <div className="glyph-canvas-node-text markdown-body">
           <MarkdownContent
             content={node.text}
@@ -88,23 +93,27 @@ export function CanvasNodeView({
     }
 
     case "file": {
-      const resolved = resolveRelative(node.file, canvasPath);
+      // Images resolve and root-clamp inside resolveImageSrc, so this branch
+      // returns before the button-only resolution below runs.
       if (IMAGE_EXT.test(node.file)) {
-        return (
-          <img
-            className="glyph-canvas-node-image"
-            src={convertFileSrc(resolved)}
-            alt={
-              // v8 ignore next -- defensive: split of a matched image path always yields a basename
-              node.file.split(/[/\\]/).pop() ?? node.file
-            }
-          />
-        );
+        const src = resolveImageSrc(node.file, canvasPath, workspaceRoot);
+        if (!src) {
+          return (
+            <div className="glyph-canvas-node-file" title={node.file}>
+              <span className="glyph-canvas-node-file-name">{basename(node.file)}</span>
+            </div>
+          );
+        }
+        return <img className="glyph-canvas-node-image" src={src} alt={basename(node.file)} />;
       }
-      const name = (
-        <span className="glyph-canvas-node-file-name">{node.file.split(/[/\\]/).pop()}</span>
-      );
-      if (!interactive) {
+      const resolved = resolveRelative(node.file, canvasPath);
+      // A file ref that resolves outside the opened workspace is refused: the
+      // open button degrades to an inert card. With no canvasPath, `resolved`
+      // is the raw relative ref, which `isPathInside` reports as outside the
+      // root, so it's refused too.
+      const outsideRoot = !!workspaceRoot && !isPathInside(resolved, workspaceRoot);
+      const name = <span className="glyph-canvas-node-file-name">{basename(node.file)}</span>;
+      if (!interactive || outsideRoot) {
         return (
           <div className="glyph-canvas-node-file" title={node.file}>
             {name}
@@ -115,7 +124,7 @@ export function CanvasNodeView({
         <button
           type="button"
           className="glyph-canvas-node-file"
-          onClick={() => onOpenFile?.(node.file)}
+          onClick={() => onOpenFile?.(resolved)}
           title={node.file}
         >
           {name}

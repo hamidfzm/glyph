@@ -1,5 +1,6 @@
 import type { ComponentPropsWithoutRef, MouseEvent } from "react";
 import { useLightbox } from "@/contexts/LightboxContext";
+import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { resolveImageSrc } from "./resolveImageSrc";
 
 interface MarkdownImageProps extends ComponentPropsWithoutRef<"img"> {
@@ -13,7 +14,8 @@ interface MarkdownImageProps extends ComponentPropsWithoutRef<"img"> {
 // a plain image (e.g. printing, export).
 export function MarkdownImage({ filePath, src, alt, ...rest }: MarkdownImageProps) {
   const lightbox = useLightbox();
-  const resolved = resolveImageSrc(src, filePath);
+  const workspaceRoot = useWorkspaceRoot();
+  const resolved = resolveImageSrc(src, filePath, workspaceRoot);
 
   if (!lightbox || !resolved) {
     return <img src={resolved} alt={alt} {...rest} />;
