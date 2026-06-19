@@ -101,8 +101,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5",
-    "@vitest/coverage-v8": "^4.1.8",
-    "happy-dom": "^20.10.2",
+    "@vitest/coverage-v8": "^4.1.9",
+    "happy-dom": "^20.10.6",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.7",
     "rehype-stringify": "^10.0.1",
@@ -112,6 +112,6 @@
     "typescript": "^5.7",
     "unified": "^11.0.5",
     "vite": "^7",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   }
 }
