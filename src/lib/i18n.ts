@@ -8,8 +8,6 @@ import enSettings from "@/locales/en/settings.json";
 // additional locales are registered here as they land (and can move to lazy
 // loading once the bundle list grows). useLocale switches the active language
 // at runtime — this module only sets up the default English baseline.
-export const NAMESPACES = ["common", "settings"] as const;
-
 export const i18n = i18next;
 
 i18n.use(initReactI18next).init({
@@ -19,7 +17,7 @@ i18n.use(initReactI18next).init({
   lng: FALLBACK_LOCALE,
   fallbackLng: FALLBACK_LOCALE,
   defaultNS: "common",
-  ns: NAMESPACES,
+  ns: ["common", "settings"],
   // React already escapes interpolated values, so i18next must not double-escape.
   interpolation: { escapeValue: false },
   // We drive loading ourselves and want synchronous renders in tests.

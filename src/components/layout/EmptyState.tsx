@@ -27,7 +27,6 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
           ) : (
             <Trans
               i18nKey="emptyState.openHint"
-              ns="common"
               values={{ shortcut: `${modKey(platform)}+O` }}
               components={{
                 kbd: (
