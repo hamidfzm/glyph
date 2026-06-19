@@ -31,9 +31,9 @@ function resolveRelative(file: string, canvasPath: string | undefined): string {
   return canvasPath ? normalizeRelativePath(canvasPath, file) : file;
 }
 
-/** The display name of a file reference: its basename. */
+/** The display name of a file reference: its basename (strip any directory). */
 function fileBasename(file: string): string {
-  return file.split(/[/\\]/).pop() ?? file;
+  return file.replace(/^.*[/\\]/, "");
 }
 
 // Renders the inner content of a single canvas node by type. Positioning,

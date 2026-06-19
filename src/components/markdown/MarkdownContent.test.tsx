@@ -78,4 +78,17 @@ describe("MarkdownContent", () => {
     fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
     expect(onOpen).not.toHaveBeenCalled();
   });
+
+  it("does not resolve a relative link when the document has no file path", () => {
+    const onOpen = vi.fn();
+    const { container } = renderInWorkspace(
+      <MarkdownContent
+        content={"[sib](./sibling.md)"}
+        onOpenRelativeFile={onOpen}
+        showFrontmatter={false}
+      />,
+    );
+    fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
 });
