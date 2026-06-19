@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import type { FileTab, FolderTab } from "@/hooks/useTabs";
+import type { FileTab, GraphTab } from "@/hooks/useTabs";
 import type { EditorMode } from "@/lib/settings";
 import { TabContent } from "./TabContent";
 
@@ -29,6 +29,23 @@ vi.mock("./editor/lazyEditor", () => ({
         onClick={() => onOpenWikilink?.("/note.md")}
       >
         wikilink
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock("./graph/lazyGraph", () => ({
+  GraphView: ({
+    workspaceFiles,
+    onOpenFile,
+  }: {
+    workspaceFiles: readonly string[];
+    onOpenFile: (path: string) => void;
+  }) => (
+    <div data-testid="graph-view">
+      <span data-testid="graph-file-count">{workspaceFiles.length}</span>
+      <button type="button" data-testid="graph-node" onClick={() => onOpenFile("/workspace/b.md")}>
+        node
       </button>
     </div>
   ),
@@ -113,25 +130,8 @@ function makeFileTab(mode: EditorMode = "view"): FileTab {
   };
 }
 
-function makeFolderTab(filePath?: string): FolderTab {
-  return {
-    id: "tab-2",
-    kind: "folder",
-    root: "/workspace",
-    expanded: new Set(),
-    nodes: new Map(),
-    file: filePath
-      ? {
-          path: filePath,
-          content: "# folder file",
-          metadata: { name: "x.md", path: filePath, size: 0, modified: 0 },
-          scrollTop: 0,
-          mode: "view",
-          editContent: null,
-          dirty: false,
-        }
-      : null,
-  };
+function makeGraphTab(root = "/workspace"): GraphTab {
+  return { id: "tab-g", kind: "graph", root, file: null };
 }
 
 function buildContext(over: Partial<TabsContextValue>): TabsContextValue {
@@ -143,9 +143,11 @@ function buildContext(over: Partial<TabsContextValue>): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    workspace: null,
     openFile: vi.fn(),
     openFolder: vi.fn(),
-    openFileInFolderTab: vi.fn(),
+    openGraph: vi.fn(),
+    closeWorkspace: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),
     createCanvas: vi.fn(),
@@ -198,13 +200,39 @@ describe("TabContent", () => {
   });
 
   it("renders nothing when the active file has no content", () => {
-    const folder = makeFolderTab(); // file: null
+    const tab = makeFileTab("view");
+    tab.file.content = null;
     const { container } = renderTabContent({
-      activeTab: folder,
-      activeTabId: folder.id,
-      activeFile: null,
+      activeTab: tab,
+      activeTabId: tab.id,
+      activeFile: tab.file,
     });
     expect(container.firstChild).toBeNull();
+  });
+
+  it("renders the graph view for a graph tab", () => {
+    const graph = makeGraphTab();
+    renderTabContent({
+      tabs: [graph],
+      activeTab: graph,
+      activeTabId: graph.id,
+      workspaceFiles: ["/workspace/a.md", "/workspace/b.md"],
+    });
+    expect(screen.getByTestId("graph-view")).toBeInTheDocument();
+    expect(screen.getByTestId("graph-file-count")).toHaveTextContent("2");
+  });
+
+  it("opens a clicked graph node as a document tab", () => {
+    const graph = makeGraphTab();
+    const openFile = vi.fn();
+    const { getByTestId } = renderTabContent({
+      tabs: [graph],
+      activeTab: graph,
+      activeTabId: graph.id,
+      openFile,
+    });
+    getByTestId("graph-node").click();
+    expect(openFile).toHaveBeenCalledWith("/workspace/b.md");
   });
 
   it("renders MarkdownViewer in view mode", () => {
@@ -233,31 +261,17 @@ describe("TabContent", () => {
     expect(screen.getByTestId("lazy-split")).toBeInTheDocument();
   });
 
-  it("routes wikilink clicks to openFileInFolderTab only inside a folder tab", () => {
-    const folder = makeFolderTab("/workspace/note.md");
-    const openFileInFolderTab = vi.fn();
-    if (folder.file) folder.file.mode = "split";
-    const { getByTestId } = renderTabContent({
-      activeTab: folder,
-      activeTabId: folder.id,
-      activeFile: folder.file,
-      openFileInFolderTab,
-    });
-    getByTestId("split-wikilink").click();
-    expect(openFileInFolderTab).toHaveBeenCalledWith(folder.id, "/note.md");
-  });
-
-  it("drops wikilink clicks outside a folder tab", () => {
+  it("routes wikilink clicks through openFile", () => {
     const tab = makeFileTab("split");
-    const openFileInFolderTab = vi.fn();
+    const openFile = vi.fn();
     const { getByTestId } = renderTabContent({
       activeTab: tab,
       activeTabId: tab.id,
       activeFile: tab.file,
-      openFileInFolderTab,
+      openFile,
     });
     getByTestId("split-wikilink").click();
-    expect(openFileInFolderTab).not.toHaveBeenCalled();
+    expect(openFile).toHaveBeenCalledWith("/note.md");
   });
 
   it("renders the notebook viewer for an .ipynb tab in view mode", () => {

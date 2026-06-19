@@ -3,8 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FolderTab, Tab } from "./useTabs";
-import { mapFolderTab, useTabs } from "./useTabs";
+import { useTabs } from "./useTabs";
 
 type Invoker = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -68,7 +67,7 @@ function defaultOptions(over: Partial<Parameters<typeof useTabs>[0]> = {}) {
     autoReload: false,
     defaultEditorMode: "view" as const,
     onSettingsChange: vi.fn(),
-    onWorkspaceRefusal: vi.fn(),
+    onWorkspaceNotice: vi.fn(),
     ...over,
   };
 }
@@ -84,6 +83,14 @@ function captureListener(
   return ref;
 }
 
+function watchDirectoryCalls(path: string) {
+  return vi
+    .mocked(invoke)
+    .mock.calls.filter(
+      (c) => c[0] === "watch_directory" && (c[1] as { path: string }).path === path,
+    );
+}
+
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
   vi.mocked(invoke).mockImplementation(makeInvoker() as typeof invoke);
@@ -96,44 +103,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("mapFolderTab", () => {
-  const folder: FolderTab = {
-    id: "d",
-    kind: "folder",
-    root: "/r",
-    expanded: new Set(),
-    nodes: new Map(),
-    file: null,
-  };
-  const fileTab = { id: "f", kind: "file" } as unknown as Tab;
-
-  it("updates the matching folder tab and leaves others untouched", () => {
-    const out = mapFolderTab([fileTab, folder], "d", (t) => ({ ...t, root: "/x" }));
-    expect((out[1] as FolderTab).root).toBe("/x");
-    expect(out[0]).toBe(fileTab);
-  });
-
-  it("does nothing when no folder tab has the id", () => {
-    const update = vi.fn((t: FolderTab) => t);
-    mapFolderTab([fileTab, folder], "missing", update);
-    expect(update).not.toHaveBeenCalled();
-  });
-
-  it("does not update a non-folder tab whose id matches", () => {
-    const update = vi.fn((t: FolderTab) => t);
-    mapFolderTab([{ ...fileTab, id: "d" }], "d", update);
-    expect(update).not.toHaveBeenCalled();
-  });
-});
-
 describe("useTabs initialization", () => {
-  it("ends up with no tabs when nothing is provided", async () => {
+  it("ends up with no tabs and no workspace when nothing is provided", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => {
       expect(result.current.initializing).toBe(false);
     });
     expect(result.current.tabs).toEqual([]);
     expect(result.current.activeTabId).toBeNull();
+    expect(result.current.workspace).toBeNull();
   });
 
   it("opens the initial file from get_initial_file", async () => {
@@ -163,9 +141,8 @@ describe("useTabs initialization", () => {
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => {
-      expect(result.current.tabs).toHaveLength(1);
+      expect(result.current.workspace?.root).toBe("/p/workspace");
     });
-    expect(result.current.tabs[0].kind).toBe("folder");
     expect(invoke).toHaveBeenCalledWith("watch_directory", { path: "/p/workspace" });
     expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/cli.md" });
   });
@@ -182,7 +159,7 @@ describe("useTabs initialization", () => {
     await waitFor(() => {
       expect(result.current.tabs).toHaveLength(2);
     });
-    const paths = result.current.tabs.map((t) => (t.kind === "file" ? t.file.path : "(folder)"));
+    const paths = result.current.tabs.map((t) => (t.kind === "file" ? t.file.path : "(graph)"));
     expect(paths).toEqual(["/p/a.md", "/p/b.md"]);
     expect(result.current.activeTab?.kind).toBe("file");
     if (result.current.activeTab?.kind === "file") {
@@ -190,7 +167,7 @@ describe("useTabs initialization", () => {
     }
   });
 
-  it("restores PersistedTab[] mix of folder and file tabs", async () => {
+  it("restores a folder entry as the workspace and file entries as tabs", async () => {
     const { result } = renderHook(() =>
       useTabs(
         defaultOptions({
@@ -202,10 +179,47 @@ describe("useTabs initialization", () => {
       ),
     );
     await waitFor(() => {
-      expect(result.current.tabs).toHaveLength(2);
+      expect(result.current.workspace?.root).toBe("/p/ws");
     });
-    expect(result.current.tabs[0].kind).toBe("folder");
-    expect(result.current.tabs[1].kind).toBe("file");
+    expect(result.current.tabs).toHaveLength(1);
+    expect(result.current.tabs[0].kind).toBe("file");
+  });
+
+  it("restores a legacy folder entry's inline filePath as a file tab", async () => {
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          openTabs: [{ kind: "folder", path: "/p/ws", filePath: "/p/ws/note.md" }],
+        }),
+      ),
+    );
+    await waitFor(() => {
+      expect(result.current.workspace?.root).toBe("/p/ws");
+    });
+    await waitFor(() => {
+      expect(result.current.tabs).toHaveLength(1);
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.path).toBe("/p/ws/note.md");
+    }
+  });
+
+  it("skips extra legacy folder entries beyond the first", async () => {
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          openTabs: [
+            { kind: "folder", path: "/p/a" },
+            { kind: "folder", path: "/p/b" },
+          ],
+        }),
+      ),
+    );
+    await waitFor(() => {
+      expect(result.current.initializing).toBe(false);
+    });
+    expect(result.current.workspace?.root).toBe("/p/a");
+    expect(invoke).not.toHaveBeenCalledWith("watch_directory", { path: "/p/b" });
   });
 
   it("falls back to recent[0] when reopenLastFile is true", async () => {
@@ -223,6 +237,22 @@ describe("useTabs initialization", () => {
     if (result.current.tabs[0].kind === "file") {
       expect(result.current.tabs[0].file.path).toBe("/p/last.md");
     }
+  });
+
+  it("swallows init command failures and still finishes initializing", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        get_initial_folder: async () => {
+          throw new Error("ipc broke");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => {
+      expect(result.current.initializing).toBe(false);
+    });
+    expect(result.current.tabs).toHaveLength(0);
+    expect(result.current.workspace).toBeNull();
   });
 });
 
@@ -314,6 +344,100 @@ describe("useTabs file operations", () => {
     }
   });
 
+  it("records a workspace note via workspace_set_last_file on open", async () => {
+    const setLastFile = vi.fn(async () => undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ workspace_set_last_file: setLastFile }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    setLastFile.mockClear();
+
+    await act(async () => {
+      await result.current.openFile("/p/ws/note.md");
+    });
+
+    expect(setLastFile).toHaveBeenCalledWith("workspace_set_last_file", {
+      workspaceRoot: "/p/ws",
+      filePath: "/p/ws/note.md",
+    });
+  });
+
+  it("does not record a loose file outside the workspace as the last file", async () => {
+    const setLastFile = vi.fn(async () => undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ workspace_set_last_file: setLastFile }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    setLastFile.mockClear();
+
+    await act(async () => {
+      await result.current.openFile("/q/loose.md");
+    });
+
+    expect(setLastFile).not.toHaveBeenCalled();
+  });
+
+  it("still opens the tab when workspace_set_last_file fails", async () => {
+    // The remember-last-file write is fire-and-forget; a failure is never
+    // fatal to opening the document.
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_set_last_file: async () => {
+          throw new Error("state.json unwritable");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/ws/note.md");
+    });
+
+    expect(
+      result.current.tabs.some((t) => t.kind === "file" && t.file.path === "/p/ws/note.md"),
+    ).toBe(true);
+  });
+
+  it("treats a file path equal to the workspace root as inside the workspace", async () => {
+    // Defensive equality arm of the membership check. A root that is itself a
+    // file path can't happen through the UI, but the guard exists and the
+    // mocks don't care what the root looks like.
+    const setLastFile = vi.fn(async () => undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ workspace_set_last_file: setLastFile }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/odd.md");
+    });
+    setLastFile.mockClear();
+
+    await act(async () => {
+      await result.current.openFile("/p/odd.md");
+    });
+
+    expect(setLastFile).toHaveBeenCalledWith("workspace_set_last_file", {
+      workspaceRoot: "/p/odd.md",
+      filePath: "/p/odd.md",
+    });
+  });
+
   it("closeTab removes the tab and unwatches the file", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
@@ -353,6 +477,27 @@ describe("useTabs file operations", () => {
 
     expect(result.current.tabs).toHaveLength(1);
     expect(result.current.activeTabId).toBe(result.current.tabs[0].id);
+  });
+
+  it("closeTab tolerates an unwatch_file failure", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        unwatch_file: async () => {
+          throw new Error("watcher gone");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+
+    await act(async () => {
+      result.current.closeTab(result.current.tabs[0].id);
+    });
+
+    expect(result.current.tabs).toHaveLength(0);
   });
 
   it("setActiveTab switches the active tab", async () => {
@@ -638,7 +783,9 @@ describe("useTabs file operations", () => {
     });
   });
 
-  it("commitEdit is a no-op for a folder tab with no open file", async () => {
+  it("commitEdit is a no-op for a graph tab", async () => {
+    // Graph tabs have no document, so the activeFileOf read inside commitEdit
+    // comes back null and nothing is written.
     const writeFile = vi.fn().mockResolvedValue(undefined);
     vi.mocked(invoke).mockImplementation(
       makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
@@ -647,13 +794,15 @@ describe("useTabs file operations", () => {
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     await act(async () => {
-      await result.current.openFolder("/ws");
+      await result.current.openFolder("/p/ws");
     });
-    const tabId = result.current.tabs[0].id;
-    expect(result.current.tabs[0].kind).toBe("folder");
+    act(() => {
+      result.current.openGraph();
+    });
+    const graphId = result.current.tabs.find((t) => t.kind === "graph")?.id as string;
 
     await act(async () => {
-      await result.current.commitEdit(tabId, "X");
+      await result.current.commitEdit(graphId, "X");
     });
     expect(writeFile).not.toHaveBeenCalled();
   });
@@ -885,7 +1034,7 @@ describe("useTabs dialog and events", () => {
     expect(result.current.tabs).toHaveLength(0);
   });
 
-  it("opens a folder via openFolder and watches it", async () => {
+  it("opens a folder as the workspace and watches it", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
@@ -893,8 +1042,8 @@ describe("useTabs dialog and events", () => {
       await result.current.openFolder("/p/ws");
     });
 
-    expect(result.current.tabs).toHaveLength(1);
-    expect(result.current.tabs[0].kind).toBe("folder");
+    expect(result.current.workspace?.root).toBe("/p/ws");
+    expect(result.current.tabs).toHaveLength(0);
     expect(invoke).toHaveBeenCalledWith("watch_directory", { path: "/p/ws" });
   });
 
@@ -916,17 +1065,15 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     let newPath: string | null = null;
     await act(async () => {
-      newPath = await result.current.createNote(folderId, "/p/ws");
+      newPath = await result.current.createNote("/p/ws");
     });
 
     expect(newPath).toBe("/p/ws/Untitled.md");
     expect(invoke).toHaveBeenCalledWith("create_note", { dir: "/p/ws", root: "/p/ws" });
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    const entries = folder?.kind === "folder" ? folder.nodes.get("/p/ws") : null;
+    const entries = result.current.workspace?.nodes.get("/p/ws");
     expect(entries?.some((e) => e.path === "/p/ws/Untitled.md")).toBe(true);
   });
 
@@ -948,17 +1095,15 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     let newPath: string | null = null;
     await act(async () => {
-      newPath = await result.current.createCanvas(folderId, "/p/ws");
+      newPath = await result.current.createCanvas("/p/ws");
     });
 
     expect(newPath).toBe("/p/ws/Untitled.canvas");
     expect(invoke).toHaveBeenCalledWith("create_canvas", { dir: "/p/ws", root: "/p/ws" });
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    const entries = folder?.kind === "folder" ? folder.nodes.get("/p/ws") : null;
+    const entries = result.current.workspace?.nodes.get("/p/ws");
     expect(entries?.some((e) => e.path === "/p/ws/Untitled.canvas")).toBe(true);
   });
 
@@ -974,16 +1119,14 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     let newPath: string | null = null;
     await act(async () => {
-      newPath = await result.current.createFolder(folderId, "/p/ws/sub");
+      newPath = await result.current.createFolder("/p/ws/sub");
     });
 
     expect(newPath).toBe("/p/ws/sub/Untitled Folder");
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    expect(folder?.kind === "folder" ? folder.expanded.has("/p/ws/sub") : false).toBe(true);
+    expect(result.current.workspace?.expanded.has("/p/ws/sub")).toBe(true);
   });
 
   it("renamePath invokes rename_path and returns the final path", async () => {
@@ -998,11 +1141,10 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     let finalPath: string | null = null;
     await act(async () => {
-      finalPath = await result.current.renamePath(folderId, "/p/ws/Untitled.md", "My Note");
+      finalPath = await result.current.renamePath("/p/ws/Untitled.md", "My Note");
     });
 
     expect(finalPath).toBe("/p/ws/My Note.md");
@@ -1013,19 +1155,21 @@ describe("useTabs dialog and events", () => {
     });
   });
 
-  it("create/rename are no-ops for an unknown tab id", async () => {
+  it("create/rename are no-ops when no workspace is open", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     let a: string | null = "x";
     let b: string | null = "x";
     let c: string | null = "x";
+    let d: string | null = "x";
     await act(async () => {
-      a = await result.current.createNote("nope", "/p/ws");
-      b = await result.current.createFolder("nope", "/p/ws");
-      c = await result.current.renamePath("nope", "/p/ws/x.md", "y");
+      a = await result.current.createNote("/p/ws");
+      b = await result.current.createFolder("/p/ws");
+      c = await result.current.createCanvas("/p/ws");
+      d = await result.current.renamePath("/p/ws/x.md", "y");
     });
-    expect([a, b, c]).toEqual([null, null, null]);
+    expect([a, b, c, d]).toEqual([null, null, null, null]);
   });
 
   it("createNote returns null and logs when the command fails", async () => {
@@ -1042,11 +1186,10 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     let newPath: string | null = "x";
     await act(async () => {
-      newPath = await result.current.createNote(folderId, "/p/ws");
+      newPath = await result.current.createNote("/p/ws");
     });
     expect(newPath).toBeNull();
     expect(spy).toHaveBeenCalled();
@@ -1065,11 +1208,10 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     let ok: boolean | undefined;
     await act(async () => {
-      ok = await result.current.deletePath(folderId, "/p/ws/note.md");
+      ok = await result.current.deletePath("/p/ws/note.md");
     });
 
     expect(ok).toBe(true);
@@ -1086,18 +1228,17 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     let ok: boolean | undefined;
     await act(async () => {
-      ok = await result.current.deletePath(folderId, "/p/ws/note.md");
+      ok = await result.current.deletePath("/p/ws/note.md");
     });
 
     expect(ok).toBe(false);
     expect(invoke).not.toHaveBeenCalledWith("delete_path", expect.anything());
   });
 
-  it("deletePath closes the open file when it is the one removed", async () => {
+  it("deletePath closes every open tab under the deleted path", async () => {
     vi.mocked(ask).mockResolvedValue(true);
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
@@ -1110,28 +1251,35 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
     await act(async () => {
-      await result.current.openFileInFolderTab(folderId, "/p/ws/note.md");
+      await result.current.openFile("/p/ws/other.md");
     });
+    await act(async () => {
+      await result.current.openFile("/p/ws/sub/a.md");
+    });
+    // The doomed tab is active, so closing it must fall back to a neighbor.
+    expect(result.current.activeTab?.kind).toBe("file");
 
     await act(async () => {
-      await result.current.deletePath(folderId, "/p/ws/note.md");
+      await result.current.deletePath("/p/ws/sub");
     });
 
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    expect(folder?.kind === "folder" ? folder.file : "set").toBeNull();
-    expect(invoke).toHaveBeenCalledWith("unwatch_file", { path: "/p/ws/note.md" });
+    expect(result.current.tabs).toHaveLength(1);
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.path).toBe("/p/ws/other.md");
+    }
+    expect(result.current.activeTabId).toBe(result.current.tabs[0].id);
+    expect(invoke).toHaveBeenCalledWith("unwatch_file", { path: "/p/ws/sub/a.md" });
   });
 
-  it("deletePath is a no-op for an unknown tab id", async () => {
+  it("deletePath is a no-op when no workspace is open", async () => {
     vi.mocked(ask).mockResolvedValue(true);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     let ok: boolean | undefined;
     await act(async () => {
-      ok = await result.current.deletePath("nope", "/p/ws/x.md");
+      ok = await result.current.deletePath("/p/ws/x.md");
     });
     expect(ok).toBe(false);
   });
@@ -1148,11 +1296,10 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     let newPath: string | null = null;
     await act(async () => {
-      newPath = await result.current.duplicatePath(folderId, "/p/ws/note.md");
+      newPath = await result.current.duplicatePath("/p/ws/note.md");
     });
 
     expect(newPath).toBe("/p/ws/note copy.md");
@@ -1162,7 +1309,7 @@ describe("useTabs dialog and events", () => {
     });
   });
 
-  it("renamePath re-points the open file when it is the renamed entry", async () => {
+  it("renamePath re-points an open tab whose file is the renamed entry", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         rename_path: async () => "/p/ws/renamed.md",
@@ -1174,18 +1321,56 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+    // A loose tab outside the renamed path must stay untouched.
     await act(async () => {
-      await result.current.openFileInFolderTab(folderId, "/p/ws/note.md");
+      await result.current.openFile("/q/loose.md");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/ws/note.md");
     });
 
     await act(async () => {
-      await result.current.renamePath(folderId, "/p/ws/note.md", "renamed");
+      await result.current.renamePath("/p/ws/note.md", "renamed");
     });
 
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/renamed.md");
+    const paths = result.current.tabs.map((t) => (t.kind === "file" ? t.file.path : null));
+    expect(paths).toEqual(["/q/loose.md", "/p/ws/renamed.md"]);
+    expect(invoke).toHaveBeenCalledWith("unwatch_file", { path: "/p/ws/note.md" });
     expect(invoke).toHaveBeenCalledWith("watch_file", { path: "/p/ws/renamed.md" });
+  });
+
+  it("renamePath still re-points the tab when the watcher hand-off fails", async () => {
+    // Both the unwatch of the old path and the watch of the new path are
+    // fire-and-forget; failures must not break the rename.
+    let failWatchers = false;
+    const boomWhenArmed = async () => {
+      if (failWatchers) throw new Error("watcher gone");
+      return undefined;
+    };
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        rename_path: async () => "/p/ws/renamed.md",
+        unwatch_file: boomWhenArmed,
+        watch_file: boomWhenArmed,
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/ws/note.md");
+    });
+
+    failWatchers = true;
+    await act(async () => {
+      await result.current.renamePath("/p/ws/note.md", "renamed");
+    });
+
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.path).toBe("/p/ws/renamed.md");
+    }
   });
 
   it("movePath invokes move_path and returns the new path", async () => {
@@ -1200,11 +1385,10 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     let newPath: string | null = null;
     await act(async () => {
-      newPath = await result.current.movePath(folderId, "/p/ws/note.md", "/p/ws/sub");
+      newPath = await result.current.movePath("/p/ws/note.md", "/p/ws/sub");
     });
 
     expect(newPath).toBe("/p/ws/sub/note.md");
@@ -1215,10 +1399,10 @@ describe("useTabs dialog and events", () => {
     });
   });
 
-  it("movePath re-points the open file when it is the moved entry", async () => {
+  it("movePath re-points open tabs inside the moved folder", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        move_path: async () => "/p/ws/sub/note.md",
+        move_path: async () => "/p/ws/dest/sub",
         read_directory: async () => [],
       }) as typeof invoke,
     );
@@ -1227,18 +1411,19 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
     await act(async () => {
-      await result.current.openFileInFolderTab(folderId, "/p/ws/note.md");
+      await result.current.openFile("/p/ws/sub/a.md");
     });
 
     await act(async () => {
-      await result.current.movePath(folderId, "/p/ws/note.md", "/p/ws/sub");
+      await result.current.movePath("/p/ws/sub", "/p/ws/dest");
     });
 
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/sub/note.md");
-    expect(invoke).toHaveBeenCalledWith("watch_file", { path: "/p/ws/sub/note.md" });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.path).toBe("/p/ws/dest/sub/a.md");
+    }
+    expect(invoke).toHaveBeenCalledWith("unwatch_file", { path: "/p/ws/sub/a.md" });
+    expect(invoke).toHaveBeenCalledWith("watch_file", { path: "/p/ws/dest/sub/a.md" });
   });
 
   it("movePath returns the original path on a no-op move", async () => {
@@ -1253,11 +1438,10 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     let p: string | null = null;
     await act(async () => {
-      p = await result.current.movePath(folderId, "/p/ws/note.md", "/p/ws");
+      p = await result.current.movePath("/p/ws/note.md", "/p/ws");
     });
     expect(p).toBe("/p/ws/note.md");
   });
@@ -1282,17 +1466,15 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
     await act(async () => {
-      await result.current.toggleExpand(folderId, "/p/ws/sub");
+      await result.current.toggleExpand("/p/ws/sub");
     });
 
     await act(async () => {
-      await result.current.movePath(folderId, "/p/ws/sub", "/p/ws/dest");
+      await result.current.movePath("/p/ws/sub", "/p/ws/dest");
     });
 
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    expect(folder?.kind === "folder" ? folder.nodes.has("/p/ws/sub") : true).toBe(false);
+    expect(result.current.workspace?.nodes.has("/p/ws/sub")).toBe(false);
   });
 
   it("deletePath prunes only the deleted folder, keeping unrelated expanded siblings", async () => {
@@ -1316,22 +1498,23 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+    // Separate acts: each expand must commit (and refresh the workspace ref)
+    // before the next one reads it.
     await act(async () => {
-      await result.current.toggleExpand(folderId, "/p/ws/sub");
-      await result.current.toggleExpand(folderId, "/p/ws/other");
+      await result.current.toggleExpand("/p/ws/sub");
+    });
+    await act(async () => {
+      await result.current.toggleExpand("/p/ws/other");
     });
 
     await act(async () => {
-      await result.current.deletePath(folderId, "/p/ws/sub");
+      await result.current.deletePath("/p/ws/sub");
     });
 
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    const f = folder?.kind === "folder" ? folder : null;
-    expect(f?.nodes.has("/p/ws/sub")).toBe(false);
-    expect(f?.expanded.has("/p/ws/sub")).toBe(false);
+    expect(result.current.workspace?.nodes.has("/p/ws/sub")).toBe(false);
+    expect(result.current.workspace?.expanded.has("/p/ws/sub")).toBe(false);
     // The unrelated expanded sibling is kept (covers the "not inside" branch).
-    expect(f?.expanded.has("/p/ws/other")).toBe(true);
+    expect(result.current.workspace?.expanded.has("/p/ws/other")).toBe(true);
   });
 
   it("deletePath copes with a path that has no name component", async () => {
@@ -1347,24 +1530,51 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     let ok = false;
     await act(async () => {
-      ok = await result.current.deletePath(folderId, "/");
+      ok = await result.current.deletePath("/");
     });
     expect(ok).toBe(true);
   });
 
-  it("duplicate/move are no-ops for an unknown tab id", async () => {
+  it("deletePath tolerates an unwatch_file failure when closing the doomed tab", async () => {
+    vi.mocked(ask).mockResolvedValue(true);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        delete_path: async () => undefined,
+        unwatch_file: async () => {
+          throw new Error("watcher gone");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/ws/note.md");
+    });
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.deletePath("/p/ws/note.md");
+    });
+
+    expect(ok).toBe(true);
+    expect(result.current.tabs).toHaveLength(0);
+  });
+
+  it("duplicate/move are no-ops when no workspace is open", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     let d: string | null = "x";
     let mv: string | null = "x";
     await act(async () => {
-      d = await result.current.duplicatePath("nope", "/p/ws/a.md");
-      mv = await result.current.movePath("nope", "/p/ws/a.md", "/p/ws/sub");
+      d = await result.current.duplicatePath("/p/ws/a.md");
+      mv = await result.current.movePath("/p/ws/a.md", "/p/ws/sub");
     });
     expect([d, mv]).toEqual([null, null]);
   });
@@ -1382,19 +1592,27 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
     await act(async () => {
-      await result.current.toggleExpand(folderId, "/p/ws/sub");
+      await result.current.toggleExpand("/p/ws/sub");
     });
-    const expandedBefore = result.current.tabs.find((t) => t.id === folderId);
-    expect(expandedBefore?.kind === "folder" ? expandedBefore.expanded.size : 0).toBe(1);
+    expect(result.current.workspace?.expanded.size).toBe(1);
 
     act(() => {
-      result.current.collapseAll(folderId);
+      result.current.collapseAll();
     });
 
-    const after = result.current.tabs.find((t) => t.id === folderId);
-    expect(after?.kind === "folder" ? after.expanded.size : 1).toBe(0);
+    expect(result.current.workspace?.expanded.size).toBe(0);
+  });
+
+  it("collapseAll is a no-op when no workspace is open", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    act(() => {
+      result.current.collapseAll();
+    });
+
+    expect(result.current.workspace).toBeNull();
   });
 
   it("expandAll loads and expands every nested directory", async () => {
@@ -1418,17 +1636,14 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     await act(async () => {
-      await result.current.expandAll(folderId);
+      await result.current.expandAll();
     });
 
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    const expanded = folder?.kind === "folder" ? folder.expanded : new Set<string>();
-    expect(expanded.has("/p/ws/sub")).toBe(true);
-    expect(expanded.has("/p/ws/sub/deep")).toBe(true);
-    expect(folder?.kind === "folder" ? folder.nodes.has("/p/ws/sub/deep") : false).toBe(true);
+    expect(result.current.workspace?.expanded.has("/p/ws/sub")).toBe(true);
+    expect(result.current.workspace?.expanded.has("/p/ws/sub/deep")).toBe(true);
+    expect(result.current.workspace?.nodes.has("/p/ws/sub/deep")).toBe(true);
   });
 
   it("expandAll stops at the given directory limit", async () => {
@@ -1447,24 +1662,23 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     // limit 1: only the root is visited, so "sub" is expanded but not descended into.
     await act(async () => {
-      await result.current.expandAll(folderId, 1);
+      await result.current.expandAll(1);
     });
 
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    expect(folder?.kind === "folder" ? folder.expanded.has("/p/ws/sub") : false).toBe(true);
+    expect(result.current.workspace?.expanded.has("/p/ws/sub")).toBe(true);
+    expect(result.current.workspace?.nodes.has("/p/ws/sub")).toBe(false);
   });
 
-  it("expandAll is a no-op for an unknown tab id", async () => {
+  it("expandAll is a no-op when no workspace is open", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
     await act(async () => {
-      await result.current.expandAll("nope");
+      await result.current.expandAll();
     });
-    expect(result.current.tabs).toHaveLength(0);
+    expect(result.current.workspace).toBeNull();
   });
 
   it("rename/duplicate/move/delete return falsy and log when the command fails", async () => {
@@ -1486,24 +1700,23 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
 
     let rename: string | null = "x";
     let duplicate: string | null = "x";
     let moved: string | null = "x";
     let deleted = true;
     await act(async () => {
-      rename = await result.current.renamePath(folderId, "/p/ws/a.md", "b");
-      duplicate = await result.current.duplicatePath(folderId, "/p/ws/a.md");
-      moved = await result.current.movePath(folderId, "/p/ws/a.md", "/p/ws/sub");
-      deleted = await result.current.deletePath(folderId, "/p/ws/a.md");
+      rename = await result.current.renamePath("/p/ws/a.md", "b");
+      duplicate = await result.current.duplicatePath("/p/ws/a.md");
+      moved = await result.current.movePath("/p/ws/a.md", "/p/ws/sub");
+      deleted = await result.current.deletePath("/p/ws/a.md");
     });
 
     expect([rename, duplicate, moved, deleted]).toEqual([null, null, null, false]);
     expect(spy).toHaveBeenCalled();
   });
 
-  it("does not duplicate a folder tab when the same root is opened twice", async () => {
+  it("re-opening the same workspace root is a no-op", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
@@ -1514,76 +1727,8 @@ describe("useTabs dialog and events", () => {
       await result.current.openFolder("/p/ws");
     });
 
-    expect(result.current.tabs).toHaveLength(1);
-  });
-
-  it("openFileInFolderTab loads a markdown file into the folder tab", async () => {
-    // Covers the happy path through the same gate the rejection test below
-    // exercises, so both branches of the `isMarkdownFile` check show up
-    // covered. Without this the partial-branch sliver lingers on codecov.
-    const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    const folderTab = result.current.tabs.find((t) => t.kind === "folder");
-    expect(folderTab).toBeDefined();
-
-    await act(async () => {
-      await result.current.openFileInFolderTab(folderTab!.id, "/p/ws/note.md");
-    });
-
-    const updated = result.current.tabs.find((t) => t.id === folderTab!.id);
-    expect(updated?.kind === "folder" ? updated.file?.path : null).toBe("/p/ws/note.md");
-  });
-
-  it("opens a notebook inside a folder tab in view mode", async () => {
-    // Covers the notebook → view-mode branch in openFileInFolderTab, mirroring
-    // the top-level openFile case: a `.ipynb` is read-only regardless of the
-    // configured default editor mode.
-    const { result } = renderHook(() =>
-      useTabs({ ...defaultOptions(), defaultEditorMode: "edit" }),
-    );
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    const folderTab = result.current.tabs.find((t) => t.kind === "folder");
-
-    await act(async () => {
-      await result.current.openFileInFolderTab(folderTab!.id, "/p/ws/analysis.ipynb");
-    });
-
-    const updated = result.current.tabs.find((t) => t.id === folderTab!.id);
-    const file = updated?.kind === "folder" ? updated.file : null;
-    expect(file?.path).toBe("/p/ws/analysis.ipynb");
-    expect(file?.mode).toBe("view");
-  });
-
-  it("openFileInFolderTab refuses to load an unsupported extension", async () => {
-    // Matches openFile: a `.txt` / `.html` / etc. dropped onto a folder tab
-    // must not become the active file. Defends the renderer from arbitrary
-    // HTML/JS the same way the top-level openFile gate does.
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    const folderTab = result.current.tabs.find((t) => t.kind === "folder");
-    expect(folderTab).toBeDefined();
-
-    await act(async () => {
-      await result.current.openFileInFolderTab(folderTab!.id, "/p/ws/evil.txt");
-    });
-
-    const updated = result.current.tabs.find((t) => t.id === folderTab!.id);
-    expect(updated?.kind === "folder" ? updated.file : null).toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("unsupported"));
-    warnSpy.mockRestore();
+    expect(result.current.workspace?.root).toBe("/p/ws");
+    expect(watchDirectoryCalls("/p/ws")).toHaveLength(1);
   });
 
   it("openFile is wired to the open-file event", async () => {
@@ -1602,7 +1747,7 @@ describe("useTabs dialog and events", () => {
     });
   });
 
-  it("auto-loads the first markdown file when opening a folder with no remembered file", async () => {
+  it("auto-opens the first markdown file when opening a folder with no remembered file", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
@@ -1614,13 +1759,13 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    await waitFor(() => {
-      const folder = result.current.tabs.find((t) => t.kind === "folder");
-      expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/a.md");
-    });
+    expect(result.current.tabs).toHaveLength(1);
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.path).toBe("/p/ws/a.md");
+    }
   });
 
-  it("auto-loads the remembered file when it still exists in the workspace", async () => {
+  it("auto-opens the remembered file when it still exists in the workspace", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
@@ -1633,10 +1778,10 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    await waitFor(() => {
-      const folder = result.current.tabs.find((t) => t.kind === "folder");
-      expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/b.md");
-    });
+    expect(result.current.tabs).toHaveLength(1);
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.path).toBe("/p/ws/b.md");
+    }
   });
 
   it("falls back to the first file when the remembered file no longer exists", async () => {
@@ -1652,13 +1797,32 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    await waitFor(() => {
-      const folder = result.current.tabs.find((t) => t.kind === "folder");
-      expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/a.md");
-    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.path).toBe("/p/ws/a.md");
+    }
   });
 
-  it("does not auto-load anything when the workspace has no markdown files", async () => {
+  it("falls back to the first file when the remembered-file lookup fails", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/a.md"],
+        workspace_get_last_file: async () => {
+          throw new Error("state.json unreadable");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    if (result.current.tabs[0].kind === "file") {
+      expect(result.current.tabs[0].file.path).toBe("/p/ws/a.md");
+    }
+  });
+
+  it("does not auto-open anything when the workspace has no markdown files", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => [],
@@ -1670,208 +1834,31 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/empty");
     });
-    const folder = result.current.tabs.find((t) => t.kind === "folder");
-    expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
+    expect(result.current.tabs).toHaveLength(0);
   });
 
-  it("openFileInFolderTab records the choice via workspace_set_last_file", async () => {
-    const setLastFile = vi.fn(async () => undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ workspace_set_last_file: setLastFile }) as typeof invoke,
-    );
-    const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    const folder = result.current.tabs.find((t) => t.kind === "folder");
-    expect(folder).toBeDefined();
-    setLastFile.mockClear();
-
-    await act(async () => {
-      await result.current.openFileInFolderTab(folder!.id, "/p/ws/note.md");
-    });
-
-    expect(setLastFile).toHaveBeenCalledWith("workspace_set_last_file", {
-      workspaceRoot: "/p/ws",
-      filePath: "/p/ws/note.md",
-    });
-  });
-
-  it("refuses a folder nested inside a parent git repo (#262)", async () => {
-    const onWorkspaceRefusal = vi.fn();
+  it("skips the auto-open probe when autoLoad is false", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        workspace_resolve: async (_cmd, args) => ({
-          selected: String(args?.selected ?? ""),
-          isGitRepo: true,
-          gitTopLevel: "/p/repo",
-          nestedUnder: "/p/repo",
-          glyphConflict: null,
-        }),
-      }) as typeof invoke,
-    );
-    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFolder("/p/repo/sub");
-    });
-
-    expect(result.current.tabs.some((t) => t.kind === "folder")).toBe(false);
-    expect(onWorkspaceRefusal).toHaveBeenCalledWith(expect.stringContaining("/p/repo"));
-  });
-
-  it("refuses a folder nested inside another workspace's .glyph (#262)", async () => {
-    const onWorkspaceRefusal = vi.fn();
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        workspace_resolve: async (_cmd, args) => ({
-          selected: String(args?.selected ?? ""),
-          isGitRepo: false,
-          gitTopLevel: null,
-          nestedUnder: null,
-          glyphConflict: "/p/outer",
-        }),
-      }) as typeof invoke,
-    );
-    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFolder("/p/outer/inner");
-    });
-
-    expect(result.current.tabs.some((t) => t.kind === "folder")).toBe(false);
-    expect(onWorkspaceRefusal).toHaveBeenCalledWith(expect.stringContaining("/p/outer"));
-  });
-
-  it("refuses a folder overlapping an already-open workspace (#262)", async () => {
-    const onWorkspaceRefusal = vi.fn();
-    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p/ws")).toBe(true);
-    onWorkspaceRefusal.mockClear();
-
-    // A child of the open workspace overlaps it.
-    await act(async () => {
-      await result.current.openFolder("/p/ws/sub");
-    });
-    expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p/ws/sub")).toBe(
-      false,
-    );
-    // A parent of the open workspace also overlaps it.
-    await act(async () => {
-      await result.current.openFolder("/p");
-    });
-    expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p")).toBe(false);
-    expect(onWorkspaceRefusal).toHaveBeenCalledTimes(2);
-  });
-
-  it("re-opening the same workspace activates it instead of refusing", async () => {
-    const onWorkspaceRefusal = vi.fn();
-    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-
-    expect(
-      result.current.tabs.filter((t) => t.kind === "folder" && t.root === "/p/ws"),
-    ).toHaveLength(1);
-    expect(onWorkspaceRefusal).not.toHaveBeenCalled();
-  });
-
-  it("silently skips a nested folder on restore without bannering", async () => {
-    const onWorkspaceRefusal = vi.fn();
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        workspace_resolve: async (_cmd, args) => ({
-          selected: String(args?.selected ?? ""),
-          isGitRepo: true,
-          gitTopLevel: "/p/repo",
-          nestedUnder: "/p/repo",
-          glyphConflict: null,
-        }),
-      }) as typeof invoke,
-    );
-    const { result } = renderHook(() =>
-      useTabs(
-        defaultOptions({
-          onWorkspaceRefusal,
-          openTabs: [{ kind: "folder", path: "/p/repo/sub" }],
-        }),
-      ),
-    );
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    expect(result.current.tabs.some((t) => t.kind === "folder")).toBe(false);
-    expect(onWorkspaceRefusal).not.toHaveBeenCalled();
-  });
-
-  it("refuses and reports when workspace resolution fails", async () => {
-    const onWorkspaceRefusal = vi.fn();
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        workspace_resolve: async () => {
-          throw new Error("unreadable path");
-        },
-      }) as typeof invoke,
-    );
-    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceRefusal })));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFolder("/p/broken");
-    });
-
-    expect(result.current.tabs.some((t) => t.kind === "folder")).toBe(false);
-    expect(onWorkspaceRefusal).toHaveBeenCalledWith(expect.stringContaining("Couldn't open"));
-  });
-
-  it("openFolder with an explicit filePath skips the auto-load probe", async () => {
-    // Covers the false arm of `wantsAutoLoad` on the openFolder branch:
-    // the caller already knows which file to land on, so we must not
-    // pre-fetch `list_markdown_files` for the auto-load path. Background
-    // indexing still happens (covers the `resolvedFiles ? ... : loadWorkspaceFiles(...)`
-    // false branch on line 391).
-    let listCalls = 0;
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        list_markdown_files: async () => {
-          listCalls += 1;
-          return ["/p/ws/note.md"];
-        },
+        list_markdown_files: async () => ["/p/ws/a.md"],
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     await act(async () => {
-      await result.current.openFolder("/p/ws", { filePath: "/p/ws/note.md" });
+      await result.current.openFolder("/p/ws", { autoLoad: false });
     });
 
-    // One call — the background-indexing branch, not the auto-load probe.
-    await waitFor(() => expect(listCalls).toBeGreaterThanOrEqual(1));
-    const folder = result.current.tabs.find((t) => t.kind === "folder");
-    // Auto-load skipped: folder.file stays null when filePath is provided.
-    expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
+    expect(result.current.workspace?.root).toBe("/p/ws");
+    expect(result.current.tabs).toHaveLength(0);
+    expect(invoke).not.toHaveBeenCalledWith("workspace_get_last_file", expect.anything());
   });
 
-  it("openFolder skips auto-load when list_markdown_files returns a non-markdown target", async () => {
-    // Covers the false arm of `isMarkdownFile(target)` inside the auto-load
-    // branch (line 343). list_markdown_files in real life never returns
-    // non-md paths, but the guard exists for defence in depth and still
-    // counts toward the patch.
+  it("skips auto-open when list_markdown_files returns a non-markdown target", async () => {
+    // Covers the false arm of `isMarkdownFile(target)` inside the auto-open
+    // branch. list_markdown_files in real life never returns non-md paths,
+    // but the guard exists for defence in depth.
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => ["/p/ws/notes.txt"],
@@ -1883,15 +1870,12 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folder = result.current.tabs.find((t) => t.kind === "folder");
-    expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
+    expect(result.current.tabs).toHaveLength(0);
   });
 
-  it("openFolder logs and continues when auto-loading the remembered file fails", async () => {
-    // Covers the catch arm on line 363: the file lookup succeeds but
-    // `read_file` fails (deleted between list and load, or a transient
-    // I/O error). The folder tab still opens, just without a pre-loaded
-    // file, and the failure is surfaced to the console for debugging.
+  it("opens the workspace without a tab when auto-opening the first file fails", async () => {
+    // The auto-open goes through openFile, whose own catch logs the failure.
+    // The workspace itself still opens.
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
@@ -1907,16 +1891,110 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    await waitFor(() => {
-      expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p/ws")).toBe(true);
-    });
-    const folder = result.current.tabs.find((t) => t.kind === "folder");
-    expect(folder?.kind === "folder" ? folder.file : "missing").toBeNull();
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("auto-load workspace file"),
-      expect.anything(),
-    );
+
+    expect(result.current.workspace?.root).toBe("/p/ws");
+    expect(result.current.tabs).toHaveLength(0);
+    expect(errorSpy).toHaveBeenCalledWith("Failed to open file:", expect.anything());
     errorSpy.mockRestore();
+  });
+
+  it("opens a folder nested inside a parent git repo with a persistent warning (#262)", async () => {
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_resolve: async (_cmd, args) => ({
+          selected: String(args?.selected ?? ""),
+          isGitRepo: true,
+          gitTopLevel: "/p/repo",
+          nestedUnder: "/p/repo",
+          glyphConflict: null,
+        }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/repo/sub");
+    });
+
+    // The folder opens (no longer refused) but a persistent warning is shown.
+    expect(result.current.workspace?.root).toBe("/p/repo/sub");
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(expect.stringContaining("/p/repo"), {
+      persistent: true,
+    });
+  });
+
+  it("refuses a folder nested inside another workspace's .glyph (#262)", async () => {
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_resolve: async (_cmd, args) => ({
+          selected: String(args?.selected ?? ""),
+          isGitRepo: false,
+          gitTopLevel: null,
+          nestedUnder: null,
+          glyphConflict: "/p/outer",
+        }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/outer/inner");
+    });
+
+    expect(result.current.workspace).toBeNull();
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(expect.stringContaining("/p/outer"));
+  });
+
+  it("restores a nested folder silently without bannering", async () => {
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_resolve: async (_cmd, args) => ({
+          selected: String(args?.selected ?? ""),
+          isGitRepo: true,
+          gitTopLevel: "/p/repo",
+          nestedUnder: "/p/repo",
+          glyphConflict: null,
+        }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          onWorkspaceNotice,
+          openTabs: [{ kind: "folder", path: "/p/repo/sub" }],
+        }),
+      ),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    // A nested folder reopens on restore, but the warning banner stays silent.
+    expect(result.current.workspace?.root).toBe("/p/repo/sub");
+    expect(onWorkspaceNotice).not.toHaveBeenCalled();
+  });
+
+  it("refuses and reports when workspace resolution fails", async () => {
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        workspace_resolve: async () => {
+          throw new Error("unreadable path");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/broken");
+    });
+
+    expect(result.current.workspace).toBeNull();
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(expect.stringContaining("Couldn't open"));
   });
 
   it("openFolder is wired to the open-folder event", async () => {
@@ -1929,10 +2007,298 @@ describe("useTabs dialog and events", () => {
       ref.handler?.({ payload: "/p/dropped" });
     });
     await waitFor(() => {
-      expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p/dropped")).toBe(
-        true,
-      );
+      expect(result.current.workspace?.root).toBe("/p/dropped");
     });
+  });
+});
+
+describe("useTabs workspace lifecycle", () => {
+  it("opening another folder replaces the workspace and closes its tabs", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => [],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/a");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/a/note.md");
+    });
+    await act(async () => {
+      await result.current.openFile("/q/loose.md");
+    });
+    act(() => {
+      result.current.openGraph();
+    });
+    expect(result.current.tabs).toHaveLength(3);
+
+    await act(async () => {
+      await result.current.openFolder("/p/b");
+    });
+
+    expect(result.current.workspace?.root).toBe("/p/b");
+    expect(invoke).toHaveBeenCalledWith("unwatch_directory", { path: "/p/a" });
+    expect(invoke).toHaveBeenCalledWith("watch_directory", { path: "/p/b" });
+    expect(invoke).toHaveBeenCalledWith("unwatch_file", { path: "/p/a/note.md" });
+    // Only the loose external tab survives; the old workspace's file tab and
+    // the graph tab are gone.
+    const paths = result.current.tabs.map((t) => (t.kind === "file" ? t.file.path : "(graph)"));
+    expect(paths).toEqual(["/q/loose.md"]);
+  });
+
+  it("replacement still proceeds when unwatching the old root fails", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        unwatch_directory: async () => {
+          throw new Error("watcher gone");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/a");
+    });
+    await act(async () => {
+      await result.current.openFolder("/p/b");
+    });
+
+    expect(result.current.workspace?.root).toBe("/p/b");
+  });
+
+  it("closeWorkspace closes member tabs and the graph but keeps loose tabs", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/note.md"],
+        scan_wikilinks: async () => [
+          { source: "/p/ws/note.md", target: "x", line: 1, snippet: "[[x]]" },
+        ],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => expect(result.current.wikilinkRefs).toHaveLength(1));
+    await act(async () => {
+      await result.current.openFile("/q/loose.md");
+    });
+    act(() => {
+      result.current.openGraph();
+    });
+    expect(result.current.tabs).toHaveLength(3);
+
+    act(() => {
+      result.current.closeWorkspace();
+    });
+
+    expect(result.current.workspace).toBeNull();
+    expect(result.current.workspaceFiles).toEqual([]);
+    expect(result.current.wikilinkRefs).toEqual([]);
+    expect(invoke).toHaveBeenCalledWith("unwatch_directory", { path: "/p/ws" });
+    expect(invoke).toHaveBeenCalledWith("unwatch_file", { path: "/p/ws/note.md" });
+    const paths = result.current.tabs.map((t) => (t.kind === "file" ? t.file.path : "(graph)"));
+    expect(paths).toEqual(["/q/loose.md"]);
+  });
+
+  it("closeWorkspace is a no-op when no workspace is open", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    act(() => {
+      result.current.closeWorkspace();
+    });
+
+    expect(invoke).not.toHaveBeenCalledWith("unwatch_directory", expect.anything());
+  });
+
+  it("closeWorkspace tolerates failing unwatch commands", async () => {
+    const boom = async () => {
+      throw new Error("watcher gone");
+    };
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ unwatch_directory: boom, unwatch_file: boom }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/ws/note.md");
+    });
+
+    await act(async () => {
+      result.current.closeWorkspace();
+    });
+
+    expect(result.current.workspace).toBeNull();
+    expect(result.current.tabs).toHaveLength(0);
+  });
+
+  it("drops a stale wikilink scan that lands after the workspace was replaced", async () => {
+    let releaseStale: ((refs: unknown[]) => void) | null = null;
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        scan_wikilinks: (_cmd, args) => {
+          if (String(args?.path ?? "") === "/p/a") {
+            return new Promise((resolve) => {
+              releaseStale = resolve;
+            });
+          }
+          return Promise.resolve([]);
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/a");
+    });
+    await act(async () => {
+      await result.current.openFolder("/p/b");
+    });
+
+    await act(async () => {
+      releaseStale?.([{ source: "/p/a/x.md", target: "y", line: 1, snippet: "[[y]]" }]);
+      await Promise.resolve();
+    });
+
+    // The slow scan for the replaced workspace must not clobber /p/b's refs.
+    expect(result.current.wikilinkRefs).toEqual([]);
+  });
+});
+
+describe("useTabs workspace teardown races", () => {
+  // Every tree mutation re-reads a directory listing after its Rust command
+  // resolves. If the workspace is closed while that read is pending, the
+  // trailing setWorkspace must keep the null state instead of resurrecting
+  // the old tree. These tests park the read on a deferred promise, close the
+  // workspace, then release the read.
+  function deferReadDirectory(target: string) {
+    let release: ((entries: unknown[]) => void) | null = null;
+    const overrides: Partial<Record<string, Invoker>> = {
+      read_directory: (_cmd, args) => {
+        const p = String(args?.path ?? "");
+        if (p === target) {
+          return new Promise((resolve) => {
+            release = resolve;
+          });
+        }
+        if (p === "/p/ws")
+          return Promise.resolve([
+            { name: "sub", path: "/p/ws/sub", isDirectory: true, modified: 0 },
+          ]);
+        return Promise.resolve([]);
+      },
+      rename_path: async () => "/p/ws/renamed.md",
+      duplicate_path: async () => "/p/ws/copy.md",
+      move_path: async () => "/p/ws/dest/a.md",
+      create_note: async () => "/p/ws/sub/Untitled.md",
+      delete_path: async () => undefined,
+    };
+    vi.mocked(invoke).mockImplementation(makeInvoker(overrides) as typeof invoke);
+    return { release: (entries: unknown[] = []) => release?.(entries) };
+  }
+
+  async function raceAgainstClose(
+    target: string,
+    run: (hook: ReturnType<typeof useTabs>) => Promise<unknown>,
+  ) {
+    vi.mocked(ask).mockResolvedValue(true);
+    const deferred = deferReadDirectory(target);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    await act(async () => {
+      const pending = run(result.current);
+      // Let the operation pass its command and park on the deferred read.
+      await new Promise((r) => setTimeout(r, 0));
+      result.current.closeWorkspace();
+      deferred.release();
+      await pending;
+    });
+
+    expect(result.current.workspace).toBeNull();
+  }
+
+  it("toggleExpand result arriving after closeWorkspace is dropped", async () => {
+    await raceAgainstClose("/p/ws/sub", (hook) => hook.toggleExpand("/p/ws/sub"));
+  });
+
+  it("createNote refresh arriving after closeWorkspace is dropped", async () => {
+    await raceAgainstClose("/p/ws/sub", (hook) => hook.createNote("/p/ws/sub"));
+  });
+
+  it("renamePath refresh arriving after closeWorkspace is dropped", async () => {
+    await raceAgainstClose("/p/ws/sub", (hook) => hook.renamePath("/p/ws/sub/a.md", "renamed"));
+  });
+
+  it("duplicatePath refresh arriving after closeWorkspace is dropped", async () => {
+    await raceAgainstClose("/p/ws/sub", (hook) => hook.duplicatePath("/p/ws/sub/a.md"));
+  });
+
+  it("movePath refresh arriving after closeWorkspace is dropped", async () => {
+    await raceAgainstClose("/p/ws/sub", (hook) => hook.movePath("/p/ws/sub/a.md", "/p/ws/dest"));
+  });
+
+  it("deletePath refresh arriving after closeWorkspace is dropped", async () => {
+    await raceAgainstClose("/p/ws/sub", (hook) => hook.deletePath("/p/ws/sub/a.md"));
+  });
+
+  it("expandAll walk finishing after closeWorkspace is dropped", async () => {
+    await raceAgainstClose("/p/ws/sub", (hook) => hook.expandAll());
+  });
+
+  it("a directory-changed refresh finishing after closeWorkspace is dropped", async () => {
+    const dirChanged = captureListener("directory-changed");
+    let release: ((files: string[]) => void) | null = null;
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: (_cmd, args) => {
+          if (String(args?.path ?? "") === "/p/ws") {
+            return new Promise((resolve) => {
+              release = resolve;
+            });
+          }
+          return Promise.resolve([]);
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      // openFolder itself awaits the markdown index, so free its read before
+      // awaiting the open; the event's refresh then gets a fresh deferred.
+      const opening = result.current.openFolder("/p/ws");
+      await new Promise((r) => setTimeout(r, 0));
+      release?.([]);
+      release = null;
+      await opening;
+    });
+
+    await act(async () => {
+      dirChanged.handler?.({ payload: "/p/ws" });
+      // Past the refresh debounce: the handler is now parked on the index read.
+      await new Promise((r) => setTimeout(r, 350));
+      result.current.closeWorkspace();
+      release?.([]);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(result.current.workspace).toBeNull();
   });
 });
 
@@ -1940,7 +2306,7 @@ describe("useTabs command failures", () => {
   it("falls back to empty listings when directory reads and workspace scans fail", async () => {
     // Covers the catch arms of loadDirectory, loadWorkspaceFiles, and
     // loadWikilinkRefs: each logs and degrades to an empty result so a
-    // permission error on one Rust command never breaks the folder tab.
+    // permission error on one Rust command never breaks the workspace.
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const boom = async () => {
       throw new Error("denied");
@@ -1959,9 +2325,8 @@ describe("useTabs command failures", () => {
       await result.current.openFolder("/p/ws");
     });
 
-    const folder = result.current.tabs.find((t) => t.kind === "folder");
-    expect(folder?.kind === "folder" ? folder.nodes.get("/p/ws") : null).toEqual([]);
-    expect(folder?.kind === "folder" ? folder.file : "set").toBeNull();
+    expect(result.current.workspace?.nodes.get("/p/ws")).toEqual([]);
+    expect(result.current.tabs).toHaveLength(0);
     expect(result.current.workspaceFiles).toEqual([]);
     expect(result.current.wikilinkRefs).toEqual([]);
     expect(errorSpy).toHaveBeenCalled();
@@ -1989,33 +2354,7 @@ describe("useTabs command failures", () => {
     errorSpy.mockRestore();
   });
 
-  it("openFileInFolderTab logs and keeps the folder file unset when the read fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        read_file: async () => {
-          throw new Error("io error");
-        },
-      }) as typeof invoke,
-    );
-    const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
-
-    await act(async () => {
-      await result.current.openFileInFolderTab(folderId, "/p/ws/note.md");
-    });
-
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    expect(folder?.kind === "folder" ? folder.file : "set").toBeNull();
-    expect(errorSpy).toHaveBeenCalledWith("Failed to open file in folder tab:", expect.anything());
-    errorSpy.mockRestore();
-  });
-
-  it("openFolder still opens the tab when watch_directory fails", async () => {
+  it("openFolder still opens the workspace when watch_directory fails", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
@@ -2031,7 +2370,7 @@ describe("useTabs command failures", () => {
       await result.current.openFolder("/p/ws");
     });
 
-    expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p/ws")).toBe(true);
+    expect(result.current.workspace?.root).toBe("/p/ws");
     expect(errorSpy).toHaveBeenCalledWith("Failed to watch directory:", expect.anything());
     errorSpy.mockRestore();
   });
@@ -2095,24 +2434,43 @@ describe("useTabs concurrent opens", () => {
     }
   });
 
-  it("two concurrent openFolder calls for the same root produce one tab", async () => {
-    // Mirrors the StrictMode double-mount scenario the post-await re-check in
-    // openFolder defends against.
+  it("a second openFolder for an in-flight root is a no-op", async () => {
+    // Mirrors the StrictMode double-mount scenario the in-flight guard
+    // defends against: the first open is parked on read_directory when the
+    // second call arrives.
+    let release: ((entries: unknown[]) => void) | null = null;
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_directory: (_cmd, args) => {
+          if (String(args?.path ?? "") === "/p/ws" && !release) {
+            return new Promise((resolve) => {
+              release = resolve;
+            });
+          }
+          return Promise.resolve([]);
+        },
+      }) as typeof invoke,
+    );
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     await act(async () => {
-      await Promise.all([result.current.openFolder("/p/ws"), result.current.openFolder("/p/ws")]);
+      const first = result.current.openFolder("/p/ws");
+      // Let the first call pass resolution, set the in-flight guard, and park
+      // on the deferred directory read.
+      await new Promise((r) => setTimeout(r, 0));
+      const second = result.current.openFolder("/p/ws");
+      release?.([]);
+      await Promise.all([first, second]);
     });
 
-    expect(result.current.tabs).toHaveLength(1);
-    expect(result.current.tabs[0].kind).toBe("folder");
-    expect(result.current.activeTabId).toBe(result.current.tabs[0].id);
+    expect(result.current.workspace?.root).toBe("/p/ws");
+    expect(watchDirectoryCalls("/p/ws")).toHaveLength(1);
   });
 });
 
-describe("useTabs folder tab interactions", () => {
-  it("openFolder with no path prompts with a directory dialog", async () => {
+describe("useTabs workspace interactions", () => {
+  it("openFolder with no path prompts a dialog and routes the choice via the window manager", async () => {
     vi.mocked(open).mockResolvedValue("/p/picked");
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
@@ -2122,9 +2480,9 @@ describe("useTabs folder tab interactions", () => {
     });
 
     expect(open).toHaveBeenCalledWith({ directory: true, multiple: false });
-    expect(result.current.tabs.some((t) => t.kind === "folder" && t.root === "/p/picked")).toBe(
-      true,
-    );
+    // The pick is handed to Rust routing (which may focus, adopt, or spawn a
+    // window); the frontend does not adopt it directly here.
+    expect(invoke).toHaveBeenCalledWith("request_open", { kind: "folder", path: "/p/picked" });
   });
 
   it("openFolder bails when the directory dialog is cancelled", async () => {
@@ -2136,7 +2494,7 @@ describe("useTabs folder tab interactions", () => {
       await result.current.openFolder();
     });
 
-    expect(result.current.tabs).toHaveLength(0);
+    expect(result.current.workspace).toBeNull();
   });
 
   it("openFolder restores persisted expanded directories and pre-loads their listings", async () => {
@@ -2157,113 +2515,19 @@ describe("useTabs folder tab interactions", () => {
     });
 
     expect(readDirs).toContain("/p/ws/sub");
-    const folder = result.current.tabs.find((t) => t.kind === "folder");
-    expect(folder?.kind === "folder" ? folder.expanded.has("/p/ws/sub") : false).toBe(true);
-    expect(folder?.kind === "folder" ? folder.nodes.has("/p/ws/sub") : false).toBe(true);
+    expect(result.current.workspace?.expanded.has("/p/ws/sub")).toBe(true);
+    expect(result.current.workspace?.nodes.has("/p/ws/sub")).toBe(true);
   });
 
-  it("openFileInFolderTab unwatches the previously open file when switching", async () => {
-    const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
-
-    await act(async () => {
-      await result.current.openFileInFolderTab(folderId, "/p/ws/a.md");
-    });
-    await act(async () => {
-      await result.current.openFileInFolderTab(folderId, "/p/ws/b.md");
-    });
-
-    expect(invoke).toHaveBeenCalledWith("unwatch_file", { path: "/p/ws/a.md" });
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    expect(folder?.kind === "folder" ? folder.file?.path : null).toBe("/p/ws/b.md");
-  });
-
-  it("openFileInFolderTab is a no-op when the file is already open", async () => {
-    const reads: string[] = [];
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        read_file: async (_cmd, args) => {
-          reads.push(String(args?.path ?? ""));
-          return "FILE BODY";
-        },
-      }) as typeof invoke,
-    );
-    const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
-
-    await act(async () => {
-      await result.current.openFileInFolderTab(folderId, "/p/ws/a.md");
-    });
-    await act(async () => {
-      await result.current.openFileInFolderTab(folderId, "/p/ws/a.md");
-    });
-
-    expect(reads.filter((p) => p === "/p/ws/a.md")).toHaveLength(1);
-  });
-
-  it("toggleExpand is a no-op for an unknown tab id", async () => {
+  it("toggleExpand is a no-op when no workspace is open", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     await act(async () => {
-      await result.current.toggleExpand("nope", "/p/ws/sub");
+      await result.current.toggleExpand("/p/ws/sub");
     });
 
-    expect(result.current.tabs).toHaveLength(0);
-  });
-
-  it("folder tab updates leave sibling tabs untouched", async () => {
-    // Exercises the per-tab mapping arms (openFileInFolderTab, toggleExpand,
-    // setTabMode, setActiveTab) with a second, unrelated file tab present so
-    // the "not this tab" branches actually run.
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        list_markdown_files: async (_cmd, args) =>
-          String(args?.path ?? "") === "/p/ws" ? ["/p/ws/a.md"] : [],
-      }) as typeof invoke,
-    );
-    const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFile("/p/solo.md");
-    });
-    const fileId = result.current.tabs.find((t) => t.kind === "file")!.id;
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
-
-    await act(async () => {
-      await result.current.openFileInFolderTab(folderId, "/p/ws/b.md");
-      await result.current.toggleExpand(folderId, "/p/ws/sub");
-    });
-    act(() => {
-      result.current.setTabMode(folderId, "edit");
-    });
-    // The folder tab (which has an open file) is active; switching away stamps
-    // the scroll position on its file rather than the sibling's.
-    act(() => {
-      result.current.setActiveTab(fileId);
-    });
-
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    const folderFile = folder?.kind === "folder" ? folder.file : null;
-    expect(folderFile?.path).toBe("/p/ws/b.md");
-    expect(folderFile?.mode).toBe("edit");
-    const sibling = result.current.tabs.find((t) => t.id === fileId);
-    if (sibling?.kind === "file") {
-      expect(sibling.file.path).toBe("/p/solo.md");
-      expect(sibling.file.mode).toBe("view");
-    }
+    expect(result.current.workspace).toBeNull();
   });
 
   it("toggleExpand collapses an expanded directory and reuses cached listings", async () => {
@@ -2281,112 +2545,71 @@ describe("useTabs folder tab interactions", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
-    const expandedOf = () => {
-      const folder = result.current.tabs.find((t) => t.id === folderId);
-      return folder?.kind === "folder" ? folder.expanded : new Set<string>();
-    };
 
     await act(async () => {
-      await result.current.toggleExpand(folderId, "/p/ws/sub");
+      await result.current.toggleExpand("/p/ws/sub");
     });
-    expect(expandedOf().has("/p/ws/sub")).toBe(true);
+    expect(result.current.workspace?.expanded.has("/p/ws/sub")).toBe(true);
     expect(subReads).toBe(1);
 
     await act(async () => {
-      await result.current.toggleExpand(folderId, "/p/ws/sub");
+      await result.current.toggleExpand("/p/ws/sub");
     });
-    expect(expandedOf().has("/p/ws/sub")).toBe(false);
+    expect(result.current.workspace?.expanded.has("/p/ws/sub")).toBe(false);
 
     // Re-expanding hits the cached listing instead of re-reading the directory.
     await act(async () => {
-      await result.current.toggleExpand(folderId, "/p/ws/sub");
+      await result.current.toggleExpand("/p/ws/sub");
     });
-    expect(expandedOf().has("/p/ws/sub")).toBe(true);
+    expect(result.current.workspace?.expanded.has("/p/ws/sub")).toBe(true);
     expect(subReads).toBe(1);
   });
 
-  it("closeTab on a folder tab unwatches the directory and open file and drops its indices", async () => {
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        list_markdown_files: async () => ["/p/ws/a.md"],
-      }) as typeof invoke,
-    );
+  it("setActiveTab leaving a graph tab keeps it unchanged", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
-    // Wait for the background workspace index so the close actually has
-    // index entries to drop.
-    await waitFor(() => expect(result.current.workspaceFiles).toEqual(["/p/ws/a.md"]));
-
     act(() => {
-      result.current.closeTab(folderId);
+      result.current.openGraph();
     });
-
-    expect(result.current.tabs).toHaveLength(0);
-    expect(invoke).toHaveBeenCalledWith("unwatch_directory", { path: "/p/ws" });
-    expect(invoke).toHaveBeenCalledWith("unwatch_file", { path: "/p/ws/a.md" });
-  });
-
-  it("closeTab on a folder tab without an open file skips the file unwatch", async () => {
-    const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
-
-    act(() => {
-      result.current.closeTab(folderId);
-    });
-
-    expect(result.current.tabs).toHaveLength(0);
-    expect(invoke).toHaveBeenCalledWith("unwatch_directory", { path: "/p/ws" });
-    expect(invoke).not.toHaveBeenCalledWith("unwatch_file", expect.anything());
-  });
-
-  it("setActiveTab leaving a folder tab without an open file keeps it unchanged", async () => {
-    const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+    const graphId = result.current.tabs.find((t) => t.kind === "graph")?.id as string;
     await act(async () => {
       await result.current.openFile("/p/a.md");
     });
-    const fileId = result.current.tabs.find((t) => t.kind === "file")!.id;
+    const fileId = result.current.tabs.find((t) => t.kind === "file")?.id as string;
 
     act(() => {
-      result.current.setActiveTab(folderId);
+      result.current.setActiveTab(graphId);
     });
-    // Leaving the folder tab: it has no file to stamp a scroll position on.
+    // Leaving the graph tab: it has no file to stamp a scroll position on.
     act(() => {
       result.current.setActiveTab(fileId);
     });
 
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    expect(folder?.kind === "folder" ? folder.file : "set").toBeNull();
+    const graph = result.current.tabs.find((t) => t.id === graphId);
+    expect(graph?.kind === "graph" ? graph.file : "set").toBeNull();
     expect(result.current.activeTabId).toBe(fileId);
   });
 
-  it("setTabMode on a folder tab without an open file is a no-op", async () => {
+  it("setTabMode on a graph tab is a no-op", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+    act(() => {
+      result.current.openGraph();
+    });
+    const graphId = result.current.tabs.find((t) => t.kind === "graph")?.id as string;
 
     act(() => {
-      result.current.setTabMode(folderId, "edit");
+      result.current.setTabMode(graphId, "edit");
     });
 
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    expect(folder?.kind === "folder" ? folder.file : "set").toBeNull();
+    const graph = result.current.tabs.find((t) => t.id === graphId);
+    expect(graph?.kind === "graph" ? graph.file : "set").toBeNull();
   });
 });
 
@@ -2428,7 +2651,7 @@ describe("useTabs guards and no-ops", () => {
     expect(result.current.tabs).toHaveLength(0);
   });
 
-  it("toggleTask is a no-op for unknown tabs, fileless folder tabs, and unchanged lines", async () => {
+  it("toggleTask is a no-op for unknown tabs, graph tabs, and unchanged lines", async () => {
     const writeFile = vi.fn(async () => undefined);
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
@@ -2441,15 +2664,18 @@ describe("useTabs guards and no-ops", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
+    act(() => {
+      result.current.openGraph();
+    });
+    const graphId = result.current.tabs.find((t) => t.kind === "graph")?.id as string;
     await act(async () => {
       await result.current.openFile("/p/tasks.md");
     });
-    const fileId = result.current.tabs.find((t) => t.kind === "file")!.id;
+    const fileId = result.current.tabs.find((t) => t.kind === "file")?.id as string;
 
     await act(async () => {
       await result.current.toggleTask("nope", 1);
-      await result.current.toggleTask(folderId, 1);
+      await result.current.toggleTask(graphId, 1);
       // Line 99 is past the end of the file, so the toggle changes nothing.
       await result.current.toggleTask(fileId, 99);
     });
@@ -2499,6 +2725,38 @@ describe("useTabs guards and no-ops", () => {
       await result.current.undoEdit(tabId);
     });
     expect(writeFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("undoEdit applies nothing when the tab has been closed", async () => {
+    // closeTab drops the per-tab history map entry, but even with a stale id
+    // the apply step bails because the tab no longer exists.
+    const writeFile = vi.fn(async () => undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => "- [ ] task",
+        write_file: writeFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/tasks.md");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    await act(async () => {
+      await result.current.toggleTask(tabId, 1);
+    });
+    expect(writeFile).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      result.current.closeTab(tabId);
+    });
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+
+    expect(writeFile).toHaveBeenCalledTimes(1);
   });
 
   it("undo and redo keep their history entry when the write fails", async () => {
@@ -2606,6 +2864,50 @@ describe("useTabs guards and no-ops", () => {
   });
 });
 
+describe("useTabs persistence", () => {
+  it("persists the workspace as a leading folder entry without a filePath key", async () => {
+    const onSettingsChange = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onSettingsChange })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await act(async () => {
+      await result.current.toggleExpand("/p/ws/sub");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/ws/note.md");
+    });
+
+    await waitFor(() => {
+      const calls = onSettingsChange.mock.calls.filter((c) => c[0] === "behavior.openTabs");
+      const last = calls[calls.length - 1]?.[1];
+      // Exact shapes: the workspace entry carries no filePath, and document
+      // tabs follow in strip order.
+      expect(last).toEqual([
+        { kind: "folder", path: "/p/ws", expanded: ["/p/ws/sub"] },
+        { kind: "file", path: "/p/ws/note.md" },
+      ]);
+    });
+    const activeCalls = onSettingsChange.mock.calls.filter(
+      (c) => c[0] === "behavior.activeTabPath",
+    );
+    expect(activeCalls[activeCalls.length - 1]?.[1]).toBe("/p/ws/note.md");
+  });
+
+  it("persists an empty list and an empty active path when nothing is open", async () => {
+    const onSettingsChange = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onSettingsChange })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await waitFor(() => {
+      expect(onSettingsChange).toHaveBeenCalledWith("behavior.openTabs", []);
+      expect(onSettingsChange).toHaveBeenCalledWith("behavior.activeTabPath", "");
+    });
+  });
+});
+
 describe("useTabs file-changed events", () => {
   it("ignores file-changed when autoReload is off", async () => {
     let body = "v1";
@@ -2704,14 +3006,12 @@ describe("useTabs file-changed events", () => {
     }
   });
 
-  it("reloads the open file inside a folder tab", async () => {
+  it("reloads the matching file tab and leaves the graph tab alone", async () => {
     let body = "v1";
     const fileChanged = captureListener("file-changed");
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         read_file: async () => body,
-        list_markdown_files: async (_cmd, args) =>
-          String(args?.path ?? "") === "/p/ws" ? ["/p/ws/a.md"] : [],
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
@@ -2719,10 +3019,11 @@ describe("useTabs file-changed events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
-    // A second, fileless folder tab must survive the reload sweep untouched.
+    act(() => {
+      result.current.openGraph();
+    });
     await act(async () => {
-      await result.current.openFolder("/p/empty");
+      await result.current.openFile("/p/ws/a.md");
     });
 
     body = "v2";
@@ -2731,13 +3032,14 @@ describe("useTabs file-changed events", () => {
       await new Promise((r) => setTimeout(r, 350));
     });
 
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    expect(folder?.kind === "folder" ? folder.file?.content : null).toBe("v2");
+    const fileTab = result.current.tabs.find((t) => t.kind === "file");
+    expect(fileTab?.kind === "file" ? fileTab.file.content : null).toBe("v2");
+    expect(result.current.tabs.some((t) => t.kind === "graph")).toBe(true);
   });
 });
 
 describe("useTabs directory-changed events", () => {
-  it("refreshes the folder tree and rebuilds the workspace indices", async () => {
+  it("refreshes the workspace tree and rebuilds the workspace indices", async () => {
     const dirChanged = captureListener("directory-changed");
     let files: string[] = [];
     let rootEntries = [{ name: "sub", path: "/p/ws/sub", isDirectory: true, modified: 0 }];
@@ -2750,18 +3052,12 @@ describe("useTabs directory-changed events", () => {
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
-    // An unrelated file tab that the refresh must leave alone. Opened first so
-    // the folder tab stays active for the workspaceFiles assertion below.
-    await act(async () => {
-      await result.current.openFile("/p/solo.md");
-    });
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    const folderId = result.current.tabs.find((t) => t.kind === "folder")!.id;
     // Load a subdirectory so the refresh sweep covers cached child listings too.
     await act(async () => {
-      await result.current.toggleExpand(folderId, "/p/ws/sub");
+      await result.current.toggleExpand("/p/ws/sub");
     });
 
     // Something outside the app adds a file.
@@ -2778,10 +3074,9 @@ describe("useTabs directory-changed events", () => {
       await new Promise((r) => setTimeout(r, 350));
     });
 
-    const folder = result.current.tabs.find((t) => t.id === folderId);
-    const rootListing = folder?.kind === "folder" ? folder.nodes.get("/p/ws") : null;
+    const rootListing = result.current.workspace?.nodes.get("/p/ws");
     expect(rootListing?.some((e) => e.path === "/p/ws/new.md")).toBe(true);
-    expect(folder?.kind === "folder" ? folder.nodes.has("/p/ws/sub") : false).toBe(true);
+    expect(result.current.workspace?.nodes.has("/p/ws/sub")).toBe(true);
     await waitFor(() => {
       expect(result.current.workspaceFiles).toEqual(["/p/ws/new.md"]);
     });
@@ -2811,5 +3106,214 @@ describe("useTabs directory-changed events", () => {
     });
 
     expect(readDirs.length).toBe(readsBefore);
+  });
+});
+
+describe("useTabs graph tabs", () => {
+  async function openWorkspace(over: Partial<Parameters<typeof useTabs>[0]> = {}) {
+    const { result } = renderHook(() => useTabs(defaultOptions(over)));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    return result;
+  }
+
+  it("openGraph creates and activates a graph tab for the workspace", async () => {
+    const result = await openWorkspace();
+    act(() => result.current.openGraph());
+    expect(result.current.tabs.map((t) => t.kind)).toEqual(["graph"]);
+    expect(result.current.activeTab?.kind).toBe("graph");
+    expect(result.current.activeTab?.kind === "graph" ? result.current.activeTab.root : null).toBe(
+      "/p/ws",
+    );
+  });
+
+  it("openGraph re-activates the existing graph tab instead of duplicating", async () => {
+    const result = await openWorkspace();
+    act(() => result.current.openGraph());
+    const graphId = result.current.activeTabId;
+    await act(async () => {
+      await result.current.openFile("/p/ws/note.md");
+    });
+    expect(result.current.activeTab?.kind).toBe("file");
+    act(() => result.current.openGraph());
+    expect(result.current.tabs.filter((t) => t.kind === "graph")).toHaveLength(1);
+    expect(result.current.activeTabId).toBe(graphId);
+  });
+
+  it("openGraph from an active graph tab keeps it active", async () => {
+    const result = await openWorkspace();
+    act(() => result.current.openGraph());
+    const graphId = result.current.activeTabId;
+    act(() => result.current.openGraph());
+    expect(result.current.activeTabId).toBe(graphId);
+    expect(result.current.tabs).toHaveLength(1);
+  });
+
+  it("openGraph is a no-op without an open workspace", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    act(() => result.current.openGraph());
+    expect(result.current.tabs).toHaveLength(0);
+  });
+
+  it("openGraph with an explicit root requires it to match the workspace", async () => {
+    const result = await openWorkspace();
+    act(() => result.current.openGraph("/elsewhere"));
+    expect(result.current.tabs.filter((t) => t.kind === "graph")).toHaveLength(0);
+  });
+
+  it("a graph tab exposes the window-level workspace index", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+        scan_wikilinks: async () => [
+          { source: "/p/ws/a.md", target: "b", line: 1, snippet: "[[b]]" },
+        ],
+      }) as typeof invoke,
+    );
+    const result = await openWorkspace();
+    await waitFor(() => expect(result.current.workspaceFiles).toHaveLength(2));
+
+    act(() => result.current.openGraph());
+    expect(result.current.activeTab?.kind).toBe("graph");
+    expect(result.current.workspaceFiles).toEqual(["/p/ws/a.md", "/p/ws/b.md"]);
+    expect(result.current.wikilinkRefs).toEqual([
+      { source: "/p/ws/a.md", target: "b", line: 1, snippet: "[[b]]" },
+    ]);
+  });
+
+  it("closeWorkspace closes the graph tab", async () => {
+    const result = await openWorkspace();
+    act(() => result.current.openGraph());
+    act(() => result.current.closeWorkspace());
+    expect(result.current.tabs).toHaveLength(0);
+    expect(result.current.activeTabId).toBeNull();
+  });
+
+  it("closing the graph tab keeps the workspace open", async () => {
+    const result = await openWorkspace();
+    act(() => result.current.openGraph());
+    const graphId = result.current.activeTabId as string;
+    act(() => result.current.closeTab(graphId));
+    expect(result.current.tabs).toHaveLength(0);
+    expect(result.current.workspace?.root).toBe("/p/ws");
+  });
+
+  it("persists graph tabs after the workspace entry and restores them", async () => {
+    const onSettingsChange = vi.fn();
+    const result = await openWorkspace({ onSettingsChange });
+    act(() => result.current.openGraph());
+    await waitFor(() => {
+      const calls = onSettingsChange.mock.calls.filter((c) => c[0] === "behavior.openTabs");
+      const last = calls[calls.length - 1]?.[1];
+      expect(last).toEqual([
+        expect.objectContaining({ kind: "folder", path: "/p/ws" }),
+        { kind: "graph", path: "/p/ws" },
+      ]);
+    });
+
+    // Restore from that persisted state: workspace first, then its graph tab.
+    const { result: restored } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          openTabs: [
+            { kind: "folder", path: "/p/ws" },
+            { kind: "graph", path: "/p/ws" },
+          ],
+          activeTabPath: "/p/ws",
+        }),
+      ),
+    );
+    await waitFor(() => expect(restored.current.initializing).toBe(false));
+    await waitFor(() => expect(restored.current.tabs.map((t) => t.kind)).toEqual(["graph"]));
+    expect(restored.current.workspace?.root).toBe("/p/ws");
+    expect(restored.current.activeTab?.kind).toBe("graph");
+  });
+
+  it("skips restoring a graph tab when no workspace entry is present", async () => {
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          openTabs: [{ kind: "graph", path: "/p/ws" }],
+        }),
+      ),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    expect(result.current.tabs).toHaveLength(0);
+    expect(result.current.workspace).toBeNull();
+  });
+
+  it("skips restoring a graph tab whose root doesn't match the workspace", async () => {
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          openTabs: [
+            { kind: "folder", path: "/p/ws" },
+            { kind: "graph", path: "/p/other" },
+          ],
+        }),
+      ),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    expect(result.current.workspace?.root).toBe("/p/ws");
+    expect(result.current.tabs).toHaveLength(0);
+  });
+});
+
+describe("useTabs multi-window", () => {
+  type Injectable = { __GLYPH_OPEN__?: unknown; __GLYPH_PRIMARY__?: unknown };
+  afterEach(() => {
+    const g = window as unknown as Injectable;
+    g.__GLYPH_OPEN__ = undefined;
+    g.__GLYPH_PRIMARY__ = undefined;
+  });
+
+  it("a spawned window adopts its injected folder and skips session restore", async () => {
+    const g = window as unknown as Injectable;
+    g.__GLYPH_OPEN__ = { kind: "folder", path: "/p/spawned" };
+    g.__GLYPH_PRIMARY__ = false;
+    const onSettingsChange = vi.fn();
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          onSettingsChange,
+          // Would be restored on a primary window; the spawned window ignores it.
+          openTabs: [{ kind: "folder", path: "/p/other" }] as never,
+          activeTabPath: "/p/other",
+        }),
+      ),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    expect(result.current.workspace?.root).toBe("/p/spawned");
+    // Secondary windows are ephemeral: they never persist the open-tabs session.
+    await act(async () => {});
+    expect(onSettingsChange.mock.calls.some((c) => c[0] === "behavior.openTabs")).toBe(false);
+  });
+
+  it("a spawned window can adopt an injected single file", async () => {
+    const g = window as unknown as Injectable;
+    g.__GLYPH_OPEN__ = { kind: "file", path: "/p/loose.md" };
+    g.__GLYPH_PRIMARY__ = false;
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    expect(
+      result.current.tabs.some((t) => t.kind === "file" && t.file.path === "/p/loose.md"),
+    ).toBe(true);
+  });
+
+  it("the primary window still persists the session", async () => {
+    const onSettingsChange = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onSettingsChange })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    await waitFor(() =>
+      expect(onSettingsChange.mock.calls.some((c) => c[0] === "behavior.openTabs")).toBe(true),
+    );
   });
 });

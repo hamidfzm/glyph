@@ -1,14 +1,14 @@
 import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS, type Settings } from "@/lib/settings";
+import { describe, expect, it } from "vitest";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { SidebarLayoutProvider, useSidebarLayoutContext } from "./SidebarLayoutContext";
 
-function wrap(settings: Settings = DEFAULT_SETTINGS) {
+// SidebarLayoutProvider reads settings from SettingsContext, which defaults to
+// DEFAULT_SETTINGS when no SettingsProvider is mounted.
+function wrap() {
   return ({ children }: { children: ReactNode }) => (
-    <SidebarLayoutProvider settings={settings} updateSettings={vi.fn()}>
-      {children}
-    </SidebarLayoutProvider>
+    <SidebarLayoutProvider>{children}</SidebarLayoutProvider>
   );
 }
 

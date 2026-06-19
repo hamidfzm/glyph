@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import { activeFileOf, type FileTab, type FolderTab, type Tab } from "@/hooks/useTabs";
+import { activeFileOf, type FileTab, type GraphTab, type Tab } from "@/hooks/useTabs";
 import { TabBar } from "./TabBar";
 
 const makeFileTab = (i: number): FileTab => ({
@@ -19,12 +19,10 @@ const makeFileTab = (i: number): FileTab => ({
   },
 });
 
-const makeFolderTab = (i: number, root: string): FolderTab => ({
+const makeGraphTab = (i: number, root: string): GraphTab => ({
   id: `tab-${i}`,
-  kind: "folder",
+  kind: "graph",
   root,
-  expanded: new Set(),
-  nodes: new Map(),
   file: null,
 });
 
@@ -33,6 +31,7 @@ const makeTabs = (count: number): Tab[] => Array.from({ length: count }, (_, i) 
 interface RenderOpts {
   tabs?: Tab[];
   activeTabId?: string | null;
+  workspace?: TabsContextValue["workspace"];
   setActiveTab?: (id: string) => void;
   closeTab?: (id: string) => void;
   setTabMode?: TabsContextValue["setTabMode"];
@@ -50,9 +49,11 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    workspace: opts.workspace ?? null,
     openFile: vi.fn(),
     openFolder: vi.fn(),
-    openFileInFolderTab: vi.fn(),
+    openGraph: vi.fn(),
+    closeWorkspace: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),
     createCanvas: vi.fn(),
@@ -147,6 +148,35 @@ describe("TabBar", () => {
     expect(closeTab).not.toHaveBeenCalled();
   });
 
+  it("marks file tabs outside the workspace as loose", () => {
+    const inside = makeFileTab(0); // /path/to/file0.md
+    const base = makeFileTab(1);
+    const outside: FileTab = {
+      ...base,
+      file: {
+        ...base.file,
+        path: "/elsewhere/loose.md",
+        metadata: { name: "loose.md", path: "/elsewhere/loose.md", size: 0, modified: 0 },
+      },
+    };
+    renderTabBar({
+      tabs: [inside, outside],
+      activeTabId: "tab-0",
+      workspace: { root: "/path/to", expanded: new Set(), nodes: new Map() },
+    });
+    const insideEl = screen.getByText("file0.md").closest(".tab-item");
+    const outsideEl = screen.getByText("loose.md").closest(".tab-item");
+    expect(insideEl?.hasAttribute("data-loose")).toBe(false);
+    expect(outsideEl?.getAttribute("data-loose")).toBe("true");
+  });
+
+  it("does not mark file tabs as loose when no workspace is open", () => {
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0", workspace: null });
+    expect(screen.getByText("file0.md").closest(".tab-item")?.hasAttribute("data-loose")).toBe(
+      false,
+    );
+  });
+
   it("shows a dirty dot for tabs with unsaved edits", () => {
     const tab = makeFileTab(0);
     const dirtyTab: FileTab = { ...tab, file: { ...tab.file, dirty: true } };
@@ -161,9 +191,9 @@ describe("TabBar", () => {
     expect(screen.getByText("Untitled")).toBeInTheDocument();
   });
 
-  it("labels a root-only folder tab with its raw path", () => {
-    renderTabBar({ tabs: [makeFolderTab(0, "/")], activeTabId: "tab-0" });
-    expect(screen.getByText("/")).toBeInTheDocument();
+  it("labels a root-only graph tab with its raw path", () => {
+    renderTabBar({ tabs: [makeGraphTab(0, "/")], activeTabId: "tab-0" });
+    expect(screen.getByText("Graph: /")).toBeInTheDocument();
   });
 
   it("hides the mode toggle when no tab id is active", () => {
@@ -172,14 +202,22 @@ describe("TabBar", () => {
     expect(screen.queryByLabelText("View mode")).not.toBeInTheDocument();
   });
 
-  it("renders folder tabs with the folder basename and folder kind marker", () => {
+  it("renders graph tabs with a Graph label and graph kind marker", () => {
     renderTabBar({
-      tabs: [makeFolderTab(0, "/Users/me/notes")],
+      tabs: [makeGraphTab(0, "/Users/me/notes")],
       activeTabId: "tab-0",
     });
-    expect(screen.getByText("notes")).toBeInTheDocument();
-    const tabEl = screen.getByText("notes").closest(".tab-item");
-    expect(tabEl?.getAttribute("data-tab-kind")).toBe("folder");
+    expect(screen.getByText("Graph: notes")).toBeInTheDocument();
+    const tabEl = screen.getByText("Graph: notes").closest(".tab-item");
+    expect(tabEl?.getAttribute("data-tab-kind")).toBe("graph");
+  });
+
+  it("hides the mode toggle when a graph tab is active", () => {
+    renderTabBar({
+      tabs: [makeGraphTab(0, "/Users/me/notes")],
+      activeTabId: "tab-0",
+    });
+    expect(screen.queryByLabelText("View mode")).not.toBeInTheDocument();
   });
 
   it("calls setTabMode with the chosen mode from each toggle button", () => {
@@ -213,9 +251,9 @@ describe("TabBar", () => {
     expect(screen.getByLabelText("Split mode")).toBeInTheDocument();
   });
 
-  it("hides mode toggle when active tab is a folder with no current file", () => {
+  it("hides mode toggle when the active tab is a graph tab", () => {
     renderTabBar({
-      tabs: [makeFolderTab(0, "/Users/me/notes")],
+      tabs: [makeGraphTab(0, "/Users/me/notes")],
       activeTabId: "tab-0",
     });
     expect(screen.queryByLabelText("View mode")).not.toBeInTheDocument();

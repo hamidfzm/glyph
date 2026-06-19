@@ -37,11 +37,23 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - name: Cache apt packages
+        if: startsWith(matrix.platform, 'ubuntu')
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-cache/*.deb
+          key: apt-webkit-${{ matrix.platform }}-v1
       - name: Install Linux dependencies
         if: startsWith(matrix.platform, 'ubuntu')
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
+          mkdir -p ~/apt-cache/partial
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+          sudo apt-get -o Dir::Cache::archives="$HOME/apt-cache" \
+            -o Binary::apt::APT::Keep-Downloaded-Packages=true \
+            install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -61,7 +73,7 @@ jobs:
 
             ### macOS
             ```bash
-            brew tap hamidfzm/tap && brew install --cask glyph
+            brew tap hamidfzm/tap && brew trust hamidfzm/tap && brew install --cask glyph
             ```
             Or download `Glyph_*_universal.dmg` below.
 
@@ -78,6 +90,9 @@ jobs:
 
             ### Linux
             ```bash
+            # Snap Store
+            sudo snap install glyph
+
             # Arch (AUR)
             yay -S glyph-md-bin
 
@@ -117,7 +132,7 @@ jobs:
 
           ### macOS
           ```bash
-          brew tap hamidfzm/tap && brew install --cask glyph
+          brew tap hamidfzm/tap && brew trust hamidfzm/tap && brew install --cask glyph
           ```
           Or download `Glyph_*_universal.dmg` below.
 
@@ -134,6 +149,9 @@ jobs:
 
           ### Linux
           ```bash
+          # Snap Store
+          sudo snap install glyph
+
           # Arch (AUR)
           yay -S glyph-md-bin
 
@@ -185,48 +203,24 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           SHA="${{ steps.sha.outputs.sha256 }}"
 
-          cat > /tmp/glyph.rb << 'CASK'
-          cask "glyph" do
-          CASK
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" \
+            homebrew/glyph.rb.template > /tmp/glyph.rb
 
-          cat >> /tmp/glyph.rb << CASK
-            version "$VERSION"
-            sha256 "$SHA"
+          # Get current file SHA for update (or empty for first push)
+          FILE_SHA=$(gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb --jq .sha 2>/dev/null || echo "")
 
-            url "https://github.com/hamidfzm/glyph/releases/download/v#{version}/Glyph_#{version}_universal.dmg"
-            name "Glyph"
-            desc "Cross-platform markdown viewer"
-            homepage "https://github.com/hamidfzm/glyph"
-
-            livecheck do
-              url :url
-              strategy :github_latest
-            end
-
-            app "Glyph.app"
-
-            postflight do
-              system_command "/usr/bin/xattr",
-                             args: ["-cr", "#{appdir}/Glyph.app"],
-                             sudo: false
-            end
-
-            zap trash: [
-              "~/Library/Application Support/com.hamidfzm.glyph",
-              "~/Library/Caches/com.hamidfzm.glyph",
-              "~/Library/Preferences/com.hamidfzm.glyph.plist",
-            ]
-          end
-          CASK
-
-          # Get current file SHA for update
-          FILE_SHA=$(gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb --jq .sha)
-
-          gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb \
-            --method PUT \
-            --field message="chore: update glyph to $VERSION" \
-            --field content="$(base64 -w0 /tmp/glyph.rb)" \
-            --field sha="$FILE_SHA"
+          if [ -n "$FILE_SHA" ]; then
+            gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb \
+              --method PUT \
+              --field message="chore: update glyph to $VERSION" \
+              --field content="$(base64 -w0 /tmp/glyph.rb)" \
+              --field sha="$FILE_SHA"
+          else
+            gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb \
+              --method PUT \
+              --field message="chore: add glyph cask $VERSION" \
+              --field content="$(base64 -w0 /tmp/glyph.rb)"
+          fi
       - name: Download Linux debs and compute sha256
         id: linux_sha
         env:
@@ -462,6 +456,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install packaging tools
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: sudo apt-get update && sudo apt-get install -y devscripts debhelper dput
       - name: Get version
         id: version
@@ -544,6 +541,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install packaging tools
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: sudo apt-get update && sudo apt-get install -y dpkg-dev gpg
       - name: Get version
         id: version
@@ -625,3 +625,49 @@ jobs:
             git commit -m "chore: update packages to $VERSION"
             git push
           }
+
+  publish-snap:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      # The snap is built from the released .deb (see snap/snapcraft.yaml), so
+      # this job needs no toolchain. It is a no-op until the maintainer adds the
+      # SNAPCRAFT_STORE_CREDENTIALS secret (snapcraft export-login), so it never
+      # fails releases before the Snap Store account is set up.
+      - name: Check for store credentials
+        id: gate
+        env:
+          CREDS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        run: |
+          if [ -n "$CREDS" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No SNAPCRAFT_STORE_CREDENTIALS secret; skipping snap publish."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+      # snapcraft.yaml discovers the latest release and pulls the .deb for the
+      # build architecture. This job runs after the release is published, so
+      # "latest" is the tag that triggered this run. (Host env vars are not
+      # forwarded into the snapcraft build instance, so the version can't be
+      # passed that way.)
+      - name: Build snap
+        if: steps.gate.outputs.enabled == 'true'
+        id: build
+        uses: snapcore/action-build@v1
+      - name: Publish snap to stable
+        if: steps.gate.outputs.enabled == 'true'
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: stable

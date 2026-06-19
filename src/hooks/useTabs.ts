@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WikilinkRef } from "@/lib/backlinks";
@@ -11,6 +10,8 @@ import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/note
 import { isPathInside, parentDir, pruneInside } from "@/lib/paths";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
+import { subscribe } from "@/lib/tauriEvent";
+import { injectedOpen, isPrimaryWindow } from "@/lib/windowContext";
 import {
   getWorkspaceLastFile,
   resolveWorkspace,
@@ -48,24 +49,28 @@ export interface FileTab {
   file: FileState;
 }
 
-export interface FolderTab {
+export interface GraphTab {
   id: string;
-  kind: "folder";
+  kind: "graph";
+  /** Workspace root this graph visualizes (always the window's workspace). */
+  root: string;
+  /** Graph tabs never display a document. Present so `activeFileOf` stays a
+   *  plain field read across all tab kinds. */
+  file: null;
+}
+
+export type Tab = FileTab | GraphTab;
+
+/**
+ * The window's folder workspace. One per window (VS Code model): the sidebar
+ * tree, wikilink index, backlinks, and graph all hang off this, while the tab
+ * strip holds plain document tabs — workspace notes and loose external files
+ * alike. Opening another folder replaces it.
+ */
+export interface Workspace {
   root: string;
   expanded: Set<string>;
   nodes: Map<string, DirEntry[]>;
-  file: FileState | null;
-}
-
-export type Tab = FileTab | FolderTab;
-
-/** Replace the folder tab with `tabId` via `update`, leaving other tabs as-is. */
-export function mapFolderTab(
-  tabs: Tab[],
-  tabId: string,
-  update: (tab: FolderTab) => FolderTab,
-): Tab[] {
-  return tabs.map((t) => (t.id === tabId && t.kind === "folder" ? update(t) : t));
 }
 
 interface TabsState {
@@ -74,10 +79,10 @@ interface TabsState {
 }
 
 interface PersistedTab {
-  kind: "file" | "folder";
-  path: string; // root for folder, file path for file
-  filePath?: string; // current file inside a folder tab
-  expanded?: string[]; // expanded subdirs for folder tab
+  kind: "file" | "folder" | "graph";
+  path: string; // workspace root for folder/graph entries, file path for file
+  filePath?: string; // legacy: the single file once shown inside a folder tab
+  expanded?: string[]; // expanded subdirs (folder entry only)
 }
 
 const MAX_RECENT_FILES = 10;
@@ -99,9 +104,11 @@ interface UseTabsOptions {
   autoReload: boolean;
   defaultEditorMode: EditorMode;
   onSettingsChange: (key: string, value: unknown) => void;
-  // Called when a folder is refused as a workspace (nested git repo / overlapping
-  // workspace, see #262). The provider surfaces it as a transient banner.
-  onWorkspaceRefusal: (message: string) => void;
+  // Called to surface a workspace notice (see #262): a refusal (a folder nested
+  // inside another Glyph workspace) or a `persistent` warning (a folder opened
+  // despite sitting inside a parent git repo). The provider surfaces it as a
+  // banner.
+  onWorkspaceNotice: (message: string, options?: { persistent?: boolean }) => void;
 }
 
 async function loadFileContent(path: string) {
@@ -134,7 +141,7 @@ export function activeFileOf(tab: Tab | null | undefined): FileState | null {
 }
 
 export function tabPathOf(tab: Tab): string {
-  return tab.kind === "folder" ? tab.root : tab.file.path;
+  return tab.kind === "file" ? tab.file.path : tab.root;
 }
 
 function isInWorkspace(filePath: string, root: string): boolean {
@@ -151,43 +158,74 @@ function normalizePersistedTabs(value: PersistedTab[] | string[]): PersistedTab[
   return value as PersistedTab[];
 }
 
+/** Remove `ids` from the tab strip, moving the active tab to a neighbour when
+ *  the current one is among the removed. */
+function removeTabs(prev: TabsState, ids: ReadonlySet<string>): TabsState {
+  if (ids.size === 0) return prev;
+  const activeIdx = prev.tabs.findIndex((t) => t.id === prev.activeTabId);
+  const updated = prev.tabs.filter((t) => !ids.has(t.id));
+  let newActiveId = prev.activeTabId;
+  if (newActiveId !== null && ids.has(newActiveId)) {
+    const fallback = updated[Math.min(Math.max(activeIdx, 0), updated.length - 1)] ?? null;
+    newActiveId = fallback?.id ?? null;
+  }
+  return { tabs: updated, activeTabId: newActiveId };
+}
+
 export function useTabs(options: UseTabsOptions) {
   const [state, setState] = useState<TabsState>({ tabs: [], activeTabId: null });
   const [initializing, setInitializing] = useState(true);
-  // Recursive markdown index per folder tab; ephemeral (rebuilt on open / dir change).
-  const [workspaceIndex, setWorkspaceIndex] = useState<Record<string, string[]>>({});
-  // Outbound wikilink references per folder tab; used to compute backlinks.
-  const [wikilinkIndex, setWikilinkIndex] = useState<Record<string, WikilinkRef[]>>({});
+  // The window's single folder workspace (or null when only loose files are
+  // open). Tree state lives here; document tabs live in `state`.
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  // Recursive markdown index + outbound wikilink refs of the workspace;
+  // ephemeral (rebuilt on open / dir change).
+  const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
+  const [wikilinkRefs, setWikilinkRefs] = useState<WikilinkRef[]>([]);
   const scrollRefsMap = useRef<Map<string, number>>(new Map());
   const stateRef = useRef(state);
   stateRef.current = state;
+  const workspaceRef = useRef(workspace);
+  workspaceRef.current = workspace;
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
   const { tabs, activeTabId } = state;
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
   const activeFile = activeFileOf(activeTab);
-  const workspaceFiles = activeTab?.kind === "folder" ? (workspaceIndex[activeTab.id] ?? []) : [];
-  const wikilinkRefs = activeTab?.kind === "folder" ? (wikilinkIndex[activeTab.id] ?? []) : [];
 
-  // Persist tabs to settings whenever state changes (post-init)
+  // Persist workspace + tabs to settings whenever state changes (post-init).
+  // The workspace travels as a leading "folder" entry in the same list the
+  // old multi-folder model used, so stale sessions migrate without a new key.
   useEffect(() => {
-    if (initializing) return;
-    const persisted: PersistedTab[] = tabs.map((tab) => {
-      if (tab.kind === "folder") {
-        return {
-          kind: "folder",
-          path: tab.root,
-          filePath: tab.file?.path,
-          expanded: Array.from(tab.expanded),
-        };
-      }
-      return { kind: "file", path: tab.file.path };
-    });
+    // Secondary windows are ephemeral: only the primary window owns session
+    // restore, so it alone persists the open-tabs list (#295 multi-window).
+    if (initializing || !isPrimaryWindow()) return;
+    const persisted: PersistedTab[] = [];
+    if (workspace) {
+      persisted.push({
+        kind: "folder",
+        path: workspace.root,
+        expanded: Array.from(workspace.expanded),
+      });
+    }
+    for (const tab of tabs) {
+      persisted.push(
+        tab.kind === "graph"
+          ? { kind: "graph", path: tab.root }
+          : { kind: "file", path: tab.file.path },
+      );
+    }
     optionsRef.current.onSettingsChange("behavior.openTabs", persisted);
     const activeTabPath = activeTab ? tabPathOf(activeTab) : "";
     optionsRef.current.onSettingsChange("behavior.activeTabPath", activeTabPath);
-  }, [tabs, activeTab, initializing]);
+  }, [tabs, activeTab, workspace, initializing]);
+
+  // Report this window's workspace to the Rust window registry so open-folder
+  // routing knows which folder each window shows (focus vs new window).
+  useEffect(() => {
+    invoke("set_window_workspace", { root: workspace?.root ?? null }).catch(() => {});
+  }, [workspace?.root]);
 
   const addToRecent = useCallback((path: string) => {
     const current = optionsRef.current.recentFiles ?? [];
@@ -222,7 +260,7 @@ export function useTabs(options: UseTabsOptions) {
     }
   }, []);
 
-  // Open a file as a new top-level tab; if already open as a top-level tab, activate it.
+  // Open a file as a document tab; if it's already open, activate its tab.
   const openFile = useCallback(
     async (path: string) => {
       // Defensive gate: never load an unsupported file. Glyph rendering treats
@@ -263,6 +301,13 @@ export function useTabs(options: UseTabsOptions) {
           return { tabs: [...prev.tabs, newTab], activeTabId: id };
         });
         addToRecent(path);
+        // Remember workspace notes in `.glyph/state.json` (git-ignored) so the
+        // workspace re-opens onto them next time. Fire-and-forget: a failure
+        // here is never fatal to opening the file.
+        const root = workspaceRef.current?.root;
+        if (root && isInWorkspace(path, root)) {
+          setWorkspaceLastFile(root, path).catch(() => {});
+        }
       } catch (err) {
         console.error("Failed to open file:", err);
       }
@@ -270,261 +315,220 @@ export function useTabs(options: UseTabsOptions) {
     [addToRecent],
   );
 
-  // Open a file inside a specific folder tab — replaces that tab's currently-viewed file.
-  // Watches the new file, unwatches the old. Folder's directory watcher stays.
-  const openFileInFolderTab = useCallback(
-    async (tabId: string, path: string) => {
-      if (!isSupportedFile(path)) {
-        console.warn(`Refusing to open unsupported file in folder tab: ${path}`);
-        return;
-      }
-      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
-      if (tab?.kind !== "folder") return;
-
-      const previousFilePath = tab.file?.path;
-      if (previousFilePath === path) return;
-
-      try {
-        const { content, metadata } = await loadFileContent(path);
-        if (previousFilePath) {
-          invoke("unwatch_file", { path: previousFilePath }).catch(() => {});
+  // Close every tab that belongs to the workspace at `root`: file tabs inside
+  // it plus graph tabs (they render its index). Loose external files survive.
+  const closeWorkspaceTabs = useCallback((root: string) => {
+    setState((prev) => {
+      const removedIds = new Set<string>();
+      for (const t of prev.tabs) {
+        if (t.kind === "graph") {
+          removedIds.add(t.id);
+        } else if (isInWorkspace(t.file.path, root)) {
+          invoke("unwatch_file", { path: t.file.path }).catch(() => {});
+          removedIds.add(t.id);
         }
-        await invoke("watch_file", { path });
-        const mode =
-          isNotebookFile(path) || isCanvasFile(path)
-            ? EDITOR_MODE.view
-            : optionsRef.current.defaultEditorMode;
-        const newFile: FileState = { ...makeFileState(path, mode), content, metadata };
-        const folderRoot = tab.root;
-        setState((prev) => ({
-          ...prev,
-          tabs: prev.tabs.map((t) =>
-            t.id === tabId && t.kind === "folder" ? { ...t, file: newFile } : t,
-          ),
-        }));
-        addToRecent(path);
-        // Remember this file in the workspace's `.glyph/state.json` (git-ignored)
-        // so it re-opens next time. Fire-and-forget: a failure here is never
-        // fatal to opening the file.
-        setWorkspaceLastFile(folderRoot, path).catch(() => {});
-      } catch (err) {
-        console.error("Failed to open file in folder tab:", err);
       }
-    },
-    [addToRecent],
-  );
+      for (const removedId of removedIds) {
+        scrollRefsMap.current.delete(removedId);
+        editHistory.current.delete(removedId);
+      }
+      return removeTabs(prev, removedIds);
+    });
+  }, []);
 
-  // Open a new folder workspace as a top-level tab.
-  // If a path is provided, opens that path; otherwise prompts via dialog.
+  // Close the window's workspace: stop watching it, close its tabs, drop the
+  // tree + indexes. Loose file tabs stay open.
+  const closeWorkspace = useCallback(() => {
+    const ws = workspaceRef.current;
+    if (!ws) return;
+    invoke("unwatch_directory", { path: ws.root }).catch(() => {});
+    closeWorkspaceTabs(ws.root);
+    workspaceRef.current = null;
+    setWorkspace(null);
+    setWorkspaceFiles([]);
+    setWikilinkRefs([]);
+  }, [closeWorkspaceTabs]);
+
+  // Guards concurrent openFolder calls for the same root (StrictMode double
+  // mount, rapid re-invocation) so the folder is only watched/loaded once.
+  const folderOpenInFlight = useRef<string | null>(null);
+
+  // Open a folder as this window's workspace. With an explicit `root` (CLI,
+  // session restore, a spawned window's injected open, or an `open-folder`
+  // event) the folder is adopted into this window. With no root (the user's
+  // Open Folder dialog) the choice is routed through the window manager so a
+  // different folder opens a new window instead of replacing this one.
   const openFolder = useCallback(
     async (
       root?: string,
-      options?: { expanded?: string[]; filePath?: string; silent?: boolean },
+      openOptions?: { expanded?: string[]; silent?: boolean; autoLoad?: boolean },
     ) => {
-      let resolvedRoot = root;
+      const resolvedRoot = root;
       if (!resolvedRoot) {
         const selected = await open({ directory: true, multiple: false });
         if (typeof selected !== "string") return;
-        resolvedRoot = selected;
+        // No explicit root means a user "Open Folder" action: route it through
+        // the window manager. A folder already open elsewhere focuses that
+        // window; an empty current window adopts it (Rust emits `open-folder`
+        // back to us); a different folder in an occupied window opens a new
+        // window. This is what stops a second folder silently replacing the
+        // current workspace.
+        await invoke("request_open", { kind: "folder", path: selected });
+        return;
       }
-
-      // Activate existing folder tab for this root, don't duplicate.
-      const existing = stateRef.current.tabs.find(
-        (t) => t.kind === "folder" && t.root === resolvedRoot,
-      );
-      if (existing) {
-        setState((prev) => ({ ...prev, activeTabId: existing.id }));
+      if (
+        workspaceRef.current?.root === resolvedRoot ||
+        folderOpenInFlight.current === resolvedRoot
+      ) {
         return;
       }
 
       // A workspace is one git repo's top level (#262). Refuse a folder nested
-      // inside a parent repo / another workspace, or one overlapping an open
-      // workspace, so every workspace-wide feature has an unambiguous owner. The
+      // inside another Glyph workspace's `.glyph/` so workspace-wide features
+      // have an unambiguous owner. A folder merely sitting inside a parent git
+      // repo is still allowed (so `samples/` inside this repo opens) but earns a
+      // persistent warning. Switching to a folder that overlaps the open one
+      // just replaces the workspace, so there's nothing to refuse there. The
       // `silent` path (persisted-tab restore) skips the banner.
-      const refuse = (message: string) => {
-        if (!options?.silent) optionsRef.current.onWorkspaceRefusal(message);
+      const notify = (message: string, persistent = false) => {
+        if (openOptions?.silent) return;
+        if (persistent) optionsRef.current.onWorkspaceNotice(message, { persistent: true });
+        else optionsRef.current.onWorkspaceNotice(message);
       };
       let resolution: WorkspaceResolution;
       try {
         resolution = await resolveWorkspace(resolvedRoot);
       } catch (err) {
-        refuse(`Couldn't open this folder: ${String(err)}`);
-        return;
-      }
-      if (resolution.nestedUnder) {
-        refuse(
-          `This folder is inside the git repository at "${resolution.nestedUnder}". Open that folder instead — Glyph treats one repository as one workspace.`,
-        );
+        notify(`Couldn't open this folder: ${String(err)}`);
         return;
       }
       if (resolution.glyphConflict) {
-        refuse(
+        notify(
           `This folder sits inside another Glyph workspace ("${resolution.glyphConflict}"). Nested workspaces aren't supported.`,
         );
         return;
       }
-      const overlap = stateRef.current.tabs.find(
-        (t): t is FolderTab =>
-          t.kind === "folder" &&
-          t.root !== resolvedRoot &&
-          (isInWorkspace(resolvedRoot as string, t.root) ||
-            isInWorkspace(t.root, resolvedRoot as string)),
-      );
-      if (overlap) {
-        refuse(
-          `This folder overlaps the open workspace "${overlap.root}". Close it first or pick a non-overlapping folder.`,
+      // Allowed, but a folder inside a parent git repo means workspace-wide
+      // features (Sync, `.glyph/` config) resolve against that repo, so warn and
+      // keep the notice up until the user dismisses it.
+      if (resolution.nestedUnder) {
+        notify(
+          `This folder is inside the git repository at "${resolution.nestedUnder}". Glyph treats one repository as one workspace, so some workspace features may act on the whole repository.`,
+          true,
         );
-        return;
       }
 
-      const id = generateId();
+      folderOpenInFlight.current = resolvedRoot;
       try {
-        await invoke("watch_directory", { path: resolvedRoot });
-      } catch (err) {
-        console.error("Failed to watch directory:", err);
-      }
+        // One workspace per window: switching folders replaces the current
+        // one and closes its tabs (loose external files stay).
+        const previous = workspaceRef.current;
+        if (previous) {
+          invoke("unwatch_directory", { path: previous.root }).catch(() => {});
+          closeWorkspaceTabs(previous.root);
+        }
 
-      const expanded = new Set<string>(options?.expanded ?? []);
-      const nodes = new Map<string, DirEntry[]>();
-      nodes.set(resolvedRoot, await loadDirectory(resolvedRoot));
-      for (const dir of expanded) {
-        nodes.set(dir, await loadDirectory(dir));
-      }
+        try {
+          await invoke("watch_directory", { path: resolvedRoot });
+        } catch (err) {
+          console.error("Failed to watch directory:", err);
+        }
 
-      // Pick the initial file BEFORE we add the tab, so the first render of the
-      // folder tab already shows content. Doing this after `setState` would race
-      // the React commit (stateRef.current wouldn't see the new tab yet inside
-      // an awaited continuation), causing openFileInFolderTab to bail out.
-      let initialFile: FileState | null = null;
-      let resolvedFiles: string[] | null = null;
-      const wantsAutoLoad = !options?.filePath;
-      if (wantsAutoLoad) {
-        resolvedFiles = await loadWorkspaceFiles(resolvedRoot);
-        if (resolvedFiles.length > 0) {
-          // The workspace remembers its last-opened file (absolute path) in
-          // `.glyph/state.json`. Fall through to the first markdown file when
-          // it's missing or stale.
+        const expanded = new Set<string>(openOptions?.expanded ?? []);
+        const nodes = new Map<string, DirEntry[]>();
+        nodes.set(resolvedRoot, await loadDirectory(resolvedRoot));
+        for (const dir of expanded) {
+          nodes.set(dir, await loadDirectory(dir));
+        }
+        const ws: Workspace = { root: resolvedRoot, expanded, nodes };
+        workspaceRef.current = ws;
+        setWorkspace(ws);
+
+        // Build the workspace markdown index so wikilinks can resolve.
+        const files = await loadWorkspaceFiles(resolvedRoot);
+        setWorkspaceFiles(files);
+        loadWikilinkRefs(resolvedRoot).then((refs) => {
+          // A replacement may have started meanwhile; don't clobber its refs.
+          if (workspaceRef.current?.root === resolvedRoot) setWikilinkRefs(refs);
+        });
+
+        // Auto-open the workspace's remembered file (or its first note) as a
+        // document tab. Restore passes autoLoad: false because the persisted
+        // tab list re-opens explicit tabs itself.
+        if (openOptions?.autoLoad !== false && files.length > 0) {
           const remembered = await getWorkspaceLastFile(resolvedRoot).catch(() => null);
-          const target =
-            remembered && resolvedFiles.includes(remembered) ? remembered : resolvedFiles[0];
+          const target = remembered && files.includes(remembered) ? remembered : files[0];
           if (isMarkdownFile(target)) {
-            try {
-              const { content, metadata } = await loadFileContent(target);
-              await invoke("watch_file", { path: target });
-              initialFile = {
-                ...makeFileState(target, optionsRef.current.defaultEditorMode),
-                content,
-                metadata,
-              };
-              addToRecent(target);
-              // Record what we actually landed on (e.g. first-time open or a
-              // stale remembered entry). Fire-and-forget.
-              setWorkspaceLastFile(resolvedRoot, target).catch(() => {});
-            } catch (err) {
-              console.error("Failed to auto-load workspace file:", err);
-            }
+            await openFile(target);
           }
         }
-      }
-
-      const newTab: FolderTab = {
-        id,
-        kind: "folder",
-        root: resolvedRoot,
-        expanded,
-        nodes,
-        file: initialFile,
-      };
-      // Re-check after the awaits — a concurrent call (e.g. React 19 StrictMode
-      // double-mount, or rapid re-invocation) may have already added this folder.
-      let activeId = id;
-      setState((prev) => {
-        const match = prev.tabs.find((t) => t.kind === "folder" && t.root === resolvedRoot);
-        if (match) {
-          activeId = match.id;
-          return { ...prev, activeTabId: match.id };
-        }
-        return { tabs: [...prev.tabs, newTab], activeTabId: id };
-      });
-
-      // Build the workspace markdown index in the background so wikilinks can
-      // resolve. Reuse the list we already fetched for the auto-load path.
-      const filesPromise = resolvedFiles
-        ? Promise.resolve(resolvedFiles)
-        : loadWorkspaceFiles(resolvedRoot);
-      filesPromise.then((files) => {
-        setWorkspaceIndex((prev) => ({ ...prev, [activeId]: files }));
-      });
-      loadWikilinkRefs(resolvedRoot).then((refs) => {
-        setWikilinkIndex((prev) => ({ ...prev, [activeId]: refs }));
-      });
-
-      if (options?.filePath) {
-        // Defer so the new tab is in state for openFileInFolderTab to find.
-        await openFileInFolderTab(activeId, options.filePath);
+      } finally {
+        folderOpenInFlight.current = null;
       }
     },
-    [addToRecent, loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFileInFolderTab],
+    [closeWorkspaceTabs, loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFile],
   );
 
-  const toggleExpand = useCallback(
-    async (tabId: string, path: string) => {
-      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
-      if (tab?.kind !== "folder") return;
+  // Open (or re-activate) the graph view of the workspace. The optional root
+  // must match the open workspace (used by persisted-tab restore); without a
+  // workspace the call is a no-op (the menu item is disabled in that state).
+  const openGraph = useCallback((root?: string) => {
+    const wsRoot = workspaceRef.current?.root;
+    if (!wsRoot || (root !== undefined && root !== wsRoot)) return;
+    const id = generateId();
+    setState((prev) => {
+      const existing = prev.tabs.find((t) => t.kind === "graph");
+      if (existing) return { ...prev, activeTabId: existing.id };
+      const newTab: GraphTab = { id, kind: "graph", root: wsRoot, file: null };
+      return { tabs: [...prev.tabs, newTab], activeTabId: id };
+    });
+  }, []);
 
-      const wasExpanded = tab.expanded.has(path);
-      const newExpanded = new Set(tab.expanded);
+  const toggleExpand = useCallback(
+    async (path: string) => {
+      const ws = workspaceRef.current;
+      if (!ws) return;
+
+      const wasExpanded = ws.expanded.has(path);
+      const newExpanded = new Set(ws.expanded);
       if (wasExpanded) {
         newExpanded.delete(path);
       } else {
         newExpanded.add(path);
       }
 
-      let newNodes = tab.nodes;
-      if (!wasExpanded && !tab.nodes.has(path)) {
+      let newNodes = ws.nodes;
+      if (!wasExpanded && !ws.nodes.has(path)) {
         const entries = await loadDirectory(path);
-        newNodes = new Map(tab.nodes);
+        newNodes = new Map(ws.nodes);
         newNodes.set(path, entries);
       }
 
-      setState((prev) => ({
-        ...prev,
-        tabs: prev.tabs.map((t) =>
-          t.id === tabId && t.kind === "folder"
-            ? { ...t, expanded: newExpanded, nodes: newNodes }
-            : t,
-        ),
-      }));
+      setWorkspace((prev) => (prev ? { ...prev, expanded: newExpanded, nodes: newNodes } : prev));
     },
     [loadDirectory],
   );
 
-  // Create a note/folder inside `dir`, then expand `dir` and refresh its listing
-  // so the new entry shows immediately (rather than waiting on the directory
-  // watcher's debounce). Returns the created path, or null on failure.
+  // Create a note/canvas/folder inside `dir`, then expand `dir` and refresh
+  // its listing so the new entry shows immediately (rather than waiting on
+  // the directory watcher's debounce). Returns the created path, or null.
   const createEntry = useCallback(
-    async (
-      tabId: string,
-      dir: string,
-      kind: "note" | "canvas" | "folder",
-    ): Promise<string | null> => {
-      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
-      if (tab?.kind !== "folder") return null;
+    async (dir: string, kind: "note" | "canvas" | "folder"): Promise<string | null> => {
+      const ws = workspaceRef.current;
+      if (!ws) return null;
       try {
         const command =
           kind === "note" ? "create_note" : kind === "canvas" ? "create_canvas" : "create_folder";
-        const newPath = await invoke<string>(command, { dir, root: tab.root });
+        const newPath = await invoke<string>(command, { dir, root: ws.root });
         const entries = await loadDirectory(dir);
-        setState((prev) => ({
-          ...prev,
-          tabs: mapFolderTab(prev.tabs, tabId, (t) => {
-            const nodes = new Map(t.nodes);
-            nodes.set(dir, entries);
-            const expanded = new Set(t.expanded);
-            if (dir !== t.root) expanded.add(dir);
-            return { ...t, nodes, expanded };
-          }),
-        }));
+        setWorkspace((prev) => {
+          if (!prev) return prev;
+          const nodes = new Map(prev.nodes);
+          nodes.set(dir, entries);
+          const expanded = new Set(prev.expanded);
+          if (dir !== prev.root) expanded.add(dir);
+          return { ...prev, nodes, expanded };
+        });
         return newPath;
       } catch (err) {
         console.error(`Failed to create ${kind}:`, err);
@@ -534,73 +538,70 @@ export function useTabs(options: UseTabsOptions) {
     [loadDirectory],
   );
 
-  const createNote = useCallback(
-    (tabId: string, dir: string) => createEntry(tabId, dir, "note"),
-    [createEntry],
-  );
-  const createCanvas = useCallback(
-    (tabId: string, dir: string) => createEntry(tabId, dir, "canvas"),
-    [createEntry],
-  );
-  const createFolder = useCallback(
-    (tabId: string, dir: string) => createEntry(tabId, dir, "folder"),
-    [createEntry],
-  );
+  const createNote = useCallback((dir: string) => createEntry(dir, "note"), [createEntry]);
+  const createCanvas = useCallback((dir: string) => createEntry(dir, "canvas"), [createEntry]);
+  const createFolder = useCallback((dir: string) => createEntry(dir, "folder"), [createEntry]);
 
-  // Rename a freshly-created entry (inline rename). Refreshes the parent listing
-  // so the new name shows. Returns the final (collision-safe) path, or null.
+  // Re-point every open file tab under `oldPath` to its location under
+  // `newPath`, moving the file watchers along. Used by rename and move.
+  const repointOpenFiles = useCallback((oldPath: string, newPath: string) => {
+    for (const t of stateRef.current.tabs) {
+      if (t.kind !== "file" || !isPathInside(t.file.path, oldPath)) continue;
+      const moved = newPath + t.file.path.slice(oldPath.length);
+      invoke("unwatch_file", { path: t.file.path }).catch(() => {});
+      invoke("watch_file", { path: moved }).catch(() => {});
+    }
+    setState((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) => {
+        if (t.kind !== "file" || !isPathInside(t.file.path, oldPath)) return t;
+        const moved = newPath + t.file.path.slice(oldPath.length);
+        return { ...t, file: { ...t.file, path: moved } };
+      }),
+    }));
+  }, []);
+
+  // Rename a freshly-created entry (inline rename). Refreshes the parent
+  // listing so the new name shows. Returns the final (collision-safe) path.
   const renamePath = useCallback(
-    async (tabId: string, path: string, newName: string): Promise<string | null> => {
-      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
-      if (tab?.kind !== "folder") return null;
+    async (path: string, newName: string): Promise<string | null> => {
+      const ws = workspaceRef.current;
+      if (!ws) return null;
       try {
-        const finalPath = await invoke<string>("rename_path", { path, newName, root: tab.root });
-        const parent = parentDir(path, tab.root);
+        const finalPath = await invoke<string>("rename_path", { path, newName, root: ws.root });
+        const parent = parentDir(path, ws.root);
         const entries = await loadDirectory(parent);
-        // If the renamed entry is (or contains) the open file, re-point the tab
-        // to its new path and move the file watcher with it.
-        const openPath = tab.file?.path;
-        let newOpenPath: string | null = null;
-        if (openPath && isPathInside(openPath, path)) {
-          newOpenPath = finalPath + openPath.slice(path.length);
-          invoke("unwatch_file", { path: openPath }).catch(() => {});
-          invoke("watch_file", { path: newOpenPath }).catch(() => {});
-        }
-        setState((prev) => ({
-          ...prev,
-          tabs: mapFolderTab(prev.tabs, tabId, (t) => {
-            const nodes = new Map(t.nodes);
-            nodes.set(parent, entries);
-            const file = newOpenPath ? { ...(t.file as FileState), path: newOpenPath } : t.file;
-            return { ...t, nodes, file };
-          }),
-        }));
+        repointOpenFiles(path, finalPath);
+        setWorkspace((prev) => {
+          if (!prev) return prev;
+          const nodes = new Map(prev.nodes);
+          nodes.set(parent, entries);
+          return { ...prev, nodes };
+        });
         return finalPath;
       } catch (err) {
         console.error("Failed to rename:", err);
         return null;
       }
     },
-    [loadDirectory],
+    [loadDirectory, repointOpenFiles],
   );
 
   // Duplicate a note/folder next to itself, then refresh the parent listing.
   const duplicatePath = useCallback(
-    async (tabId: string, path: string): Promise<string | null> => {
-      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
-      if (tab?.kind !== "folder") return null;
+    async (path: string): Promise<string | null> => {
+      const ws = workspaceRef.current;
+      if (!ws) return null;
       try {
-        const newPath = await invoke<string>("duplicate_path", { path, root: tab.root });
-        const parent = parentDir(path, tab.root);
+        const newPath = await invoke<string>("duplicate_path", { path, root: ws.root });
+        const parent = parentDir(path, ws.root);
         const entries = await loadDirectory(parent);
-        setState((prev) => ({
-          ...prev,
-          tabs: mapFolderTab(prev.tabs, tabId, (t) => {
-            const nodes = new Map(t.nodes);
-            nodes.set(parent, entries);
-            return { ...t, nodes };
-          }),
-        }));
+        setWorkspace((prev) => {
+          if (!prev) return prev;
+          const nodes = new Map(prev.nodes);
+          nodes.set(parent, entries);
+          return { ...prev, nodes };
+        });
         return newPath;
       } catch (err) {
         console.error("Failed to duplicate:", err);
@@ -610,66 +611,54 @@ export function useTabs(options: UseTabsOptions) {
     [loadDirectory],
   );
 
-  // Move a note/folder into `toDir`. Refreshes both the source and destination
-  // listings, prunes cached child listings under the old location, and
-  // re-points the open file (and its watcher) if it moved.
+  // Move a note/folder into `toDir`. Refreshes both the source and
+  // destination listings, prunes cached child listings under the old
+  // location, and re-points open tabs (and their watchers) if they moved.
   const movePath = useCallback(
-    async (tabId: string, from: string, toDir: string): Promise<string | null> => {
-      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
-      if (tab?.kind !== "folder") return null;
+    async (from: string, toDir: string): Promise<string | null> => {
+      const ws = workspaceRef.current;
+      if (!ws) return null;
       try {
-        const newPath = await invoke<string>("move_path", { from, toDir, root: tab.root });
+        const newPath = await invoke<string>("move_path", { from, toDir, root: ws.root });
         if (newPath === from) return newPath;
-        const sourceParent = parentDir(from, tab.root);
+        const sourceParent = parentDir(from, ws.root);
         const [sourceEntries, destEntries] = await Promise.all([
           loadDirectory(sourceParent),
           loadDirectory(toDir),
         ]);
-        const openPath = tab.file?.path;
-        let newOpenPath: string | null = null;
-        if (openPath && isPathInside(openPath, from)) {
-          newOpenPath = newPath + openPath.slice(from.length);
-          invoke("unwatch_file", { path: openPath }).catch(() => {});
-          invoke("watch_file", { path: newOpenPath }).catch(() => {});
-        }
-        setState((prev) => ({
-          ...prev,
-          tabs: mapFolderTab(prev.tabs, tabId, (t) => {
-            const nodes = new Map(t.nodes);
-            nodes.set(sourceParent, sourceEntries);
-            nodes.set(toDir, destEntries);
-            // Drop cached listings for the moved entry and anything under it.
-            pruneInside(nodes.keys(), from, (key) => nodes.delete(key));
-            const file = newOpenPath ? { ...(t.file as FileState), path: newOpenPath } : t.file;
-            return { ...t, nodes, file };
-          }),
-        }));
+        repointOpenFiles(from, newPath);
+        setWorkspace((prev) => {
+          if (!prev) return prev;
+          const nodes = new Map(prev.nodes);
+          nodes.set(sourceParent, sourceEntries);
+          nodes.set(toDir, destEntries);
+          // Drop cached listings for the moved entry and anything under it.
+          pruneInside(nodes.keys(), from, (key) => nodes.delete(key));
+          return { ...prev, nodes };
+        });
         return newPath;
       } catch (err) {
         console.error("Failed to move:", err);
         return null;
       }
     },
-    [loadDirectory],
+    [loadDirectory, repointOpenFiles],
   );
 
-  // Collapse every expanded directory in a folder tab.
-  const collapseAll = useCallback((tabId: string) => {
-    setState((prev) => ({
-      ...prev,
-      tabs: mapFolderTab(prev.tabs, tabId, (t) => ({ ...t, expanded: new Set<string>() })),
-    }));
+  // Collapse every expanded directory in the workspace tree.
+  const collapseAll = useCallback(() => {
+    setWorkspace((prev) => (prev ? { ...prev, expanded: new Set<string>() } : prev));
   }, []);
 
-  // Expand every directory in a folder tab, loading any not-yet-read listings.
-  // Bounded so a pathological tree can't spin forever.
+  // Expand every directory in the workspace, loading any not-yet-read
+  // listings. Bounded so a pathological tree can't spin forever.
   const expandAll = useCallback(
-    async (tabId: string, limit: number = EXPAND_ALL_MAX_DIRS) => {
-      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
-      if (tab?.kind !== "folder") return;
-      const nodes = new Map(tab.nodes);
+    async (limit: number = EXPAND_ALL_MAX_DIRS) => {
+      const ws = workspaceRef.current;
+      if (!ws) return;
+      const nodes = new Map(ws.nodes);
       const expanded = new Set<string>();
-      const queue: string[] = [tab.root];
+      const queue: string[] = [ws.root];
       let visited = 0;
       while (queue.length > 0 && visited < limit) {
         const dir = queue.shift() as string;
@@ -686,20 +675,17 @@ export function useTabs(options: UseTabsOptions) {
           }
         }
       }
-      setState((prev) => ({
-        ...prev,
-        tabs: mapFolderTab(prev.tabs, tabId, (t) => ({ ...t, nodes, expanded })),
-      }));
+      setWorkspace((prev) => (prev ? { ...prev, nodes, expanded } : prev));
     },
     [loadDirectory],
   );
 
-  // Delete a note/folder after confirming. Closes the open file if it (or its
-  // containing folder) was removed, and prunes the tree's cached listings.
+  // Delete a note/folder after confirming. Closes any open tabs under the
+  // deleted path and prunes the tree's cached listings.
   const deletePath = useCallback(
-    async (tabId: string, path: string): Promise<boolean> => {
-      const tab = stateRef.current.tabs.find((t) => t.id === tabId);
-      if (tab?.kind !== "folder") return false;
+    async (path: string): Promise<boolean> => {
+      const ws = workspaceRef.current;
+      if (!ws) return false;
       const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
       const confirmed = await ask(`Delete "${name}"? This can't be undone.`, {
         title: "Delete",
@@ -707,30 +693,35 @@ export function useTabs(options: UseTabsOptions) {
       });
       if (!confirmed) return false;
       try {
-        await invoke("delete_path", { path, root: tab.root });
+        await invoke("delete_path", { path, root: ws.root });
       } catch (err) {
         console.error("Failed to delete:", err);
         return false;
       }
 
-      const parent = parentDir(path, tab.root);
+      const parent = parentDir(path, ws.root);
       const entries = await loadDirectory(parent);
-      const openPath = tab.file?.path;
-      const removedOpen = openPath !== undefined && isPathInside(openPath, path);
-      if (removedOpen) {
-        invoke("unwatch_file", { path: openPath as string }).catch(() => {});
-      }
-      setState((prev) => ({
-        ...prev,
-        tabs: mapFolderTab(prev.tabs, tabId, (t) => {
-          const nodes = new Map(t.nodes);
-          nodes.set(parent, entries);
-          pruneInside(nodes.keys(), path, (key) => nodes.delete(key));
-          const expanded = new Set(t.expanded);
-          pruneInside(expanded, path, (key) => expanded.delete(key));
-          return { ...t, nodes, expanded, file: removedOpen ? null : t.file };
-        }),
-      }));
+      setState((prev) => {
+        const removedIds = new Set<string>();
+        for (const t of prev.tabs) {
+          if (t.kind === "file" && isPathInside(t.file.path, path)) {
+            invoke("unwatch_file", { path: t.file.path }).catch(() => {});
+            scrollRefsMap.current.delete(t.id);
+            editHistory.current.delete(t.id);
+            removedIds.add(t.id);
+          }
+        }
+        return removeTabs(prev, removedIds);
+      });
+      setWorkspace((prev) => {
+        if (!prev) return prev;
+        const nodes = new Map(prev.nodes);
+        nodes.set(parent, entries);
+        pruneInside(nodes.keys(), path, (key) => nodes.delete(key));
+        const expanded = new Set(prev.expanded);
+        pruneInside(expanded, path, (key) => expanded.delete(key));
+        return { ...prev, nodes, expanded };
+      });
       return true;
     },
     [loadDirectory],
@@ -738,38 +729,14 @@ export function useTabs(options: UseTabsOptions) {
 
   const closeTab = useCallback((id: string) => {
     setState((prev) => {
-      const idx = prev.tabs.findIndex((t) => t.id === id);
-      if (idx === -1) return prev;
-
-      const tab = prev.tabs[idx];
-      if (tab.kind === "folder") {
-        invoke("unwatch_directory", { path: tab.root }).catch(() => {});
-        if (tab.file) invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
-      } else {
+      const tab = prev.tabs.find((t) => t.id === id);
+      if (!tab) return prev;
+      if (tab.kind === "file") {
         invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
       }
       scrollRefsMap.current.delete(id);
       editHistory.current.delete(id);
-      setWorkspaceIndex((prevIdx) => {
-        if (!(id in prevIdx)) return prevIdx;
-        const next = { ...prevIdx };
-        delete next[id];
-        return next;
-      });
-      setWikilinkIndex((prevIdx) => {
-        if (!(id in prevIdx)) return prevIdx;
-        const next = { ...prevIdx };
-        delete next[id];
-        return next;
-      });
-
-      const updated = prev.tabs.filter((t) => t.id !== id);
-      let newActiveId = prev.activeTabId;
-      if (prev.activeTabId === id) {
-        const newActive = updated[Math.min(idx, updated.length - 1)] ?? null;
-        newActiveId = newActive?.id ?? null;
-      }
-      return { tabs: updated, activeTabId: newActiveId };
+      return removeTabs(prev, new Set([id]));
     });
   }, []);
 
@@ -780,11 +747,8 @@ export function useTabs(options: UseTabsOptions) {
         const savedScroll = scrollRefsMap.current.get(prev.activeTabId) ?? 0;
         return {
           tabs: prev.tabs.map((t) => {
-            if (t.id !== prev.activeTabId) return t;
-            const file = activeFileOf(t);
-            if (!file) return t;
-            const updatedFile = { ...file, scrollTop: savedScroll };
-            return t.kind === "folder" ? { ...t, file: updatedFile } : { ...t, file: updatedFile };
+            if (t.id !== prev.activeTabId || t.kind === "graph") return t;
+            return { ...t, file: { ...t.file, scrollTop: savedScroll } };
           }),
           activeTabId: id,
         };
@@ -797,11 +761,8 @@ export function useTabs(options: UseTabsOptions) {
     setState((prev) => ({
       ...prev,
       tabs: prev.tabs.map((t) => {
-        if (t.id !== id) return t;
-        const file = activeFileOf(t);
-        if (!file) return t;
-        const next = mutator(file);
-        return t.kind === "folder" ? { ...t, file: next } : { ...t, file: next };
+        if (t.id !== id || t.kind === "graph") return t;
+        return { ...t, file: mutator(t.file) };
       }),
     }));
   }, []);
@@ -988,11 +949,21 @@ export function useTabs(options: UseTabsOptions) {
     }
   }, [openFile]);
 
-  // Initialize: load CLI arg, restore tabs, or reopen last file
+  // Initialize: load CLI arg, restore workspace + tabs, or reopen last file
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only effect
   useEffect(() => {
     (async () => {
       try {
+        // A spawned secondary window was created to open one specific path.
+        // Adopt it and skip the CLI / session-restore path entirely (those
+        // belong to the primary window).
+        const injected = injectedOpen();
+        if (injected) {
+          if (injected.kind === "folder") await openFolder(injected.path);
+          else await openFile(injected.path);
+          setInitializing(false);
+          return;
+        }
         const initialFolder = await invoke<string | null>("get_initial_folder");
         if (initialFolder) {
           await openFolder(initialFolder);
@@ -1004,18 +975,29 @@ export function useTabs(options: UseTabsOptions) {
           await openFile(initialPath);
         } else if (options.openTabs.length > 0) {
           const persistedTabs = normalizePersistedTabs(options.openTabs);
+          // One workspace per window: the first folder entry wins. Extra
+          // folder entries (legacy multi-workspace sessions) are skipped.
+          const folderEntry = persistedTabs.find((t) => t.kind === "folder");
+          if (folderEntry) {
+            // Silent: if the folder became nested between sessions, skip it
+            // rather than banner the user on every launch. autoLoad off — the
+            // explicit tab list below decides what opens.
+            await openFolder(folderEntry.path, {
+              expanded: folderEntry.expanded ?? [],
+              silent: true,
+              autoLoad: false,
+            });
+            // Legacy folder tabs carried their single open file inline.
+            if (folderEntry.filePath) {
+              await openFile(folderEntry.filePath);
+            }
+          }
           for (const persisted of persistedTabs) {
-            if (persisted.kind === "folder") {
-              // Restoring a saved session: if a folder became nested or
-              // overlapping between sessions, skip it silently rather than
-              // banner the user on every launch.
-              await openFolder(persisted.path, {
-                expanded: persisted.expanded ?? [],
-                filePath: persisted.filePath,
-                silent: true,
-              });
-            } else {
+            if (persisted.kind === "file") {
               await openFile(persisted.path);
+            } else if (persisted.kind === "graph") {
+              // No-op unless the workspace restored above matches.
+              openGraph(persisted.path);
             }
           }
           // Activate the previously-active tab by its primary path
@@ -1037,24 +1019,23 @@ export function useTabs(options: UseTabsOptions) {
 
   // Listen for open-file and open-folder events (drag-drop, file associations)
   useEffect(() => {
-    const unlistenFile = listen<string>("open-file", (event) => {
+    const unsubscribeFile = subscribe<string>("open-file", (event) => {
       openFile(event.payload);
     });
-    const unlistenFolder = listen<string>("open-folder", (event) => {
+    const unsubscribeFolder = subscribe<string>("open-folder", (event) => {
       openFolder(event.payload);
     });
     return () => {
-      unlistenFile.then((fn) => fn());
-      unlistenFolder.then((fn) => fn());
+      unsubscribeFile();
+      unsubscribeFolder();
     };
   }, [openFile, openFolder]);
 
-  // Listen for file-changed events (auto-reload). Applies to any open file —
-  // top-level FileTabs and the active file inside FolderTabs alike.
+  // Listen for file-changed events (auto-reload). Applies to any open file tab.
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
 
-    const unlisten = listen<string>("file-changed", (event) => {
+    const unsubscribe = subscribe<string>("file-changed", (event) => {
       if (!optionsRef.current.autoReload) return;
       clearTimeout(timeout);
       timeout = setTimeout(async () => {
@@ -1077,13 +1058,11 @@ export function useTabs(options: UseTabsOptions) {
           setState((prev) => ({
             ...prev,
             tabs: prev.tabs.map((t) => {
-              const f = activeFileOf(t);
-              if (!f || f.path !== changedPath) return t;
+              if (t.kind === "graph" || t.file.path !== changedPath) return t;
               // External reload invalidates our edit history — replaying old
               // diffs against changed content is unsafe.
               editHistory.current.delete(t.id);
-              const next: FileState = { ...f, content, metadata };
-              return t.kind === "folder" ? { ...t, file: next } : { ...t, file: next };
+              return { ...t, file: { ...t.file, content, metadata } };
             }),
           }));
         } catch {
@@ -1094,51 +1073,46 @@ export function useTabs(options: UseTabsOptions) {
 
     return () => {
       clearTimeout(timeout);
-      unlisten.then((fn) => fn());
+      unsubscribe();
     };
   }, []);
 
-  // Listen for directory-changed events: refresh the affected folder tab's tree.
+  // Listen for directory-changed events: refresh the workspace tree + indexes.
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | null = null;
-    const unlisten = listen<string>("directory-changed", (event) => {
+    const unsubscribe = subscribe<string>("directory-changed", (event) => {
       const watchedRoot = event.payload;
       if (timeout) clearTimeout(timeout);
       timeout = setTimeout(async () => {
-        const tab = stateRef.current.tabs.find(
-          (t) => t.kind === "folder" && t.root === watchedRoot,
-        );
-        if (tab?.kind !== "folder") return;
+        const ws = workspaceRef.current;
+        if (!ws || ws.root !== watchedRoot) return;
         // Refresh root + every currently-loaded subdirectory under this root.
-        const dirsToRefresh: string[] = [tab.root];
-        for (const dir of tab.nodes.keys()) {
-          if (dir !== tab.root && isInWorkspace(dir, tab.root)) {
+        const dirsToRefresh: string[] = [ws.root];
+        for (const dir of ws.nodes.keys()) {
+          if (dir !== ws.root && isInWorkspace(dir, ws.root)) {
             dirsToRefresh.push(dir);
           }
         }
         const [fresh, freshFiles, freshRefs] = await Promise.all([
           Promise.all(dirsToRefresh.map(async (d) => [d, await loadDirectory(d)] as const)),
-          loadWorkspaceFiles(tab.root),
-          loadWikilinkRefs(tab.root),
+          loadWorkspaceFiles(ws.root),
+          loadWikilinkRefs(ws.root),
         ]);
-        setState((prev) => ({
-          ...prev,
-          tabs: prev.tabs.map((t) => {
-            if (t.id !== tab.id || t.kind !== "folder") return t;
-            const newNodes = new Map(t.nodes);
-            for (const [d, entries] of fresh) {
-              newNodes.set(d, entries);
-            }
-            return { ...t, nodes: newNodes };
-          }),
-        }));
-        setWorkspaceIndex((prev) => ({ ...prev, [tab.id]: freshFiles }));
-        setWikilinkIndex((prev) => ({ ...prev, [tab.id]: freshRefs }));
+        setWorkspace((prev) => {
+          if (!prev || prev.root !== watchedRoot) return prev;
+          const newNodes = new Map(prev.nodes);
+          for (const [d, entries] of fresh) {
+            newNodes.set(d, entries);
+          }
+          return { ...prev, nodes: newNodes };
+        });
+        setWorkspaceFiles(freshFiles);
+        setWikilinkRefs(freshRefs);
       }, DIRECTORY_REFRESH_DEBOUNCE);
     });
     return () => {
       if (timeout) clearTimeout(timeout);
-      unlisten.then((fn) => fn());
+      unsubscribe();
     };
   }, [loadDirectory, loadWikilinkRefs, loadWorkspaceFiles]);
 
@@ -1148,11 +1122,13 @@ export function useTabs(options: UseTabsOptions) {
     activeTabId,
     activeFile,
     initializing,
+    workspace,
     workspaceFiles,
     wikilinkRefs,
     openFile,
     openFolder,
-    openFileInFolderTab,
+    openGraph,
+    closeWorkspace,
     toggleExpand,
     createNote,
     createCanvas,

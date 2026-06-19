@@ -1,14 +1,15 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCallback, useRef } from "react";
+import { CollapseAllIcon } from "@/components/icons/CollapseAllIcon";
+import { ExpandAllIcon } from "@/components/icons/ExpandAllIcon";
+import { NewFolderIcon } from "@/components/icons/NewFolderIcon";
+import { NewNoteIcon } from "@/components/icons/NewNoteIcon";
+import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { useActiveHeading } from "@/hooks/useActiveHeading";
-import type { Tab } from "@/hooks/useTabs";
-import { CollapseAllIcon } from "../icons/CollapseAllIcon";
-import { ExpandAllIcon } from "../icons/ExpandAllIcon";
-import { NewFolderIcon } from "../icons/NewFolderIcon";
-import { NewNoteIcon } from "../icons/NewNoteIcon";
+import type { Workspace } from "@/hooks/useTabs";
 import { BacklinksSection } from "./BacklinksSection";
 import { EdgeExpand } from "./EdgeExpand";
 import { FileTree, type FileTreeHandle } from "./FileTree";
@@ -26,11 +27,13 @@ const DEFAULT_WIDTH = 224;
 export function Sidebar({ side }: SidebarProps) {
   const {
     activeTab,
+    activeFile,
+    workspace,
     tocEntries,
     backlinks,
     toggleExpand: onToggleExpand,
-    openFileInFolderTab: onOpenFileInTab,
-    openFile: onOpenFileInNewTab,
+    openFile: onOpenFile,
+    closeWorkspace,
     createNote,
     createCanvas,
     createFolder,
@@ -45,9 +48,9 @@ export function Sidebar({ side }: SidebarProps) {
 
   // "Move to…": pick a destination folder (within the workspace), then relocate.
   const handleMove = useCallback(
-    async (tabId: string, root: string, from: string) => {
+    async (root: string, from: string) => {
       const dir = await open({ directory: true, defaultPath: root });
-      if (typeof dir === "string") movePath(tabId, from, dir);
+      if (typeof dir === "string") movePath(from, dir);
     },
     [movePath],
   );
@@ -62,7 +65,9 @@ export function Sidebar({ side }: SidebarProps) {
   } = useSidebarLayoutContext();
   const activeId = useActiveHeading(tocEntries);
 
-  if (!activeTab) return null;
+  // The files panel follows the window's workspace; the outline follows the
+  // active document. With neither there is nothing to show.
+  if (!workspace && !activeTab) return null;
   const w = sidebarWidth ?? DEFAULT_WIDTH;
   const hasOutlineContent = tocEntries.length > 0;
   const showOutline = outlineVisible && hasOutlineContent;
@@ -77,13 +82,10 @@ export function Sidebar({ side }: SidebarProps) {
   // Helpers for the file-tree + outline content blocks.
   const folderName = (root: string) => root.split(/[\\/]/).filter(Boolean).pop() ?? root;
 
-  const renderFilesBlock = (
-    folder: Extract<Tab, { kind: "folder" }>,
-    headerSide: "left" | "right",
-  ) => (
+  const renderFilesBlock = (ws: Workspace, headerSide: "left" | "right") => (
     <div className="px-3 pb-3 flex-1 flex flex-col min-h-0">
       <PanelHeader
-        label={folderName(folder.root)}
+        label={folderName(ws.root)}
         side={headerSide}
         onCollapse={onToggleFiles}
         collapseTitle="Hide files sidebar"
@@ -95,45 +97,43 @@ export function Sidebar({ side }: SidebarProps) {
             <ToolbarButton title="New folder" onClick={() => fileTreeRef.current?.createFolder()}>
               <NewFolderIcon />
             </ToolbarButton>
-            {folder.expanded.size > 0 ? (
-              <ToolbarButton title="Collapse all" onClick={() => collapseAll(folder.id)}>
+            {ws.expanded.size > 0 ? (
+              <ToolbarButton title="Collapse all" onClick={() => collapseAll()}>
                 <CollapseAllIcon />
               </ToolbarButton>
             ) : (
-              <ToolbarButton title="Expand all" onClick={() => expandAll(folder.id)}>
+              <ToolbarButton title="Expand all" onClick={() => expandAll()}>
                 <ExpandAllIcon />
               </ToolbarButton>
             )}
+            <ToolbarButton title="Close workspace" onClick={closeWorkspace}>
+              <TabCloseIcon />
+            </ToolbarButton>
           </>
         }
       />
       <FileTree
         ref={fileTreeRef}
-        root={folder.root}
-        nodes={folder.nodes}
-        expanded={folder.expanded}
-        activeFilePath={folder.file?.path}
-        onToggle={(path) => onToggleExpand(folder.id, path)}
-        onOpenFile={(path) => onOpenFileInTab(folder.id, path)}
-        onOpenFileInNewTab={onOpenFileInNewTab}
-        onCreateNote={(dir) => createNote(folder.id, dir)}
-        onCreateCanvas={(dir) => createCanvas(folder.id, dir)}
-        onCreateFolder={(dir) => createFolder(folder.id, dir)}
-        onRename={(path, newName) => renamePath(folder.id, path, newName)}
-        onDuplicate={(path) => duplicatePath(folder.id, path)}
-        onMove={(path) => handleMove(folder.id, folder.root, path)}
+        root={ws.root}
+        nodes={ws.nodes}
+        expanded={ws.expanded}
+        activeFilePath={activeFile?.path}
+        onToggle={onToggleExpand}
+        onOpenFile={onOpenFile}
+        onCreateNote={createNote}
+        onCreateCanvas={createCanvas}
+        onCreateFolder={createFolder}
+        onRename={renamePath}
+        onDuplicate={duplicatePath}
+        onMove={(path) => handleMove(ws.root, path)}
         onReveal={(path) => {
           void revealItemInDir(path);
         }}
-        onDelete={(path) => deletePath(folder.id, path)}
+        onDelete={deletePath}
       />
       {backlinks.length > 0 && (
         <div className="mt-4 pt-3 border-t border-[var(--color-border)]">
-          <BacklinksSection
-            backlinks={backlinks}
-            workspaceRoot={folder.root}
-            onOpen={(path) => onOpenFileInTab(folder.id, path)}
-          />
+          <BacklinksSection backlinks={backlinks} workspaceRoot={ws.root} onOpen={onOpenFile} />
         </div>
       )}
     </div>
@@ -151,16 +151,14 @@ export function Sidebar({ side }: SidebarProps) {
     </div>
   );
 
-  if (activeTab.kind === "folder") {
-    const folderTab = activeTab;
-
+  if (workspace) {
     if (sidebarLayout === "combined") {
       // Single panel on the primary side, Files + Outline stacked.
       if (side !== primarySide) return null;
       if (filesVisible || showOutline) {
         return (
           <SidebarPanel width={w} side={primarySide}>
-            {filesVisible && renderFilesBlock(folderTab, primarySide)}
+            {filesVisible && renderFilesBlock(workspace, primarySide)}
             {filesVisible && showOutline && (
               <div className="border-t border-[var(--color-border)] pt-3">
                 {renderOutlineBlock(primarySide)}
@@ -187,7 +185,7 @@ export function Sidebar({ side }: SidebarProps) {
       if (side !== primarySide) return null;
       const filesPanel = filesVisible ? (
         <SidebarPanel width={w} side={primarySide}>
-          {renderFilesBlock(folderTab, primarySide)}
+          {renderFilesBlock(workspace, primarySide)}
         </SidebarPanel>
       ) : (
         <EdgeExpand
@@ -223,7 +221,7 @@ export function Sidebar({ side }: SidebarProps) {
       if (filesVisible) {
         return (
           <SidebarPanel width={w} side={filesSide}>
-            {renderFilesBlock(folderTab, filesSide)}
+            {renderFilesBlock(workspace, filesSide)}
           </SidebarPanel>
         );
       }
@@ -256,7 +254,7 @@ export function Sidebar({ side }: SidebarProps) {
     return null;
   }
 
-  // File tab: outline is the only sidebar; rendered on the primary side.
+  // No workspace: outline is the only sidebar; rendered on the primary side.
   if (side !== primarySide) return null;
   if (showOutline) {
     return (

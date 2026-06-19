@@ -100,6 +100,12 @@ describe("buildWikilinkCompletions", () => {
     const cooking = completions.find((c) => c.label === "Cooking");
     expect(cooking?.detail).toBe("Notes/Cooking.md");
   });
+
+  it("uses the file basename as detail when no workspace root is set", () => {
+    const completions = buildWikilinkCompletions(["/some/dir/Cooking.md"], undefined, "");
+    const cooking = completions.find((c) => c.label === "Cooking");
+    expect(cooking?.detail).toBe("Cooking.md");
+  });
 });
 
 function runSource(doc: string, cursor: number, files: string[], explicit = false) {

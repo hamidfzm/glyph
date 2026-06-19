@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useState } from "react";
-import { MARKDOWN_EXTENSIONS } from "../lib/markdownExtensions";
+import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
+import { subscribe } from "@/lib/tauriEvent";
 
 interface FileMetadata {
   name: string;
@@ -103,11 +103,11 @@ export function useFileLoader(options?: {
 
   // Also listen for open-file events (e.g. from file associations)
   useEffect(() => {
-    const unlisten = listen<string>("open-file", (event) => {
+    const unsubscribe = subscribe<string>("open-file", (event) => {
       loadFile(event.payload);
     });
     return () => {
-      unlisten.then((fn) => fn());
+      unsubscribe();
     };
   }, [loadFile]);
 

@@ -26,3 +26,6 @@ foreach ($lnk in $shortcuts) {
     Remove-Item -LiteralPath $lnk -Force -ErrorAction SilentlyContinue
   }
 }
+
+# Remove the `glyph` PATH shim created by chocolateyinstall.ps1.
+Uninstall-BinFile -Name 'glyph'

@@ -2,8 +2,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS } from "@/lib/settings";
-import { TabsProvider, useTabsContext } from "./TabsContext";
+import {
+  TabsContext,
+  type TabsContextValue,
+  TabsProvider,
+  useTabsContext,
+  useWorkspaceRoot,
+} from "./TabsContext";
 
 // Mock invoke so opening a file resolves with content/metadata. `read_file`
 // echoes a marker derived from the path so we can assert which file is active.
@@ -36,11 +41,9 @@ beforeEach(() => {
 });
 
 function wrap() {
-  return ({ children }: { children: ReactNode }) => (
-    <TabsProvider settings={DEFAULT_SETTINGS} updateSettings={vi.fn()}>
-      {children}
-    </TabsProvider>
-  );
+  // TabsProvider reads settings from SettingsContext, which defaults to
+  // DEFAULT_SETTINGS when no SettingsProvider is mounted.
+  return ({ children }: { children: ReactNode }) => <TabsProvider>{children}</TabsProvider>;
 }
 
 describe("TabsProvider", () => {
@@ -164,5 +167,32 @@ describe("TabsProvider", () => {
       expect(result.current.activeTab.file.path).toBe("/cli/file.md");
       expect(result.current.activeTab.file.content).toBe("# Hello");
     }
+  });
+});
+
+describe("useWorkspaceRoot", () => {
+  it("returns undefined when no provider is mounted", () => {
+    const { result } = renderHook(() => useWorkspaceRoot());
+    expect(result.current).toBeUndefined();
+  });
+
+  it("returns the open workspace root from the tabs context", () => {
+    const tabs = { workspace: { root: "/repo" } } as unknown as TabsContextValue;
+    const { result } = renderHook(() => useWorkspaceRoot(), {
+      wrapper: ({ children }) => (
+        <TabsContext.Provider value={tabs}>{children}</TabsContext.Provider>
+      ),
+    });
+    expect(result.current).toBe("/repo");
+  });
+
+  it("returns undefined when no folder workspace is open", () => {
+    const tabs = { workspace: null } as unknown as TabsContextValue;
+    const { result } = renderHook(() => useWorkspaceRoot(), {
+      wrapper: ({ children }) => (
+        <TabsContext.Provider value={tabs}>{children}</TabsContext.Provider>
+      ),
+    });
+    expect(result.current).toBeUndefined();
   });
 });

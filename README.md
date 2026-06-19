@@ -32,16 +32,18 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - GitHub-style alerts — `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`
 - Heading anchor links — every heading gets a GitHub-compatible slug; `[text](#heading)` scrolls smoothly to the target
 - Wikilinks — `[[note]]`, `[[note|alias]]`, `[[note#heading]]` resolve against the open folder workspace; broken links render with a distinct style
+- Relative links — `[text](./note.md)`, `[text](../folder/board.canvas)`, and relative image paths resolve against the document's folder (including `../`) and open in-app, anywhere inside the open workspace; targets that would escape the workspace folder are not followed
 - Backlinks panel — sidebar list of every workspace note that links to the current file, with surrounding-line snippets
 - Syntax highlighting for code blocks (6 themes: Glyph, GitHub, Monokai, Nord, Solarized Light/Dark)
 - Copy button on code blocks
 - Math/LaTeX rendering — inline (`$...$`) and block (`$$...$$`) equations via KaTeX
 - Mermaid diagrams — flowcharts, sequence diagrams, Gantt charts, and more (theme-aware); `.mmd` source files open directly as diagrams
 - CSV/TSV tables — ` ```csv ` and ` ```tsv ` code blocks render as styled, scrollable tables
-- Inline HTML — `<kbd>`, `<sub>`, `<sup>`, `<details>`, alignment attributes (sanitised allowlist)
+- Inline HTML — `<kbd>`, `<sub>`, `<sup>`, `<details>`, inline `<svg>` drawings, alignment attributes (sanitised allowlist)
 - YAML frontmatter — title, author, date, and tags render as a metadata block above the document; tags get a per-tag colour
 - Emoji shortcodes — `:smile:` → 😊, `:+1:` → 👍
 - Local and remote image display
+- Image lightbox — click any image to view it full-size over a dark backdrop, with zoom controls (fit, actual size, zoom in/out), arrow-key navigation between the document's images, and Escape or click-outside to close
 - External links open in system browser with optional confirmation dialog
 
 ### Editor
@@ -54,7 +56,8 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 ### Viewer
 - Jupyter notebooks — open `.ipynb` files directly; markdown cells render with full markdown (math, code, diagrams), code cells are syntax-highlighted, and image, HTML, plain-text, and colourised stream/traceback outputs show under each cell with `In [n]:` / `Out [n]:` prompts (read-only)
 - Canvas — open [JSON Canvas](https://jsoncanvas.org) (`.canvas`) files as an infinite, pan-and-zoom board; cards render markdown, embedded images, links, and labelled groups, connected by arrows. View mode is read-only; switch to edit mode to move, resize, recolour (presets or any custom colour), and connect cards, edit text and connection labels inline, and add or delete nodes and edges via toolbar, double-click, or right-click menus. Task-list checkboxes toggle right on the cards in either mode. File → Export saves the board as a self-contained vector HTML page or a board-sized vector PDF (both keep the 1:1 spatial layout, with selectable text), or as a Word or EPUB document with the cards laid out as a flowing article. Edits save back as standard `.canvas` JSON that round-trips with Obsidian, with undo/redo per tab
-- Folder / workspace tabs — open a folder as a tab; browse `.md` and `.canvas` files in the sidebar tree; right-click a file to open it in a new top-level tab. Right-click a folder, a file, or the empty panel to create a new note, canvas, or folder there, then type its name inline. Right-click any note, canvas, or folder to rename, duplicate, move, copy its path, reveal it in the system file manager, or delete it (with confirmation), and use the files-panel toolbar for new note, new folder, and collapse all. One folder is one workspace (a git repository's top level): a folder nested inside another repo, or overlapping an already-open one, is declined so links and search have an unambiguous scope
+- Folder workspaces — open a folder and it becomes the window's workspace: the sidebar tree shows its `.md` and `.canvas` files, and clicking a note opens it as a regular tab, so any number of workspace notes can be open side by side (loose external files mix into the same tab strip). Wikilinks, backlinks, the graph, and the command palette always resolve against the open workspace, whichever tab is active. Right-click a folder, a file, or the empty panel to create a new note, canvas, or folder there, then type its name inline. Right-click any note, canvas, or folder to rename, duplicate, move, copy its path, reveal it in the system file manager, or delete it (with confirmation), and use the files-panel toolbar for new note, new folder, collapse all, and close workspace. One window holds one workspace (a git repository's top level): opening a different folder opens it in its own window (a folder that's already open is focused instead), so a second workspace never replaces the one you're in. A single file opened from outside the workspace shows as a distinct "loose" tab, marking it as an independent document rather than part of the project tree. A folder nested inside another Glyph workspace is declined so links and search have an unambiguous scope
+- Graph view — `Cmd/Ctrl+G` (or View → Open Graph) maps the workspace as a force-directed graph: notes are nodes, wikilinks are edges, orphan notes render muted. Hover a note to highlight its neighbours, click to open it, drag to pan, scroll to zoom, and reset the view with one button. The graph updates live as notes change
 - Multiple files in tabs — open, switch, close, middle-click to close
 - Command palette — `Cmd/Ctrl+K` to fuzzy-jump to any workspace file, document heading, or app action
 - In-document search — `Cmd/Ctrl+F` with match highlighting and navigation
@@ -101,8 +104,11 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 
 ```bash
 brew tap hamidfzm/tap
+brew trust hamidfzm/tap
 brew install --cask glyph
 ```
+
+`brew trust` is required once because Glyph ships from a third-party tap; recent Homebrew refuses to load casks from untrusted taps.
 
 ### Windows (Chocolatey)
 
@@ -115,6 +121,12 @@ choco install glyph
 ```powershell
 scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
 scoop install glyph
+```
+
+### Linux (Snap)
+
+```bash
+sudo snap install glyph
 ```
 
 ### Arch Linux (AUR)
@@ -160,6 +172,17 @@ chmod +x Glyph_*.AppImage
 ./Glyph_*.AppImage
 ```
 
+### Command-line usage
+
+Installing from a package manager puts a `glyph` command on your `PATH`:
+
+```bash
+glyph README.md      # open a file
+glyph ~/notes/       # open a folder as a workspace
+```
+
+The command is provided by the Homebrew cask (macOS), Chocolatey or Scoop (Windows), and the deb package or Homebrew formula (Linux). The macOS `.dmg` and Windows MSI install the app only; use a package manager for the terminal command.
+
 ## Development
 
 ```bash
@@ -204,6 +227,7 @@ cd src-tauri && cargo clippy    # Lint Rust
 | `Cmd+O` / `Ctrl+O` | Open file(s) |
 | `Cmd+Shift+O` / `Ctrl+Shift+O` | Open folder |
 | `Cmd+K` / `Ctrl+K` | Command palette (files, headings, app actions) |
+| `Cmd+G` / `Ctrl+G` | Open workspace graph |
 | `Cmd+P` / `Ctrl+P` | Print / Export to PDF |
 | `Cmd+F` / `Ctrl+F` | Find in document |
 | `Cmd+=` / `Ctrl+=` | Zoom in |
@@ -251,6 +275,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Tabs | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ |
 | Folder / workspace (vault) sidebar | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
 | Wikilinks & backlinks | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | plugin |
+| Graph view | ✅ | ✅ | ❌ | ❌ | ❌ | plugin | plugin |
 | Tag / metadata search | planned | ✅ | ❌ | ❌ | ✅ | ✅ | plugin |
 | Command palette | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | In-document search | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |

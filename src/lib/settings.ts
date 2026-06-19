@@ -60,7 +60,8 @@ export function nextEditorMode(current: EditorMode | undefined): EditorMode {
 }
 
 export interface PersistedTab {
-  kind: "file" | "folder";
+  kind: "file" | "folder" | "graph";
+  // File path for file tabs; workspace root for folder and graph tabs.
   path: string;
   filePath?: string;
   expanded?: string[];

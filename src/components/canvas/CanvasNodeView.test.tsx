@@ -2,6 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { CanvasNode } from "@/lib/canvas/types";
+import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { CanvasNodeView } from "./CanvasNodeView";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
@@ -105,5 +106,52 @@ describe("CanvasNodeView", () => {
     fireEvent.click(screen.getByText("doc.md"));
     expect(onOpenFile).not.toHaveBeenCalled();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("opens a ../ markdown file node at its resolved absolute path", () => {
+    const onOpenFile = vi.fn();
+    const node: CanvasNode = { ...base, type: "file", file: "../notes/todo.md" };
+    renderInWorkspace(
+      <CanvasNodeView node={node} canvasPath="/ws/board/diagram.canvas" onOpenFile={onOpenFile} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "todo.md" }));
+    expect(onOpenFile).toHaveBeenCalledWith("/ws/notes/todo.md");
+  });
+
+  it("opens a ../ canvas file node as a canvas at its resolved path", () => {
+    const onOpenFile = vi.fn();
+    const node: CanvasNode = { ...base, type: "file", file: "../other.canvas" };
+    renderInWorkspace(
+      <CanvasNodeView node={node} canvasPath="/ws/a/board.canvas" onOpenFile={onOpenFile} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "other.canvas" }));
+    expect(onOpenFile).toHaveBeenCalledWith("/ws/other.canvas");
+  });
+
+  it("renders an inert card for a file node that escapes the workspace root", () => {
+    const onOpenFile = vi.fn();
+    const node: CanvasNode = { ...base, type: "file", file: "../../secret/todo.md" };
+    renderInWorkspace(
+      <CanvasNodeView node={node} canvasPath="/ws/board/diagram.canvas" onOpenFile={onOpenFile} />,
+    );
+    expect(screen.getByText("todo.md")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(onOpenFile).not.toHaveBeenCalled();
+  });
+
+  it("does not render an image whose path escapes the workspace root", () => {
+    const node: CanvasNode = { ...base, type: "file", file: "../../secret/pic.png" };
+    renderInWorkspace(<CanvasNodeView node={node} canvasPath="/ws/board/diagram.canvas" />);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByText("pic.png")).toBeInTheDocument();
+  });
+
+  it("refuses an unresolvable file node when a workspace root is set but the canvas path is unknown", () => {
+    const onOpenFile = vi.fn();
+    const node: CanvasNode = { ...base, type: "file", file: "../secret/todo.md" };
+    renderInWorkspace(<CanvasNodeView node={node} onOpenFile={onOpenFile} />);
+    expect(screen.getByText("todo.md")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(onOpenFile).not.toHaveBeenCalled();
   });
 });

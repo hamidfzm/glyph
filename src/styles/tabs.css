@@ -19,6 +19,7 @@
 }
 
 .tab-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -66,6 +67,26 @@
 .tab-label {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Loose file: a document opened from outside the workspace. Italic label plus a
+   thin accent bar on the leading edge mark it as an independent file, not part
+   of the project tree (JetBrains non-project-file style). */
+.tab-item[data-loose] .tab-label {
+  font-style: italic;
+}
+
+.tab-item[data-loose]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 60%;
+  border-radius: 1px;
+  background: var(--color-accent);
+  opacity: 0.7;
 }
 
 .tab-close {

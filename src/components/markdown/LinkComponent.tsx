@@ -1,12 +1,19 @@
 import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { type ComponentPropsWithoutRef, useCallback, useContext } from "react";
+import { ExternalLinkIcon } from "@/components/icons/ExternalLinkIcon";
 import { SettingsContext } from "@/contexts/SettingsContext";
+import { isOpenableRelativeHref } from "@/lib/relativePath";
 import { scrollToHeading } from "@/lib/scrollToHeading";
-import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 
 export interface LinkComponentProps extends ComponentPropsWithoutRef<"a"> {
   onOpenWikilink?: (path: string, heading?: string) => void;
+  /**
+   * Open a relative markdown/canvas link in the workspace. Only provided when a
+   * folder workspace is open; absent in single-file mode, where relative links
+   * fall through to the browser as before.
+   */
+  onOpenRelativeFile?: (href: string) => void;
 }
 
 export function LinkComponent(props: LinkComponentProps) {
@@ -16,6 +23,7 @@ export function LinkComponent(props: LinkComponentProps) {
     href,
     children,
     onOpenWikilink,
+    onOpenRelativeFile,
     node: _node,
     ...rest
   } = props as LinkComponentProps & {
@@ -54,6 +62,14 @@ export function LinkComponent(props: LinkComponentProps) {
         return;
       }
 
+      // A relative link to a workspace document opens in-app instead of the
+      // browser. Resolution and root-clamping happen in the provided callback.
+      if (onOpenRelativeFile && isOpenableRelativeHref(href)) {
+        e.preventDefault();
+        onOpenRelativeFile(href);
+        return;
+      }
+
       e.preventDefault();
 
       if (settings.behavior.confirmExternalLinks) {
@@ -75,6 +91,7 @@ export function LinkComponent(props: LinkComponentProps) {
       wikilinkPath,
       wikilinkHeading,
       onOpenWikilink,
+      onOpenRelativeFile,
       settings.behavior.confirmExternalLinks,
     ],
   );
@@ -88,7 +105,9 @@ export function LinkComponent(props: LinkComponentProps) {
     );
   }
 
-  const isExternal = href && !href.startsWith("#");
+  // In-app relative links are not external, so they don't get the launch icon.
+  const isInternalRelative = !!onOpenRelativeFile && isOpenableRelativeHref(href);
+  const isExternal = href && !href.startsWith("#") && !isInternalRelative;
 
   return (
     <a href={href} onClick={handleClick} {...rest}>

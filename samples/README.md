@@ -240,6 +240,31 @@ Hidden content lives inside `<details>` blocks. Useful for FAQs, troubleshooting
 
 ![Forest path](https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&h=400&fit=crop)
 
+### Local Images
+
+Relative paths resolve against this file's folder, so SVGs and other images committed next to your notes render inline:
+
+![Glyph turns Markdown into styled documents](./diagram.svg)
+
+Click any image to open it in the lightbox: zoom in/out, fit or actual size, and use the arrow keys to move between them. Press `Esc` or click the backdrop to close.
+
+### Inline SVG
+
+You can also embed SVG straight into the markdown. It renders inline from a sanitised allowlist (shapes, gradients, and text — no scripts or external references), which is handy for small, theme-friendly diagrams:
+
+<svg viewBox="0 0 320 120" width="320" height="120" role="img" aria-label="Inline SVG gradient badge">
+  <defs>
+    <linearGradient id="demo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366f1" />
+      <stop offset="1" stop-color="#0ea5e9" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="312" height="112" rx="16" fill="url(#demo)" />
+  <circle cx="64" cy="60" r="34" fill="#ffffff" fill-opacity="0.18" />
+  <path d="M50 60 l10 10 l20 -24" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+  <text x="190" y="68" text-anchor="middle" font-family="sans-serif" font-size="24" font-weight="700" fill="#ffffff">Inline SVG</text>
+</svg>
+
 ## Links
 
 - [Glyph on GitHub](https://github.com/hamidfzm/glyph) — External links open in your system browser
@@ -257,9 +282,41 @@ When you open a folder as a workspace, `[[note]]` style links resolve to other m
 
 Opening this file on its own (no folder) treats every wikilink as broken.
 
+### Relative links
+
+Standard markdown links with relative paths resolve against this document's
+folder and open in the workspace, including paths that walk up with `../`. With
+the `samples/` folder open, these all open in-app:
+
+- [the index](./Index.md) — a sibling markdown file
+- [kitchen notes](Notes/Cooking.md) — a file in a subfolder
+- [the canvas demo](./canvas-demo.canvas) — opens as a canvas board
+
+Relative image paths resolve the same way. This SVG sits in a sibling folder:
+
+![A relative image from a sibling folder](./assets/relative-image.svg)
+
+`../` and `../../` are best seen from a nested note, where they have somewhere
+to climb to:
+
+- [Notes/Relative-Links](Notes/Relative-Links.md) — one level deep; uses `../` to reach the root
+- [Notes/Deep/Deeper-Relative-Links](Notes/Deep/Deeper-Relative-Links.md) — two levels deep; uses `../../`
+
+Targets that resolve **outside** the open folder are refused. From this root
+README, `../` already points above `samples/`, so links like
+`[escape](../outside.md)` and images like `![](../outside.svg)` are not
+followed and render nothing. Opening any of these files on its own (no folder)
+leaves every relative link to the browser instead.
+
 ### Backlinks
 
 When you have the `samples/` folder open, the **Backlinks** section under the file tree lists every other note that links to the current document. This file is referenced from [[Index]] and [[Notes/Cooking]], so opening either of them will show *this* file in their backlinks panel.
+
+### Graph view
+
+With the `samples/` folder open, press `Cmd/Ctrl+G` (or View → Open Graph) to see this workspace as a graph: every note is a node, every wikilink an edge. Hover a node to highlight its neighbours, click one to open that note, drag to pan, and scroll to zoom. `Missing` targets never appear (broken links are dropped), and notes nothing links to render muted.
+
+This workspace is wired to make the graph worth a look: [[Index]] and [[Graph View]] act as hubs, the cooking notes ([[Notes/Cooking]], [[Ingredients]], [[Techniques]]) form a tight cluster, and `Scratchpad` sits off on its own as a muted orphan. The [[Graph View]] note is a full walkthrough of the feature.
 
 ### Wikilink autocomplete
 
@@ -303,6 +360,7 @@ Create a fresh board from the file tree: right-click a folder (or the empty pane
 | `Cmd+O` | Open file(s) |
 | `Cmd+Shift+O` | Open folder |
 | `Cmd+K` | Command palette |
+| `Cmd+G` | Workspace graph |
 | `Cmd+P` | Print / Export to PDF |
 | `Cmd+F` | Find in document |
 | `Cmd+=` / `Cmd+-` | Zoom in / out |

@@ -4,15 +4,15 @@ class Glyph < Formula
   license "MIT"
   version "{{VERSION}}"
 
-  on_linux do
-    if Hardware::CPU.intel?
-      url "https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/Glyph_{{VERSION}}_amd64.deb"
-      sha256 "{{SHA256_AMD64}}"
-    end
-    if Hardware::CPU.arm?
-      url "https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/Glyph_{{VERSION}}_arm64.deb"
-      sha256 "{{SHA256_ARM64}}"
-    end
+  # url/sha256 must be defined at the top level so the formula parses on every
+  # platform (otherwise macOS taps fail with "formula requires at least a URL").
+  # `depends_on :linux` is what keeps this Linux-only at install time.
+  if Hardware::CPU.arm?
+    url "https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/Glyph_{{VERSION}}_arm64.deb"
+    sha256 "{{SHA256_ARM64}}"
+  else
+    url "https://github.com/hamidfzm/glyph/releases/download/v{{VERSION}}/Glyph_{{VERSION}}_amd64.deb"
+    sha256 "{{SHA256_AMD64}}"
   end
 
   depends_on :linux
