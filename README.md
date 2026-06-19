@@ -121,6 +121,12 @@ scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
 scoop install glyph
 ```
 
+### Linux (Snap)
+
+```bash
+sudo snap install glyph
+```
+
 ### Arch Linux (AUR)
 
 ```bash
