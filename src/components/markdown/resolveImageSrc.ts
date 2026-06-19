@@ -1,6 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { isPathInside } from "@/lib/paths";
-import { normalizeRelativePath } from "@/lib/relativePath";
+import { resolveWorkspacePath } from "@/lib/relativePath";
 
 // Strip a Windows verbatim ("\\?\", or UNC "\\?\UNC\") path prefix. The backend
 // hands us canonicalized paths, which on Windows carry this prefix; it tells the
@@ -24,9 +23,8 @@ export function resolveImageSrc(
   if (!src) return src;
   if (/^(https?:|data:)/i.test(src)) return src;
   if (filePath) {
-    const resolved = normalizeRelativePath(filePath, src);
-    if (root && !isPathInside(resolved, root)) return undefined;
-    return convertFileSrc(stripVerbatimPrefix(resolved));
+    const resolved = resolveWorkspacePath(filePath, src, root);
+    return resolved === null ? undefined : convertFileSrc(stripVerbatimPrefix(resolved));
   }
   return src;
 }

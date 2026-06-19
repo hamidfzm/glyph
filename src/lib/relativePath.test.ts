@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isOpenableRelativeHref, isRelativeLocalHref, normalizeRelativePath } from "./relativePath";
+import {
+  isOpenableRelativeHref,
+  isRelativeLocalHref,
+  normalizeRelativePath,
+  resolveWorkspacePath,
+} from "./relativePath";
 
 describe("normalizeRelativePath", () => {
   it("joins a bare relative path onto the document's directory", () => {
@@ -76,6 +81,26 @@ describe("isRelativeLocalHref", () => {
     "",
   ])("treats %s as not a relative local href", (href) => {
     expect(isRelativeLocalHref(href)).toBe(false);
+  });
+});
+
+describe("resolveWorkspacePath", () => {
+  it("resolves a relative target against the document directory", () => {
+    expect(resolveWorkspacePath("/ws/notes/doc.md", "../other.md", "/ws")).toBe("/ws/other.md");
+  });
+
+  it("returns null when the target escapes the root", () => {
+    expect(resolveWorkspacePath("/ws/notes/doc.md", "../../etc/passwd", "/ws")).toBeNull();
+  });
+
+  it("does not clamp when no root is given (single-file mode)", () => {
+    expect(resolveWorkspacePath("/ws/notes/doc.md", "../../etc/passwd", undefined)).toBe(
+      "/etc/passwd",
+    );
+  });
+
+  it("drops a trailing #heading", () => {
+    expect(resolveWorkspacePath("/ws/doc.md", "./other.md#section", "/ws")).toBe("/ws/other.md");
   });
 });
 

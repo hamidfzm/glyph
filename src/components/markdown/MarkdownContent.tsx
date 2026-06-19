@@ -13,8 +13,7 @@ import { useWorkspaceRoot } from "@/contexts/WorkspaceRootContext";
 import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
 import { useKatexPlugin } from "@/hooks/useKatexPlugin";
 import { parseFrontmatter } from "@/lib/frontmatter";
-import { isPathInside } from "@/lib/paths";
-import { normalizeRelativePath } from "@/lib/relativePath";
+import { resolveWorkspacePath } from "@/lib/relativePath";
 import { remarkWikilink } from "@/lib/wikilink";
 import { CodeBlockComponent } from "./CodeBlockComponent";
 import { FrontmatterBlock } from "./FrontmatterBlock";
@@ -67,8 +66,8 @@ export function MarkdownContent({
   const handleOpenRelativeFile = useCallback(
     (href: string) => {
       if (!filePath || !workspaceRoot || !onOpenRelativeFile) return;
-      const resolved = normalizeRelativePath(filePath, href);
-      if (isPathInside(resolved, workspaceRoot)) onOpenRelativeFile(resolved);
+      const resolved = resolveWorkspacePath(filePath, href, workspaceRoot);
+      if (resolved) onOpenRelativeFile(resolved);
     },
     [filePath, workspaceRoot, onOpenRelativeFile],
   );

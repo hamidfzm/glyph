@@ -1,11 +1,12 @@
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
+import { isPathInside } from "@/lib/paths";
 
 // Resolving relative file references (markdown links, image sources, canvas
-// file nodes) against the directory of the document that contains them. Pair
-// these with isPathInside from @/lib/paths to constrain the result to the
-// opened workspace folder. The same helpers back every relative-path feature so
-// link, image, and canvas resolution stay byte-for-byte consistent.
+// file nodes) against the directory of the document that contains them, and
+// constraining the result to the opened workspace folder. resolveWorkspacePath
+// is the one entry point that pairs resolution with the root clamp, so link,
+// image, and canvas resolution stay byte-for-byte consistent.
 
 // Resolve a relative `target` against the directory of `docPath`, collapsing
 // `.` and `..` segments. `docPath` is an absolute file path; the result keeps
@@ -32,6 +33,21 @@ export function normalizeRelativePath(docPath: string, target: string): string {
     out.push(seg);
   }
   return lead + out.join(sep);
+}
+
+// Resolve a relative `target` against `docPath`'s directory and clamp it to the
+// opened workspace `root`. Returns the absolute in-workspace path, or null when
+// `root` is set and the target escapes it. With no `root` (single-file mode),
+// resolution is unconstrained. This is the single resolve+clamp entry point for
+// markdown links and images; callers handle the no-`docPath` case themselves.
+export function resolveWorkspacePath(
+  docPath: string,
+  target: string,
+  root: string | undefined,
+): string | null {
+  const resolved = normalizeRelativePath(docPath, target);
+  if (root && !isPathInside(resolved, root)) return null;
+  return resolved;
 }
 
 // Whether an `href` is a relative local path (and therefore a candidate for

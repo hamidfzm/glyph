@@ -98,13 +98,8 @@ export function CanvasNodeView({
     }
 
     case "file": {
-      const resolved = resolveRelative(node.file, canvasPath);
-      // A file ref that resolves outside the opened workspace is refused: the
-      // image isn't loaded and the open button degrades to an inert card. With
-      // no canvasPath, `resolved` is the raw relative ref, which `isPathInside`
-      // correctly reports as outside the root, so it's refused too.
-      const outsideRoot = !!workspaceRoot && !isPathInside(resolved, workspaceRoot);
-
+      // Images resolve and root-clamp inside resolveImageSrc, so this branch
+      // returns before the button-only resolution below runs.
       if (IMAGE_EXT.test(node.file)) {
         const src = resolveImageSrc(node.file, canvasPath, workspaceRoot);
         if (!src) {
@@ -116,6 +111,12 @@ export function CanvasNodeView({
         }
         return <img className="glyph-canvas-node-image" src={src} alt={fileBasename(node.file)} />;
       }
+      const resolved = resolveRelative(node.file, canvasPath);
+      // A file ref that resolves outside the opened workspace is refused: the
+      // open button degrades to an inert card. With no canvasPath, `resolved`
+      // is the raw relative ref, which `isPathInside` reports as outside the
+      // root, so it's refused too.
+      const outsideRoot = !!workspaceRoot && !isPathInside(resolved, workspaceRoot);
       const name = <span className="glyph-canvas-node-file-name">{fileBasename(node.file)}</span>;
       if (!interactive || outsideRoot) {
         return (

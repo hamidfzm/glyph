@@ -1,14 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { WorkspaceRootContext } from "@/contexts/WorkspaceRootContext";
+import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { MarkdownContent } from "./MarkdownContent";
-
-// Render with an opened workspace root in context (the value MarkdownContent now
-// reads via useWorkspaceRoot instead of a prop).
-function renderInWorkspace(ui: ReactNode, root = "/ws") {
-  return render(<WorkspaceRootContext.Provider value={root}>{ui}</WorkspaceRootContext.Provider>);
-}
 
 // MarkdownContent is the shared rendering core (frontmatter + ReactMarkdown with
 // the full plugin set). MarkdownViewer.test covers the sanitiser/alert paths via

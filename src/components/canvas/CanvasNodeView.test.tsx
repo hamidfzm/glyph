@@ -1,9 +1,8 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { WorkspaceRootContext } from "@/contexts/WorkspaceRootContext";
 import type { CanvasNode } from "@/lib/canvas/types";
+import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { CanvasNodeView } from "./CanvasNodeView";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
@@ -13,12 +12,6 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 const base = { id: "n", x: 0, y: 0, width: 200, height: 80 };
-
-// Render with an opened workspace root in context (the value CanvasNodeView now
-// reads via useWorkspaceRoot instead of a prop).
-function renderInWorkspace(ui: ReactNode, root = "/ws") {
-  return render(<WorkspaceRootContext.Provider value={root}>{ui}</WorkspaceRootContext.Provider>);
-}
 
 describe("CanvasNodeView", () => {
   it("renders a text node's markdown heading", () => {
