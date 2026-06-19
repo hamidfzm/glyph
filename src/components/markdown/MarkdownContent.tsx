@@ -9,7 +9,7 @@ import remarkGfm from "remark-gfm";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
 import { LightboxProvider } from "@/contexts/LightboxContext";
-import { useWorkspaceRoot } from "@/contexts/WorkspaceRootContext";
+import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
 import { useKatexPlugin } from "@/hooks/useKatexPlugin";
 import { parseFrontmatter } from "@/lib/frontmatter";

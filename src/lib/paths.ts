@@ -8,6 +8,11 @@ export function parentDir(path: string, fallback: string): string {
   return sep > 0 ? path.slice(0, sep) : fallback;
 }
 
+/** Final path segment (file or folder name), with any directory prefix removed. */
+export function basename(path: string): string {
+  return path.replace(/^.*[/\\]/, "");
+}
+
 /** True when `candidate` is `base` itself or a descendant (file or folder) of it. */
 export function isPathInside(candidate: string, base: string): boolean {
   return (

@@ -1,6 +1,6 @@
 import type { ComponentPropsWithoutRef, MouseEvent } from "react";
 import { useLightbox } from "@/contexts/LightboxContext";
-import { useWorkspaceRoot } from "@/contexts/WorkspaceRootContext";
+import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { resolveImageSrc } from "./resolveImageSrc";
 
 interface MarkdownImageProps extends ComponentPropsWithoutRef<"img"> {

@@ -1,10 +1,11 @@
 import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { WorkspaceRootContext } from "@/contexts/WorkspaceRootContext";
+import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 
 // Render with an opened workspace root in context, the value components read via
-// useWorkspaceRoot instead of a prop. Use in tests that exercise relative-path
-// resolution and root clamping.
+// useWorkspaceRoot. Provides a minimal TabsContext (only `workspace`); use in
+// tests that exercise relative-path resolution and root clamping.
 export function renderInWorkspace(ui: ReactNode, root = "/ws") {
-  return render(<WorkspaceRootContext.Provider value={root}>{ui}</WorkspaceRootContext.Provider>);
+  const tabs = { workspace: { root } } as unknown as TabsContextValue;
+  return render(<TabsContext.Provider value={tabs}>{ui}</TabsContext.Provider>);
 }

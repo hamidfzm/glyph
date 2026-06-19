@@ -2,10 +2,10 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useRef } from "react";
 import { MarkdownContent } from "@/components/markdown/MarkdownContent";
 import { resolveImageSrc } from "@/components/markdown/resolveImageSrc";
-import { useWorkspaceRoot } from "@/contexts/WorkspaceRootContext";
+import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { canvasColorToCss } from "@/lib/canvas/color";
 import type { CanvasNode } from "@/lib/canvas/types";
-import { isPathInside } from "@/lib/paths";
+import { basename, isPathInside } from "@/lib/paths";
 import { normalizeRelativePath } from "@/lib/relativePath";
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i;
@@ -29,11 +29,6 @@ interface CanvasNodeViewProps {
 /** Resolve a canvas-relative file reference against the .canvas file's folder. */
 function resolveRelative(file: string, canvasPath: string | undefined): string {
   return canvasPath ? normalizeRelativePath(canvasPath, file) : file;
-}
-
-/** The display name of a file reference: its basename (strip any directory). */
-function fileBasename(file: string): string {
-  return file.replace(/^.*[/\\]/, "");
 }
 
 // Renders the inner content of a single canvas node by type. Positioning,
@@ -105,11 +100,11 @@ export function CanvasNodeView({
         if (!src) {
           return (
             <div className="glyph-canvas-node-file" title={node.file}>
-              <span className="glyph-canvas-node-file-name">{fileBasename(node.file)}</span>
+              <span className="glyph-canvas-node-file-name">{basename(node.file)}</span>
             </div>
           );
         }
-        return <img className="glyph-canvas-node-image" src={src} alt={fileBasename(node.file)} />;
+        return <img className="glyph-canvas-node-image" src={src} alt={basename(node.file)} />;
       }
       const resolved = resolveRelative(node.file, canvasPath);
       // A file ref that resolves outside the opened workspace is refused: the
@@ -117,7 +112,7 @@ export function CanvasNodeView({
       // is the raw relative ref, which `isPathInside` reports as outside the
       // root, so it's refused too.
       const outsideRoot = !!workspaceRoot && !isPathInside(resolved, workspaceRoot);
-      const name = <span className="glyph-canvas-node-file-name">{fileBasename(node.file)}</span>;
+      const name = <span className="glyph-canvas-node-file-name">{basename(node.file)}</span>;
       if (!interactive || outsideRoot) {
         return (
           <div className="glyph-canvas-node-file" title={node.file}>

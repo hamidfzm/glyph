@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { isPathInside, parentDir, pruneInside } from "./paths";
+import { basename, isPathInside, parentDir, pruneInside } from "./paths";
+
+describe("basename", () => {
+  it("returns the final segment of a posix path", () => {
+    expect(basename("/a/b/c.md")).toBe("c.md");
+  });
+
+  it("returns the final segment of a windows path", () => {
+    expect(basename("a\\b\\c.md")).toBe("c.md");
+  });
+
+  it("returns the input unchanged when there is no directory", () => {
+    expect(basename("c.md")).toBe("c.md");
+  });
+});
 
 describe("parentDir", () => {
   it("returns the directory of a nested posix path", () => {

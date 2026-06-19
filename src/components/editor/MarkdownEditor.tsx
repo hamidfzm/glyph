@@ -13,7 +13,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
-import { useWorkspaceRoot } from "@/contexts/WorkspaceRootContext";
+import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { useSettings } from "@/hooks/useSettings";
 import { editorKeymapExtensions } from "@/lib/editorKeymap";
 import { wikilinkCompletionSource } from "@/lib/wikilinkCompletion";
