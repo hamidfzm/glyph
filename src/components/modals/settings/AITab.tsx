@@ -1,7 +1,9 @@
+import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
 import { MODEL_SUGGESTIONS } from "@/lib/settings";
 
 export function AITab() {
+  const { t } = useTranslation("settings");
   const { settings, updateSettings } = useSettings();
   const { ai } = settings;
 
@@ -12,24 +14,24 @@ export function AITab() {
   return (
     <>
       <div className="settings-section">
-        <div className="settings-section-title">AI Provider</div>
+        <div className="settings-section-title">{t("ai.provider.title")}</div>
         <div className="settings-row">
-          <span className="settings-label">Provider</span>
+          <span className="settings-label">{t("ai.provider.label")}</span>
           <select
             className="settings-select"
             value={ai.provider}
             onChange={(e) => updateSettings("ai.provider", e.target.value)}
           >
-            <option value="none">None</option>
-            <option value="claude">Claude (Anthropic)</option>
-            <option value="openai">OpenAI</option>
-            <option value="ollama">Ollama (Local)</option>
+            <option value="none">{t("ai.provider.none")}</option>
+            <option value="claude">{t("ai.provider.claude")}</option>
+            <option value="openai">{t("ai.provider.openai")}</option>
+            <option value="ollama">{t("ai.provider.ollama")}</option>
           </select>
         </div>
 
         {(ai.provider === "claude" || ai.provider === "openai") && (
           <div className="settings-row">
-            <span className="settings-label">API Key</span>
+            <span className="settings-label">{t("ai.apiKey.label")}</span>
             <input
               className="settings-input"
               type="password"
@@ -45,8 +47,8 @@ export function AITab() {
         {ai.provider === "ollama" && (
           <div className="settings-row">
             <div>
-              <span className="settings-label">Ollama URL</span>
-              <div className="settings-description">Requires OLLAMA_ORIGINS=* for CORS</div>
+              <span className="settings-label">{t("ai.ollamaUrl.label")}</span>
+              <div className="settings-description">{t("ai.ollamaUrl.description")}</div>
             </div>
             <input
               className="settings-input"
@@ -60,7 +62,7 @@ export function AITab() {
 
         {ai.provider !== "none" && (
           <div className="settings-row">
-            <span className="settings-label">Model</span>
+            <span className="settings-label">{t("ai.model.label")}</span>
             <div
               style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}
             >
@@ -69,7 +71,7 @@ export function AITab() {
                 type="text"
                 value={ai.model}
                 onChange={(e) => updateSettings("ai.model", e.target.value)}
-                placeholder="Select or type model name"
+                placeholder={t("ai.model.placeholder")}
                 list="model-suggestions"
               />
               <datalist id="model-suggestions">
@@ -83,20 +85,20 @@ export function AITab() {
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-title">Text-to-Speech</div>
+        <div className="settings-section-title">{t("ai.tts.title")}</div>
         <div className="settings-row">
-          <span className="settings-label">Voice</span>
+          <span className="settings-label">{t("ai.voice.label")}</span>
           <input
             className="settings-input"
             type="text"
             value={ai.ttsVoice}
             onChange={(e) => updateSettings("ai.ttsVoice", e.target.value)}
-            placeholder="Default system voice"
+            placeholder={t("ai.voice.placeholder")}
           />
         </div>
 
         <div className="settings-row">
-          <span className="settings-label">Speed</span>
+          <span className="settings-label">{t("ai.speed.label")}</span>
           <div className="settings-range">
             <input
               type="range"

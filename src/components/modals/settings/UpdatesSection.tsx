@@ -1,5 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
 import { checkForUpdate } from "@/lib/updateCheck";
 import { Toggle } from "./Toggle";
@@ -14,6 +15,7 @@ type ManualStatus =
   | { kind: "error" };
 
 export function UpdatesSection() {
+  const { t } = useTranslation("settings");
   const { settings, updateSettings } = useSettings();
   const { behavior } = settings;
   const [status, setStatus] = useState<ManualStatus>({ kind: "idle" });
@@ -32,14 +34,11 @@ export function UpdatesSection() {
 
   return (
     <div className="settings-section">
-      <div className="settings-section-title">Updates</div>
+      <div className="settings-section-title">{t("updates.title")}</div>
       <div className="settings-row">
         <div>
-          <span className="settings-label">Check for updates</span>
-          <div className="settings-description">
-            On launch, check for a newer release and show a banner when one is available. Only the
-            installed version is compared; no files or personal data are sent.
-          </div>
+          <span className="settings-label">{t("updates.check.label")}</span>
+          <div className="settings-description">{t("updates.check.description")}</div>
         </div>
         <Toggle
           checked={behavior.checkForUpdates}
@@ -54,28 +53,28 @@ export function UpdatesSection() {
         onClick={handleCheck}
         disabled={status.kind === "checking"}
       >
-        {status.kind === "checking" ? "Checking…" : "Check Now"}
+        {status.kind === "checking" ? t("updates.checking") : t("updates.checkNow")}
       </button>
 
       {status.kind === "current" && (
         <div className="settings-description" style={{ marginTop: 8 }}>
-          You're on the latest version.
+          {t("updates.current")}
         </div>
       )}
       {status.kind === "error" && (
         <div className="settings-description" style={{ marginTop: 8 }}>
-          Couldn't check for updates. Try again later.
+          {t("updates.error")}
         </div>
       )}
       {status.kind === "available" && (
         <div className="settings-description" style={{ marginTop: 8 }}>
-          Version {status.version} is available.{" "}
+          {t("updates.available", { version: status.version })}{" "}
           <button
             type="button"
             onClick={() => void openUrl(status.url)}
             style={{ color: "var(--color-accent)", textDecoration: "underline", cursor: "pointer" }}
           >
-            Download
+            {t("updates.download")}
           </button>
         </div>
       )}

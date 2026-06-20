@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { usePlatform } from "@/hooks/usePlatform";
 import { useSettings } from "@/hooks/useSettings";
 import {
@@ -12,6 +13,7 @@ import { HotkeyRow } from "./HotkeyRow";
 const CATEGORY_ORDER: CommandCategory[] = ["File", "Edit", "View", "Application"];
 
 export function HotkeysTab() {
+  const { t } = useTranslation("settings");
   const platform = usePlatform();
   const { settings, updateSettings } = useSettings();
   const overrides = settings.keybindings.overrides;
@@ -42,10 +44,10 @@ export function HotkeysTab() {
         <input
           type="search"
           className="settings-input settings-hotkey-search"
-          placeholder="Search shortcuts…"
+          placeholder={t("hotkeys.search.placeholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search shortcuts"
+          aria-label={t("hotkeys.search.label")}
         />
       </div>
       {CATEGORY_ORDER.map((category) => {

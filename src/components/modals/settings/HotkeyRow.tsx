@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Platform } from "@/hooks/usePlatform";
 import { acceleratorFromEvent, type BindableCommand, formatAccelerator } from "@/lib/keybindings";
 
@@ -23,6 +24,7 @@ export function HotkeyRow({
   onRecord,
   onReset,
 }: HotkeyRowProps) {
+  const { t } = useTranslation("settings");
   const [recording, setRecording] = useState(false);
 
   // While recording, swallow the next modifier+key combo and store it. Escape
@@ -54,7 +56,7 @@ export function HotkeyRow({
         <span className="settings-label">{command.label}</span>
         {isConflict && (
           <div className="settings-description" style={{ color: "#e5484d" }}>
-            Conflicts with another shortcut
+            {t("hotkeys.conflict")}
           </div>
         )}
       </div>
@@ -64,8 +66,8 @@ export function HotkeyRow({
           onClick={() => setRecording((r) => !r)}
           aria-label={
             recording
-              ? `Recording shortcut for ${command.label}`
-              : `Change shortcut for ${command.label}`
+              ? t("hotkeys.aria.recording", { command: command.label })
+              : t("hotkeys.aria.change", { command: command.label })
           }
           style={{
             minWidth: 96,
@@ -78,18 +80,18 @@ export function HotkeyRow({
             fontSize: 12,
           }}
         >
-          {recording ? "Press keys…" : formatAccelerator(accelerator, platform)}
+          {recording ? t("hotkeys.recording") : formatAccelerator(accelerator, platform)}
         </button>
         {isOverridden && (
           <button
             type="button"
             onClick={onReset}
-            title="Reset to default"
-            aria-label={`Reset shortcut for ${command.label}`}
+            title={t("hotkeys.resetTitle")}
+            aria-label={t("hotkeys.aria.reset", { command: command.label })}
             className="settings-description"
             style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}
           >
-            Reset
+            {t("hotkeys.reset")}
           </button>
         )}
       </div>
