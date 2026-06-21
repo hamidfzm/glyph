@@ -1,6 +1,7 @@
 import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
 import { FALLBACK_LOCALE } from "@/lib/locales";
+import enCommands from "@/locales/en/commands.json";
 import enCommon from "@/locales/en/common.json";
 import enSettings from "@/locales/en/settings.json";
 
@@ -12,12 +13,12 @@ export const i18n = i18next;
 
 i18n.use(initReactI18next).init({
   resources: {
-    en: { common: enCommon, settings: enSettings },
+    en: { common: enCommon, settings: enSettings, commands: enCommands },
   },
   lng: FALLBACK_LOCALE,
   fallbackLng: FALLBACK_LOCALE,
   defaultNS: "common",
-  ns: ["common", "settings"],
+  ns: ["common", "settings", "commands"],
   // React already escapes interpolated values, so i18next must not double-escape.
   interpolation: { escapeValue: false },
   // We drive loading ourselves and want synchronous renders in tests.

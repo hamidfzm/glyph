@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { MenuEventHandlers } from "@/hooks/useMenuEvents";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { Command } from "@/lib/commands";
@@ -39,6 +40,7 @@ export function useAppCommands({
   tocEntries,
   actions,
 }: AppCommandSources): Command[] {
+  const { t } = useTranslation("commands");
   return useMemo<Command[]>(() => {
     const out: Command[] = [];
 
@@ -68,36 +70,34 @@ export function useAppCommands({
 
     // App-level commands. Subset of every menu item that makes sense to invoke
     // from a palette (Open Folder is reachable from the empty-state button).
-    const appCommands: Array<{ title: string; shortcut?: string; run: () => void }> = [
-      { title: "Open File…", shortcut: "Cmd/Ctrl+O", run: actions.openFile },
-      { title: "Open Folder…", shortcut: "Cmd/Ctrl+Shift+O", run: actions.openFolder },
-      { title: "Close Tab", shortcut: "Cmd/Ctrl+W", run: actions.closeTab },
-      { title: "Toggle Files Sidebar", shortcut: "Cmd/Ctrl+B", run: actions.toggleFilesSidebar },
-      {
-        title: "Toggle Outline Sidebar",
-        shortcut: "Cmd/Ctrl+\\",
-        run: actions.toggleOutlineSidebar,
-      },
-      { title: "Reset View", run: actions.resetView },
-      { title: "Settings…", shortcut: "Cmd/Ctrl+,", run: actions.openSettings },
-      { title: "Cloud Sync…", run: actions.openSyncSettings },
-      { title: "Find in Document", shortcut: "Cmd/Ctrl+F", run: actions.find },
-      { title: "Toggle Edit Mode", shortcut: "Cmd/Ctrl+E", run: actions.toggleEdit },
-      { title: "Open Graph", shortcut: "Cmd/Ctrl+G", run: actions.openGraph },
-      { title: "Print…", shortcut: "Cmd/Ctrl+P", run: actions.print },
-      { title: "Export to HTML…", run: actions.exportHtml },
-      { title: "Export to Word (DOCX)…", run: actions.exportDocx },
-      { title: "Export to EPUB…", run: actions.exportEpub },
-      { title: "Export to PDF…", run: actions.exportPdf },
-      { title: "Zoom In", shortcut: "Cmd/Ctrl+=", run: actions.zoomIn },
-      { title: "Zoom Out", shortcut: "Cmd/Ctrl+-", run: actions.zoomOut },
-      { title: "Reset Zoom", shortcut: "Cmd/Ctrl+0", run: actions.zoomReset },
-      { title: "Read Aloud", run: actions.readAloud },
+    // `key` is the stable command id (locale-independent); the visible title is
+    // translated via `commands.<key>`.
+    const appCommands: Array<{ key: string; shortcut?: string; run: () => void }> = [
+      { key: "openFile", shortcut: "Cmd/Ctrl+O", run: actions.openFile },
+      { key: "openFolder", shortcut: "Cmd/Ctrl+Shift+O", run: actions.openFolder },
+      { key: "closeTab", shortcut: "Cmd/Ctrl+W", run: actions.closeTab },
+      { key: "toggleFilesSidebar", shortcut: "Cmd/Ctrl+B", run: actions.toggleFilesSidebar },
+      { key: "toggleOutlineSidebar", shortcut: "Cmd/Ctrl+\\", run: actions.toggleOutlineSidebar },
+      { key: "resetView", run: actions.resetView },
+      { key: "openSettings", shortcut: "Cmd/Ctrl+,", run: actions.openSettings },
+      { key: "openSyncSettings", run: actions.openSyncSettings },
+      { key: "find", shortcut: "Cmd/Ctrl+F", run: actions.find },
+      { key: "toggleEdit", shortcut: "Cmd/Ctrl+E", run: actions.toggleEdit },
+      { key: "openGraph", shortcut: "Cmd/Ctrl+G", run: actions.openGraph },
+      { key: "print", shortcut: "Cmd/Ctrl+P", run: actions.print },
+      { key: "exportHtml", run: actions.exportHtml },
+      { key: "exportDocx", run: actions.exportDocx },
+      { key: "exportEpub", run: actions.exportEpub },
+      { key: "exportPdf", run: actions.exportPdf },
+      { key: "zoomIn", shortcut: "Cmd/Ctrl+=", run: actions.zoomIn },
+      { key: "zoomOut", shortcut: "Cmd/Ctrl+-", run: actions.zoomOut },
+      { key: "zoomReset", shortcut: "Cmd/Ctrl+0", run: actions.zoomReset },
+      { key: "readAloud", run: actions.readAloud },
     ];
     for (const c of appCommands) {
       out.push({
-        id: `cmd:${c.title}`,
-        title: c.title,
+        id: `cmd:${c.key}`,
+        title: t(c.key),
         section: "Commands",
         shortcut: c.shortcut,
         run: c.run,
@@ -105,5 +105,5 @@ export function useAppCommands({
     }
 
     return out;
-  }, [workspaceOpen, workspaceFiles, tocEntries, actions]);
+  }, [workspaceOpen, workspaceFiles, tocEntries, actions, t]);
 }
