@@ -220,9 +220,7 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
   if (graph.nodes.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center" data-print-hide="true">
-        <p className="text-sm text-[var(--color-text-tertiary)]">
-          No notes to graph yet. Add markdown files to this workspace.
-        </p>
+        <p className="text-sm text-[var(--color-text-tertiary)]">{t("graph.emptyState")}</p>
       </div>
     );
   }

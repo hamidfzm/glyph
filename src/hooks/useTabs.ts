@@ -925,15 +925,15 @@ export function useTabs(options: UseTabsOptions) {
       multiple: true,
       filters: [
         {
-          name: "Documents",
+          name: t("common:fileDialog.documents"),
           extensions: [...MARKDOWN_EXTENSIONS, ...NOTEBOOK_EXTENSIONS] as string[],
         },
         {
-          name: "Markdown",
+          name: t("common:fileDialog.markdown"),
           extensions: MARKDOWN_EXTENSIONS as string[],
         },
         {
-          name: "Jupyter Notebook",
+          name: t("common:fileDialog.notebook"),
           extensions: NOTEBOOK_EXTENSIONS as string[],
         },
       ],
@@ -944,7 +944,7 @@ export function useTabs(options: UseTabsOptions) {
         await openFile(path);
       }
     }
-  }, [openFile]);
+  }, [openFile, t]);
 
   // Initialize: load CLI arg, restore workspace + tabs, or reopen last file
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only effect
