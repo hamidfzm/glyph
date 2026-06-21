@@ -70,5 +70,54 @@
     "epub": "EPUB",
     "pdf": "PDF",
     "exporting": "Exporting {{format}}…"
+  },
+  "contextMenu": {
+    "copy": "Copy",
+    "selectAll": "Select All",
+    "searchGoogle": "Search Google for \"{{query}}\"",
+    "stopReading": "Stop Reading",
+    "readSelection": "Read Selection Aloud",
+    "readAloud": "Read Aloud",
+    "ai": "AI",
+    "aiOnSelection": "{{action}} Selection",
+    "aiOnDocument": "{{action}} Document",
+    "aiVerb": {
+      "summarize": "Summarize",
+      "explain": "Explain",
+      "translate": "Translate",
+      "simplify": "Simplify"
+    }
+  },
+  "fileTree": {
+    "open": "Open",
+    "newNote": "New Note",
+    "newCanvas": "New Canvas",
+    "newFolder": "New Folder",
+    "rename": "Rename",
+    "duplicate": "Make a copy",
+    "move": "Move to…",
+    "copyPath": "Copy path",
+    "copyAbsolutePath": "Copy absolute path",
+    "reveal": "Show in system explorer",
+    "delete": "Delete"
+  },
+  "canvasMenu": {
+    "newCard": "New card",
+    "newGroup": "New group",
+    "newLink": "New link",
+    "editText": "Edit text",
+    "editGroupLabel": "Edit label",
+    "editUrl": "Edit URL",
+    "editEdgeLabel": "Edit label",
+    "deleteConnection": "Delete connection",
+    "clearColor": "Clear colour",
+    "color": "Colour",
+    "delete": "Delete",
+    "colorRed": "Red",
+    "colorOrange": "Orange",
+    "colorYellow": "Yellow",
+    "colorGreen": "Green",
+    "colorCyan": "Cyan",
+    "colorPurple": "Purple"
   }
 }

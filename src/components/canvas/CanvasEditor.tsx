@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { ContextMenu, type ContextMenuModel } from "@/components/menu/ContextMenu";
 import { useCanvasDocument } from "@/hooks/useCanvasDocument";
 import { useCanvasGestures } from "@/hooks/useCanvasGestures";
@@ -63,6 +64,7 @@ interface CanvasEditorProps {
 // useCanvasGestures; this component owns selection, inline editing, the
 // context menu, and the discrete board operations.
 export function CanvasEditor({ content, filePath, onChange, viewportKey }: CanvasEditorProps) {
+  const { t } = useTranslation("common");
   const { viewport, restored, stageRef, panBy, zoomBy, fitTo, toStagePoint } =
     useCanvasViewport(viewportKey);
   const { data, setData, commit } = useCanvasDocument(content, onChange);
@@ -209,7 +211,7 @@ export function CanvasEditor({ content, filePath, onChange, viewportKey }: Canva
         setSelectedEdge(null);
       },
     };
-    setMenu({ x: e.clientX, y: e.clientY, items: buildCanvasMenuItems(target, actions) });
+    setMenu({ x: e.clientX, y: e.clientY, items: buildCanvasMenuItems(target, actions, t) });
   };
 
   // Delete/Backspace removes the selection. Bound on the document (like the

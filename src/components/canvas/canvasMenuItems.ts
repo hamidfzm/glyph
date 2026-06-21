@@ -2,6 +2,7 @@
 // React so the menu contents are easy to unit test: empty board space offers
 // node creation, a node offers edit/recolour/delete, an edge offers delete.
 
+import type { TFunction } from "i18next";
 import { PRESET_COLORS } from "@/lib/canvas/color";
 import type { CanvasNode } from "@/lib/canvas/types";
 import type { ContextMenuActionItem, ContextMenuItem } from "@/lib/contextMenuItems";
@@ -20,27 +21,44 @@ export interface CanvasMenuActions {
   deleteEdge: (id: string) => void;
 }
 
-/** Human names for the spec's preset colour indices "1"–"6". */
-const PRESET_LABELS: Record<string, string> = {
-  "1": "Red",
-  "2": "Orange",
-  "3": "Yellow",
-  "4": "Green",
-  "5": "Cyan",
-  "6": "Purple",
+/** i18n keys for the spec's preset colour indices "1"–"6". */
+const PRESET_LABEL_KEYS: Record<string, string> = {
+  "1": "canvasMenu.colorRed",
+  "2": "canvasMenu.colorOrange",
+  "3": "canvasMenu.colorYellow",
+  "4": "canvasMenu.colorGreen",
+  "5": "canvasMenu.colorCyan",
+  "6": "canvasMenu.colorPurple",
 };
 
-const EDIT_LABELS = { text: "Edit text", group: "Edit label", link: "Edit URL" } as const;
+const EDIT_LABEL_KEYS = {
+  text: "canvasMenu.editText",
+  group: "canvasMenu.editGroupLabel",
+  link: "canvasMenu.editUrl",
+} as const;
 
 export function buildCanvasMenuItems(
   target: CanvasMenuTarget,
   actions: CanvasMenuActions,
+  t: TFunction<"common">,
 ): ContextMenuItem[] {
   if (target.kind === "stage") {
     return [
-      { kind: "action", label: "New card", onSelect: () => actions.createNode("text") },
-      { kind: "action", label: "New group", onSelect: () => actions.createNode("group") },
-      { kind: "action", label: "New link", onSelect: () => actions.createNode("link") },
+      {
+        kind: "action",
+        label: t("canvasMenu.newCard"),
+        onSelect: () => actions.createNode("text"),
+      },
+      {
+        kind: "action",
+        label: t("canvasMenu.newGroup"),
+        onSelect: () => actions.createNode("group"),
+      },
+      {
+        kind: "action",
+        label: t("canvasMenu.newLink"),
+        onSelect: () => actions.createNode("link"),
+      },
     ];
   }
 
@@ -48,13 +66,13 @@ export function buildCanvasMenuItems(
     return [
       {
         kind: "action",
-        label: "Edit label",
+        label: t("canvasMenu.editEdgeLabel"),
         onSelect: () => actions.editEdgeLabel(target.id),
       },
       { kind: "separator" },
       {
         kind: "action",
-        label: "Delete connection",
+        label: t("canvasMenu.deleteConnection"),
         danger: true,
         onSelect: () => actions.deleteEdge(target.id),
       },
@@ -66,25 +84,25 @@ export function buildCanvasMenuItems(
   if (node.type !== "file") {
     items.push({
       kind: "action",
-      label: EDIT_LABELS[node.type],
+      label: t(EDIT_LABEL_KEYS[node.type]),
       onSelect: () => actions.startEdit(node.id),
     });
   }
   const swatches: ContextMenuActionItem[] = PRESET_COLORS.map((c) => ({
     kind: "action",
-    label: PRESET_LABELS[c],
+    label: t(PRESET_LABEL_KEYS[c]),
     onSelect: () => actions.setNodeColor(node.id, c),
   }));
   swatches.push({
     kind: "action",
-    label: "Clear colour",
+    label: t("canvasMenu.clearColor"),
     onSelect: () => actions.setNodeColor(node.id, undefined),
   });
-  items.push({ kind: "submenu", label: "Colour", items: swatches });
+  items.push({ kind: "submenu", label: t("canvasMenu.color"), items: swatches });
   items.push({ kind: "separator" });
   items.push({
     kind: "action",
-    label: "Delete",
+    label: t("canvasMenu.delete"),
     danger: true,
     onSelect: () => actions.deleteNode(node.id),
   });

@@ -2,6 +2,7 @@
 // the hook and the component so the menu's contents are pure, easy to unit test,
 // and free of any React or OS-native menu API.
 
+import type { TFunction } from "i18next";
 import type { ReactNode } from "react";
 
 export interface ContextMenuActions {
@@ -36,7 +37,9 @@ export type ContextMenuItem =
   | ContextMenuSubmenuItem;
 
 const SELECTION_PREVIEW_MAX = 30;
-const AI_ACTIONS = ["Summarize", "Explain", "Translate", "Simplify"] as const;
+// Canonical action ids passed to the AI controller; the visible verb is
+// translated separately via `contextMenu.aiVerb.<id>`.
+const AI_ACTIONS = ["summarize", "explain", "translate", "simplify"] as const;
 
 /** Copy text to the clipboard. The text is captured up front (not read live)
  *  so it survives focus moving from the document selection to the menu. */
@@ -82,16 +85,21 @@ function joinGroups(groups: ContextMenuItem[][]): ContextMenuItem[] {
 export function buildContextMenuItems(
   actions: ContextMenuActions,
   selection: string,
+  t: TFunction<"common">,
 ): ContextMenuItem[] {
   const text: ContextMenuItem[] = [];
   if (selection) {
-    text.push({ kind: "action", label: "Copy", onSelect: () => copySelection(selection) });
+    text.push({
+      kind: "action",
+      label: t("contextMenu.copy"),
+      onSelect: () => copySelection(selection),
+    });
   }
-  text.push({ kind: "action", label: "Select All", onSelect: selectAllContent });
+  text.push({ kind: "action", label: t("contextMenu.selectAll"), onSelect: selectAllContent });
   if (selection) {
     text.push({
       kind: "action",
-      label: `Search Google for "${selectionPreview(selection)}"`,
+      label: t("contextMenu.searchGoogle", { query: selectionPreview(selection) }),
       onSelect: () => searchGoogle(selection),
     });
   }
@@ -99,13 +107,17 @@ export function buildContextMenuItems(
   const tts: ContextMenuItem[] = [];
   if (actions.ttsAvailable) {
     if (actions.ttsSpeaking) {
-      tts.push({ kind: "action", label: "Stop Reading", onSelect: () => actions.ttsStop?.() });
+      tts.push({
+        kind: "action",
+        label: t("contextMenu.stopReading"),
+        onSelect: () => actions.ttsStop?.(),
+      });
     } else {
       const textToRead = selection || actions.content || "";
       if (textToRead) {
         tts.push({
           kind: "action",
-          label: selection ? "Read Selection Aloud" : "Read Aloud",
+          label: selection ? t("contextMenu.readSelection") : t("contextMenu.readAloud"),
           onSelect: () => actions.ttsSpeak?.(textToRead),
         });
       }
@@ -118,11 +130,13 @@ export function buildContextMenuItems(
     if (textForAI) {
       ai.push({
         kind: "submenu",
-        label: "AI",
+        label: t("contextMenu.ai"),
         items: AI_ACTIONS.map((action) => ({
           kind: "action" as const,
-          label: selection ? `${action} Selection` : `${action} Document`,
-          onSelect: () => actions.aiAction?.(action.toLowerCase(), textForAI),
+          label: t(selection ? "contextMenu.aiOnSelection" : "contextMenu.aiOnDocument", {
+            action: t(`contextMenu.aiVerb.${action}`),
+          }),
+          onSelect: () => actions.aiAction?.(action, textForAI),
         })),
       });
     }
