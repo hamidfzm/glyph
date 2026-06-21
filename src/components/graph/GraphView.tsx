@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { useElementSize } from "@/hooks/useElementSize";
 import { useGraphCamera } from "@/hooks/useGraphCamera";
 import { useGraphSimulation } from "@/hooks/useGraphSimulation";
@@ -56,6 +57,7 @@ interface ActivePointer {
 // node; from then the camera is theirs until they hit "Reset view". Dragging a
 // node pins it under the cursor and reheats the simulation, like Obsidian.
 export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphViewProps) {
+  const { t } = useTranslation("common");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { ref: containerRef, size: viewport } = useElementSize<HTMLDivElement>();
   const graph = useMemo(
@@ -233,7 +235,7 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
       <canvas
         ref={canvasRef}
         role="img"
-        aria-label="Workspace graph"
+        aria-label={t("graph.label")}
         className="absolute inset-0 touch-none"
         style={{ width: viewport.width, height: viewport.height, cursor }}
         onPointerDown={handlePointerDown}
@@ -247,7 +249,7 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
         onClick={refit}
         disabled={autoFit}
         className="absolute top-3 right-3 px-2.5 py-1 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)] enabled:hover:text-[var(--color-text-primary)] disabled:opacity-40"
-        title="Re-centre and fit the graph"
+        title={t("graph.reset")}
       >
         Reset view
       </button>

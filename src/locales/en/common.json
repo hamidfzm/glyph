@@ -193,5 +193,9 @@
   },
   "canvasViewer": {
     "error": "This canvas couldn't be opened."
+  },
+  "graph": {
+    "label": "Workspace graph",
+    "reset": "Re-centre and fit the graph"
   }
 }
