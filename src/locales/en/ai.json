@@ -1,0 +1,17 @@
+{
+  "title": "AI",
+  "actionLabel": {
+    "summarize": "Summary",
+    "explain": "Explanation",
+    "translate": "Translation",
+    "simplify": "Simplified"
+  },
+  "processing": "Processing...",
+  "empty": "Use the AI menu or context menu to run an action.",
+  "stopReading": "Stop Reading",
+  "readAloud": "Read Aloud",
+  "copy": "Copy",
+  "error": {
+    "notConfigured": "No AI provider configured. Open Settings to set up an AI provider."
+  }
+}
