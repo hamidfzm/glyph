@@ -1,4 +1,10 @@
 {
+  "app": {
+    "name": "Glyph"
+  },
+  "error": {
+    "fallback": "Something went wrong. Try reopening the file or restarting Glyph."
+  },
   "emptyState": {
     "openHeading": "Open a Markdown file",
     "openHint": "Drop a file here, use the menu, or press <kbd>{{shortcut}}</kbd>",
@@ -6,5 +12,63 @@
     "folderHint": "Pick a file from the sidebar to start reading.",
     "openFile": "Open File",
     "openFolder": "Open Folder"
+  },
+  "statusBar": {
+    "jupyter": "Jupyter Notebook",
+    "words_one": "{{formatted}} word",
+    "words_other": "{{formatted}} words",
+    "readingTime_one": "{{count}} min read",
+    "readingTime_other": "{{count}} min read"
+  },
+  "sidebar": {
+    "hideFiles": "Hide files sidebar",
+    "hideOutline": "Hide outline sidebar",
+    "showFiles": "Show files sidebar",
+    "showOutline": "Show outline sidebar",
+    "newNote": "New note",
+    "newFolder": "New folder",
+    "collapseAll": "Collapse all",
+    "expandAll": "Expand all",
+    "closeWorkspace": "Close workspace",
+    "outline": "Outline"
+  },
+  "backlinks": {
+    "heading": "Backlinks"
+  },
+  "tabBar": {
+    "graphLabel": "Graph: {{name}}",
+    "untitled": "Untitled",
+    "closeTab": "Close {{label}}",
+    "viewMode": "View mode",
+    "view": "View",
+    "editMode": "Edit mode",
+    "edit": "Edit",
+    "splitMode": "Split mode",
+    "split": "Split"
+  },
+  "updateBanner": {
+    "available": "<strong>Glyph {{version}}</strong> is available",
+    "currentVersion": "(you have {{version}})",
+    "download": "Download",
+    "dismiss": "Dismiss update notification"
+  },
+  "workspaceBanner": {
+    "dismiss": "Dismiss workspace notice"
+  },
+  "search": {
+    "placeholder": "Find in document...",
+    "label": "Search",
+    "noResults": "No results",
+    "matchCount": "{{current}} of {{total}}",
+    "prevMatch": "Previous match",
+    "nextMatch": "Next match",
+    "close": "Close search"
+  },
+  "exportProgress": {
+    "html": "HTML",
+    "docx": "Word document",
+    "epub": "EPUB",
+    "pdf": "PDF",
+    "exporting": "Exporting {{format}}…"
   }
 }

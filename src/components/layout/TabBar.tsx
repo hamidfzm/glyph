@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 import { EditModeIcon } from "@/components/icons/EditModeIcon";
 import { GraphIcon } from "@/components/icons/GraphIcon";
 import { SplitModeIcon } from "@/components/icons/SplitModeIcon";
@@ -9,15 +11,16 @@ import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isLooseFilePath } from "@/lib/looseFile";
 import { EDITOR_MODE } from "@/lib/settings";
 
-function tabLabel(tab: Tab): string {
+function tabLabel(tab: Tab, t: TFunction<"common">): string {
   if (tab.kind === "graph") {
     const segments = tab.root.split(/[\\/]/).filter(Boolean);
-    return `Graph: ${segments[segments.length - 1] ?? tab.root}`;
+    return t("tabBar.graphLabel", { name: segments[segments.length - 1] ?? tab.root });
   }
-  return tab.file.metadata?.name ?? "Untitled";
+  return tab.file.metadata?.name ?? t("tabBar.untitled");
 }
 
 export function TabBar() {
+  const { t } = useTranslation("common");
   const {
     tabs,
     activeTabId,
@@ -41,7 +44,7 @@ export function TabBar() {
         {tabs.map((tab) => {
           const file = activeFileOf(tab);
           const dirty = file?.dirty ?? false;
-          const label = tabLabel(tab);
+          const label = tabLabel(tab, t);
           // Mark file tabs opened from outside the workspace so they read as
           // independent documents, not part of the project tree.
           const loose = tab.kind === "file" && isLooseFilePath(tab.file.path, workspace?.root);
@@ -77,7 +80,7 @@ export function TabBar() {
                 type="button"
                 className="tab-close"
                 tabIndex={-1}
-                aria-label={`Close ${label}`}
+                aria-label={t("tabBar.closeTab", { label })}
                 onClick={() => onClose(tab.id)}
               >
                 <TabCloseIcon />
@@ -93,8 +96,8 @@ export function TabBar() {
             className="mode-toggle-btn"
             data-active={activeFile.mode === EDITOR_MODE.view || undefined}
             onClick={() => onModeChange(activeTab.id, EDITOR_MODE.view)}
-            aria-label="View mode"
-            title="View"
+            aria-label={t("tabBar.viewMode")}
+            title={t("tabBar.view")}
           >
             <ViewModeIcon />
           </button>
@@ -103,8 +106,8 @@ export function TabBar() {
             className="mode-toggle-btn"
             data-active={activeFile.mode === EDITOR_MODE.edit || undefined}
             onClick={() => onModeChange(activeTab.id, EDITOR_MODE.edit)}
-            aria-label="Edit mode"
-            title="Edit"
+            aria-label={t("tabBar.editMode")}
+            title={t("tabBar.edit")}
           >
             <EditModeIcon />
           </button>
@@ -114,8 +117,8 @@ export function TabBar() {
               className="mode-toggle-btn"
               data-active={activeFile.mode === EDITOR_MODE.split || undefined}
               onClick={() => onModeChange(activeTab.id, EDITOR_MODE.split)}
-              aria-label="Split mode"
-              title="Split"
+              aria-label={t("tabBar.splitMode")}
+              title={t("tabBar.split")}
             >
               <SplitModeIcon />
             </button>

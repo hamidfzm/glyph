@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { BannerCloseIcon } from "@/components/icons/BannerCloseIcon";
 
 interface WorkspaceNoticeBannerProps {
@@ -13,6 +14,7 @@ interface WorkspaceNoticeBannerProps {
  * auto-dismiss, while warnings stay up until dismissed (see `useWorkspaceNotice`).
  */
 export function WorkspaceNoticeBanner({ notice, onDismiss }: WorkspaceNoticeBannerProps) {
+  const { t } = useTranslation("common");
   if (!notice) return null;
 
   return (
@@ -26,7 +28,7 @@ export function WorkspaceNoticeBanner({ notice, onDismiss }: WorkspaceNoticeBann
         type="button"
         className="ml-auto cursor-pointer text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
         onClick={onDismiss}
-        aria-label="Dismiss workspace notice"
+        aria-label={t("workspaceBanner.dismiss")}
       >
         <BannerCloseIcon />
       </button>

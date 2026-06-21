@@ -1,6 +1,7 @@
+import { useTranslation } from "react-i18next";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { useSettings } from "@/hooks/useSettings";
-import { countWords, readingTime } from "@/lib/markdown";
+import { countWords, readingMinutes } from "@/lib/markdown";
 import { isNotebookFile } from "@/lib/notebookExtensions";
 import { ZOOM_DEFAULT } from "@/lib/settings";
 import { SyncStatusIndicator } from "./SyncStatusIndicator";
@@ -12,6 +13,7 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ onOpenSync }: StatusBarProps) {
+  const { t } = useTranslation("common");
   const { settings } = useSettings();
   const { activeFile, displayContent } = useTabsContext();
   const zoomPercent = Math.round((settings.appearance.fontSize / ZOOM_DEFAULT) * 100);
@@ -37,11 +39,13 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
         </span>
       )}
       {isNotebook ? (
-        <span className="ml-auto">Jupyter Notebook</span>
+        <span className="ml-auto">{t("statusBar.jupyter")}</span>
       ) : (
         <>
-          <span className="ml-auto">{words.toLocaleString()} words</span>
-          <span>{readingTime(words)}</span>
+          <span className="ml-auto">
+            {t("statusBar.words", { count: words, formatted: words.toLocaleString() })}
+          </span>
+          <span>{t("statusBar.readingTime", { count: readingMinutes(words) })}</span>
         </>
       )}
       {zoomPercent !== 100 && <span>{zoomPercent}%</span>}

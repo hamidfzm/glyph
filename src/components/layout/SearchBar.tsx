@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { SearchCloseIcon } from "@/components/icons/SearchCloseIcon";
 import { SearchNextIcon } from "@/components/icons/SearchNextIcon";
 import { SearchPrevIcon } from "@/components/icons/SearchPrevIcon";
@@ -22,6 +23,7 @@ export function SearchBar({
   onPrev,
   onClose,
 }: SearchBarProps) {
+  const { t } = useTranslation("common");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -52,12 +54,14 @@ export function SearchBar({
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Find in document..."
-        aria-label="Search"
+        placeholder={t("search.placeholder")}
+        aria-label={t("search.label")}
       />
       {query.length > 0 && (
         <span className="search-match-count" data-no-results={noResults}>
-          {noResults ? "No results" : `${currentMatch} of ${matchCount}`}
+          {noResults
+            ? t("search.noResults")
+            : t("search.matchCount", { current: currentMatch, total: matchCount })}
         </span>
       )}
       <button
@@ -65,7 +69,7 @@ export function SearchBar({
         className="search-nav-btn"
         onClick={onPrev}
         disabled={matchCount === 0}
-        aria-label="Previous match"
+        aria-label={t("search.prevMatch")}
       >
         <SearchPrevIcon />
       </button>
@@ -74,11 +78,16 @@ export function SearchBar({
         className="search-nav-btn"
         onClick={onNext}
         disabled={matchCount === 0}
-        aria-label="Next match"
+        aria-label={t("search.nextMatch")}
       >
         <SearchNextIcon />
       </button>
-      <button type="button" className="search-nav-btn" onClick={onClose} aria-label="Close search">
+      <button
+        type="button"
+        className="search-nav-btn"
+        onClick={onClose}
+        aria-label={t("search.close")}
+      >
         <SearchCloseIcon />
       </button>
     </search>
