@@ -17,7 +17,7 @@ When asked to review a PR or set of changes, analyze every changed file for:
 
 ### Reuse & Duplication
 - Identify duplicated logic that could be extracted into a shared utility or hook
-- Check if existing hooks (`useSettings`, `useSearch`, `useFileLoader`, etc.) already handle what new code is doing manually
+- Check if existing hooks (`useSettings`, `useSearch`, `useTabs`, etc.) already handle what new code is doing manually
 - Look for copy-pasted patterns across components that should be abstracted
 
 ### Code Quality
