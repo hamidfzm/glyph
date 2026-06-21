@@ -5,6 +5,7 @@ import enAi from "@/locales/en/ai.json";
 import enCommands from "@/locales/en/commands.json";
 import enCommon from "@/locales/en/common.json";
 import enSettings from "@/locales/en/settings.json";
+import enSync from "@/locales/en/sync.json";
 
 // The shared i18next instance. English is bundled inline as the fallback;
 // additional locales are registered here as they land (and can move to lazy
@@ -14,12 +15,12 @@ export const i18n = i18next;
 
 i18n.use(initReactI18next).init({
   resources: {
-    en: { common: enCommon, settings: enSettings, commands: enCommands, ai: enAi },
+    en: { common: enCommon, settings: enSettings, commands: enCommands, ai: enAi, sync: enSync },
   },
   lng: FALLBACK_LOCALE,
   fallbackLng: FALLBACK_LOCALE,
   defaultNS: "common",
-  ns: ["common", "settings", "commands", "ai"],
+  ns: ["common", "settings", "commands", "ai", "sync"],
   // React already escapes interpolated values, so i18next must not double-escape.
   interpolation: { escapeValue: false },
   // We drive loading ourselves and want synchronous renders in tests.

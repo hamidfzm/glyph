@@ -1,0 +1,91 @@
+{
+  "modal": {
+    "title": "Cloud Sync settings",
+    "heading": "Cloud Sync",
+    "close": "Close cloud sync settings"
+  },
+  "empty": "Open a folder workspace to configure cloud sync for it. Single-file tabs sync as part of whichever folder they live in.",
+  "description": "Git-backed sync for this workspace. Glyph ships with its own libgit2 build — no system <kbd>git</kbd> needed.",
+  "loading": "Loading…",
+  "notRepo": "This folder isn't a git repository yet.",
+  "initRepo": "Initialize repo",
+  "remoteUrl": {
+    "label": "Remote URL",
+    "hint": "(blank = local-only history)",
+    "placeholder": "https://github.com/you/notes.git"
+  },
+  "branch": {
+    "label": "Branch",
+    "placeholder": "main"
+  },
+  "conflictPolicy": {
+    "legend": "Conflict policy",
+    "prompt": { "label": "Prompt me", "description": "Stop on conflicts and open the resolver." },
+    "preferRemote": {
+      "label": "Take remote",
+      "description": "Discard local edits when they clash."
+    },
+    "preferLocal": { "label": "Keep local", "description": "Push local edits over the remote." }
+  },
+  "authorName": { "label": "Author name", "placeholder": "defaults to your git config" },
+  "authorEmail": { "label": "Author email", "placeholder": "you@example.com" },
+  "token": {
+    "label": "Personal access token",
+    "hint": "(HTTPS only)",
+    "placeholderSaved": "saved — leave blank to keep",
+    "placeholderNew": "ghp_…",
+    "note": "Stored in memory only for now. The next release routes it through your OS keychain."
+  },
+  "commitMessage": {
+    "label": "Commit message",
+    "hint": "(blank = auto-generated from changes)",
+    "placeholder": "e.g. Update notes"
+  },
+  "saveChanges": "Save changes",
+  "saveConfig": "Save config",
+  "syncNow": "Sync now",
+  "refreshStatus": "Refresh status",
+  "disable": "Disable sync",
+  "status": {
+    "workingTree": "Working tree: <strong>{{state}}</strong>",
+    "clean": "clean",
+    "dirty": "dirty",
+    "aheadBehind": "Ahead: <strong>{{ahead}}</strong> · Behind: <strong>{{behind}}</strong>",
+    "conflicts": "Unresolved conflicts: {{files}}",
+    "lastSync": "Last sync: {{time}}",
+    "lastRun": "Last run: pulled <strong>{{pulled}}</strong>, committed <strong>{{committed}}</strong>, pushed <strong>{{pushed}}</strong>{{suffix}}",
+    "lastRunConflicts": ", {{count}} conflict(s) need attention"
+  },
+  "indicator": {
+    "off": "Sync off",
+    "configured": "Sync configured",
+    "conflicts": "Conflicts ({{count}})",
+    "changes": "Sync +{{ahead}}/-{{behind}}",
+    "dirty": "Sync: dirty",
+    "synced": "Synced {{time}}",
+    "syncedDefault": "Synced",
+    "open": "Open Cloud Sync settings"
+  },
+  "relativeTime": {
+    "never": "never",
+    "secondsAgo": "{{count}}s ago",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  },
+  "error": {
+    "notConfigured": "This workspace isn't configured for sync yet.",
+    "authFailed": "Authentication failed.",
+    "authFailedDetail": "Authentication failed: {{message}}",
+    "network": "Couldn't reach the remote.",
+    "networkDetail": "Couldn't reach the remote: {{message}}",
+    "conflict": "Resolve conflicts in {{count}} file(s) before syncing again.",
+    "invalidState": "Repository is in an unexpected state.",
+    "invalidStateDetail": "Repository is in an unexpected state: {{message}}",
+    "io": "I/O error.",
+    "ioDetail": "I/O error: {{message}}",
+    "backend": "Sync backend error.",
+    "backendDetail": "Sync backend error: {{message}}",
+    "unknown": "Unknown sync error."
+  }
+}
