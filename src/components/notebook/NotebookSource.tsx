@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { fenceCode } from "@/lib/notebook/fence";
 import { MarkdownViewer } from "../markdown/MarkdownViewer";
 
@@ -18,8 +19,6 @@ interface NotebookSourceProps {
   banner?: string | null;
 }
 
-const DEFAULT_BANNER = "Read-only source view — notebooks can't be edited in Glyph.";
-
 // Read-only view of a notebook's raw `.ipynb` JSON, shown when a notebook tab
 // is switched into edit/split mode. Notebooks are not editable in Glyph (see
 // the issue's read-only scope), so rather than dropping the JSON into the
@@ -34,15 +33,18 @@ export function NotebookSource({
   onScrollChange,
   searchOpen,
   onSearchClose,
-  banner = DEFAULT_BANNER,
+  banner,
 }: NotebookSourceProps) {
+  const { t } = useTranslation("common");
   const fenced = useMemo(() => fenceCode(content, "json"), [content]);
+  // Default to the standalone read-only note; `null` hides the banner entirely.
+  const bannerText = banner === null ? null : (banner ?? t("notebook.sourceBanner"));
 
   return (
     <div className="flex flex-col flex-1 min-h-0 min-w-0">
-      {banner !== null && (
+      {bannerText !== null && (
         <div className="nb-source-banner" data-print-hide="true">
-          {banner}
+          {bannerText}
         </div>
       )}
       <MarkdownViewer

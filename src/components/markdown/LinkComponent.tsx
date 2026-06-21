@@ -1,6 +1,7 @@
 import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { type ComponentPropsWithoutRef, useCallback, useContext } from "react";
+import { useTranslation } from "react-i18next";
 import { ExternalLinkIcon } from "@/components/icons/ExternalLinkIcon";
 import { SettingsContext } from "@/contexts/SettingsContext";
 import { isOpenableRelativeHref } from "@/lib/relativePath";
@@ -30,6 +31,7 @@ export function LinkComponent(props: LinkComponentProps) {
     node?: unknown;
   };
   const { settings } = useContext(SettingsContext);
+  const { t } = useTranslation("common");
 
   // Wikilink: identified by remarkWikilink-emitted data attributes. We never
   // route these through openUrl — they're either a workspace file (resolved)
@@ -73,11 +75,11 @@ export function LinkComponent(props: LinkComponentProps) {
       e.preventDefault();
 
       if (settings.behavior.confirmExternalLinks) {
-        const confirmed = await ask(`Open this link in your browser?\n\n${href}`, {
-          title: "Open External Link",
+        const confirmed = await ask(t("link.confirmMessage", { url: href }), {
+          title: t("link.openExternalTitle"),
           kind: "info",
-          okLabel: "Open",
-          cancelLabel: "Cancel",
+          okLabel: t("link.open"),
+          cancelLabel: t("link.cancel"),
         });
         if (!confirmed) return;
       }
@@ -93,6 +95,7 @@ export function LinkComponent(props: LinkComponentProps) {
       onOpenWikilink,
       onOpenRelativeFile,
       settings.behavior.confirmExternalLinks,
+      t,
     ],
   );
 

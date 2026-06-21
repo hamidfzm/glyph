@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import type { ParsedFrontmatter } from "@/lib/frontmatter";
 import { tagHue } from "@/lib/tagColor";
 import { CalendarIcon } from "../icons/CalendarIcon";
@@ -9,6 +10,7 @@ interface FrontmatterBlockProps {
 }
 
 export function FrontmatterBlock({ data }: FrontmatterBlockProps) {
+  const { t } = useTranslation("common");
   const hasTags = Boolean(data.tags && data.tags.length > 0);
 
   return (
@@ -16,13 +18,13 @@ export function FrontmatterBlock({ data }: FrontmatterBlockProps) {
       <tbody>
         {data.title && (
           <tr>
-            <th scope="row">Title</th>
+            <th scope="row">{t("frontmatter.title")}</th>
             <td className="frontmatter-value-title">{data.title}</td>
           </tr>
         )}
         {data.author && (
           <tr>
-            <th scope="row">Author</th>
+            <th scope="row">{t("frontmatter.author")}</th>
             <td>
               <UserIcon className="frontmatter-cell-icon" />
               {data.author}
@@ -31,7 +33,7 @@ export function FrontmatterBlock({ data }: FrontmatterBlockProps) {
         )}
         {data.date && (
           <tr>
-            <th scope="row">Date</th>
+            <th scope="row">{t("frontmatter.date")}</th>
             <td>
               <CalendarIcon className="frontmatter-cell-icon" />
               <time>{data.date}</time>
@@ -40,7 +42,7 @@ export function FrontmatterBlock({ data }: FrontmatterBlockProps) {
         )}
         {hasTags && (
           <tr>
-            <th scope="row">Tags</th>
+            <th scope="row">{t("frontmatter.tags")}</th>
             <td>
               <ul className="frontmatter-tags">
                 {data.tags?.map((tag) => (

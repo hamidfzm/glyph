@@ -1,4 +1,5 @@
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActualSizeIcon } from "@/components/icons/ActualSizeIcon";
 import { ChevronLeftIcon } from "@/components/icons/ChevronLeftIcon";
 import { ChevronRightIcon } from "@/components/icons/ChevronRightIcon";
@@ -20,6 +21,7 @@ interface LightboxProps {
 // image is laid out at `natural × scale` inside a scrollable stage so zooming
 // past the viewport pans rather than clips.
 export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProps) {
+  const { t } = useTranslation("common");
   const image = images[index];
   const imgRef = useRef<HTMLImageElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -161,7 +163,7 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
       className="lightbox-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label={image.alt ? `Image: ${image.alt}` : "Image viewer"}
+      aria-label={image.alt ? t("lightbox.image", { alt: image.alt }) : t("lightbox.viewer")}
       data-print-hide="true"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -177,8 +179,8 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
         type="button"
         className="lightbox-button lightbox-close"
         onClick={onClose}
-        aria-label="Close (Esc)"
-        title="Close (Esc)"
+        aria-label={t("lightbox.close")}
+        title={t("lightbox.close")}
       >
         <ModalCloseIcon />
       </button>
@@ -189,8 +191,8 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
           className="lightbox-button lightbox-nav lightbox-prev"
           onClick={() => goTo(index - 1)}
           disabled={index === 0}
-          aria-label="Previous image (←)"
-          title="Previous image (←)"
+          aria-label={t("lightbox.previous")}
+          title={t("lightbox.previous")}
         >
           <ChevronLeftIcon className="w-5 h-5" />
         </button>
@@ -212,8 +214,8 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
           className="lightbox-button lightbox-nav lightbox-next"
           onClick={() => goTo(index + 1)}
           disabled={index === images.length - 1}
-          aria-label="Next image (→)"
-          title="Next image (→)"
+          aria-label={t("lightbox.next")}
+          title={t("lightbox.next")}
         >
           <ChevronRightIcon className="w-5 h-5" />
         </button>
@@ -224,8 +226,8 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
           type="button"
           className="lightbox-button"
           onClick={() => zoomBy(1 / ZOOM_STEP)}
-          aria-label="Zoom out (-)"
-          title="Zoom out (-)"
+          aria-label={t("lightbox.zoomOut")}
+          title={t("lightbox.zoomOut")}
         >
           <ZoomOutIcon />
         </button>
@@ -236,8 +238,8 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
           type="button"
           className="lightbox-button"
           onClick={() => zoomBy(ZOOM_STEP)}
-          aria-label="Zoom in (+)"
-          title="Zoom in (+)"
+          aria-label={t("lightbox.zoomIn")}
+          title={t("lightbox.zoomIn")}
         >
           <ZoomInIcon />
         </button>
@@ -246,8 +248,8 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
           type="button"
           className="lightbox-button"
           onClick={applyFit}
-          aria-label="Fit to screen (0)"
-          title="Fit to screen (0)"
+          aria-label={t("lightbox.fit")}
+          title={t("lightbox.fit")}
         >
           <FitIcon />
         </button>
@@ -255,8 +257,8 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
           type="button"
           className="lightbox-button"
           onClick={actualSize}
-          aria-label="Actual size (1)"
-          title="Actual size (1)"
+          aria-label={t("lightbox.actualSize")}
+          title={t("lightbox.actualSize")}
         >
           <ActualSizeIcon />
         </button>

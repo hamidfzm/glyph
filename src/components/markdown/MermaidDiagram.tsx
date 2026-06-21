@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useIsDarkMode } from "@/hooks/useIsDarkMode";
 
 let idCounter = 0;
@@ -16,6 +17,7 @@ interface MermaidDiagramProps {
 }
 
 export function MermaidDiagram({ code }: MermaidDiagramProps) {
+  const { t } = useTranslation("common");
   const containerRef = useRef<HTMLDivElement>(null);
   // Sentinel that lets us drop stale render results. Each call bumps it; if
   // the call finishes and the sentinel has since changed, a newer render is
@@ -27,7 +29,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
   const renderDiagram = useCallback(async () => {
     const mySeq = ++renderSeqRef.current;
     if (code.trim().length === 0) {
-      setError("Empty diagram source");
+      setError(t("mermaid.empty"));
       return;
     }
     // Always pass a fresh id to `mermaid.render`. Mermaid v11 keeps internal
@@ -49,9 +51,9 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
       }
     } catch (err) {
       if (renderSeqRef.current !== mySeq) return;
-      setError(err instanceof Error ? err.message : "Diagram error");
+      setError(err instanceof Error ? err.message : t("mermaid.errorLabel"));
     }
-  }, [code, isDark]);
+  }, [code, isDark, t]);
 
   useEffect(() => {
     renderDiagram();
@@ -60,7 +62,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
   if (error) {
     return (
       <div className="mermaid-error">
-        <div className="mermaid-error-label">Failed to render diagram</div>
+        <div className="mermaid-error-label">{t("mermaid.errorTitle")}</div>
         <pre>
           <code>{code}</code>
         </pre>
