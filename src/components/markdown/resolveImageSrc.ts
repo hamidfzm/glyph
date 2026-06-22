@@ -9,6 +9,13 @@ function stripVerbatimPrefix(path: string): string {
   return path.replace(/^\\\\\?\\UNC\\/, "\\\\").replace(/^\\\\\?\\/, "");
 }
 
+// Turn an absolute filesystem path into a webview-loadable asset-protocol URL,
+// stripping the Windows verbatim prefix first. Shared by markdown image
+// resolution and the standalone image viewer (image file tabs).
+export function toAssetUrl(path: string): string {
+  return convertFileSrc(stripVerbatimPrefix(path));
+}
+
 // Resolve a markdown image `src` to something the webview can load: remote and
 // data URLs pass through untouched, while relative paths are resolved against
 // the document's directory (with `../` support) and run through Tauri's asset
@@ -24,7 +31,7 @@ export function resolveImageSrc(
   if (/^(https?:|data:)/i.test(src)) return src;
   if (filePath) {
     const resolved = resolveWorkspacePath(filePath, src, root);
-    return resolved === null ? undefined : convertFileSrc(stripVerbatimPrefix(resolved));
+    return resolved === null ? undefined : toAssetUrl(resolved);
   }
   return src;
 }

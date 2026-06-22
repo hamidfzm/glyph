@@ -1,13 +1,14 @@
 import { useCallback } from "react";
 import { useTabsContext } from "@/contexts/TabsContext";
-import { activeFileOf } from "@/hooks/useTabs";
 import { useTaskList } from "@/hooks/useTaskList";
 import { isCanvasFile } from "@/lib/canvasExtensions";
+import { isImageFile } from "@/lib/imageExtensions";
 import { isNotebookFile } from "@/lib/notebookExtensions";
 import { EDITOR_MODE } from "@/lib/settings";
 import { CanvasEditor, CanvasViewer } from "./canvas/lazyCanvas";
 import { MarkdownEditor, SplitView } from "./editor/lazyEditor";
 import { GraphView } from "./graph/lazyGraph";
+import { ImageViewer } from "./markdown/ImageViewer";
 import { MarkdownViewer } from "./markdown/MarkdownViewer";
 import { NotebookSource, NotebookSplit, NotebookViewer } from "./notebook/lazyNotebook";
 
@@ -74,8 +75,17 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     );
   }
 
-  const file = activeFileOf(activeTab);
-  if (!file?.content) return null;
+  // `activeTab` is narrowed to a file tab here (graph returned above), so its
+  // file is always present.
+  const file = activeTab.file;
+
+  // Image/SVG tabs carry no text content (they're never read as text); they
+  // render straight from the asset protocol in the read-only image viewer.
+  if (isImageFile(file.path)) {
+    return <ImageViewer key={`${activeTab.id}:${file.path}`} filePath={file.path} />;
+  }
+
+  if (!file.content) return null;
 
   const editorContent = file.editContent ?? file.content;
 

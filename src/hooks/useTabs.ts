@@ -6,6 +6,7 @@ import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/lib/editHistory";
+import { isImageFile } from "@/lib/imageExtensions";
 import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
@@ -270,8 +271,9 @@ export function useTabs(options: UseTabsOptions) {
       // content as markdown (HTML included via the sanitizer), so opening a
       // random `.txt` / `.html` / etc. is a code-injection vector. Notebooks
       // (`.ipynb`) are allowed — they take the dedicated NotebookViewer path.
-      // See memory/reject-unsupported-file-types.md.
-      if (!isSupportedFile(path)) {
+      // Images/SVGs are allowed too — they render in the read-only image
+      // viewer, never as text. See memory/reject-unsupported-file-types.md.
+      if (!isSupportedFile(path) && !isImageFile(path)) {
         console.warn(`Refusing to open unsupported file: ${path}`);
         return;
       }
@@ -283,12 +285,24 @@ export function useTabs(options: UseTabsOptions) {
 
       const id = generateId();
       try {
-        const { content, metadata } = await loadFileContent(path);
-        await invoke("watch_file", { path });
-        // Notebooks are read-only; open straight into the viewer regardless of
-        // the user's default editor mode.
+        // Images are binary: never read them as text. Load metadata only and
+        // let the image viewer render straight from the asset protocol. (No
+        // file watch — the asset URL is static, so an on-disk change would not
+        // refresh it anyway.) Documents load their text and start a watch.
+        const isImage = isImageFile(path);
+        let content: string | null;
+        let metadata: FileMetadata;
+        if (isImage) {
+          content = null;
+          metadata = await invoke<FileMetadata>("get_file_metadata", { path });
+        } else {
+          ({ content, metadata } = await loadFileContent(path));
+          await invoke("watch_file", { path });
+        }
+        // Notebooks, canvases, and images are read-only; open straight into the
+        // viewer regardless of the user's default editor mode.
         const mode =
-          isNotebookFile(path) || isCanvasFile(path)
+          isImage || isNotebookFile(path) || isCanvasFile(path)
             ? EDITOR_MODE.view
             : optionsRef.current.defaultEditorMode;
         const newTab: FileTab = {
@@ -1038,6 +1052,8 @@ export function useTabs(options: UseTabsOptions) {
       clearTimeout(timeout);
       timeout = setTimeout(async () => {
         const changedPath = event.payload;
+        // Images are never watched and never read as text; ignore defensively.
+        if (isImageFile(changedPath)) return;
         const matchingTab = stateRef.current.tabs.find(
           (t) => activeFileOf(t)?.path === changedPath,
         );

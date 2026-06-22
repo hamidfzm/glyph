@@ -57,6 +57,12 @@ vi.mock("./markdown/MarkdownViewer", () => ({
   ),
 }));
 
+vi.mock("./markdown/ImageViewer", () => ({
+  ImageViewer: ({ filePath }: { filePath?: string }) => (
+    <div data-testid="image-viewer">{filePath}</div>
+  ),
+}));
+
 vi.mock("./canvas/lazyCanvas", () => ({
   CanvasViewer: ({ filePath, content }: { filePath?: string; content: string }) => (
     <div data-testid="canvas-viewer" data-content={content}>
@@ -124,6 +130,23 @@ function makeFileTab(mode: EditorMode = "view"): FileTab {
       metadata: { name: "file.md", path: "/p/file.md", size: 0, modified: 0 },
       scrollTop: 0,
       mode,
+      editContent: null,
+      dirty: false,
+    },
+  };
+}
+
+function makeImageTab(): FileTab {
+  return {
+    id: "tab-img",
+    kind: "file",
+    file: {
+      path: "/p/diagram.svg",
+      // Images carry no text content; the viewer renders from the asset protocol.
+      content: null,
+      metadata: { name: "diagram.svg", path: "/p/diagram.svg", size: 0, modified: 0 },
+      scrollTop: 0,
+      mode: "view",
       editContent: null,
       dirty: false,
     },
@@ -294,6 +317,14 @@ describe("TabContent", () => {
     renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
     expect(screen.getByTestId("notebook-split")).toBeInTheDocument();
     expect(screen.queryByTestId("lazy-split")).toBeNull();
+  });
+
+  it("renders the image viewer for an image tab, even with null content", () => {
+    const tab = makeImageTab();
+    renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
+    expect(screen.getByTestId("image-viewer")).toHaveTextContent("/p/diagram.svg");
+    // The null-content guard must not pre-empt the image branch.
+    expect(screen.queryByTestId("markdown-viewer")).toBeNull();
   });
 
   it("renders the read-only canvas viewer for a .canvas tab in view mode", () => {

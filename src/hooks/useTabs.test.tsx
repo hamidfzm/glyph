@@ -302,6 +302,27 @@ describe("useTabs file operations", () => {
     expect(tab.kind === "file" ? tab.file.mode : null).toBe("view");
   });
 
+  it("opens an image in view mode without reading it as text", async () => {
+    // Images are binary: openFile must skip read_file (and the file watch)
+    // entirely and load metadata only, opening the read-only image viewer.
+    const { result } = renderHook(() =>
+      useTabs({ ...defaultOptions(), defaultEditorMode: "edit" }),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/diagram.svg");
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+    const tab = result.current.tabs[0];
+    expect(tab.kind === "file" ? tab.file.mode : null).toBe("view");
+    expect(tab.kind === "file" ? tab.file.content : "x").toBeNull();
+    expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/diagram.svg" });
+    expect(invoke).not.toHaveBeenCalledWith("watch_file", { path: "/p/diagram.svg" });
+    expect(invoke).toHaveBeenCalledWith("get_file_metadata", { path: "/p/diagram.svg" });
+  });
+
   it("never marks a notebook tab dirty when toggled into edit mode", async () => {
     // Notebooks are read-only: switching modes shows the JSON source view, not
     // an editor. The tab must never become dirty, or autosave would write the
@@ -982,6 +1003,26 @@ describe("useTabs file operations", () => {
       expect(result.current.tabs[0].file.editContent).toBe("unsaved work");
       expect(result.current.tabs[0].file.content).toBe("original");
     }
+  });
+
+  it("ignores a file-changed event for an image path without reading it", async () => {
+    // Images are never read as text; the auto-reload guard short-circuits on an
+    // image path before any read_file, even if a stray event arrives.
+    const fileChanged = captureListener("file-changed");
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/diagram.svg");
+    });
+    vi.mocked(invoke).mockClear();
+
+    await act(async () => {
+      fileChanged.handler?.({ payload: "/p/diagram.svg" });
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/diagram.svg" });
   });
 
   it("saveScrollPosition + setActiveTab persists scrollTop to the leaving tab", async () => {
