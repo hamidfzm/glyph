@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { canvasColorToCss } from "@/lib/canvas/color";
 import type { CanvasNode, NodeSide } from "@/lib/canvas/types";
 import { CanvasNodeView } from "./CanvasNodeView";
@@ -43,15 +44,15 @@ function editValue(node: CanvasNode): string {
   }
 }
 
-/** Placeholder hinting what the inline editor expects, per node type. */
-function editPlaceholder(node: CanvasNode): string {
+/** i18n key for the inline-editor placeholder, per node type. */
+function editPlaceholderKey(node: CanvasNode): string {
   switch (node.type) {
     case "group":
-      return "Group name";
+      return "canvasNode.groupPlaceholder";
     case "link":
-      return "https://example.com";
+      return "canvasNode.linkPlaceholder";
     default:
-      return "Type markdown…";
+      return "canvasNode.textPlaceholder";
   }
 }
 
@@ -61,6 +62,7 @@ function editPlaceholder(node: CanvasNode): string {
 // The chrome hangs outside the border, so clipping happens on the inner
 // content wrapper, never on the node itself.
 export function CanvasEditableNode(props: CanvasEditableNodeProps) {
+  const { t } = useTranslation("common");
   const { node, canvasPath, selected, editing } = props;
   const editable = node.type !== "file";
   const textRef = useRef<HTMLTextAreaElement | null>(null);
@@ -155,7 +157,7 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
             ref={textRef}
             className="glyph-canvas-node-editor"
             defaultValue={editValue(node)}
-            placeholder={editPlaceholder(node)}
+            placeholder={t(editPlaceholderKey(node))}
             onChange={(e) => {
               valueRef.current = e.target.value;
             }}

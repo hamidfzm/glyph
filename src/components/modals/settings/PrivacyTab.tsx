@@ -1,21 +1,19 @@
+import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
 import { Toggle } from "./Toggle";
 
 export function PrivacyTab() {
+  const { t } = useTranslation("settings");
   const { settings, updateSettings } = useSettings();
   const { privacy } = settings;
 
   return (
     <div className="settings-section">
-      <div className="settings-section-title">Error Reporting</div>
+      <div className="settings-section-title">{t("privacy.title")}</div>
       <div className="settings-row">
         <div>
-          <span className="settings-label">Send crash reports</span>
-          <div className="settings-description">
-            Off by default. When on, anonymous crash reports (stack traces, OS, and app version) are
-            sent to help fix bugs. Your files, file paths, and links are never included. Only active
-            in production builds. See SECURITY.md for the full policy.
-          </div>
+          <span className="settings-label">{t("privacy.crashReports.label")}</span>
+          <div className="settings-description">{t("privacy.crashReports.description")}</div>
         </div>
         <Toggle
           checked={privacy.errorReporting}

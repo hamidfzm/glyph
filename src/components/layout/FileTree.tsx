@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { CanvasIcon } from "@/components/icons/CanvasIcon";
 import { NewCanvasIcon } from "@/components/icons/NewCanvasIcon";
 import type { DirEntry } from "@/hooks/useTabs";
@@ -186,6 +187,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
   },
   ref,
 ) {
+  const { t } = useTranslation("common");
   const entries = nodes.get(root) ?? [];
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [editing, setEditing] = useState<EditingState | null>(null);
@@ -297,26 +299,31 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
 
     if (filePath) {
       groups.push([
-        { kind: "action", label: "Open", icon: <OpenIcon />, onSelect: () => onOpenFile(filePath) },
+        {
+          kind: "action",
+          label: t("fileTree.open"),
+          icon: <OpenIcon />,
+          onSelect: () => onOpenFile(filePath),
+        },
       ]);
     }
 
     groups.push([
       {
         kind: "action",
-        label: "New Note",
+        label: t("fileTree.newNote"),
         icon: <NewNoteIcon />,
         onSelect: () => startCreate("note", dir),
       },
       {
         kind: "action",
-        label: "New Canvas",
+        label: t("fileTree.newCanvas"),
         icon: <NewCanvasIcon />,
         onSelect: () => startCreate("canvas", dir),
       },
       {
         kind: "action",
-        label: "New Folder",
+        label: t("fileTree.newFolder"),
         icon: <NewFolderIcon />,
         onSelect: () => startCreate("folder", dir),
       },
@@ -326,19 +333,19 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
       groups.push([
         {
           kind: "action",
-          label: "Rename",
+          label: t("fileTree.rename"),
           icon: <RenameIcon />,
           onSelect: () => startRename(entryPath, !!entryIsDir),
         },
         {
           kind: "action",
-          label: "Make a copy",
+          label: t("fileTree.duplicate"),
           icon: <DuplicateIcon />,
           onSelect: () => onDuplicate(entryPath),
         },
         {
           kind: "action",
-          label: "Move to…",
+          label: t("fileTree.move"),
           icon: <MoveIcon />,
           onSelect: () => onMove(entryPath),
         },
@@ -346,19 +353,19 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
       groups.push([
         {
           kind: "action",
-          label: "Copy path",
+          label: t("fileTree.copyPath"),
           icon: <CopyPathIcon />,
           onSelect: () => copyPath(entryPath, false),
         },
         {
           kind: "action",
-          label: "Copy absolute path",
+          label: t("fileTree.copyAbsolutePath"),
           icon: <CopyPathIcon />,
           onSelect: () => copyPath(entryPath, true),
         },
         {
           kind: "action",
-          label: "Show in system explorer",
+          label: t("fileTree.reveal"),
           icon: <RevealIcon />,
           onSelect: () => onReveal(entryPath),
         },
@@ -366,7 +373,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
       groups.push([
         {
           kind: "action",
-          label: "Delete",
+          label: t("fileTree.delete"),
           icon: <DeleteIcon />,
           danger: true,
           onSelect: () => onDelete(entryPath),
@@ -390,6 +397,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
     startCreate,
     startRename,
     copyPath,
+    t,
   ]);
 
   const childProps: EntryRenderProps = {

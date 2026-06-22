@@ -1,10 +1,12 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 // Fallback UI rendered by the top-level Sentry ErrorBoundary (see main.tsx)
 // when a render error escapes the tree. Presentational, plus one effect: it
 // reveals the window itself.
 export function ErrorFallback() {
+  const { t } = useTranslation("common");
   // The window is created hidden (visible:false in tauri.conf.json) and is
   // normally revealed by useWindowReveal inside AppShell. If the crash happens
   // before that runs, AppShell never mounts, so we reveal here — otherwise this
@@ -33,7 +35,7 @@ export function ErrorFallback() {
         color: "var(--color-text-secondary)",
       }}
     >
-      <p>Something went wrong. Try reopening the file or restarting Glyph.</p>
+      <p>{t("error.fallback")}</p>
     </div>
   );
 }

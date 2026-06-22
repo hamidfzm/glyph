@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MarkdownViewer } from "../markdown/MarkdownViewer";
+import { MarkdownViewer } from "@/components/markdown/MarkdownViewer";
 import { MarkdownEditor } from "./MarkdownEditor";
 
 interface SplitViewProps {
@@ -9,8 +9,8 @@ interface SplitViewProps {
   searchOpen: boolean;
   onSearchClose: () => void;
   workspaceFiles?: string[];
-  workspaceRoot?: string;
   onOpenWikilink?: (path: string, heading?: string) => void;
+  onOpenRelativeFile?: (path: string) => void;
   onTaskToggle?: (line: number) => void;
 }
 
@@ -23,8 +23,8 @@ export function SplitView({
   searchOpen,
   onSearchClose,
   workspaceFiles,
-  workspaceRoot,
   onOpenWikilink,
+  onOpenRelativeFile,
   onTaskToggle,
 }: SplitViewProps) {
   const [previewContent, setPreviewContent] = useState(content);
@@ -59,12 +59,7 @@ export function SplitView({
         data-testid="split-view-editor"
         className="split-view-editor flex flex-1 min-w-0 min-h-0 overflow-hidden border-r border-[var(--color-border)]"
       >
-        <MarkdownEditor
-          content={content}
-          onChange={handleChange}
-          workspaceFiles={workspaceFiles}
-          workspaceRoot={workspaceRoot}
-        />
+        <MarkdownEditor content={content} onChange={handleChange} workspaceFiles={workspaceFiles} />
       </div>
       <div
         data-testid="split-view-preview"
@@ -77,6 +72,7 @@ export function SplitView({
           onSearchClose={onSearchClose}
           workspaceFiles={workspaceFiles}
           onOpenWikilink={onOpenWikilink}
+          onOpenRelativeFile={onOpenRelativeFile}
           onTaskToggle={onTaskToggle}
         />
       </div>

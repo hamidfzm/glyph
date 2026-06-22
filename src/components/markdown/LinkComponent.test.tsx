@@ -2,17 +2,17 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SettingsContext } from "@/contexts/SettingsContext";
-import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { DEFAULT_SETTINGS, type Settings } from "@/lib/settings";
 import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 
-function renderLink(props: Partial<LinkComponentProps>) {
+function renderLink(props: Partial<LinkComponentProps>, settings: Settings = DEFAULT_SETTINGS) {
   return render(
     <SettingsContext
       value={{
-        settings: DEFAULT_SETTINGS,
+        settings,
         updateSettings: vi.fn(),
         resetSettings: vi.fn(),
         loaded: true,
@@ -22,6 +22,13 @@ function renderLink(props: Partial<LinkComponentProps>) {
     </SettingsContext>,
   );
 }
+
+// Open mode without the external-link confirmation prompt, so a fall-through to
+// the browser calls openUrl synchronously (no awaited `ask`).
+const NO_CONFIRM: Settings = {
+  ...DEFAULT_SETTINGS,
+  behavior: { ...DEFAULT_SETTINGS.behavior, confirmExternalLinks: false },
+};
 
 describe("LinkComponent hash links", () => {
   it("scrolls to the matching id when an in-document anchor is clicked", () => {
@@ -123,5 +130,69 @@ describe("LinkComponent wikilinks", () => {
 
     expect(openUrl).not.toHaveBeenCalled();
     expect(onOpen).toHaveBeenCalled();
+  });
+});
+
+describe("LinkComponent relative file links", () => {
+  it("opens a relative markdown link in the workspace", () => {
+    vi.mocked(openUrl).mockClear();
+    const onOpen = vi.fn();
+    const { container } = renderLink({ href: "./sibling.md", onOpenRelativeFile: onOpen });
+    fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
+
+    expect(onOpen).toHaveBeenCalledWith("./sibling.md");
+    expect(openUrl).not.toHaveBeenCalled();
+  });
+
+  it("opens a relative ../ canvas link in the workspace", () => {
+    vi.mocked(openUrl).mockClear();
+    const onOpen = vi.fn();
+    const { container } = renderLink({
+      href: "../diagrams/board.canvas",
+      onOpenRelativeFile: onOpen,
+    });
+    fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
+
+    expect(onOpen).toHaveBeenCalledWith("../diagrams/board.canvas");
+    expect(openUrl).not.toHaveBeenCalled();
+  });
+
+  it("does not render the external-link icon on an intercepted relative link", () => {
+    const { container } = renderLink({ href: "./sibling.md", onOpenRelativeFile: vi.fn() });
+    expect(container.querySelector("svg")).toBeNull();
+  });
+
+  it("ignores a relative link to a non-markdown, non-canvas file", () => {
+    vi.mocked(openUrl).mockClear();
+    const onOpen = vi.fn();
+    const { container } = renderLink(
+      { href: "./data.txt", onOpenRelativeFile: onOpen },
+      NO_CONFIRM,
+    );
+    fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
+
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(openUrl).toHaveBeenCalledWith("./data.txt");
+  });
+
+  it("falls through to the browser in single-file mode (no callback)", () => {
+    vi.mocked(openUrl).mockClear();
+    const { container } = renderLink({ href: "./sibling.md" }, NO_CONFIRM);
+    fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
+
+    expect(openUrl).toHaveBeenCalledWith("./sibling.md");
+  });
+
+  it("does not intercept an external URL that happens to end in .md", () => {
+    vi.mocked(openUrl).mockClear();
+    const onOpen = vi.fn();
+    const { container } = renderLink(
+      { href: "https://example.com/page.md", onOpenRelativeFile: onOpen },
+      NO_CONFIRM,
+    );
+    fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
+
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(openUrl).toHaveBeenCalledWith("https://example.com/page.md");
   });
 });

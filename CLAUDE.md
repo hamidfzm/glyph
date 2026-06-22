@@ -93,7 +93,7 @@ Do **not** create releases manually with `gh release create` or push tags by han
 - `src-tauri/tauri.conf.json` — App window config, CLI plugin config, bundle settings
 - `src-tauri/capabilities/default.json` — Tauri permission grants
 - `src-tauri/src/menu.rs` — Native menu items and keyboard shortcut accelerators
-- `src/hooks/useFileLoader.ts` — Core file loading logic (CLI args + dialog)
+- `src/hooks/useTabs.ts` — Core file/workspace loading and tab state (CLI args + dialog)
 - `src/components/App.tsx` — Root layout, menu event listeners, and theme injection
 - `src/lib/settings.ts` — Settings types, defaults, and constants
 - `src/contexts/SettingsContext.tsx` — Settings persistence via Tauri store

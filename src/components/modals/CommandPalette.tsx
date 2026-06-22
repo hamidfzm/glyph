@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { type Command, type CommandSection, rankCommands } from "@/lib/commands";
 import { CommandPaletteItem } from "./CommandPaletteItem";
 
@@ -19,6 +20,7 @@ export function CommandPalette({
   onQueryChange,
   onClose,
 }: CommandPaletteProps) {
+  const { t } = useTranslation("commands");
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -92,7 +94,7 @@ export function CommandPalette({
       onKeyDown={handleOverlayKeyDown}
       role="dialog"
       aria-modal="true"
-      aria-label="Command palette"
+      aria-label={t("palette.title")}
       data-print-hide="true"
     >
       <div className="command-palette">
@@ -100,19 +102,19 @@ export function CommandPalette({
           ref={inputRef}
           type="text"
           className="command-palette-input"
-          placeholder="Type a command, file, or heading…"
+          placeholder={t("palette.placeholder")}
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          aria-label="Command palette query"
+          aria-label={t("palette.queryLabel")}
         />
         <div className="command-palette-results">
           {sections.length === 0 ? (
-            <div className="command-palette-empty">No results</div>
+            <div className="command-palette-empty">{t("palette.empty")}</div>
           ) : (
             sections.map(({ section, items }) => (
               <div key={section} className="command-palette-group">
-                <div className="command-palette-section">{section}</div>
+                <div className="command-palette-section">{t(`section.${section}`)}</div>
                 {items.map(({ row, index }) => (
                   <CommandPaletteItem
                     key={row.command.id}

@@ -4,9 +4,8 @@
 // inserts `[[<stem>]]` (or just `<stem>]]` if the brackets exist already).
 import type { Completion, CompletionContext, CompletionResult } from "@codemirror/autocomplete";
 import type { EditorState } from "@codemirror/state";
+import { basename } from "./paths";
 import { stemOf } from "./wikilinkResolver";
-
-const PATH_SEP = /[\\/]/;
 
 interface WikilinkOpening {
   /** Document offset of the first `[` in the opening `[[`. */
@@ -19,7 +18,7 @@ function relativeName(path: string, root?: string): string {
   if (root && (path.startsWith(`${root}/`) || path.startsWith(`${root}\\`))) {
     return path.slice(root.length + 1);
   }
-  return path.split(PATH_SEP).pop() ?? path;
+  return basename(path);
 }
 
 // Look back from `pos` for an unclosed `[[` on the same line. Returns null if

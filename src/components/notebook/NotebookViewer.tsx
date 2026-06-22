@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useSearch } from "@/hooks/useSearch";
 import { parseNotebook } from "@/lib/notebook/parseNotebook";
 import { NotebookParseError } from "@/lib/notebook/types";
@@ -33,6 +34,7 @@ export function NotebookViewer({
   searchOpen,
   onSearchClose,
 }: NotebookViewerProps) {
+  const { t } = useTranslation("common");
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const search = useSearch({ containerRef: contentRef });
@@ -81,7 +83,7 @@ export function NotebookViewer({
     if (parsed.error) {
       return (
         <div className="nb-error-state">
-          <p className="nb-error-title">Couldn't render this notebook</p>
+          <p className="nb-error-title">{t("notebook.errorTitle")}</p>
           <p className="nb-error-detail">{parsed.error}</p>
         </div>
       );
@@ -89,7 +91,7 @@ export function NotebookViewer({
     // On the non-error path the parser always returns a notebook.
     const notebook = parsed.notebook as NonNullable<typeof parsed.notebook>;
     if (notebook.cells.length === 0) {
-      return <div className="nb-empty-state">This notebook has no cells.</div>;
+      return <div className="nb-empty-state">{t("notebook.empty")}</div>;
     }
     return notebook.cells.map((cell) => (
       <NotebookCell

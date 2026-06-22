@@ -1,5 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import { vi } from "vitest";
+// Initialise the shared i18next instance so components using useTranslation /
+// Trans render their English strings synchronously in tests.
+import "@/lib/i18n";
 
 vi.mock("@tauri-apps/api/core", () => ({
   // Mirrors the real API: invoke always returns a Promise. Tests that need a
@@ -27,6 +30,7 @@ globalThis.fetch = vi.fn(() =>
 
 vi.mock("@tauri-apps/plugin-os", () => ({
   platform: vi.fn(() => "macos"),
+  locale: vi.fn(() => Promise.resolve("en-US")),
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({

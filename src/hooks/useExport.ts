@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { collectStyles } from "@/lib/export/collectStyles";
 import { buildHtmlDocument } from "@/lib/export/html";
 import { deriveExportMeta } from "@/lib/export/meta";
@@ -17,11 +18,13 @@ interface UseExportOptions {
   content: string | null;
 }
 
-const FILTERS: Record<ExportFormat, { name: string; ext: string }> = {
-  html: { name: "HTML", ext: "html" },
-  docx: { name: "Word Document", ext: "docx" },
-  epub: { name: "EPUB", ext: "epub" },
-  pdf: { name: "PDF", ext: "pdf" },
+// File extension per format. The save-dialog filter *name* is translated at
+// call time (see `exportFilter.<format>` in common.json).
+const EXT: Record<ExportFormat, string> = {
+  html: "html",
+  docx: "docx",
+  epub: "epub",
+  pdf: "pdf",
 };
 
 // Write binary export output via the Rust command. The bytes are sent as a
@@ -55,6 +58,7 @@ export function useExport({
   filePath,
   content,
 }: UseExportOptions): ExportHandlers {
+  const { t } = useTranslation("common");
   const includeToc = settings.includeToc;
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
 
@@ -68,10 +72,10 @@ export function useExport({
       // would fool the document guard.
       if (document.querySelector(".glyph-canvas")) {
         const meta = deriveExportMeta(filePath, content);
-        const { name, ext } = FILTERS[format];
+        const ext = EXT[format];
         const path = await save({
           defaultPath: `${meta.baseName}.${ext}`,
-          filters: [{ name, extensions: [ext] }],
+          filters: [{ name: t(`exportFilter.${format}`), extensions: [ext] }],
         });
         if (!path) return;
         setExporting(format);
@@ -141,10 +145,10 @@ export function useExport({
       if (!document.querySelector(".markdown-body")) return;
 
       const meta = deriveExportMeta(filePath, content);
-      const { name, ext } = FILTERS[format];
+      const ext = EXT[format];
       const path = await save({
         defaultPath: `${meta.baseName}.${ext}`,
-        filters: [{ name, extensions: [ext] }],
+        filters: [{ name: t(`exportFilter.${format}`), extensions: [ext] }],
       });
       if (!path) return; // user cancelled
 
@@ -208,7 +212,7 @@ export function useExport({
         setExporting(null);
       }
     },
-    [entries, includeToc, filePath, content],
+    [entries, includeToc, filePath, content, t],
   );
 
   // Handler identities depend only on `run`, so they stay stable while

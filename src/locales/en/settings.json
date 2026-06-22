@@ -1,0 +1,243 @@
+{
+  "modal": {
+    "title": "Settings",
+    "reset": "Reset to Defaults",
+    "changesApply": "Changes apply immediately",
+    "tabs": {
+      "appearance": "Appearance",
+      "layout": "Layout",
+      "behavior": "Behavior",
+      "editor": "Editor",
+      "hotkeys": "Hotkeys",
+      "ai": "AI",
+      "print": "Print",
+      "privacy": "Privacy"
+    }
+  },
+  "language": {
+    "sectionTitle": "Language",
+    "label": "Display Language",
+    "system": "System"
+  },
+  "appearance": {
+    "theme": {
+      "title": "Theme",
+      "label": "Color Theme",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "typography": {
+      "title": "Typography"
+    },
+    "fontFamily": {
+      "label": "Font Family",
+      "system": "System Default",
+      "serif": "Serif",
+      "sans": "Sans-serif",
+      "mono": "Monospace",
+      "custom": "Custom"
+    },
+    "customFont": {
+      "label": "Custom Font Name",
+      "placeholder": "e.g. Inter, Lora"
+    },
+    "fontSize": {
+      "label": "Font Size"
+    },
+    "lineHeight": {
+      "label": "Line Height",
+      "compact": "Compact",
+      "normal": "Normal",
+      "relaxed": "Relaxed"
+    },
+    "contentWidth": {
+      "label": "Content Width",
+      "narrow": "Narrow",
+      "medium": "Medium",
+      "wide": "Wide",
+      "full": "Full"
+    },
+    "code": {
+      "title": "Code"
+    },
+    "codeFont": {
+      "label": "Code Font",
+      "placeholder": "Default (SF Mono, Fira Code...)"
+    },
+    "codeTheme": {
+      "label": "Code Theme",
+      "glyph": "Glyph (Default)",
+      "github": "GitHub",
+      "monokai": "Monokai",
+      "nord": "Nord",
+      "solarizedLight": "Solarized Light",
+      "solarizedDark": "Solarized Dark"
+    }
+  },
+  "layout": {
+    "title": "Sidebars",
+    "showFiles": {
+      "label": "Show Files Sidebar",
+      "description": "Workspace file tree (folder tabs only). Toggle with <kbd>Cmd/Ctrl+B</kbd>."
+    },
+    "showOutline": {
+      "label": "Show Outline Sidebar",
+      "description": "Document table of contents. Toggle with <kbd>Cmd/Ctrl+\\</kbd>."
+    },
+    "sidebarLayout": {
+      "label": "Sidebar layout",
+      "description": "Folder tabs only. <b>Split</b>: Files and Outline on opposite sides. <b>Combined</b>: stacked in one panel. <b>Beside</b>: two adjacent panels on the same side.",
+      "split": "Split",
+      "combined": "Combined",
+      "beside": "Beside"
+    },
+    "swap": {
+      "label": "Swap sidebar sides",
+      "description": "Flip which side each panel lives on. Default is Files left / Outline right; on, it becomes Files right / Outline left."
+    },
+    "width": {
+      "label": "Sidebar Width"
+    }
+  },
+  "behavior": {
+    "fileHandling": {
+      "title": "File Handling"
+    },
+    "autoReload": {
+      "label": "Auto-reload",
+      "description": "Reload file when changed on disk"
+    },
+    "reopenLastFile": {
+      "label": "Reopen Last File",
+      "description": "Open the last viewed file on startup"
+    },
+    "confirmExternalLinks": {
+      "label": "Confirm External Links",
+      "description": "Ask before opening links in browser"
+    },
+    "recentFiles": {
+      "title": "Recent Files",
+      "clear": "Clear Recent Files"
+    }
+  },
+  "updates": {
+    "title": "Updates",
+    "check": {
+      "label": "Check for updates",
+      "description": "On launch, check for a newer release and show a banner when one is available. Only the installed version is compared; no files or personal data are sent."
+    },
+    "checking": "Checking…",
+    "checkNow": "Check Now",
+    "current": "You're on the latest version.",
+    "error": "Couldn't check for updates. Try again later.",
+    "available": "Version {{version}} is available.",
+    "download": "Download"
+  },
+  "editor": {
+    "title": "Editor",
+    "keymap": {
+      "label": "Keymap",
+      "description": "Keyboard bindings for the markdown editor. Vim adds modal editing; VSCode mirrors common VSCode shortcuts. Takes effect the next time a document enters edit or split mode."
+    },
+    "keymapOptions": {
+      "default": "Default",
+      "vim": "Vim",
+      "vscode": "VSCode"
+    },
+    "help": {
+      "default": {
+        "title": "Default (Glyph) shortcuts",
+        "autocomplete": "in a folder workspace opens wikilink autocomplete",
+        "accept": "accept the highlighted completion",
+        "undoRedo": "undo / redo",
+        "standard": "Standard OS text-editing shortcuts otherwise"
+      },
+      "vim": {
+        "title": "Vim quick reference",
+        "modes": "normal, insert, insert-after, visual modes",
+        "motions": "motions; f + char to jump; / to search",
+        "operators": "operators with counts and text objects (diw, ci\")",
+        "files": "File commands like :w, :q, and :wq don't apply here — Glyph autosaves, and you close a tab with the Close Tab shortcut."
+      },
+      "vscode": {
+        "title": "VSCode shortcuts",
+        "moveLine": "move the current line up / down",
+        "copyLine": "copy the line up / down",
+        "comment": "toggle line comment",
+        "multiSelect": "select the next occurrence; Cmd/Ctrl+] or [ to indent / outdent"
+      }
+    }
+  },
+  "ai": {
+    "provider": {
+      "title": "AI Provider",
+      "label": "Provider",
+      "none": "None",
+      "claude": "Claude (Anthropic)",
+      "openai": "OpenAI",
+      "ollama": "Ollama (Local)"
+    },
+    "apiKey": {
+      "label": "API Key"
+    },
+    "ollamaUrl": {
+      "label": "Ollama URL",
+      "description": "Requires OLLAMA_ORIGINS=* for CORS"
+    },
+    "model": {
+      "label": "Model",
+      "placeholder": "Select or type model name"
+    },
+    "tts": {
+      "title": "Text-to-Speech"
+    },
+    "voice": {
+      "label": "Voice",
+      "placeholder": "Default system voice"
+    },
+    "speed": {
+      "label": "Speed"
+    }
+  },
+  "print": {
+    "title": "Print & PDF Export",
+    "pageBreaks": {
+      "label": "Page Breaks",
+      "description": "Start a new page at heading level",
+      "none": "None",
+      "h1": "At H1",
+      "h2": "At H2"
+    },
+    "toc": {
+      "label": "Include Table of Contents",
+      "description": "Insert a contents page at the start"
+    },
+    "backgrounds": {
+      "label": "Print Backgrounds & Colors",
+      "description": "Preserve theme colors in output"
+    }
+  },
+  "privacy": {
+    "title": "Error Reporting",
+    "crashReports": {
+      "label": "Send crash reports",
+      "description": "Off by default. When on, anonymous crash reports (stack traces, OS, and app version) are sent to help fix bugs. Your files, file paths, and links are never included. Only active in production builds. See SECURITY.md for the full policy."
+    }
+  },
+  "hotkeys": {
+    "search": {
+      "placeholder": "Search shortcuts…",
+      "label": "Search shortcuts"
+    },
+    "conflict": "Conflicts with another shortcut",
+    "recording": "Press keys…",
+    "reset": "Reset",
+    "resetTitle": "Reset to default",
+    "aria": {
+      "recording": "Recording shortcut for {{command}}",
+      "change": "Change shortcut for {{command}}",
+      "reset": "Reset shortcut for {{command}}"
+    }
+  }
+}

@@ -234,7 +234,7 @@ export function AppShell() {
               platform={platform}
               onOpenFile={openFileDialog}
               onOpenFolder={() => openFolder()}
-              hint={folderEmptyHint ? "Pick a file from the sidebar to start reading." : undefined}
+              folderEmpty={folderEmptyHint}
             />
           </div>
         ) : (

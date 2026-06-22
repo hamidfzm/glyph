@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Backlink } from "@/lib/backlinks";
 
 interface BacklinksSectionProps {
@@ -15,6 +16,7 @@ function relativeName(path: string, root: string): string {
 }
 
 export function BacklinksSection({ backlinks, workspaceRoot, onOpen }: BacklinksSectionProps) {
+  const { t } = useTranslation("common");
   const [collapsed, setCollapsed] = useState(false);
 
   if (backlinks.length === 0) return null;
@@ -30,7 +32,7 @@ export function BacklinksSection({ backlinks, workspaceRoot, onOpen }: Backlinks
         <span aria-hidden="true" className="inline-block w-3">
           {collapsed ? "▸" : "▾"}
         </span>
-        <span>Backlinks</span>
+        <span>{t("backlinks.heading")}</span>
         <span className="text-[var(--color-text-tertiary)] font-normal normal-case tracking-normal">
           {backlinks.length}
         </span>

@@ -4,6 +4,7 @@
 // stylesheet the way the HTML export does, so colours, positions, and the
 // edges svg must arrive self-contained.
 
+import { basename } from "@/lib/paths";
 import { BOARD_PADDING, inlineImages, measureBoard, syncCheckboxes } from "./boardDom";
 
 export interface BoardCard {
@@ -148,9 +149,7 @@ export async function buildCanvasBoardModel(): Promise<CanvasBoardModel | null> 
     if (url) card.linkUrl = url;
     const file = el.querySelector(".glyph-canvas-node-file")?.getAttribute("title");
     if (file) {
-      /* v8 ignore start -- defensive: splitting a non-empty string always yields a last segment */
-      card.fileName = file.split(/[/\\]/).pop() ?? file;
-      /* v8 ignore stop */
+      card.fileName = basename(file);
     }
     cards.push(card);
   }

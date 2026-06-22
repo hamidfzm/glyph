@@ -13,6 +13,7 @@
 // state.
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   type CommitAuthorHint,
   clearSyncToken as clearSyncTokenCommand,
@@ -76,6 +77,7 @@ export interface UseSyncConfigActions {
 export type UseSyncConfigReturn = UseSyncConfigState & UseSyncConfigActions;
 
 export function useSyncConfig(workspacePath: string | null): UseSyncConfigReturn {
+  const { t } = useTranslation("sync");
   const [config, setConfig] = useState<WorkspaceSyncConfig | null>(null);
   const [status, setStatus] = useState<StatusReport | null>(null);
   const [defaultAuthor, setDefaultAuthor] = useState<CommitAuthorHint | null>(null);
@@ -110,7 +112,7 @@ export function useSyncConfig(workspacePath: string | null): UseSyncConfigReturn
         if (cfgRes.status === "fulfilled") {
           setConfig(cfgRes.value);
         } else {
-          setError(describeSyncError(cfgRes.reason));
+          setError(describeSyncError(cfgRes.reason, t));
         }
         // Author hint and repo presence are advisory: a failure is not
         // fatal, just leaves the field at its previous default.
@@ -125,25 +127,28 @@ export function useSyncConfig(workspacePath: string | null): UseSyncConfigReturn
     return () => {
       cancelled = true;
     };
-  }, [workspacePath]);
+  }, [workspacePath, t]);
 
   /**
    * Wrap an imperative action with busy/error state management.
    * Centralises the try/catch so individual actions stay one-liners.
    */
-  const guarded = useCallback(async <T>(action: () => Promise<T>): Promise<T> => {
-    setBusy(true);
-    setError(null);
-    try {
-      return await action();
-    } catch (e) {
-      const msg = describeSyncError(e);
-      setError(msg);
-      throw e;
-    } finally {
-      setBusy(false);
-    }
-  }, []);
+  const guarded = useCallback(
+    async <T>(action: () => Promise<T>): Promise<T> => {
+      setBusy(true);
+      setError(null);
+      try {
+        return await action();
+      } catch (e) {
+        const msg = describeSyncError(e, t);
+        setError(msg);
+        throw e;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [t],
+  );
 
   const save = useCallback(
     async (next: WorkspaceSyncConfig) => {

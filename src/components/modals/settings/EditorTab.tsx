@@ -1,91 +1,87 @@
 import { Fragment } from "react";
+import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
 import type { EditorKeymap } from "@/lib/settings";
 import { Segmented } from "./Segmented";
 
-const KEYMAP_OPTIONS: { value: EditorKeymap; label: string }[] = [
-  { value: "default", label: "Default" },
-  { value: "vim", label: "Vim" },
-  { value: "vscode", label: "VSCode" },
-];
-
 interface KeymapTip {
   keys?: string;
-  text: string;
+  textKey: string;
 }
 
-// Short, per-preset cheat sheet shown under the selector. Modifier-bearing
+// Per-preset cheat sheet shown under the selector. The shortcut strings (`keys`)
+// are literal key names and stay untranslated; the prose lives in the settings
+// locale under editor.help.* and is resolved at render. Modifier-bearing
 // shortcuts are written generically ("Cmd/Ctrl") since the bindings are the same
 // across platforms apart from the primary modifier.
-const KEYMAP_HELP: Record<EditorKeymap, { title: string; tips: KeymapTip[] }> = {
+const KEYMAP_HELP: Record<EditorKeymap, { titleKey: string; tips: KeymapTip[] }> = {
   default: {
-    title: "Default (Glyph) shortcuts",
+    titleKey: "editor.help.default.title",
     tips: [
-      { keys: "[[", text: "in a folder workspace opens wikilink autocomplete" },
-      { keys: "Tab / Enter", text: "accept the highlighted completion" },
-      { keys: "Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z", text: "undo / redo" },
-      { text: "Standard OS text-editing shortcuts otherwise" },
+      { keys: "[[", textKey: "editor.help.default.autocomplete" },
+      { keys: "Tab / Enter", textKey: "editor.help.default.accept" },
+      { keys: "Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z", textKey: "editor.help.default.undoRedo" },
+      { textKey: "editor.help.default.standard" },
     ],
   },
   vim: {
-    title: "Vim quick reference",
+    titleKey: "editor.help.vim.title",
     tips: [
-      { keys: "Esc / i / a / v", text: "normal, insert, insert-after, visual modes" },
-      { keys: "w b e 0 $ gg G", text: "motions; f + char to jump; / to search" },
-      { keys: "d c y p", text: 'operators with counts and text objects (diw, ci")' },
-      {
-        text: "File commands like :w, :q, and :wq don't apply here — Glyph autosaves, and you close a tab with the Close Tab shortcut.",
-      },
+      { keys: "Esc / i / a / v", textKey: "editor.help.vim.modes" },
+      { keys: "w b e 0 $ gg G", textKey: "editor.help.vim.motions" },
+      { keys: "d c y p", textKey: "editor.help.vim.operators" },
+      { textKey: "editor.help.vim.files" },
     ],
   },
   vscode: {
-    title: "VSCode shortcuts",
+    titleKey: "editor.help.vscode.title",
     tips: [
-      { keys: "Alt+Up / Alt+Down", text: "move the current line up / down" },
-      { keys: "Shift+Alt+Up / Down", text: "copy the line up / down" },
-      { keys: "Cmd/Ctrl+/", text: "toggle line comment" },
-      {
-        keys: "Cmd/Ctrl+D",
-        text: "select the next occurrence; Cmd/Ctrl+] or [ to indent / outdent",
-      },
+      { keys: "Alt+Up / Alt+Down", textKey: "editor.help.vscode.moveLine" },
+      { keys: "Shift+Alt+Up / Down", textKey: "editor.help.vscode.copyLine" },
+      { keys: "Cmd/Ctrl+/", textKey: "editor.help.vscode.comment" },
+      { keys: "Cmd/Ctrl+D", textKey: "editor.help.vscode.multiSelect" },
     ],
   },
 };
 
 export function EditorTab() {
+  const { t } = useTranslation("settings");
   const { settings, updateSettings } = useSettings();
   const { editor } = settings;
   const help = KEYMAP_HELP[editor.keymap];
 
+  const keymapOptions: { value: EditorKeymap; label: string }[] = [
+    { value: "default", label: t("editor.keymapOptions.default") },
+    { value: "vim", label: t("editor.keymapOptions.vim") },
+    { value: "vscode", label: t("editor.keymapOptions.vscode") },
+  ];
+
   return (
     <div className="settings-section">
-      <div className="settings-section-title">Editor</div>
+      <div className="settings-section-title">{t("editor.title")}</div>
       <div className="settings-row">
         <div>
-          <span className="settings-label">Keymap</span>
-          <div className="settings-description">
-            Keyboard bindings for the markdown editor. Vim adds modal editing; VSCode mirrors common
-            VSCode shortcuts. Takes effect the next time a document enters edit or split mode.
-          </div>
+          <span className="settings-label">{t("editor.keymap.label")}</span>
+          <div className="settings-description">{t("editor.keymap.description")}</div>
         </div>
         <Segmented
           value={editor.keymap}
-          options={KEYMAP_OPTIONS}
+          options={keymapOptions}
           onChange={(v) => updateSettings("editor.keymap", v)}
         />
       </div>
 
       <div className="settings-description settings-keymap-help">
-        <strong>{help.title}</strong>
+        <strong>{t(help.titleKey)}</strong>
         <ul>
           {help.tips.map((tip) => (
-            <li key={tip.text}>
+            <li key={tip.textKey}>
               {tip.keys && (
                 <Fragment>
                   <code>{tip.keys}</code>{" "}
                 </Fragment>
               )}
-              {tip.text}
+              {t(tip.textKey)}
             </li>
           ))}
         </ul>

@@ -32,6 +32,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - GitHub-style alerts — `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`
 - Heading anchor links — every heading gets a GitHub-compatible slug; `[text](#heading)` scrolls smoothly to the target
 - Wikilinks — `[[note]]`, `[[note|alias]]`, `[[note#heading]]` resolve against the open folder workspace; broken links render with a distinct style
+- Relative links — `[text](./note.md)`, `[text](../folder/board.canvas)`, and relative image paths resolve against the document's folder (including `../`) and open in-app, anywhere inside the open workspace; targets that would escape the workspace folder are not followed
 - Backlinks panel — sidebar list of every workspace note that links to the current file, with surrounding-line snippets
 - Syntax highlighting for code blocks (6 themes: Glyph, GitHub, Monokai, Nord, Solarized Light/Dark)
 - Copy button on code blocks
@@ -77,6 +78,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 
 ### Appearance
 - System / Light / Dark themes
+- Localized interface — follows your system language, or pick one in Settings → Appearance (community translations welcome)
 - Customizable font family, size, line height, and content width
 - Custom code font support
 - Platform-native styling (macOS vibrancy, Windows Mica)
@@ -119,6 +121,12 @@ choco install glyph
 ```powershell
 scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
 scoop install glyph
+```
+
+### Linux (Snap)
+
+```bash
+sudo snap install glyph
 ```
 
 ### Arch Linux (AUR)

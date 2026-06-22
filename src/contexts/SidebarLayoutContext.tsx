@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useContext, useMemo } from "react";
+import { useSettings } from "@/hooks/useSettings";
 import { useSidebarLayout } from "@/hooks/useSidebarLayout";
-import type { Settings, SidebarLayout } from "@/lib/settings";
+import type { SidebarLayout } from "@/lib/settings";
 
 type SidebarLayoutApi = ReturnType<typeof useSidebarLayout>;
 
@@ -12,17 +13,8 @@ export interface SidebarLayoutContextValue extends SidebarLayoutApi {
 
 export const SidebarLayoutContext = createContext<SidebarLayoutContextValue | null>(null);
 
-interface SidebarLayoutProviderProps {
-  settings: Settings;
-  updateSettings: (key: string, value: unknown) => void;
-  children: ReactNode;
-}
-
-export function SidebarLayoutProvider({
-  settings,
-  updateSettings,
-  children,
-}: SidebarLayoutProviderProps) {
+export function SidebarLayoutProvider({ children }: { children: ReactNode }) {
+  const { settings, updateSettings } = useSettings();
   const layout = useSidebarLayout({
     filesVisibleSetting: settings.layout.filesSidebarVisible,
     outlineVisibleSetting: settings.layout.outlineSidebarVisible,

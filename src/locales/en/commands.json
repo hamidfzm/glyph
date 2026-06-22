@@ -1,0 +1,33 @@
+{
+  "palette": {
+    "title": "Command palette",
+    "placeholder": "Type a command, file, or heading…",
+    "queryLabel": "Command palette query",
+    "empty": "No results"
+  },
+  "section": {
+    "Files": "Files",
+    "Headings": "Headings",
+    "Commands": "Commands"
+  },
+  "openFile": "Open File…",
+  "openFolder": "Open Folder…",
+  "closeTab": "Close Tab",
+  "toggleFilesSidebar": "Toggle Files Sidebar",
+  "toggleOutlineSidebar": "Toggle Outline Sidebar",
+  "resetView": "Reset View",
+  "openSettings": "Settings…",
+  "openSyncSettings": "Cloud Sync…",
+  "find": "Find in Document",
+  "toggleEdit": "Toggle Edit Mode",
+  "openGraph": "Open Graph",
+  "print": "Print…",
+  "exportHtml": "Export to HTML…",
+  "exportDocx": "Export to Word (DOCX)…",
+  "exportEpub": "Export to EPUB…",
+  "exportPdf": "Export to PDF…",
+  "zoomIn": "Zoom In",
+  "zoomOut": "Zoom Out",
+  "zoomReset": "Reset Zoom",
+  "readAloud": "Read Aloud"
+}

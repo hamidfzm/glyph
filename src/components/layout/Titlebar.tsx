@@ -1,8 +1,11 @@
+import { useTranslation } from "react-i18next";
+
 interface TitlebarProps {
   fileName?: string;
 }
 
 export function Titlebar({ fileName }: TitlebarProps) {
+  const { t } = useTranslation("common");
   return (
     <div
       data-tauri-drag-region
@@ -21,7 +24,7 @@ export function Titlebar({ fileName }: TitlebarProps) {
         data-tauri-drag-region
         className="text-sm text-[var(--color-text-secondary)] select-none truncate max-w-[50%]"
       >
-        {fileName || "Glyph"}
+        {fileName || t("app.name")}
       </span>
     </div>
   );

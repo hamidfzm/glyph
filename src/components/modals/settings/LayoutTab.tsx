@@ -1,19 +1,21 @@
+import { Trans, useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
 import { Segmented } from "./Segmented";
 import { Toggle } from "./Toggle";
 
 export function LayoutTab() {
+  const { t } = useTranslation("settings");
   const { settings, updateSettings } = useSettings();
   const { layout } = settings;
 
   return (
     <div className="settings-section">
-      <div className="settings-section-title">Sidebars</div>
+      <div className="settings-section-title">{t("layout.title")}</div>
       <div className="settings-row">
         <div>
-          <span className="settings-label">Show Files Sidebar</span>
+          <span className="settings-label">{t("layout.showFiles.label")}</span>
           <div className="settings-description">
-            Workspace file tree (folder tabs only). Toggle with <kbd>Cmd/Ctrl+B</kbd>.
+            <Trans t={t} i18nKey="layout.showFiles.description" components={{ kbd: <kbd /> }} />
           </div>
         </div>
         <Toggle
@@ -24,9 +26,9 @@ export function LayoutTab() {
 
       <div className="settings-row">
         <div>
-          <span className="settings-label">Show Outline Sidebar</span>
+          <span className="settings-label">{t("layout.showOutline.label")}</span>
           <div className="settings-description">
-            Document table of contents. Toggle with <kbd>Cmd/Ctrl+\</kbd>.
+            <Trans t={t} i18nKey="layout.showOutline.description" components={{ kbd: <kbd /> }} />
           </div>
         </div>
         <Toggle
@@ -37,18 +39,17 @@ export function LayoutTab() {
 
       <div className="settings-row">
         <div>
-          <span className="settings-label">Sidebar layout</span>
+          <span className="settings-label">{t("layout.sidebarLayout.label")}</span>
           <div className="settings-description">
-            Folder tabs only. <b>Split</b>: Files and Outline on opposite sides. <b>Combined</b>:
-            stacked in one panel. <b>Beside</b>: two adjacent panels on the same side.
+            <Trans t={t} i18nKey="layout.sidebarLayout.description" components={{ b: <b /> }} />
           </div>
         </div>
         <Segmented
           value={layout.sidebarLayout}
           options={[
-            { value: "split", label: "Split" },
-            { value: "combined", label: "Combined" },
-            { value: "beside", label: "Beside" },
+            { value: "split", label: t("layout.sidebarLayout.split") },
+            { value: "combined", label: t("layout.sidebarLayout.combined") },
+            { value: "beside", label: t("layout.sidebarLayout.beside") },
           ]}
           onChange={(v) => updateSettings("layout.sidebarLayout", v)}
         />
@@ -56,11 +57,8 @@ export function LayoutTab() {
 
       <div className="settings-row">
         <div>
-          <span className="settings-label">Swap sidebar sides</span>
-          <div className="settings-description">
-            Flip which side each panel lives on. Default is Files left / Outline right; on, it
-            becomes Files right / Outline left.
-          </div>
+          <span className="settings-label">{t("layout.swap.label")}</span>
+          <div className="settings-description">{t("layout.swap.description")}</div>
         </div>
         <Toggle
           checked={layout.swapSidebarSides}
@@ -69,7 +67,7 @@ export function LayoutTab() {
       </div>
 
       <div className="settings-row">
-        <span className="settings-label">Sidebar Width</span>
+        <span className="settings-label">{t("layout.width.label")}</span>
         <div className="settings-range">
           <input
             type="range"

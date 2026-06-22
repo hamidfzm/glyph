@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { useCanvasViewport } from "@/hooks/useCanvasViewport";
 import { canvasColorToCss } from "@/lib/canvas/color";
 import { nodesBoundingBox } from "@/lib/canvas/geometry";
@@ -37,6 +38,7 @@ export function CanvasViewer({
   onChange,
   viewportKey,
 }: CanvasViewerProps) {
+  const { t } = useTranslation("common");
   const { viewport, restored, stageRef, panBy, zoomBy, fitTo } = useCanvasViewport(viewportKey);
 
   const parsed = useMemo(() => {
@@ -93,7 +95,7 @@ export function CanvasViewer({
   if (parsed.error) {
     return (
       <div className="glyph-canvas-error" role="alert">
-        <p>This canvas couldn't be opened.</p>
+        <p>{t("canvasViewer.error")}</p>
         <code>{parsed.error}</code>
       </div>
     );

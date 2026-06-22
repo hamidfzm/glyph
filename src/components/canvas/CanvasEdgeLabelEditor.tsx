@@ -1,4 +1,5 @@
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { Point } from "@/lib/canvas/geometry";
 
 interface CanvasEdgeLabelEditorProps {
@@ -19,6 +20,7 @@ export function CanvasEdgeLabelEditor({
   onCommit,
   onCancel,
 }: CanvasEdgeLabelEditorProps) {
+  const { t } = useTranslation("common");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const valueRef = useRef(initial);
   const done = useRef(false);
@@ -69,8 +71,8 @@ export function CanvasEdgeLabelEditor({
       className="glyph-canvas-edge-label-editor"
       style={{ left: at.x, top: at.y }}
       defaultValue={initial}
-      placeholder="Label"
-      aria-label="Edge label"
+      placeholder={t("canvasEdge.labelPlaceholder")}
+      aria-label={t("canvasEdge.labelAria")}
       onChange={(e) => {
         valueRef.current = e.target.value;
       }}

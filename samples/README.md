@@ -282,6 +282,32 @@ When you open a folder as a workspace, `[[note]]` style links resolve to other m
 
 Opening this file on its own (no folder) treats every wikilink as broken.
 
+### Relative links
+
+Standard markdown links with relative paths resolve against this document's
+folder and open in the workspace, including paths that walk up with `../`. With
+the `samples/` folder open, these all open in-app:
+
+- [the index](./Index.md) — a sibling markdown file
+- [kitchen notes](Notes/Cooking.md) — a file in a subfolder
+- [the canvas demo](./canvas-demo.canvas) — opens as a canvas board
+
+Relative image paths resolve the same way. This SVG sits in a sibling folder:
+
+![A relative image from a sibling folder](./assets/relative-image.svg)
+
+`../` and `../../` are best seen from a nested note, where they have somewhere
+to climb to:
+
+- [Notes/Relative-Links](Notes/Relative-Links.md) — one level deep; uses `../` to reach the root
+- [Notes/Deep/Deeper-Relative-Links](Notes/Deep/Deeper-Relative-Links.md) — two levels deep; uses `../../`
+
+Targets that resolve **outside** the open folder are refused. From this root
+README, `../` already points above `samples/`, so links like
+`[escape](../outside.md)` and images like `![](../outside.svg)` are not
+followed and render nothing. Opening any of these files on its own (no folder)
+leaves every relative link to the browser instead.
+
 ### Backlinks
 
 When you have the `samples/` folder open, the **Backlinks** section under the file tree lists every other note that links to the current document. This file is referenced from [[Index]] and [[Notes/Cooking]], so opening either of them will show *this* file in their backlinks panel.

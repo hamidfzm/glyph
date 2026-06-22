@@ -17,7 +17,9 @@
 // All Tauri command calls are routed through `useSyncConfig`, so this
 // component stays a thin form view.
 
+import type { TFunction } from "i18next";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { useSyncConfigContext } from "@/contexts/SyncConfigContext";
 import {
@@ -27,14 +29,22 @@ import {
   type WorkspaceSyncConfig,
 } from "@/lib/sync";
 
-const CONFLICT_POLICIES: { id: ConflictPolicy; label: string; description: string }[] = [
-  { id: "prompt", label: "Prompt me", description: "Stop on conflicts and open the resolver." },
+const CONFLICT_POLICIES: { id: ConflictPolicy; labelKey: string; descKey: string }[] = [
+  {
+    id: "prompt",
+    labelKey: "conflictPolicy.prompt.label",
+    descKey: "conflictPolicy.prompt.description",
+  },
   {
     id: "prefer-remote",
-    label: "Take remote",
-    description: "Discard local edits when they clash.",
+    labelKey: "conflictPolicy.preferRemote.label",
+    descKey: "conflictPolicy.preferRemote.description",
   },
-  { id: "prefer-local", label: "Keep local", description: "Push local edits over the remote." },
+  {
+    id: "prefer-local",
+    labelKey: "conflictPolicy.preferLocal.label",
+    descKey: "conflictPolicy.preferLocal.description",
+  },
 ];
 
 export interface FormState {
@@ -152,13 +162,13 @@ export async function commitSaveConfig(
   }
 }
 
-function relativeTime(unix: number | null): string {
-  if (!unix) return "never";
+function relativeTime(unix: number | null, t: TFunction<"sync">): string {
+  if (!unix) return t("relativeTime.never");
   const seconds = Math.max(0, Math.floor(Date.now() / 1000) - unix);
-  if (seconds < 60) return `${seconds}s ago`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
+  if (seconds < 60) return t("relativeTime.secondsAgo", { count: seconds });
+  if (seconds < 3600) return t("relativeTime.minutesAgo", { count: Math.floor(seconds / 60) });
+  if (seconds < 86400) return t("relativeTime.hoursAgo", { count: Math.floor(seconds / 3600) });
+  return t("relativeTime.daysAgo", { count: Math.floor(seconds / 86400) });
 }
 
 interface SyncSettingsModalProps {
@@ -167,6 +177,7 @@ interface SyncSettingsModalProps {
 }
 
 export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
+  const { t } = useTranslation("sync");
   const {
     workspacePath,
     config,
@@ -258,16 +269,16 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
       }}
       role="dialog"
       aria-modal="true"
-      aria-label="Cloud Sync settings"
+      aria-label={t("modal.title")}
     >
       <div className="settings-modal">
         <div className="settings-header">
-          <h2>Cloud Sync</h2>
+          <h2>{t("modal.heading")}</h2>
           <button
             type="button"
             className="settings-close"
             onClick={onClose}
-            aria-label="Close cloud sync settings"
+            aria-label={t("modal.close")}
           >
             <ModalCloseIcon />
           </button>
@@ -275,29 +286,25 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
 
         <div className="settings-body settings-sync">
           {!workspacePath ? (
-            <p className="settings-empty">
-              Open a folder workspace to configure cloud sync for it. Single-file tabs sync as part
-              of whichever folder they live in.
-            </p>
+            <p className="settings-empty">{t("empty")}</p>
           ) : (
             <>
               <p className="settings-section-description">
-                Git-backed sync for this workspace. Glyph ships with its own libgit2 build — no
-                system <kbd>git</kbd> needed.
+                <Trans i18nKey="sync:description" components={{ kbd: <kbd /> }} />
               </p>
 
-              {loading && <p className="settings-busy">Loading…</p>}
+              {loading && <p className="settings-busy">{t("loading")}</p>}
 
               {!loading && repoPresent === false && (
                 <div className="settings-warning" data-testid="sync-init-banner">
-                  <div>This folder isn't a git repository yet.</div>
+                  <div>{t("notRepo")}</div>
                   <button
                     type="button"
                     className="settings-secondary-btn"
                     onClick={handleInitRepo}
                     disabled={busy}
                   >
-                    Initialize repo
+                    {t("initRepo")}
                   </button>
                 </div>
               )}
@@ -306,13 +313,13 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                 <>
                   <label className="settings-field">
                     <span className="settings-field-label">
-                      Remote URL{" "}
-                      <span className="settings-field-hint">(blank = local-only history)</span>
+                      {t("remoteUrl.label")}{" "}
+                      <span className="settings-field-hint">{t("remoteUrl.hint")}</span>
                     </span>
                     <input
                       type="url"
                       className="settings-input"
-                      placeholder="https://github.com/you/notes.git"
+                      placeholder={t("remoteUrl.placeholder")}
                       value={form.remoteUrl}
                       onChange={(e) => update("remoteUrl", e.target.value)}
                       spellCheck={false}
@@ -321,11 +328,11 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                   </label>
 
                   <label className="settings-field">
-                    <span className="settings-field-label">Branch</span>
+                    <span className="settings-field-label">{t("branch.label")}</span>
                     <input
                       type="text"
                       className="settings-input"
-                      placeholder="main"
+                      placeholder={t("branch.placeholder")}
                       value={form.remoteBranch}
                       onChange={(e) => update("remoteBranch", e.target.value)}
                       spellCheck={false}
@@ -334,7 +341,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                   </label>
 
                   <fieldset className="settings-field">
-                    <legend className="settings-field-label">Conflict policy</legend>
+                    <legend className="settings-field-label">{t("conflictPolicy.legend")}</legend>
                     <div className="settings-segmented">
                       {CONFLICT_POLICIES.map((p) => (
                         <button
@@ -343,20 +350,20 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                           className="settings-segmented-option"
                           data-active={form.conflictPolicy === p.id}
                           onClick={() => update("conflictPolicy", p.id)}
-                          title={p.description}
+                          title={t(p.descKey)}
                         >
-                          {p.label}
+                          {t(p.labelKey)}
                         </button>
                       ))}
                     </div>
                   </fieldset>
 
                   <label className="settings-field">
-                    <span className="settings-field-label">Author name</span>
+                    <span className="settings-field-label">{t("authorName.label")}</span>
                     <input
                       type="text"
                       className="settings-input"
-                      placeholder={defaultAuthor?.name ?? "defaults to your git config"}
+                      placeholder={defaultAuthor?.name ?? t("authorName.placeholder")}
                       value={form.authorName}
                       onChange={(e) => update("authorName", e.target.value)}
                       spellCheck={false}
@@ -365,11 +372,11 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                   </label>
 
                   <label className="settings-field">
-                    <span className="settings-field-label">Author email</span>
+                    <span className="settings-field-label">{t("authorEmail.label")}</span>
                     <input
                       type="email"
                       className="settings-input"
-                      placeholder={defaultAuthor?.email ?? "you@example.com"}
+                      placeholder={defaultAuthor?.email ?? t("authorEmail.placeholder")}
                       value={form.authorEmail}
                       onChange={(e) => update("authorEmail", e.target.value)}
                       spellCheck={false}
@@ -379,34 +386,29 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
 
                   <label className="settings-field">
                     <span className="settings-field-label">
-                      Personal access token{" "}
-                      <span className="settings-field-hint">(HTTPS only)</span>
+                      {t("token.label")}{" "}
+                      <span className="settings-field-hint">{t("token.hint")}</span>
                     </span>
                     <input
                       type="password"
                       className="settings-input"
-                      placeholder={config ? "saved — leave blank to keep" : "ghp_…"}
+                      placeholder={config ? t("token.placeholderSaved") : t("token.placeholderNew")}
                       value={form.token}
                       onChange={(e) => update("token", e.target.value)}
                       autoComplete="off"
                     />
-                    <span className="settings-field-hint">
-                      Stored in memory only for now. The next release routes it through your OS
-                      keychain.
-                    </span>
+                    <span className="settings-field-hint">{t("token.note")}</span>
                   </label>
 
                   <label className="settings-field">
                     <span className="settings-field-label">
-                      Commit message{" "}
-                      <span className="settings-field-hint">
-                        (blank = auto-generated from changes)
-                      </span>
+                      {t("commitMessage.label")}{" "}
+                      <span className="settings-field-hint">{t("commitMessage.hint")}</span>
                     </span>
                     <input
                       type="text"
                       className="settings-input"
-                      placeholder="e.g. Update notes"
+                      placeholder={t("commitMessage.placeholder")}
                       value={form.commitMessage}
                       onChange={(e) => update("commitMessage", e.target.value)}
                     />
@@ -421,7 +423,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                       onClick={handleSave}
                       disabled={busy}
                     >
-                      {config ? "Save changes" : "Save config"}
+                      {config ? t("saveChanges") : t("saveConfig")}
                     </button>
                     {config && (
                       <>
@@ -431,7 +433,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                           onClick={handleSyncNow}
                           disabled={busy}
                         >
-                          Sync now
+                          {t("syncNow")}
                         </button>
                         <button
                           type="button"
@@ -439,7 +441,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                           onClick={refreshStatus}
                           disabled={busy}
                         >
-                          Refresh status
+                          {t("refreshStatus")}
                         </button>
                         <button
                           type="button"
@@ -447,7 +449,7 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                           onClick={() => remove()}
                           disabled={busy}
                         >
-                          Disable sync
+                          {t("disable")}
                         </button>
                       </>
                     )}
@@ -458,28 +460,48 @@ export function SyncSettingsModal({ open, onClose }: SyncSettingsModalProps) {
                       {status && (
                         <>
                           <div>
-                            Working tree: <strong>{status.clean ? "clean" : "dirty"}</strong>
+                            <Trans
+                              i18nKey="sync:status.workingTree"
+                              components={{ strong: <strong /> }}
+                              values={{
+                                state: status.clean ? t("status.clean") : t("status.dirty"),
+                              }}
+                            />
                           </div>
                           <div>
-                            Ahead: <strong>{status.ahead}</strong> · Behind:{" "}
-                            <strong>{status.behind}</strong>
+                            <Trans
+                              i18nKey="sync:status.aheadBehind"
+                              components={{ strong: <strong /> }}
+                              values={{ ahead: status.ahead, behind: status.behind }}
+                            />
                           </div>
                           {status.conflicts.length > 0 && (
                             <div className="settings-warning">
-                              Unresolved conflicts: {status.conflicts.join(", ")}
+                              {t("status.conflicts", { files: status.conflicts.join(", ") })}
                             </div>
                           )}
-                          <div>Last sync: {relativeTime(status.lastSyncUnix)}</div>
+                          <div>
+                            {t("status.lastSync", { time: relativeTime(status.lastSyncUnix, t) })}
+                          </div>
                         </>
                       )}
                       {lastSync && (
                         <div>
-                          Last run: pulled <strong>{lastSync.pulledCount}</strong>, committed{" "}
-                          <strong>{lastSync.committedCount}</strong>, pushed{" "}
-                          <strong>{lastSync.pushedCount}</strong>
-                          {lastSync.conflicts.length > 0
-                            ? `, ${lastSync.conflicts.length} conflict(s) need attention`
-                            : ""}
+                          <Trans
+                            i18nKey="sync:status.lastRun"
+                            components={{ strong: <strong /> }}
+                            values={{
+                              pulled: lastSync.pulledCount,
+                              committed: lastSync.committedCount,
+                              pushed: lastSync.pushedCount,
+                              suffix:
+                                lastSync.conflicts.length > 0
+                                  ? t("status.lastRunConflicts", {
+                                      count: lastSync.conflicts.length,
+                                    })
+                                  : "",
+                            }}
+                          />
                         </div>
                       )}
                     </div>

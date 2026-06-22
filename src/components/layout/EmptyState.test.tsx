@@ -51,4 +51,12 @@ describe("EmptyState", () => {
     const button = screen.getByText("Open File");
     expect(button).toHaveAttribute("type", "button");
   });
+
+  it("shows the folder-empty prompt without open actions when folderEmpty", () => {
+    renderEmptyState({ folderEmpty: true });
+    expect(screen.getByText("No file open in this folder")).toBeInTheDocument();
+    expect(screen.getByText("Pick a file from the sidebar to start reading.")).toBeInTheDocument();
+    expect(screen.queryByText("Open File")).not.toBeInTheDocument();
+    expect(screen.queryByText("Open Folder")).not.toBeInTheDocument();
+  });
 });

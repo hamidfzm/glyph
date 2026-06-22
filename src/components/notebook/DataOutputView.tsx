@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { DataOutput } from "@/lib/notebook/types";
 import { MarkdownContent } from "../markdown/MarkdownContent";
 import { AnsiText } from "./AnsiText";
@@ -19,6 +20,7 @@ function pickRichest(data: Record<string, string>): string | null {
 // Renders a notebook "execute_result" / "display_data" output, choosing the
 // richest available MIME representation.
 export function DataOutputView({ output, filePath }: { output: DataOutput; filePath?: string }) {
+  const { t } = useTranslation("common");
   const mime = pickRichest(output.data);
   if (!mime) {
     const interactive = Object.keys(output.data).find(
@@ -27,8 +29,8 @@ export function DataOutputView({ output, filePath }: { output: DataOutput; fileP
     return (
       <div className="nb-output-unsupported">
         {interactive
-          ? `Interactive output (${interactive}) is not supported yet`
-          : "Unsupported output"}
+          ? t("notebook.unsupportedInteractive", { type: interactive })
+          : t("notebook.unsupported")}
       </div>
     );
   }
