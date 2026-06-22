@@ -14,8 +14,8 @@ describe("useWorkspaceNotice", () => {
     const { result } = renderHook(() => useWorkspaceNotice());
     expect(result.current.notice).toBeNull();
 
-    act(() => result.current.show("nope"));
-    expect(result.current.notice).toBe("nope");
+    act(() => result.current.show({ key: "notice.nestedWorkspace" }));
+    expect(result.current.notice).toEqual({ key: "notice.nestedWorkspace" });
 
     act(() => vi.advanceTimersByTime(6000));
     expect(result.current.notice).toBeNull();
@@ -24,12 +24,12 @@ describe("useWorkspaceNotice", () => {
   it("keeps a persistent notice up past the auto-dismiss timeout", () => {
     const { result } = renderHook(() => useWorkspaceNotice());
 
-    act(() => result.current.show("heads up", { persistent: true }));
-    expect(result.current.notice).toBe("heads up");
+    act(() => result.current.show({ key: "notice.nestedUnderGit" }, { persistent: true }));
+    expect(result.current.notice).toEqual({ key: "notice.nestedUnderGit" });
 
     // Well past the transient timeout: a persistent notice stays until dismissed.
     act(() => vi.advanceTimersByTime(60000));
-    expect(result.current.notice).toBe("heads up");
+    expect(result.current.notice).toEqual({ key: "notice.nestedUnderGit" });
 
     act(() => result.current.dismiss());
     expect(result.current.notice).toBeNull();
@@ -37,21 +37,21 @@ describe("useWorkspaceNotice", () => {
 
   it("dismiss clears the notice immediately", () => {
     const { result } = renderHook(() => useWorkspaceNotice());
-    act(() => result.current.show("nope"));
+    act(() => result.current.show({ key: "notice.nestedWorkspace" }));
     act(() => result.current.dismiss());
     expect(result.current.notice).toBeNull();
   });
 
   it("a new show replaces the message and resets the timer", () => {
     const { result } = renderHook(() => useWorkspaceNotice());
-    act(() => result.current.show("first"));
+    act(() => result.current.show({ key: "error.couldntOpen" }));
     act(() => vi.advanceTimersByTime(3000));
-    act(() => result.current.show("second"));
-    expect(result.current.notice).toBe("second");
+    act(() => result.current.show({ key: "notice.nestedWorkspace" }));
+    expect(result.current.notice).toEqual({ key: "notice.nestedWorkspace" });
 
     // 3s after the second show: still up (timer was reset).
     act(() => vi.advanceTimersByTime(3000));
-    expect(result.current.notice).toBe("second");
+    expect(result.current.notice).toEqual({ key: "notice.nestedWorkspace" });
 
     act(() => vi.advanceTimersByTime(3000));
     expect(result.current.notice).toBeNull();

@@ -9,23 +9,27 @@ import { i18n } from "@/lib/i18n";
 // is merged underneath the active locale so any missing key falls back.
 export function useNativeMenuLabels() {
   useEffect(() => {
-    const push = () => {
+    const push = async () => {
+      // Nothing else mounts useTranslation("menu"), so the active locale's menu
+      // bundle isn't pulled in by render; load it explicitly before reading.
+      await i18n.loadNamespaces("menu");
       const en = (i18n.getResourceBundle("en", "menu") ?? {}) as Record<string, string>;
       const active = (i18n.getResourceBundle(i18n.language, "menu") ?? {}) as Record<
         string,
         string
       >;
-      invoke("set_menu_labels", { labels: { ...en, ...active } }).catch((err) => {
+      try {
+        await invoke("set_menu_labels", { labels: { ...en, ...active } });
+      } catch (err) {
         console.error("Failed to localize native menu:", err);
-      });
+      }
     };
 
-    push();
-    i18n.on("languageChanged", push);
-    i18n.on("loaded", push);
+    const run = () => void push();
+    run();
+    i18n.on("languageChanged", run);
     return () => {
-      i18n.off("languageChanged", push);
-      i18n.off("loaded", push);
+      i18n.off("languageChanged", run);
     };
   }, []);
 }

@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/**
+ * A workspace notice as a translation key (in the `workspace` namespace) plus
+ * interpolation values, rather than a resolved string — so the banner can
+ * re-translate it live when the UI locale changes instead of freezing the
+ * language it was opened in.
+ */
+export interface WorkspaceNotice {
+  key: string;
+  values?: Record<string, string>;
+}
+
 /** How long a transient notice stays up before auto-dismissing. */
 const AUTO_DISMISS_MS = 6000;
 
@@ -11,7 +22,7 @@ const AUTO_DISMISS_MS = 6000;
  * inside a parent git repo) stays up until the user dismisses it.
  */
 export function useWorkspaceNotice() {
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<WorkspaceNotice | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearTimer = useCallback(() => {
@@ -27,9 +38,9 @@ export function useWorkspaceNotice() {
   }, [clearTimer]);
 
   const show = useCallback(
-    (message: string, options?: { persistent?: boolean }) => {
+    (next: WorkspaceNotice, options?: { persistent?: boolean }) => {
       clearTimer();
-      setNotice(message);
+      setNotice(next);
       if (!options?.persistent) {
         timerRef.current = setTimeout(() => setNotice(null), AUTO_DISMISS_MS);
       }
