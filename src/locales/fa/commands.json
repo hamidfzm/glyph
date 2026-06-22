@@ -1,0 +1,33 @@
+{
+  "palette": {
+    "title": "پنل فرمان",
+    "placeholder": "یک فرمان، فایل یا عنوان تایپ کنید…",
+    "queryLabel": "جستجوی پنل فرمان",
+    "empty": "نتیجه‌ای یافت نشد"
+  },
+  "section": {
+    "Files": "فایل‌ها",
+    "Headings": "عنوان‌ها",
+    "Commands": "فرمان‌ها"
+  },
+  "openFile": "باز کردن فایل…",
+  "openFolder": "باز کردن پوشه…",
+  "closeTab": "بستن زبانه",
+  "toggleFilesSidebar": "تغییر نوار فایل‌ها",
+  "toggleOutlineSidebar": "تغییر نوار رئوس مطالب",
+  "resetView": "بازنشانی نما",
+  "openSettings": "تنظیمات…",
+  "openSyncSettings": "همگام‌سازی ابری…",
+  "find": "جستجو در سند",
+  "toggleEdit": "تغییر حالت ویرایش",
+  "openGraph": "باز کردن گراف",
+  "print": "چاپ…",
+  "exportHtml": "خروجی به HTML…",
+  "exportDocx": "خروجی به Word (DOCX)…",
+  "exportEpub": "خروجی به EPUB…",
+  "exportPdf": "خروجی به PDF…",
+  "zoomIn": "بزرگ‌نمایی",
+  "zoomOut": "کوچک‌نمایی",
+  "zoomReset": "بازنشانی بزرگ‌نمایی",
+  "readAloud": "خواندن با صدای بلند"
+}

@@ -21,6 +21,13 @@ describe("useLocale", () => {
     expect(mockOsLocale).not.toHaveBeenCalled();
   });
 
+  it("sets dir=rtl for a right-to-left locale", async () => {
+    renderHook(() => useLocale("fa"));
+    await waitFor(() => expect(i18n.language).toBe("fa"));
+    expect(document.documentElement.lang).toBe("fa");
+    expect(document.documentElement.dir).toBe("rtl");
+  });
+
   it("consults the OS locale when set to system", async () => {
     mockOsLocale.mockResolvedValue("en-GB");
     renderHook(() => useLocale("system"));

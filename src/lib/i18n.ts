@@ -7,6 +7,12 @@ import enCommon from "@/locales/en/common.json";
 import enSettings from "@/locales/en/settings.json";
 import enSync from "@/locales/en/sync.json";
 import enWorkspace from "@/locales/en/workspace.json";
+import faAi from "@/locales/fa/ai.json";
+import faCommands from "@/locales/fa/commands.json";
+import faCommon from "@/locales/fa/common.json";
+import faSettings from "@/locales/fa/settings.json";
+import faSync from "@/locales/fa/sync.json";
+import faWorkspace from "@/locales/fa/workspace.json";
 
 // The shared i18next instance. English is bundled inline as the fallback;
 // additional locales are registered here as they land (and can move to lazy
@@ -23,6 +29,14 @@ i18n.use(initReactI18next).init({
       ai: enAi,
       sync: enSync,
       workspace: enWorkspace,
+    },
+    fa: {
+      common: faCommon,
+      settings: faSettings,
+      commands: faCommands,
+      ai: faAi,
+      sync: faSync,
+      workspace: faWorkspace,
     },
   },
   lng: FALLBACK_LOCALE,
