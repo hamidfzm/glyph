@@ -147,7 +147,7 @@
     "errorTitle": "图表渲染失败"
   },
   "taskList": {
-    "toggle": "切换任务"
+    "toggle": "切换任务状态"
   },
   "frontmatter": {
     "title": "标题",
@@ -158,7 +158,7 @@
   "notebook": {
     "errorTitle": "无法渲染此 notebook",
     "empty": "此 notebook 没有单元格。",
-    "sourceBanner": "只读源视图 — notebook 无法在 Glyph 中编辑。",
+    "sourceBanner": "只读源码视图，notebook 无法在 Glyph 中编辑。",
     "unsupportedInteractive": "尚不支持交互式输出 ({{type}})",
     "unsupported": "不支持的输出"
   },
@@ -196,7 +196,7 @@
   },
   "graph": {
     "label": "工作区图谱",
-    "reset": "重新居中并适应图谱",
+    "reset": "重新居中并缩放以适应视图",
     "resetView": "重置视图",
     "emptyState": "尚无可绘制图谱的笔记。请向此工作区添加 markdown 文件。"
   },

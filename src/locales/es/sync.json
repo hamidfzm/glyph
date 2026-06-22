@@ -20,12 +20,12 @@
   },
   "conflictPolicy": {
     "legend": "Política de conflictos",
-    "prompt": { "label": "Preguntarme", "description": "Detenerse en los conflictos y abrir el resolutor." },
+    "prompt": { "label": "Preguntarme", "description": "Detener la sincronización ante un conflicto y abrir la herramienta de resolución." },
     "preferRemote": {
-      "label": "Tomar remoto",
-      "description": "Descartar las ediciones locales cuando entren en conflicto."
+      "label": "Usar la versión remota",
+      "description": "Descartar los cambios locales cuando entren en conflicto."
     },
-    "preferLocal": { "label": "Mantener local", "description": "Aplicar las ediciones locales sobre el remoto." }
+    "preferLocal": { "label": "Conservar la versión local", "description": "Imponer los cambios locales sobre el remoto." }
   },
   "authorName": { "label": "Nombre del autor", "placeholder": "por defecto, tu configuración de git" },
   "authorEmail": { "label": "Correo del autor", "placeholder": "you@example.com" },
@@ -34,7 +34,7 @@
     "hint": "(solo HTTPS)",
     "placeholderSaved": "guardado: déjalo en blanco para conservarlo",
     "placeholderNew": "ghp_…",
-    "note": "Por ahora se guarda solo en memoria. La próxima versión lo enrutará a través del llavero de tu sistema operativo."
+    "note": "Por ahora se guarda solo en memoria. La próxima versión lo almacenará en el llavero de tu sistema operativo."
   },
   "commitMessage": {
     "label": "Mensaje del commit",
@@ -48,9 +48,9 @@
   "disable": "Desactivar sincronización",
   "status": {
     "workingTree": "Árbol de trabajo: <strong>{{state}}</strong>",
-    "clean": "limpio",
-    "dirty": "modificado",
-    "aheadBehind": "Adelante: <strong>{{ahead}}</strong> · Atrás: <strong>{{behind}}</strong>",
+    "clean": "sin cambios",
+    "dirty": "con cambios",
+    "aheadBehind": "Por delante: <strong>{{ahead}}</strong> · Por detrás: <strong>{{behind}}</strong>",
     "conflicts": "Conflictos sin resolver: {{files}}",
     "lastSync": "Última sincronización: {{time}}",
     "lastRun": "Última ejecución: descargados <strong>{{pulled}}</strong>, confirmados <strong>{{committed}}</strong>, enviados <strong>{{pushed}}</strong>{{suffix}}",
@@ -61,7 +61,7 @@
     "configured": "Sincronización configurada",
     "conflicts": "Conflictos ({{count}})",
     "changes": "Sincronización +{{ahead}}/-{{behind}}",
-    "dirty": "Sincronización: modificado",
+    "dirty": "Sincronización: con cambios",
     "synced": "Sincronizado {{time}}",
     "syncedDefault": "Sincronizado",
     "open": "Abrir ajustes de sincronización en la nube"

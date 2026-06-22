@@ -56,7 +56,7 @@
       "narrow": "Schmal",
       "medium": "Mittel",
       "wide": "Breit",
-      "full": "Voll"
+      "full": "Maximal"
     },
     "code": {
       "title": "Code"
@@ -138,7 +138,7 @@
     "title": "Editor",
     "keymap": {
       "label": "Tastenbelegung",
-      "description": "Tastenbelegungen für den Markdown-Editor. Vim fügt modale Bearbeitung hinzu; VSCode bildet gängige VSCode-Tastenkürzel nach. Wird beim nächsten Wechsel eines Dokuments in den Bearbeitungs- oder geteilten Modus wirksam."
+      "description": "Tastenbelegung für den Markdown-Editor. Vim ergänzt die modale Bearbeitung; VSCode bildet gängige VSCode-Tastenkürzel nach. Wird beim nächsten Wechsel eines Dokuments in den Bearbeitungs- oder geteilten Modus wirksam."
     },
     "keymapOptions": {
       "default": "Standard",
@@ -158,7 +158,7 @@
         "modes": "Modi: normal, insert, insert-after, visual",
         "motions": "Bewegungen; f + Zeichen zum Springen; / zum Suchen",
         "operators": "Operatoren mit Anzahlen und Textobjekten (diw, ci\")",
-        "files": "Dateibefehle wie :w, :q und :wq gelten hier nicht — Glyph speichert automatisch, und du schließt einen Tab mit dem Tastenkürzel zum Schließen des Tabs."
+        "files": "Dateibefehle wie :w, :q und :wq gelten hier nicht. Glyph speichert automatisch, und ein Tab wird mit dem Tastenkürzel zum Schließen des Tabs geschlossen."
       },
       "vscode": {
         "title": "VSCode-Tastenkürzel",
@@ -190,7 +190,7 @@
       "placeholder": "Modellnamen auswählen oder eingeben"
     },
     "tts": {
-      "title": "Text-zu-Sprache"
+      "title": "Sprachausgabe"
     },
     "voice": {
       "label": "Stimme",

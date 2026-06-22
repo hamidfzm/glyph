@@ -79,11 +79,11 @@
     "title": "Barras laterales",
     "showFiles": {
       "label": "Mostrar barra de archivos",
-      "description": "Árbol de archivos del espacio de trabajo (solo en pestañas de carpeta). Alterna con <kbd>Cmd/Ctrl+B</kbd>."
+      "description": "Árbol de archivos del espacio de trabajo (solo en pestañas de carpeta). Muestra u oculta con <kbd>Cmd/Ctrl+B</kbd>."
     },
     "showOutline": {
       "label": "Mostrar barra de esquema",
-      "description": "Tabla de contenidos del documento. Alterna con <kbd>Cmd/Ctrl+\\</kbd>."
+      "description": "Tabla de contenidos del documento. Muestra u oculta con <kbd>Cmd/Ctrl+\\</kbd>."
     },
     "sidebarLayout": {
       "label": "Diseño de la barra lateral",
@@ -94,7 +94,7 @@
     },
     "swap": {
       "label": "Intercambiar lados de las barras laterales",
-      "description": "Cambia el lado en el que vive cada panel. El valor predeterminado es Archivos a la izquierda / Esquema a la derecha; al activarlo, pasa a Archivos a la derecha / Esquema a la izquierda."
+      "description": "Cambia el lado en el que se ubica cada panel. De forma predeterminada, Archivos queda a la izquierda y Esquema a la derecha; al activarlo, Archivos pasa a la derecha y Esquema a la izquierda."
     },
     "width": {
       "label": "Ancho de la barra lateral"
@@ -138,7 +138,7 @@
     "title": "Editor",
     "keymap": {
       "label": "Mapa de teclas",
-      "description": "Combinaciones de teclas para el editor de markdown. Vim añade edición modal; VSCode replica los atajos habituales de VSCode. Surte efecto la próxima vez que un documento entra en modo de edición o dividido."
+      "description": "Combinaciones de teclas para el editor de markdown. Vim añade edición modal; VSCode replica los atajos habituales de VSCode. Surte efecto la próxima vez que un documento entre en modo de edición o dividido."
     },
     "keymapOptions": {
       "default": "Predeterminado",
@@ -204,7 +204,7 @@
     "title": "Impresión y exportación a PDF",
     "pageBreaks": {
       "label": "Saltos de página",
-      "description": "Empezar una página nueva en el nivel de encabezado",
+      "description": "Iniciar una página nueva en cada encabezado del nivel indicado",
       "none": "Ninguno",
       "h1": "En H1",
       "h2": "En H2"

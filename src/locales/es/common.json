@@ -3,7 +3,7 @@
     "name": "Glyph"
   },
   "error": {
-    "fallback": "Algo salió mal. Prueba a reabrir el archivo o reiniciar Glyph."
+    "fallback": "Algo salió mal. Intenta volver a abrir el archivo o reiniciar Glyph."
   },
   "emptyState": {
     "openHeading": "Abrir un archivo Markdown",
@@ -33,7 +33,7 @@
     "outline": "Esquema"
   },
   "backlinks": {
-    "heading": "Retroenlaces"
+    "heading": "Enlaces entrantes"
   },
   "tabBar": {
     "graphLabel": "Grafo: {{name}}",
@@ -142,12 +142,12 @@
     "actualSize": "Tamaño real (1)"
   },
   "mermaid": {
-    "empty": "Origen del diagrama vacío",
+    "empty": "El código del diagrama está vacío",
     "errorLabel": "Error del diagrama",
-    "errorTitle": "No se pudo renderizar el diagrama"
+    "errorTitle": "No se pudo mostrar el diagrama"
   },
   "taskList": {
-    "toggle": "Alternar tarea"
+    "toggle": "Marcar o desmarcar tarea"
   },
   "frontmatter": {
     "title": "Título",
@@ -156,9 +156,9 @@
     "tags": "Etiquetas"
   },
   "notebook": {
-    "errorTitle": "No se pudo renderizar este notebook",
+    "errorTitle": "No se pudo mostrar este notebook",
     "empty": "Este notebook no tiene celdas.",
-    "sourceBanner": "Vista de origen de solo lectura: los notebooks no se pueden editar en Glyph.",
+    "sourceBanner": "Vista del código fuente en modo de solo lectura. Los notebooks no se pueden editar en Glyph.",
     "unsupportedInteractive": "La salida interactiva ({{type}}) todavía no es compatible",
     "unsupported": "Salida no compatible"
   },
@@ -196,7 +196,7 @@
   },
   "graph": {
     "label": "Grafo del espacio de trabajo",
-    "reset": "Recentrar y ajustar el grafo",
+    "reset": "Centrar y ajustar el grafo",
     "resetView": "Restablecer vista",
     "emptyState": "Aún no hay notas para el grafo. Añade archivos markdown a este espacio de trabajo."
   },

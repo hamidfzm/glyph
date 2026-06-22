@@ -5,7 +5,7 @@
     "close": "关闭云同步设置"
   },
   "empty": "打开一个文件夹工作区以为其配置云同步。单文件标签页会作为其所在文件夹的一部分进行同步。",
-  "description": "针对此工作区的基于 Git 的同步。Glyph 自带 libgit2 构建 — 无需系统 <kbd>git</kbd>。",
+  "description": "基于 Git 同步此工作区。Glyph 内置 libgit2，无需系统 <kbd>git</kbd>。",
   "loading": "正在加载…",
   "notRepo": "此文件夹还不是 git 仓库。",
   "initRepo": "初始化仓库",
@@ -20,21 +20,21 @@
   },
   "conflictPolicy": {
     "legend": "冲突策略",
-    "prompt": { "label": "询问我", "description": "遇到冲突时停止并打开解决器。" },
+    "prompt": { "label": "提示我", "description": "遇到冲突时暂停并打开冲突解决面板。" },
     "preferRemote": {
       "label": "采用远程",
       "description": "冲突时丢弃本地编辑。"
     },
-    "preferLocal": { "label": "保留本地", "description": "将本地编辑推送覆盖远程。" }
+    "preferLocal": { "label": "保留本地", "description": "推送本地编辑以覆盖远程。" }
   },
   "authorName": { "label": "作者姓名", "placeholder": "默认使用您的 git 配置" },
   "authorEmail": { "label": "作者邮箱", "placeholder": "you@example.com" },
   "token": {
     "label": "个人访问令牌",
     "hint": "(仅限 HTTPS)",
-    "placeholderSaved": "已保存 — 留空以保留",
+    "placeholderSaved": "已保存，留空则保持不变",
     "placeholderNew": "ghp_…",
-    "note": "目前仅存储在内存中。下一版本将通过您的操作系统密钥链进行处理。"
+    "note": "目前仅存储在内存中。下一版本将改为存入系统的密钥链。"
   },
   "commitMessage": {
     "label": "提交信息",

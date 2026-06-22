@@ -5,7 +5,7 @@
     "close": "Einstellungen für Cloud-Synchronisierung schließen"
   },
   "empty": "Öffne einen Ordner-Arbeitsbereich, um die Cloud-Synchronisierung dafür einzurichten. Einzeldatei-Tabs werden als Teil des Ordners synchronisiert, in dem sie liegen.",
-  "description": "Git-basierte Synchronisierung für diesen Arbeitsbereich. Glyph bringt einen eigenen libgit2-Build mit — es wird kein System-<kbd>git</kbd> benötigt.",
+  "description": "Git-basierte Synchronisierung für diesen Arbeitsbereich. Glyph bringt einen eigenen libgit2-Build mit, ein systemweites <kbd>git</kbd> ist nicht erforderlich.",
   "loading": "Wird geladen…",
   "notRepo": "Dieser Ordner ist noch kein Git-Repository.",
   "initRepo": "Repository initialisieren",
@@ -32,9 +32,9 @@
   "token": {
     "label": "Persönliches Zugriffstoken",
     "hint": "(nur HTTPS)",
-    "placeholderSaved": "gespeichert — leer lassen, um es zu behalten",
+    "placeholderSaved": "gespeichert, zum Behalten leer lassen",
     "placeholderNew": "ghp_…",
-    "note": "Wird vorerst nur im Arbeitsspeicher gehalten. Die nächste Version leitet es über den Schlüsselbund deines Betriebssystems."
+    "note": "Wird vorerst nur im Arbeitsspeicher gehalten. Die nächste Version speichert es im Schlüsselbund deines Betriebssystems."
   },
   "commitMessage": {
     "label": "Commit-Nachricht",
@@ -54,7 +54,7 @@
     "conflicts": "Ungelöste Konflikte: {{files}}",
     "lastSync": "Letzte Synchronisierung: {{time}}",
     "lastRun": "Letzter Lauf: <strong>{{pulled}}</strong> gepullt, <strong>{{committed}}</strong> committet, <strong>{{pushed}}</strong> gepusht{{suffix}}",
-    "lastRunConflicts": ", {{count}} Konflikt(e) erfordern Beachtung"
+    "lastRunConflicts": ", {{count}} Konflikt(e) erfordern Aufmerksamkeit"
   },
   "indicator": {
     "off": "Synchronisierung aus",
@@ -77,8 +77,8 @@
     "notConfigured": "Dieser Arbeitsbereich ist noch nicht für die Synchronisierung konfiguriert.",
     "authFailed": "Authentifizierung fehlgeschlagen.",
     "authFailedDetail": "Authentifizierung fehlgeschlagen: {{message}}",
-    "network": "Das Remote war nicht erreichbar.",
-    "networkDetail": "Das Remote war nicht erreichbar: {{message}}",
+    "network": "Das Remote ist nicht erreichbar.",
+    "networkDetail": "Das Remote ist nicht erreichbar: {{message}}",
     "conflict": "Löse Konflikte in {{count}} Datei(en), bevor du erneut synchronisierst.",
     "invalidState": "Das Repository befindet sich in einem unerwarteten Zustand.",
     "invalidStateDetail": "Das Repository befindet sich in einem unerwarteten Zustand: {{message}}",

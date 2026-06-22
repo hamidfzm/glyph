@@ -44,7 +44,7 @@
     "editMode": "Bearbeitungsmodus",
     "edit": "Bearbeiten",
     "splitMode": "Geteilter Modus",
-    "split": "Teilen"
+    "split": "Geteilt"
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> ist verfügbar",
@@ -138,7 +138,7 @@
     "next": "Nächstes Bild (→)",
     "zoomOut": "Verkleinern (-)",
     "zoomIn": "Vergrößern (+)",
-    "fit": "An Bildschirm anpassen (0)",
+    "fit": "An den Bildschirm anpassen (0)",
     "actualSize": "Tatsächliche Größe (1)"
   },
   "mermaid": {
@@ -158,7 +158,7 @@
   "notebook": {
     "errorTitle": "Dieses Notebook konnte nicht gerendert werden",
     "empty": "Dieses Notebook hat keine Zellen.",
-    "sourceBanner": "Schreibgeschützte Quellansicht — Notebooks können in Glyph nicht bearbeitet werden.",
+    "sourceBanner": "Schreibgeschützte Quellansicht. Notebooks können in Glyph nicht bearbeitet werden.",
     "unsupportedInteractive": "Interaktive Ausgabe ({{type}}) wird noch nicht unterstützt",
     "unsupported": "Nicht unterstützte Ausgabe"
   },

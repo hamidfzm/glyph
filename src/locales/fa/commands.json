@@ -1,8 +1,8 @@
 {
   "palette": {
-    "title": "پنل فرمان",
+    "title": "پالت فرمان",
     "placeholder": "یک فرمان، فایل یا عنوان تایپ کنید…",
-    "queryLabel": "جستجوی پنل فرمان",
+    "queryLabel": "جستجوی پالت فرمان",
     "empty": "نتیجه‌ای یافت نشد"
   },
   "section": {
@@ -13,8 +13,8 @@
   "openFile": "باز کردن فایل…",
   "openFolder": "باز کردن پوشه…",
   "closeTab": "بستن زبانه",
-  "toggleFilesSidebar": "تغییر نوار فایل‌ها",
-  "toggleOutlineSidebar": "تغییر نوار رئوس مطالب",
+  "toggleFilesSidebar": "نمایش/پنهان‌کردن نوار فایل‌ها",
+  "toggleOutlineSidebar": "نمایش/پنهان‌کردن نوار رئوس مطالب",
   "resetView": "بازنشانی نما",
   "openSettings": "تنظیمات…",
   "openSyncSettings": "همگام‌سازی ابری…",
