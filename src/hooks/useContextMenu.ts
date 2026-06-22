@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   buildContextMenuItems,
   type ContextMenuActions,
@@ -39,6 +40,7 @@ function isInsideMarkdownContent(target: EventTarget | null): boolean {
  * rendered prose (`.markdown-body`); other chrome simply shows nothing.
  */
 export function useContextMenu(actions: ContextMenuActions) {
+  const { t } = useTranslation("common");
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const close = useCallback(() => setMenu(null), []);
 
@@ -54,11 +56,11 @@ export function useContextMenu(actions: ContextMenuActions) {
       // Only the markdown viewer shows a themed menu; other chrome shows none.
       if (!isInsideMarkdownContent(e.target)) return;
       const selection = window.getSelection()?.toString().trim() ?? "";
-      setMenu({ x: e.clientX, y: e.clientY, items: buildContextMenuItems(actions, selection) });
+      setMenu({ x: e.clientX, y: e.clientY, items: buildContextMenuItems(actions, selection, t) });
     };
     document.addEventListener("contextmenu", handler);
     return () => document.removeEventListener("contextmenu", handler);
-  }, [actions]);
+  }, [actions, t]);
 
   return { menu, close };
 }

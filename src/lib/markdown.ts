@@ -7,7 +7,6 @@ export function countWords(text: string): number {
     .filter((w) => w.length > 0).length;
 }
 
-export function readingTime(wordCount: number): string {
-  const minutes = Math.max(1, Math.ceil(wordCount / 230));
-  return `${minutes} min read`;
+export function readingMinutes(wordCount: number): number {
+  return Math.max(1, Math.ceil(wordCount / 230));
 }

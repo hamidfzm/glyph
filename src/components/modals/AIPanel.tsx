@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
@@ -16,13 +17,6 @@ interface AIPanelProps {
   onStopReading?: () => void;
 }
 
-const ACTION_LABELS: Record<AIAction, string> = {
-  summarize: "Summary",
-  explain: "Explanation",
-  translate: "Translation",
-  simplify: "Simplified",
-};
-
 export function AIPanel({
   open,
   onClose,
@@ -34,6 +28,7 @@ export function AIPanel({
   speaking,
   onStopReading,
 }: AIPanelProps) {
+  const { t } = useTranslation("ai");
   const handleCopy = useCallback(() => {
     if (result) {
       navigator.clipboard.writeText(result);
@@ -43,7 +38,7 @@ export function AIPanel({
   return (
     <div className="ai-panel" data-open={open}>
       <div className="ai-panel-header">
-        <h3>{action ? ACTION_LABELS[action] : "AI"}</h3>
+        <h3>{action ? t(`actionLabel.${action}`) : t("title")}</h3>
         <button type="button" className="settings-close" onClick={onClose}>
           <ModalCloseIcon />
         </button>
@@ -53,7 +48,7 @@ export function AIPanel({
         {loading && (
           <div className="ai-loading">
             <div className="ai-spinner" />
-            <span>Processing...</span>
+            <span>{t("processing")}</span>
           </div>
         )}
 
@@ -74,7 +69,7 @@ export function AIPanel({
               padding: "40px 0",
             }}
           >
-            Use the AI menu or context menu to run an action.
+            {t("empty")}
           </div>
         )}
       </div>
@@ -84,15 +79,15 @@ export function AIPanel({
           {onReadAloud &&
             (speaking ? (
               <button type="button" className="ai-panel-btn" onClick={onStopReading}>
-                Stop Reading
+                {t("stopReading")}
               </button>
             ) : (
               <button type="button" className="ai-panel-btn" onClick={() => onReadAloud(result)}>
-                Read Aloud
+                {t("readAloud")}
               </button>
             ))}
           <button type="button" className="ai-panel-btn" onClick={handleCopy}>
-            Copy
+            {t("copy")}
           </button>
         </div>
       )}

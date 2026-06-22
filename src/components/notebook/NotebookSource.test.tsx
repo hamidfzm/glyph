@@ -18,6 +18,17 @@ describe("NotebookSource", () => {
     expect(screen.getByText(/read-only source view/i)).toBeInTheDocument();
   });
 
+  it("uses a custom banner label instead of the default", () => {
+    render(<NotebookSource content="{}" banner="Source" {...props} />);
+    expect(screen.getByText("Source")).toBeInTheDocument();
+    expect(screen.queryByText(/read-only source view/i)).not.toBeInTheDocument();
+  });
+
+  it("hides the banner when banner is null", () => {
+    const { container } = render(<NotebookSource content="{}" banner={null} {...props} />);
+    expect(container.querySelector(".nb-source-banner")).toBeNull();
+  });
+
   it("does not render an editable textarea", () => {
     const { container } = render(<NotebookSource content="{}" {...props} />);
     expect(container.querySelector("textarea")).toBeNull();

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { MenuEventHandlers } from "@/hooks/useMenuEvents";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { Command } from "@/lib/commands";
@@ -39,6 +40,7 @@ export function useAppCommands({
   tocEntries,
   actions,
 }: AppCommandSources): Command[] {
+  const { t } = useTranslation("commands");
   return useMemo<Command[]>(() => {
     const out: Command[] = [];
 
@@ -68,42 +70,127 @@ export function useAppCommands({
 
     // App-level commands. Subset of every menu item that makes sense to invoke
     // from a palette (Open Folder is reachable from the empty-state button).
-    const appCommands: Array<{ title: string; shortcut?: string; run: () => void }> = [
-      { title: "Open File…", shortcut: "Cmd/Ctrl+O", run: actions.openFile },
-      { title: "Open Folder…", shortcut: "Cmd/Ctrl+Shift+O", run: actions.openFolder },
-      { title: "Close Tab", shortcut: "Cmd/Ctrl+W", run: actions.closeTab },
-      { title: "Toggle Files Sidebar", shortcut: "Cmd/Ctrl+B", run: actions.toggleFilesSidebar },
+    out.push(
       {
-        title: "Toggle Outline Sidebar",
+        id: "cmd:openFile",
+        title: t("openFile"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+O",
+        run: actions.openFile,
+      },
+      {
+        id: "cmd:openFolder",
+        title: t("openFolder"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+Shift+O",
+        run: actions.openFolder,
+      },
+      {
+        id: "cmd:closeTab",
+        title: t("closeTab"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+W",
+        run: actions.closeTab,
+      },
+      {
+        id: "cmd:toggleFilesSidebar",
+        title: t("toggleFilesSidebar"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+B",
+        run: actions.toggleFilesSidebar,
+      },
+      {
+        id: "cmd:toggleOutlineSidebar",
+        title: t("toggleOutlineSidebar"),
+        section: "Commands",
         shortcut: "Cmd/Ctrl+\\",
         run: actions.toggleOutlineSidebar,
       },
-      { title: "Reset View", run: actions.resetView },
-      { title: "Settings…", shortcut: "Cmd/Ctrl+,", run: actions.openSettings },
-      { title: "Cloud Sync…", run: actions.openSyncSettings },
-      { title: "Find in Document", shortcut: "Cmd/Ctrl+F", run: actions.find },
-      { title: "Toggle Edit Mode", shortcut: "Cmd/Ctrl+E", run: actions.toggleEdit },
-      { title: "Open Graph", shortcut: "Cmd/Ctrl+G", run: actions.openGraph },
-      { title: "Print…", shortcut: "Cmd/Ctrl+P", run: actions.print },
-      { title: "Export to HTML…", run: actions.exportHtml },
-      { title: "Export to Word (DOCX)…", run: actions.exportDocx },
-      { title: "Export to EPUB…", run: actions.exportEpub },
-      { title: "Export to PDF…", run: actions.exportPdf },
-      { title: "Zoom In", shortcut: "Cmd/Ctrl+=", run: actions.zoomIn },
-      { title: "Zoom Out", shortcut: "Cmd/Ctrl+-", run: actions.zoomOut },
-      { title: "Reset Zoom", shortcut: "Cmd/Ctrl+0", run: actions.zoomReset },
-      { title: "Read Aloud", run: actions.readAloud },
-    ];
-    for (const c of appCommands) {
-      out.push({
-        id: `cmd:${c.title}`,
-        title: c.title,
+      { id: "cmd:resetView", title: t("resetView"), section: "Commands", run: actions.resetView },
+      {
+        id: "cmd:openSettings",
+        title: t("openSettings"),
         section: "Commands",
-        shortcut: c.shortcut,
-        run: c.run,
-      });
-    }
+        shortcut: "Cmd/Ctrl+,",
+        run: actions.openSettings,
+      },
+      {
+        id: "cmd:openSyncSettings",
+        title: t("openSyncSettings"),
+        section: "Commands",
+        run: actions.openSyncSettings,
+      },
+      {
+        id: "cmd:find",
+        title: t("find"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+F",
+        run: actions.find,
+      },
+      {
+        id: "cmd:toggleEdit",
+        title: t("toggleEdit"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+E",
+        run: actions.toggleEdit,
+      },
+      {
+        id: "cmd:openGraph",
+        title: t("openGraph"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+G",
+        run: actions.openGraph,
+      },
+      {
+        id: "cmd:print",
+        title: t("print"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+P",
+        run: actions.print,
+      },
+      {
+        id: "cmd:exportHtml",
+        title: t("exportHtml"),
+        section: "Commands",
+        run: actions.exportHtml,
+      },
+      {
+        id: "cmd:exportDocx",
+        title: t("exportDocx"),
+        section: "Commands",
+        run: actions.exportDocx,
+      },
+      {
+        id: "cmd:exportEpub",
+        title: t("exportEpub"),
+        section: "Commands",
+        run: actions.exportEpub,
+      },
+      { id: "cmd:exportPdf", title: t("exportPdf"), section: "Commands", run: actions.exportPdf },
+      {
+        id: "cmd:zoomIn",
+        title: t("zoomIn"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+=",
+        run: actions.zoomIn,
+      },
+      {
+        id: "cmd:zoomOut",
+        title: t("zoomOut"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+-",
+        run: actions.zoomOut,
+      },
+      {
+        id: "cmd:zoomReset",
+        title: t("zoomReset"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+0",
+        run: actions.zoomReset,
+      },
+      { id: "cmd:readAloud", title: t("readAloud"), section: "Commands", run: actions.readAloud },
+    );
 
     return out;
-  }, [workspaceOpen, workspaceFiles, tocEntries, actions]);
+  }, [workspaceOpen, workspaceFiles, tocEntries, actions, t]);
 }

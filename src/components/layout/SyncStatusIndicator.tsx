@@ -11,44 +11,54 @@
 // immediately. We deliberately don't poll for fresh status here — the pill
 // shows whatever was last loaded or refreshed.
 
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 import { useSyncConfigContext } from "@/contexts/SyncConfigContext";
 
 interface SyncStatusIndicatorProps {
   onOpenSync: () => void;
 }
 
-export function relativeTime(unix: number): string {
+export function relativeTime(unix: number, t: TFunction<"sync">): string {
   const seconds = Math.max(0, Math.floor(Date.now() / 1000) - unix);
-  if (seconds < 60) return `${seconds}s ago`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
+  if (seconds < 60) return t("relativeTime.secondsAgo", { count: seconds });
+  if (seconds < 3600) return t("relativeTime.minutesAgo", { count: Math.floor(seconds / 60) });
+  if (seconds < 86400) return t("relativeTime.hoursAgo", { count: Math.floor(seconds / 3600) });
+  return t("relativeTime.daysAgo", { count: Math.floor(seconds / 86400) });
 }
 
 export function summarise(
   config: ReturnType<typeof useSyncConfigContext>["config"],
   status: ReturnType<typeof useSyncConfigContext>["status"],
+  t: TFunction<"sync">,
 ): { label: string; tone: "off" | "ok" | "warn" | "error" } {
-  if (!config) return { label: "Sync off", tone: "off" };
-  if (!status) return { label: "Sync configured", tone: "ok" };
+  if (!config) return { label: t("indicator.off"), tone: "off" };
+  if (!status) return { label: t("indicator.configured"), tone: "ok" };
   if (status.conflicts.length > 0) {
-    return { label: `Conflicts (${status.conflicts.length})`, tone: "error" };
+    return { label: t("indicator.conflicts", { count: status.conflicts.length }), tone: "error" };
   }
   if (status.ahead > 0 || status.behind > 0) {
-    return { label: `Sync +${status.ahead}/-${status.behind}`, tone: "warn" };
+    return {
+      label: t("indicator.changes", { ahead: status.ahead, behind: status.behind }),
+      tone: "warn",
+    };
   }
-  if (!status.clean) return { label: "Sync: dirty", tone: "warn" };
+  if (!status.clean) return { label: t("indicator.dirty"), tone: "warn" };
   if (status.lastSyncUnix) {
-    return { label: `Synced ${relativeTime(status.lastSyncUnix)}`, tone: "ok" };
+    return {
+      label: t("indicator.synced", { time: relativeTime(status.lastSyncUnix, t) }),
+      tone: "ok",
+    };
   }
-  return { label: "Synced", tone: "ok" };
+  return { label: t("indicator.syncedDefault"), tone: "ok" };
 }
 
 export function SyncStatusIndicator({ onOpenSync }: SyncStatusIndicatorProps) {
+  const { t } = useTranslation("sync");
   const { config, status, workspacePath } = useSyncConfigContext();
   if (!workspacePath) return null;
 
-  const { label, tone } = summarise(config, status);
+  const { label, tone } = summarise(config, status, t);
 
   return (
     <button
@@ -56,7 +66,7 @@ export function SyncStatusIndicator({ onOpenSync }: SyncStatusIndicatorProps) {
       onClick={onOpenSync}
       className="status-sync-indicator"
       data-tone={tone}
-      title="Open Cloud Sync settings"
+      title={t("indicator.open")}
     >
       {label}
     </button>

@@ -1,8 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncConfigContext, type SyncConfigContextValue } from "@/contexts/SyncConfigContext";
+import { i18n } from "@/lib/i18n";
 import type { StatusReport, WorkspaceSyncConfig } from "@/lib/sync";
 import { relativeTime, SyncStatusIndicator, summarise } from "./SyncStatusIndicator";
+
+const t = i18n.getFixedT("en", "sync");
 
 function cfg(overrides: Partial<WorkspaceSyncConfig> = {}): WorkspaceSyncConfig {
   return {
@@ -88,35 +91,35 @@ function status(overrides: Partial<StatusReport> = {}): StatusReport {
 
 describe("summarise", () => {
   it("returns 'Sync off' for an unconfigured workspace", () => {
-    expect(summarise(null, null)).toEqual({ label: "Sync off", tone: "off" });
+    expect(summarise(null, null, t)).toEqual({ label: "Sync off", tone: "off" });
   });
 
   it("returns 'Sync configured' when status hasn't been fetched yet", () => {
-    expect(summarise(cfg(), null)).toEqual({ label: "Sync configured", tone: "ok" });
+    expect(summarise(cfg(), null, t)).toEqual({ label: "Sync configured", tone: "ok" });
   });
 
   it("reports conflict count when the status has unresolved conflicts", () => {
-    const out = summarise(cfg(), status({ conflicts: ["a.md", "b.md"] }));
+    const out = summarise(cfg(), status({ conflicts: ["a.md", "b.md"] }), t);
     expect(out).toEqual({ label: "Conflicts (2)", tone: "error" });
   });
 
   it("reports ahead/behind counters when either is non-zero", () => {
-    expect(summarise(cfg(), status({ ahead: 2, behind: 1 }))).toEqual({
+    expect(summarise(cfg(), status({ ahead: 2, behind: 1 }), t)).toEqual({
       label: "Sync +2/-1",
       tone: "warn",
     });
-    expect(summarise(cfg(), status({ ahead: 1, behind: 0 }))).toEqual({
+    expect(summarise(cfg(), status({ ahead: 1, behind: 0 }), t)).toEqual({
       label: "Sync +1/-0",
       tone: "warn",
     });
-    expect(summarise(cfg(), status({ ahead: 0, behind: 1 }))).toEqual({
+    expect(summarise(cfg(), status({ ahead: 0, behind: 1 }), t)).toEqual({
       label: "Sync +0/-1",
       tone: "warn",
     });
   });
 
   it("reports 'Sync: dirty' when the working tree isn't clean", () => {
-    expect(summarise(cfg(), status({ clean: false }))).toEqual({
+    expect(summarise(cfg(), status({ clean: false }), t)).toEqual({
       label: "Sync: dirty",
       tone: "warn",
     });
@@ -127,7 +130,7 @@ describe("summarise", () => {
     vi.setSystemTime(new Date("2025-01-01T00:00:30Z"));
     try {
       const lastSyncUnix = Math.floor(new Date("2025-01-01T00:00:00Z").getTime() / 1000);
-      expect(summarise(cfg(), status({ clean: true, lastSyncUnix }))).toEqual({
+      expect(summarise(cfg(), status({ clean: true, lastSyncUnix }), t)).toEqual({
         label: "Synced 30s ago",
         tone: "ok",
       });
@@ -137,7 +140,7 @@ describe("summarise", () => {
   });
 
   it("reports 'Synced' (no relative time) when lastSyncUnix is null", () => {
-    expect(summarise(cfg(), status({ clean: true, lastSyncUnix: null }))).toEqual({
+    expect(summarise(cfg(), status({ clean: true, lastSyncUnix: null }), t)).toEqual({
       label: "Synced",
       tone: "ok",
     });
@@ -155,30 +158,30 @@ describe("relativeTime", () => {
 
   it("formats sub-minute deltas in seconds", () => {
     const now = Math.floor(Date.now() / 1000);
-    expect(relativeTime(now - 5)).toBe("5s ago");
-    expect(relativeTime(now)).toBe("0s ago");
+    expect(relativeTime(now - 5, t)).toBe("5s ago");
+    expect(relativeTime(now, t)).toBe("0s ago");
   });
 
   it("formats sub-hour deltas in minutes", () => {
     const now = Math.floor(Date.now() / 1000);
-    expect(relativeTime(now - 120)).toBe("2m ago");
-    expect(relativeTime(now - 3599)).toBe("59m ago");
+    expect(relativeTime(now - 120, t)).toBe("2m ago");
+    expect(relativeTime(now - 3599, t)).toBe("59m ago");
   });
 
   it("formats sub-day deltas in hours", () => {
     const now = Math.floor(Date.now() / 1000);
-    expect(relativeTime(now - 3600)).toBe("1h ago");
-    expect(relativeTime(now - 86399)).toBe("23h ago");
+    expect(relativeTime(now - 3600, t)).toBe("1h ago");
+    expect(relativeTime(now - 86399, t)).toBe("23h ago");
   });
 
   it("formats day-and-up deltas in days", () => {
     const now = Math.floor(Date.now() / 1000);
-    expect(relativeTime(now - 86400)).toBe("1d ago");
-    expect(relativeTime(now - 86400 * 7)).toBe("7d ago");
+    expect(relativeTime(now - 86400, t)).toBe("1d ago");
+    expect(relativeTime(now - 86400 * 7, t)).toBe("7d ago");
   });
 
   it("clamps future timestamps to zero seconds", () => {
     const now = Math.floor(Date.now() / 1000);
-    expect(relativeTime(now + 100)).toBe("0s ago");
+    expect(relativeTime(now + 100, t)).toBe("0s ago");
   });
 });

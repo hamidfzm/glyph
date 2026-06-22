@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { useSettings } from "@/hooks/useSettings";
 import { AITab } from "./AITab";
@@ -18,6 +19,7 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
+  const { t } = useTranslation("settings");
   const { resetSettings } = useSettings();
   const [tab, setTab] = useState<Tab>("appearance");
 
@@ -41,14 +43,14 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   if (!open) return null;
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "appearance", label: "Appearance" },
-    { id: "layout", label: "Layout" },
-    { id: "behavior", label: "Behavior" },
-    { id: "editor", label: "Editor" },
-    { id: "hotkeys", label: "Hotkeys" },
-    { id: "ai", label: "AI" },
-    { id: "print", label: "Print" },
-    { id: "privacy", label: "Privacy" },
+    { id: "appearance", label: t("modal.tabs.appearance") },
+    { id: "layout", label: t("modal.tabs.layout") },
+    { id: "behavior", label: t("modal.tabs.behavior") },
+    { id: "editor", label: t("modal.tabs.editor") },
+    { id: "hotkeys", label: t("modal.tabs.hotkeys") },
+    { id: "ai", label: t("modal.tabs.ai") },
+    { id: "print", label: t("modal.tabs.print") },
+    { id: "privacy", label: t("modal.tabs.privacy") },
   ];
 
   return (
@@ -62,7 +64,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     >
       <div className="settings-modal">
         <div className="settings-header">
-          <h2>Settings</h2>
+          <h2>{t("modal.title")}</h2>
           <button type="button" className="settings-close" onClick={onClose}>
             <ModalCloseIcon />
           </button>
@@ -97,10 +99,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
         <div className="settings-footer">
           <button type="button" className="settings-reset-btn" onClick={resetSettings}>
-            Reset to Defaults
+            {t("modal.reset")}
           </button>
           <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
-            Changes apply immediately
+            {t("modal.changesApply")}
           </span>
         </div>
       </div>

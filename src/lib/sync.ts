@@ -7,6 +7,7 @@
 // here, plus kebab-case on the string-tagged unions.
 
 import { invoke } from "@tauri-apps/api/core";
+import type { TFunction } from "i18next";
 
 export type BackendKind = "git";
 
@@ -169,27 +170,35 @@ export function isSyncRepoPresent(workspacePath: string): Promise<boolean> {
  * surface returns the tagged error JSON; the UI usually wants one
  * sentence to show in a toast or inline beneath the form.
  */
-export function describeSyncError(err: unknown): string {
-  if (!err || typeof err !== "object") return String(err ?? "Unknown sync error.");
+export function describeSyncError(err: unknown, t: TFunction<"sync">): string {
+  if (!err || typeof err !== "object") return String(err ?? t("error.unknown"));
   const e = err as SyncError;
   switch (e.kind) {
     case "not-configured":
-      return "This workspace isn't configured for sync yet.";
+      return t("error.notConfigured");
     case "auth-failed":
-      return `Authentication failed${e.message ? `: ${String(e.message)}` : "."}`;
+      return e.message
+        ? t("error.authFailedDetail", { message: String(e.message) })
+        : t("error.authFailed");
     case "network":
-      return `Couldn't reach the remote${e.message ? `: ${String(e.message)}` : "."}`;
+      return e.message
+        ? t("error.networkDetail", { message: String(e.message) })
+        : t("error.network");
     case "conflict": {
       const files = Array.isArray(e.message) ? e.message : [];
-      return `Resolve conflicts in ${files.length} file(s) before syncing again.`;
+      return t("error.conflict", { count: files.length });
     }
     case "invalid-state":
-      return `Repository is in an unexpected state${e.message ? `: ${String(e.message)}` : "."}`;
+      return e.message
+        ? t("error.invalidStateDetail", { message: String(e.message) })
+        : t("error.invalidState");
     case "io":
-      return `I/O error${e.message ? `: ${String(e.message)}` : "."}`;
+      return e.message ? t("error.ioDetail", { message: String(e.message) }) : t("error.io");
     case "backend":
-      return `Sync backend error${e.message ? `: ${String(e.message)}` : "."}`;
+      return e.message
+        ? t("error.backendDetail", { message: String(e.message) })
+        : t("error.backend");
     default:
-      return "Unknown sync error.";
+      return t("error.unknown");
   }
 }

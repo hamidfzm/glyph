@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { canvasColorToCss, PRESET_COLORS } from "@/lib/canvas/color";
 
 interface CanvasSelectionToolbarProps {
@@ -15,6 +16,7 @@ export function CanvasSelectionToolbar({
   onSetColor,
   onDelete,
 }: CanvasSelectionToolbarProps) {
+  const { t } = useTranslation("common");
   const customRef = useRef<HTMLInputElement | null>(null);
   const onSetColorRef = useRef(onSetColor);
   onSetColorRef.current = onSetColor;
@@ -34,12 +36,16 @@ export function CanvasSelectionToolbar({
   }, []);
 
   return (
-    <div className="glyph-canvas-selection-toolbar" role="toolbar" aria-label="Selection">
+    <div
+      className="glyph-canvas-selection-toolbar"
+      role="toolbar"
+      aria-label={t("canvasSelection.toolbar")}
+    >
       <button
         type="button"
         className="glyph-canvas-swatch"
         data-clear
-        aria-label="Clear colour"
+        aria-label={t("canvasSelection.clearColor")}
         onClick={() => onSetColor(undefined)}
       />
       {PRESET_COLORS.map((c) => (
@@ -48,7 +54,7 @@ export function CanvasSelectionToolbar({
           key={c}
           className="glyph-canvas-swatch"
           style={{ background: canvasColorToCss(c) }}
-          aria-label={`Colour ${c}`}
+          aria-label={t("canvasSelection.colorLabel", { color: c })}
           onClick={() => onSetColor(c)}
         />
       ))}
@@ -57,11 +63,11 @@ export function CanvasSelectionToolbar({
         type="color"
         className="glyph-canvas-swatch"
         data-custom
-        aria-label="Custom colour"
+        aria-label={t("canvasSelection.customColor")}
         defaultValue="#a882ff"
       />
       <button type="button" className="glyph-canvas-delete" onClick={onDelete}>
-        Delete{count > 1 ? ` (${count})` : ""}
+        {count > 1 ? t("canvasSelection.deleteCount", { count }) : t("canvasSelection.delete")}
       </button>
     </div>
   );

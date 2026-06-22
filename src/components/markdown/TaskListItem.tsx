@@ -1,4 +1,5 @@
 import { Children, type ComponentPropsWithoutRef, isValidElement, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 interface TaskListItemProps extends ComponentPropsWithoutRef<"li"> {
   // ReactMarkdown passes the source mdast node here; not in JSX intrinsic types.
@@ -10,6 +11,7 @@ interface TaskListItemProps extends ComponentPropsWithoutRef<"li"> {
 // items with a clickable one tied back to the source line so the parent
 // can rewrite the markdown.
 export function TaskListItem({ onTaskToggle, node, children, ...rest }: TaskListItemProps) {
+  const { t } = useTranslation("common");
   const isTask = typeof rest.className === "string" && rest.className.includes("task-list-item");
   if (!isTask) {
     return <li {...rest}>{children}</li>;
@@ -48,7 +50,7 @@ export function TaskListItem({ onTaskToggle, node, children, ...rest }: TaskList
           type="checkbox"
           checked={originalChecked}
           onChange={handleChange}
-          aria-label="Toggle task"
+          aria-label={t("taskList.toggle")}
         />
       ) : null}
       {tail}

@@ -1,6 +1,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { CollapseAllIcon } from "@/components/icons/CollapseAllIcon";
 import { ExpandAllIcon } from "@/components/icons/ExpandAllIcon";
 import { NewFolderIcon } from "@/components/icons/NewFolderIcon";
@@ -25,6 +26,7 @@ interface SidebarProps {
 const DEFAULT_WIDTH = 224;
 
 export function Sidebar({ side }: SidebarProps) {
+  const { t } = useTranslation("common");
   const {
     activeTab,
     activeFile,
@@ -88,25 +90,31 @@ export function Sidebar({ side }: SidebarProps) {
         label={folderName(ws.root)}
         side={headerSide}
         onCollapse={onToggleFiles}
-        collapseTitle="Hide files sidebar"
+        collapseTitle={t("sidebar.hideFiles")}
         actions={
           <>
-            <ToolbarButton title="New note" onClick={() => fileTreeRef.current?.createNote()}>
+            <ToolbarButton
+              title={t("sidebar.newNote")}
+              onClick={() => fileTreeRef.current?.createNote()}
+            >
               <NewNoteIcon />
             </ToolbarButton>
-            <ToolbarButton title="New folder" onClick={() => fileTreeRef.current?.createFolder()}>
+            <ToolbarButton
+              title={t("sidebar.newFolder")}
+              onClick={() => fileTreeRef.current?.createFolder()}
+            >
               <NewFolderIcon />
             </ToolbarButton>
             {ws.expanded.size > 0 ? (
-              <ToolbarButton title="Collapse all" onClick={() => collapseAll()}>
+              <ToolbarButton title={t("sidebar.collapseAll")} onClick={() => collapseAll()}>
                 <CollapseAllIcon />
               </ToolbarButton>
             ) : (
-              <ToolbarButton title="Expand all" onClick={() => expandAll()}>
+              <ToolbarButton title={t("sidebar.expandAll")} onClick={() => expandAll()}>
                 <ExpandAllIcon />
               </ToolbarButton>
             )}
-            <ToolbarButton title="Close workspace" onClick={closeWorkspace}>
+            <ToolbarButton title={t("sidebar.closeWorkspace")} onClick={closeWorkspace}>
               <TabCloseIcon />
             </ToolbarButton>
           </>
@@ -142,10 +150,10 @@ export function Sidebar({ side }: SidebarProps) {
   const renderOutlineBlock = (headerSide: "left" | "right") => (
     <div className="px-3 pb-3">
       <PanelHeader
-        label="Outline"
+        label={t("sidebar.outline")}
         side={headerSide}
         onCollapse={onToggleOutline}
-        collapseTitle="Hide outline sidebar"
+        collapseTitle={t("sidebar.hideOutline")}
       />
       <OutlineSection entries={tocEntries} activeId={activeId} />
     </div>
@@ -172,7 +180,7 @@ export function Sidebar({ side }: SidebarProps) {
         <EdgeExpand
           side={primarySide}
           onClick={onToggleFiles}
-          title="Show files sidebar"
+          title={t("sidebar.showFiles")}
           panel="files"
         />
       );
@@ -191,7 +199,7 @@ export function Sidebar({ side }: SidebarProps) {
         <EdgeExpand
           side={primarySide}
           onClick={onToggleFiles}
-          title="Show files sidebar"
+          title={t("sidebar.showFiles")}
           panel="files"
         />
       );
@@ -203,7 +211,7 @@ export function Sidebar({ side }: SidebarProps) {
         <EdgeExpand
           side={primarySide}
           onClick={onToggleOutline}
-          title="Show outline sidebar"
+          title={t("sidebar.showOutline")}
           panel="outline"
         />
       ) : null;
@@ -229,7 +237,7 @@ export function Sidebar({ side }: SidebarProps) {
         <EdgeExpand
           side={filesSide}
           onClick={onToggleFiles}
-          title="Show files sidebar"
+          title={t("sidebar.showFiles")}
           panel="files"
         />
       );
@@ -246,7 +254,7 @@ export function Sidebar({ side }: SidebarProps) {
         <EdgeExpand
           side={outlineSide}
           onClick={onToggleOutline}
-          title="Show outline sidebar"
+          title={t("sidebar.showOutline")}
           panel="outline"
         />
       );
@@ -268,7 +276,7 @@ export function Sidebar({ side }: SidebarProps) {
       <EdgeExpand
         side={primarySide}
         onClick={onToggleOutline}
-        title="Show outline sidebar"
+        title={t("sidebar.showOutline")}
         panel="outline"
       />
     );

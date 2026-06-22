@@ -40,4 +40,31 @@ describe("useLocale", () => {
     renderHook(() => useLocale("system"));
     await waitFor(() => expect(i18n.language).toBe("en"));
   });
+
+  it("uses the webview locale when the OS reports none", async () => {
+    mockOsLocale.mockResolvedValue(null);
+    renderHook(() => useLocale("system"));
+    await waitFor(() => expect(mockOsLocale).toHaveBeenCalled());
+    // navigator.language is en-US under happy-dom, so it resolves to English.
+    expect(document.documentElement.lang).toBe("en");
+  });
+
+  it("does not apply the locale if unmounted before the OS lookup resolves", async () => {
+    let resolveOs: (value: string) => void = () => {};
+    mockOsLocale.mockReturnValue(new Promise<string>((r) => (resolveOs = r)));
+    const { unmount } = renderHook(() => useLocale("system"));
+    unmount();
+    resolveOs("en-GB");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(document.documentElement.lang).toBe("");
+  });
+
+  it("does not apply the locale if unmounted mid-change", async () => {
+    const { unmount } = renderHook(() => useLocale("en"));
+    unmount();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(document.documentElement.lang).toBe("");
+  });
 });

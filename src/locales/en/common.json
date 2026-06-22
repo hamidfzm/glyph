@@ -1,4 +1,10 @@
 {
+  "app": {
+    "name": "Glyph"
+  },
+  "error": {
+    "fallback": "Something went wrong. Try reopening the file or restarting Glyph."
+  },
   "emptyState": {
     "openHeading": "Open a Markdown file",
     "openHint": "Drop a file here, use the menu, or press <kbd>{{shortcut}}</kbd>",
@@ -6,5 +12,202 @@
     "folderHint": "Pick a file from the sidebar to start reading.",
     "openFile": "Open File",
     "openFolder": "Open Folder"
+  },
+  "statusBar": {
+    "jupyter": "Jupyter Notebook",
+    "words_one": "{{formatted}} word",
+    "words_other": "{{formatted}} words",
+    "readingTime_one": "{{count}} min read",
+    "readingTime_other": "{{count}} min read"
+  },
+  "sidebar": {
+    "hideFiles": "Hide files sidebar",
+    "hideOutline": "Hide outline sidebar",
+    "showFiles": "Show files sidebar",
+    "showOutline": "Show outline sidebar",
+    "newNote": "New note",
+    "newFolder": "New folder",
+    "collapseAll": "Collapse all",
+    "expandAll": "Expand all",
+    "closeWorkspace": "Close workspace",
+    "outline": "Outline"
+  },
+  "backlinks": {
+    "heading": "Backlinks"
+  },
+  "tabBar": {
+    "graphLabel": "Graph: {{name}}",
+    "untitled": "Untitled",
+    "closeTab": "Close {{label}}",
+    "viewMode": "View mode",
+    "view": "View",
+    "editMode": "Edit mode",
+    "edit": "Edit",
+    "splitMode": "Split mode",
+    "split": "Split"
+  },
+  "updateBanner": {
+    "available": "<strong>Glyph {{version}}</strong> is available",
+    "currentVersion": "(you have {{version}})",
+    "download": "Download",
+    "dismiss": "Dismiss update notification"
+  },
+  "workspaceBanner": {
+    "dismiss": "Dismiss workspace notice"
+  },
+  "search": {
+    "placeholder": "Find in document...",
+    "label": "Search",
+    "noResults": "No results",
+    "matchCount": "{{current}} of {{total}}",
+    "prevMatch": "Previous match",
+    "nextMatch": "Next match",
+    "close": "Close search"
+  },
+  "exportProgress": {
+    "html": "HTML",
+    "docx": "Word document",
+    "epub": "EPUB",
+    "pdf": "PDF",
+    "exporting": "Exporting {{format}}…"
+  },
+  "contextMenu": {
+    "copy": "Copy",
+    "selectAll": "Select All",
+    "searchGoogle": "Search Google for \"{{query}}\"",
+    "stopReading": "Stop Reading",
+    "readSelection": "Read Selection Aloud",
+    "readAloud": "Read Aloud",
+    "ai": "AI",
+    "aiOnSelection": "{{action}} Selection",
+    "aiOnDocument": "{{action}} Document",
+    "aiVerb": {
+      "summarize": "Summarize",
+      "explain": "Explain",
+      "translate": "Translate",
+      "simplify": "Simplify"
+    }
+  },
+  "fileTree": {
+    "open": "Open",
+    "newNote": "New Note",
+    "newCanvas": "New Canvas",
+    "newFolder": "New Folder",
+    "rename": "Rename",
+    "duplicate": "Make a copy",
+    "move": "Move to…",
+    "copyPath": "Copy path",
+    "copyAbsolutePath": "Copy absolute path",
+    "reveal": "Show in system explorer",
+    "delete": "Delete"
+  },
+  "canvasMenu": {
+    "newCard": "New card",
+    "newGroup": "New group",
+    "newLink": "New link",
+    "editText": "Edit text",
+    "editGroupLabel": "Edit label",
+    "editUrl": "Edit URL",
+    "editEdgeLabel": "Edit label",
+    "deleteConnection": "Delete connection",
+    "clearColor": "Clear colour",
+    "color": "Colour",
+    "delete": "Delete",
+    "colorRed": "Red",
+    "colorOrange": "Orange",
+    "colorYellow": "Yellow",
+    "colorGreen": "Green",
+    "colorCyan": "Cyan",
+    "colorPurple": "Purple"
+  },
+  "link": {
+    "confirmMessage": "Open this link in your browser?\n\n{{url}}",
+    "openExternalTitle": "Open External Link",
+    "open": "Open",
+    "cancel": "Cancel"
+  },
+  "copyButton": {
+    "copied": "Copied",
+    "label": "Copy code"
+  },
+  "lightbox": {
+    "image": "Image: {{alt}}",
+    "viewer": "Image viewer",
+    "close": "Close (Esc)",
+    "previous": "Previous image (←)",
+    "next": "Next image (→)",
+    "zoomOut": "Zoom out (-)",
+    "zoomIn": "Zoom in (+)",
+    "fit": "Fit to screen (0)",
+    "actualSize": "Actual size (1)"
+  },
+  "mermaid": {
+    "empty": "Empty diagram source",
+    "errorLabel": "Diagram error",
+    "errorTitle": "Failed to render diagram"
+  },
+  "taskList": {
+    "toggle": "Toggle task"
+  },
+  "frontmatter": {
+    "title": "Title",
+    "author": "Author",
+    "date": "Date",
+    "tags": "Tags"
+  },
+  "notebook": {
+    "errorTitle": "Couldn't render this notebook",
+    "empty": "This notebook has no cells.",
+    "sourceBanner": "Read-only source view — notebooks can't be edited in Glyph.",
+    "unsupportedInteractive": "Interactive output ({{type}}) is not supported yet",
+    "unsupported": "Unsupported output"
+  },
+  "canvasToolbar": {
+    "addCard": "Add card",
+    "addCardLabel": "+ Card",
+    "addGroup": "Add group",
+    "addGroupLabel": "+ Group",
+    "addLink": "Add link",
+    "addLinkLabel": "+ Link",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "fit": "Fit to content",
+    "fitLabel": "Fit"
+  },
+  "canvasSelection": {
+    "toolbar": "Selection",
+    "clearColor": "Clear colour",
+    "colorLabel": "Colour {{color}}",
+    "customColor": "Custom colour",
+    "delete": "Delete",
+    "deleteCount": "Delete ({{count}})"
+  },
+  "canvasEdge": {
+    "labelPlaceholder": "Label",
+    "labelAria": "Edge label"
+  },
+  "canvasNode": {
+    "groupPlaceholder": "Group name",
+    "linkPlaceholder": "https://example.com",
+    "textPlaceholder": "Type markdown…"
+  },
+  "canvasViewer": {
+    "error": "This canvas couldn't be opened."
+  },
+  "graph": {
+    "label": "Workspace graph",
+    "reset": "Re-centre and fit the graph",
+    "emptyState": "No notes to graph yet. Add markdown files to this workspace."
+  },
+  "fileDialog": {
+    "documents": "Documents",
+    "markdown": "Markdown",
+    "notebook": "Jupyter Notebook"
+  },
+  "exportFilter": {
+    "html": "HTML",
+    "docx": "Word Document",
+    "epub": "EPUB",
+    "pdf": "PDF"
   }
 }

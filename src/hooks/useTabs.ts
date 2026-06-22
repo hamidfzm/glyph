@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/lib/editHistory";
@@ -173,6 +174,7 @@ function removeTabs(prev: TabsState, ids: ReadonlySet<string>): TabsState {
 }
 
 export function useTabs(options: UseTabsOptions) {
+  const { t } = useTranslation("workspace");
   const [state, setState] = useState<TabsState>({ tabs: [], activeTabId: null });
   const [initializing, setInitializing] = useState(true);
   // The window's single folder workspace (or null when only loose files are
@@ -399,23 +401,18 @@ export function useTabs(options: UseTabsOptions) {
       try {
         resolution = await resolveWorkspace(resolvedRoot);
       } catch (err) {
-        notify(`Couldn't open this folder: ${String(err)}`);
+        notify(t("error.couldntOpen", { error: String(err) }));
         return;
       }
       if (resolution.glyphConflict) {
-        notify(
-          `This folder sits inside another Glyph workspace ("${resolution.glyphConflict}"). Nested workspaces aren't supported.`,
-        );
+        notify(t("notice.nestedWorkspace", { path: resolution.glyphConflict }));
         return;
       }
       // Allowed, but a folder inside a parent git repo means workspace-wide
       // features (Sync, `.glyph/` config) resolve against that repo, so warn and
       // keep the notice up until the user dismisses it.
       if (resolution.nestedUnder) {
-        notify(
-          `This folder is inside the git repository at "${resolution.nestedUnder}". Glyph treats one repository as one workspace, so some workspace features may act on the whole repository.`,
-          true,
-        );
+        notify(t("notice.nestedUnderGit", { path: resolution.nestedUnder }), true);
       }
 
       folderOpenInFlight.current = resolvedRoot;
@@ -466,7 +463,7 @@ export function useTabs(options: UseTabsOptions) {
         folderOpenInFlight.current = null;
       }
     },
-    [closeWorkspaceTabs, loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFile],
+    [closeWorkspaceTabs, loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFile, t],
   );
 
   // Open (or re-activate) the graph view of the workspace. The optional root
@@ -687,8 +684,8 @@ export function useTabs(options: UseTabsOptions) {
       const ws = workspaceRef.current;
       if (!ws) return false;
       const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
-      const confirmed = await ask(`Delete "${name}"? This can't be undone.`, {
-        title: "Delete",
+      const confirmed = await ask(t("confirmDelete.message", { name }), {
+        title: t("confirmDelete.title"),
         kind: "warning",
       });
       if (!confirmed) return false;
@@ -724,7 +721,7 @@ export function useTabs(options: UseTabsOptions) {
       });
       return true;
     },
-    [loadDirectory],
+    [loadDirectory, t],
   );
 
   const closeTab = useCallback((id: string) => {
@@ -928,15 +925,15 @@ export function useTabs(options: UseTabsOptions) {
       multiple: true,
       filters: [
         {
-          name: "Documents",
+          name: t("common:fileDialog.documents"),
           extensions: [...MARKDOWN_EXTENSIONS, ...NOTEBOOK_EXTENSIONS] as string[],
         },
         {
-          name: "Markdown",
+          name: t("common:fileDialog.markdown"),
           extensions: MARKDOWN_EXTENSIONS as string[],
         },
         {
-          name: "Jupyter Notebook",
+          name: t("common:fileDialog.notebook"),
           extensions: NOTEBOOK_EXTENSIONS as string[],
         },
       ],
@@ -947,7 +944,7 @@ export function useTabs(options: UseTabsOptions) {
         await openFile(path);
       }
     }
-  }, [openFile]);
+  }, [openFile, t]);
 
   // Initialize: load CLI arg, restore workspace + tabs, or reopen last file
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only effect

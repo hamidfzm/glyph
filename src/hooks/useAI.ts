@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createAIProvider } from "../lib/ai-providers";
 import type { AISettings } from "../lib/settings";
 
@@ -34,6 +35,7 @@ const ACTION_PROMPTS: Record<AIAction, { system: string; user: (text: string) =>
 };
 
 export function useAI(aiSettings: AISettings) {
+  const { t } = useTranslation("ai");
   const [state, setState] = useState<AIState>({
     loading: false,
     result: null,
@@ -49,7 +51,7 @@ export function useAI(aiSettings: AISettings) {
         setState({
           loading: false,
           result: null,
-          error: "No AI provider configured. Open Settings to set up an AI provider.",
+          error: t("error.notConfigured"),
           action,
         });
         return;
@@ -75,7 +77,7 @@ export function useAI(aiSettings: AISettings) {
         });
       }
     },
-    [aiSettings],
+    [aiSettings, t],
   );
 
   const clear = useCallback(() => {

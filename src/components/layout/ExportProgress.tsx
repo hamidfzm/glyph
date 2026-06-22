@@ -1,11 +1,5 @@
+import { useTranslation } from "react-i18next";
 import type { ExportFormat } from "@/hooks/useExport";
-
-const LABELS: Record<ExportFormat, string> = {
-  html: "HTML",
-  docx: "Word document",
-  epub: "EPUB",
-  pdf: "PDF",
-};
 
 /**
  * Small non-blocking toast shown while an export is being assembled and
@@ -14,6 +8,7 @@ const LABELS: Record<ExportFormat, string> = {
  * than a silent pause.
  */
 export function ExportProgress({ format }: { format: ExportFormat }) {
+  const { t } = useTranslation("common");
   return (
     <div
       role="status"
@@ -25,7 +20,7 @@ export function ExportProgress({ format }: { format: ExportFormat }) {
         aria-hidden="true"
         className="h-4 w-4 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin"
       />
-      Exporting {LABELS[format]}…
+      {t("exportProgress.exporting", { format: t(`exportProgress.${format}`) })}
     </div>
   );
 }
