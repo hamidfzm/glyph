@@ -1,6 +1,7 @@
 mod canvas;
 mod cli;
 mod commands;
+mod image;
 mod markdown;
 mod menu;
 mod menu_runtime;
@@ -20,6 +21,7 @@ use tauri_plugin_cli::CliExt;
 use watcher::FileWatcherState;
 
 pub use canvas::is_canvas_file;
+pub use image::is_image_file;
 pub use markdown::is_markdown_file;
 pub use notebook::{is_notebook_file, is_supported_file};
 

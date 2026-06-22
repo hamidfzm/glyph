@@ -41,7 +41,13 @@ pub fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
             Err(_) => continue,
         };
         let is_directory = metadata.is_dir();
-        if !is_directory && !crate::is_supported_file(&entry_path) {
+        // The sidebar lists openable documents plus image/SVG assets. Images are
+        // not part of `is_supported_file` (the document index that feeds the
+        // graph / wikilinks), so they are admitted here on top of it.
+        if !is_directory
+            && !crate::is_supported_file(&entry_path)
+            && !crate::is_image_file(&entry_path)
+        {
             continue;
         }
         let modified = metadata
@@ -141,11 +147,13 @@ mod tests {
     }
 
     #[test]
-    fn read_directory_lists_md_files_and_dirs() {
+    fn read_directory_lists_documents_images_and_dirs() {
         let dir = unique_tmp("read_dir_basic");
         fs::write(dir.join("readme.md"), "x").unwrap();
         fs::write(dir.join("notes.markdown"), "x").unwrap();
-        fs::write(dir.join("image.png"), b"x").unwrap();
+        fs::write(dir.join("diagram.svg"), b"<svg/>").unwrap();
+        fs::write(dir.join("photo.png"), b"x").unwrap();
+        fs::write(dir.join("data.json"), b"x").unwrap();
         fs::create_dir_all(dir.join("subdir")).unwrap();
 
         let result = read_directory(dir.to_string_lossy().to_string()).unwrap();
@@ -154,9 +162,11 @@ mod tests {
         assert!(names.contains(&"subdir"));
         assert!(names.contains(&"readme.md"));
         assert!(names.contains(&"notes.markdown"));
+        assert!(names.contains(&"diagram.svg"), "svg files are listed");
+        assert!(names.contains(&"photo.png"), "image files are listed");
         assert!(
-            !names.contains(&"image.png"),
-            "non-markdown files filtered out"
+            !names.contains(&"data.json"),
+            "unsupported files filtered out"
         );
 
         let _ = fs::remove_dir_all(&dir);

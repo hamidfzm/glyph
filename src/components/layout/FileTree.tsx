@@ -1,10 +1,12 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CanvasIcon } from "@/components/icons/CanvasIcon";
+import { ImageIcon } from "@/components/icons/ImageIcon";
 import { NewCanvasIcon } from "@/components/icons/NewCanvasIcon";
 import type { DirEntry } from "@/hooks/useTabs";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import type { ContextMenuItem } from "@/lib/contextMenuItems";
+import { isImageFile } from "@/lib/imageExtensions";
 import { ChevronRightIcon } from "../icons/ChevronRightIcon";
 import { CopyPathIcon } from "../icons/CopyPathIcon";
 import { DeleteIcon } from "../icons/DeleteIcon";
@@ -153,6 +155,8 @@ function renderEntry(entry: DirEntry, depth: number, props: EntryRenderProps): R
         <span className="w-[10px]" aria-hidden="true" />
         {isCanvasFile(entry.name) ? (
           <CanvasIcon className={isActive ? "opacity-90" : "opacity-60"} />
+        ) : isImageFile(entry.name) ? (
+          <ImageIcon className={isActive ? "opacity-90" : "opacity-60"} />
         ) : (
           <FileTextIcon className={isActive ? "opacity-90" : "opacity-60"} />
         )}

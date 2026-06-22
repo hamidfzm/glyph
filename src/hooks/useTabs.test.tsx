@@ -302,6 +302,27 @@ describe("useTabs file operations", () => {
     expect(tab.kind === "file" ? tab.file.mode : null).toBe("view");
   });
 
+  it("opens an image in view mode without reading it as text", async () => {
+    // Images are binary: openFile must skip read_file (and the file watch)
+    // entirely and load metadata only, opening the read-only image viewer.
+    const { result } = renderHook(() =>
+      useTabs({ ...defaultOptions(), defaultEditorMode: "edit" }),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/diagram.svg");
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+    const tab = result.current.tabs[0];
+    expect(tab.kind === "file" ? tab.file.mode : null).toBe("view");
+    expect(tab.kind === "file" ? tab.file.content : "x").toBeNull();
+    expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/diagram.svg" });
+    expect(invoke).not.toHaveBeenCalledWith("watch_file", { path: "/p/diagram.svg" });
+    expect(invoke).toHaveBeenCalledWith("get_file_metadata", { path: "/p/diagram.svg" });
+  });
+
   it("never marks a notebook tab dirty when toggled into edit mode", async () => {
     // Notebooks are read-only: switching modes shows the JSON source view, not
     // an editor. The tab must never become dirty, or autosave would write the

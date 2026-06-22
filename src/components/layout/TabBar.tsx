@@ -8,6 +8,7 @@ import { ViewModeIcon } from "@/components/icons/ViewModeIcon";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
 import { isCanvasFile } from "@/lib/canvasExtensions";
+import { isImageFile } from "@/lib/imageExtensions";
 import { isLooseFilePath } from "@/lib/looseFile";
 import { EDITOR_MODE } from "@/lib/settings";
 
@@ -33,7 +34,9 @@ export function TabBar() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
   const activeFile = activeFileOf(activeTab);
-  const showModeToggle = activeTab !== null && activeFile !== null;
+  // Images have a single read-only view, so the whole view/edit/split toggle is
+  // hidden for them (as opposed to canvas, which keeps view + edit).
+  const showModeToggle = activeTab !== null && activeFile !== null && !isImageFile(activeFile.path);
   // Canvas has no source-beside-preview split: the board itself is the editor,
   // so split would duplicate edit mode. Only markdown gets the third button.
   const showSplit = activeFile !== null && !isCanvasFile(activeFile.path);

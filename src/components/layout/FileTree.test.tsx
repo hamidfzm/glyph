@@ -58,6 +58,19 @@ describe("FileTree", () => {
     expect(screen.getByTitle("/root/note.md").querySelector("svg rect")).toBeNull();
   });
 
+  it("renders the image icon for image and svg entries", () => {
+    const entries: DirEntry[] = [
+      { name: "photo.png", path: "/root/photo.png", isDirectory: false, modified: 0 },
+      { name: "diagram.svg", path: "/root/diagram.svg", isDirectory: false, modified: 0 },
+      { name: "note.md", path: "/root/note.md", isDirectory: false, modified: 0 },
+    ];
+    renderFileTree({ nodes: new Map([["/root", entries]]) });
+    // The image glyph is the only one with a <circle> (the sun); canvas/text are not.
+    expect(screen.getByTitle("/root/photo.png").querySelector("svg circle")).toBeTruthy();
+    expect(screen.getByTitle("/root/diagram.svg").querySelector("svg circle")).toBeTruthy();
+    expect(screen.getByTitle("/root/note.md").querySelector("svg circle")).toBeNull();
+  });
+
   it("highlights the active canvas entry", () => {
     const entries: DirEntry[] = [
       { name: "board.canvas", path: "/root/board.canvas", isDirectory: false, modified: 0 },
