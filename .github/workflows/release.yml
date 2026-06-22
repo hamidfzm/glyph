@@ -8,9 +8,6 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     strategy:
@@ -39,7 +36,7 @@ jobs:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - name: Cache apt packages
         if: startsWith(matrix.platform, 'ubuntu')
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/apt-cache/*.deb
           key: apt-webkit-${{ matrix.platform }}-v1
