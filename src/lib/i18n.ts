@@ -5,11 +5,20 @@ import { FALLBACK_LOCALE } from "@/lib/locales";
 import enAi from "@/locales/en/ai.json";
 import enCommands from "@/locales/en/commands.json";
 import enCommon from "@/locales/en/common.json";
+import enMenu from "@/locales/en/menu.json";
 import enSettings from "@/locales/en/settings.json";
 import enSync from "@/locales/en/sync.json";
 import enWorkspace from "@/locales/en/workspace.json";
 
-export const NAMESPACES = ["common", "settings", "commands", "ai", "sync", "workspace"] as const;
+export const NAMESPACES = [
+  "common",
+  "settings",
+  "commands",
+  "ai",
+  "sync",
+  "workspace",
+  "menu",
+] as const;
 
 // Every non-English locale JSON is code-split into its own chunk (Vite turns
 // each `import()` into a separate file) and fetched only when that locale is
@@ -45,6 +54,7 @@ i18n
         ai: enAi,
         sync: enSync,
         workspace: enWorkspace,
+        menu: enMenu,
       },
     },
     partialBundledLanguages: true,
