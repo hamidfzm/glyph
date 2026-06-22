@@ -71,6 +71,19 @@ describe("FileTree", () => {
     expect(screen.getByTitle("/root/note.md").querySelector("svg circle")).toBeNull();
   });
 
+  it("highlights the active image entry", () => {
+    const entries: DirEntry[] = [
+      { name: "photo.png", path: "/root/photo.png", isDirectory: false, modified: 0 },
+    ];
+    renderFileTree({
+      nodes: new Map([["/root", entries]]),
+      activeFilePath: "/root/photo.png",
+    });
+    const row = screen.getByTitle("/root/photo.png");
+    expect(row.className).toContain("bg-[var(--color-accent)]");
+    expect(row.querySelector("svg circle")).toBeTruthy();
+  });
+
   it("highlights the active canvas entry", () => {
     const entries: DirEntry[] = [
       { name: "board.canvas", path: "/root/board.canvas", isDirectory: false, modified: 0 },

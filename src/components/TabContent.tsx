@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { useTabsContext } from "@/contexts/TabsContext";
-import { activeFileOf } from "@/hooks/useTabs";
 import { useTaskList } from "@/hooks/useTaskList";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isImageFile } from "@/lib/imageExtensions";
@@ -76,8 +75,9 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     );
   }
 
-  const file = activeFileOf(activeTab);
-  if (!file) return null;
+  // `activeTab` is narrowed to a file tab here (graph returned above), so its
+  // file is always present.
+  const file = activeTab.file;
 
   // Image/SVG tabs carry no text content (they're never read as text); they
   // render straight from the asset protocol in the read-only image viewer.

@@ -1005,6 +1005,26 @@ describe("useTabs file operations", () => {
     }
   });
 
+  it("ignores a file-changed event for an image path without reading it", async () => {
+    // Images are never read as text; the auto-reload guard short-circuits on an
+    // image path before any read_file, even if a stray event arrives.
+    const fileChanged = captureListener("file-changed");
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/diagram.svg");
+    });
+    vi.mocked(invoke).mockClear();
+
+    await act(async () => {
+      fileChanged.handler?.({ payload: "/p/diagram.svg" });
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/diagram.svg" });
+  });
+
   it("saveScrollPosition + setActiveTab persists scrollTop to the leaving tab", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
