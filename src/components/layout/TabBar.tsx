@@ -73,7 +73,7 @@ export function TabBar() {
                 aria-label={label}
               >
                 {dirty && <span className="tab-dirty-dot" />}
-                {tab.kind === "graph" && <GraphIcon className="opacity-70 -ml-0.5" />}
+                {tab.kind === "graph" && <GraphIcon className="opacity-70 -ms-0.5" />}
                 <span className="tab-label">{label}</span>
               </button>
               <button

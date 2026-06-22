@@ -21,12 +21,12 @@ export function WorkspaceNoticeBanner({ notice, onDismiss }: WorkspaceNoticeBann
     <div
       data-print-hide="true"
       role="status"
-      className="flex items-center gap-3 px-4 py-2 border-b border-[var(--color-border)] border-l-4 border-l-[var(--color-warning,#b45309)] bg-[var(--color-banner-bg)] text-sm text-[var(--color-text-primary)] select-none shrink-0"
+      className="flex items-center gap-3 px-4 py-2 border-b border-[var(--color-border)] border-s-4 border-s-[var(--color-warning,#b45309)] bg-[var(--color-banner-bg)] text-sm text-[var(--color-text-primary)] select-none shrink-0"
     >
       <span>{notice}</span>
       <button
         type="button"
-        className="ml-auto cursor-pointer text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+        className="ms-auto cursor-pointer text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
         onClick={onDismiss}
         aria-label={t("workspaceBanner.dismiss")}
       >

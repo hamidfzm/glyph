@@ -1,7 +1,7 @@
 export function ExternalLinkIcon() {
   return (
     <svg
-      className="inline-block ml-0.5 -mt-0.5 opacity-50"
+      className="inline-block ms-0.5 -mt-0.5 opacity-50"
       width="12"
       height="12"
       viewBox="0 0 12 12"

@@ -130,7 +130,7 @@ The UI is localized with [react-i18next](https://react.i18next.com/). Translatio
 2. Register the bundle in `src/lib/i18n.ts` and add a `{ code, name, nativeName, dir }` entry to `LOCALES` in `src/lib/locales.ts`.
 3. Run `pnpm typecheck && pnpm test`. The language then appears in Settings → Appearance.
 
-Right-to-left locales (Arabic, Hebrew, Persian) need the layout audit tracked in [#264](https://github.com/hamidfzm/glyph/issues/264) before they render correctly.
+Right-to-left locales (Arabic, Hebrew, Persian) are supported: set `dir: "rtl"` in the `src/lib/locales.ts` entry and the layout mirrors automatically. The UI uses CSS logical properties (`margin-inline-*`, `inset-inline-*`, `text-start/end`, Tailwind `ms-/me-/ps-/pe-/start-/end-`) rather than physical `left`/`right`, so prefer those in new styles. Spatial surfaces that are coordinate-based (the canvas board, the graph) deliberately stay physical and do not mirror.
 
 ## Workflow
 

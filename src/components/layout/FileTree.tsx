@@ -116,7 +116,7 @@ function renderEntry(entry: DirEntry, depth: number, props: EntryRenderProps): R
           type="button"
           onClick={() => onToggle(entry.path)}
           onContextMenu={(e) => onContextMenu(e, entry)}
-          className="w-full text-left text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] flex items-center gap-1.5"
+          className="w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] flex items-center gap-1.5"
           style={indentStyle}
           title={entry.path}
         >
@@ -142,7 +142,7 @@ function renderEntry(entry: DirEntry, depth: number, props: EntryRenderProps): R
         type="button"
         onClick={() => onOpenFile(entry.path)}
         onContextMenu={(e) => onContextMenu(e, entry)}
-        className={`w-full text-left text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors flex items-center gap-1.5 ${
+        className={`w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors flex items-center gap-1.5 ${
           isActive
             ? "bg-[var(--color-accent)] text-white font-medium"
             : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)]"

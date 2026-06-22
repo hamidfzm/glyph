@@ -31,7 +31,7 @@ export function SubmenuItem({
         </span>
       </button>
       {open && (
-        <div role="menu" className={`${SURFACE_CLASS} top-0 left-full -mt-1 ml-1`}>
+        <div role="menu" className={`${SURFACE_CLASS} top-0 start-full -mt-1 ms-1`}>
           {item.items.map((sub) => (
             <ActionButton key={sub.label} item={sub} onSelect={() => onRun(sub.onSelect)} />
           ))}

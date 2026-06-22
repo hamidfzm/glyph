@@ -57,7 +57,7 @@ export function SplitView({
     <div className="split-view flex h-full w-full">
       <div
         data-testid="split-view-editor"
-        className="split-view-editor flex flex-1 min-w-0 min-h-0 overflow-hidden border-r border-[var(--color-border)]"
+        className="split-view-editor flex flex-1 min-w-0 min-h-0 overflow-hidden border-e border-[var(--color-border)]"
       >
         <MarkdownEditor content={content} onChange={handleChange} workspaceFiles={workspaceFiles} />
       </div>

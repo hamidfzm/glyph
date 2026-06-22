@@ -39,10 +39,10 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
         </span>
       )}
       {isNotebook ? (
-        <span className="ml-auto">{t("statusBar.jupyter")}</span>
+        <span className="ms-auto">{t("statusBar.jupyter")}</span>
       ) : (
         <>
-          <span className="ml-auto">
+          <span className="ms-auto">
             {t("statusBar.words", { count: words, formatted: words.toLocaleString() })}
           </span>
           <span>{t("statusBar.readingTime", { count: readingMinutes(words) })}</span>

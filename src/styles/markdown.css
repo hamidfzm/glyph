@@ -89,7 +89,7 @@
 .markdown-body blockquote {
   margin: 0 0 1em;
   padding: 0.5em 1em;
-  border-left: 4px solid var(--color-accent);
+  border-inline-start: 4px solid var(--color-accent);
   background: var(--color-surface-secondary);
   border-radius: 0 var(--glyph-radius-sm) var(--glyph-radius-sm) 0;
   color: var(--color-text-secondary);
@@ -100,7 +100,7 @@
 .markdown-body .markdown-alert {
   margin: 0 0 1em;
   padding: 0.5em 1em;
-  border-left: 4px solid var(--alert-accent, var(--color-accent));
+  border-inline-start: 4px solid var(--alert-accent, var(--color-accent));
   background: color-mix(in srgb, var(--alert-accent, var(--color-accent)) 8%, transparent);
   border-radius: 0 var(--glyph-radius-sm) var(--glyph-radius-sm) 0;
   color: var(--color-text-primary);
@@ -133,7 +133,7 @@
 .markdown-body ul,
 .markdown-body ol {
   margin: 0 0 1em;
-  padding-left: 2em;
+  padding-inline-start: 2em;
 }
 
 .markdown-body li { margin: 0.25em 0; }
@@ -144,12 +144,12 @@
  * match the GFM rendering convention. */
 .markdown-body ul.contains-task-list {
   list-style: none;
-  padding-left: 0.5em;
+  padding-inline-start: 0.5em;
 }
 
 .markdown-body ul.contains-task-list ul,
 .markdown-body ul.contains-task-list ol {
-  padding-left: 1.5em;
+  padding-inline-start: 1.5em;
 }
 
 .markdown-body li.task-list-item {
@@ -194,7 +194,7 @@
 .markdown-body .code-copy-button {
   position: absolute;
   top: 8px;
-  right: 8px;
+  inset-inline-end: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -282,7 +282,7 @@
 .markdown-body td {
   padding: 0.5em 1em;
   border: 1px solid var(--color-border);
-  text-align: left;
+  text-align: start;
 }
 
 .markdown-body th {
@@ -310,12 +310,12 @@
 
 .markdown-body .csv-table th:first-child,
 .markdown-body .csv-table td:first-child {
-  border-left: none;
+  border-inline-start: none;
 }
 
 .markdown-body .csv-table th:last-child,
 .markdown-body .csv-table td:last-child {
-  border-right: none;
+  border-inline-end: none;
 }
 
 .markdown-body .csv-table tr:first-child th {
@@ -338,7 +338,7 @@
 }
 
 .markdown-body .footnotes ol {
-  padding-left: 1.5em;
+  padding-inline-start: 1.5em;
 }
 
 .markdown-body .footnotes li {
@@ -447,7 +447,7 @@
   padding: 0.45em 0.9em;
   border: none;
   border-bottom: 1px solid var(--color-border);
-  text-align: left;
+  text-align: start;
   vertical-align: middle;
   background: none;
 }
@@ -470,7 +470,7 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-text-tertiary);
-  border-right: 1px solid var(--color-border);
+  border-inline-end: 1px solid var(--color-border);
 }
 
 .markdown-body .frontmatter-table td {
@@ -483,7 +483,7 @@
 }
 
 .markdown-body .frontmatter-cell-icon {
-  margin-right: 0.45em;
+  margin-inline-end: 0.45em;
   vertical-align: -0.15em;
   opacity: 0.6;
 }
@@ -519,7 +519,7 @@
 
 .markdown-body .frontmatter-tag-hash {
   opacity: 0.55;
-  margin-right: 0.05em;
+  margin-inline-end: 0.05em;
 }
 
 .dark .markdown-body .frontmatter-tag {

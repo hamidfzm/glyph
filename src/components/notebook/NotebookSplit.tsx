@@ -26,7 +26,7 @@ export function NotebookSplit({
 }: NotebookSplitProps) {
   return (
     <div className="split-view flex h-full w-full">
-      <div className="split-view-editor flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-r border-[var(--color-border)]">
+      <div className="split-view-editor flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-e border-[var(--color-border)]">
         <NotebookSource
           content={content}
           filePath={filePath}

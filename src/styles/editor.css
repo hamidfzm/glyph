@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 0 4px;
   /* Keep the toggle in the bar even if the tab list grows wide enough to
    * fight for horizontal space (e.g. after a TOC scroll triggers a layout
@@ -134,7 +134,7 @@
   color: var(--color-text-tertiary);
   font-style: normal;
   font-size: 0.85em;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail {

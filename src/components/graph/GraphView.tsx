@@ -246,10 +246,10 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
         type="button"
         onClick={refit}
         disabled={autoFit}
-        className="absolute top-3 right-3 px-2.5 py-1 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)] enabled:hover:text-[var(--color-text-primary)] disabled:opacity-40"
+        className="absolute top-3 end-3 px-2.5 py-1 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)] enabled:hover:text-[var(--color-text-primary)] disabled:opacity-40"
         title={t("graph.reset")}
       >
-        Reset view
+        {t("graph.resetView")}
       </button>
       {hovered && (
         <div
