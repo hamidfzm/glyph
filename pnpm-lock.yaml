@@ -97,6 +97,9 @@ importers:
       i18next:
         specifier: ^26.3.1
         version: 26.3.1(typescript@5.9.3)
+      i18next-resources-to-backend:
+        specifier: ^1.2.1
+        version: 1.2.1
       js-yaml:
         specifier: ^4.2.0
         version: 4.2.0
@@ -2239,6 +2242,9 @@ packages:
     resolution: {integrity: sha512-5gs5ytaNjBrh5Ow3zrvdUUY+0VxIuWVL4i9irt6friV+BqdCfmV11CQTWMiBYWHbXhco+J1kHfTOUkePhCDvMA==}
     engines: {node: '>=18'}
     hasBin: true
+
+  i18next-resources-to-backend@1.2.1:
+    resolution: {integrity: sha512-okHbVA+HZ7n1/76MsfhPqDou0fptl2dAlhRDu2ideXloRRduzHsqDOznJBef+R3DFZnbvWoBW+KxJ7fnFjd6Yw==}
 
   i18next@26.3.1:
     resolution: {integrity: sha512-txQqd5EULsqEh9OJqRH15aCaOuy/nLJyhw5EHCSKLKJE1aBbb3Zve2+uQIxgWhPm1QqUQoWyQBm2kfmmIrzkcQ==}
@@ -5570,6 +5576,10 @@ snapshots:
       - supports-color
 
   husky@9.1.7: {}
+
+  i18next-resources-to-backend@1.2.1:
+    dependencies:
+      '@babel/runtime': 7.29.7
 
   i18next@26.3.1(typescript@5.9.3):
     optionalDependencies:
