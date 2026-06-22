@@ -290,10 +290,13 @@ export function useTabs(options: UseTabsOptions) {
         // file watch — the asset URL is static, so an on-disk change would not
         // refresh it anyway.) Documents load their text and start a watch.
         const isImage = isImageFile(path);
-        const { content, metadata } = isImage
-          ? { content: null, metadata: await invoke<FileMetadata>("get_file_metadata", { path }) }
-          : await loadFileContent(path);
-        if (!isImage) {
+        let content: string | null;
+        let metadata: FileMetadata;
+        if (isImage) {
+          content = null;
+          metadata = await invoke<FileMetadata>("get_file_metadata", { path });
+        } else {
+          ({ content, metadata } = await loadFileContent(path));
           await invoke("watch_file", { path });
         }
         // Notebooks, canvases, and images are read-only; open straight into the
