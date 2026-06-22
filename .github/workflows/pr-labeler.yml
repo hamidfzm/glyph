@@ -39,7 +39,6 @@ jobs:
               ci: "ci",
               build: "ci",
               test: "testing",
-              security: "security",
             };
 
             // Colors used to create a category label if it does not exist yet.
@@ -59,8 +58,18 @@ jobs:
             const type = match[1].toLowerCase();
             const scope = (match[2] || "").toLowerCase();
 
-            // A `deps` scope (e.g. chore(deps), build(deps)) is a dependency bump.
-            let label = scope.includes("deps") ? "dependencies" : TYPE_TO_LABEL[type];
+            // Scope takes precedence over type: a `deps` scope (chore(deps),
+            // build(deps)) is a dependency bump, and a `security` scope
+            // (fix(security), feat(security)) belongs in the Security section
+            // regardless of whether it is framed as a fix or a feature.
+            let label;
+            if (scope.includes("deps")) {
+              label = "dependencies";
+            } else if (scope.includes("security")) {
+              label = "security";
+            } else {
+              label = TYPE_TO_LABEL[type];
+            }
             if (!label) {
               core.info(`No category mapped for type "${type}"; leaving to "Other Changes".`);
               return;
