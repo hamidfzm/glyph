@@ -1,0 +1,243 @@
+{
+  "modal": {
+    "title": "Ajustes",
+    "reset": "Restablecer valores predeterminados",
+    "changesApply": "Los cambios se aplican de inmediato",
+    "tabs": {
+      "appearance": "Apariencia",
+      "layout": "Diseño",
+      "behavior": "Comportamiento",
+      "editor": "Editor",
+      "hotkeys": "Atajos",
+      "ai": "IA",
+      "print": "Impresión",
+      "privacy": "Privacidad"
+    }
+  },
+  "language": {
+    "sectionTitle": "Idioma",
+    "label": "Idioma de la interfaz",
+    "system": "Sistema"
+  },
+  "appearance": {
+    "theme": {
+      "title": "Tema",
+      "label": "Tema de color",
+      "system": "Sistema",
+      "light": "Claro",
+      "dark": "Oscuro"
+    },
+    "typography": {
+      "title": "Tipografía"
+    },
+    "fontFamily": {
+      "label": "Familia de fuente",
+      "system": "Predeterminada del sistema",
+      "serif": "Serif",
+      "sans": "Sans-serif",
+      "mono": "Monoespaciada",
+      "custom": "Personalizada"
+    },
+    "customFont": {
+      "label": "Nombre de fuente personalizada",
+      "placeholder": "p. ej. Inter, Lora"
+    },
+    "fontSize": {
+      "label": "Tamaño de fuente"
+    },
+    "lineHeight": {
+      "label": "Altura de línea",
+      "compact": "Compacta",
+      "normal": "Normal",
+      "relaxed": "Amplia"
+    },
+    "contentWidth": {
+      "label": "Ancho del contenido",
+      "narrow": "Estrecho",
+      "medium": "Medio",
+      "wide": "Ancho",
+      "full": "Completo"
+    },
+    "code": {
+      "title": "Código"
+    },
+    "codeFont": {
+      "label": "Fuente del código",
+      "placeholder": "Predeterminada (SF Mono, Fira Code...)"
+    },
+    "codeTheme": {
+      "label": "Tema del código",
+      "glyph": "Glyph (predeterminado)",
+      "github": "GitHub",
+      "monokai": "Monokai",
+      "nord": "Nord",
+      "solarizedLight": "Solarized Light",
+      "solarizedDark": "Solarized Dark"
+    }
+  },
+  "layout": {
+    "title": "Barras laterales",
+    "showFiles": {
+      "label": "Mostrar barra de archivos",
+      "description": "Árbol de archivos del espacio de trabajo (solo en pestañas de carpeta). Alterna con <kbd>Cmd/Ctrl+B</kbd>."
+    },
+    "showOutline": {
+      "label": "Mostrar barra de esquema",
+      "description": "Tabla de contenidos del documento. Alterna con <kbd>Cmd/Ctrl+\\</kbd>."
+    },
+    "sidebarLayout": {
+      "label": "Diseño de la barra lateral",
+      "description": "Solo en pestañas de carpeta. <b>Dividido</b>: archivos y esquema en lados opuestos. <b>Combinado</b>: apilados en un panel. <b>Contiguo</b>: dos paneles adyacentes en el mismo lado.",
+      "split": "Dividido",
+      "combined": "Combinado",
+      "beside": "Contiguo"
+    },
+    "swap": {
+      "label": "Intercambiar lados de las barras laterales",
+      "description": "Cambia el lado en el que vive cada panel. El valor predeterminado es Archivos a la izquierda / Esquema a la derecha; al activarlo, pasa a Archivos a la derecha / Esquema a la izquierda."
+    },
+    "width": {
+      "label": "Ancho de la barra lateral"
+    }
+  },
+  "behavior": {
+    "fileHandling": {
+      "title": "Gestión de archivos"
+    },
+    "autoReload": {
+      "label": "Recarga automática",
+      "description": "Recargar el archivo cuando cambie en el disco"
+    },
+    "reopenLastFile": {
+      "label": "Reabrir último archivo",
+      "description": "Abrir el último archivo visto al iniciar"
+    },
+    "confirmExternalLinks": {
+      "label": "Confirmar enlaces externos",
+      "description": "Preguntar antes de abrir enlaces en el navegador"
+    },
+    "recentFiles": {
+      "title": "Archivos recientes",
+      "clear": "Borrar archivos recientes"
+    }
+  },
+  "updates": {
+    "title": "Actualizaciones",
+    "check": {
+      "label": "Buscar actualizaciones",
+      "description": "Al iniciar, busca una versión más reciente y muestra un aviso cuando hay una disponible. Solo se compara la versión instalada; no se envía ningún archivo ni dato personal."
+    },
+    "checking": "Comprobando…",
+    "checkNow": "Comprobar ahora",
+    "current": "Tienes la última versión.",
+    "error": "No se pudieron buscar actualizaciones. Inténtalo de nuevo más tarde.",
+    "available": "La versión {{version}} está disponible.",
+    "download": "Descargar"
+  },
+  "editor": {
+    "title": "Editor",
+    "keymap": {
+      "label": "Mapa de teclas",
+      "description": "Combinaciones de teclas para el editor de markdown. Vim añade edición modal; VSCode replica los atajos habituales de VSCode. Surte efecto la próxima vez que un documento entra en modo de edición o dividido."
+    },
+    "keymapOptions": {
+      "default": "Predeterminado",
+      "vim": "Vim",
+      "vscode": "VSCode"
+    },
+    "help": {
+      "default": {
+        "title": "Atajos predeterminados (Glyph)",
+        "autocomplete": "en un espacio de trabajo de carpeta abre el autocompletado de wikilinks",
+        "accept": "aceptar la sugerencia resaltada",
+        "undoRedo": "deshacer / rehacer",
+        "standard": "De lo contrario, atajos estándar de edición de texto del sistema operativo"
+      },
+      "vim": {
+        "title": "Referencia rápida de Vim",
+        "modes": "modos normal, insert, insert-after, visual",
+        "motions": "movimientos; f + carácter para saltar; / para buscar",
+        "operators": "operadores con contadores y objetos de texto (diw, ci\")",
+        "files": "Los comandos de archivo como :w, :q y :wq no se aplican aquí: Glyph guarda automáticamente y las pestañas se cierran con el atajo de cerrar pestaña."
+      },
+      "vscode": {
+        "title": "Atajos de VSCode",
+        "moveLine": "mover la línea actual arriba / abajo",
+        "copyLine": "copiar la línea arriba / abajo",
+        "comment": "alternar comentario de línea",
+        "multiSelect": "seleccionar la siguiente coincidencia; Cmd/Ctrl+] o [ para sangrar / quitar sangría"
+      }
+    }
+  },
+  "ai": {
+    "provider": {
+      "title": "Proveedor de IA",
+      "label": "Proveedor",
+      "none": "Ninguno",
+      "claude": "Claude (Anthropic)",
+      "openai": "OpenAI",
+      "ollama": "Ollama (local)"
+    },
+    "apiKey": {
+      "label": "Clave de API"
+    },
+    "ollamaUrl": {
+      "label": "URL de Ollama",
+      "description": "Requiere OLLAMA_ORIGINS=* para CORS"
+    },
+    "model": {
+      "label": "Modelo",
+      "placeholder": "Selecciona o escribe el nombre del modelo"
+    },
+    "tts": {
+      "title": "Texto a voz"
+    },
+    "voice": {
+      "label": "Voz",
+      "placeholder": "Voz predeterminada del sistema"
+    },
+    "speed": {
+      "label": "Velocidad"
+    }
+  },
+  "print": {
+    "title": "Impresión y exportación a PDF",
+    "pageBreaks": {
+      "label": "Saltos de página",
+      "description": "Empezar una página nueva en el nivel de encabezado",
+      "none": "Ninguno",
+      "h1": "En H1",
+      "h2": "En H2"
+    },
+    "toc": {
+      "label": "Incluir tabla de contenidos",
+      "description": "Insertar una página de contenidos al principio"
+    },
+    "backgrounds": {
+      "label": "Imprimir fondos y colores",
+      "description": "Conservar los colores del tema en la salida"
+    }
+  },
+  "privacy": {
+    "title": "Informes de errores",
+    "crashReports": {
+      "label": "Enviar informes de fallos",
+      "description": "Desactivado de forma predeterminada. Cuando está activado, se envían informes de fallos anónimos (trazas de pila, sistema operativo y versión de la app) para ayudar a corregir errores. Tus archivos, rutas de archivo y enlaces nunca se incluyen. Solo se activa en compilaciones de producción. Consulta SECURITY.md para ver la política completa."
+    }
+  },
+  "hotkeys": {
+    "search": {
+      "placeholder": "Buscar atajos…",
+      "label": "Buscar atajos"
+    },
+    "conflict": "Entra en conflicto con otro atajo",
+    "recording": "Pulsa las teclas…",
+    "reset": "Restablecer",
+    "resetTitle": "Restablecer al valor predeterminado",
+    "aria": {
+      "recording": "Grabando atajo para {{command}}",
+      "change": "Cambiar atajo para {{command}}",
+      "reset": "Restablecer atajo para {{command}}"
+    }
+  }
+}

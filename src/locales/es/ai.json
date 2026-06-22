@@ -1,0 +1,17 @@
+{
+  "title": "IA",
+  "actionLabel": {
+    "summarize": "Resumen",
+    "explain": "Explicación",
+    "translate": "Traducción",
+    "simplify": "Simplificado"
+  },
+  "processing": "Procesando...",
+  "empty": "Usa el menú de IA o el menú contextual para ejecutar una acción.",
+  "stopReading": "Detener lectura",
+  "readAloud": "Leer en voz alta",
+  "copy": "Copiar",
+  "error": {
+    "notConfigured": "No hay ningún proveedor de IA configurado. Abre Ajustes para configurar un proveedor de IA."
+  }
+}

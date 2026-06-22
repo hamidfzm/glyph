@@ -1,0 +1,33 @@
+{
+  "palette": {
+    "title": "命令面板",
+    "placeholder": "输入命令、文件或标题…",
+    "queryLabel": "命令面板查询",
+    "empty": "无结果"
+  },
+  "section": {
+    "Files": "文件",
+    "Headings": "标题",
+    "Commands": "命令"
+  },
+  "openFile": "打开文件…",
+  "openFolder": "打开文件夹…",
+  "closeTab": "关闭标签页",
+  "toggleFilesSidebar": "切换文件侧边栏",
+  "toggleOutlineSidebar": "切换大纲侧边栏",
+  "resetView": "重置视图",
+  "openSettings": "设置…",
+  "openSyncSettings": "云同步…",
+  "find": "在文档中查找",
+  "toggleEdit": "切换编辑模式",
+  "openGraph": "打开图谱",
+  "print": "打印…",
+  "exportHtml": "导出为 HTML…",
+  "exportDocx": "导出为 Word (DOCX)…",
+  "exportEpub": "导出为 EPUB…",
+  "exportPdf": "导出为 PDF…",
+  "zoomIn": "放大",
+  "zoomOut": "缩小",
+  "zoomReset": "重置缩放",
+  "readAloud": "朗读"
+}

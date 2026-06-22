@@ -1,0 +1,91 @@
+{
+  "modal": {
+    "title": "Ajustes de sincronización en la nube",
+    "heading": "Sincronización en la nube",
+    "close": "Cerrar ajustes de sincronización en la nube"
+  },
+  "empty": "Abre un espacio de trabajo de carpeta para configurar su sincronización en la nube. Las pestañas de un solo archivo se sincronizan como parte de la carpeta en la que residen.",
+  "description": "Sincronización basada en Git para este espacio de trabajo. Glyph incluye su propia compilación de libgit2: no se necesita <kbd>git</kbd> del sistema.",
+  "loading": "Cargando…",
+  "notRepo": "Esta carpeta aún no es un repositorio git.",
+  "initRepo": "Inicializar repositorio",
+  "remoteUrl": {
+    "label": "URL remota",
+    "hint": "(en blanco = historial solo local)",
+    "placeholder": "https://github.com/you/notes.git"
+  },
+  "branch": {
+    "label": "Rama",
+    "placeholder": "main"
+  },
+  "conflictPolicy": {
+    "legend": "Política de conflictos",
+    "prompt": { "label": "Preguntarme", "description": "Detenerse en los conflictos y abrir el resolutor." },
+    "preferRemote": {
+      "label": "Tomar remoto",
+      "description": "Descartar las ediciones locales cuando entren en conflicto."
+    },
+    "preferLocal": { "label": "Mantener local", "description": "Aplicar las ediciones locales sobre el remoto." }
+  },
+  "authorName": { "label": "Nombre del autor", "placeholder": "por defecto, tu configuración de git" },
+  "authorEmail": { "label": "Correo del autor", "placeholder": "you@example.com" },
+  "token": {
+    "label": "Token de acceso personal",
+    "hint": "(solo HTTPS)",
+    "placeholderSaved": "guardado: déjalo en blanco para conservarlo",
+    "placeholderNew": "ghp_…",
+    "note": "Por ahora se guarda solo en memoria. La próxima versión lo enrutará a través del llavero de tu sistema operativo."
+  },
+  "commitMessage": {
+    "label": "Mensaje del commit",
+    "hint": "(en blanco = generado automáticamente a partir de los cambios)",
+    "placeholder": "p. ej. Actualizar notas"
+  },
+  "saveChanges": "Guardar cambios",
+  "saveConfig": "Guardar configuración",
+  "syncNow": "Sincronizar ahora",
+  "refreshStatus": "Actualizar estado",
+  "disable": "Desactivar sincronización",
+  "status": {
+    "workingTree": "Árbol de trabajo: <strong>{{state}}</strong>",
+    "clean": "limpio",
+    "dirty": "modificado",
+    "aheadBehind": "Adelante: <strong>{{ahead}}</strong> · Atrás: <strong>{{behind}}</strong>",
+    "conflicts": "Conflictos sin resolver: {{files}}",
+    "lastSync": "Última sincronización: {{time}}",
+    "lastRun": "Última ejecución: descargados <strong>{{pulled}}</strong>, confirmados <strong>{{committed}}</strong>, enviados <strong>{{pushed}}</strong>{{suffix}}",
+    "lastRunConflicts": ", {{count}} conflicto(s) requieren atención"
+  },
+  "indicator": {
+    "off": "Sincronización desactivada",
+    "configured": "Sincronización configurada",
+    "conflicts": "Conflictos ({{count}})",
+    "changes": "Sincronización +{{ahead}}/-{{behind}}",
+    "dirty": "Sincronización: modificado",
+    "synced": "Sincronizado {{time}}",
+    "syncedDefault": "Sincronizado",
+    "open": "Abrir ajustes de sincronización en la nube"
+  },
+  "relativeTime": {
+    "never": "nunca",
+    "secondsAgo": "hace {{count}} s",
+    "minutesAgo": "hace {{count}} min",
+    "hoursAgo": "hace {{count}} h",
+    "daysAgo": "hace {{count}} d"
+  },
+  "error": {
+    "notConfigured": "Este espacio de trabajo aún no está configurado para la sincronización.",
+    "authFailed": "Error de autenticación.",
+    "authFailedDetail": "Error de autenticación: {{message}}",
+    "network": "No se pudo conectar con el remoto.",
+    "networkDetail": "No se pudo conectar con el remoto: {{message}}",
+    "conflict": "Resuelve los conflictos en {{count}} archivo(s) antes de volver a sincronizar.",
+    "invalidState": "El repositorio está en un estado inesperado.",
+    "invalidStateDetail": "El repositorio está en un estado inesperado: {{message}}",
+    "io": "Error de E/S.",
+    "ioDetail": "Error de E/S: {{message}}",
+    "backend": "Error del backend de sincronización.",
+    "backendDetail": "Error del backend de sincronización: {{message}}",
+    "unknown": "Error de sincronización desconocido."
+  }
+}

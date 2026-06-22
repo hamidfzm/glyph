@@ -1,0 +1,17 @@
+{
+  "title": "AI",
+  "actionLabel": {
+    "summarize": "摘要",
+    "explain": "解释",
+    "translate": "翻译",
+    "simplify": "简化版"
+  },
+  "processing": "处理中...",
+  "empty": "使用 AI 菜单或右键菜单运行操作。",
+  "stopReading": "停止朗读",
+  "readAloud": "朗读",
+  "copy": "复制",
+  "error": {
+    "notConfigured": "未配置 AI 提供商。请打开设置以设置 AI 提供商。"
+  }
+}

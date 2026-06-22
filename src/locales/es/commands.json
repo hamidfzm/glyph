@@ -1,0 +1,33 @@
+{
+  "palette": {
+    "title": "Paleta de comandos",
+    "placeholder": "Escribe un comando, archivo o encabezado…",
+    "queryLabel": "Consulta de la paleta de comandos",
+    "empty": "Sin resultados"
+  },
+  "section": {
+    "Files": "Archivos",
+    "Headings": "Encabezados",
+    "Commands": "Comandos"
+  },
+  "openFile": "Abrir archivo…",
+  "openFolder": "Abrir carpeta…",
+  "closeTab": "Cerrar pestaña",
+  "toggleFilesSidebar": "Alternar barra de archivos",
+  "toggleOutlineSidebar": "Alternar barra de esquema",
+  "resetView": "Restablecer vista",
+  "openSettings": "Ajustes…",
+  "openSyncSettings": "Sincronización en la nube…",
+  "find": "Buscar en el documento",
+  "toggleEdit": "Alternar modo de edición",
+  "openGraph": "Abrir grafo",
+  "print": "Imprimir…",
+  "exportHtml": "Exportar a HTML…",
+  "exportDocx": "Exportar a Word (DOCX)…",
+  "exportEpub": "Exportar a EPUB…",
+  "exportPdf": "Exportar a PDF…",
+  "zoomIn": "Acercar",
+  "zoomOut": "Alejar",
+  "zoomReset": "Restablecer zoom",
+  "readAloud": "Leer en voz alta"
+}

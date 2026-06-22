@@ -1,0 +1,13 @@
+{
+  "error": {
+    "couldntOpen": "Dieser Ordner konnte nicht geöffnet werden: {{error}}"
+  },
+  "notice": {
+    "nestedWorkspace": "Dieser Ordner liegt innerhalb eines anderen Glyph-Arbeitsbereichs (\"{{path}}\"). Verschachtelte Arbeitsbereiche werden nicht unterstützt.",
+    "nestedUnderGit": "Dieser Ordner liegt innerhalb des Git-Repositorys unter \"{{path}}\". Glyph behandelt ein Repository als einen Arbeitsbereich, daher können einige Arbeitsbereich-Funktionen auf das gesamte Repository wirken."
+  },
+  "confirmDelete": {
+    "message": "\"{{name}}\" löschen? Das kann nicht rückgängig gemacht werden.",
+    "title": "Löschen"
+  }
+}

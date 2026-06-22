@@ -1,0 +1,13 @@
+{
+  "error": {
+    "couldntOpen": "无法打开此文件夹：{{error}}"
+  },
+  "notice": {
+    "nestedWorkspace": "此文件夹位于另一个 Glyph 工作区 (\"{{path}}\") 内。不支持嵌套工作区。",
+    "nestedUnderGit": "此文件夹位于 \"{{path}}\" 处的 git 仓库内。Glyph 将一个仓库视为一个工作区，因此某些工作区功能可能作用于整个仓库。"
+  },
+  "confirmDelete": {
+    "message": "删除 \"{{name}}\"？此操作无法撤销。",
+    "title": "删除"
+  }
+}
