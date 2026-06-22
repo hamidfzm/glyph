@@ -199,8 +199,10 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           SHA="${{ steps.sha.outputs.sha256 }}"
+          HOMEPAGE=$(jq -r .homepage package.json)
 
           sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" \
+            -e "s|{{HOMEPAGE}}|$HOMEPAGE|g" \
             homebrew/glyph.rb.template > /tmp/glyph.rb
 
           # Get current file SHA for update (or empty for first push)
@@ -237,10 +239,12 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           SHA_AMD64="${{ steps.linux_sha.outputs.sha256_amd64 }}"
           SHA_ARM64="${{ steps.linux_sha.outputs.sha256_arm64 }}"
+          HOMEPAGE=$(jq -r .homepage package.json)
 
           sed -e "s/{{VERSION}}/$VERSION/g" \
             -e "s/{{SHA256_AMD64}}/$SHA_AMD64/g" \
             -e "s/{{SHA256_ARM64}}/$SHA_ARM64/g" \
+            -e "s|{{HOMEPAGE}}|$HOMEPAGE|g" \
             homebrew/glyph-formula.rb.template > /tmp/glyph.rb
 
           # Get current file SHA for update (or empty for first push)
@@ -326,8 +330,10 @@ jobs:
           # Set the version and inject the changelog via the XML DOM so any
           # special characters in the notes are escaped correctly.
           [xml]$nuspec = Get-Content chocolatey/glyph.nuspec -Raw
+          $homepage = (Get-Content package.json -Raw | ConvertFrom-Json).homepage
           $nuspec.package.metadata.version = $version
           $nuspec.package.metadata.releaseNotes = $notes
+          $nuspec.package.metadata.projectUrl = $homepage
           $nuspec.Save("$pwd\chocolatey\glyph.nuspec")
 
           cd chocolatey
@@ -359,8 +365,10 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           SHA="${{ steps.sha.outputs.sha256 }}"
+          HOMEPAGE=$(jq -r .homepage package.json)
 
           sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA/g" \
+            -e "s|{{HOMEPAGE}}|$HOMEPAGE|g" \
             scoop/glyph.json.template > /tmp/glyph.json
 
           # Get current file SHA for update (or empty for first push)
@@ -421,16 +429,20 @@ jobs:
           # Clone AUR repo
           git clone ssh://aur@aur.archlinux.org/glyph-md-bin.git /tmp/aur
 
+          HOMEPAGE=$(jq -r .homepage package.json)
+
           # Update PKGBUILD from template
           sed -e "s/{{VERSION}}/$VERSION/g" \
             -e "s/{{SHA256_AMD64}}/$SHA_AMD64/g" \
             -e "s/{{SHA256_ARM64}}/$SHA_ARM64/g" \
+            -e "s|{{HOMEPAGE}}|$HOMEPAGE|g" \
             aur/PKGBUILD > /tmp/aur/PKGBUILD
 
           # Update .SRCINFO from template
           sed -e "s/{{VERSION}}/$VERSION/g" \
             -e "s/{{SHA256_AMD64}}/$SHA_AMD64/g" \
             -e "s/{{SHA256_ARM64}}/$SHA_ARM64/g" \
+            -e "s|{{HOMEPAGE}}|$HOMEPAGE|g" \
             aur/.SRCINFO > /tmp/aur/.SRCINFO
 
           # Push to AUR
@@ -501,7 +513,8 @@ jobs:
           # Now add debian/ packaging (series-specific changelog lives here, but
           # debuild ships it as the separate .debian.tar.xz, not in orig.tar.gz).
           mkdir -p /tmp/glyph-${VERSION}/debian
-          cp ppa/debian/control /tmp/glyph-${VERSION}/debian/
+          HOMEPAGE=$(jq -r .homepage package.json)
+          sed "s|{{HOMEPAGE}}|$HOMEPAGE|g" ppa/debian/control > /tmp/glyph-${VERSION}/debian/control
           cp ppa/debian/rules /tmp/glyph-${VERSION}/debian/
 
           # Generate debian/copyright from repo LICENSE file
@@ -656,6 +669,11 @@ jobs:
       # "latest" is the tag that triggered this run. (Host env vars are not
       # forwarded into the snapcraft build instance, so the version can't be
       # passed that way.)
+      - name: Set website from package.json (single source)
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          HOMEPAGE=$(jq -r .homepage package.json)
+          sed -i "s|^website: .*|website: $HOMEPAGE|" snap/snapcraft.yaml
       - name: Build snap
         if: steps.gate.outputs.enabled == 'true'
         id: build

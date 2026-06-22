@@ -1,7 +1,7 @@
 {
     "version": "{{VERSION}}",
     "description": "Cross-platform markdown viewer",
-    "homepage": "https://github.com/hamidfzm/glyph",
+    "homepage": "{{HOMEPAGE}}",
     "license": "MIT",
     "architecture": {
         "64bit": {

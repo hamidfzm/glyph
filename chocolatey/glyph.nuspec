@@ -5,7 +5,7 @@
     <version>{{VERSION}}</version>
     <title>Glyph</title>
     <authors>hamidfzm</authors>
-    <projectUrl>https://github.com/hamidfzm/glyph</projectUrl>
+    <projectUrl>{{HOMEPAGE}}</projectUrl>
     <packageSourceUrl>https://github.com/hamidfzm/glyph/tree/main/chocolatey</packageSourceUrl>
     <iconUrl>https://raw.githubusercontent.com/hamidfzm/glyph/main/src-tauri/icons/icon.png</iconUrl>
     <licenseUrl>https://github.com/hamidfzm/glyph/blob/main/LICENSE</licenseUrl>
