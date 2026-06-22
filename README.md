@@ -299,7 +299,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Text-to-speech | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
 | Plugin / extension API | planned | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
 | Cloud sync | ⚠️ Git-backed | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Graph view | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
+| Graph view | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
 
 ### Platform
 
