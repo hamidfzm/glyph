@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { CheckIcon } from "@/components/icons/CheckIcon";
 import { LinkIcon } from "@/components/icons/LinkIcon";
 
@@ -9,6 +10,7 @@ import { LinkIcon } from "@/components/icons/LinkIcon";
  * anchor rather than code and carries its own label/icon set.
  */
 export function HeadingAnchor({ id }: { id: string }) {
+  const { t } = useTranslation("common");
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -37,7 +39,7 @@ export function HeadingAnchor({ id }: { id: string }) {
       type="button"
       className={`heading-anchor${copied ? " copied" : ""}`}
       onClick={handleCopy}
-      aria-label={copied ? "Copied" : "Copy link to heading"}
+      aria-label={copied ? t("copyButton.copied") : t("headingAnchor.label")}
     >
       {copied ? <CheckIcon /> : <LinkIcon />}
     </button>

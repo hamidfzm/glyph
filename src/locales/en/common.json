@@ -130,6 +130,9 @@
     "copied": "Copied",
     "label": "Copy code"
   },
+  "headingAnchor": {
+    "label": "Copy link to heading"
+  },
   "lightbox": {
     "image": "Image: {{alt}}",
     "viewer": "Image viewer",
