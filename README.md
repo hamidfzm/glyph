@@ -64,6 +64,7 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - In-document search — `Cmd/Ctrl+F` with match highlighting and navigation
 - Zoom in/out — `Cmd/Ctrl+=/-/0` with zoom level in status bar
 - Table of Contents sidebar with active heading tracking
+- Heading anchor copy — hover any heading to reveal a link button that copies its `#anchor` to the clipboard
 - Print — `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
 - Export to HTML, Word (DOCX), EPUB, and PDF — `File → Export`; works for markdown documents and Jupyter notebooks, writes a file directly (no print dialog), and reuses the rendered output (math, code highlighting, tables, images inlined) so files are self-contained and offline. Task-list checkboxes are read-only in exports; exported HTML follows the reader's light/dark system preference.
 - Live reload — file watcher auto-updates on external changes

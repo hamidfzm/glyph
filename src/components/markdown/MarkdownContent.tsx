@@ -19,6 +19,7 @@ import { CodeBlockComponent } from "./CodeBlockComponent";
 import { FrontmatterBlock } from "./FrontmatterBlock";
 import { useImageComponent } from "./ImageComponent";
 import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
+import { MarkdownHeading } from "./MarkdownHeading";
 import { markdownSanitizeSchema } from "./sanitizeSchema";
 import { TaskListItem } from "./TaskListItem";
 
@@ -124,6 +125,12 @@ export function MarkdownContent({
           img: ImageComponent,
           pre: CodeBlockComponent,
           li: TaskListLi,
+          h1: MarkdownHeading,
+          h2: MarkdownHeading,
+          h3: MarkdownHeading,
+          h4: MarkdownHeading,
+          h5: MarkdownHeading,
+          h6: MarkdownHeading,
         }}
       >
         {content}
