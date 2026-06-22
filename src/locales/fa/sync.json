@@ -1,0 +1,91 @@
+{
+  "modal": {
+    "title": "تنظیمات همگام‌سازی ابری",
+    "heading": "همگام‌سازی ابری",
+    "close": "بستن تنظیمات همگام‌سازی ابری"
+  },
+  "empty": "برای پیکربندی همگام‌سازی ابری، یک فضای کاری پوشه باز کنید. زبانه‌های تک‌فایل به‌عنوان بخشی از پوشه‌ای که در آن قرار دارند همگام می‌شوند.",
+  "description": "همگام‌سازی مبتنی بر Git برای این فضای کاری. Glyph با نسخه libgit2 خود عرضه می‌شود — به <kbd>git</kbd> سیستمی نیازی نیست.",
+  "loading": "در حال بارگذاری…",
+  "notRepo": "این پوشه هنوز یک مخزن git نیست.",
+  "initRepo": "راه‌اندازی مخزن",
+  "remoteUrl": {
+    "label": "نشانی ریموت",
+    "hint": "(خالی = تاریخچه فقط‌محلی)",
+    "placeholder": "https://github.com/you/notes.git"
+  },
+  "branch": {
+    "label": "شاخه",
+    "placeholder": "main"
+  },
+  "conflictPolicy": {
+    "legend": "سیاست تعارض",
+    "prompt": { "label": "از من بپرس", "description": "در تعارض‌ها متوقف شو و حل‌کننده را باز کن." },
+    "preferRemote": {
+      "label": "ترجیح ریموت",
+      "description": "در صورت تعارض، ویرایش‌های محلی نادیده گرفته شوند."
+    },
+    "preferLocal": { "label": "حفظ محلی", "description": "ویرایش‌های محلی روی ریموت اعمال شوند." }
+  },
+  "authorName": { "label": "نام نویسنده", "placeholder": "پیش‌فرض از پیکربندی git شما" },
+  "authorEmail": { "label": "ایمیل نویسنده", "placeholder": "you@example.com" },
+  "token": {
+    "label": "توکن دسترسی شخصی",
+    "hint": "(فقط HTTPS)",
+    "placeholderSaved": "ذخیره‌شده — برای حفظ خالی بگذارید",
+    "placeholderNew": "ghp_…",
+    "note": "فعلاً فقط در حافظه ذخیره می‌شود. نسخه بعدی آن را از طریق کیچین سیستم‌عامل شما هدایت می‌کند."
+  },
+  "commitMessage": {
+    "label": "پیام کامیت",
+    "hint": "(خالی = به‌طور خودکار از تغییرات ساخته می‌شود)",
+    "placeholder": "مثلاً به‌روزرسانی یادداشت‌ها"
+  },
+  "saveChanges": "ذخیره تغییرات",
+  "saveConfig": "ذخیره پیکربندی",
+  "syncNow": "اکنون همگام‌سازی کن",
+  "refreshStatus": "تازه‌سازی وضعیت",
+  "disable": "غیرفعال‌کردن همگام‌سازی",
+  "status": {
+    "workingTree": "درخت کاری: <strong>{{state}}</strong>",
+    "clean": "تمیز",
+    "dirty": "تغییریافته",
+    "aheadBehind": "جلوتر: <strong>{{ahead}}</strong> · عقب‌تر: <strong>{{behind}}</strong>",
+    "conflicts": "تعارض‌های حل‌نشده: {{files}}",
+    "lastSync": "آخرین همگام‌سازی: {{time}}",
+    "lastRun": "آخرین اجرا: pull‌شده <strong>{{pulled}}</strong>، کامیت‌شده <strong>{{committed}}</strong>، push‌شده <strong>{{pushed}}</strong>{{suffix}}",
+    "lastRunConflicts": "، {{count}} تعارض نیازمند رسیدگی است"
+  },
+  "indicator": {
+    "off": "همگام‌سازی خاموش",
+    "configured": "همگام‌سازی پیکربندی‌شده",
+    "conflicts": "تعارض‌ها ({{count}})",
+    "changes": "همگام‌سازی +{{ahead}}/-{{behind}}",
+    "dirty": "همگام‌سازی: تغییریافته",
+    "synced": "همگام‌شده {{time}}",
+    "syncedDefault": "همگام‌شده",
+    "open": "باز کردن تنظیمات همگام‌سازی ابری"
+  },
+  "relativeTime": {
+    "never": "هرگز",
+    "secondsAgo": "{{count}} ثانیه پیش",
+    "minutesAgo": "{{count}} دقیقه پیش",
+    "hoursAgo": "{{count}} ساعت پیش",
+    "daysAgo": "{{count}} روز پیش"
+  },
+  "error": {
+    "notConfigured": "این فضای کاری هنوز برای همگام‌سازی پیکربندی نشده است.",
+    "authFailed": "احراز هویت ناموفق بود.",
+    "authFailedDetail": "احراز هویت ناموفق بود: {{message}}",
+    "network": "دسترسی به ریموت ممکن نبود.",
+    "networkDetail": "دسترسی به ریموت ممکن نبود: {{message}}",
+    "conflict": "پیش از همگام‌سازی مجدد، تعارض‌های {{count}} فایل را حل کنید.",
+    "invalidState": "مخزن در وضعیت غیرمنتظره‌ای است.",
+    "invalidStateDetail": "مخزن در وضعیت غیرمنتظره‌ای است: {{message}}",
+    "io": "خطای ورودی/خروجی.",
+    "ioDetail": "خطای ورودی/خروجی: {{message}}",
+    "backend": "خطای بک‌اند همگام‌سازی.",
+    "backendDetail": "خطای بک‌اند همگام‌سازی: {{message}}",
+    "unknown": "خطای ناشناخته همگام‌سازی."
+  }
+}

@@ -2,7 +2,7 @@ import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import { type TocEntry, useTableOfContents } from "@/hooks/useTableOfContents";
 import { useTabs } from "@/hooks/useTabs";
-import { useWorkspaceNotice } from "@/hooks/useWorkspaceNotice";
+import { useWorkspaceNotice, type WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { type Backlink, filterBacklinks } from "@/lib/backlinks";
 import { displayContentFor, tocContentFor } from "@/lib/displayContent";
 import { EDITOR_MODE } from "@/lib/settings";
@@ -15,9 +15,10 @@ export interface TabsContextValue extends TabsApi {
   displayContent: string | null;
   tocEntries: TocEntry[];
   backlinks: Backlink[];
-  // Message shown for a workspace event (#262): a refusal, or a persistent
-  // warning when a folder is opened inside a parent git repo.
-  workspaceNotice: string | null;
+  // Notice shown for a workspace event (#262): a refusal, or a persistent
+  // warning when a folder is opened inside a parent git repo. A translation
+  // key + values so the banner re-localizes live (see WorkspaceNoticeBanner).
+  workspaceNotice: WorkspaceNotice | null;
   dismissWorkspaceNotice: () => void;
 }
 

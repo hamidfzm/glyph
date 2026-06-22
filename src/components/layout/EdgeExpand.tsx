@@ -14,7 +14,7 @@ interface EdgeExpandProps {
 // its content is available. Shows the panel's own icon so it reads as
 // "click to bring back the [folder/outline] panel".
 export function EdgeExpand({ side, onClick, title, panel }: EdgeExpandProps) {
-  const borderClass = side === "left" ? "border-r" : "border-l";
+  const borderClass = side === "left" ? "border-e" : "border-s";
   const Icon = panel === "files" ? FolderIcon : OutlineIcon;
   return (
     <button

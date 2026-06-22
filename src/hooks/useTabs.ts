@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/lib/editHistory";
@@ -109,7 +110,7 @@ interface UseTabsOptions {
   // inside another Glyph workspace) or a `persistent` warning (a folder opened
   // despite sitting inside a parent git repo). The provider surfaces it as a
   // banner.
-  onWorkspaceNotice: (message: string, options?: { persistent?: boolean }) => void;
+  onWorkspaceNotice: (notice: WorkspaceNotice, options?: { persistent?: boolean }) => void;
 }
 
 async function loadFileContent(path: string) {
@@ -392,27 +393,27 @@ export function useTabs(options: UseTabsOptions) {
       // persistent warning. Switching to a folder that overlaps the open one
       // just replaces the workspace, so there's nothing to refuse there. The
       // `silent` path (persisted-tab restore) skips the banner.
-      const notify = (message: string, persistent = false) => {
+      const notify = (notice: WorkspaceNotice, persistent = false) => {
         if (openOptions?.silent) return;
-        if (persistent) optionsRef.current.onWorkspaceNotice(message, { persistent: true });
-        else optionsRef.current.onWorkspaceNotice(message);
+        if (persistent) optionsRef.current.onWorkspaceNotice(notice, { persistent: true });
+        else optionsRef.current.onWorkspaceNotice(notice);
       };
       let resolution: WorkspaceResolution;
       try {
         resolution = await resolveWorkspace(resolvedRoot);
       } catch (err) {
-        notify(t("error.couldntOpen", { error: String(err) }));
+        notify({ key: "error.couldntOpen", values: { error: String(err) } });
         return;
       }
       if (resolution.glyphConflict) {
-        notify(t("notice.nestedWorkspace", { path: resolution.glyphConflict }));
+        notify({ key: "notice.nestedWorkspace", values: { path: resolution.glyphConflict } });
         return;
       }
       // Allowed, but a folder inside a parent git repo means workspace-wide
       // features (Sync, `.glyph/` config) resolve against that repo, so warn and
       // keep the notice up until the user dismisses it.
       if (resolution.nestedUnder) {
-        notify(t("notice.nestedUnderGit", { path: resolution.nestedUnder }), true);
+        notify({ key: "notice.nestedUnderGit", values: { path: resolution.nestedUnder } }, true);
       }
 
       folderOpenInFlight.current = resolvedRoot;
@@ -463,7 +464,7 @@ export function useTabs(options: UseTabsOptions) {
         folderOpenInFlight.current = null;
       }
     },
-    [closeWorkspaceTabs, loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFile, t],
+    [closeWorkspaceTabs, loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFile],
   );
 
   // Open (or re-activate) the graph view of the workspace. The optional root

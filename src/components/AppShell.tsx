@@ -11,6 +11,7 @@ import { useExport } from "@/hooks/useExport";
 import { useFontZoom } from "@/hooks/useFontZoom";
 import { useMenuEvents } from "@/hooks/useMenuEvents";
 import { useNativeKeybindings } from "@/hooks/useNativeKeybindings";
+import { useNativeMenuLabels } from "@/hooks/useNativeMenuLabels";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
 import { usePlatform } from "@/hooks/usePlatform";
 import { usePrint } from "@/hooks/usePrint";
@@ -113,6 +114,7 @@ export function AppShell() {
     aiConfigured: aiController.configured,
     ttsAvailable: tts.available,
   });
+  useNativeMenuLabels();
 
   const closeActiveTab = useCallback(() => {
     if (activeTabId) closeTab(activeTabId);

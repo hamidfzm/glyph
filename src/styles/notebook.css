@@ -61,7 +61,7 @@
   font-family: var(--glyph-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 0.8rem;
   line-height: 1.5;
-  text-align: right;
+  text-align: end;
   color: var(--color-text-tertiary);
   user-select: none;
   white-space: nowrap;

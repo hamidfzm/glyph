@@ -18,7 +18,7 @@ export function OutlineSection({ entries, activeId }: { entries: TocEntry[]; act
           <button
             type="button"
             onClick={() => scrollTo(entry.id)}
-            className={`w-full text-left text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors ${
+            className={`w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors ${
               activeId === entry.id
                 ? "bg-[var(--color-accent)] text-white font-medium"
                 : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)]"

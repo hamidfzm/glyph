@@ -70,7 +70,7 @@
 .lightbox-close {
   position: fixed;
   top: 16px;
-  right: 16px;
+  inset-inline-end: 16px;
 }
 
 .lightbox-nav {
@@ -83,11 +83,11 @@
 }
 
 .lightbox-prev {
-  left: 16px;
+  inset-inline-start: 16px;
 }
 
 .lightbox-next {
-  right: 16px;
+  inset-inline-end: 16px;
 }
 
 .lightbox-toolbar {

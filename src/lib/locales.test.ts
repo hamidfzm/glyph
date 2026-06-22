@@ -5,11 +5,13 @@ describe("resolveLocale", () => {
   it("matches a supported code exactly, case-insensitively", () => {
     expect(resolveLocale("en")).toBe("en");
     expect(resolveLocale("EN")).toBe("en");
+    expect(resolveLocale("fa")).toBe("fa");
   });
 
   it("falls back from a regional tag to its primary subtag", () => {
     expect(resolveLocale("en-US")).toBe("en");
     expect(resolveLocale("en-GB")).toBe("en");
+    expect(resolveLocale("fa-IR")).toBe("fa");
   });
 
   it("falls back to English for unsupported and empty inputs", () => {
@@ -25,6 +27,7 @@ describe("resolveLocale", () => {
 describe("localeDir", () => {
   it("returns the direction of a supported locale", () => {
     expect(localeDir("en")).toBe("ltr");
+    expect(localeDir("fa")).toBe("rtl");
   });
 
   it("defaults to ltr for unknown codes", () => {

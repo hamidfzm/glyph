@@ -1920,9 +1920,10 @@ describe("useTabs dialog and events", () => {
 
     // The folder opens (no longer refused) but a persistent warning is shown.
     expect(result.current.workspace?.root).toBe("/p/repo/sub");
-    expect(onWorkspaceNotice).toHaveBeenCalledWith(expect.stringContaining("/p/repo"), {
-      persistent: true,
-    });
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      { key: "notice.nestedUnderGit", values: { path: "/p/repo" } },
+      { persistent: true },
+    );
   });
 
   it("refuses a folder nested inside another workspace's .glyph (#262)", async () => {
@@ -1946,7 +1947,10 @@ describe("useTabs dialog and events", () => {
     });
 
     expect(result.current.workspace).toBeNull();
-    expect(onWorkspaceNotice).toHaveBeenCalledWith(expect.stringContaining("/p/outer"));
+    expect(onWorkspaceNotice).toHaveBeenCalledWith({
+      key: "notice.nestedWorkspace",
+      values: { path: "/p/outer" },
+    });
   });
 
   it("restores a nested folder silently without bannering", async () => {
@@ -1994,7 +1998,10 @@ describe("useTabs dialog and events", () => {
     });
 
     expect(result.current.workspace).toBeNull();
-    expect(onWorkspaceNotice).toHaveBeenCalledWith(expect.stringContaining("Couldn't open"));
+    expect(onWorkspaceNotice).toHaveBeenCalledWith({
+      key: "error.couldntOpen",
+      values: { error: expect.stringContaining("unreadable path") },
+    });
   });
 
   it("openFolder is wired to the open-folder event", async () => {

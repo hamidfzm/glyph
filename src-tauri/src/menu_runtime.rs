@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 use tauri::{
-    menu::{AboutMetadataBuilder, MenuBuilder, MenuItem, MenuItemBuilder, SubmenuBuilder},
+    menu::{AboutMetadataBuilder, MenuBuilder, MenuItem, MenuItemBuilder, Submenu, SubmenuBuilder},
     App, State, Wry,
 };
 
@@ -23,6 +23,7 @@ use crate::menu::{dispatch_menu_action, menu_action_for_id};
 pub struct MenuItemRefs {
     open: MenuItem<Wry>,
     open_folder: MenuItem<Wry>,
+    reset_view: MenuItem<Wry>,
     close_tab: MenuItem<Wry>,
     close: MenuItem<Wry>,
     print: MenuItem<Wry>,
@@ -40,10 +41,58 @@ pub struct MenuItemRefs {
     zoom_out: MenuItem<Wry>,
     actual_size: MenuItem<Wry>,
     settings: MenuItem<Wry>,
+    sync_settings: MenuItem<Wry>,
     ai_summarize: MenuItem<Wry>,
     ai_explain: MenuItem<Wry>,
     ai_simplify: MenuItem<Wry>,
     ai_read_aloud: MenuItem<Wry>,
+    // Submenu handles, kept so their titles can be re-localized at runtime.
+    file_menu: Submenu<Wry>,
+    edit_menu: Submenu<Wry>,
+    view_menu: Submenu<Wry>,
+    ai_menu: Submenu<Wry>,
+    help_menu: Submenu<Wry>,
+    export_menu: Submenu<Wry>,
+}
+
+/// Localized labels for every Glyph-defined menu entry. Pushed from the
+/// frontend (which owns the translations) via `set_menu_labels` whenever the
+/// UI locale changes. OS-provided items (Copy, Quit, About, Fullscreen, …) are
+/// localized by the platform, so they're absent here.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuLabels {
+    file: String,
+    edit: String,
+    view: String,
+    ai: String,
+    help: String,
+    export: String,
+    open: String,
+    open_folder: String,
+    reset_view: String,
+    print: String,
+    export_html: String,
+    export_docx: String,
+    export_epub: String,
+    export_pdf: String,
+    close_tab: String,
+    close: String,
+    settings: String,
+    sync_settings: String,
+    find: String,
+    command_palette: String,
+    toggle_files_sidebar: String,
+    toggle_outline_sidebar: String,
+    zoom_in: String,
+    zoom_out: String,
+    actual_size: String,
+    toggle_edit: String,
+    open_graph: String,
+    ai_summarize: String,
+    ai_explain: String,
+    ai_simplify: String,
+    ai_read_aloud: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -209,7 +258,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
 
     // macOS: Settings goes in app menu, File menu is simple
     #[cfg(target_os = "macos")]
-    let menu = {
+    let (menu, file_menu) = {
         let file_menu = SubmenuBuilder::new(handle, "File")
             .item(&open)
             .item(&open_folder)
@@ -237,19 +286,20 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .quit()
             .build()?;
 
-        MenuBuilder::new(handle)
+        let menu = MenuBuilder::new(handle)
             .item(&app_menu)
             .item(&file_menu)
             .item(&edit_menu)
             .item(&view_menu)
             .item(&ai_menu)
             .item(&help_menu)
-            .build()?
+            .build()?;
+        (menu, file_menu)
     };
 
     // Windows/Linux: Settings goes in File menu
     #[cfg(not(target_os = "macos"))]
-    let menu = {
+    let (menu, file_menu) = {
         let file_menu = SubmenuBuilder::new(handle, "File")
             .item(&open)
             .item(&open_folder)
@@ -264,18 +314,20 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .item(&close)
             .build()?;
 
-        MenuBuilder::new(handle)
+        let menu = MenuBuilder::new(handle)
             .item(&file_menu)
             .item(&edit_menu)
             .item(&view_menu)
             .item(&ai_menu)
             .item(&help_menu)
-            .build()?
+            .build()?;
+        (menu, file_menu)
     };
 
     let refs = MenuItemRefs {
         open,
         open_folder,
+        reset_view,
         close_tab,
         close,
         print,
@@ -293,10 +345,17 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         zoom_out,
         actual_size,
         settings,
+        sync_settings,
         ai_summarize,
         ai_explain,
         ai_simplify,
         ai_read_aloud,
+        file_menu,
+        edit_menu,
+        view_menu,
+        ai_menu,
+        help_menu,
+        export_menu,
     };
 
     Ok((menu, refs))
@@ -394,6 +453,56 @@ pub fn apply_menu_state(refs: &MenuItemRefs, flags: &MenuStateFlags) -> Result<(
 #[tauri::command]
 pub fn set_menu_state(refs: State<MenuItemRefs>, flags: MenuStateFlags) -> Result<(), String> {
     apply_menu_state(&refs, &flags)
+}
+
+/// Re-label every Glyph-defined menu item and submenu title in place via
+/// `set_text` — no menu rebuild, so item handles and accelerators stay valid.
+/// The frontend calls this with translated strings whenever the locale changes.
+pub fn apply_menu_labels(refs: &MenuItemRefs, l: &MenuLabels) -> Result<(), String> {
+    let s = |e: tauri::Error| e.to_string();
+    refs.file_menu.set_text(&l.file).map_err(s)?;
+    refs.edit_menu.set_text(&l.edit).map_err(s)?;
+    refs.view_menu.set_text(&l.view).map_err(s)?;
+    refs.ai_menu.set_text(&l.ai).map_err(s)?;
+    refs.help_menu.set_text(&l.help).map_err(s)?;
+    refs.export_menu.set_text(&l.export).map_err(s)?;
+    refs.open.set_text(&l.open).map_err(s)?;
+    refs.open_folder.set_text(&l.open_folder).map_err(s)?;
+    refs.reset_view.set_text(&l.reset_view).map_err(s)?;
+    refs.print.set_text(&l.print).map_err(s)?;
+    refs.export_html.set_text(&l.export_html).map_err(s)?;
+    refs.export_docx.set_text(&l.export_docx).map_err(s)?;
+    refs.export_epub.set_text(&l.export_epub).map_err(s)?;
+    refs.export_pdf.set_text(&l.export_pdf).map_err(s)?;
+    refs.close_tab.set_text(&l.close_tab).map_err(s)?;
+    refs.close.set_text(&l.close).map_err(s)?;
+    refs.settings.set_text(&l.settings).map_err(s)?;
+    refs.sync_settings.set_text(&l.sync_settings).map_err(s)?;
+    refs.find.set_text(&l.find).map_err(s)?;
+    refs.command_palette
+        .set_text(&l.command_palette)
+        .map_err(s)?;
+    refs.toggle_files_sidebar
+        .set_text(&l.toggle_files_sidebar)
+        .map_err(s)?;
+    refs.toggle_outline_sidebar
+        .set_text(&l.toggle_outline_sidebar)
+        .map_err(s)?;
+    refs.zoom_in.set_text(&l.zoom_in).map_err(s)?;
+    refs.zoom_out.set_text(&l.zoom_out).map_err(s)?;
+    refs.actual_size.set_text(&l.actual_size).map_err(s)?;
+    refs.toggle_edit.set_text(&l.toggle_edit).map_err(s)?;
+    refs.open_graph.set_text(&l.open_graph).map_err(s)?;
+    refs.ai_summarize.set_text(&l.ai_summarize).map_err(s)?;
+    refs.ai_explain.set_text(&l.ai_explain).map_err(s)?;
+    refs.ai_simplify.set_text(&l.ai_simplify).map_err(s)?;
+    refs.ai_read_aloud.set_text(&l.ai_read_aloud).map_err(s)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_menu_labels(refs: State<MenuItemRefs>, labels: MenuLabels) -> Result<(), String> {
+    apply_menu_labels(&refs, &labels)
 }
 
 pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {

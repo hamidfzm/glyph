@@ -9,7 +9,7 @@ export function SidebarPanel({
   side: "left" | "right";
   children: React.ReactNode;
 }) {
-  const borderClass = side === "left" ? "border-r" : "border-l";
+  const borderClass = side === "left" ? "border-e" : "border-s";
   return (
     <nav
       data-print-hide="true"

@@ -197,6 +197,7 @@
   "graph": {
     "label": "Workspace graph",
     "reset": "Re-centre and fit the graph",
+    "resetView": "Reset view",
     "emptyState": "No notes to graph yet. Add markdown files to this workspace."
   },
   "fileDialog": {

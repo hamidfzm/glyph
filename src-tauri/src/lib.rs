@@ -228,6 +228,7 @@ pub fn run() {
             watcher::unwatch_directory,
             menu_runtime::set_menu_state,
             menu_runtime::apply_keybindings,
+            menu_runtime::set_menu_labels,
             windows_runtime::set_window_workspace,
             windows_runtime::request_open,
             sync::commands::sync_set_config,

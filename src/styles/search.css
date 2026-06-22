@@ -1,7 +1,7 @@
 .search-bar {
   position: absolute;
   top: 8px;
-  right: 24px;
+  inset-inline-end: 24px;
   z-index: 50;
   display: flex;
   align-items: center;
