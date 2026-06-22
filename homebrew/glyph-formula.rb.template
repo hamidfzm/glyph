@@ -1,6 +1,6 @@
 class Glyph < Formula
   desc "Cross-platform markdown viewer"
-  homepage "https://github.com/hamidfzm/glyph"
+  homepage "{{HOMEPAGE}}"
   license "MIT"
   version "{{VERSION}}"
 

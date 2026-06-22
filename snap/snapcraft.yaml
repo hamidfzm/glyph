@@ -19,6 +19,7 @@
 name: glyph
 base: core22
 adopt-info: glyph
+icon: src-tauri/icons/icon.png
 summary: Cross-platform markdown viewer and editor
 description: |
   Glyph is a modern, cross-platform markdown viewer and editor with
@@ -33,7 +34,7 @@ description: |
 grade: stable
 confinement: strict
 license: MIT
-website: https://github.com/hamidfzm/glyph
+website: https://glyph-md.github.io
 issues: https://github.com/hamidfzm/glyph/issues
 source-code: https://github.com/hamidfzm/glyph
 compression: lzo

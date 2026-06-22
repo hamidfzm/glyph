@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: hamidfzm <hamidfzm@users.noreply.github.com>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.0
-Homepage: https://github.com/hamidfzm/glyph
+Homepage: {{HOMEPAGE}}
 
 Package: glyph
 Architecture: amd64 arm64

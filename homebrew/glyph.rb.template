@@ -5,7 +5,7 @@ cask "glyph" do
   url "https://github.com/hamidfzm/glyph/releases/download/v#{version}/Glyph_#{version}_universal.dmg"
   name "Glyph"
   desc "Cross-platform markdown viewer"
-  homepage "https://github.com/hamidfzm/glyph"
+  homepage "{{HOMEPAGE}}"
 
   livecheck do
     url :url
