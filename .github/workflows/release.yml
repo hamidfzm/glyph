@@ -920,6 +920,13 @@ jobs:
             { print }
           ' flatpak/com.hamidfzm.glyph.yml > /tmp/manifest.yml
 
+          # Single-source the homepage URL from package.json (falls back to the
+          # committed value if the field is absent).
+          HOMEPAGE=$(jq -r '.homepage // empty' package.json)
+          if [ -n "$HOMEPAGE" ]; then
+            sed -i "s|<url type=\"homepage\">.*</url>|<url type=\"homepage\">$HOMEPAGE</url>|" flatpak/com.hamidfzm.glyph.metainfo.xml
+          fi
+
           git clone "https://x-access-token:${GH_TOKEN}@github.com/flathub/com.hamidfzm.glyph.git" /tmp/flathub
           cp /tmp/manifest.yml /tmp/flathub/com.hamidfzm.glyph.yml
           cp flatpak/com.hamidfzm.glyph.desktop /tmp/flathub/
