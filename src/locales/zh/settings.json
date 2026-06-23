@@ -1,0 +1,243 @@
+{
+  "modal": {
+    "title": "设置",
+    "reset": "恢复默认设置",
+    "changesApply": "更改立即生效",
+    "tabs": {
+      "appearance": "外观",
+      "layout": "布局",
+      "behavior": "行为",
+      "editor": "编辑器",
+      "hotkeys": "快捷键",
+      "ai": "AI",
+      "print": "打印",
+      "privacy": "隐私"
+    }
+  },
+  "language": {
+    "sectionTitle": "语言",
+    "label": "显示语言",
+    "system": "跟随系统"
+  },
+  "appearance": {
+    "theme": {
+      "title": "主题",
+      "label": "颜色主题",
+      "system": "跟随系统",
+      "light": "浅色",
+      "dark": "深色"
+    },
+    "typography": {
+      "title": "排版"
+    },
+    "fontFamily": {
+      "label": "字体",
+      "system": "系统默认",
+      "serif": "衬线",
+      "sans": "无衬线",
+      "mono": "等宽",
+      "custom": "自定义"
+    },
+    "customFont": {
+      "label": "自定义字体名称",
+      "placeholder": "例如 Inter、Lora"
+    },
+    "fontSize": {
+      "label": "字号"
+    },
+    "lineHeight": {
+      "label": "行高",
+      "compact": "紧凑",
+      "normal": "正常",
+      "relaxed": "宽松"
+    },
+    "contentWidth": {
+      "label": "内容宽度",
+      "narrow": "窄",
+      "medium": "中",
+      "wide": "宽",
+      "full": "全宽"
+    },
+    "code": {
+      "title": "代码"
+    },
+    "codeFont": {
+      "label": "代码字体",
+      "placeholder": "默认 (SF Mono, Fira Code...)"
+    },
+    "codeTheme": {
+      "label": "代码主题",
+      "glyph": "Glyph (默认)",
+      "github": "GitHub",
+      "monokai": "Monokai",
+      "nord": "Nord",
+      "solarizedLight": "Solarized Light",
+      "solarizedDark": "Solarized Dark"
+    }
+  },
+  "layout": {
+    "title": "侧边栏",
+    "showFiles": {
+      "label": "显示文件侧边栏",
+      "description": "工作区文件树 (仅文件夹标签页)。使用 <kbd>Cmd/Ctrl+B</kbd> 切换。"
+    },
+    "showOutline": {
+      "label": "显示大纲侧边栏",
+      "description": "文档目录。使用 <kbd>Cmd/Ctrl+\\</kbd> 切换。"
+    },
+    "sidebarLayout": {
+      "label": "侧边栏布局",
+      "description": "仅文件夹标签页。<b>拆分</b>：文件和大纲分置两侧。<b>合并</b>：堆叠在一个面板中。<b>并排</b>：同一侧的两个相邻面板。",
+      "split": "拆分",
+      "combined": "合并",
+      "beside": "并排"
+    },
+    "swap": {
+      "label": "交换侧边栏位置",
+      "description": "翻转每个面板所在的一侧。默认为文件居左 / 大纲居右；开启后变为文件居右 / 大纲居左。"
+    },
+    "width": {
+      "label": "侧边栏宽度"
+    }
+  },
+  "behavior": {
+    "fileHandling": {
+      "title": "文件处理"
+    },
+    "autoReload": {
+      "label": "自动重新加载",
+      "description": "文件在磁盘上更改时重新加载"
+    },
+    "reopenLastFile": {
+      "label": "重新打开上次的文件",
+      "description": "启动时打开上次查看的文件"
+    },
+    "confirmExternalLinks": {
+      "label": "确认外部链接",
+      "description": "在浏览器中打开链接前先询问"
+    },
+    "recentFiles": {
+      "title": "最近文件",
+      "clear": "清除最近文件"
+    }
+  },
+  "updates": {
+    "title": "更新",
+    "check": {
+      "label": "检查更新",
+      "description": "启动时检查是否有更新版本，有可用更新时显示横幅。仅比较已安装的版本；不会发送任何文件或个人数据。"
+    },
+    "checking": "正在检查…",
+    "checkNow": "立即检查",
+    "current": "您使用的是最新版本。",
+    "error": "无法检查更新。请稍后重试。",
+    "available": "版本 {{version}} 可用。",
+    "download": "下载"
+  },
+  "editor": {
+    "title": "编辑器",
+    "keymap": {
+      "label": "键位映射",
+      "description": "markdown 编辑器使用的按键方案。Vim 提供模式化编辑；VSCode 沿用常用的 VSCode 快捷键。在文档下次进入编辑或分屏模式时生效。"
+    },
+    "keymapOptions": {
+      "default": "默认",
+      "vim": "Vim",
+      "vscode": "VSCode"
+    },
+    "help": {
+      "default": {
+        "title": "默认 (Glyph) 快捷键",
+        "autocomplete": "在文件夹工作区中打开 wikilink 自动补全",
+        "accept": "接受高亮显示的补全",
+        "undoRedo": "撤销 / 重做",
+        "standard": "其余使用标准操作系统文本编辑快捷键"
+      },
+      "vim": {
+        "title": "Vim 快速参考",
+        "modes": "普通、插入、插入后、可视模式",
+        "motions": "移动；f + 字符跳转；/ 搜索",
+        "operators": "带计数和文本对象的操作符 (diw, ci\")",
+        "files": "诸如 :w、:q 和 :wq 之类的文件命令在这里不起作用：Glyph 会自动保存，关闭标签页请使用「关闭标签页」快捷键。"
+      },
+      "vscode": {
+        "title": "VSCode 快捷键",
+        "moveLine": "向上 / 向下移动当前行",
+        "copyLine": "向上 / 向下复制该行",
+        "comment": "切换行注释",
+        "multiSelect": "选择下一处匹配；Cmd/Ctrl+] 或 [ 缩进 / 取消缩进"
+      }
+    }
+  },
+  "ai": {
+    "provider": {
+      "title": "AI 提供商",
+      "label": "提供商",
+      "none": "无",
+      "claude": "Claude (Anthropic)",
+      "openai": "OpenAI",
+      "ollama": "Ollama (本地)"
+    },
+    "apiKey": {
+      "label": "API 密钥"
+    },
+    "ollamaUrl": {
+      "label": "Ollama URL",
+      "description": "CORS 需要 OLLAMA_ORIGINS=*"
+    },
+    "model": {
+      "label": "模型",
+      "placeholder": "选择或输入模型名称"
+    },
+    "tts": {
+      "title": "文字转语音"
+    },
+    "voice": {
+      "label": "语音",
+      "placeholder": "默认系统语音"
+    },
+    "speed": {
+      "label": "语速"
+    }
+  },
+  "print": {
+    "title": "打印和 PDF 导出",
+    "pageBreaks": {
+      "label": "分页符",
+      "description": "在指定标题级别处开始新页",
+      "none": "无",
+      "h1": "在 H1 处",
+      "h2": "在 H2 处"
+    },
+    "toc": {
+      "label": "包含目录",
+      "description": "在开头插入目录页"
+    },
+    "backgrounds": {
+      "label": "打印背景和颜色",
+      "description": "在输出中保留主题颜色"
+    }
+  },
+  "privacy": {
+    "title": "错误报告",
+    "crashReports": {
+      "label": "发送崩溃报告",
+      "description": "默认关闭。开启后会发送匿名崩溃报告 (包含堆栈跟踪、操作系统和应用版本)，用于帮助修复问题。绝不会包含您的文件、文件路径和链接。仅在生产构建中生效。完整政策请参阅 SECURITY.md。"
+    }
+  },
+  "hotkeys": {
+    "search": {
+      "placeholder": "搜索快捷键…",
+      "label": "搜索快捷键"
+    },
+    "conflict": "与另一个快捷键冲突",
+    "recording": "按下按键…",
+    "reset": "重置",
+    "resetTitle": "恢复默认",
+    "aria": {
+      "recording": "正在为 {{command}} 录制快捷键",
+      "change": "更改 {{command}} 的快捷键",
+      "reset": "重置 {{command}} 的快捷键"
+    }
+  }
+}

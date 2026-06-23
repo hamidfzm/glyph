@@ -1,0 +1,243 @@
+{
+  "modal": {
+    "title": "Einstellungen",
+    "reset": "Auf Standardwerte zurücksetzen",
+    "changesApply": "Änderungen werden sofort übernommen",
+    "tabs": {
+      "appearance": "Darstellung",
+      "layout": "Layout",
+      "behavior": "Verhalten",
+      "editor": "Editor",
+      "hotkeys": "Tastenkürzel",
+      "ai": "KI",
+      "print": "Drucken",
+      "privacy": "Datenschutz"
+    }
+  },
+  "language": {
+    "sectionTitle": "Sprache",
+    "label": "Anzeigesprache",
+    "system": "System"
+  },
+  "appearance": {
+    "theme": {
+      "title": "Theme",
+      "label": "Farb-Theme",
+      "system": "System",
+      "light": "Hell",
+      "dark": "Dunkel"
+    },
+    "typography": {
+      "title": "Typografie"
+    },
+    "fontFamily": {
+      "label": "Schriftfamilie",
+      "system": "Systemstandard",
+      "serif": "Serif",
+      "sans": "Sans-Serif",
+      "mono": "Monospace",
+      "custom": "Benutzerdefiniert"
+    },
+    "customFont": {
+      "label": "Benutzerdefinierter Schriftname",
+      "placeholder": "z. B. Inter, Lora"
+    },
+    "fontSize": {
+      "label": "Schriftgröße"
+    },
+    "lineHeight": {
+      "label": "Zeilenhöhe",
+      "compact": "Kompakt",
+      "normal": "Normal",
+      "relaxed": "Locker"
+    },
+    "contentWidth": {
+      "label": "Inhaltsbreite",
+      "narrow": "Schmal",
+      "medium": "Mittel",
+      "wide": "Breit",
+      "full": "Maximal"
+    },
+    "code": {
+      "title": "Code"
+    },
+    "codeFont": {
+      "label": "Code-Schrift",
+      "placeholder": "Standard (SF Mono, Fira Code...)"
+    },
+    "codeTheme": {
+      "label": "Code-Theme",
+      "glyph": "Glyph (Standard)",
+      "github": "GitHub",
+      "monokai": "Monokai",
+      "nord": "Nord",
+      "solarizedLight": "Solarized Light",
+      "solarizedDark": "Solarized Dark"
+    }
+  },
+  "layout": {
+    "title": "Seitenleisten",
+    "showFiles": {
+      "label": "Dateien-Seitenleiste anzeigen",
+      "description": "Dateibaum des Arbeitsbereichs (nur Ordner-Tabs). Umschalten mit <kbd>Cmd/Ctrl+B</kbd>."
+    },
+    "showOutline": {
+      "label": "Gliederungs-Seitenleiste anzeigen",
+      "description": "Inhaltsverzeichnis des Dokuments. Umschalten mit <kbd>Cmd/Ctrl+\\</kbd>."
+    },
+    "sidebarLayout": {
+      "label": "Seitenleisten-Layout",
+      "description": "Nur Ordner-Tabs. <b>Geteilt</b>: Dateien und Gliederung auf gegenüberliegenden Seiten. <b>Kombiniert</b>: in einem Panel gestapelt. <b>Nebeneinander</b>: zwei benachbarte Panels auf derselben Seite.",
+      "split": "Geteilt",
+      "combined": "Kombiniert",
+      "beside": "Nebeneinander"
+    },
+    "swap": {
+      "label": "Seiten der Seitenleisten tauschen",
+      "description": "Vertauscht, auf welcher Seite jedes Panel liegt. Standard ist Dateien links / Gliederung rechts; aktiviert wird es zu Dateien rechts / Gliederung links."
+    },
+    "width": {
+      "label": "Breite der Seitenleiste"
+    }
+  },
+  "behavior": {
+    "fileHandling": {
+      "title": "Dateiverwaltung"
+    },
+    "autoReload": {
+      "label": "Automatisch neu laden",
+      "description": "Datei neu laden, wenn sie auf dem Datenträger geändert wurde"
+    },
+    "reopenLastFile": {
+      "label": "Letzte Datei erneut öffnen",
+      "description": "Beim Start die zuletzt angesehene Datei öffnen"
+    },
+    "confirmExternalLinks": {
+      "label": "Externe Links bestätigen",
+      "description": "Vor dem Öffnen von Links im Browser nachfragen"
+    },
+    "recentFiles": {
+      "title": "Zuletzt verwendete Dateien",
+      "clear": "Zuletzt verwendete Dateien löschen"
+    }
+  },
+  "updates": {
+    "title": "Updates",
+    "check": {
+      "label": "Nach Updates suchen",
+      "description": "Beim Start nach einer neueren Version suchen und ein Banner anzeigen, wenn eine verfügbar ist. Es wird nur die installierte Version verglichen; es werden keine Dateien oder persönlichen Daten gesendet."
+    },
+    "checking": "Wird geprüft…",
+    "checkNow": "Jetzt prüfen",
+    "current": "Du verwendest die neueste Version.",
+    "error": "Suche nach Updates fehlgeschlagen. Versuche es später erneut.",
+    "available": "Version {{version}} ist verfügbar.",
+    "download": "Herunterladen"
+  },
+  "editor": {
+    "title": "Editor",
+    "keymap": {
+      "label": "Tastenbelegung",
+      "description": "Tastenbelegung für den Markdown-Editor. Vim ergänzt die modale Bearbeitung; VSCode bildet gängige VSCode-Tastenkürzel nach. Wird beim nächsten Wechsel eines Dokuments in den Bearbeitungs- oder geteilten Modus wirksam."
+    },
+    "keymapOptions": {
+      "default": "Standard",
+      "vim": "Vim",
+      "vscode": "VSCode"
+    },
+    "help": {
+      "default": {
+        "title": "Standard-Tastenkürzel (Glyph)",
+        "autocomplete": "öffnet in einem Ordner-Arbeitsbereich die Wikilink-Autovervollständigung",
+        "accept": "die hervorgehobene Vervollständigung übernehmen",
+        "undoRedo": "rückgängig / wiederherstellen",
+        "standard": "ansonsten Standard-Tastenkürzel des Betriebssystems zum Bearbeiten von Text"
+      },
+      "vim": {
+        "title": "Vim-Kurzreferenz",
+        "modes": "Modi: normal, insert, insert-after, visual",
+        "motions": "Bewegungen; f + Zeichen zum Springen; / zum Suchen",
+        "operators": "Operatoren mit Anzahlen und Textobjekten (diw, ci\")",
+        "files": "Dateibefehle wie :w, :q und :wq gelten hier nicht. Glyph speichert automatisch, und ein Tab wird mit dem Tastenkürzel zum Schließen des Tabs geschlossen."
+      },
+      "vscode": {
+        "title": "VSCode-Tastenkürzel",
+        "moveLine": "die aktuelle Zeile nach oben / unten verschieben",
+        "copyLine": "die Zeile nach oben / unten kopieren",
+        "comment": "Zeilenkommentar umschalten",
+        "multiSelect": "das nächste Vorkommen auswählen; Cmd/Ctrl+] oder [ zum Ein- / Ausrücken"
+      }
+    }
+  },
+  "ai": {
+    "provider": {
+      "title": "KI-Anbieter",
+      "label": "Anbieter",
+      "none": "Keiner",
+      "claude": "Claude (Anthropic)",
+      "openai": "OpenAI",
+      "ollama": "Ollama (Lokal)"
+    },
+    "apiKey": {
+      "label": "API-Schlüssel"
+    },
+    "ollamaUrl": {
+      "label": "Ollama-URL",
+      "description": "Erfordert OLLAMA_ORIGINS=* für CORS"
+    },
+    "model": {
+      "label": "Modell",
+      "placeholder": "Modellnamen auswählen oder eingeben"
+    },
+    "tts": {
+      "title": "Sprachausgabe"
+    },
+    "voice": {
+      "label": "Stimme",
+      "placeholder": "Standard-Systemstimme"
+    },
+    "speed": {
+      "label": "Geschwindigkeit"
+    }
+  },
+  "print": {
+    "title": "Drucken & PDF-Export",
+    "pageBreaks": {
+      "label": "Seitenumbrüche",
+      "description": "Bei einer Überschriftsebene eine neue Seite beginnen",
+      "none": "Keine",
+      "h1": "Bei H1",
+      "h2": "Bei H2"
+    },
+    "toc": {
+      "label": "Inhaltsverzeichnis einfügen",
+      "description": "Am Anfang eine Inhaltsseite einfügen"
+    },
+    "backgrounds": {
+      "label": "Hintergründe & Farben drucken",
+      "description": "Theme-Farben in der Ausgabe beibehalten"
+    }
+  },
+  "privacy": {
+    "title": "Fehlerberichte",
+    "crashReports": {
+      "label": "Absturzberichte senden",
+      "description": "Standardmäßig aus. Wenn aktiviert, werden anonyme Absturzberichte (Stack-Traces, Betriebssystem und App-Version) gesendet, um Fehler zu beheben. Deine Dateien, Dateipfade und Links werden niemals einbezogen. Nur in Produktionsversionen aktiv. Die vollständige Richtlinie findest du in SECURITY.md."
+    }
+  },
+  "hotkeys": {
+    "search": {
+      "placeholder": "Tastenkürzel suchen…",
+      "label": "Tastenkürzel suchen"
+    },
+    "conflict": "Steht in Konflikt mit einem anderen Tastenkürzel",
+    "recording": "Tasten drücken…",
+    "reset": "Zurücksetzen",
+    "resetTitle": "Auf Standard zurücksetzen",
+    "aria": {
+      "recording": "Tastenkürzel für {{command}} wird aufgezeichnet",
+      "change": "Tastenkürzel für {{command}} ändern",
+      "reset": "Tastenkürzel für {{command}} zurücksetzen"
+    }
+  }
+}

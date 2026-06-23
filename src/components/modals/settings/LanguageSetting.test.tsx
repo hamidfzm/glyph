@@ -28,6 +28,9 @@ describe("LanguageSetting", () => {
     expect(screen.getByRole("option", { name: "System" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "English" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "فارسی" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Español" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "中文" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Deutsch" })).toBeInTheDocument();
   });
 
   it("persists the chosen locale", () => {

@@ -1,0 +1,214 @@
+{
+  "app": {
+    "name": "Glyph"
+  },
+  "error": {
+    "fallback": "出现错误。请尝试重新打开文件或重启 Glyph。"
+  },
+  "emptyState": {
+    "openHeading": "打开 Markdown 文件",
+    "openHint": "将文件拖放到此处、使用菜单，或按 <kbd>{{shortcut}}</kbd>",
+    "folderHeading": "此文件夹中未打开任何文件",
+    "folderHint": "从侧边栏选择一个文件开始阅读。",
+    "openFile": "打开文件",
+    "openFolder": "打开文件夹"
+  },
+  "statusBar": {
+    "jupyter": "Jupyter Notebook",
+    "words_one": "{{formatted}} 个词",
+    "words_other": "{{formatted}} 个词",
+    "readingTime_one": "阅读时长 {{count}} 分钟",
+    "readingTime_other": "阅读时长 {{count}} 分钟"
+  },
+  "sidebar": {
+    "hideFiles": "隐藏文件侧边栏",
+    "hideOutline": "隐藏大纲侧边栏",
+    "showFiles": "显示文件侧边栏",
+    "showOutline": "显示大纲侧边栏",
+    "newNote": "新建笔记",
+    "newFolder": "新建文件夹",
+    "collapseAll": "全部折叠",
+    "expandAll": "全部展开",
+    "closeWorkspace": "关闭工作区",
+    "outline": "大纲"
+  },
+  "backlinks": {
+    "heading": "反向链接"
+  },
+  "tabBar": {
+    "graphLabel": "图谱：{{name}}",
+    "untitled": "无标题",
+    "closeTab": "关闭 {{label}}",
+    "viewMode": "查看模式",
+    "view": "查看",
+    "editMode": "编辑模式",
+    "edit": "编辑",
+    "splitMode": "分屏模式",
+    "split": "分屏"
+  },
+  "updateBanner": {
+    "available": "<strong>Glyph {{version}}</strong> 可用",
+    "currentVersion": "(当前版本 {{version}})",
+    "download": "下载",
+    "dismiss": "忽略更新通知"
+  },
+  "workspaceBanner": {
+    "dismiss": "忽略工作区提示"
+  },
+  "search": {
+    "placeholder": "在文档中查找…",
+    "label": "搜索",
+    "noResults": "无结果",
+    "matchCount": "第 {{current}} 个，共 {{total}} 个",
+    "prevMatch": "上一个匹配项",
+    "nextMatch": "下一个匹配项",
+    "close": "关闭搜索"
+  },
+  "exportProgress": {
+    "html": "HTML",
+    "docx": "Word 文档",
+    "epub": "EPUB",
+    "pdf": "PDF",
+    "exporting": "正在导出 {{format}}…"
+  },
+  "contextMenu": {
+    "copy": "复制",
+    "selectAll": "全选",
+    "searchGoogle": "用 Google 搜索 \"{{query}}\"",
+    "stopReading": "停止朗读",
+    "readSelection": "朗读所选内容",
+    "readAloud": "朗读",
+    "ai": "AI",
+    "aiOnSelection": "{{action}}所选内容",
+    "aiOnDocument": "{{action}}文档",
+    "aiVerb": {
+      "summarize": "总结",
+      "explain": "解释",
+      "translate": "翻译",
+      "simplify": "简化"
+    }
+  },
+  "fileTree": {
+    "open": "打开",
+    "newNote": "新建笔记",
+    "newCanvas": "新建画布",
+    "newFolder": "新建文件夹",
+    "rename": "重命名",
+    "duplicate": "创建副本",
+    "move": "移动到…",
+    "copyPath": "复制路径",
+    "copyAbsolutePath": "复制绝对路径",
+    "reveal": "在系统资源管理器中显示",
+    "delete": "删除"
+  },
+  "canvasMenu": {
+    "newCard": "新建卡片",
+    "newGroup": "新建分组",
+    "newLink": "新建链接",
+    "editText": "编辑文本",
+    "editGroupLabel": "编辑标签",
+    "editUrl": "编辑 URL",
+    "editEdgeLabel": "编辑标签",
+    "deleteConnection": "删除连接",
+    "clearColor": "清除颜色",
+    "color": "颜色",
+    "delete": "删除",
+    "colorRed": "红色",
+    "colorOrange": "橙色",
+    "colorYellow": "黄色",
+    "colorGreen": "绿色",
+    "colorCyan": "青色",
+    "colorPurple": "紫色"
+  },
+  "link": {
+    "confirmMessage": "在浏览器中打开此链接？\n\n{{url}}",
+    "openExternalTitle": "打开外部链接",
+    "open": "打开",
+    "cancel": "取消"
+  },
+  "copyButton": {
+    "copied": "已复制",
+    "label": "复制代码"
+  },
+  "lightbox": {
+    "image": "图片：{{alt}}",
+    "viewer": "图片查看器",
+    "close": "关闭 (Esc)",
+    "previous": "上一张图片 (←)",
+    "next": "下一张图片 (→)",
+    "zoomOut": "缩小 (-)",
+    "zoomIn": "放大 (+)",
+    "fit": "适应屏幕 (0)",
+    "actualSize": "实际大小 (1)"
+  },
+  "mermaid": {
+    "empty": "图表源为空",
+    "errorLabel": "图表错误",
+    "errorTitle": "图表渲染失败"
+  },
+  "taskList": {
+    "toggle": "切换任务状态"
+  },
+  "frontmatter": {
+    "title": "标题",
+    "author": "作者",
+    "date": "日期",
+    "tags": "标签"
+  },
+  "notebook": {
+    "errorTitle": "无法渲染此 notebook",
+    "empty": "此 notebook 没有单元格。",
+    "sourceBanner": "只读源码视图，notebook 无法在 Glyph 中编辑。",
+    "unsupportedInteractive": "尚不支持交互式输出 ({{type}})",
+    "unsupported": "不支持的输出"
+  },
+  "canvasToolbar": {
+    "addCard": "添加卡片",
+    "addCardLabel": "+ 卡片",
+    "addGroup": "添加分组",
+    "addGroupLabel": "+ 分组",
+    "addLink": "添加链接",
+    "addLinkLabel": "+ 链接",
+    "zoomOut": "缩小",
+    "zoomIn": "放大",
+    "fit": "适应内容",
+    "fitLabel": "适应"
+  },
+  "canvasSelection": {
+    "toolbar": "选择",
+    "clearColor": "清除颜色",
+    "colorLabel": "颜色 {{color}}",
+    "customColor": "自定义颜色",
+    "delete": "删除",
+    "deleteCount": "删除 ({{count}})"
+  },
+  "canvasEdge": {
+    "labelPlaceholder": "标签",
+    "labelAria": "连线标签"
+  },
+  "canvasNode": {
+    "groupPlaceholder": "分组名称",
+    "linkPlaceholder": "https://example.com",
+    "textPlaceholder": "输入 markdown…"
+  },
+  "canvasViewer": {
+    "error": "无法打开此画布。"
+  },
+  "graph": {
+    "label": "工作区图谱",
+    "reset": "重新居中并缩放以适应视图",
+    "resetView": "重置视图",
+    "emptyState": "尚无可绘制图谱的笔记。请向此工作区添加 markdown 文件。"
+  },
+  "fileDialog": {
+    "documents": "文档",
+    "markdown": "Markdown",
+    "notebook": "Jupyter Notebook"
+  },
+  "exportFilter": {
+    "html": "HTML",
+    "docx": "Word 文档",
+    "epub": "EPUB",
+    "pdf": "PDF"
+  }
+}

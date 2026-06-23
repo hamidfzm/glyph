@@ -1,0 +1,214 @@
+{
+  "app": {
+    "name": "Glyph"
+  },
+  "error": {
+    "fallback": "Algo salió mal. Intenta volver a abrir el archivo o reiniciar Glyph."
+  },
+  "emptyState": {
+    "openHeading": "Abrir un archivo Markdown",
+    "openHint": "Suelta un archivo aquí, usa el menú o pulsa <kbd>{{shortcut}}</kbd>",
+    "folderHeading": "No hay ningún archivo abierto en esta carpeta",
+    "folderHint": "Elige un archivo en la barra lateral para empezar a leer.",
+    "openFile": "Abrir archivo",
+    "openFolder": "Abrir carpeta"
+  },
+  "statusBar": {
+    "jupyter": "Jupyter Notebook",
+    "words_one": "{{formatted}} palabra",
+    "words_other": "{{formatted}} palabras",
+    "readingTime_one": "{{count}} min de lectura",
+    "readingTime_other": "{{count}} min de lectura"
+  },
+  "sidebar": {
+    "hideFiles": "Ocultar barra de archivos",
+    "hideOutline": "Ocultar barra de esquema",
+    "showFiles": "Mostrar barra de archivos",
+    "showOutline": "Mostrar barra de esquema",
+    "newNote": "Nueva nota",
+    "newFolder": "Nueva carpeta",
+    "collapseAll": "Contraer todo",
+    "expandAll": "Expandir todo",
+    "closeWorkspace": "Cerrar espacio de trabajo",
+    "outline": "Esquema"
+  },
+  "backlinks": {
+    "heading": "Enlaces entrantes"
+  },
+  "tabBar": {
+    "graphLabel": "Grafo: {{name}}",
+    "untitled": "Sin título",
+    "closeTab": "Cerrar {{label}}",
+    "viewMode": "Modo de vista",
+    "view": "Ver",
+    "editMode": "Modo de edición",
+    "edit": "Editar",
+    "splitMode": "Modo dividido",
+    "split": "Dividir"
+  },
+  "updateBanner": {
+    "available": "<strong>Glyph {{version}}</strong> está disponible",
+    "currentVersion": "(tienes {{version}})",
+    "download": "Descargar",
+    "dismiss": "Descartar notificación de actualización"
+  },
+  "workspaceBanner": {
+    "dismiss": "Descartar aviso del espacio de trabajo"
+  },
+  "search": {
+    "placeholder": "Buscar en el documento...",
+    "label": "Buscar",
+    "noResults": "Sin resultados",
+    "matchCount": "{{current}} de {{total}}",
+    "prevMatch": "Coincidencia anterior",
+    "nextMatch": "Coincidencia siguiente",
+    "close": "Cerrar búsqueda"
+  },
+  "exportProgress": {
+    "html": "HTML",
+    "docx": "Documento de Word",
+    "epub": "EPUB",
+    "pdf": "PDF",
+    "exporting": "Exportando {{format}}…"
+  },
+  "contextMenu": {
+    "copy": "Copiar",
+    "selectAll": "Seleccionar todo",
+    "searchGoogle": "Buscar \"{{query}}\" en Google",
+    "stopReading": "Detener lectura",
+    "readSelection": "Leer selección en voz alta",
+    "readAloud": "Leer en voz alta",
+    "ai": "IA",
+    "aiOnSelection": "{{action}} selección",
+    "aiOnDocument": "{{action}} documento",
+    "aiVerb": {
+      "summarize": "Resumir",
+      "explain": "Explicar",
+      "translate": "Traducir",
+      "simplify": "Simplificar"
+    }
+  },
+  "fileTree": {
+    "open": "Abrir",
+    "newNote": "Nueva nota",
+    "newCanvas": "Nuevo lienzo",
+    "newFolder": "Nueva carpeta",
+    "rename": "Renombrar",
+    "duplicate": "Hacer una copia",
+    "move": "Mover a…",
+    "copyPath": "Copiar ruta",
+    "copyAbsolutePath": "Copiar ruta absoluta",
+    "reveal": "Mostrar en el explorador del sistema",
+    "delete": "Eliminar"
+  },
+  "canvasMenu": {
+    "newCard": "Nueva tarjeta",
+    "newGroup": "Nuevo grupo",
+    "newLink": "Nuevo enlace",
+    "editText": "Editar texto",
+    "editGroupLabel": "Editar etiqueta",
+    "editUrl": "Editar URL",
+    "editEdgeLabel": "Editar etiqueta",
+    "deleteConnection": "Eliminar conexión",
+    "clearColor": "Quitar color",
+    "color": "Color",
+    "delete": "Eliminar",
+    "colorRed": "Rojo",
+    "colorOrange": "Naranja",
+    "colorYellow": "Amarillo",
+    "colorGreen": "Verde",
+    "colorCyan": "Cian",
+    "colorPurple": "Morado"
+  },
+  "link": {
+    "confirmMessage": "¿Abrir este enlace en tu navegador?\n\n{{url}}",
+    "openExternalTitle": "Abrir enlace externo",
+    "open": "Abrir",
+    "cancel": "Cancelar"
+  },
+  "copyButton": {
+    "copied": "Copiado",
+    "label": "Copiar código"
+  },
+  "lightbox": {
+    "image": "Imagen: {{alt}}",
+    "viewer": "Visor de imágenes",
+    "close": "Cerrar (Esc)",
+    "previous": "Imagen anterior (←)",
+    "next": "Imagen siguiente (→)",
+    "zoomOut": "Alejar (-)",
+    "zoomIn": "Acercar (+)",
+    "fit": "Ajustar a la pantalla (0)",
+    "actualSize": "Tamaño real (1)"
+  },
+  "mermaid": {
+    "empty": "El código del diagrama está vacío",
+    "errorLabel": "Error del diagrama",
+    "errorTitle": "No se pudo mostrar el diagrama"
+  },
+  "taskList": {
+    "toggle": "Marcar o desmarcar tarea"
+  },
+  "frontmatter": {
+    "title": "Título",
+    "author": "Autor",
+    "date": "Fecha",
+    "tags": "Etiquetas"
+  },
+  "notebook": {
+    "errorTitle": "No se pudo mostrar este notebook",
+    "empty": "Este notebook no tiene celdas.",
+    "sourceBanner": "Vista del código fuente en modo de solo lectura. Los notebooks no se pueden editar en Glyph.",
+    "unsupportedInteractive": "La salida interactiva ({{type}}) todavía no es compatible",
+    "unsupported": "Salida no compatible"
+  },
+  "canvasToolbar": {
+    "addCard": "Añadir tarjeta",
+    "addCardLabel": "+ Tarjeta",
+    "addGroup": "Añadir grupo",
+    "addGroupLabel": "+ Grupo",
+    "addLink": "Añadir enlace",
+    "addLinkLabel": "+ Enlace",
+    "zoomOut": "Alejar",
+    "zoomIn": "Acercar",
+    "fit": "Ajustar al contenido",
+    "fitLabel": "Ajustar"
+  },
+  "canvasSelection": {
+    "toolbar": "Selección",
+    "clearColor": "Quitar color",
+    "colorLabel": "Color {{color}}",
+    "customColor": "Color personalizado",
+    "delete": "Eliminar",
+    "deleteCount": "Eliminar ({{count}})"
+  },
+  "canvasEdge": {
+    "labelPlaceholder": "Etiqueta",
+    "labelAria": "Etiqueta de la conexión"
+  },
+  "canvasNode": {
+    "groupPlaceholder": "Nombre del grupo",
+    "linkPlaceholder": "https://example.com",
+    "textPlaceholder": "Escribe markdown…"
+  },
+  "canvasViewer": {
+    "error": "No se pudo abrir este lienzo."
+  },
+  "graph": {
+    "label": "Grafo del espacio de trabajo",
+    "reset": "Centrar y ajustar el grafo",
+    "resetView": "Restablecer vista",
+    "emptyState": "Aún no hay notas para el grafo. Añade archivos markdown a este espacio de trabajo."
+  },
+  "fileDialog": {
+    "documents": "Documentos",
+    "markdown": "Markdown",
+    "notebook": "Jupyter Notebook"
+  },
+  "exportFilter": {
+    "html": "HTML",
+    "docx": "Documento de Word",
+    "epub": "EPUB",
+    "pdf": "PDF"
+  }
+}

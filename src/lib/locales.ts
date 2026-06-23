@@ -17,11 +17,15 @@ export interface LocaleMeta {
 }
 
 // Order here is the order shown in the picker (after the "System" entry).
-// Only fully-translated locales belong here. Persian (fa) is the first RTL
-// locale and sets dir="rtl"; the full RTL layout audit is tracked in #264.
+// Only fully-translated locales belong here; the set mirrors the marketing
+// site's languages. Persian (fa) is RTL (dir="rtl"); the broader RTL layout
+// audit is tracked in #264.
 export const LOCALES: LocaleMeta[] = [
   { code: "en", name: "English", nativeName: "English", dir: "ltr" },
   { code: "fa", name: "Persian", nativeName: "فارسی", dir: "rtl" },
+  { code: "es", name: "Spanish", nativeName: "Español", dir: "ltr" },
+  { code: "zh", name: "Chinese (Simplified)", nativeName: "中文", dir: "ltr" },
+  { code: "de", name: "German", nativeName: "Deutsch", dir: "ltr" },
 ];
 
 const SUPPORTED_CODES = LOCALES.map((l) => l.code);

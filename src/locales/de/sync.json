@@ -1,0 +1,91 @@
+{
+  "modal": {
+    "title": "Einstellungen für Cloud-Synchronisierung",
+    "heading": "Cloud-Synchronisierung",
+    "close": "Einstellungen für Cloud-Synchronisierung schließen"
+  },
+  "empty": "Öffne einen Ordner-Arbeitsbereich, um die Cloud-Synchronisierung dafür einzurichten. Einzeldatei-Tabs werden als Teil des Ordners synchronisiert, in dem sie liegen.",
+  "description": "Git-basierte Synchronisierung für diesen Arbeitsbereich. Glyph bringt einen eigenen libgit2-Build mit, ein systemweites <kbd>git</kbd> ist nicht erforderlich.",
+  "loading": "Wird geladen…",
+  "notRepo": "Dieser Ordner ist noch kein Git-Repository.",
+  "initRepo": "Repository initialisieren",
+  "remoteUrl": {
+    "label": "Remote-URL",
+    "hint": "(leer = nur lokaler Verlauf)",
+    "placeholder": "https://github.com/you/notes.git"
+  },
+  "branch": {
+    "label": "Branch",
+    "placeholder": "main"
+  },
+  "conflictPolicy": {
+    "legend": "Konfliktrichtlinie",
+    "prompt": { "label": "Mich fragen", "description": "Bei Konflikten anhalten und die Konfliktlösung öffnen." },
+    "preferRemote": {
+      "label": "Remote übernehmen",
+      "description": "Lokale Änderungen verwerfen, wenn sie kollidieren."
+    },
+    "preferLocal": { "label": "Lokal behalten", "description": "Lokale Änderungen über das Remote pushen." }
+  },
+  "authorName": { "label": "Autorname", "placeholder": "Standard ist deine Git-Konfiguration" },
+  "authorEmail": { "label": "Autor-E-Mail", "placeholder": "you@example.com" },
+  "token": {
+    "label": "Persönliches Zugriffstoken",
+    "hint": "(nur HTTPS)",
+    "placeholderSaved": "gespeichert, zum Behalten leer lassen",
+    "placeholderNew": "ghp_…",
+    "note": "Wird vorerst nur im Arbeitsspeicher gehalten. Die nächste Version speichert es im Schlüsselbund deines Betriebssystems."
+  },
+  "commitMessage": {
+    "label": "Commit-Nachricht",
+    "hint": "(leer = automatisch aus Änderungen erzeugt)",
+    "placeholder": "z. B. Notizen aktualisieren"
+  },
+  "saveChanges": "Änderungen speichern",
+  "saveConfig": "Konfiguration speichern",
+  "syncNow": "Jetzt synchronisieren",
+  "refreshStatus": "Status aktualisieren",
+  "disable": "Synchronisierung deaktivieren",
+  "status": {
+    "workingTree": "Arbeitsverzeichnis: <strong>{{state}}</strong>",
+    "clean": "sauber",
+    "dirty": "geändert",
+    "aheadBehind": "Voraus: <strong>{{ahead}}</strong> · Zurück: <strong>{{behind}}</strong>",
+    "conflicts": "Ungelöste Konflikte: {{files}}",
+    "lastSync": "Letzte Synchronisierung: {{time}}",
+    "lastRun": "Letzter Lauf: <strong>{{pulled}}</strong> gepullt, <strong>{{committed}}</strong> committet, <strong>{{pushed}}</strong> gepusht{{suffix}}",
+    "lastRunConflicts": ", {{count}} Konflikt(e) erfordern Aufmerksamkeit"
+  },
+  "indicator": {
+    "off": "Synchronisierung aus",
+    "configured": "Synchronisierung konfiguriert",
+    "conflicts": "Konflikte ({{count}})",
+    "changes": "Sync +{{ahead}}/-{{behind}}",
+    "dirty": "Sync: geändert",
+    "synced": "Synchronisiert {{time}}",
+    "syncedDefault": "Synchronisiert",
+    "open": "Einstellungen für Cloud-Synchronisierung öffnen"
+  },
+  "relativeTime": {
+    "never": "nie",
+    "secondsAgo": "vor {{count}}s",
+    "minutesAgo": "vor {{count}}m",
+    "hoursAgo": "vor {{count}}h",
+    "daysAgo": "vor {{count}}d"
+  },
+  "error": {
+    "notConfigured": "Dieser Arbeitsbereich ist noch nicht für die Synchronisierung konfiguriert.",
+    "authFailed": "Authentifizierung fehlgeschlagen.",
+    "authFailedDetail": "Authentifizierung fehlgeschlagen: {{message}}",
+    "network": "Das Remote ist nicht erreichbar.",
+    "networkDetail": "Das Remote ist nicht erreichbar: {{message}}",
+    "conflict": "Löse Konflikte in {{count}} Datei(en), bevor du erneut synchronisierst.",
+    "invalidState": "Das Repository befindet sich in einem unerwarteten Zustand.",
+    "invalidStateDetail": "Das Repository befindet sich in einem unerwarteten Zustand: {{message}}",
+    "io": "E/A-Fehler.",
+    "ioDetail": "E/A-Fehler: {{message}}",
+    "backend": "Fehler im Synchronisierungs-Backend.",
+    "backendDetail": "Fehler im Synchronisierungs-Backend: {{message}}",
+    "unknown": "Unbekannter Synchronisierungsfehler."
+  }
+}

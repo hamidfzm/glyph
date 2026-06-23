@@ -1,0 +1,33 @@
+{
+  "palette": {
+    "title": "Befehlspalette",
+    "placeholder": "Befehl, Datei oder Überschrift eingeben…",
+    "queryLabel": "Befehlspaletten-Abfrage",
+    "empty": "Keine Ergebnisse"
+  },
+  "section": {
+    "Files": "Dateien",
+    "Headings": "Überschriften",
+    "Commands": "Befehle"
+  },
+  "openFile": "Datei öffnen…",
+  "openFolder": "Ordner öffnen…",
+  "closeTab": "Tab schließen",
+  "toggleFilesSidebar": "Dateien-Seitenleiste umschalten",
+  "toggleOutlineSidebar": "Gliederungs-Seitenleiste umschalten",
+  "resetView": "Ansicht zurücksetzen",
+  "openSettings": "Einstellungen…",
+  "openSyncSettings": "Cloud-Synchronisierung…",
+  "find": "Im Dokument suchen",
+  "toggleEdit": "Bearbeitungsmodus umschalten",
+  "openGraph": "Graph öffnen",
+  "print": "Drucken…",
+  "exportHtml": "Als HTML exportieren…",
+  "exportDocx": "Als Word (DOCX) exportieren…",
+  "exportEpub": "Als EPUB exportieren…",
+  "exportPdf": "Als PDF exportieren…",
+  "zoomIn": "Vergrößern",
+  "zoomOut": "Verkleinern",
+  "zoomReset": "Zoom zurücksetzen",
+  "readAloud": "Vorlesen"
+}
