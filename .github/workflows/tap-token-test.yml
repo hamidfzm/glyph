@@ -1,0 +1,39 @@
+name: TAP token test
+on:
+  push:
+    branches: [chore/tap-token-test]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify TAP_GITHUB_TOKEN can write to the glyph-md tap/bucket
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::TAP_GITHUB_TOKEN is empty or unset"; exit 1
+          fi
+          echo "Token identity: $(gh api user --jq .login 2>/dev/null || echo '(cannot read /user; fine-grained token)')"
+          fail=0
+          for repo in glyph-md/homebrew-tap glyph-md/scoop-bucket; do
+            echo "=== $repo ==="
+            push=$(gh api "repos/$repo" --jq '.permissions.push' 2>/dev/null || echo "unknown")
+            echo "reported push permission: $push"
+            sha=$(gh api "repos/$repo/git/refs/heads/main" --jq .object.sha 2>/dev/null) || { echo "::error::$repo: cannot read main"; fail=1; continue; }
+            ref="tap-token-test-${GITHUB_RUN_ID}"
+            if gh api "repos/$repo/git/refs" -f ref="refs/heads/$ref" -f sha="$sha" >/dev/null 2>&1; then
+              echo "PASS: created branch $ref on $repo (token has write access)"
+              gh api -X DELETE "repos/$repo/git/refs/heads/$ref" >/dev/null 2>&1 && echo "cleaned up $ref"
+            else
+              echo "::error::$repo: token could NOT create a branch -> no write access"; fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::TAP_GITHUB_TOKEN is missing write access to one or more glyph-md repos"; exit 1
+          fi
+          echo "ALL GOOD: TAP_GITHUB_TOKEN can write to both glyph-md/homebrew-tap and glyph-md/scoop-bucket"
