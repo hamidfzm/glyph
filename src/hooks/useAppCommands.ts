@@ -218,6 +218,30 @@ export function useAppCommands({
           void plugins.installFromFolder();
         },
       });
+
+      // Marketplace: install entries not yet on disk, update those with a newer version.
+      const installedIds = new Set(plugins.loaded.map((p) => p.id));
+      for (const entry of plugins.registry) {
+        if (installedIds.has(entry.id)) continue;
+        out.push({
+          id: `market-install:${entry.id}`,
+          title: t("installNamed", { name: entry.name }),
+          section: "Commands",
+          run: () => {
+            void plugins.installFromRegistry(entry);
+          },
+        });
+      }
+      for (const update of plugins.updates) {
+        out.push({
+          id: `market-update:${update.entry.id}`,
+          title: t("updateNamed", { name: update.entry.name, version: update.entry.version }),
+          section: "Commands",
+          run: () => {
+            void plugins.installFromRegistry(update.entry);
+          },
+        });
+      }
     }
 
     return out;

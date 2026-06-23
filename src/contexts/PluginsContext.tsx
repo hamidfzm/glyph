@@ -6,11 +6,19 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToasts";
 import { createPluginHost, type LoadedPluginInfo, type PluginHost } from "@/lib/plugins/host";
+import {
+  installFromRegistry as downloadAndInstall,
+  fetchRegistry,
+  findUpdates,
+  type RegistryEntry,
+  type RegistryUpdate,
+} from "@/lib/plugins/marketplace";
 import type { InstalledPlugin } from "@/lib/plugins/types";
 
 const TOAST_DURATION_MS = 4000;
@@ -21,8 +29,14 @@ export interface PluginsContextValue {
   statusBarItems: PluginHost["statusBarItems"];
   /** Plugins currently loaded, for future manager UI. */
   loaded: LoadedPluginInfo[];
+  /** Marketplace entries from the glyph-md registry (empty if unreachable). */
+  registry: RegistryEntry[];
+  /** Installed plugins with a newer version available in the registry. */
+  updates: RegistryUpdate[];
   /** Pick a plugin folder, install it into the app config dir, and load it. */
   installFromFolder: () => Promise<void>;
+  /** Download and install (or update) a marketplace entry, then load it. */
+  installFromRegistry: (entry: RegistryEntry) => Promise<void>;
 }
 
 export const PluginsContext = createContext<PluginsContextValue | null>(null);
@@ -35,6 +49,7 @@ export const PluginsContext = createContext<PluginsContextValue | null>(null);
 export function PluginsProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<PluginToast[]>([]);
   const [loaded, setLoaded] = useState<LoadedPluginInfo[]>([]);
+  const [registry, setRegistry] = useState<RegistryEntry[]>([]);
   const toastId = useRef(0);
 
   const pushToast = useCallback((message: string) => {
@@ -67,11 +82,19 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       }
       if (!cancelled) setLoaded(host.listLoaded());
     })();
+    // Marketplace index is best-effort: offline just means no available/updates.
+    fetchRegistry()
+      .then((entries) => {
+        if (!cancelled) setRegistry(entries);
+      })
+      .catch((err) => console.error("Failed to fetch plugin registry:", err));
     return () => {
       cancelled = true;
       host.unloadAll();
     };
   }, [host]);
+
+  const updates = useMemo(() => findUpdates(loaded, registry), [loaded, registry]);
 
   const installFromFolder = useCallback(async () => {
     const dir = await open({ directory: true, multiple: false, title: "Select a plugin folder" });
@@ -87,13 +110,31 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     }
   }, [host, pushToast]);
 
+  const installFromRegistry = useCallback(
+    async (entry: RegistryEntry) => {
+      try {
+        const plugin = await downloadAndInstall(entry);
+        await host.load(plugin);
+        setLoaded(host.listLoaded());
+        pushToast(`Installed plugin: ${plugin.name} v${plugin.version}`);
+      } catch (err) {
+        console.error("Plugin install failed:", err);
+        pushToast(`Plugin install failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    },
+    [host, pushToast],
+  );
+
   return (
     <PluginsContext.Provider
       value={{
         commands: host.commands,
         statusBarItems: host.statusBarItems,
         loaded,
+        registry,
+        updates,
         installFromFolder,
+        installFromRegistry,
       }}
     >
       {children}

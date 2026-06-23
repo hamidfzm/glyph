@@ -29,6 +29,24 @@ loads on every launch from then on:
 
 To uninstall, delete the plugin's folder there and restart Glyph.
 
+## Marketplace
+
+Glyph also reads a marketplace index maintained in the `glyph-md/plugins` repo
+(`index.json`, see the seed beside this file). Each entry carries the metadata
+the app needs to install and to detect new versions:
+
+```json
+{ "id": "...", "name": "...", "description": "...",
+  "version": "1.2.0", "apiVersion": "^1.0.0",
+  "mainUrl": "https://raw.githubusercontent.com/<owner>/<repo>/<tag>/main.js" }
+```
+
+On launch the app fetches the index. Indexed plugins that aren't installed show
+up in the command palette as **Install Plugin: <name>**; an installed plugin
+whose `version` is behind the index shows **Update Plugin: <name>**. To publish,
+a plugin author opens a PR to `glyph-md/plugins` adding or bumping their entry;
+the plugin code itself lives in the author's own repo.
+
 ## manifest.json
 
 | Field | Required | Meaning |

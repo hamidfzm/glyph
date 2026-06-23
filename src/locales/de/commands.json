@@ -30,5 +30,7 @@
   "zoomOut": "Verkleinern",
   "zoomReset": "Zoom zurücksetzen",
   "readAloud": "Vorlesen",
-  "installPlugin": "Plugin aus Ordner installieren…"
+  "installPlugin": "Plugin aus Ordner installieren…",
+  "installNamed": "Plugin installieren: {{name}}",
+  "updateNamed": "Plugin aktualisieren: {{name}} (v{{version}})"
 }

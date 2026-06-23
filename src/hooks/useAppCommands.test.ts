@@ -194,7 +194,10 @@ describe("useAppCommands", () => {
       commands,
       statusBarItems: createRegistry<StatusBarItemContribution>(),
       loaded: [],
+      registry: [],
+      updates: [],
       installFromFolder,
+      installFromRegistry: vi.fn(async () => {}),
     };
     const wrapper = ({ children }: { children: ReactNode }) =>
       createElement(PluginsContext.Provider, { value }, children);

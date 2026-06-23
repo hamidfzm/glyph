@@ -30,5 +30,7 @@
   "zoomOut": "缩小",
   "zoomReset": "重置缩放",
   "readAloud": "朗读",
-  "installPlugin": "从文件夹安装插件…"
+  "installPlugin": "从文件夹安装插件…",
+  "installNamed": "安装插件：{{name}}",
+  "updateNamed": "更新插件：{{name}}（v{{version}}）"
 }

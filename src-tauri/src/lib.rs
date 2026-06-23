@@ -226,6 +226,7 @@ pub fn run() {
             commands::wikilinks::scan_wikilinks,
             commands::plugins::list_plugins,
             commands::plugins::install_plugin,
+            commands::plugins::install_plugin_files,
             watcher::watch_file,
             watcher::unwatch_file,
             watcher::watch_directory,

@@ -143,6 +143,23 @@ fn install_into(root: &Path, src: &Path) -> Result<InstalledPlugin, String> {
     read_plugin_dir(&dest)
 }
 
+/// Write an in-memory plugin (manifest + entry source) into `root/<id>/`. Used
+/// by marketplace installs, where the frontend has already downloaded the code.
+fn install_sources(
+    root: &Path,
+    manifest_json: &str,
+    main_source: &str,
+) -> Result<InstalledPlugin, String> {
+    let info = parse_manifest(manifest_json)?;
+    let dest = root.join(&info.id);
+    fs::create_dir_all(&dest).map_err(|e| format!("cannot create {}: {e}", dest.display()))?;
+    fs::write(dest.join("manifest.json"), manifest_json)
+        .map_err(|e| format!("cannot write manifest.json: {e}"))?;
+    fs::write(dest.join(&info.main), main_source)
+        .map_err(|e| format!("cannot write {}: {e}", info.main))?;
+    read_plugin_dir(&dest)
+}
+
 fn plugins_root<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
     app.path()
         .app_config_dir()
@@ -163,6 +180,15 @@ pub fn install_plugin<R: tauri::Runtime>(
     src_dir: String,
 ) -> Result<InstalledPlugin, String> {
     install_into(&plugins_root(&app)?, Path::new(&src_dir))
+}
+
+#[tauri::command]
+pub fn install_plugin_files<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    manifest: String,
+    main: String,
+) -> Result<InstalledPlugin, String> {
+    install_sources(&plugins_root(&app)?, &manifest, &main)
 }
 
 #[cfg(test)]
@@ -340,6 +366,27 @@ mod tests {
         assert!(install_into(&root, &src).is_err());
         let _ = fs::remove_dir_all(&root);
         let _ = fs::remove_dir_all(&src);
+    }
+
+    #[test]
+    fn install_sources_writes_manifest_and_entry() {
+        let root = temp_root("sources");
+        let manifest =
+            r#"{"id":"com.x.fromsrc","name":"Src","version":"1.0.0","apiVersion":"^1.0.0"}"#;
+        let plugin = install_sources(&root, manifest, "export default { activate(){} };").unwrap();
+
+        assert_eq!(plugin.id, "com.x.fromsrc");
+        assert_eq!(plugin.main_source, "export default { activate(){} };");
+        assert!(root.join("com.x.fromsrc").join("manifest.json").is_file());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn install_sources_rejects_a_bad_manifest() {
+        let root = temp_root("sources_bad");
+        assert!(install_sources(&root, "not json", "x").is_err());
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
