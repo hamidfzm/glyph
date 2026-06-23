@@ -70,7 +70,7 @@ jobs:
 
             ### macOS
             ```bash
-            brew tap hamidfzm/tap && brew trust hamidfzm/tap && brew install --cask glyph
+            brew tap glyph-md/tap && brew trust glyph-md/tap && brew install --cask glyph
             ```
             Or download `Glyph_*_universal.dmg` below.
 
@@ -80,7 +80,7 @@ jobs:
             choco install glyph
 
             # Scoop
-            scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
+            scoop bucket add glyph-md https://github.com/glyph-md/scoop-bucket
             scoop install glyph
             ```
             Or download `Glyph_*_x64_en-US.msi` below.
@@ -94,7 +94,7 @@ jobs:
             yay -S glyph-md-bin
 
             # Homebrew (Linuxbrew)
-            brew tap hamidfzm/tap && brew install glyph
+            brew tap glyph-md/tap && brew install glyph
 
             # Debian/Ubuntu (PPA)
             sudo add-apt-repository ppa:hamidfzm/glyph
@@ -129,7 +129,7 @@ jobs:
 
           ### macOS
           ```bash
-          brew tap hamidfzm/tap && brew trust hamidfzm/tap && brew install --cask glyph
+          brew tap glyph-md/tap && brew trust glyph-md/tap && brew install --cask glyph
           ```
           Or download `Glyph_*_universal.dmg` below.
 
@@ -139,7 +139,7 @@ jobs:
           choco install glyph
 
           # Scoop
-          scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
+          scoop bucket add glyph-md https://github.com/glyph-md/scoop-bucket
           scoop install glyph
           ```
           Or download `Glyph_*_x64_en-US.msi` below.
@@ -153,7 +153,7 @@ jobs:
           yay -S glyph-md-bin
 
           # Homebrew (Linuxbrew)
-          brew tap hamidfzm/tap && brew install glyph
+          brew tap glyph-md/tap && brew install glyph
 
           # Debian/Ubuntu (PPA)
           sudo add-apt-repository ppa:hamidfzm/glyph
@@ -206,16 +206,16 @@ jobs:
             homebrew/glyph.rb.template > /tmp/glyph.rb
 
           # Get current file SHA for update (or empty for first push)
-          FILE_SHA=$(gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb --jq .sha 2>/dev/null || echo "")
+          FILE_SHA=$(gh api repos/glyph-md/homebrew-tap/contents/Casks/glyph.rb --jq .sha 2>/dev/null || echo "")
 
           if [ -n "$FILE_SHA" ]; then
-            gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb \
+            gh api repos/glyph-md/homebrew-tap/contents/Casks/glyph.rb \
               --method PUT \
               --field message="chore: update glyph to $VERSION" \
               --field content="$(base64 -w0 /tmp/glyph.rb)" \
               --field sha="$FILE_SHA"
           else
-            gh api repos/hamidfzm/homebrew-tap/contents/Casks/glyph.rb \
+            gh api repos/glyph-md/homebrew-tap/contents/Casks/glyph.rb \
               --method PUT \
               --field message="chore: add glyph cask $VERSION" \
               --field content="$(base64 -w0 /tmp/glyph.rb)"
@@ -248,16 +248,16 @@ jobs:
             homebrew/glyph-formula.rb.template > /tmp/glyph.rb
 
           # Get current file SHA for update (or empty for first push)
-          FILE_SHA=$(gh api repos/hamidfzm/homebrew-tap/contents/Formula/glyph.rb --jq .sha 2>/dev/null || echo "")
+          FILE_SHA=$(gh api repos/glyph-md/homebrew-tap/contents/Formula/glyph.rb --jq .sha 2>/dev/null || echo "")
 
           if [ -n "$FILE_SHA" ]; then
-            gh api repos/hamidfzm/homebrew-tap/contents/Formula/glyph.rb \
+            gh api repos/glyph-md/homebrew-tap/contents/Formula/glyph.rb \
               --method PUT \
               --field message="chore: update glyph linux formula to $VERSION" \
               --field content="$(base64 -w0 /tmp/glyph.rb)" \
               --field sha="$FILE_SHA"
           else
-            gh api repos/hamidfzm/homebrew-tap/contents/Formula/glyph.rb \
+            gh api repos/glyph-md/homebrew-tap/contents/Formula/glyph.rb \
               --method PUT \
               --field message="chore: add glyph linux formula $VERSION" \
               --field content="$(base64 -w0 /tmp/glyph.rb)"
@@ -372,16 +372,16 @@ jobs:
             scoop/glyph.json.template > /tmp/glyph.json
 
           # Get current file SHA for update (or empty for first push)
-          FILE_SHA=$(gh api repos/hamidfzm/scoop-bucket/contents/bucket/glyph.json --jq .sha 2>/dev/null || echo "")
+          FILE_SHA=$(gh api repos/glyph-md/scoop-bucket/contents/bucket/glyph.json --jq .sha 2>/dev/null || echo "")
 
           if [ -n "$FILE_SHA" ]; then
-            gh api repos/hamidfzm/scoop-bucket/contents/bucket/glyph.json \
+            gh api repos/glyph-md/scoop-bucket/contents/bucket/glyph.json \
               --method PUT \
               --field message="chore: update glyph to $VERSION" \
               --field content="$(base64 -w0 /tmp/glyph.json)" \
               --field sha="$FILE_SHA"
           else
-            gh api repos/hamidfzm/scoop-bucket/contents/bucket/glyph.json \
+            gh api repos/glyph-md/scoop-bucket/contents/bucket/glyph.json \
               --method PUT \
               --field message="chore: add glyph $VERSION" \
               --field content="$(base64 -w0 /tmp/glyph.json)"

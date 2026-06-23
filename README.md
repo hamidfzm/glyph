@@ -104,8 +104,8 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 ### macOS (Homebrew)
 
 ```bash
-brew tap hamidfzm/tap
-brew trust hamidfzm/tap
+brew tap glyph-md/tap
+brew trust glyph-md/tap
 brew install --cask glyph
 ```
 
@@ -120,7 +120,7 @@ choco install glyph
 ### Windows (Scoop)
 
 ```powershell
-scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
+scoop bucket add glyph-md https://github.com/glyph-md/scoop-bucket
 scoop install glyph
 ```
 
@@ -139,7 +139,7 @@ yay -S glyph-md-bin
 ### Linux (Homebrew)
 
 ```bash
-brew tap hamidfzm/tap
+brew tap glyph-md/tap
 brew install glyph
 ```
 
