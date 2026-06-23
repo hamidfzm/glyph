@@ -154,8 +154,8 @@ sudo apt install glyph
 ### Debian
 
 ```bash
-curl -fsSL https://glyph-md.github.io/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
-echo "deb [signed-by=/usr/share/keyrings/glyph.gpg] https://glyph-md.github.io/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/glyph.list
+curl -fsSL https://glyph.md/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
+echo "deb [signed-by=/usr/share/keyrings/glyph.gpg] https://glyph.md/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/glyph.list
 sudo apt update
 sudo apt install glyph
 ```
