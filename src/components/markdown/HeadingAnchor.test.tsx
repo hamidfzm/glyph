@@ -46,6 +46,33 @@ describe("HeadingAnchor", () => {
     expect(button.classList.contains("copied")).toBe(false);
   });
 
+  it("resets the revert timer when clicked again before it fires", async () => {
+    vi.useFakeTimers();
+    render(<HeadingAnchor id="usage" />);
+    const button = screen.getByRole("button");
+
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1500);
+    });
+    // Second click within the window clears the pending timer and starts a new
+    // 2s window, so the button is still showing "Copied" 1s later.
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(button.classList.contains("copied")).toBe(true);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(button.classList.contains("copied")).toBe(false);
+  });
+
   it("ignores clipboard rejections without throwing", async () => {
     writeTextMock.mockRejectedValueOnce(new Error("denied"));
     render(<HeadingAnchor id="denied" />);
