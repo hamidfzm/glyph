@@ -39,6 +39,44 @@
 .markdown-body h5 { font-size: 0.875em; }
 .markdown-body h6 { font-size: 0.85em; color: var(--color-text-secondary); }
 
+/* Hover-revealed anchor-copy button appended inside each heading. Hidden with
+   opacity (space stays reserved) so revealing it never shifts heading layout. */
+.markdown-body .heading-anchor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+  height: 1.1em;
+  margin-left: 0.4em;
+  padding: 0;
+  vertical-align: middle;
+  border: none;
+  background: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.markdown-body .heading-anchor svg {
+  width: 1em;
+  height: 1em;
+}
+
+.markdown-body :is(h1, h2, h3, h4, h5, h6):hover .heading-anchor,
+.markdown-body .heading-anchor:focus-visible {
+  opacity: 1;
+}
+
+.markdown-body .heading-anchor:hover {
+  color: var(--color-text-primary);
+}
+
+.markdown-body .heading-anchor.copied {
+  opacity: 1;
+  color: var(--color-accent);
+}
+
 .markdown-body p {
   margin: 0 0 1em;
 }
