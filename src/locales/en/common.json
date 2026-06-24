@@ -149,6 +149,11 @@
     "errorLabel": "Diagram error",
     "errorTitle": "Failed to render diagram"
   },
+  "d2": {
+    "empty": "Empty diagram source",
+    "errorLabel": "Diagram error",
+    "errorTitle": "Failed to render diagram"
+  },
   "taskList": {
     "toggle": "Toggle task"
   },
@@ -206,7 +211,8 @@
   "fileDialog": {
     "documents": "Documents",
     "markdown": "Markdown",
-    "notebook": "Jupyter Notebook"
+    "notebook": "Jupyter Notebook",
+    "d2": "D2 Diagram"
   },
   "exportFilter": {
     "html": "HTML",

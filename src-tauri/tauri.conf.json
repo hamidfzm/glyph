@@ -49,6 +49,11 @@
         "ext": ["md", "markdown", "mdown", "mkd", "mkdn", "mdx", "mmd"],
         "mimeType": "text/markdown",
         "description": "Markdown Document"
+      },
+      {
+        "ext": ["d2"],
+        "mimeType": "text/plain",
+        "description": "D2 Diagram"
       }
     ]
   },

@@ -146,6 +146,11 @@
     "errorLabel": "Error del diagrama",
     "errorTitle": "No se pudo mostrar el diagrama"
   },
+  "d2": {
+    "empty": "El código del diagrama está vacío",
+    "errorLabel": "Error del diagrama",
+    "errorTitle": "No se pudo mostrar el diagrama"
+  },
   "taskList": {
     "toggle": "Marcar o desmarcar tarea"
   },
@@ -203,7 +208,8 @@
   "fileDialog": {
     "documents": "Documentos",
     "markdown": "Markdown",
-    "notebook": "Jupyter Notebook"
+    "notebook": "Jupyter Notebook",
+    "d2": "Diagrama D2"
   },
   "exportFilter": {
     "html": "HTML",

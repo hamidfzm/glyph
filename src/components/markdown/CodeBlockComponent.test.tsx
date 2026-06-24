@@ -6,6 +6,10 @@ vi.mock("./MermaidDiagram", () => ({
   MermaidDiagram: ({ code }: { code: string }) => <div data-testid="mermaid-diagram">{code}</div>,
 }));
 
+vi.mock("./D2Diagram", () => ({
+  D2Diagram: ({ code }: { code: string }) => <div data-testid="d2-diagram">{code}</div>,
+}));
+
 const writeTextMock = vi.fn().mockResolvedValue(undefined);
 Object.defineProperty(navigator, "clipboard", {
   value: { writeText: writeTextMock },
@@ -39,6 +43,25 @@ describe("CodeBlockComponent", () => {
       </CodeBlockComponent>,
     );
     expect(screen.getByTestId("mermaid-diagram")).toHaveTextContent("graph LR; A-->B;");
+  });
+
+  it("renders D2Diagram for d2 code blocks", () => {
+    render(
+      <CodeBlockComponent>
+        <code className="language-d2">a {"->"} b</code>
+      </CodeBlockComponent>,
+    );
+    expect(screen.getByTestId("d2-diagram")).toBeInTheDocument();
+    expect(screen.getByTestId("d2-diagram")).toHaveTextContent("a -> b");
+  });
+
+  it("does not render a copy button for d2 blocks", () => {
+    render(
+      <CodeBlockComponent>
+        <code className="language-d2">a {"->"} b</code>
+      </CodeBlockComponent>,
+    );
+    expect(screen.queryByRole("button", { name: "Copy code" })).not.toBeInTheDocument();
   });
 
   it("renders a CSV table for csv code blocks", () => {

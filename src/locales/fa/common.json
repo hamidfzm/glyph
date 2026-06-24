@@ -146,6 +146,11 @@
     "errorLabel": "خطای نمودار",
     "errorTitle": "رندر نمودار ناموفق بود"
   },
+  "d2": {
+    "empty": "منبع نمودار خالی است",
+    "errorLabel": "خطای نمودار",
+    "errorTitle": "رندر نمودار ناموفق بود"
+  },
   "taskList": {
     "toggle": "تغییر وضعیت کار"
   },
@@ -203,7 +208,8 @@
   "fileDialog": {
     "documents": "اسناد",
     "markdown": "Markdown",
-    "notebook": "نوت‌بوک Jupyter"
+    "notebook": "نوت‌بوک Jupyter",
+    "d2": "نمودار D2"
   },
   "exportFilter": {
     "html": "HTML",
