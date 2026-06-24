@@ -9,6 +9,12 @@ my-plugin/
 └── main.js         # pre-built ES module, default-exporting { activate }
 ```
 
+`main.js` is a single file, but you don't have to write it as one: split your
+source into as many modules as you like and bundle them into one ES module
+(e.g. `esbuild src/main.ts --bundle --format=esm --outfile=main.js`). The
+loader imports exactly one file, so bundling is how multi-file plugins ship,
+see the marketplace [CONTRIBUTING guide](https://github.com/glyph-md/plugins/blob/main/CONTRIBUTING.md).
+
 ## Try the sample
 
 1. Open Glyph and press `Cmd/Ctrl+K` to open the command palette.
