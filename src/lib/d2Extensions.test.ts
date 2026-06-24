@@ -12,6 +12,12 @@ describe("isD2File", () => {
     expect(isD2File("/p/diagram.mmd")).toBe(false);
     expect(isD2File("/p/README")).toBe(false);
   });
+
+  it("returns false when the path has no usable extension segment", () => {
+    // "" → split(".").pop() is "" (falsy), exercising the no-extension branch.
+    expect(isD2File("")).toBe(false);
+    expect(isD2File("/p/trailingdot.")).toBe(false);
+  });
 });
 
 describe("adaptD2Content", () => {

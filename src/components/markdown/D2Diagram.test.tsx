@@ -81,4 +81,74 @@ describe("D2Diagram", () => {
     await waitFor(() => expect(container.querySelector(".d2-diagram")).not.toBeNull());
     expect(container.querySelector(".d2-diagram")?.getAttribute("data-d2-source")).toBe("a -> b");
   });
+
+  it("falls back to a generic error message when render rejects with a non-Error value", async () => {
+    // Exercises the non-Error branch of `err instanceof Error ? ... : ...`.
+    renderD2.mockRejectedValue("not an Error instance");
+    const { container } = render(<D2Diagram code="garbage" />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".d2-error")).not.toBeNull();
+    });
+  });
+
+  it("only the latest concurrent render writes its SVG to the DOM", async () => {
+    // The first (light) render hangs; a theme flip starts a second (dark) render
+    // that resolves first and wins. When the stale first render finally settles,
+    // the sequence guard must drop it instead of overwriting the winner.
+    type Resolver = (value: string) => void;
+    const firstRender: { resolve: Resolver } = { resolve: () => {} };
+    renderD2.mockImplementationOnce(
+      () => new Promise<string>((resolve) => (firstRender.resolve = resolve)),
+    );
+    renderD2.mockResolvedValueOnce("<svg id='winner'></svg>");
+
+    const { container } = render(<D2Diagram code="x -> y" />);
+    document.documentElement.classList.add("dark");
+
+    await waitFor(() => expect(container.querySelector("svg#winner")).not.toBeNull());
+
+    firstRender.resolve("<svg id='stale'></svg>");
+    await new Promise((r) => setTimeout(r, 10));
+    expect(container.querySelector("svg#stale")).toBeNull();
+    expect(container.querySelector("svg#winner")).not.toBeNull();
+  });
+
+  it("skips the DOM write when the container ref is null at resolution time", async () => {
+    // Unmount mid-render: the awaited continuation runs after the ref is nulled,
+    // so the `if (containerRef.current)` guard's false branch fires.
+    type Resolver = (value: string) => void;
+    const pending: { resolve: Resolver } = { resolve: () => {} };
+    renderD2.mockImplementationOnce(
+      () => new Promise<string>((resolve) => (pending.resolve = resolve)),
+    );
+
+    const { unmount } = render(<D2Diagram code="x -> y" />);
+    await waitFor(() => expect(renderD2).toHaveBeenCalled());
+    unmount();
+    pending.resolve("<svg id='post-unmount'></svg>");
+    await new Promise((r) => setTimeout(r, 10));
+    expect(document.querySelector("svg#post-unmount")).toBeNull();
+  });
+
+  it("does not flip into the error UI when a stale render rejects after a newer one wins", async () => {
+    // Symmetry with the success guard: a stale rejection arriving after a newer
+    // render has painted must not switch the component into the error state.
+    type Rejecter = (reason: unknown) => void;
+    const firstRender: { reject: Rejecter } = { reject: () => {} };
+    renderD2.mockImplementationOnce(
+      () => new Promise<string>((_resolve, reject) => (firstRender.reject = reject)),
+    );
+    renderD2.mockResolvedValueOnce("<svg id='winner'></svg>");
+
+    const { container } = render(<D2Diagram code="x -> y" />);
+    document.documentElement.classList.add("dark");
+
+    await waitFor(() => expect(container.querySelector("svg#winner")).not.toBeNull());
+
+    firstRender.reject(new Error("stale failure"));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(container.querySelector(".d2-error")).toBeNull();
+    expect(container.querySelector("svg#winner")).not.toBeNull();
+  });
 });
