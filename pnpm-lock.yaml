@@ -77,7 +77,7 @@ importers:
         specifier: ^2
         version: 2.4.1
       '@terrastruct/d2':
-        specifier: ^0.1.33
+        specifier: 0.1.33
         version: 0.1.33
       '@types/js-yaml':
         specifier: ^4.0.9
@@ -92,7 +92,7 @@ importers:
         specifier: ^9.7.1
         version: 9.7.1
       dompurify:
-        specifier: ^3.4.11
+        specifier: '>=3.4.11'
         version: 3.4.11
       github-slugger:
         specifier: ^2.0.0

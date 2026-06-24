@@ -1,8 +1,8 @@
-// Lazy D2 renderer + render cache, kept in its own module so the WASM instance
-// and the cache are shared across every `D2Diagram` (mirrors `lazyHighlight.ts`
-// / `lazyKatex.ts`). `@terrastruct/d2`'s browser build inlines the multi-MB WASM
-// and runs it in a blob-URL worker, so the dynamic import is fully self-contained
-// and makes no network request — the diagram renders offline.
+// Lazy D2 renderer + render cache. Pure logic (no JSX) shared by the on-screen
+// `D2Diagram` component and the PDF export rasterizer, so it lives in `lib`
+// rather than under `components`. `@terrastruct/d2`'s browser build inlines the
+// multi-MB WASM and runs it in a blob-URL worker, so the dynamic import is fully
+// self-contained and makes no network request — the diagram renders offline.
 
 import type { CompileOptions, Diagram, RenderOptions } from "@terrastruct/d2";
 import DOMPurify from "dompurify";
@@ -35,8 +35,9 @@ const DARK_THEME_ID = 200;
 
 // Rendered+sanitized SVG keyed by `${theme}:${source}` so re-renders (scroll,
 // tab switch, parent re-render, reopening an unchanged doc) skip the expensive
-// WASM layout. Shared across all instances; entries are immutable strings.
-const cache = new Map<string, string>();
+// WASM layout. Promises are cached (not strings) so concurrent renders of the
+// same diagram share one compile; failures are evicted so they can be retried.
+const cache = new Map<string, Promise<string>>();
 
 // The rendered SVG is untrusted (it derives from arbitrary D2 source) and is
 // injected via innerHTML, so sanitize before it reaches the DOM. DOMPurify's
@@ -51,15 +52,19 @@ function sanitizeSvg(svg: string): string {
 
 /** Compile and render a D2 source to sanitized SVG, served from cache when the
  *  same source has already been rendered for the same theme. */
-export async function renderD2(source: string, dark: boolean): Promise<string> {
+export function renderD2(source: string, dark: boolean): Promise<string> {
   const key = `${dark ? "dark" : "light"}:${source}`;
   const cached = cache.get(key);
-  if (cached !== undefined) return cached;
+  if (cached) return cached;
 
-  const d2 = await loadD2();
-  const result = await d2.compile(source, { themeID: dark ? DARK_THEME_ID : LIGHT_THEME_ID });
-  const svg = await d2.render(result.diagram, { ...result.renderOptions, noXMLTag: true });
-  const clean = sanitizeSvg(svg);
-  cache.set(key, clean);
-  return clean;
+  const pending = (async () => {
+    const d2 = await loadD2();
+    const result = await d2.compile(source, { themeID: dark ? DARK_THEME_ID : LIGHT_THEME_ID });
+    const svg = await d2.render(result.diagram, { ...result.renderOptions, noXMLTag: true });
+    return sanitizeSvg(svg);
+  })();
+  // Don't cache a failed render, so a transient error can be retried.
+  pending.catch(() => cache.delete(key));
+  cache.set(key, pending);
+  return pending;
 }

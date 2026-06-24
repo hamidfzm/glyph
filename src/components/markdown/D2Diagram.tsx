@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useIsDarkMode } from "@/hooks/useIsDarkMode";
-import { renderD2 } from "./lazyD2";
+import { renderD2 } from "@/lib/d2Render";
 
 interface D2DiagramProps {
   code: string;
@@ -22,12 +22,15 @@ export function D2Diagram({ code }: D2DiagramProps) {
       setError(t("d2.empty"));
       return;
     }
+    // Clear any prior error up front so the container div remounts before the
+    // async render resolves; otherwise the error fallback keeps the container
+    // unmounted and a successful re-render could never write its SVG.
+    setError(null);
     try {
       const svg = await renderD2(code, isDark);
       if (renderSeqRef.current !== mySeq) return;
       if (containerRef.current) {
         containerRef.current.innerHTML = svg;
-        setError(null);
       }
     } catch (err) {
       if (renderSeqRef.current !== mySeq) return;

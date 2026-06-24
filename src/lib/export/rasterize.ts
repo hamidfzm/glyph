@@ -2,7 +2,7 @@
 // rendered; Mermaid and D2 are re-rendered in the light theme so PDF diagrams
 // are always light (the on-screen SVG bakes in the app theme's colors).
 
-import { renderD2 } from "@/components/markdown/lazyD2";
+import { renderD2 } from "@/lib/d2Render";
 
 let mermaidId = 0;
 

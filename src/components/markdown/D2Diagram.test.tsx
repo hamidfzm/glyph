@@ -4,7 +4,7 @@ import { D2Diagram } from "./D2Diagram";
 
 const renderD2 = vi.fn();
 
-vi.mock("./lazyD2", () => ({
+vi.mock("@/lib/d2Render", () => ({
   renderD2: (...args: unknown[]) => renderD2(...args),
 }));
 
@@ -48,6 +48,20 @@ describe("D2Diagram", () => {
       expect(container.querySelector(".d2-error")).not.toBeNull();
     });
     expect(container.querySelector("pre code")?.textContent).toBe("garbage");
+  });
+
+  it("recovers from the error state once the code becomes valid", async () => {
+    renderD2.mockRejectedValueOnce(new Error("bad d2"));
+    renderD2.mockResolvedValue("<svg data-test='ok'></svg>");
+    const { container, rerender } = render(<D2Diagram code="garbage" />);
+
+    await waitFor(() => expect(container.querySelector(".d2-error")).not.toBeNull());
+
+    rerender(<D2Diagram code="a -> b" />);
+    await waitFor(() => {
+      expect(container.querySelector(".d2-error")).toBeNull();
+      expect(container.querySelector(".d2-diagram svg")?.getAttribute("data-test")).toBe("ok");
+    });
   });
 
   it("flags empty/whitespace-only source without calling the renderer", async () => {

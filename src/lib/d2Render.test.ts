@@ -22,7 +22,7 @@ vi.mock("dompurify", () => ({
   },
 }));
 
-import { renderD2 } from "./lazyD2";
+import { renderD2 } from "./d2Render";
 
 describe("renderD2", () => {
   beforeEach(() => {
@@ -52,6 +52,14 @@ describe("renderD2", () => {
     renderSvg.mockResolvedValue("<svg></svg>");
     await renderD2("theme-key", false);
     await renderD2("theme-key", true);
+    expect(compile).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not cache a failed render, so it can be retried", async () => {
+    renderSvg.mockRejectedValueOnce(new Error("boom"));
+    renderSvg.mockResolvedValueOnce("<svg></svg>");
+    await expect(renderD2("retry-key", false)).rejects.toThrow("boom");
+    await expect(renderD2("retry-key", false)).resolves.toBe("CLEAN:<svg></svg>");
     expect(compile).toHaveBeenCalledTimes(2);
   });
 });
