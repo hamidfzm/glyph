@@ -1,6 +1,7 @@
 mod canvas;
 mod cli;
 mod commands;
+mod d2;
 mod image;
 mod markdown;
 mod menu;
@@ -21,6 +22,7 @@ use tauri_plugin_cli::CliExt;
 use watcher::FileWatcherState;
 
 pub use canvas::is_canvas_file;
+pub use d2::is_d2_file;
 pub use image::is_image_file;
 pub use markdown::is_markdown_file;
 pub use notebook::{is_notebook_file, is_supported_file};

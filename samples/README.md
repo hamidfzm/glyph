@@ -17,6 +17,7 @@ This document demonstrates all the rendering features supported by Glyph. The YA
 - [Code Blocks](#code-blocks)
 - [Math / LaTeX](#math--latex)
 - [Mermaid Diagrams](#mermaid-diagrams)
+- [D2 Diagrams](#d2-diagrams)
 - [CSV / TSV Tables](#csv--tsv-tables)
 - [Footnotes](#footnotes)
 - [Emoji Shortcodes](#emoji-shortcodes)
@@ -59,6 +60,7 @@ Documents without frontmatter render as before — no extra spacing, no empty ca
 - [x] Syntax highlighting with copy button
 - [x] Math/LaTeX rendering
 - [x] Mermaid diagrams
+- [x] D2 diagrams
 - [x] Tabs and in-document search
 - [ ] Presentation mode
 
@@ -153,6 +155,35 @@ as plain markdown.
 
 Open [[Flowchart]] for the diagram variant and [[Notes/Cooking]] for the
 MultiMarkdown variant; both files use the `.mmd` extension.
+
+## D2 Diagrams
+
+Fenced code blocks tagged `d2` render as [D2](https://d2lang.com) diagrams,
+theme-aware like Mermaid. D2 is well suited to architecture diagrams with
+nested containers and labelled connections.
+
+```d2
+direction: right
+
+reader: Reader
+glyph: Glyph {
+  parse: Parse Markdown
+  render: Render View
+  parse -> render
+}
+reader -> glyph.parse: opens a file
+glyph.render -> reader: rendered output
+```
+
+### `.d2` source files
+
+A `.d2` file's whole body is diagram source. Glyph wraps it in a ` ```d2 `
+fence and renders it directly, the same way `.mmd` files render as Mermaid.
+`.d2` files show up in the workspace file tree and open straight into the
+diagram viewer.
+
+Open [[Architecture]] for a full example using nested containers, a person
+and cylinder shape, and bidirectional connections.
 
 ## CSV / TSV Tables
 
