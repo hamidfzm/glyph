@@ -33,12 +33,27 @@ describe("filterBacklinks", () => {
 
   it("respects target syntax variants", () => {
     const refs = [
-      ref("/workspace/Index.md", "Cooking|kitchen"),
-      ref("/workspace/Index.md", "Cooking#Recipes"),
-      ref("/workspace/Index.md", "Cooking.md"),
+      ref("/workspace/Index.md", "Cooking|kitchen", 1),
+      ref("/workspace/Index.md", "Cooking#Recipes", 2),
+      ref("/workspace/Index.md", "Cooking.md", 3),
     ];
     const result = filterBacklinks(refs, workspaceFiles, "/workspace/Notes/Cooking.md");
     expect(result).toHaveLength(3);
+  });
+
+  it("collapses several same-line links to the current file into one row", () => {
+    // A single source line can mention the same target twice; the panel should
+    // surface it once (and never emit duplicate `source:line` React keys).
+    const refs = [
+      ref("/workspace/Index.md", "Cooking", 3),
+      ref("/workspace/Index.md", "Cooking|kitchen", 3),
+      ref("/workspace/Index.md", "Cooking", 9),
+    ];
+    const result = filterBacklinks(refs, workspaceFiles, "/workspace/Notes/Cooking.md");
+    expect(result.map((b) => [b.source, b.line])).toEqual([
+      ["/workspace/Index.md", 3],
+      ["/workspace/Index.md", 9],
+    ]);
   });
 
   it("ignores refs whose target resolves elsewhere", () => {

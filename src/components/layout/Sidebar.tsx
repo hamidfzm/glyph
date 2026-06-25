@@ -120,27 +120,32 @@ export function Sidebar({ side }: SidebarProps) {
           </>
         }
       />
-      <FileTree
-        ref={fileTreeRef}
-        root={ws.root}
-        nodes={ws.nodes}
-        expanded={ws.expanded}
-        activeFilePath={activeFile?.path}
-        onToggle={onToggleExpand}
-        onOpenFile={onOpenFile}
-        onCreateNote={createNote}
-        onCreateCanvas={createCanvas}
-        onCreateFolder={createFolder}
-        onRename={renamePath}
-        onDuplicate={duplicatePath}
-        onMove={(path) => handleMove(ws.root, path)}
-        onReveal={(path) => {
-          void revealItemInDir(path);
-        }}
-        onDelete={deletePath}
-      />
+      {/* The tree scrolls inside its own region so a long file list can't spill
+          over the backlinks block pinned below it (visible when the panel is
+          short, e.g. with devtools open). */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <FileTree
+          ref={fileTreeRef}
+          root={ws.root}
+          nodes={ws.nodes}
+          expanded={ws.expanded}
+          activeFilePath={activeFile?.path}
+          onToggle={onToggleExpand}
+          onOpenFile={onOpenFile}
+          onCreateNote={createNote}
+          onCreateCanvas={createCanvas}
+          onCreateFolder={createFolder}
+          onRename={renamePath}
+          onDuplicate={duplicatePath}
+          onMove={(path) => handleMove(ws.root, path)}
+          onReveal={(path) => {
+            void revealItemInDir(path);
+          }}
+          onDelete={deletePath}
+        />
+      </div>
       {backlinks.length > 0 && (
-        <div className="mt-4 pt-3 border-t border-[var(--color-border)]">
+        <div className="mt-4 pt-3 border-t border-[var(--color-border)] shrink-0">
           <BacklinksSection backlinks={backlinks} workspaceRoot={ws.root} onOpen={onOpenFile} />
         </div>
       )}
