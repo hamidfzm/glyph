@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { IMAGE_EXTENSIONS, isImageFile } from "./imageExtensions";
+import { IMAGE_EXTENSIONS, isImageFile, isSvgFile } from "./imageExtensions";
 import { isSupportedFile } from "./notebookExtensions";
 
 describe("isImageFile", () => {
@@ -21,6 +21,17 @@ describe("isImageFile", () => {
     expect(isImageFile("board.canvas")).toBe(false);
     expect(isImageFile("noext")).toBe(false);
     expect(isImageFile("")).toBe(false);
+  });
+});
+
+describe("isSvgFile", () => {
+  it("matches only svg files, case-insensitively", () => {
+    expect(isSvgFile("diagram.svg")).toBe(true);
+    expect(isSvgFile("/a/b/icon.SVG")).toBe(true);
+    expect(isSvgFile("photo.png")).toBe(false);
+    expect(isSvgFile("note.md")).toBe(false);
+    expect(isSvgFile("noext")).toBe(false);
+    expect(isSvgFile("")).toBe(false);
   });
 });
 

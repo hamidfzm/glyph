@@ -24,3 +24,11 @@ export function isImageFile(path: string): boolean {
   const ext = path.split(".").pop()?.toLowerCase();
   return ext ? IMAGE_EXTENSIONS.includes(ext) : false;
 }
+
+/**
+ * Whether `path` is an SVG. SVGs are text, so the image viewer renders them
+ * from their inlined markup (a `data:` URL) rather than the asset protocol.
+ */
+export function isSvgFile(path: string): boolean {
+  return path.split(".").pop()?.toLowerCase() === "svg";
+}

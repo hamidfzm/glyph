@@ -5,13 +5,10 @@ import { ActualSizeIcon } from "@/components/icons/ActualSizeIcon";
 import { FitIcon } from "@/components/icons/FitIcon";
 import { ZoomInIcon } from "@/components/icons/ZoomInIcon";
 import { ZoomOutIcon } from "@/components/icons/ZoomOutIcon";
+import { isSvgFile } from "@/lib/imageExtensions";
 import { clampScale, fitScale, ZOOM_STEP } from "@/lib/lightbox";
 import { svgToDataUrl } from "@/lib/svgDataUrl";
 import { toAssetUrl } from "./resolveImageSrc";
-
-function isSvgPath(path: string): boolean {
-  return path.split(".").pop()?.toLowerCase() === "svg";
-}
 
 interface ImageViewerProps {
   filePath: string;
@@ -37,10 +34,10 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
   // and the markup is cheap to read. Raster assets keep the asset protocol. The
   // initial null src means the <img> stays empty for one tick until the read
   // resolves, then `onLoad` measures it.
-  const [src, setSrc] = useState<string | null>(isSvgPath(filePath) ? null : toAssetUrl(filePath));
+  const [src, setSrc] = useState<string | null>(isSvgFile(filePath) ? null : toAssetUrl(filePath));
 
   useEffect(() => {
-    if (!isSvgPath(filePath)) {
+    if (!isSvgFile(filePath)) {
       setSrc(toAssetUrl(filePath));
       return;
     }
