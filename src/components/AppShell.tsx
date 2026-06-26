@@ -19,6 +19,7 @@ import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
+import { isImageFile } from "@/lib/imageExtensions";
 import { nextEditorMode } from "@/lib/settings";
 import { EmptyState } from "./layout/EmptyState";
 import { ExportProgress } from "./layout/ExportProgress";
@@ -215,8 +216,14 @@ export function AppShell() {
   const showEmptyState = !initializing && !activeTab;
   // With a workspace open but no tabs, nudge toward the sidebar tree.
   const folderEmptyHint = workspace !== null && !activeTab;
-  // Graph tabs have no file but always render content (the canvas).
-  const showContent = !!activeTab && (activeTab.kind === "graph" || !!activeFile?.content);
+  // Graph tabs have no file but always render content (the canvas). Image tabs
+  // carry no text content (it stays null — they render from the asset path), so
+  // gate them on the path, not on content, or they fall through to a blank pane.
+  const showContent =
+    !!activeTab &&
+    (activeTab.kind === "graph" ||
+      !!activeFile?.content ||
+      (!!activeFile && isImageFile(activeFile.path)));
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)]">
