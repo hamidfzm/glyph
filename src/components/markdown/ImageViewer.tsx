@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActualSizeIcon } from "@/components/icons/ActualSizeIcon";
@@ -5,7 +6,12 @@ import { FitIcon } from "@/components/icons/FitIcon";
 import { ZoomInIcon } from "@/components/icons/ZoomInIcon";
 import { ZoomOutIcon } from "@/components/icons/ZoomOutIcon";
 import { clampScale, fitScale, ZOOM_STEP } from "@/lib/lightbox";
+import { svgToDataUrl } from "@/lib/svgDataUrl";
 import { toAssetUrl } from "./resolveImageSrc";
+
+function isSvgPath(path: string): boolean {
+  return path.split(".").pop()?.toLowerCase() === "svg";
+}
 
 interface ImageViewerProps {
   filePath: string;
@@ -26,7 +32,31 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
   // `viewBox` report naturalWidth/Height === 0). Drives the sizing model below.
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
 
-  const src = toAssetUrl(filePath);
+  // SVGs render from their inlined markup as a `data:` URL rather than the asset
+  // protocol: it always loads (no protocol round-trip that can come back empty)
+  // and the markup is cheap to read. Raster assets keep the asset protocol. The
+  // initial null src means the <img> stays empty for one tick until the read
+  // resolves, then `onLoad` measures it.
+  const [src, setSrc] = useState<string | null>(isSvgPath(filePath) ? null : toAssetUrl(filePath));
+
+  useEffect(() => {
+    if (!isSvgPath(filePath)) {
+      setSrc(toAssetUrl(filePath));
+      return;
+    }
+    let cancelled = false;
+    invoke<string>("read_file", { path: filePath })
+      .then((svg) => {
+        if (!cancelled) setSrc(svgToDataUrl(svg));
+      })
+      // Fall back to the asset protocol if the read fails for any reason.
+      .catch(() => {
+        if (!cancelled) setSrc(toAssetUrl(filePath));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filePath]);
 
   const computeFit = useCallback(() => {
     const stage = stageRef.current;
@@ -92,7 +122,7 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
       <div ref={stageRef} className="image-viewer-stage">
         <img
           ref={imgRef}
-          src={src}
+          src={src ?? undefined}
           alt=""
           className="image-viewer-img"
           style={imageStyle}

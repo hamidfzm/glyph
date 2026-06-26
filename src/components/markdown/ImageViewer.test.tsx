@@ -1,13 +1,23 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, type Mock } from "vitest";
 import { ImageViewer } from "./ImageViewer";
 
 describe("ImageViewer", () => {
-  it("renders the image through the asset protocol", () => {
-    const { container } = render(<ImageViewer filePath="/notes/diagram.svg" />);
+  it("renders a raster image through the asset protocol", () => {
+    const { container } = render(<ImageViewer filePath="/notes/photo.png" />);
     const img = container.querySelector("img.image-viewer-img");
     // convertFileSrc is mocked to asset://localhost/<path> in the test setup.
-    expect(img?.getAttribute("src")).toBe("asset://localhost//notes/diagram.svg");
+    expect(img?.getAttribute("src")).toBe("asset://localhost//notes/photo.png");
+  });
+
+  it("renders an SVG inline from its content as a data URL", async () => {
+    (invoke as Mock).mockResolvedValueOnce('<svg xmlns="http://www.w3.org/2000/svg"/>');
+    const { container } = render(<ImageViewer filePath="/notes/diagram.svg" />);
+    await waitFor(() => {
+      const img = container.querySelector("img.image-viewer-img");
+      expect(img?.getAttribute("src")).toMatch(/^data:image\/svg\+xml,/);
+    });
   });
 
   it("exposes an image-viewer region", () => {
