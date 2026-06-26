@@ -5,6 +5,7 @@ import { ActualSizeIcon } from "@/components/icons/ActualSizeIcon";
 import { FitIcon } from "@/components/icons/FitIcon";
 import { ZoomInIcon } from "@/components/icons/ZoomInIcon";
 import { ZoomOutIcon } from "@/components/icons/ZoomOutIcon";
+import { useDragPan } from "@/hooks/useDragPan";
 import { isSvgFile } from "@/lib/imageExtensions";
 import { clampScale, fitScale, ZOOM_STEP } from "@/lib/lightbox";
 import { svgToDataUrl } from "@/lib/svgDataUrl";
@@ -22,6 +23,7 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
   const { t } = useTranslation("common");
   const stageRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  useDragPan(stageRef);
   const [scale, setScale] = useState(1);
   const [isFit, setIsFit] = useState(true);
   const [loaded, setLoaded] = useState(false);
