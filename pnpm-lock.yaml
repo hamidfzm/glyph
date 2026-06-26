@@ -10,7 +10,6 @@ overrides:
   uuid: '>=14.0.0'
   postcss: '>=8.5.10'
   esbuild: '>=0.28.1'
-  dompurify: '>=3.4.11'
 
 importers:
 
@@ -92,7 +91,7 @@ importers:
         specifier: ^9.7.1
         version: 9.7.1
       dompurify:
-        specifier: '>=3.4.11'
+        specifier: ^3.4.11
         version: 3.4.11
       github-slugger:
         specifier: ^2.0.0
