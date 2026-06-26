@@ -5,6 +5,8 @@ import type { LightboxImage } from "@/lib/lightbox";
 interface LightboxContextValue {
   /** Open the lightbox, starting at the clicked image. */
   open: (img: HTMLImageElement) => void;
+  /** Open the lightbox on a single image source (e.g. a rendered diagram). */
+  openSrc: (src: string, alt?: string) => void;
 }
 
 const LightboxContext = createContext<LightboxContextValue | null>(null);
@@ -31,6 +33,10 @@ export function LightboxProvider({ children }: { children: ReactNode }) {
     setState({ images, index });
   }, []);
 
+  const openSrc = useCallback((src: string, alt = "") => {
+    setState({ images: [{ src, alt }], index: 0 });
+  }, []);
+
   const close = useCallback(() => setState(null), []);
   const setIndex = useCallback(
     // setIndex is only wired to the open lightbox, so the state is non-null here.
@@ -38,7 +44,7 @@ export function LightboxProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const value = useMemo<LightboxContextValue>(() => ({ open }), [open]);
+  const value = useMemo<LightboxContextValue>(() => ({ open, openSrc }), [open, openSrc]);
 
   return (
     <LightboxContext.Provider value={value}>

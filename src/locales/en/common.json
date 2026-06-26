@@ -147,12 +147,16 @@
   "mermaid": {
     "empty": "Empty diagram source",
     "errorLabel": "Diagram error",
-    "errorTitle": "Failed to render diagram"
+    "errorTitle": "Failed to render diagram",
+    "label": "Mermaid diagram",
+    "zoomHint": "Click to zoom"
   },
   "d2": {
     "empty": "Empty diagram source",
     "errorLabel": "Diagram error",
-    "errorTitle": "Failed to render diagram"
+    "errorTitle": "Failed to render diagram",
+    "label": "D2 diagram",
+    "zoomHint": "Click to zoom"
   },
   "taskList": {
     "toggle": "Toggle task"
