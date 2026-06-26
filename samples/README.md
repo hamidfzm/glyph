@@ -160,7 +160,9 @@ MultiMarkdown variant; both files use the `.mmd` extension.
 
 Fenced code blocks tagged `d2` render as [D2](https://d2lang.com) diagrams,
 theme-aware like Mermaid. D2 is well suited to architecture diagrams with
-nested containers and labelled connections.
+nested containers and labelled connections. Click any rendered diagram (D2 or
+Mermaid) to open it in the lightbox, where you can zoom in and drag to move
+around the detail.
 
 ```d2
 direction: right
@@ -277,7 +279,9 @@ Relative paths resolve against this file's folder, so SVGs and other images comm
 
 ![Glyph turns Markdown into styled documents](./diagram.svg)
 
-Click any image to open it in the lightbox: zoom in/out, fit or actual size, and use the arrow keys to move between them. Press `Esc` or click the backdrop to close.
+Click any image to open it in the lightbox: zoom in/out, fit or actual size, drag to pan around a zoomed-in image, and use the arrow keys to move between them. Press `Esc` or click the backdrop to close.
+
+The workspace also ships standalone image files in several formats. Open `diagram.png`, `diagram.jpg`, `diagram.gif`, or `diagram.svg` from the file tree: each opens in the image viewer, where the same controls (zoom in/out, fit, actual size, scroll or drag to pan) apply. SVGs render crisply at any zoom.
 
 ### Inline SVG
 
