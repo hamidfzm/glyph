@@ -1,0 +1,13 @@
+{
+  "title": "افزونه‌ها",
+  "installFromFolder": "نصب از پوشه…",
+  "installedHeading": "نصب‌شده",
+  "availableHeading": "در دسترس",
+  "install": "نصب",
+  "update": "به‌روزرسانی",
+  "remove": "حذف",
+  "enable": "فعال‌سازی {{name}}",
+  "noInstalled": "هیچ افزونه‌ای نصب نشده است.",
+  "noAvailable": "افزونه‌ای در دسترس نیست.",
+  "updateTo": "به‌روزرسانی به نسخهٔ {{version}}"
+}

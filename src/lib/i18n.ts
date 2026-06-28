@@ -6,6 +6,7 @@ import enAi from "@/locales/en/ai.json";
 import enCommands from "@/locales/en/commands.json";
 import enCommon from "@/locales/en/common.json";
 import enMenu from "@/locales/en/menu.json";
+import enPlugins from "@/locales/en/plugins.json";
 import enSettings from "@/locales/en/settings.json";
 import enSync from "@/locales/en/sync.json";
 import enWorkspace from "@/locales/en/workspace.json";
@@ -18,6 +19,7 @@ export const NAMESPACES = [
   "sync",
   "workspace",
   "menu",
+  "plugins",
 ] as const;
 
 // Every non-English locale JSON is code-split into its own chunk (Vite turns
@@ -55,6 +57,7 @@ i18n
         sync: enSync,
         workspace: enWorkspace,
         menu: enMenu,
+        plugins: enPlugins,
       },
     },
     partialBundledLanguages: true,
