@@ -17,6 +17,7 @@ This document demonstrates all the rendering features supported by Glyph. The YA
 - [Code Blocks](#code-blocks)
 - [Math / LaTeX](#math--latex)
 - [Mermaid Diagrams](#mermaid-diagrams)
+- [D2 Diagrams](#d2-diagrams)
 - [CSV / TSV Tables](#csv--tsv-tables)
 - [Footnotes](#footnotes)
 - [Emoji Shortcodes](#emoji-shortcodes)
@@ -59,6 +60,7 @@ Documents without frontmatter render as before — no extra spacing, no empty ca
 - [x] Syntax highlighting with copy button
 - [x] Math/LaTeX rendering
 - [x] Mermaid diagrams
+- [x] D2 diagrams
 - [x] Tabs and in-document search
 - [ ] Presentation mode
 
@@ -154,6 +156,37 @@ as plain markdown.
 Open [[Flowchart]] for the diagram variant and [[Notes/Cooking]] for the
 MultiMarkdown variant; both files use the `.mmd` extension.
 
+## D2 Diagrams
+
+Fenced code blocks tagged `d2` render as [D2](https://d2lang.com) diagrams,
+theme-aware like Mermaid. D2 is well suited to architecture diagrams with
+nested containers and labelled connections. Click any rendered diagram (D2 or
+Mermaid) to open it in the lightbox, where you can zoom in and drag to move
+around the detail.
+
+```d2
+direction: right
+
+reader: Reader
+glyph: Glyph {
+  parse: Parse Markdown
+  render: Render View
+  parse -> render
+}
+reader -> glyph.parse: opens a file
+glyph.render -> reader: rendered output
+```
+
+### `.d2` source files
+
+A `.d2` file's whole body is diagram source. Glyph wraps it in a ` ```d2 `
+fence and renders it directly, the same way `.mmd` files render as Mermaid.
+`.d2` files show up in the workspace file tree and open straight into the
+diagram viewer.
+
+Open [[Architecture]] for a full example using nested containers, a person
+and cylinder shape, and bidirectional connections.
+
 ## CSV / TSV Tables
 
 Fenced code blocks tagged `csv` or `tsv` render as styled, scrollable
@@ -246,7 +279,9 @@ Relative paths resolve against this file's folder, so SVGs and other images comm
 
 ![Glyph turns Markdown into styled documents](./diagram.svg)
 
-Click any image to open it in the lightbox: zoom in/out, fit or actual size, and use the arrow keys to move between them. Press `Esc` or click the backdrop to close.
+Click any image to open it in the lightbox: zoom in/out, fit or actual size, drag to pan around a zoomed-in image, and use the arrow keys to move between them. Press `Esc` or click the backdrop to close.
+
+The workspace also ships standalone image files in several formats. Open `diagram.png`, `diagram.jpg`, `diagram.gif`, or `diagram.svg` from the file tree: each opens in the image viewer, where the same controls (zoom in/out, fit, actual size, scroll or drag to pan) apply. SVGs render crisply at any zoom.
 
 ### Inline SVG
 

@@ -7,6 +7,7 @@ import { FitIcon } from "@/components/icons/FitIcon";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { ZoomInIcon } from "@/components/icons/ZoomInIcon";
 import { ZoomOutIcon } from "@/components/icons/ZoomOutIcon";
+import { useDragPan } from "@/hooks/useDragPan";
 import { clampScale, fitScale, type LightboxImage, ZOOM_STEP } from "@/lib/lightbox";
 
 interface LightboxProps {
@@ -25,6 +26,7 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
   const image = images[index];
   const imgRef = useRef<HTMLImageElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  useDragPan(stageRef);
   const [scale, setScale] = useState(1);
   const [isFit, setIsFit] = useState(true);
   const [loaded, setLoaded] = useState(false);

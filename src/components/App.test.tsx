@@ -210,6 +210,34 @@ describe("App", () => {
     expect(await findByTestId("ai-panel")).toBeInTheDocument();
   });
 
+  it("renders an image tab's viewer instead of a blank pane (null text content)", async () => {
+    // Image tabs carry no text content; the content gate must admit them by
+    // path or they fall through to an empty pane (the SVG-blank regression).
+    vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
+      switch (cmd) {
+        case "get_initial_folder":
+          return Promise.resolve(null);
+        case "get_initial_file":
+          return Promise.resolve("/cli/diagram.svg");
+        case "read_file":
+          return Promise.resolve('<svg xmlns="http://www.w3.org/2000/svg"/>');
+        case "get_file_metadata":
+          return Promise.resolve({
+            name: "diagram.svg",
+            path: String(args?.path ?? ""),
+            size: 0,
+            modified: 0,
+          });
+        default:
+          return Promise.resolve(undefined);
+      }
+    }) as unknown as typeof invoke);
+
+    const { wrapper } = withProviders();
+    const { findByRole } = render(<App />, { wrapper });
+    expect(await findByRole("region", { name: "Image viewer" })).toBeInTheDocument();
+  });
+
   it("invokes openFolder via menu-open-folder", async () => {
     const listeners = captureMenuListeners();
     const { wrapper } = withProviders();

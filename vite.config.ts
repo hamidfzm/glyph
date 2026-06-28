@@ -46,6 +46,17 @@ export default defineConfig(async ({ mode }) => ({
   // Source maps are only emitted when we're going to upload + delete them.
   build: {
     sourcemap: sentryAuthToken ? true : false,
+    rollupOptions: {
+      output: {
+        // The `@terrastruct/d2` browser build resolves to its own `index.js`, so
+        // its lazy chunk would otherwise be named `index-<hash>.js` and collide
+        // with the entry chunk in bundle-size diffs. Give it a stable name; it
+        // stays lazy (only the dynamic import in d2Render.ts references it).
+        manualChunks(id) {
+          if (id.includes("@terrastruct/d2")) return "d2";
+        },
+      },
+    },
   },
   // Strip `console.*` and `debugger` from production bundles so diagnostic
   // logs added during debugging don't leak into shipped builds (and don't

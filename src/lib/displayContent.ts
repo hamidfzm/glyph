@@ -4,17 +4,21 @@
 
 import { canvasDisplayText } from "./canvas/canvasText";
 import { isCanvasFile } from "./canvasExtensions";
+import { isD2File } from "./d2Extensions";
 import { isNotebookFile } from "./notebookExtensions";
 
 /**
  * Markdown passes through as-is. Notebooks suppress entirely — their raw
- * `.ipynb` JSON is worse than nothing. Canvases are JSON too, but their boards
- * carry real prose, so the text cards, group labels, and link URLs are
- * projected instead of the syntax.
+ * `.ipynb` JSON is worse than nothing. D2 files are a single diagram whose body
+ * is fence-wrapped diagram source (with `#` comments that would otherwise read
+ * as headings), so they suppress too — no word count, read-aloud, AI text, or
+ * outline. Canvases are JSON too, but their boards carry real prose, so the
+ * text cards, group labels, and link URLs are projected instead of the syntax.
  */
 export function displayContentFor(path: string | undefined, live: string | null): string | null {
   if (!path) return live;
   if (isNotebookFile(path)) return null;
+  if (isD2File(path)) return null;
   if (isCanvasFile(path)) return live ? canvasDisplayText(live) : null;
   return live;
 }

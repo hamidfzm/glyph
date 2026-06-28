@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MermaidDiagram } from "./MermaidDiagram";
 
@@ -12,10 +12,19 @@ vi.mock("mermaid", () => ({
   },
 }));
 
+// Controllable lightbox: null by default (no provider in scope), set per-test to
+// exercise the click-to-zoom path.
+let mockLightbox: { open: ReturnType<typeof vi.fn>; openSrc: ReturnType<typeof vi.fn> } | null =
+  null;
+vi.mock("@/contexts/LightboxContext", () => ({
+  useLightbox: () => mockLightbox,
+}));
+
 describe("MermaidDiagram", () => {
   beforeEach(() => {
     initialize.mockReset();
     renderMermaid.mockReset();
+    mockLightbox = null;
     document.documentElement.classList.remove("dark");
   });
 
@@ -205,5 +214,50 @@ describe("MermaidDiagram", () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(container.querySelector(".mermaid-error")).toBeNull();
     expect(container.querySelector("svg#winner")).not.toBeNull();
+  });
+
+  describe("lightbox zoom", () => {
+    beforeEach(() => {
+      mockLightbox = { open: vi.fn(), openSrc: vi.fn() };
+    });
+
+    it("is a zoomable button and opens the rendered SVG in the lightbox on click", async () => {
+      renderMermaid.mockResolvedValue({ svg: "<svg id='zoomed'/>" });
+      const { container } = render(<MermaidDiagram code="graph TD; A-->B" />);
+
+      const diagram = await waitFor(() => {
+        const el = container.querySelector(".mermaid-diagram");
+        expect(el?.getAttribute("role")).toBe("button");
+        return el as HTMLElement;
+      });
+      fireEvent.click(diagram);
+
+      expect(mockLightbox?.openSrc).toHaveBeenCalledTimes(1);
+      expect(mockLightbox?.openSrc.mock.calls[0][0]).toMatch(/^data:image\/svg\+xml/);
+    });
+
+    it("opens the lightbox on Enter and Space but not other keys", async () => {
+      renderMermaid.mockResolvedValue({ svg: "<svg/>" });
+      const { container } = render(<MermaidDiagram code="graph TD; A-->B" />);
+      const diagram = await waitFor(
+        () => container.querySelector(".mermaid-diagram") as HTMLElement,
+      );
+
+      fireEvent.keyDown(diagram, { key: "Enter" });
+      fireEvent.keyDown(diagram, { key: " " });
+      fireEvent.keyDown(diagram, { key: "a" });
+
+      expect(mockLightbox?.openSrc).toHaveBeenCalledTimes(2);
+    });
+
+    it("is not a button when no lightbox provider is in scope", async () => {
+      mockLightbox = null;
+      renderMermaid.mockResolvedValue({ svg: "<svg/>" });
+      const { container } = render(<MermaidDiagram code="graph TD; A-->B" />);
+      const diagram = await waitFor(
+        () => container.querySelector(".mermaid-diagram") as HTMLElement,
+      );
+      expect(diagram.getAttribute("role")).toBeNull();
+    });
   });
 });

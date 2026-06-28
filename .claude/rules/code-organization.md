@@ -12,6 +12,7 @@ Keep files focused and readable. When a file starts to do more than one thing, s
   - Only exception: a set of thin `lazy()` + `Suspense` wrapper entrypoints for one feature (e.g. `lazyNotebook.tsx`, `lazyEditor.tsx`) is a single code-splitting concern and may group its wrappers in one file.
 - Soft cap of ~200 lines per file. Hitting the cap is a signal to split, not a hard error.
 - Hooks live in `src/hooks/`. UI in `src/components/`. Pure logic next to its consumer or in `src/lib/`.
+- **No pure helpers defined inside a component file — not even one-liners.** A function that takes data and returns data with no JSX and no component state (a file-type/extension predicate, a path/string transform, a formatter, a comparator) belongs in `src/lib/`, and a predicate joins the module that owns its siblings rather than starting a new one: `isSvgFile` lives in `src/lib/imageExtensions.ts` next to `isImageFile`, not as a local `isSvgPath` in `ImageViewer.tsx`. The component imports it. This keeps the logic testable in isolation and discoverable by the next caller instead of duplicated. (A closure that genuinely closes over props/state — an event handler, a memoised callback — stays in the component; it isn't a pure helper.)
 - Module-level singletons (cached promises, counters) belong in their own module so the cache is shared and easy to find.
 - Tests sit beside the file under test (`Foo.tsx` ↔ `Foo.test.tsx`).
 - Don't pre-split for hypothetical reuse — split when the current file actually has two responsibilities.

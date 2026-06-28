@@ -6,10 +6,12 @@ import { prepareContent } from "./prepareContent";
 // orchestration is testable without them.
 const rasterizeElementMock = vi.fn(async () => "data:image/png;base64,MATH");
 const rasterizeMermaidMock = vi.fn(async () => "data:image/png;base64,MERMAID");
+const rasterizeD2Mock = vi.fn(async () => "data:image/png;base64,D2");
 const restoreMermaidMock = vi.fn(async () => {});
 vi.mock("./rasterize", () => ({
   rasterizeElement: () => rasterizeElementMock(),
   rasterizeMermaidLight: () => rasterizeMermaidMock(),
+  rasterizeD2Light: () => rasterizeD2Mock(),
   restoreMermaidTheme: () => restoreMermaidMock(),
 }));
 
@@ -119,6 +121,23 @@ describe("prepareContent", () => {
     expect(result?.html).toContain("data:image/png;base64,MERMAID");
     expect(result?.html).not.toContain("katex-display");
     expect(result?.html).not.toContain("mermaid-diagram");
+  });
+
+  it("rasterizes a D2 diagram (light re-render) for PDF", async () => {
+    rasterizeD2Mock.mockClear();
+    setBody('<div class="d2-diagram" data-d2-source="a -> b"><svg></svg></div>');
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(rasterizeD2Mock).toHaveBeenCalledTimes(1);
+    expect(result?.html).toContain("data:image/png;base64,D2");
+    expect(result?.html).not.toContain("d2-diagram");
+  });
+
+  it("leaves a D2 diagram untouched when its source is missing", async () => {
+    rasterizeD2Mock.mockClear();
+    setBody('<div class="d2-diagram"><svg></svg></div>');
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(rasterizeD2Mock).not.toHaveBeenCalled();
+    expect(result?.html).toContain("d2-diagram");
   });
 
   it("leaves a Mermaid diagram untouched when its source is missing", async () => {

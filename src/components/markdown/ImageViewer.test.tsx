@@ -1,13 +1,47 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, type Mock } from "vitest";
 import { ImageViewer } from "./ImageViewer";
 
 describe("ImageViewer", () => {
-  it("renders the image through the asset protocol", () => {
-    const { container } = render(<ImageViewer filePath="/notes/diagram.svg" />);
+  it("renders a raster image through the asset protocol", () => {
+    const { container } = render(<ImageViewer filePath="/notes/photo.png" />);
     const img = container.querySelector("img.image-viewer-img");
     // convertFileSrc is mocked to asset://localhost/<path> in the test setup.
-    expect(img?.getAttribute("src")).toBe("asset://localhost//notes/diagram.svg");
+    expect(img?.getAttribute("src")).toBe("asset://localhost//notes/photo.png");
+  });
+
+  it("renders an SVG inline from its content as a data URL", async () => {
+    (invoke as Mock).mockResolvedValueOnce('<svg xmlns="http://www.w3.org/2000/svg"/>');
+    const { container } = render(<ImageViewer filePath="/notes/diagram.svg" />);
+    await waitFor(() => {
+      const img = container.querySelector("img.image-viewer-img");
+      expect(img?.getAttribute("src")).toMatch(/^data:image\/svg\+xml,/);
+    });
+  });
+
+  it("falls back to the asset protocol when reading an SVG fails", async () => {
+    (invoke as Mock).mockRejectedValueOnce(new Error("read failed"));
+    const { container } = render(<ImageViewer filePath="/notes/broken.svg" />);
+    await waitFor(() => {
+      const img = container.querySelector("img.image-viewer-img");
+      expect(img?.getAttribute("src")).toBe("asset://localhost//notes/broken.svg");
+    });
+  });
+
+  it("ignores a late SVG read that resolves after unmount", async () => {
+    let resolveRead!: (svg: string) => void;
+    (invoke as Mock).mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveRead = resolve;
+      }),
+    );
+    const { unmount } = render(<ImageViewer filePath="/notes/late.svg" />);
+    unmount();
+    // The cleanup flag must suppress the setSrc on the unmounted component
+    // (no act warning / state-update-after-unmount).
+    resolveRead("<svg/>");
+    await Promise.resolve();
   });
 
   it("exposes an image-viewer region", () => {

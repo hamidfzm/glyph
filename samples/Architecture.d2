@@ -1,0 +1,38 @@
+# A D2-source .d2 file. Glyph wraps the whole body in a ```d2 fence and renders
+# it as a diagram (no fences needed), the same way .mmd files render as Mermaid.
+
+direction: right
+
+user: User {
+  shape: person
+}
+
+glyph: Glyph {
+  frontend: Frontend (React) {
+    tree: File Tree
+    viewer: Markdown Viewer
+    diagrams: Diagram Renderers {
+      mermaid: Mermaid
+      d2: D2
+    }
+  }
+
+  backend: Backend (Rust) {
+    commands: Tauri Commands
+    watcher: File Watcher
+  }
+
+  frontend.tree -> backend.commands: read_directory
+  frontend.viewer -> backend.commands: read file
+  backend.watcher -> frontend.viewer: file changed {
+    style.stroke-dash: 3
+  }
+}
+
+fs: File System {
+  shape: cylinder
+}
+
+user -> glyph.frontend.tree: opens a workspace
+glyph.backend.commands <-> fs: I/O
+glyph.frontend.viewer -> user: rendered view
