@@ -160,6 +160,18 @@ fn install_sources(
     read_plugin_dir(&dest)
 }
 
+/// Delete an installed plugin's folder. `validate_id` blocks path traversal, so
+/// this can only ever remove a direct child of the plugins root. Missing is a
+/// no-op (already uninstalled).
+fn uninstall_from(root: &Path, id: &str) -> Result<(), String> {
+    validate_id(id)?;
+    let dir = root.join(id);
+    if dir.is_dir() {
+        fs::remove_dir_all(&dir).map_err(|e| format!("cannot remove {}: {e}", dir.display()))?;
+    }
+    Ok(())
+}
+
 fn plugins_root<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
     app.path()
         .app_config_dir()
@@ -189,6 +201,14 @@ pub fn install_plugin_files<R: tauri::Runtime>(
     main: String,
 ) -> Result<InstalledPlugin, String> {
     install_sources(&plugins_root(&app)?, &manifest, &main)
+}
+
+#[tauri::command]
+pub fn uninstall_plugin<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    id: String,
+) -> Result<(), String> {
+    uninstall_from(&plugins_root(&app)?, &id)
 }
 
 #[cfg(test)]
@@ -390,10 +410,39 @@ mod tests {
     }
 
     #[test]
+    fn uninstall_removes_the_plugin_folder() {
+        let root = temp_root("uninstall");
+        write_plugin(&root.join("com.x.gone"), "com.x.gone", "export default {};");
+        assert!(root.join("com.x.gone").is_dir());
+
+        uninstall_from(&root, "com.x.gone").unwrap();
+        assert!(!root.join("com.x.gone").exists());
+        // Missing is a no-op, not an error.
+        uninstall_from(&root, "com.x.gone").unwrap();
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn uninstall_rejects_an_unsafe_id() {
+        let root = temp_root("uninstall_bad");
+        assert!(uninstall_from(&root, "../escape").is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn list_plugins_command_returns_ok_for_a_mock_app() {
         use tauri::test::mock_app;
         let app = mock_app();
         assert!(list_plugins(app.handle().clone()).is_ok());
+    }
+
+    #[test]
+    fn uninstall_plugin_command_runs_via_mock_app() {
+        use tauri::test::mock_app;
+        let app = mock_app();
+        // No such plugin installed: the command treats missing as a no-op, Ok.
+        assert!(uninstall_plugin(app.handle().clone(), "com.x.absent".to_string()).is_ok());
     }
 
     #[test]

@@ -47,7 +47,13 @@ interface LoadedPlugin {
  * {@link DisposerBag}, so unloading a plugin removes exactly its
  * contributions and nothing else.
  */
-export function createPluginHost(notify: (message: string) => void): PluginHost {
+export function createPluginHost(
+  notify: (message: string) => void,
+  // i18n registration is injected so the host stays decoupled (and testable
+  // without i18next). Defaults to a no-op. Translations persist past unload,
+  // which is harmless (just unused strings in memory).
+  registerTranslations: GlyphPluginContext["registerTranslations"] = () => {},
+): PluginHost {
   const commands = createRegistry<CommandContribution>();
   const statusBarItems = createRegistry<StatusBarItemContribution>();
   const loaded = new Map<string, LoadedPlugin>();
@@ -69,6 +75,7 @@ export function createPluginHost(notify: (message: string) => void): PluginHost 
       },
     },
     notify,
+    registerTranslations,
   });
 
   const unload = (id: string) => {

@@ -1,0 +1,13 @@
+{
+  "title": "Plugins",
+  "installFromFolder": "Install from folder…",
+  "installedHeading": "Installed",
+  "availableHeading": "Available",
+  "install": "Install",
+  "update": "Update",
+  "remove": "Remove",
+  "enable": "Enable {{name}}",
+  "noInstalled": "No plugins installed.",
+  "noAvailable": "No plugins available.",
+  "updateTo": "Update to v{{version}}"
+}

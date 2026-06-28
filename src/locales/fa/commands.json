@@ -30,7 +30,5 @@
   "zoomOut": "کوچک‌نمایی",
   "zoomReset": "بازنشانی بزرگ‌نمایی",
   "readAloud": "خواندن با صدای بلند",
-  "installPlugin": "نصب افزونه از پوشه…",
-  "installNamed": "نصب افزونه: {{name}}",
-  "updateNamed": "به‌روزرسانی افزونه: {{name}} (v{{version}})"
+  "managePlugins": "مدیریت افزونه‌ها…"
 }

@@ -24,6 +24,8 @@ export interface AppCommandSources {
 export interface AppActions extends MenuEventHandlers {
   /** Open the given workspace file as a document tab. Used by file rows. */
   openWorkspaceFile: (path: string) => void;
+  /** Open the plugin management modal. */
+  managePlugins: () => void;
 }
 
 function basename(path: string): string {
@@ -196,9 +198,16 @@ export function useAppCommands({
         run: actions.zoomReset,
       },
       { id: "cmd:readAloud", title: t("readAloud"), section: "Commands", run: actions.readAloud },
+      {
+        id: "cmd:managePlugins",
+        title: t("managePlugins"),
+        section: "Commands",
+        run: actions.managePlugins,
+      },
     );
 
-    // Plugin-contributed commands, plus the install entry point itself.
+    // Commands contributed by loaded plugins (the marketplace, install, enable,
+    // and remove actions all live in the Manage Plugins modal instead).
     for (const c of pluginCommands) {
       out.push({
         id: `plugin:${c.id}`,
@@ -209,41 +218,7 @@ export function useAppCommands({
         },
       });
     }
-    if (plugins) {
-      out.push({
-        id: "cmd:install-plugin",
-        title: t("installPlugin"),
-        section: "Commands",
-        run: () => {
-          void plugins.installFromFolder();
-        },
-      });
-
-      // Marketplace: install entries not yet on disk, update those with a newer version.
-      const installedIds = new Set(plugins.loaded.map((p) => p.id));
-      for (const entry of plugins.registry) {
-        if (installedIds.has(entry.id)) continue;
-        out.push({
-          id: `market-install:${entry.id}`,
-          title: t("installNamed", { name: entry.name }),
-          section: "Commands",
-          run: () => {
-            void plugins.installFromRegistry(entry);
-          },
-        });
-      }
-      for (const update of plugins.updates) {
-        out.push({
-          id: `market-update:${update.entry.id}`,
-          title: t("updateNamed", { name: update.entry.name, version: update.entry.version }),
-          section: "Commands",
-          run: () => {
-            void plugins.installFromRegistry(update.entry);
-          },
-        });
-      }
-    }
 
     return out;
-  }, [workspaceOpen, workspaceFiles, tocEntries, actions, t, plugins, pluginCommands]);
+  }, [workspaceOpen, workspaceFiles, tocEntries, actions, t, pluginCommands]);
 }

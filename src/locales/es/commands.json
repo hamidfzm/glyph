@@ -30,7 +30,5 @@
   "zoomOut": "Alejar",
   "zoomReset": "Restablecer zoom",
   "readAloud": "Leer en voz alta",
-  "installPlugin": "Instalar complemento desde carpeta…",
-  "installNamed": "Instalar complemento: {{name}}",
-  "updateNamed": "Actualizar complemento: {{name}} (v{{version}})"
+  "managePlugins": "Gestionar complementos…"
 }

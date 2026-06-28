@@ -30,7 +30,5 @@
   "zoomOut": "Zoom Out",
   "zoomReset": "Reset Zoom",
   "readAloud": "Read Aloud",
-  "installPlugin": "Install Plugin from Folder…",
-  "installNamed": "Install Plugin: {{name}}",
-  "updateNamed": "Update Plugin: {{name}} (v{{version}})"
+  "managePlugins": "Manage Plugins…"
 }

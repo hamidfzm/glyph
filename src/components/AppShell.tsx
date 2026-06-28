@@ -32,6 +32,7 @@ import { AIPanel } from "./modals/AIPanel";
 import { CommandPalette } from "./modals/CommandPalette";
 import { SyncSettingsModal } from "./modals/SyncSettingsModal";
 import { SettingsModal } from "./modals/settings/lazySettings";
+import { PluginsModal } from "./plugins/PluginsModal";
 import { TabContent } from "./TabContent";
 
 // All the wiring that used to live inside App: menu events, AI/TTS/Print
@@ -80,6 +81,7 @@ export function AppShell() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [syncSettingsOpen, setSyncSettingsOpen] = useState(false);
+  const [pluginsOpen, setPluginsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
   useAutoSave({
@@ -191,7 +193,11 @@ export function AppShell() {
     workspaceFiles,
     tocEntries,
     actions: useMemo(
-      () => ({ ...menuHandlers, openWorkspaceFile: openFile }),
+      () => ({
+        ...menuHandlers,
+        openWorkspaceFile: openFile,
+        managePlugins: () => setPluginsOpen(true),
+      }),
       [menuHandlers, openFile],
     ),
   });
@@ -261,6 +267,7 @@ export function AppShell() {
       {/* Mounted only when open so the settings chunk loads on first use. */}
       {settingsOpen && <SettingsModal open onClose={() => setSettingsOpen(false)} />}
       {syncSettingsOpen && <SyncSettingsModal open onClose={() => setSyncSettingsOpen(false)} />}
+      {pluginsOpen && <PluginsModal onClose={() => setPluginsOpen(false)} />}
       <AIPanel
         open={aiController.panelOpen}
         onClose={aiController.closePanel}

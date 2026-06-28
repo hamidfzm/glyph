@@ -17,6 +17,7 @@ describe("importPluginModule", () => {
       commands: { register: vi.fn() },
       ui: { addStatusBarItem: vi.fn() },
       notify,
+      registerTranslations: vi.fn(),
     });
     expect(notify).toHaveBeenCalledWith("activated 1");
   });
@@ -31,6 +32,7 @@ describe("importPluginModule", () => {
       commands: { register: vi.fn() },
       ui: { addStatusBarItem: vi.fn() },
       notify,
+      registerTranslations: vi.fn(),
     });
     expect(notify).toHaveBeenCalledWith("héllo ✓ ☃");
   });

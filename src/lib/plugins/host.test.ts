@@ -138,6 +138,20 @@ describe("createPluginHost", () => {
     spy.mockRestore();
   });
 
+  it("routes ctx.registerTranslations to the injected i18n hook", async () => {
+    const register = vi.fn();
+    const host = createPluginHost(vi.fn(), register);
+    const module: PluginModule = {
+      activate(ctx) {
+        ctx.registerTranslations("de", "myplugin", { hello: "Hallo" });
+      },
+    };
+
+    await host.load(installed(), importerFor(module));
+
+    expect(register).toHaveBeenCalledWith("de", "myplugin", { hello: "Hallo" });
+  });
+
   it("unloadAll tears down every plugin", async () => {
     const host = createPluginHost(vi.fn());
     const make = (): PluginModule => ({

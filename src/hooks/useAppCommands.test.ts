@@ -30,6 +30,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     aiAction: vi.fn(),
     readAloud: vi.fn(),
     openWorkspaceFile: vi.fn(),
+    managePlugins: vi.fn(),
     ...over,
   };
 }
@@ -185,19 +186,22 @@ describe("useAppCommands", () => {
     expect(file.title).toBe("loose");
   });
 
-  it("surfaces plugin commands and the install command when a plugins provider is present", () => {
+  it("surfaces commands contributed by loaded plugins", () => {
     const commands = createRegistry<CommandContribution>();
     const run = vi.fn();
     commands.register({ id: "demo.greet", title: "Greet", run });
-    const installFromFolder = vi.fn(async () => {});
     const value: PluginsContextValue = {
       commands,
       statusBarItems: createRegistry<StatusBarItemContribution>(),
+      installed: [],
+      disabled: [],
       loaded: [],
       registry: [],
       updates: [],
-      installFromFolder,
+      installFromFolder: vi.fn(async () => {}),
       installFromRegistry: vi.fn(async () => {}),
+      setEnabled: vi.fn(async () => {}),
+      uninstall: vi.fn(async () => {}),
     };
     const wrapper = ({ children }: { children: ReactNode }) =>
       createElement(PluginsContext.Provider, { value }, children);
@@ -217,10 +221,16 @@ describe("useAppCommands", () => {
     expect(greet.title).toBe("Greet");
     greet.run();
     expect(run).toHaveBeenCalledOnce();
+  });
 
-    const install = result.current.find((c) => c.id === "cmd:install-plugin")!;
-    expect(install).toBeTruthy();
-    install.run();
-    expect(installFromFolder).toHaveBeenCalledOnce();
+  it("includes a Manage Plugins command", () => {
+    const actions = makeActions();
+    const { result } = renderHook(() =>
+      useAppCommands({ workspaceOpen: false, workspaceFiles: [], tocEntries: [], actions }),
+    );
+    const manage = result.current.find((c) => c.id === "cmd:managePlugins")!;
+    expect(manage).toBeTruthy();
+    manage.run();
+    expect(actions.managePlugins).toHaveBeenCalledOnce();
   });
 });

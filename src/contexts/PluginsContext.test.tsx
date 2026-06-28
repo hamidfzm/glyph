@@ -162,12 +162,82 @@ describe("PluginsProvider", () => {
     screen.getByRole("button", { name: "install" }).click();
 
     await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent(
-        "Plugin install failed: not a plugin folder",
-      ),
+      expect(screen.getByRole("status")).toHaveTextContent("Plugin error: not a plugin folder"),
     );
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it("deactivates and reactivates a plugin", async () => {
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "list_plugins" ? [installedPlugin()] : undefined),
+    );
+
+    function ManageProbe() {
+      const p = usePluginsOptional();
+      if (!p) return null;
+      return (
+        <div>
+          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
+          <span data-testid="disabled">{p.disabled.join(",")}</span>
+          <span data-testid="commands">{p.commands.list().length}</span>
+          <button type="button" onClick={() => void p.setEnabled("com.x.demo", false)}>
+            off
+          </button>
+          <button type="button" onClick={() => void p.setEnabled("com.x.demo", true)}>
+            on
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <ManageProbe />
+      </PluginsProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
+
+    screen.getByRole("button", { name: "off" }).click();
+    await waitFor(() => expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo"));
+    expect(screen.getByTestId("loaded")).toHaveTextContent("");
+    expect(screen.getByTestId("commands")).toHaveTextContent("0");
+
+    screen.getByRole("button", { name: "on" }).click();
+    await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
+    expect(screen.getByTestId("disabled").textContent).toBe("");
+  });
+
+  it("uninstalls a plugin", async () => {
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "list_plugins" ? [installedPlugin()] : undefined),
+    );
+
+    function ManageProbe() {
+      const p = usePluginsOptional();
+      if (!p) return null;
+      return (
+        <div>
+          <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
+          <button type="button" onClick={() => void p.uninstall("com.x.demo")}>
+            rm
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <ManageProbe />
+      </PluginsProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("installed")).toHaveTextContent("com.x.demo"));
+    screen.getByRole("button", { name: "rm" }).click();
+
+    await waitFor(() => expect(screen.getByTestId("installed").textContent).toBe(""));
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("uninstall_plugin", { id: "com.x.demo" });
   });
 
   it("logs and stays empty when listing installed plugins fails", async () => {

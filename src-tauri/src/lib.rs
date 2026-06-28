@@ -227,6 +227,7 @@ pub fn run() {
             commands::plugins::list_plugins,
             commands::plugins::install_plugin,
             commands::plugins::install_plugin_files,
+            commands::plugins::uninstall_plugin,
             watcher::watch_file,
             watcher::unwatch_file,
             watcher::watch_directory,

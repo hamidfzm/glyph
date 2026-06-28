@@ -11,6 +11,8 @@ import {
   useState,
 } from "react";
 import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToasts";
+import { registerTranslations } from "@/lib/i18n";
+import { loadDisabled, saveDisabled } from "@/lib/plugins/disabledStore";
 import { createPluginHost, type LoadedPluginInfo, type PluginHost } from "@/lib/plugins/host";
 import {
   installFromRegistry as downloadAndInstall,
@@ -27,7 +29,11 @@ export interface PluginsContextValue {
   /** Contribution registries, for the palette and status bar to read. */
   commands: PluginHost["commands"];
   statusBarItems: PluginHost["statusBarItems"];
-  /** Plugins currently loaded, for future manager UI. */
+  /** Every plugin on disk, enabled or not. */
+  installed: InstalledPlugin[];
+  /** Ids the user has deactivated (installed but not loaded). */
+  disabled: string[];
+  /** Plugins currently active in the host. */
   loaded: LoadedPluginInfo[];
   /** Marketplace entries from the glyph-md registry (empty if unreachable). */
   registry: RegistryEntry[];
@@ -37,17 +43,24 @@ export interface PluginsContextValue {
   installFromFolder: () => Promise<void>;
   /** Download and install (or update) a marketplace entry, then load it. */
   installFromRegistry: (entry: RegistryEntry) => Promise<void>;
+  /** Activate or deactivate an installed plugin (persisted across restarts). */
+  setEnabled: (id: string, enabled: boolean) => Promise<void>;
+  /** Unload and delete an installed plugin from disk. */
+  uninstall: (id: string) => Promise<void>;
 }
 
 export const PluginsContext = createContext<PluginsContextValue | null>(null);
 
 /**
- * Owns the plugin host for the app: loads every installed plugin on startup,
- * exposes the contribution registries, renders plugin toasts (`ctx.notify`),
- * and provides the install-from-folder flow used by the command palette.
+ * Owns the plugin host for the app: loads enabled plugins on startup, exposes
+ * the contribution registries and the marketplace, renders plugin toasts
+ * (`ctx.notify`), and provides the install / enable / uninstall actions the
+ * management modal drives.
  */
 export function PluginsProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<PluginToast[]>([]);
+  const [installed, setInstalled] = useState<InstalledPlugin[]>([]);
+  const [disabled, setDisabled] = useState<string[]>([]);
   const [loaded, setLoaded] = useState<LoadedPluginInfo[]>([]);
   const [registry, setRegistry] = useState<RegistryEntry[]>([]);
   const toastId = useRef(0);
@@ -61,26 +74,33 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // One host per provider; pushToast is stable so the closure stays valid.
-  const [host] = useState(() => createPluginHost(pushToast));
+  const [host] = useState(() => createPluginHost(pushToast, registerTranslations));
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const dis = await loadDisabled();
+      let all: InstalledPlugin[] = [];
       try {
         const result = await invoke<InstalledPlugin[]>("list_plugins");
-        const plugins = Array.isArray(result) ? result : [];
-        for (const plugin of plugins) {
-          if (cancelled) return;
-          try {
-            await host.load(plugin);
-          } catch (err) {
-            console.error(`Failed to load plugin ${plugin.id}:`, err);
-          }
-        }
+        all = Array.isArray(result) ? result : [];
       } catch (err) {
         console.error("Failed to list installed plugins:", err);
       }
-      if (!cancelled) setLoaded(host.listLoaded());
+      for (const plugin of all) {
+        if (cancelled) return;
+        if (dis.includes(plugin.id)) continue; // deactivated: on disk, not loaded
+        try {
+          await host.load(plugin);
+        } catch (err) {
+          console.error(`Failed to load plugin ${plugin.id}:`, err);
+        }
+      }
+      if (!cancelled) {
+        setInstalled(all);
+        setDisabled(dis);
+        setLoaded(host.listLoaded());
+      }
     })();
     // Marketplace index is best-effort: offline just means no available/updates.
     fetchRegistry()
@@ -94,7 +114,31 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     };
   }, [host]);
 
-  const updates = useMemo(() => findUpdates(loaded, registry), [loaded, registry]);
+  const updates = useMemo(() => findUpdates(installed, registry), [installed, registry]);
+
+  // Record a freshly installed/updated plugin: on disk, enabled, and loaded.
+  const afterInstall = useCallback(
+    (plugin: InstalledPlugin) => {
+      setInstalled((prev) => [...prev.filter((p) => p.id !== plugin.id), plugin]);
+      setDisabled((prev) => {
+        if (!prev.includes(plugin.id)) return prev;
+        const next = prev.filter((d) => d !== plugin.id);
+        void saveDisabled(next);
+        return next;
+      });
+      setLoaded(host.listLoaded());
+      pushToast(`Installed plugin: ${plugin.name} v${plugin.version}`);
+    },
+    [host, pushToast],
+  );
+
+  const reportFailure = useCallback(
+    (err: unknown) => {
+      console.error("Plugin operation failed:", err);
+      pushToast(`Plugin error: ${err instanceof Error ? err.message : String(err)}`);
+    },
+    [pushToast],
+  );
 
   const installFromFolder = useCallback(async () => {
     const dir = await open({ directory: true, multiple: false, title: "Select a plugin folder" });
@@ -102,27 +146,66 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     try {
       const plugin = await invoke<InstalledPlugin>("install_plugin", { srcDir: dir });
       await host.load(plugin);
-      setLoaded(host.listLoaded());
-      pushToast(`Installed plugin: ${plugin.name} v${plugin.version}`);
+      afterInstall(plugin);
     } catch (err) {
-      console.error("Plugin install failed:", err);
-      pushToast(`Plugin install failed: ${err instanceof Error ? err.message : String(err)}`);
+      reportFailure(err);
     }
-  }, [host, pushToast]);
+  }, [host, afterInstall, reportFailure]);
 
   const installFromRegistry = useCallback(
     async (entry: RegistryEntry) => {
       try {
         const plugin = await downloadAndInstall(entry);
         await host.load(plugin);
-        setLoaded(host.listLoaded());
-        pushToast(`Installed plugin: ${plugin.name} v${plugin.version}`);
+        afterInstall(plugin);
       } catch (err) {
-        console.error("Plugin install failed:", err);
-        pushToast(`Plugin install failed: ${err instanceof Error ? err.message : String(err)}`);
+        reportFailure(err);
       }
     },
-    [host, pushToast],
+    [host, afterInstall, reportFailure],
+  );
+
+  const setEnabled = useCallback(
+    async (id: string, enabled: boolean) => {
+      if (enabled) {
+        const plugin = installed.find((p) => p.id === id);
+        if (!plugin) return;
+        try {
+          await host.load(plugin);
+        } catch (err) {
+          reportFailure(err);
+          return;
+        }
+        const next = disabled.filter((d) => d !== id);
+        setDisabled(next);
+        await saveDisabled(next);
+      } else {
+        host.unload(id);
+        const next = disabled.includes(id) ? disabled : [...disabled, id];
+        setDisabled(next);
+        await saveDisabled(next);
+      }
+      setLoaded(host.listLoaded());
+    },
+    [installed, disabled, host, reportFailure],
+  );
+
+  const uninstall = useCallback(
+    async (id: string) => {
+      host.unload(id);
+      try {
+        await invoke("uninstall_plugin", { id });
+      } catch (err) {
+        reportFailure(err);
+        return;
+      }
+      setInstalled((prev) => prev.filter((p) => p.id !== id));
+      const next = disabled.filter((d) => d !== id);
+      setDisabled(next);
+      await saveDisabled(next);
+      setLoaded(host.listLoaded());
+    },
+    [disabled, host, reportFailure],
   );
 
   return (
@@ -130,11 +213,15 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       value={{
         commands: host.commands,
         statusBarItems: host.statusBarItems,
+        installed,
+        disabled,
         loaded,
         registry,
         updates,
         installFromFolder,
         installFromRegistry,
+        setEnabled,
+        uninstall,
       }}
     >
       {children}

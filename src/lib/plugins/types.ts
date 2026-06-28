@@ -81,6 +81,12 @@ export interface GlyphPluginContext {
   readonly commands: CommandRegistryApi;
   readonly ui: UiRegistryApi;
   notify(message: string): void;
+  /**
+   * Register (or extend) translations for a locale + namespace. A plugin ships
+   * its own strings and reads them through the host's i18n; the bundle is
+   * deep-merged, so it augments rather than replaces existing keys.
+   */
+  registerTranslations(locale: string, namespace: string, resources: Record<string, unknown>): void;
 }
 
 /**

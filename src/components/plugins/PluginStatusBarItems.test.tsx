@@ -9,11 +9,15 @@ function value(statusBarItems = createRegistry<StatusBarItemContribution>()): Pl
   return {
     commands: createRegistry<CommandContribution>(),
     statusBarItems,
+    installed: [],
+    disabled: [],
     loaded: [],
     registry: [],
     updates: [],
     installFromFolder: async () => {},
     installFromRegistry: async () => {},
+    setEnabled: async () => {},
+    uninstall: async () => {},
   };
 }
 
