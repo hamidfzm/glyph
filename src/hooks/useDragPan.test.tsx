@@ -58,4 +58,47 @@ describe("useDragPan", () => {
     fire(stage, "pointermove", 101, 101); // ~1.4px, under threshold
     expect(stage.scrollLeft).toBe(0);
   });
+
+  it("ignores non-primary (e.g. right) button presses", () => {
+    const { getByTestId } = render(<Harness />);
+    const stage = getByTestId("stage");
+    setSize(stage, 1000, 200);
+    stage.scrollLeft = 0;
+
+    stage.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        clientX: 100,
+        clientY: 100,
+        button: 2,
+        pointerId: 1,
+      }),
+    );
+    fire(stage, "pointermove", 60, 70);
+    expect(stage.scrollLeft).toBe(0);
+  });
+
+  it("swallows the click that trails a real drag, but not a plain click", () => {
+    const { getByTestId } = render(<Harness />);
+    const stage = getByTestId("stage");
+    setSize(stage, 1000, 200);
+
+    // A plain click (no drag) passes through untouched.
+    const plain = new MouseEvent("click", { bubbles: true, cancelable: true });
+    stage.dispatchEvent(plain);
+    expect(plain.defaultPrevented).toBe(false);
+
+    // A real drag arms a one-shot swallow for the trailing click.
+    fire(stage, "pointerdown", 100, 100);
+    fire(stage, "pointermove", 60, 70);
+    fire(stage, "pointerup", 60, 70);
+    const dragged = new MouseEvent("click", { bubbles: true, cancelable: true });
+    stage.dispatchEvent(dragged);
+    expect(dragged.defaultPrevented).toBe(true);
+
+    // The swallow is one-shot: the next click is allowed through again.
+    const next = new MouseEvent("click", { bubbles: true, cancelable: true });
+    stage.dispatchEvent(next);
+    expect(next.defaultPrevented).toBe(false);
+  });
 });

@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { D2Diagram } from "./D2Diagram";
 
@@ -8,9 +8,18 @@ vi.mock("@/lib/d2Render", () => ({
   renderD2: (...args: unknown[]) => renderD2(...args),
 }));
 
+// Controllable lightbox: null by default (no provider in scope), set per-test to
+// exercise the click-to-zoom path.
+let mockLightbox: { open: ReturnType<typeof vi.fn>; openSrc: ReturnType<typeof vi.fn> } | null =
+  null;
+vi.mock("@/contexts/LightboxContext", () => ({
+  useLightbox: () => mockLightbox,
+}));
+
 describe("D2Diagram", () => {
   beforeEach(() => {
     renderD2.mockReset();
+    mockLightbox = null;
     document.documentElement.classList.remove("dark");
   });
 
@@ -150,5 +159,46 @@ describe("D2Diagram", () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(container.querySelector(".d2-error")).toBeNull();
     expect(container.querySelector("svg#winner")).not.toBeNull();
+  });
+
+  describe("lightbox zoom", () => {
+    beforeEach(() => {
+      mockLightbox = { open: vi.fn(), openSrc: vi.fn() };
+    });
+
+    it("is a zoomable button and opens the rendered SVG in the lightbox on click", async () => {
+      renderD2.mockResolvedValue("<svg id='zoomed'></svg>");
+      const { container } = render(<D2Diagram code="x -> y" />);
+
+      const diagram = await waitFor(() => {
+        const el = container.querySelector(".d2-diagram");
+        expect(el?.getAttribute("role")).toBe("button");
+        return el as HTMLElement;
+      });
+      fireEvent.click(diagram);
+
+      expect(mockLightbox?.openSrc).toHaveBeenCalledTimes(1);
+      expect(mockLightbox?.openSrc.mock.calls[0][0]).toMatch(/^data:image\/svg\+xml/);
+    });
+
+    it("opens the lightbox on Enter and Space but not other keys", async () => {
+      renderD2.mockResolvedValue("<svg></svg>");
+      const { container } = render(<D2Diagram code="x -> y" />);
+      const diagram = await waitFor(() => container.querySelector(".d2-diagram") as HTMLElement);
+
+      fireEvent.keyDown(diagram, { key: "Enter" });
+      fireEvent.keyDown(diagram, { key: " " });
+      fireEvent.keyDown(diagram, { key: "a" });
+
+      expect(mockLightbox?.openSrc).toHaveBeenCalledTimes(2);
+    });
+
+    it("is not a button when no lightbox provider is in scope", async () => {
+      mockLightbox = null;
+      renderD2.mockResolvedValue("<svg></svg>");
+      const { container } = render(<D2Diagram code="x -> y" />);
+      const diagram = await waitFor(() => container.querySelector(".d2-diagram") as HTMLElement);
+      expect(diagram.getAttribute("role")).toBeNull();
+    });
   });
 });

@@ -20,6 +20,30 @@ describe("ImageViewer", () => {
     });
   });
 
+  it("falls back to the asset protocol when reading an SVG fails", async () => {
+    (invoke as Mock).mockRejectedValueOnce(new Error("read failed"));
+    const { container } = render(<ImageViewer filePath="/notes/broken.svg" />);
+    await waitFor(() => {
+      const img = container.querySelector("img.image-viewer-img");
+      expect(img?.getAttribute("src")).toBe("asset://localhost//notes/broken.svg");
+    });
+  });
+
+  it("ignores a late SVG read that resolves after unmount", async () => {
+    let resolveRead!: (svg: string) => void;
+    (invoke as Mock).mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveRead = resolve;
+      }),
+    );
+    const { unmount } = render(<ImageViewer filePath="/notes/late.svg" />);
+    unmount();
+    // The cleanup flag must suppress the setSrc on the unmounted component
+    // (no act warning / state-update-after-unmount).
+    resolveRead("<svg/>");
+    await Promise.resolve();
+  });
+
   it("exposes an image-viewer region", () => {
     render(<ImageViewer filePath="/a/b/photo.png" />);
     expect(screen.getByRole("region", { name: "Image viewer" })).toBeInTheDocument();
