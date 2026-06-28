@@ -23,64 +23,64 @@ Built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 
 ## Try It
 
-The [`samples/`](samples) directory is a tiny demo workspace — open it as a folder (`Cmd/Ctrl+Shift+O`) to see every rendering feature plus working wikilinks. [`samples/README.md`](samples/README.md) is the showcase document; the surrounding files exist so its `[[wikilinks]]` resolve.
+The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folder (`Cmd/Ctrl+Shift+O`) to see every rendering feature plus working wikilinks. [`samples/README.md`](samples/README.md) is the showcase document; the surrounding files exist so its `[[wikilinks]]` resolve.
 
 ## Features
 
 ### Markdown Rendering
-- GitHub Flavored Markdown — tables, task lists, strikethrough, autolinks, footnotes
-- GitHub-style alerts — `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`
-- Heading anchor links — every heading gets a GitHub-compatible slug; `[text](#heading)` scrolls smoothly to the target
-- Wikilinks — `[[note]]`, `[[note|alias]]`, `[[note#heading]]` resolve against the open folder workspace; broken links render with a distinct style
-- Relative links — `[text](./note.md)`, `[text](../folder/board.canvas)`, and relative image paths resolve against the document's folder (including `../`) and open in-app, anywhere inside the open workspace; targets that would escape the workspace folder are not followed
-- Backlinks panel — sidebar list of every workspace note that links to the current file, with surrounding-line snippets
+- GitHub Flavored Markdown: tables, task lists, strikethrough, autolinks, footnotes
+- GitHub-style alerts: `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`
+- Heading anchor links: every heading gets a GitHub-compatible slug; `[text](#heading)` scrolls smoothly to the target
+- Wikilinks: `[[note]]`, `[[note|alias]]`, `[[note#heading]]` resolve against the open folder workspace; broken links render with a distinct style
+- Relative links: `[text](./note.md)`, `[text](../folder/board.canvas)`, and relative image paths resolve against the document's folder (including `../`) and open in-app, anywhere inside the open workspace; targets that would escape the workspace folder are not followed
+- Backlinks panel: sidebar list of every workspace note that links to the current file, with surrounding-line snippets
 - Syntax highlighting for code blocks (6 themes: Glyph, GitHub, Monokai, Nord, Solarized Light/Dark)
 - Copy button on code blocks
-- Math/LaTeX rendering — inline (`$...$`) and block (`$$...$$`) equations via KaTeX
-- Mermaid diagrams — flowcharts, sequence diagrams, Gantt charts, and more (theme-aware); `.mmd` source files open directly as diagrams
-- D2 diagrams — ` ```d2 ` code blocks render as diagrams (theme-aware); `.d2` source files open directly as diagrams
-- CSV/TSV tables — ` ```csv ` and ` ```tsv ` code blocks render as styled, scrollable tables
-- Inline HTML — `<kbd>`, `<sub>`, `<sup>`, `<details>`, inline `<svg>` drawings, alignment attributes (sanitised allowlist)
-- YAML frontmatter — title, author, date, and tags render as a metadata block above the document; tags get a per-tag colour
-- Emoji shortcodes — `:smile:` → 😊, `:+1:` → 👍
+- Math/LaTeX rendering: inline (`$...$`) and block (`$$...$$`) equations via KaTeX
+- Mermaid diagrams: flowcharts, sequence diagrams, Gantt charts, and more (theme-aware); `.mmd` source files open directly as diagrams
+- D2 diagrams: ` ```d2 ` code blocks render as diagrams (theme-aware); `.d2` source files open directly as diagrams
+- CSV/TSV tables: ` ```csv ` and ` ```tsv ` code blocks render as styled, scrollable tables
+- Inline HTML: `<kbd>`, `<sub>`, `<sup>`, `<details>`, inline `<svg>` drawings, alignment attributes (sanitised allowlist)
+- YAML frontmatter: title, author, date, and tags render as a metadata block above the document; tags get a per-tag colour
+- Emoji shortcodes: `:smile:` → 😊, `:+1:` → 👍
 - Local and remote image display
-- Image lightbox — click any image to view it full-size over a dark backdrop, with zoom controls (fit, actual size, zoom in/out), arrow-key navigation between the document's images, and Escape or click-outside to close
+- Image lightbox: click any image to view it full-size over a dark backdrop, with zoom controls (fit, actual size, zoom in/out), arrow-key navigation between the document's images, and Escape or click-outside to close
 - External links open in system browser with optional confirmation dialog
 
 ### Editor
-- Markdown editor mode — syntax highlighting, line numbers, undo/redo history
-- Split view — edit and preview side-by-side, or switch between modes per tab
+- Markdown editor mode: syntax highlighting, line numbers, undo/redo history
+- Split view: edit and preview side-by-side, or switch between modes per tab
 - Live preview updates as you type
-- Wikilink autocomplete — type `[[` in a folder workspace to pick from existing notes; Tab/Enter to insert
-- Editor keymaps — choose Default, Vim, or VSCode bindings in Settings → Editor
+- Wikilink autocomplete: type `[[` in a folder workspace to pick from existing notes; Tab/Enter to insert
+- Editor keymaps: choose Default, Vim, or VSCode bindings in Settings → Editor
 
 ### Viewer
-- Jupyter notebooks — open `.ipynb` files directly; markdown cells render with full markdown (math, code, diagrams), code cells are syntax-highlighted, and image, HTML, plain-text, and colourised stream/traceback outputs show under each cell with `In [n]:` / `Out [n]:` prompts (read-only)
-- Canvas — open [JSON Canvas](https://jsoncanvas.org) (`.canvas`) files as an infinite, pan-and-zoom board; cards render markdown, embedded images, links, and labelled groups, connected by arrows. View mode is read-only; switch to edit mode to move, resize, recolour (presets or any custom colour), and connect cards, edit text and connection labels inline, and add or delete nodes and edges via toolbar, double-click, or right-click menus. Task-list checkboxes toggle right on the cards in either mode. File → Export saves the board as a self-contained vector HTML page or a board-sized vector PDF (both keep the 1:1 spatial layout, with selectable text), or as a Word or EPUB document with the cards laid out as a flowing article. Edits save back as standard `.canvas` JSON that round-trips with Obsidian, with undo/redo per tab
-- Images — image and SVG files (`.png`, `.jpg`, `.gif`, `.webp`, `.bmp`, `.svg`, and more) in a workspace folder show in the sidebar tree; click one to open it in a read-only viewer with fit, actual-size, and zoom controls (pan a zoomed image by scrolling)
-- Folder workspaces — open a folder and it becomes the window's workspace: the sidebar tree shows its `.md`, `.canvas`, `.d2`, and image files, and clicking a note opens it as a regular tab, so any number of workspace notes can be open side by side (loose external files mix into the same tab strip). Wikilinks, backlinks, the graph, and the command palette always resolve against the open workspace, whichever tab is active. Right-click a folder, a file, or the empty panel to create a new note, canvas, or folder there, then type its name inline. Right-click any note, canvas, or folder to rename, duplicate, move, copy its path, reveal it in the system file manager, or delete it (with confirmation), and use the files-panel toolbar for new note, new folder, collapse all, and close workspace. One window holds one workspace (a git repository's top level): opening a different folder opens it in its own window (a folder that's already open is focused instead), so a second workspace never replaces the one you're in. A single file opened from outside the workspace shows as a distinct "loose" tab, marking it as an independent document rather than part of the project tree. A folder nested inside another Glyph workspace is declined so links and search have an unambiguous scope
-- Graph view — `Cmd/Ctrl+G` (or View → Open Graph) maps the workspace as a force-directed graph: notes are nodes, wikilinks are edges, orphan notes render muted. Hover a note to highlight its neighbours, click to open it, drag to pan, scroll to zoom, and reset the view with one button. The graph updates live as notes change
-- Multiple files in tabs — open, switch, close, middle-click to close
-- Command palette — `Cmd/Ctrl+K` to fuzzy-jump to any workspace file, document heading, or app action
-- In-document search — `Cmd/Ctrl+F` with match highlighting and navigation
-- Zoom in/out — `Cmd/Ctrl+=/-/0` with zoom level in status bar
+- Jupyter notebooks: open `.ipynb` files directly; markdown cells render with full markdown (math, code, diagrams), code cells are syntax-highlighted, and image, HTML, plain-text, and colourised stream/traceback outputs show under each cell with `In [n]:` / `Out [n]:` prompts (read-only)
+- Canvas: open [JSON Canvas](https://jsoncanvas.org) (`.canvas`) files as an infinite, pan-and-zoom board; cards render markdown, embedded images, links, and labelled groups, connected by arrows. View mode is read-only; switch to edit mode to move, resize, recolour (presets or any custom colour), and connect cards, edit text and connection labels inline, and add or delete nodes and edges via toolbar, double-click, or right-click menus. Task-list checkboxes toggle right on the cards in either mode. File → Export saves the board as a self-contained vector HTML page or a board-sized vector PDF (both keep the 1:1 spatial layout, with selectable text), or as a Word or EPUB document with the cards laid out as a flowing article. Edits save back as standard `.canvas` JSON that round-trips with Obsidian, with undo/redo per tab
+- Images: image and SVG files (`.png`, `.jpg`, `.gif`, `.webp`, `.bmp`, `.svg`, and more) in a workspace folder show in the sidebar tree; click one to open it in a read-only viewer with fit, actual-size, and zoom controls (pan a zoomed image by scrolling)
+- Folder workspaces: open a folder and it becomes the window's workspace: the sidebar tree shows its `.md`, `.canvas`, `.d2`, and image files, and clicking a note opens it as a regular tab, so any number of workspace notes can be open side by side (loose external files mix into the same tab strip). Wikilinks, backlinks, the graph, and the command palette always resolve against the open workspace, whichever tab is active. Right-click a folder, a file, or the empty panel to create a new note, canvas, or folder there, then type its name inline. Right-click any note, canvas, or folder to rename, duplicate, move, copy its path, reveal it in the system file manager, or delete it (with confirmation), and use the files-panel toolbar for new note, new folder, collapse all, and close workspace. One window holds one workspace (a git repository's top level): opening a different folder opens it in its own window (a folder that's already open is focused instead), so a second workspace never replaces the one you're in. A single file opened from outside the workspace shows as a distinct "loose" tab, marking it as an independent document rather than part of the project tree. A folder nested inside another Glyph workspace is declined so links and search have an unambiguous scope
+- Graph view: `Cmd/Ctrl+G` (or View → Open Graph) maps the workspace as a force-directed graph: notes are nodes, wikilinks are edges, orphan notes render muted. Hover a note to highlight its neighbours, click to open it, drag to pan, scroll to zoom, and reset the view with one button. The graph updates live as notes change
+- Multiple files in tabs: open, switch, close, middle-click to close
+- Command palette: `Cmd/Ctrl+K` to fuzzy-jump to any workspace file, document heading, or app action
+- In-document search: `Cmd/Ctrl+F` with match highlighting and navigation
+- Zoom in/out: `Cmd/Ctrl+=/-/0` with zoom level in status bar
 - Table of Contents sidebar with active heading tracking
-- Print — `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
-- Export to HTML, Word (DOCX), EPUB, and PDF — `File → Export`; works for markdown documents and Jupyter notebooks, writes a file directly (no print dialog), and reuses the rendered output (math, code highlighting, tables, images inlined) so files are self-contained and offline. Task-list checkboxes are read-only in exports; exported HTML follows the reader's light/dark system preference.
-- Live reload — file watcher auto-updates on external changes
-- Undo / redo for in-document edits — `Cmd/Ctrl+Z` and `Cmd/Ctrl+Shift+Z` reverse task-list checkbox toggles and other programmatic edits per tab
+- Print: `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
+- Export to HTML, Word (DOCX), EPUB, and PDF via `File → Export`: works for markdown documents and Jupyter notebooks, writes a file directly (no print dialog), and reuses the rendered output (math, code highlighting, tables, images inlined) so files are self-contained and offline. Task-list checkboxes are read-only in exports; exported HTML follows the reader's light/dark system preference.
+- Live reload: file watcher auto-updates on external changes
+- Undo / redo for in-document edits: `Cmd/Ctrl+Z` and `Cmd/Ctrl+Shift+Z` reverse task-list checkbox toggles and other programmatic edits per tab
 - Drag and drop markdown files, notebooks, canvases, or folders to open
-- File associations — double-click `.md` files to open in Glyph
-- CLI support — `glyph README.md` opens a file; `glyph notebook.ipynb` opens a notebook; `glyph board.canvas` opens a canvas; `glyph diagram.d2` opens a diagram; `glyph ~/notes/` opens a folder as a workspace
+- File associations: double-click `.md` files to open in Glyph
+- CLI support: `glyph README.md` opens a file; `glyph notebook.ipynb` opens a notebook; `glyph board.canvas` opens a canvas; `glyph diagram.d2` opens a diagram; `glyph ~/notes/` opens a folder as a workspace
 - Recent files list
-- Session restore — open tabs persist across restarts
+- Session restore: open tabs persist across restarts
 
 ### Sync (experimental)
 - Cloud Sync (per-workspace, Git-backed): sync a folder workspace to any Git remote you control (GitHub, GitLab, or self-hosted). Pull, commit, and push changes against a chosen branch and commit identity, with a conflict policy you pick (prompt, prefer remote, or prefer local). A status-bar pill shows ahead/behind/dirty state, and **Cloud Sync…** in the command palette (`Cmd/Ctrl+K`) opens the setup. Single-file tabs sync as part of their folder workspace. Still maturing, so expect rough edges.
 
 ### Appearance
 - System / Light / Dark themes
-- Localized interface — follows your system language, or pick one in Settings → Appearance, with full right-to-left (RTL) layout support (community translations welcome)
+- Localized interface: follows your system language, or pick one in Settings → Appearance, with full right-to-left (RTL) layout support (community translations welcome)
 - Customizable font family, size, line height, and content width
 - Custom code font support
 - Platform-native styling (macOS vibrancy, Windows Mica)
@@ -94,12 +94,12 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 - Cross-platform: macOS (universal), Windows (x64), Linux (amd64 + arm64)
 - Window state persistence across restarts
 - Native menu bar with customizable keyboard shortcuts (remap any command in Settings → Hotkeys)
-- Update notifications — checks for a newer release on launch and shows a banner when one is available (toggle in Settings → Behavior)
-- Plugins (experimental) — install JavaScript plugins that add palette commands and status bar items, browse and manage them from the command palette (Manage Plugins…); see the [plugin marketplace](https://github.com/glyph-md/plugins)
+- Update notifications: checks for a newer release on launch and shows a banner when one is available (toggle in Settings → Behavior)
+- Plugins (experimental): install JavaScript plugins that add palette commands and status bar items, browse and manage them from the command palette (Manage Plugins…); see the [plugin marketplace](https://github.com/glyph-md/plugins)
 
 ### Privacy
 - Local-first: your files never leave your machine unless you opt into Cloud Sync (per workspace, to a Git remote you control)
-- Opt-in crash reporting (off by default) to help fix bugs — see [Privacy & Error Reporting](#privacy--error-reporting)
+- Opt-in crash reporting (off by default) to help fix bugs (see [Privacy & Error Reporting](#privacy--error-reporting))
 
 ## Install
 
@@ -297,7 +297,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 
 Legend: ✅ supported · ⚠️ partial / inconsistent · ❌ not supported · plugin = third-party · planned = on roadmap
 
-Note on "WYSIWYG / inline preview": Glyph's editor has split-view live preview and styled markdown tokens (bold/italic render as bold/italic in source), but markdown markers remain visible — Typora-style fully inline rendering is not implemented.
+Note on "WYSIWYG / inline preview": Glyph's editor has split-view live preview and styled markdown tokens (bold/italic render as bold/italic in source), but markdown markers remain visible. Typora-style fully inline rendering is not implemented.
 
 ## Privacy & Error Reporting
 
@@ -311,7 +311,7 @@ When enabled, reports include only:
 - Operating system and Glyph version
 - The error message
 
-They never include your file contents, file paths, file names, or any links — these are stripped from every report before it is sent. You can turn reporting off again at any time from the same setting.
+They never include your file contents, file paths, file names, or any links: these are stripped from every report before it is sent. You can turn reporting off again at any time from the same setting.
 
 ## Sponsors
 
