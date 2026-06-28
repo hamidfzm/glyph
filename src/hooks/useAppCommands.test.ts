@@ -1,5 +1,9 @@
 import { renderHook } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
+import { createRegistry } from "@/lib/plugins/registry";
+import type { CommandContribution, StatusBarItemContribution } from "@/lib/plugins/types";
 import { type AppActions, useAppCommands } from "./useAppCommands";
 
 function makeActions(over: Partial<AppActions> = {}): AppActions {
@@ -26,6 +30,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     aiAction: vi.fn(),
     readAloud: vi.fn(),
     openWorkspaceFile: vi.fn(),
+    managePlugins: vi.fn(),
     ...over,
   };
 }
@@ -179,5 +184,53 @@ describe("useAppCommands", () => {
     );
     const file = result.current.find((c) => c.section === "Files")!;
     expect(file.title).toBe("loose");
+  });
+
+  it("surfaces commands contributed by loaded plugins", () => {
+    const commands = createRegistry<CommandContribution>();
+    const run = vi.fn();
+    commands.register({ id: "demo.greet", title: "Greet", run });
+    const value: PluginsContextValue = {
+      commands,
+      statusBarItems: createRegistry<StatusBarItemContribution>(),
+      installed: [],
+      disabled: [],
+      loaded: [],
+      registry: [],
+      updates: [],
+      installFromFolder: vi.fn(async () => {}),
+      installFromRegistry: vi.fn(async () => {}),
+      setEnabled: vi.fn(async () => {}),
+      uninstall: vi.fn(async () => {}),
+    };
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(PluginsContext.Provider, { value }, children);
+
+    const { result } = renderHook(
+      () =>
+        useAppCommands({
+          workspaceOpen: false,
+          workspaceFiles: [],
+          tocEntries: [],
+          actions: makeActions(),
+        }),
+      { wrapper },
+    );
+
+    const greet = result.current.find((c) => c.id === "plugin:demo.greet")!;
+    expect(greet.title).toBe("Greet");
+    greet.run();
+    expect(run).toHaveBeenCalledOnce();
+  });
+
+  it("includes a Manage Plugins command", () => {
+    const actions = makeActions();
+    const { result } = renderHook(() =>
+      useAppCommands({ workspaceOpen: false, workspaceFiles: [], tocEntries: [], actions }),
+    );
+    const manage = result.current.find((c) => c.id === "cmd:managePlugins")!;
+    expect(manage).toBeTruthy();
+    manage.run();
+    expect(actions.managePlugins).toHaveBeenCalledOnce();
   });
 });

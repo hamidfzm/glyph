@@ -1,6 +1,7 @@
-import { SidebarLayoutProvider } from "@/contexts/SidebarLayoutContext";
-import { SyncConfigProvider } from "@/contexts/SyncConfigContext";
-import { TabsProvider } from "@/contexts/TabsContext";
+import { PluginsProvider } from "@/contexts/PluginsProvider";
+import { SidebarLayoutProvider } from "@/contexts/SidebarLayoutProvider";
+import { SyncConfigProvider } from "@/contexts/SyncConfigProvider";
+import { TabsProvider } from "@/contexts/TabsProvider";
 import { useCodeThemeStyle } from "@/hooks/useCodeThemeStyle";
 import { useLocale } from "@/hooks/useLocale";
 import { useSettings } from "@/hooks/useSettings";
@@ -19,12 +20,14 @@ export function App() {
   useLocale(settings.appearance.locale);
 
   return (
-    <TabsProvider>
-      <SidebarLayoutProvider>
-        <SyncConfigProvider>
-          <AppShell />
-        </SyncConfigProvider>
-      </SidebarLayoutProvider>
-    </TabsProvider>
+    <PluginsProvider>
+      <TabsProvider>
+        <SidebarLayoutProvider>
+          <SyncConfigProvider>
+            <AppShell />
+          </SyncConfigProvider>
+        </SidebarLayoutProvider>
+      </TabsProvider>
+    </PluginsProvider>
   );
 }

@@ -1,9 +1,11 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { usePluginsOptional } from "@/contexts/PluginsContext";
 import type { MenuEventHandlers } from "@/hooks/useMenuEvents";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { Command } from "@/lib/commands";
 import { scrollToHeading } from "@/lib/scrollToHeading";
+import { useRegistryEntries } from "./usePluginRegistry";
 
 export interface AppCommandSources {
   /** True when the window has a folder workspace open. */
@@ -22,6 +24,8 @@ export interface AppCommandSources {
 export interface AppActions extends MenuEventHandlers {
   /** Open the given workspace file as a document tab. Used by file rows. */
   openWorkspaceFile: (path: string) => void;
+  /** Open the plugin management modal. */
+  managePlugins: () => void;
 }
 
 function basename(path: string): string {
@@ -41,6 +45,11 @@ export function useAppCommands({
   actions,
 }: AppCommandSources): Command[] {
   const { t } = useTranslation("commands");
+  // Optional so the palette keeps working without a PluginsProvider (tests,
+  // isolated rendering); both are empty/null in that case.
+  const plugins = usePluginsOptional();
+  const pluginCommands = useRegistryEntries(plugins?.commands ?? null);
+
   return useMemo<Command[]>(() => {
     const out: Command[] = [];
 
@@ -189,8 +198,27 @@ export function useAppCommands({
         run: actions.zoomReset,
       },
       { id: "cmd:readAloud", title: t("readAloud"), section: "Commands", run: actions.readAloud },
+      {
+        id: "cmd:managePlugins",
+        title: t("managePlugins"),
+        section: "Commands",
+        run: actions.managePlugins,
+      },
     );
 
+    // Commands contributed by loaded plugins (the marketplace, install, enable,
+    // and remove actions all live in the Manage Plugins modal instead).
+    for (const c of pluginCommands) {
+      out.push({
+        id: `plugin:${c.id}`,
+        title: c.title,
+        section: "Commands",
+        run: () => {
+          void c.run();
+        },
+      });
+    }
+
     return out;
-  }, [workspaceOpen, workspaceFiles, tocEntries, actions, t]);
+  }, [workspaceOpen, workspaceFiles, tocEntries, actions, t, pluginCommands]);
 }

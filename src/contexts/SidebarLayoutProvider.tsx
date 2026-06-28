@@ -1,17 +1,7 @@
-import { createContext, type ReactNode, useContext, useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import { useSidebarLayout } from "@/hooks/useSidebarLayout";
-import type { SidebarLayout } from "@/lib/settings";
-
-type SidebarLayoutApi = ReturnType<typeof useSidebarLayout>;
-
-export interface SidebarLayoutContextValue extends SidebarLayoutApi {
-  sidebarLayout: SidebarLayout;
-  swapSidebarSides: boolean;
-  sidebarWidth: number | undefined;
-}
-
-export const SidebarLayoutContext = createContext<SidebarLayoutContextValue | null>(null);
+import { SidebarLayoutContext, type SidebarLayoutContextValue } from "./SidebarLayoutContext";
 
 export function SidebarLayoutProvider({ children }: { children: ReactNode }) {
   const { settings, updateSettings } = useSettings();
@@ -37,10 +27,4 @@ export function SidebarLayoutProvider({ children }: { children: ReactNode }) {
   );
 
   return <SidebarLayoutContext.Provider value={value}>{children}</SidebarLayoutContext.Provider>;
-}
-
-export function useSidebarLayoutContext(): SidebarLayoutContextValue {
-  const ctx = useContext(SidebarLayoutContext);
-  if (!ctx) throw new Error("useSidebarLayoutContext must be used inside <SidebarLayoutProvider>");
-  return ctx;
 }

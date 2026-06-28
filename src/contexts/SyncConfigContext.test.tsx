@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import type { Workspace } from "@/hooks/useTabs";
 import type { WorkspaceSyncConfig } from "@/lib/sync";
-import { SyncConfigProvider, useSyncConfigContext } from "./SyncConfigContext";
+import { useSyncConfigContext } from "./SyncConfigContext";
+import { SyncConfigProvider } from "./SyncConfigProvider";
 import { TabsContext, type TabsContextValue } from "./TabsContext";
 
 beforeEach(() => {

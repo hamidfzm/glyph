@@ -1,15 +1,7 @@
-import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Lightbox } from "@/components/markdown/Lightbox";
 import type { LightboxImage } from "@/lib/lightbox";
-
-interface LightboxContextValue {
-  /** Open the lightbox, starting at the clicked image. */
-  open: (img: HTMLImageElement) => void;
-  /** Open the lightbox on a single image source (e.g. a rendered diagram). */
-  openSrc: (src: string, alt?: string) => void;
-}
-
-const LightboxContext = createContext<LightboxContextValue | null>(null);
+import { LightboxContext, type LightboxContextValue } from "./LightboxContext";
 
 interface LightboxState {
   images: LightboxImage[];
@@ -59,9 +51,4 @@ export function LightboxProvider({ children }: { children: ReactNode }) {
       )}
     </LightboxContext.Provider>
   );
-}
-
-/** Returns the lightbox API, or null when rendered outside a provider. */
-export function useLightbox(): LightboxContextValue | null {
-  return useContext(LightboxContext);
 }

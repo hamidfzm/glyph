@@ -2,8 +2,9 @@ import { load } from "@tauri-apps/plugin-store";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { useContext } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS } from "../lib/settings";
-import { SettingsContext, SettingsProvider } from "./SettingsContext";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { SettingsContext } from "./SettingsContext";
+import { SettingsProvider } from "./SettingsProvider";
 
 const mockedLoad = vi.mocked(load);
 const realMatchMedia = window.matchMedia;

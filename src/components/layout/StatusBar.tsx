@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { PluginStatusBarItems } from "@/components/plugins/PluginStatusBarItems";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { useSettings } from "@/hooks/useSettings";
 import { countWords, readingMinutes } from "@/lib/markdown";
@@ -49,6 +50,7 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
         </>
       )}
       {zoomPercent !== 100 && <span>{zoomPercent}%</span>}
+      <PluginStatusBarItems />
       {onOpenSync && <SyncStatusIndicator onOpenSync={onOpenSync} />}
     </div>
   );
