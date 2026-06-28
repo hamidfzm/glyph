@@ -2,7 +2,8 @@ import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
-import { SidebarLayoutProvider, useSidebarLayoutContext } from "./SidebarLayoutContext";
+import { useSidebarLayoutContext } from "./SidebarLayoutContext";
+import { SidebarLayoutProvider } from "./SidebarLayoutProvider";
 
 // SidebarLayoutProvider reads settings from SettingsContext, which defaults to
 // DEFAULT_SETTINGS when no SettingsProvider is mounted.

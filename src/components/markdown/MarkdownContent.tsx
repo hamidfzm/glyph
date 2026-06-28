@@ -8,7 +8,7 @@ import remarkGemoji from "remark-gemoji";
 import remarkGfm from "remark-gfm";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
-import { LightboxProvider } from "@/contexts/LightboxContext";
+import { LightboxProvider } from "@/contexts/LightboxProvider";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
 import { useKatexPlugin } from "@/hooks/useKatexPlugin";
