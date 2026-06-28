@@ -3,7 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./components/App";
 import { ErrorFallback } from "./components/ErrorFallback";
-import { SettingsProvider } from "./contexts/SettingsContext";
+import { SettingsProvider } from "./contexts/SettingsProvider";
 import "./styles/app.css";
 
 createRoot(document.getElementById("root")!).render(

@@ -5,10 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   TabsContext,
   type TabsContextValue,
-  TabsProvider,
   useTabsContext,
   useWorkspaceRoot,
 } from "./TabsContext";
+import { TabsProvider } from "./TabsProvider";
 
 // Mock invoke so opening a file resolves with content/metadata. `read_file`
 // echoes a marker derived from the path so we can assert which file is active.

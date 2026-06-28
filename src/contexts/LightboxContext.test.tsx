@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { MarkdownImage } from "@/components/markdown/MarkdownImage";
-import { LightboxProvider, useLightbox } from "./LightboxContext";
+import { useLightbox } from "./LightboxContext";
+import { LightboxProvider } from "./LightboxProvider";
 
 function renderDoc() {
   return render(
