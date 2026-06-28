@@ -418,7 +418,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: container only suppresses the native menu for empty-area right-clicks; keyboard users create via the menu reached from focusable rows
-    <div data-filetree-root className="min-h-20 flex-1" onContextMenu={handleRootContextMenu}>
+    <div data-filetree-root className="min-h-full" onContextMenu={handleRootContextMenu}>
       <ul className="space-y-0.5">{entries.map((entry) => renderEntry(entry, 0, childProps))}</ul>
       <ContextMenu menu={menu} onClose={closeMenu} />
     </div>

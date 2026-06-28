@@ -1,55 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import {
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToasts";
+import { PluginsContext } from "@/contexts/PluginsContext";
 import { registerTranslations } from "@/lib/i18n";
 import { loadDisabled, saveDisabled } from "@/lib/plugins/disabledStore";
-import { createPluginHost, type LoadedPluginInfo, type PluginHost } from "@/lib/plugins/host";
+import { createPluginHost, type LoadedPluginInfo } from "@/lib/plugins/host";
 import {
   installFromRegistry as downloadAndInstall,
   fetchRegistry,
   findUpdates,
   type RegistryEntry,
-  type RegistryUpdate,
 } from "@/lib/plugins/marketplace";
 import type { InstalledPlugin } from "@/lib/plugins/types";
 
 const TOAST_DURATION_MS = 4000;
-
-export interface PluginsContextValue {
-  /** Contribution registries, for the palette and status bar to read. */
-  commands: PluginHost["commands"];
-  statusBarItems: PluginHost["statusBarItems"];
-  /** Every plugin on disk, enabled or not. */
-  installed: InstalledPlugin[];
-  /** Ids the user has deactivated (installed but not loaded). */
-  disabled: string[];
-  /** Plugins currently active in the host. */
-  loaded: LoadedPluginInfo[];
-  /** Marketplace entries from the glyph-md registry (empty if unreachable). */
-  registry: RegistryEntry[];
-  /** Installed plugins with a newer version available in the registry. */
-  updates: RegistryUpdate[];
-  /** Pick a plugin folder, install it into the app config dir, and load it. */
-  installFromFolder: () => Promise<void>;
-  /** Download and install (or update) a marketplace entry, then load it. */
-  installFromRegistry: (entry: RegistryEntry) => Promise<void>;
-  /** Activate or deactivate an installed plugin (persisted across restarts). */
-  setEnabled: (id: string, enabled: boolean) => Promise<void>;
-  /** Unload and delete an installed plugin from disk. */
-  uninstall: (id: string) => Promise<void>;
-}
-
-export const PluginsContext = createContext<PluginsContextValue | null>(null);
 
 /**
  * Owns the plugin host for the app: loads enabled plugins on startup, exposes
@@ -228,14 +193,4 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       <PluginToasts toasts={toasts} />
     </PluginsContext.Provider>
   );
-}
-
-/**
- * Optional accessor: returns `null` when no provider is mounted. Plugin
- * integration points (palette, status bar) use this so they keep working in
- * isolation: component tests and storybook-style rendering don't need the
- * provider.
- */
-export function usePluginsOptional(): PluginsContextValue | null {
-  return useContext(PluginsContext);
 }

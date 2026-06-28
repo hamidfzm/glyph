@@ -4,7 +4,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import type { InstalledPlugin } from "@/lib/plugins/types";
-import { PluginsProvider, usePluginsOptional } from "./PluginsContext";
+import { usePluginsOptional } from "./PluginsContext";
+import { PluginsProvider } from "./PluginsProvider";
 
 function installedPlugin(overrides: Partial<InstalledPlugin> = {}): InstalledPlugin {
   return {

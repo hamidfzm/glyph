@@ -1,27 +1,14 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
-import { createContext, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   CONTENT_WIDTH_MAP,
   DEFAULT_SETTINGS,
   FONT_FAMILY_MAP,
   LINE_HEIGHT_MAP,
   type Settings,
-} from "../lib/settings";
-import { deepMerge, setNestedValue } from "../lib/settingsObject";
-
-export interface SettingsContextValue {
-  settings: Settings;
-  updateSettings: (path: string, value: unknown) => void;
-  resetSettings: () => void;
-  loaded: boolean;
-}
-
-export const SettingsContext = createContext<SettingsContextValue>({
-  settings: DEFAULT_SETTINGS,
-  updateSettings: () => {},
-  resetSettings: () => {},
-  loaded: false,
-});
+} from "@/lib/settings";
+import { deepMerge, setNestedValue } from "@/lib/settingsObject";
+import { SettingsContext } from "./SettingsContext";
 
 function applyTheme(theme: Settings["appearance"]["theme"]) {
   if (theme === "system") {

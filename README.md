@@ -105,8 +105,8 @@ The [`samples/`](samples) directory is a tiny demo workspace — open it as a fo
 ### macOS (Homebrew)
 
 ```bash
-brew tap hamidfzm/tap
-brew trust hamidfzm/tap
+brew tap glyph-md/tap
+brew trust glyph-md/tap
 brew install --cask glyph
 ```
 
@@ -121,7 +121,7 @@ choco install glyph
 ### Windows (Scoop)
 
 ```powershell
-scoop bucket add hamidfzm https://github.com/hamidfzm/scoop-bucket
+scoop bucket add glyph-md https://github.com/glyph-md/scoop-bucket
 scoop install glyph
 ```
 
@@ -140,7 +140,7 @@ yay -S glyph-md-bin
 ### Linux (Homebrew)
 
 ```bash
-brew tap hamidfzm/tap
+brew tap glyph-md/tap
 brew install glyph
 ```
 
@@ -155,8 +155,8 @@ sudo apt install glyph
 ### Debian
 
 ```bash
-curl -fsSL https://hamidfzm.github.io/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
-echo "deb [signed-by=/usr/share/keyrings/glyph.gpg] https://hamidfzm.github.io/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/glyph.list
+curl -fsSL https://glyph-md.github.io/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
+echo "deb [signed-by=/usr/share/keyrings/glyph.gpg] https://glyph-md.github.io/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/glyph.list
 sudo apt update
 sudo apt install glyph
 ```

@@ -27,6 +27,11 @@ export function filterBacklinks(
 
   const out: Backlink[] = [];
   const files = workspaceFiles as string[];
+  // One row per (source, line): a single line can hold several wikilinks to the
+  // same target (e.g. a sentence that mentions [[Graph View]] twice), which
+  // would otherwise surface as duplicate rows sharing the same snippet — and
+  // collide on the `source:line` React key in `BacklinksSection`.
+  const seen = new Set<string>();
   for (const ref of refs) {
     if (ref.source === currentFilePath) continue;
     // Strip the optional `|alias` — the resolver only cares about the target
@@ -35,6 +40,9 @@ export function filterBacklinks(
     const target = pipe >= 0 ? ref.target.slice(0, pipe) : ref.target;
     const resolved = resolveWikilink(target, files, ref.source);
     if (resolved.path === currentFilePath) {
+      const key = `${ref.source}:${ref.line}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       out.push({ source: ref.source, line: ref.line, snippet: ref.snippet });
     }
   }

@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SyncConfigProvider } from "@/contexts/SyncConfigContext";
+import { SyncConfigProvider } from "@/contexts/SyncConfigProvider";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { Workspace } from "@/hooks/useTabs";
 import type { WorkspaceSyncConfig } from "@/lib/sync";
