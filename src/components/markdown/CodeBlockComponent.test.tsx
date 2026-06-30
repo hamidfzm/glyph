@@ -31,19 +31,20 @@ describe("CodeBlockComponent", () => {
   });
 
   it("renders a plugin-registered fenced language with its component", () => {
+    // Use a language with no built-in handler so the plugin renderer is reached.
     const fencedRenderers = createRegistry<FencedRendererContribution>();
     fencedRenderers.register({
-      language: "d2",
-      render: ({ code }) => <div data-testid="d2">{code}</div>,
+      language: "plantuml",
+      render: ({ code }) => <div data-testid="plantuml">{code}</div>,
     });
     render(
       <PluginsContext.Provider value={{ fencedRenderers } as unknown as PluginsContextValue}>
         <CodeBlockComponent>
-          <code className="language-d2">a -&gt; b</code>
+          <code className="language-plantuml">A -&gt; B</code>
         </CodeBlockComponent>
       </PluginsContext.Provider>,
     );
-    expect(screen.getByTestId("d2").textContent).toBe("a -> b");
+    expect(screen.getByTestId("plantuml").textContent).toBe("A -> B");
   });
 
   it("renders MermaidDiagram for mermaid code blocks", () => {
