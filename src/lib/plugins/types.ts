@@ -1,7 +1,22 @@
+import type { ComponentType } from "react";
+import type { Options } from "react-markdown";
 import type { Disposer } from "./disposer";
 
 /** Capability a plugin requests; surfaced for user consent before enabling. */
 export type PluginPermission = "workspace:read" | "workspace:write" | `network:${string}`;
+
+/**
+ * A remark or rehype plugin, in the shape react-markdown accepts (`plugin` or
+ * `[plugin, options]`). Sourced from react-markdown's own types so the plugin
+ * contract stays in lockstep with the renderer.
+ */
+export type MarkdownPlugin = NonNullable<Options["remarkPlugins"]>[number];
+
+/** Renders a fenced code block of `language` (e.g. ```d2) as a React component. */
+export interface FencedRendererContribution {
+  language: string;
+  render: ComponentType<{ code: string }>;
+}
 
 /**
  * Declarative metadata shipped alongside a plugin's built `main.js`. Mirrors the
@@ -70,6 +85,15 @@ export interface UiRegistryApi {
   addStatusBarItem(item: StatusBarItemContribution): Disposer;
 }
 
+export interface MarkdownRegistryApi {
+  /** Add a remark plugin (runs after the built-in remark plugins). */
+  registerRemarkPlugin(plugin: MarkdownPlugin): Disposer;
+  /** Add a rehype plugin (runs after the built-in rehype plugins, incl. sanitize). */
+  registerRehypePlugin(plugin: MarkdownPlugin): Disposer;
+  /** Render fenced ```<language> blocks with a React component. */
+  registerFencedRenderer(language: string, render: ComponentType<{ code: string }>): Disposer;
+}
+
 /**
  * The capability object passed to {@link PluginModule.activate}. It is the only
  * door a plugin has to the host; there is no direct `invoke`. Every
@@ -80,6 +104,7 @@ export interface GlyphPluginContext {
   readonly apiVersion: string;
   readonly commands: CommandRegistryApi;
   readonly ui: UiRegistryApi;
+  readonly markdown: MarkdownRegistryApi;
   notify(message: string): void;
   /**
    * Register (or extend) translations for a locale + namespace. A plugin ships

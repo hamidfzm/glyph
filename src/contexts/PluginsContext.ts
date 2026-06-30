@@ -4,9 +4,12 @@ import type { RegistryEntry, RegistryUpdate } from "@/lib/plugins/marketplace";
 import type { InstalledPlugin } from "@/lib/plugins/types";
 
 export interface PluginsContextValue {
-  /** Contribution registries, for the palette and status bar to read. */
+  /** Contribution registries, for the palette, status bar, and renderer to read. */
   commands: PluginHost["commands"];
   statusBarItems: PluginHost["statusBarItems"];
+  remarkPlugins: PluginHost["remarkPlugins"];
+  rehypePlugins: PluginHost["rehypePlugins"];
+  fencedRenderers: PluginHost["fencedRenderers"];
   /** Every plugin on disk, enabled or not. */
   installed: InstalledPlugin[];
   /** Ids the user has deactivated (installed but not loaded). */

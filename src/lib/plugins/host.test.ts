@@ -103,6 +103,26 @@ describe("createPluginHost", () => {
     expect(host.listLoaded()).toHaveLength(0);
   });
 
+  it("registers markdown contributions and removes them on unload", async () => {
+    const host = createPluginHost(vi.fn());
+    const remark = vi.fn();
+    const Render = () => null;
+    const module: PluginModule = {
+      activate(ctx) {
+        ctx.markdown.registerRemarkPlugin(remark);
+        ctx.markdown.registerFencedRenderer("d2", Render);
+      },
+    };
+
+    await host.load(installed(), importerFor(module));
+    expect(host.remarkPlugins.list()).toEqual([remark]);
+    expect(host.fencedRenderers.list()).toEqual([{ language: "d2", render: Render }]);
+
+    host.unload("com.x.demo");
+    expect(host.remarkPlugins.list()).toHaveLength(0);
+    expect(host.fencedRenderers.list()).toHaveLength(0);
+  });
+
   it("routes ctx.notify to the host notifier", async () => {
     const notify = vi.fn();
     const host = createPluginHost(notify);

@@ -16,6 +16,11 @@ describe("importPluginModule", () => {
       apiVersion: "1.0.0",
       commands: { register: vi.fn() },
       ui: { addStatusBarItem: vi.fn() },
+      markdown: {
+        registerRemarkPlugin: vi.fn(),
+        registerRehypePlugin: vi.fn(),
+        registerFencedRenderer: vi.fn(),
+      },
       notify,
       registerTranslations: vi.fn(),
     });
@@ -31,6 +36,11 @@ describe("importPluginModule", () => {
       apiVersion: "1.0.0",
       commands: { register: vi.fn() },
       ui: { addStatusBarItem: vi.fn() },
+      markdown: {
+        registerRemarkPlugin: vi.fn(),
+        registerRehypePlugin: vi.fn(),
+        registerFencedRenderer: vi.fn(),
+      },
       notify,
       registerTranslations: vi.fn(),
     });

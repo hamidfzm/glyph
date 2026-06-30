@@ -1,4 +1,6 @@
 import { type ComponentPropsWithoutRef, isValidElement, type ReactNode } from "react";
+import { usePluginsOptional } from "@/contexts/PluginsContext";
+import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { CopyButton } from "./CopyButton";
 import { CsvTable } from "./CsvTable";
 import { MermaidDiagram } from "./MermaidDiagram";
@@ -19,6 +21,8 @@ function extractText(node: ReactNode): string {
 
 export function CodeBlockComponent(props: ComponentPropsWithoutRef<"pre">) {
   const { children, ...rest } = props;
+  const plugins = usePluginsOptional();
+  const fencedRenderers = useRegistryEntries(plugins?.fencedRenderers ?? null);
 
   if (isValidElement<CodeProps>(children)) {
     const className = children.props.className ?? "";
@@ -33,6 +37,13 @@ export function CodeBlockComponent(props: ComponentPropsWithoutRef<"pre">) {
     if (/\blanguage-tsv\b/.test(className)) {
       const code = extractText(children.props.children).trim();
       return <CsvTable code={code} delimiter={"\t"} />;
+    }
+    // Plugin-contributed fenced renderers handle any other language (e.g. d2).
+    const lang = /\blanguage-([\w-]+)\b/.exec(className)?.[1];
+    const custom = lang && fencedRenderers.find((r) => r.language === lang);
+    if (custom) {
+      const Render = custom.render;
+      return <Render code={extractText(children.props.children).trim()} />;
     }
   }
 
