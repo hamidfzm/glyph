@@ -29,5 +29,8 @@
   "aiSummarize": "总结文档",
   "aiExplain": "解释文档",
   "aiSimplify": "简化文档",
-  "aiReadAloud": "朗读"
+  "aiReadAloud": "朗读",
+  "documentation": "文档",
+  "releaseNotes": "发行说明",
+  "reportIssue": "报告问题"
 }

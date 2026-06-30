@@ -29,5 +29,8 @@
   "aiSummarize": "خلاصه‌سازی سند",
   "aiExplain": "توضیح سند",
   "aiSimplify": "ساده‌سازی سند",
-  "aiReadAloud": "خواندن با صدای بلند"
+  "aiReadAloud": "خواندن با صدای بلند",
+  "documentation": "مستندات",
+  "releaseNotes": "یادداشت‌های انتشار",
+  "reportIssue": "گزارش اشکال"
 }

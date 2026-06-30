@@ -29,5 +29,8 @@
   "aiSummarize": "Dokument zusammenfassen",
   "aiExplain": "Dokument erklären",
   "aiSimplify": "Dokument vereinfachen",
-  "aiReadAloud": "Vorlesen"
+  "aiReadAloud": "Vorlesen",
+  "documentation": "Dokumentation",
+  "releaseNotes": "Versionshinweise",
+  "reportIssue": "Problem melden"
 }
