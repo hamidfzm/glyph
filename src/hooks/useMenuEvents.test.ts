@@ -26,6 +26,9 @@ function noopHandlers(overrides: Partial<MenuEventHandlers> = {}): MenuEventHand
     zoomReset: vi.fn(),
     aiAction: vi.fn(),
     readAloud: vi.fn(),
+    documentation: vi.fn(),
+    releaseNotes: vi.fn(),
+    reportIssue: vi.fn(),
     ...overrides,
   };
 }
@@ -62,6 +65,9 @@ describe("useMenuEvents", () => {
         "menu-zoom-reset",
         "menu-ai-action",
         "menu-ai-read-aloud",
+        "menu-documentation",
+        "menu-release-notes",
+        "menu-report-issue",
       ]),
     );
   });

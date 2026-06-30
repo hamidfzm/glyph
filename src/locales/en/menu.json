@@ -29,5 +29,8 @@
   "aiSummarize": "Summarize Document",
   "aiExplain": "Explain Document",
   "aiSimplify": "Simplify Document",
-  "aiReadAloud": "Read Aloud"
+  "aiReadAloud": "Read Aloud",
+  "documentation": "Documentation",
+  "releaseNotes": "Release Notes",
+  "reportIssue": "Report an Issue"
 }

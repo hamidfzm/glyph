@@ -23,6 +23,9 @@ export interface MenuEventHandlers {
   zoomReset: () => void;
   aiAction: (action: string) => void;
   readAloud: () => void;
+  documentation: () => void;
+  releaseNotes: () => void;
+  reportIssue: () => void;
 }
 
 // Subscribes to every `menu-*` event emitted by the Rust menu. Pass in a
@@ -52,6 +55,9 @@ export function useMenuEvents(handlers: MenuEventHandlers) {
       subscribe("menu-zoom-reset", handlers.zoomReset),
       subscribe<string>("menu-ai-action", (event) => handlers.aiAction(event.payload)),
       subscribe("menu-ai-read-aloud", handlers.readAloud),
+      subscribe("menu-documentation", handlers.documentation),
+      subscribe("menu-release-notes", handlers.releaseNotes),
+      subscribe("menu-report-issue", handlers.reportIssue),
     ];
     return () => {
       for (const unsubscribe of unsubscribes) {
