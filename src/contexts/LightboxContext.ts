@@ -8,6 +8,8 @@ import { createContext, useContext } from "react";
 export interface LightboxContextValue {
   /** Open the lightbox, starting at the clicked image. */
   open: (img: HTMLImageElement) => void;
+  /** Open the lightbox on a single image source (e.g. a rendered diagram). */
+  openSrc: (src: string, alt?: string) => void;
 }
 
 export const LightboxContext = createContext<LightboxContextValue | null>(null);

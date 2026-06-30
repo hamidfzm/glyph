@@ -146,6 +146,11 @@
     "errorLabel": "Diagrammfehler",
     "errorTitle": "Diagramm konnte nicht gerendert werden"
   },
+  "d2": {
+    "empty": "Leere Diagrammquelle",
+    "errorLabel": "Diagrammfehler",
+    "errorTitle": "Diagramm konnte nicht gerendert werden"
+  },
   "taskList": {
     "toggle": "Aufgabe umschalten"
   },
@@ -203,7 +208,8 @@
   "fileDialog": {
     "documents": "Dokumente",
     "markdown": "Markdown",
-    "notebook": "Jupyter Notebook"
+    "notebook": "Jupyter Notebook",
+    "d2": "D2-Diagramm"
   },
   "exportFilter": {
     "html": "HTML",

@@ -1,5 +1,10 @@
 import type { TocEntry } from "@/hooks/useTableOfContents";
-import { rasterizeElement, rasterizeMermaidLight, restoreMermaidTheme } from "./rasterize";
+import {
+  rasterizeD2Light,
+  rasterizeElement,
+  rasterizeMermaidLight,
+  restoreMermaidTheme,
+} from "./rasterize";
 import { buildTocElement } from "./toc";
 
 export interface PrepareOptions {
@@ -13,14 +18,14 @@ export interface PrepareOptions {
   pdf?: boolean;
 }
 
-// Rasterize each block-math (`.katex-display`) and Mermaid diagram in the live
-// DOM to a PNG and swap the matching clone node for an <img>. Runs only for PDF
-// (HTML/EPUB render these natively). Block math is captured as rendered; Mermaid
-// is re-rendered light so it doesn't end up as a dark box on the white page. On
-// any failure the original node is left so the walker falls back (math → LaTeX,
-// diagram → dropped).
+// Rasterize each block-math (`.katex-display`), Mermaid, and D2 diagram in the
+// live DOM to a PNG and swap the matching clone node for an <img>. Runs only for
+// PDF (HTML/EPUB render these natively). Block math is captured as rendered;
+// Mermaid and D2 are re-rendered light so they don't end up as a dark box on the
+// white page. On any failure the original node is left so the walker falls back
+// (math → LaTeX, diagram → dropped).
 async function rasterizeRichContent(liveBody: Element, clone: Element): Promise<void> {
-  const selector = ".katex-display, .mermaid-diagram";
+  const selector = ".katex-display, .mermaid-diagram, .d2-diagram";
   const live = liveBody.querySelectorAll<HTMLElement>(selector);
   if (live.length === 0) return;
   const cloned = clone.querySelectorAll(selector);
@@ -36,6 +41,10 @@ async function rasterizeRichContent(liveBody: Element, clone: Element): Promise<
         if (!source) continue; // can't re-render without the source; leave as-is
         dataUrl = await rasterizeMermaidLight(source);
         mermaidRendered = true;
+      } else if (el.classList.contains("d2-diagram")) {
+        const source = el.getAttribute("data-d2-source");
+        if (!source) continue; // can't re-render without the source; leave as-is
+        dataUrl = await rasterizeD2Light(source);
       } else {
         dataUrl = await rasterizeElement(el, mathBackground);
       }

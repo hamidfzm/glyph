@@ -25,6 +25,10 @@ export function LightboxProvider({ children }: { children: ReactNode }) {
     setState({ images, index });
   }, []);
 
+  const openSrc = useCallback((src: string, alt = "") => {
+    setState({ images: [{ src, alt }], index: 0 });
+  }, []);
+
   const close = useCallback(() => setState(null), []);
   const setIndex = useCallback(
     // setIndex is only wired to the open lightbox, so the state is non-null here.
@@ -32,7 +36,7 @@ export function LightboxProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const value = useMemo<LightboxContextValue>(() => ({ open }), [open]);
+  const value = useMemo<LightboxContextValue>(() => ({ open, openSrc }), [open, openSrc]);
 
   return (
     <LightboxContext.Provider value={value}>

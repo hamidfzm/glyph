@@ -8,6 +8,7 @@
 // workspace file tree. The Rust side mirrors this in src-tauri/src/notebook.rs.
 
 import { isCanvasFile } from "./canvasExtensions";
+import { isD2File } from "./d2Extensions";
 import { isMarkdownFile } from "./markdownExtensions";
 
 export const NOTEBOOK_EXTENSIONS: readonly string[] = ["ipynb"];
@@ -17,7 +18,7 @@ export function isNotebookFile(path: string): boolean {
   return ext ? NOTEBOOK_EXTENSIONS.includes(ext) : false;
 }
 
-/** Any document Glyph can open: markdown, a Jupyter notebook, or a canvas. */
+/** Any document Glyph can open: markdown, a Jupyter notebook, a canvas, or a D2 diagram. */
 export function isSupportedFile(path: string): boolean {
-  return isMarkdownFile(path) || isNotebookFile(path) || isCanvasFile(path);
+  return isMarkdownFile(path) || isNotebookFile(path) || isCanvasFile(path) || isD2File(path);
 }

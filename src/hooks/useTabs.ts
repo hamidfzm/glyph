@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { isCanvasFile } from "@/lib/canvasExtensions";
+import { adaptD2Content, D2_EXTENSIONS, isD2File } from "@/lib/d2Extensions";
 import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/lib/editHistory";
 import { isImageFile } from "@/lib/imageExtensions";
 import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
@@ -119,10 +120,10 @@ async function loadFileContent(path: string) {
     invoke<string>("read_file", { path }),
     invoke<FileMetadata>("get_file_metadata", { path }),
   ]);
-  // `.mmd` files double as Mermaid diagram source. If the body sniffs as a
-  // Mermaid declaration, wrap it in a fence so the existing renderer turns
-  // it into a diagram; otherwise treat the file as plain markdown text.
-  const content = adaptMmdContent(path, raw);
+  // `.mmd` files double as Mermaid diagram source; `.d2` files are D2 diagram
+  // source. Each adapter fence-wraps its own extension so the existing markdown
+  // renderer turns the body into a diagram, and is a no-op for other paths.
+  const content = adaptD2Content(path, adaptMmdContent(path, raw));
   return { content, metadata };
 }
 
@@ -299,10 +300,12 @@ export function useTabs(options: UseTabsOptions) {
           ({ content, metadata } = await loadFileContent(path));
           await invoke("watch_file", { path });
         }
-        // Notebooks, canvases, and images are read-only; open straight into the
-        // viewer regardless of the user's default editor mode.
+        // Notebooks, canvases, images, and D2 files are read-only; open straight
+        // into the viewer regardless of the user's default editor mode. (`.d2`
+        // content is fence-wrapped for rendering, so an editor would write the
+        // wrapper back over the source.)
         const mode =
-          isImage || isNotebookFile(path) || isCanvasFile(path)
+          isImage || isNotebookFile(path) || isCanvasFile(path) || isD2File(path)
             ? EDITOR_MODE.view
             : optionsRef.current.defaultEditorMode;
         const newTab: FileTab = {
@@ -941,7 +944,11 @@ export function useTabs(options: UseTabsOptions) {
       filters: [
         {
           name: t("common:fileDialog.documents"),
-          extensions: [...MARKDOWN_EXTENSIONS, ...NOTEBOOK_EXTENSIONS] as string[],
+          extensions: [
+            ...MARKDOWN_EXTENSIONS,
+            ...NOTEBOOK_EXTENSIONS,
+            ...D2_EXTENSIONS,
+          ] as string[],
         },
         {
           name: t("common:fileDialog.markdown"),
@@ -950,6 +957,10 @@ export function useTabs(options: UseTabsOptions) {
         {
           name: t("common:fileDialog.notebook"),
           extensions: NOTEBOOK_EXTENSIONS as string[],
+        },
+        {
+          name: t("common:fileDialog.d2"),
+          extensions: D2_EXTENSIONS as string[],
         },
       ],
     });

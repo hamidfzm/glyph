@@ -153,6 +153,7 @@ mod tests {
         fs::write(dir.join("notes.markdown"), "x").unwrap();
         fs::write(dir.join("diagram.svg"), b"<svg/>").unwrap();
         fs::write(dir.join("photo.png"), b"x").unwrap();
+        fs::write(dir.join("architecture.d2"), b"a -> b").unwrap();
         fs::write(dir.join("data.json"), b"x").unwrap();
         fs::create_dir_all(dir.join("subdir")).unwrap();
 
@@ -164,6 +165,7 @@ mod tests {
         assert!(names.contains(&"notes.markdown"));
         assert!(names.contains(&"diagram.svg"), "svg files are listed");
         assert!(names.contains(&"photo.png"), "image files are listed");
+        assert!(names.contains(&"architecture.d2"), "d2 files are listed");
         assert!(
             !names.contains(&"data.json"),
             "unsupported files filtered out"

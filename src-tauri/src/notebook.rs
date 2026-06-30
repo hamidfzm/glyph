@@ -15,12 +15,16 @@ pub fn is_notebook_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Any document Glyph can open: a markdown file, a Jupyter notebook, or a JSON
-/// Canvas. Used by the open-gating paths (CLI args, drag-drop, file-tree
-/// walking) so every supported document type reaches the renderer while
-/// everything else is rejected.
+/// Any document Glyph can open: a markdown file, a Jupyter notebook, a JSON
+/// Canvas, or a D2 diagram. Used by the open-gating paths (CLI args, drag-drop,
+/// file-tree walking) so every supported document type reaches the renderer
+/// while everything else is rejected. Mirrors `isSupportedFile` in
+/// `src/lib/notebookExtensions.ts`.
 pub fn is_supported_file(path: &Path) -> bool {
-    crate::is_markdown_file(path) || is_notebook_file(path) || crate::is_canvas_file(path)
+    crate::is_markdown_file(path)
+        || is_notebook_file(path)
+        || crate::is_canvas_file(path)
+        || crate::is_d2_file(path)
 }
 
 #[cfg(test)]
@@ -42,11 +46,12 @@ mod tests {
     }
 
     #[test]
-    fn supported_covers_markdown_notebooks_and_canvas() {
+    fn supported_covers_markdown_notebooks_canvas_and_d2() {
         assert!(is_supported_file(Path::new("README.md")));
         assert!(is_supported_file(Path::new("notes.markdown")));
         assert!(is_supported_file(Path::new("analysis.ipynb")));
         assert!(is_supported_file(Path::new("board.canvas")));
+        assert!(is_supported_file(Path::new("diagram.d2")));
     }
 
     #[test]

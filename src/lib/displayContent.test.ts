@@ -20,6 +20,10 @@ describe("displayContentFor", () => {
     expect(displayContentFor("/nb/analysis.ipynb", '{"cells":[]}')).toBeNull();
   });
 
+  it("suppresses D2 diagrams (fenced source is not prose)", () => {
+    expect(displayContentFor("/d/arch.d2", "```d2\n# a comment\na -> b\n```")).toBeNull();
+  });
+
   it("projects a canvas board's prose", () => {
     expect(displayContentFor("/b/board.canvas", board)).toBe("# Card heading");
   });
@@ -36,6 +40,13 @@ describe("tocContentFor", () => {
 
   it("keeps the outline empty for a canvas despite projected headings", () => {
     expect(tocContentFor("/b/board.canvas", "# Card heading")).toBeNull();
+  });
+
+  it("keeps the outline empty for a D2 file (suppressed display)", () => {
+    // `#` comments in D2 source would otherwise read as outline headings.
+    expect(
+      tocContentFor("/d/arch.d2", displayContentFor("/d/arch.d2", "```d2\n# c\n```")),
+    ).toBeNull();
   });
 
   it("passes through when there is no path", () => {

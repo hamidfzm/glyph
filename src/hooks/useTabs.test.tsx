@@ -302,6 +302,26 @@ describe("useTabs file operations", () => {
     expect(tab.kind === "file" ? tab.file.mode : null).toBe("view");
   });
 
+  it("opens a .d2 file in view mode with the body fence-wrapped as a d2 block", async () => {
+    // `.d2` is the D2 diagram language: the whole file body is diagram source,
+    // so it's fence-wrapped (rendered via the markdown path) and opened
+    // read-only, since an editor would write the wrapper back over the source.
+    const { result } = renderHook(() =>
+      useTabs({ ...defaultOptions(), defaultEditorMode: "edit" }),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/diagram.d2");
+    });
+
+    const tab = result.current.tabs[0];
+    expect(tab.kind === "file" ? tab.file.mode : null).toBe("view");
+    const content = tab.kind === "file" ? tab.file.content : null;
+    expect(content).toContain("```d2");
+    expect(content).toContain("FILE BODY");
+  });
+
   it("opens an image in view mode without reading it as text", async () => {
     // Images are binary: openFile must skip read_file (and the file watch)
     // entirely and load metadata only, opening the read-only image viewer.

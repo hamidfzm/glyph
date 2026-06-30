@@ -10,7 +10,6 @@ overrides:
   uuid: '>=14.0.0'
   postcss: '>=8.5.10'
   esbuild: '>=0.28.1'
-  dompurify: '>=3.4.11'
 
 importers:
 
@@ -76,6 +75,9 @@ importers:
       '@tauri-apps/plugin-window-state':
         specifier: ^2
         version: 2.4.1
+      '@terrastruct/d2':
+        specifier: 0.1.33
+        version: 0.1.33
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
@@ -88,6 +90,9 @@ importers:
       docx:
         specifier: ^9.7.1
         version: 9.7.1
+      dompurify:
+        specifier: ^3.4.11
+        version: 3.4.11
       github-slugger:
         specifier: ^2.0.0
         version: 2.0.0
@@ -1362,6 +1367,9 @@ packages:
 
   '@tauri-apps/plugin-window-state@2.4.1':
     resolution: {integrity: sha512-OuvdrzyY8Q5Dbzpj+GcrnV1iCeoZbcFdzMjanZMMcAEUNy/6PH5pxZPXpaZLOR7whlzXiuzx0L9EKZbH7zpdRw==}
+
+  '@terrastruct/d2@0.1.33':
+    resolution: {integrity: sha512-eK5hyfGIJFolC7sUsiKvWdY9xGFctTe3d+PSijo09IYDso8psztC+A4SammizXtlwYZpnnW0AtDjfBYauceSeA==}
 
   '@testing-library/dom@10.4.1':
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
@@ -4536,6 +4544,8 @@ snapshots:
   '@tauri-apps/plugin-window-state@2.4.1':
     dependencies:
       '@tauri-apps/api': 2.11.1
+
+  '@terrastruct/d2@0.1.33': {}
 
   '@testing-library/dom@10.4.1':
     dependencies:

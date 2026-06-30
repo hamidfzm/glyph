@@ -146,6 +146,11 @@
     "errorLabel": "图表错误",
     "errorTitle": "图表渲染失败"
   },
+  "d2": {
+    "empty": "图表源为空",
+    "errorLabel": "图表错误",
+    "errorTitle": "图表渲染失败"
+  },
   "taskList": {
     "toggle": "切换任务状态"
   },
@@ -203,7 +208,8 @@
   "fileDialog": {
     "documents": "文档",
     "markdown": "Markdown",
-    "notebook": "Jupyter Notebook"
+    "notebook": "Jupyter Notebook",
+    "d2": "D2 图表"
   },
   "exportFilter": {
     "html": "HTML",

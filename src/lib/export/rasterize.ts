@@ -1,6 +1,8 @@
 // Rasterization helpers for PDF export. Math is captured from the live DOM as
-// rendered; Mermaid is re-rendered in the light theme so PDF diagrams are
-// always light (the on-screen SVG bakes in the app theme's colors).
+// rendered; Mermaid and D2 are re-rendered in the light theme so PDF diagrams
+// are always light (the on-screen SVG bakes in the app theme's colors).
+
+import { renderD2 } from "@/lib/d2Render";
 
 let mermaidId = 0;
 
@@ -18,6 +20,15 @@ export async function rasterizeMermaidLight(source: string): Promise<string> {
   const { default: mermaid } = await import("mermaid");
   mermaid.initialize({ startOnLoad: false, theme: "default", flowchart: { htmlLabels: false } });
   const { svg } = await mermaid.render(`glyph-export-mermaid-${mermaidId++}`, source);
+  return svgToPng(svg);
+}
+
+// Re-render a D2 source in the light theme and rasterize to a PNG on a white
+// background. Always light, regardless of the app theme. Unlike Mermaid there's
+// no global theme to restore (D2 takes the theme per render call), and the
+// sanitized SVG already has no `<foreignObject>` to taint the canvas.
+export async function rasterizeD2Light(source: string): Promise<string> {
+  const svg = await renderD2(source, false);
   return svgToPng(svg);
 }
 

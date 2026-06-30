@@ -58,6 +58,27 @@ describe("LightboxProvider", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
+  it("opens a single source directly via openSrc (for rendered diagrams)", () => {
+    function Probe() {
+      const lightbox = useLightbox();
+      return (
+        <button
+          type="button"
+          onClick={() => lightbox?.openSrc("data:image/svg+xml,<svg/>", "diagram")}
+        >
+          probe
+        </button>
+      );
+    }
+    render(
+      <LightboxProvider>
+        <Probe />
+      </LightboxProvider>,
+    );
+    fireEvent.click(screen.getByText("probe"));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
   it("does nothing when opening an image that isn't in the document", () => {
     function Probe() {
       const lightbox = useLightbox();
