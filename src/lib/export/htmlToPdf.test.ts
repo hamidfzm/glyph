@@ -36,32 +36,6 @@ describe("convertHtmlToPdf", () => {
     expect(json).not.toContain('"svg"');
   });
 
-  it("sizes a vector SVG from its width attribute, capped at the content width", () => {
-    const [sized] = convertHtmlToPdf('<svg width="120" height="60"><rect/></svg>') as [
-      { svg: string; width: number },
-    ];
-    expect(sized.width).toBe(120);
-    expect(sized.svg).toContain("<rect");
-    // The sanitizer strips xmlns from diagram SVGs; the embed restores it.
-    expect(sized.svg).toContain('xmlns="http://www.w3.org/2000/svg"');
-
-    const [capped] = convertHtmlToPdf('<svg width="2000"><rect/></svg>') as [
-      { svg: string; width: number },
-    ];
-    expect(capped.width).toBe(515);
-  });
-
-  it("sizes a vector SVG from its viewBox when width is missing or relative", () => {
-    // Mermaid emits width="100%" plus a viewBox; the viewBox wins.
-    const [node] = convertHtmlToPdf('<svg width="100%" viewBox="0 0 240 80"><rect/></svg>') as [
-      { svg: string; width: number },
-    ];
-    expect(node.width).toBe(240);
-    // No usable size at all falls back to the full content width.
-    const [fallback] = convertHtmlToPdf("<svg><rect/></svg>") as [{ svg: string; width: number }];
-    expect(fallback.width).toBe(515);
-  });
-
   it("embeds a data:image/svg+xml image as a vector svg node", () => {
     const markup = '<svg width="90" height="30"><circle r="9"/></svg>';
     const uri = `data:image/svg+xml,${encodeURIComponent(markup)}`;

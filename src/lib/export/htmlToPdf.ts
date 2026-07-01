@@ -1,9 +1,7 @@
 import type { Content, TableCell } from "pdfmake/interfaces";
-import { decodeSvgDataUrl, ensureSvgXmlns } from "@/lib/svgDataUrl";
+import { decodeSvgDataUrl } from "@/lib/svgDataUrl";
 import { decodeDataUri } from "./imageSize";
-
-// Page content width for an A4 page with default pdfmake margins (~40pt each).
-const CONTENT_WIDTH = 515;
+import { CONTENT_WIDTH, svgNode } from "./svgPdfNode";
 
 interface InlineStyle {
   bold?: boolean;
@@ -139,34 +137,6 @@ function codeRuns(pre: Element, baseColor?: string): Content[] {
     if (!last.text) runs.pop();
   }
   return runs.length ? runs : [{ text: "" }];
-}
-
-// Intrinsic width of an <svg>, from its width attribute (ignoring relative
-// values like "100%", which Mermaid emits) or the viewBox. Null when neither
-// yields a usable number.
-function svgWidth(el: Element): number | null {
-  const attr = el.getAttribute("width")?.trim();
-  if (attr && !attr.endsWith("%")) {
-    const w = Number.parseFloat(attr);
-    if (Number.isFinite(w) && w > 0) return w;
-  }
-  const viewBox = el
-    .getAttribute("viewBox")
-    ?.trim()
-    .split(/[\s,]+/);
-  if (viewBox?.length === 4) {
-    const w = Number.parseFloat(viewBox[2]);
-    if (Number.isFinite(w) && w > 0) return w;
-  }
-  return null;
-}
-
-// Embed an <svg> element as a pdfmake vector node, scaled down to the page
-// content width when wider. `ensureSvgXmlns` mirrors the data-URL path: the
-// sanitizer strips the namespace from D2/Mermaid output.
-function svgNode(el: Element): Content {
-  const width = Math.min(svgWidth(el) ?? CONTENT_WIDTH, CONTENT_WIDTH);
-  return { svg: ensureSvgXmlns(el.outerHTML), width, margin: [0, 0, 0, 8] };
 }
 
 function imageNode(el: Element): Content | null {
