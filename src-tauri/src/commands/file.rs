@@ -16,9 +16,14 @@ pub struct FileMetadata {
     pub modified: u64,
 }
 
+/// Return the file the app was launched to open, if any, consuming it. `take`
+/// (not `clone`) matters now that macOS `RunEvent::Opened` can write this stash
+/// at any point in the app's life, not just at startup: consuming on first read
+/// means a later launch's path can never resurface in a subsequently-opened
+/// window (or a dev hot-reload) as a stale file.
 #[tauri::command]
 pub fn get_initial_file(state: State<'_, InitialFile>) -> Option<String> {
-    state.0.lock().ok()?.clone()
+    state.0.lock().ok()?.take()
 }
 
 #[tauri::command]
@@ -224,6 +229,23 @@ mod tests {
         app.manage(InitialFile(Mutex::new(None)));
         let result = get_initial_file(app.state::<InitialFile>());
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn get_initial_file_is_consumed_on_read() {
+        use tauri::test::mock_app;
+        use tauri::Manager;
+
+        // The stash is read-once: a macOS `RunEvent::Opened` may have written a
+        // launch path, and once the primary window reads it, no later window (or
+        // dev hot-reload) should resurface it.
+        let app = mock_app();
+        app.manage(InitialFile(Mutex::new(Some("/ws/file.md".to_string()))));
+        assert_eq!(
+            get_initial_file(app.state::<InitialFile>()).as_deref(),
+            Some("/ws/file.md")
+        );
+        assert!(get_initial_file(app.state::<InitialFile>()).is_none());
     }
 
     #[test]

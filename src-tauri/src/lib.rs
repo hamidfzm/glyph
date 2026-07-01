@@ -57,6 +57,68 @@ pub fn handle_second_instance<R: tauri::Runtime>(
     }
 }
 
+/// Handle a macOS `RunEvent::Opened`: classify each opened path, stash the first
+/// supported one as the initial file/folder, and route it to a window. The stash
+/// is the cold-start safety net — a launch that opens Glyph delivers this event
+/// before the frontend has registered its `open-file` listener, so the emit inside
+/// `open_in_app` is lost; the mount-time `get_initial_file` / `get_initial_folder`
+/// query reads the stash instead. First supported path wins.
+///
+/// `pub` so it is exempt from dead-code warnings on non-macOS targets (same reason
+/// `handle_second_instance` is pub), and testable under `MockRuntime` everywhere.
+pub fn handle_opened_paths<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    paths: Vec<std::path::PathBuf>,
+) {
+    let Some(registry) = app_handle.try_state::<windows::WindowRegistry>() else {
+        return;
+    };
+    let current = windows_runtime::current_window_label(app_handle);
+    for path in paths {
+        // `cli::classify_resolved_path` is the same classifier the CLI arg block
+        // uses, so the file/folder gating and the non-markdown rejection stay in
+        // lockstep. Routing decides whether to focus, adopt, or spawn a window.
+        match cli::classify_resolved_path(&path) {
+            Some(cli::InitialOpenAction::Folder(p)) => {
+                if let Some(state) = app_handle.try_state::<commands::InitialFolder>() {
+                    if let Ok(mut slot) = state.0.lock() {
+                        *slot = Some(p.clone());
+                    }
+                }
+                windows_runtime::open_in_app(
+                    app_handle,
+                    &registry,
+                    windows::OpenKind::Folder,
+                    p,
+                    &current,
+                );
+                break;
+            }
+            Some(cli::InitialOpenAction::File(p)) => {
+                if let Some(state) = app_handle.try_state::<commands::InitialFile>() {
+                    if let Ok(mut slot) = state.0.lock() {
+                        *slot = Some(p.clone());
+                    }
+                }
+                windows_runtime::open_in_app(
+                    app_handle,
+                    &registry,
+                    windows::OpenKind::File,
+                    p,
+                    &current,
+                );
+                break;
+            }
+            Some(cli::InitialOpenAction::RejectedUnsupported(p)) => {
+                eprintln!("Refusing to open unsupported file type: {p}");
+                // Keep scanning the list — the user may have selected a mix of
+                // supported and unsupported files.
+            }
+            None => {}
+        }
+    }
+}
+
 /// Build a fresh `tauri::Builder` with the platform-conditional single-instance
 /// plugin registered on Windows and Linux. macOS routes second launches via
 /// `RunEvent::Opened`, so it gets a vanilla builder.
@@ -263,47 +325,11 @@ pub fn run() {
     app.run(|_app_handle, _event| {
         #[cfg(target_os = "macos")]
         if let RunEvent::Opened { urls } = _event {
-            let Some(registry) = _app_handle.try_state::<windows::WindowRegistry>() else {
-                return;
-            };
-            let current = windows_runtime::current_window_label(_app_handle);
-            for url in urls {
-                let Ok(path) = url.to_file_path() else {
-                    continue;
-                };
-                // `cli::classify_resolved_path` is the same classifier the CLI
-                // arg block uses, so the file/folder gating and the
-                // non-markdown rejection stay in lockstep. Routing decides
-                // whether to focus, adopt, or spawn a window.
-                match cli::classify_resolved_path(&path) {
-                    Some(cli::InitialOpenAction::Folder(p)) => {
-                        windows_runtime::open_in_app(
-                            _app_handle,
-                            &registry,
-                            windows::OpenKind::Folder,
-                            p,
-                            &current,
-                        );
-                        break;
-                    }
-                    Some(cli::InitialOpenAction::File(p)) => {
-                        windows_runtime::open_in_app(
-                            _app_handle,
-                            &registry,
-                            windows::OpenKind::File,
-                            p,
-                            &current,
-                        );
-                        break;
-                    }
-                    Some(cli::InitialOpenAction::RejectedUnsupported(p)) => {
-                        eprintln!("Refusing to open unsupported file type: {p}");
-                        // Keep scanning the URL list — the user may have
-                        // dropped a mix of supported and unsupported files.
-                    }
-                    None => {}
-                }
-            }
+            let paths = urls
+                .into_iter()
+                .filter_map(|url| url.to_file_path().ok())
+                .collect();
+            handle_opened_paths(_app_handle, paths);
         }
     });
 }
@@ -322,7 +348,27 @@ mod tests {
     fn routed_app() -> tauri::App<MockRuntime> {
         let app = mock_app_with_main_window();
         app.manage(crate::windows::WindowRegistry::new());
+        // The initial-file/folder state that `handle_opened_paths` stashes into
+        // (the cold-start safety net) so tests can read the stash back.
+        app.manage(commands::InitialFile(Mutex::new(None)));
+        app.manage(commands::InitialFolder(Mutex::new(None)));
         app
+    }
+
+    fn stashed_file(app: &tauri::App<MockRuntime>) -> Option<String> {
+        app.state::<commands::InitialFile>()
+            .0
+            .lock()
+            .unwrap()
+            .clone()
+    }
+
+    fn stashed_folder(app: &tauri::App<MockRuntime>) -> Option<String> {
+        app.state::<commands::InitialFolder>()
+            .0
+            .lock()
+            .unwrap()
+            .clone()
     }
 
     /// Build a mock app with a "main" webview window so the
@@ -403,6 +449,70 @@ mod tests {
             vec!["glyph".to_string(), "nope.md".to_string()],
             cwd.to_string_lossy().to_string(),
         );
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    // handle_opened_paths is the macOS file-association entry point. Its window
+    // effects (focus / emit / spawn) can't be observed under MockRuntime, but the
+    // cold-start stash into InitialFile / InitialFolder — the actual fix for
+    // clicking a file while Glyph is closed — is managed state we can read back.
+    #[test]
+    fn handle_opened_paths_stashes_a_file_for_cold_start() {
+        let cwd = unique_tmp("op_file");
+        let file = cwd.join("note.md");
+        fs::write(&file, "hi").unwrap();
+        let app = routed_app();
+
+        handle_opened_paths(&app.handle().clone(), vec![file.clone()]);
+
+        assert_eq!(
+            stashed_file(&app).as_deref(),
+            Some(file.to_string_lossy().as_ref())
+        );
+        assert_eq!(stashed_folder(&app), None);
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn handle_opened_paths_stashes_a_folder_for_cold_start() {
+        let cwd = unique_tmp("op_folder");
+        let folder = cwd.join("workspace");
+        fs::create_dir_all(&folder).unwrap();
+        let app = routed_app();
+
+        handle_opened_paths(&app.handle().clone(), vec![folder.clone()]);
+
+        assert_eq!(
+            stashed_folder(&app).as_deref(),
+            Some(folder.to_string_lossy().as_ref())
+        );
+        assert_eq!(stashed_file(&app), None);
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn handle_opened_paths_ignores_unsupported_files() {
+        let cwd = unique_tmp("op_txt");
+        let file = cwd.join("evil.txt");
+        fs::write(&file, "<script>alert('x')</script>").unwrap();
+        let app = routed_app();
+
+        handle_opened_paths(&app.handle().clone(), vec![file]);
+
+        assert_eq!(stashed_file(&app), None);
+        assert_eq!(stashed_folder(&app), None);
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn handle_opened_paths_ignores_missing_paths() {
+        let cwd = unique_tmp("op_missing");
+        let app = routed_app();
+
+        handle_opened_paths(&app.handle().clone(), vec![cwd.join("nope.md")]);
+
+        assert_eq!(stashed_file(&app), None);
+        assert_eq!(stashed_folder(&app), None);
         let _ = fs::remove_dir_all(&cwd);
     }
 

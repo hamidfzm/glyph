@@ -19,9 +19,11 @@ pub struct DirEntry {
     pub modified: u64,
 }
 
+/// Return the folder the app was launched to open, if any, consuming it. See
+/// [`super::file::get_initial_file`] for why this takes rather than clones.
 #[tauri::command]
 pub fn get_initial_folder(state: State<'_, InitialFolder>) -> Option<String> {
-    state.0.lock().ok()?.clone()
+    state.0.lock().ok()?.take()
 }
 
 #[tauri::command]
