@@ -18,13 +18,62 @@ describe("convertHtmlToPdf", () => {
     expect(content.some((c) => typeof c === "object" && c !== null && "table" in c)).toBe(true);
   });
 
-  it("reduces KaTeX to its LaTeX source and drops SVG diagrams", () => {
+  it("reduces KaTeX to its LaTeX source; a block-level SVG embeds as a vector node", () => {
     const content = convertHtmlToPdf(
       '<p><span class="katex"><annotation encoding="application/x-tex">x^2</annotation></span></p>' +
         "<svg><path/></svg>",
     );
-    // The paragraph keeps the LaTeX; the bare <svg> contributes no block.
-    expect(JSON.stringify(content)).toContain("x^2");
+    const json = JSON.stringify(content);
+    expect(json).toContain("x^2");
+    expect(json).toContain('"svg"');
+  });
+
+  it("skips an SVG at inline position (only block-level SVG embeds)", () => {
+    const content = convertHtmlToPdf("<p>before<svg><rect/></svg>after</p>");
+    const json = JSON.stringify(content);
+    expect(json).toContain("before");
+    expect(json).toContain("after");
+    expect(json).not.toContain('"svg"');
+  });
+
+  it("sizes a vector SVG from its width attribute, capped at the content width", () => {
+    const [sized] = convertHtmlToPdf('<svg width="120" height="60"><rect/></svg>') as [
+      { svg: string; width: number },
+    ];
+    expect(sized.width).toBe(120);
+    expect(sized.svg).toContain("<rect");
+    // The sanitizer strips xmlns from diagram SVGs; the embed restores it.
+    expect(sized.svg).toContain('xmlns="http://www.w3.org/2000/svg"');
+
+    const [capped] = convertHtmlToPdf('<svg width="2000"><rect/></svg>') as [
+      { svg: string; width: number },
+    ];
+    expect(capped.width).toBe(515);
+  });
+
+  it("sizes a vector SVG from its viewBox when width is missing or relative", () => {
+    // Mermaid emits width="100%" plus a viewBox; the viewBox wins.
+    const [node] = convertHtmlToPdf('<svg width="100%" viewBox="0 0 240 80"><rect/></svg>') as [
+      { svg: string; width: number },
+    ];
+    expect(node.width).toBe(240);
+    // No usable size at all falls back to the full content width.
+    const [fallback] = convertHtmlToPdf("<svg><rect/></svg>") as [{ svg: string; width: number }];
+    expect(fallback.width).toBe(515);
+  });
+
+  it("embeds a data:image/svg+xml image as a vector svg node", () => {
+    const markup = '<svg width="90" height="30"><circle r="9"/></svg>';
+    const uri = `data:image/svg+xml,${encodeURIComponent(markup)}`;
+    const [node] = convertHtmlToPdf(`<p><img src="${uri}"></p>`) as [
+      { svg: string; width: number },
+    ];
+    expect(node.svg).toContain("<circle");
+    expect(node.width).toBe(90);
+
+    const base64 = `data:image/svg+xml;base64,${btoa(markup)}`;
+    const [b64Node] = convertHtmlToPdf(`<img src="${base64}">`) as [{ svg: string }];
+    expect(b64Node.svg).toContain("<circle");
   });
 
   it("always returns at least one node for empty input", () => {

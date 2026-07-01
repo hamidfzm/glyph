@@ -2,17 +2,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { prepareContent } from "./prepareContent";
 
-// Rasterization needs a real layout/canvas engine; mock the helpers so the
+// Rendering needs a real layout/canvas/WASM engine; mock the helpers so the
 // orchestration is testable without them.
 const rasterizeElementMock = vi.fn(async () => "data:image/png;base64,MATH");
-const rasterizeMermaidMock = vi.fn(async () => "data:image/png;base64,MERMAID");
-const rasterizeD2Mock = vi.fn(async () => "data:image/png;base64,D2");
+const renderMermaidMock = vi.fn(async () => '<svg data-diagram="mermaid-light"></svg>');
+const renderD2Mock = vi.fn(async () => '<svg data-diagram="d2-light"></svg>');
 const restoreMermaidMock = vi.fn(async () => {});
 vi.mock("./rasterize", () => ({
   rasterizeElement: () => rasterizeElementMock(),
-  rasterizeMermaidLight: () => rasterizeMermaidMock(),
-  rasterizeD2Light: () => rasterizeD2Mock(),
+  renderMermaidLightSvg: () => renderMermaidMock(),
   restoreMermaidTheme: () => restoreMermaidMock(),
+}));
+vi.mock("@/lib/d2Render", () => ({
+  renderD2: () => renderD2Mock(),
 }));
 
 const ENTRIES: TocEntry[] = [{ id: "intro", text: "Intro", level: 1 }];
@@ -105,50 +107,51 @@ describe("prepareContent", () => {
     expect(result?.html).toContain("rgb(40, 42, 54)");
   });
 
-  it("rasterizes block math (as-is) and Mermaid (light re-render) for PDF", async () => {
+  it("rasterizes block math and swaps Mermaid for its light vector SVG for PDF", async () => {
     rasterizeElementMock.mockClear();
-    rasterizeMermaidMock.mockClear();
+    renderMermaidMock.mockClear();
     restoreMermaidMock.mockClear();
     setBody(
       '<p><span class="katex-display">math</span></p>' +
         '<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg></svg></div>',
     );
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(rasterizeElementMock).toHaveBeenCalledTimes(1); // block math
-    expect(rasterizeMermaidMock).toHaveBeenCalledTimes(1); // diagram re-rendered light
+    expect(rasterizeElementMock).toHaveBeenCalledTimes(1); // block math stays raster
+    expect(renderMermaidMock).toHaveBeenCalledTimes(1); // diagram re-rendered light
     expect(restoreMermaidMock).toHaveBeenCalledTimes(1); // app theme restored after
     expect(result?.html).toContain("data:image/png;base64,MATH");
-    expect(result?.html).toContain("data:image/png;base64,MERMAID");
+    expect(result?.html).toContain('data-diagram="mermaid-light"'); // inline vector SVG, not a PNG
     expect(result?.html).not.toContain("katex-display");
     expect(result?.html).not.toContain("mermaid-diagram");
   });
 
-  it("rasterizes a D2 diagram (light re-render) for PDF", async () => {
-    rasterizeD2Mock.mockClear();
+  it("swaps a D2 diagram for its light vector SVG for PDF", async () => {
+    renderD2Mock.mockClear();
     setBody('<div class="d2-diagram" data-d2-source="a -> b"><svg></svg></div>');
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(rasterizeD2Mock).toHaveBeenCalledTimes(1);
-    expect(result?.html).toContain("data:image/png;base64,D2");
+    expect(renderD2Mock).toHaveBeenCalledTimes(1);
+    expect(result?.html).toContain('data-diagram="d2-light"');
     expect(result?.html).not.toContain("d2-diagram");
+    expect(result?.html).not.toContain("data:image/png");
   });
 
   it("leaves a D2 diagram untouched when its source is missing", async () => {
-    rasterizeD2Mock.mockClear();
+    renderD2Mock.mockClear();
     setBody('<div class="d2-diagram"><svg></svg></div>');
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(rasterizeD2Mock).not.toHaveBeenCalled();
+    expect(renderD2Mock).not.toHaveBeenCalled();
     expect(result?.html).toContain("d2-diagram");
   });
 
   it("leaves a Mermaid diagram untouched when its source is missing", async () => {
-    rasterizeMermaidMock.mockClear();
+    renderMermaidMock.mockClear();
     setBody('<div class="mermaid-diagram"><svg></svg></div>');
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(rasterizeMermaidMock).not.toHaveBeenCalled();
+    expect(renderMermaidMock).not.toHaveBeenCalled();
     expect(result?.html).toContain("mermaid-diagram");
   });
 
-  it("keeps the original node when rasterization fails", async () => {
+  it("keeps the original node when math rasterization fails", async () => {
     rasterizeElementMock.mockClear();
     rasterizeElementMock.mockRejectedValueOnce(new Error("canvas tainted"));
     setBody('<span class="katex-display">E=mc^2</span>');
@@ -158,13 +161,34 @@ describe("prepareContent", () => {
     expect(result?.html).not.toContain("data:image/png");
   });
 
-  it("does not rasterize for non-PDF exports", async () => {
+  it("drops a diagram whose light re-render fails (never embeds the dark SVG)", async () => {
+    renderMermaidMock.mockClear();
+    renderMermaidMock.mockRejectedValueOnce(new Error("bad source"));
+    setBody(
+      '<div class="mermaid-diagram" data-mermaid-source="broken"><svg data-dark="1"></svg></div>' +
+        "<p>after</p>",
+    );
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(result?.html).not.toContain("mermaid-diagram");
+    expect(result?.html).not.toContain('data-dark="1"');
+    expect(result?.html).toContain("after");
+  });
+
+  it("drops a diagram whose light render returns no svg", async () => {
+    renderD2Mock.mockResolvedValueOnce("plain text, not svg");
+    setBody('<div class="d2-diagram" data-d2-source="a -> b"><svg data-dark="1"></svg></div>');
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(result?.html).not.toContain("d2-diagram");
+    expect(result?.html).not.toContain('data-dark="1"');
+  });
+
+  it("does not touch math or diagrams for non-PDF exports", async () => {
     rasterizeElementMock.mockClear();
-    rasterizeMermaidMock.mockClear();
+    renderMermaidMock.mockClear();
     setBody('<span class="katex-display">math</span>');
     await prepareContent({ entries: ENTRIES, includeToc: false });
     expect(rasterizeElementMock).not.toHaveBeenCalled();
-    expect(rasterizeMermaidMock).not.toHaveBeenCalled();
+    expect(renderMermaidMock).not.toHaveBeenCalled();
   });
 
   it("injects a table of contents when requested", async () => {

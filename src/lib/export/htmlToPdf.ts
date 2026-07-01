@@ -1,4 +1,5 @@
 import type { Content, TableCell } from "pdfmake/interfaces";
+import { decodeSvgDataUrl, ensureSvgXmlns } from "@/lib/svgDataUrl";
 import { decodeDataUri } from "./imageSize";
 
 // Page content width for an A4 page with default pdfmake margins (~40pt each).
@@ -50,8 +51,9 @@ function styledText(text: string, style: InlineStyle): Content {
 
 // Flatten an element's inline descendants into pdfmake text fragments. Anchors
 // become links; `<br>` becomes a newline; KaTeX falls back to its LaTeX source;
-// raw SVG (Mermaid) is skipped. Inline images degrade to their alt text — block
-// images are handled separately and embedded.
+// an SVG at inline position is skipped (block-level SVG embeds as a vector
+// node). Inline images degrade to their alt text — block images are handled
+// separately and embedded.
 function inlinePdf(node: Node, style: InlineStyle = {}): Content[] {
   const out: Content[] = [];
   for (const child of Array.from(node.childNodes)) {
@@ -139,10 +141,44 @@ function codeRuns(pre: Element, baseColor?: string): Content[] {
   return runs.length ? runs : [{ text: "" }];
 }
 
+// Intrinsic width of an <svg>, from its width attribute (ignoring relative
+// values like "100%", which Mermaid emits) or the viewBox. Null when neither
+// yields a usable number.
+function svgWidth(el: Element): number | null {
+  const attr = el.getAttribute("width")?.trim();
+  if (attr && !attr.endsWith("%")) {
+    const w = Number.parseFloat(attr);
+    if (Number.isFinite(w) && w > 0) return w;
+  }
+  const viewBox = el
+    .getAttribute("viewBox")
+    ?.trim()
+    .split(/[\s,]+/);
+  if (viewBox?.length === 4) {
+    const w = Number.parseFloat(viewBox[2]);
+    if (Number.isFinite(w) && w > 0) return w;
+  }
+  return null;
+}
+
+// Embed an <svg> element as a pdfmake vector node, scaled down to the page
+// content width when wider. `ensureSvgXmlns` mirrors the data-URL path: the
+// sanitizer strips the namespace from D2/Mermaid output.
+function svgNode(el: Element): Content {
+  const width = Math.min(svgWidth(el) ?? CONTENT_WIDTH, CONTENT_WIDTH);
+  return { svg: ensureSvgXmlns(el.outerHTML), width, margin: [0, 0, 0, 8] };
+}
+
 function imageNode(el: Element): Content | null {
   const src = el.getAttribute("src") ?? "";
+  // An SVG image (inlined by prepareContent as a data: URL) embeds as vectors.
+  const svgMarkup = decodeSvgDataUrl(src);
+  if (svgMarkup !== null) {
+    const svgEl = new DOMParser().parseFromString(svgMarkup, "text/html").body.querySelector("svg");
+    return svgEl ? svgNode(svgEl) : null;
+  }
   const decoded = decodeDataUri(src);
-  // pdfmake embeds PNG and JPEG; other formats are skipped.
+  // pdfmake embeds PNG and JPEG; other raster formats are skipped.
   if (!decoded || (decoded.type !== "png" && decoded.type !== "jpg")) return null;
   const width = Math.min(decoded.width, CONTENT_WIDTH);
   return { image: src, width, margin: [0, 0, 0, 8] };
@@ -271,7 +307,7 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
     ];
   }
   if (tag === "table") return [tableNode(el)];
-  if (tag === "svg") return [];
+  if (tag === "svg") return [svgNode(el)];
   if (tag === "img") {
     const img = imageNode(el);
     return img ? [img] : [];
@@ -289,9 +325,9 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
 }
 
 /**
- * Walk a prepared HTML fragment into a pdfmake content array. Reuses the docx
- * walker's structure and fidelity tradeoffs: math becomes LaTeX source and SVG
- * diagrams are dropped, since a vector PDF has no faithful equivalent.
+ * Walk a prepared HTML fragment into a pdfmake content array. Block-level SVG
+ * (light-rendered diagrams, SVG images) embeds as vector `svg` nodes; inline
+ * math falls back to its LaTeX source, matching the docx walker.
  */
 export function convertHtmlToPdf(bodyHtml: string): Content[] {
   const doc = new DOMParser().parseFromString(bodyHtml, "text/html");

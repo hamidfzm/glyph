@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { svgToDataUrl } from "./svgDataUrl";
+import { decodeSvgDataUrl, ensureSvgXmlns, svgToDataUrl } from "./svgDataUrl";
 
 describe("svgToDataUrl", () => {
   it("wraps markup in an svg data URL", () => {
@@ -28,5 +28,34 @@ describe("svgToDataUrl", () => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>';
     const decoded = decodeURIComponent(svgToDataUrl(svg).slice("data:image/svg+xml,".length));
     expect(decoded).toBe(svg);
+  });
+});
+
+describe("ensureSvgXmlns", () => {
+  it("adds the namespace only when absent", () => {
+    expect(ensureSvgXmlns("<svg><g/></svg>")).toBe(
+      '<svg xmlns="http://www.w3.org/2000/svg"><g/></svg>',
+    );
+    const withNs = '<svg xmlns="http://www.w3.org/2000/svg"><g/></svg>';
+    expect(ensureSvgXmlns(withNs)).toBe(withNs);
+  });
+});
+
+describe("decodeSvgDataUrl", () => {
+  it("round-trips a URI-encoded svg data URL", () => {
+    const svg = "<svg><text>a&b #c</text></svg>";
+    expect(decodeSvgDataUrl(svgToDataUrl(svg))).toBe(ensureSvgXmlns(svg));
+  });
+
+  it("decodes a base64 svg data URL", () => {
+    const svg = "<svg><rect/></svg>";
+    expect(decodeSvgDataUrl(`data:image/svg+xml;base64,${btoa(svg)}`)).toBe(svg);
+  });
+
+  it("returns null for non-SVG data URLs and malformed input", () => {
+    expect(decodeSvgDataUrl("data:image/png;base64,AAAA")).toBeNull();
+    expect(decodeSvgDataUrl("data:image/svg+xml")).toBeNull(); // no comma
+    expect(decodeSvgDataUrl("data:image/svg+xml,%")).toBeNull(); // bad URI encoding
+    expect(decodeSvgDataUrl("https://example.com/x.svg")).toBeNull();
   });
 });
