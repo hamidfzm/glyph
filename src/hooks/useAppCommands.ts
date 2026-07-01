@@ -200,6 +200,13 @@ export function useAppCommands({
         shortcut: "Cmd/Ctrl+0",
         run: actions.zoomReset,
       },
+      {
+        id: "cmd:aiChat",
+        title: t("aiChat"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+Shift+A",
+        run: actions.aiChat,
+      },
       { id: "cmd:readAloud", title: t("readAloud"), section: "Commands", run: actions.readAloud },
       {
         id: "cmd:managePlugins",

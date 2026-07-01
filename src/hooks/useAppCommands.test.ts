@@ -33,6 +33,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     zoomOut: vi.fn(),
     zoomReset: vi.fn(),
     aiAction: vi.fn(),
+    aiChat: vi.fn(),
     readAloud: vi.fn(),
     documentation: vi.fn(),
     releaseNotes: vi.fn(),

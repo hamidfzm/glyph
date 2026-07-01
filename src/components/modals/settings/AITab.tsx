@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { useOllamaModels } from "@/hooks/useOllamaModels";
 import { useSettings } from "@/hooks/useSettings";
 import { MODEL_SUGGESTIONS } from "@/lib/settings";
 
@@ -7,9 +8,16 @@ export function AITab() {
   const { settings, updateSettings } = useSettings();
   const { ai } = settings;
 
-  // Every non-"none" provider has suggestions in MODEL_SUGGESTIONS, so the
-  // model section below can render the datalist unconditionally.
-  const models = ai.provider === "none" ? [] : MODEL_SUGGESTIONS[ai.provider];
+  // For Ollama the suggestions are the models actually installed on the local
+  // server (falling back to the built-ins when it's unreachable); the other
+  // providers keep their static lists.
+  const ollamaModels = useOllamaModels(ai.ollamaUrl, ai.provider === "ollama");
+  const models =
+    ai.provider === "none"
+      ? []
+      : ai.provider === "ollama"
+        ? ollamaModels
+        : MODEL_SUGGESTIONS[ai.provider];
 
   return (
     <>
@@ -56,6 +64,9 @@ export function AITab() {
               value={ai.ollamaUrl}
               onChange={(e) => updateSettings("ai.ollamaUrl", e.target.value)}
               placeholder="http://localhost:11434"
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
             />
           </div>
         )}
@@ -73,6 +84,9 @@ export function AITab() {
                 onChange={(e) => updateSettings("ai.model", e.target.value)}
                 placeholder={t("ai.model.placeholder")}
                 list="model-suggestions"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
               />
               <datalist id="model-suggestions">
                 {models.map((m) => (
@@ -94,6 +108,9 @@ export function AITab() {
             value={ai.ttsVoice}
             onChange={(e) => updateSettings("ai.ttsVoice", e.target.value)}
             placeholder={t("ai.voice.placeholder")}
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
           />
         </div>
 

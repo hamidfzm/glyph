@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ClaudeProvider, createAIProvider, OllamaProvider, OpenAIProvider } from "./ai-providers";
+import {
+  ClaudeProvider,
+  createAIProvider,
+  fetchOllamaModels,
+  OllamaProvider,
+  OpenAIProvider,
+} from "./ai-providers";
 import type { AISettings } from "./settings";
 
 const mockFetch = vi.fn();
@@ -9,16 +15,38 @@ beforeEach(() => {
   mockFetch.mockReset();
 });
 
+/** Build a fetch Response whose body streams the given lines. */
+function streamResponse(lines: string[]) {
+  const encoder = new TextEncoder();
+  return {
+    ok: true,
+    body: new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const line of lines) controller.enqueue(encoder.encode(`${line}\n`));
+        controller.close();
+      },
+    }),
+  };
+}
+
 describe("ClaudeProvider", () => {
   const provider = new ClaudeProvider("test-key", "claude-sonnet-4-20250514");
 
-  it("sends correct request to Claude API", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ content: [{ text: "response" }] }),
-    });
+  it("sends a streaming request and assembles deltas", async () => {
+    mockFetch.mockResolvedValueOnce(
+      streamResponse([
+        'data: {"type":"message_start"}',
+        'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hel"}}',
+        'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"lo"}}',
+        'data: {"type":"message_stop"}',
+      ]),
+    );
 
-    const result = await provider.complete("test prompt", "system prompt");
+    const chunks: string[] = [];
+    const result = await provider.chat([{ role: "user", content: "test prompt" }], {
+      system: "system prompt",
+      onChunk: (d) => chunks.push(d),
+    });
 
     expect(mockFetch).toHaveBeenCalledWith(
       "https://api.anthropic.com/v1/messages",
@@ -34,32 +62,20 @@ describe("ClaudeProvider", () => {
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.model).toBe("claude-sonnet-4-20250514");
     expect(body.system).toBe("system prompt");
+    expect(body.stream).toBe(true);
     expect(body.messages[0].content).toBe("test prompt");
-    expect(result).toBe("response");
+    expect(result).toBe("Hello");
+    expect(chunks).toEqual(["Hel", "lo"]);
   });
 
-  it("sends request without system prompt when not provided", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ content: [{ text: "hi" }] }),
-    });
+  it("omits system when not provided and uses the default model", async () => {
+    const defaultProvider = new ClaudeProvider("key", "");
+    mockFetch.mockResolvedValueOnce(streamResponse([]));
 
-    await provider.complete("test");
+    await defaultProvider.chat([{ role: "user", content: "test" }]);
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.system).toBeUndefined();
-  });
-
-  it("uses default model when none specified", async () => {
-    const defaultProvider = new ClaudeProvider("key", "");
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ content: [{ text: "" }] }),
-    });
-
-    await defaultProvider.complete("test");
-
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.model).toBe("claude-sonnet-4-20250514");
   });
 
@@ -70,75 +86,65 @@ describe("ClaudeProvider", () => {
       text: () => Promise.resolve("Unauthorized"),
     });
 
-    await expect(provider.complete("test")).rejects.toThrow("Claude API error (401)");
+    await expect(provider.chat([{ role: "user", content: "test" }])).rejects.toThrow(
+      "Claude API error (401)",
+    );
   });
 
-  it("returns empty string when content is missing", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
+  it("throws when the stream carries an error event", async () => {
+    mockFetch.mockResolvedValueOnce(
+      streamResponse(['data: {"type":"error","error":{"message":"overloaded"}}']),
+    );
 
-    const result = await provider.complete("test");
-    expect(result).toBe("");
+    await expect(provider.chat([{ role: "user", content: "test" }])).rejects.toThrow("overloaded");
   });
 });
 
 describe("OpenAIProvider", () => {
   const provider = new OpenAIProvider("test-key", "gpt-4o");
 
-  it("sends correct request to OpenAI API", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          choices: [{ message: { content: "response" } }],
-        }),
-    });
+  it("sends a streaming request and assembles deltas", async () => {
+    mockFetch.mockResolvedValueOnce(
+      streamResponse([
+        'data: {"choices":[{"delta":{"content":"Hel"}}]}',
+        'data: {"choices":[{"delta":{"content":"lo"}}]}',
+        "data: [DONE]",
+      ]),
+    );
 
-    const result = await provider.complete("test prompt", "system prompt");
+    const chunks: string[] = [];
+    const result = await provider.chat([{ role: "user", content: "test prompt" }], {
+      system: "system prompt",
+      onChunk: (d) => chunks.push(d),
+    });
 
     expect(mockFetch).toHaveBeenCalledWith(
       "https://api.openai.com/v1/chat/completions",
       expect.objectContaining({
         method: "POST",
-        headers: expect.objectContaining({
-          Authorization: "Bearer test-key",
-        }),
+        headers: expect.objectContaining({ Authorization: "Bearer test-key" }),
       }),
     );
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.model).toBe("gpt-4o");
+    expect(body.stream).toBe(true);
     expect(body.messages).toHaveLength(2);
     expect(body.messages[0].role).toBe("system");
     expect(body.messages[1].role).toBe("user");
-    expect(result).toBe("response");
+    expect(result).toBe("Hello");
+    expect(chunks).toEqual(["Hel", "lo"]);
   });
 
-  it("omits system message when not provided", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ choices: [{ message: { content: "hi" } }] }),
-    });
+  it("omits the system message when not provided and uses the default model", async () => {
+    const defaultProvider = new OpenAIProvider("key", "");
+    mockFetch.mockResolvedValueOnce(streamResponse(["data: [DONE]"]));
 
-    await provider.complete("test");
+    await defaultProvider.chat([{ role: "user", content: "test" }]);
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.messages).toHaveLength(1);
     expect(body.messages[0].role).toBe("user");
-  });
-
-  it("uses default model when none specified", async () => {
-    const defaultProvider = new OpenAIProvider("key", "");
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ choices: [{ message: { content: "" } }] }),
-    });
-
-    await defaultProvider.complete("test");
-
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.model).toBe("gpt-4o");
   });
 
@@ -149,87 +155,103 @@ describe("OpenAIProvider", () => {
       text: () => Promise.resolve("Rate limited"),
     });
 
-    await expect(provider.complete("test")).rejects.toThrow("OpenAI API error (429)");
-  });
-
-  it("returns empty string when choices are missing", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
-
-    const result = await provider.complete("test");
-    expect(result).toBe("");
+    await expect(provider.chat([{ role: "user", content: "test" }])).rejects.toThrow(
+      "OpenAI API error (429)",
+    );
   });
 });
 
 describe("OllamaProvider", () => {
   const provider = new OllamaProvider("http://localhost:11434", "llama3.2");
 
-  it("sends correct request to Ollama", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ response: "reply" }),
-    });
+  it("sends a streaming chat request and assembles deltas", async () => {
+    mockFetch.mockResolvedValueOnce(
+      streamResponse([
+        '{"message":{"role":"assistant","content":"Hel"},"done":false}',
+        '{"message":{"role":"assistant","content":"lo"},"done":true}',
+      ]),
+    );
 
-    const result = await provider.complete("test prompt", "system prompt");
+    const chunks: string[] = [];
+    const result = await provider.chat(
+      [
+        { role: "user", content: "hi" },
+        { role: "assistant", content: "hey" },
+        { role: "user", content: "test prompt" },
+      ],
+      { system: "system prompt", onChunk: (d) => chunks.push(d) },
+    );
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:11434/api/generate",
+      "http://localhost:11434/api/chat",
       expect.objectContaining({ method: "POST" }),
     );
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.model).toBe("llama3.2");
-    expect(body.prompt).toContain("system prompt");
-    expect(body.prompt).toContain("test prompt");
-    expect(body.stream).toBe(false);
-    expect(result).toBe("reply");
+    expect(body.stream).toBe(true);
+    expect(body.messages).toHaveLength(4);
+    expect(body.messages[0]).toEqual({ role: "system", content: "system prompt" });
+    expect(result).toBe("Hello");
+    expect(chunks).toEqual(["Hel", "lo"]);
   });
 
-  it("sends prompt without system when not provided", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ response: "ok" }),
-    });
-
-    await provider.complete("just a prompt");
-
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.prompt).toBe("just a prompt");
-  });
-
-  it("uses default model when none specified", async () => {
+  it("omits system and uses the default model when not provided", async () => {
     const defaultProvider = new OllamaProvider("http://localhost:11434", "");
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ response: "" }),
-    });
+    mockFetch.mockResolvedValueOnce(streamResponse([]));
 
-    await defaultProvider.complete("test");
+    await defaultProvider.chat([{ role: "user", content: "test" }]);
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.messages).toHaveLength(1);
     expect(body.model).toBe("llama3.2");
   });
 
-  it("throws on error", async () => {
+  it("throws on HTTP error", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
       text: () => Promise.resolve("Server error"),
     });
 
-    await expect(provider.complete("test")).rejects.toThrow("Ollama error (500)");
+    await expect(provider.chat([{ role: "user", content: "test" }])).rejects.toThrow(
+      "Ollama error (500)",
+    );
   });
 
-  it("returns empty string when response is missing", async () => {
+  it("throws when the stream carries an error", async () => {
+    mockFetch.mockResolvedValueOnce(streamResponse(['{"error":"model not found"}']));
+
+    await expect(provider.chat([{ role: "user", content: "test" }])).rejects.toThrow(
+      "model not found",
+    );
+  });
+});
+
+describe("fetchOllamaModels", () => {
+  it("returns installed model names", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({}),
+      json: () => Promise.resolve({ models: [{ name: "gemma2:latest" }, { name: "llama3.2:8b" }] }),
     });
 
-    const result = await provider.complete("test");
-    expect(result).toBe("");
+    await expect(fetchOllamaModels("http://localhost:11434")).resolves.toEqual([
+      "gemma2:latest",
+      "llama3.2:8b",
+    ]);
+    expect(mockFetch).toHaveBeenCalledWith("http://localhost:11434/api/tags", {
+      signal: undefined,
+    });
+  });
+
+  it("returns empty list when the server reports no models", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
+    await expect(fetchOllamaModels("http://localhost:11434")).resolves.toEqual([]);
+  });
+
+  it("throws when the server is unreachable or errors", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 502 });
+    await expect(fetchOllamaModels("http://localhost:11434")).rejects.toThrow("Ollama error (502)");
   });
 });
 
@@ -263,11 +285,7 @@ describe("createAIProvider", () => {
   });
 
   it("returns null for claude without API key", () => {
-    const provider = createAIProvider({
-      ...baseSettings,
-      provider: "claude",
-    });
-    expect(provider).toBeNull();
+    expect(createAIProvider({ ...baseSettings, provider: "claude" })).toBeNull();
   });
 
   it("returns OpenAIProvider with API key", () => {
@@ -280,27 +298,18 @@ describe("createAIProvider", () => {
   });
 
   it("returns null for openai without API key", () => {
-    const provider = createAIProvider({
-      ...baseSettings,
-      provider: "openai",
-    });
-    expect(provider).toBeNull();
+    expect(createAIProvider({ ...baseSettings, provider: "openai" })).toBeNull();
   });
 
   it("returns OllamaProvider (no key required)", () => {
-    const provider = createAIProvider({
-      ...baseSettings,
-      provider: "ollama",
-    });
-    expect(provider).toBeInstanceOf(OllamaProvider);
+    expect(createAIProvider({ ...baseSettings, provider: "ollama" })).toBeInstanceOf(
+      OllamaProvider,
+    );
   });
 
   it("uses default ollama URL when empty", () => {
-    const provider = createAIProvider({
-      ...baseSettings,
-      provider: "ollama",
-      ollamaUrl: "",
-    });
-    expect(provider).toBeInstanceOf(OllamaProvider);
+    expect(createAIProvider({ ...baseSettings, provider: "ollama", ollamaUrl: "" })).toBeInstanceOf(
+      OllamaProvider,
+    );
   });
 });

@@ -129,6 +129,14 @@ export const BINDABLE_COMMANDS: readonly BindableCommand[] = [
     nativeMenu: true,
   },
   {
+    id: "ai-chat",
+    label: "AI Chat",
+    category: "View",
+    defaultAccelerator: "CmdOrCtrl+Shift+A",
+    event: "menu-ai-chat",
+    nativeMenu: true,
+  },
+  {
     id: "zoom-in",
     label: "Zoom In",
     category: "View",
