@@ -4,13 +4,16 @@
 
 import type { TFunction } from "i18next";
 import type { ReactNode } from "react";
+import { AI_ACTIONS } from "./aiPrompts";
 
 export interface ContextMenuActions {
   ttsSpeak?: (text: string) => void;
   ttsStop?: () => void;
   ttsSpeaking?: boolean;
   ttsAvailable?: boolean;
-  aiAction?: (action: string, text: string) => void;
+  /** Run an AI quick action; `selection` present when text was selected,
+   *  otherwise the action targets the whole document. */
+  aiAction?: (action: string, selection?: string) => void;
   aiConfigured?: boolean;
   content?: string | null;
 }
@@ -37,9 +40,6 @@ export type ContextMenuItem =
   | ContextMenuSubmenuItem;
 
 const SELECTION_PREVIEW_MAX = 30;
-// Canonical action ids passed to the AI controller; the visible verb is
-// translated separately via `contextMenu.aiVerb.<id>`.
-const AI_ACTIONS = ["summarize", "explain", "translate", "simplify"] as const;
 
 /** Copy text to the clipboard. The text is captured up front (not read live)
  *  so it survives focus moving from the document selection to the menu. */
@@ -125,21 +125,20 @@ export function buildContextMenuItems(
   }
 
   const ai: ContextMenuItem[] = [];
-  if (actions.aiConfigured) {
-    const textForAI = selection || actions.content || "";
-    if (textForAI) {
-      ai.push({
-        kind: "submenu",
-        label: t("contextMenu.ai"),
-        items: AI_ACTIONS.map((action) => ({
-          kind: "action" as const,
-          label: t(selection ? "contextMenu.aiOnSelection" : "contextMenu.aiOnDocument", {
-            action: t(`contextMenu.aiVerb.${action}`),
-          }),
-          onSelect: () => actions.aiAction?.(action, textForAI),
-        })),
-      });
-    }
+  if (actions.aiConfigured && (selection || actions.content)) {
+    ai.push({
+      kind: "submenu",
+      label: t("contextMenu.ai"),
+      items: AI_ACTIONS.map((action) => ({
+        kind: "action" as const,
+        label: t(selection ? "contextMenu.aiOnSelection" : "contextMenu.aiOnDocument", {
+          action: t(`contextMenu.aiVerb.${action}`),
+        }),
+        // The document itself rides along in the chat's system prompt, so only
+        // an explicit selection is passed as the action's target text.
+        onSelect: () => actions.aiAction?.(action, selection || undefined),
+      })),
+    });
   }
 
   return joinGroups([text, tts, ai]);

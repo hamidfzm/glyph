@@ -24,8 +24,8 @@ vi.mock("./modals/settings/lazySettings", () => ({
     ) : null,
 }));
 
-vi.mock("./modals/AIPanel", () => ({
-  AIPanel: ({ open }: { open: boolean }) => (open ? <div data-testid="ai-panel" /> : null),
+vi.mock("./ai/AIChatPanel", () => ({
+  AIChatPanel: ({ open }: { open: boolean }) => (open ? <div data-testid="ai-panel" /> : null),
 }));
 
 // Mocked so a test can drive the in-progress-export state (the real hook never
@@ -199,8 +199,7 @@ describe("App", () => {
     const listeners = captureMenuListeners();
     const { wrapper } = withProviders();
     const { findByTestId } = render(<App />, { wrapper });
-    // Wait for the CLI file to load — handleAIActionFromMenu drops the call
-    // unless there is non-empty displayContent.
+    // Wait for the CLI file to load so the action runs against real content.
     await findByTestId("markdown-viewer");
     await waitFor(() => expect(listeners["menu-ai-action"]).toBeDefined());
 
