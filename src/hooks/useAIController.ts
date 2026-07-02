@@ -1,27 +1,37 @@
-import { useCallback, useState } from "react";
-import { type AIAction, useAI } from "@/hooks/useAI";
+import { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useAIChat } from "@/hooks/useAIChat";
+import { type AIAction, type AIDocContext, actionPrompt } from "@/lib/aiPrompts";
 import type { AISettings } from "@/lib/settings";
 
-// Bundles useAI with the AI-panel open state and the menu-driven action
-// handler. The panel opens automatically when an action fires.
-export function useAIController(aiSettings: AISettings) {
-  const ai = useAI(aiSettings);
+// Bundles the AI chat with the panel open state and the menu/context-menu
+// quick-action handler. Quick actions open the panel and run as chat turns so
+// the user can follow up. `doc` is the open document (content + path), read
+// through a ref so its churn doesn't re-create the chat callbacks.
+export function useAIController(aiSettings: AISettings, doc: AIDocContext | null) {
+  const { t } = useTranslation("ai");
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  const getDocContext = useCallback(() => docRef.current, []);
+
+  const chat = useAIChat(aiSettings, getDocContext);
   const [panelOpen, setPanelOpen] = useState(false);
 
   const runAction = useCallback(
-    (action: string, text: string) => {
+    (action: string, selection?: string) => {
       setPanelOpen(true);
-      ai.run(action as AIAction, text);
+      const aiAction = action as AIAction;
+      const display = t(`request.${selection ? "selection" : "document"}.${aiAction}`);
+      void chat.send(actionPrompt(aiAction, selection), display);
     },
-    [ai],
+    [chat, t],
   );
 
-  const closePanel = useCallback(() => {
-    setPanelOpen(false);
-    ai.clear();
-  }, [ai]);
+  const togglePanel = useCallback(() => setPanelOpen((open) => !open), []);
+  // Closing hides the panel but keeps the conversation for when it reopens.
+  const closePanel = useCallback(() => setPanelOpen(false), []);
 
   const configured = aiSettings.provider !== "none";
 
-  return { ai, panelOpen, runAction, closePanel, configured };
+  return { chat, panelOpen, togglePanel, closePanel, runAction, configured };
 }

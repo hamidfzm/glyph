@@ -1,16 +1,39 @@
 {
-  "title": "IA",
-  "actionLabel": {
-    "summarize": "Resumen",
-    "explain": "Explicación",
-    "translate": "Traducción",
-    "simplify": "Simplificado"
+  "title": "Chat de IA",
+  "chip": {
+    "summarize": "Resumir",
+    "explain": "Explicar",
+    "translate": "Traducir",
+    "simplify": "Simplificar"
   },
-  "processing": "Procesando...",
-  "empty": "Usa el menú de IA o el menú contextual para ejecutar una acción.",
+  "request": {
+    "document": {
+      "summarize": "Resumir el documento",
+      "explain": "Explicar el documento",
+      "translate": "Traducir el documento",
+      "simplify": "Simplificar el documento"
+    },
+    "selection": {
+      "summarize": "Resumir la selección",
+      "explain": "Explicar la selección",
+      "translate": "Traducir la selección",
+      "simplify": "Simplificar la selección"
+    }
+  },
+  "empty": "Pregunta lo que quieras sobre este documento o empieza con una acción rápida.",
+  "emptyNoDoc": "Pregunta lo que quieras al asistente.",
+  "placeholder": "Pregunta sobre este documento…",
+  "placeholderNoDoc": "Pregunta lo que quieras…",
+  "send": "Enviar",
+  "stop": "Detener",
+  "clear": "Borrar conversación",
+  "close": "Cerrar",
+  "thinking": "Pensando…",
+  "copy": "Copiar",
+  "locate": "Mostrar en el documento",
+  "locateMissed": "No encontrado en el documento",
   "stopReading": "Detener lectura",
   "readAloud": "Leer en voz alta",
-  "copy": "Copiar",
   "error": {
     "notConfigured": "No hay ningún proveedor de IA configurado. Abre Ajustes para configurar un proveedor de IA."
   }

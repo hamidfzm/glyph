@@ -2,8 +2,12 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
-import { DEFAULT_SETTINGS, type Settings } from "@/lib/settings";
+import { useOllamaModels } from "@/hooks/useOllamaModels";
+import { DEFAULT_SETTINGS, MODEL_SUGGESTIONS, type Settings } from "@/lib/settings";
 import { AITab } from "./AITab";
+
+vi.mock("@/hooks/useOllamaModels", () => ({ useOllamaModels: vi.fn() }));
+vi.mocked(useOllamaModels).mockReturnValue(MODEL_SUGGESTIONS.ollama);
 
 function setup(settings: Settings = DEFAULT_SETTINGS) {
   const updateSettings = vi.fn();
@@ -69,5 +73,30 @@ describe("AITab", () => {
       target: { value: "http://host:1234" },
     });
     expect(updateSettings).toHaveBeenCalledWith("ai.ollamaUrl", "http://host:1234");
+  });
+
+  it("with Ollama: lists the models installed on the server in the datalist", () => {
+    vi.mocked(useOllamaModels).mockReturnValue(["gemma2:latest", "llama3.2:8b"]);
+    setup(withProvider("ollama"));
+
+    expect(useOllamaModels).toHaveBeenCalledWith(DEFAULT_SETTINGS.ai.ollamaUrl, true);
+    const options = [...document.querySelectorAll("#model-suggestions option")].map((o) =>
+      o.getAttribute("value"),
+    );
+    expect(options).toEqual(["gemma2:latest", "llama3.2:8b"]);
+    vi.mocked(useOllamaModels).mockReturnValue(MODEL_SUGGESTIONS.ollama);
+  });
+
+  it("disables autocorrect on the model, server URL, and voice inputs", () => {
+    setup(withProvider("ollama"));
+    for (const input of [
+      screen.getByPlaceholderText("Select or type model name"),
+      screen.getByPlaceholderText("http://localhost:11434"),
+      screen.getByPlaceholderText("Default system voice"),
+    ]) {
+      expect(input).toHaveAttribute("spellcheck", "false");
+      expect(input).toHaveAttribute("autocorrect", "off");
+      expect(input).toHaveAttribute("autocapitalize", "off");
+    }
   });
 });

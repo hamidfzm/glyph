@@ -42,6 +42,7 @@ pub struct MenuItemRefs {
     actual_size: MenuItem<Wry>,
     settings: MenuItem<Wry>,
     sync_settings: MenuItem<Wry>,
+    ai_chat: MenuItem<Wry>,
     ai_summarize: MenuItem<Wry>,
     ai_explain: MenuItem<Wry>,
     ai_simplify: MenuItem<Wry>,
@@ -92,6 +93,7 @@ pub struct MenuLabels {
     actual_size: String,
     toggle_edit: String,
     open_graph: String,
+    ai_chat: String,
     ai_summarize: String,
     ai_explain: String,
     ai_simplify: String,
@@ -226,6 +228,9 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
     };
 
     // AI menu
+    let ai_chat = MenuItemBuilder::with_id("ai-chat", "AI Chat")
+        .accelerator("CmdOrCtrl+Shift+A")
+        .build(handle)?;
     let ai_summarize =
         MenuItemBuilder::with_id("ai-summarize", "Summarize Document").build(handle)?;
     let ai_explain = MenuItemBuilder::with_id("ai-explain", "Explain Document").build(handle)?;
@@ -233,6 +238,8 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
     let ai_read_aloud = MenuItemBuilder::with_id("ai-read-aloud", "Read Aloud").build(handle)?;
 
     let ai_menu = SubmenuBuilder::new(handle, "AI")
+        .item(&ai_chat)
+        .separator()
         .item(&ai_summarize)
         .item(&ai_explain)
         .item(&ai_simplify)
@@ -363,6 +370,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         actual_size,
         settings,
         sync_settings,
+        ai_chat,
         ai_summarize,
         ai_explain,
         ai_simplify,
@@ -395,6 +403,7 @@ fn accelerator_target<'a>(refs: &'a MenuItemRefs, id: &str) -> Option<&'a MenuIt
         "toggle-outline-sidebar" => &refs.toggle_outline_sidebar,
         "toggle-edit" => &refs.toggle_edit,
         "open-graph" => &refs.open_graph,
+        "ai-chat" => &refs.ai_chat,
         "zoom-in" => &refs.zoom_in,
         "zoom-out" => &refs.zoom_out,
         "actual-size" => &refs.actual_size,
@@ -456,6 +465,10 @@ pub fn apply_menu_state(refs: &MenuItemRefs, flags: &MenuStateFlags) -> Result<(
     refs.open_graph
         .set_enabled(flags.has_workspace)
         .map_err(stringify)?;
+    // Chat works with or without an open document, so it only needs a provider.
+    refs.ai_chat
+        .set_enabled(flags.ai_configured)
+        .map_err(stringify)?;
     let ai_enabled = flags.ai_configured && flags.has_content;
     refs.ai_summarize
         .set_enabled(ai_enabled)
@@ -513,6 +526,7 @@ pub fn apply_menu_labels(refs: &MenuItemRefs, l: &MenuLabels) -> Result<(), Stri
     refs.actual_size.set_text(&l.actual_size).map_err(s)?;
     refs.toggle_edit.set_text(&l.toggle_edit).map_err(s)?;
     refs.open_graph.set_text(&l.open_graph).map_err(s)?;
+    refs.ai_chat.set_text(&l.ai_chat).map_err(s)?;
     refs.ai_summarize.set_text(&l.ai_summarize).map_err(s)?;
     refs.ai_explain.set_text(&l.ai_explain).map_err(s)?;
     refs.ai_simplify.set_text(&l.ai_simplify).map_err(s)?;

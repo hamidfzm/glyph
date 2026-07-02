@@ -22,6 +22,7 @@ export interface MenuEventHandlers {
   zoomOut: () => void;
   zoomReset: () => void;
   aiAction: (action: string) => void;
+  aiChat: () => void;
   readAloud: () => void;
   documentation: () => void;
   releaseNotes: () => void;
@@ -54,6 +55,7 @@ export function useMenuEvents(handlers: MenuEventHandlers) {
       subscribe("menu-zoom-out", handlers.zoomOut),
       subscribe("menu-zoom-reset", handlers.zoomReset),
       subscribe<string>("menu-ai-action", (event) => handlers.aiAction(event.payload)),
+      subscribe("menu-ai-chat", handlers.aiChat),
       subscribe("menu-ai-read-aloud", handlers.readAloud),
       subscribe("menu-documentation", handlers.documentation),
       subscribe("menu-release-notes", handlers.releaseNotes),
