@@ -46,7 +46,14 @@ async function preparePdfRichContent(liveBody: Element, clone: Element): Promise
       const svg = isMermaid ? await renderMermaidLightSvg(source) : await renderD2(source, false);
       if (isMermaid) mermaidRendered = true;
       const wrap = clone.ownerDocument.createElement("div");
-      wrap.innerHTML = svg;
+      // The diagram source is user-authored, and unlike D2 (sanitized in
+      // d2Render) Mermaid's output is raw, so sanitize at the sink before it
+      // re-enters the DOM and later flows into pdfmake's SVG parser. DOMPurify
+      // keeps <style> blocks and style attributes, which Mermaid's colors need;
+      // <foreignObject> is forbidden as the SVG-embedded-HTML vector (and
+      // pdfmake can't draw it anyway).
+      const { default: DOMPurify } = await import("dompurify");
+      wrap.innerHTML = DOMPurify.sanitize(svg, { FORBID_TAGS: ["foreignObject"] });
       const svgEl = wrap.querySelector("svg");
       if (!svgEl) throw new Error("no svg in rendered diagram");
       cloned[i].replaceWith(svgEl);

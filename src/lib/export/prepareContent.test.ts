@@ -16,6 +16,15 @@ vi.mock("./rasterize", () => ({
 vi.mock("@/lib/d2Render", () => ({
   renderD2: () => renderD2Mock(),
 }));
+// DOMPurify does not run faithfully under happy-dom (it drops the <svg>
+// wrapper), so mock it pass-through and assert the sanitize wiring instead;
+// real stripping is DOMPurify's job in the webview.
+const sanitizeMock = vi.fn((svg: string, _opts?: { FORBID_TAGS?: string[] }) => svg);
+vi.mock("dompurify", () => ({
+  default: {
+    sanitize: (svg: string, opts?: { FORBID_TAGS?: string[] }) => sanitizeMock(svg, opts),
+  },
+}));
 
 const ENTRIES: TocEntry[] = [{ id: "intro", text: "Intro", level: 1 }];
 
@@ -159,6 +168,19 @@ describe("prepareContent", () => {
     // Fallback: the math element survives (the walker turns it into LaTeX text).
     expect(result?.html).toContain("katex-display");
     expect(result?.html).not.toContain("data:image/png");
+  });
+
+  it("sanitizes the re-rendered diagram SVG before it re-enters the DOM", async () => {
+    sanitizeMock.mockClear();
+    setBody(
+      '<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg></svg></div>' +
+        '<div class="d2-diagram" data-d2-source="a -> b"><svg></svg></div>',
+    );
+    await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(sanitizeMock).toHaveBeenCalledTimes(2);
+    for (const call of sanitizeMock.mock.calls) {
+      expect(call[1]).toEqual({ FORBID_TAGS: ["foreignObject"] });
+    }
   });
 
   it("drops a diagram whose light re-render fails (never embeds the dark SVG)", async () => {

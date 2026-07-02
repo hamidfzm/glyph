@@ -35,6 +35,20 @@ describe("svgNode", () => {
     expect(fallback.width).toBe(CONTENT_WIDTH);
   });
 
+  it("ignores an unparseable width attribute and falls through to the viewBox", () => {
+    const node = svgNode(svgEl('<svg width="auto" viewBox="0 0 64 32"><rect/></svg>')) as {
+      width: number;
+    };
+    expect(node.width).toBe(64);
+  });
+
+  it("ignores a degenerate viewBox (zero or non-numeric width)", () => {
+    const zero = svgNode(svgEl('<svg viewBox="0 0 0 80"><rect/></svg>')) as { width: number };
+    expect(zero.width).toBe(CONTENT_WIDTH);
+    const junk = svgNode(svgEl('<svg viewBox="0 0 abc 80"><rect/></svg>')) as { width: number };
+    expect(junk.width).toBe(CONTENT_WIDTH);
+  });
+
   it("keeps an existing xmlns untouched", () => {
     const node = svgNode(
       svgEl('<svg xmlns="http://www.w3.org/2000/svg" width="10"><g/></svg>'),
