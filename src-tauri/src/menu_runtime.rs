@@ -46,6 +46,9 @@ pub struct MenuItemRefs {
     ai_explain: MenuItem<Wry>,
     ai_simplify: MenuItem<Wry>,
     ai_read_aloud: MenuItem<Wry>,
+    documentation: MenuItem<Wry>,
+    release_notes: MenuItem<Wry>,
+    report_issue: MenuItem<Wry>,
     // Submenu handles, kept so their titles can be re-localized at runtime.
     file_menu: Submenu<Wry>,
     edit_menu: Submenu<Wry>,
@@ -93,6 +96,9 @@ pub struct MenuLabels {
     ai_explain: String,
     ai_simplify: String,
     ai_read_aloud: String,
+    documentation: String,
+    release_notes: String,
+    report_issue: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -243,8 +249,19 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .license(Some("MIT"))
         .build();
 
+    // Help menu external links, always enabled. Each emits a menu event the
+    // frontend handles by opening the URL via the opener plugin.
+    let documentation = MenuItemBuilder::with_id("documentation", "Documentation").build(handle)?;
+    let release_notes = MenuItemBuilder::with_id("release-notes", "Release Notes").build(handle)?;
+    let report_issue = MenuItemBuilder::with_id("report-issue", "Report an Issue").build(handle)?;
+
     // Help menu
     let help_menu = SubmenuBuilder::new(handle, "Help")
+        .item(&documentation)
+        .item(&release_notes)
+        .separator()
+        .item(&report_issue)
+        .separator()
         .about(Some(about_metadata.clone()))
         .build()?;
 
@@ -350,6 +367,9 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         ai_explain,
         ai_simplify,
         ai_read_aloud,
+        documentation,
+        release_notes,
+        report_issue,
         file_menu,
         edit_menu,
         view_menu,
@@ -497,6 +517,9 @@ pub fn apply_menu_labels(refs: &MenuItemRefs, l: &MenuLabels) -> Result<(), Stri
     refs.ai_explain.set_text(&l.ai_explain).map_err(s)?;
     refs.ai_simplify.set_text(&l.ai_simplify).map_err(s)?;
     refs.ai_read_aloud.set_text(&l.ai_read_aloud).map_err(s)?;
+    refs.documentation.set_text(&l.documentation).map_err(s)?;
+    refs.release_notes.set_text(&l.release_notes).map_err(s)?;
+    refs.report_issue.set_text(&l.report_issue).map_err(s)?;
     Ok(())
 }
 

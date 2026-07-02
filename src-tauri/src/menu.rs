@@ -73,6 +73,9 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         "actual-size" => emit("menu-zoom-reset"),
         "find" => emit("menu-find"),
         "toggle-edit" => emit("menu-toggle-edit"),
+        "documentation" => emit("menu-documentation"),
+        "release-notes" => emit("menu-release-notes"),
+        "report-issue" => emit("menu-report-issue"),
         #[cfg(debug_assertions)]
         "toggle-devtools" => Some(MenuAction::ToggleDevTools),
         _ => None,
@@ -237,6 +240,22 @@ mod tests {
         assert_eq!(
             menu_action_for_id("ai-read-aloud"),
             Some(emit("menu-ai-read-aloud"))
+        );
+    }
+
+    #[test]
+    fn help_menu_ids_emit_their_events() {
+        assert_eq!(
+            menu_action_for_id("documentation"),
+            Some(emit("menu-documentation"))
+        );
+        assert_eq!(
+            menu_action_for_id("release-notes"),
+            Some(emit("menu-release-notes"))
+        );
+        assert_eq!(
+            menu_action_for_id("report-issue"),
+            Some(emit("menu-report-issue"))
         );
     }
 

@@ -79,6 +79,9 @@ export function useAppCommands({
 
     // App-level commands. Subset of every menu item that makes sense to invoke
     // from a palette (Open Folder is reachable from the empty-state button).
+    // The Help-menu external links (documentation/releaseNotes/reportIssue on
+    // AppActions) are intentionally omitted: they belong in the native Help
+    // menu only, not the palette.
     out.push(
       {
         id: "cmd:openFile",

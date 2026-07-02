@@ -19,6 +19,7 @@ import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
+import { openDocumentation, openReleaseNotes, openReportIssue } from "@/lib/helpLinks";
 import { isImageFile } from "@/lib/imageExtensions";
 import { nextEditorMode } from "@/lib/settings";
 import { EmptyState } from "./layout/EmptyState";
@@ -163,6 +164,10 @@ export function AppShell() {
       zoomReset: zoom.zoomReset,
       aiAction: handleAIActionFromMenu,
       readAloud: readAloud.toggle,
+      // Static external links; module-level refs, so no deps entry needed.
+      documentation: openDocumentation,
+      releaseNotes: openReleaseNotes,
+      reportIssue: openReportIssue,
     }),
     [
       openFileDialog,
