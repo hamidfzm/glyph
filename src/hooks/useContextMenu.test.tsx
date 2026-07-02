@@ -114,6 +114,44 @@ describe("useContextMenu", () => {
     expect(actionLabels(result.current.menu)).toContain("Select All");
   });
 
+  it("adds link actions when the target is inside an external link", () => {
+    const body = document.createElement("div");
+    body.className = "markdown-body";
+    const anchor = document.createElement("a");
+    anchor.setAttribute("href", "https://example.com");
+    const strong = document.createElement("strong");
+    strong.textContent = "example";
+    anchor.appendChild(strong);
+    body.appendChild(anchor);
+    document.body.appendChild(body);
+    const { result } = renderHook(() => useContextMenu(baseActions));
+
+    act(() => {
+      fireContextMenu(strong);
+    });
+
+    const labels = actionLabels(result.current.menu);
+    expect(labels).toContain("Copy Link Address");
+    expect(labels).toContain("Open in External Browser");
+  });
+
+  it("shows no link actions for internal links (wikilinks render as href='#')", () => {
+    const body = document.createElement("div");
+    body.className = "markdown-body";
+    const anchor = document.createElement("a");
+    anchor.setAttribute("href", "#");
+    anchor.textContent = "wikilink";
+    body.appendChild(anchor);
+    document.body.appendChild(body);
+    const { result } = renderHook(() => useContextMenu(baseActions));
+
+    act(() => {
+      fireContextMenu(anchor);
+    });
+
+    expect(actionLabels(result.current.menu)).toEqual(["Select All"]);
+  });
+
   it("close() clears the open menu", () => {
     const para = mountMarkdown();
     const { result } = renderHook(() => useContextMenu(baseActions));

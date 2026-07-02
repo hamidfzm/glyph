@@ -73,6 +73,8 @@
   },
   "contextMenu": {
     "copy": "Kopieren",
+    "copyLinkAddress": "Linkadresse kopieren",
+    "openInBrowser": "In externem Browser öffnen",
     "selectAll": "Alles auswählen",
     "searchGoogle": "Bei Google nach \"{{query}}\" suchen",
     "stopReading": "Vorlesen stoppen",
