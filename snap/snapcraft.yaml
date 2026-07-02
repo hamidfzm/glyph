@@ -17,6 +17,7 @@
 #
 # See the Tauri Snapcraft guide: https://v2.tauri.app/distribute/snapcraft/
 name: glyph
+title: Glyph
 base: core22
 adopt-info: glyph
 icon: src-tauri/icons/icon.png
@@ -26,10 +27,11 @@ description: |
   platform-native styling. Built with Tauri v2, React 19, and TypeScript.
 
   Features GitHub Flavored Markdown with syntax highlighting, KaTeX math,
-  Mermaid diagrams, multi-file tabs, a table-of-contents outline, live file
-  watching, wikilinks and backlinks, optional AI summarization
-  (Claude/OpenAI/Ollama), text-to-speech, and light/dark themes that follow
-  the system appearance.
+  Mermaid and D2 diagrams, multi-file tabs, a table-of-contents outline,
+  live file watching, wikilinks and backlinks, optional AI summarization
+  (Claude/OpenAI/Ollama), text-to-speech, cloud sync across devices, a
+  JavaScript plugin system, and light/dark themes that follow the system
+  appearance.
 
 grade: stable
 confinement: strict
@@ -37,6 +39,7 @@ license: MIT
 website: https://glyph-md.github.io
 issues: https://github.com/hamidfzm/glyph/issues
 source-code: https://github.com/hamidfzm/glyph
+donation: https://github.com/hamidfzm/glyph#sponsors
 compression: lzo
 
 apps:
