@@ -22,6 +22,7 @@ import { useWindowReveal } from "@/hooks/useWindowReveal";
 import { openDocumentation, openReleaseNotes, openReportIssue } from "@/lib/helpLinks";
 import { isImageFile } from "@/lib/imageExtensions";
 import { nextEditorMode } from "@/lib/settings";
+import { AIChatEdgeButton } from "./ai/AIChatEdgeButton";
 import { AIChatPanel } from "./ai/AIChatPanel";
 import { EmptyState } from "./layout/EmptyState";
 import { ExportProgress } from "./layout/ExportProgress";
@@ -274,6 +275,9 @@ export function AppShell() {
           speaking={tts.speaking}
           onStopReading={tts.stop}
         />
+        {aiController.configured && !aiController.panelOpen && (
+          <AIChatEdgeButton onClick={aiController.togglePanel} />
+        )}
       </div>
       <StatusBar onOpenSync={() => setSyncSettingsOpen(true)} />
 

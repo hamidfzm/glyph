@@ -85,6 +85,9 @@
   padding: 6px 10px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* Each line resolves its own direction, so a Persian question in an
+     otherwise-LTR app renders right-to-left (the bubble carries dir="auto"). */
+  unicode-bidi: plaintext;
 }
 
 [dir="rtl"] .ai-msg-user {
@@ -99,6 +102,13 @@
   font-size: 13px;
   max-width: 100%;
   padding: 0;
+}
+
+/* Assistant replies mix languages (e.g. a Persian translation under English
+   headings); each block resolves its own direction from its first strong
+   character. */
+.ai-msg-markdown :is(p, li, h1, h2, h3, h4, h5, h6) {
+  unicode-bidi: plaintext;
 }
 
 /* Per-message actions, revealed on hover to keep the transcript quiet. */
@@ -234,7 +244,9 @@
   color: var(--color-text-primary);
   font-family: inherit;
   max-height: 120px;
-  overflow-y: auto;
+  /* The scrollbar appears only when content exceeds max-height (toggled from
+     the component); a permanent one reads as clutter beside one line. */
+  overflow-y: hidden;
 }
 
 .ai-composer-input:focus {

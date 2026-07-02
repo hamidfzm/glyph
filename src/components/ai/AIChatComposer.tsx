@@ -34,7 +34,9 @@ export function AIChatComposer({
     setValue("");
     // The textarea is mounted for as long as the composer is; submit only
     // fires from its own key handler or the send button beside it.
-    (textareaRef.current as HTMLTextAreaElement).style.height = "auto";
+    const el = textareaRef.current as HTMLTextAreaElement;
+    el.style.height = "auto";
+    el.style.overflowY = "hidden";
   }, [value, streaming, disabled, onSend]);
 
   const handleChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
@@ -42,6 +44,9 @@ export function AIChatComposer({
     const el = e.target;
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+    // Show the scrollbar only once the content outgrows the max height,
+    // instead of a permanent sliver next to single-line input.
+    el.style.overflowY = el.scrollHeight > MAX_TEXTAREA_HEIGHT ? "auto" : "hidden";
   }, []);
 
   const handleKeyDown = useCallback(
@@ -59,6 +64,7 @@ export function AIChatComposer({
       <textarea
         ref={textareaRef}
         className="ai-composer-input"
+        dir="auto"
         rows={1}
         value={value}
         placeholder={placeholder}

@@ -1,7 +1,6 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchOllamaModels } from "@/lib/ai-providers";
-import { MODEL_SUGGESTIONS } from "@/lib/settings";
 import { useOllamaModels } from "./useOllamaModels";
 
 vi.mock("@/lib/ai-providers", async (importOriginal) => ({
@@ -20,19 +19,23 @@ describe("useOllamaModels", () => {
     mockFetchModels.mockResolvedValue(["gemma2:latest", "llama3.2:8b"]);
     const { result } = renderHook(() => useOllamaModels("http://localhost:11434", true));
 
-    // Fallback suggestions while the debounced fetch is pending.
-    expect(result.current).toEqual(MODEL_SUGGESTIONS.ollama);
+    // Probing while the debounced fetch is pending.
+    expect(result.current).toEqual({ models: [], status: "loading" });
 
-    await waitFor(() => expect(result.current).toEqual(["gemma2:latest", "llama3.2:8b"]));
+    await waitFor(() =>
+      expect(result.current).toEqual({
+        models: ["gemma2:latest", "llama3.2:8b"],
+        status: "ok",
+      }),
+    );
     expect(mockFetchModels).toHaveBeenCalledWith("http://localhost:11434", expect.any(AbortSignal));
   });
 
-  it("falls back to the built-in suggestions when the server is unreachable", async () => {
+  it("reports the error state when the server is unreachable", async () => {
     mockFetchModels.mockRejectedValue(new Error("offline"));
     const { result } = renderHook(() => useOllamaModels("http://localhost:11434", true));
 
-    await waitFor(() => expect(mockFetchModels).toHaveBeenCalled());
-    expect(result.current).toEqual(MODEL_SUGGESTIONS.ollama);
+    await waitFor(() => expect(result.current).toEqual({ models: [], status: "error" }));
   });
 
   it("refetches when the URL changes", async () => {
@@ -40,19 +43,36 @@ describe("useOllamaModels", () => {
     const { result, rerender } = renderHook(({ url }) => useOllamaModels(url, true), {
       initialProps: { url: "http://localhost:11434" },
     });
-    await waitFor(() => expect(result.current).toEqual(["a:latest"]));
+    await waitFor(() => expect(result.current.models).toEqual(["a:latest"]));
 
     mockFetchModels.mockResolvedValue(["b:latest"]);
     rerender({ url: "http://other:11434" });
-    await waitFor(() => expect(result.current).toEqual(["b:latest"]));
+    await waitFor(() => expect(result.current.models).toEqual(["b:latest"]));
     expect(mockFetchModels).toHaveBeenLastCalledWith("http://other:11434", expect.any(AbortSignal));
   });
 
-  it("does not fetch when disabled", async () => {
+  it("stays idle and does not fetch when disabled", async () => {
     const { result } = renderHook(() => useOllamaModels("http://localhost:11434", false));
-    expect(result.current).toEqual(MODEL_SUGGESTIONS.ollama);
+    expect(result.current).toEqual({ models: [], status: "idle" });
     // Give the debounce window a chance to elapse.
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(mockFetchModels).not.toHaveBeenCalled();
+  });
+
+  it("does not flip to error when the fetch is aborted by unmount", async () => {
+    let reject: ((err: unknown) => void) | undefined;
+    mockFetchModels.mockImplementation(
+      (_url, signal) =>
+        new Promise<string[]>((_resolve, rej) => {
+          reject = rej;
+          signal?.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
+        }),
+    );
+    const { result, unmount } = renderHook(() => useOllamaModels("http://localhost:11434", true));
+    await waitFor(() => expect(mockFetchModels).toHaveBeenCalled());
+    unmount();
+    expect(reject).toBeDefined();
+    // The aborted rejection must not surface as an error state update.
+    expect(result.current.status).toBe("loading");
   });
 });

@@ -29,7 +29,11 @@ export function AIChatMessage({
   }, [turn.content]);
 
   if (turn.role === "user") {
-    return <div className="ai-msg ai-msg-user">{turn.display ?? turn.content}</div>;
+    return (
+      <div className="ai-msg ai-msg-user" dir="auto">
+        {turn.display ?? turn.content}
+      </div>
+    );
   }
 
   if (pending) {
@@ -46,7 +50,7 @@ export function AIChatMessage({
 
   return (
     <div className="ai-msg ai-msg-assistant">
-      <div className="markdown-body ai-msg-markdown">
+      <div className="markdown-body ai-msg-markdown" dir="auto">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ blockquote: AIQuoteBlock }}>
           {turn.content}
         </ReactMarkdown>

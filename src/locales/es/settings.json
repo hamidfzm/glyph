@@ -187,7 +187,12 @@
     },
     "model": {
       "label": "Modelo",
-      "placeholder": "Selecciona o escribe el nombre del modelo"
+      "placeholder": "Selecciona o escribe el nombre del modelo",
+      "status": {
+        "checking": "Comprobando el servidor de Ollama…",
+        "ok": "Conectado a Ollama. Modelos instalados: {{count}}",
+        "error": "No se puede acceder al servidor de Ollama. Comprueba la URL y OLLAMA_ORIGINS."
+      }
     },
     "tts": {
       "title": "Texto a voz"
