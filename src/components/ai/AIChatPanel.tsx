@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { type UIEvent, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ClearChatIcon } from "@/components/icons/ClearChatIcon";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
@@ -50,9 +50,9 @@ export function AIChatPanel({
   // re-read pauses the auto-scroll until they return.
   const pinnedRef = useRef(true);
 
-  const handleScroll = useCallback(() => {
-    const el = bodyRef.current;
-    if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  const handleScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    const el = event.currentTarget;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   }, []);
 
   useEffect(() => {

@@ -52,6 +52,13 @@ describe("locateInDocument", () => {
     expect(locateInDocument("quick brown fox")).toBe(false);
   });
 
+  it("skips blocks whose textContent is null", () => {
+    const first = document.querySelector("h1") as HTMLElement;
+    Object.defineProperty(first, "textContent", { get: () => null });
+    expect(locateInDocument("quick brown fox")).toBe(true);
+    expect(document.querySelector("p")?.classList.contains("ai-flash")).toBe(true);
+  });
+
   it("clears the previous flash when locating a second passage", () => {
     expect(locateInDocument("quick brown fox")).toBe(true);
     expect(locateInDocument("Second paragraph")).toBe(true);

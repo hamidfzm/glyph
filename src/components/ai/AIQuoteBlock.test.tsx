@@ -18,12 +18,21 @@ describe("AIQuoteBlock", () => {
     expect(screen.getByRole("button", { name: "Show in document" })).toBeInTheDocument();
   });
 
-  it("locates the blockquote's text (without the button label) on click", () => {
+  it("locates exactly the quote's text, never the button label", () => {
     mockLocate.mockReturnValue(true);
     render(<AIQuoteBlock>quoted passage</AIQuoteBlock>);
     fireEvent.click(screen.getByRole("button", { name: "Show in document" }));
-    expect(mockLocate).toHaveBeenCalledTimes(1);
-    expect(mockLocate.mock.calls[0][0]).toContain("quoted passage");
+    expect(mockLocate).toHaveBeenCalledWith("quoted passage");
+  });
+
+  it("treats a text-less quote as not found", () => {
+    mockLocate.mockReturnValue(false);
+    const { container } = render(<AIQuoteBlock />);
+    const content = container.querySelector(".ai-quote-content") as HTMLElement;
+    Object.defineProperty(content, "textContent", { get: () => null });
+    fireEvent.click(screen.getByRole("button", { name: "Show in document" }));
+    expect(mockLocate).toHaveBeenCalledWith("");
+    expect(screen.getByRole("button", { name: "Not found in document" })).toBeInTheDocument();
   });
 
   it("shows temporary not-found feedback when the quote is not in the document", () => {

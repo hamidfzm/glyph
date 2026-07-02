@@ -32,8 +32,9 @@ export function AIChatComposer({
     if (!text || streaming || disabled) return;
     onSend(text);
     setValue("");
-    const el = textareaRef.current;
-    if (el) el.style.height = "auto";
+    // The textarea is mounted for as long as the composer is; submit only
+    // fires from its own key handler or the send button beside it.
+    (textareaRef.current as HTMLTextAreaElement).style.height = "auto";
   }, [value, streaming, disabled, onSend]);
 
   const handleChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
