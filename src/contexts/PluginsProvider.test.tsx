@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
@@ -135,6 +135,70 @@ describe("PluginsProvider", () => {
     await waitFor(() =>
       expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin", expect.anything()),
     );
+  });
+
+  it("aborts a folder install when consent is declined", async () => {
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "list_plugins" ? [] : undefined),
+    );
+    vi.mocked(open).mockResolvedValue("/somewhere/plugin-folder");
+    vi.mocked(ask).mockResolvedValueOnce(false);
+
+    function InstallProbe() {
+      const plugins = usePluginsOptional();
+      return (
+        <button type="button" onClick={() => void plugins?.installFromFolder()}>
+          install
+        </button>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <InstallProbe />
+      </PluginsProvider>,
+    );
+    screen.getByRole("button", { name: "install" }).click();
+
+    await waitFor(() => expect(vi.mocked(ask)).toHaveBeenCalled());
+    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin", expect.anything());
+  });
+
+  it("aborts a marketplace install when consent is declined, and lists permissions in the prompt", async () => {
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "list_plugins" ? [] : undefined),
+    );
+    vi.mocked(ask).mockResolvedValueOnce(false);
+    const entry = {
+      id: "com.x.market",
+      name: "Market",
+      version: "1.0.0",
+      apiVersion: "^1.0.0",
+      permissions: ["workspace:read"],
+      mainUrl: "https://example.test/main.js",
+    };
+
+    function InstallProbe() {
+      const plugins = usePluginsOptional();
+      return (
+        <button type="button" onClick={() => void plugins?.installFromRegistry(entry)}>
+          market
+        </button>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <InstallProbe />
+      </PluginsProvider>,
+    );
+    screen.getByRole("button", { name: "market" }).click();
+
+    await waitFor(() => expect(vi.mocked(ask)).toHaveBeenCalled());
+    const [message] = vi.mocked(ask).mock.calls.at(-1) ?? [];
+    expect(message).toContain("Market");
+    expect(message).toContain("workspace:read");
+    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin_files", expect.anything());
   });
 
   it("shows an error toast when install fails", async () => {

@@ -67,6 +67,17 @@ describe("PluginsModal", () => {
     expect(screen.getByText("Charlie")).toBeInTheDocument();
   });
 
+  it("shows an installed plugin's declared permissions", () => {
+    renderModal(
+      ctx({ installed: [{ ...installed, permissions: ["workspace:read", "network:api.test"] }] }),
+    );
+    expect(
+      screen.getByText(
+        (_, el) => el?.textContent === "Permissions: workspace:read, network:api.test",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("toggles an installed plugin's active state", () => {
     const value = ctx();
     renderModal(value);

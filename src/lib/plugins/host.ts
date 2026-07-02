@@ -106,6 +106,13 @@ export function createPluginHost(
     }
   };
 
+  // Guards against overlapping load() calls for the same id (rapid re-enable
+  // or double-clicked update) and against loads that resolve after teardown:
+  // only the newest generation commits; anything stale rolls itself back.
+  // unloadAll bumps every generation instead of latching a closed flag, so a
+  // StrictMode remount (same host instance) can still load plugins afterwards.
+  const loadGeneration = new Map<string, number>();
+
   return {
     commands,
     statusBarItems,
@@ -118,7 +125,9 @@ export function createPluginHost(
           `${plugin.name} requires plugin API ${plugin.apiVersion}, but this Glyph provides ${PLUGIN_API_VERSION}`,
         );
       }
-      unload(plugin.id);
+      const generation = (loadGeneration.get(plugin.id) ?? 0) + 1;
+      loadGeneration.set(plugin.id, generation);
+
       const module = await importPluginModule(plugin.mainSource, importer);
       const bag = new DisposerBag();
       try {
@@ -127,6 +136,20 @@ export function createPluginHost(
         bag.dispose(); // roll back anything registered before the throw
         throw err;
       }
+      // Superseded by a newer load, or the host has been torn down: undo this
+      // activation instead of committing a leaked instance.
+      if (loadGeneration.get(plugin.id) !== generation) {
+        bag.dispose();
+        try {
+          module.deactivate?.();
+        } catch (err) {
+          console.error(`Plugin ${plugin.id} threw in deactivate():`, err);
+        }
+        return;
+      }
+      // The previous instance stays live while the new one downloads and
+      // activates; swap only at commit time.
+      unload(plugin.id);
       loaded.set(plugin.id, {
         info: {
           id: plugin.id,
@@ -140,6 +163,10 @@ export function createPluginHost(
     },
     unload,
     unloadAll() {
+      // Invalidate in-flight loads too, not just committed instances.
+      for (const [id, generation] of loadGeneration) {
+        loadGeneration.set(id, generation + 1);
+      }
       for (const id of [...loaded.keys()]) unload(id);
     },
     listLoaded() {

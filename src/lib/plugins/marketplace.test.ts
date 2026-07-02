@@ -63,7 +63,9 @@ describe("installFromRegistry", () => {
     );
     vi.mocked(invoke).mockResolvedValue(undefined);
 
-    await installFromRegistry(entry({ version: "2.0.0", description: "d" }));
+    await installFromRegistry(
+      entry({ version: "2.0.0", description: "d", permissions: ["workspace:read"] }),
+    );
 
     const [cmd, args] = vi.mocked(invoke).mock.calls.at(-1) ?? [];
     expect(cmd).toBe("install_plugin_files");
@@ -74,6 +76,7 @@ describe("installFromRegistry", () => {
       version: "2.0.0",
       apiVersion: "^1.0.0",
       description: "d",
+      permissions: ["workspace:read"],
     });
   });
 
