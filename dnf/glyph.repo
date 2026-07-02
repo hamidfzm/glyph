@@ -1,0 +1,7 @@
+[glyph]
+name=Glyph
+baseurl=https://glyph-md.github.io/rpm-repo
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://glyph-md.github.io/rpm-repo/gpg.key

@@ -180,7 +180,7 @@ Run the **Create Release** workflow from GitHub Actions (`create-release.yml`) w
 3. Commit and push to `main`
 4. Create and push the `vX.Y.Z` tag, which triggers `release.yml`
 
-The release workflow builds all platforms and publishes to Homebrew, Chocolatey, Scoop, AUR, PPA, and the Debian apt repo.
+The release workflow builds all platforms and publishes to Homebrew, Chocolatey, Scoop, AUR, PPA, the Debian apt repo, and the Fedora/RHEL dnf repo.
 
 Do **not** create releases manually with `gh release create` or push tags by hand — use the workflow.
 
