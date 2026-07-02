@@ -187,6 +187,33 @@ describe("createPluginHost", () => {
     expect(register).toHaveBeenCalledWith("de", "myplugin", { hello: "Hallo" });
   });
 
+  it("gates ctx.workspace on the plugin's declared permissions", async () => {
+    const host = createPluginHost(vi.fn(), undefined, () => "/ws");
+    let denied: unknown;
+    let allowedCall: Promise<string[]> | undefined;
+    const withPermission: PluginModule = {
+      activate(ctx) {
+        allowedCall = ctx.workspace.listFiles();
+        allowedCall.catch(() => {}); // resolved via mocked invoke in tests
+      },
+    };
+    const withoutPermission: PluginModule = {
+      async activate(ctx) {
+        denied = await ctx.workspace.listFiles().catch((e: unknown) => e);
+      },
+    };
+
+    await host.load(
+      installed({ id: "p.allowed", permissions: ["workspace:read"] }),
+      importerFor(withPermission),
+    );
+    await host.load(installed({ id: "p.denied" }), importerFor(withoutPermission));
+
+    expect(allowedCall).toBeDefined();
+    expect(denied).toBeInstanceOf(Error);
+    expect(String(denied)).toMatch(/workspace:read/);
+  });
+
   it("only the newest of two overlapping loads for one id commits; the stale one rolls back", async () => {
     const host = createPluginHost(vi.fn());
     const staleDeactivate = vi.fn();
@@ -212,6 +239,28 @@ describe("createPluginHost", () => {
     expect(host.commands.list().map((c) => c.id)).toEqual(["fresh.cmd"]);
     expect(host.listLoaded().map((p) => p.version)).toEqual(["2.0.0"]);
     expect(staleDeactivate).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs but survives when a superseded load's deactivate throws", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const host = createPluginHost(vi.fn());
+    const stale: PluginModule = {
+      activate() {},
+      deactivate() {
+        throw new Error("bad rollback");
+      },
+    };
+    const fresh: PluginModule = { activate() {} };
+
+    const first = deferredImporterFor(stale);
+    const firstLoad = host.load(installed(), first.importer);
+    await host.load(installed(), importerFor(fresh));
+    first.resolve();
+    await firstLoad;
+
+    expect(host.listLoaded()).toHaveLength(1);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   it("a load resolving after unloadAll rolls back instead of leaking", async () => {

@@ -11,6 +11,7 @@ import type {
   PluginModule,
   StatusBarItemContribution,
 } from "./types";
+import { createWorkspaceApi } from "./workspaceApi";
 
 export interface LoadedPluginInfo {
   id: string;
@@ -61,6 +62,9 @@ export function createPluginHost(
   // without i18next). Defaults to a no-op. Translations persist past unload,
   // which is harmless (just unused strings in memory).
   registerTranslations: GlyphPluginContext["registerTranslations"] = () => {},
+  // Where the opened workspace lives right now; null when none is open. The
+  // provider keeps this current so ctx.workspace stays scoped correctly.
+  getWorkspaceRoot: () => string | null = () => null,
 ): PluginHost {
   const commands = createRegistry<CommandContribution>();
   const statusBarItems = createRegistry<StatusBarItemContribution>();
@@ -79,7 +83,7 @@ export function createPluginHost(
       return dispose;
     };
 
-  const buildContext = (bag: DisposerBag): GlyphPluginContext => ({
+  const buildContext = (bag: DisposerBag, permissions: readonly string[]): GlyphPluginContext => ({
     apiVersion: PLUGIN_API_VERSION,
     commands: { register: tracked(commands.register, bag) },
     ui: { addStatusBarItem: tracked(statusBarItems.register, bag) },
@@ -90,6 +94,7 @@ export function createPluginHost(
         return tracked(fencedRenderers.register, bag)({ language, render });
       },
     },
+    workspace: createWorkspaceApi(getWorkspaceRoot, permissions),
     notify,
     registerTranslations,
   });
@@ -131,7 +136,7 @@ export function createPluginHost(
       const module = await importPluginModule(plugin.mainSource, importer);
       const bag = new DisposerBag();
       try {
-        await module.activate(buildContext(bag));
+        await module.activate(buildContext(bag, plugin.permissions ?? []));
       } catch (err) {
         bag.dispose(); // roll back anything registered before the throw
         throw err;

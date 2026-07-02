@@ -40,8 +40,19 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     }, TOAST_DURATION_MS);
   }, []);
 
+  // The opened workspace root, mirrored from TabsContext by
+  // usePluginWorkspaceSync (this provider mounts above TabsProvider, so it
+  // cannot read that context directly). A ref, not state: only ctx.workspace
+  // calls read it, and they always want the current value.
+  const workspaceRootRef = useRef<string | null>(null);
+  const setWorkspaceRoot = useCallback((root: string | null) => {
+    workspaceRootRef.current = root;
+  }, []);
+
   // One host per provider; pushToast is stable so the closure stays valid.
-  const [host] = useState(() => createPluginHost(pushToast, registerTranslations));
+  const [host] = useState(() =>
+    createPluginHost(pushToast, registerTranslations, () => workspaceRootRef.current),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -213,6 +224,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         installFromRegistry,
         setEnabled,
         uninstall,
+        setWorkspaceRoot,
       }}
     >
       {children}

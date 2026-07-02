@@ -14,6 +14,7 @@ import { useNativeKeybindings } from "@/hooks/useNativeKeybindings";
 import { useNativeMenuLabels } from "@/hooks/useNativeMenuLabels";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
 import { usePlatform } from "@/hooks/usePlatform";
+import { usePluginWorkspaceSync } from "@/hooks/usePluginWorkspaceSync";
 import { usePrint } from "@/hooks/usePrint";
 import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
@@ -53,6 +54,9 @@ export function AppShell() {
   // Reveal the window (created hidden in tauri.conf.json) once settings/theme
   // are loaded, avoiding the white flash + geometry jump on launch.
   useWindowReveal();
+
+  // Keep the plugin host's workspace scope in sync with the open workspace.
+  usePluginWorkspaceSync();
 
   // Once-per-session check for a newer GitHub release; the banner shows only
   // when the user has the feature on and an update is actually available.

@@ -47,6 +47,7 @@ function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
     installFromRegistry: vi.fn(async () => {}),
     setEnabled: vi.fn(async () => {}),
     uninstall: vi.fn(async () => {}),
+    setWorkspaceRoot: vi.fn(),
     ...over,
   };
 }
