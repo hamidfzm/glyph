@@ -105,8 +105,12 @@ jobs:
             curl -fsSL https://glyph-md.github.io/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
             echo "deb [signed-by=/usr/share/keyrings/glyph.gpg] https://glyph-md.github.io/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/glyph.list
             sudo apt update && sudo apt install glyph
+
+            # Fedora/RHEL (dnf)
+            sudo tee /etc/yum.repos.d/glyph.repo < <(curl -fsSL https://glyph-md.github.io/rpm-repo/glyph.repo)
+            sudo dnf install glyph
             ```
-            Or download the `.deb` / `.AppImage` below.
+            Or download the `.deb` / `.rpm` / `.AppImage` below.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
@@ -164,8 +168,12 @@ jobs:
           curl -fsSL https://glyph-md.github.io/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
           echo "deb [signed-by=/usr/share/keyrings/glyph.gpg] https://glyph-md.github.io/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/glyph.list
           sudo apt update && sudo apt install glyph
+
+          # Fedora/RHEL (dnf)
+          sudo tee /etc/yum.repos.d/glyph.repo < <(curl -fsSL https://glyph-md.github.io/rpm-repo/glyph.repo)
+          sudo dnf install glyph
           ```
-          Or download the `.deb` / `.AppImage` below.
+          Or download the `.deb` / `.rpm` / `.AppImage` below.
 
           ---
 
@@ -686,3 +694,101 @@ jobs:
         with:
           snap: ${{ steps.build.outputs.snap }}
           release: stable
+
+  publish-dnf:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # The signed DNF repo lives in glyph-md/rpm-repo (GitHub Pages), mirroring
+      # the apt-repo. Skip cleanly until that repo exists, so a missing target
+      # never fails the release (gated like publish-snap, though this probes the
+      # repo via the API rather than checking a secret's presence). Note:
+      # TAP_GITHUB_TOKEN must have access to rpm-repo, otherwise this 404s and the
+      # job stays a silent no-op even once the repo is created.
+      - name: Check rpm-repo exists
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          if gh api repos/glyph-md/rpm-repo >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No glyph-md/rpm-repo; skipping DNF publish."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install packaging tools
+        if: steps.gate.outputs.enabled == 'true'
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: sudo apt-get update && sudo apt-get install -y createrepo-c rpm gnupg
+      - name: Get version
+        if: steps.gate.outputs.enabled == 'true'
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Download RPM packages
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release download "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "Glyph-${VERSION}-1.x86_64.rpm" \
+            --pattern "Glyph-${VERSION}-1.aarch64.rpm"
+      - name: Import GPG key
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format long 2>/dev/null | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
+          echo "GPG_KEY_ID=$GPG_KEY_ID" >> "$GITHUB_ENV"
+          # Passphrase file for loopback signing (empty file is harmless for an
+          # unprotected key, which is what the apt-repo job also assumes).
+          printf '%s' "$GPG_PASSPHRASE" > /tmp/gpg-pass
+          # rpm --addsign shells out to gpg; force batch/loopback so it never
+          # blocks on a pinentry prompt in CI.
+          cat > "$HOME/.rpmmacros" <<EOF
+          %_gpg_name $GPG_KEY_ID
+          %__gpg_sign_cmd gpg --batch --no-verbose --no-armor --pinentry-mode loopback --passphrase-file /tmp/gpg-pass --no-secmem-warning -u "%{_gpg_name}" --sign --detach-sign --output %{__signature_filename} %{__plaintext_filename}
+          EOF
+      - name: Clone rpm-repo, sign RPMs, and rebuild metadata
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/glyph-md/rpm-repo.git" /tmp/rpm-repo
+          cd /tmp/rpm-repo
+
+          # Flat repo at the Pages root: RPMs sit next to repodata/, matching the
+          # baseurl in dnf/glyph.repo. Copy in this release's packages (overwrite
+          # if re-running the same tag), then sign only those two files, not the
+          # whole history, so prior releases' RPMs are left untouched (mirrors how
+          # publish-debian only handles the current version's debs).
+          cp "$GITHUB_WORKSPACE/Glyph-${VERSION}-1.x86_64.rpm" .
+          cp "$GITHUB_WORKSPACE/Glyph-${VERSION}-1.aarch64.rpm" .
+          rpm --addsign "Glyph-${VERSION}-1.x86_64.rpm" "Glyph-${VERSION}-1.aarch64.rpm"
+
+          # Regenerate repodata over all versions (full rebuild is idempotent).
+          createrepo_c --revision "$VERSION" .
+
+          # repo_gpgcheck=1 verifies a detached signature of repomd.xml.
+          gpg --batch --yes --pinentry-mode loopback --passphrase-file /tmp/gpg-pass \
+            --default-key "$GPG_KEY_ID" --detach-sign --armor repodata/repomd.xml
+
+          # Ship the public key and the .repo drop-in at the root.
+          gpg --armor --export "$GPG_KEY_ID" > gpg.key
+          cp "$GITHUB_WORKSPACE/dnf/glyph.repo" glyph.repo
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || {
+            git commit -m "chore: update packages to $VERSION"
+            git push
+          }

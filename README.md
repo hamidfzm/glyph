@@ -162,13 +162,23 @@ sudo apt update
 sudo apt install glyph
 ```
 
+### Fedora / RHEL (DNF)
+
+```bash
+sudo tee /etc/yum.repos.d/glyph.repo < <(curl -fsSL https://glyph-md.github.io/rpm-repo/glyph.repo)
+sudo dnf install glyph
+```
+
 ### Linux (manual)
 
-Download the `.deb` or `.AppImage` from [Releases](https://github.com/hamidfzm/glyph/releases).
+Download the `.deb`, `.rpm`, or `.AppImage` from [Releases](https://github.com/hamidfzm/glyph/releases).
 
 ```bash
 # Debian/Ubuntu
 sudo dpkg -i glyph_*.deb
+
+# Fedora/RHEL
+sudo dnf install ./Glyph-*.rpm
 
 # AppImage
 chmod +x Glyph_*.AppImage
