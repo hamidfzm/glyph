@@ -98,6 +98,60 @@ describe("ClaudeProvider", () => {
 
     await expect(provider.chat([{ role: "user", content: "test" }])).rejects.toThrow("overloaded");
   });
+
+  it("falls back to a generic message when the stream error carries none", async () => {
+    mockFetch.mockResolvedValueOnce(streamResponse(['data: {"type":"error","error":{}}']));
+
+    await expect(provider.chat([{ role: "user", content: "test" }])).rejects.toThrow(
+      "stream error",
+    );
+  });
+
+  it("ignores malformed, empty, and non-delta SSE lines", async () => {
+    mockFetch.mockResolvedValueOnce(
+      streamResponse([
+        "event: content_block_delta",
+        "data:",
+        "data: {broken json",
+        'data: {"type":"content_block_delta","delta":{"type":"input_json_delta"}}',
+        'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"ok"}}',
+      ]),
+    );
+
+    await expect(provider.chat([{ role: "user", content: "test" }])).resolves.toBe("ok");
+  });
+
+  it("falls back to reading the whole body when the response cannot stream", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: null,
+      text: () =>
+        Promise.resolve(
+          'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"whole"}}\n',
+        ),
+    });
+
+    await expect(provider.chat([{ role: "user", content: "test" }])).resolves.toBe("whole");
+  });
+
+  it("flushes a final line that has no trailing newline", async () => {
+    const encoder = new TextEncoder();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"tail"}}',
+            ),
+          );
+          controller.close();
+        },
+      }),
+    });
+
+    await expect(provider.chat([{ role: "user", content: "test" }])).resolves.toBe("tail");
+  });
 });
 
 describe("OpenAIProvider", () => {
@@ -226,6 +280,20 @@ describe("OllamaProvider", () => {
       "model not found",
     );
   });
+
+  it("skips blank and malformed NDJSON lines", async () => {
+    mockFetch.mockResolvedValueOnce(
+      streamResponse([
+        "",
+        "   ",
+        "{not json",
+        '{"done":false}',
+        '{"message":{"role":"assistant","content":"ok"},"done":true}',
+      ]),
+    );
+
+    await expect(provider.chat([{ role: "user", content: "test" }])).resolves.toBe("ok");
+  });
 });
 
 describe("fetchOllamaModels", () => {
@@ -247,6 +315,14 @@ describe("fetchOllamaModels", () => {
   it("returns empty list when the server reports no models", async () => {
     mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
     await expect(fetchOllamaModels("http://localhost:11434")).resolves.toEqual([]);
+  });
+
+  it("drops entries without a name", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ models: [{ name: "good:latest" }, { size: 1 }] }),
+    });
+    await expect(fetchOllamaModels("http://localhost:11434")).resolves.toEqual(["good:latest"]);
   });
 
   it("throws when the server is unreachable or errors", async () => {

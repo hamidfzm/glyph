@@ -52,6 +52,14 @@ describe("locateInDocument", () => {
     expect(locateInDocument("quick brown fox")).toBe(false);
   });
 
+  it("clears the previous flash when locating a second passage", () => {
+    expect(locateInDocument("quick brown fox")).toBe(true);
+    expect(locateInDocument("Second paragraph")).toBe(true);
+    const paragraphs = document.querySelectorAll("p");
+    expect(paragraphs[0].classList.contains("ai-flash")).toBe(false);
+    expect(paragraphs[1].classList.contains("ai-flash")).toBe(true);
+  });
+
   it("removes the flash class after the animation window", () => {
     vi.useFakeTimers();
     locateInDocument("quick brown fox");

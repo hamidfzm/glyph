@@ -100,6 +100,53 @@ describe("useAIChat", () => {
     expect(result.current.streaming).toBe(false);
   });
 
+  it("stringifies non-Error rejections", async () => {
+    mockProvider(async () => {
+      throw "socket hung up";
+    });
+    const { result } = renderHook(() => useAIChat(ollamaSettings, () => null));
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(result.current.error).toBe("socket hung up");
+  });
+
+  it("a new send supersedes the in-flight one without ending its streaming state", async () => {
+    let firstReject: ((err: unknown) => void) | undefined;
+    const chat = vi
+      .fn()
+      .mockImplementationOnce(
+        (_messages: ChatMessage[], options?: ChatOptions) =>
+          new Promise<string>((_resolve, reject) => {
+            firstReject = reject;
+            options?.signal?.addEventListener("abort", () =>
+              reject(new DOMException("aborted", "AbortError")),
+            );
+          }),
+      )
+      .mockResolvedValue("second reply");
+    mockCreate.mockReturnValue({ chat });
+    const { result } = renderHook(() => useAIChat(ollamaSettings, () => null));
+
+    act(() => {
+      void result.current.send("first");
+    });
+    await waitFor(() => expect(result.current.streaming).toBe(true));
+
+    // The second send aborts the first; the first's cleanup must not clear the
+    // streaming flag owned by the second.
+    await act(async () => {
+      await result.current.send("second");
+    });
+
+    expect(firstReject).toBeDefined();
+    expect(result.current.streaming).toBe(false);
+    const contents = result.current.turns.map((turn) => turn.content);
+    expect(contents).toContain("second reply");
+  });
+
   it("keeps the partial reply when the stream is aborted", async () => {
     mockProvider(async (_messages, options) => {
       options?.onChunk?.("partial");
