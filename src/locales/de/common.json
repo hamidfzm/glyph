@@ -44,7 +44,8 @@
     "editMode": "Bearbeitungsmodus",
     "edit": "Bearbeiten",
     "splitMode": "Geteilter Modus",
-    "split": "Geteilt"
+    "split": "Geteilt",
+    "aiChat": "KI-Chat"
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> ist verfügbar",

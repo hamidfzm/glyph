@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AI_ACTIONS, actionPrompt, buildSystemPrompt } from "./aiPrompts";
+import { AI_ACTIONS, actionPrompt, aiDocContext, buildSystemPrompt } from "./aiPrompts";
 
 describe("buildSystemPrompt", () => {
   it("returns the base prompt when there is no document", () => {
@@ -25,6 +25,58 @@ describe("buildSystemPrompt", () => {
     const prompt = buildSystemPrompt({ content: "x".repeat(30_000) });
     expect(prompt).toContain("[Document truncated]");
     expect(prompt.length).toBeLessThan(26_000);
+  });
+
+  it("tells the model about a non-text active file instead of staying silent", () => {
+    const prompt = buildSystemPrompt({ content: "", path: "assets/ship.png" });
+    expect(prompt).toContain("assets/ship.png");
+    expect(prompt).toContain("not readable text");
+  });
+
+  it("lists the workspace files when a folder is open", () => {
+    const prompt = buildSystemPrompt({
+      content: "# Doc",
+      path: "Notes/doc.md",
+      workspaceRoot: "/vault",
+      workspaceFiles: ["Notes/doc.md", "Index.md"],
+    });
+    expect(prompt).toContain("folder workspace /vault");
+    expect(prompt).toContain("Index.md");
+    expect(prompt).toContain("# Doc");
+  });
+
+  it("elides very large workspaces with a count", () => {
+    const files = Array.from({ length: 250 }, (_, i) => `note-${i}.md`);
+    const prompt = buildSystemPrompt({
+      content: "",
+      workspaceRoot: "/vault",
+      workspaceFiles: files,
+    });
+    expect(prompt).toContain("note-199.md");
+    expect(prompt).not.toContain("note-200.md");
+    expect(prompt).toContain("[and 50 more]");
+  });
+});
+
+describe("aiDocContext", () => {
+  it("returns null when nothing is open", () => {
+    expect(aiDocContext({ content: null })).toBeNull();
+  });
+
+  it("keeps a content-less file path so the model knows what is open", () => {
+    expect(aiDocContext({ path: "a.png", content: null })).toEqual({
+      content: "",
+      path: "a.png",
+      workspaceRoot: undefined,
+      workspaceFiles: undefined,
+    });
+  });
+
+  it("only carries workspace files alongside a workspace root", () => {
+    const ctx = aiDocContext({ content: "x", workspaceFiles: ["a.md"] });
+    expect(ctx?.workspaceFiles).toBeUndefined();
+    const wsCtx = aiDocContext({ content: "x", workspaceRoot: "/v", workspaceFiles: ["a.md"] });
+    expect(wsCtx?.workspaceFiles).toEqual(["a.md"]);
   });
 });
 

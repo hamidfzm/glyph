@@ -27,6 +27,7 @@ This document demonstrates all the rendering features supported by Glyph. The YA
 - [Links](#links)
 - [Jupyter Notebooks](#jupyter-notebooks)
 - [Canvas](#canvas)
+- [AI Assistant](#ai-assistant)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 
 ## Frontmatter
@@ -388,6 +389,18 @@ Create a fresh board from the file tree: right-click a folder (or the empty pane
 
 ---
 
+## AI Assistant
+
+Glyph ships an AI chat that converses about the open document with streaming replies, docked beside the text. Configure a provider in Settings → AI (a local Ollama server needs no API key; Claude and OpenAI take yours), then open the chat with the sparkle button in the tab bar or `Cmd+Shift+A`.
+
+- **Quick actions** — Summarize / Explain / Translate / Simplify the document from the chips, the AI menu, or the right-click menu (select text first to run them on just the selection).
+- **Locate quotes** — when the assistant quotes the document, click *Show in document* to scroll to and flash the passage.
+- **Read aloud** — hover an assistant reply for Copy and Read Aloud.
+
+Open [AI Playground](AI%20Playground.md) for a guided set of prompts to try against prepared content: a story to question, a table to interrogate, code to explain, and a Persian paragraph for right-to-left answers.
+
+---
+
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
@@ -402,6 +415,7 @@ Create a fresh board from the file tree: right-click a folder (or the empty pane
 | `Cmd+0` | Reset zoom |
 | `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo task checkbox toggles |
 | `Cmd+B` | Toggle sidebar |
+| `Cmd+Shift+A` | AI chat |
 | `Cmd+,` | Settings |
 
 *Try pressing `Cmd+F` to search this document, or `Cmd+P` to print / save as PDF. Use `File → Export` to save this page as HTML, Word (DOCX), EPUB, or PDF — math, code highlighting, tables, and images are carried straight from the rendered view.*

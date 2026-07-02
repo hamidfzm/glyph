@@ -19,10 +19,10 @@ import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
+import { aiDocContext } from "@/lib/aiPrompts";
 import { openDocumentation, openReleaseNotes, openReportIssue } from "@/lib/helpLinks";
 import { isImageFile } from "@/lib/imageExtensions";
 import { nextEditorMode } from "@/lib/settings";
-import { AIChatEdgeButton } from "./ai/AIChatEdgeButton";
 import { AIChatPanel } from "./ai/AIChatPanel";
 import { EmptyState } from "./layout/EmptyState";
 import { ExportProgress } from "./layout/ExportProgress";
@@ -101,7 +101,12 @@ export function AppShell() {
 
   const aiController = useAIController(
     settings.ai,
-    displayContent ? { content: displayContent, path: activeFile?.path } : null,
+    aiDocContext({
+      path: activeFile?.path,
+      content: displayContent,
+      workspaceRoot: workspace?.root,
+      workspaceFiles,
+    }),
   );
   const readAloud = useReadAloudController(settings.ai, () => displayContent);
   const tts = readAloud.tts;
@@ -241,7 +246,7 @@ export function AppShell() {
         notice={tabs.workspaceNotice}
         onDismiss={tabs.dismissWorkspaceNotice}
       />
-      <TabBar />
+      <TabBar onToggleAIChat={aiController.configured ? aiController.togglePanel : null} />
       <div className="flex flex-1 min-h-0">
         <Sidebar side="left" />
         {showContent ? (
@@ -275,9 +280,6 @@ export function AppShell() {
           speaking={tts.speaking}
           onStopReading={tts.stop}
         />
-        {aiController.configured && !aiController.panelOpen && (
-          <AIChatEdgeButton onClick={aiController.togglePanel} />
-        )}
       </div>
       <StatusBar onOpenSync={() => setSyncSettingsOpen(true)} />
 

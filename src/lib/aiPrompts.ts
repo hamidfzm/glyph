@@ -7,14 +7,21 @@ export type AIAction = "summarize" | "explain" | "translate" | "simplify";
 export const AI_ACTIONS: readonly AIAction[] = ["summarize", "explain", "translate", "simplify"];
 
 export interface AIDocContext {
+  /** Text of the active document; empty for non-text files (images, etc.). */
   content: string;
   /** File path or name, shown to the model so it can refer to the document. */
   path?: string;
+  /** Root of the open folder workspace, when there is one. */
+  workspaceRoot?: string;
+  /** Files in the workspace, so the assistant can answer questions about it. */
+  workspaceFiles?: readonly string[];
 }
 
 // Documents are sent whole up to this budget; local models have modest context
 // windows, so the tail is dropped past it with an explicit truncation note.
 const MAX_DOC_CONTEXT_CHARS = 24_000;
+// Workspace listings are context, not content; huge vaults get elided.
+const MAX_WORKSPACE_FILES = 200;
 
 const BASE_SYSTEM_PROMPT = [
   "You are the AI assistant built into Glyph, a markdown viewer.",
@@ -22,15 +29,60 @@ const BASE_SYSTEM_PROMPT = [
   "When you reference a specific passage of the open document, quote it verbatim in a markdown blockquote so the app can highlight it in the document.",
 ].join(" ");
 
-/** Build the system prompt, embedding the open document as context. */
+/**
+ * Assemble the AI context from the app's view state. Returns null when there
+ * is truly nothing open, so the assistant doesn't hallucinate a document.
+ */
+export function aiDocContext(source: {
+  path?: string;
+  content: string | null;
+  workspaceRoot?: string;
+  workspaceFiles?: readonly string[];
+}): AIDocContext | null {
+  const { path, content, workspaceRoot, workspaceFiles } = source;
+  if (!path && !content && !workspaceRoot) return null;
+  return {
+    content: content ?? "",
+    path,
+    workspaceRoot,
+    workspaceFiles: workspaceRoot ? workspaceFiles : undefined,
+  };
+}
+
+/** Build the system prompt, embedding the workspace and open document. */
 export function buildSystemPrompt(doc: AIDocContext | null): string {
-  if (!doc?.content) return BASE_SYSTEM_PROMPT;
-  const truncated =
-    doc.content.length > MAX_DOC_CONTEXT_CHARS
-      ? `${doc.content.slice(0, MAX_DOC_CONTEXT_CHARS)}\n\n[Document truncated]`
-      : doc.content;
-  const name = doc.path ? ` (${doc.path})` : "";
-  return `${BASE_SYSTEM_PROMPT}\n\nThe user has this document open${name}:\n\n---\n${truncated}\n---`;
+  if (!doc) return BASE_SYSTEM_PROMPT;
+  const parts = [BASE_SYSTEM_PROMPT];
+
+  if (doc.workspaceRoot) {
+    const files = doc.workspaceFiles ?? [];
+    const listed = files.slice(0, MAX_WORKSPACE_FILES);
+    const elided = files.length - listed.length;
+    parts.push(
+      `The user has the folder workspace ${doc.workspaceRoot} open.${
+        listed.length > 0
+          ? ` Files in the workspace:\n${listed.join("\n")}${
+              elided > 0 ? `\n[and ${elided} more]` : ""
+            }`
+          : ""
+      }`,
+    );
+  }
+
+  if (doc.content) {
+    const truncated =
+      doc.content.length > MAX_DOC_CONTEXT_CHARS
+        ? `${doc.content.slice(0, MAX_DOC_CONTEXT_CHARS)}\n\n[Document truncated]`
+        : doc.content;
+    const name = doc.path ? ` (${doc.path})` : "";
+    parts.push(`The user has this document open${name}:\n\n---\n${truncated}\n---`);
+  } else if (doc.path) {
+    parts.push(
+      `The active file is ${doc.path}. Its content is not readable text (an image, notebook, or diagram), so say so rather than guessing if asked about its contents.`,
+    );
+  }
+
+  return parts.join("\n\n");
 }
 
 const DOCUMENT_PROMPTS: Record<AIAction, string> = {

@@ -44,7 +44,8 @@
     "editMode": "حالت ویرایش",
     "edit": "ویرایش",
     "splitMode": "حالت تقسیم",
-    "split": "تقسیم"
+    "split": "تقسیم",
+    "aiChat": "گفتگو با هوش مصنوعی"
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> در دسترس است",
