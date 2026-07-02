@@ -40,7 +40,9 @@ export type ContextMenuItem =
 const SELECTION_PREVIEW_MAX = 30;
 // Link actions only apply to external web URLs. Internal targets (wikilinks
 // render as href="#", heading anchors, relative workspace paths) have no
-// meaningful "copy address" or "open in browser" semantics.
+// meaningful "copy address" or "open in browser" semantics. Other schemes that
+// are "external" for click-through (mailto: etc.) are deliberately excluded
+// too: "Open in External Browser" would be a misleading label for them.
 export function isExternalHttpUrl(href: string): boolean {
   return /^https?:\/\//i.test(href);
 }
@@ -48,8 +50,8 @@ export function isExternalHttpUrl(href: string): boolean {
 // translated separately via `contextMenu.aiVerb.<id>`.
 const AI_ACTIONS = ["summarize", "explain", "translate", "simplify"] as const;
 
-/** Copy text to the clipboard. The text is captured up front (not read live)
- *  so it survives focus moving from the document selection to the menu. */
+/** Copy text (a captured selection, a link href) to the clipboard. The text is
+ *  captured up front (not read live) so it survives focus moving to the menu. */
 export function copySelection(text: string): void {
   // Best-effort: the clipboard write can reject when the window isn't focused
   // or permission is denied. There's no meaningful recovery for a copy gesture,
