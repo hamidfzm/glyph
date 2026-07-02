@@ -48,6 +48,8 @@ export interface InstalledPlugin {
   version: string;
   apiVersion: string;
   description?: string;
+  /** Capabilities the plugin declares; shown to the user before install. */
+  permissions?: string[];
   /** Absolute path of the installed plugin folder. */
   dir: string;
   /** Source text of the plugin's ESM entry file. */

@@ -17,6 +17,9 @@ pub struct InstalledPlugin {
     pub api_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Capabilities the plugin declares; shown to the user before install.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub permissions: Vec<String>,
     /// Absolute path of the installed plugin folder.
     pub dir: String,
     /// Source text of the plugin's ESM entry file.
@@ -29,7 +32,24 @@ struct ManifestInfo {
     version: String,
     api_version: String,
     description: Option<String>,
+    permissions: Vec<String>,
     main: String,
+}
+
+/// Optional `permissions` array; when present it must be an array of strings.
+fn parse_permissions(value: &serde_json::Value) -> Result<Vec<String>, String> {
+    match value.get("permissions") {
+        None => Ok(Vec::new()),
+        Some(serde_json::Value::Array(items)) => items
+            .iter()
+            .map(|v| {
+                v.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "manifest \"permissions\" must be an array of strings".into())
+            })
+            .collect(),
+        Some(_) => Err("manifest \"permissions\" must be an array of strings".into()),
+    }
 }
 
 fn required_str(value: &serde_json::Value, key: &str) -> Result<String, String> {
@@ -78,6 +98,7 @@ fn parse_manifest(json: &str) -> Result<ManifestInfo, String> {
             .get("description")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
+        permissions: parse_permissions(&value)?,
         main,
     })
 }
@@ -95,6 +116,7 @@ fn read_plugin_dir(dir: &Path) -> Result<InstalledPlugin, String> {
         version: info.version,
         api_version: info.api_version,
         description: info.description,
+        permissions: info.permissions,
         dir: dir.to_string_lossy().to_string(),
         main_source,
     })
@@ -476,6 +498,7 @@ mod tests {
             version: "1.0.0".into(),
             api_version: "^1.0.0".into(),
             description: None,
+            permissions: Vec::new(),
             dir: "d".into(),
             main_source: "s".into(),
         };
@@ -483,5 +506,33 @@ mod tests {
         assert!(json.contains("\"apiVersion\""));
         assert!(json.contains("\"mainSource\""));
         assert!(!json.contains("\"description\""));
+        assert!(!json.contains("\"permissions\""));
+    }
+
+    #[test]
+    fn parse_manifest_reads_permissions() {
+        let info = parse_manifest(
+            r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0","permissions":["workspace:read","network:example.com"]}"#,
+        )
+        .unwrap();
+        assert_eq!(info.permissions, ["workspace:read", "network:example.com"]);
+    }
+
+    #[test]
+    fn parse_manifest_defaults_permissions_to_empty() {
+        let info =
+            parse_manifest(r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0"}"#)
+                .unwrap();
+        assert!(info.permissions.is_empty());
+    }
+
+    #[test]
+    fn parse_manifest_rejects_non_string_permissions() {
+        for json in [
+            r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0","permissions":"workspace:read"}"#,
+            r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0","permissions":[1]}"#,
+        ] {
+            assert!(parse_manifest(json).is_err(), "should reject: {json}");
+        }
     }
 }
