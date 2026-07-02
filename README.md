@@ -66,7 +66,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Zoom in/out: `Cmd/Ctrl+=/-/0` with zoom level in status bar
 - Table of Contents sidebar with active heading tracking
 - Print: `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
-- Export to HTML, Word (DOCX), EPUB, and PDF via `File → Export`: works for markdown documents and Jupyter notebooks, writes a file directly (no print dialog), and reuses the rendered output (math, code highlighting, tables, images inlined) so files are self-contained and offline. Task-list checkboxes are read-only in exports; exported HTML follows the reader's light/dark system preference.
+- Export to HTML, Word (DOCX), EPUB, and PDF via `File → Export`: works for markdown documents and Jupyter notebooks, writes a file directly (no print dialog), and reuses the rendered output (math, code highlighting, tables, images inlined) so files are self-contained and offline. Mermaid and D2 diagrams and SVG images embed in the PDF as true vectors, so they stay crisp at any zoom. Task-list checkboxes are read-only in exports; exported HTML follows the reader's light/dark system preference.
 - Live reload: file watcher auto-updates on external changes
 - Undo / redo for in-document edits: `Cmd/Ctrl+Z` and `Cmd/Ctrl+Shift+Z` reverse task-list checkbox toggles and other programmatic edits per tab
 - Drag and drop markdown files, notebooks, canvases, or folders to open
