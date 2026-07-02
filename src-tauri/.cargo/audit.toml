@@ -18,4 +18,19 @@ ignore = [
     # something we can force via Cargo.toml. Revisit when Tauri's HTML/CSS
     # pipeline upgrades to newer `cssparser`/`selectors`.
     "RUSTSEC-2026-0097",
+
+    # RUSTSEC-2026-0194 (quadratic time on duplicate start-tag attribute names)
+    # and RUSTSEC-2026-0195 (unbounded namespace-declaration allocation in
+    # `NsReader`) are XML-parsing denial-of-service issues in `quick-xml` 0.38.
+    #
+    # Not reachable in Glyph: `quick-xml` is a transitive dependency of `plist`
+    # (via `tauri`), which Glyph only exercises to read the app's own, trusted
+    # macOS `Info.plist`. No attacker-controlled XML is ever fed to `quick-xml`,
+    # so the DoS conditions cannot be triggered.
+    #
+    # Upstream fix is quick-xml >= 0.41, but the newest `plist` (1.9.0) still
+    # caps quick-xml at 0.39.4, so the patched version is not yet reachable from
+    # our tree. Revisit when `plist`/`tauri` move to quick-xml >= 0.41.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
 ]
