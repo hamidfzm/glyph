@@ -1,5 +1,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
+import { createRegistry } from "@/lib/plugins/registry";
+import type { FencedRendererContribution } from "@/lib/plugins/types";
 import { CodeBlockComponent } from "./CodeBlockComponent";
 
 vi.mock("./MermaidDiagram", () => ({
@@ -25,6 +28,23 @@ describe("CodeBlockComponent", () => {
     );
     const pre = container.querySelector("pre");
     expect(pre).toBeTruthy();
+  });
+
+  it("renders a plugin-registered fenced language with its component", () => {
+    // Use a language with no built-in handler so the plugin renderer is reached.
+    const fencedRenderers = createRegistry<FencedRendererContribution>();
+    fencedRenderers.register({
+      language: "plantuml",
+      render: ({ code }) => <div data-testid="plantuml">{code}</div>,
+    });
+    render(
+      <PluginsContext.Provider value={{ fencedRenderers } as unknown as PluginsContextValue}>
+        <CodeBlockComponent>
+          <code className="language-plantuml">A -&gt; B</code>
+        </CodeBlockComponent>
+      </PluginsContext.Provider>,
+    );
+    expect(screen.getByTestId("plantuml").textContent).toBe("A -> B");
   });
 
   it("renders MermaidDiagram for mermaid code blocks", () => {

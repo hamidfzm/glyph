@@ -178,6 +178,9 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       value={{
         commands: host.commands,
         statusBarItems: host.statusBarItems,
+        remarkPlugins: host.remarkPlugins,
+        rehypePlugins: host.rehypePlugins,
+        fencedRenderers: host.fencedRenderers,
         installed,
         disabled,
         loaded,

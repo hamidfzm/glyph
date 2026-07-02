@@ -2,13 +2,21 @@ import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import { createRegistry } from "@/lib/plugins/registry";
-import type { CommandContribution, StatusBarItemContribution } from "@/lib/plugins/types";
+import type {
+  CommandContribution,
+  FencedRendererContribution,
+  MarkdownPlugin,
+  StatusBarItemContribution,
+} from "@/lib/plugins/types";
 import { PluginStatusBarItems } from "./PluginStatusBarItems";
 
 function value(statusBarItems = createRegistry<StatusBarItemContribution>()): PluginsContextValue {
   return {
     commands: createRegistry<CommandContribution>(),
     statusBarItems,
+    remarkPlugins: createRegistry<MarkdownPlugin>(),
+    rehypePlugins: createRegistry<MarkdownPlugin>(),
+    fencedRenderers: createRegistry<FencedRendererContribution>(),
     installed: [],
     disabled: [],
     loaded: [],

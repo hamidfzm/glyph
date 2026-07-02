@@ -3,7 +3,12 @@ import { createElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import { createRegistry } from "@/lib/plugins/registry";
-import type { CommandContribution, StatusBarItemContribution } from "@/lib/plugins/types";
+import type {
+  CommandContribution,
+  FencedRendererContribution,
+  MarkdownPlugin,
+  StatusBarItemContribution,
+} from "@/lib/plugins/types";
 import { type AppActions, useAppCommands } from "./useAppCommands";
 
 function makeActions(over: Partial<AppActions> = {}): AppActions {
@@ -196,6 +201,9 @@ describe("useAppCommands", () => {
     const value: PluginsContextValue = {
       commands,
       statusBarItems: createRegistry<StatusBarItemContribution>(),
+      remarkPlugins: createRegistry<MarkdownPlugin>(),
+      rehypePlugins: createRegistry<MarkdownPlugin>(),
+      fencedRenderers: createRegistry<FencedRendererContribution>(),
       installed: [],
       disabled: [],
       loaded: [],

@@ -1,11 +1,13 @@
 import { PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
-import { DisposerBag } from "./disposer";
+import { type Disposer, DisposerBag } from "./disposer";
 import { importPluginModule, type ModuleImporter } from "./loader";
 import { createRegistry, type Registry } from "./registry";
 import type {
   CommandContribution,
+  FencedRendererContribution,
   GlyphPluginContext,
   InstalledPlugin,
+  MarkdownPlugin,
   PluginModule,
   StatusBarItemContribution,
 } from "./types";
@@ -22,6 +24,12 @@ export interface PluginHost {
   readonly commands: Registry<CommandContribution>;
   /** Status bar items contributed by loaded plugins. */
   readonly statusBarItems: Registry<StatusBarItemContribution>;
+  /** Remark plugins contributed by loaded plugins. */
+  readonly remarkPlugins: Registry<MarkdownPlugin>;
+  /** Rehype plugins contributed by loaded plugins. */
+  readonly rehypePlugins: Registry<MarkdownPlugin>;
+  /** Fenced code-block renderers contributed by loaded plugins. */
+  readonly fencedRenderers: Registry<FencedRendererContribution>;
   /**
    * Import and activate an installed plugin. Re-loading an already-loaded id
    * unloads the previous instance first. Throws on apiVersion mismatch, a bad
@@ -56,22 +64,30 @@ export function createPluginHost(
 ): PluginHost {
   const commands = createRegistry<CommandContribution>();
   const statusBarItems = createRegistry<StatusBarItemContribution>();
+  const remarkPlugins = createRegistry<MarkdownPlugin>();
+  const rehypePlugins = createRegistry<MarkdownPlugin>();
+  const fencedRenderers = createRegistry<FencedRendererContribution>();
   const loaded = new Map<string, LoadedPlugin>();
+
+  // Route a registration through the plugin's own DisposerBag so unload removes
+  // exactly its contributions.
+  const tracked =
+    <T>(register: (entry: T) => Disposer, bag: DisposerBag) =>
+    (entry: T): Disposer => {
+      const dispose = register(entry);
+      bag.add(dispose);
+      return dispose;
+    };
 
   const buildContext = (bag: DisposerBag): GlyphPluginContext => ({
     apiVersion: PLUGIN_API_VERSION,
-    commands: {
-      register(command) {
-        const dispose = commands.register(command);
-        bag.add(dispose);
-        return dispose;
-      },
-    },
-    ui: {
-      addStatusBarItem(item) {
-        const dispose = statusBarItems.register(item);
-        bag.add(dispose);
-        return dispose;
+    commands: { register: tracked(commands.register, bag) },
+    ui: { addStatusBarItem: tracked(statusBarItems.register, bag) },
+    markdown: {
+      registerRemarkPlugin: tracked(remarkPlugins.register, bag),
+      registerRehypePlugin: tracked(rehypePlugins.register, bag),
+      registerFencedRenderer(language, render) {
+        return tracked(fencedRenderers.register, bag)({ language, render });
       },
     },
     notify,
@@ -93,6 +109,9 @@ export function createPluginHost(
   return {
     commands,
     statusBarItems,
+    remarkPlugins,
+    rehypePlugins,
+    fencedRenderers,
     async load(plugin, importer) {
       if (!satisfiesApiVersion(plugin.apiVersion)) {
         throw new Error(

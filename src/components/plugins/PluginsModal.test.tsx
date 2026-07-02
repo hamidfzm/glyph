@@ -5,7 +5,9 @@ import type { RegistryEntry } from "@/lib/plugins/marketplace";
 import { createRegistry } from "@/lib/plugins/registry";
 import type {
   CommandContribution,
+  FencedRendererContribution,
   InstalledPlugin,
+  MarkdownPlugin,
   StatusBarItemContribution,
 } from "@/lib/plugins/types";
 import { PluginsModal } from "./PluginsModal";
@@ -33,6 +35,9 @@ function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
   return {
     commands: createRegistry<CommandContribution>(),
     statusBarItems: createRegistry<StatusBarItemContribution>(),
+    remarkPlugins: createRegistry<MarkdownPlugin>(),
+    rehypePlugins: createRegistry<MarkdownPlugin>(),
+    fencedRenderers: createRegistry<FencedRendererContribution>(),
     installed: [installed],
     disabled: [],
     loaded: [],

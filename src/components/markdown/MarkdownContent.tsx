@@ -1,26 +1,19 @@
 import { useCallback, useMemo } from "react";
-import ReactMarkdown, { type Options } from "react-markdown";
-import rehypeRaw from "rehype-raw";
-import rehypeSanitize from "rehype-sanitize";
-import rehypeSlug from "rehype-slug";
-import remarkFrontmatter from "remark-frontmatter";
-import remarkGemoji from "remark-gemoji";
-import remarkGfm from "remark-gfm";
-import { remarkAlert } from "remark-github-blockquote-alert";
-import remarkMath from "remark-math";
+import ReactMarkdown from "react-markdown";
 import { LightboxProvider } from "@/contexts/LightboxProvider";
+import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
 import { useKatexPlugin } from "@/hooks/useKatexPlugin";
+import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { parseFrontmatter } from "@/lib/frontmatter";
+import { buildRehypePlugins, buildRemarkPlugins } from "@/lib/markdown/pipeline";
 import { resolveWorkspacePath } from "@/lib/relativePath";
-import { remarkWikilink } from "@/lib/wikilink";
 import { CodeBlockComponent } from "./CodeBlockComponent";
 import { FrontmatterBlock } from "./FrontmatterBlock";
 import { useImageComponent } from "./ImageComponent";
 import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
 import { MarkdownHeading } from "./MarkdownHeading";
-import { markdownSanitizeSchema } from "./sanitizeSchema";
 import { TaskListItem } from "./TaskListItem";
 
 interface MarkdownContentProps {
@@ -52,6 +45,10 @@ export function MarkdownContent({
   const workspaceRoot = useWorkspaceRoot();
   const katexPlugin = useKatexPlugin(content);
   const highlightPlugin = useHighlightPlugin(content);
+  // Plugin-contributed remark/rehype plugins, appended to the built-in pipeline.
+  const plugins = usePluginsOptional();
+  const pluginRemark = useRegistryEntries(plugins?.remarkPlugins ?? null);
+  const pluginRehype = useRegistryEntries(plugins?.rehypePlugins ?? null);
   const frontmatter = useMemo(
     () => (showFrontmatter ? parseFrontmatter(content) : null),
     [content, showFrontmatter],
@@ -73,27 +70,14 @@ export function MarkdownContent({
     [filePath, workspaceRoot, onOpenRelativeFile],
   );
 
-  const rehypePlugins: NonNullable<Options["rehypePlugins"]> = useMemo(() => {
-    const plugins: NonNullable<Options["rehypePlugins"]> = [
-      rehypeRaw,
-      [rehypeSanitize, markdownSanitizeSchema],
-      rehypeSlug,
-    ];
-    if (highlightPlugin) plugins.push(highlightPlugin);
-    if (katexPlugin) plugins.push(katexPlugin);
-    return plugins;
-  }, [katexPlugin, highlightPlugin]);
+  const rehypePlugins = useMemo(
+    () => buildRehypePlugins({ highlightPlugin, katexPlugin, extra: pluginRehype }),
+    [highlightPlugin, katexPlugin, pluginRehype],
+  );
 
-  const remarkPlugins: NonNullable<Options["remarkPlugins"]> = useMemo(
-    () => [
-      remarkFrontmatter,
-      remarkGfm,
-      remarkMath,
-      remarkGemoji,
-      remarkAlert,
-      [remarkWikilink, { workspaceFiles, currentFilePath: filePath }],
-    ],
-    [workspaceFiles, filePath],
+  const remarkPlugins = useMemo(
+    () => buildRemarkPlugins({ workspaceFiles, filePath, extra: pluginRemark }),
+    [workspaceFiles, filePath, pluginRemark],
   );
 
   const LinkWithWikilink = useCallback(
