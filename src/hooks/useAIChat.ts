@@ -60,7 +60,7 @@ export function useAIChat(aiSettings: AISettings, getDocContext: () => AIDocCont
       setStreaming(true);
 
       try {
-        await provider.chat(history, {
+        const full = await provider.chat(history, {
           system: buildSystemPrompt(getDocContext()),
           signal: controller.signal,
           onChunk: (delta) =>
@@ -70,6 +70,13 @@ export function useAIChat(aiSettings: AISettings, getDocContext: () => AIDocCont
               ),
             ),
         });
+        // Reconcile with the resolved text so a reply that arrived without
+        // chunk callbacks (non-streaming fallback) still fills the turn.
+        setTurns((prev) =>
+          prev.map((turn) =>
+            turn.id === assistantId && turn.content !== full ? { ...turn, content: full } : turn,
+          ),
+        );
       } catch (err) {
         // Stop/abort keeps whatever streamed in; real failures also surface
         // the error. Either way an assistant turn that never got a token is

@@ -52,6 +52,48 @@ describe("AIChatPanel", () => {
     expect(input).toHaveValue("");
   });
 
+  it("does not send blank input or while the composer is disabled", () => {
+    const onSend = vi.fn();
+    const { rerender } = render(<AIChatPanel {...defaultProps} onSend={onSend} />);
+    const input = screen.getByPlaceholderText(/ask about this document/i);
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onSend).not.toHaveBeenCalled();
+
+    rerender(<AIChatPanel {...defaultProps} onSend={onSend} configured={false} />);
+    expect(screen.getByPlaceholderText(/ask about this document/i)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+  });
+
+  it("stops following the stream when the user scrolls up, resumes at the bottom", () => {
+    const { container, rerender } = render(<AIChatPanel {...defaultProps} turns={conversation} />);
+    const body = container.querySelector(".ai-chat-body") as HTMLDivElement;
+    Object.defineProperty(body, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(body, "clientHeight", { configurable: true, value: 200 });
+
+    // Scrolled far from the bottom: appending a turn must not yank the view.
+    body.scrollTop = 100;
+    fireEvent.scroll(body);
+    rerender(
+      <AIChatPanel
+        {...defaultProps}
+        turns={[...conversation, { id: 3, role: "assistant", content: "more" }]}
+      />,
+    );
+    expect(body.scrollTop).toBe(100);
+
+    // Back near the bottom: the next update pins to the end again.
+    body.scrollTop = 790;
+    fireEvent.scroll(body);
+    rerender(
+      <AIChatPanel
+        {...defaultProps}
+        turns={[...conversation, { id: 3, role: "assistant", content: "more text" }]}
+      />,
+    );
+    expect(body.scrollTop).toBe(1000);
+  });
+
   it("does not send on Shift+Enter", () => {
     const onSend = vi.fn();
     render(<AIChatPanel {...defaultProps} onSend={onSend} />);
