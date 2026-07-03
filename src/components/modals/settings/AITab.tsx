@@ -16,8 +16,7 @@ export function AITab() {
   // actually installed (anything else cannot run anyway). Otherwise, and for
   // the other providers, it stays a free-text input with suggestions.
   const ollamaListReady = ollama.status === "ok" && ollama.models.length > 0;
-  const suggestions =
-    ai.provider === "none" ? [] : (MODEL_SUGGESTIONS[ai.provider] ?? MODEL_SUGGESTIONS.ollama);
+  const suggestions = ai.provider === "none" ? [] : MODEL_SUGGESTIONS[ai.provider];
 
   return (
     <>

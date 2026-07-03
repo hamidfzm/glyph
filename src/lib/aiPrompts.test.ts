@@ -45,6 +45,20 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("# Doc");
   });
 
+  it("names the workspace even when its file list is empty or missing", () => {
+    const noList = buildSystemPrompt({ content: "", workspaceRoot: "/vault" });
+    expect(noList).toContain("folder workspace /vault");
+    expect(noList).not.toContain("Files in the workspace");
+
+    const emptyList = buildSystemPrompt({
+      content: "",
+      workspaceRoot: "/vault",
+      workspaceFiles: [],
+    });
+    expect(emptyList).toContain("folder workspace /vault");
+    expect(emptyList).not.toContain("Files in the workspace");
+  });
+
   it("elides very large workspaces with a count", () => {
     const files = Array.from({ length: 250 }, (_, i) => `note-${i}.md`);
     const prompt = buildSystemPrompt({
