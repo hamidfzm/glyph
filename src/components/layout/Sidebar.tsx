@@ -213,7 +213,9 @@ export function Sidebar({ side }: SidebarProps) {
 
   if (workspace) {
     if (sidebarLayout === "combined") {
-      // Single panel on the primary side, Files + Outline stacked.
+      // Single panel on the primary side, Files + Outline stacked. One panel
+      // has one width, so combined mode deliberately resizes (and persists)
+      // the Files width; the Outline width only applies in split/beside.
       if (side !== primarySide) return null;
       if (filesVisible || showOutline) {
         return (

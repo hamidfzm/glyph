@@ -81,7 +81,8 @@ export function usePanelResize(options: PanelResizeOptions): {
     if (!drag) return;
     const o = optionsRef.current;
     const pos = o.axis === "x" ? e.clientX : e.clientY;
-    const next = drag.size + drag.direction * (pos - drag.start);
+    // Round so sub-pixel pointer positions never persist fractional sizes.
+    const next = Math.round(drag.size + drag.direction * (pos - drag.start));
     const clamped = Math.min(drag.max, Math.max(o.min, next));
     liveRef.current = clamped;
     setLive(clamped);

@@ -33,7 +33,7 @@ export function ResizeHandle({
       aria-orientation={axis === "x" ? "vertical" : "horizontal"}
       aria-label={label}
       aria-valuenow={Math.round(value)}
-      aria-valuemin={min}
+      aria-valuemin={Math.round(min)}
       aria-valuemax={Math.round(max)}
       className={`border-0 m-0 ${cursor} select-none touch-none z-10 transition-colors hover:bg-[var(--color-accent)]/50 active:bg-[var(--color-accent)] focus-visible:bg-[var(--color-accent)]/50 focus:outline-none ${className}`}
       {...handleProps}
