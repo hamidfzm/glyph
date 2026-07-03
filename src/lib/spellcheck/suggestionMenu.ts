@@ -15,9 +15,15 @@ export interface SuggestionMenuOptions {
 }
 
 // Show a lightweight context menu of spelling corrections at (x, y). Imperative
+// Closes whatever menu is currently open. Only one lives at a time, so a fresh
+// right-click never leaks the previous menu's DOM node or document listeners.
+let closeOpenMenu: (() => void) | null = null;
+
 // DOM (not React) so it can be opened straight from a CodeMirror contextmenu
 // handler. Closes on the next outside click, Escape, or after any action.
 export function openSuggestionMenu(options: SuggestionMenuOptions): void {
+  closeOpenMenu?.();
+
   const menu = document.createElement("div");
   menu.className = "spellcheck-menu";
   menu.style.left = `${options.x}px`;
@@ -27,6 +33,7 @@ export function openSuggestionMenu(options: SuggestionMenuOptions): void {
     menu.remove();
     document.removeEventListener("mousedown", onOutside, true);
     document.removeEventListener("keydown", onKey, true);
+    if (closeOpenMenu === close) closeOpenMenu = null;
   }
 
   function onOutside(event: MouseEvent): void {
@@ -70,4 +77,5 @@ export function openSuggestionMenu(options: SuggestionMenuOptions): void {
   document.body.appendChild(menu);
   document.addEventListener("mousedown", onOutside, true);
   document.addEventListener("keydown", onKey, true);
+  closeOpenMenu = close;
 }

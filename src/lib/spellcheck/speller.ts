@@ -14,11 +14,19 @@ const DICTIONARY_BASE = "/dictionaries";
 // this instance, so all open editors see them (session-scoped, in memory).
 const cache = new Map<string, Promise<Speller>>();
 
+async function fetchText(url: string): Promise<string> {
+  const res = await fetch(url);
+  // fetch only rejects on network failure, so a missing/misconfigured
+  // dictionary would otherwise hand nspell a 404 HTML body as if it were valid.
+  if (!res.ok) throw new Error(`Failed to load ${url}: ${res.status}`);
+  return res.text();
+}
+
 async function loadSpeller(language: string): Promise<Speller> {
   const base = `${DICTIONARY_BASE}/${language}`;
   const [aff, dic] = await Promise.all([
-    fetch(`${base}/index.aff`).then((res) => res.text()),
-    fetch(`${base}/index.dic`).then((res) => res.text()),
+    fetchText(`${base}/index.aff`),
+    fetchText(`${base}/index.dic`),
   ]);
   return nspell(aff, dic);
 }
@@ -27,6 +35,11 @@ export function getSpeller(language: string): Promise<Speller> {
   let pending = cache.get(language);
   if (!pending) {
     pending = loadSpeller(language);
+    // Never cache a failed load: drop it so the next call retries instead of
+    // handing back the rejected promise for the rest of the session.
+    pending.catch(() => {
+      if (cache.get(language) === pending) cache.delete(language);
+    });
     cache.set(language, pending);
   }
   return pending;

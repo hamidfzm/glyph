@@ -7,14 +7,15 @@ vi.mock("nspell", () => ({ default: nspellMock }));
 
 import { clearSpellerCache, getSpeller } from "./speller";
 
+function okResponse() {
+  return Promise.resolve({ ok: true, text: () => Promise.resolve("dictionary-data") });
+}
+
 describe("getSpeller", () => {
   beforeEach(() => {
     clearSpellerCache();
     nspellMock.mockClear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.resolve({ text: () => Promise.resolve("dictionary-data") })),
-    );
+    vi.stubGlobal("fetch", vi.fn(okResponse));
   });
 
   afterEach(() => {
@@ -36,5 +37,29 @@ describe("getSpeller", () => {
     clearSpellerCache();
     await getSpeller("en");
     expect(nspellMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects on a non-ok response instead of building from an error body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve({ ok: false, status: 404, text: () => Promise.resolve("<html>") }),
+      ),
+    );
+    await expect(getSpeller("en")).rejects.toThrow();
+    expect(nspellMock).not.toHaveBeenCalled();
+  });
+
+  it("does not cache a failed load, so the next call retries", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve("") })),
+    );
+    await expect(getSpeller("en")).rejects.toThrow();
+
+    const recovered = vi.fn(okResponse);
+    vi.stubGlobal("fetch", recovered);
+    await getSpeller("en");
+    expect(recovered).toHaveBeenCalled();
   });
 });
