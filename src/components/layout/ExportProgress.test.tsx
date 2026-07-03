@@ -18,4 +18,14 @@ describe("ExportProgress", () => {
     render(<ExportProgress format="html" />);
     expect(screen.getByRole("status")).toHaveAttribute("data-export-ignore", "true");
   });
+
+  it("shows determinate page counts for the website export", () => {
+    render(<ExportProgress format="website" progress={{ done: 3, total: 7 }} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Exporting page 3 of 7…");
+  });
+
+  it("falls back to the format label while the page total is unknown", () => {
+    render(<ExportProgress format="website" progress={{ done: 0, total: 0 }} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Exporting website…");
+  });
 });

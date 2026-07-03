@@ -354,6 +354,14 @@ With the `samples/` folder open, press `Cmd/Ctrl+G` (or View → Open Graph) to 
 
 This workspace is wired to make the graph worth a look: [[Index]] and [[Graph View]] act as hubs, the cooking notes ([[Notes/Cooking]], [[Ingredients]], [[Techniques]]) form a tight cluster, and `Scratchpad` sits off on its own as a muted orphan. The [[Graph View]] note is a full walkthrough of the feature.
 
+### Export as a website
+
+With the `samples/` folder open, `File → Export → Website…` turns this whole workspace into a static site: every note becomes a linked HTML page (this README becomes `index.html`), wikilinks and relative links navigate between pages, images are copied alongside, Mermaid diagrams render as inline SVG, and a navigation sidebar ties it together. The same export runs headless from the terminal for CI publishing:
+
+```bash
+glyph samples/ --export-website ./site
+```
+
 ### Wikilink autocomplete
 
 In the editor or split view, typing `[[` opens a popup with workspace files. Keep typing to filter, press **Tab** or **Enter** to insert; the closing `]]` is added for you. Open this file in split view (`Cmd+E` cycles modes) and try typing `[[Co` to see it.

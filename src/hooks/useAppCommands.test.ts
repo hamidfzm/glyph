@@ -29,6 +29,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     exportDocx: vi.fn(),
     exportEpub: vi.fn(),
     exportPdf: vi.fn(),
+    exportWebsite: vi.fn(),
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
     zoomReset: vi.fn(),
@@ -87,6 +88,32 @@ describe("useAppCommands", () => {
       }),
     );
     expect(result.current.some((c) => c.section === "Files")).toBe(false);
+  });
+
+  it("offers the website export only when a workspace is open", () => {
+    const actions = makeActions();
+    const open = renderHook(() =>
+      useAppCommands({
+        workspaceOpen: true,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions,
+      }),
+    );
+    const cmd = open.result.current.find((c) => c.id === "cmd:exportWebsite");
+    expect(cmd?.title).toBe("Export Workspace as Website…");
+    cmd?.run();
+    expect(actions.exportWebsite).toHaveBeenCalledOnce();
+
+    const closed = renderHook(() =>
+      useAppCommands({
+        workspaceOpen: false,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions: makeActions(),
+      }),
+    );
+    expect(closed.result.current.some((c) => c.id === "cmd:exportWebsite")).toBe(false);
   });
 
   it("emits a Heading command per TOC entry", () => {

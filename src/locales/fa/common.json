@@ -70,7 +70,9 @@
     "docx": "سند Word",
     "epub": "EPUB",
     "pdf": "PDF",
-    "exporting": "در حال خروجی‌گرفتن {{format}}…"
+    "exporting": "در حال خروجی‌گرفتن {{format}}…",
+    "website": "وب‌سایت",
+    "exportingPages": "در حال خروجی‌گرفتن صفحه {{done}} از {{total}}…"
   },
   "contextMenu": {
     "copy": "کپی",

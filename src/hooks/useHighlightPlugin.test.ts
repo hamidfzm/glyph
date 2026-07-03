@@ -10,6 +10,7 @@ const { loadHighlight, hasCodeBlock } = vi.hoisted(() => ({
 vi.mock("@/components/markdown/lazyHighlight", () => ({
   hasCodeBlock,
   loadHighlight,
+  HIGHLIGHT_OPTIONS: { plainText: ["mermaid", "csv", "tsv"] },
 }));
 
 describe("useHighlightPlugin", () => {

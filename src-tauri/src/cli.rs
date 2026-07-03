@@ -113,6 +113,93 @@ pub fn second_instance_event(argv: &[String], cwd: &Path) -> Option<SecondInstan
     }
 }
 
+/// Value of a `--flag value` / `--flag=value` pair in argv, if present. The
+/// argv fallback for `tauri-plugin-cli` flags, mirroring [`pick_path_arg`].
+pub fn pick_flag_value<'a>(argv: &'a [String], flag: &str) -> Option<&'a str> {
+    let prefix = format!("{flag}=");
+    let mut iter = argv.iter().skip(1);
+    while let Some(arg) = iter.next() {
+        if arg == flag {
+            return iter.next().map(String::as_str);
+        }
+        if let Some(rest) = arg.strip_prefix(&prefix) {
+            return Some(rest);
+        }
+    }
+    None
+}
+
+/// Remove `--flag value` / `--flag=value` from argv so positional scanning
+/// ([`pick_path_arg`]) can't mistake the flag's value for the path argument.
+pub fn strip_flag(argv: &[String], flag: &str) -> Vec<String> {
+    let prefix = format!("{flag}=");
+    let mut out = Vec::new();
+    let mut iter = argv.iter();
+    while let Some(arg) = iter.next() {
+        if arg == flag {
+            iter.next();
+            continue;
+        }
+        if arg.starts_with(&prefix) {
+            continue;
+        }
+        out.push(arg.clone());
+    }
+    out
+}
+
+/// Resolve the `--export-website` output directory against `cwd`. Unlike
+/// input paths it does not need to exist yet, so there is no canonicalize.
+pub fn resolve_out_dir(path_str: &str, cwd: &Path) -> Option<String> {
+    if path_str.trim().is_empty() {
+        return None;
+    }
+    let path = Path::new(path_str);
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        cwd.join(path)
+    };
+    Some(absolute.to_string_lossy().to_string())
+}
+
+/// What this process launch should do, decided from the CLI once at startup.
+#[derive(Debug, PartialEq, Eq)]
+pub enum CliLaunch {
+    /// Normal interactive launch, optionally opening a path.
+    Open(Option<InitialOpenAction>),
+    /// Headless website export: render `root` into `out_dir` and exit.
+    ExportWebsite { root: String, out_dir: String },
+}
+
+/// Combine the positional path and the `--export-website` flag into a launch
+/// plan. `Err` is a usage error the caller should print before exiting
+/// nonzero: an export was requested without a valid workspace folder.
+pub fn launch_plan(
+    plugin_path: Option<&str>,
+    plugin_export: Option<&str>,
+    env_args: &[String],
+    cwd: &Path,
+) -> Result<CliLaunch, String> {
+    let export_out = plugin_export
+        .map(str::to_string)
+        .or_else(|| pick_flag_value(env_args, "--export-website").map(str::to_string));
+    let positional_args = strip_flag(env_args, "--export-website");
+    let action = initial_open_action(plugin_path, &positional_args, cwd);
+    let Some(out) = export_out else {
+        return Ok(CliLaunch::Open(action));
+    };
+    let out_dir = resolve_out_dir(&out, cwd)
+        .ok_or("--export-website needs an output directory".to_string())?;
+    match action {
+        Some(InitialOpenAction::Folder(root)) => Ok(CliLaunch::ExportWebsite { root, out_dir }),
+        _ => Err(
+            "--export-website requires an existing workspace folder: glyph <folder> --export-website <outDir>"
+                .to_string(),
+        ),
+    }
+}
+
 /// Resolve a CLI-supplied path against the working directory. Returns the
 /// canonicalized path if it points at something on disk, otherwise `None`.
 ///
@@ -397,6 +484,132 @@ mod tests {
         ];
         let result = second_instance_event(&argv, &cwd).expect("should resolve");
         assert_eq!(result.event_name, "open-file");
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn pick_flag_value_finds_space_and_equals_forms() {
+        let argv: Vec<String> = ["glyph", "docs", "--export-website", "site"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(pick_flag_value(&argv, "--export-website"), Some("site"));
+
+        let eq_form: Vec<String> = ["glyph", "--export-website=out", "docs"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(pick_flag_value(&eq_form, "--export-website"), Some("out"));
+    }
+
+    #[test]
+    fn pick_flag_value_returns_none_when_absent_or_valueless() {
+        let argv: Vec<String> = ["glyph", "docs"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(pick_flag_value(&argv, "--export-website"), None);
+        let dangling: Vec<String> = ["glyph", "--export-website"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(pick_flag_value(&dangling, "--export-website"), None);
+    }
+
+    #[test]
+    fn strip_flag_removes_flag_and_value_leaving_positionals() {
+        let argv: Vec<String> = ["glyph", "--export-website", "site", "docs"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(strip_flag(&argv, "--export-website"), vec!["glyph", "docs"]);
+        let eq_form: Vec<String> = ["glyph", "--export-website=site", "docs"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(
+            strip_flag(&eq_form, "--export-website"),
+            vec!["glyph", "docs"]
+        );
+    }
+
+    #[test]
+    fn resolve_out_dir_makes_relative_paths_absolute_without_requiring_existence() {
+        let cwd = Path::new("/work");
+        let resolved = resolve_out_dir("site", cwd).expect("resolves");
+        assert_eq!(resolved, Path::new("/work").join("site").to_string_lossy());
+        assert!(resolve_out_dir("  ", cwd).is_none());
+    }
+
+    #[test]
+    fn launch_plan_without_export_flag_is_a_normal_open() {
+        let cwd = unique_tmp("lp_open");
+        let ws = cwd.join("docs");
+        fs::create_dir_all(&ws).unwrap();
+        let argv: Vec<String> = ["glyph", "docs"].iter().map(|s| s.to_string()).collect();
+
+        let plan = launch_plan(None, None, &argv, &cwd).expect("plans");
+        assert!(matches!(
+            plan,
+            CliLaunch::Open(Some(InitialOpenAction::Folder(_)))
+        ));
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_plan_pairs_folder_with_export_flag_even_when_flag_precedes_path() {
+        // The flag's value must not be mistaken for the positional path.
+        let cwd = unique_tmp("lp_export");
+        let ws = cwd.join("docs");
+        fs::create_dir_all(&ws).unwrap();
+        let argv: Vec<String> = ["glyph", "--export-website", "site", "docs"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        let plan = launch_plan(None, None, &argv, &cwd).expect("plans");
+        match plan {
+            CliLaunch::ExportWebsite { root, out_dir } => {
+                assert!(root.ends_with("docs"), "root was {root}");
+                assert_eq!(out_dir, cwd.join("site").to_string_lossy());
+            }
+            other => panic!("expected ExportWebsite, got {other:?}"),
+        }
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_plan_export_without_folder_is_a_usage_error() {
+        let cwd = unique_tmp("lp_err");
+        let argv: Vec<String> = ["glyph", "--export-website", "site"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let err = launch_plan(None, None, &argv, &cwd).expect_err("usage error");
+        assert!(err.contains("--export-website"));
+
+        // A file (not a folder) positional is also a usage error.
+        let file = cwd.join("note.md");
+        fs::write(&file, "x").unwrap();
+        let argv: Vec<String> = ["glyph", "note.md", "--export-website", "site"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert!(launch_plan(None, None, &argv, &cwd).is_err());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_plan_prefers_plugin_export_value() {
+        let cwd = unique_tmp("lp_plugin");
+        let ws = cwd.join("docs");
+        fs::create_dir_all(&ws).unwrap();
+        let argv: Vec<String> = ["glyph", "docs"].iter().map(|s| s.to_string()).collect();
+
+        let plan = launch_plan(None, Some("from-plugin"), &argv, &cwd).expect("plans");
+        match plan {
+            CliLaunch::ExportWebsite { out_dir, .. } => {
+                assert_eq!(out_dir, cwd.join("from-plugin").to_string_lossy());
+            }
+            other => panic!("expected ExportWebsite, got {other:?}"),
+        }
         let _ = fs::remove_dir_all(&cwd);
     }
 

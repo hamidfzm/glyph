@@ -49,6 +49,7 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         "export-docx" => emit("menu-export-docx"),
         "export-epub" => emit("menu-export-epub"),
         "export-pdf" => emit("menu-export-pdf"),
+        "export-website" => emit("menu-export-website"),
         "close" => Some(MenuAction::CloseWindow),
         "toggle-files-sidebar" => emit("menu-toggle-files-sidebar"),
         "toggle-outline-sidebar" => emit("menu-toggle-outline-sidebar"),
@@ -176,6 +177,10 @@ mod tests {
         assert_eq!(
             menu_action_for_id("export-pdf"),
             Some(emit("menu-export-pdf"))
+        );
+        assert_eq!(
+            menu_action_for_id("export-website"),
+            Some(emit("menu-export-website"))
         );
     }
 

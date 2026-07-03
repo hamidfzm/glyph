@@ -65,6 +65,11 @@
           "name": "file",
           "index": 1,
           "takesValue": true
+        },
+        {
+          "name": "export-website",
+          "takesValue": true,
+          "description": "Export the workspace folder as a static website into the given directory and exit"
         }
       ]
     }

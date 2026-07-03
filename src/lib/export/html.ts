@@ -9,6 +9,12 @@ export interface HtmlDocOptions {
   dark: boolean;
   // Wrapper class so bundled styles apply (markdown vs notebook body).
   bodyClass?: "markdown-body" | "notebook-body" | "glyph-canvas-page";
+  // Multi-page site export: link a shared stylesheet instead of carrying the
+  // collected app CSS inline in every page (`css` then holds only page-specific
+  // extras, usually "").
+  stylesheetHref?: string;
+  // Multi-page site export: navigation tree markup placed beside the content.
+  navHtml?: string;
 }
 
 // The app's base styles lock the shell to the viewport (`html, body, #root {
@@ -39,6 +45,27 @@ const THEME_SCRIPT = `(function(){try{var root=document.documentElement,KEY='gly
 
 const THEME_TOGGLE_BUTTON = `<button id="glyph-theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">\u{25D1}</button>`;
 
+// Two-pane layout for the multi-page site export: sticky nav tree beside the
+// content column, stacking on narrow viewports. Only emitted when a page has
+// nav markup.
+const SITE_LAYOUT = `
+.glyph-site { display: flex; gap: 2rem; max-width: 1100px; margin: 0 auto; align-items: flex-start; }
+.glyph-site-nav { position: sticky; top: 1rem; flex: 0 0 220px; max-height: calc(100vh - 2rem); overflow-y: auto; font-size: 0.875rem; }
+.glyph-site-nav ul { list-style: none; margin: 0; padding-left: 0.75rem; }
+.glyph-site-nav > ul { padding-left: 0; }
+.glyph-site-nav li { margin: 0.15rem 0; }
+.glyph-site-nav summary { cursor: pointer; font-weight: 600; color: var(--color-text-primary, inherit); }
+.glyph-site-nav a { text-decoration: none; color: var(--color-text-secondary, #57606a); }
+.glyph-site-nav a:hover { color: var(--color-accent, #0969da); }
+.glyph-site-nav a[aria-current="page"] { color: var(--color-accent, #0969da); font-weight: 600; }
+.glyph-site-main { flex: 1 1 auto; min-width: 0; }
+.glyph-site-main .markdown-body { margin: 0; }
+@media (max-width: 768px) {
+  .glyph-site { flex-direction: column; }
+  .glyph-site-nav { position: static; flex: none; width: 100%; }
+}
+@media print { .glyph-site-nav { display: none; } }`;
+
 /**
  * Wrap prepared body HTML and collected CSS into a standalone, offline HTML
  * document. The page scrolls like a normal web page and includes a light/dark
@@ -52,8 +79,24 @@ export function buildHtmlDocument({
   css,
   dark,
   bodyClass = "markdown-body",
+  stylesheetHref,
+  navHtml,
 }: HtmlDocOptions): string {
   const initialClass = dark ? ' class="dark"' : "";
+  const stylesheetLink = stylesheetHref
+    ? `\n<link rel="stylesheet" href="${escapeXml(stylesheetHref)}">`
+    : "";
+  const content = `<div class="${bodyClass}">
+${bodyHtml}
+</div>`;
+  const body = navHtml
+    ? `<div class="glyph-site">
+${navHtml}
+<main class="glyph-site-main">
+${content}
+</main>
+</div>`
+    : content;
   return `<!doctype html>
 <html lang="en"${initialClass}>
 <head>
@@ -61,17 +104,15 @@ export function buildHtmlDocument({
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${escapeXml(title)}</title>
-<script>${THEME_SCRIPT}</script>
+<script>${THEME_SCRIPT}</script>${stylesheetLink}
 <style>
 ${css}
-${LAYOUT_OVERRIDES}
+${LAYOUT_OVERRIDES}${navHtml ? SITE_LAYOUT : ""}
 </style>
 </head>
 <body>
 ${THEME_TOGGLE_BUTTON}
-<div class="${bodyClass}">
-${bodyHtml}
-</div>
+${body}
 </body>
 </html>
 `;

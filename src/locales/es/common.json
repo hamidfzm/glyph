@@ -70,7 +70,9 @@
     "docx": "Documento de Word",
     "epub": "EPUB",
     "pdf": "PDF",
-    "exporting": "Exportando {{format}}…"
+    "exporting": "Exportando {{format}}…",
+    "website": "sitio web",
+    "exportingPages": "Exportando página {{done}} de {{total}}…"
   },
   "contextMenu": {
     "copy": "Copiar",

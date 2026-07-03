@@ -1,6 +1,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect } from "react";
 import { useSettings } from "@/hooks/useSettings";
+import { getCliExportRequest } from "@/lib/cliExport";
 
 /**
  * Reveals the main window once the app is ready to be seen.
@@ -20,9 +21,12 @@ export function useWindowReveal() {
   useEffect(() => {
     if (!loaded) return;
 
+    let cancelled = false;
+    let raf = 0;
+    let timer = 0;
     let revealed = false;
     const reveal = () => {
-      if (revealed) return;
+      if (revealed || cancelled) return;
       revealed = true;
       try {
         const win = getCurrentWindow();
@@ -36,12 +40,17 @@ export function useWindowReveal() {
       }
     };
 
-    // Show after a painted frame so the first visible frame is fully themed.
-    const raf = requestAnimationFrame(() => requestAnimationFrame(reveal));
-    // Safety net in case rAF never fires (e.g. window not focused on some OSes).
-    const timer = window.setTimeout(reveal, 1000);
+    // A headless CLI export must never surface the window: the process is a
+    // renderer, not an app the user opened. Everyone else reveals after a
+    // painted frame, with a timeout safety net in case rAF never fires.
+    void getCliExportRequest().then((cliExport) => {
+      if (cliExport || cancelled) return;
+      raf = requestAnimationFrame(() => requestAnimationFrame(reveal));
+      timer = window.setTimeout(reveal, 1000);
+    });
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(raf);
       window.clearTimeout(timer);
     };

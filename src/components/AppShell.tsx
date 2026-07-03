@@ -3,11 +3,13 @@ import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { useAIController } from "@/hooks/useAIController";
 import { useAutoSave } from "@/hooks/useAutoSave";
+import { useCliExport } from "@/hooks/useCliExport";
 import { useCommandPaletteController } from "@/hooks/useCommandPaletteController";
 import { useContextMenu } from "@/hooks/useContextMenu";
 import { useDocumentUndoRedo } from "@/hooks/useDocumentUndoRedo";
 import { useErrorReporting } from "@/hooks/useErrorReporting";
 import { useExport } from "@/hooks/useExport";
+import { useExportSite } from "@/hooks/useExportSite";
 import { useFontZoom } from "@/hooks/useFontZoom";
 import { useMenuEvents } from "@/hooks/useMenuEvents";
 import { useNativeKeybindings } from "@/hooks/useNativeKeybindings";
@@ -58,6 +60,10 @@ export function AppShell() {
 
   // Keep the plugin host's workspace scope in sync with the open workspace.
   usePluginWorkspaceSync();
+
+  // Headless CLI website export: runs and exits when the process was launched
+  // with --export-website, a no-op otherwise.
+  useCliExport();
 
   // Once-per-session check for a newer GitHub release; the banner shows only
   // when the user has the feature on and an update is actually available.
@@ -121,6 +127,7 @@ export function AppShell() {
     filePath: activeFile?.path,
     content: displayContent,
   });
+  const siteExporter = useExportSite(workspace?.root);
   const zoom = useFontZoom({ fontSize: settings.appearance.fontSize, updateSettings });
 
   useNativeMenuState({
@@ -164,6 +171,7 @@ export function AppShell() {
       exportDocx: exporters.exportDocx,
       exportEpub: exporters.exportEpub,
       exportPdf: exporters.exportPdf,
+      exportWebsite: siteExporter.exportWebsite,
       zoomIn: zoom.zoomIn,
       zoomOut: zoom.zoomOut,
       zoomReset: zoom.zoomReset,
@@ -189,6 +197,7 @@ export function AppShell() {
       exporters.exportDocx,
       exporters.exportEpub,
       exporters.exportPdf,
+      siteExporter.exportWebsite,
       zoom.zoomIn,
       zoom.zoomOut,
       zoom.zoomReset,
@@ -288,6 +297,9 @@ export function AppShell() {
       <StatusBar onOpenSync={() => setSyncSettingsOpen(true)} />
 
       {exporters.exporting && <ExportProgress format={exporters.exporting} />}
+      {siteExporter.siteProgress && (
+        <ExportProgress format="website" progress={siteExporter.siteProgress} />
+      )}
 
       <CommandPalette
         open={palette.open}
