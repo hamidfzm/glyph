@@ -202,6 +202,91 @@ describe("PluginsProvider", () => {
     expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin_files", expect.anything());
   });
 
+  it("routes ctx.workspace reads through the synced workspace root", async () => {
+    const reader = installedPlugin({
+      permissions: ["workspace:read"],
+      mainSource: `export default {
+        activate(ctx) {
+          ctx.commands.register({
+            id: "demo.read",
+            title: "Read",
+            async run() { await ctx.workspace.readFile("sub/a.md"); },
+          });
+        },
+      };`,
+    });
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "list_plugins" ? [reader] : undefined),
+    );
+
+    function WorkspaceProbe() {
+      const p = usePluginsOptional();
+      const commands = useRegistryEntries(p?.commands ?? null);
+      return (
+        <div>
+          <button type="button" onClick={() => p?.setWorkspaceRoot("/ws")}>
+            setroot
+          </button>
+          <button type="button" onClick={() => void commands[0]?.run()}>
+            read
+          </button>
+          <span data-testid="ready">{commands.length}</span>
+        </div>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <WorkspaceProbe />
+      </PluginsProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("ready")).toHaveTextContent("1"));
+
+    screen.getByRole("button", { name: "setroot" }).click();
+    screen.getByRole("button", { name: "read" }).click();
+
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("read_file", { path: "/ws/sub/a.md" }),
+    );
+  });
+
+  it("shows an error toast when a marketplace download fails", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "list_plugins" ? [] : undefined),
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    const entry = {
+      id: "com.x.market",
+      name: "Market",
+      version: "1.0.0",
+      apiVersion: "^1.0.0",
+      mainUrl: "https://example.test/main.js",
+    };
+
+    function InstallProbe() {
+      const plugins = usePluginsOptional();
+      return (
+        <button type="button" onClick={() => void plugins?.installFromRegistry(entry)}>
+          market
+        </button>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <InstallProbe />
+      </PluginsProvider>,
+    );
+    screen.getByRole("button", { name: "market" }).click();
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Plugin error: download failed: 500"),
+    );
+    vi.unstubAllGlobals();
+    spy.mockRestore();
+  });
+
   it("keeps a plugin disabled and reports the error when re-enabling fails", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const broken = installedPlugin({ mainSource: "export default {" });

@@ -187,6 +187,20 @@ describe("createPluginHost", () => {
     expect(register).toHaveBeenCalledWith("de", "myplugin", { hello: "Hallo" });
   });
 
+  it("defaults ctx.workspace to no-workspace-open when no root getter is supplied", async () => {
+    const host = createPluginHost(vi.fn());
+    let error: unknown;
+    const module: PluginModule = {
+      async activate(ctx) {
+        error = await ctx.workspace.listFiles().catch((e: unknown) => e);
+      },
+    };
+
+    await host.load(installed({ permissions: ["workspace:read"] }), importerFor(module));
+
+    expect(String(error)).toMatch(/no workspace/);
+  });
+
   it("gates ctx.workspace on the plugin's declared permissions", async () => {
     const host = createPluginHost(vi.fn(), undefined, () => "/ws");
     let denied: unknown;
