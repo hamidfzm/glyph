@@ -159,7 +159,8 @@ export function useExport({
         const prepared = await prepareContent({
           entries,
           includeToc,
-          // PDF needs inlined code colors + rasterized math/diagrams.
+          // PDF needs inlined code colors, rasterized math, and diagrams
+          // re-rendered light as inline SVG for vector embedding.
           pdf: format === "pdf",
         });
         // The body can vanish if the file is closed during the (async) save
