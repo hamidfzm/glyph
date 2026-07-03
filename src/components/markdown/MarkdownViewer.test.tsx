@@ -151,3 +151,20 @@ describe("MarkdownViewer wikilinks", () => {
     expect(onOpen).toHaveBeenCalledWith("/workspace/Cooking.md", undefined);
   });
 });
+
+describe("MarkdownViewer MDX notice", () => {
+  it("shows the notice for .mdx files", () => {
+    const { getByRole } = renderMd("# Title", { filePath: "/docs/page.mdx" });
+    expect(getByRole("note").textContent).toMatch(/MDX/);
+  });
+
+  it("is case insensitive on the extension", () => {
+    const { getByRole } = renderMd("# Title", { filePath: "/docs/page.MDX" });
+    expect(getByRole("note")).toBeInTheDocument();
+  });
+
+  it("shows no notice for .md files or when filePath is absent", () => {
+    expect(renderMd("# Title", { filePath: "/docs/page.md" }).queryByRole("note")).toBeNull();
+    expect(renderMd("# Title").queryByRole("note")).toBeNull();
+  });
+});

@@ -47,7 +47,7 @@
     },
     "fileAssociations": [
       {
-        "ext": ["md", "markdown", "mdown", "mkd", "mkdn", "mdx", "mmd"],
+        "ext": ["md", "markdown", "mdown", "mkd", "mkdn", "mdx", "mmd", "mdtext", "mdtxt"],
         "mimeType": "text/markdown",
         "description": "Markdown Document"
       },

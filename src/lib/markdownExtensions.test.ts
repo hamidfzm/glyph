@@ -5,6 +5,8 @@ describe("MARKDOWN_EXTENSIONS", () => {
   it("includes at least the common markdown extensions", () => {
     expect(MARKDOWN_EXTENSIONS).toContain("md");
     expect(MARKDOWN_EXTENSIONS).toContain("markdown");
+    expect(MARKDOWN_EXTENSIONS).toContain("mdtext");
+    expect(MARKDOWN_EXTENSIONS).toContain("mdtxt");
   });
 });
 

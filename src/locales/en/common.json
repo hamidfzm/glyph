@@ -147,6 +147,9 @@
     "fit": "Fit to screen (0)",
     "actualSize": "Actual size (1)"
   },
+  "mdxNotice": {
+    "body": "MDX file: JSX components are not rendered; only the markdown content is shown."
+  },
   "mermaid": {
     "empty": "Empty diagram source",
     "errorLabel": "Diagram error",

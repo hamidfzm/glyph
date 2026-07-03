@@ -144,6 +144,9 @@
     "fit": "An den Bildschirm anpassen (0)",
     "actualSize": "Tatsächliche Größe (1)"
   },
+  "mdxNotice": {
+    "body": "MDX-Datei: JSX-Komponenten werden nicht gerendert; nur der Markdown-Inhalt wird angezeigt."
+  },
   "mermaid": {
     "empty": "Leere Diagrammquelle",
     "errorLabel": "Diagrammfehler",

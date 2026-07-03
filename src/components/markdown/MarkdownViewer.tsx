@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { SearchBar } from "@/components/layout/SearchBar";
 import { useSearch } from "@/hooks/useSearch";
 import { MarkdownContent } from "./MarkdownContent";
@@ -31,7 +32,12 @@ export function MarkdownViewer({
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
+  const { t } = useTranslation("common");
   const search = useSearch({ containerRef: contentRef });
+
+  // MDX files render as plain markdown; JSX components are not evaluated
+  // (see #77). A per-file notice beats silently showing broken output.
+  const isMdx = filePath?.toLowerCase().endsWith(".mdx") ?? false;
 
   // Restore scroll position on mount
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — restore once when tab activates
@@ -83,6 +89,15 @@ export function MarkdownViewer({
         // can still scroll to the top of the viewport.
         style={{ scrollPaddingTop: "16px" }}
       >
+        {isMdx && (
+          <div
+            role="note"
+            data-print-hide="true"
+            className="mx-8 mt-4 px-3 py-2 rounded border border-[var(--color-border)] border-s-4 border-s-[var(--color-warning,#b45309)] bg-[var(--color-banner-bg)] text-sm text-[var(--color-text-secondary)] select-none"
+          >
+            {t("mdxNotice.body")}
+          </div>
+        )}
         <div ref={contentRef} className="markdown-body px-8 py-6">
           <MarkdownContent
             content={content}

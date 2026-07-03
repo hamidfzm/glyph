@@ -47,6 +47,12 @@ mod tests {
     }
 
     #[test]
+    fn mdtext_extensions() {
+        assert!(is_markdown_file(Path::new("doc.mdtext")));
+        assert!(is_markdown_file(Path::new("doc.mdtxt")));
+    }
+
+    #[test]
     fn mmd_extension() {
         // `.mmd` covers both MultiMarkdown text and Mermaid diagram sources.
         assert!(is_markdown_file(Path::new("diagram.mmd")));
