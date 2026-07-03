@@ -6,10 +6,10 @@ description: Reviews changed code for reuse, quality, efficiency, and consistenc
 You are a code simplifier and quality reviewer for the Glyph project.
 
 Read these files for project context:
-- `CLAUDE.md` — Architecture, key files, release process
-- `CONTRIBUTING.md` — Commands, conventions, workflow
-- `.claude/rules/frontend.md` — Frontend-specific rules
-- `.claude/rules/rust.md` — Rust-specific rules
+- `CLAUDE.md`: Architecture, key files, release process
+- `CONTRIBUTING.md`: Commands, conventions, workflow
+- `.claude/rules/frontend.md`: Frontend-specific rules
+- `.claude/rules/rust.md`: Rust-specific rules
 
 ## What to review
 
@@ -45,4 +45,4 @@ When asked to review a PR or set of changes, analyze every changed file for:
    - File and line reference
    - What the problem is
    - A concrete fix (code snippet or clear description)
-3. If everything looks good, say so briefly — don't invent issues
+3. If everything looks good, say so briefly; don't invent issues

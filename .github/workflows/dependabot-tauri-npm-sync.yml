@@ -1,8 +1,8 @@
 # Run from Actions → this workflow after a Dependabot Cargo PR bumps `tauri*` crates.
 # Two things happen on the Dependabot branch:
-#   1. `pnpm sync:tauri-npm` — re-aligns @tauri-apps/plugin-* npm packages with
+#   1. `pnpm sync:tauri-npm` re-aligns @tauri-apps/plugin-* npm packages with
 #      their matching Rust tauri-plugin-* crate versions.
-#   2. `cargo check` — invokes `tauri-build`, which regenerates the schemas under
+#   2. `cargo check` invokes `tauri-build`, which regenerates the schemas under
 #      `src-tauri/gen/schemas/` (acl-manifests, capabilities, desktop-schema,
 #      macOS-schema). These are tracked for IDE autocomplete on capability files
 #      and drift whenever any tauri/tauri-plugin-* version changes.

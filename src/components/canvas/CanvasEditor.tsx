@@ -218,7 +218,7 @@ export function CanvasEditor({ content, filePath, onChange, viewportKey }: Canva
   // app's undo/redo shortcut) so the stage needs no tabIndex; ignored while a
   // text field is focused.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const handleKey = (e: KeyboardEvent) => {
       if (e.key !== "Delete" && e.key !== "Backspace") return;
       if (editingId) return;
       const target = e.target as Element | null;
@@ -235,8 +235,8 @@ export function CanvasEditor({ content, filePath, onChange, viewportKey }: Canva
         setSelection(new Set());
       }
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
   }, [selection, selectedEdge, editingId, commit]);
 
   const boundingBox = useMemo(() => nodesBoundingBox(data.nodes), [data.nodes]);

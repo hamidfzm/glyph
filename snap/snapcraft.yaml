@@ -4,7 +4,7 @@
 # instead of recompiling. By default it discovers the latest GitHub release and
 # pulls the .deb matching the build architecture, so it needs no inputs and
 # works under any snapcraft provider (LXD, multipass, destructive mode) and in
-# `snapcore/action-build` — none of which forward arbitrary host env vars into
+# `snapcore/action-build`, none of which forward arbitrary host env vars into
 # the build instance. To pin a specific version (e.g. for a local test build of
 # an older release), export GLYPH_VERSION *and* build in --destructive-mode so
 # the variable reaches the build environment.
