@@ -48,6 +48,8 @@ export interface InstalledPlugin {
   version: string;
   apiVersion: string;
   description?: string;
+  /** Capabilities the plugin declares; shown to the user before install. */
+  permissions?: string[];
   /** Absolute path of the installed plugin folder. */
   dir: string;
   /** Source text of the plugin's ESM entry file. */
@@ -100,11 +102,24 @@ export interface MarkdownRegistryApi {
  * registration returns a {@link Disposer}; the host collects them and runs
  * them on unload, so a plugin that only registers needs no `deactivate`.
  */
+/**
+ * Mediated, read-only access to the opened workspace. Requires the plugin to
+ * declare the `workspace:read` permission; paths are workspace-relative and
+ * confined to the workspace root.
+ */
+export interface WorkspaceApi {
+  /** Read a file inside the workspace (workspace-relative path). */
+  readFile(path: string): Promise<string>;
+  /** List the workspace's markdown files (absolute paths). */
+  listFiles(): Promise<string[]>;
+}
+
 export interface GlyphPluginContext {
   readonly apiVersion: string;
   readonly commands: CommandRegistryApi;
   readonly ui: UiRegistryApi;
   readonly markdown: MarkdownRegistryApi;
+  readonly workspace: WorkspaceApi;
   notify(message: string): void;
   /**
    * Register (or extend) translations for a locale + namespace. A plugin ships

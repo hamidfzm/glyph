@@ -9,5 +9,9 @@
   "enable": "Enable {{name}}",
   "noInstalled": "No plugins installed.",
   "noAvailable": "No plugins available.",
-  "updateTo": "Update to v{{version}}"
+  "updateTo": "Update to v{{version}}",
+  "consentTitle": "Install plugin?",
+  "consentBody": "\"{{name}}\" will run JavaScript inside Glyph with access to the plugin API.",
+  "consentPermissions": "It requests:",
+  "permissionsLabel": "Permissions"
 }

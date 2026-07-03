@@ -21,6 +21,21 @@ function importerFor(module: PluginModule): ModuleImporter {
   return vi.fn().mockResolvedValue({ default: module });
 }
 
+/** An importer whose resolution the test controls, for overlap/race cases. */
+function deferredImporterFor(module: PluginModule): {
+  importer: ModuleImporter;
+  resolve: () => void;
+} {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => {
+    release = r;
+  });
+  return {
+    importer: () => gate.then(() => ({ default: module })),
+    resolve: release,
+  };
+}
+
 describe("createPluginHost", () => {
   it("activates a plugin and exposes its contributions", async () => {
     const host = createPluginHost(vi.fn());
@@ -170,6 +185,130 @@ describe("createPluginHost", () => {
     await host.load(installed(), importerFor(module));
 
     expect(register).toHaveBeenCalledWith("de", "myplugin", { hello: "Hallo" });
+  });
+
+  it("defaults ctx.workspace to no-workspace-open when no root getter is supplied", async () => {
+    const host = createPluginHost(vi.fn());
+    let error: unknown;
+    const module: PluginModule = {
+      async activate(ctx) {
+        error = await ctx.workspace.listFiles().catch((e: unknown) => e);
+      },
+    };
+
+    await host.load(installed({ permissions: ["workspace:read"] }), importerFor(module));
+
+    expect(String(error)).toMatch(/no workspace/);
+  });
+
+  it("gates ctx.workspace on the plugin's declared permissions", async () => {
+    const host = createPluginHost(vi.fn(), undefined, () => "/ws");
+    let denied: unknown;
+    let allowedCall: Promise<string[]> | undefined;
+    const withPermission: PluginModule = {
+      activate(ctx) {
+        allowedCall = ctx.workspace.listFiles();
+        allowedCall.catch(() => {}); // resolved via mocked invoke in tests
+      },
+    };
+    const withoutPermission: PluginModule = {
+      async activate(ctx) {
+        denied = await ctx.workspace.listFiles().catch((e: unknown) => e);
+      },
+    };
+
+    await host.load(
+      installed({ id: "p.allowed", permissions: ["workspace:read"] }),
+      importerFor(withPermission),
+    );
+    await host.load(installed({ id: "p.denied" }), importerFor(withoutPermission));
+
+    expect(allowedCall).toBeDefined();
+    expect(denied).toBeInstanceOf(Error);
+    expect(String(denied)).toMatch(/workspace:read/);
+  });
+
+  it("only the newest of two overlapping loads for one id commits; the stale one rolls back", async () => {
+    const host = createPluginHost(vi.fn());
+    const staleDeactivate = vi.fn();
+    const stale: PluginModule = {
+      activate(ctx) {
+        ctx.commands.register({ id: "stale.cmd", title: "Stale", run: () => {} });
+      },
+      deactivate: staleDeactivate,
+    };
+    const fresh: PluginModule = {
+      activate(ctx) {
+        ctx.commands.register({ id: "fresh.cmd", title: "Fresh", run: () => {} });
+      },
+    };
+
+    const first = deferredImporterFor(stale);
+    const firstLoad = host.load(installed({ version: "1.0.0" }), first.importer);
+    // Second load for the same id starts before the first resolves.
+    await host.load(installed({ version: "2.0.0" }), importerFor(fresh));
+    first.resolve();
+    await firstLoad;
+
+    expect(host.commands.list().map((c) => c.id)).toEqual(["fresh.cmd"]);
+    expect(host.listLoaded().map((p) => p.version)).toEqual(["2.0.0"]);
+    expect(staleDeactivate).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs but survives when a superseded load's deactivate throws", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const host = createPluginHost(vi.fn());
+    const stale: PluginModule = {
+      activate() {},
+      deactivate() {
+        throw new Error("bad rollback");
+      },
+    };
+    const fresh: PluginModule = { activate() {} };
+
+    const first = deferredImporterFor(stale);
+    const firstLoad = host.load(installed(), first.importer);
+    await host.load(installed(), importerFor(fresh));
+    first.resolve();
+    await firstLoad;
+
+    expect(host.listLoaded()).toHaveLength(1);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("a load resolving after unloadAll rolls back instead of leaking", async () => {
+    const host = createPluginHost(vi.fn());
+    const module: PluginModule = {
+      activate(ctx) {
+        ctx.commands.register({ id: "late.cmd", title: "Late", run: () => {} });
+      },
+    };
+    const gate = deferredImporterFor(module);
+    const pending = host.load(installed(), gate.importer);
+
+    host.unloadAll();
+    gate.resolve();
+    await pending;
+
+    expect(host.commands.list()).toHaveLength(0);
+    expect(host.listLoaded()).toHaveLength(0);
+  });
+
+  it("can load again after unloadAll (StrictMode remount)", async () => {
+    const host = createPluginHost(vi.fn());
+    const make = (): PluginModule => ({
+      activate(ctx) {
+        ctx.commands.register({ id: "again.cmd", title: "Again", run: () => {} });
+      },
+    });
+
+    await host.load(installed(), importerFor(make()));
+    host.unloadAll();
+    await host.load(installed(), importerFor(make()));
+
+    expect(host.commands.list().map((c) => c.id)).toEqual(["again.cmd"]);
+    expect(host.listLoaded()).toHaveLength(1);
   });
 
   it("unloadAll tears down every plugin", async () => {

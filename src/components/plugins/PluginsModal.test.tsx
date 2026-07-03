@@ -47,6 +47,7 @@ function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
     installFromRegistry: vi.fn(async () => {}),
     setEnabled: vi.fn(async () => {}),
     uninstall: vi.fn(async () => {}),
+    setWorkspaceRoot: vi.fn(),
     ...over,
   };
 }
@@ -65,6 +66,17 @@ describe("PluginsModal", () => {
     expect(screen.getByText("Alpha")).toBeInTheDocument();
     expect(screen.getByText("the alpha plugin")).toBeInTheDocument();
     expect(screen.getByText("Charlie")).toBeInTheDocument();
+  });
+
+  it("shows an installed plugin's declared permissions", () => {
+    renderModal(
+      ctx({ installed: [{ ...installed, permissions: ["workspace:read", "network:api.test"] }] }),
+    );
+    expect(
+      screen.getByText(
+        (_, el) => el?.textContent === "Permissions: workspace:read, network:api.test",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("toggles an installed plugin's active state", () => {

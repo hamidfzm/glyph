@@ -9,5 +9,9 @@
   "enable": "启用 {{name}}",
   "noInstalled": "尚未安装插件。",
   "noAvailable": "暂无可用插件。",
-  "updateTo": "更新到 v{{version}}"
+  "updateTo": "更新到 v{{version}}",
+  "consentTitle": "安装插件？",
+  "consentBody": "“{{name}}”将在 Glyph 中运行 JavaScript 并访问插件 API。",
+  "consentPermissions": "它请求：",
+  "permissionsLabel": "权限"
 }

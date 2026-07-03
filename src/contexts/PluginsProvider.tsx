@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToasts";
 import { PluginsContext } from "@/contexts/PluginsContext";
 import { registerTranslations } from "@/lib/i18n";
@@ -23,6 +24,7 @@ const TOAST_DURATION_MS = 4000;
  * management modal drives.
  */
 export function PluginsProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation("plugins");
   const [toasts, setToasts] = useState<PluginToast[]>([]);
   const [installed, setInstalled] = useState<InstalledPlugin[]>([]);
   const [disabled, setDisabled] = useState<string[]>([]);
@@ -38,8 +40,19 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     }, TOAST_DURATION_MS);
   }, []);
 
+  // The opened workspace root, mirrored from TabsContext by
+  // usePluginWorkspaceSync (this provider mounts above TabsProvider, so it
+  // cannot read that context directly). A ref, not state: only ctx.workspace
+  // calls read it, and they always want the current value.
+  const workspaceRootRef = useRef<string | null>(null);
+  const setWorkspaceRoot = useCallback((root: string | null) => {
+    workspaceRootRef.current = root;
+  }, []);
+
   // One host per provider; pushToast is stable so the closure stays valid.
-  const [host] = useState(() => createPluginHost(pushToast, registerTranslations));
+  const [host] = useState(() =>
+    createPluginHost(pushToast, registerTranslations, () => workspaceRootRef.current),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -81,20 +94,28 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
 
   const updates = useMemo(() => findUpdates(installed, registry), [installed, registry]);
 
+  // Functional updates throughout: concurrent operations would otherwise close
+  // over the same stale `disabled` array and clobber each other's persisted
+  // change. Persisting inside the updater keeps state and store in lockstep.
+  const persistDisabled = useCallback((update: (prev: string[]) => string[]) => {
+    setDisabled((prev) => {
+      const next = update(prev);
+      if (next !== prev) void saveDisabled(next);
+      return next;
+    });
+  }, []);
+
   // Record a freshly installed/updated plugin: on disk, enabled, and loaded.
   const afterInstall = useCallback(
     (plugin: InstalledPlugin) => {
       setInstalled((prev) => [...prev.filter((p) => p.id !== plugin.id), plugin]);
-      setDisabled((prev) => {
-        if (!prev.includes(plugin.id)) return prev;
-        const next = prev.filter((d) => d !== plugin.id);
-        void saveDisabled(next);
-        return next;
-      });
+      persistDisabled((prev) =>
+        prev.includes(plugin.id) ? prev.filter((d) => d !== plugin.id) : prev,
+      );
       setLoaded(host.listLoaded());
       pushToast(`Installed plugin: ${plugin.name} v${plugin.version}`);
     },
-    [host, pushToast],
+    [host, pushToast, persistDisabled],
   );
 
   const reportFailure = useCallback(
@@ -105,9 +126,27 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     [pushToast],
   );
 
+  // Native yes/no consent before any code is installed. Installing implies
+  // consent, so re-enabling an already-installed plugin never re-prompts.
+  const confirmInstall = useCallback(
+    (name: string, permissions?: string[]) => {
+      const requests = permissions?.length
+        ? `\n\n${t("consentPermissions")}\n${permissions.map((p) => `- ${p}`).join("\n")}`
+        : "";
+      return ask(`${t("consentBody", { name })}${requests}`, {
+        title: t("consentTitle"),
+        kind: "warning",
+      });
+    },
+    [t],
+  );
+
   const installFromFolder = useCallback(async () => {
     const dir = await open({ directory: true, multiple: false, title: "Select a plugin folder" });
     if (typeof dir !== "string") return; // cancelled
+    // Folder installs read the manifest during install, so consent names the
+    // folder; declared permissions still show afterwards in Manage Plugins.
+    if (!(await confirmInstall(dir))) return;
     try {
       const plugin = await invoke<InstalledPlugin>("install_plugin", { srcDir: dir });
       await host.load(plugin);
@@ -115,10 +154,11 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       reportFailure(err);
     }
-  }, [host, afterInstall, reportFailure]);
+  }, [host, afterInstall, reportFailure, confirmInstall]);
 
   const installFromRegistry = useCallback(
     async (entry: RegistryEntry) => {
+      if (!(await confirmInstall(entry.name, entry.permissions))) return;
       try {
         const plugin = await downloadAndInstall(entry);
         await host.load(plugin);
@@ -127,7 +167,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         reportFailure(err);
       }
     },
-    [host, afterInstall, reportFailure],
+    [host, afterInstall, reportFailure, confirmInstall],
   );
 
   const setEnabled = useCallback(
@@ -141,18 +181,14 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
           reportFailure(err);
           return;
         }
-        const next = disabled.filter((d) => d !== id);
-        setDisabled(next);
-        await saveDisabled(next);
+        persistDisabled((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : prev));
       } else {
         host.unload(id);
-        const next = disabled.includes(id) ? disabled : [...disabled, id];
-        setDisabled(next);
-        await saveDisabled(next);
+        persistDisabled((prev) => (prev.includes(id) ? prev : [...prev, id]));
       }
       setLoaded(host.listLoaded());
     },
-    [installed, disabled, host, reportFailure],
+    [installed, host, reportFailure, persistDisabled],
   );
 
   const uninstall = useCallback(
@@ -165,12 +201,10 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         return;
       }
       setInstalled((prev) => prev.filter((p) => p.id !== id));
-      const next = disabled.filter((d) => d !== id);
-      setDisabled(next);
-      await saveDisabled(next);
+      persistDisabled((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : prev));
       setLoaded(host.listLoaded());
     },
-    [disabled, host, reportFailure],
+    [host, reportFailure, persistDisabled],
   );
 
   return (
@@ -190,6 +224,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         installFromRegistry,
         setEnabled,
         uninstall,
+        setWorkspaceRoot,
       }}
     >
       {children}

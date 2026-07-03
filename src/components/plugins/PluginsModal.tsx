@@ -88,6 +88,11 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
                         {p.description}
                       </div>
                     )}
+                    {p.permissions && p.permissions.length > 0 && (
+                      <div className="text-xs text-[var(--color-text-secondary)] truncate">
+                        {t("permissionsLabel")}: {p.permissions.join(", ")}
+                      </div>
+                    )}
                   </div>
                   {update && (
                     <button

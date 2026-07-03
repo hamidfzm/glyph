@@ -26,6 +26,7 @@ function value(statusBarItems = createRegistry<StatusBarItemContribution>()): Pl
     installFromRegistry: async () => {},
     setEnabled: async () => {},
     uninstall: async () => {},
+    setWorkspaceRoot: () => {},
   };
 }
 
