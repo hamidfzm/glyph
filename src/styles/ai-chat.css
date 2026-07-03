@@ -1,0 +1,301 @@
+/* AI assistant sidebar. Docked in the content row beside the document (a flex
+   sibling, never an overlay), so opening it shrinks the document instead of
+   covering it. `border-inline-start` keeps the divider on the correct side
+   under RTL. */
+.ai-chat-panel {
+  display: none;
+  flex-direction: column;
+  width: 340px;
+  max-width: 45vw;
+  flex-shrink: 0;
+  min-height: 0;
+  background: var(--color-surface);
+  border-inline-start: 1px solid var(--color-border);
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+}
+
+.ai-chat-panel[data-open="true"] {
+  display: flex;
+}
+
+.ai-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.ai-chat-header h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.ai-chat-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.ai-chat-header-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  border-radius: var(--glyph-radius-sm);
+  padding: 4px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.ai-chat-header-btn:hover {
+  background: var(--color-surface-secondary);
+  color: var(--color-text-primary);
+}
+
+.ai-chat-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-chat-empty {
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  text-align: center;
+  padding: 32px 8px;
+}
+
+/* Messages */
+.ai-msg-user {
+  align-self: flex-end;
+  max-width: 85%;
+  background: var(--color-accent);
+  color: #fff;
+  border-radius: 12px;
+  border-end-end-radius: 4px;
+  padding: 6px 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /* Each line resolves its own direction, so a Persian question in an
+     otherwise-LTR app renders right-to-left (the bubble carries dir="auto"). */
+  unicode-bidi: plaintext;
+}
+
+[dir="rtl"] .ai-msg-user {
+  align-self: flex-start;
+}
+
+.ai-msg-assistant {
+  align-self: stretch;
+}
+
+.ai-msg-assistant .ai-msg-markdown {
+  font-size: 13px;
+  max-width: 100%;
+  padding: 0;
+}
+
+/* Assistant replies mix languages (e.g. a Persian translation under English
+   headings); each block resolves its own direction from its first strong
+   character. */
+.ai-msg-markdown :is(p, li, h1, h2, h3, h4, h5, h6) {
+  unicode-bidi: plaintext;
+}
+
+/* Per-message actions, revealed on hover to keep the transcript quiet. */
+.ai-msg-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.ai-msg-assistant:hover .ai-msg-actions,
+.ai-msg-actions:focus-within {
+  opacity: 1;
+}
+
+.ai-msg-action {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ai-msg-action:hover {
+  color: var(--color-text-primary);
+}
+
+/* Typing indicator shown before the first streamed token arrives. */
+.ai-typing {
+  display: flex;
+  gap: 4px;
+  padding: 6px 0;
+}
+
+.ai-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+  animation: ai-typing-bounce 1.2s infinite ease-in-out;
+}
+
+.ai-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.ai-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes ai-typing-bounce {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+/* Quoted document passages with their locate affordance. */
+.ai-quote .ai-quote-locate {
+  display: block;
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 2px 0 0;
+  font-size: 11px;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ai-quote .ai-quote-locate:hover {
+  text-decoration: underline;
+}
+
+/* Quick-action chips */
+.ai-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px 0;
+  flex-shrink: 0;
+}
+
+.ai-chip {
+  appearance: none;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ai-chip:hover:not(:disabled) {
+  background: var(--color-surface-tertiary);
+}
+
+.ai-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Composer */
+.ai-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 10px 12px;
+  flex-shrink: 0;
+}
+
+.ai-composer-input {
+  flex: 1;
+  resize: none;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  max-height: 120px;
+  /* The scrollbar appears only when content exceeds max-height (toggled from
+     the component); a permanent one reads as clutter beside one line. */
+  overflow-y: hidden;
+}
+
+.ai-composer-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.ai-composer-btn {
+  appearance: none;
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ai-composer-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ai-error {
+  color: #e53e3e;
+  font-size: 12px;
+  padding: 10px;
+  background: rgba(229, 62, 62, 0.08);
+  border-radius: var(--glyph-radius-sm);
+}
+
+/* Flash highlight applied to the located block in the markdown viewer. */
+.ai-flash {
+  animation: ai-flash-pulse 2.5s ease;
+  border-radius: 4px;
+}
+
+@keyframes ai-flash-pulse {
+  0%,
+  60% {
+    background-color: color-mix(in srgb, var(--color-accent) 20%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 20%, transparent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}

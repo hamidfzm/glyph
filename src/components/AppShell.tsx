@@ -19,9 +19,11 @@ import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
+import { aiDocContext } from "@/lib/aiPrompts";
 import { openDocumentation, openReleaseNotes, openReportIssue } from "@/lib/helpLinks";
 import { isImageFile } from "@/lib/imageExtensions";
 import { nextEditorMode } from "@/lib/settings";
+import { AIChatPanel } from "./ai/AIChatPanel";
 import { EmptyState } from "./layout/EmptyState";
 import { ExportProgress } from "./layout/ExportProgress";
 import { Sidebar } from "./layout/Sidebar";
@@ -30,7 +32,6 @@ import { TabBar } from "./layout/TabBar";
 import { UpdateBanner } from "./layout/UpdateBanner";
 import { WorkspaceNoticeBanner } from "./layout/WorkspaceNoticeBanner";
 import { ContextMenu } from "./menu/ContextMenu";
-import { AIPanel } from "./modals/AIPanel";
 import { CommandPalette } from "./modals/CommandPalette";
 import { SyncSettingsModal } from "./modals/SyncSettingsModal";
 import { SettingsModal } from "./modals/settings/lazySettings";
@@ -98,7 +99,15 @@ export function AppShell() {
     ),
   });
 
-  const aiController = useAIController(settings.ai);
+  const aiController = useAIController(
+    settings.ai,
+    aiDocContext({
+      path: activeFile?.path,
+      content: displayContent,
+      workspaceRoot: workspace?.root,
+      workspaceFiles,
+    }),
+  );
   const readAloud = useReadAloudController(settings.ai, () => displayContent);
   const tts = readAloud.tts;
   const printDoc = usePrint({ entries: tabs.tocEntries, settings: settings.print });
@@ -131,14 +140,6 @@ export function AppShell() {
     setTabMode(activeTabId, nextEditorMode(activeFile?.mode));
   }, [activeTabId, activeFile?.mode, setTabMode]);
 
-  const handleAIActionFromMenu = useCallback(
-    (action: string) => {
-      const text = displayContent ?? "";
-      if (text) aiController.runAction(action, text);
-    },
-    [aiController, displayContent],
-  );
-
   const menuHandlers = useMemo(
     () => ({
       openFile: openFileDialog,
@@ -162,7 +163,8 @@ export function AppShell() {
       zoomIn: zoom.zoomIn,
       zoomOut: zoom.zoomOut,
       zoomReset: zoom.zoomReset,
-      aiAction: handleAIActionFromMenu,
+      aiAction: aiController.runAction,
+      aiChat: aiController.togglePanel,
       readAloud: readAloud.toggle,
       // Static external links; module-level refs, so no deps entry needed.
       documentation: openDocumentation,
@@ -186,7 +188,8 @@ export function AppShell() {
       zoom.zoomIn,
       zoom.zoomOut,
       zoom.zoomReset,
-      handleAIActionFromMenu,
+      aiController.runAction,
+      aiController.togglePanel,
       readAloud.toggle,
     ],
   );
@@ -216,11 +219,11 @@ export function AppShell() {
       ttsStop: tts.stop,
       ttsSpeaking: tts.speaking,
       ttsAvailable: tts.available,
-      aiAction: handleAIActionFromMenu,
+      aiAction: aiController.runAction,
       aiConfigured: aiController.configured,
       content: displayContent,
     }),
-    [tts, handleAIActionFromMenu, aiController.configured, displayContent],
+    [tts, aiController.runAction, aiController.configured, displayContent],
   );
   const contextMenu = useContextMenu(contextMenuActions);
 
@@ -243,7 +246,7 @@ export function AppShell() {
         notice={tabs.workspaceNotice}
         onDismiss={tabs.dismissWorkspaceNotice}
       />
-      <TabBar />
+      <TabBar onToggleAIChat={aiController.configured ? aiController.togglePanel : null} />
       <div className="flex flex-1 min-h-0">
         <Sidebar side="left" />
         {showContent ? (
@@ -261,6 +264,22 @@ export function AppShell() {
           <div className="flex-1" />
         )}
         <Sidebar side="right" />
+        <AIChatPanel
+          open={aiController.panelOpen}
+          onClose={aiController.closePanel}
+          turns={aiController.chat.turns}
+          streaming={aiController.chat.streaming}
+          error={aiController.chat.error}
+          configured={aiController.configured}
+          hasDocument={(displayContent ?? "").length > 0}
+          onSend={aiController.chat.send}
+          onStop={aiController.chat.stop}
+          onClear={aiController.chat.clear}
+          onQuickAction={aiController.runAction}
+          onReadAloud={tts.available ? tts.speak : undefined}
+          speaking={tts.speaking}
+          onStopReading={tts.stop}
+        />
       </div>
       <StatusBar onOpenSync={() => setSyncSettingsOpen(true)} />
 
@@ -280,17 +299,6 @@ export function AppShell() {
       {settingsOpen && <SettingsModal open onClose={() => setSettingsOpen(false)} />}
       {syncSettingsOpen && <SyncSettingsModal open onClose={() => setSyncSettingsOpen(false)} />}
       {pluginsOpen && <PluginsModal onClose={() => setPluginsOpen(false)} />}
-      <AIPanel
-        open={aiController.panelOpen}
-        onClose={aiController.closePanel}
-        loading={aiController.ai.loading}
-        result={aiController.ai.result}
-        error={aiController.ai.error}
-        action={aiController.ai.action}
-        onReadAloud={tts.available ? tts.speak : undefined}
-        speaking={tts.speaking}
-        onStopReading={tts.stop}
-      />
     </div>
   );
 }

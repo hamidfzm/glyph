@@ -44,7 +44,8 @@
     "editMode": "编辑模式",
     "edit": "编辑",
     "splitMode": "分屏模式",
-    "split": "分屏"
+    "split": "分屏",
+    "aiChat": "AI 聊天"
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> 可用",

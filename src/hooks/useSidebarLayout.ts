@@ -25,19 +25,21 @@ export function useSidebarLayout({
     setOutlineVisible(outlineVisibleSetting);
   }, [outlineVisibleSetting]);
 
+  // The settings write must stay OUT of the setState updater: React runs
+  // updaters during render (and re-runs them if the render restarts), so a
+  // side effect there updates SettingsProvider mid-render and can cascade
+  // into an update-depth loop.
   const toggleFiles = useCallback(() => {
-    setFilesVisible((v) => {
-      updateSettings("layout.filesSidebarVisible", !v);
-      return !v;
-    });
-  }, [updateSettings]);
+    const next = !filesVisible;
+    setFilesVisible(next);
+    updateSettings("layout.filesSidebarVisible", next);
+  }, [filesVisible, updateSettings]);
 
   const toggleOutline = useCallback(() => {
-    setOutlineVisible((v) => {
-      updateSettings("layout.outlineSidebarVisible", !v);
-      return !v;
-    });
-  }, [updateSettings]);
+    const next = !outlineVisible;
+    setOutlineVisible(next);
+    updateSettings("layout.outlineSidebarVisible", next);
+  }, [outlineVisible, updateSettings]);
 
   const resetLayout = useCallback(() => {
     updateSettings("layout.filesSidebarVisible", true);

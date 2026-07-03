@@ -187,7 +187,12 @@
     },
     "model": {
       "label": "Modell",
-      "placeholder": "Modellnamen auswählen oder eingeben"
+      "placeholder": "Modellnamen auswählen oder eingeben",
+      "status": {
+        "checking": "Ollama-Server wird geprüft…",
+        "ok": "Mit Ollama verbunden. Installierte Modelle: {{count}}",
+        "error": "Ollama-Server nicht erreichbar. Prüfe die URL und OLLAMA_ORIGINS."
+      }
     },
     "tts": {
       "title": "Sprachausgabe"

@@ -86,8 +86,10 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Platform-native styling (macOS vibrancy, Windows Mica)
 
 ### AI (optional)
-- Summarize, explain, translate, and simplify documents
-- Providers: Claude, OpenAI, Ollama (local)
+- AI chat sidebar: converse about the open document with streaming replies, docked beside the text (never over it)
+- Quick actions: summarize, explain, translate, and simplify the document or a selection, from chips, the AI menu, or the right-click menu
+- Quoted passages in replies can be located in the document with one click (scrolls and highlights the match)
+- Providers: Claude, OpenAI, Ollama (local); the model list for Ollama is read from your local server
 - Text-to-speech with configurable voice and speed
 
 ### Platform

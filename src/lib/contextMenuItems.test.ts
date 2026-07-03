@@ -98,18 +98,23 @@ describe("buildContextMenuItems", () => {
       "Translate Document",
       "Simplify Document",
     ]);
+    // The document itself travels in the chat's system prompt, so no
+    // selection text is passed for whole-document actions.
     if (submenu?.kind === "submenu") submenu.items[0].onSelect();
-    expect(aiAction).toHaveBeenCalledWith("summarize", "doc body");
+    expect(aiAction).toHaveBeenCalledWith("summarize", undefined);
   });
 
-  it("targets the selection in AI labels when text is selected", () => {
+  it("targets the selection in AI labels and passes it to the action", () => {
+    const aiAction = vi.fn();
     const items = buildContextMenuItems(
-      { aiConfigured: true, aiAction: vi.fn(), content: "doc" },
+      { aiConfigured: true, aiAction, content: "doc" },
       "picked",
       t,
     );
     const submenu = items.find((i) => i.kind === "submenu");
     expect(submenu?.kind === "submenu" && submenu.items[0].label).toBe("Summarize Selection");
+    if (submenu?.kind === "submenu") submenu.items[0].onSelect();
+    expect(aiAction).toHaveBeenCalledWith("summarize", "picked");
   });
 
   it("omits the AI submenu when there is no text to act on", () => {

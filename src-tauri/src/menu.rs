@@ -55,6 +55,7 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         "open-command-palette" => emit("menu-open-command-palette"),
         "open-settings" => emit("menu-open-settings"),
         "open-sync-settings" => emit("menu-open-sync-settings"),
+        "ai-chat" => emit("menu-ai-chat"),
         "ai-summarize" => Some(MenuAction::Emit {
             event: "menu-ai-action",
             payload: Some("summarize"),
@@ -225,6 +226,7 @@ mod tests {
 
     #[test]
     fn ai_action_ids_emit_with_their_payload() {
+        assert_eq!(menu_action_for_id("ai-chat"), Some(emit("menu-ai-chat")));
         assert_eq!(
             menu_action_for_id("ai-summarize"),
             Some(emit_with("menu-ai-action", "summarize"))

@@ -187,7 +187,12 @@
     },
     "model": {
       "label": "模型",
-      "placeholder": "选择或输入模型名称"
+      "placeholder": "选择或输入模型名称",
+      "status": {
+        "checking": "正在检查 Ollama 服务器…",
+        "ok": "已连接到 Ollama。已安装模型：{{count}}",
+        "error": "无法连接 Ollama 服务器。请检查 URL 和 OLLAMA_ORIGINS。"
+      }
     },
     "tts": {
       "title": "文字转语音"

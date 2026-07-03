@@ -87,12 +87,12 @@ function Wrapper({ value, children }: { value: TabsContextValue; children: React
   return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;
 }
 
-function renderTabBar(opts: RenderOpts = {}) {
+function renderTabBar(opts: RenderOpts = {}, onToggleAIChat: (() => void) | null = null) {
   const value = buildContext(opts);
   return {
     ...render(
       <Wrapper value={value}>
-        <TabBar />
+        <TabBar onToggleAIChat={onToggleAIChat} />
       </Wrapper>,
     ),
     value,
@@ -103,6 +103,18 @@ describe("TabBar", () => {
   it("renders nothing when no tabs", () => {
     const { container } = renderTabBar({ tabs: [] });
     expect(container.firstChild).toBeNull();
+  });
+
+  it("shows the AI chat toggle only when a callback is provided", () => {
+    const onToggleAIChat = vi.fn();
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0" }, onToggleAIChat);
+    fireEvent.click(screen.getByRole("button", { name: "AI Chat" }));
+    expect(onToggleAIChat).toHaveBeenCalled();
+  });
+
+  it("hides the AI chat toggle when no provider is configured (null callback)", () => {
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0" }, null);
+    expect(screen.queryByRole("button", { name: "AI Chat" })).not.toBeInTheDocument();
   });
 
   it("renders tab items with file names", () => {

@@ -2,6 +2,7 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { EditModeIcon } from "@/components/icons/EditModeIcon";
 import { GraphIcon } from "@/components/icons/GraphIcon";
+import { SparkleIcon } from "@/components/icons/SparkleIcon";
 import { SplitModeIcon } from "@/components/icons/SplitModeIcon";
 import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
 import { ViewModeIcon } from "@/components/icons/ViewModeIcon";
@@ -20,7 +21,13 @@ function tabLabel(tab: Tab, t: TFunction<"common">): string {
   return tab.file.metadata?.name ?? t("tabBar.untitled");
 }
 
-export function TabBar() {
+interface TabBarProps {
+  // `null` when no AI provider is configured, hiding the chat toggle (same
+  // convention as StatusBar's onOpenSync).
+  onToggleAIChat?: (() => void) | null;
+}
+
+export function TabBar({ onToggleAIChat }: TabBarProps) {
   const { t } = useTranslation("common");
   const {
     tabs,
@@ -126,6 +133,19 @@ export function TabBar() {
               <SplitModeIcon />
             </button>
           )}
+        </div>
+      )}
+      {onToggleAIChat && (
+        <div className="mode-toggle">
+          <button
+            type="button"
+            className="mode-toggle-btn"
+            onClick={onToggleAIChat}
+            aria-label={t("tabBar.aiChat")}
+            title={t("tabBar.aiChat")}
+          >
+            <SparkleIcon />
+          </button>
         </div>
       )}
     </div>
