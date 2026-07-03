@@ -45,7 +45,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Emoji shortcodes: `:smile:` → 😊, `:+1:` → 👍
 - Local and remote image display
 - Image lightbox: click any image to view it full-size over a dark backdrop, with zoom controls (fit, actual size, zoom in/out), arrow-key navigation between the document's images, and Escape or click-outside to close
-- External links open in system browser with optional confirmation dialog
+- External links open in system browser with optional confirmation dialog; right-click one to copy its address or open it in the external browser
 
 ### Editor
 - Markdown editor mode: syntax highlighting, line numbers, undo/redo history

@@ -56,7 +56,15 @@ export function useContextMenu(actions: ContextMenuActions) {
       // Only the markdown viewer shows a themed menu; other chrome shows none.
       if (!isInsideMarkdownContent(e.target)) return;
       const selection = window.getSelection()?.toString().trim() ?? "";
-      setMenu({ x: e.clientX, y: e.clientY, items: buildContextMenuItems(actions, selection, t) });
+      // Raw attribute, not the resolved `href` property: resolution would turn
+      // relative workspace links into http://localhost/... URLs, which would
+      // wrongly pass the external-link filter in the builder.
+      const linkHref = (e.target as Element).closest("a[href]")?.getAttribute("href") ?? undefined;
+      setMenu({
+        x: e.clientX,
+        y: e.clientY,
+        items: buildContextMenuItems(actions, selection, t, linkHref),
+      });
     };
     document.addEventListener("contextmenu", handler);
     return () => document.removeEventListener("contextmenu", handler);

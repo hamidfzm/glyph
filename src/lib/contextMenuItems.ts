@@ -2,6 +2,7 @@
 // the hook and the component so the menu's contents are pure, easy to unit test,
 // and free of any React or OS-native menu API.
 
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { TFunction } from "i18next";
 import type { ReactNode } from "react";
 
@@ -37,12 +38,20 @@ export type ContextMenuItem =
   | ContextMenuSubmenuItem;
 
 const SELECTION_PREVIEW_MAX = 30;
+// Link actions only apply to external web URLs. Internal targets (wikilinks
+// render as href="#", heading anchors, relative workspace paths) have no
+// meaningful "copy address" or "open in browser" semantics. Other schemes that
+// are "external" for click-through (mailto: etc.) are deliberately excluded
+// too: "Open in External Browser" would be a misleading label for them.
+export function isExternalHttpUrl(href: string): boolean {
+  return /^https?:\/\//i.test(href);
+}
 // Canonical action ids passed to the AI controller; the visible verb is
 // translated separately via `contextMenu.aiVerb.<id>`.
 const AI_ACTIONS = ["summarize", "explain", "translate", "simplify"] as const;
 
-/** Copy text to the clipboard. The text is captured up front (not read live)
- *  so it survives focus moving from the document selection to the menu. */
+/** Copy text (a captured selection, a link href) to the clipboard. The text is
+ *  captured up front (not read live) so it survives focus moving to the menu. */
 export function copySelection(text: string): void {
   // Best-effort: the clipboard write can reject when the window isn't focused
   // or permission is denied. There's no meaningful recovery for a copy gesture,
@@ -86,7 +95,25 @@ export function buildContextMenuItems(
   actions: ContextMenuActions,
   selection: string,
   t: TFunction<"common">,
+  linkHref?: string,
 ): ContextMenuItem[] {
+  const link: ContextMenuItem[] = [];
+  if (linkHref && isExternalHttpUrl(linkHref)) {
+    link.push(
+      {
+        kind: "action",
+        label: t("contextMenu.copyLinkAddress"),
+        onSelect: () => copySelection(linkHref),
+      },
+      {
+        kind: "action",
+        label: t("contextMenu.openInBrowser"),
+        // Best-effort like copySelection: no meaningful recovery for the gesture.
+        onSelect: () => void openUrl(linkHref).catch(() => undefined),
+      },
+    );
+  }
+
   const text: ContextMenuItem[] = [];
   if (selection) {
     text.push({
@@ -142,5 +169,5 @@ export function buildContextMenuItems(
     }
   }
 
-  return joinGroups([text, tts, ai]);
+  return joinGroups([link, text, tts, ai]);
 }

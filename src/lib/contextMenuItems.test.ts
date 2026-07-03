@@ -1,3 +1,4 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "@/lib/i18n";
 import {
@@ -7,6 +8,8 @@ import {
   searchGoogle,
   selectAllContent,
 } from "./contextMenuItems";
+
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn().mockResolvedValue(undefined) }));
 
 // English-bound translator so label assertions read the same source strings.
 const t = i18n.getFixedT("en", "common");
@@ -134,6 +137,44 @@ describe("buildContextMenuItems", () => {
     const search = items.find((i) => i.kind === "action" && i.label.startsWith("Search Google"));
     if (search?.kind === "action") search.onSelect();
     expect(open).toHaveBeenCalledWith("https://www.google.com/search?q=term", "_blank");
+  });
+
+  it("prepends link actions for an external http(s) link", () => {
+    const items = buildContextMenuItems({}, "", t, "https://example.com/page");
+    const labels = actionLabels(items);
+    expect(labels.slice(0, 2)).toEqual(["Copy Link Address", "Open in External Browser"]);
+  });
+
+  it("Copy Link Address puts the full URL on the clipboard", () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const items = buildContextMenuItems({}, "", t, "http://example.com/a?b=c");
+    const copy = find(items, "Copy Link Address");
+    if (copy?.kind === "action") copy.onSelect();
+    expect(writeText).toHaveBeenCalledWith("http://example.com/a?b=c");
+  });
+
+  it("Open in External Browser routes through the opener plugin", () => {
+    const items = buildContextMenuItems({}, "", t, "https://example.com");
+    const open = find(items, "Open in External Browser");
+    if (open?.kind === "action") open.onSelect();
+    expect(openUrl).toHaveBeenCalledWith("https://example.com");
+  });
+
+  it("omits link actions for internal targets and when no link is present", () => {
+    for (const href of ["#heading", "./notes/other.md", "#", "mailto:a@b.c", undefined]) {
+      const items = buildContextMenuItems({}, "", t, href);
+      expect(actionLabels(items)).toEqual(["Select All"]);
+    }
+  });
+
+  it("keeps text actions alongside link actions when a link is right-clicked over a selection", () => {
+    const items = buildContextMenuItems({}, "picked", t, "https://example.com");
+    const labels = actionLabels(items);
+    expect(labels).toContain("Copy Link Address");
+    expect(labels).toContain("Open in External Browser");
+    expect(labels).toContain("Copy");
+    expect(labels.some((l) => l.startsWith("Search Google"))).toBe(true);
   });
 
   it("Stop Reading invokes ttsStop", () => {

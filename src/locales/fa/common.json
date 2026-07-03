@@ -73,6 +73,8 @@
   },
   "contextMenu": {
     "copy": "کپی",
+    "copyLinkAddress": "کپی نشانی پیوند",
+    "openInBrowser": "باز کردن در مرورگر خارجی",
     "selectAll": "انتخاب همه",
     "searchGoogle": "جستجوی «{{query}}» در گوگل",
     "stopReading": "توقف خواندن",

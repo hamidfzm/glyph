@@ -73,6 +73,8 @@
   },
   "contextMenu": {
     "copy": "复制",
+    "copyLinkAddress": "复制链接地址",
+    "openInBrowser": "在外部浏览器中打开",
     "selectAll": "全选",
     "searchGoogle": "用 Google 搜索 \"{{query}}\"",
     "stopReading": "停止朗读",
