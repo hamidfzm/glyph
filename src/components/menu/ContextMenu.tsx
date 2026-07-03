@@ -107,7 +107,7 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
       ref={rootRef}
       role="menu"
       aria-orientation="vertical"
-      className={SURFACE_CLASS}
+      className={`fixed ${SURFACE_CLASS}`}
       style={{ top: pos.y, left: pos.x }}
       onContextMenu={(e) => e.preventDefault()}
     >
