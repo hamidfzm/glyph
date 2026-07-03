@@ -91,7 +91,7 @@
     }
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.0",
+    "@biomejs/biome": "^2.5.2",
     "@codecov/vite-plugin": "^2.0.1",
     "@sentry/vite-plugin": "^5.3.0",
     "@tailwindcss/vite": "^4",
@@ -100,7 +100,7 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/d3-force": "^3.0.10",
-    "@types/node": "^22.19.21",
+    "@types/node": "^22.20.0",
     "@types/papaparse": "^5.5.2",
     "@types/pdfmake": "^0.3.3",
     "@types/react": "^19",
@@ -109,7 +109,7 @@
     "@vitest/coverage-v8": "^4.1.9",
     "happy-dom": "^20.10.6",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.7",
+    "lint-staged": "^17.0.8",
     "rehype-stringify": "^10.0.1",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
