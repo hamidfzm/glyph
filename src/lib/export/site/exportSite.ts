@@ -3,6 +3,8 @@ import { collectStyles } from "@/lib/export/collectStyles";
 import { buildHtmlDocument } from "@/lib/export/html";
 import { deriveExportMeta } from "@/lib/export/meta";
 import { restoreMermaidTheme } from "@/lib/export/rasterize";
+import { isMarkdownFile } from "@/lib/markdownExtensions";
+import { adaptMmdContent } from "@/lib/mmd";
 import { basename } from "@/lib/paths";
 import { buildIndexBodyHtml } from "./indexPage";
 import { inlineMermaidSvgs } from "./mermaidInline";
@@ -51,19 +53,37 @@ export async function exportSite({
   outDir,
   onProgress,
 }: ExportSiteOptions): Promise<ExportSiteResult> {
-  const files = await invoke<string[]>("list_markdown_files", { path: root });
-  if (files.length === 0) {
+  // `list_markdown_files` returns every openable document type; the site
+  // renders the markdown family only (notebooks, canvases, and D2 sources
+  // have their own renderers the headless pipeline can't reproduce).
+  const listed = await invoke<string[]>("list_markdown_files", { path: root });
+  const unordered = listed.filter(isMarkdownFile);
+  if (unordered.length === 0) {
     throw new Error("The workspace contains no markdown files to export.");
   }
+  // The root README claims index.html before anything else can collide with
+  // it (e.g. Index.md on a case-insensitive filesystem).
+  const readme = unordered.find((f) => pageRelPath(relFromRoot(root, f)) === "index.html");
+  const files = readme ? [readme, ...unordered.filter((f) => f !== readme)] : unordered;
 
   // Pass 1: read everything up front. Nav on every page needs the full page
   // list with titles before the first page is written.
   const contents = new Map<string, string>();
   const pages = new Map<string, string>(); // abs md path -> site rel html path
   const sitePages: SitePage[] = [];
+  // Output paths collide case-insensitively (Windows/macOS filesystems):
+  // Index.md must not overwrite README.md's index.html, nor a.md A.md's page.
+  const takenRels = new Set<string>();
   for (const file of files) {
-    const content = await invoke<string>("read_file", { path: file });
-    const rel = pageRelPath(relFromRoot(root, file));
+    // .mmd files that sniff as Mermaid source render as a diagram, like the
+    // viewer does.
+    const content = adaptMmdContent(file, await invoke<string>("read_file", { path: file }));
+    const wanted = pageRelPath(relFromRoot(root, file));
+    let rel = wanted;
+    for (let n = 1; takenRels.has(rel.toLowerCase()); n++) {
+      rel = wanted.replace(/\.html$/, `-${n}.html`);
+    }
+    takenRels.add(rel.toLowerCase());
     contents.set(file, content);
     pages.set(file, rel);
     sitePages.push({ rel, title: deriveExportMeta(file, content).title });
@@ -98,6 +118,7 @@ export async function exportSite({
   };
 
   let done = 0;
+  let copied = 0;
   let usedMermaid = false;
   try {
     for (const file of files) {
@@ -126,7 +147,15 @@ export async function exportSite({
 
     for (const [src, destRel] of assets) {
       await ensureDir(destRel);
-      await invoke("copy_file", { src, dest: outPath(outDir, destRel) });
+      try {
+        await invoke("copy_file", { src, dest: outPath(outDir, destRel) });
+        copied++;
+      } catch (err) {
+        // A referenced image that is missing on disk renders nothing in the
+        // app; the exported page gets the same broken reference instead of
+        // the whole export failing on it.
+        console.error(`Failed to copy asset ${src}:`, err);
+      }
     }
 
     // Collected last so stylesheets loaded during rendering (KaTeX) are in.
@@ -136,5 +165,5 @@ export async function exportSite({
     if (usedMermaid) await restoreMermaidTheme(dark);
   }
 
-  return { pages: done, assets: assets.size };
+  return { pages: done, assets: copied };
 }

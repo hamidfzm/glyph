@@ -24,15 +24,17 @@ pub fn get_cli_export(state: State<'_, CliExport>) -> Option<CliExportRequest> {
 
 /// Report the outcome of a CLI export and terminate the process, making the
 /// app scriptable: success prints to stdout and exits 0, failure prints to
-/// stderr and exits nonzero (CI fails the step).
+/// stderr and exits nonzero (CI fails the step). Exits via
+/// `std::process::exit` rather than `AppHandle::exit`: the latter unwinds the
+/// event loop and the process then reports 0 regardless of the requested code.
 #[tauri::command]
-pub fn finish_cli_export<R: tauri::Runtime>(app: tauri::AppHandle<R>, code: i32, message: String) {
+pub fn finish_cli_export(code: i32, message: String) {
     if code == 0 {
         println!("{message}");
     } else {
         eprintln!("{message}");
     }
-    app.exit(code);
+    std::process::exit(code);
 }
 
 #[cfg(test)]

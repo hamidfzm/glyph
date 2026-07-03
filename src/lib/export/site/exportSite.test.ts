@@ -97,6 +97,59 @@ describe("exportSite", () => {
     expect(restoreMermaidTheme).toHaveBeenCalledTimes(1);
   });
 
+  it("exports only the markdown family, skipping notebooks, canvases, and D2", async () => {
+    const fs = mockFs({
+      "/ws/notes.md": "# Notes",
+      "/ws/board.canvas": "{}",
+      "/ws/nb.ipynb": "{}",
+      "/ws/arch.d2": "a -> b",
+    });
+    const result = await exportSite({ root: "/ws", outDir: "/out" });
+    expect(result.pages).toBe(2); // notes.html + generated index
+    expect(fs.writes.has("/out/board.html")).toBe(false);
+    expect(fs.writes.has("/out/nb.html")).toBe(false);
+    expect(fs.writes.has("/out/arch.html")).toBe(false);
+  });
+
+  it("renders a Mermaid-source .mmd file as a diagram page", async () => {
+    const fs = mockFs({ "/ws/flow.mmd": "flowchart TD\n  A --> B" });
+    await exportSite({ root: "/ws", outDir: "/out" });
+    const page = fs.writes.get("/out/flow.html") ?? "";
+    expect(page).toContain('<div class="mermaid-diagram">');
+  });
+
+  it("keeps README as index.html when another page collides case-insensitively", async () => {
+    // On Windows/macOS filesystems Index.html and index.html are the same
+    // file; the exported site must stay portable across them.
+    const fs = mockFs({
+      "/ws/Index.md": "# The Index Note",
+      "/ws/README.md": "# Home",
+    });
+    const result = await exportSite({ root: "/ws", outDir: "/out" });
+    expect(result.pages).toBe(2);
+    expect(fs.writes.get("/out/index.html")).toContain("Home");
+    expect(fs.writes.get("/out/Index-1.html")).toContain("The Index Note");
+  });
+
+  it("tolerates a missing asset instead of failing the export", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fs = mockFs({ "/ws/notes.md": "![gone](./missing.png) ![ok](./ok.png)" });
+    const base = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation((cmd, args) => {
+      const a = (args ?? {}) as Record<string, string>;
+      if (cmd === "copy_file" && a.src === "/ws/missing.png") {
+        return Promise.reject(new Error("os error 2"));
+      }
+      return base(cmd, args);
+    });
+
+    const result = await exportSite({ root: "/ws", outDir: "/out" });
+    expect(result.assets).toBe(1);
+    expect(fs.copies).toEqual([{ src: "/ws/ok.png", dest: "/out/ok.png" }]);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+
   it("rejects when the workspace has no markdown files", async () => {
     mockFs({});
     await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(/no markdown files/i);
