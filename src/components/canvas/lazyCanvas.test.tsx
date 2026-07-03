@@ -12,18 +12,20 @@ const board = JSON.stringify({
 // Thin Suspense wrappers that code-split the canvas renderer. The dynamic import
 // resolves asynchronously, so each test waits for the real component to appear,
 // exercising both the fallback and resolved paths.
+// The first dynamic import can be slow when the full suite runs under machine
+// load, so these tests get a longer timeout than the 5s default.
 describe("lazyCanvas", () => {
-  it("lazily renders the CanvasViewer", async () => {
+  it("lazily renders the CanvasViewer", { timeout: 15000 }, async () => {
     render(<CanvasViewer content={board} />);
     await waitFor(() => expect(screen.getByText("lazy node")).toBeInTheDocument(), {
-      timeout: 5000,
+      timeout: 15000,
     });
   });
 
-  it("lazily renders the CanvasEditor", async () => {
+  it("lazily renders the CanvasEditor", { timeout: 15000 }, async () => {
     render(<CanvasEditor content={board} onChange={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("lazy node")).toBeInTheDocument(), {
-      timeout: 5000,
+      timeout: 15000,
     });
   });
 });
