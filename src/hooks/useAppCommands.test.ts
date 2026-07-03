@@ -5,8 +5,11 @@ import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsCont
 import { createRegistry } from "@/lib/plugins/registry";
 import type {
   CommandContribution,
+  ExporterContribution,
   FencedRendererContribution,
   MarkdownPlugin,
+  SettingsPanelContribution,
+  SidebarPanelContribution,
   StatusBarItemContribution,
 } from "@/lib/plugins/types";
 import { type AppActions, useAppCommands } from "./useAppCommands";
@@ -40,6 +43,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     reportIssue: vi.fn(),
     openWorkspaceFile: vi.fn(),
     managePlugins: vi.fn(),
+    runPluginExporter: vi.fn(),
     ...over,
   };
 }
@@ -205,6 +209,9 @@ describe("useAppCommands", () => {
       remarkPlugins: createRegistry<MarkdownPlugin>(),
       rehypePlugins: createRegistry<MarkdownPlugin>(),
       fencedRenderers: createRegistry<FencedRendererContribution>(),
+      sidebarPanels: createRegistry<SidebarPanelContribution>(),
+      settingsPanels: createRegistry<SettingsPanelContribution>(),
+      exporters: createRegistry<ExporterContribution>(),
       installed: [],
       disabled: [],
       loaded: [],

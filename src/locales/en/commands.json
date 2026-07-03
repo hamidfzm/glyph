@@ -31,5 +31,6 @@
   "zoomReset": "Reset Zoom",
   "aiChat": "AI Chat",
   "readAloud": "Read Aloud",
-  "managePlugins": "Manage Plugins…"
+  "managePlugins": "Manage Plugins…",
+  "exportAs": "Export: {{label}}…"
 }

@@ -13,6 +13,7 @@ import {
   findUpdates,
   type RegistryEntry,
 } from "@/lib/plugins/marketplace";
+import { loadPluginSettings, savePluginSettings } from "@/lib/plugins/settingsStore";
 import type { InstalledPlugin } from "@/lib/plugins/types";
 
 const TOAST_DURATION_MS = 4000;
@@ -51,7 +52,10 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
 
   // One host per provider; pushToast is stable so the closure stays valid.
   const [host] = useState(() =>
-    createPluginHost(pushToast, registerTranslations, () => workspaceRootRef.current),
+    createPluginHost(pushToast, registerTranslations, () => workspaceRootRef.current, {
+      load: loadPluginSettings,
+      save: (id, settings) => void savePluginSettings(id, settings),
+    }),
   );
 
   useEffect(() => {
@@ -215,6 +219,9 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         remarkPlugins: host.remarkPlugins,
         rehypePlugins: host.rehypePlugins,
         fencedRenderers: host.fencedRenderers,
+        sidebarPanels: host.sidebarPanels,
+        settingsPanels: host.settingsPanels,
+        exporters: host.exporters,
         installed,
         disabled,
         loaded,

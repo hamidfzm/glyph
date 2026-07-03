@@ -79,12 +79,58 @@ export interface MountContribution {
 /** A status bar item contribution. */
 export type StatusBarItemContribution = MountContribution;
 
+/** A titled sidebar section contribution. */
+export interface SidebarPanelContribution extends MountContribution {
+  /** Section heading shown above the panel in the sidebar. */
+  title: string;
+}
+
+/**
+ * A settings UI contribution, shown under the plugin's row in Manage Plugins.
+ * The host keys it by plugin id, so each plugin has at most one panel.
+ */
+export interface SettingsPanelContribution extends MountContribution {
+  /** Set by the host to the owning plugin's id. */
+  pluginId: string;
+}
+
+/**
+ * An export format contribution. The host runs the shared pipeline (prepare
+ * the rendered document, ask for a save location, write the file); the plugin
+ * only turns HTML into bytes.
+ */
+export interface ExporterContribution {
+  id: string;
+  /** Palette label, e.g. "reveal.js slides". */
+  label: string;
+  /** File extension without the dot, e.g. "html". */
+  extension: string;
+  /** Convert the prepared document HTML into file contents. */
+  build: (bodyHtml: string) => Promise<Uint8Array | string>;
+}
+
 export interface CommandRegistryApi {
   register(command: CommandContribution): Disposer;
 }
 
 export interface UiRegistryApi {
   addStatusBarItem(item: StatusBarItemContribution): Disposer;
+  addSidebarPanel(panel: SidebarPanelContribution): Disposer;
+  /** One settings panel per plugin; the host keys it by the plugin's id. */
+  addSettingsPanel(panel: MountContribution): Disposer;
+}
+
+export interface ExportersRegistryApi {
+  register(exporter: ExporterContribution): Disposer;
+}
+
+/**
+ * Per-plugin persisted key-value settings. Hydrated before `activate`, so
+ * `get` is synchronous; `set` persists in the background.
+ */
+export interface PluginSettingsApi {
+  get<T = unknown>(key: string): T | undefined;
+  set(key: string, value: unknown): void;
 }
 
 export interface MarkdownRegistryApi {
@@ -120,6 +166,8 @@ export interface GlyphPluginContext {
   readonly ui: UiRegistryApi;
   readonly markdown: MarkdownRegistryApi;
   readonly workspace: WorkspaceApi;
+  readonly exporters: ExportersRegistryApi;
+  readonly settings: PluginSettingsApi;
   notify(message: string): void;
   /**
    * Register (or extend) translations for a locale + namespace. A plugin ships

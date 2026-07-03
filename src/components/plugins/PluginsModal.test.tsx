@@ -5,9 +5,12 @@ import type { RegistryEntry } from "@/lib/plugins/marketplace";
 import { createRegistry } from "@/lib/plugins/registry";
 import type {
   CommandContribution,
+  ExporterContribution,
   FencedRendererContribution,
   InstalledPlugin,
   MarkdownPlugin,
+  SettingsPanelContribution,
+  SidebarPanelContribution,
   StatusBarItemContribution,
 } from "@/lib/plugins/types";
 import { PluginsModal } from "./PluginsModal";
@@ -38,6 +41,9 @@ function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
     remarkPlugins: createRegistry<MarkdownPlugin>(),
     rehypePlugins: createRegistry<MarkdownPlugin>(),
     fencedRenderers: createRegistry<FencedRendererContribution>(),
+    sidebarPanels: createRegistry<SidebarPanelContribution>(),
+    settingsPanels: createRegistry<SettingsPanelContribution>(),
+    exporters: createRegistry<ExporterContribution>(),
     installed: [installed],
     disabled: [],
     loaded: [],

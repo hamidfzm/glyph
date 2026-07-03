@@ -14,6 +14,7 @@ import { useNativeKeybindings } from "@/hooks/useNativeKeybindings";
 import { useNativeMenuLabels } from "@/hooks/useNativeMenuLabels";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
 import { usePlatform } from "@/hooks/usePlatform";
+import { usePluginExporterRunner } from "@/hooks/usePluginExporterRunner";
 import { usePluginWorkspaceSync } from "@/hooks/usePluginWorkspaceSync";
 import { usePrint } from "@/hooks/usePrint";
 import { useReadAloudController } from "@/hooks/useReadAloudController";
@@ -122,6 +123,11 @@ export function AppShell() {
     content: displayContent,
   });
   const zoom = useFontZoom({ fontSize: settings.appearance.fontSize, updateSettings });
+  const runPluginExporter = usePluginExporterRunner({
+    entries: tabs.tocEntries,
+    filePath: activeFile?.path,
+    content: displayContent,
+  });
 
   useNativeMenuState({
     hasTab: openTabs.length > 0,
@@ -210,8 +216,9 @@ export function AppShell() {
         ...menuHandlers,
         openWorkspaceFile: openFile,
         managePlugins: () => setPluginsOpen(true),
+        runPluginExporter,
       }),
-      [menuHandlers, openFile],
+      [menuHandlers, openFile, runPluginExporter],
     ),
   });
 

@@ -173,6 +173,57 @@ describe("createPluginHost", () => {
     spy.mockRestore();
   });
 
+  it("exposes sidebar panels, settings panels, and exporters; unload removes them", async () => {
+    const host = createPluginHost(vi.fn());
+    const module: PluginModule = {
+      activate(ctx) {
+        ctx.ui.addSidebarPanel({ id: "p.side", title: "Side", mount: () => {} });
+        ctx.ui.addSettingsPanel({ id: "p.settings", mount: () => {} });
+        ctx.exporters.register({
+          id: "p.export",
+          label: "Thing",
+          extension: "txt",
+          build: async () => "out",
+        });
+      },
+    };
+
+    await host.load(installed(), importerFor(module));
+
+    expect(host.sidebarPanels.list().map((p) => p.title)).toEqual(["Side"]);
+    // The host stamps the owning plugin id onto the settings panel.
+    expect(host.settingsPanels.list().map((p) => p.pluginId)).toEqual(["com.x.demo"]);
+    expect(host.exporters.list().map((e) => e.id)).toEqual(["p.export"]);
+
+    host.unload("com.x.demo");
+    expect(host.sidebarPanels.list()).toHaveLength(0);
+    expect(host.settingsPanels.list()).toHaveLength(0);
+    expect(host.exporters.list()).toHaveLength(0);
+  });
+
+  it("hydrates ctx.settings before activate and persists set() through the backend", async () => {
+    const save = vi.fn();
+    const backend = {
+      load: vi.fn().mockResolvedValue({ size: 12 }),
+      save,
+    };
+    const host = createPluginHost(vi.fn(), undefined, undefined, backend);
+    let seen: unknown;
+    const module: PluginModule = {
+      activate(ctx) {
+        seen = ctx.settings.get("size");
+        ctx.settings.set("size", 14);
+        ctx.settings.set("theme", "dark");
+      },
+    };
+
+    await host.load(installed(), importerFor(module));
+
+    expect(backend.load).toHaveBeenCalledWith("com.x.demo");
+    expect(seen).toBe(12);
+    expect(save).toHaveBeenLastCalledWith("com.x.demo", { size: 14, theme: "dark" });
+  });
+
   it("routes ctx.registerTranslations to the injected i18n hook", async () => {
     const register = vi.fn();
     const host = createPluginHost(vi.fn(), register);

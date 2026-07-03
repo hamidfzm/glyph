@@ -10,6 +10,9 @@ export interface PluginsContextValue {
   remarkPlugins: PluginHost["remarkPlugins"];
   rehypePlugins: PluginHost["rehypePlugins"];
   fencedRenderers: PluginHost["fencedRenderers"];
+  sidebarPanels: PluginHost["sidebarPanels"];
+  settingsPanels: PluginHost["settingsPanels"];
+  exporters: PluginHost["exporters"];
   /** Every plugin on disk, enabled or not. */
   installed: InstalledPlugin[];
   /** Ids the user has deactivated (installed but not loaded). */
