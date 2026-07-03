@@ -144,6 +144,9 @@
     "fit": "Ajustar a la pantalla (0)",
     "actualSize": "Tamaño real (1)"
   },
+  "mdxNotice": {
+    "body": "Archivo MDX: los componentes JSX no se renderizan; solo se muestra el contenido markdown."
+  },
   "mermaid": {
     "empty": "El código del diagrama está vacío",
     "errorLabel": "Error del diagrama",

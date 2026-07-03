@@ -144,6 +144,9 @@
     "fit": "适应屏幕 (0)",
     "actualSize": "实际大小 (1)"
   },
+  "mdxNotice": {
+    "body": "MDX 文件：JSX 组件不会渲染，仅显示 Markdown 内容。"
+  },
   "mermaid": {
     "empty": "图表源为空",
     "errorLabel": "图表错误",
