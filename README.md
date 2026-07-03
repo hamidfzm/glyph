@@ -65,6 +65,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - In-document search: `Cmd/Ctrl+F` with match highlighting and navigation
 - Zoom in/out: `Cmd/Ctrl+=/-/0` with zoom level in status bar
 - Table of Contents sidebar with active heading tracking
+- Resizable panels: drag the edge of the files sidebar, outline sidebar, AI chat panel, or the backlinks divider to resize it (double-click resets); sizes persist across restarts
 - Print: `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
 - Export to HTML, Word (DOCX), EPUB, and PDF via `File → Export`: works for markdown documents and Jupyter notebooks, writes a file directly (no print dialog), and reuses the rendered output (math, code highlighting, tables, images inlined) so files are self-contained and offline. Mermaid and D2 diagrams and SVG images embed in the PDF as true vectors, so they stay crisp at any zoom. Task-list checkboxes are read-only in exports; exported HTML follows the reader's light/dark system preference.
 - Live reload: file watcher auto-updates on external changes

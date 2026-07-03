@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { SettingsContext } from "@/contexts/SettingsContext";
 import type { ChatTurn } from "@/hooks/useAIChat";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { AIChatPanel } from "./AIChatPanel";
 
 const noop = () => {};
@@ -28,6 +30,26 @@ describe("AIChatPanel", () => {
   it("renders closed via data-open=false", () => {
     const { container } = render(<AIChatPanel {...defaultProps} open={false} />);
     expect(container.querySelector('.ai-chat-panel[data-open="false"]')).not.toBeNull();
+  });
+
+  it("commits the dragged width to settings on release", () => {
+    const updateSettings = vi.fn();
+    render(
+      <SettingsContext.Provider
+        value={{ settings: DEFAULT_SETTINGS, updateSettings, resetSettings: noop, loaded: true }}
+      >
+        <AIChatPanel {...defaultProps} />
+      </SettingsContext.Provider>,
+    );
+    const handle = screen.getByRole("separator");
+    fireEvent.pointerDown(handle, { button: 0, clientX: 500 });
+    // Docked at the inline-end edge in LTR: dragging left widens the panel.
+    fireEvent.pointerMove(handle, { clientX: 450 });
+    fireEvent.pointerUp(handle);
+    expect(updateSettings).toHaveBeenCalledExactlyOnceWith(
+      "layout.aiPanelWidth",
+      DEFAULT_SETTINGS.layout.aiPanelWidth + 50,
+    );
   });
 
   it("shows the empty hint when there is no conversation", () => {

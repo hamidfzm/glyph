@@ -119,7 +119,12 @@ function buildSidebarContext(opts: RenderOpts): SidebarLayoutContextValue {
     resetLayout: vi.fn(),
     sidebarLayout: opts.sidebarLayout ?? "split",
     swapSidebarSides: opts.swapSidebarSides ?? false,
-    sidebarWidth: undefined,
+    filesSidebarWidth: 200,
+    outlineSidebarWidth: 260,
+    backlinksHeight: null,
+    setFilesSidebarWidth: vi.fn(),
+    setOutlineSidebarWidth: vi.fn(),
+    setBacklinksHeight: vi.fn(),
   };
 }
 
@@ -233,6 +238,19 @@ describe("Sidebar", () => {
     const { container } = renderBothSides({ workspace: makeWorkspace(), sidebarLayout: "split" });
     expect(container.querySelector('nav[data-sidebar="left"]')).toBeInTheDocument();
     expect(container.querySelector('nav[data-sidebar="right"]')).toBeInTheDocument();
+  });
+
+  it("applies independent widths to the Files and Outline panels", () => {
+    const { container } = renderBothSides({ workspace: makeWorkspace(), sidebarLayout: "split" });
+    const files = container.querySelector('nav[data-sidebar="left"]') as HTMLElement;
+    const outline = container.querySelector('nav[data-sidebar="right"]') as HTMLElement;
+    expect(files.style.width).toBe("200px");
+    expect(outline.style.width).toBe("260px");
+  });
+
+  it("renders resize handles on both panels", () => {
+    renderBothSides({ workspace: makeWorkspace(), sidebarLayout: "split" });
+    expect(screen.getAllByRole("separator").length).toBe(2);
   });
 
   it("swaps sides when swapSidebarSides=true (file tab outline goes right)", () => {

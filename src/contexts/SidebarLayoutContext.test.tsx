@@ -20,7 +20,9 @@ describe("SidebarLayoutProvider", () => {
     expect(result.current.outlineVisible).toBe(DEFAULT_SETTINGS.layout.outlineSidebarVisible);
     expect(result.current.sidebarLayout).toBe(DEFAULT_SETTINGS.layout.sidebarLayout);
     expect(result.current.swapSidebarSides).toBe(DEFAULT_SETTINGS.layout.swapSidebarSides);
-    expect(result.current.sidebarWidth).toBe(DEFAULT_SETTINGS.layout.sidebarWidth);
+    expect(result.current.filesSidebarWidth).toBe(DEFAULT_SETTINGS.layout.filesSidebarWidth);
+    expect(result.current.outlineSidebarWidth).toBe(DEFAULT_SETTINGS.layout.outlineSidebarWidth);
+    expect(result.current.backlinksHeight).toBe(DEFAULT_SETTINGS.layout.backlinksHeight);
   });
 
   it("throws a clear error when the hook is used outside the provider", () => {

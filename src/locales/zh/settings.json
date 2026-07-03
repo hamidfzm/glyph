@@ -96,8 +96,11 @@
       "label": "交换侧边栏位置",
       "description": "翻转每个面板所在的一侧。默认为文件居左 / 大纲居右；开启后变为文件居右 / 大纲居左。"
     },
-    "width": {
-      "label": "侧边栏宽度"
+    "filesWidth": {
+      "label": "文件侧边栏宽度"
+    },
+    "outlineWidth": {
+      "label": "大纲侧边栏宽度"
     }
   },
   "behavior": {

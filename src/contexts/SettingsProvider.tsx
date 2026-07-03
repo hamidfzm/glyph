@@ -7,6 +7,7 @@ import {
   LINE_HEIGHT_MAP,
   type Settings,
 } from "@/lib/settings";
+import { migrateLegacySettings } from "@/lib/settingsMigrations";
 import { deepMerge, setNestedValue } from "@/lib/settingsObject";
 import { SettingsContext } from "./SettingsContext";
 
@@ -74,7 +75,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (!cancelled && saved) {
           const merged = deepMerge(
             DEFAULT_SETTINGS as unknown as Record<string, unknown>,
-            saved as unknown as Record<string, unknown>,
+            migrateLegacySettings(saved as unknown as Record<string, unknown>),
           ) as unknown as Settings;
           setSettings(merged);
           applyTheme(merged.appearance.theme);

@@ -30,7 +30,9 @@
     "collapseAll": "全部折叠",
     "expandAll": "全部展开",
     "closeWorkspace": "关闭工作区",
-    "outline": "大纲"
+    "outline": "大纲",
+    "resize": "调整侧边栏大小",
+    "resizeBacklinks": "调整反向链接大小"
   },
   "backlinks": {
     "heading": "反向链接"
