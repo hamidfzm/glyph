@@ -42,12 +42,28 @@ describe("EditorTab", () => {
   });
 
   it("shows the Vim quick reference when Vim is selected", () => {
-    setup({ ...DEFAULT_SETTINGS, editor: { keymap: "vim" } });
+    setup({ ...DEFAULT_SETTINGS, editor: { ...DEFAULT_SETTINGS.editor, keymap: "vim" } });
     expect(screen.getByText("Vim quick reference")).toBeInTheDocument();
   });
 
   it("shows the VSCode quick reference when VSCode is selected", () => {
-    setup({ ...DEFAULT_SETTINGS, editor: { keymap: "vscode" } });
+    setup({ ...DEFAULT_SETTINGS, editor: { ...DEFAULT_SETTINGS.editor, keymap: "vscode" } });
     expect(screen.getByText("VSCode shortcuts")).toBeInTheDocument();
+  });
+
+  it("toggles spell check", () => {
+    const { updateSettings } = setup();
+    expect(screen.getByText("Check spelling")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(updateSettings).toHaveBeenCalledWith("editor.spellCheck", true);
+  });
+
+  it("shows the language picker only when spell check is on", () => {
+    setup();
+    expect(screen.queryByText("Language")).toBeNull();
+
+    setup({ ...DEFAULT_SETTINGS, editor: { ...DEFAULT_SETTINGS.editor, spellCheck: true } });
+    expect(screen.getByText("Language")).toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toHaveValue("en");
   });
 });

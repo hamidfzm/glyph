@@ -9,13 +9,16 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { useSettings } from "@/hooks/useSettings";
 import { editorKeymapExtensions } from "@/lib/editorKeymap";
+import { buildSpellcheck } from "@/lib/spellcheck/spellcheckExtension";
+import type { SuggestionMenuLabels } from "@/lib/spellcheck/suggestionMenu";
 import { wikilinkCompletionSource } from "@/lib/wikilinkCompletion";
 
 interface MarkdownEditorProps {
@@ -41,8 +44,26 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
   workspaceFilesRef.current = workspaceFiles ?? [];
   workspaceRootRef.current = workspaceRoot;
 
+  const { t } = useTranslation("settings");
   const { settings } = useSettings();
   const keymapPreset = settings.editor.keymap;
+  const { spellCheck, spellCheckLanguage } = settings.editor;
+
+  // Spell check lives in a Compartment so toggling it reconfigures the editor in
+  // place (cursor, selection and undo history survive). Kept in a ref so the
+  // same instance is reused across renders and the keymap-driven rebuild.
+  const spellcheckCompartment = useRef(new Compartment()).current;
+
+  // Context-menu labels are read at menu-open time through this ref, so a locale
+  // change is reflected without reconfiguring the spell-check extension.
+  const spellLabelsRef = useRef<SuggestionMenuLabels>({ ignore: "", add: "", empty: "" });
+  spellLabelsRef.current = {
+    ignore: t("editor.spellCheck.ignore"),
+    add: t("editor.spellCheck.add"),
+    empty: t("editor.spellCheck.noSuggestions"),
+  };
+  const spellcheckExtension = (enabled: boolean, language: string) =>
+    enabled ? buildSpellcheck(language, () => spellLabelsRef.current) : [];
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: content is synced via separate effect below to avoid destroying the editor on every keystroke
   useEffect(() => {
@@ -105,6 +126,7 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
           }),
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(glyphHighlight),
+          spellcheckCompartment.of(spellcheckExtension(spellCheck, spellCheckLanguage)),
           EditorView.lineWrapping,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
@@ -175,6 +197,18 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
       });
     }
   }, [content]);
+
+  // Toggle or switch spell-check language in place, keeping editor state intact.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: spellcheckCompartment is a stable ref and spellcheckExtension only reads refs
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: spellcheckCompartment.reconfigure(
+        spellcheckExtension(spellCheck, spellCheckLanguage),
+      ),
+    });
+  }, [spellCheck, spellCheckLanguage]);
 
   return <div ref={containerRef} className="editor-container" />;
 }
