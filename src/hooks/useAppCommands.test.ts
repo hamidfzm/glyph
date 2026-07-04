@@ -243,6 +243,50 @@ describe("useAppCommands", () => {
     expect(run).toHaveBeenCalledOnce();
   });
 
+  it("surfaces plugin exporters as palette commands", () => {
+    const exporters = createRegistry<ExporterContribution>();
+    const slides: ExporterContribution = {
+      id: "x.slides",
+      label: "Slides",
+      extension: "html",
+      build: async () => "out",
+    };
+    exporters.register(slides);
+    const value: PluginsContextValue = {
+      commands: createRegistry<CommandContribution>(),
+      statusBarItems: createRegistry<StatusBarItemContribution>(),
+      remarkPlugins: createRegistry<MarkdownPlugin>(),
+      rehypePlugins: createRegistry<MarkdownPlugin>(),
+      fencedRenderers: createRegistry<FencedRendererContribution>(),
+      sidebarPanels: createRegistry<SidebarPanelContribution>(),
+      settingsPanels: createRegistry<SettingsPanelContribution>(),
+      exporters,
+      installed: [],
+      disabled: [],
+      loaded: [],
+      registry: [],
+      updates: [],
+      installFromFolder: vi.fn(async () => {}),
+      installFromRegistry: vi.fn(async () => {}),
+      setEnabled: vi.fn(async () => {}),
+      uninstall: vi.fn(async () => {}),
+      setWorkspaceRoot: vi.fn(),
+    };
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(PluginsContext.Provider, { value }, children);
+    const actions = makeActions();
+
+    const { result } = renderHook(
+      () => useAppCommands({ workspaceOpen: false, workspaceFiles: [], tocEntries: [], actions }),
+      { wrapper },
+    );
+
+    const cmd = result.current.find((c) => c.id === "plugin-export:x.slides")!;
+    expect(cmd.title).toContain("Slides");
+    cmd.run();
+    expect(actions.runPluginExporter).toHaveBeenCalledWith(slides);
+  });
+
   it("includes a Manage Plugins command", () => {
     const actions = makeActions();
     const { result } = renderHook(() =>

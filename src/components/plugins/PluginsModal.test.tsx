@@ -74,6 +74,28 @@ describe("PluginsModal", () => {
     expect(screen.getByText("Charlie")).toBeInTheDocument();
   });
 
+  it("mounts a plugin's settings panel under its row, only while enabled", () => {
+    const settingsPanels = createRegistry<SettingsPanelContribution>();
+    settingsPanels.register({
+      id: "a.b.settings",
+      pluginId: "a.b",
+      mount: (el) => {
+        el.textContent = "size: 12";
+      },
+    });
+
+    const { rerender } = renderModal(ctx({ settingsPanels }));
+    expect(screen.getByText("size: 12")).toBeInTheDocument();
+
+    // Disabled plugin: the panel disappears.
+    rerender(
+      <PluginsContext.Provider value={ctx({ settingsPanels, disabled: ["a.b"] })}>
+        <PluginsModal onClose={vi.fn()} />
+      </PluginsContext.Provider>,
+    );
+    expect(screen.queryByText("size: 12")).not.toBeInTheDocument();
+  });
+
   it("shows an installed plugin's declared permissions", () => {
     renderModal(
       ctx({ installed: [{ ...installed, permissions: ["workspace:read", "network:api.test"] }] }),
