@@ -74,13 +74,13 @@ export function CanvasViewer({
   const panState = useRef<{ x: number; y: number } | null>(null);
   const [panning, setPanning] = useState(false);
 
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     panState.current = { x: e.clientX, y: e.clientY };
     setPanning(true);
     e.currentTarget.setPointerCapture?.(e.pointerId);
   };
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const handlePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const last = panState.current;
     if (!last) return;
     panBy(e.clientX - last.x, e.clientY - last.y);
@@ -113,8 +113,8 @@ export function CanvasViewer({
         ref={stageRef}
         className="glyph-canvas-stage"
         data-panning={panning || undefined}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
         onPointerUp={endPan}
         onPointerCancel={endPan}
       >

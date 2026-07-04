@@ -25,7 +25,7 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  const onBackdrop = useCallback(
+  const handleBackdrop = useCallback(
     (e: React.MouseEvent) => {
       if (e.target === e.currentTarget) onClose();
     },
@@ -40,7 +40,7 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: Escape is handled globally above.
-    <div className="settings-overlay" onClick={onBackdrop} role="dialog" aria-modal="true">
+    <div className="settings-overlay" onClick={handleBackdrop} role="dialog" aria-modal="true">
       <div className="settings-modal">
         <div className="settings-header">
           <h2>{t("title")}</h2>

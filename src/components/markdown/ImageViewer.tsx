@@ -98,9 +98,9 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
   // Keep a fitted image fitted on resize, unless the user has zoomed.
   useEffect(() => {
     if (!isFit) return;
-    const onResize = () => setScale(computeFit());
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    const handleResize = () => setScale(computeFit());
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, [isFit, computeFit]);
 
   // With an intrinsic size we lay the image out at `natural × scale` so zooming

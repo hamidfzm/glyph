@@ -8,7 +8,7 @@ Thanks for your interest in contributing!
 # Prerequisites: Node.js (see .nvmrc), pnpm, Rust stable, plus platform deps (below)
 git clone https://github.com/hamidfzm/glyph.git
 cd glyph
-nvm use          # or fnm use — reads .nvmrc
+nvm use          # or fnm use (reads .nvmrc)
 pnpm install     # also installs the Husky git hooks via `prepare`
 pnpm tauri dev
 ```
@@ -72,7 +72,7 @@ sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl \
 
 `pnpm install` registers a Husky pre-commit hook that runs the same gate CI runs, so a green commit is a green PR build:
 
-1. **lint-staged** — Biome formats and lints staged `src/**/*.{ts,tsx,js,jsx,css}` files (auto-fixes and re-stages); `cargo fmt --check` runs once if any `src-tauri/**/*.rs` is staged.
+1. **lint-staged**: Biome formats and lints staged `src/**/*.{ts,tsx,js,jsx,css}` files (auto-fixes and re-stages); `cargo fmt --check` runs once if any `src-tauri/**/*.rs` is staged.
 2. `pnpm typecheck`
 3. `pnpm test --run`
 4. `cargo test --lib` (in `src-tauri/`)
@@ -80,7 +80,7 @@ sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl \
 
 Budget roughly 1–2 minutes on a clean working tree. The fast lint-staged step gates the slow tests so a formatter miss fails in seconds.
 
-To bypass in a genuine emergency: `git commit --no-verify`. Don't make a habit of it — CI runs the same gate and will reject the PR.
+To bypass in a genuine emergency: `git commit --no-verify`. Don't make a habit of it. CI runs the same gate and will reject the PR.
 
 ## Development Commands
 
@@ -108,10 +108,10 @@ cd src-tauri && cargo test      # Rust tests
 - **Commits**: [Conventional commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`)
 - **No co-authored-by** lines in commits
 - **Package manager**: pnpm only (not npm/yarn)
-- **Linting (TS)**: Biome (configured in `biome.json`) — run `pnpm lint`
-- **Linting (Rust)**: Clippy — run `cargo clippy` in `src-tauri/`
+- **Linting (TS)**: Biome (configured in `biome.json`); run `pnpm lint`
+- **Linting (Rust)**: Clippy; run `cargo clippy` in `src-tauri/`
 - **Formatting**: Biome for TypeScript, rustfmt for Rust
-- **Testing (TS)**: Vitest + Testing Library — test files colocated as `*.test.{ts,tsx}`
+- **Testing (TS)**: Vitest + Testing Library; test files colocated as `*.test.{ts,tsx}`
 - **Testing (Rust)**: `#[cfg(test)]` modules in source files
 - **Imports**: Named exports, no default exports
 - **Issue titles**: imperative mood (e.g. "Add search within document", not "Search feature" or "feat: search"). Always tag with `enhancement`/`bug` + a `priority: *` label + a category label (`markdown`/`ui`/`navigation`) where it fits. Add new issues to the **Glyph Roadmap** project board with status **Todo**.
@@ -123,7 +123,7 @@ The UI is localized with [react-i18next](https://react.i18next.com/). Translatio
 **Adding a UI string:**
 1. Add the key to the relevant `src/locales/en/<namespace>.json`.
 2. Reference it with `useTranslation("<namespace>")` → `t("my.key")`, or `<Trans>` when the copy contains inline markup (see `EmptyState.tsx`).
-3. Add the same key to the other locale files (or leave them to translators — the English fallback keeps the UI working meanwhile).
+3. Add the same key to the other locale files (or leave them to translators; the English fallback keeps the UI working meanwhile).
 
 **Translating into a new language:**
 1. Create `src/locales/<code>/` (a BCP-47 tag, e.g. `fr`, `pt-BR`, `zh-Hans`) and copy the `en` JSON files into it, translating the values.
@@ -150,9 +150,9 @@ Right-to-left locales (Arabic, Hebrew, Persian) are supported: set `dir: "rtl"` 
 
 ### Pull Requests
 
-- Use the [PR template](.github/PULL_REQUEST_TEMPLATE.md) — fill in all sections
-- **Link to the issue** — include `Closes #N` in the PR body so the issue auto-closes on merge
-- Keep PRs focused — one feature or fix per PR
+- Use the [PR template](.github/PULL_REQUEST_TEMPLATE.md) and fill in all sections
+- **Link to the issue**: include `Closes #N` in the PR body so the issue auto-closes on merge
+- Keep PRs focused: one feature or fix per PR
 - Include tests for new functionality
 - Ensure CI passes on all 3 platforms (macOS, Windows, Linux)
 - Use conventional commit style for the PR title (e.g. `feat: add search`)
@@ -160,7 +160,7 @@ Right-to-left locales (Arabic, Hebrew, Persian) are supported: set `dir: "rtl"` 
 ### Branch Protection
 
 - `main` requires CI to pass on all 3 platforms before merge
-- Strict status checks — branch must be up to date with `main`
+- Strict status checks: branch must be up to date with `main`
 - Linear history enforced (rebase/squash only, no merge commits)
 - No force pushes or branch deletion on `main`
 
@@ -182,7 +182,7 @@ Run the **Create Release** workflow from GitHub Actions (`create-release.yml`) w
 
 The release workflow builds all platforms and publishes to Homebrew, Chocolatey, Scoop, AUR, PPA, the Debian apt repo, and the Fedora/RHEL dnf repo.
 
-Do **not** create releases manually with `gh release create` or push tags by hand — use the workflow.
+Do **not** create releases manually with `gh release create` or push tags by hand. Use the workflow.
 
 **Wait for CI to pass on `main` before triggering Create Release.** The release workflow assumes the latest commit is green; running it on a red `main` produces broken artifacts that get published to every package manager simultaneously. Check the CI badge or `gh run list --branch main --limit 1` first.
 
@@ -190,7 +190,7 @@ Do **not** create releases manually with `gh release create` or push tags by han
 
 - **Bugs**: Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.yml)
 - **Features**: Use the [feature request template](.github/ISSUE_TEMPLATE/feature_request.yml)
-- **Security**: See [SECURITY.md](SECURITY.md) — do **not** open public issues for vulnerabilities
+- **Security**: See [SECURITY.md](SECURITY.md); do **not** open public issues for vulnerabilities
 
 ## License
 

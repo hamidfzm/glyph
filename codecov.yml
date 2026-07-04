@@ -57,7 +57,7 @@ ignore:
   # live window manager and can't be reached from MockRuntime. The routing
   # decision (route_open) and the registry live in windows.rs with direct tests.
   - "src-tauri/src/windows_runtime.rs"
-  # lib.rs hosts the Tauri `run()` entry point — every line in that
+  # lib.rs hosts the Tauri `run()` entry point; every line in that
   # function calls into a real Builder/runtime, which can't be reached
   # from MockRuntime unit tests. The testable functions (`handle_second_instance`,
   # `make_app_builder`) keep their dedicated tests in lib.rs's own
@@ -83,7 +83,7 @@ ignore:
   - "src/components/AppShell.tsx"
   # MarkdownEditor.tsx instantiates a CodeMirror EditorView, which needs a real
   # browser layout/measurement engine (getBoundingClientRect, focus, key
-  # dispatch) that happy-dom doesn't provide — every consumer (SplitView) mocks
+  # dispatch) that happy-dom doesn't provide; every consumer (SplitView) mocks
   # it for the same reason. The testable piece (keymap-preset resolution) is
   # extracted to src/lib/editorKeymap.ts and covered there.
   - "src/components/editor/MarkdownEditor.tsx"

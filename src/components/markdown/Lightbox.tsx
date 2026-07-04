@@ -89,7 +89,7 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
 
   // Keyboard controls: close, navigate, and zoom.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const handleKey = (e: KeyboardEvent) => {
       switch (e.key) {
         case "Escape":
           e.preventDefault();
@@ -126,16 +126,16 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
           break;
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
   }, [hasMultiple, index, goTo, zoomBy, applyFit, actualSize, onClose]);
 
   // Keep the image fitted when the window resizes, unless the user has zoomed.
   useEffect(() => {
     if (!isFit) return;
-    const onResize = () => setScale(computeFit());
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    const handleResize = () => setScale(computeFit());
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, [isFit, computeFit]);
 
   if (!image) return null;
