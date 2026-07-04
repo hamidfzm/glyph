@@ -166,6 +166,15 @@ export const markdownSanitizeSchema = {
       "dataWikilinkHeading",
       "dataWikilinkBroken",
     ],
+    // Note-embed placeholder emitted by remarkWikilink; EmbedComponent reads
+    // these to load and render the target inline.
+    div: [
+      ...(defaultSchema.attributes?.div ?? []),
+      "dataEmbedTarget",
+      "dataEmbedPath",
+      "dataEmbedHeading",
+      "dataEmbedBroken",
+    ],
     img: [...(defaultSchema.attributes?.img ?? []), "align", "width", "height"],
     details: [...(defaultSchema.attributes?.details ?? []), "open"],
     video: ["src", "controls", "width", "height", "poster", "loop", "muted", "autoplay"],

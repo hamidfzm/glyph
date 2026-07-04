@@ -222,5 +222,12 @@
     "docx": "Word 文档",
     "epub": "EPUB",
     "pdf": "PDF"
+  },
+  "embed": {
+    "openSource": "打开嵌入的笔记",
+    "loading": "正在加载嵌入内容...",
+    "broken": "找不到嵌入的笔记：{{target}}",
+    "circular": "循环嵌入：{{target}}",
+    "headingNotFound": "找不到标题：{{heading}}"
   }
 }

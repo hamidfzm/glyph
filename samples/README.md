@@ -318,6 +318,20 @@ When you open a folder as a workspace, `[[note]]` style links resolve to other m
 
 Opening this file on its own (no folder) treats every wikilink as broken.
 
+### Note embeds
+
+Prefix a wikilink with `!` to render its target inline instead of linking to
+it. With the `samples/` folder open, these expand in place:
+
+![[Notes/Ingredients]]
+
+![[Index#Setup]]
+
+Each embed sits in a bordered block; hover it for a control that opens the
+source note. `![[note#heading]]` embeds only that section. A missing target or
+heading shows a placeholder, and a note that embeds itself (directly or through
+a chain) shows a circular-embed placeholder instead of looping.
+
 ### Relative links
 
 Standard markdown links with relative paths resolve against this document's

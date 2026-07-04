@@ -1,5 +1,6 @@
-import { useCallback, useMemo } from "react";
+import { type ComponentPropsWithoutRef, useCallback, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
+import { EmbedContext, type EmbedContextValue, useEmbedContext } from "@/contexts/EmbedContext";
 import { LightboxProvider } from "@/contexts/LightboxProvider";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
@@ -10,11 +11,24 @@ import { parseFrontmatter } from "@/lib/frontmatter";
 import { buildRehypePlugins, buildRemarkPlugins } from "@/lib/markdown/pipeline";
 import { resolveWorkspacePath } from "@/lib/relativePath";
 import { CodeBlockComponent } from "./CodeBlockComponent";
+import { EmbedComponent } from "./EmbedComponent";
 import { FrontmatterBlock } from "./FrontmatterBlock";
 import { useImageComponent } from "./ImageComponent";
 import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
 import { MarkdownHeading } from "./MarkdownHeading";
 import { TaskListItem } from "./TaskListItem";
+
+// react-markdown maps by tag name, so every `<div>` routes through here: the
+// note-embed placeholders emitted by remarkWikilink become EmbedComponent,
+// everything else (alerts, raw HTML) renders as a plain div.
+function DivComponent(props: ComponentPropsWithoutRef<"div"> & { node?: unknown }) {
+  const { node: _node, ...rest } = props;
+  const className = rest.className;
+  if (typeof className === "string" && className.split(/\s+/).includes("markdown-embed")) {
+    return <EmbedComponent {...rest} />;
+  }
+  return <div {...rest} />;
+}
 
 interface MarkdownContentProps {
   content: string;
@@ -43,6 +57,14 @@ export function MarkdownContent({
   showFrontmatter = true,
 }: MarkdownContentProps) {
   const workspaceRoot = useWorkspaceRoot();
+  // Extend the ancestor embed chain with this document's file so a nested
+  // embed that points back at an already-rendering file is caught as a cycle.
+  const parentEmbed = useEmbedContext();
+  const embedValue = useMemo<EmbedContextValue>(() => {
+    const base = parentEmbed.chain;
+    const chain = filePath && !base.includes(filePath) ? [...base, filePath] : base;
+    return { workspaceFiles, onOpenWikilink, chain };
+  }, [parentEmbed.chain, filePath, workspaceFiles, onOpenWikilink]);
   const katexPlugin = useKatexPlugin(content);
   const highlightPlugin = useHighlightPlugin(content);
   // Plugin-contributed remark/rehype plugins, appended to the built-in pipeline.
@@ -99,26 +121,29 @@ export function MarkdownContent({
   );
 
   return (
-    <LightboxProvider>
-      {frontmatter && <FrontmatterBlock data={frontmatter} />}
-      <ReactMarkdown
-        remarkPlugins={remarkPlugins}
-        rehypePlugins={rehypePlugins}
-        components={{
-          a: LinkWithWikilink,
-          img: ImageComponent,
-          pre: CodeBlockComponent,
-          li: TaskListLi,
-          h1: MarkdownHeading,
-          h2: MarkdownHeading,
-          h3: MarkdownHeading,
-          h4: MarkdownHeading,
-          h5: MarkdownHeading,
-          h6: MarkdownHeading,
-        }}
-      >
-        {content}
-      </ReactMarkdown>
-    </LightboxProvider>
+    <EmbedContext.Provider value={embedValue}>
+      <LightboxProvider>
+        {frontmatter && <FrontmatterBlock data={frontmatter} />}
+        <ReactMarkdown
+          remarkPlugins={remarkPlugins}
+          rehypePlugins={rehypePlugins}
+          components={{
+            a: LinkWithWikilink,
+            img: ImageComponent,
+            pre: CodeBlockComponent,
+            li: TaskListLi,
+            div: DivComponent,
+            h1: MarkdownHeading,
+            h2: MarkdownHeading,
+            h3: MarkdownHeading,
+            h4: MarkdownHeading,
+            h5: MarkdownHeading,
+            h6: MarkdownHeading,
+          }}
+        >
+          {content}
+        </ReactMarkdown>
+      </LightboxProvider>
+    </EmbedContext.Provider>
   );
 }

@@ -229,5 +229,12 @@
     "docx": "Word Document",
     "epub": "EPUB",
     "pdf": "PDF"
+  },
+  "embed": {
+    "openSource": "Open embedded note",
+    "loading": "Loading embed...",
+    "broken": "Embedded note not found: {{target}}",
+    "circular": "Circular embed: {{target}}",
+    "headingNotFound": "Heading not found: {{heading}}"
   }
 }

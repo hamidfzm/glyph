@@ -13,6 +13,20 @@ describe("convertHtmlToPdf", () => {
     expect(list.ul).toHaveLength(2);
   });
 
+  it("flattens a note embed's rendered content into block nodes", () => {
+    // A `![[note]]` embed renders as a bordered div; the exporter recurses div
+    // containers, so the embedded heading and body land in the PDF and the
+    // icon-only source button contributes nothing.
+    const html =
+      '<div class="markdown-embed">' +
+      '<button class="markdown-embed__source"><svg><path/></svg></button>' +
+      '<div class="markdown-embed__body"><h2>Section</h2><p>embedded body</p></div>' +
+      "</div>";
+    const json = JSON.stringify(convertHtmlToPdf(html));
+    expect(json).toContain("Section");
+    expect(json).toContain("embedded body");
+  });
+
   it("emits a table node for table markup", () => {
     const content = convertHtmlToPdf("<table><tr><th>H</th></tr><tr><td>1</td></tr></table>");
     expect(content.some((c) => typeof c === "object" && c !== null && "table" in c)).toBe(true);
