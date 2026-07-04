@@ -52,6 +52,47 @@ describe("AIChatPanel", () => {
     );
   });
 
+  it("inverts the resize drag direction under RTL", () => {
+    document.documentElement.dir = "rtl";
+    try {
+      const updateSettings = vi.fn();
+      render(
+        <SettingsContext.Provider
+          value={{ settings: DEFAULT_SETTINGS, updateSettings, resetSettings: noop, loaded: true }}
+        >
+          <AIChatPanel {...defaultProps} />
+        </SettingsContext.Provider>,
+      );
+      const handle = screen.getByRole("separator");
+      fireEvent.pointerDown(handle, { button: 0, clientX: 500 });
+      // Mirrored dock: dragging right widens the panel.
+      fireEvent.pointerMove(handle, { clientX: 550 });
+      fireEvent.pointerUp(handle);
+      expect(updateSettings).toHaveBeenCalledExactlyOnceWith(
+        "layout.aiPanelWidth",
+        DEFAULT_SETTINGS.layout.aiPanelWidth + 50,
+      );
+    } finally {
+      document.documentElement.dir = "";
+    }
+  });
+
+  it("double-click on the handle resets the width to its default", () => {
+    const updateSettings = vi.fn();
+    render(
+      <SettingsContext.Provider
+        value={{ settings: DEFAULT_SETTINGS, updateSettings, resetSettings: noop, loaded: true }}
+      >
+        <AIChatPanel {...defaultProps} />
+      </SettingsContext.Provider>,
+    );
+    fireEvent.doubleClick(screen.getByRole("separator"));
+    expect(updateSettings).toHaveBeenCalledExactlyOnceWith(
+      "layout.aiPanelWidth",
+      DEFAULT_SETTINGS.layout.aiPanelWidth,
+    );
+  });
+
   it("shows the empty hint when there is no conversation", () => {
     render(<AIChatPanel {...defaultProps} />);
     expect(screen.getByText(/quick action/i)).toBeInTheDocument();

@@ -110,4 +110,39 @@ describe("usePanelResize", () => {
     expect(onReset).toHaveBeenCalledOnce();
     expect(onCommit).not.toHaveBeenCalled();
   });
+
+  it("nudges the size with arrow keys, committing each step", () => {
+    const { handle, onCommit } = setup();
+    fireEvent.keyDown(handle, { key: "ArrowRight" });
+    expect(onCommit).toHaveBeenCalledWith(240);
+    fireEvent.keyDown(handle, { key: "ArrowLeft" });
+    expect(onCommit).toHaveBeenCalledWith(208);
+    expect(onCommit).toHaveBeenCalledTimes(2);
+  });
+
+  it("clamps keyboard nudges at the bounds", () => {
+    const { handle, onCommit } = setup({ size: 476 });
+    fireEvent.keyDown(handle, { key: "ArrowRight" });
+    expect(onCommit).toHaveBeenCalledExactlyOnceWith(480);
+  });
+
+  it("uses vertical arrows for axis y and resolves getters per press", () => {
+    const { handle, onCommit } = setup({
+      axis: "y",
+      size: () => 100,
+      min: 80,
+      max: () => 130,
+      direction: () => -1,
+    });
+    // ArrowUp is physically -1; direction -1 turns it into growth.
+    fireEvent.keyDown(handle, { key: "ArrowUp" });
+    expect(onCommit).toHaveBeenCalledExactlyOnceWith(116);
+  });
+
+  it("ignores non-arrow keys and arrows for the other axis", () => {
+    const { handle, onCommit } = setup();
+    fireEvent.keyDown(handle, { key: "Enter" });
+    fireEvent.keyDown(handle, { key: "ArrowUp" });
+    expect(onCommit).not.toHaveBeenCalled();
+  });
 });

@@ -23,6 +23,16 @@ describe("migrateLegacySettings", () => {
     });
   });
 
+  it("seeds the files width while preserving an existing outline width", () => {
+    const migrated = migrateLegacySettings({
+      layout: { sidebarWidth: 256, outlineSidebarWidth: 300 },
+    });
+    expect(migrated.layout).toEqual({
+      filesSidebarWidth: 256,
+      outlineSidebarWidth: 300,
+    });
+  });
+
   it("passes already-migrated settings through unchanged", () => {
     const saved = { layout: { filesSidebarWidth: 300, outlineSidebarWidth: 224 } };
     expect(migrateLegacySettings(saved)).toBe(saved);

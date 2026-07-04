@@ -26,8 +26,10 @@ You are the **implement** stage of Glyph's spec-driven workflow. Build the featu
    ```
    Fix every Biome warning per `ci-hygiene.md`: apply the fix, do not suppress.
 
-5. **Keep the issue current.** As tasks and acceptance criteria are satisfied, tick their checkboxes in the issue body (`gh issue edit $ARGUMENTS --body-file ...`) so the issue reflects real progress.
+5. **Check patch coverage before committing.** Run `pnpm test:coverage` and read the summary table for every file you created or changed: each one must have no uncovered lines attributable to your diff (event handlers, drag-start/reset callbacks, keyboard paths, and error branches are the usual escapees). Add tests until the new lines are covered; Codecov will fail the PR on patch coverage otherwise, and `/ship` will bounce it back here.
 
-6. When all acceptance criteria are met and the gates are green, commit with a conventional-commit message (no co-authored-by line) and tell the user the next step is `/ship $ARGUMENTS`.
+6. **Keep the issue current.** As tasks and acceptance criteria are satisfied, tick their checkboxes in the issue body (`gh issue edit $ARGUMENTS --body-file ...`) so the issue reflects real progress.
+
+7. When all acceptance criteria are met and the gates are green, commit with a conventional-commit message (no co-authored-by line) and tell the user the next step is `/ship $ARGUMENTS`.
 
 No em dashes anywhere. Do not open the PR here; that is `/ship`.
