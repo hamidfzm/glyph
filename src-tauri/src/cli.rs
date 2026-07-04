@@ -539,6 +539,16 @@ mod tests {
     }
 
     #[test]
+    fn resolve_out_dir_keeps_absolute_paths_as_given() {
+        // temp_dir is absolute on every platform (a bare "/x" is not absolute
+        // on Windows, where absolute needs a drive or UNC prefix).
+        let abs = std::env::temp_dir().join("glyph-site-out");
+        let resolved = resolve_out_dir(abs.to_string_lossy().as_ref(), Path::new("/elsewhere"))
+            .expect("resolves");
+        assert_eq!(resolved, abs.to_string_lossy());
+    }
+
+    #[test]
     fn launch_plan_without_export_flag_is_a_normal_open() {
         let cwd = unique_tmp("lp_open");
         let ws = cwd.join("docs");
@@ -593,6 +603,18 @@ mod tests {
             .map(|s| s.to_string())
             .collect();
         assert!(launch_plan(None, None, &argv, &cwd).is_err());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_plan_rejects_a_blank_output_directory() {
+        let cwd = unique_tmp("lp_blank");
+        let ws = cwd.join("docs");
+        fs::create_dir_all(&ws).unwrap();
+        let argv: Vec<String> = ["glyph", "docs"].iter().map(|s| s.to_string()).collect();
+
+        let err = launch_plan(None, Some("   "), &argv, &cwd).expect_err("usage error");
+        assert!(err.contains("output directory"), "got: {err}");
         let _ = fs::remove_dir_all(&cwd);
     }
 

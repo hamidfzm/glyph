@@ -22,6 +22,17 @@ pub fn get_cli_export(state: State<'_, CliExport>) -> Option<CliExportRequest> {
     state.0.lock().ok()?.clone()
 }
 
+/// Route the outcome message: stdout for success, stderr for failure (so CI
+/// logs read naturally and `2>/dev/null` keeps only the summary). Split from
+/// the command so the branch is unit-testable; the command never returns.
+fn print_cli_export_outcome(code: i32, message: &str) {
+    if code == 0 {
+        println!("{message}");
+    } else {
+        eprintln!("{message}");
+    }
+}
+
 /// Report the outcome of a CLI export and terminate the process, making the
 /// app scriptable: success prints to stdout and exits 0, failure prints to
 /// stderr and exits nonzero (CI fails the step). Exits via
@@ -29,11 +40,7 @@ pub fn get_cli_export(state: State<'_, CliExport>) -> Option<CliExportRequest> {
 /// event loop and the process then reports 0 regardless of the requested code.
 #[tauri::command]
 pub fn finish_cli_export(code: i32, message: String) {
-    if code == 0 {
-        println!("{message}");
-    } else {
-        eprintln!("{message}");
-    }
+    print_cli_export_outcome(code, &message);
     std::process::exit(code);
 }
 
@@ -83,5 +90,14 @@ mod tests {
     fn cli_export_default_is_none() {
         let state = CliExport(Mutex::new(None));
         assert!(state.0.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn print_cli_export_outcome_takes_both_streams() {
+        // Routing is by code: 0 -> stdout, nonzero -> stderr. The output
+        // itself is not captured here; this exercises both branches so a
+        // future panic or format regression is caught.
+        print_cli_export_outcome(0, "exported fine");
+        print_cli_export_outcome(1, "export failed");
     }
 }

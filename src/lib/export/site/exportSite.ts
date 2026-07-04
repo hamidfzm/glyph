@@ -68,7 +68,7 @@ export async function exportSite({
 
   // Pass 1: read everything up front. Nav on every page needs the full page
   // list with titles before the first page is written.
-  const contents = new Map<string, string>();
+  const jobs: Array<{ file: string; content: string; rel: string }> = [];
   const pages = new Map<string, string>(); // abs md path -> site rel html path
   const sitePages: SitePage[] = [];
   // Output paths collide case-insensitively (Windows/macOS filesystems):
@@ -84,7 +84,7 @@ export async function exportSite({
       rel = wanted.replace(/\.html$/, `-${n}.html`);
     }
     takenRels.add(rel.toLowerCase());
-    contents.set(file, content);
+    jobs.push({ file, content, rel });
     pages.set(file, rel);
     sitePages.push({ rel, title: deriveExportMeta(file, content).title });
   }
@@ -121,9 +121,7 @@ export async function exportSite({
   let copied = 0;
   let usedMermaid = false;
   try {
-    for (const file of files) {
-      const content = contents.get(file) ?? "";
-      const pageRel = pages.get(file) ?? "index.html";
+    for (const { file, content, rel: pageRel } of jobs) {
       let body = await renderPageHtml({
         content,
         filePath: file,

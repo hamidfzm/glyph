@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  decodeHref,
   encodeHref,
   headingSlug,
   pageRelPath,
@@ -71,6 +72,16 @@ describe("relativeHref", () => {
 
   it("reaches shared assets from a nested page", () => {
     expect(relativeHref("guide/intro.html", "style.css")).toBe("../style.css");
+  });
+});
+
+describe("decodeHref", () => {
+  it("undoes percent-encoding", () => {
+    expect(decodeHref("my%20pics/a%20b.png")).toBe("my pics/a b.png");
+  });
+
+  it("passes malformed sequences through verbatim", () => {
+    expect(decodeHref("50%-off.md")).toBe("50%-off.md");
   });
 });
 

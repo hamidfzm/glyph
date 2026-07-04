@@ -77,6 +77,42 @@ describe("rehypeSiteUrls links", () => {
     const html = await render("[out](../outside/x.md)", ctx);
     expect(html).toContain('href="../outside/x.md"');
   });
+
+  it("leaves a wikilink at # when its target has no generated page", async () => {
+    // The resolver knows the file (it is in workspaceFiles) but the export
+    // produced no page for it.
+    const ctx: SiteUrlContext = {
+      ...makeCtx("/ws/other.md", "other.html"),
+      pages: new Map([["/ws/other.md", "other.html"]]),
+    };
+    const html = await render("See [[intro]]", ctx);
+    expect(html).toContain('href="#"');
+  });
+
+  it("matches pages case-insensitively when link casing differs from disk", async () => {
+    const ctx = makeCtx("/ws/guide/intro.md", "guide/intro.html");
+    const html = await render("Back to [readme](../readme.md)", ctx);
+    expect(html).toContain('href="../index.html"');
+  });
+
+  it("leaves relative links to non-markdown files untouched", async () => {
+    const ctx = makeCtx("/ws/other.md", "other.html");
+    const html = await render("[raw data](./data.csv)", ctx);
+    expect(html).toContain('href="./data.csv"');
+  });
+
+  it("ignores anchors without an href", async () => {
+    const ctx = makeCtx("/ws/other.md", "other.html");
+    const html = await render("raw <a>plain anchor</a> text", ctx);
+    expect(html).toContain("<a>plain anchor</a>");
+  });
+
+  it("skips element nodes that carry no properties at all", () => {
+    const transform = rehypeSiteUrls(makeCtx("/ws/other.md", "other.html"));
+    const bareAnchor = { type: "element", tagName: "a", children: [] };
+    const tree = { type: "root", children: [bareAnchor] };
+    expect(() => transform(tree as never)).not.toThrow();
+  });
 });
 
 describe("rehypeSiteUrls images", () => {
@@ -105,6 +141,13 @@ describe("rehypeSiteUrls images", () => {
     const ctx = makeCtx("/ws/other.md", "other.html");
     const html = await render("![r](https://example.com/x.png)", ctx);
     expect(html).toContain('src="https://example.com/x.png"');
+    expect(ctx.assets.size).toBe(0);
+  });
+
+  it("ignores images without a src", async () => {
+    const ctx = makeCtx("/ws/other.md", "other.html");
+    const html = await render('raw <img alt="empty"> tag', ctx);
+    expect(html).toContain('alt="empty"');
     expect(ctx.assets.size).toBe(0);
   });
 

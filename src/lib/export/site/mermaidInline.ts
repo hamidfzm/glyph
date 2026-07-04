@@ -13,17 +13,21 @@ export async function inlineMermaidSvgs(
   render: (source: string) => Promise<string> = renderMermaidLightSvg,
 ): Promise<string> {
   const doc = new DOMParser().parseFromString(html, "text/html");
-  const blocks = Array.from(doc.body.querySelectorAll("pre > code.language-mermaid"));
-  for (const code of blocks) {
+  let replaced = false;
+  for (const pre of Array.from(doc.body.querySelectorAll("pre"))) {
+    const code = pre.querySelector(":scope > code.language-mermaid");
+    if (!code) continue;
     try {
-      const svg = await render(code.textContent ?? "");
+      // textContent is typed nullable but is always a string on elements.
+      const svg = await render(String(code.textContent));
       const wrapper = doc.createElement("div");
       wrapper.className = "mermaid-diagram";
       wrapper.innerHTML = svg;
-      code.closest("pre")?.replaceWith(wrapper);
+      pre.replaceWith(wrapper);
+      replaced = true;
     } catch {
       // Leave the source block in place.
     }
   }
-  return blocks.length > 0 ? doc.body.innerHTML : html;
+  return replaced ? doc.body.innerHTML : html;
 }
