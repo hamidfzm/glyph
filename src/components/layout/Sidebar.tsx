@@ -89,8 +89,14 @@ export function Sidebar({ side }: SidebarProps) {
       ),
     [],
   );
+  // Also the idle aria value; on the first render the ref is not attached yet,
+  // so the minimum stands in until the block has a measurable height.
+  const measureBacklinks = useCallback(
+    () => backlinksRef.current?.offsetHeight ?? BACKLINKS_HEIGHT_MIN,
+    [],
+  );
   const backlinksResize = usePanelResize({
-    size: () => backlinksRef.current?.offsetHeight ?? BACKLINKS_HEIGHT_MIN,
+    size: measureBacklinks,
     min: BACKLINKS_HEIGHT_MIN,
     max: backlinksMax,
     axis: "y",
@@ -181,7 +187,7 @@ export function Sidebar({ side }: SidebarProps) {
           <ResizeHandle
             axis="y"
             label={t("sidebar.resizeBacklinks")}
-            value={backlinksResize.size ?? backlinksHeight ?? BACKLINKS_HEIGHT_MIN}
+            value={backlinksResize.size ?? backlinksHeight ?? measureBacklinks()}
             min={BACKLINKS_HEIGHT_MIN}
             max={backlinksMax()}
             className="mt-3 -mx-3 h-1.5 shrink-0"
