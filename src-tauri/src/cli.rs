@@ -575,13 +575,15 @@ mod tests {
             .collect();
 
         let plan = launch_plan(None, None, &argv, &cwd).expect("plans");
-        match plan {
-            CliLaunch::ExportWebsite { root, out_dir } => {
-                assert!(root.ends_with("docs"), "root was {root}");
-                assert_eq!(out_dir, cwd.join("site").to_string_lossy());
-            }
-            other => panic!("expected ExportWebsite, got {other:?}"),
-        }
+        let expected_out = cwd.join("site").to_string_lossy().to_string();
+        assert!(
+            matches!(
+                &plan,
+                CliLaunch::ExportWebsite { root, out_dir }
+                    if root.ends_with("docs") && *out_dir == expected_out
+            ),
+            "expected ExportWebsite for docs -> site, got {plan:?}"
+        );
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -626,12 +628,11 @@ mod tests {
         let argv: Vec<String> = ["glyph", "docs"].iter().map(|s| s.to_string()).collect();
 
         let plan = launch_plan(None, Some("from-plugin"), &argv, &cwd).expect("plans");
-        match plan {
-            CliLaunch::ExportWebsite { out_dir, .. } => {
-                assert_eq!(out_dir, cwd.join("from-plugin").to_string_lossy());
-            }
-            other => panic!("expected ExportWebsite, got {other:?}"),
-        }
+        let expected_out = cwd.join("from-plugin").to_string_lossy().to_string();
+        assert!(
+            matches!(&plan, CliLaunch::ExportWebsite { out_dir, .. } if *out_dir == expected_out),
+            "expected ExportWebsite with the plugin's out dir, got {plan:?}"
+        );
         let _ = fs::remove_dir_all(&cwd);
     }
 

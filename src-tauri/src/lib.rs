@@ -301,7 +301,7 @@ pub fn run() {
             commands::file::get_initial_file,
             commands::file::print_document,
             commands::export::get_cli_export,
-            commands::export::finish_cli_export,
+            commands::export_runtime::finish_cli_export,
             commands::directory::get_initial_folder,
             commands::directory::read_directory,
             commands::directory::list_markdown_files,

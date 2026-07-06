@@ -24,24 +24,14 @@ pub fn get_cli_export(state: State<'_, CliExport>) -> Option<CliExportRequest> {
 
 /// Route the outcome message: stdout for success, stderr for failure (so CI
 /// logs read naturally and `2>/dev/null` keeps only the summary). Split from
-/// the command so the branch is unit-testable; the command never returns.
-fn print_cli_export_outcome(code: i32, message: &str) {
+/// the `finish_cli_export` command (in [`super::export_runtime`]) so the
+/// branch is unit-testable; the command itself never returns.
+pub(crate) fn print_cli_export_outcome(code: i32, message: &str) {
     if code == 0 {
         println!("{message}");
     } else {
         eprintln!("{message}");
     }
-}
-
-/// Report the outcome of a CLI export and terminate the process, making the
-/// app scriptable: success prints to stdout and exits 0, failure prints to
-/// stderr and exits nonzero (CI fails the step). Exits via
-/// `std::process::exit` rather than `AppHandle::exit`: the latter unwinds the
-/// event loop and the process then reports 0 regardless of the requested code.
-#[tauri::command]
-pub fn finish_cli_export(code: i32, message: String) {
-    print_cli_export_outcome(code, &message);
-    std::process::exit(code);
 }
 
 #[cfg(test)]
