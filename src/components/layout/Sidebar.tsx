@@ -7,6 +7,7 @@ import { ExpandAllIcon } from "@/components/icons/ExpandAllIcon";
 import { NewFolderIcon } from "@/components/icons/NewFolderIcon";
 import { NewNoteIcon } from "@/components/icons/NewNoteIcon";
 import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
+import { PluginSidebarPanels } from "@/components/plugins/PluginSidebarPanels";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { useActiveHeading } from "@/hooks/useActiveHeading";
@@ -214,6 +215,7 @@ export function Sidebar({ side }: SidebarProps) {
         collapseTitle={t("sidebar.hideOutline")}
       />
       <OutlineSection entries={tocEntries} activeId={activeId} />
+      <PluginSidebarPanels />
     </div>
   );
 

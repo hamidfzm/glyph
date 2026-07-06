@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import { createRegistry } from "@/lib/plugins/registry";
@@ -11,16 +11,16 @@ import type {
   SidebarPanelContribution,
   StatusBarItemContribution,
 } from "@/lib/plugins/types";
-import { PluginStatusBarItems } from "./PluginStatusBarItems";
+import { PluginSidebarPanels } from "./PluginSidebarPanels";
 
-function value(statusBarItems = createRegistry<StatusBarItemContribution>()): PluginsContextValue {
+function value(sidebarPanels = createRegistry<SidebarPanelContribution>()): PluginsContextValue {
   return {
     commands: createRegistry<CommandContribution>(),
-    statusBarItems,
+    statusBarItems: createRegistry<StatusBarItemContribution>(),
     remarkPlugins: createRegistry<MarkdownPlugin>(),
     rehypePlugins: createRegistry<MarkdownPlugin>(),
     fencedRenderers: createRegistry<FencedRendererContribution>(),
-    sidebarPanels: createRegistry<SidebarPanelContribution>(),
+    sidebarPanels,
     settingsPanels: createRegistry<SettingsPanelContribution>(),
     exporters: createRegistry<ExporterContribution>(),
     installed: [],
@@ -36,34 +36,34 @@ function value(statusBarItems = createRegistry<StatusBarItemContribution>()): Pl
   };
 }
 
-describe("PluginStatusBarItems", () => {
-  it("renders nothing without a provider", () => {
-    const { container } = render(<PluginStatusBarItems />);
+describe("PluginSidebarPanels", () => {
+  it("renders nothing without a provider or without panels", () => {
+    const { container } = render(<PluginSidebarPanels />);
     expect(container.firstChild).toBeNull();
-  });
 
-  it("renders nothing when no items are registered", () => {
-    const { container } = render(
+    const { container: withProvider } = render(
       <PluginsContext.Provider value={value()}>
-        <PluginStatusBarItems />
+        <PluginSidebarPanels />
       </PluginsContext.Provider>,
     );
-    expect(container.firstChild).toBeNull();
+    expect(withProvider.firstChild).toBeNull();
   });
 
-  it("renders a slot per registered item", () => {
-    const items = createRegistry<StatusBarItemContribution>();
-    items.register({
-      id: "it1",
+  it("renders a titled section per registered panel", () => {
+    const panels = createRegistry<SidebarPanelContribution>();
+    panels.register({
+      id: "todo",
+      title: "TODOs",
       mount: (el) => {
-        el.textContent = "A";
+        el.textContent = "3 open";
       },
     });
-    const { container } = render(
-      <PluginsContext.Provider value={value(items)}>
-        <PluginStatusBarItems />
+    render(
+      <PluginsContext.Provider value={value(panels)}>
+        <PluginSidebarPanels />
       </PluginsContext.Provider>,
     );
-    expect(container.querySelector('[data-plugin-slot="it1"]')?.textContent).toBe("A");
+    expect(screen.getByText("TODOs")).toBeInTheDocument();
+    expect(screen.getByText("3 open")).toBeInTheDocument();
   });
 });

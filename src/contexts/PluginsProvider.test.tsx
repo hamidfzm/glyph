@@ -4,9 +4,15 @@ import { load } from "@tauri-apps/plugin-store";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
+import { loadPluginSettings, savePluginSettings } from "@/lib/plugins/settingsStore";
 import type { InstalledPlugin } from "@/lib/plugins/types";
 import { usePluginsOptional } from "./PluginsContext";
 import { PluginsProvider } from "./PluginsProvider";
+
+vi.mock("@/lib/plugins/settingsStore", () => ({
+  loadPluginSettings: vi.fn(() => Promise.resolve({})),
+  savePluginSettings: vi.fn(() => Promise.resolve()),
+}));
 
 function installedPlugin(overrides: Partial<InstalledPlugin> = {}): InstalledPlugin {
   return {
@@ -41,6 +47,31 @@ describe("PluginsProvider", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockResolvedValue(undefined);
+  });
+
+  it("hydrates and persists plugin settings through the store", async () => {
+    vi.mocked(loadPluginSettings).mockResolvedValueOnce({ size: 12 });
+    const plugin = installedPlugin({
+      mainSource: `export default {
+        activate(ctx) {
+          const size = ctx.settings.get("size");
+          ctx.settings.set("size", size + 1);
+        },
+      };`,
+    });
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "list_plugins" ? [plugin] : undefined),
+    );
+
+    render(
+      <PluginsProvider>
+        <Probe />
+      </PluginsProvider>,
+    );
+
+    await waitFor(() =>
+      expect(vi.mocked(savePluginSettings)).toHaveBeenCalledWith("com.x.demo", { size: 13 }),
+    );
   });
 
   it("loads installed plugins on mount and exposes their contributions", async () => {

@@ -4,6 +4,7 @@ import { usePluginsOptional } from "@/contexts/PluginsContext";
 import type { MenuEventHandlers } from "@/hooks/useMenuEvents";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { Command } from "@/lib/commands";
+import type { ExporterContribution } from "@/lib/plugins/types";
 import { scrollToHeading } from "@/lib/scrollToHeading";
 import { useRegistryEntries } from "./usePluginRegistry";
 
@@ -26,6 +27,8 @@ export interface AppActions extends MenuEventHandlers {
   openWorkspaceFile: (path: string) => void;
   /** Open the plugin management modal. */
   managePlugins: () => void;
+  /** Run a plugin-contributed export format through the shared pipeline. */
+  runPluginExporter: (exporter: ExporterContribution) => void;
 }
 
 function basename(path: string): string {
@@ -49,6 +52,7 @@ export function useAppCommands({
   // isolated rendering); both are empty/null in that case.
   const plugins = usePluginsOptional();
   const pluginCommands = useRegistryEntries(plugins?.commands ?? null);
+  const pluginExporters = useRegistryEntries(plugins?.exporters ?? null);
 
   return useMemo<Command[]>(() => {
     const out: Command[] = [];
@@ -229,6 +233,16 @@ export function useAppCommands({
       });
     }
 
+    // Export formats contributed by plugins run through the shared pipeline.
+    for (const exporter of pluginExporters) {
+      out.push({
+        id: `plugin-export:${exporter.id}`,
+        title: t("exportAs", { label: exporter.label }),
+        section: "Commands",
+        run: () => actions.runPluginExporter(exporter),
+      });
+    }
+
     return out;
-  }, [workspaceOpen, workspaceFiles, tocEntries, actions, t, pluginCommands]);
+  }, [workspaceOpen, workspaceFiles, tocEntries, actions, t, pluginCommands, pluginExporters]);
 }
