@@ -36,13 +36,13 @@ export function SidebarPanel({
       data-print-hide="true"
       data-sidebar={side}
       className={`relative shrink-0 flex ${borderClass} border-[var(--color-border)] select-none`}
-      style={{ width: size ?? width, background: "var(--glyph-sidebar-bg)" }}
+      style={{ width: size, background: "var(--glyph-sidebar-bg)" }}
     >
       <div className="flex-1 min-w-0 flex flex-col overflow-y-auto pt-3">{children}</div>
       <ResizeHandle
         axis="x"
         label={t("sidebar.resize")}
-        value={size ?? width}
+        value={size}
         min={SIDEBAR_WIDTH_MIN}
         max={SIDEBAR_WIDTH_MAX}
         className={`absolute inset-y-0 w-1.5 ${side === "left" ? "end-0" : "start-0"}`}

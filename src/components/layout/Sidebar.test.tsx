@@ -62,6 +62,7 @@ interface RenderOpts {
   setFilesSidebarWidth?: (width: number) => void;
   setOutlineSidebarWidth?: (width: number) => void;
   setBacklinksHeight?: (height: number | null) => void;
+  backlinksHeight?: number | null;
   tabs?: Partial<TabsContextValue>;
 }
 
@@ -124,7 +125,7 @@ function buildSidebarContext(opts: RenderOpts): SidebarLayoutContextValue {
     swapSidebarSides: opts.swapSidebarSides ?? false,
     filesSidebarWidth: 200,
     outlineSidebarWidth: 260,
-    backlinksHeight: null,
+    backlinksHeight: opts.backlinksHeight ?? null,
     setFilesSidebarWidth: opts.setFilesSidebarWidth ?? vi.fn(),
     setOutlineSidebarWidth: opts.setOutlineSidebarWidth ?? vi.fn(),
     setBacklinksHeight: opts.setBacklinksHeight ?? vi.fn(),
@@ -326,6 +327,18 @@ describe("Sidebar", () => {
     expect(wrapper.style.height).toBe("200px");
     fireEvent.pointerUp(handle);
     expect(setBacklinksHeight).toHaveBeenCalledExactlyOnceWith(200);
+  });
+
+  it("applies a persisted backlinks height when idle", () => {
+    const { container } = renderSidebar({
+      workspace: makeWorkspace(),
+      backlinksHeight: 150,
+      tabs: { backlinks: [{ source: "/tmp/notes/other.md", line: 3, snippet: "see readme" }] },
+    });
+    const wrapper = container.querySelector(".backlinks-section")?.parentElement as HTMLElement;
+    expect(wrapper.style.height).toBe("150px");
+    const handle = screen.getByRole("separator", { name: "Resize backlinks" });
+    expect(handle).toHaveAttribute("aria-valuenow", "150");
   });
 
   it("double-click on the backlinks divider restores the automatic height", () => {

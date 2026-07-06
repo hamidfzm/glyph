@@ -85,12 +85,12 @@ export function AIChatPanel({
       className="ai-chat-panel"
       data-open={open}
       aria-label={t("title")}
-      style={{ width: size ?? undefined }}
+      style={{ width: size }}
     >
       <ResizeHandle
         axis="x"
         label={t("resize")}
-        value={size ?? settings.layout.aiPanelWidth}
+        value={size}
         min={AI_PANEL_WIDTH_MIN}
         max={window.innerWidth * AI_PANEL_WIDTH_MAX_FRACTION}
         className="absolute inset-y-0 start-0 w-1.5"

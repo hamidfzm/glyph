@@ -39,16 +39,23 @@ export interface PanelResizeHandleProps {
   onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => void;
 }
 
-/**
- * Drag-to-resize for a panel edge. Spread `handleProps` onto a ResizeHandle;
- * apply `size` (live drag value, or the persisted size when idle; null when
- * the idle size is DOM-measured) as the panel's width/height style.
- */
-export function usePanelResize(options: PanelResizeOptions): {
+interface PanelResizeResult {
   size: number | null;
   dragging: boolean;
   handleProps: PanelResizeHandleProps;
-} {
+}
+
+/**
+ * Drag-to-resize for a panel edge. Spread `handleProps` onto a ResizeHandle;
+ * apply `size` (live drag value, or the persisted size when idle) as the
+ * panel's width/height style. With a numeric `size` option the result is
+ * always a number; only a getter (DOM-measured) idle size yields null.
+ */
+export function usePanelResize(
+  options: PanelResizeOptions & { size: number },
+): PanelResizeResult & { size: number };
+export function usePanelResize(options: PanelResizeOptions): PanelResizeResult;
+export function usePanelResize(options: PanelResizeOptions): PanelResizeResult {
   const [live, setLive] = useState<number | null>(null);
   // Mirror of `live` readable from event handlers without going through a
   // state updater (committing inside an updater would double-fire in
