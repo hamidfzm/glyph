@@ -67,6 +67,11 @@ function renderModal(value: PluginsContextValue, onClose = vi.fn()) {
 }
 
 describe("PluginsModal", () => {
+  it("renders nothing without a PluginsProvider", () => {
+    const { container } = render(<PluginsModal onClose={vi.fn()} />);
+    expect(container.firstChild).toBeNull();
+  });
+
   it("lists installed and available plugins", () => {
     renderModal(ctx());
     expect(screen.getByText("Alpha")).toBeInTheDocument();
@@ -137,14 +142,24 @@ describe("PluginsModal", () => {
     expect(value.installFromRegistry).toHaveBeenCalled();
   });
 
-  it("installs from a folder and closes on Escape", () => {
+  it("installs from a folder and closes on Escape but not on other keys or inner clicks", () => {
     const value = ctx();
     const onClose = vi.fn();
     renderModal(value, onClose);
     fireEvent.click(screen.getByRole("button", { name: "Install from folder…" }));
     expect(value.installFromFolder).toHaveBeenCalled();
+
+    // Neither a non-Escape key nor a click inside the panel closes the modal.
+    fireEvent.keyDown(window, { key: "Enter" });
+    fireEvent.click(screen.getByText("Alpha"));
+    expect(onClose).not.toHaveBeenCalled();
+
+    // Clicking the backdrop itself closes.
+    fireEvent.click(screen.getByRole("dialog"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 
   it("shows empty states", () => {
