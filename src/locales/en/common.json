@@ -30,7 +30,9 @@
     "collapseAll": "Collapse all",
     "expandAll": "Expand all",
     "closeWorkspace": "Close workspace",
-    "outline": "Outline"
+    "outline": "Outline",
+    "resize": "Resize sidebar",
+    "resizeBacklinks": "Resize backlinks"
   },
   "backlinks": {
     "heading": "Backlinks"

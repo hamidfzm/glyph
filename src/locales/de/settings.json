@@ -96,8 +96,11 @@
       "label": "Seiten der Seitenleisten tauschen",
       "description": "Vertauscht, auf welcher Seite jedes Panel liegt. Standard ist Dateien links / Gliederung rechts; aktiviert wird es zu Dateien rechts / Gliederung links."
     },
-    "width": {
-      "label": "Breite der Seitenleiste"
+    "filesWidth": {
+      "label": "Breite der Dateien-Seitenleiste"
+    },
+    "outlineWidth": {
+      "label": "Breite der Gliederungs-Seitenleiste"
     }
   },
   "behavior": {

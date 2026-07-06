@@ -4,8 +4,10 @@
    under RTL. */
 .ai-chat-panel {
   display: none;
+  position: relative;
   flex-direction: column;
-  width: 340px;
+  /* Width comes from settings (layout.aiPanelWidth) as an inline style; the
+     max is a hard guard matching AI_PANEL_WIDTH_MAX_FRACTION. */
   max-width: 45vw;
   flex-shrink: 0;
   min-height: 0;

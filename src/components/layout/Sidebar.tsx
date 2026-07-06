@@ -10,12 +10,15 @@ import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { useActiveHeading } from "@/hooks/useActiveHeading";
+import { usePanelResize } from "@/hooks/usePanelResize";
 import type { Workspace } from "@/hooks/useTabs";
+import { BACKLINKS_HEIGHT_MIN } from "@/lib/settings";
 import { BacklinksSection } from "./BacklinksSection";
 import { EdgeExpand } from "./EdgeExpand";
 import { FileTree, type FileTreeHandle } from "./FileTree";
 import { OutlineSection } from "./OutlineSection";
 import { PanelHeader } from "./PanelHeader";
+import { ResizeHandle } from "./ResizeHandle";
 import { SidebarPanel } from "./SidebarPanel";
 import { ToolbarButton } from "./ToolbarButton";
 
@@ -23,7 +26,9 @@ interface SidebarProps {
   side: "left" | "right";
 }
 
-const DEFAULT_WIDTH = 224;
+// Keep at least this much of the Files panel for the tree when dragging the
+// backlinks divider up.
+const BACKLINKS_TREE_RESERVE = 120;
 
 export function Sidebar({ side }: SidebarProps) {
   const { t } = useTranslation("common");
@@ -61,16 +66,49 @@ export function Sidebar({ side }: SidebarProps) {
     outlineVisible,
     sidebarLayout,
     swapSidebarSides,
-    sidebarWidth,
+    filesSidebarWidth,
+    outlineSidebarWidth,
+    backlinksHeight,
+    setFilesSidebarWidth,
+    setOutlineSidebarWidth,
+    setBacklinksHeight,
     toggleFiles: onToggleFiles,
     toggleOutline: onToggleOutline,
   } = useSidebarLayoutContext();
   const activeId = useActiveHeading(tocEntries);
 
+  // Vertical divider between the file tree and the backlinks block. The idle
+  // height is DOM-measured so a drag starts from the rendered height even when
+  // the block is auto-sized; double-click restores auto.
+  const backlinksRef = useRef<HTMLDivElement>(null);
+  const backlinksMax = useCallback(
+    () =>
+      Math.max(
+        BACKLINKS_HEIGHT_MIN,
+        (backlinksRef.current?.parentElement?.clientHeight ?? 0) - BACKLINKS_TREE_RESERVE,
+      ),
+    [],
+  );
+  // Also the idle aria value; on the first render the ref is not attached yet,
+  // so the minimum stands in until the block has a measurable height.
+  const measureBacklinks = useCallback(
+    () => backlinksRef.current?.offsetHeight ?? BACKLINKS_HEIGHT_MIN,
+    [],
+  );
+  const backlinksResize = usePanelResize({
+    size: measureBacklinks,
+    min: BACKLINKS_HEIGHT_MIN,
+    max: backlinksMax,
+    axis: "y",
+    // The block sits at the panel bottom: dragging the divider up grows it.
+    direction: -1,
+    onCommit: setBacklinksHeight,
+    onReset: () => setBacklinksHeight(null),
+  });
+
   // The files panel follows the window's workspace; the outline follows the
   // active document. With neither there is nothing to show.
   if (!workspace && !activeTab) return null;
-  const w = sidebarWidth ?? DEFAULT_WIDTH;
   const hasOutlineContent = tocEntries.length > 0;
   const showOutline = outlineVisible && hasOutlineContent;
 
@@ -145,9 +183,24 @@ export function Sidebar({ side }: SidebarProps) {
         />
       </div>
       {backlinks.length > 0 && (
-        <div className="mt-4 pt-3 border-t border-[var(--color-border)] shrink-0">
-          <BacklinksSection backlinks={backlinks} workspaceRoot={ws.root} onOpen={onOpenFile} />
-        </div>
+        <>
+          <ResizeHandle
+            axis="y"
+            label={t("sidebar.resizeBacklinks")}
+            value={backlinksResize.size ?? backlinksHeight ?? measureBacklinks()}
+            min={BACKLINKS_HEIGHT_MIN}
+            max={backlinksMax()}
+            className="mt-3 -mx-3 h-1.5 shrink-0"
+            {...backlinksResize.handleProps}
+          />
+          <div
+            ref={backlinksRef}
+            className="pt-1.5 border-t border-[var(--color-border)] shrink-0 overflow-y-auto"
+            style={{ height: backlinksResize.size ?? backlinksHeight ?? undefined }}
+          >
+            <BacklinksSection backlinks={backlinks} workspaceRoot={ws.root} onOpen={onOpenFile} />
+          </div>
+        </>
       )}
     </div>
   );
@@ -166,11 +219,17 @@ export function Sidebar({ side }: SidebarProps) {
 
   if (workspace) {
     if (sidebarLayout === "combined") {
-      // Single panel on the primary side, Files + Outline stacked.
+      // Single panel on the primary side, Files + Outline stacked. One panel
+      // has one width, so combined mode deliberately resizes (and persists)
+      // the Files width; the Outline width only applies in split/beside.
       if (side !== primarySide) return null;
       if (filesVisible || showOutline) {
         return (
-          <SidebarPanel width={w} side={primarySide}>
+          <SidebarPanel
+            width={filesSidebarWidth}
+            side={primarySide}
+            onWidthCommit={setFilesSidebarWidth}
+          >
             {filesVisible && renderFilesBlock(workspace, primarySide)}
             {filesVisible && showOutline && (
               <div className="border-t border-[var(--color-border)] pt-3">
@@ -197,7 +256,11 @@ export function Sidebar({ side }: SidebarProps) {
       // content | Outline | Files (still adjacent on the right edge).
       if (side !== primarySide) return null;
       const filesPanel = filesVisible ? (
-        <SidebarPanel width={w} side={primarySide}>
+        <SidebarPanel
+          width={filesSidebarWidth}
+          side={primarySide}
+          onWidthCommit={setFilesSidebarWidth}
+        >
           {renderFilesBlock(workspace, primarySide)}
         </SidebarPanel>
       ) : (
@@ -209,7 +272,11 @@ export function Sidebar({ side }: SidebarProps) {
         />
       );
       const outlinePanel = showOutline ? (
-        <SidebarPanel width={w} side={primarySide}>
+        <SidebarPanel
+          width={outlineSidebarWidth}
+          side={primarySide}
+          onWidthCommit={setOutlineSidebarWidth}
+        >
           {renderOutlineBlock(primarySide)}
         </SidebarPanel>
       ) : hasOutlineContent ? (
@@ -233,7 +300,11 @@ export function Sidebar({ side }: SidebarProps) {
     if (side === filesSide) {
       if (filesVisible) {
         return (
-          <SidebarPanel width={w} side={filesSide}>
+          <SidebarPanel
+            width={filesSidebarWidth}
+            side={filesSide}
+            onWidthCommit={setFilesSidebarWidth}
+          >
             {renderFilesBlock(workspace, filesSide)}
           </SidebarPanel>
         );
@@ -249,7 +320,11 @@ export function Sidebar({ side }: SidebarProps) {
     }
     if (showOutline) {
       return (
-        <SidebarPanel width={w} side={outlineSide}>
+        <SidebarPanel
+          width={outlineSidebarWidth}
+          side={outlineSide}
+          onWidthCommit={setOutlineSidebarWidth}
+        >
           {renderOutlineBlock(outlineSide)}
         </SidebarPanel>
       );
@@ -271,7 +346,11 @@ export function Sidebar({ side }: SidebarProps) {
   if (side !== primarySide) return null;
   if (showOutline) {
     return (
-      <SidebarPanel width={w} side={primarySide}>
+      <SidebarPanel
+        width={outlineSidebarWidth}
+        side={primarySide}
+        onWidthCommit={setOutlineSidebarWidth}
+      >
         {renderOutlineBlock(primarySide)}
       </SidebarPanel>
     );

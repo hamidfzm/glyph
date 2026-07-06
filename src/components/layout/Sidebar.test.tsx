@@ -1,6 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -10,7 +10,7 @@ import {
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { FileTab, Tab, Workspace } from "@/hooks/useTabs";
-import type { SidebarLayout } from "@/lib/settings";
+import { SIDEBAR_WIDTH_DEFAULT, type SidebarLayout } from "@/lib/settings";
 import { Sidebar } from "./Sidebar";
 
 const mockEntries: TocEntry[] = [
@@ -59,6 +59,10 @@ interface RenderOpts {
   swapSidebarSides?: boolean;
   toggleFiles?: () => void;
   toggleOutline?: () => void;
+  setFilesSidebarWidth?: (width: number) => void;
+  setOutlineSidebarWidth?: (width: number) => void;
+  setBacklinksHeight?: (height: number | null) => void;
+  backlinksHeight?: number | null;
   tabs?: Partial<TabsContextValue>;
 }
 
@@ -119,7 +123,12 @@ function buildSidebarContext(opts: RenderOpts): SidebarLayoutContextValue {
     resetLayout: vi.fn(),
     sidebarLayout: opts.sidebarLayout ?? "split",
     swapSidebarSides: opts.swapSidebarSides ?? false,
-    sidebarWidth: undefined,
+    filesSidebarWidth: 200,
+    outlineSidebarWidth: 260,
+    backlinksHeight: opts.backlinksHeight ?? null,
+    setFilesSidebarWidth: opts.setFilesSidebarWidth ?? vi.fn(),
+    setOutlineSidebarWidth: opts.setOutlineSidebarWidth ?? vi.fn(),
+    setBacklinksHeight: opts.setBacklinksHeight ?? vi.fn(),
   };
 }
 
@@ -233,6 +242,114 @@ describe("Sidebar", () => {
     const { container } = renderBothSides({ workspace: makeWorkspace(), sidebarLayout: "split" });
     expect(container.querySelector('nav[data-sidebar="left"]')).toBeInTheDocument();
     expect(container.querySelector('nav[data-sidebar="right"]')).toBeInTheDocument();
+  });
+
+  it("applies independent widths to the Files and Outline panels", () => {
+    const { container } = renderBothSides({ workspace: makeWorkspace(), sidebarLayout: "split" });
+    const files = container.querySelector('nav[data-sidebar="left"]') as HTMLElement;
+    const outline = container.querySelector('nav[data-sidebar="right"]') as HTMLElement;
+    expect(files.style.width).toBe("200px");
+    expect(outline.style.width).toBe("260px");
+  });
+
+  it("renders resize handles on both panels", () => {
+    renderBothSides({ workspace: makeWorkspace(), sidebarLayout: "split" });
+    expect(screen.getAllByRole("separator").length).toBe(2);
+  });
+
+  it("commits a dragged files-panel width once on release", () => {
+    const setFilesSidebarWidth = vi.fn();
+    const { container } = renderSidebar({
+      workspace: makeWorkspace(),
+      sidebarLayout: "split",
+      setFilesSidebarWidth,
+    });
+    const nav = container.querySelector('nav[data-sidebar="left"]') as HTMLElement;
+    const handle = within(nav).getByRole("separator");
+    fireEvent.pointerDown(handle, { button: 0, clientX: 200 });
+    // Left-side panel in LTR: dragging right grows it.
+    fireEvent.pointerMove(handle, { clientX: 250 });
+    expect(nav.style.width).toBe("250px");
+    fireEvent.pointerUp(handle);
+    expect(setFilesSidebarWidth).toHaveBeenCalledExactlyOnceWith(250);
+  });
+
+  it("inverts the files-panel drag direction under RTL", () => {
+    document.documentElement.dir = "rtl";
+    try {
+      const setFilesSidebarWidth = vi.fn();
+      const { container } = renderSidebar({
+        workspace: makeWorkspace(),
+        sidebarLayout: "split",
+        setFilesSidebarWidth,
+      });
+      const nav = container.querySelector('nav[data-sidebar="left"]') as HTMLElement;
+      const handle = within(nav).getByRole("separator");
+      fireEvent.pointerDown(handle, { button: 0, clientX: 200 });
+      // Mirrored layout: dragging left grows the panel.
+      fireEvent.pointerMove(handle, { clientX: 150 });
+      fireEvent.pointerUp(handle);
+      expect(setFilesSidebarWidth).toHaveBeenCalledExactlyOnceWith(250);
+    } finally {
+      document.documentElement.dir = "";
+    }
+  });
+
+  it("double-click on a panel handle resets its width to the default", () => {
+    const setFilesSidebarWidth = vi.fn();
+    const { container } = renderSidebar({
+      workspace: makeWorkspace(),
+      sidebarLayout: "split",
+      setFilesSidebarWidth,
+    });
+    const nav = container.querySelector('nav[data-sidebar="left"]') as HTMLElement;
+    fireEvent.doubleClick(within(nav).getByRole("separator"));
+    expect(setFilesSidebarWidth).toHaveBeenCalledExactlyOnceWith(SIDEBAR_WIDTH_DEFAULT);
+  });
+
+  it("drags the backlinks divider and persists the height", () => {
+    const setBacklinksHeight = vi.fn();
+    const { container } = renderSidebar({
+      workspace: makeWorkspace(),
+      setBacklinksHeight,
+      tabs: { backlinks: [{ source: "/tmp/notes/other.md", line: 3, snippet: "see readme" }] },
+    });
+    const wrapper = container.querySelector(".backlinks-section")?.parentElement as HTMLElement;
+    Object.defineProperty(wrapper, "offsetHeight", { configurable: true, value: 150 });
+    Object.defineProperty(wrapper.parentElement as HTMLElement, "clientHeight", {
+      configurable: true,
+      value: 500,
+    });
+    const handle = screen.getByRole("separator", { name: "Resize backlinks" });
+    fireEvent.pointerDown(handle, { button: 0, clientY: 400 });
+    // The block sits at the bottom: dragging the divider up grows it.
+    fireEvent.pointerMove(handle, { clientY: 350 });
+    expect(wrapper.style.height).toBe("200px");
+    fireEvent.pointerUp(handle);
+    expect(setBacklinksHeight).toHaveBeenCalledExactlyOnceWith(200);
+  });
+
+  it("applies a persisted backlinks height when idle", () => {
+    const { container } = renderSidebar({
+      workspace: makeWorkspace(),
+      backlinksHeight: 150,
+      tabs: { backlinks: [{ source: "/tmp/notes/other.md", line: 3, snippet: "see readme" }] },
+    });
+    const wrapper = container.querySelector(".backlinks-section")?.parentElement as HTMLElement;
+    expect(wrapper.style.height).toBe("150px");
+    const handle = screen.getByRole("separator", { name: "Resize backlinks" });
+    expect(handle).toHaveAttribute("aria-valuenow", "150");
+  });
+
+  it("double-click on the backlinks divider restores the automatic height", () => {
+    const setBacklinksHeight = vi.fn();
+    renderSidebar({
+      workspace: makeWorkspace(),
+      setBacklinksHeight,
+      tabs: { backlinks: [{ source: "/tmp/notes/other.md", line: 3, snippet: "see readme" }] },
+    });
+    fireEvent.doubleClick(screen.getByRole("separator", { name: "Resize backlinks" }));
+    expect(setBacklinksHeight).toHaveBeenCalledExactlyOnceWith(null);
   });
 
   it("swaps sides when swapSidebarSides=true (file tab outline goes right)", () => {
