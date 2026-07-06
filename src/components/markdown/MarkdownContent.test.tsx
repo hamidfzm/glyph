@@ -1,7 +1,26 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Settings } from "@/lib/settings";
 import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { MarkdownContent } from "./MarkdownContent";
+
+// Overridable settings for the feature-toggle tests; null falls through to the
+// real hook so every other test keeps the defaults.
+let mockSettings: Settings | null = null;
+vi.mock("@/hooks/useSettings", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@/hooks/useSettings")>();
+  return {
+    ...orig,
+    useSettings: () => {
+      const real = orig.useSettings();
+      return mockSettings ? { ...real, settings: mockSettings } : real;
+    },
+  };
+});
+
+afterEach(() => {
+  mockSettings = null;
+});
 
 // MarkdownContent is the shared rendering core (frontmatter + ReactMarkdown with
 // the full plugin set). MarkdownViewer.test covers the sanitiser/alert paths via
@@ -30,11 +49,41 @@ describe("MarkdownContent", () => {
     await waitFor(() => expect(container.querySelector("code.hljs")).toBeTruthy());
   });
 
+  it("renders task-list items and routes toggles to onTaskToggle", () => {
+    const onTaskToggle = vi.fn();
+    render(
+      <MarkdownContent
+        content={"- [ ] first\n- [x] second"}
+        showFrontmatter={false}
+        onTaskToggle={onTaskToggle}
+      />,
+    );
+    const boxes = screen.getAllByRole("checkbox");
+    expect(boxes).toHaveLength(2);
+    expect(boxes[1]).toBeChecked();
+
+    fireEvent.click(boxes[0]);
+    expect(onTaskToggle).toHaveBeenCalledWith(1);
+  });
+
   it("lazily renders math via KaTeX", async () => {
     const { container } = render(
       <MarkdownContent content={"inline $x^2$ math"} showFrontmatter={false} />,
     );
     await waitFor(() => expect(container.querySelector(".katex")).toBeTruthy());
+  });
+
+  it("leaves math syntax literal when the feature is toggled off", async () => {
+    const { DEFAULT_SETTINGS } = await import("@/lib/settings");
+    mockSettings = {
+      ...DEFAULT_SETTINGS,
+      markdown: { ...DEFAULT_SETTINGS.markdown, math: false },
+    };
+    const { container } = render(
+      <MarkdownContent content={"inline $x^2$ math"} showFrontmatter={false} />,
+    );
+    expect(container.textContent).toContain("$x^2$");
+    expect(container.querySelector(".katex")).toBeNull();
   });
 
   it("resolves a relative link against the document and opens it in the workspace", () => {
