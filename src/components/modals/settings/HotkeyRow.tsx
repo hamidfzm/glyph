@@ -32,7 +32,7 @@ export function HotkeyRow({
   // from typing.
   useEffect(() => {
     if (!recording) return;
-    const onKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       event.preventDefault();
       event.stopPropagation();
       if (event.code === "Escape") {
@@ -46,8 +46,8 @@ export function HotkeyRow({
         setRecording(false);
       }
     };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [recording, onRecord]);
 
   return (

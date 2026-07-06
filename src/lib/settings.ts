@@ -24,12 +24,28 @@ export interface LayoutSettings {
   filesSidebarVisible: boolean;
   // Toggles the Outline panel (visible in both file and folder tabs).
   outlineSidebarVisible: boolean;
-  sidebarWidth: number;
+  filesSidebarWidth: number;
+  outlineSidebarWidth: number;
+  aiPanelWidth: number;
+  // Pixel height of the backlinks block inside the Files panel. null keeps its
+  // natural height until the user drags the divider.
+  backlinksHeight: number | null;
   sidebarLayout: SidebarLayout;
   // Mirrors the sidebar layout. Default Files-left / Outline-right; when true
   // it becomes Files-right / Outline-left. Affects all layout modes.
   swapSidebarSides: boolean;
 }
+
+// Drag-resize bounds. Sidebar panels share one range; the AI panel's upper
+// bound is 45vw, resolved against the window at drag time (and enforced by its
+// CSS max-width).
+export const SIDEBAR_WIDTH_DEFAULT = 224;
+export const SIDEBAR_WIDTH_MIN = 160;
+export const SIDEBAR_WIDTH_MAX = 480;
+export const AI_PANEL_WIDTH_DEFAULT = 340;
+export const AI_PANEL_WIDTH_MIN = 280;
+export const AI_PANEL_WIDTH_MAX_FRACTION = 0.45;
+export const BACKLINKS_HEIGHT_MIN = 80;
 
 // Editor modes for a document tab. Defined as a constant object so call sites
 // reference `EDITOR_MODE.view` etc. instead of bare string literals; the
@@ -148,7 +164,10 @@ export const DEFAULT_SETTINGS: Settings = {
   layout: {
     filesSidebarVisible: true,
     outlineSidebarVisible: true,
-    sidebarWidth: 224,
+    filesSidebarWidth: SIDEBAR_WIDTH_DEFAULT,
+    outlineSidebarWidth: SIDEBAR_WIDTH_DEFAULT,
+    aiPanelWidth: AI_PANEL_WIDTH_DEFAULT,
+    backlinksHeight: null,
     sidebarLayout: "beside",
     swapSidebarSides: false,
   },

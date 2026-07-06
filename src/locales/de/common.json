@@ -30,7 +30,9 @@
     "collapseAll": "Alle einklappen",
     "expandAll": "Alle ausklappen",
     "closeWorkspace": "Arbeitsbereich schließen",
-    "outline": "Gliederung"
+    "outline": "Gliederung",
+    "resize": "Größe der Seitenleiste ändern",
+    "resizeBacklinks": "Größe der Rückverweise ändern"
   },
   "backlinks": {
     "heading": "Rückverweise"

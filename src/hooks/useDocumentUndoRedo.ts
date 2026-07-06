@@ -30,7 +30,7 @@ export function useDocumentUndoRedo({
     const undoAccel = resolved.get("undo");
     const redoAccel = resolved.get("redo");
 
-    const onKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       const isUndo = !!undoAccel && matchesAccelerator(event, undoAccel, platform);
       // Ctrl+Y is the Windows/Linux redo convention; keep it working alongside
       // the (remappable) primary redo binding.
@@ -51,7 +51,7 @@ export function useDocumentUndoRedo({
       if (isUndo) onUndo(activeTabId);
       else onRedo(activeTabId);
     };
-    document.addEventListener(KEYBOARD_EVENT.KeyDown, onKeyDown);
-    return () => document.removeEventListener(KEYBOARD_EVENT.KeyDown, onKeyDown);
+    document.addEventListener(KEYBOARD_EVENT.KeyDown, handleKeyDown);
+    return () => document.removeEventListener(KEYBOARD_EVENT.KeyDown, handleKeyDown);
   }, [activeTabId, platform, onUndo, onRedo, overrides]);
 }

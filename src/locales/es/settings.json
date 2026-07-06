@@ -96,8 +96,11 @@
       "label": "Intercambiar lados de las barras laterales",
       "description": "Cambia el lado en el que se ubica cada panel. De forma predeterminada, Archivos queda a la izquierda y Esquema a la derecha; al activarlo, Archivos pasa a la derecha y Esquema a la izquierda."
     },
-    "width": {
-      "label": "Ancho de la barra lateral"
+    "filesWidth": {
+      "label": "Ancho de la barra de archivos"
+    },
+    "outlineWidth": {
+      "label": "Ancho de la barra de esquema"
     }
   },
   "behavior": {

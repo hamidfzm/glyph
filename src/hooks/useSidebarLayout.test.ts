@@ -57,7 +57,28 @@ describe("useSidebarLayout", () => {
     expect(updateSettings).toHaveBeenCalledWith("layout.outlineSidebarVisible", false);
   });
 
-  it("resetLayout writes the four defaults", () => {
+  it("persists panel sizes through the width and backlinks setters", () => {
+    const updateSettings = vi.fn();
+    const { result } = renderHook(() =>
+      useSidebarLayout({
+        filesVisibleSetting: true,
+        outlineVisibleSetting: true,
+        updateSettings,
+      }),
+    );
+    act(() => {
+      result.current.setFilesSidebarWidth(300);
+      result.current.setOutlineSidebarWidth(280);
+      result.current.setBacklinksHeight(150);
+      result.current.setBacklinksHeight(null);
+    });
+    expect(updateSettings).toHaveBeenCalledWith("layout.filesSidebarWidth", 300);
+    expect(updateSettings).toHaveBeenCalledWith("layout.outlineSidebarWidth", 280);
+    expect(updateSettings).toHaveBeenCalledWith("layout.backlinksHeight", 150);
+    expect(updateSettings).toHaveBeenLastCalledWith("layout.backlinksHeight", null);
+  });
+
+  it("resetLayout writes every layout default, sizes included", () => {
     const updateSettings = vi.fn();
     const { result } = renderHook(() =>
       useSidebarLayout({
@@ -73,5 +94,9 @@ describe("useSidebarLayout", () => {
     expect(updateSettings).toHaveBeenCalledWith("layout.outlineSidebarVisible", true);
     expect(updateSettings).toHaveBeenCalledWith("layout.sidebarLayout", "beside");
     expect(updateSettings).toHaveBeenCalledWith("layout.swapSidebarSides", false);
+    expect(updateSettings).toHaveBeenCalledWith("layout.filesSidebarWidth", 224);
+    expect(updateSettings).toHaveBeenCalledWith("layout.outlineSidebarWidth", 224);
+    expect(updateSettings).toHaveBeenCalledWith("layout.aiPanelWidth", 340);
+    expect(updateSettings).toHaveBeenCalledWith("layout.backlinksHeight", null);
   });
 });

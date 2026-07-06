@@ -96,8 +96,11 @@
       "label": "Swap sidebar sides",
       "description": "Flip which side each panel lives on. Default is Files left / Outline right; on, it becomes Files right / Outline left."
     },
-    "width": {
-      "label": "Sidebar Width"
+    "filesWidth": {
+      "label": "Files Sidebar Width"
+    },
+    "outlineWidth": {
+      "label": "Outline Sidebar Width"
     }
   },
   "behavior": {

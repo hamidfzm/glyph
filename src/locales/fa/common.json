@@ -30,7 +30,9 @@
     "collapseAll": "جمع کردن همه",
     "expandAll": "باز کردن همه",
     "closeWorkspace": "بستن فضای کاری",
-    "outline": "رئوس مطالب"
+    "outline": "رئوس مطالب",
+    "resize": "تغییر اندازه نوار کناری",
+    "resizeBacklinks": "تغییر اندازه پیوندهای ورودی"
   },
   "backlinks": {
     "heading": "پیوندهای ورودی"

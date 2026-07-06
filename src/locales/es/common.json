@@ -30,7 +30,9 @@
     "collapseAll": "Contraer todo",
     "expandAll": "Expandir todo",
     "closeWorkspace": "Cerrar espacio de trabajo",
-    "outline": "Esquema"
+    "outline": "Esquema",
+    "resize": "Cambiar tamaño de la barra lateral",
+    "resizeBacklinks": "Cambiar tamaño de los enlaces entrantes"
   },
   "backlinks": {
     "heading": "Enlaces entrantes"

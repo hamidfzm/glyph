@@ -36,7 +36,11 @@ describe("LayoutTab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Combined" }));
     expect(updateSettings).toHaveBeenCalledWith("layout.sidebarLayout", "combined");
 
-    fireEvent.change(screen.getByRole("slider"), { target: { value: "200" } });
-    expect(updateSettings).toHaveBeenCalledWith("layout.sidebarWidth", 200);
+    // Slider order matches the JSX: files width, outline width.
+    const [filesWidth, outlineWidth] = screen.getAllByRole("slider");
+    fireEvent.change(filesWidth, { target: { value: "200" } });
+    expect(updateSettings).toHaveBeenCalledWith("layout.filesSidebarWidth", 200);
+    fireEvent.change(outlineWidth, { target: { value: "320" } });
+    expect(updateSettings).toHaveBeenCalledWith("layout.outlineSidebarWidth", 320);
   });
 });

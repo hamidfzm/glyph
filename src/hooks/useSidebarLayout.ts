@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Settings } from "@/lib/settings";
+import { AI_PANEL_WIDTH_DEFAULT, type Settings, SIDEBAR_WIDTH_DEFAULT } from "@/lib/settings";
 
 interface UseSidebarLayoutOptions {
   filesVisibleSetting: boolean;
@@ -41,12 +41,40 @@ export function useSidebarLayout({
     updateSettings("layout.outlineSidebarVisible", next);
   }, [outlineVisible, updateSettings]);
 
+  const setFilesSidebarWidth = useCallback(
+    (width: number) => updateSettings("layout.filesSidebarWidth", width),
+    [updateSettings],
+  );
+
+  const setOutlineSidebarWidth = useCallback(
+    (width: number) => updateSettings("layout.outlineSidebarWidth", width),
+    [updateSettings],
+  );
+
+  const setBacklinksHeight = useCallback(
+    (height: number | null) => updateSettings("layout.backlinksHeight", height),
+    [updateSettings],
+  );
+
   const resetLayout = useCallback(() => {
     updateSettings("layout.filesSidebarVisible", true);
     updateSettings("layout.outlineSidebarVisible", true);
     updateSettings("layout.sidebarLayout", "beside" satisfies Settings["layout"]["sidebarLayout"]);
     updateSettings("layout.swapSidebarSides", false);
+    updateSettings("layout.filesSidebarWidth", SIDEBAR_WIDTH_DEFAULT);
+    updateSettings("layout.outlineSidebarWidth", SIDEBAR_WIDTH_DEFAULT);
+    updateSettings("layout.aiPanelWidth", AI_PANEL_WIDTH_DEFAULT);
+    updateSettings("layout.backlinksHeight", null);
   }, [updateSettings]);
 
-  return { filesVisible, outlineVisible, toggleFiles, toggleOutline, resetLayout };
+  return {
+    filesVisible,
+    outlineVisible,
+    toggleFiles,
+    toggleOutline,
+    setFilesSidebarWidth,
+    setOutlineSidebarWidth,
+    setBacklinksHeight,
+    resetLayout,
+  };
 }
