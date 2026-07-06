@@ -46,19 +46,19 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
   // Dismiss on outside press, Escape, scroll, resize, or window blur.
   useEffect(() => {
     if (!menu) return;
-    const onMouseDown = (e: MouseEvent) => {
+    const handleMouseDown = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) onClose();
     };
-    const onKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
-    window.addEventListener("mousedown", onMouseDown, true);
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mousedown", handleMouseDown, true);
+    window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("resize", onClose);
     window.addEventListener("blur", onClose);
     return () => {
-      window.removeEventListener("mousedown", onMouseDown, true);
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mousedown", handleMouseDown, true);
+      window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("resize", onClose);
       window.removeEventListener("blur", onClose);
     };
@@ -107,7 +107,7 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
       ref={rootRef}
       role="menu"
       aria-orientation="vertical"
-      className={SURFACE_CLASS}
+      className={`fixed ${SURFACE_CLASS}`}
       style={{ top: pos.y, left: pos.x }}
       onContextMenu={(e) => e.preventDefault()}
     >

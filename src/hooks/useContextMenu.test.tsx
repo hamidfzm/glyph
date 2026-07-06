@@ -47,6 +47,29 @@ describe("useContextMenu", () => {
     expect(actionLabels(result.current.menu)).toContain("Select All");
   });
 
+  it("shows no themed menu over assistant replies in the AI chat panel", () => {
+    // Chat replies render with .markdown-body too, but the document-targeted
+    // menu is wrong there; the panel has its own per-message actions.
+    const panel = document.createElement("aside");
+    panel.className = "ai-chat-panel";
+    const reply = document.createElement("div");
+    reply.className = "markdown-body ai-msg-markdown";
+    const para = document.createElement("p");
+    para.textContent = "assistant reply";
+    reply.appendChild(para);
+    panel.appendChild(reply);
+    document.body.appendChild(panel);
+    const { result } = renderHook(() => useContextMenu(baseActions));
+
+    let event: MouseEvent;
+    act(() => {
+      event = fireContextMenu(para);
+    });
+
+    expect(event!.defaultPrevented).toBe(true);
+    expect(result.current.menu).toBeNull();
+  });
+
   it("suppresses the native menu outside the markdown body without showing a themed menu", () => {
     const chrome = document.createElement("div");
     chrome.textContent = "Sidebar label";

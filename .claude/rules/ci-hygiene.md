@@ -10,6 +10,7 @@ paths:
 Keep the GitHub Actions "Annotations" panel clean. Warnings and notices are real findings, not background noise.
 
 - Treat every `##[warning]` and `##[notice]` annotation as a fix-it item, not a TODO. The Lint job runs Biome with `--error-on-warnings`, so any new warning fails CI.
+- Treat the Codecov PR comment the same way. A red "Patch coverage" line means the diff shipped untested lines: run `pnpm test:coverage` locally, write tests for the flagged lines, and push before asking for review. The usual escapees are event handlers, drag/reset callbacks, keyboard paths, and error branches, which is exactly the code that regresses silently without tests. Do not merge over an unresolved Codecov comment.
 - Apply Biome's suggested fix for lint findings instead of suppressing them (e.g. `useOptionalChain`, `useIndexOf`).
 - When GitHub flags an action as targeting a deprecated Node.js version, bump the action to the major version that ships on the current Node runtime. Examples: `pnpm/action-setup@v5+`, `actions/upload-artifact@v5+`, `codecov/codecov-action@v6+` (the v6 bump pulls in `actions/github-script@v8`).
 - Don't introduce deprecated actions, packages, or APIs. Before adding a third-party action or library, check its README/changelog for deprecation notices and pick the supported replacement instead. Examples we've hit: `codecov/test-results-action` (deprecated; use `codecov/codecov-action@v6` with `report_type: test_results`).

@@ -3,8 +3,12 @@
 
 // The menu surface (root panel and submenu panels): themed with the app's own
 // fonts and CSS color variables so it matches the UI instead of the OS menu.
+// Positioning is deliberately NOT part of this class: the root panel is
+// viewport-fixed while submenu panels anchor absolutely to their trigger row,
+// so each surface declares its own (a `fixed` here once sent submenus
+// off-screen, since their start-full offset resolved against the viewport).
 export const SURFACE_CLASS =
-  "fixed z-50 min-w-[12rem] p-1 rounded-[var(--glyph-radius)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_10px_30px_rgba(0,0,0,0.22)] text-[13px] text-[var(--color-text-primary)] select-none";
+  "z-50 min-w-[12rem] p-1 rounded-[var(--glyph-radius)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_10px_30px_rgba(0,0,0,0.22)] text-[13px] text-[var(--color-text-primary)] select-none";
 
 // A single menu row (action button or submenu trigger).
 export const ITEM_CLASS =

@@ -30,7 +30,9 @@
     "collapseAll": "Alle einklappen",
     "expandAll": "Alle ausklappen",
     "closeWorkspace": "Arbeitsbereich schließen",
-    "outline": "Gliederung"
+    "outline": "Gliederung",
+    "resize": "Größe der Seitenleiste ändern",
+    "resizeBacklinks": "Größe der Rückverweise ändern"
   },
   "backlinks": {
     "heading": "Rückverweise"
@@ -143,6 +145,9 @@
     "zoomIn": "Vergrößern (+)",
     "fit": "An den Bildschirm anpassen (0)",
     "actualSize": "Tatsächliche Größe (1)"
+  },
+  "mdxNotice": {
+    "body": "MDX-Datei: JSX-Komponenten werden nicht gerendert; nur der Markdown-Inhalt wird angezeigt."
   },
   "mermaid": {
     "empty": "Leere Diagrammquelle",

@@ -11,3 +11,4 @@ paths:
 - Theme (dark/light) via `matchMedia('prefers-color-scheme: dark')`, toggle `.dark` class on `<html>`
 - All color values use CSS custom properties (`var(--color-*)`) for theme support
 - Platform-specific styling uses CSS custom properties (`var(--glyph-*)`) not JSX conditionals
+- Naming: `onFoo` for callback props, `handleFoo` for the local function bound to one (including effect-local listeners); a ref that stores a prop keeps the prop's name (`onCommitRef`). Boolean state reads as a predicate: `isFoo`, `hasFoo`, or a UI-state noun like `settingsOpen`/`loaded`. Hooks are `useFoo` and return named objects, not tuples (single-value hooks may return the value directly).
