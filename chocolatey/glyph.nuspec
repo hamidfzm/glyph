@@ -14,6 +14,6 @@
     <releaseNotes>https://github.com/hamidfzm/glyph/releases</releaseNotes>
     <tags>markdown viewer glyph tauri</tags>
     <summary>Cross-platform markdown viewer</summary>
-    <description>A modern, cross-platform markdown viewer with GFM support, syntax highlighting, live reload, and platform-native styling.</description>
+    <description>A modern, cross-platform markdown viewer and editor with GFM support, syntax highlighting, Mermaid and D2 diagrams, live file watching, cloud sync, JavaScript plugins, and platform-native styling.</description>
   </metadata>
 </package>

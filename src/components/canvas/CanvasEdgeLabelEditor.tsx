@@ -54,7 +54,7 @@ export function CanvasEdgeLabelEditor({
     onCommit(valueRef.current);
   };
 
-  const onKeyDown = (e: ReactKeyboardEvent) => {
+  const handleKeyDown = (e: ReactKeyboardEvent) => {
     if (e.key === "Escape") {
       done.current = true;
       onCancel();
@@ -78,7 +78,7 @@ export function CanvasEdgeLabelEditor({
       }}
       onPointerDown={(e) => e.stopPropagation()}
       onBlur={commit}
-      onKeyDown={onKeyDown}
+      onKeyDown={handleKeyDown}
     />
   );
 }

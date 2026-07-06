@@ -9,5 +9,9 @@
   "enable": "Activar {{name}}",
   "noInstalled": "No hay complementos instalados.",
   "noAvailable": "No hay complementos disponibles.",
-  "updateTo": "Actualizar a v{{version}}"
+  "updateTo": "Actualizar a v{{version}}",
+  "consentTitle": "¿Instalar complemento?",
+  "consentBody": "\"{{name}}\" ejecutará JavaScript dentro de Glyph con acceso a la API de complementos.",
+  "consentPermissions": "Solicita:",
+  "permissionsLabel": "Permisos"
 }

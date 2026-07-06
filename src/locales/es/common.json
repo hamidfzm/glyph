@@ -30,7 +30,9 @@
     "collapseAll": "Contraer todo",
     "expandAll": "Expandir todo",
     "closeWorkspace": "Cerrar espacio de trabajo",
-    "outline": "Esquema"
+    "outline": "Esquema",
+    "resize": "Cambiar tamaño de la barra lateral",
+    "resizeBacklinks": "Cambiar tamaño de los enlaces entrantes"
   },
   "backlinks": {
     "heading": "Enlaces entrantes"
@@ -44,7 +46,8 @@
     "editMode": "Modo de edición",
     "edit": "Editar",
     "splitMode": "Modo dividido",
-    "split": "Dividir"
+    "split": "Dividir",
+    "aiChat": "Chat de IA"
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> está disponible",
@@ -142,6 +145,9 @@
     "zoomIn": "Acercar (+)",
     "fit": "Ajustar a la pantalla (0)",
     "actualSize": "Tamaño real (1)"
+  },
+  "mdxNotice": {
+    "body": "Archivo MDX: los componentes JSX no se renderizan; solo se muestra el contenido markdown."
   },
   "mermaid": {
     "empty": "El código del diagrama está vacío",

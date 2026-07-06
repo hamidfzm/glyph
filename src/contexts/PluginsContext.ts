@@ -10,6 +10,9 @@ export interface PluginsContextValue {
   remarkPlugins: PluginHost["remarkPlugins"];
   rehypePlugins: PluginHost["rehypePlugins"];
   fencedRenderers: PluginHost["fencedRenderers"];
+  sidebarPanels: PluginHost["sidebarPanels"];
+  settingsPanels: PluginHost["settingsPanels"];
+  exporters: PluginHost["exporters"];
   /** Every plugin on disk, enabled or not. */
   installed: InstalledPlugin[];
   /** Ids the user has deactivated (installed but not loaded). */
@@ -28,6 +31,8 @@ export interface PluginsContextValue {
   setEnabled: (id: string, enabled: boolean) => Promise<void>;
   /** Unload and delete an installed plugin from disk. */
   uninstall: (id: string) => Promise<void>;
+  /** Mirror the opened workspace root into the host (for ctx.workspace). */
+  setWorkspaceRoot: (root: string | null) => void;
 }
 
 export const PluginsContext = createContext<PluginsContextValue | null>(null);

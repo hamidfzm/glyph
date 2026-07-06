@@ -4,8 +4,11 @@ import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsCont
 import { createRegistry } from "@/lib/plugins/registry";
 import type {
   CommandContribution,
+  ExporterContribution,
   FencedRendererContribution,
   MarkdownPlugin,
+  SettingsPanelContribution,
+  SidebarPanelContribution,
   StatusBarItemContribution,
 } from "@/lib/plugins/types";
 import { PluginStatusBarItems } from "./PluginStatusBarItems";
@@ -17,6 +20,9 @@ function value(statusBarItems = createRegistry<StatusBarItemContribution>()): Pl
     remarkPlugins: createRegistry<MarkdownPlugin>(),
     rehypePlugins: createRegistry<MarkdownPlugin>(),
     fencedRenderers: createRegistry<FencedRendererContribution>(),
+    sidebarPanels: createRegistry<SidebarPanelContribution>(),
+    settingsPanels: createRegistry<SettingsPanelContribution>(),
+    exporters: createRegistry<ExporterContribution>(),
     installed: [],
     disabled: [],
     loaded: [],
@@ -26,6 +32,7 @@ function value(statusBarItems = createRegistry<StatusBarItemContribution>()): Pl
     installFromRegistry: async () => {},
     setEnabled: async () => {},
     uninstall: async () => {},
+    setWorkspaceRoot: () => {},
   };
 }
 

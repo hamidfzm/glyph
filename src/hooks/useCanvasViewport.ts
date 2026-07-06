@@ -76,7 +76,7 @@ export function useCanvasViewport(persistKey?: string): UseCanvasViewport {
     const stage = stageRef.current;
     if (!stage) return;
 
-    const onWheel = (e: WheelEvent) => {
+    const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       const pivot = toStagePoint(e.clientX, e.clientY);
       if (e.ctrlKey || e.metaKey) {
@@ -87,8 +87,8 @@ export function useCanvasViewport(persistKey?: string): UseCanvasViewport {
       }
     };
 
-    stage.addEventListener("wheel", onWheel, { passive: false });
-    return () => stage.removeEventListener("wheel", onWheel);
+    stage.addEventListener("wheel", handleWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", handleWheel);
   }, [toStagePoint]);
 
   return { viewport, restored, stageRef, panBy, zoomBy, fitTo, toStagePoint };

@@ -15,12 +15,15 @@ describe("importPluginModule", () => {
     module.activate({
       apiVersion: "1.0.0",
       commands: { register: vi.fn() },
-      ui: { addStatusBarItem: vi.fn() },
+      ui: { addStatusBarItem: vi.fn(), addSidebarPanel: vi.fn(), addSettingsPanel: vi.fn() },
+      exporters: { register: vi.fn() },
+      settings: { get: vi.fn(), set: vi.fn() },
       markdown: {
         registerRemarkPlugin: vi.fn(),
         registerRehypePlugin: vi.fn(),
         registerFencedRenderer: vi.fn(),
       },
+      workspace: { readFile: vi.fn(), listFiles: vi.fn() },
       notify,
       registerTranslations: vi.fn(),
     });
@@ -35,12 +38,15 @@ describe("importPluginModule", () => {
     module.activate({
       apiVersion: "1.0.0",
       commands: { register: vi.fn() },
-      ui: { addStatusBarItem: vi.fn() },
+      ui: { addStatusBarItem: vi.fn(), addSidebarPanel: vi.fn(), addSettingsPanel: vi.fn() },
+      exporters: { register: vi.fn() },
+      settings: { get: vi.fn(), set: vi.fn() },
       markdown: {
         registerRemarkPlugin: vi.fn(),
         registerRehypePlugin: vi.fn(),
         registerFencedRenderer: vi.fn(),
       },
+      workspace: { readFile: vi.fn(), listFiles: vi.fn() },
       notify,
       registerTranslations: vi.fn(),
     });

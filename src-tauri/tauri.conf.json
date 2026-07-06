@@ -21,7 +21,8 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src * asset: http://asset.localhost https://asset.localhost ipc: http://ipc.localhost data: blob: 'unsafe-inline'; script-src 'self' data: blob: 'wasm-unsafe-eval'",
+      "devCsp": null,
       "assetProtocol": {
         "enable": true,
         "scope": {
@@ -46,7 +47,7 @@
     },
     "fileAssociations": [
       {
-        "ext": ["md", "markdown", "mdown", "mkd", "mkdn", "mdx", "mmd"],
+        "ext": ["md", "markdown", "mdown", "mkd", "mkdn", "mdx", "mmd", "mdtext", "mdtxt"],
         "mimeType": "text/markdown",
         "description": "Markdown Document"
       },

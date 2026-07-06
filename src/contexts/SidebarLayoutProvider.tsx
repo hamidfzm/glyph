@@ -16,13 +16,17 @@ export function SidebarLayoutProvider({ children }: { children: ReactNode }) {
       ...layout,
       sidebarLayout: settings.layout.sidebarLayout,
       swapSidebarSides: settings.layout.swapSidebarSides,
-      sidebarWidth: settings.layout.sidebarWidth,
+      filesSidebarWidth: settings.layout.filesSidebarWidth,
+      outlineSidebarWidth: settings.layout.outlineSidebarWidth,
+      backlinksHeight: settings.layout.backlinksHeight,
     }),
     [
       layout,
       settings.layout.sidebarLayout,
       settings.layout.swapSidebarSides,
-      settings.layout.sidebarWidth,
+      settings.layout.filesSidebarWidth,
+      settings.layout.outlineSidebarWidth,
+      settings.layout.backlinksHeight,
     ],
   );
 

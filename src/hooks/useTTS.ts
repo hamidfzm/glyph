@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useSystemVoices } from "@/hooks/useSystemVoices";
 
 interface TTSOptions {
   voice: string;
@@ -8,31 +9,16 @@ interface TTSOptions {
 interface TTSState {
   speaking: boolean;
   available: boolean;
-  voices: SpeechSynthesisVoice[];
 }
 
 export function useTTS(options: TTSOptions) {
+  const voices = useSystemVoices();
   const [state, setState] = useState<TTSState>({
     speaking: false,
     available: typeof window !== "undefined" && "speechSynthesis" in window,
-    voices: [],
   });
   const optionsRef = useRef(options);
   optionsRef.current = options;
-
-  // Load voices
-  useEffect(() => {
-    if (!state.available) return;
-
-    const loadVoices = () => {
-      const voices = speechSynthesis.getVoices();
-      setState((prev) => ({ ...prev, voices }));
-    };
-
-    loadVoices();
-    speechSynthesis.addEventListener("voiceschanged", loadVoices);
-    return () => speechSynthesis.removeEventListener("voiceschanged", loadVoices);
-  }, [state.available]);
 
   const speak = useCallback(
     (text: string) => {
@@ -69,5 +55,5 @@ export function useTTS(options: TTSOptions) {
     setState((prev) => ({ ...prev, speaking: false }));
   }, [state.available]);
 
-  return { ...state, speak, stop };
+  return { ...state, voices, speak, stop };
 }

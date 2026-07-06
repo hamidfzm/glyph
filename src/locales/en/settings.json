@@ -96,8 +96,11 @@
       "label": "Swap sidebar sides",
       "description": "Flip which side each panel lives on. Default is Files left / Outline right; on, it becomes Files right / Outline left."
     },
-    "width": {
-      "label": "Sidebar Width"
+    "filesWidth": {
+      "label": "Files Sidebar Width"
+    },
+    "outlineWidth": {
+      "label": "Outline Sidebar Width"
     }
   },
   "behavior": {
@@ -199,7 +202,12 @@
     },
     "model": {
       "label": "Model",
-      "placeholder": "Select or type model name"
+      "placeholder": "Select or type model name",
+      "status": {
+        "checking": "Checking the Ollama server…",
+        "ok": "Connected to Ollama. Installed models: {{count}}",
+        "error": "Cannot reach the Ollama server. Check the URL and OLLAMA_ORIGINS."
+      }
     },
     "tts": {
       "title": "Text-to-Speech"

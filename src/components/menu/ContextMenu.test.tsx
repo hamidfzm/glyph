@@ -93,6 +93,15 @@ describe("ContextMenu", () => {
     expect(screen.queryByRole("menuitem", { name: "Summarize Document" })).toBeNull();
 
     fireEvent.click(screen.getByRole("menuitem", { name: "AI" }));
+
+    // The nested panel must anchor to its trigger row (absolute), never to the
+    // viewport (fixed): `start-full` against the viewport put the whole
+    // submenu off-screen, which read as the AI menu doing nothing.
+    const panels = screen.getAllByRole("menu");
+    const submenuPanel = panels[panels.length - 1];
+    expect(submenuPanel.className).toContain("absolute");
+    expect(submenuPanel.className).not.toContain("fixed");
+
     fireEvent.click(screen.getByRole("menuitem", { name: "Summarize Document" }));
     expect(onSelect).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();

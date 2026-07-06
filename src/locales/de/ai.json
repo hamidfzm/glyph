@@ -1,16 +1,40 @@
 {
-  "title": "KI",
-  "actionLabel": {
-    "summarize": "Zusammenfassung",
-    "explain": "Erklärung",
-    "translate": "Übersetzung",
-    "simplify": "Vereinfacht"
+  "title": "KI-Chat",
+  "chip": {
+    "summarize": "Zusammenfassen",
+    "explain": "Erklären",
+    "translate": "Übersetzen",
+    "simplify": "Vereinfachen"
   },
-  "processing": "Wird verarbeitet…",
-  "empty": "Verwende das KI-Menü oder das Kontextmenü, um eine Aktion auszuführen.",
+  "request": {
+    "document": {
+      "summarize": "Dokument zusammenfassen",
+      "explain": "Dokument erklären",
+      "translate": "Dokument übersetzen",
+      "simplify": "Dokument vereinfachen"
+    },
+    "selection": {
+      "summarize": "Auswahl zusammenfassen",
+      "explain": "Auswahl erklären",
+      "translate": "Auswahl übersetzen",
+      "simplify": "Auswahl vereinfachen"
+    }
+  },
+  "empty": "Stelle Fragen zu diesem Dokument oder starte mit einer Schnellaktion.",
+  "emptyNoDoc": "Stelle dem Assistenten eine Frage.",
+  "placeholder": "Frage zu diesem Dokument stellen…",
+  "placeholderNoDoc": "Frage stellen…",
+  "send": "Senden",
+  "stop": "Stopp",
+  "clear": "Unterhaltung löschen",
+  "close": "Schließen",
+  "resize": "Größe des Panels ändern",
+  "thinking": "Denkt nach…",
+  "copy": "Kopieren",
+  "locate": "Im Dokument anzeigen",
+  "locateMissed": "Nicht im Dokument gefunden",
   "stopReading": "Vorlesen stoppen",
   "readAloud": "Vorlesen",
-  "copy": "Kopieren",
   "error": {
     "notConfigured": "Kein KI-Anbieter konfiguriert. Öffne die Einstellungen, um einen KI-Anbieter einzurichten."
   }

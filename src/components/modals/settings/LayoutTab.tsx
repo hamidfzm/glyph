@@ -1,5 +1,6 @@
 import { Trans, useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
+import { SIDEBAR_WIDTH_MAX, SIDEBAR_WIDTH_MIN } from "@/lib/settings";
 import { Segmented } from "./Segmented";
 import { Toggle } from "./Toggle";
 
@@ -67,17 +68,32 @@ export function LayoutTab() {
       </div>
 
       <div className="settings-row">
-        <span className="settings-label">{t("layout.width.label")}</span>
+        <span className="settings-label">{t("layout.filesWidth.label")}</span>
         <div className="settings-range">
           <input
             type="range"
-            min={160}
-            max={320}
+            min={SIDEBAR_WIDTH_MIN}
+            max={SIDEBAR_WIDTH_MAX}
             step={8}
-            value={layout.sidebarWidth}
-            onChange={(e) => updateSettings("layout.sidebarWidth", Number(e.target.value))}
+            value={layout.filesSidebarWidth}
+            onChange={(e) => updateSettings("layout.filesSidebarWidth", Number(e.target.value))}
           />
-          <span className="settings-range-value">{layout.sidebarWidth}px</span>
+          <span className="settings-range-value">{layout.filesSidebarWidth}px</span>
+        </div>
+      </div>
+
+      <div className="settings-row">
+        <span className="settings-label">{t("layout.outlineWidth.label")}</span>
+        <div className="settings-range">
+          <input
+            type="range"
+            min={SIDEBAR_WIDTH_MIN}
+            max={SIDEBAR_WIDTH_MAX}
+            step={8}
+            value={layout.outlineSidebarWidth}
+            onChange={(e) => updateSettings("layout.outlineSidebarWidth", Number(e.target.value))}
+          />
+          <span className="settings-range-value">{layout.outlineSidebarWidth}px</span>
         </div>
       </div>
     </div>

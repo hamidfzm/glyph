@@ -1,10 +1,6 @@
 import type { TocEntry } from "@/hooks/useTableOfContents";
-import {
-  rasterizeD2Light,
-  rasterizeElement,
-  rasterizeMermaidLight,
-  restoreMermaidTheme,
-} from "./rasterize";
+import { renderD2 } from "@/lib/d2Render";
+import { rasterizeElement, renderMermaidLightSvg, restoreMermaidTheme } from "./rasterize";
 import { buildTocElement } from "./toc";
 
 export interface PrepareOptions {
@@ -13,18 +9,20 @@ export interface PrepareOptions {
   // Overridable for tests; defaults to the live document.
   doc?: Document;
   // PDF export needs extra work the vector walker can't do itself: inline the
-  // rendered syntax-highlight colors onto code spans, and rasterize block math
-  // and Mermaid diagrams (which pdfmake can't draw) to embedded images.
+  // rendered syntax-highlight colors onto code spans, rasterize block math to
+  // an embedded image, and re-render diagrams light as inline SVG so pdfmake
+  // embeds them as vectors.
   pdf?: boolean;
 }
 
-// Rasterize each block-math (`.katex-display`), Mermaid, and D2 diagram in the
-// live DOM to a PNG and swap the matching clone node for an <img>. Runs only for
-// PDF (HTML/EPUB render these natively). Block math is captured as rendered;
-// Mermaid and D2 are re-rendered light so they don't end up as a dark box on the
-// white page. On any failure the original node is left so the walker falls back
-// (math → LaTeX, diagram → dropped).
-async function rasterizeRichContent(liveBody: Element, clone: Element): Promise<void> {
+// For PDF export: swap each Mermaid / D2 diagram in the clone for its
+// light-theme vector `<svg>` (the walker embeds SVG natively; see htmlToPdf),
+// and rasterize block math (`.katex-display`) to a PNG <img> (vector math is
+// #256). Diagrams re-render light so they don't sit as a dark box on the white
+// page. A math failure leaves the original node (the walker falls back to the
+// LaTeX source); a diagram whose light re-render fails is removed so the dark
+// on-screen SVG never leaks into the PDF.
+async function preparePdfRichContent(liveBody: Element, clone: Element): Promise<void> {
   const selector = ".katex-display, .mermaid-diagram, .d2-diagram";
   const live = liveBody.querySelectorAll<HTMLElement>(selector);
   if (live.length === 0) return;
@@ -34,25 +32,33 @@ async function rasterizeRichContent(liveBody: Element, clone: Element): Promise<
 
   for (let i = 0; i < live.length; i++) {
     const el = live[i];
+    const isMath = el.classList.contains("katex-display");
     try {
-      let dataUrl: string;
-      if (el.classList.contains("mermaid-diagram")) {
-        const source = el.getAttribute("data-mermaid-source");
-        if (!source) continue; // can't re-render without the source; leave as-is
-        dataUrl = await rasterizeMermaidLight(source);
-        mermaidRendered = true;
-      } else if (el.classList.contains("d2-diagram")) {
-        const source = el.getAttribute("data-d2-source");
-        if (!source) continue; // can't re-render without the source; leave as-is
-        dataUrl = await rasterizeD2Light(source);
-      } else {
-        dataUrl = await rasterizeElement(el, mathBackground);
+      if (isMath) {
+        const img = clone.ownerDocument.createElement("img");
+        img.setAttribute("src", await rasterizeElement(el, mathBackground));
+        cloned[i].replaceWith(img);
+        continue;
       }
-      const img = clone.ownerDocument.createElement("img");
-      img.setAttribute("src", dataUrl);
-      cloned[i].replaceWith(img);
+      const isMermaid = el.classList.contains("mermaid-diagram");
+      const source = el.getAttribute(isMermaid ? "data-mermaid-source" : "data-d2-source");
+      if (!source) continue; // no source to re-render; the on-screen SVG embeds as-is
+      const svg = isMermaid ? await renderMermaidLightSvg(source) : await renderD2(source, false);
+      if (isMermaid) mermaidRendered = true;
+      const wrap = clone.ownerDocument.createElement("div");
+      // The diagram source is user-authored, and unlike D2 (sanitized in
+      // d2Render) Mermaid's output is raw, so sanitize at the sink before it
+      // re-enters the DOM and later flows into pdfmake's SVG parser. DOMPurify
+      // keeps <style> blocks and style attributes, which Mermaid's colors need;
+      // <foreignObject> is forbidden as the SVG-embedded-HTML vector (and
+      // pdfmake can't draw it anyway).
+      const { default: DOMPurify } = await import("dompurify");
+      wrap.innerHTML = DOMPurify.sanitize(svg, { FORBID_TAGS: ["foreignObject"] });
+      const svgEl = wrap.querySelector("svg");
+      if (!svgEl) throw new Error("no svg in rendered diagram");
+      cloned[i].replaceWith(svgEl);
     } catch {
-      // Leave the original node; the walker falls back.
+      if (!isMath) cloned[i].remove();
     }
   }
 
@@ -141,7 +147,7 @@ export async function prepareContent({
   const clone = body.cloneNode(true) as HTMLElement;
   if (pdf) {
     inlineCodeColors(body, clone);
-    await rasterizeRichContent(body, clone);
+    await preparePdfRichContent(body, clone);
   }
   for (const el of Array.from(clone.querySelectorAll(STRIP_SELECTOR))) {
     el.remove();

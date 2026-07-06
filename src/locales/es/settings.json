@@ -96,8 +96,11 @@
       "label": "Intercambiar lados de las barras laterales",
       "description": "Cambia el lado en el que se ubica cada panel. De forma predeterminada, Archivos queda a la izquierda y Esquema a la derecha; al activarlo, Archivos pasa a la derecha y Esquema a la izquierda."
     },
-    "width": {
-      "label": "Ancho de la barra lateral"
+    "filesWidth": {
+      "label": "Ancho de la barra de archivos"
+    },
+    "outlineWidth": {
+      "label": "Ancho de la barra de esquema"
     }
   },
   "behavior": {
@@ -187,7 +190,12 @@
     },
     "model": {
       "label": "Modelo",
-      "placeholder": "Selecciona o escribe el nombre del modelo"
+      "placeholder": "Selecciona o escribe el nombre del modelo",
+      "status": {
+        "checking": "Comprobando el servidor de Ollama…",
+        "ok": "Conectado a Ollama. Modelos instalados: {{count}}",
+        "error": "No se puede acceder al servidor de Ollama. Comprueba la URL y OLLAMA_ORIGINS."
+      }
     },
     "tts": {
       "title": "Texto a voz"

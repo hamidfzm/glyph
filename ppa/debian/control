@@ -10,6 +10,7 @@ Package: glyph
 Architecture: amd64 arm64
 Depends: ${shlibs:Depends}, ${misc:Depends}, libwebkit2gtk-4.1-0, libgtk-3-0
 Description: Cross-platform markdown viewer
- A modern markdown viewer with GFM support, syntax highlighting,
- live file watching, table of contents sidebar, and platform-native styling.
+ A modern markdown viewer and editor with GFM support, syntax highlighting,
+ Mermaid and D2 diagrams, live file watching, table of contents sidebar,
+ cloud sync, JavaScript plugins, and platform-native styling.
  Built with Tauri v2, React 19, and TypeScript.

@@ -96,8 +96,11 @@
       "label": "Seiten der Seitenleisten tauschen",
       "description": "Vertauscht, auf welcher Seite jedes Panel liegt. Standard ist Dateien links / Gliederung rechts; aktiviert wird es zu Dateien rechts / Gliederung links."
     },
-    "width": {
-      "label": "Breite der Seitenleiste"
+    "filesWidth": {
+      "label": "Breite der Dateien-Seitenleiste"
+    },
+    "outlineWidth": {
+      "label": "Breite der Gliederungs-Seitenleiste"
     }
   },
   "behavior": {
@@ -187,7 +190,12 @@
     },
     "model": {
       "label": "Modell",
-      "placeholder": "Modellnamen auswählen oder eingeben"
+      "placeholder": "Modellnamen auswählen oder eingeben",
+      "status": {
+        "checking": "Ollama-Server wird geprüft…",
+        "ok": "Mit Ollama verbunden. Installierte Modelle: {{count}}",
+        "error": "Ollama-Server nicht erreichbar. Prüfe die URL und OLLAMA_ORIGINS."
+      }
     },
     "tts": {
       "title": "Sprachausgabe"

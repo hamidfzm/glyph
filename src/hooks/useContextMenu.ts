@@ -22,11 +22,15 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 // The themed text menu (Copy / Search / Read Aloud / AI) only makes sense over
-// rendered prose. Other surfaces own their own menus: the file tree shows file
-// actions, and the rest of the chrome falls through to the native menu.
+// the document's rendered prose. Other surfaces own their own menus: the file
+// tree shows file actions, and the rest of the chrome falls through to the
+// native menu. Assistant replies in the AI chat panel also render with
+// `.markdown-body`, but the document-targeted menu is wrong there (Select All
+// and the AI actions operate on the document, not the message; per-message
+// Copy / Read Aloud buttons cover the chat), so the panel is excluded.
 function isInsideMarkdownContent(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
-  return target.closest(".markdown-body") !== null;
+  return target.closest(".markdown-body") !== null && target.closest(".ai-chat-panel") === null;
 }
 
 /**

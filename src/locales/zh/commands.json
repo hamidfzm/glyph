@@ -29,6 +29,8 @@
   "zoomIn": "放大",
   "zoomOut": "缩小",
   "zoomReset": "重置缩放",
+  "aiChat": "AI 聊天",
   "readAloud": "朗读",
-  "managePlugins": "管理插件…"
+  "managePlugins": "管理插件…",
+  "exportAs": "导出：{{label}}…"
 }

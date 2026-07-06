@@ -113,7 +113,7 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
     };
   }, [editing]);
 
-  const onKeyDown = (e: ReactKeyboardEvent) => {
+  const handleKeyDown = (e: ReactKeyboardEvent) => {
     if (e.key === "Escape") {
       // Discard: mark the edit finished so the end-of-editing commit skips.
       done.current = true;
@@ -163,7 +163,7 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
             }}
             onPointerDown={(e) => e.stopPropagation()}
             onBlur={commit}
-            onKeyDown={onKeyDown}
+            onKeyDown={handleKeyDown}
           />
         ) : (
           <CanvasNodeView

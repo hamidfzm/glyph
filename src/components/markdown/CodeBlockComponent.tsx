@@ -43,7 +43,8 @@ export function CodeBlockComponent(props: ComponentPropsWithoutRef<"pre">) {
       const code = extractText(children.props.children).trim();
       return <CsvTable code={code} delimiter={"\t"} />;
     }
-    // Plugin-contributed fenced renderers handle any other language (e.g. d2).
+    // Plugin-contributed fenced renderers handle any language without a
+    // built-in handler above (e.g. a PlantUML plugin registering "plantuml").
     const lang = /\blanguage-([\w-]+)\b/.exec(className)?.[1];
     const custom = lang && fencedRenderers.find((r) => r.language === lang);
     if (custom) {

@@ -1,16 +1,40 @@
 {
-  "title": "AI",
-  "actionLabel": {
-    "summarize": "Summary",
-    "explain": "Explanation",
-    "translate": "Translation",
-    "simplify": "Simplified"
+  "title": "AI Chat",
+  "chip": {
+    "summarize": "Summarize",
+    "explain": "Explain",
+    "translate": "Translate",
+    "simplify": "Simplify"
   },
-  "processing": "Processing...",
-  "empty": "Use the AI menu or context menu to run an action.",
+  "request": {
+    "document": {
+      "summarize": "Summarize the document",
+      "explain": "Explain the document",
+      "translate": "Translate the document",
+      "simplify": "Simplify the document"
+    },
+    "selection": {
+      "summarize": "Summarize the selection",
+      "explain": "Explain the selection",
+      "translate": "Translate the selection",
+      "simplify": "Simplify the selection"
+    }
+  },
+  "empty": "Ask anything about this document, or start with a quick action.",
+  "emptyNoDoc": "Ask the assistant anything.",
+  "placeholder": "Ask about this document…",
+  "placeholderNoDoc": "Ask anything…",
+  "send": "Send",
+  "stop": "Stop",
+  "clear": "Clear conversation",
+  "close": "Close",
+  "resize": "Resize panel",
+  "thinking": "Thinking…",
+  "copy": "Copy",
+  "locate": "Show in document",
+  "locateMissed": "Not found in document",
   "stopReading": "Stop Reading",
   "readAloud": "Read Aloud",
-  "copy": "Copy",
   "error": {
     "notConfigured": "No AI provider configured. Open Settings to set up an AI provider."
   }

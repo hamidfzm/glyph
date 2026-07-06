@@ -14,6 +14,8 @@ export interface RegistryEntry {
   description?: string;
   version: string;
   apiVersion: string;
+  /** Capabilities the plugin declares; shown to the user before install. */
+  permissions?: string[];
   /** Direct URL to the plugin's built ESM entry file. */
   mainUrl: string;
 }
@@ -64,6 +66,7 @@ export async function installFromRegistry(entry: RegistryEntry): Promise<Install
     version: entry.version,
     apiVersion: entry.apiVersion,
     description: entry.description,
+    permissions: entry.permissions,
   });
   return invoke<InstalledPlugin>("install_plugin_files", { manifest, main });
 }
