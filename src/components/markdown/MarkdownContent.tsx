@@ -6,6 +6,7 @@ import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
 import { useKatexPlugin } from "@/hooks/useKatexPlugin";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
+import { useSettings } from "@/hooks/useSettings";
 import { parseFrontmatter } from "@/lib/frontmatter";
 import { buildRehypePlugins, buildRemarkPlugins } from "@/lib/markdown/pipeline";
 import { resolveWorkspacePath } from "@/lib/relativePath";
@@ -43,7 +44,11 @@ export function MarkdownContent({
   showFrontmatter = true,
 }: MarkdownContentProps) {
   const workspaceRoot = useWorkspaceRoot();
-  const katexPlugin = useKatexPlugin(content);
+  const { settings } = useSettings();
+  const features = settings.markdown;
+  // With math off, skip the KaTeX lazy-load entirely (remark-math is also
+  // dropped from the pipeline, so $…$ stays literal text).
+  const katexPlugin = useKatexPlugin(features.math ? content : "");
   const highlightPlugin = useHighlightPlugin(content);
   // Plugin-contributed remark/rehype plugins, appended to the built-in pipeline.
   const plugins = usePluginsOptional();
@@ -76,8 +81,8 @@ export function MarkdownContent({
   );
 
   const remarkPlugins = useMemo(
-    () => buildRemarkPlugins({ workspaceFiles, filePath, extra: pluginRemark }),
-    [workspaceFiles, filePath, pluginRemark],
+    () => buildRemarkPlugins({ workspaceFiles, filePath, features, extra: pluginRemark }),
+    [workspaceFiles, filePath, features, pluginRemark],
   );
 
   const LinkWithWikilink = useCallback(

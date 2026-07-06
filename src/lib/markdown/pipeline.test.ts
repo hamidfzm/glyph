@@ -25,6 +25,32 @@ describe("buildRemarkPlugins", () => {
   it("works with no extras", () => {
     expect(buildRemarkPlugins({}).length).toBeGreaterThanOrEqual(6);
   });
+
+  it("drops a feature's plugin when its toggle is off", () => {
+    const all = buildRemarkPlugins({});
+    const noMath = buildRemarkPlugins({ features: { math: false } });
+    expect(noMath.length).toBe(all.length - 1);
+
+    // Wikilinks is the only tuple entry; disabling it removes the tuple.
+    const noWikilinks = buildRemarkPlugins({ features: { wikilinks: false } });
+    expect(noWikilinks.some((p) => Array.isArray(p))).toBe(false);
+  });
+
+  it("disabling every feature leaves only frontmatter plus extras", () => {
+    const extra = vi.fn();
+    const plugins = buildRemarkPlugins({
+      features: { gfm: false, math: false, alerts: false, emoji: false, wikilinks: false },
+      extra: [extra],
+    });
+    expect(plugins.length).toBe(2); // frontmatter + the extra
+    expect(ref(plugins[1])).toBe(extra);
+  });
+
+  it("treats omitted feature keys as enabled", () => {
+    const partial = buildRemarkPlugins({ features: { math: false } });
+    const full = buildRemarkPlugins({ features: {} });
+    expect(full.length).toBe(partial.length + 1);
+  });
 });
 
 describe("buildRehypePlugins", () => {
