@@ -47,7 +47,8 @@ export function openSuggestionMenu(options: SuggestionMenuOptions): void {
   function addItem(label: string, action: () => void, extraClass = ""): void {
     const item = document.createElement("button");
     item.type = "button";
-    item.className = `spellcheck-menu-item${extraClass ? ` ${extraClass}` : ""}`;
+    item.className = "spellcheck-menu-item";
+    if (extraClass) item.classList.add(extraClass);
     item.textContent = label;
     item.addEventListener("click", () => {
       action();

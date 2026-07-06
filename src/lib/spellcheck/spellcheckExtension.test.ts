@@ -138,4 +138,44 @@ describe("buildSpellcheck (editor integration)", () => {
     expect(document.querySelector(".spellcheck-menu")).not.toBeNull();
     view.destroy();
   });
+
+  it("ignores a right-click that is not over any text", async () => {
+    const view = mount("helo world", "lang-nopos");
+    await flushMicrotasks();
+    vi.spyOn(view, "posAtCoords").mockReturnValue(null);
+    view.contentDOM.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }),
+    );
+    expect(document.querySelector(".spellcheck-menu")).toBeNull();
+    view.destroy();
+  });
+
+  it("shares ignored words across editors of the same language", async () => {
+    const first = mount("helo world", "lang-share");
+    await flushMicrotasks();
+    rightClickAt(first, 2);
+    document.querySelectorAll<HTMLButtonElement>(".spellcheck-menu-action")[0].click(); // Ignore
+    first.destroy();
+
+    const second = mount("helo world", "lang-share");
+    await flushMicrotasks();
+    rightClickAt(second, 2);
+    expect(document.querySelector(".spellcheck-menu")).toBeNull(); // still ignored
+    second.destroy();
+  });
+
+  it("does not scan until the dictionary has loaded", () => {
+    getSpeller.mockReturnValueOnce(new Promise(() => {})); // never resolves
+    vi.useFakeTimers();
+    const view = mount("helo world", "lang-pending");
+    view.dispatch({ changes: { from: 10, insert: " teh" } }); // schedules a debounced rescan
+    vi.advanceTimersByTime(300); // rescan runs while the speller is still null
+    vi.spyOn(view, "posAtCoords").mockReturnValue(2);
+    view.contentDOM.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }),
+    );
+    expect(document.querySelector(".spellcheck-menu")).toBeNull();
+    vi.useRealTimers();
+    view.destroy();
+  });
 });

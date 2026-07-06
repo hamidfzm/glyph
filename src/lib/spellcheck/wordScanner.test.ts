@@ -51,4 +51,13 @@ describe("scanWords", () => {
   it("excludes YAML frontmatter", () => {
     expect(wordsOf("---\ntitel: xyz\n---\nreal wrods")).toEqual(["real", "wrods"]);
   });
+
+  it("excludes frontmatter closed with a ... fence", () => {
+    expect(wordsOf("---\ntitel: xyz\n...\nreal wrods")).toEqual(["real", "wrods"]);
+  });
+
+  it("treats an unterminated frontmatter block as prose", () => {
+    // No closing fence, so the leading --- is not frontmatter and its lines are checked.
+    expect(wordsOf("---\ntitel: xyz\nmore wrods")).toEqual(["titel", "xyz", "more", "wrods"]);
+  });
 });

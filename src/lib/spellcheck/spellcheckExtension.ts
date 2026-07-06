@@ -106,8 +106,9 @@ function misspelledWordAt(
   view: EditorView,
   pos: number,
 ): { from: number; to: number; text: string } | null {
-  const field = view.state.field(misspellingField, false);
-  if (!field) return null;
+  // The field is installed alongside this handler by buildSpellcheck, so it is
+  // always present when a context-menu event reaches here.
+  const field = view.state.field(misspellingField);
   let found: { from: number; to: number; text: string } | null = null;
   field.between(pos, pos, (from, to) => {
     found = { from, to, text: view.state.doc.sliceString(from, to) };

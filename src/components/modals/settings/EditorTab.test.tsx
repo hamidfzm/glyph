@@ -66,4 +66,13 @@ describe("EditorTab", () => {
     expect(screen.getByText("Language")).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveValue("en");
   });
+
+  it("updates the spell-check language from the picker", () => {
+    const { updateSettings } = setup({
+      ...DEFAULT_SETTINGS,
+      editor: { ...DEFAULT_SETTINGS.editor, spellCheck: true },
+    });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "en" } });
+    expect(updateSettings).toHaveBeenCalledWith("editor.spellCheckLanguage", "en");
+  });
 });

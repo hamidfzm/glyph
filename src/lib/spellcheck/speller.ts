@@ -37,9 +37,7 @@ export function getSpeller(language: string): Promise<Speller> {
     pending = loadSpeller(language);
     // Never cache a failed load: drop it so the next call retries instead of
     // handing back the rejected promise for the rest of the session.
-    pending.catch(() => {
-      if (cache.get(language) === pending) cache.delete(language);
-    });
+    pending.catch(() => cache.delete(language));
     cache.set(language, pending);
   }
   return pending;
