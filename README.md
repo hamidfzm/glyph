@@ -263,7 +263,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Source editor | ✅ | ✅ | n/a | ✅ | ✅ | ✅ | ✅ |
 | WYSIWYG / inline preview | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ❌ |
 | Split view | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Spell check | planned | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Spell check | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ### Navigation
 
@@ -293,7 +293,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 |---|---|---|---|---|---|---|---|
 | AI (multi-provider, local) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
 | Text-to-speech | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
-| Plugin / extension API | planned | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
+| Plugin / extension API | ⚠️ experimental | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
 | Cloud sync | ⚠️ Git-backed | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Graph view | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
 
