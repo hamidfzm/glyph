@@ -15,7 +15,12 @@ describe("importPluginModule", () => {
     module.activate({
       apiVersion: "1.0.0",
       commands: { register: vi.fn() },
-      ui: { addStatusBarItem: vi.fn(), addSidebarPanel: vi.fn(), addSettingsPanel: vi.fn() },
+      ui: {
+        addStatusBarItem: vi.fn(),
+        addSidebarPanel: vi.fn(),
+        addSettingsPanel: vi.fn(),
+        addStyles: vi.fn(),
+      },
       exporters: { register: vi.fn() },
       settings: { get: vi.fn(), set: vi.fn() },
       markdown: {
@@ -38,7 +43,12 @@ describe("importPluginModule", () => {
     module.activate({
       apiVersion: "1.0.0",
       commands: { register: vi.fn() },
-      ui: { addStatusBarItem: vi.fn(), addSidebarPanel: vi.fn(), addSettingsPanel: vi.fn() },
+      ui: {
+        addStatusBarItem: vi.fn(),
+        addSidebarPanel: vi.fn(),
+        addSettingsPanel: vi.fn(),
+        addStyles: vi.fn(),
+      },
       exporters: { register: vi.fn() },
       settings: { get: vi.fn(), set: vi.fn() },
       markdown: {

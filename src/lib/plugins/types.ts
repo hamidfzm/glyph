@@ -79,6 +79,11 @@ export interface MountContribution {
 /** A status bar item contribution. */
 export type StatusBarItemContribution = MountContribution;
 
+/** A stylesheet contributed by a plugin, injected after the app styles. */
+export interface StyleContribution {
+  css: string;
+}
+
 /** A titled sidebar section contribution. */
 export interface SidebarPanelContribution extends MountContribution {
   /** Section heading shown above the panel in the sidebar. */
@@ -118,6 +123,11 @@ export interface UiRegistryApi {
   addSidebarPanel(panel: SidebarPanelContribution): Disposer;
   /** One settings panel per plugin; the host keys it by the plugin's id. */
   addSettingsPanel(panel: MountContribution): Disposer;
+  /**
+   * Inject a stylesheet after the app styles (theme plugins, custom CSS).
+   * Removed automatically when the plugin unloads.
+   */
+  addStyles(css: string): Disposer;
 }
 
 export interface ExportersRegistryApi {

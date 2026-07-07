@@ -12,6 +12,7 @@ import type {
   SettingsPanelContribution,
   SidebarPanelContribution,
   StatusBarItemContribution,
+  StyleContribution,
 } from "@/lib/plugins/types";
 import { PluginsModal } from "./PluginsModal";
 
@@ -43,6 +44,7 @@ function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
     fencedRenderers: createRegistry<FencedRendererContribution>(),
     sidebarPanels: createRegistry<SidebarPanelContribution>(),
     settingsPanels: createRegistry<SettingsPanelContribution>(),
+    styles: createRegistry<StyleContribution>(),
     exporters: createRegistry<ExporterContribution>(),
     installed: [installed],
     disabled: [],

@@ -86,7 +86,6 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Localized interface: follows your system language, or pick one in Settings → Appearance, with full right-to-left (RTL) layout support (community translations welcome)
 - Customizable font family, size, line height, and content width
 - Custom code font support
-- Custom CSS: load your own stylesheet on top of the app styles (Settings → Appearance → Custom CSS, "Edit file" opens it)
 - Platform-native styling (macOS vibrancy, Windows Mica)
 
 ### AI (optional)
@@ -101,7 +100,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Window state persistence across restarts
 - Native menu bar with customizable keyboard shortcuts (remap any command in Settings → Hotkeys)
 - Update notifications: checks for a newer release on launch and shows a banner when one is available (toggle in Settings → Behavior)
-- Plugins (experimental): install JavaScript plugins that extend rendering, palette commands, and the status bar; every install asks for confirmation and shows the plugin's declared permissions, and everything is managed from the command palette (Manage Plugins…); see the [plugin marketplace](https://github.com/glyph-md/plugins)
+- Plugins (experimental): install JavaScript plugins that extend rendering, palette commands, the status bar, and app styling (custom CSS/themes ship as plugins); every install asks for confirmation and shows the plugin's declared permissions, and everything is managed from the command palette (Manage Plugins…); see the [plugin marketplace](https://github.com/glyph-md/plugins)
 
 ### Privacy
 - Local-first: your files never leave your machine unless you opt into Cloud Sync (per workspace, to a Git remote you control)
