@@ -163,8 +163,10 @@ const remarkWikilink: Plugin<[WikilinkPluginOptions?]> =
         }
         const parsed = parseInner(inner);
         // `![[image.png]]` keeps its plain-text `!` plus a (broken) wikilink, so
-        // image embeds are unchanged. Only `![[note]]` becomes an embed node.
-        if (bang && !isImageFile(parsed.baseTarget)) {
+        // image embeds are unchanged. Only `![[note]]` becomes an embed node, and
+        // only directly inside a paragraph: an embed nested in inline markup
+        // (`**![[note]]**`) can't be hoisted to a block, so it stays a wikilink.
+        if (bang && !isImageFile(parsed.baseTarget) && parent.type === "paragraph") {
           replacement.push(buildEmbedNode(parsed, options));
         } else {
           if (bang) replacement.push({ type: "text", value: "!" } as TextNode);

@@ -18,13 +18,14 @@ import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
 import { MarkdownHeading } from "./MarkdownHeading";
 import { TaskListItem } from "./TaskListItem";
 
-// react-markdown maps by tag name, so every `<div>` routes through here: the
-// note-embed placeholders emitted by remarkWikilink become EmbedComponent,
-// everything else (alerts, raw HTML) renders as a plain div.
+// react-markdown maps by tag name, so every `<div>` routes through here: a
+// note-embed placeholder emitted by remarkWikilink becomes EmbedComponent,
+// everything else (alerts, raw HTML, a user's own `class="markdown-embed"`
+// div) renders as a plain div. The `data-embed-target` marker is only ever set
+// by the plugin, so it distinguishes a real placeholder from arbitrary markup.
 function DivComponent(props: ComponentPropsWithoutRef<"div"> & { node?: unknown }) {
   const { node: _node, ...rest } = props;
-  const className = rest.className;
-  if (typeof className === "string" && className.split(/\s+/).includes("markdown-embed")) {
+  if ("data-embed-target" in rest) {
     return <EmbedComponent {...rest} />;
   }
   return <div {...rest} />;

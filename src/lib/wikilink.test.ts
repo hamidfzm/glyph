@@ -208,4 +208,13 @@ describe("remarkWikilink embeds", () => {
     const out = await html("![[Cooking]]\n![[Missing]]", { workspaceFiles: files });
     expect(out.match(/class="markdown-embed"/g) ?? []).toHaveLength(2);
   });
+
+  it("downgrades an embed nested in inline markup to a wikilink", async () => {
+    // An embed inside bold can't be hoisted to a block, so it stays a wikilink
+    // instead of producing mangled block-in-inline markup.
+    const out = await html("**![[Cooking]]**", { workspaceFiles: files });
+    expect(out).not.toContain("markdown-embed");
+    expect(out).toContain("<strong>");
+    expect(out).toContain('data-wikilink-path="/workspace/Notes/Cooking.md"');
+  });
 });

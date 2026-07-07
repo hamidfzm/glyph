@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { TFunction } from "i18next";
 import { type ComponentPropsWithoutRef, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { OpenIcon } from "@/components/icons/OpenIcon";
@@ -24,8 +25,13 @@ export function EmbedComponent(props: ComponentPropsWithoutRef<"div">) {
   const heading = attrs["data-embed-heading"] as string | undefined;
   const target = (attrs["data-embed-target"] as string | undefined) ?? "";
 
+  // Only ever read a file the resolver already matched to a workspace member.
+  // `data-embed-path` can be injected via raw HTML that survives the sanitizer,
+  // so this gate (mirroring openFile's) stops `read_file` from touching an
+  // arbitrary absolute path the moment the document renders.
+  const inWorkspace = !!path && !!workspaceFiles?.includes(path);
   const isCircular = !!path && chain.includes(path);
-  const canLoad = !!path && !isCircular;
+  const canLoad = inWorkspace && !isCircular;
 
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
@@ -45,7 +51,7 @@ export function EmbedComponent(props: ComponentPropsWithoutRef<"div">) {
     };
   }, [canLoad, path]);
 
-  if (!path) {
+  if (!inWorkspace) {
     return (
       <div className="markdown-embed markdown-embed--broken">{t("embed.broken", { target })}</div>
     );
@@ -64,13 +70,13 @@ export function EmbedComponent(props: ComponentPropsWithoutRef<"div">) {
           className="markdown-embed__source"
           title={t("embed.openSource")}
           aria-label={t("embed.openSource")}
-          onClick={() => onOpenWikilink(path, heading)}
+          onClick={() => path && onOpenWikilink(path, heading)}
         >
           <OpenIcon />
         </button>
       )}
       <div className="markdown-embed__body">
-        {renderBody(state, path, heading, workspaceFiles, onOpenWikilink, t)}
+        {renderBody(state, path as string, heading, workspaceFiles, onOpenWikilink, t)}
       </div>
     </div>
   );
@@ -82,10 +88,17 @@ function renderBody(
   heading: string | undefined,
   workspaceFiles: string[] | undefined,
   onOpenWikilink: ((path: string, heading?: string) => void) | undefined,
-  t: (key: string, opts?: Record<string, unknown>) => string,
+  t: TFunction<"common">,
 ) {
-  if (state.status === "loading" || state.status === "error") {
+  if (state.status === "loading") {
     return <p className="markdown-embed__status">{t("embed.loading")}</p>;
+  }
+  if (state.status === "error") {
+    return (
+      <p className="markdown-embed__status markdown-embed--broken">
+        {t("embed.error", { target: path })}
+      </p>
+    );
   }
 
   const content = heading ? extractHeadingSection(state.content, heading) : state.content;

@@ -15,7 +15,9 @@ vi.mock("./MarkdownContent", () => ({
 }));
 
 function renderEmbed(props: Record<string, unknown>, ctx: Partial<EmbedContextValue> = {}) {
-  const value: EmbedContextValue = { chain: [], ...ctx };
+  // Default the target into the workspace so the workspace-membership gate
+  // passes; tests that exercise the gate override workspaceFiles.
+  const value: EmbedContextValue = { chain: [], workspaceFiles: ["/w/Note.md"], ...ctx };
   return render(
     <EmbedContext.Provider value={value}>
       <EmbedComponent {...props} />
@@ -66,6 +68,22 @@ describe("EmbedComponent", () => {
     renderEmbed({ "data-embed-target": "Missing", "data-embed-broken": "" });
     expect(screen.getByText(/Embedded note not found: Missing/)).toBeInTheDocument();
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses to read a path outside the workspace (raw-HTML injection guard)", () => {
+    renderEmbed(
+      { "data-embed-path": "/etc/passwd", "data-embed-target": "passwd" },
+      { workspaceFiles: ["/w/Note.md"] },
+    );
+    expect(screen.getByText(/Embedded note not found: passwd/)).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("shows an error placeholder when the read fails", async () => {
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("denied"));
+    renderEmbed({ "data-embed-path": "/w/Note.md", "data-embed-target": "Note" });
+    expect(await screen.findByText(/Could not load embed/)).toBeInTheDocument();
+    expect(screen.queryByTestId("nested")).not.toBeInTheDocument();
   });
 
   it("renders a circular placeholder when the target is already in the chain", () => {

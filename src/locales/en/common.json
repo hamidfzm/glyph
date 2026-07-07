@@ -235,6 +235,7 @@
     "loading": "Loading embed...",
     "broken": "Embedded note not found: {{target}}",
     "circular": "Circular embed: {{target}}",
-    "headingNotFound": "Heading not found: {{heading}}"
+    "headingNotFound": "Heading not found: {{heading}}",
+    "error": "Could not load embed: {{target}}"
   }
 }
