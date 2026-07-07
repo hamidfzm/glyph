@@ -191,6 +191,13 @@ describe("remarkWikilink embeds", () => {
     expect(out).not.toContain("data-embed-path");
   });
 
+  it("marks an embed as broken when no workspace is open", async () => {
+    // Exercises the `workspaceFiles ?? []` default in the embed builder.
+    const out = await html("![[Cooking]]", {});
+    expect(out).toContain('class="markdown-embed"');
+    expect(out).toContain("data-embed-broken");
+  });
+
   it("leaves image embeds as a literal ! plus wikilink", async () => {
     const out = await html("![[photo.png]]", { workspaceFiles: files });
     expect(out).not.toContain("markdown-embed");

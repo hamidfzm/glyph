@@ -70,6 +70,47 @@ describe("EmbedComponent", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  it("falls back to an empty label when the target marker is absent", () => {
+    // No data-embed-target and no path: the `?? ""` default supplies the label.
+    renderEmbed({ "data-embed-broken": "" });
+    expect(screen.getByText(/Embedded note not found:/)).toBeInTheDocument();
+  });
+
+  it("ignores a read that resolves after unmount", async () => {
+    let resolve: ((v: string) => void) | undefined;
+    vi.mocked(invoke).mockReturnValueOnce(
+      new Promise<string>((r) => {
+        resolve = r;
+      }),
+    );
+    const { unmount } = renderEmbed({
+      "data-embed-path": "/w/Note.md",
+      "data-embed-target": "Note",
+    });
+    unmount();
+    resolve?.("late body");
+    await Promise.resolve();
+    // The alive guard drops the resolved value; nothing is rendered post-unmount.
+    expect(screen.queryByTestId("nested")).not.toBeInTheDocument();
+  });
+
+  it("ignores a read that rejects after unmount", async () => {
+    let reject: ((e: unknown) => void) | undefined;
+    vi.mocked(invoke).mockReturnValueOnce(
+      new Promise<string>((_, r) => {
+        reject = r;
+      }),
+    );
+    const { unmount } = renderEmbed({
+      "data-embed-path": "/w/Note.md",
+      "data-embed-target": "Note",
+    });
+    unmount();
+    reject?.(new Error("late"));
+    await Promise.resolve();
+    expect(screen.queryByText(/Could not load embed/)).not.toBeInTheDocument();
+  });
+
   it("refuses to read a path outside the workspace (raw-HTML injection guard)", () => {
     renderEmbed(
       { "data-embed-path": "/etc/passwd", "data-embed-target": "passwd" },
