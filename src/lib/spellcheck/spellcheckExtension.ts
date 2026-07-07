@@ -13,11 +13,9 @@ const setMisspellings = StateEffect.define<DecorationSet>();
 const misspellingField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update(value, tr) {
-    value = value.map(tr.changes);
-    for (const effect of tr.effects) {
-      if (effect.is(setMisspellings)) value = effect.value;
-    }
-    return value;
+    const mapped = value.map(tr.changes);
+    const update = tr.effects.find((effect) => effect.is(setMisspellings));
+    return update ? update.value : mapped;
   },
   provide: (field) => EditorView.decorations.from(field),
 });
@@ -130,12 +128,15 @@ export function buildSpellcheck(
     contextmenu(event, view) {
       const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
       if (pos == null) return false;
+
+      // The plugin is installed with this handler, so the instance is always
+      // present; its speller is null only until the dictionary finishes loading.
+      const instance = view.plugin(plugin) as SpellcheckPlugin;
+      const speller = instance.speller;
+      if (!speller) return false;
+
       const word = misspelledWordAt(view, pos);
       if (!word) return false;
-
-      const instance = view.plugin(plugin);
-      const speller = instance?.speller;
-      if (!speller) return false;
 
       event.preventDefault();
       openSuggestionMenu({
@@ -148,11 +149,11 @@ export function buildSpellcheck(
         },
         onIgnore: () => {
           ignored.add(word.text.toLowerCase());
-          instance?.rescan(view);
+          instance.rescan(view);
         },
         onAdd: () => {
           speller.add(word.text);
-          instance?.rescan(view);
+          instance.rescan(view);
         },
       });
       return true;

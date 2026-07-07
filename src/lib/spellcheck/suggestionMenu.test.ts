@@ -49,9 +49,11 @@ describe("openSuggestionMenu", () => {
     expect(addOpts.onAdd).toHaveBeenCalled();
   });
 
-  it("closes on Escape", () => {
+  it("closes on Escape but ignores other keys", () => {
     openSuggestionMenu({ ...base(), suggestions: ["a"] });
     expect(menuCount()).toBe(1);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
+    expect(menuCount()).toBe(1); // non-Escape key leaves it open
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     expect(menuCount()).toBe(0);
   });

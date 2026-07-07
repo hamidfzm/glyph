@@ -66,13 +66,20 @@ export function scanWords(state: EditorState, from: number, to: number): WordTok
 
   const text = state.doc.sliceString(from, to);
   const tokens: WordToken[] = [];
-  for (const match of text.matchAll(WORD_RE)) {
+  // A fresh regex per scan keeps the shared WORD_RE free of `lastIndex` state;
+  // exec's RegExpExecArray gives a definite `index`.
+  const re = new RegExp(WORD_RE.source, WORD_RE.flags);
+  let match: RegExpExecArray | null = re.exec(text);
+  while (match !== null) {
     const word = match[0];
-    if (word.length < 2 || isAllCaps(word)) continue;
-    const start = from + (match.index ?? 0);
-    const end = start + word.length;
-    if (overlapsAny(start, end, exclusions)) continue;
-    tokens.push({ from: start, to: end, word });
+    if (word.length >= 2 && !isAllCaps(word)) {
+      const start = from + match.index;
+      const end = start + word.length;
+      if (!overlapsAny(start, end, exclusions)) {
+        tokens.push({ from: start, to: end, word });
+      }
+    }
+    match = re.exec(text);
   }
   return tokens;
 }

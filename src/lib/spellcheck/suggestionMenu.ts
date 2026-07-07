@@ -33,7 +33,9 @@ export function openSuggestionMenu(options: SuggestionMenuOptions): void {
     menu.remove();
     document.removeEventListener("mousedown", onOutside, true);
     document.removeEventListener("keydown", onKey, true);
-    if (closeOpenMenu === close) closeOpenMenu = null;
+    // A newer menu always closes this one before taking over closeOpenMenu, so
+    // this close only ever runs while this menu owns the reference.
+    closeOpenMenu = null;
   }
 
   function onOutside(event: MouseEvent): void {
@@ -44,11 +46,10 @@ export function openSuggestionMenu(options: SuggestionMenuOptions): void {
     if (event.key === "Escape") close();
   }
 
-  function addItem(label: string, action: () => void, extraClass = ""): void {
+  function addItem(label: string, className: string, action: () => void): void {
     const item = document.createElement("button");
     item.type = "button";
-    item.className = "spellcheck-menu-item";
-    if (extraClass) item.classList.add(extraClass);
+    item.className = className;
     item.textContent = label;
     item.addEventListener("click", () => {
       action();
@@ -64,7 +65,7 @@ export function openSuggestionMenu(options: SuggestionMenuOptions): void {
     menu.appendChild(empty);
   } else {
     for (const suggestion of options.suggestions) {
-      addItem(suggestion, () => options.onPick(suggestion));
+      addItem(suggestion, "spellcheck-menu-item", () => options.onPick(suggestion));
     }
   }
 
@@ -72,8 +73,8 @@ export function openSuggestionMenu(options: SuggestionMenuOptions): void {
   divider.className = "spellcheck-menu-divider";
   menu.appendChild(divider);
 
-  addItem(options.labels.ignore, options.onIgnore, "spellcheck-menu-action");
-  addItem(options.labels.add, options.onAdd, "spellcheck-menu-action");
+  addItem(options.labels.ignore, "spellcheck-menu-item spellcheck-menu-action", options.onIgnore);
+  addItem(options.labels.add, "spellcheck-menu-item spellcheck-menu-action", options.onAdd);
 
   document.body.appendChild(menu);
   document.addEventListener("mousedown", onOutside, true);
