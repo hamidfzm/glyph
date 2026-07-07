@@ -144,6 +144,22 @@ export interface KeybindingSettings {
   overrides: Record<string, string>;
 }
 
+// Which optional markdown syntax extensions render. All on by default; turning
+// one off drops its plugin from the pipeline, so the raw syntax stays literal
+// (e.g. $x$ renders as plain text with math off).
+export interface MarkdownSettings {
+  /** GitHub Flavored Markdown: tables, task lists, strikethrough, autolinks. */
+  gfm: boolean;
+  /** Math rendering via KaTeX: $inline$ and $$block$$. */
+  math: boolean;
+  /** GitHub blockquote alerts: > [!NOTE], [!TIP], … */
+  alerts: boolean;
+  /** Emoji shortcodes: :smile: */
+  emoji: boolean;
+  /** [[wikilink]] resolution against the workspace. */
+  wikilinks: boolean;
+}
+
 export interface Settings {
   appearance: AppearanceSettings;
   layout: LayoutSettings;
@@ -153,6 +169,7 @@ export interface Settings {
   privacy: PrivacySettings;
   keybindings: KeybindingSettings;
   editor: EditorSettings;
+  markdown: MarkdownSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -210,6 +227,13 @@ export const DEFAULT_SETTINGS: Settings = {
     keymap: "default",
     spellCheck: false,
     spellCheckLanguage: "en",
+  },
+  markdown: {
+    gfm: true,
+    math: true,
+    alerts: true,
+    emoji: true,
+    wikilinks: true,
   },
 };
 

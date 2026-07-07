@@ -11,7 +11,8 @@
       "hotkeys": "Tastenkürzel",
       "ai": "KI",
       "print": "Drucken",
-      "privacy": "Datenschutz"
+      "privacy": "Datenschutz",
+      "markdown": "Markdown"
     }
   },
   "language": {
@@ -246,6 +247,29 @@
       "recording": "Tastenkürzel für {{command}} wird aufgezeichnet",
       "change": "Tastenkürzel für {{command}} ändern",
       "reset": "Tastenkürzel für {{command}} zurücksetzen"
+    }
+  },
+  "markdown": {
+    "title": "Markdown-Funktionen",
+    "gfm": {
+      "label": "Tabellen & Aufgabenlisten",
+      "description": "GitHub Flavored Markdown: Tabellen, Aufgabenlisten, Durchstreichen, Autolinks"
+    },
+    "math": {
+      "label": "Mathematik",
+      "description": "KaTeX-Formeln: $inline$ und $$block$$"
+    },
+    "alerts": {
+      "label": "Hinweise",
+      "description": "Callouts im GitHub-Stil: > [!NOTE], [!TIP], [!WARNING]"
+    },
+    "emoji": {
+      "label": "Emoji-Kürzel",
+      "description": ":smile: in Emoji umwandeln"
+    },
+    "wikilinks": {
+      "label": "Wikilinks",
+      "description": "[[Notiz]]-Links im Arbeitsbereich auflösen"
     }
   }
 }

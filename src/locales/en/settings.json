@@ -11,7 +11,8 @@
       "hotkeys": "Hotkeys",
       "ai": "AI",
       "print": "Print",
-      "privacy": "Privacy"
+      "privacy": "Privacy",
+      "markdown": "Markdown"
     }
   },
   "language": {
@@ -258,6 +259,29 @@
       "recording": "Recording shortcut for {{command}}",
       "change": "Change shortcut for {{command}}",
       "reset": "Reset shortcut for {{command}}"
+    }
+  },
+  "markdown": {
+    "title": "Markdown Features",
+    "gfm": {
+      "label": "Tables & task lists",
+      "description": "GitHub Flavored Markdown: tables, task lists, strikethrough, autolinks"
+    },
+    "math": {
+      "label": "Math",
+      "description": "KaTeX equations: $inline$ and $$block$$"
+    },
+    "alerts": {
+      "label": "Alerts",
+      "description": "GitHub-style callouts: > [!NOTE], [!TIP], [!WARNING]"
+    },
+    "emoji": {
+      "label": "Emoji shortcodes",
+      "description": "Turn :smile: into emoji"
+    },
+    "wikilinks": {
+      "label": "Wikilinks",
+      "description": "Resolve [[note]] links against the workspace"
     }
   }
 }

@@ -52,6 +52,9 @@ describe("SettingsModal", () => {
     fireEvent.click(screen.getByText("Behavior"));
     expect(screen.getByText("Auto-reload")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByText("Markdown"));
+    expect(screen.getByText("Markdown Features")).toBeInTheDocument();
+
     fireEvent.click(screen.getByText("Editor"));
     expect(screen.getByText("Keymap")).toBeInTheDocument();
 
