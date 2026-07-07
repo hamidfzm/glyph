@@ -84,4 +84,35 @@ describe("installFromRegistry", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
     await expect(installFromRegistry(entry())).rejects.toThrow(/download failed/);
   });
+
+  // SHA-256 of "export default {};", uppercase to prove comparison is case-insensitive.
+  const GOOD_SHA = "9f085b1079ab38f776bbb3930dfd067a838ca3e0483aff8625f88837e8ed964c";
+
+  it("installs when the download matches the declared sha256", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve("export default {};") }),
+    );
+    vi.mocked(invoke).mockResolvedValue(undefined);
+
+    await installFromRegistry(entry({ sha256: GOOD_SHA.toUpperCase() }));
+
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("install_plugin_files", expect.anything());
+  });
+
+  it("refuses to install when the download does not match the declared sha256", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve("export default { tampered: true };"),
+      }),
+    );
+    vi.mocked(invoke).mockReset();
+
+    await expect(installFromRegistry(entry({ sha256: GOOD_SHA }))).rejects.toThrow(
+      /checksum mismatch/,
+    );
+    expect(vi.mocked(invoke)).not.toHaveBeenCalled();
+  });
 });
