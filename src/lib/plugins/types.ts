@@ -35,6 +35,13 @@ export interface PluginManifest {
   main?: string;
   /** Capabilities requested; shown on the consent screen before first enable. */
   permissions?: PluginPermission[];
+  /**
+   * Run in a dedicated worker instead of the app context. Sandboxed plugins
+   * get no DOM and network fenced to their `network:` permissions, but only
+   * the non-UI API subset: commands, styles, exporters, workspace, settings,
+   * notify, and translations. No markdown pipeline or panel mounts.
+   */
+  sandbox?: boolean;
 }
 
 /**
@@ -50,6 +57,8 @@ export interface InstalledPlugin {
   description?: string;
   /** Capabilities the plugin declares; shown to the user before install. */
   permissions?: string[];
+  /** Run isolated in a worker; see {@link PluginManifest.sandbox}. */
+  sandbox?: boolean;
   /** Absolute path of the installed plugin folder. */
   dir: string;
   /** Source text of the plugin's ESM entry file. */

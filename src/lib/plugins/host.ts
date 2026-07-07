@@ -2,6 +2,7 @@ import { PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 import { type Disposer, DisposerBag } from "./disposer";
 import { importPluginModule, type ModuleImporter } from "./loader";
 import { createRegistry, type Registry } from "./registry";
+import { startSandbox, type WorkerSpawner } from "./sandbox/sandbox";
 import type {
   CommandContribution,
   ExporterContribution,
@@ -92,6 +93,9 @@ export function createPluginHost(
   // provider keeps this current so ctx.workspace stays scoped correctly.
   getWorkspaceRoot: () => string | null = () => null,
   settingsBackend: PluginSettingsBackend = noopSettingsBackend,
+  // How sandboxed plugins spawn their worker; injectable because jsdom has no
+  // Worker. Defaults to a real blob-URL Worker inside startSandbox.
+  workerSpawner?: WorkerSpawner,
 ): PluginHost {
   const commands = createRegistry<CommandContribution>();
   const statusBarItems = createRegistry<StatusBarItemContribution>();
@@ -188,6 +192,49 @@ export function createPluginHost(
       }
       const generation = (loadGeneration.get(plugin.id) ?? 0) + 1;
       loadGeneration.set(plugin.id, generation);
+
+      if (plugin.sandbox) {
+        const settings = await settingsBackend.load(plugin.id);
+        const bag = new DisposerBag();
+        const workspace = createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? []);
+        const terminate = await startSandbox(
+          plugin,
+          settings,
+          {
+            registerCommand: tracked(commands.register, bag),
+            addStyles(css) {
+              tracked(styles.register, bag)({ css });
+            },
+            registerExporter: tracked(exporters.register, bag),
+            notify,
+            registerTranslations,
+            settingsSet(key, value) {
+              settings[key] = value;
+              settingsBackend.save(plugin.id, settings);
+            },
+            workspaceRead: workspace.readFile,
+            workspaceList: workspace.listFiles,
+          },
+          workerSpawner,
+        );
+        bag.add(terminate);
+        if (loadGeneration.get(plugin.id) !== generation) {
+          bag.dispose();
+          return;
+        }
+        unload(plugin.id);
+        loaded.set(plugin.id, {
+          info: {
+            id: plugin.id,
+            name: plugin.name,
+            version: plugin.version,
+            description: plugin.description,
+          },
+          module: { activate: () => {} },
+          bag,
+        });
+        return;
+      }
 
       const [module, settings] = await Promise.all([
         importPluginModule(plugin.mainSource, importer),
