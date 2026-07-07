@@ -8,10 +8,20 @@ import { BehaviorTab } from "./BehaviorTab";
 import { EditorTab } from "./EditorTab";
 import { HotkeysTab } from "./HotkeysTab";
 import { LayoutTab } from "./LayoutTab";
+import { MarkdownTab } from "./MarkdownTab";
 import { PrintTab } from "./PrintTab";
 import { PrivacyTab } from "./PrivacyTab";
 
-type Tab = "appearance" | "layout" | "behavior" | "editor" | "hotkeys" | "ai" | "print" | "privacy";
+type Tab =
+  | "appearance"
+  | "layout"
+  | "behavior"
+  | "markdown"
+  | "editor"
+  | "hotkeys"
+  | "ai"
+  | "print"
+  | "privacy";
 
 interface SettingsModalProps {
   open: boolean;
@@ -46,6 +56,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     { id: "appearance", label: t("modal.tabs.appearance") },
     { id: "layout", label: t("modal.tabs.layout") },
     { id: "behavior", label: t("modal.tabs.behavior") },
+    { id: "markdown", label: t("modal.tabs.markdown") },
     { id: "editor", label: t("modal.tabs.editor") },
     { id: "hotkeys", label: t("modal.tabs.hotkeys") },
     { id: "ai", label: t("modal.tabs.ai") },
@@ -89,6 +100,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             {tab === "appearance" && <AppearanceTab />}
             {tab === "layout" && <LayoutTab />}
             {tab === "behavior" && <BehaviorTab />}
+            {tab === "markdown" && <MarkdownTab />}
             {tab === "editor" && <EditorTab />}
             {tab === "hotkeys" && <HotkeysTab />}
             {tab === "ai" && <AITab />}

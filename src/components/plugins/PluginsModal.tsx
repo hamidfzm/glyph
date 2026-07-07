@@ -2,6 +2,8 @@ import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
+import { useRegistryEntries } from "@/hooks/usePluginRegistry";
+import { PluginMountSlot } from "./PluginMountSlot";
 
 const rowClass =
   "flex items-start gap-3 py-3 border-b border-[var(--color-border)] last:border-b-0";
@@ -16,6 +18,7 @@ const btnClass =
 export function PluginsModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation("plugins");
   const plugins = usePluginsOptional();
+  const settingsPanels = useRegistryEntries(plugins?.settingsPanels ?? null);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -25,7 +28,7 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  const onBackdrop = useCallback(
+  const handleBackdrop = useCallback(
     (e: React.MouseEvent) => {
       if (e.target === e.currentTarget) onClose();
     },
@@ -40,7 +43,7 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: Escape is handled globally above.
-    <div className="settings-overlay" onClick={onBackdrop} role="dialog" aria-modal="true">
+    <div className="settings-overlay" onClick={handleBackdrop} role="dialog" aria-modal="true">
       <div className="settings-modal">
         <div className="settings-header">
           <h2>{t("title")}</h2>
@@ -68,6 +71,7 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
             plugins.installed.map((p) => {
               const enabled = !plugins.disabled.includes(p.id);
               const update = updatesById.get(p.id);
+              const settingsPanel = settingsPanels.find((panel) => panel.pluginId === p.id);
               return (
                 <div key={p.id} className={rowClass}>
                   <label className="flex items-center pt-0.5">
@@ -91,6 +95,11 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
                     {p.permissions && p.permissions.length > 0 && (
                       <div className="text-xs text-[var(--color-text-secondary)] truncate">
                         {t("permissionsLabel")}: {p.permissions.join(", ")}
+                      </div>
+                    )}
+                    {settingsPanel && enabled && (
+                      <div className="mt-2 text-xs text-[var(--color-text-primary)]">
+                        <PluginMountSlot contribution={settingsPanel} />
                       </div>
                     )}
                   </div>

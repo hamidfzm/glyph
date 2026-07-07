@@ -9,6 +9,7 @@ import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
 import { markdownSanitizeSchema } from "@/components/markdown/sanitizeSchema";
 import type { MarkdownPlugin } from "@/lib/plugins/types";
+import type { MarkdownSettings } from "@/lib/settings";
 import { remarkWikilink } from "@/lib/wikilink";
 
 // The markdown remark/rehype pipeline, built outside the render tree so the
@@ -23,6 +24,13 @@ type RehypePlugins = NonNullable<Options["rehypePlugins"]>;
 export interface RemarkPipelineOptions {
   workspaceFiles?: string[];
   filePath?: string;
+  /**
+   * Which optional syntax extensions are on (Settings → Markdown). Omitted
+   * features default to on, so callers without settings (tests, notebook
+   * cells) keep the full pipeline. Frontmatter always parses: the metadata
+   * block is a document property, not a syntax extension.
+   */
+  features?: Partial<MarkdownSettings>;
   /** Plugin-contributed remark plugins, appended after the built-ins. */
   extra?: readonly MarkdownPlugin[];
 }
@@ -30,17 +38,19 @@ export interface RemarkPipelineOptions {
 export function buildRemarkPlugins({
   workspaceFiles,
   filePath,
+  features = {},
   extra = [],
 }: RemarkPipelineOptions): RemarkPlugins {
-  return [
-    remarkFrontmatter,
-    remarkGfm,
-    remarkMath,
-    remarkGemoji,
-    remarkAlert,
-    [remarkWikilink, { workspaceFiles, currentFilePath: filePath }],
-    ...extra,
-  ];
+  const plugins: RemarkPlugins = [remarkFrontmatter];
+  if (features.gfm !== false) plugins.push(remarkGfm);
+  if (features.math !== false) plugins.push(remarkMath);
+  if (features.emoji !== false) plugins.push(remarkGemoji);
+  if (features.alerts !== false) plugins.push(remarkAlert);
+  if (features.wikilinks !== false) {
+    plugins.push([remarkWikilink, { workspaceFiles, currentFilePath: filePath }]);
+  }
+  plugins.push(...extra);
+  return plugins;
 }
 
 export interface RehypePipelineOptions {

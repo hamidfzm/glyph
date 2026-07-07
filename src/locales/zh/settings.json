@@ -11,7 +11,8 @@
       "hotkeys": "快捷键",
       "ai": "AI",
       "print": "打印",
-      "privacy": "隐私"
+      "privacy": "隐私",
+      "markdown": "Markdown"
     }
   },
   "language": {
@@ -96,8 +97,11 @@
       "label": "交换侧边栏位置",
       "description": "翻转每个面板所在的一侧。默认为文件居左 / 大纲居右；开启后变为文件居右 / 大纲居左。"
     },
-    "width": {
-      "label": "侧边栏宽度"
+    "filesWidth": {
+      "label": "文件侧边栏宽度"
+    },
+    "outlineWidth": {
+      "label": "大纲侧边栏宽度"
     }
   },
   "behavior": {
@@ -243,6 +247,29 @@
       "recording": "正在为 {{command}} 录制快捷键",
       "change": "更改 {{command}} 的快捷键",
       "reset": "重置 {{command}} 的快捷键"
+    }
+  },
+  "markdown": {
+    "title": "Markdown 功能",
+    "gfm": {
+      "label": "表格与任务列表",
+      "description": "GitHub 风格 Markdown：表格、任务列表、删除线、自动链接"
+    },
+    "math": {
+      "label": "数学公式",
+      "description": "KaTeX 公式：$行内$ 与 $$块级$$"
+    },
+    "alerts": {
+      "label": "提示块",
+      "description": "GitHub 风格标注：> [!NOTE], [!TIP], [!WARNING]"
+    },
+    "emoji": {
+      "label": "表情简码",
+      "description": "将 :smile: 转为表情"
+    },
+    "wikilinks": {
+      "label": "双链笔记",
+      "description": "在工作区内解析 [[笔记]] 链接"
     }
   }
 }

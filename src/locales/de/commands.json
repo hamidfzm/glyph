@@ -31,5 +31,6 @@
   "zoomReset": "Zoom zurücksetzen",
   "aiChat": "KI-Chat",
   "readAloud": "Vorlesen",
-  "managePlugins": "Plugins verwalten…"
+  "managePlugins": "Plugins verwalten…",
+  "exportAs": "Exportieren: {{label}}…"
 }

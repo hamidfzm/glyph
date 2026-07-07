@@ -24,7 +24,7 @@ export function useDragPan(ref: RefObject<HTMLElement | null>): void {
 
     const canPan = () => el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight;
 
-    const onPointerDown = (e: PointerEvent) => {
+    const handlePointerDown = (e: PointerEvent) => {
       if (e.button !== 0 || !canPan()) return;
       dragging = true;
       moved = false;
@@ -35,7 +35,7 @@ export function useDragPan(ref: RefObject<HTMLElement | null>): void {
       el.setPointerCapture?.(e.pointerId);
     };
 
-    const onPointerMove = (e: PointerEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       if (!dragging) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
@@ -49,7 +49,7 @@ export function useDragPan(ref: RefObject<HTMLElement | null>): void {
       }
     };
 
-    const onPointerUp = (e: PointerEvent) => {
+    const handlePointerUp = (e: PointerEvent) => {
       if (!dragging) return;
       dragging = false;
       el.releasePointerCapture?.(e.pointerId);
@@ -63,15 +63,15 @@ export function useDragPan(ref: RefObject<HTMLElement | null>): void {
       }
     };
 
-    el.addEventListener("pointerdown", onPointerDown);
-    el.addEventListener("pointermove", onPointerMove);
-    el.addEventListener("pointerup", onPointerUp);
-    el.addEventListener("pointercancel", onPointerUp);
+    el.addEventListener("pointerdown", handlePointerDown);
+    el.addEventListener("pointermove", handlePointerMove);
+    el.addEventListener("pointerup", handlePointerUp);
+    el.addEventListener("pointercancel", handlePointerUp);
     return () => {
-      el.removeEventListener("pointerdown", onPointerDown);
-      el.removeEventListener("pointermove", onPointerMove);
-      el.removeEventListener("pointerup", onPointerUp);
-      el.removeEventListener("pointercancel", onPointerUp);
+      el.removeEventListener("pointerdown", handlePointerDown);
+      el.removeEventListener("pointermove", handlePointerMove);
+      el.removeEventListener("pointerup", handlePointerUp);
+      el.removeEventListener("pointercancel", handlePointerUp);
     };
   }, [ref]);
 }

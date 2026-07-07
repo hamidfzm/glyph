@@ -750,10 +750,14 @@ jobs:
           # unprotected key, which is what the apt-repo job also assumes).
           printf '%s' "$GPG_PASSPHRASE" > /tmp/gpg-pass
           # rpm --addsign shells out to gpg; force batch/loopback so it never
-          # blocks on a pinentry prompt in CI.
+          # blocks on a pinentry prompt in CI. rpm execs the macro's first
+          # token as a literal binary path (no PATH search), so it must be
+          # %{__gpg}; the bare "gpg" after it is argv[0], matching rpm's
+          # stock macro shape.
           cat > "$HOME/.rpmmacros" <<EOF
           %_gpg_name $GPG_KEY_ID
-          %__gpg_sign_cmd gpg --batch --no-verbose --no-armor --pinentry-mode loopback --passphrase-file /tmp/gpg-pass --no-secmem-warning -u "%{_gpg_name}" --sign --detach-sign --output %{__signature_filename} %{__plaintext_filename}
+          %__gpg /usr/bin/gpg
+          %__gpg_sign_cmd %{__gpg} gpg --batch --no-verbose --no-armor --pinentry-mode loopback --passphrase-file /tmp/gpg-pass --no-secmem-warning -u "%{_gpg_name}" --sign --detach-sign --output %{__signature_filename} %{__plaintext_filename}
           EOF
       - name: Clone rpm-repo, sign RPMs, and rebuild metadata
         if: steps.gate.outputs.enabled == 'true'

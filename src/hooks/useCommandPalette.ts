@@ -38,15 +38,15 @@ export function useCommandPalette({ platform }: UseCommandPaletteOptions) {
 
   useEffect(() => {
     const binding = resolveBindings(overrides).get("open-command-palette");
-    const onKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (!binding || !matchesAccelerator(event, binding, platform)) return;
       const target = event.target as Element | null;
       if (target?.closest(".cm-editor")) return;
       event.preventDefault();
       toggle();
     };
-    document.addEventListener(KEYBOARD_EVENT.KeyDown, onKeyDown);
-    return () => document.removeEventListener(KEYBOARD_EVENT.KeyDown, onKeyDown);
+    document.addEventListener(KEYBOARD_EVENT.KeyDown, handleKeyDown);
+    return () => document.removeEventListener(KEYBOARD_EVENT.KeyDown, handleKeyDown);
   }, [platform, toggle, overrides]);
 
   // The native View menu's "Command Palette…" item emits this event so users

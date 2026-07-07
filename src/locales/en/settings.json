@@ -11,7 +11,8 @@
       "hotkeys": "Hotkeys",
       "ai": "AI",
       "print": "Print",
-      "privacy": "Privacy"
+      "privacy": "Privacy",
+      "markdown": "Markdown"
     }
   },
   "language": {
@@ -96,8 +97,11 @@
       "label": "Swap sidebar sides",
       "description": "Flip which side each panel lives on. Default is Files left / Outline right; on, it becomes Files right / Outline left."
     },
-    "width": {
-      "label": "Sidebar Width"
+    "filesWidth": {
+      "label": "Files Sidebar Width"
+    },
+    "outlineWidth": {
+      "label": "Outline Sidebar Width"
     }
   },
   "behavior": {
@@ -136,6 +140,18 @@
   },
   "editor": {
     "title": "Editor",
+    "spellCheck": {
+      "title": "Spell Check",
+      "label": "Check spelling",
+      "description": "Underline misspelled words while editing. Right-click a word for suggestions. Applies to edit and split modes.",
+      "language": "Language",
+      "languages": {
+        "en": "English (US)"
+      },
+      "ignore": "Ignore",
+      "add": "Add to dictionary",
+      "noSuggestions": "No suggestions"
+    },
     "keymap": {
       "label": "Keymap",
       "description": "Keyboard bindings for the markdown editor. Vim adds modal editing; VSCode mirrors common VSCode shortcuts. Takes effect the next time a document enters edit or split mode."
@@ -243,6 +259,29 @@
       "recording": "Recording shortcut for {{command}}",
       "change": "Change shortcut for {{command}}",
       "reset": "Reset shortcut for {{command}}"
+    }
+  },
+  "markdown": {
+    "title": "Markdown Features",
+    "gfm": {
+      "label": "Tables & task lists",
+      "description": "GitHub Flavored Markdown: tables, task lists, strikethrough, autolinks"
+    },
+    "math": {
+      "label": "Math",
+      "description": "KaTeX equations: $inline$ and $$block$$"
+    },
+    "alerts": {
+      "label": "Alerts",
+      "description": "GitHub-style callouts: > [!NOTE], [!TIP], [!WARNING]"
+    },
+    "emoji": {
+      "label": "Emoji shortcodes",
+      "description": "Turn :smile: into emoji"
+    },
+    "wikilinks": {
+      "label": "Wikilinks",
+      "description": "Resolve [[note]] links against the workspace"
     }
   }
 }

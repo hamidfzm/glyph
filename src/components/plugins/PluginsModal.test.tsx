@@ -5,9 +5,12 @@ import type { RegistryEntry } from "@/lib/plugins/marketplace";
 import { createRegistry } from "@/lib/plugins/registry";
 import type {
   CommandContribution,
+  ExporterContribution,
   FencedRendererContribution,
   InstalledPlugin,
   MarkdownPlugin,
+  SettingsPanelContribution,
+  SidebarPanelContribution,
   StatusBarItemContribution,
 } from "@/lib/plugins/types";
 import { PluginsModal } from "./PluginsModal";
@@ -38,6 +41,9 @@ function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
     remarkPlugins: createRegistry<MarkdownPlugin>(),
     rehypePlugins: createRegistry<MarkdownPlugin>(),
     fencedRenderers: createRegistry<FencedRendererContribution>(),
+    sidebarPanels: createRegistry<SidebarPanelContribution>(),
+    settingsPanels: createRegistry<SettingsPanelContribution>(),
+    exporters: createRegistry<ExporterContribution>(),
     installed: [installed],
     disabled: [],
     loaded: [],
@@ -61,11 +67,38 @@ function renderModal(value: PluginsContextValue, onClose = vi.fn()) {
 }
 
 describe("PluginsModal", () => {
+  it("renders nothing without a PluginsProvider", () => {
+    const { container } = render(<PluginsModal onClose={vi.fn()} />);
+    expect(container.firstChild).toBeNull();
+  });
+
   it("lists installed and available plugins", () => {
     renderModal(ctx());
     expect(screen.getByText("Alpha")).toBeInTheDocument();
     expect(screen.getByText("the alpha plugin")).toBeInTheDocument();
     expect(screen.getByText("Charlie")).toBeInTheDocument();
+  });
+
+  it("mounts a plugin's settings panel under its row, only while enabled", () => {
+    const settingsPanels = createRegistry<SettingsPanelContribution>();
+    settingsPanels.register({
+      id: "a.b.settings",
+      pluginId: "a.b",
+      mount: (el) => {
+        el.textContent = "size: 12";
+      },
+    });
+
+    const { rerender } = renderModal(ctx({ settingsPanels }));
+    expect(screen.getByText("size: 12")).toBeInTheDocument();
+
+    // Disabled plugin: the panel disappears.
+    rerender(
+      <PluginsContext.Provider value={ctx({ settingsPanels, disabled: ["a.b"] })}>
+        <PluginsModal onClose={vi.fn()} />
+      </PluginsContext.Provider>,
+    );
+    expect(screen.queryByText("size: 12")).not.toBeInTheDocument();
   });
 
   it("shows an installed plugin's declared permissions", () => {
@@ -109,14 +142,24 @@ describe("PluginsModal", () => {
     expect(value.installFromRegistry).toHaveBeenCalled();
   });
 
-  it("installs from a folder and closes on Escape", () => {
+  it("installs from a folder and closes on Escape but not on other keys or inner clicks", () => {
     const value = ctx();
     const onClose = vi.fn();
     renderModal(value, onClose);
     fireEvent.click(screen.getByRole("button", { name: "Install from folder…" }));
     expect(value.installFromFolder).toHaveBeenCalled();
+
+    // Neither a non-Escape key nor a click inside the panel closes the modal.
+    fireEvent.keyDown(window, { key: "Enter" });
+    fireEvent.click(screen.getByText("Alpha"));
+    expect(onClose).not.toHaveBeenCalled();
+
+    // Clicking the backdrop itself closes.
+    fireEvent.click(screen.getByRole("dialog"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 
   it("shows empty states", () => {

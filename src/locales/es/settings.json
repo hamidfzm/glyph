@@ -11,7 +11,8 @@
       "hotkeys": "Atajos",
       "ai": "IA",
       "print": "Impresión",
-      "privacy": "Privacidad"
+      "privacy": "Privacidad",
+      "markdown": "Markdown"
     }
   },
   "language": {
@@ -96,8 +97,11 @@
       "label": "Intercambiar lados de las barras laterales",
       "description": "Cambia el lado en el que se ubica cada panel. De forma predeterminada, Archivos queda a la izquierda y Esquema a la derecha; al activarlo, Archivos pasa a la derecha y Esquema a la izquierda."
     },
-    "width": {
-      "label": "Ancho de la barra lateral"
+    "filesWidth": {
+      "label": "Ancho de la barra de archivos"
+    },
+    "outlineWidth": {
+      "label": "Ancho de la barra de esquema"
     }
   },
   "behavior": {
@@ -243,6 +247,29 @@
       "recording": "Grabando atajo para {{command}}",
       "change": "Cambiar atajo para {{command}}",
       "reset": "Restablecer atajo para {{command}}"
+    }
+  },
+  "markdown": {
+    "title": "Funciones de Markdown",
+    "gfm": {
+      "label": "Tablas y listas de tareas",
+      "description": "GitHub Flavored Markdown: tablas, listas de tareas, tachado, autoenlaces"
+    },
+    "math": {
+      "label": "Matemáticas",
+      "description": "Ecuaciones KaTeX: $inline$ y $$bloque$$"
+    },
+    "alerts": {
+      "label": "Avisos",
+      "description": "Llamadas estilo GitHub: > [!NOTE], [!TIP], [!WARNING]"
+    },
+    "emoji": {
+      "label": "Atajos de emoji",
+      "description": "Convertir :smile: en emoji"
+    },
+    "wikilinks": {
+      "label": "Wikienlaces",
+      "description": "Resolver enlaces [[nota]] en el espacio de trabajo"
     }
   }
 }

@@ -21,8 +21,9 @@
       }
     ],
     "security": {
-      "csp": "default-src * asset: http://asset.localhost https://asset.localhost ipc: http://ipc.localhost data: blob: 'unsafe-inline'; script-src 'self' data: blob: 'wasm-unsafe-eval'",
+      "csp": "default-src * asset: http://asset.localhost https://asset.localhost ipc: http://ipc.localhost data: blob: 'unsafe-inline'; script-src 'self' data: blob: 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'",
       "devCsp": null,
+      "dangerousDisableAssetCspModification": ["style-src"],
       "assetProtocol": {
         "enable": true,
         "scope": {

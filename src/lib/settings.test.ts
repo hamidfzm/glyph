@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  AI_PANEL_WIDTH_DEFAULT,
+  AI_PANEL_WIDTH_MIN,
   CONTENT_WIDTH_MAP,
   DEFAULT_SETTINGS,
   EDITOR_MODE,
@@ -7,6 +9,9 @@ import {
   LINE_HEIGHT_MAP,
   MODEL_SUGGESTIONS,
   nextEditorMode,
+  SIDEBAR_WIDTH_DEFAULT,
+  SIDEBAR_WIDTH_MAX,
+  SIDEBAR_WIDTH_MIN,
 } from "./settings";
 
 describe("DEFAULT_SETTINGS", () => {
@@ -26,7 +31,16 @@ describe("DEFAULT_SETTINGS", () => {
     expect(DEFAULT_SETTINGS.layout.outlineSidebarVisible).toBe(true);
     expect(DEFAULT_SETTINGS.layout.sidebarLayout).toBe("beside");
     expect(DEFAULT_SETTINGS.layout.swapSidebarSides).toBe(false);
-    expect(DEFAULT_SETTINGS.layout.sidebarWidth).toBe(224);
+    expect(DEFAULT_SETTINGS.layout.filesSidebarWidth).toBe(SIDEBAR_WIDTH_DEFAULT);
+    expect(DEFAULT_SETTINGS.layout.outlineSidebarWidth).toBe(SIDEBAR_WIDTH_DEFAULT);
+    expect(DEFAULT_SETTINGS.layout.aiPanelWidth).toBe(AI_PANEL_WIDTH_DEFAULT);
+    expect(DEFAULT_SETTINGS.layout.backlinksHeight).toBeNull();
+  });
+
+  it("keeps resize bounds ordered around the defaults", () => {
+    expect(SIDEBAR_WIDTH_MIN).toBeLessThan(SIDEBAR_WIDTH_DEFAULT);
+    expect(SIDEBAR_WIDTH_DEFAULT).toBeLessThan(SIDEBAR_WIDTH_MAX);
+    expect(AI_PANEL_WIDTH_MIN).toBeLessThan(AI_PANEL_WIDTH_DEFAULT);
   });
 
   it("has behavior defaults", () => {

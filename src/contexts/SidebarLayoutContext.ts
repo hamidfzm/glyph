@@ -12,7 +12,9 @@ type SidebarLayoutApi = ReturnType<typeof useSidebarLayout>;
 export interface SidebarLayoutContextValue extends SidebarLayoutApi {
   sidebarLayout: SidebarLayout;
   swapSidebarSides: boolean;
-  sidebarWidth: number | undefined;
+  filesSidebarWidth: number;
+  outlineSidebarWidth: number;
+  backlinksHeight: number | null;
 }
 
 export const SidebarLayoutContext = createContext<SidebarLayoutContextValue | null>(null);

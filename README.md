@@ -44,6 +44,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Inline HTML: `<kbd>`, `<sub>`, `<sup>`, `<details>`, inline `<svg>` drawings, alignment attributes (sanitised allowlist)
 - YAML frontmatter: title, author, date, and tags render as a metadata block above the document; tags get a per-tag colour
 - Emoji shortcodes: `:smile:` → 😊, `:+1:` → 👍
+- Feature toggles: turn optional syntax off per taste in Settings → Markdown (GFM extras, math, alerts, emoji, wikilinks); disabled syntax renders as plain text
 - Local and remote image display
 - Image lightbox: click any image to view it full-size over a dark backdrop, with zoom controls (fit, actual size, zoom in/out), arrow-key navigation between the document's images, and Escape or click-outside to close
 - External links open in system browser with optional confirmation dialog; right-click one to copy its address or open it in the external browser
@@ -54,6 +55,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Live preview updates as you type
 - Wikilink autocomplete: type `[[` in a folder workspace to pick from existing notes; Tab/Enter to insert
 - Editor keymaps: choose Default, Vim, or VSCode bindings in Settings → Editor
+- Spell check: underline misspelled words while editing, with right-click suggestions; opt in under Settings → Editor
 
 ### Viewer
 - Jupyter notebooks: open `.ipynb` files directly; markdown cells render with full markdown (math, code, diagrams), code cells are syntax-highlighted, and image, HTML, plain-text, and colourised stream/traceback outputs show under each cell with `In [n]:` / `Out [n]:` prompts (read-only)
@@ -66,6 +68,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - In-document search: `Cmd/Ctrl+F` with match highlighting and navigation
 - Zoom in/out: `Cmd/Ctrl+=/-/0` with zoom level in status bar
 - Table of Contents sidebar with active heading tracking
+- Resizable panels: drag the edge of the files sidebar, outline sidebar, AI chat panel, or the backlinks divider to resize it (double-click resets); sizes persist across restarts
 - Print: `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control
 - Export to HTML, Word (DOCX), EPUB, and PDF via `File → Export`: works for markdown documents and Jupyter notebooks, writes a file directly (no print dialog), and reuses the rendered output (math, code highlighting, tables, images inlined) so files are self-contained and offline. Mermaid and D2 diagrams and SVG images embed in the PDF as true vectors, so they stay crisp at any zoom. Task-list checkboxes are read-only in exports; exported HTML follows the reader's light/dark system preference.
 - Live reload: file watcher auto-updates on external changes
@@ -262,7 +265,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Source editor | ✅ | ✅ | n/a | ✅ | ✅ | ✅ | ✅ |
 | WYSIWYG / inline preview | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ❌ |
 | Split view | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Spell check | planned | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Spell check | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ### Navigation
 
@@ -292,7 +295,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 |---|---|---|---|---|---|---|---|
 | AI (multi-provider, local) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
 | Text-to-speech | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
-| Plugin / extension API | planned | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
+| Plugin / extension API | ⚠️ experimental | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
 | Cloud sync | ⚠️ Git-backed | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Graph view | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
 

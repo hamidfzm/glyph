@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
 import type { EditorKeymap } from "@/lib/settings";
 import { Segmented } from "./Segmented";
+import { Toggle } from "./Toggle";
 
 interface KeymapTip {
   keys?: string;
@@ -57,35 +58,64 @@ export function EditorTab() {
   ];
 
   return (
-    <div className="settings-section">
-      <div className="settings-section-title">{t("editor.title")}</div>
-      <div className="settings-row">
-        <div>
-          <span className="settings-label">{t("editor.keymap.label")}</span>
-          <div className="settings-description">{t("editor.keymap.description")}</div>
+    <Fragment>
+      <div className="settings-section">
+        <div className="settings-section-title">{t("editor.title")}</div>
+        <div className="settings-row">
+          <div>
+            <span className="settings-label">{t("editor.keymap.label")}</span>
+            <div className="settings-description">{t("editor.keymap.description")}</div>
+          </div>
+          <Segmented
+            value={editor.keymap}
+            options={keymapOptions}
+            onChange={(v) => updateSettings("editor.keymap", v)}
+          />
         </div>
-        <Segmented
-          value={editor.keymap}
-          options={keymapOptions}
-          onChange={(v) => updateSettings("editor.keymap", v)}
-        />
+
+        <div className="settings-description settings-keymap-help">
+          <strong>{t(help.titleKey)}</strong>
+          <ul>
+            {help.tips.map((tip) => (
+              <li key={tip.textKey}>
+                {tip.keys && (
+                  <Fragment>
+                    <code>{tip.keys}</code>{" "}
+                  </Fragment>
+                )}
+                {t(tip.textKey)}
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
 
-      <div className="settings-description settings-keymap-help">
-        <strong>{t(help.titleKey)}</strong>
-        <ul>
-          {help.tips.map((tip) => (
-            <li key={tip.textKey}>
-              {tip.keys && (
-                <Fragment>
-                  <code>{tip.keys}</code>{" "}
-                </Fragment>
-              )}
-              {t(tip.textKey)}
-            </li>
-          ))}
-        </ul>
+      <div className="settings-section">
+        <div className="settings-section-title">{t("editor.spellCheck.title")}</div>
+        <div className="settings-row">
+          <div>
+            <span className="settings-label">{t("editor.spellCheck.label")}</span>
+            <div className="settings-description">{t("editor.spellCheck.description")}</div>
+          </div>
+          <Toggle
+            checked={editor.spellCheck}
+            onChange={(v) => updateSettings("editor.spellCheck", v)}
+          />
+        </div>
+
+        {editor.spellCheck && (
+          <div className="settings-row">
+            <span className="settings-label">{t("editor.spellCheck.language")}</span>
+            <select
+              className="settings-select"
+              value={editor.spellCheckLanguage}
+              onChange={(e) => updateSettings("editor.spellCheckLanguage", e.target.value)}
+            >
+              <option value="en">{t("editor.spellCheck.languages.en")}</option>
+            </select>
+          </div>
+        )}
       </div>
-    </div>
+    </Fragment>
   );
 }
