@@ -1,3 +1,5 @@
+import { invoke } from "@tauri-apps/api/core";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -59,5 +61,29 @@ describe("AppearanceTab", () => {
       target: { value: "Inter" },
     });
     expect(updateSettings).toHaveBeenCalledWith("appearance.customFont", "Inter");
+  });
+
+  it("toggles custom CSS and opens the file from the edit button", async () => {
+    vi.mocked(invoke).mockResolvedValue("/config/custom.css");
+    const { updateSettings } = setup();
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(updateSettings).toHaveBeenCalledWith("appearance.customCss", true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit file" }));
+    await vi.waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("ensure_custom_css");
+      expect(vi.mocked(revealItemInDir)).toHaveBeenCalledWith("/config/custom.css");
+    });
+  });
+
+  it("logs instead of throwing when opening custom.css fails", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(invoke).mockRejectedValue(new Error("io"));
+    setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit file" }));
+    await vi.waitFor(() => expect(spy).toHaveBeenCalled());
+    spy.mockRestore();
   });
 });

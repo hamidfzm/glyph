@@ -292,6 +292,8 @@ pub fn run() {
             commands::plugins::install_plugin,
             commands::plugins::install_plugin_files,
             commands::plugins::uninstall_plugin,
+            commands::custom_css::read_custom_css,
+            commands::custom_css::ensure_custom_css,
             watcher::watch_file,
             watcher::unwatch_file,
             watcher::watch_directory,

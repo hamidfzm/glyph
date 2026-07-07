@@ -86,6 +86,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Localized interface: follows your system language, or pick one in Settings → Appearance, with full right-to-left (RTL) layout support (community translations welcome)
 - Customizable font family, size, line height, and content width
 - Custom code font support
+- Custom CSS: load your own stylesheet on top of the app styles (Settings → Appearance → Custom CSS, "Edit file" opens it)
 - Platform-native styling (macOS vibrancy, Windows Mica)
 
 ### AI (optional)

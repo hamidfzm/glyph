@@ -74,6 +74,11 @@
       "nord": "Nord",
       "solarizedLight": "Solarized Light",
       "solarizedDark": "Solarized Dark"
+    },
+    "customCss": {
+      "label": "CSS personalizado",
+      "description": "Cargar tu propia hoja de estilos (custom.css) sobre los estilos de la app.",
+      "edit": "Editar archivo"
     }
   },
   "layout": {

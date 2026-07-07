@@ -1,7 +1,21 @@
+import { invoke } from "@tauri-apps/api/core";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
 import { LanguageSetting } from "./LanguageSetting";
 import { Segmented } from "./Segmented";
+import { Toggle } from "./Toggle";
+
+// Create custom.css if needed, then show it in the file manager so the user
+// can open it in their editor of choice.
+async function handleEditCustomCss() {
+  try {
+    const path = await invoke<string>("ensure_custom_css");
+    await revealItemInDir(path);
+  } catch (err) {
+    console.error("Failed to open custom.css:", err);
+  }
+}
 
 export function AppearanceTab() {
   const { t } = useTranslation("settings");
@@ -128,6 +142,26 @@ export function AppearanceTab() {
             <option value="solarized-light">{t("appearance.codeTheme.solarizedLight")}</option>
             <option value="solarized-dark">{t("appearance.codeTheme.solarizedDark")}</option>
           </select>
+        </div>
+
+        <div className="settings-row">
+          <div>
+            <span className="settings-label">{t("appearance.customCss.label")}</span>
+            <div className="settings-description">
+              {t("appearance.customCss.description")}{" "}
+              <button
+                type="button"
+                className="underline cursor-pointer"
+                onClick={() => void handleEditCustomCss()}
+              >
+                {t("appearance.customCss.edit")}
+              </button>
+            </div>
+          </div>
+          <Toggle
+            checked={appearance.customCss}
+            onChange={(v) => updateSettings("appearance.customCss", v)}
+          />
         </div>
       </div>
     </>

@@ -74,6 +74,11 @@
       "nord": "Nord",
       "solarizedLight": "Solarized Light",
       "solarizedDark": "Solarized Dark"
+    },
+    "customCss": {
+      "label": "自定义 CSS",
+      "description": "在应用样式之上加载你自己的样式表（custom.css）。",
+      "edit": "编辑文件"
     }
   },
   "layout": {

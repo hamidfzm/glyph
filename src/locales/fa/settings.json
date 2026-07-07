@@ -74,6 +74,11 @@
       "nord": "Nord",
       "solarizedLight": "Solarized Light",
       "solarizedDark": "Solarized Dark"
+    },
+    "customCss": {
+      "label": "CSS سفارشی",
+      "description": "بارگذاری شیوه‌نامهٔ شخصی (custom.css) روی استایل‌های برنامه.",
+      "edit": "ویرایش فایل"
     }
   },
   "layout": {

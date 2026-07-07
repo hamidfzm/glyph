@@ -10,6 +10,8 @@ export interface AppearanceSettings {
   contentWidth: "narrow" | "medium" | "wide" | "full";
   codeFont: string;
   codeTheme: "glyph" | "github" | "monokai" | "nord" | "solarized-light" | "solarized-dark";
+  /** Inject the user's custom.css (app config dir) after the app styles. */
+  customCss: boolean;
 }
 
 // How Files and Outline panels are arranged in folder tabs.
@@ -183,6 +185,7 @@ export const DEFAULT_SETTINGS: Settings = {
     contentWidth: "medium",
     codeFont: "",
     codeTheme: "glyph",
+    customCss: false,
   },
   layout: {
     filesSidebarVisible: true,
