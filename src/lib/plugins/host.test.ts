@@ -173,12 +173,13 @@ describe("createPluginHost", () => {
     spy.mockRestore();
   });
 
-  it("exposes sidebar panels, settings panels, and exporters; unload removes them", async () => {
+  it("exposes sidebar panels, settings panels, styles, and exporters; unload removes them", async () => {
     const host = createPluginHost(vi.fn());
     const module: PluginModule = {
       activate(ctx) {
         ctx.ui.addSidebarPanel({ id: "p.side", title: "Side", mount: () => {} });
         ctx.ui.addSettingsPanel({ id: "p.settings", mount: () => {} });
+        ctx.ui.addStyles(".markdown-body { color: red }");
         ctx.exporters.register({
           id: "p.export",
           label: "Thing",
@@ -193,11 +194,13 @@ describe("createPluginHost", () => {
     expect(host.sidebarPanels.list().map((p) => p.title)).toEqual(["Side"]);
     // The host stamps the owning plugin id onto the settings panel.
     expect(host.settingsPanels.list().map((p) => p.pluginId)).toEqual(["com.x.demo"]);
+    expect(host.styles.list().map((s) => s.css)).toEqual([".markdown-body { color: red }"]);
     expect(host.exporters.list().map((e) => e.id)).toEqual(["p.export"]);
 
     host.unload("com.x.demo");
     expect(host.sidebarPanels.list()).toHaveLength(0);
     expect(host.settingsPanels.list()).toHaveLength(0);
+    expect(host.styles.list()).toHaveLength(0);
     expect(host.exporters.list()).toHaveLength(0);
   });
 

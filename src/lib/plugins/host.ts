@@ -13,6 +13,7 @@ import type {
   SettingsPanelContribution,
   SidebarPanelContribution,
   StatusBarItemContribution,
+  StyleContribution,
 } from "./types";
 import { createWorkspaceApi } from "./workspaceApi";
 
@@ -52,6 +53,8 @@ export interface PluginHost {
   readonly sidebarPanels: Registry<SidebarPanelContribution>;
   /** Per-plugin settings UIs, shown under each row in Manage Plugins. */
   readonly settingsPanels: Registry<SettingsPanelContribution>;
+  /** Stylesheets contributed by loaded plugins, injected after app styles. */
+  readonly styles: Registry<StyleContribution>;
   /** Export formats contributed by loaded plugins. */
   readonly exporters: Registry<ExporterContribution>;
   /**
@@ -97,6 +100,7 @@ export function createPluginHost(
   const fencedRenderers = createRegistry<FencedRendererContribution>();
   const sidebarPanels = createRegistry<SidebarPanelContribution>();
   const settingsPanels = createRegistry<SettingsPanelContribution>();
+  const styles = createRegistry<StyleContribution>();
   const exporters = createRegistry<ExporterContribution>();
   const loaded = new Map<string, LoadedPlugin>();
 
@@ -122,6 +126,9 @@ export function createPluginHost(
       addSidebarPanel: tracked(sidebarPanels.register, bag),
       addSettingsPanel(panel) {
         return tracked(settingsPanels.register, bag)({ ...panel, pluginId: plugin.id });
+      },
+      addStyles(css) {
+        return tracked(styles.register, bag)({ css });
       },
     },
     markdown: {
@@ -171,6 +178,7 @@ export function createPluginHost(
     fencedRenderers,
     sidebarPanels,
     settingsPanels,
+    styles,
     exporters,
     async load(plugin, importer) {
       if (!satisfiesApiVersion(plugin.apiVersion)) {

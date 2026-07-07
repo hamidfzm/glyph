@@ -12,6 +12,7 @@ export interface PluginsContextValue {
   fencedRenderers: PluginHost["fencedRenderers"];
   sidebarPanels: PluginHost["sidebarPanels"];
   settingsPanels: PluginHost["settingsPanels"];
+  styles: PluginHost["styles"];
   exporters: PluginHost["exporters"];
   /** Every plugin on disk, enabled or not. */
   installed: InstalledPlugin[];

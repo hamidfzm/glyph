@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { PluginStyles } from "@/components/plugins/PluginStyles";
 import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToasts";
 import { PluginsContext } from "@/contexts/PluginsContext";
 import { registerTranslations } from "@/lib/i18n";
@@ -221,6 +222,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         fencedRenderers: host.fencedRenderers,
         sidebarPanels: host.sidebarPanels,
         settingsPanels: host.settingsPanels,
+        styles: host.styles,
         exporters: host.exporters,
         installed,
         disabled,
@@ -235,6 +237,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      <PluginStyles />
       <PluginToasts toasts={toasts} />
     </PluginsContext.Provider>
   );
