@@ -140,11 +140,18 @@ const remarkWikilink: Plugin<[WikilinkPluginOptions?]> =
   (tree) => {
     const root = tree as unknown as Parameters<typeof visit>[0];
 
-    // Pass 1: replace `[[...]]` / `![[...]]` inside text nodes.
+    // Pass 1: replace `[[...]]` / `![[...]]` inside text nodes. A matched text
+    // node is never the tree root, so `parent` and `index` are always set;
+    // assert them rather than guard so there is no unreachable branch.
     visit(root, "text", (node: TextNode, index: number | null, parent: Parent | null) => {
-      if (!parent || index === null) return;
+      const parentNode = parent as Parent;
+      const at = index as number;
       // Skip text inside inline code, code blocks, links, etc.
-      if (parent.type === "inlineCode" || parent.type === "code" || parent.type === "link") {
+      if (
+        parentNode.type === "inlineCode" ||
+        parentNode.type === "code" ||
+        parentNode.type === "link"
+      ) {
         return;
       }
 
@@ -166,7 +173,7 @@ const remarkWikilink: Plugin<[WikilinkPluginOptions?]> =
         // image embeds are unchanged. Only `![[note]]` becomes an embed node, and
         // only directly inside a paragraph: an embed nested in inline markup
         // (`**![[note]]**`) can't be hoisted to a block, so it stays a wikilink.
-        if (bang && !isImageFile(parsed.baseTarget) && parent.type === "paragraph") {
+        if (bang && !isImageFile(parsed.baseTarget) && parentNode.type === "paragraph") {
           replacement.push(buildEmbedNode(parsed, options));
         } else {
           if (bang) replacement.push({ type: "text", value: "!" } as TextNode);
@@ -179,8 +186,8 @@ const remarkWikilink: Plugin<[WikilinkPluginOptions?]> =
         replacement.push({ type: "text", value: value.slice(cursor) } as TextNode);
       }
 
-      parent.children.splice(index, 1, ...replacement);
-      return index + replacement.length;
+      parentNode.children.splice(at, 1, ...replacement);
+      return at + replacement.length;
     });
 
     // Pass 2: normalize embeds sitting inside a paragraph. A paragraph made up
@@ -188,7 +195,6 @@ const remarkWikilink: Plugin<[WikilinkPluginOptions?]> =
     // level; a paragraph that mixes an embed with other content downgrades the
     // embed to a plain wikilink so nothing nests a block inside a `<p>`.
     visit(root, "paragraph", (node: Parent, index: number | null, parent: Parent | null) => {
-      if (!parent || index === null) return;
       const embeds = node.children.filter((c) => c.data?.embed);
       if (embeds.length === 0) return;
 
@@ -197,8 +203,11 @@ const remarkWikilink: Plugin<[WikilinkPluginOptions?]> =
       );
 
       if (standalone) {
-        parent.children.splice(index, 1, ...embeds);
-        return index + embeds.length;
+        // A paragraph always has a parent and numeric index (never the root).
+        const parentNode = parent as Parent;
+        const at = index as number;
+        parentNode.children.splice(at, 1, ...embeds);
+        return at + embeds.length;
       }
 
       // Mixed content: swap each embed node in place for its wikilink form.
