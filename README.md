@@ -53,6 +53,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Live preview updates as you type
 - Wikilink autocomplete: type `[[` in a folder workspace to pick from existing notes; Tab/Enter to insert
 - Editor keymaps: choose Default, Vim, or VSCode bindings in Settings → Editor
+- Spell check: underline misspelled words while editing, with right-click suggestions; opt in under Settings → Editor
 
 ### Viewer
 - Jupyter notebooks: open `.ipynb` files directly; markdown cells render with full markdown (math, code, diagrams), code cells are syntax-highlighted, and image, HTML, plain-text, and colourised stream/traceback outputs show under each cell with `In [n]:` / `Out [n]:` prompts (read-only)
@@ -262,7 +263,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Source editor | ✅ | ✅ | n/a | ✅ | ✅ | ✅ | ✅ |
 | WYSIWYG / inline preview | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ❌ |
 | Split view | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Spell check | planned | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Spell check | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ### Navigation
 
@@ -292,7 +293,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 |---|---|---|---|---|---|---|---|
 | AI (multi-provider, local) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
 | Text-to-speech | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
-| Plugin / extension API | planned | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
+| Plugin / extension API | ⚠️ experimental | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
 | Cloud sync | ⚠️ Git-backed | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Graph view | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
 

@@ -128,6 +128,12 @@ export type EditorKeymap = "default" | "vim" | "vscode";
 
 export interface EditorSettings {
   keymap: EditorKeymap;
+  // Underline misspelled words in the editor (edit and split modes). Off by
+  // default; the dictionary only loads once enabled.
+  spellCheck: boolean;
+  // Dictionary language for spell check, as a folder name under
+  // public/dictionaries (currently only "en" ships).
+  spellCheckLanguage: string;
 }
 
 export interface KeybindingSettings {
@@ -202,6 +208,8 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   editor: {
     keymap: "default",
+    spellCheck: false,
+    spellCheckLanguage: "en",
   },
 };
 
