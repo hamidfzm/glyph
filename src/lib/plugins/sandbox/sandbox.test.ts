@@ -91,6 +91,12 @@ describe("startSandbox", () => {
     expect(worker.terminated).toBe(true);
   });
 
+  it("ignores worker failures after activation", async () => {
+    const { worker } = await startActivated();
+    worker.onerror?.("late failure");
+    expect(worker.terminated).toBe(false);
+  });
+
   it("logs errors after activation instead of rejecting", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const { worker } = await startActivated();
@@ -157,6 +163,11 @@ describe("startSandbox", () => {
     const second = exporter.build("b");
     worker.emit({ type: "export-result", callId: 2, ok: false, error: "no bytes" });
     await expect(second).rejects.toThrow("no bytes");
+
+    // An ok result with no output still rejects instead of resolving undefined.
+    const third = exporter.build("c");
+    worker.emit({ type: "export-result", callId: 3, ok: true });
+    await expect(third).rejects.toThrow("export failed");
 
     // Unknown callId is ignored rather than crashing the bridge.
     worker.emit({ type: "export-result", callId: 99, ok: true, output: "x" });
