@@ -35,6 +35,13 @@ export interface PluginManifest {
   main?: string;
   /** Capabilities requested; shown on the consent screen before first enable. */
   permissions?: PluginPermission[];
+  /**
+   * Run in a dedicated worker instead of the app context. Sandboxed plugins
+   * get no DOM and network fenced to their `network:` permissions, but only
+   * the non-UI API subset: commands, styles, exporters, workspace, settings,
+   * notify, and translations. No markdown pipeline or panel mounts.
+   */
+  sandbox?: boolean;
 }
 
 /**
@@ -50,6 +57,8 @@ export interface InstalledPlugin {
   description?: string;
   /** Capabilities the plugin declares; shown to the user before install. */
   permissions?: string[];
+  /** Run isolated in a worker; see {@link PluginManifest.sandbox}. */
+  sandbox?: boolean;
   /** Absolute path of the installed plugin folder. */
   dir: string;
   /** Source text of the plugin's ESM entry file. */
@@ -78,6 +87,11 @@ export interface MountContribution {
 
 /** A status bar item contribution. */
 export type StatusBarItemContribution = MountContribution;
+
+/** A stylesheet contributed by a plugin, injected after the app styles. */
+export interface StyleContribution {
+  css: string;
+}
 
 /** A titled sidebar section contribution. */
 export interface SidebarPanelContribution extends MountContribution {
@@ -118,6 +132,11 @@ export interface UiRegistryApi {
   addSidebarPanel(panel: SidebarPanelContribution): Disposer;
   /** One settings panel per plugin; the host keys it by the plugin's id. */
   addSettingsPanel(panel: MountContribution): Disposer;
+  /**
+   * Inject a stylesheet after the app styles (theme plugins, custom CSS).
+   * Removed automatically when the plugin unloads.
+   */
+  addStyles(css: string): Disposer;
 }
 
 export interface ExportersRegistryApi {

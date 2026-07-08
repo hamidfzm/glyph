@@ -2,6 +2,7 @@ import { PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 import { type Disposer, DisposerBag } from "./disposer";
 import { importPluginModule, type ModuleImporter } from "./loader";
 import { createRegistry, type Registry } from "./registry";
+import { startSandbox, type WorkerSpawner } from "./sandbox/sandbox";
 import type {
   CommandContribution,
   ExporterContribution,
@@ -13,6 +14,7 @@ import type {
   SettingsPanelContribution,
   SidebarPanelContribution,
   StatusBarItemContribution,
+  StyleContribution,
 } from "./types";
 import { createWorkspaceApi } from "./workspaceApi";
 
@@ -52,6 +54,8 @@ export interface PluginHost {
   readonly sidebarPanels: Registry<SidebarPanelContribution>;
   /** Per-plugin settings UIs, shown under each row in Manage Plugins. */
   readonly settingsPanels: Registry<SettingsPanelContribution>;
+  /** Stylesheets contributed by loaded plugins, injected after app styles. */
+  readonly styles: Registry<StyleContribution>;
   /** Export formats contributed by loaded plugins. */
   readonly exporters: Registry<ExporterContribution>;
   /**
@@ -89,6 +93,9 @@ export function createPluginHost(
   // provider keeps this current so ctx.workspace stays scoped correctly.
   getWorkspaceRoot: () => string | null = () => null,
   settingsBackend: PluginSettingsBackend = noopSettingsBackend,
+  // How sandboxed plugins spawn their worker; injectable because jsdom has no
+  // Worker. Defaults to a real blob-URL Worker inside startSandbox.
+  workerSpawner?: WorkerSpawner,
 ): PluginHost {
   const commands = createRegistry<CommandContribution>();
   const statusBarItems = createRegistry<StatusBarItemContribution>();
@@ -97,6 +104,7 @@ export function createPluginHost(
   const fencedRenderers = createRegistry<FencedRendererContribution>();
   const sidebarPanels = createRegistry<SidebarPanelContribution>();
   const settingsPanels = createRegistry<SettingsPanelContribution>();
+  const styles = createRegistry<StyleContribution>();
   const exporters = createRegistry<ExporterContribution>();
   const loaded = new Map<string, LoadedPlugin>();
 
@@ -122,6 +130,9 @@ export function createPluginHost(
       addSidebarPanel: tracked(sidebarPanels.register, bag),
       addSettingsPanel(panel) {
         return tracked(settingsPanels.register, bag)({ ...panel, pluginId: plugin.id });
+      },
+      addStyles(css) {
+        return tracked(styles.register, bag)({ css });
       },
     },
     markdown: {
@@ -171,6 +182,7 @@ export function createPluginHost(
     fencedRenderers,
     sidebarPanels,
     settingsPanels,
+    styles,
     exporters,
     async load(plugin, importer) {
       if (!satisfiesApiVersion(plugin.apiVersion)) {
@@ -180,6 +192,49 @@ export function createPluginHost(
       }
       const generation = (loadGeneration.get(plugin.id) ?? 0) + 1;
       loadGeneration.set(plugin.id, generation);
+
+      if (plugin.sandbox) {
+        const settings = await settingsBackend.load(plugin.id);
+        const bag = new DisposerBag();
+        const workspace = createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? []);
+        const terminate = await startSandbox(
+          plugin,
+          settings,
+          {
+            registerCommand: tracked(commands.register, bag),
+            addStyles(css) {
+              tracked(styles.register, bag)({ css });
+            },
+            registerExporter: tracked(exporters.register, bag),
+            notify,
+            registerTranslations,
+            settingsSet(key, value) {
+              settings[key] = value;
+              settingsBackend.save(plugin.id, settings);
+            },
+            workspaceRead: workspace.readFile,
+            workspaceList: workspace.listFiles,
+          },
+          workerSpawner,
+        );
+        bag.add(terminate);
+        if (loadGeneration.get(plugin.id) !== generation) {
+          bag.dispose();
+          return;
+        }
+        unload(plugin.id);
+        loaded.set(plugin.id, {
+          info: {
+            id: plugin.id,
+            name: plugin.name,
+            version: plugin.version,
+            description: plugin.description,
+          },
+          module: { activate: () => {} },
+          bag,
+        });
+        return;
+      }
 
       const [module, settings] = await Promise.all([
         importPluginModule(plugin.mainSource, importer),

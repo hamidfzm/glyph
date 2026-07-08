@@ -10,6 +10,7 @@ import type {
   SettingsPanelContribution,
   SidebarPanelContribution,
   StatusBarItemContribution,
+  StyleContribution,
 } from "@/lib/plugins/types";
 import { PluginStatusBarItems } from "./PluginStatusBarItems";
 
@@ -22,6 +23,7 @@ function value(statusBarItems = createRegistry<StatusBarItemContribution>()): Pl
     fencedRenderers: createRegistry<FencedRendererContribution>(),
     sidebarPanels: createRegistry<SidebarPanelContribution>(),
     settingsPanels: createRegistry<SettingsPanelContribution>(),
+    styles: createRegistry<StyleContribution>(),
     exporters: createRegistry<ExporterContribution>(),
     installed: [],
     disabled: [],

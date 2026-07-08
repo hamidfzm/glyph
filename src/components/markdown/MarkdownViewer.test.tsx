@@ -152,6 +152,42 @@ describe("MarkdownViewer wikilinks", () => {
   });
 });
 
+describe("MarkdownViewer scrolling", () => {
+  it("restores the initial scroll position on mount", () => {
+    const raf = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((cb: FrameRequestCallback) => {
+        cb(0);
+        return 0;
+      });
+    const { container } = renderMd("# Title", { initialScrollTop: 120 });
+    expect(container.querySelector(".overflow-y-auto")?.scrollTop).toBe(120);
+    raf.mockRestore();
+  });
+
+  it("reports scroll position changes to the parent", () => {
+    const onScrollChange = vi.fn();
+    const { container } = renderMd("# Title", { onScrollChange });
+    const scroller = container.querySelector(".overflow-y-auto") as HTMLDivElement;
+    fireEvent.scroll(scroller, { target: { scrollTop: 42 } });
+    expect(onScrollChange).toHaveBeenCalledWith(42);
+  });
+});
+
+describe("MarkdownViewer search", () => {
+  it("clears the query and notifies the parent when search closes", () => {
+    const onSearchClose = vi.fn();
+    const { getByRole, getByLabelText } = renderMd("# Title", { searchOpen: true, onSearchClose });
+    const input = getByLabelText("Search") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "tit" } });
+    expect(input.value).toBe("tit");
+
+    fireEvent.click(getByRole("button", { name: "Close search" }));
+    expect(onSearchClose).toHaveBeenCalledOnce();
+    expect((getByLabelText("Search") as HTMLInputElement).value).toBe("");
+  });
+});
+
 describe("MarkdownViewer MDX notice", () => {
   it("shows the notice for .mdx files", () => {
     const { getByRole } = renderMd("# Title", { filePath: "/docs/page.mdx" });
