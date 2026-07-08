@@ -64,7 +64,7 @@ describe("installFromRegistry", () => {
     vi.mocked(invoke).mockResolvedValue(undefined);
 
     await installFromRegistry(
-      entry({ version: "2.0.0", description: "d", permissions: ["workspace:read"] }),
+      entry({ version: "2.0.0", description: "d", permissions: ["workspace:read"], sandbox: true }),
     );
 
     const [cmd, args] = vi.mocked(invoke).mock.calls.at(-1) ?? [];
@@ -77,6 +77,7 @@ describe("installFromRegistry", () => {
       apiVersion: "^1.0.0",
       description: "d",
       permissions: ["workspace:read"],
+      sandbox: true,
     });
   });
 

@@ -24,6 +24,8 @@ export interface RegistryEntry {
    * silently ship different code than the reviewed index entry.
    */
   sha256?: string;
+  /** Run isolated in a worker; see the manifest `sandbox` flag. */
+  sandbox?: boolean;
 }
 
 /** Hex SHA-256 of UTF-8 text, via WebCrypto (available in the webview and Node). */
@@ -85,6 +87,7 @@ export async function installFromRegistry(entry: RegistryEntry): Promise<Install
     apiVersion: entry.apiVersion,
     description: entry.description,
     permissions: entry.permissions,
+    sandbox: entry.sandbox,
   });
   return invoke<InstalledPlugin>("install_plugin_files", { manifest, main });
 }

@@ -20,6 +20,9 @@ pub struct InstalledPlugin {
     /// Capabilities the plugin declares; shown to the user before install.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub permissions: Vec<String>,
+    /// Run isolated in a worker instead of the app context.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub sandbox: bool,
     /// Absolute path of the installed plugin folder.
     pub dir: String,
     /// Source text of the plugin's ESM entry file.
@@ -33,6 +36,7 @@ struct ManifestInfo {
     api_version: String,
     description: Option<String>,
     permissions: Vec<String>,
+    sandbox: bool,
     main: String,
 }
 
@@ -99,6 +103,11 @@ fn parse_manifest(json: &str) -> Result<ManifestInfo, String> {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
         permissions: parse_permissions(&value)?,
+        sandbox: match value.get("sandbox") {
+            None => false,
+            Some(serde_json::Value::Bool(b)) => *b,
+            Some(_) => return Err("manifest \"sandbox\" must be a boolean".into()),
+        },
         main,
     })
 }
@@ -117,6 +126,7 @@ fn read_plugin_dir(dir: &Path) -> Result<InstalledPlugin, String> {
         api_version: info.api_version,
         description: info.description,
         permissions: info.permissions,
+        sandbox: info.sandbox,
         dir: dir.to_string_lossy().to_string(),
         main_source,
     })
@@ -499,6 +509,7 @@ mod tests {
             api_version: "^1.0.0".into(),
             description: None,
             permissions: Vec::new(),
+            sandbox: false,
             dir: "d".into(),
             main_source: "s".into(),
         };
@@ -507,6 +518,24 @@ mod tests {
         assert!(json.contains("\"mainSource\""));
         assert!(!json.contains("\"description\""));
         assert!(!json.contains("\"permissions\""));
+        assert!(!json.contains("\"sandbox\""));
+    }
+
+    #[test]
+    fn parse_manifest_reads_sandbox_flag() {
+        let with_sandbox = |v: &str| {
+            format!(
+                r#"{{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0","sandbox":{v}}}"#
+            )
+        };
+        assert!(parse_manifest(&with_sandbox("true")).unwrap().sandbox);
+        assert!(!parse_manifest(&with_sandbox("false")).unwrap().sandbox);
+        assert!(
+            !parse_manifest(r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0"}"#)
+                .unwrap()
+                .sandbox
+        );
+        assert!(parse_manifest(&with_sandbox("\"yes\"")).is_err());
     }
 
     #[test]
