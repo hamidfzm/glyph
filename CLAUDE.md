@@ -23,7 +23,7 @@ The spec stays current throughout: acceptance-criteria and task checkboxes on th
 
 - **Plan before non-trivial work.** Anything beyond a one-line change starts from a spec (`/spec`) or an existing issue, not freeform edits.
 - **Ask, don't guess.** When acceptance criteria or scope are ambiguous, ask the user before writing code.
-- **Follow the rules in `.claude/rules/`**, which are authoritative for code organization, frontend, Rust, app-shell, docs, cleanup, CI hygiene, the worktree workflow, and Sentry issue fixes.
+- **Follow the rules in `.claude/rules/`**, which are authoritative for code organization, frontend, i18n, Rust, app-shell, docs, cleanup, CI hygiene, the worktree workflow, and Sentry issue fixes.
 - **Run the gates before every PR** (the same gate the Husky pre-commit hook and CI enforce):
   ```bash
   pnpm typecheck && pnpm check && pnpm test

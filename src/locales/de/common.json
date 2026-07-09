@@ -152,12 +152,16 @@
   "mermaid": {
     "empty": "Leere Diagrammquelle",
     "errorLabel": "Diagrammfehler",
-    "errorTitle": "Diagramm konnte nicht gerendert werden"
+    "errorTitle": "Diagramm konnte nicht gerendert werden",
+    "label": "Mermaid-Diagramm",
+    "zoomHint": "Zum Zoomen klicken"
   },
   "d2": {
     "empty": "Leere Diagrammquelle",
     "errorLabel": "Diagrammfehler",
-    "errorTitle": "Diagramm konnte nicht gerendert werden"
+    "errorTitle": "Diagramm konnte nicht gerendert werden",
+    "label": "D2-Diagramm",
+    "zoomHint": "Zum Zoomen klicken"
   },
   "taskList": {
     "toggle": "Aufgabe umschalten"
@@ -224,5 +228,16 @@
     "docx": "Word-Dokument",
     "epub": "EPUB",
     "pdf": "PDF"
+  },
+  "headingAnchor": {
+    "label": "Link zur Überschrift kopieren"
+  },
+  "embed": {
+    "openSource": "Eingebettete Notiz öffnen",
+    "loading": "Einbettung wird geladen...",
+    "broken": "Eingebettete Notiz nicht gefunden: {{target}}",
+    "circular": "Zirkuläre Einbettung: {{target}}",
+    "headingNotFound": "Überschrift nicht gefunden: {{heading}}",
+    "error": "Einbettung konnte nicht geladen werden: {{target}}"
   }
 }

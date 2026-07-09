@@ -171,6 +171,18 @@
         "comment": "Zeilenkommentar umschalten",
         "multiSelect": "das nächste Vorkommen auswählen; Cmd/Ctrl+] oder [ zum Ein- / Ausrücken"
       }
+    },
+    "spellCheck": {
+      "title": "Rechtschreibprüfung",
+      "label": "Rechtschreibung prüfen",
+      "description": "Falsch geschriebene Wörter beim Bearbeiten unterstreichen. Rechtsklick auf ein Wort zeigt Vorschläge. Gilt für Bearbeitungs- und Split-Modus.",
+      "language": "Sprache",
+      "languages": {
+        "en": "Englisch (US)"
+      },
+      "ignore": "Ignorieren",
+      "add": "Zum Wörterbuch hinzufügen",
+      "noSuggestions": "Keine Vorschläge"
     }
   },
   "ai": {

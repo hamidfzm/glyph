@@ -17,6 +17,7 @@
   "close": "关闭窗口",
   "settings": "设置…",
   "syncSettings": "云同步…",
+  "managePlugins": "插件…",
   "find": "查找…",
   "commandPalette": "命令面板…",
   "toggleFilesSidebar": "切换文件侧边栏",

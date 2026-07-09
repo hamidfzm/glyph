@@ -171,6 +171,18 @@
         "comment": "切换行注释",
         "multiSelect": "选择下一处匹配；Cmd/Ctrl+] 或 [ 缩进 / 取消缩进"
       }
+    },
+    "spellCheck": {
+      "title": "拼写检查",
+      "label": "检查拼写",
+      "description": "编辑时为拼写错误的单词加下划线。右键单击单词查看建议。适用于编辑和分屏模式。",
+      "language": "语言",
+      "languages": {
+        "en": "英语（美国）"
+      },
+      "ignore": "忽略",
+      "add": "添加到词典",
+      "noSuggestions": "无建议"
     }
   },
   "ai": {

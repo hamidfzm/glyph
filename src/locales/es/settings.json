@@ -171,6 +171,18 @@
         "comment": "alternar comentario de línea",
         "multiSelect": "seleccionar la siguiente coincidencia; Cmd/Ctrl+] o [ para sangrar / quitar sangría"
       }
+    },
+    "spellCheck": {
+      "title": "Revisión ortográfica",
+      "label": "Revisar ortografía",
+      "description": "Subraya palabras mal escritas al editar. Haz clic derecho en una palabra para ver sugerencias. Se aplica a los modos de edición y dividido.",
+      "language": "Idioma",
+      "languages": {
+        "en": "Inglés (EE. UU.)"
+      },
+      "ignore": "Ignorar",
+      "add": "Añadir al diccionario",
+      "noSuggestions": "Sin sugerencias"
     }
   },
   "ai": {

@@ -42,6 +42,7 @@ pub struct MenuItemRefs {
     actual_size: MenuItem<Wry>,
     settings: MenuItem<Wry>,
     sync_settings: MenuItem<Wry>,
+    manage_plugins: MenuItem<Wry>,
     ai_chat: MenuItem<Wry>,
     ai_summarize: MenuItem<Wry>,
     ai_explain: MenuItem<Wry>,
@@ -84,6 +85,7 @@ pub struct MenuLabels {
     close: String,
     settings: String,
     sync_settings: String,
+    manage_plugins: String,
     find: String,
     command_palette: String,
     toggle_files_sidebar: String,
@@ -374,6 +376,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         actual_size,
         settings,
         sync_settings,
+        manage_plugins,
         ai_chat,
         ai_summarize,
         ai_explain,
@@ -515,6 +518,7 @@ pub fn apply_menu_labels(refs: &MenuItemRefs, l: &MenuLabels) -> Result<(), Stri
     refs.close.set_text(&l.close).map_err(s)?;
     refs.settings.set_text(&l.settings).map_err(s)?;
     refs.sync_settings.set_text(&l.sync_settings).map_err(s)?;
+    refs.manage_plugins.set_text(&l.manage_plugins).map_err(s)?;
     refs.find.set_text(&l.find).map_err(s)?;
     refs.command_palette
         .set_text(&l.command_palette)

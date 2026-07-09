@@ -152,12 +152,16 @@
   "mermaid": {
     "empty": "منبع نمودار خالی است",
     "errorLabel": "خطای نمودار",
-    "errorTitle": "رندر نمودار ناموفق بود"
+    "errorTitle": "رندر نمودار ناموفق بود",
+    "label": "نمودار Mermaid",
+    "zoomHint": "برای بزرگنمایی کلیک کنید"
   },
   "d2": {
     "empty": "منبع نمودار خالی است",
     "errorLabel": "خطای نمودار",
-    "errorTitle": "رندر نمودار ناموفق بود"
+    "errorTitle": "رندر نمودار ناموفق بود",
+    "label": "نمودار D2",
+    "zoomHint": "برای بزرگنمایی کلیک کنید"
   },
   "taskList": {
     "toggle": "تغییر وضعیت کار"
@@ -224,5 +228,16 @@
     "docx": "سند Word",
     "epub": "EPUB",
     "pdf": "PDF"
+  },
+  "headingAnchor": {
+    "label": "کپی پیوند عنوان"
+  },
+  "embed": {
+    "openSource": "باز کردن یادداشت جاسازی‌شده",
+    "loading": "در حال بارگذاری جاسازی...",
+    "broken": "یادداشت جاسازی‌شده پیدا نشد: {{target}}",
+    "circular": "جاسازی حلقه‌ای: {{target}}",
+    "headingNotFound": "عنوان پیدا نشد: {{heading}}",
+    "error": "جاسازی بارگذاری نشد: {{target}}"
   }
 }
