@@ -406,22 +406,23 @@ jobs:
     runs-on: windows-latest
     steps:
       # Submits a manifest-update PR to microsoft/winget-pkgs for
-      # hamidfzm.Glyph from the released MSI. Requires WINGET_GITHUB_TOKEN,
-      # a classic PAT with public_repo scope whose owner has a fork of
-      # microsoft/winget-pkgs; the package must already exist upstream
-      # (one-time bootstrap, see winget/README.md). Skips cleanly until the
-      # secret is set, so it never fails releases before setup (same gate
-      # pattern as publish-snap).
+      # hamidfzm.Glyph from the released MSI. Reuses TAP_GITHUB_TOKEN (the
+      # classic PAT already used for the tap/bucket/apt repos; winget-releaser
+      # needs public_repo, which repo scope includes) and forks
+      # microsoft/winget-pkgs under the token owner if needed. The package
+      # must already exist upstream (one-time bootstrap, see winget/README.md).
+      # Skips cleanly until the secret is set, so it never fails releases
+      # before setup (same gate pattern as publish-snap).
       - name: Check for winget token
         id: gate
         shell: bash
         env:
-          TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+          TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
         run: |
           if [ -n "$TOKEN" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No WINGET_GITHUB_TOKEN secret; skipping winget publish."
+            echo "No TAP_GITHUB_TOKEN secret; skipping winget publish."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Get version
@@ -436,7 +437,7 @@ jobs:
           version: ${{ steps.version.outputs.version }}
           release-tag: ${{ github.ref_name }}
           installers-regex: '_x64_en-US\.msi$'
-          token: ${{ secrets.WINGET_GITHUB_TOKEN }}
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
 
   publish-aur:
     needs: build

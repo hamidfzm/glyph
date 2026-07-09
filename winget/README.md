@@ -7,9 +7,11 @@ manifest-update PR against [microsoft/winget-pkgs](https://github.com/microsoft/
 
 ## One-time setup
 
-1. Create a classic GitHub PAT with `public_repo` scope and add it to this
-   repo's Actions secrets as `WINGET_GITHUB_TOKEN`. The token owner needs a
-   fork of `microsoft/winget-pkgs` (winget-releaser creates one if missing).
+1. The job reuses the existing `TAP_GITHUB_TOKEN` secret (the classic PAT
+   already used for the Homebrew tap, Scoop bucket, and apt repo; its `repo`
+   scope covers the `public_repo` winget-releaser needs). The token owner
+   needs a fork of `microsoft/winget-pkgs` (winget-releaser creates one if
+   missing). Nothing to set up if that secret exists.
 2. Submit the initial manifest, since winget-releaser can only update a
    package that already exists upstream. Easiest path, from a Windows machine:
 
