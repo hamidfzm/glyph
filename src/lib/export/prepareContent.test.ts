@@ -77,6 +77,23 @@ describe("prepareContent", () => {
     expect(html).toContain("keep");
   });
 
+  it("strips every in-content tool button while keeping the content around it", async () => {
+    // Heading anchors and the note-embed "open source" control are interactive
+    // tools; only their surrounding content should survive to the export.
+    setBody(
+      `<h2 id="s">Title<button type="button" class="heading-anchor" aria-label="Copy link">a</button></h2>` +
+        `<div class="markdown-embed"><button type="button" class="markdown-embed__source" aria-label="Open embedded note">o</button>` +
+        `<div class="markdown-embed__body"><p>embedded body</p></div></div>`,
+    );
+    const html = await prepareHtml();
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain("heading-anchor");
+    expect(html).not.toContain("markdown-embed__source");
+    // Heading text and embedded content are read-only, so they stay.
+    expect(html).toContain("Title");
+    expect(html).toContain("embedded body");
+  });
+
   it("disables task-list checkboxes so exports aren't interactive", async () => {
     setBody(
       `<ul class="contains-task-list"><li class="task-list-item">` +

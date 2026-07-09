@@ -97,8 +97,12 @@ export interface PreparedContent {
 }
 
 // Elements that exist only for interactive use in the app and should never
-// appear in an exported document.
-const STRIP_SELECTOR = ".code-copy-button, [data-export-ignore]";
+// appear in an exported document. Every rendered `<button>` is a tool (copy
+// code, heading anchor, note-embed "open source"), so the tag is stripped
+// wholesale; raw markdown can't produce one (button is not in the sanitize
+// allowlist), so this only removes our own affordances, never document content.
+// `[data-export-ignore]` covers non-button opt-outs.
+const STRIP_SELECTOR = "button, [data-export-ignore]";
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
