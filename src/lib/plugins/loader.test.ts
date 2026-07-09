@@ -22,6 +22,7 @@ describe("importPluginModule", () => {
         addStyles: vi.fn(),
       },
       exporters: { register: vi.fn() },
+      spellcheck: { registerDictionary: vi.fn() },
       settings: { get: vi.fn(), set: vi.fn() },
       markdown: {
         registerRemarkPlugin: vi.fn(),
@@ -50,6 +51,7 @@ describe("importPluginModule", () => {
         addStyles: vi.fn(),
       },
       exporters: { register: vi.fn() },
+      spellcheck: { registerDictionary: vi.fn() },
       settings: { get: vi.fn(), set: vi.fn() },
       markdown: {
         registerRemarkPlugin: vi.fn(),

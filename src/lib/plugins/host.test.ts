@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { clearDictionarySources, getDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { FakeWorker } from "@/test/fakeWorker";
 import { PLUGIN_API_VERSION } from "./apiVersion";
 import { createPluginHost } from "./host";
@@ -497,5 +498,27 @@ describe("createPluginHost", () => {
       expect(host.listLoaded()).toHaveLength(0);
       expect(worker.terminated).toBe(true);
     });
+  });
+});
+
+describe("spellcheck dictionary contributions", () => {
+  it("registers through the plugin's bag and unload removes the dictionary", async () => {
+    clearDictionarySources();
+    const host = createPluginHost(vi.fn());
+    const module: PluginModule = {
+      activate(ctx) {
+        ctx.spellcheck.registerDictionary({
+          language: "fa",
+          label: "Persian",
+          load: () => Promise.resolve({ aff: "AFF", dic: "DIC" }),
+        });
+      },
+    };
+
+    await host.load(installed(), importerFor(module));
+    expect(getDictionarySource("fa")?.label).toBe("Persian");
+
+    host.unload("com.x.demo");
+    expect(getDictionarySource("fa")).toBeUndefined();
   });
 });

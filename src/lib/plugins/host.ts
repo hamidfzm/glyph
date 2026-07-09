@@ -1,3 +1,4 @@
+import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 import { type Disposer, DisposerBag } from "./disposer";
 import { importPluginModule, type ModuleImporter } from "./loader";
@@ -144,6 +145,10 @@ export function createPluginHost(
     },
     workspace: createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? []),
     exporters: { register: tracked(exporters.register, bag) },
+    // Dictionaries live in the spellcheck module's own registry (the speller
+    // and the settings UI read it directly); only the disposal is routed
+    // through the plugin's bag here.
+    spellcheck: { registerDictionary: tracked(registerDictionarySource, bag) },
     settings: {
       get: (key) => settings[key] as never,
       set(key, value) {

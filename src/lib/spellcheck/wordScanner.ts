@@ -22,10 +22,12 @@ const EXCLUDED_NODES = new Set([
   "CommentBlock",
 ]);
 
-// Letters (incl. combining marks) with internal apostrophes and hyphens, so
-// "don't" and "well-being" stay single tokens. No digits, so "utf8" won't match
-// as one word.
-const WORD_RE = /\p{L}[\p{L}\p{M}'’]*(?:-\p{L}[\p{L}\p{M}'’]*)*/gu;
+// Letters (incl. combining marks) with internal apostrophes, hyphens, and the
+// zero-width non-joiner (U+200C), so "don't", "well-being", and ZWNJ-joined
+// Persian words (mi + ZWNJ + ravam) stay single tokens. ZWNJ is a format
+// character, not a letter, so it needs listing explicitly. No digits, so
+// "utf8" won't match as one word.
+const WORD_RE = /\p{L}[\p{L}\p{M}\u200C'’]*(?:-\p{L}[\p{L}\p{M}\u200C'’]*)*/gu;
 
 function isAllCaps(word: string): boolean {
   return word === word.toUpperCase() && word !== word.toLowerCase();

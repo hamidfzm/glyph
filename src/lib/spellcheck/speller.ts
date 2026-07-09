@@ -1,4 +1,5 @@
 import nspell from "nspell";
+import { getDictionarySource, subscribeDictionarySources } from "./dictionarySources";
 
 // A loaded spell checker instance for one language.
 export type Speller = ReturnType<typeof nspell>;
@@ -23,6 +24,13 @@ async function fetchText(url: string): Promise<string> {
 }
 
 async function loadSpeller(language: string): Promise<Speller> {
+  // A plugin-registered dictionary wins over the bundled assets, so plugins
+  // can both add new languages and override a shipped one.
+  const source = getDictionarySource(language);
+  if (source) {
+    const { aff, dic } = await source.load();
+    return nspell(aff, dic);
+  }
   const base = `${DICTIONARY_BASE}/${language}`;
   const [aff, dic] = await Promise.all([
     fetchText(`${base}/index.aff`),
@@ -30,6 +38,10 @@ async function loadSpeller(language: string): Promise<Speller> {
   ]);
   return nspell(aff, dic);
 }
+
+// When a plugin registers, replaces, or removes a language, any cached checker
+// for it is stale; drop it so the next request rebuilds from the new source.
+subscribeDictionarySources((language) => cache.delete(language));
 
 export function getSpeller(language: string): Promise<Speller> {
   let pending = cache.get(language);
