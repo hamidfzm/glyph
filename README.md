@@ -120,6 +120,12 @@ brew install --cask glyph
 
 `brew trust` is required once because Glyph ships from a third-party tap; recent Homebrew refuses to load casks from untrusted taps.
 
+### Windows (winget)
+
+```powershell
+winget install hamidfzm.Glyph
+```
+
 ### Windows (Chocolatey)
 
 ```powershell

@@ -76,6 +76,9 @@ jobs:
 
             ### Windows
             ```powershell
+            # winget
+            winget install hamidfzm.Glyph
+
             # Chocolatey
             choco install glyph
 
@@ -139,6 +142,9 @@ jobs:
 
           ### Windows
           ```powershell
+          # winget
+          winget install hamidfzm.Glyph
+
           # Chocolatey
           choco install glyph
 
@@ -394,6 +400,43 @@ jobs:
               --field message="chore: add glyph $VERSION" \
               --field content="$(base64 -w0 /tmp/glyph.json)"
           fi
+
+  publish-winget:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      # Submits a manifest-update PR to microsoft/winget-pkgs for
+      # hamidfzm.Glyph from the released MSI. Requires WINGET_GITHUB_TOKEN,
+      # a classic PAT with public_repo scope whose owner has a fork of
+      # microsoft/winget-pkgs; the package must already exist upstream
+      # (one-time bootstrap, see winget/README.md). Skips cleanly until the
+      # secret is set, so it never fails releases before setup (same gate
+      # pattern as publish-snap).
+      - name: Check for winget token
+        id: gate
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No WINGET_GITHUB_TOKEN secret; skipping winget publish."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Get version
+        if: steps.gate.outputs.enabled == 'true'
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - uses: vedantmgoyal9/winget-releaser@v2
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          identifier: hamidfzm.Glyph
+          version: ${{ steps.version.outputs.version }}
+          release-tag: ${{ github.ref_name }}
+          installers-regex: '_x64_en-US\.msi$'
+          token: ${{ secrets.WINGET_GITHUB_TOKEN }}
 
   publish-aur:
     needs: build
