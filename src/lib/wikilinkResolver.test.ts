@@ -74,4 +74,12 @@ describe("resolveWikilink", () => {
     expect(resolveWikilink("Notes/Travel", files).path).toBe("/workspace/Notes/Travel.md");
     expect(resolveWikilink("Archive/Travel", files).path).toBe("/workspace/Archive/Travel.md");
   });
+
+  it("matches a `/` target against backslash workspace paths (Windows)", () => {
+    // list_markdown_files returns OS-separator paths; a wikilink is authored
+    // with `/`, so the separators must be normalized before matching.
+    const win = ["C:\\ws\\Index.md", "C:\\ws\\Notes\\Ingredients.md"];
+    expect(resolveWikilink("Notes/Ingredients", win).path).toBe("C:\\ws\\Notes\\Ingredients.md");
+    expect(resolveWikilink("Notes\\Ingredients", win).path).toBe("C:\\ws\\Notes\\Ingredients.md");
+  });
 });

@@ -57,10 +57,16 @@ describe("note embeds on export", () => {
     expect(prepared?.html).not.toContain("<button");
   });
 
-  it("carries the embedded content through to the PDF walker", async () => {
+  it("boxes the embed and carries its content through to the PDF walker", async () => {
     await renderEmbedded("![[Note]]", "## Recipes\n\nPASTA_STEP", "PASTA_STEP");
     const prepared = await prepareContent({ entries: [], includeToc: false });
-    const json = JSON.stringify(convertHtmlToPdf(prepared?.html ?? ""));
+    const content = convertHtmlToPdf(prepared?.html ?? "");
+    // The embed renders as a bordered box (a bordered pdfmake table), not flat text.
+    const box = content.find(
+      (c) => typeof c === "object" && c !== null && "table" in c && "layout" in c,
+    );
+    expect(box).toBeTruthy();
+    const json = JSON.stringify(content);
     expect(json).toContain("Recipes");
     expect(json).toContain("PASTA_STEP");
   });

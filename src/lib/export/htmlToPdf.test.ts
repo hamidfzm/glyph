@@ -13,16 +13,19 @@ describe("convertHtmlToPdf", () => {
     expect(list.ul).toHaveLength(2);
   });
 
-  it("flattens a note embed's rendered content into block nodes", () => {
-    // A `![[note]]` embed renders as a bordered div; the exporter recurses div
-    // containers, so the embedded heading and body land in the PDF and the
-    // icon-only source button contributes nothing.
+  it("boxes a note embed in a bordered table with its content inside", () => {
+    // A `![[note]]` embed renders as a bordered block on screen; the PDF wraps
+    // its content in a single-cell bordered table so it stays distinct. (The
+    // source button is stripped by prepareContent before the walker runs.)
     const html =
       '<div class="markdown-embed">' +
-      '<button class="markdown-embed__source"><svg><path/></svg></button>' +
       '<div class="markdown-embed__body"><h2>Section</h2><p>embedded body</p></div>' +
       "</div>";
-    const json = JSON.stringify(convertHtmlToPdf(html));
+    const content = convertHtmlToPdf(html);
+    const box = content[0] as { table?: { body: unknown[][] }; layout?: unknown };
+    expect(box.table).toBeTruthy();
+    expect(box.layout).toBeTruthy();
+    const json = JSON.stringify(content);
     expect(json).toContain("Section");
     expect(json).toContain("embedded body");
   });
