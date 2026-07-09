@@ -71,6 +71,17 @@ describe("buildEpub", () => {
     expect(nav).toContain("Intro");
   });
 
+  it("resolves the chapter's base direction automatically for RTL documents", async () => {
+    const bytes = await buildEpub({
+      bodyHtml: "<p>سلام دنیا</p>",
+      css: "",
+      entries: [],
+      metadata: META,
+    });
+    const chapter = await (await loadEpub(bytes)).file("OEBPS/chapter.xhtml")?.async("string");
+    expect(chapter).toContain('<div class="markdown-body" dir="auto">');
+  });
+
   it("emits well-formed XHTML for the chapter (void tags self-closed)", async () => {
     const bytes = await buildEpub({
       bodyHtml: "<p>line<br>break</p><hr>",

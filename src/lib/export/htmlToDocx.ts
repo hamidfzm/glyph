@@ -9,6 +9,7 @@ import {
   TextRun,
   WidthType,
 } from "docx";
+import { isRtlText } from "@/lib/textDirection";
 import { inlineRuns } from "./docxInline";
 
 export const OL_REFERENCE = "glyph-ordered";
@@ -47,6 +48,15 @@ function childElements(el: Element, tag: string): Element[] {
   return Array.from(el.children).filter((c) => c.tagName.toLowerCase() === tag);
 }
 
+// Word renders an RTL paragraph (direction + right alignment) when w:bidi is
+// set; each block decides from its own first strong character, mirroring the
+// viewer's per-block `unicode-bidi: plaintext`. Code blocks stay LTR.
+// `undefined` (not `false`) keeps LTR paragraphs free of an explicit
+// `w:bidi val="false"` element.
+function isRtl(el: Element): true | undefined {
+  return isRtlText(el.textContent) || undefined;
+}
+
 function codeBlock(el: Element): Paragraph {
   // textContent is never null for an element; the assertion avoids a dead branch.
   const lines = el.textContent!.replace(/\n$/, "").split("\n");
@@ -62,7 +72,12 @@ function quoteBlocks(el: Element): Block[] {
   const paras = childElements(el, "p");
   const sources = paras.length > 0 ? paras : [el];
   return sources.map(
-    (p) => new Paragraph({ indent: { left: INDENT_STEP }, children: inlineRuns(p) }),
+    (p) =>
+      new Paragraph({
+        indent: { left: INDENT_STEP },
+        bidirectional: isRtl(p),
+        children: inlineRuns(p),
+      }),
   );
 }
 
@@ -76,7 +91,12 @@ function tableBlock(el: Element): Table {
         children: cells.map((cell) => {
           const header = cell.tagName.toLowerCase() === "th";
           return new TableCell({
-            children: [new Paragraph({ children: inlineRuns(cell, { bold: header }) })],
+            children: [
+              new Paragraph({
+                bidirectional: isRtl(cell),
+                children: inlineRuns(cell, { bold: header }),
+              }),
+            ],
           });
         }),
       }),
@@ -117,7 +137,9 @@ function listBlocks(listEl: Element, ordered: boolean, level: number, ctx: Ctx):
     const listProps: IParagraphOptions = ordered
       ? { numbering: { reference: OL_REFERENCE, level, instance } }
       : { bullet: { level } };
-    out.push(new Paragraph({ ...listProps, children: inlineRuns(clone) }));
+    out.push(
+      new Paragraph({ ...listProps, bidirectional: isRtl(clone), children: inlineRuns(clone) }),
+    );
     for (const sublist of nested) {
       out.push(...listBlocks(sublist, sublist.tagName.toLowerCase() === "ol", level + 1, ctx));
     }
@@ -128,18 +150,31 @@ function listBlocks(listEl: Element, ordered: boolean, level: number, ctx: Ctx):
 function blocksForNode(node: Node, ctx: Ctx): Block[] {
   if (node.nodeType === 3) {
     const text = (node as Text).data.trim();
-    return text ? [new Paragraph({ children: [new TextRun(text)] })] : [];
+    return text
+      ? [
+          new Paragraph({
+            bidirectional: isRtlText(text) || undefined,
+            children: [new TextRun(text)],
+          }),
+        ]
+      : [];
   }
   if (node.nodeType !== 1) return [];
   const el = node as Element;
   const tag = el.tagName.toLowerCase();
 
   if (HEADING_BY_TAG[tag]) {
-    return [new Paragraph({ heading: HEADING_BY_TAG[tag], children: inlineRuns(el) })];
+    return [
+      new Paragraph({
+        heading: HEADING_BY_TAG[tag],
+        bidirectional: isRtl(el),
+        children: inlineRuns(el),
+      }),
+    ];
   }
   if (tag === "p") {
     const children = inlineRuns(el);
-    return children.length ? [new Paragraph({ children })] : [];
+    return children.length ? [new Paragraph({ bidirectional: isRtl(el), children })] : [];
   }
   if (tag === "ul" || tag === "ol") return listBlocks(el, tag === "ol", 0, ctx);
   if (tag === "blockquote") return quoteBlocks(el);
@@ -155,7 +190,7 @@ function blocksForNode(node: Node, ctx: Ctx): Block[] {
 
   // Unknown element: render its inline content as a paragraph.
   const children = inlineRuns(el);
-  return children.length ? [new Paragraph({ children })] : [];
+  return children.length ? [new Paragraph({ bidirectional: isRtl(el), children })] : [];
 }
 
 /**
