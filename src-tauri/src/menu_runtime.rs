@@ -152,6 +152,8 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
     // first-time click teaches the user what it needs.
     let sync_settings =
         MenuItemBuilder::with_id("open-sync-settings", "Cloud Sync\u{2026}").build(handle)?;
+    let manage_plugins =
+        MenuItemBuilder::with_id("manage-plugins", "Plugins\u{2026}").build(handle)?;
 
     // Edit menu
     let find = MenuItemBuilder::with_id("find", "Find\u{2026}")
@@ -300,6 +302,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .about(Some(about_metadata))
             .separator()
             .item(&settings)
+            .item(&manage_plugins)
             .separator()
             .services()
             .separator()
@@ -332,6 +335,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .item(&export_menu)
             .separator()
             .item(&settings)
+            .item(&manage_plugins)
             .item(&sync_settings)
             .separator()
             .item(&close_tab)

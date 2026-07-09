@@ -163,6 +163,19 @@ describe("App", () => {
     await waitFor(() => expect(queryByTestId("settings-modal")).not.toBeInTheDocument());
   });
 
+  it("opens the plugins modal in response to menu-manage-plugins", async () => {
+    const listeners = captureMenuListeners();
+    const { wrapper } = withProviders();
+    const { queryByRole, findByRole } = render(<App />, { wrapper });
+    await waitFor(() => expect(listeners["menu-manage-plugins"]).toBeDefined());
+    expect(queryByRole("dialog")).not.toBeInTheDocument();
+
+    await act(async () => {
+      listeners["menu-manage-plugins"]?.({ payload: undefined });
+    });
+    expect(await findByRole("dialog")).toBeInTheDocument();
+  });
+
   it("renders EmptyState with a working Open Folder button (covers inline arrow)", async () => {
     const { wrapper } = withProviders();
     const { findByRole } = render(<App />, { wrapper });
