@@ -166,6 +166,19 @@ export const markdownSanitizeSchema = {
       "dataWikilinkHeading",
       "dataWikilinkBroken",
     ],
+    // Note-embed placeholder emitted by remarkWikilink; EmbedComponent reads
+    // these to load and render the target inline. rehype's default `div`
+    // attributes are the static microdata pair below, so we list them inline
+    // rather than spread `defaultSchema.attributes?.div`, whose `?.`/`?? []`
+    // fallbacks would be dead branches (attributes and div are always defined).
+    div: [
+      "itemScope",
+      "itemType",
+      "dataEmbedTarget",
+      "dataEmbedPath",
+      "dataEmbedHeading",
+      "dataEmbedBroken",
+    ],
     img: [...(defaultSchema.attributes?.img ?? []), "align", "width", "height"],
     details: [...(defaultSchema.attributes?.details ?? []), "open"],
     video: ["src", "controls", "width", "height", "poster", "loop", "muted", "autoplay"],

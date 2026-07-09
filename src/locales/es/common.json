@@ -224,5 +224,13 @@
     "docx": "Documento de Word",
     "epub": "EPUB",
     "pdf": "PDF"
+  },
+  "embed": {
+    "openSource": "Abrir nota insertada",
+    "loading": "Cargando inserción...",
+    "broken": "Nota insertada no encontrada: {{target}}",
+    "circular": "Inserción circular: {{target}}",
+    "headingNotFound": "Encabezado no encontrado: {{heading}}",
+    "error": "No se pudo cargar la inserción: {{target}}"
   }
 }

@@ -116,6 +116,58 @@
   border-bottom-style: dashed;
 }
 
+/* Note embeds: `![[note]]` renders the target inline in a bordered container. */
+.markdown-body .markdown-embed {
+  position: relative;
+  margin: 1em 0;
+  padding: 0.25em 1em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--glyph-radius);
+  background: var(--color-surface-secondary);
+}
+
+.markdown-body .markdown-embed__body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body .markdown-embed__body > :last-child {
+  margin-bottom: 0;
+}
+
+/* Icon-only affordance that jumps to the embedded note's source. */
+.markdown-body .markdown-embed__source {
+  position: absolute;
+  top: 0.5em;
+  inset-inline-end: 0.5em;
+  display: inline-flex;
+  padding: 0.25em;
+  border-radius: var(--glyph-radius-sm);
+  color: var(--color-text-tertiary);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.markdown-body .markdown-embed:hover .markdown-embed__source {
+  opacity: 1;
+}
+
+.markdown-body .markdown-embed__source:hover {
+  color: var(--color-accent);
+  background: var(--color-surface);
+}
+
+.markdown-body .markdown-embed__status {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+.markdown-body .markdown-embed--broken {
+  color: var(--color-text-tertiary);
+  border-style: dashed;
+  font-style: italic;
+}
+
 .markdown-body strong { font-weight: 600; }
 
 .markdown-body img {

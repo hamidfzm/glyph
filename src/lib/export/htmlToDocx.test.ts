@@ -21,6 +21,22 @@ describe("convertHtmlToDocx", () => {
     expect(blocks.some((b) => b instanceof Table)).toBe(true);
   });
 
+  it("boxes a note embed in a single-cell table", () => {
+    // The embed is a bordered block on screen; DOCX renders it as a table so it
+    // stays distinct instead of flattening into the surrounding paragraphs.
+    const blocks = convertHtmlToDocx(
+      '<div class="markdown-embed"><div class="markdown-embed__body"><h2>Section</h2><p>embedded body</p></div></div>',
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toBeInstanceOf(Table);
+  });
+
+  it("still emits a table for an empty note embed (docx cells can't be empty)", () => {
+    const blocks = convertHtmlToDocx('<div class="markdown-embed"></div>');
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toBeInstanceOf(Table);
+  });
+
   it("skips empty paragraphs", () => {
     expect(convertHtmlToDocx("<p></p>")).toHaveLength(1); // falls back to a single empty block
   });

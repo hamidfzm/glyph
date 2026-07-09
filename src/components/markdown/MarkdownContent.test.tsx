@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Settings } from "@/lib/settings";
@@ -71,6 +72,23 @@ describe("MarkdownContent", () => {
       <MarkdownContent content={"inline $x^2$ math"} showFrontmatter={false} />,
     );
     await waitFor(() => expect(container.querySelector(".katex")).toBeTruthy());
+  });
+
+  it("dispatches a standalone note embed to the embed renderer", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce("embedded body");
+    const { container } = render(
+      <MarkdownContent
+        content={"![[Note]]"}
+        filePath="/ws/doc.md"
+        workspaceFiles={["/ws/Note.md"]}
+        showFrontmatter={false}
+      />,
+    );
+    // The `<div class="markdown-embed">` placeholder routes through DivComponent
+    // to EmbedComponent, which reads the target and renders it inline.
+    await screen.findByText("embedded body");
+    expect(container.querySelector(".markdown-embed")).toBeTruthy();
+    expect(invoke).toHaveBeenCalledWith("read_file", { path: "/ws/Note.md" });
   });
 
   it("leaves math syntax literal when the feature is toggled off", async () => {

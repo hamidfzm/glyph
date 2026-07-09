@@ -85,6 +85,21 @@ function tableBlock(el: Element): Table {
   return new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } });
 }
 
+// A note embed (`![[note]]`) is a bordered block on screen; render it as a
+// single-cell table so the embedded content stays boxed rather than flattening
+// into the surrounding document.
+function embedBlock(el: Element, ctx: Ctx): Table {
+  const inner = Array.from(el.childNodes).flatMap((c) => blocksForNode(c, ctx));
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({
+        children: [new TableCell({ children: inner.length ? inner : [new Paragraph({})] })],
+      }),
+    ],
+  });
+}
+
 function listBlocks(listEl: Element, ordered: boolean, level: number, ctx: Ctx): Block[] {
   const out: Block[] = [];
   const instance = ordered ? ctx.olInstance++ : 0;
@@ -132,6 +147,7 @@ function blocksForNode(node: Node, ctx: Ctx): Block[] {
   if (tag === "hr") return [new Paragraph({ thematicBreak: true })];
   if (tag === "table") return [tableBlock(el)];
   if (tag === "svg") return [];
+  if (tag === "div" && el.classList.contains("markdown-embed")) return [embedBlock(el, ctx)];
 
   if (CONTAINER_TAGS.has(tag)) {
     return Array.from(el.childNodes).flatMap((c) => blocksForNode(c, ctx));

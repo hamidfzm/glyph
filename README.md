@@ -32,6 +32,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - GitHub-style alerts: `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`
 - Heading anchor links: every heading gets a GitHub-compatible slug; `[text](#heading)` scrolls smoothly to the target
 - Wikilinks: `[[note]]`, `[[note|alias]]`, `[[note#heading]]` resolve against the open folder workspace; broken links render with a distinct style
+- Note embeds: `![[note]]` and `![[note#heading]]` render another note (or one heading's section) inline in a bordered block with a control to open the source; broken targets and cycles show a placeholder
 - Relative links: `[text](./note.md)`, `[text](../folder/board.canvas)`, and relative image paths resolve against the document's folder (including `../`) and open in-app, anywhere inside the open workspace; targets that would escape the workspace folder are not followed
 - Backlinks panel: sidebar list of every workspace note that links to the current file, with surrounding-line snippets
 - Syntax highlighting for code blocks (6 themes: Glyph, GitHub, Monokai, Nord, Solarized Light/Dark)

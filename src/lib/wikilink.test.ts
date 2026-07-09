@@ -155,3 +155,73 @@ describe("remarkWikilink with rehype-sanitize", () => {
     expect(out).not.toContain("data-wikilink-path");
   });
 });
+
+describe("remarkWikilink embeds", () => {
+  const files = ["/workspace/Notes/Cooking.md"];
+
+  async function html(md: string, options: WikilinkPluginOptions) {
+    const file = await unified()
+      .use(remarkParse)
+      .use(remarkWikilink, options)
+      .use(remarkRehype, { allowDangerousHtml: true })
+      .use(rehypeRaw)
+      .use(rehypeSanitize, markdownSanitizeSchema)
+      .use(rehypeStringify)
+      .process(md);
+    return String(file);
+  }
+
+  it("renders a standalone embed as a block div with the resolved path", async () => {
+    const out = await html("![[Cooking]]", { workspaceFiles: files });
+    expect(out).toContain('class="markdown-embed"');
+    expect(out).toContain('data-embed-path="/workspace/Notes/Cooking.md"');
+    // Hoisted out of the paragraph, so the embed is not wrapped in a <p>.
+    expect(out).not.toContain("<p>");
+  });
+
+  it("carries the heading on an embed", async () => {
+    const out = await html("![[Cooking#Recipes]]", { workspaceFiles: files });
+    expect(out).toContain('data-embed-heading="Recipes"');
+  });
+
+  it("marks an unresolved embed as broken", async () => {
+    const out = await html("![[Missing]]", { workspaceFiles: files });
+    expect(out).toContain('class="markdown-embed"');
+    expect(out).toContain("data-embed-broken");
+    expect(out).not.toContain("data-embed-path");
+  });
+
+  it("marks an embed as broken when no workspace is open", async () => {
+    // Exercises the `workspaceFiles ?? []` default in the embed builder.
+    const out = await html("![[Cooking]]", {});
+    expect(out).toContain('class="markdown-embed"');
+    expect(out).toContain("data-embed-broken");
+  });
+
+  it("leaves image embeds as a literal ! plus wikilink", async () => {
+    const out = await html("![[photo.png]]", { workspaceFiles: files });
+    expect(out).not.toContain("markdown-embed");
+    expect(out).toContain("!");
+    expect(out).toContain('class="wikilink');
+  });
+
+  it("downgrades a mid-sentence embed to a plain wikilink", async () => {
+    const out = await html("see ![[Cooking]] now", { workspaceFiles: files });
+    expect(out).not.toContain("markdown-embed");
+    expect(out).toContain('data-wikilink-path="/workspace/Notes/Cooking.md"');
+  });
+
+  it("hoists several stacked embeds to sibling blocks", async () => {
+    const out = await html("![[Cooking]]\n![[Missing]]", { workspaceFiles: files });
+    expect(out.match(/class="markdown-embed"/g) ?? []).toHaveLength(2);
+  });
+
+  it("downgrades an embed nested in inline markup to a wikilink", async () => {
+    // An embed inside bold can't be hoisted to a block, so it stays a wikilink
+    // instead of producing mangled block-in-inline markup.
+    const out = await html("**![[Cooking]]**", { workspaceFiles: files });
+    expect(out).not.toContain("markdown-embed");
+    expect(out).toContain("<strong>");
+    expect(out).toContain('data-wikilink-path="/workspace/Notes/Cooking.md"');
+  });
+});

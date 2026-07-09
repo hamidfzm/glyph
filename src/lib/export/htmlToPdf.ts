@@ -283,6 +283,30 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
     return img ? [img] : [];
   }
 
+  // A note embed (`![[note]]`) renders as a bordered block on screen; mirror
+  // that in the PDF by boxing its content in a single-cell table so the embed
+  // stays visually distinct rather than flattening into the surrounding text.
+  if (tag === "div" && el.classList.contains("markdown-embed")) {
+    const inner = Array.from(el.childNodes).flatMap((c) => blocksForNode(c, ctx));
+    if (inner.length === 0) return [];
+    return [
+      {
+        table: { widths: ["*"], body: [[{ stack: inner }]] },
+        layout: {
+          hLineWidth: () => 0.75,
+          vLineWidth: () => 0.75,
+          hLineColor: () => "#d0d0d0",
+          vLineColor: () => "#d0d0d0",
+          paddingLeft: () => 10,
+          paddingRight: () => 10,
+          paddingTop: () => 8,
+          paddingBottom: () => 8,
+        },
+        margin: [0, 4, 0, 8],
+      },
+    ];
+  }
+
   if (CONTAINER_TAGS.has(tag)) {
     return Array.from(el.childNodes).flatMap((c) => blocksForNode(c, ctx));
   }

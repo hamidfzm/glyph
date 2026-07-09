@@ -50,12 +50,19 @@ export function resolveWikilink(
   //  1. relative-path-ish target ("folder/note") → match the suffix of any path
   //  2. bare name → match by stem
   const looksLikePath = cleaned.includes("/") || cleaned.includes("\\");
+  // Path-suffix matching normalizes separators: workspace paths arrive with the
+  // OS separator (backslashes on Windows), while a wikilink target is authored
+  // with `/`, so `[[Notes/Ingredients]]` must still match `…\Notes\Ingredients`.
+  const targetSuffix = `/${lower.replace(/\\/g, "/")}`;
 
   const candidates: string[] = [];
   for (const file of workspaceFiles) {
     if (looksLikePath) {
-      const noExt = file.replace(/\.[^./\\]+$/, "");
-      if (noExt.toLowerCase().endsWith(`/${lower}`) || noExt.toLowerCase().endsWith(`\\${lower}`)) {
+      const noExt = file
+        .replace(/\.[^./\\]+$/, "")
+        .replace(/\\/g, "/")
+        .toLowerCase();
+      if (noExt.endsWith(targetSuffix)) {
         candidates.push(file);
       }
     } else if (stemOf(file).toLowerCase() === lower) {
