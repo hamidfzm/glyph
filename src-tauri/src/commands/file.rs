@@ -49,6 +49,22 @@ pub fn write_binary_file(path: String, contents: Vec<u8>) -> Result<(), String> 
     fs::write(&path, &contents).map_err(|e| format!("Failed to write file: {e}"))
 }
 
+/// Create a directory and all missing parents. Used by the website exporter,
+/// which mirrors the workspace's folder tree into the output directory.
+#[tauri::command]
+pub fn create_dir_all(path: String) -> Result<(), String> {
+    fs::create_dir_all(&path).map_err(|e| format!("Failed to create directory: {e}"))
+}
+
+/// Copy a file byte-for-byte, e.g. an image referenced by an exported page.
+/// The destination's parent must already exist (`create_dir_all`).
+#[tauri::command]
+pub fn copy_file(src: String, dest: String) -> Result<(), String> {
+    fs::copy(&src, &dest)
+        .map(|_| ())
+        .map_err(|e| format!("Failed to copy file: {e}"))
+}
+
 #[tauri::command]
 pub fn get_file_metadata(path: String) -> Result<FileMetadata, String> {
     let p = Path::new(&path);
@@ -281,6 +297,70 @@ mod tests {
             .build()
             .expect("mock window should build");
         assert!(print_document(window).is_ok());
+    }
+
+    #[test]
+    fn create_dir_all_creates_nested_directories() {
+        let root = std::env::temp_dir().join(format!("glyph_test_mkdir_{}", std::process::id()));
+        let nested = root.join("a").join("b").join("c");
+
+        let result = create_dir_all(nested.to_string_lossy().to_string());
+        assert!(result.is_ok());
+        assert!(nested.is_dir());
+        // Idempotent: creating an existing tree is fine.
+        assert!(create_dir_all(nested.to_string_lossy().to_string()).is_ok());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn create_dir_all_bad_path_errors() {
+        // A path whose parent is a *file* cannot become a directory.
+        let root =
+            std::env::temp_dir().join(format!("glyph_test_mkdir_bad_{}", std::process::id()));
+        let _ = fs::create_dir_all(&root);
+        let blocker = root.join("file.txt");
+        fs::write(&blocker, "x").unwrap();
+
+        let result = create_dir_all(blocker.join("sub").to_string_lossy().to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to create directory"));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn copy_file_round_trips_bytes() {
+        let root = std::env::temp_dir().join(format!("glyph_test_copy_{}", std::process::id()));
+        let _ = fs::create_dir_all(&root);
+        let src = root.join("src.png");
+        let dest = root.join("dest.png");
+        fs::write(&src, [0x89u8, 0x50, 0x4e, 0x47]).unwrap();
+
+        let result = copy_file(
+            src.to_string_lossy().to_string(),
+            dest.to_string_lossy().to_string(),
+        );
+        assert!(result.is_ok());
+        assert_eq!(fs::read(&dest).unwrap(), vec![0x89u8, 0x50, 0x4e, 0x47]);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn copy_file_missing_source_errors() {
+        let root =
+            std::env::temp_dir().join(format!("glyph_test_copy_miss_{}", std::process::id()));
+        let _ = fs::create_dir_all(&root);
+
+        let result = copy_file(
+            root.join("nope.png").to_string_lossy().to_string(),
+            root.join("dest.png").to_string_lossy().to_string(),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to copy file"));
+
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

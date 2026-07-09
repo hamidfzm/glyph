@@ -74,4 +74,36 @@ describe("buildHtmlDocument", () => {
     expect(html).toContain(":root { color-scheme: light; }");
     expect(html).toContain(":root.dark { color-scheme: dark; }");
   });
+
+  it("links a shared stylesheet for site pages, escaping the href", () => {
+    const out = buildHtmlDocument({
+      bodyHtml: "",
+      title: "t",
+      css: "",
+      dark: false,
+      stylesheetHref: "../style.css?a&b",
+    });
+    expect(out).toContain('<link rel="stylesheet" href="../style.css?a&amp;b">');
+  });
+
+  it("omits the stylesheet link and site layout for single-file exports", () => {
+    const out = buildHtmlDocument({ bodyHtml: "", title: "t", css: "", dark: false });
+    expect(out).not.toContain("<link rel=");
+    expect(out).not.toContain("glyph-site");
+  });
+
+  it("wraps content in the two-pane site layout when nav markup is given", () => {
+    const out = buildHtmlDocument({
+      bodyHtml: "<p>x</p>",
+      title: "t",
+      css: "",
+      dark: false,
+      navHtml: '<nav class="glyph-site-nav"><ul></ul></nav>',
+    });
+    expect(out).toContain('<div class="glyph-site">');
+    expect(out).toContain('<nav class="glyph-site-nav">');
+    expect(out).toContain('<main class="glyph-site-main">');
+    // The nav is chrome, not content: hidden when printing.
+    expect(out).toContain("@media print { .glyph-site-nav { display: none; } }");
+  });
 });

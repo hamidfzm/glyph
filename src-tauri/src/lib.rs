@@ -165,6 +165,7 @@ pub fn run() {
         ))))
         .manage(commands::InitialFile(Mutex::new(None)))
         .manage(commands::InitialFolder(Mutex::new(None)))
+        .manage(commands::CliExport(Mutex::new(None)))
         .manage(sync::SyncState::new())
         .manage(telemetry::TelemetryState(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
@@ -196,32 +197,52 @@ pub fn run() {
             // work on Windows: pnpm's arg forwarding can land the positional
             // arg in argv without ever populating the plugin's matches.
             let cwd = std::env::current_dir().unwrap_or_default();
-            let plugin_path: Option<String> = app
-                .cli()
-                .matches()
-                .ok()
-                .and_then(|m| m.args.get("file").cloned())
-                .and_then(|a| a.value.as_str().map(str::to_string));
+            let cli_matches = app.cli().matches().ok();
+            let plugin_arg = |name: &str| -> Option<String> {
+                cli_matches
+                    .as_ref()
+                    .and_then(|m| m.args.get(name))
+                    .and_then(|a| a.value.as_str().map(str::to_string))
+            };
+            let plugin_path = plugin_arg("file");
+            let plugin_export = plugin_arg("export-website");
             let env_args: Vec<String> = std::env::args().collect();
             // Seed the window registry's "main" entry so routing knows what the
             // first window shows before its frontend reports back. A folder
             // launch pre-registers the workspace; everything else leaves main
-            // empty (loose file / no document).
+            // empty (loose file / no document / headless export).
             let registry = app.state::<windows::WindowRegistry>();
-            match cli::initial_open_action(plugin_path.as_deref(), &env_args, &cwd) {
-                Some(cli::InitialOpenAction::Folder(p)) => {
+            match cli::launch_plan(
+                plugin_path.as_deref(),
+                plugin_export.as_deref(),
+                &env_args,
+                &cwd,
+            ) {
+                Err(usage) => {
+                    eprintln!("{usage}");
+                    std::process::exit(2);
+                }
+                Ok(cli::CliLaunch::ExportWebsite { root, out_dir }) => {
+                    // Headless: the workspace is not opened in the UI and the
+                    // window stays hidden; the frontend runs the export on
+                    // mount and exits via `finish_cli_export`.
+                    registry.set_workspace("main", None);
+                    *app.state::<commands::CliExport>().0.lock().unwrap() =
+                        Some(commands::export::CliExportRequest { root, out_dir });
+                }
+                Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::Folder(p)))) => {
                     registry.set_workspace("main", Some(p.clone()));
                     *app.state::<commands::InitialFolder>().0.lock().unwrap() = Some(p);
                 }
-                Some(cli::InitialOpenAction::File(p)) => {
+                Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::File(p)))) => {
                     registry.set_workspace("main", None);
                     *app.state::<commands::InitialFile>().0.lock().unwrap() = Some(p);
                 }
-                Some(cli::InitialOpenAction::RejectedUnsupported(p)) => {
+                Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::RejectedUnsupported(p)))) => {
                     registry.set_workspace("main", None);
                     eprintln!("Refusing to open unsupported file type: {p}");
                 }
-                None => {
+                Ok(cli::CliLaunch::Open(None)) => {
                     registry.set_workspace("main", None);
                 }
             }
@@ -274,9 +295,13 @@ pub fn run() {
             commands::file::read_file,
             commands::file::write_file,
             commands::file::write_binary_file,
+            commands::file::create_dir_all,
+            commands::file::copy_file,
             commands::file::get_file_metadata,
             commands::file::get_initial_file,
             commands::file::print_document,
+            commands::export::get_cli_export,
+            commands::export_runtime::finish_cli_export,
             commands::directory::get_initial_folder,
             commands::directory::read_directory,
             commands::directory::list_markdown_files,

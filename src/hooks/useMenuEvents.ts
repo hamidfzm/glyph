@@ -18,6 +18,7 @@ export interface MenuEventHandlers {
   exportDocx: () => void;
   exportEpub: () => void;
   exportPdf: () => void;
+  exportWebsite: () => void;
   zoomIn: () => void;
   zoomOut: () => void;
   zoomReset: () => void;
@@ -51,6 +52,7 @@ export function useMenuEvents(handlers: MenuEventHandlers) {
       subscribe("menu-export-docx", handlers.exportDocx),
       subscribe("menu-export-epub", handlers.exportEpub),
       subscribe("menu-export-pdf", handlers.exportPdf),
+      subscribe("menu-export-website", handlers.exportWebsite),
       subscribe("menu-zoom-in", handlers.zoomIn),
       subscribe("menu-zoom-out", handlers.zoomOut),
       subscribe("menu-zoom-reset", handlers.zoomReset),

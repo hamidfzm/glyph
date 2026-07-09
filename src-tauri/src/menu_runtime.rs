@@ -31,6 +31,7 @@ pub struct MenuItemRefs {
     export_docx: MenuItem<Wry>,
     export_epub: MenuItem<Wry>,
     export_pdf: MenuItem<Wry>,
+    export_website: MenuItem<Wry>,
     find: MenuItem<Wry>,
     command_palette: MenuItem<Wry>,
     toggle_files_sidebar: MenuItem<Wry>,
@@ -80,6 +81,7 @@ pub struct MenuLabels {
     export_docx: String,
     export_epub: String,
     export_pdf: String,
+    export_website: String,
     close_tab: String,
     close: String,
     settings: String,
@@ -137,6 +139,10 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         MenuItemBuilder::with_id("export-docx", "Word (DOCX)\u{2026}").build(handle)?;
     let export_epub = MenuItemBuilder::with_id("export-epub", "EPUB\u{2026}").build(handle)?;
     let export_pdf = MenuItemBuilder::with_id("export-pdf", "PDF\u{2026}").build(handle)?;
+    // Whole-workspace static site export; gated on has_workspace, unlike the
+    // single-document items above which need an open file.
+    let export_website =
+        MenuItemBuilder::with_id("export-website", "Website\u{2026}").build(handle)?;
 
     let close_tab = MenuItemBuilder::with_id("close-tab", "Close Tab")
         .accelerator("CmdOrCtrl+W")
@@ -278,6 +284,8 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .item(&export_docx)
         .item(&export_epub)
         .item(&export_pdf)
+        .separator()
+        .item(&export_website)
         .build()?;
 
     // macOS: Settings goes in app menu, File menu is simple
@@ -359,6 +367,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         export_docx,
         export_epub,
         export_pdf,
+        export_website,
         find,
         command_palette,
         toggle_files_sidebar,
@@ -458,6 +467,9 @@ pub fn apply_menu_state(refs: &MenuItemRefs, flags: &MenuStateFlags) -> Result<(
     refs.export_pdf
         .set_enabled(flags.has_file)
         .map_err(stringify)?;
+    refs.export_website
+        .set_enabled(flags.has_workspace)
+        .map_err(stringify)?;
     refs.find.set_enabled(flags.has_file).map_err(stringify)?;
     refs.toggle_edit
         .set_enabled(flags.has_file)
@@ -507,6 +519,7 @@ pub fn apply_menu_labels(refs: &MenuItemRefs, l: &MenuLabels) -> Result<(), Stri
     refs.export_docx.set_text(&l.export_docx).map_err(s)?;
     refs.export_epub.set_text(&l.export_epub).map_err(s)?;
     refs.export_pdf.set_text(&l.export_pdf).map_err(s)?;
+    refs.export_website.set_text(&l.export_website).map_err(s)?;
     refs.close_tab.set_text(&l.close_tab).map_err(s)?;
     refs.close.set_text(&l.close).map_err(s)?;
     refs.settings.set_text(&l.settings).map_err(s)?;

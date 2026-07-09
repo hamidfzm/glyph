@@ -52,6 +52,10 @@ ignore:
   # every line drives the native menu manager and can't be exercised from
   # MockRuntime. The testable halves live in menu.rs with direct tests.
   - "src-tauri/src/menu_runtime.rs"
+  # finish_cli_export terminates the process via std::process::exit, which a
+  # unit test cannot survive. The testable halves (CLI export state and the
+  # stdout/stderr routing) live in commands/export.rs with direct tests.
+  - "src-tauri/src/commands/export_runtime.rs"
   # Multi-window runtime wiring (focus/spawn/emit_to real windows + the
   # set_window_workspace / request_open command shims): every line drives the
   # live window manager and can't be reached from MockRuntime. The routing

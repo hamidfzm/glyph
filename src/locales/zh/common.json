@@ -72,7 +72,9 @@
     "docx": "Word 文档",
     "epub": "EPUB",
     "pdf": "PDF",
-    "exporting": "正在导出 {{format}}…"
+    "exporting": "正在导出 {{format}}…",
+    "website": "网站",
+    "exportingPages": "正在导出第 {{done}}/{{total}} 页…"
   },
   "contextMenu": {
     "copy": "复制",

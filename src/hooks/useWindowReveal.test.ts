@@ -16,6 +16,10 @@ vi.mock("@tauri-apps/api/window", () => ({
 const { useSettingsMock } = vi.hoisted(() => ({ useSettingsMock: vi.fn() }));
 vi.mock("@/hooks/useSettings", () => ({ useSettings: useSettingsMock }));
 
+// Mock the CLI-export probe: null means a normal interactive launch.
+const { getCliExportRequestMock } = vi.hoisted(() => ({ getCliExportRequestMock: vi.fn() }));
+vi.mock("@/lib/cliExport", () => ({ getCliExportRequest: getCliExportRequestMock }));
+
 function setLoaded(loaded: boolean) {
   useSettingsMock.mockReturnValue({ loaded });
 }
@@ -26,6 +30,7 @@ describe("useWindowReveal", () => {
     show.mockClear();
     setFocus.mockClear();
     setLoaded(false);
+    getCliExportRequestMock.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -89,6 +94,16 @@ describe("useWindowReveal", () => {
     await vi.advanceTimersByTimeAsync(2000); // timeout path
 
     expect(show).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the window hidden for a headless CLI export", async () => {
+    getCliExportRequestMock.mockResolvedValue({ root: "/ws", outDir: "/out" });
+    setLoaded(true);
+    renderHook(() => useWindowReveal());
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(show).not.toHaveBeenCalled();
   });
 
   it("does not reveal after unmount", async () => {
