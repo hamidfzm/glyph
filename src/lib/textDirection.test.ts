@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isRtlText } from "./textDirection";
+import { containsRtlText, isRtlText } from "./textDirection";
 
 describe("isRtlText", () => {
   it("detects Persian, Arabic, and Hebrew as RTL", () => {
@@ -27,5 +27,19 @@ describe("isRtlText", () => {
   it("follows the first strong character in mixed text", () => {
     expect(isRtlText("سلام means hello")).toBe(true);
     expect(isRtlText("hello یعنی سلام")).toBe(false);
+  });
+});
+
+describe("containsRtlText", () => {
+  it("finds RTL characters anywhere in the text", () => {
+    expect(containsRtlText("hello یعنی سلام")).toBe(true);
+    expect(containsRtlText("שלום in the middle")).toBe(true);
+  });
+
+  it("is false for pure LTR or empty text", () => {
+    expect(containsRtlText("hello")).toBe(false);
+    expect(containsRtlText("")).toBe(false);
+    expect(containsRtlText(null)).toBe(false);
+    expect(containsRtlText(undefined)).toBe(false);
   });
 });

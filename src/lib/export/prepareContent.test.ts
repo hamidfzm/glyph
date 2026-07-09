@@ -221,6 +221,49 @@ describe("prepareContent", () => {
     expect(result?.html).not.toContain('data-dark="1"');
   });
 
+  it("rasterizes blocks containing RTL text for PDF (browser bidi is exact)", async () => {
+    rasterizeElementMock.mockClear();
+    setBody("<p>سلام دنیا</p><p>plain english</p>");
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(rasterizeElementMock).toHaveBeenCalledTimes(1);
+    expect(result?.html).toContain("data:image/png;base64,MATH");
+    expect(result?.html).not.toContain("سلام");
+    // The LTR paragraph stays selectable text.
+    expect(result?.html).toContain("plain english");
+  });
+
+  it("rasterizes an RTL list once at its outermost block", async () => {
+    rasterizeElementMock.mockClear();
+    setBody("<ul><li>مورد یک</li><li>مورد دو</li></ul>");
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(rasterizeElementMock).toHaveBeenCalledTimes(1);
+    expect(result?.html).not.toContain("<ul>");
+  });
+
+  it("keeps RTL code blocks as text (never rasterized)", async () => {
+    rasterizeElementMock.mockClear();
+    setBody("<pre>msg = 'سلام'</pre>");
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(rasterizeElementMock).not.toHaveBeenCalled();
+    expect(result?.html).toContain("سلام");
+  });
+
+  it("keeps the original block when RTL rasterization fails", async () => {
+    rasterizeElementMock.mockClear();
+    rasterizeElementMock.mockRejectedValueOnce(new Error("canvas tainted"));
+    setBody("<p>سلام دنیا</p>");
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(result?.html).toContain("سلام دنیا");
+  });
+
+  it("leaves RTL text alone for non-PDF exports", async () => {
+    rasterizeElementMock.mockClear();
+    setBody("<p>سلام دنیا</p>");
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false });
+    expect(rasterizeElementMock).not.toHaveBeenCalled();
+    expect(result?.html).toContain("سلام دنیا");
+  });
+
   it("does not touch math or diagrams for non-PDF exports", async () => {
     rasterizeElementMock.mockClear();
     renderMermaidMock.mockClear();

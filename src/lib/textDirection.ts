@@ -11,3 +11,8 @@ export function isRtlText(text: string | null | undefined): boolean {
   const first = text?.match(/\p{L}/u);
   return first ? RTL_CHAR.test(first[0]) : false;
 }
+
+/** Whether text contains any RTL character at all, regardless of position. */
+export function containsRtlText(text: string | null | undefined): boolean {
+  return text ? RTL_CHAR.test(text) : false;
+}
