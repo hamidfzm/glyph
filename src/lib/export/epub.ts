@@ -94,7 +94,7 @@ function buildChapter(title: string, bodyHtml: string, bodyClass: string): strin
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head><meta charset="utf-8"/><title>${escapeXml(title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
 <body>
-<div class="${bodyClass}">
+<div class="${bodyClass}" dir="auto">
 ${toXhtml(bodyHtml)}
 </div>
 </body>

@@ -86,7 +86,9 @@ export function buildHtmlDocument({
   const stylesheetLink = stylesheetHref
     ? `\n<link rel="stylesheet" href="${escapeXml(stylesheetHref)}">`
     : "";
-  const content = `<div class="${bodyClass}">
+  // dir="auto" mirrors the viewer: a fully-RTL document resolves an RTL base
+  // direction; per-block bidi comes from the bundled markdown.css rules.
+  const content = `<div class="${bodyClass}" dir="auto">
 ${bodyHtml}
 </div>`;
   const body = navHtml
