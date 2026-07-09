@@ -81,6 +81,23 @@
   margin: 0 0 1em;
 }
 
+/* Bidirectional text. Each block resolves its own direction from its first
+   strong character, so an RTL paragraph in an LTR document (and vice versa)
+   renders in its natural direction, mirroring the AI chat behaviour in
+   ai-chat.css. The viewer container carries dir="auto" so a fully-RTL
+   document also flips the layout (list markers, blockquote borders, tables). */
+.markdown-body :is(p, li, h1, h2, h3, h4, h5, h6, th, td) {
+  unicode-bidi: plaintext;
+}
+
+/* Code and math are always left-to-right, even inside an RTL document. */
+.markdown-body pre,
+.markdown-body code,
+.markdown-body .katex {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 .markdown-body a {
   color: var(--color-accent);
   text-decoration: none;
@@ -181,7 +198,11 @@
   padding: 0.5em 1em;
   border-inline-start: 4px solid var(--color-accent);
   background: var(--color-surface-secondary);
-  border-radius: 0 var(--glyph-radius-sm) var(--glyph-radius-sm) 0;
+  /* Logical corners: square against the accent border, rounded on the far
+     side, in both LTR and RTL. */
+  border-radius: 0;
+  border-start-end-radius: var(--glyph-radius-sm);
+  border-end-end-radius: var(--glyph-radius-sm);
   color: var(--color-text-secondary);
 }
 
@@ -192,7 +213,9 @@
   padding: 0.5em 1em;
   border-inline-start: 4px solid var(--alert-accent, var(--color-accent));
   background: color-mix(in srgb, var(--alert-accent, var(--color-accent)) 8%, transparent);
-  border-radius: 0 var(--glyph-radius-sm) var(--glyph-radius-sm) 0;
+  border-radius: 0;
+  border-start-end-radius: var(--glyph-radius-sm);
+  border-end-end-radius: var(--glyph-radius-sm);
   color: var(--color-text-primary);
 }
 
