@@ -188,6 +188,13 @@ describe("MarkdownViewer search", () => {
   });
 });
 
+describe("MarkdownViewer text direction", () => {
+  it("resolves the document base direction automatically", () => {
+    const { container } = renderMd("# سلام دنیا");
+    expect(container.querySelector(".markdown-body")?.getAttribute("dir")).toBe("auto");
+  });
+});
+
 describe("MarkdownViewer MDX notice", () => {
   it("shows the notice for .mdx files", () => {
     const { getByRole } = renderMd("# Title", { filePath: "/docs/page.mdx" });

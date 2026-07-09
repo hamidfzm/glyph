@@ -98,7 +98,11 @@ export function MarkdownViewer({
             {t("mdxNotice.body")}
           </div>
         )}
-        <div ref={contentRef} className="markdown-body px-8 py-6">
+        {/* dir="auto" resolves the document's base direction from its first
+            strong character, so a fully-RTL file lays out RTL (list markers,
+            blockquote borders, tables). Mixed-direction blocks are handled
+            per-element via `unicode-bidi: plaintext` in markdown.css. */}
+        <div ref={contentRef} className="markdown-body px-8 py-6" dir="auto">
           <MarkdownContent
             content={content}
             filePath={filePath}

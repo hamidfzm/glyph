@@ -107,11 +107,9 @@
 }
 
 /* Assistant replies mix languages (e.g. a Persian translation under English
-   headings); each block resolves its own direction from its first strong
-   character. */
-.ai-msg-markdown :is(p, li, h1, h2, h3, h4, h5, h6) {
-  unicode-bidi: plaintext;
-}
+   headings); each block resolves its own direction via the shared
+   `unicode-bidi: plaintext` rule in markdown.css (the reply container carries
+   .markdown-body). */
 
 /* Per-message actions, revealed on hover to keep the transcript quiet. */
 .ai-msg-actions {

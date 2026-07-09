@@ -44,6 +44,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Inline HTML: `<kbd>`, `<sub>`, `<sup>`, `<details>`, inline `<svg>` drawings, alignment attributes (sanitised allowlist)
 - YAML frontmatter: title, author, date, and tags render as a metadata block above the document; tags get a per-tag colour
 - Emoji shortcodes: `:smile:` → 😊, `:+1:` → 👍
+- Bidirectional text: RTL languages (Persian, Arabic, Hebrew) render right-to-left per paragraph, mixed RTL/LTR documents just work, and fully-RTL documents flip the whole layout (lists, quotes, tables); code always stays left-to-right
 - Feature toggles: turn optional syntax off per taste in Settings → Markdown (GFM extras, math, alerts, emoji, wikilinks); disabled syntax renders as plain text
 - Local and remote image display
 - Image lightbox: click any image to view it full-size over a dark backdrop, with zoom controls (fit, actual size, zoom in/out), arrow-key navigation between the document's images, and Escape or click-outside to close
