@@ -22,12 +22,28 @@ describe("convertHtmlToPdf", () => {
       '<div class="markdown-embed__body"><h2>Section</h2><p>embedded body</p></div>' +
       "</div>";
     const content = convertHtmlToPdf(html);
-    const box = content[0] as { table?: { body: unknown[][] }; layout?: unknown };
+    type BorderLayout = Record<string, () => number | string>;
+    const box = content[0] as { table?: { body: unknown[][] }; layout?: BorderLayout };
     expect(box.table).toBeTruthy();
-    expect(box.layout).toBeTruthy();
+    const layout = box.layout as BorderLayout;
+    // The border spec: thin light lines on all sides with cell padding.
+    expect(layout.hLineWidth()).toBe(0.75);
+    expect(layout.vLineWidth()).toBe(0.75);
+    expect(layout.hLineColor()).toBe("#d0d0d0");
+    expect(layout.vLineColor()).toBe("#d0d0d0");
+    expect(layout.paddingLeft()).toBe(10);
+    expect(layout.paddingRight()).toBe(10);
+    expect(layout.paddingTop()).toBe(8);
+    expect(layout.paddingBottom()).toBe(8);
     const json = JSON.stringify(content);
     expect(json).toContain("Section");
     expect(json).toContain("embedded body");
+  });
+
+  it("emits nothing for an empty note embed", () => {
+    // An embed whose content produced no blocks contributes no box.
+    const content = convertHtmlToPdf('<div class="markdown-embed"></div>');
+    expect(JSON.stringify(content)).not.toContain("table");
   });
 
   it("emits a table node for table markup", () => {
