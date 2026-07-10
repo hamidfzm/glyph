@@ -89,7 +89,7 @@ describe("useExport", () => {
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: "note.html" }));
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_file");
     expect(call).toBeTruthy();
-    expect((call?.[1] as { content: string }).content).toContain(
+    expect((call![1] as { content: string }).content).toContain(
       '<div class="markdown-body" dir="auto">',
     );
   });
