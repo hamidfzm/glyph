@@ -92,11 +92,11 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
                         {p.description}
                       </div>
                     )}
-                    {p.permissions && p.permissions.length > 0 && (
-                      <div className="text-xs text-[var(--color-text-secondary)] truncate">
-                        {t("permissionsLabel")}: {p.permissions.join(", ")}
-                      </div>
-                    )}
+                    <div className="text-xs text-[var(--color-text-secondary)] truncate">
+                      {t("permissionsLabel")}:{" "}
+                      {p.permissions?.length ? p.permissions.join(", ") : t("permissionsNone")}
+                      {p.sandbox && <> · {t("sandboxBadge")}</>}
+                    </div>
                     {settingsPanel && enabled && (
                       <div className="mt-2 text-xs text-[var(--color-text-primary)]">
                         <PluginMountSlot contribution={settingsPanel} />
@@ -142,6 +142,11 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
                       {e.description}
                     </div>
                   )}
+                  <div className="text-xs text-[var(--color-text-secondary)] truncate">
+                    {t("permissionsLabel")}:{" "}
+                    {e.permissions?.length ? e.permissions.join(", ") : t("permissionsNone")}
+                    {e.sandbox && <> · {t("sandboxBadge")}</>}
+                  </div>
                 </div>
                 <button
                   type="button"

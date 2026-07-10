@@ -13,5 +13,7 @@
   "consentTitle": "安装插件？",
   "consentBody": "“{{name}}”将在 Glyph 中运行 JavaScript 并访问插件 API。",
   "consentPermissions": "它请求：",
-  "permissionsLabel": "权限"
+  "permissionsLabel": "权限",
+  "permissionsNone": "无",
+  "sandboxBadge": "沙盒"
 }

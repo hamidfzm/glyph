@@ -114,6 +114,32 @@ describe("PluginsModal", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows an explicit None for plugins without permissions, on both lists", () => {
+    renderModal(ctx());
+    // One installed (Alpha, no permissions) and one marketplace entry (Charlie, none declared).
+    expect(screen.getAllByText((_, el) => el?.textContent === "Permissions: None")).toHaveLength(2);
+  });
+
+  it("shows a marketplace entry's permissions and sandbox badge before install", () => {
+    renderModal(
+      ctx({
+        registry: [{ ...available, permissions: ["network:api.example.com"], sandbox: true }],
+      }),
+    );
+    expect(
+      screen.getByText(
+        (_, el) => el?.textContent === "Permissions: network:api.example.com · Sandboxed",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("marks sandboxed installed plugins", () => {
+    renderModal(ctx({ installed: [{ ...installed, sandbox: true }] }));
+    expect(
+      screen.getByText((_, el) => el?.textContent === "Permissions: None · Sandboxed"),
+    ).toBeInTheDocument();
+  });
+
   it("toggles an installed plugin's active state", () => {
     const value = ctx();
     renderModal(value);

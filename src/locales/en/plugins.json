@@ -13,5 +13,7 @@
   "consentTitle": "Install plugin?",
   "consentBody": "\"{{name}}\" will run JavaScript inside Glyph with access to the plugin API.",
   "consentPermissions": "It requests:",
-  "permissionsLabel": "Permissions"
+  "permissionsLabel": "Permissions",
+  "permissionsNone": "None",
+  "sandboxBadge": "Sandboxed"
 }
