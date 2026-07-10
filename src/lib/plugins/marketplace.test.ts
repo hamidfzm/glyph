@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { PLUGIN_API_VERSION } from "./apiVersion";
 import { fetchRegistry, findUpdates, installFromRegistry, type RegistryEntry } from "./marketplace";
 
 function entry(over: Partial<RegistryEntry> = {}): RegistryEntry {
@@ -7,7 +8,7 @@ function entry(over: Partial<RegistryEntry> = {}): RegistryEntry {
     id: "com.x.demo",
     name: "Demo",
     version: "1.0.0",
-    apiVersion: "^1.0.0",
+    apiVersion: `^${PLUGIN_API_VERSION}`,
     mainUrl: "https://example.test/main.js",
     ...over,
   };
@@ -74,7 +75,7 @@ describe("installFromRegistry", () => {
     expect(manifest).toMatchObject({
       id: "com.x.demo",
       version: "2.0.0",
-      apiVersion: "^1.0.0",
+      apiVersion: `^${PLUGIN_API_VERSION}`,
       description: "d",
       permissions: ["workspace:read"],
       sandbox: true,

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
+import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
 import type { RegistryEntry } from "@/lib/plugins/marketplace";
 import { createRegistry } from "@/lib/plugins/registry";
 import type {
@@ -20,7 +21,7 @@ const installed: InstalledPlugin = {
   id: "a.b",
   name: "Alpha",
   version: "1.0.0",
-  apiVersion: "^1.0.0",
+  apiVersion: `^${PLUGIN_API_VERSION}`,
   description: "the alpha plugin",
   dir: "/p/a.b",
   mainSource: "export default {};",
@@ -31,7 +32,7 @@ const available: RegistryEntry = {
   name: "Charlie",
   description: "from the market",
   version: "2.0.0",
-  apiVersion: "^1.0.0",
+  apiVersion: `^${PLUGIN_API_VERSION}`,
   mainUrl: "https://example.test/c.js",
 };
 
