@@ -797,7 +797,7 @@ describe("SyncSettingsModal", () => {
       expect(calls).toContain("sync_set_config");
     });
     const setConfigCall = vi.mocked(invoke).mock.calls.find((c) => c[0] === "sync_set_config");
-    expect((setConfigCall?.[1] as { config: { remoteUrl: string } }).config.remoteUrl).toBe("");
+    expect((setConfigCall![1] as { config: { remoteUrl: string } }).config.remoteUrl).toBe("");
     const allCalls = vi.mocked(invoke).mock.calls.map((c) => c[0]);
     expect(allCalls).not.toContain("sync_set_origin");
   });

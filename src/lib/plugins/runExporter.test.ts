@@ -55,7 +55,7 @@ describe("runExporter", () => {
     );
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_file");
     expect(call?.[1]).toMatchObject({ path: "/out.html" });
-    expect((call?.[1] as { content: string }).content).toContain("<deck>");
+    expect((call![1] as { content: string }).content).toContain("<deck>");
   });
 
   it("writes binary output via write_binary_file", async () => {
