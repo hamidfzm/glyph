@@ -11,6 +11,7 @@ Glyph follows GitHub Flow with one git worktree per branch. There is no `develop
 
 - `main` is the only long-lived branch. It is always green and releasable.
 - Every change lands on a short-lived branch cut from the latest `main`: `feat/<slug>`, `fix/<slug>`, or `chore/<slug>` / `docs/<slug>` / `refactor/<slug>` as the change warrants.
+- **Those prefixes are the only allowed branch names.** A worktree auto-created by tooling may start life under a different name (e.g. `claude/<slug>`); rename it with `git branch -m <old> feat/<slug>` **before the first push**. The `.husky/pre-push` hook rejects pushes from any branch that doesn't match the convention.
 - Each branch lives in its own worktree under `.claude/worktrees/<slug>/`, so several branches can be checked out at once without stashing. `.claude/worktrees/` is gitignored, so nothing inside a worktree directory is itself committed to the parent repo.
 - Branches merge into `main` only through a PR, with linear history (squash or rebase, no merge commits), per [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
