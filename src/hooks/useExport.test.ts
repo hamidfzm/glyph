@@ -89,7 +89,7 @@ describe("useExport", () => {
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: "note.html" }));
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_file");
     expect(call).toBeTruthy();
-    expect((call?.[1] as { content: string }).content).toContain('<div class="markdown-body">');
+    expect((call![1] as { content: string }).content).toContain('<div class="markdown-body">');
   });
 
   it("does not write when the save dialog is cancelled", async () => {
@@ -113,7 +113,7 @@ describe("useExport", () => {
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_binary_file");
     expect(call).toBeTruthy();
     // Bytes are sent as a plain number array so Rust's Vec<u8> can deserialize.
-    const contents = (call?.[1] as { contents: number[] }).contents;
+    const contents = (call![1] as { contents: number[] }).contents;
     expect(Array.isArray(contents)).toBe(true);
     expect(contents.length).toBeGreaterThan(0);
   });
@@ -128,7 +128,7 @@ describe("useExport", () => {
 
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_binary_file");
     expect(call).toBeTruthy();
-    expect((call?.[1] as { contents: Uint8Array }).contents.length).toBeGreaterThan(0);
+    expect((call![1] as { contents: Uint8Array }).contents.length).toBeGreaterThan(0);
   });
 
   it("writes PDF bytes via write_binary_file (no print dialog)", async () => {
@@ -141,7 +141,7 @@ describe("useExport", () => {
 
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_binary_file");
     expect(call).toBeTruthy();
-    expect((call?.[1] as { contents: Uint8Array }).contents.length).toBeGreaterThan(0);
+    expect((call![1] as { contents: Uint8Array }).contents.length).toBeGreaterThan(0);
     // It must not fall back to the print path.
     expect(vi.mocked(invoke).mock.calls.some((c) => c[0] === "print_document")).toBe(false);
   });
@@ -189,7 +189,7 @@ describe("useExport", () => {
     expect(buildBoardMock).toHaveBeenCalled();
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_file");
     expect(call).toBeTruthy();
-    const content = (call?.[1] as { content: string }).content;
+    const content = (call![1] as { content: string }).content;
     expect(content).toContain("glyph-canvas-export");
     expect(content).toContain('class="glyph-canvas-page"');
   });
@@ -215,7 +215,7 @@ describe("useExport", () => {
     expect(buildDocumentMock).not.toHaveBeenCalled();
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_binary_file");
     expect(call).toBeTruthy();
-    expect((call?.[1] as { contents: number[] }).contents).toEqual([1, 2, 3]);
+    expect((call![1] as { contents: number[] }).contents).toEqual([1, 2, 3]);
   });
 
   it("skips the PDF write when the board model is empty", async () => {
