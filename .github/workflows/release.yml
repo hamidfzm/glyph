@@ -409,21 +409,27 @@ jobs:
       # hamidfzm.Glyph from the released MSI. Reuses TAP_GITHUB_TOKEN (the
       # classic PAT already used for the tap/bucket/apt repos; winget-releaser
       # needs public_repo, which repo scope includes) and forks
-      # microsoft/winget-pkgs under the token owner if needed. The package
-      # must already exist upstream (one-time bootstrap, see winget/README.md).
-      # Skips cleanly until the secret is set, so it never fails releases
-      # before setup (same gate pattern as publish-snap).
-      - name: Check for winget token
+      # microsoft/winget-pkgs under the token owner if needed. Skips cleanly
+      # while the secret is missing or the package is not yet in winget-pkgs
+      # (the one-time bootstrap PR, see winget/README.md, may still be in
+      # Microsoft's moderation queue), so it never fails releases before
+      # setup; the first release after the bootstrap merges publishes
+      # automatically (probe-the-target gate, same pattern as publish-dnf).
+      - name: Check winget prerequisites
         id: gate
         shell: bash
         env:
           TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -n "$TOKEN" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
+          if [ -z "$TOKEN" ]; then
             echo "No TAP_GITHUB_TOKEN secret; skipping winget publish."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
+          elif ! gh api repos/microsoft/winget-pkgs/contents/manifests/h/hamidfzm/Glyph >/dev/null 2>&1; then
+            echo "hamidfzm.Glyph not yet in winget-pkgs (bootstrap pending); skipping winget publish."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Get version
         if: steps.gate.outputs.enabled == 'true'
