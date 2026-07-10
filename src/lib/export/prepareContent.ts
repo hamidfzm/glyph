@@ -1,5 +1,6 @@
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { renderD2 } from "@/lib/d2Render";
+import { containsRtlText } from "@/lib/textDirection";
 import { rasterizeElement, renderMermaidLightSvg, restoreMermaidTheme } from "./rasterize";
 import { buildTocElement } from "./toc";
 
@@ -64,6 +65,36 @@ async function preparePdfRichContent(liveBody: Element, clone: Element): Promise
 
   if (mermaidRendered) {
     await restoreMermaidTheme(liveBody.ownerDocument.documentElement.classList.contains("dark"));
+  }
+}
+
+// pdfmake positions each word individually left-to-right and does no bidi
+// reordering or Arabic shaping (and its bundled font has no Arabic/Hebrew
+// glyphs), so RTL text can't render as PDF text. Instead, any block containing
+// RTL characters is captured from the live DOM as an image, the same treatment
+// block math gets: the webview's bidi rendering is exact. Outermost matching
+// blocks only, so a list with one RTL item rasterizes once. Code blocks are
+// not candidates and stay selectable text.
+const RTL_BLOCK_SELECTOR = "p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, table";
+
+async function rasterizeRtlBlocks(liveBody: Element, clone: Element): Promise<void> {
+  const live = liveBody.querySelectorAll<HTMLElement>(RTL_BLOCK_SELECTOR);
+  if (live.length === 0) return;
+  const cloned = clone.querySelectorAll(RTL_BLOCK_SELECTOR);
+  const background = getComputedStyle(liveBody).backgroundColor || "#ffffff";
+  for (let i = 0; i < live.length; i++) {
+    const el = live[i];
+    // Skip nested matches (an RTL <li> is covered by its list, a table cell's
+    // paragraph by its table).
+    if (el.parentElement?.closest(RTL_BLOCK_SELECTOR)) continue;
+    if (!containsRtlText(el.textContent)) continue;
+    try {
+      const img = clone.ownerDocument.createElement("img");
+      img.setAttribute("src", await rasterizeElement(el, background));
+      cloned[i].replaceWith(img);
+    } catch {
+      // Leave the original block; the walker degrades to logical-order text.
+    }
   }
 }
 
@@ -152,6 +183,10 @@ export async function prepareContent({
   if (pdf) {
     inlineCodeColors(body, clone);
     await preparePdfRichContent(body, clone);
+    // After the math/diagram pass: both passes match live and clone nodes by
+    // querySelectorAll index, and this one replaces whole blocks that may
+    // contain the elements the first pass looks for.
+    await rasterizeRtlBlocks(body, clone);
   }
   for (const el of Array.from(clone.querySelectorAll(STRIP_SELECTOR))) {
     el.remove();

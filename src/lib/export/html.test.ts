@@ -12,7 +12,7 @@ describe("buildHtmlDocument", () => {
     expect(out).toContain("<!doctype html>");
     expect(out).toContain("<title>My Doc</title>");
     expect(out).toContain("<style>\n.markdown-body{color:red}");
-    expect(out).toContain('<div class="markdown-body">');
+    expect(out).toContain('<div class="markdown-body" dir="auto">');
     expect(out).toContain("<p>hello</p>");
     expect(out).not.toContain('<html lang="en" class="dark">');
   });
@@ -50,7 +50,7 @@ describe("buildHtmlDocument", () => {
       dark: false,
       bodyClass: "notebook-body",
     });
-    expect(out).toContain('<div class="notebook-body">');
+    expect(out).toContain('<div class="notebook-body" dir="auto">');
   });
 
   it("syncs to the reader's system theme via prefers-color-scheme", () => {

@@ -21,6 +21,7 @@ This document demonstrates all the rendering features supported by Glyph. The YA
 - [CSV / TSV Tables](#csv--tsv-tables)
 - [Footnotes](#footnotes)
 - [Emoji Shortcodes](#emoji-shortcodes)
+- [Bidirectional Text](#bidirectional-text)
 - [Blockquotes](#blockquotes)
 - [Raw HTML](#raw-html)
 - [Images](#images)
@@ -226,6 +227,21 @@ Footnotes can contain **rich text** and even code[^3].
 Glyph converts GitHub-style emoji shortcodes to Unicode:
 
 :wave: Hello! :rocket: Ship it! :tada: Celebration! :bug: Found a bug :white_check_mark: Tests passing :heart: Love it :thumbsup: Approved
+
+## Bidirectional Text
+
+Each paragraph resolves its own direction from its first strong character, so RTL and LTR text mix freely in one document.
+
+این بند به فارسی نوشته شده و از راست به چپ نمایش داده می‌شود، حتی وقتی بقیه سند انگلیسی است.
+
+هذه الفقرة مكتوبة بالعربية وتعرض من اليمين إلى اليسار.
+
+Mixed inline text works too: the word سلام means "hello" in Persian, and code like `let x = 1` stays left-to-right even inside an RTL paragraph.
+
+- فهرست‌ها هم پشتیبانی می‌شوند
+- Bullet items keep their own direction per line
+
+> نقل‌قول‌ها نیز جهت خود را از متن می‌گیرند.
 
 ## Blockquotes
 
