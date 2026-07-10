@@ -234,10 +234,10 @@
   },
   "embed": {
     "openSource": "Eingebettete Notiz öffnen",
-    "loading": "Einbettung wird geladen...",
+    "loading": "Eingebettete Notiz wird geladen…",
     "broken": "Eingebettete Notiz nicht gefunden: {{target}}",
     "circular": "Zirkuläre Einbettung: {{target}}",
     "headingNotFound": "Überschrift nicht gefunden: {{heading}}",
-    "error": "Einbettung konnte nicht geladen werden: {{target}}"
+    "error": "Eingebettete Notiz konnte nicht geladen werden: {{target}}"
   }
 }

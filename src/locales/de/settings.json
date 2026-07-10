@@ -175,7 +175,7 @@
     "spellCheck": {
       "title": "Rechtschreibprüfung",
       "label": "Rechtschreibung prüfen",
-      "description": "Falsch geschriebene Wörter beim Bearbeiten unterstreichen. Rechtsklick auf ein Wort zeigt Vorschläge. Gilt für Bearbeitungs- und Split-Modus.",
+      "description": "Falsch geschriebene Wörter werden beim Bearbeiten unterstrichen. Rechtsklick auf ein Wort zeigt Vorschläge. Gilt für den Bearbeitungs- und den geteilten Modus.",
       "language": "Sprache",
       "languages": {
         "en": "Englisch (US)"
