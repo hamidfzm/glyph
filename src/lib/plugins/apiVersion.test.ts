@@ -22,6 +22,15 @@ describe("satisfiesApiVersion", () => {
     expect(satisfiesApiVersion("^2.0.0", "1.9.9")).toBe(false);
   });
 
+  it("requires an exact match while the API major is 0, caret or not", () => {
+    expect(satisfiesApiVersion("0.16.0", "0.16.0")).toBe(true);
+    expect(satisfiesApiVersion("^0.16.0", "0.16.0")).toBe(true);
+    expect(satisfiesApiVersion("^0.16.0", "0.16.4")).toBe(false);
+    expect(satisfiesApiVersion("^0.15.1", "0.16.0")).toBe(false);
+    expect(satisfiesApiVersion("0.16.0", "0.15.9")).toBe(false);
+    expect(satisfiesApiVersion("^0.16.0", "1.0.0")).toBe(false);
+  });
+
   it("treats unparseable input as incompatible", () => {
     expect(satisfiesApiVersion("latest", "1.0.0")).toBe(false);
     expect(satisfiesApiVersion("^1.0", "1.0.0")).toBe(false);

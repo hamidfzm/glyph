@@ -4,6 +4,7 @@ import { load } from "@tauri-apps/plugin-store";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
+import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
 import { loadPluginSettings, savePluginSettings } from "@/lib/plugins/settingsStore";
 import type { InstalledPlugin } from "@/lib/plugins/types";
 import { usePluginsOptional } from "./PluginsContext";
@@ -19,7 +20,7 @@ function installedPlugin(overrides: Partial<InstalledPlugin> = {}): InstalledPlu
     id: "com.x.demo",
     name: "Demo",
     version: "1.0.0",
-    apiVersion: "^1.0.0",
+    apiVersion: `^${PLUGIN_API_VERSION}`,
     dir: "/plugins/com.x.demo",
     mainSource: `export default {
       activate(ctx) {
@@ -205,7 +206,7 @@ describe("PluginsProvider", () => {
       id: "com.x.market",
       name: "Market",
       version: "1.0.0",
-      apiVersion: "^1.0.0",
+      apiVersion: `^${PLUGIN_API_VERSION}`,
       permissions: ["workspace:read"],
       mainUrl: "https://example.test/main.js",
     };
@@ -291,7 +292,7 @@ describe("PluginsProvider", () => {
       id: "com.x.market",
       name: "Market",
       version: "1.0.0",
-      apiVersion: "^1.0.0",
+      apiVersion: `^${PLUGIN_API_VERSION}`,
       mainUrl: "https://example.test/main.js",
     };
 
@@ -440,7 +441,7 @@ describe("PluginsProvider", () => {
       id: "com.x.market",
       name: "Market",
       version: "1.0.0",
-      apiVersion: "^1.0.0",
+      apiVersion: `^${PLUGIN_API_VERSION}`,
       mainUrl: "https://example.test/main.js",
     };
     vi.stubGlobal(
