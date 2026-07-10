@@ -5,6 +5,7 @@ const { nspellMock } = vi.hoisted(() => ({
 }));
 vi.mock("nspell", () => ({ default: nspellMock }));
 
+import { clearDictionarySources, registerDictionarySource } from "./dictionarySources";
 import { clearSpellerCache, getSpeller } from "./speller";
 
 function okResponse() {
@@ -13,6 +14,7 @@ function okResponse() {
 
 describe("getSpeller", () => {
   beforeEach(() => {
+    clearDictionarySources();
     clearSpellerCache();
     nspellMock.mockClear();
     vi.stubGlobal("fetch", vi.fn(okResponse));
@@ -61,5 +63,31 @@ describe("getSpeller", () => {
     vi.stubGlobal("fetch", recovered);
     await getSpeller("en");
     expect(recovered).toHaveBeenCalled();
+  });
+
+  it("prefers a registered dictionary source over the bundled assets", async () => {
+    const load = vi.fn(() => Promise.resolve({ aff: "FA-AFF", dic: "FA-DIC" }));
+    registerDictionarySource({ language: "fa", label: "Persian", load });
+
+    await getSpeller("fa");
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(nspellMock).toHaveBeenCalledWith("FA-AFF", "FA-DIC");
+  });
+
+  it("drops the cached checker when the language's source changes", async () => {
+    const dispose = registerDictionarySource({
+      language: "fa",
+      label: "Persian",
+      load: () => Promise.resolve({ aff: "A1", dic: "D1" }),
+    });
+    await getSpeller("fa");
+    expect(nspellMock).toHaveBeenCalledTimes(1);
+
+    // Unregistering invalidates; the next request falls back to bundled assets.
+    dispose();
+    await getSpeller("fa");
+    expect(fetch).toHaveBeenCalledTimes(2); // aff + dic from public/
+    expect(nspellMock).toHaveBeenCalledTimes(2);
   });
 });

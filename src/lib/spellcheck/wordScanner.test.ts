@@ -60,4 +60,12 @@ describe("scanWords", () => {
     // No closing fence, so the leading --- is not frontmatter and its lines are checked.
     expect(wordsOf("---\ntitel: xyz\nmore wrods")).toEqual(["titel", "xyz", "more", "wrods"]);
   });
+
+  it("keeps ZWNJ-joined Persian words as single tokens", () => {
+    // The zero-width non-joiner sits inside words like "mi-ravam"; splitting on
+    // it would flag both halves against any Persian dictionary.
+    const ZWNJ = "\u200C";
+    const doc = `می${ZWNJ}روم و نمی${ZWNJ}دانم`;
+    expect(wordsOf(doc)).toEqual([`می${ZWNJ}روم`, `نمی${ZWNJ}دانم`]);
+  });
 });

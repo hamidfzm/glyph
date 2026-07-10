@@ -1,8 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
 import { DEFAULT_SETTINGS, type Settings } from "@/lib/settings";
+import {
+  clearDictionarySources,
+  registerDictionarySource,
+} from "@/lib/spellcheck/dictionarySources";
 import { EditorTab } from "./EditorTab";
 
 function setup(settings: Settings = DEFAULT_SETTINGS) {
@@ -21,6 +25,10 @@ function setup(settings: Settings = DEFAULT_SETTINGS) {
 }
 
 describe("EditorTab", () => {
+  beforeEach(() => {
+    clearDictionarySources();
+  });
+
   it("offers the keymap presets", () => {
     setup();
     expect(screen.getByText("Keymap")).toBeInTheDocument();
@@ -74,5 +82,42 @@ describe("EditorTab", () => {
     });
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "en" } });
     expect(updateSettings).toHaveBeenCalledWith("editor.spellCheckLanguage", "en");
+  });
+
+  it("lists plugin-contributed dictionaries and selecting one stores its code", () => {
+    registerDictionarySource({
+      language: "fa",
+      label: "فارسی (Persian)",
+      load: () => Promise.resolve({ aff: "", dic: "" }),
+    });
+    const { updateSettings } = setup({
+      ...DEFAULT_SETTINGS,
+      editor: { ...DEFAULT_SETTINGS.editor, spellCheck: true },
+    });
+
+    expect(screen.getByRole("option", { name: "فارسی (Persian)" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "fa" } });
+    expect(updateSettings).toHaveBeenCalledWith("editor.spellCheckLanguage", "fa");
+  });
+
+  it("a plugin dictionary for en replaces the built-in entry", () => {
+    registerDictionarySource({
+      language: "en",
+      label: "English (custom)",
+      load: () => Promise.resolve({ aff: "", dic: "" }),
+    });
+    setup({ ...DEFAULT_SETTINGS, editor: { ...DEFAULT_SETTINGS.editor, spellCheck: true } });
+
+    expect(screen.getByRole("option", { name: "English (custom)" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "English (US)" })).toBeNull();
+  });
+
+  it("keeps an orphaned stored language selectable after its plugin is gone", () => {
+    setup({
+      ...DEFAULT_SETTINGS,
+      editor: { ...DEFAULT_SETTINGS.editor, spellCheck: true, spellCheckLanguage: "fa" },
+    });
+    expect(screen.getByRole("combobox")).toHaveValue("fa");
+    expect(screen.getByRole("option", { name: "fa" })).toBeInTheDocument();
   });
 });

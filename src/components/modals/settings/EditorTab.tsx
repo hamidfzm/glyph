@@ -1,7 +1,11 @@
-import { Fragment } from "react";
+import { Fragment, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
 import type { EditorKeymap } from "@/lib/settings";
+import {
+  listDictionarySources,
+  subscribeDictionarySources,
+} from "@/lib/spellcheck/dictionarySources";
 import { Segmented } from "./Segmented";
 import { Toggle } from "./Toggle";
 
@@ -57,6 +61,25 @@ export function EditorTab() {
     { value: "vscode", label: t("editor.keymapOptions.vscode") },
   ];
 
+  // Built-in English plus every plugin-contributed dictionary, live-updating
+  // as plugins load and unload. A plugin may override "en" itself; dedupe by
+  // language with the plugin's entry winning, like the speller does.
+  const pluginDictionaries = useSyncExternalStore(
+    subscribeDictionarySources,
+    listDictionarySources,
+  );
+  const languageOptions = [
+    ...(pluginDictionaries.some((d) => d.language === "en")
+      ? []
+      : [{ language: "en", label: t("editor.spellCheck.languages.en") }]),
+    ...pluginDictionaries.map((d) => ({ language: d.language, label: d.label })),
+  ];
+  // A language whose plugin was uninstalled stays selectable (and stored), so
+  // the choice survives a disable/enable cycle instead of silently resetting.
+  const orphanedLanguage = languageOptions.some((o) => o.language === editor.spellCheckLanguage)
+    ? null
+    : editor.spellCheckLanguage;
+
   return (
     <Fragment>
       <div className="settings-section">
@@ -111,7 +134,12 @@ export function EditorTab() {
               value={editor.spellCheckLanguage}
               onChange={(e) => updateSettings("editor.spellCheckLanguage", e.target.value)}
             >
-              <option value="en">{t("editor.spellCheck.languages.en")}</option>
+              {languageOptions.map((option) => (
+                <option key={option.language} value={option.language}>
+                  {option.label}
+                </option>
+              ))}
+              {orphanedLanguage && <option value={orphanedLanguage}>{orphanedLanguage}</option>}
             </select>
           </div>
         )}

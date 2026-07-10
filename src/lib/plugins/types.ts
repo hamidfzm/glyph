@@ -1,6 +1,9 @@
 import type { ComponentType } from "react";
 import type { Options } from "react-markdown";
+import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
 import type { Disposer } from "./disposer";
+
+export type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
 
 /** Capability a plugin requests; surfaced for user consent before enabling. */
 export type PluginPermission = "workspace:read" | "workspace:write" | `network:${string}`;
@@ -152,6 +155,17 @@ export interface PluginSettingsApi {
   set(key: string, value: unknown): void;
 }
 
+export interface SpellcheckRegistryApi {
+  /**
+   * Contribute a spell-check dictionary for a language. It appears in the
+   * Settings language picker under `label`, and `load` runs only when the user
+   * selects the language. Registering an already-known code (including the
+   * built-in "en") replaces it; the disposer removes the dictionary and drops
+   * any cached checker built from it.
+   */
+  registerDictionary(dictionary: DictionaryContribution): Disposer;
+}
+
 export interface MarkdownRegistryApi {
   /** Add a remark plugin (runs after the built-in remark plugins). */
   registerRemarkPlugin(plugin: MarkdownPlugin): Disposer;
@@ -186,6 +200,7 @@ export interface GlyphPluginContext {
   readonly markdown: MarkdownRegistryApi;
   readonly workspace: WorkspaceApi;
   readonly exporters: ExportersRegistryApi;
+  readonly spellcheck: SpellcheckRegistryApi;
   readonly settings: PluginSettingsApi;
   notify(message: string): void;
   /**

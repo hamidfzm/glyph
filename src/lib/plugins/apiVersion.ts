@@ -4,7 +4,7 @@
  * gates loading on it. Bump the major only on a breaking change to the plugin
  * contract; bump the minor when adding backwards-compatible surface.
  */
-export const PLUGIN_API_VERSION = "1.2.0";
+export const PLUGIN_API_VERSION = "1.3.0";
 
 interface SemVer {
   major: number;

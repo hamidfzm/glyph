@@ -55,7 +55,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Live preview updates as you type
 - Wikilink autocomplete: type `[[` in a folder workspace to pick from existing notes; Tab/Enter to insert
 - Editor keymaps: choose Default, Vim, or VSCode bindings in Settings → Editor
-- Spell check: underline misspelled words while editing, with right-click suggestions; opt in under Settings → Editor
+- Spell check: underline misspelled words while editing, with right-click suggestions; opt in under Settings → Editor. English ships built in; add more languages by installing dictionary plugins from the marketplace
 
 ### Viewer
 - Jupyter notebooks: open `.ipynb` files directly; markdown cells render with full markdown (math, code, diagrams), code cells are syntax-highlighted, and image, HTML, plain-text, and colourised stream/traceback outputs show under each cell with `In [n]:` / `Out [n]:` prompts (read-only)
@@ -102,7 +102,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Window state persistence across restarts
 - Native menu bar with customizable keyboard shortcuts (remap any command in Settings → Hotkeys)
 - Update notifications: checks for a newer release on launch and shows a banner when one is available (toggle in Settings → Behavior)
-- Plugins (experimental): install JavaScript plugins that extend rendering, palette commands, the status bar, and app styling (custom CSS/themes ship as plugins); every install asks for confirmation and shows the plugin's declared permissions, and everything is managed from the Plugins… menu item (next to Settings) or the command palette (Manage Plugins…); browse the [plugin marketplace](https://github.com/glyph-md/plugins) or write your own with the [plugin docs](https://github.com/glyph-md/plugins/tree/main/docs)
+- Plugins (experimental): install JavaScript plugins that extend rendering, palette commands, the status bar, spell-check dictionaries, and app styling (custom CSS/themes ship as plugins); every install asks for confirmation and shows the plugin's declared permissions, and everything is managed from the Plugins… menu item (next to Settings) or the command palette (Manage Plugins…); browse the [plugin marketplace](https://github.com/glyph-md/plugins) or write your own with the [plugin docs](https://github.com/glyph-md/plugins/tree/main/docs)
 
 ### Privacy
 - Local-first: your files never leave your machine unless you opt into Cloud Sync (per workspace, to a Git remote you control)
