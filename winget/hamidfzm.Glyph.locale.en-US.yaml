@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: hamidfzm.Glyph
+PackageVersion: "{{VERSION}}"
+PackageLocale: en-US
+Publisher: hamidfzm
+PublisherUrl: https://github.com/hamidfzm
+PublisherSupportUrl: https://github.com/hamidfzm/glyph/issues
+PackageName: Glyph
+PackageUrl: https://glyph-md.github.io
+License: MIT
+LicenseUrl: https://github.com/hamidfzm/glyph/blob/main/LICENSE
+ShortDescription: Cross-platform markdown viewer
+Description: A modern, cross-platform markdown viewer with GFM support, syntax highlighting, live reload, and platform-native styling.
+Moniker: glyph
+Tags:
+  - markdown
+  - viewer
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
