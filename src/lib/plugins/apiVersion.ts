@@ -1,14 +1,15 @@
 /**
- * The version of the Glyph plugin API this build implements. Plugins declare a
- * compatible range in their manifest (`apiVersion`) and {@link satisfiesApiVersion}
- * gates loading on it.
+ * The version of the Glyph plugin API this build implements. Plugins declare
+ * the version they were built against in their manifest (`apiVersion`) and
+ * {@link satisfiesApiVersion} gates loading on it.
  *
- * While the plugin contract is unstable (pre-0.16.0), this tracks the app
- * version injected at build time, so plugins pin per app minor (`"^0.16.0"`)
- * and every 0.x minor may break them. Cut over to an independent 1.0.0 when
- * the contract is declared stable.
+ * The contract is unstable until it ships as 1.0.0: while the major is 0,
+ * plugins must match this version exactly (ranges grant nothing), and it is
+ * bumped by hand whenever the API decisions change. 0.16.0 marks the current
+ * decision set, aligned with the app release that first ships the plugin
+ * system as stable.
  */
-export const PLUGIN_API_VERSION = __APP_VERSION__;
+export const PLUGIN_API_VERSION = "0.16.0";
 
 interface SemVer {
   major: number;
@@ -29,11 +30,11 @@ function parse(version: string): SemVer | null {
 /**
  * Does the host API satisfy a plugin's required range? Supports an exact
  * version (`"1.2.3"`) or a caret range (`"^1.2.3"`: same major, with host
- * `minor.patch >= required`). Caret on a 0.x version follows npm's rule: the
- * minor is breaking, so it must match exactly (`"^0.16.0"` matches 0.16.x
- * only). Intentionally tiny: the plugin contract only needs caret/exact, not
- * the full semver grammar. Unparseable input is treated as incompatible
- * rather than throwing.
+ * `minor.patch >= required`). While the API major is 0 nothing is backwards
+ * compatible, so the required version must equal the host version exactly and
+ * a caret grants nothing. Intentionally tiny: the plugin contract only needs
+ * caret/exact, not the full semver grammar. Unparseable input is treated as
+ * incompatible rather than throwing.
  */
 export function satisfiesApiVersion(range: string, current: string = PLUGIN_API_VERSION): boolean {
   const host = parse(current);
@@ -45,11 +46,8 @@ export function satisfiesApiVersion(range: string, current: string = PLUGIN_API_
   if (!required) return false;
 
   if (host.major !== required.major) return false;
-  if (!caret) {
+  if (required.major === 0 || !caret) {
     return host.minor === required.minor && host.patch === required.patch;
-  }
-  if (required.major === 0) {
-    return host.minor === required.minor && host.patch >= required.patch;
   }
   if (host.minor !== required.minor) return host.minor > required.minor;
   return host.patch >= required.patch;
