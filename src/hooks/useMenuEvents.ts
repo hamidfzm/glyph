@@ -11,6 +11,7 @@ export interface MenuEventHandlers {
   resetView: () => void;
   openSettings: () => void;
   openSyncSettings: () => void;
+  managePlugins: () => void;
   find: () => void;
   toggleEdit: () => void;
   print: () => void;
@@ -45,6 +46,7 @@ export function useMenuEvents(handlers: MenuEventHandlers) {
       subscribe("menu-reset-view", handlers.resetView),
       subscribe("menu-open-settings", handlers.openSettings),
       subscribe("menu-open-sync-settings", handlers.openSyncSettings),
+      subscribe("menu-manage-plugins", handlers.managePlugins),
       subscribe("menu-find", handlers.find),
       subscribe("menu-toggle-edit", handlers.toggleEdit),
       subscribe("menu-print", handlers.print),

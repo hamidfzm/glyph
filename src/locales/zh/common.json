@@ -154,12 +154,16 @@
   "mermaid": {
     "empty": "图表源为空",
     "errorLabel": "图表错误",
-    "errorTitle": "图表渲染失败"
+    "errorTitle": "图表渲染失败",
+    "label": "Mermaid 图表",
+    "zoomHint": "点击放大"
   },
   "d2": {
     "empty": "图表源为空",
     "errorLabel": "图表错误",
-    "errorTitle": "图表渲染失败"
+    "errorTitle": "图表渲染失败",
+    "label": "D2 图表",
+    "zoomHint": "点击放大"
   },
   "taskList": {
     "toggle": "切换任务状态"
@@ -234,5 +238,8 @@
     "circular": "循环嵌入：{{target}}",
     "headingNotFound": "找不到标题：{{heading}}",
     "error": "无法加载嵌入内容：{{target}}"
+  },
+  "headingAnchor": {
+    "label": "复制标题链接"
   }
 }

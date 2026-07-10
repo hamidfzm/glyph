@@ -170,6 +170,7 @@ export function AppShell() {
       resetView: sidebar.resetLayout,
       openSettings: () => setSettingsOpen(true),
       openSyncSettings: () => setSyncSettingsOpen(true),
+      managePlugins: () => setPluginsOpen(true),
       find: () => setSearchOpen(true),
       toggleEdit: handleToggleEdit,
       print: printDoc,
@@ -224,7 +225,6 @@ export function AppShell() {
       () => ({
         ...menuHandlers,
         openWorkspaceFile: openFile,
-        managePlugins: () => setPluginsOpen(true),
         runPluginExporter,
       }),
       [menuHandlers, openFile, runPluginExporter],

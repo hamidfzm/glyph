@@ -18,6 +18,7 @@
   "close": "Close Window",
   "settings": "Settings…",
   "syncSettings": "Cloud Sync…",
+  "managePlugins": "Plugins…",
   "find": "Find…",
   "commandPalette": "Command Palette…",
   "toggleFilesSidebar": "Toggle Files Sidebar",

@@ -102,7 +102,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Window state persistence across restarts
 - Native menu bar with customizable keyboard shortcuts (remap any command in Settings → Hotkeys)
 - Update notifications: checks for a newer release on launch and shows a banner when one is available (toggle in Settings → Behavior)
-- Plugins (experimental): install JavaScript plugins that extend rendering, palette commands, the status bar, and app styling (custom CSS/themes ship as plugins); every install asks for confirmation and shows the plugin's declared permissions, and everything is managed from the command palette (Manage Plugins…); browse the [plugin marketplace](https://github.com/glyph-md/plugins) or write your own with the [plugin docs](https://github.com/glyph-md/plugins/tree/main/docs)
+- Plugins (experimental): install JavaScript plugins that extend rendering, palette commands, the status bar, and app styling (custom CSS/themes ship as plugins); every install asks for confirmation and shows the plugin's declared permissions, and everything is managed from the Plugins… menu item (next to Settings) or the command palette (Manage Plugins…); browse the [plugin marketplace](https://github.com/glyph-md/plugins) or write your own with the [plugin docs](https://github.com/glyph-md/plugins/tree/main/docs)
 
 ### Privacy
 - Local-first: your files never leave your machine unless you opt into Cloud Sync (per workspace, to a Git remote you control)

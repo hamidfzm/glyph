@@ -154,12 +154,16 @@
   "mermaid": {
     "empty": "El código del diagrama está vacío",
     "errorLabel": "Error del diagrama",
-    "errorTitle": "No se pudo mostrar el diagrama"
+    "errorTitle": "No se pudo mostrar el diagrama",
+    "label": "Diagrama Mermaid",
+    "zoomHint": "Haz clic para ampliar"
   },
   "d2": {
     "empty": "El código del diagrama está vacío",
     "errorLabel": "Error del diagrama",
-    "errorTitle": "No se pudo mostrar el diagrama"
+    "errorTitle": "No se pudo mostrar el diagrama",
+    "label": "Diagrama D2",
+    "zoomHint": "Haz clic para ampliar"
   },
   "taskList": {
     "toggle": "Marcar o desmarcar tarea"
@@ -234,5 +238,8 @@
     "circular": "Inserción circular: {{target}}",
     "headingNotFound": "Encabezado no encontrado: {{heading}}",
     "error": "No se pudo cargar la inserción: {{target}}"
+  },
+  "headingAnchor": {
+    "label": "Copiar enlace al encabezado"
   }
 }
