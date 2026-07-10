@@ -1,0 +1,20 @@
+# Pre-push gate: enforce the branch naming convention (CONTRIBUTING.md,
+# .claude/rules/worktrees.md). Every short-lived branch is <type>/<slug>;
+# anything else (including tool-generated names like claude/<slug>) must be
+# renamed before it reaches origin:
+#
+#   git branch -m <old> feat/<slug>
+#
+# Tag pushes and detached-HEAD pushes are allowed through (releases push tags).
+
+branch="$(git symbolic-ref --short -q HEAD)" || exit 0
+
+case "$branch" in
+  main | feat/* | fix/* | chore/* | docs/* | refactor/*) ;;
+  *)
+    echo "pre-push: branch name '$branch' violates the naming convention." >&2
+    echo "Allowed: main, feat/<slug>, fix/<slug>, chore/<slug>, docs/<slug>, refactor/<slug>." >&2
+    echo "Rename first: git branch -m $branch feat/<slug>" >&2
+    exit 1
+    ;;
+esac
