@@ -4,6 +4,7 @@ import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { PluginMountSlot } from "./PluginMountSlot";
+import { PluginPermissionsLine } from "./PluginPermissionsLine";
 
 const rowClass =
   "flex items-start gap-3 py-3 border-b border-[var(--color-border)] last:border-b-0";
@@ -92,11 +93,7 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
                         {p.description}
                       </div>
                     )}
-                    {p.permissions && p.permissions.length > 0 && (
-                      <div className="text-xs text-[var(--color-text-secondary)] truncate">
-                        {t("permissionsLabel")}: {p.permissions.join(", ")}
-                      </div>
-                    )}
+                    <PluginPermissionsLine permissions={p.permissions} sandbox={p.sandbox} />
                     {settingsPanel && enabled && (
                       <div className="mt-2 text-xs text-[var(--color-text-primary)]">
                         <PluginMountSlot contribution={settingsPanel} />
@@ -142,6 +139,7 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
                       {e.description}
                     </div>
                   )}
+                  <PluginPermissionsLine permissions={e.permissions} sandbox={e.sandbox} />
                 </div>
                 <button
                   type="button"

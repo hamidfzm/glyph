@@ -13,5 +13,7 @@
   "consentTitle": "افزونه نصب شود؟",
   "consentBody": "«{{name}}» جاوااسکریپت را درون Glyph با دسترسی به API افزونه اجرا می‌کند.",
   "consentPermissions": "درخواست می‌کند:",
-  "permissionsLabel": "دسترسی‌ها"
+  "permissionsLabel": "دسترسی‌ها",
+  "permissionsNone": "ندارد",
+  "sandboxBadge": "ایزوله"
 }

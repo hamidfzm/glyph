@@ -13,5 +13,7 @@
   "consentTitle": "¿Instalar complemento?",
   "consentBody": "\"{{name}}\" ejecutará JavaScript dentro de Glyph con acceso a la API de complementos.",
   "consentPermissions": "Solicita:",
-  "permissionsLabel": "Permisos"
+  "permissionsLabel": "Permisos",
+  "permissionsNone": "Ninguno",
+  "sandboxBadge": "Aislado"
 }
