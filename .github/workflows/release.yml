@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  discussions: write
 
 jobs:
   build:
@@ -188,6 +189,12 @@ jobs:
 
           printf '%s\n\n%s' "$BODY" "$CHANGELOG" > /tmp/release-body.md
           gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --notes-file /tmp/release-body.md
+
+          # Create the linked Announcements discussion after the notes are
+          # final, so the discussion body carries the full changelog.
+          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}" --jq .id)
+          gh api -X PATCH "repos/${{ github.repository }}/releases/$RELEASE_ID" \
+            -f discussion_category_name=Announcements
 
   publish-homebrew:
     needs: build
