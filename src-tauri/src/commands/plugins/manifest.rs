@@ -157,3 +157,165 @@ impl ManifestInfo {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_manifest_reads_all_fields() {
+        let info = parse_manifest(
+        r#"{"id":"com.x.demo","name":"Demo","version":"2.1.0","apiVersion":"^1.0.0","description":"d","main":"index.js"}"#,
+    )
+    .unwrap();
+        assert_eq!(info.id, "com.x.demo");
+        assert_eq!(info.name, "Demo");
+        assert_eq!(info.version, "2.1.0");
+        assert_eq!(info.api_version, "^1.0.0");
+        assert_eq!(info.description.as_deref(), Some("d"));
+        assert_eq!(info.main, "index.js");
+    }
+
+    #[test]
+    fn parse_manifest_defaults_main_to_main_js() {
+        let info = parse_manifest(
+            r#"{"id":"com.x.demo","name":"Demo","version":"1.0.0","apiVersion":"^1.0.0"}"#,
+        )
+        .unwrap();
+        assert_eq!(info.main, "main.js");
+    }
+
+    #[test]
+    fn parse_manifest_rejects_missing_required_fields() {
+        for json in [
+            r#"{}"#,
+            r#"{"id":"a"}"#,
+            r#"{"id":"a","name":"n"}"#,
+            r#"{"id":"a","name":"n","version":"1.0.0"}"#,
+            r#"{"id":"  ","name":"n","version":"1.0.0","apiVersion":"^1.0.0"}"#,
+        ] {
+            assert!(parse_manifest(json).is_err(), "should reject: {json}");
+        }
+    }
+
+    #[test]
+    fn parse_manifest_rejects_unsafe_ids_and_entries() {
+        let with_id = |id: &str| {
+            format!(r#"{{"id":"{id}","name":"n","version":"1.0.0","apiVersion":"^1.0.0"}}"#)
+        };
+        for id in ["../evil", "a/b", "a\\b", ".hidden", "spa ce"] {
+            assert!(
+                parse_manifest(&with_id(id)).is_err(),
+                "should reject id {id}"
+            );
+        }
+        let bad_main =
+            r#"{"id":"ok.id","name":"n","version":"1.0.0","apiVersion":"^1.0.0","main":"../x.js"}"#;
+        assert!(parse_manifest(bad_main).is_err());
+    }
+
+    #[test]
+    fn parse_manifest_rejects_invalid_json() {
+        assert!(parse_manifest("not json").is_err());
+    }
+
+    #[test]
+    fn parse_manifest_rejects_backslash_in_main() {
+        let json = r#"{"id":"ok.id","name":"n","version":"1.0.0","apiVersion":"^1.0.0","main":"sub\\x.js"}"#;
+        assert!(parse_manifest(json).is_err());
+    }
+
+    #[test]
+    fn parse_manifest_rejects_a_files_list_over_the_cap() {
+        let mut files: Vec<String> = vec![String::from("\"main.js\"")];
+        files.extend((0..MAX_PACKAGE_FILES).map(|i| format!("\"a{i}.txt\"")));
+        let json = format!(
+            r#"{{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"0.16.0","files":[{}]}}"#,
+            files.join(",")
+        );
+        let Err(err) = parse_manifest(&json) else {
+            panic!("a files list over the cap must be rejected")
+        };
+        assert!(err.contains("more than"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn parse_manifest_validates_the_files_whitelist() {
+        let with_files = |files: &str| {
+            format!(
+                r#"{{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"0.16.0","files":{files}}}"#
+            )
+        };
+        let ok = parse_manifest(&with_files(r#"["main.js","assets/fa.dic"]"#)).unwrap();
+        assert_eq!(ok.files, ["main.js", "assets/fa.dic"]);
+        assert_eq!(ok.install_files(), ok.files);
+
+        // Legacy manifest: no files -> install just the entry.
+        let legacy =
+            parse_manifest(r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"0.16.0"}"#)
+                .unwrap();
+        assert_eq!(legacy.install_files(), ["main.js"]);
+
+        for bad in [
+            r#"["assets/fa.dic"]"#,       // must include main
+            r#"["main.js","../escape"]"#, // traversal
+            r#"["main.js","/abs"]"#,      // absolute
+            r#"["main.js","a\\b"]"#,      // backslash
+            r#"["main.js","c:evil"]"#,    // drive colon
+            r#"["main.js",""]"#,          // empty
+            r#"["main.js","a//b"]"#,      // empty segment
+            r#"["main.js","./x"]"#,       // dot segment
+            r#""main.js""#,               // not an array
+            r#"[1]"#,                     // not strings
+        ] {
+            assert!(
+                parse_manifest(&with_files(bad)).is_err(),
+                "should reject files={bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_manifest_reads_sandbox_flag() {
+        let with_sandbox = |v: &str| {
+            format!(
+                r#"{{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0","sandbox":{v}}}"#
+            )
+        };
+        assert!(parse_manifest(&with_sandbox("true")).unwrap().sandbox);
+        assert!(!parse_manifest(&with_sandbox("false")).unwrap().sandbox);
+        assert!(
+            !parse_manifest(r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0"}"#)
+                .unwrap()
+                .sandbox
+        );
+        assert!(parse_manifest(&with_sandbox("\"yes\"")).is_err());
+    }
+
+    #[test]
+    fn parse_manifest_reads_permissions() {
+        let info = parse_manifest(
+        r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0","permissions":["workspace:read","network:example.com"]}"#,
+    )
+    .unwrap();
+        assert_eq!(info.permissions, ["workspace:read", "network:example.com"]);
+    }
+
+    #[test]
+    fn parse_manifest_defaults_permissions_to_empty() {
+        let info =
+            parse_manifest(r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0"}"#)
+                .unwrap();
+        assert!(info.permissions.is_empty());
+    }
+
+    #[test]
+    fn parse_manifest_rejects_non_string_permissions() {
+        for json in [
+            r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0","permissions":"workspace:read"}"#,
+            r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0","permissions":[1]}"#,
+        ] {
+            assert!(parse_manifest(json).is_err(), "should reject: {json}");
+        }
+    }
+}

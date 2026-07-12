@@ -167,3 +167,292 @@ pub(crate) fn uninstall_from(root: &Path, id: &str) -> Result<(), String> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::test_support::*;
+    use super::*;
+
+    #[test]
+    fn read_plugin_dir_round_trips() {
+        let root = temp_root("read");
+        let dir = root.join("com.x.demo");
+        write_plugin(&dir, "com.x.demo", "export default {};");
+
+        let plugin = read_plugin_dir(&dir).unwrap();
+        assert_eq!(plugin.id, "com.x.demo");
+        assert_eq!(plugin.main_source, "export default {};");
+        assert_eq!(plugin.dir, dir.to_string_lossy());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn read_plugin_dir_errors_when_entry_is_missing() {
+        let root = temp_root("noentry");
+        let dir = root.join("com.x.demo");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("manifest.json"),
+            r#"{"id":"com.x.demo","name":"n","version":"1.0.0","apiVersion":"^1.0.0"}"#,
+        )
+        .unwrap();
+
+        assert!(read_plugin_dir(&dir).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn scan_skips_broken_plugins_and_sorts_by_id() {
+        let root = temp_root("scan");
+        write_plugin(&root.join("b-plugin"), "b.plugin", "export default {};");
+        write_plugin(&root.join("a-plugin"), "a.plugin", "export default {};");
+        fs::create_dir_all(root.join("broken")).unwrap(); // no manifest
+        fs::write(root.join("stray-file.txt"), "ignored").unwrap();
+
+        let plugins = scan_plugins_root(&root);
+        let ids: Vec<&str> = plugins.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["a.plugin", "b.plugin"]);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn scan_returns_empty_when_root_does_not_exist() {
+        let missing = std::env::temp_dir().join("glyph_plugins_definitely_missing");
+        assert!(scan_plugins_root(&missing).is_empty());
+    }
+
+    #[test]
+    fn install_copies_manifest_and_entry_into_root() {
+        let root = temp_root("install_root");
+        let src = temp_root("install_src");
+        write_plugin(&src, "com.x.installed", "export default { activate(){} };");
+        fs::write(src.join("notes.txt"), "not copied").unwrap();
+
+        let plugin = install_into(&root, &src).unwrap();
+        assert_eq!(plugin.id, "com.x.installed");
+        let dest = root.join("com.x.installed");
+        assert!(dest.join("manifest.json").is_file());
+        assert!(dest.join("main.js").is_file());
+        assert!(!dest.join("notes.txt").exists());
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&src);
+    }
+
+    #[test]
+    fn install_rejects_a_folder_without_manifest() {
+        let root = temp_root("install_bad_root");
+        let src = temp_root("install_bad_src");
+        assert!(install_into(&root, &src).is_err());
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&src);
+    }
+
+    #[test]
+    fn install_errors_when_the_entry_file_is_missing() {
+        let root = temp_root("install_noentry_root");
+        let src = temp_root("install_noentry_src");
+        // Manifest is valid but main.js was never written.
+        fs::write(
+            src.join("manifest.json"),
+            r#"{"id":"com.x.demo","name":"n","version":"1.0.0","apiVersion":"^1.0.0"}"#,
+        )
+        .unwrap();
+
+        assert!(install_into(&root, &src).is_err());
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&src);
+    }
+
+    /// Build an in-memory zip from (name, bytes) entries for package tests.
+    fn zip_with(method: zip::CompressionMethod, entries: &[(&str, &[u8])]) -> Vec<u8> {
+        use std::io::Write;
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        let mut writer = zip::ZipWriter::new(&mut cursor);
+        let options = zip::write::SimpleFileOptions::default().compression_method(method);
+        for (name, bytes) in entries {
+            writer.start_file(*name, options).unwrap();
+            writer.write_all(bytes).unwrap();
+        }
+        writer.finish().unwrap();
+        cursor.into_inner()
+    }
+
+    fn zip_of(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        zip_with(zip::CompressionMethod::Stored, entries)
+    }
+
+    const PACKAGED_MANIFEST: &str = r#"{"id":"com.x.pkg","name":"Pkg","version":"1.0.0","apiVersion":"0.16.0","files":["main.js","assets/data.txt"]}"#;
+
+    #[test]
+    fn install_package_rejects_an_oversized_file_before_writing_anything() {
+        let root = temp_root("pkg_cap_file");
+        // Deflated zeros compress to almost nothing, but entry.size() reports the
+        // real uncompressed size, which is what the cap checks.
+        let big = vec![0u8; (MAX_FILE_BYTES + 1) as usize];
+        let bytes = zip_with(
+            zip::CompressionMethod::Deflated,
+            &[
+                ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+                ("main.js", b"export default {};"),
+                ("assets/data.txt", &big),
+            ],
+        );
+
+        let err = install_package(&root, &bytes).unwrap_err();
+        assert!(err.contains("size limit"), "unexpected error: {err}");
+        assert!(
+            !root.join("com.x.pkg").exists(),
+            "a rejected package must leave nothing on disk"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn install_package_rejects_when_the_total_exceeds_the_cap() {
+        let root = temp_root("pkg_cap_total");
+        let manifest = r#"{"id":"com.x.pkg","name":"Pkg","version":"1.0.0","apiVersion":"0.16.0","files":["main.js","a.bin","b.bin"]}"#;
+        // Each file sits exactly at the per-file cap, so only the running total trips.
+        let at_cap = vec![0u8; MAX_FILE_BYTES as usize];
+        let bytes = zip_with(
+            zip::CompressionMethod::Deflated,
+            &[
+                ("manifest.json", manifest.as_bytes()),
+                ("main.js", &at_cap),
+                ("a.bin", &at_cap),
+                ("b.bin", &at_cap),
+            ],
+        );
+
+        let err = install_package(&root, &bytes).unwrap_err();
+        assert!(err.contains("total size limit"), "unexpected error: {err}");
+        assert!(!root.join("com.x.pkg").exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn install_package_reports_a_file_colliding_with_an_asset_directory() {
+        let root = temp_root("pkg_dir_collision");
+        // A file already sits where the package's assets/ directory must go.
+        fs::create_dir_all(root.join("com.x.pkg")).unwrap();
+        fs::write(root.join("com.x.pkg").join("assets"), "in the way").unwrap();
+        let bytes = zip_of(&[
+            ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+            ("main.js", b"export default {};"),
+            ("assets/data.txt", b"payload"),
+        ]);
+
+        let err = install_package(&root, &bytes).unwrap_err();
+        assert!(err.contains("cannot create"), "unexpected error: {err}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn install_package_reports_an_unwritable_declared_file() {
+        let root = temp_root("pkg_write_collision");
+        // A directory sits exactly where the entry file must be written.
+        fs::create_dir_all(root.join("com.x.pkg").join("main.js")).unwrap();
+        let bytes = zip_of(&[
+            ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+            ("main.js", b"export default {};"),
+            ("assets/data.txt", b"payload"),
+        ]);
+
+        let err = install_package(&root, &bytes).unwrap_err();
+        assert!(err.contains("cannot write"), "unexpected error: {err}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn install_package_copies_only_declared_files() {
+        let root = temp_root("pkg");
+        let bytes = zip_of(&[
+            ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+            ("main.js", b"export default { activate(){} };"),
+            ("assets/data.txt", b"payload"),
+            ("extra.exe", b"smuggled"),
+        ]);
+
+        let plugin = install_package(&root, &bytes).unwrap();
+        assert_eq!(plugin.id, "com.x.pkg");
+        assert_eq!(plugin.files, ["main.js", "assets/data.txt"]);
+        let dest = root.join("com.x.pkg");
+        assert!(dest.join("assets/data.txt").is_file());
+        assert!(
+            !dest.join("extra.exe").exists(),
+            "undeclared files must not land on disk"
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn install_package_fails_when_a_declared_file_is_missing() {
+        let root = temp_root("pkg_missing");
+        let bytes = zip_of(&[
+            ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+            ("main.js", b"export default {};"),
+            // assets/data.txt declared but absent
+        ]);
+        let err = install_package(&root, &bytes).unwrap_err();
+        assert!(err.contains("assets/data.txt"), "unexpected error: {err}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn install_package_rejects_a_zip_without_manifest_and_garbage_bytes() {
+        let root = temp_root("pkg_bad");
+        let no_manifest = zip_of(&[("main.js", b"x" as &[u8])]);
+        assert!(install_package(&root, &no_manifest).is_err());
+        assert!(install_package(&root, b"not a zip").is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn read_asset_serves_only_declared_files() {
+        let root = temp_root("asset");
+        let bytes = zip_of(&[
+            ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+            ("main.js", b"export default {};"),
+            ("assets/data.txt", b"payload"),
+        ]);
+        install_package(&root, &bytes).unwrap();
+
+        assert_eq!(
+            read_asset_from(&root, "com.x.pkg", "assets/data.txt").unwrap(),
+            b"payload"
+        );
+        // The entry file itself is declared, so it is readable too.
+        assert!(read_asset_from(&root, "com.x.pkg", "main.js").is_ok());
+        // Undeclared name, traversal, bad id: all rejected.
+        assert!(read_asset_from(&root, "com.x.pkg", "manifest.json").is_err());
+        assert!(read_asset_from(&root, "com.x.pkg", "../outside").is_err());
+        assert!(read_asset_from(&root, "../escape", "main.js").is_err());
+        assert!(read_asset_from(&root, "com.x.absent", "main.js").is_err());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn uninstall_removes_the_plugin_folder() {
+        let root = temp_root("uninstall");
+        write_plugin(&root.join("com.x.gone"), "com.x.gone", "export default {};");
+        assert!(root.join("com.x.gone").is_dir());
+
+        uninstall_from(&root, "com.x.gone").unwrap();
+        assert!(!root.join("com.x.gone").exists());
+        // Missing is a no-op, not an error.
+        uninstall_from(&root, "com.x.gone").unwrap();
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn uninstall_rejects_an_unsafe_id() {
+        let root = temp_root("uninstall_bad");
+        assert!(uninstall_from(&root, "../escape").is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+}
