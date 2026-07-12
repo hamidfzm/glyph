@@ -755,6 +755,38 @@ export function useTabs(options: UseTabsOptions) {
     });
   }, []);
 
+  // Reorder the tab strip: move tab `id` to `toIndex` (clamped to the strip).
+  // Only the array order changes; the active tab and every tab's state are
+  // untouched, and persistence follows from the persist effect above reading
+  // the array order.
+  const moveTab = useCallback((id: string, toIndex: number) => {
+    setState((prev) => {
+      const from = prev.tabs.findIndex((t) => t.id === id);
+      if (from === -1) return prev;
+      const to = Math.max(0, Math.min(toIndex, prev.tabs.length - 1));
+      if (to === from) return prev;
+      const tabs = [...prev.tabs];
+      const [moved] = tabs.splice(from, 1);
+      tabs.splice(to, 0, moved);
+      return { ...prev, tabs };
+    });
+  }, []);
+
+  // Move the active tab by `delta` positions (-1 left, +1 right); a no-op at
+  // either end of the strip or with no active tab.
+  const moveActiveTab = useCallback(
+    (delta: number) => {
+      const { tabs, activeTabId } = stateRef.current;
+      if (!activeTabId) return;
+      const from = tabs.findIndex((t) => t.id === activeTabId);
+      /* v8 ignore start -- defensive: a non-null activeTabId always references an open tab */
+      if (from === -1) return;
+      /* v8 ignore stop */
+      moveTab(activeTabId, from + delta);
+    },
+    [moveTab],
+  );
+
   const setActiveTab = useCallback((id: string) => {
     setState((prev) => {
       // Save scroll position of current active tab's file
@@ -1167,6 +1199,8 @@ export function useTabs(options: UseTabsOptions) {
     deletePath,
     closeTab,
     setActiveTab,
+    moveTab,
+    moveActiveTab,
     setTabMode,
     updateEditContent,
     markSaved,

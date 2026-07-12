@@ -3385,3 +3385,120 @@ describe("useTabs multi-window", () => {
     );
   });
 });
+
+describe("useTabs moveTab / moveActiveTab", () => {
+  async function renderWithTabs(activeTabPath = "/p/a.md") {
+    const onSettingsChange = vi.fn();
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          openTabs: ["/p/a.md", "/p/b.md", "/p/c.md"],
+          activeTabPath,
+          onSettingsChange,
+        }),
+      ),
+    );
+    await waitFor(() => expect(result.current.tabs).toHaveLength(3));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    return { result, onSettingsChange };
+  }
+
+  function paths(result: { current: ReturnType<typeof useTabs> }) {
+    return result.current.tabs.map((t) => (t.kind === "file" ? t.file.path : "(graph)"));
+  }
+
+  it("moves a tab to the target index", async () => {
+    const { result } = await renderWithTabs();
+    const first = result.current.tabs[0];
+    act(() => {
+      result.current.moveTab(first.id, 2);
+    });
+    expect(paths(result)).toEqual(["/p/b.md", "/p/c.md", "/p/a.md"]);
+  });
+
+  it("clamps an out-of-range target index to the strip", async () => {
+    const { result } = await renderWithTabs();
+    const first = result.current.tabs[0];
+    act(() => {
+      result.current.moveTab(first.id, 99);
+    });
+    expect(paths(result)).toEqual(["/p/b.md", "/p/c.md", "/p/a.md"]);
+  });
+
+  it("is a no-op when the clamped target equals the current index", async () => {
+    const { result } = await renderWithTabs();
+    const before = result.current.tabs;
+    act(() => {
+      result.current.moveTab(before[2].id, 99);
+    });
+    expect(result.current.tabs).toBe(before);
+  });
+
+  it("is a no-op for an unknown tab id", async () => {
+    const { result } = await renderWithTabs();
+    const before = result.current.tabs;
+    act(() => {
+      result.current.moveTab("nope", 0);
+    });
+    expect(result.current.tabs).toBe(before);
+  });
+
+  it("keeps the active tab and per-tab state across a reorder", async () => {
+    const { result } = await renderWithTabs("/p/b.md");
+    const activeBefore = result.current.activeTabId;
+    const first = result.current.tabs[0];
+    act(() => {
+      result.current.moveTab(first.id, 2);
+    });
+    expect(result.current.activeTabId).toBe(activeBefore);
+    const moved = result.current.tabs[2];
+    expect(moved.kind).toBe("file");
+    if (moved.kind === "file") {
+      expect(moved.file.content).toBe("FILE BODY");
+      expect(moved.file.dirty).toBe(false);
+    }
+  });
+
+  it("moveActiveTab moves the active tab by the delta", async () => {
+    const { result } = await renderWithTabs("/p/a.md");
+    act(() => {
+      result.current.moveActiveTab(1);
+    });
+    expect(paths(result)).toEqual(["/p/b.md", "/p/a.md", "/p/c.md"]);
+    act(() => {
+      result.current.moveActiveTab(-1);
+    });
+    expect(paths(result)).toEqual(["/p/a.md", "/p/b.md", "/p/c.md"]);
+  });
+
+  it("moveActiveTab is a no-op at the ends of the strip", async () => {
+    const { result } = await renderWithTabs("/p/a.md");
+    const before = result.current.tabs;
+    act(() => {
+      result.current.moveActiveTab(-1);
+    });
+    expect(result.current.tabs).toBe(before);
+  });
+
+  it("moveActiveTab is a no-op with no active tab", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    act(() => {
+      result.current.moveActiveTab(1);
+    });
+    expect(result.current.tabs).toEqual([]);
+  });
+
+  it("persists the reordered tab list", async () => {
+    const { result, onSettingsChange } = await renderWithTabs();
+    const first = result.current.tabs[0];
+    act(() => {
+      result.current.moveTab(first.id, 2);
+    });
+    await waitFor(() => {
+      const calls = onSettingsChange.mock.calls.filter((c) => c[0] === "behavior.openTabs");
+      const last = calls[calls.length - 1]?.[1] as { kind: string; path: string }[];
+      expect(last.map((t) => t.path)).toEqual(["/p/b.md", "/p/c.md", "/p/a.md"]);
+    });
+  });
+});

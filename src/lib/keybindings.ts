@@ -113,6 +113,20 @@ export const BINDABLE_COMMANDS: readonly BindableCommand[] = [
     nativeMenu: true,
   },
   {
+    id: "move-tab-left",
+    label: "Move Tab Left",
+    category: "View",
+    defaultAccelerator: "CmdOrCtrl+Shift+PageUp",
+    nativeMenu: false,
+  },
+  {
+    id: "move-tab-right",
+    label: "Move Tab Right",
+    category: "View",
+    defaultAccelerator: "CmdOrCtrl+Shift+PageDown",
+    nativeMenu: false,
+  },
+  {
     id: "toggle-edit",
     label: "Toggle Edit Mode",
     category: "View",

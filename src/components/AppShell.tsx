@@ -21,6 +21,7 @@ import { usePluginWorkspaceSync } from "@/hooks/usePluginWorkspaceSync";
 import { usePrint } from "@/hooks/usePrint";
 import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
+import { useTabReorderShortcuts } from "@/hooks/useTabReorderShortcuts";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
 import { aiDocContext } from "@/lib/aiPrompts";
@@ -87,11 +88,13 @@ export function AppShell() {
     markSaved,
     undoEdit,
     redoEdit,
+    moveActiveTab,
     workspaceFiles,
     tocEntries,
   } = tabs;
 
   useDocumentUndoRedo({ activeTabId, platform, onUndo: undoEdit, onRedo: redoEdit });
+  useTabReorderShortcuts({ platform, onMove: moveActiveTab });
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [syncSettingsOpen, setSyncSettingsOpen] = useState(false);

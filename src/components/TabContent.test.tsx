@@ -184,6 +184,8 @@ function buildContext(over: Partial<TabsContextValue>): TabsContextValue {
     deletePath: vi.fn(),
     closeTab: vi.fn(),
     setActiveTab: vi.fn(),
+    moveTab: vi.fn(),
+    moveActiveTab: vi.fn(),
     setTabMode: vi.fn(),
     updateEditContent: vi.fn(),
     markSaved: vi.fn(),

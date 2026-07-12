@@ -35,6 +35,7 @@ interface RenderOpts {
   setActiveTab?: (id: string) => void;
   closeTab?: (id: string) => void;
   setTabMode?: TabsContextValue["setTabMode"];
+  moveTab?: (id: string, toIndex: number) => void;
 }
 
 function buildContext(opts: RenderOpts): TabsContextValue {
@@ -68,6 +69,8 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     closeTab: opts.closeTab ?? vi.fn(),
     setActiveTab: opts.setActiveTab ?? vi.fn(),
     setTabMode: opts.setTabMode ?? vi.fn(),
+    moveTab: opts.moveTab ?? vi.fn(),
+    moveActiveTab: vi.fn(),
     updateEditContent: vi.fn(),
     markSaved: vi.fn(),
     toggleTask: vi.fn(),
@@ -269,6 +272,88 @@ describe("TabBar", () => {
       activeTabId: "tab-0",
     });
     expect(screen.queryByLabelText("View mode")).not.toBeInTheDocument();
+  });
+
+  describe("drag-and-drop reordering", () => {
+    const dataTransfer = () => ({ setData: vi.fn(), effectAllowed: "", dropEffect: "" });
+    const tabEl = (name: string) => screen.getByText(name).closest(".tab-item") as HTMLElement;
+
+    it("marks every tab as draggable", () => {
+      renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
+      expect(tabEl("file0.md").getAttribute("draggable")).toBe("true");
+      expect(tabEl("file1.md").getAttribute("draggable")).toBe("true");
+    });
+
+    it("moves the dragged tab to the drop target's index", () => {
+      const moveTab = vi.fn();
+      renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-0", moveTab });
+      const dt = dataTransfer();
+      fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
+      fireEvent.dragOver(tabEl("file2.md"), { dataTransfer: dt });
+      fireEvent.drop(tabEl("file2.md"), { dataTransfer: dt });
+      expect(moveTab).toHaveBeenCalledWith("tab-0", 2);
+    });
+
+    it("shows the drop indicator on the trailing edge when dragging right", () => {
+      renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-0" });
+      const dt = dataTransfer();
+      fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
+      fireEvent.dragOver(tabEl("file2.md"), { dataTransfer: dt });
+      // dragover fires repeatedly over the same target; the indicator is stable.
+      fireEvent.dragOver(tabEl("file2.md"), { dataTransfer: dt });
+      expect(tabEl("file2.md").getAttribute("data-drop")).toBe("after");
+    });
+
+    it("shows the drop indicator on the leading edge when dragging left", () => {
+      renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-2" });
+      const dt = dataTransfer();
+      fireEvent.dragStart(tabEl("file2.md"), { dataTransfer: dt });
+      fireEvent.dragOver(tabEl("file0.md"), { dataTransfer: dt });
+      expect(tabEl("file0.md").getAttribute("data-drop")).toBe("before");
+    });
+
+    it("shows no indicator over the dragged tab itself and does not move on self-drop", () => {
+      const moveTab = vi.fn();
+      renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0", moveTab });
+      const dt = dataTransfer();
+      fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
+      fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
+      fireEvent.dragOver(tabEl("file0.md"), { dataTransfer: dt });
+      expect(tabEl("file0.md").hasAttribute("data-drop")).toBe(false);
+      expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
+      fireEvent.drop(tabEl("file0.md"), { dataTransfer: dt });
+      expect(moveTab).not.toHaveBeenCalled();
+    });
+
+    it("clears the indicator when the drag ends without a drop", () => {
+      renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
+      const dt = dataTransfer();
+      fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
+      fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
+      expect(tabEl("file1.md").getAttribute("data-drop")).toBe("after");
+      fireEvent.dragEnd(tabEl("file0.md"), { dataTransfer: dt });
+      expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
+    });
+
+    it("ignores dragover and drop when no tab drag is in progress", () => {
+      const moveTab = vi.fn();
+      renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0", moveTab });
+      const dt = dataTransfer();
+      fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
+      expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
+      fireEvent.drop(tabEl("file1.md"), { dataTransfer: dt });
+      expect(moveTab).not.toHaveBeenCalled();
+    });
+
+    it("clears the indicator after a completed drop", () => {
+      const moveTab = vi.fn();
+      renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-0", moveTab });
+      const dt = dataTransfer();
+      fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
+      fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
+      fireEvent.drop(tabEl("file1.md"), { dataTransfer: dt });
+      expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
+    });
   });
 
   // Regression: <button> cannot be a descendant of <button> per the HTML

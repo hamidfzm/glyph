@@ -452,6 +452,7 @@ Open [AI Playground](AI%20Playground.md) for a guided set of prompts to try agai
 | `Cmd+=` / `Cmd+-` | Zoom in / out |
 | `Cmd+0` | Reset zoom |
 | `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo task checkbox toggles |
+| `Cmd+Shift+PageUp` / `Cmd+Shift+PageDown` | Move tab left / right |
 | `Cmd+B` | Toggle sidebar |
 | `Cmd+Shift+A` | AI chat |
 | `Cmd+,` | Settings |
