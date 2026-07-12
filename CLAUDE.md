@@ -88,6 +88,24 @@ The release workflow builds all platforms and publishes to Homebrew, winget, Cho
 
 Do **not** create releases manually with `gh release create` or push tags by hand. Use the workflow.
 
+## Sibling Repos (glyph-md org)
+
+The main repo is `hamidfzm/glyph`. Every satellite (Homebrew tap, Scoop bucket, apt/rpm repos, plugin marketplace, plugin template, export-website action, org profile, and the `glyph-md.github.io` website) lives in the **glyph-md** GitHub org. Clone them all into a `glyph-md/` directory **adjacent to this repo** (i.e. `../glyph-md/<repo>` relative to the `glyph` checkout, not inside a worktree or a temp dir) and make cross-repo changes there so the working copies persist between sessions.
+
+Clone/refresh them with:
+
+```bash
+mkdir -p ../glyph-md && cd ../glyph-md
+TOKEN=$(gh auth token)
+for r in $(gh repo list glyph-md --limit 100 --json name -q '.[].name'); do
+  [ -d "$r/.git" ] && (cd "$r" && git pull --ff-only) && continue
+  git clone "https://x-access-token:${TOKEN}@github.com/glyph-md/$r.git" "$r"
+  git -C "$r" remote set-url origin "git@github.com:glyph-md/$r.git"  # scrub token; push over SSH
+done
+```
+
+SSH auth isn't loaded in the Bash tool, so clone over HTTPS with the gh token, then reset `origin` to the SSH URL for pushing (SSH works from PowerShell). Never commit a remote URL with the token baked in.
+
 ## Key Files
 
 - `src-tauri/tauri.conf.json`: App window config, CLI plugin config, bundle settings
