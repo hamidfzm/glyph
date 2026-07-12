@@ -21,6 +21,7 @@ paths:
 
 - Unit tests live in `#[cfg(test)]` modules in the same file as the code under test.
 - A module whose test block outgrows the source it tests (roughly 200+ lines) may move to a sibling `tests.rs` submodule, as `sync/git/tests.rs` does.
+- In a module folder (`foo/mod.rs` + sibling files), each sibling keeps its own inline `#[cfg(test)] mod tests`; `tests.rs` holds only the connected tests that span siblings or drive the Tauri command surface (mock app), and shared fixtures live in a `#[cfg(test)] mod test_support` sibling. `commands/plugins/` is the reference layout.
 
 ## Both
 
