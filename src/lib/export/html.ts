@@ -10,11 +10,17 @@ export interface HtmlDocOptions {
   // Wrapper class so bundled styles apply (markdown vs notebook body).
   bodyClass?: "markdown-body" | "notebook-body" | "glyph-canvas-page";
   // Multi-page site export: link a shared stylesheet instead of carrying the
-  // collected app CSS inline in every page (`css` then holds only page-specific
-  // extras, usually "").
+  // collected app CSS inline in every page. The page then emits no <style> at
+  // all (`css` is ignored); the shared sheet must include siteChromeCss().
   stylesheetHref?: string;
+  // Multi-page site export: link the shared theme script (siteChromeScript(),
+  // written once as site.js) instead of inlining it into every page.
+  scriptHref?: string;
   // Multi-page site export: navigation tree markup placed beside the content.
   navHtml?: string;
+  // Multi-page site export: per-page "On this page" outline, shown as a
+  // second sticky column on wide viewports. Only honored alongside navHtml.
+  outlineHtml?: string | null;
 }
 
 // The app's base styles lock the shell to the viewport (`html, body, #root {
@@ -45,11 +51,31 @@ const THEME_SCRIPT = `(function(){try{var root=document.documentElement,KEY='gly
 
 const THEME_TOGGLE_BUTTON = `<button id="glyph-theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">\u{25D1}</button>`;
 
-// Two-pane layout for the multi-page site export: sticky nav tree beside the
-// content column, stacking on narrow viewports. Only emitted when a page has
-// nav markup.
+/**
+ * Chrome CSS shared by every generated site page (viewport reset, theme
+ * toggle, nav/outline layout). The site exporter appends it once to the
+ * shared style.css instead of inlining it into each page; single-file
+ * exports keep it inline and stay self-contained.
+ */
+export function siteChromeCss(): string {
+  return `${LAYOUT_OVERRIDES}${SITE_LAYOUT}`;
+}
+
+/**
+ * Theme-toggle script shared by every generated site page, written once as
+ * the site's site.js. Loaded synchronously from <head> so the dark class is
+ * applied before first paint, exactly like the inline variant.
+ */
+export function siteChromeScript(): string {
+  return THEME_SCRIPT;
+}
+
+// Site layout for the multi-page export: sticky nav tree beside the content
+// column, plus an optional per-page outline column on the far side. Nav
+// stacks on narrow viewports; the outline hides instead (a heading list at
+// the bottom of the page is useless). Only emitted when a page has nav markup.
 const SITE_LAYOUT = `
-.glyph-site { display: flex; gap: 2rem; max-width: 1100px; margin: 0 auto; align-items: flex-start; }
+.glyph-site { display: flex; gap: 2rem; max-width: 1320px; margin: 0 auto; align-items: flex-start; }
 .glyph-site-nav { position: sticky; top: 1rem; flex: 0 0 220px; max-height: calc(100vh - 2rem); overflow-y: auto; font-size: 0.875rem; }
 .glyph-site-nav ul { list-style: none; margin: 0; padding-left: 0.75rem; }
 .glyph-site-nav > ul { padding-left: 0; }
@@ -60,11 +86,20 @@ const SITE_LAYOUT = `
 .glyph-site-nav a[aria-current="page"] { color: var(--color-accent, #0969da); font-weight: 600; }
 .glyph-site-main { flex: 1 1 auto; min-width: 0; }
 .glyph-site-main .markdown-body { margin: 0; }
+.glyph-site-outline { position: sticky; top: 1rem; flex: 0 0 200px; max-height: calc(100vh - 2rem); overflow-y: auto; font-size: 0.8125rem; }
+.glyph-site-outline ul { list-style: none; margin: 0; padding: 0; }
+.glyph-site-outline li { margin: 0.2rem 0; }
+.glyph-site-outline a { text-decoration: none; color: var(--color-text-secondary, #57606a); }
+.glyph-site-outline a:hover { color: var(--color-accent, #0969da); }
+.glyph-outline-l2 { padding-left: 0.75rem; }
+.glyph-outline-l3 { padding-left: 1.5rem; }
+.glyph-outline-l4, .glyph-outline-l5, .glyph-outline-l6 { padding-left: 2.25rem; }
+@media (max-width: 1024px) { .glyph-site-outline { display: none; } }
 @media (max-width: 768px) {
   .glyph-site { flex-direction: column; }
   .glyph-site-nav { position: static; flex: none; width: 100%; }
 }
-@media print { .glyph-site-nav { display: none; } }`;
+@media print { .glyph-site-nav, .glyph-site-outline { display: none; } }`;
 
 /**
  * Wrap prepared body HTML and collected CSS into a standalone, offline HTML
@@ -80,12 +115,27 @@ export function buildHtmlDocument({
   dark,
   bodyClass = "markdown-body",
   stylesheetHref,
+  scriptHref,
   navHtml,
+  outlineHtml,
 }: HtmlDocOptions): string {
   const initialClass = dark ? ' class="dark"' : "";
   const stylesheetLink = stylesheetHref
     ? `\n<link rel="stylesheet" href="${escapeXml(stylesheetHref)}">`
     : "";
+  // Site pages share one script file; single-file exports inline it to stay
+  // self-contained. Either way it loads synchronously in <head> so the theme
+  // class lands before first paint.
+  const themeScript = scriptHref
+    ? `<script src="${escapeXml(scriptHref)}"></script>`
+    : `<script>${THEME_SCRIPT}</script>`;
+  // With a shared stylesheet the page carries no CSS of its own.
+  const styleBlock = stylesheetHref
+    ? ""
+    : `\n<style>
+${css}
+${LAYOUT_OVERRIDES}${navHtml ? SITE_LAYOUT : ""}
+</style>`;
   // dir="auto" mirrors the viewer: a fully-RTL document resolves an RTL base
   // direction; per-block bidi comes from the bundled markdown.css rules.
   const content = `<div class="${bodyClass}" dir="auto">
@@ -96,7 +146,7 @@ ${bodyHtml}
 ${navHtml}
 <main class="glyph-site-main">
 ${content}
-</main>
+</main>${outlineHtml ? `\n${outlineHtml}` : ""}
 </div>`
     : content;
   return `<!doctype html>
@@ -106,11 +156,7 @@ ${content}
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${escapeXml(title)}</title>
-<script>${THEME_SCRIPT}</script>${stylesheetLink}
-<style>
-${css}
-${LAYOUT_OVERRIDES}${navHtml ? SITE_LAYOUT : ""}
-</style>
+${themeScript}${stylesheetLink}${styleBlock}
 </head>
 <body>
 ${THEME_TOGGLE_BUTTON}

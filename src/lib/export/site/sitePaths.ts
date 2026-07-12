@@ -21,13 +21,20 @@ export function relFromRoot(root: string, abs: string): string {
   return a.startsWith(`${r}/`) ? a.slice(r.length + 1) : a.replace(/^.*\//, "");
 }
 
-/**
- * Map a workspace-relative markdown path to its generated page path. The root
- * README (any markdown extension) becomes the site's index.html.
- */
+/** Map a workspace-relative markdown path to its generated page path. */
 export function pageRelPath(relMd: string): string {
-  if (/^readme\.[^./]+$/i.test(relMd)) return "index.html";
   return relMd.replace(/\.[^./]+$/, ".html");
+}
+
+/**
+ * How strongly a workspace-relative path claims the site's index.html: a
+ * root-level index.* wins over a root-level README.*; everything else (0)
+ * never claims it and the exporter falls back to a generated page list.
+ */
+export function indexSourcePriority(relMd: string): number {
+  if (/^index\.[^./]+$/i.test(relMd)) return 2;
+  if (/^readme\.[^./]+$/i.test(relMd)) return 1;
+  return 0;
 }
 
 /**

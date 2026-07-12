@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { collectStyles } from "@/lib/export/collectStyles";
-import { buildHtmlDocument } from "@/lib/export/html";
+import { buildHtmlDocument, siteChromeCss, siteChromeScript } from "@/lib/export/html";
 import { deriveExportMeta } from "@/lib/export/meta";
 import { restoreMermaidTheme } from "@/lib/export/rasterize";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
@@ -9,9 +9,10 @@ import { basename } from "@/lib/paths";
 import { buildIndexBodyHtml } from "./indexPage";
 import { inlineMermaidSvgs } from "./mermaidInline";
 import { buildNavHtml, type SitePage } from "./nav";
+import { buildOutlineHtml } from "./outline";
 import { renderPageHtml } from "./renderPage";
 import { rehypeSiteUrls } from "./rewriteUrls";
-import { pageRelPath, relativeHref, relFromRoot } from "./sitePaths";
+import { indexSourcePriority, pageRelPath, relativeHref, relFromRoot } from "./sitePaths";
 
 export interface ExportSiteOptions {
   /** Absolute workspace root to export. */
@@ -42,11 +43,11 @@ function siteDir(rel: string): string {
 
 /**
  * Export a folder workspace as a browsable static site: one page per markdown
- * file (structure preserved, root README promoted to index.html), a shared
- * style.css collected from the live document, per-page nav, rewritten
- * wikilinks/relative links, copied image assets, and inline Mermaid SVGs.
- * Rendering is headless (no React mount), so every file exports with the same
- * fidelity regardless of what is open in the app.
+ * file (structure preserved; the root index.*, else the root README.*, owns
+ * index.html), a shared style.css collected from the live document, per-page
+ * nav and outline, rewritten wikilinks/relative links, copied image assets,
+ * and inline Mermaid SVGs. Rendering is headless (no React mount), so every
+ * file exports with the same fidelity regardless of what is open in the app.
  */
 export async function exportSite({
   root,
@@ -61,10 +62,17 @@ export async function exportSite({
   if (unordered.length === 0) {
     throw new Error("The workspace contains no markdown files to export.");
   }
-  // The root README claims index.html before anything else can collide with
-  // it (e.g. Index.md on a case-insensitive filesystem).
-  const readme = unordered.find((f) => pageRelPath(relFromRoot(root, f)) === "index.html");
-  const files = readme ? [readme, ...unordered.filter((f) => f !== readme)] : unordered;
+  // One root file owns the site's index.html: a root index.* first, a root
+  // README.* as fallback. It goes first so nothing can collide with
+  // index.html before it claims the name; a README that lost the promotion
+  // exports as a normal README.html page.
+  const indexSource = unordered.reduce<string | null>((best, f) => {
+    const priority = indexSourcePriority(relFromRoot(root, f));
+    if (priority === 0) return best;
+    return best !== null && indexSourcePriority(relFromRoot(root, best)) >= priority ? best : f;
+  }, null);
+  const files =
+    indexSource !== null ? [indexSource, ...unordered.filter((f) => f !== indexSource)] : unordered;
 
   // Pass 1: read everything up front. Nav on every page needs the full page
   // list with titles before the first page is written.
@@ -72,13 +80,13 @@ export async function exportSite({
   const pages = new Map<string, string>(); // abs md path -> site rel html path
   const sitePages: SitePage[] = [];
   // Output paths collide case-insensitively (Windows/macOS filesystems):
-  // Index.md must not overwrite README.md's index.html, nor a.md A.md's page.
+  // a.md must not overwrite A.md's page, nor Cooking.mmd Cooking.md's.
   const takenRels = new Set<string>();
   for (const file of files) {
     // .mmd files that sniff as Mermaid source render as a diagram, like the
     // viewer does.
     const content = adaptMmdContent(file, await invoke<string>("read_file", { path: file }));
-    const wanted = pageRelPath(relFromRoot(root, file));
+    const wanted = file === indexSource ? "index.html" : pageRelPath(relFromRoot(root, file));
     let rel = wanted;
     for (let n = 1; takenRels.has(rel.toLowerCase()); n++) {
       rel = wanted.replace(/\.html$/, `-${n}.html`);
@@ -110,8 +118,12 @@ export async function exportSite({
       title,
       css: "",
       dark,
+      // Pages share one stylesheet and one theme script (all pages carry the
+      // same chrome); only the body markup is per-page.
       stylesheetHref: relativeHref(rel, "style.css"),
+      scriptHref: relativeHref(rel, "site.js"),
       navHtml: buildNavHtml(sitePages, rel),
+      outlineHtml: buildOutlineHtml(bodyHtml),
     });
     await ensureDir(rel);
     await invoke("write_file", { path: outPath(outDir, rel), content: html });
@@ -157,8 +169,14 @@ export async function exportSite({
     }
 
     // Collected last so stylesheets loaded during rendering (KaTeX) are in.
+    // The chrome CSS and theme script live in shared files rather than being
+    // repeated inline in every page.
     await ensureDir("style.css");
-    await invoke("write_file", { path: outPath(outDir, "style.css"), content: collectStyles() });
+    await invoke("write_file", {
+      path: outPath(outDir, "style.css"),
+      content: `${collectStyles()}\n${siteChromeCss()}`,
+    });
+    await invoke("write_file", { path: outPath(outDir, "site.js"), content: siteChromeScript() });
   } finally {
     if (usedMermaid) await restoreMermaidTheme(dark);
   }
