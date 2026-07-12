@@ -10,9 +10,12 @@ export interface HtmlDocOptions {
   // Wrapper class so bundled styles apply (markdown vs notebook body).
   bodyClass?: "markdown-body" | "notebook-body" | "glyph-canvas-page";
   // Multi-page site export: link a shared stylesheet instead of carrying the
-  // collected app CSS inline in every page (`css` then holds only page-specific
-  // extras, usually "").
+  // collected app CSS inline in every page. The page then emits no <style> at
+  // all (`css` is ignored); the shared sheet must include siteChromeCss().
   stylesheetHref?: string;
+  // Multi-page site export: link the shared theme script (siteChromeScript(),
+  // written once as site.js) instead of inlining it into every page.
+  scriptHref?: string;
   // Multi-page site export: navigation tree markup placed beside the content.
   navHtml?: string;
   // Multi-page site export: per-page "On this page" outline, shown as a
@@ -47,6 +50,25 @@ body { margin: 0; padding: 2rem 1.25rem; }
 const THEME_SCRIPT = `(function(){try{var root=document.documentElement,KEY='glyph-export-theme',mq=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');function stored(){try{return localStorage.getItem(KEY)}catch(e){return null}}function apply(){var s=stored();root.classList.toggle('dark',s==='dark'||(s===null&&!!mq&&mq.matches))}apply();if(mq&&mq.addEventListener)mq.addEventListener('change',function(){if(stored()===null)apply()});document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('glyph-theme-toggle');if(!b)return;b.addEventListener('click',function(){var d=!root.classList.contains('dark');root.classList.toggle('dark',d);try{localStorage.setItem(KEY,d?'dark':'light')}catch(e){}})})}catch(e){}})();`;
 
 const THEME_TOGGLE_BUTTON = `<button id="glyph-theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">\u{25D1}</button>`;
+
+/**
+ * Chrome CSS shared by every generated site page (viewport reset, theme
+ * toggle, nav/outline layout). The site exporter appends it once to the
+ * shared style.css instead of inlining it into each page; single-file
+ * exports keep it inline and stay self-contained.
+ */
+export function siteChromeCss(): string {
+  return `${LAYOUT_OVERRIDES}${SITE_LAYOUT}`;
+}
+
+/**
+ * Theme-toggle script shared by every generated site page, written once as
+ * the site's site.js. Loaded synchronously from <head> so the dark class is
+ * applied before first paint, exactly like the inline variant.
+ */
+export function siteChromeScript(): string {
+  return THEME_SCRIPT;
+}
 
 // Site layout for the multi-page export: sticky nav tree beside the content
 // column, plus an optional per-page outline column on the far side. Nav
@@ -93,6 +115,7 @@ export function buildHtmlDocument({
   dark,
   bodyClass = "markdown-body",
   stylesheetHref,
+  scriptHref,
   navHtml,
   outlineHtml,
 }: HtmlDocOptions): string {
@@ -100,6 +123,19 @@ export function buildHtmlDocument({
   const stylesheetLink = stylesheetHref
     ? `\n<link rel="stylesheet" href="${escapeXml(stylesheetHref)}">`
     : "";
+  // Site pages share one script file; single-file exports inline it to stay
+  // self-contained. Either way it loads synchronously in <head> so the theme
+  // class lands before first paint.
+  const themeScript = scriptHref
+    ? `<script src="${escapeXml(scriptHref)}"></script>`
+    : `<script>${THEME_SCRIPT}</script>`;
+  // With a shared stylesheet the page carries no CSS of its own.
+  const styleBlock = stylesheetHref
+    ? ""
+    : `\n<style>
+${css}
+${LAYOUT_OVERRIDES}${navHtml ? SITE_LAYOUT : ""}
+</style>`;
   // dir="auto" mirrors the viewer: a fully-RTL document resolves an RTL base
   // direction; per-block bidi comes from the bundled markdown.css rules.
   const content = `<div class="${bodyClass}" dir="auto">
@@ -120,11 +156,7 @@ ${content}
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${escapeXml(title)}</title>
-<script>${THEME_SCRIPT}</script>${stylesheetLink}
-<style>
-${css}
-${LAYOUT_OVERRIDES}${navHtml ? SITE_LAYOUT : ""}
-</style>
+${themeScript}${stylesheetLink}${styleBlock}
 </head>
 <body>
 ${THEME_TOGGLE_BUTTON}

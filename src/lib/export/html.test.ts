@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHtmlDocument } from "./html";
+import { buildHtmlDocument, siteChromeCss, siteChromeScript } from "./html";
 
 describe("buildHtmlDocument", () => {
   it("wraps body and css in a standalone document with the markdown-body class", () => {
@@ -84,6 +84,31 @@ describe("buildHtmlDocument", () => {
       stylesheetHref: "../style.css?a&b",
     });
     expect(out).toContain('<link rel="stylesheet" href="../style.css?a&amp;b">');
+    // The shared sheet owns all CSS; the page carries no <style> of its own.
+    expect(out).not.toContain("<style>");
+  });
+
+  it("links a shared theme script for site pages instead of inlining it", () => {
+    const out = buildHtmlDocument({
+      bodyHtml: "",
+      title: "t",
+      css: "",
+      dark: false,
+      scriptHref: "../site.js",
+    });
+    expect(out).toContain('<script src="../site.js"></script>');
+    expect(out).not.toContain("glyph-export-theme");
+  });
+
+  it("exposes the shared site chrome for the exporter to write once", () => {
+    // Everything a site page needs from the dropped inline blocks must be in
+    // the shared chrome: viewport reset, toggle styles, layout, theme script.
+    const css = siteChromeCss();
+    expect(css).toContain("html, body { height: auto;");
+    expect(css).toContain("#glyph-theme-toggle");
+    expect(css).toContain(".glyph-site {");
+    expect(css).toContain(".glyph-site-outline {");
+    expect(siteChromeScript()).toContain("glyph-export-theme");
   });
 
   it("omits the stylesheet link and site layout for single-file exports", () => {

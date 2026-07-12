@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { collectStyles } from "@/lib/export/collectStyles";
-import { buildHtmlDocument } from "@/lib/export/html";
+import { buildHtmlDocument, siteChromeCss, siteChromeScript } from "@/lib/export/html";
 import { deriveExportMeta } from "@/lib/export/meta";
 import { restoreMermaidTheme } from "@/lib/export/rasterize";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
@@ -118,7 +118,10 @@ export async function exportSite({
       title,
       css: "",
       dark,
+      // Pages share one stylesheet and one theme script (all pages carry the
+      // same chrome); only the body markup is per-page.
       stylesheetHref: relativeHref(rel, "style.css"),
+      scriptHref: relativeHref(rel, "site.js"),
       navHtml: buildNavHtml(sitePages, rel),
       outlineHtml: buildOutlineHtml(bodyHtml),
     });
@@ -166,8 +169,14 @@ export async function exportSite({
     }
 
     // Collected last so stylesheets loaded during rendering (KaTeX) are in.
+    // The chrome CSS and theme script live in shared files rather than being
+    // repeated inline in every page.
     await ensureDir("style.css");
-    await invoke("write_file", { path: outPath(outDir, "style.css"), content: collectStyles() });
+    await invoke("write_file", {
+      path: outPath(outDir, "style.css"),
+      content: `${collectStyles()}\n${siteChromeCss()}`,
+    });
+    await invoke("write_file", { path: outPath(outDir, "site.js"), content: siteChromeScript() });
   } finally {
     if (usedMermaid) await restoreMermaidTheme(dark);
   }

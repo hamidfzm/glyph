@@ -61,6 +61,7 @@ describe("exportSite", () => {
     expect([...fs.writes.keys()].sort()).toEqual([
       "/out/guide/intro.html",
       "/out/index.html",
+      "/out/site.js",
       "/out/style.css",
     ]);
     expect(progress[0]).toEqual([0, 2]);
@@ -68,9 +69,15 @@ describe("exportSite", () => {
 
     const intro = fs.writes.get("/out/guide/intro.html") ?? "";
     expect(intro).toContain('<link rel="stylesheet" href="../style.css">');
+    expect(intro).toContain('<script src="../site.js"></script>');
     expect(intro).toContain('class="glyph-site-nav"');
     expect(intro).toContain('href="../index.html"');
     expect(fs.dirs).toContain("/out/guide");
+
+    // Chrome shared by every page lives once in the site files, not inline.
+    expect(intro).not.toContain("<style>");
+    expect(fs.writes.get("/out/style.css")).toContain(".glyph-site {");
+    expect(fs.writes.get("/out/site.js")).toContain("glyph-export-theme");
   });
 
   it("generates an index page when the workspace has no root README", async () => {
