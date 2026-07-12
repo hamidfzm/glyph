@@ -233,9 +233,9 @@ mod tests {
             r#"{{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"0.16.0","files":[{}]}}"#,
             files.join(",")
         );
-        let Err(err) = parse_manifest(&json) else {
-            panic!("a files list over the cap must be rejected")
-        };
+        let err = parse_manifest(&json)
+            .err()
+            .expect("a files list over the cap must be rejected");
         assert!(err.contains("more than"), "unexpected error: {err}");
     }
 
