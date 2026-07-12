@@ -3,6 +3,7 @@
 // is the whitelist installs and asset reads are held to, so everything here
 // rejects rather than normalizes.
 
+#[derive(Debug)]
 pub(crate) struct ManifestInfo {
     pub(crate) id: String,
     pub(crate) name: String,
@@ -233,9 +234,7 @@ mod tests {
             r#"{{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"0.16.0","files":[{}]}}"#,
             files.join(",")
         );
-        let err = parse_manifest(&json)
-            .err()
-            .expect("a files list over the cap must be rejected");
+        let err = parse_manifest(&json).unwrap_err();
         assert!(err.contains("more than"), "unexpected error: {err}");
     }
 
