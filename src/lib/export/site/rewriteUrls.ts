@@ -73,7 +73,9 @@ function rewriteAnchor(ctx: SiteUrlContext, props: Record<string, unknown>): voi
     const page = lookupPage(ctx.pages, wikiTarget);
     if (!page) return; // target exists in the workspace but not in this export
     const heading = props.dataWikilinkHeading;
-    const fragment = typeof heading === "string" ? `#${headingSlug(heading)}` : "";
+    // Slugs can carry non-ASCII letters; percent-encode like outline.ts does.
+    const fragment =
+      typeof heading === "string" ? `#${encodeURIComponent(headingSlug(heading))}` : "";
     props.href = encodeHref(relativeHref(ctx.pageRel, page)) + fragment;
     return;
   }

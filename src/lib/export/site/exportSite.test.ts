@@ -132,6 +132,18 @@ describe("exportSite", () => {
     expect([...fs.writes.keys()].some((p) => p.includes("index-1"))).toBe(false);
   });
 
+  it("breaks equal-priority index ties by listing order", async () => {
+    // Two root index variants both claim index.html: the first listed wins
+    // and the other falls through to the case-insensitive dedupe.
+    const fs = mockFs({
+      "/ws/index.md": "# First Index",
+      "/ws/Index.markdown": "# Second Index",
+    });
+    await exportSite({ root: "/ws", outDir: "/out" });
+    expect(fs.writes.get("/out/index.html")).toContain("First Index");
+    expect(fs.writes.get("/out/Index-1.html")).toContain("Second Index");
+  });
+
   it("dedupes output paths that collide case-insensitively", async () => {
     // On Windows/macOS filesystems a.html and A.html are the same file; the
     // exported site must stay portable across them.
