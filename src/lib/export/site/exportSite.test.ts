@@ -118,17 +118,43 @@ describe("exportSite", () => {
     expect(page).toContain('<div class="mermaid-diagram">');
   });
 
-  it("keeps README as index.html when another page collides case-insensitively", async () => {
-    // On Windows/macOS filesystems Index.html and index.html are the same
-    // file; the exported site must stay portable across them.
+  it("prefers a root index file over the README for index.html", async () => {
     const fs = mockFs({
-      "/ws/Index.md": "# The Index Note",
+      "/ws/index.md": "# The Real Index",
       "/ws/README.md": "# Home",
     });
     const result = await exportSite({ root: "/ws", outDir: "/out" });
     expect(result.pages).toBe(2);
-    expect(fs.writes.get("/out/index.html")).toContain("Home");
-    expect(fs.writes.get("/out/Index-1.html")).toContain("The Index Note");
+    // index.md owns index.html; the README exports as a normal page and no
+    // deduped index-1.html appears.
+    expect(fs.writes.get("/out/index.html")).toContain("The Real Index");
+    expect(fs.writes.get("/out/README.html")).toContain("Home");
+    expect([...fs.writes.keys()].some((p) => p.includes("index-1"))).toBe(false);
+  });
+
+  it("dedupes output paths that collide case-insensitively", async () => {
+    // On Windows/macOS filesystems a.html and A.html are the same file; the
+    // exported site must stay portable across them.
+    const fs = mockFs({
+      "/ws/a.md": "# Lower",
+      "/ws/A.markdown": "# Upper",
+    });
+    await exportSite({ root: "/ws", outDir: "/out" });
+    expect(fs.writes.get("/out/a.html")).toContain("Lower");
+    expect(fs.writes.get("/out/A-1.html")).toContain("Upper");
+  });
+
+  it("gives multi-heading pages an outline and skips it on short pages", async () => {
+    const fs = mockFs({
+      "/ws/long.md": "# One\n\n## Two\n\n### Three",
+      "/ws/short.md": "# Only",
+    });
+    await exportSite({ root: "/ws", outDir: "/out" });
+    const long = fs.writes.get("/out/long.html") ?? "";
+    expect(long).toContain('<nav class="glyph-site-outline"');
+    expect(long).toContain('href="#two"');
+    const short = fs.writes.get("/out/short.html") ?? "";
+    expect(short).not.toContain('<nav class="glyph-site-outline"');
   });
 
   it("tolerates a missing asset instead of failing the export", async () => {

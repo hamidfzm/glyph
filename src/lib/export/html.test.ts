@@ -103,7 +103,38 @@ describe("buildHtmlDocument", () => {
     expect(out).toContain('<div class="glyph-site">');
     expect(out).toContain('<nav class="glyph-site-nav">');
     expect(out).toContain('<main class="glyph-site-main">');
-    // The nav is chrome, not content: hidden when printing.
-    expect(out).toContain("@media print { .glyph-site-nav { display: none; } }");
+    // Nav and outline are chrome, not content: hidden when printing.
+    expect(out).toContain(
+      "@media print { .glyph-site-nav, .glyph-site-outline { display: none; } }",
+    );
+  });
+
+  it("adds the outline column after the content when outline markup is given", () => {
+    const out = buildHtmlDocument({
+      bodyHtml: "<p>x</p>",
+      title: "t",
+      css: "",
+      dark: false,
+      navHtml: '<nav class="glyph-site-nav"><ul></ul></nav>',
+      outlineHtml: '<nav class="glyph-site-outline"><ul></ul></nav>',
+    });
+    expect(out).toContain('<nav class="glyph-site-outline">');
+    expect(out.indexOf("glyph-site-main")).toBeLessThan(
+      out.indexOf('<nav class="glyph-site-outline">'),
+    );
+    // Hidden on narrow viewports rather than stacked below the content.
+    expect(out).toContain("@media (max-width: 1024px) { .glyph-site-outline { display: none; } }");
+  });
+
+  it("omits the outline element when a page has none", () => {
+    const out = buildHtmlDocument({
+      bodyHtml: "<p>x</p>",
+      title: "t",
+      css: "",
+      dark: false,
+      navHtml: '<nav class="glyph-site-nav"><ul></ul></nav>',
+      outlineHtml: null,
+    });
+    expect(out).not.toContain('<nav class="glyph-site-outline">');
   });
 });

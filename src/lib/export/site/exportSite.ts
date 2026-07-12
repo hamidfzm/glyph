@@ -9,9 +9,10 @@ import { basename } from "@/lib/paths";
 import { buildIndexBodyHtml } from "./indexPage";
 import { inlineMermaidSvgs } from "./mermaidInline";
 import { buildNavHtml, type SitePage } from "./nav";
+import { buildOutlineHtml } from "./outline";
 import { renderPageHtml } from "./renderPage";
 import { rehypeSiteUrls } from "./rewriteUrls";
-import { pageRelPath, relativeHref, relFromRoot } from "./sitePaths";
+import { indexSourcePriority, pageRelPath, relativeHref, relFromRoot } from "./sitePaths";
 
 export interface ExportSiteOptions {
   /** Absolute workspace root to export. */
@@ -61,10 +62,17 @@ export async function exportSite({
   if (unordered.length === 0) {
     throw new Error("The workspace contains no markdown files to export.");
   }
-  // The root README claims index.html before anything else can collide with
-  // it (e.g. Index.md on a case-insensitive filesystem).
-  const readme = unordered.find((f) => pageRelPath(relFromRoot(root, f)) === "index.html");
-  const files = readme ? [readme, ...unordered.filter((f) => f !== readme)] : unordered;
+  // One root file owns the site's index.html: a root index.* first, a root
+  // README.* as fallback. It goes first so nothing can collide with
+  // index.html before it claims the name; a README that lost the promotion
+  // exports as a normal README.html page.
+  const indexSource = unordered.reduce<string | null>((best, f) => {
+    const priority = indexSourcePriority(relFromRoot(root, f));
+    if (priority === 0) return best;
+    return best !== null && indexSourcePriority(relFromRoot(root, best)) >= priority ? best : f;
+  }, null);
+  const files =
+    indexSource !== null ? [indexSource, ...unordered.filter((f) => f !== indexSource)] : unordered;
 
   // Pass 1: read everything up front. Nav on every page needs the full page
   // list with titles before the first page is written.
@@ -78,7 +86,7 @@ export async function exportSite({
     // .mmd files that sniff as Mermaid source render as a diagram, like the
     // viewer does.
     const content = adaptMmdContent(file, await invoke<string>("read_file", { path: file }));
-    const wanted = pageRelPath(relFromRoot(root, file));
+    const wanted = file === indexSource ? "index.html" : pageRelPath(relFromRoot(root, file));
     let rel = wanted;
     for (let n = 1; takenRels.has(rel.toLowerCase()); n++) {
       rel = wanted.replace(/\.html$/, `-${n}.html`);
@@ -112,6 +120,7 @@ export async function exportSite({
       dark,
       stylesheetHref: relativeHref(rel, "style.css"),
       navHtml: buildNavHtml(sitePages, rel),
+      outlineHtml: buildOutlineHtml(bodyHtml),
     });
     await ensureDir(rel);
     await invoke("write_file", { path: outPath(outDir, rel), content: html });

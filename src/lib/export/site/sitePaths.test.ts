@@ -3,6 +3,7 @@ import {
   decodeHref,
   encodeHref,
   headingSlug,
+  indexSourcePriority,
   pageRelPath,
   relativeHref,
   relFromRoot,
@@ -41,15 +42,22 @@ describe("pageRelPath", () => {
   it("maps markdown to .html preserving folders", () => {
     expect(pageRelPath("guide/intro.md")).toBe("guide/intro.html");
     expect(pageRelPath("notes.markdown")).toBe("notes.html");
+    expect(pageRelPath("README.md")).toBe("README.html");
+  });
+});
+
+describe("indexSourcePriority", () => {
+  it("ranks a root index above a root README, regardless of case", () => {
+    expect(indexSourcePriority("index.md")).toBeGreaterThan(indexSourcePriority("README.md"));
+    expect(indexSourcePriority("Index.markdown")).toBe(indexSourcePriority("index.md"));
+    expect(indexSourcePriority("readme.mdown")).toBe(indexSourcePriority("README.md"));
+    expect(indexSourcePriority("README.md")).toBeGreaterThan(0);
   });
 
-  it("promotes the root README to index.html regardless of case", () => {
-    expect(pageRelPath("README.md")).toBe("index.html");
-    expect(pageRelPath("readme.markdown")).toBe("index.html");
-  });
-
-  it("does not promote a nested README", () => {
-    expect(pageRelPath("docs/README.md")).toBe("docs/README.html");
+  it("gives ordinary and nested pages no claim on index.html", () => {
+    expect(indexSourcePriority("notes.md")).toBe(0);
+    expect(indexSourcePriority("docs/index.md")).toBe(0);
+    expect(indexSourcePriority("docs/README.md")).toBe(0);
   });
 });
 
