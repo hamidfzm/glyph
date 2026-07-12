@@ -7,6 +7,7 @@ import { SplitModeIcon } from "@/components/icons/SplitModeIcon";
 import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
 import { ViewModeIcon } from "@/components/icons/ViewModeIcon";
 import { useTabsContext } from "@/contexts/TabsContext";
+import { useTabDragReorder } from "@/hooks/useTabDragReorder";
 import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isImageFile } from "@/lib/imageExtensions";
@@ -36,7 +37,9 @@ export function TabBar({ onToggleAIChat }: TabBarProps) {
     setActiveTab: onActivate,
     closeTab: onClose,
     setTabMode: onModeChange,
+    moveTab: onMove,
   } = useTabsContext();
+  const { indicator, handlersFor } = useTabDragReorder(onMove);
   if (tabs.length === 0) return null;
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
@@ -51,7 +54,7 @@ export function TabBar({ onToggleAIChat }: TabBarProps) {
   return (
     <div className="tab-bar-container" data-print-hide="true">
       <div className="tab-bar-scroll">
-        {tabs.map((tab) => {
+        {tabs.map((tab, index) => {
           const file = activeFileOf(tab);
           const dirty = file?.dirty ?? false;
           const label = tabLabel(tab, t);
@@ -68,6 +71,8 @@ export function TabBar({ onToggleAIChat }: TabBarProps) {
               data-active={tab.id === activeTabId || undefined}
               data-tab-kind={tab.kind}
               data-loose={loose || undefined}
+              data-drop={indicator?.index === index ? indicator.edge : undefined}
+              {...handlersFor(tab.id, index)}
               onAuxClick={(e) => {
                 if (e.button === 1) {
                   e.preventDefault();
