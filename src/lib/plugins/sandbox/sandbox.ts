@@ -25,6 +25,16 @@ export interface SandboxHostApi {
   settingsSet(key: string, value: unknown): void;
   workspaceRead(path: string): Promise<string>;
   workspaceList(): Promise<string[]>;
+  /** Read one of the plugin's own manifest-declared files. */
+  assetRead(path: string): Promise<Uint8Array>;
+}
+
+/** Settle a worker-initiated call with a host-result message. */
+function respond(worker: WorkerLike, callId: number, result: Promise<unknown>): void {
+  result.then(
+    (value) => worker.postMessage({ type: "host-result", callId, ok: true, value }),
+    (err) => worker.postMessage({ type: "host-result", callId, ok: false, error: String(err) }),
+  );
 }
 
 const defaultSpawner: WorkerSpawner = (source) =>
@@ -116,39 +126,16 @@ export function startSandbox(
           break;
         }
         case "workspace-read":
-          api.workspaceRead(data.path).then(
-            (value) =>
-              worker.postMessage({
-                type: "workspace-result",
-                callId: data.callId,
-                ok: true,
-                value,
-              }),
-            (err) =>
-              worker.postMessage({
-                type: "workspace-result",
-                callId: data.callId,
-                ok: false,
-                error: String(err),
-              }),
-          );
+          respond(worker, data.callId, api.workspaceRead(data.path));
           break;
         case "workspace-list":
-          api.workspaceList().then(
-            (value) =>
-              worker.postMessage({
-                type: "workspace-result",
-                callId: data.callId,
-                ok: true,
-                value,
-              }),
-            (err) =>
-              worker.postMessage({
-                type: "workspace-result",
-                callId: data.callId,
-                ok: false,
-                error: String(err),
-              }),
+          respond(worker, data.callId, api.workspaceList());
+          break;
+        case "asset-read":
+          respond(
+            worker,
+            data.callId,
+            api.assetRead(data.path).then((bytes) => Array.from(bytes)),
           );
           break;
       }

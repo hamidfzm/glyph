@@ -14,7 +14,8 @@ export type HostMessage =
     }
   | { type: "run-command"; id: string }
   | { type: "build-export"; callId: number; id: string; bodyHtml: string }
-  | { type: "workspace-result"; callId: number; ok: boolean; value?: unknown; error?: string };
+  /** Reply to any worker-initiated call (workspace-read/list, asset-read). */
+  | { type: "host-result"; callId: number; ok: boolean; value?: unknown; error?: string };
 
 /** Worker -> host. */
 export type WorkerMessage =
@@ -39,7 +40,9 @@ export type WorkerMessage =
       error?: string;
     }
   | { type: "workspace-read"; callId: number; path: string }
-  | { type: "workspace-list"; callId: number };
+  | { type: "workspace-list"; callId: number }
+  /** Read one of the plugin's own manifest-declared files; resolves to bytes. */
+  | { type: "asset-read"; callId: number; path: string };
 
 /**
  * Is a URL reachable under the plugin's declared `network:<host>` permissions?

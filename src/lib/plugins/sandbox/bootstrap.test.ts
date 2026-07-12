@@ -118,7 +118,7 @@ describe("worker bootstrap", () => {
     });
   });
 
-  it("resolves workspace calls via workspace-result round trips", async () => {
+  it("resolves workspace calls via host-result round trips", async () => {
     const w = bootWorker();
     const plugin = `export default {
       async activate(ctx) {
@@ -130,18 +130,43 @@ describe("worker bootstrap", () => {
     const activation = w.send(init(plugin));
     await vi.waitFor(() => expect(w.typesPosted()).toContain("workspace-read"));
     const read = w.posted.find((m) => m.type === "workspace-read") as { callId: number };
-    await w.send({ type: "workspace-result", callId: read.callId, ok: true, value: "hello" });
+    await w.send({ type: "host-result", callId: read.callId, ok: true, value: "hello" });
 
     await vi.waitFor(() => expect(w.typesPosted()).toContain("workspace-list"));
     const list = w.posted.find((m) => m.type === "workspace-list") as { callId: number };
-    await w.send({ type: "workspace-result", callId: list.callId, ok: false, error: "denied" });
+    await w.send({ type: "host-result", callId: list.callId, ok: false, error: "denied" });
 
     await activation;
     await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
     expect(w.posted).toContainEqual({ type: "notify", message: "read:hello" });
     expect(w.posted).toContainEqual({ type: "notify", message: "list:denied" });
     // A result for an unknown call is ignored.
-    await w.send({ type: "workspace-result", callId: 999, ok: true, value: "" });
+    await w.send({ type: "host-result", callId: 999, ok: true, value: "" });
+  });
+
+  it("serves ctx.assets reads via asset-read round trips", async () => {
+    const w = bootWorker();
+    const plugin = `export default {
+      async activate(ctx) {
+        const text = await ctx.assets.readText("assets/greeting.txt");
+        const bytes = await ctx.assets.readBinary("assets/raw.bin");
+        ctx.notify("asset:" + text + ":" + bytes.length);
+      },
+    }`;
+    const activation = w.send(init(plugin));
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("asset-read"));
+    const first = w.posted.find((m) => m.type === "asset-read") as { callId: number };
+    await w.send({
+      type: "host-result",
+      callId: first.callId,
+      ok: true,
+      value: Array.from(new TextEncoder().encode("hi")),
+    });
+    await vi.waitFor(() => expect(w.posted.filter((m) => m.type === "asset-read")).toHaveLength(2));
+    const second = w.posted.filter((m) => m.type === "asset-read")[1] as { callId: number };
+    await w.send({ type: "host-result", callId: second.callId, ok: true, value: [1, 2, 3] });
+    await activation;
+    expect(w.posted).toContainEqual({ type: "notify", message: "asset:hi:3" });
   });
 
   it("fences fetch to declared network hosts and removes other network APIs", async () => {

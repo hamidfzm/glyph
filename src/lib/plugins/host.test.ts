@@ -461,7 +461,7 @@ describe("createPluginHost", () => {
       // workspace:read granted but no workspace open: an error result, not a hang.
       await vi.waitFor(() =>
         expect(worker.posted).toContainEqual(
-          expect.objectContaining({ type: "workspace-result", callId: 1, ok: false }),
+          expect.objectContaining({ type: "host-result", callId: 1, ok: false }),
         ),
       );
     });

@@ -1,5 +1,6 @@
 import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
+import { createAssetsApi } from "./assetsApi";
 import { type Disposer, DisposerBag } from "./disposer";
 import { importPluginModule, type ModuleImporter } from "./loader";
 import { createRegistry, type Registry } from "./registry";
@@ -144,6 +145,7 @@ export function createPluginHost(
       },
     },
     workspace: createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? []),
+    assets: createAssetsApi(plugin.id),
     exporters: { register: tracked(exporters.register, bag) },
     // Dictionaries live in the spellcheck module's own registry (the speller
     // and the settings UI read it directly); only the disposal is routed
@@ -219,6 +221,7 @@ export function createPluginHost(
             },
             workspaceRead: workspace.readFile,
             workspaceList: workspace.listFiles,
+            assetRead: createAssetsApi(plugin.id).readBinary,
           },
           workerSpawner,
         );

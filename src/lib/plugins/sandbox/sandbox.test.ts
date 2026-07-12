@@ -25,6 +25,7 @@ function apiStub(): SandboxHostApi {
     registerTranslations: vi.fn(),
     settingsSet: vi.fn(),
     workspaceRead: vi.fn().mockResolvedValue("file text"),
+    assetRead: vi.fn().mockResolvedValue(new Uint8Array([7, 8])),
     workspaceList: vi.fn().mockResolvedValue(["/ws/a.md"]),
   };
 }
@@ -173,25 +174,39 @@ describe("startSandbox", () => {
     worker.emit({ type: "export-result", callId: 99, ok: true, output: "x" });
   });
 
-  it("answers workspace-read and workspace-list with workspace-result", async () => {
+  it("answers workspace-read and workspace-list with host-result", async () => {
     const { worker, api } = await startActivated();
     worker.emit({ type: "workspace-read", callId: 1, path: "notes.md" });
     worker.emit({ type: "workspace-list", callId: 2 });
     await vi.waitFor(() => {
       expect(worker.posted).toContainEqual({
-        type: "workspace-result",
+        type: "host-result",
         callId: 1,
         ok: true,
         value: "file text",
       });
       expect(worker.posted).toContainEqual({
-        type: "workspace-result",
+        type: "host-result",
         callId: 2,
         ok: true,
         value: ["/ws/a.md"],
       });
     });
     expect(api.workspaceRead).toHaveBeenCalledWith("notes.md");
+  });
+
+  it("answers asset-read with the plugin's file bytes as a plain array", async () => {
+    const { worker, api } = await startActivated();
+    worker.emit({ type: "asset-read", callId: 5, path: "assets/data.bin" });
+    await vi.waitFor(() => {
+      expect(worker.posted).toContainEqual({
+        type: "host-result",
+        callId: 5,
+        ok: true,
+        value: [7, 8],
+      });
+    });
+    expect(api.assetRead).toHaveBeenCalledWith("assets/data.bin");
   });
 
   it("relays workspace failures as error results", async () => {
@@ -203,13 +218,13 @@ describe("startSandbox", () => {
     worker.emit({ type: "workspace-list", callId: 2 });
     await vi.waitFor(() => {
       expect(worker.posted).toContainEqual({
-        type: "workspace-result",
+        type: "host-result",
         callId: 1,
         ok: false,
         error: "Error: requires workspace:read",
       });
       expect(worker.posted).toContainEqual({
-        type: "workspace-result",
+        type: "host-result",
         callId: 2,
         ok: false,
         error: "Error: no workspace",
