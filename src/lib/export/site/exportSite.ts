@@ -43,11 +43,11 @@ function siteDir(rel: string): string {
 
 /**
  * Export a folder workspace as a browsable static site: one page per markdown
- * file (structure preserved, root README promoted to index.html), a shared
- * style.css collected from the live document, per-page nav, rewritten
- * wikilinks/relative links, copied image assets, and inline Mermaid SVGs.
- * Rendering is headless (no React mount), so every file exports with the same
- * fidelity regardless of what is open in the app.
+ * file (structure preserved; the root index.*, else the root README.*, owns
+ * index.html), a shared style.css collected from the live document, per-page
+ * nav and outline, rewritten wikilinks/relative links, copied image assets,
+ * and inline Mermaid SVGs. Rendering is headless (no React mount), so every
+ * file exports with the same fidelity regardless of what is open in the app.
  */
 export async function exportSite({
   root,
@@ -80,7 +80,7 @@ export async function exportSite({
   const pages = new Map<string, string>(); // abs md path -> site rel html path
   const sitePages: SitePage[] = [];
   // Output paths collide case-insensitively (Windows/macOS filesystems):
-  // Index.md must not overwrite README.md's index.html, nor a.md A.md's page.
+  // a.md must not overwrite A.md's page, nor Cooking.mmd Cooking.md's.
   const takenRels = new Set<string>();
   for (const file of files) {
     // .mmd files that sniff as Mermaid source render as a diagram, like the
