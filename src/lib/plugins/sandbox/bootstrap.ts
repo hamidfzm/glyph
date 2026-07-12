@@ -93,6 +93,15 @@ function buildContext(init) {
         return hostCall({ type: "workspace-list" });
       },
     },
+    assets: {
+      async readBinary(path) {
+        return new Uint8Array(await hostCall({ type: "asset-read", path }));
+      },
+      async readText(path) {
+        const bytes = await hostCall({ type: "asset-read", path });
+        return new TextDecoder().decode(new Uint8Array(bytes));
+      },
+    },
     settings: {
       get(key) {
         return settings[key];
@@ -141,7 +150,7 @@ onmessage = async (event) => {
       } catch (err) {
         postMessage({ type: "export-result", callId: msg.callId, ok: false, error: String(err) });
       }
-    } else if (msg.type === "workspace-result") {
+    } else if (msg.type === "host-result") {
       const pending = pendingHost.get(msg.callId);
       if (pending) {
         pendingHost.delete(msg.callId);

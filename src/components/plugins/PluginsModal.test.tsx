@@ -33,7 +33,8 @@ const available: RegistryEntry = {
   description: "from the market",
   version: "2.0.0",
   apiVersion: `^${PLUGIN_API_VERSION}`,
-  mainUrl: "https://example.test/c.js",
+  packageUrl: "https://example.test/c.zip",
+  sha256: "aa",
 };
 
 function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {

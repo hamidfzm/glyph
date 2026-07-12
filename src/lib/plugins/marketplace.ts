@@ -3,7 +3,7 @@ import type { InstalledPlugin } from "./types";
 
 // The marketplace is a single static JSON file maintained in the glyph-md org.
 // The app reads it to discover plugins and detect new versions; plugin code
-// itself lives in each plugin's own repo (referenced by `mainUrl`).
+// itself lives in each plugin's own repo (referenced by `packageUrl`).
 // ponytail: hardcoded URL; make it a setting if users ever want a custom registry.
 export const REGISTRY_URL = "https://raw.githubusercontent.com/glyph-md/plugins/main/index.json";
 
@@ -16,21 +16,25 @@ export interface RegistryEntry {
   apiVersion: string;
   /** Capabilities the plugin declares; shown to the user before install. */
   permissions?: string[];
-  /** Direct URL to the plugin's built ESM entry file. */
-  mainUrl: string;
   /**
-   * SHA-256 of the entry file (hex). When present, the download is verified
-   * before anything is installed, so a tampered or moved `mainUrl` cannot
-   * silently ship different code than the reviewed index entry.
+   * URL of the plugin's package: a zip holding `manifest.json` plus the
+   * manifest-declared files. Hosted in the plugin's own repo (a tagged
+   * release asset), never in the registry.
    */
-  sha256?: string;
+  packageUrl: string;
+  /**
+   * SHA-256 of the package (hex). The download is verified before anything is
+   * installed, so a tampered or moved `packageUrl` cannot silently ship a
+   * different package than the reviewed index entry.
+   */
+  sha256: string;
   /** Run isolated in a worker; see the manifest `sandbox` flag. */
   sandbox?: boolean;
 }
 
-/** Hex SHA-256 of UTF-8 text, via WebCrypto (available in the webview and Node). */
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+/** Hex SHA-256 of raw bytes, via WebCrypto (available in the webview and Node). */
+async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
@@ -67,27 +71,20 @@ export function findUpdates(
   return updates;
 }
 
-/** Download a registry entry's code and install it into the plugins dir. */
+/**
+ * Download a registry entry's package, verify it against the declared sha256,
+ * and hand it to Rust, which copies out only the manifest-declared files. The
+ * manifest inside the package is the source of truth for what gets installed.
+ */
 export async function installFromRegistry(entry: RegistryEntry): Promise<InstalledPlugin> {
-  const res = await fetch(entry.mainUrl);
+  const res = await fetch(entry.packageUrl);
   if (!res.ok) throw new Error(`download failed: ${res.status}`);
-  const main = await res.text();
-  if (entry.sha256) {
-    const actual = await sha256Hex(main);
-    if (actual !== entry.sha256.toLowerCase()) {
-      throw new Error(`checksum mismatch for ${entry.id}: expected ${entry.sha256}, got ${actual}`);
-    }
+  const buffer = await res.arrayBuffer();
+  const actual = await sha256Hex(buffer);
+  if (actual !== entry.sha256.toLowerCase()) {
+    throw new Error(`checksum mismatch for ${entry.id}: expected ${entry.sha256}, got ${actual}`);
   }
-  // The registry entry is the source of truth for metadata, so synthesize the
-  // manifest from it rather than fetching a second file.
-  const manifest = JSON.stringify({
-    id: entry.id,
-    name: entry.name,
-    version: entry.version,
-    apiVersion: entry.apiVersion,
-    description: entry.description,
-    permissions: entry.permissions,
-    sandbox: entry.sandbox,
+  return invoke<InstalledPlugin>("install_plugin_package", {
+    bytes: Array.from(new Uint8Array(buffer)),
   });
-  return invoke<InstalledPlugin>("install_plugin_files", { manifest, main });
 }

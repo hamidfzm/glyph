@@ -23,6 +23,10 @@ pub struct InstalledPlugin {
     /// Run isolated in a worker instead of the app context.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub sandbox: bool,
+    /// Files the plugin consists of (entry + assets), as declared in the
+    /// manifest. Empty for legacy two-file plugins (manifest + main only).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<String>,
     /// Absolute path of the installed plugin folder.
     pub dir: String,
     /// Source text of the plugin's ESM entry file.
@@ -38,6 +42,64 @@ struct ManifestInfo {
     permissions: Vec<String>,
     sandbox: bool,
     main: String,
+    files: Vec<String>,
+}
+
+/// Caps for package installs: a plugin is code plus a few data assets
+/// (dictionaries, fonts), not an arbitrary archive.
+const MAX_PACKAGE_FILES: usize = 256;
+const MAX_FILE_BYTES: u64 = 20 * 1024 * 1024;
+const MAX_TOTAL_BYTES: u64 = 50 * 1024 * 1024;
+
+/// A declared file path must stay inside the plugin folder on every platform:
+/// relative, `/`-separated, no empty/`.`/`..` segments, no drive colons.
+fn validate_file_path(path: &str) -> Result<(), String> {
+    let ok = !path.is_empty()
+        && !path.contains('\\')
+        && !path.contains(':')
+        && !path.starts_with('/')
+        && path
+            .split('/')
+            .all(|seg| !seg.is_empty() && seg != "." && seg != "..");
+    if ok {
+        Ok(())
+    } else {
+        Err(format!(
+            "invalid manifest file path \"{path}\": use relative, '/'-separated paths inside the plugin folder"
+        ))
+    }
+}
+
+/// Optional `files` whitelist; when present it must be an array of valid
+/// relative paths that includes the entry file.
+fn parse_files(value: &serde_json::Value, main: &str) -> Result<Vec<String>, String> {
+    match value.get("files") {
+        None => Ok(Vec::new()),
+        Some(serde_json::Value::Array(items)) => {
+            let files = items
+                .iter()
+                .map(|v| {
+                    let s = v.as_str().ok_or_else(|| {
+                        String::from("manifest \"files\" must be an array of strings")
+                    })?;
+                    validate_file_path(s)?;
+                    Ok(s.to_string())
+                })
+                .collect::<Result<Vec<String>, String>>()?;
+            if files.len() > MAX_PACKAGE_FILES {
+                return Err(format!(
+                    "manifest \"files\" lists more than {MAX_PACKAGE_FILES} entries"
+                ));
+            }
+            if !files.iter().any(|f| f == main) {
+                return Err(format!(
+                    "manifest \"files\" must include the entry file \"{main}\""
+                ));
+            }
+            Ok(files)
+        }
+        Some(_) => Err("manifest \"files\" must be an array of strings".into()),
+    }
 }
 
 /// Optional `permissions` array; when present it must be an array of strings.
@@ -93,6 +155,7 @@ fn parse_manifest(json: &str) -> Result<ManifestInfo, String> {
     if main.contains('/') || main.contains('\\') || main.starts_with('.') {
         return Err(format!("invalid manifest \"main\": {main}"));
     }
+    let files = parse_files(&value, &main)?;
     Ok(ManifestInfo {
         id,
         name: required_str(&value, "name")?,
@@ -109,7 +172,20 @@ fn parse_manifest(json: &str) -> Result<ManifestInfo, String> {
             Some(_) => return Err("manifest \"sandbox\" must be a boolean".into()),
         },
         main,
+        files,
     })
+}
+
+impl ManifestInfo {
+    /// The files an install copies: the declared whitelist, or just the entry
+    /// for a legacy manifest without `files`.
+    fn install_files(&self) -> Vec<String> {
+        if self.files.is_empty() {
+            vec![self.main.clone()]
+        } else {
+            self.files.clone()
+        }
+    }
 }
 
 /// Read one installed plugin folder (manifest + entry source).
@@ -127,6 +203,7 @@ fn read_plugin_dir(dir: &Path) -> Result<InstalledPlugin, String> {
         description: info.description,
         permissions: info.permissions,
         sandbox: info.sandbox,
+        files: info.files,
         dir: dir.to_string_lossy().to_string(),
         main_source,
     })
@@ -154,42 +231,101 @@ fn scan_plugins_root(root: &Path) -> Vec<InstalledPlugin> {
     plugins
 }
 
+/// Write one declared file into the plugin's install folder, creating any
+/// nested asset directories. The path was already validated relative-only.
+fn write_plugin_file(dest: &Path, rel: &str, bytes: &[u8]) -> Result<(), String> {
+    let target = dest.join(rel);
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
+    }
+    fs::write(&target, bytes).map_err(|e| format!("cannot write {rel}: {e}"))
+}
+
 /// Copy a plugin from `src` into `root/<id>/` after validating its manifest,
 /// then read it back from the installed location. Only the manifest and the
-/// entry file are copied; a plugin is exactly those two files.
+/// manifest-declared files are copied; anything else in the folder stays put.
 fn install_into(root: &Path, src: &Path) -> Result<InstalledPlugin, String> {
     let manifest_json = fs::read_to_string(src.join("manifest.json"))
         .map_err(|e| format!("not a plugin folder (no manifest.json): {e}"))?;
     let info = parse_manifest(&manifest_json)?;
-    let src_main = src.join(&info.main);
-    if !src_main.is_file() {
-        return Err(format!("plugin entry file \"{}\" not found", info.main));
-    }
 
     let dest = root.join(&info.id);
     fs::create_dir_all(&dest).map_err(|e| format!("cannot create {}: {e}", dest.display()))?;
     fs::copy(src.join("manifest.json"), dest.join("manifest.json"))
         .map_err(|e| format!("cannot copy manifest.json: {e}"))?;
-    fs::copy(&src_main, dest.join(&info.main))
-        .map_err(|e| format!("cannot copy {}: {e}", info.main))?;
+    for rel in info.install_files() {
+        let bytes = fs::read(src.join(&rel))
+            .map_err(|e| format!("declared plugin file \"{rel}\" not found: {e}"))?;
+        write_plugin_file(&dest, &rel, &bytes)?;
+    }
     read_plugin_dir(&dest)
 }
 
-/// Write an in-memory plugin (manifest + entry source) into `root/<id>/`. Used
-/// by marketplace installs, where the frontend has already downloaded the code.
-fn install_sources(
-    root: &Path,
-    manifest_json: &str,
-    main_source: &str,
-) -> Result<InstalledPlugin, String> {
-    let info = parse_manifest(manifest_json)?;
+/// Install a downloaded plugin package (a zip whose sha256 the frontend has
+/// already verified against the registry entry). The archive is never
+/// extracted wholesale: the manifest inside declares the plugin's files, only
+/// those are copied out, and a declared file missing from the archive fails
+/// the install. Size caps keep a hostile archive from filling the disk.
+fn install_package(root: &Path, bytes: &[u8]) -> Result<InstalledPlugin, String> {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes))
+        .map_err(|e| format!("not a valid plugin package: {e}"))?;
+
+    let mut manifest_json = String::new();
+    {
+        use std::io::Read;
+        let mut entry = archive
+            .by_name("manifest.json")
+            .map_err(|_| String::from("package has no manifest.json at its root"))?;
+        entry
+            .read_to_string(&mut manifest_json)
+            .map_err(|e| format!("cannot read manifest.json from package: {e}"))?;
+    }
+    let info = parse_manifest(&manifest_json)?;
+
     let dest = root.join(&info.id);
     fs::create_dir_all(&dest).map_err(|e| format!("cannot create {}: {e}", dest.display()))?;
-    fs::write(dest.join("manifest.json"), manifest_json)
+    fs::write(dest.join("manifest.json"), &manifest_json)
         .map_err(|e| format!("cannot write manifest.json: {e}"))?;
-    fs::write(dest.join(&info.main), main_source)
-        .map_err(|e| format!("cannot write {}: {e}", info.main))?;
+
+    let mut total: u64 = 0;
+    for rel in info.install_files() {
+        use std::io::Read;
+        let mut entry = archive
+            .by_name(&rel)
+            .map_err(|_| format!("declared plugin file \"{rel}\" is missing from the package"))?;
+        if entry.size() > MAX_FILE_BYTES {
+            return Err(format!("plugin file \"{rel}\" exceeds the size limit"));
+        }
+        total += entry.size();
+        if total > MAX_TOTAL_BYTES {
+            return Err(String::from("plugin package exceeds the total size limit"));
+        }
+        let mut bytes = Vec::with_capacity(entry.size() as usize);
+        entry
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("cannot read {rel} from package: {e}"))?;
+        write_plugin_file(&dest, &rel, &bytes)?;
+    }
     read_plugin_dir(&dest)
+}
+
+/// Read one manifest-declared file of an installed plugin. Backs `ctx.assets`:
+/// the id and path are re-validated here, and only files the (reviewed)
+/// manifest lists are readable, so a plugin can reach exactly its own content.
+fn read_asset_from(root: &Path, id: &str, path: &str) -> Result<Vec<u8>, String> {
+    validate_id(id)?;
+    validate_file_path(path)?;
+    let dir = root.join(id);
+    let manifest_json = fs::read_to_string(dir.join("manifest.json"))
+        .map_err(|e| format!("plugin \"{id}\" is not installed: {e}"))?;
+    let info = parse_manifest(&manifest_json)?;
+    if !info.install_files().iter().any(|f| f == path) {
+        return Err(format!(
+            "\"{path}\" is not a declared file of plugin \"{id}\""
+        ));
+    }
+    fs::read(dir.join(path)).map_err(|e| format!("cannot read {path}: {e}"))
 }
 
 /// Delete an installed plugin's folder. `validate_id` blocks path traversal, so
@@ -227,12 +363,22 @@ pub fn install_plugin<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-pub fn install_plugin_files<R: tauri::Runtime>(
+pub fn install_plugin_package<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
-    manifest: String,
-    main: String,
+    // ponytail: bytes ride the JSON IPC as a number array; switch to Tauri's
+    // raw request body if multi-MB installs ever feel slow.
+    bytes: Vec<u8>,
 ) -> Result<InstalledPlugin, String> {
-    install_sources(&plugins_root(&app)?, &manifest, &main)
+    install_package(&plugins_root(&app)?, &bytes)
+}
+
+#[tauri::command]
+pub fn read_plugin_asset<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    id: String,
+    path: String,
+) -> Result<Vec<u8>, String> {
+    read_asset_from(&plugins_root(&app)?, &id, &path)
 }
 
 #[tauri::command]
@@ -420,24 +566,126 @@ mod tests {
         let _ = fs::remove_dir_all(&src);
     }
 
-    #[test]
-    fn install_sources_writes_manifest_and_entry() {
-        let root = temp_root("sources");
-        let manifest =
-            r#"{"id":"com.x.fromsrc","name":"Src","version":"1.0.0","apiVersion":"^1.0.0"}"#;
-        let plugin = install_sources(&root, manifest, "export default { activate(){} };").unwrap();
+    /// Build an in-memory zip from (name, bytes) entries for package tests.
+    fn zip_of(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        use std::io::Write;
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        let mut writer = zip::ZipWriter::new(&mut cursor);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        for (name, bytes) in entries {
+            writer.start_file(*name, options).unwrap();
+            writer.write_all(bytes).unwrap();
+        }
+        writer.finish().unwrap();
+        cursor.into_inner()
+    }
 
-        assert_eq!(plugin.id, "com.x.fromsrc");
-        assert_eq!(plugin.main_source, "export default { activate(){} };");
-        assert!(root.join("com.x.fromsrc").join("manifest.json").is_file());
+    const PACKAGED_MANIFEST: &str = r#"{"id":"com.x.pkg","name":"Pkg","version":"1.0.0","apiVersion":"0.16.0","files":["main.js","assets/data.txt"]}"#;
+
+    #[test]
+    fn install_package_copies_only_declared_files() {
+        let root = temp_root("pkg");
+        let bytes = zip_of(&[
+            ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+            ("main.js", b"export default { activate(){} };"),
+            ("assets/data.txt", b"payload"),
+            ("extra.exe", b"smuggled"),
+        ]);
+
+        let plugin = install_package(&root, &bytes).unwrap();
+        assert_eq!(plugin.id, "com.x.pkg");
+        assert_eq!(plugin.files, ["main.js", "assets/data.txt"]);
+        let dest = root.join("com.x.pkg");
+        assert!(dest.join("assets/data.txt").is_file());
+        assert!(
+            !dest.join("extra.exe").exists(),
+            "undeclared files must not land on disk"
+        );
 
         let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn install_sources_rejects_a_bad_manifest() {
-        let root = temp_root("sources_bad");
-        assert!(install_sources(&root, "not json", "x").is_err());
+    fn install_package_fails_when_a_declared_file_is_missing() {
+        let root = temp_root("pkg_missing");
+        let bytes = zip_of(&[
+            ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+            ("main.js", b"export default {};"),
+            // assets/data.txt declared but absent
+        ]);
+        let err = install_package(&root, &bytes).unwrap_err();
+        assert!(err.contains("assets/data.txt"), "unexpected error: {err}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn install_package_rejects_a_zip_without_manifest_and_garbage_bytes() {
+        let root = temp_root("pkg_bad");
+        let no_manifest = zip_of(&[("main.js", b"x" as &[u8])]);
+        assert!(install_package(&root, &no_manifest).is_err());
+        assert!(install_package(&root, b"not a zip").is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn parse_manifest_validates_the_files_whitelist() {
+        let with_files = |files: &str| {
+            format!(
+                r#"{{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"0.16.0","files":{files}}}"#
+            )
+        };
+        let ok = parse_manifest(&with_files(r#"["main.js","assets/fa.dic"]"#)).unwrap();
+        assert_eq!(ok.files, ["main.js", "assets/fa.dic"]);
+        assert_eq!(ok.install_files(), ok.files);
+
+        // Legacy manifest: no files -> install just the entry.
+        let legacy =
+            parse_manifest(r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"0.16.0"}"#)
+                .unwrap();
+        assert_eq!(legacy.install_files(), ["main.js"]);
+
+        for bad in [
+            r#"["assets/fa.dic"]"#,       // must include main
+            r#"["main.js","../escape"]"#, // traversal
+            r#"["main.js","/abs"]"#,      // absolute
+            r#"["main.js","a\\b"]"#,      // backslash
+            r#"["main.js","c:evil"]"#,    // drive colon
+            r#"["main.js",""]"#,          // empty
+            r#"["main.js","a//b"]"#,      // empty segment
+            r#"["main.js","./x"]"#,       // dot segment
+            r#""main.js""#,               // not an array
+            r#"[1]"#,                     // not strings
+        ] {
+            assert!(
+                parse_manifest(&with_files(bad)).is_err(),
+                "should reject files={bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn read_asset_serves_only_declared_files() {
+        let root = temp_root("asset");
+        let bytes = zip_of(&[
+            ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+            ("main.js", b"export default {};"),
+            ("assets/data.txt", b"payload"),
+        ]);
+        install_package(&root, &bytes).unwrap();
+
+        assert_eq!(
+            read_asset_from(&root, "com.x.pkg", "assets/data.txt").unwrap(),
+            b"payload"
+        );
+        // The entry file itself is declared, so it is readable too.
+        assert!(read_asset_from(&root, "com.x.pkg", "main.js").is_ok());
+        // Undeclared name, traversal, bad id: all rejected.
+        assert!(read_asset_from(&root, "com.x.pkg", "manifest.json").is_err());
+        assert!(read_asset_from(&root, "com.x.pkg", "../outside").is_err());
+        assert!(read_asset_from(&root, "../escape", "main.js").is_err());
+        assert!(read_asset_from(&root, "com.x.absent", "main.js").is_err());
+
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -510,6 +758,7 @@ mod tests {
             description: None,
             permissions: Vec::new(),
             sandbox: false,
+            files: Vec::new(),
             dir: "d".into(),
             main_source: "s".into(),
         };

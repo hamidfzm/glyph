@@ -208,7 +208,8 @@ describe("PluginsProvider", () => {
       version: "1.0.0",
       apiVersion: `^${PLUGIN_API_VERSION}`,
       permissions: ["workspace:read"],
-      mainUrl: "https://example.test/main.js",
+      packageUrl: "https://example.test/plugin.zip",
+      sha256: "aa",
     };
 
     function InstallProbe() {
@@ -231,7 +232,7 @@ describe("PluginsProvider", () => {
     const [message] = vi.mocked(ask).mock.calls.at(-1) ?? [];
     expect(message).toContain("Market");
     expect(message).toContain("workspace:read");
-    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin_files", expect.anything());
+    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin_package", expect.anything());
   });
 
   it("routes ctx.workspace reads through the synced workspace root", async () => {
@@ -293,7 +294,8 @@ describe("PluginsProvider", () => {
       name: "Market",
       version: "1.0.0",
       apiVersion: `^${PLUGIN_API_VERSION}`,
-      mainUrl: "https://example.test/main.js",
+      packageUrl: "https://example.test/plugin.zip",
+      sha256: "aa",
     };
 
     function InstallProbe() {
@@ -442,7 +444,9 @@ describe("PluginsProvider", () => {
       name: "Market",
       version: "1.0.0",
       apiVersion: `^${PLUGIN_API_VERSION}`,
-      mainUrl: "https://example.test/main.js",
+      packageUrl: "https://example.test/plugin.zip",
+      // SHA-256 of the one-byte package the fetch stub serves.
+      sha256: "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
     };
     vi.stubGlobal(
       "fetch",
@@ -450,15 +454,15 @@ describe("PluginsProvider", () => {
         .fn()
         .mockImplementation((url: string) =>
           Promise.resolve(
-            url === "https://example.test/main.js"
-              ? { ok: true, text: () => Promise.resolve("export default { activate(){} };") }
+            url === "https://example.test/plugin.zip"
+              ? { ok: true, arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer) }
               : { ok: true, json: () => Promise.resolve({ plugins: [entry] }) },
           ),
         ),
     );
     vi.mocked(invoke).mockImplementation((cmd) => {
       if (cmd === "list_plugins") return Promise.resolve([]);
-      if (cmd === "install_plugin_files")
+      if (cmd === "install_plugin_package")
         return Promise.resolve(installedPlugin({ id: entry.id, name: entry.name }));
       return Promise.resolve(undefined);
     });

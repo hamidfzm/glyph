@@ -45,6 +45,12 @@ export interface PluginManifest {
    * notify, and translations. No markdown pipeline or panel mounts.
    */
   sandbox?: boolean;
+  /**
+   * The files the plugin consists of (must include `main`). Installs copy
+   * exactly these out of a package or folder, and `ctx.assets` reads are
+   * limited to them. Omitted for a single-file plugin.
+   */
+  files?: string[];
 }
 
 /**
@@ -62,6 +68,8 @@ export interface InstalledPlugin {
   permissions?: string[];
   /** Run isolated in a worker; see {@link PluginManifest.sandbox}. */
   sandbox?: boolean;
+  /** Manifest-declared files; see {@link PluginManifest.files}. */
+  files?: string[];
   /** Absolute path of the installed plugin folder. */
   dir: string;
   /** Source text of the plugin's ESM entry file. */
@@ -193,12 +201,23 @@ export interface WorkspaceApi {
   listFiles(): Promise<string[]>;
 }
 
+/**
+ * Read the plugin's own bundled files (the manifest-declared `files`). No
+ * permission needed: it is the plugin's own reviewed content. Paths are as
+ * declared in the manifest, e.g. `assets/fa.dic`.
+ */
+export interface AssetsApi {
+  readText(path: string): Promise<string>;
+  readBinary(path: string): Promise<Uint8Array>;
+}
+
 export interface GlyphPluginContext {
   readonly apiVersion: string;
   readonly commands: CommandRegistryApi;
   readonly ui: UiRegistryApi;
   readonly markdown: MarkdownRegistryApi;
   readonly workspace: WorkspaceApi;
+  readonly assets: AssetsApi;
   readonly exporters: ExportersRegistryApi;
   readonly spellcheck: SpellcheckRegistryApi;
   readonly settings: PluginSettingsApi;
