@@ -178,12 +178,11 @@ fn install_errors_when_the_entry_file_is_missing() {
 }
 
 /// Build an in-memory zip from (name, bytes) entries for package tests.
-fn zip_of(entries: &[(&str, &[u8])]) -> Vec<u8> {
+fn zip_with(method: zip::CompressionMethod, entries: &[(&str, &[u8])]) -> Vec<u8> {
     use std::io::Write;
     let mut cursor = std::io::Cursor::new(Vec::new());
     let mut writer = zip::ZipWriter::new(&mut cursor);
-    let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let options = zip::write::SimpleFileOptions::default().compression_method(method);
     for (name, bytes) in entries {
         writer.start_file(*name, options).unwrap();
         writer.write_all(bytes).unwrap();
@@ -192,7 +191,104 @@ fn zip_of(entries: &[(&str, &[u8])]) -> Vec<u8> {
     cursor.into_inner()
 }
 
+fn zip_of(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    zip_with(zip::CompressionMethod::Stored, entries)
+}
+
 const PACKAGED_MANIFEST: &str = r#"{"id":"com.x.pkg","name":"Pkg","version":"1.0.0","apiVersion":"0.16.0","files":["main.js","assets/data.txt"]}"#;
+
+#[test]
+fn install_package_rejects_an_oversized_file_before_writing_anything() {
+    let root = temp_root("pkg_cap_file");
+    // Deflated zeros compress to almost nothing, but entry.size() reports the
+    // real uncompressed size, which is what the cap checks.
+    let big = vec![0u8; (MAX_FILE_BYTES + 1) as usize];
+    let bytes = zip_with(
+        zip::CompressionMethod::Deflated,
+        &[
+            ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+            ("main.js", b"export default {};"),
+            ("assets/data.txt", &big),
+        ],
+    );
+
+    let err = install_package(&root, &bytes).unwrap_err();
+    assert!(err.contains("size limit"), "unexpected error: {err}");
+    assert!(
+        !root.join("com.x.pkg").exists(),
+        "a rejected package must leave nothing on disk"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn install_package_rejects_when_the_total_exceeds_the_cap() {
+    let root = temp_root("pkg_cap_total");
+    let manifest = r#"{"id":"com.x.pkg","name":"Pkg","version":"1.0.0","apiVersion":"0.16.0","files":["main.js","a.bin","b.bin"]}"#;
+    // Each file sits exactly at the per-file cap, so only the running total trips.
+    let at_cap = vec![0u8; MAX_FILE_BYTES as usize];
+    let bytes = zip_with(
+        zip::CompressionMethod::Deflated,
+        &[
+            ("manifest.json", manifest.as_bytes()),
+            ("main.js", &at_cap),
+            ("a.bin", &at_cap),
+            ("b.bin", &at_cap),
+        ],
+    );
+
+    let err = install_package(&root, &bytes).unwrap_err();
+    assert!(err.contains("total size limit"), "unexpected error: {err}");
+    assert!(!root.join("com.x.pkg").exists());
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn install_package_reports_a_file_colliding_with_an_asset_directory() {
+    let root = temp_root("pkg_dir_collision");
+    // A file already sits where the package's assets/ directory must go.
+    fs::create_dir_all(root.join("com.x.pkg")).unwrap();
+    fs::write(root.join("com.x.pkg").join("assets"), "in the way").unwrap();
+    let bytes = zip_of(&[
+        ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+        ("main.js", b"export default {};"),
+        ("assets/data.txt", b"payload"),
+    ]);
+
+    let err = install_package(&root, &bytes).unwrap_err();
+    assert!(err.contains("cannot create"), "unexpected error: {err}");
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn install_package_reports_an_unwritable_declared_file() {
+    let root = temp_root("pkg_write_collision");
+    // A directory sits exactly where the entry file must be written.
+    fs::create_dir_all(root.join("com.x.pkg").join("main.js")).unwrap();
+    let bytes = zip_of(&[
+        ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+        ("main.js", b"export default {};"),
+        ("assets/data.txt", b"payload"),
+    ]);
+
+    let err = install_package(&root, &bytes).unwrap_err();
+    assert!(err.contains("cannot write"), "unexpected error: {err}");
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn parse_manifest_rejects_a_files_list_over_the_cap() {
+    let mut files: Vec<String> = vec![String::from("\"main.js\"")];
+    files.extend((0..MAX_PACKAGE_FILES).map(|i| format!("\"a{i}.txt\"")));
+    let json = format!(
+        r#"{{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"0.16.0","files":[{}]}}"#,
+        files.join(",")
+    );
+    let Err(err) = parse_manifest(&json) else {
+        panic!("a files list over the cap must be rejected")
+    };
+    assert!(err.contains("more than"), "unexpected error: {err}");
+}
 
 #[test]
 fn install_package_copies_only_declared_files() {
@@ -351,11 +447,36 @@ fn install_plugin_command_installs_via_mock_app() {
     assert_eq!(plugin.id, "com.x.cmdinstalled");
     assert!(Path::new(&plugin.dir).join("main.js").is_file());
 
-    // Clean up the install we wrote into the mock app's config dir.
-    if let Some(plugins_dir) = Path::new(&plugin.dir).parent() {
-        let _ = fs::remove_dir_all(plugins_dir);
-    }
+    // Clean up only this plugin's folder: mock_app tests share the config
+    // dir and run in parallel, so removing the parent races the other tests.
+    let _ = fs::remove_dir_all(&plugin.dir);
     let _ = fs::remove_dir_all(&src);
+}
+
+#[test]
+fn package_and_asset_commands_run_via_mock_app() {
+    use tauri::test::mock_app;
+    let app = mock_app();
+    let bytes = zip_of(&[
+        ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+        ("main.js", b"export default {};"),
+        ("assets/data.txt", b"payload"),
+    ]);
+
+    let plugin = install_plugin_package(app.handle().clone(), bytes).unwrap();
+    assert_eq!(plugin.id, "com.x.pkg");
+
+    let asset = read_plugin_asset(
+        app.handle().clone(),
+        "com.x.pkg".to_string(),
+        "assets/data.txt".to_string(),
+    )
+    .unwrap();
+    assert_eq!(asset, b"payload");
+
+    // Clean up only this plugin's folder: mock_app tests share the config
+    // dir and run in parallel, so removing the parent races the other tests.
+    let _ = fs::remove_dir_all(&plugin.dir);
 }
 
 #[test]

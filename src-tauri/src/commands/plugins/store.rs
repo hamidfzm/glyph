@@ -104,15 +104,11 @@ pub(crate) fn install_package(root: &Path, bytes: &[u8]) -> Result<InstalledPlug
     }
     let info = parse_manifest(&manifest_json)?;
 
-    let dest = root.join(&info.id);
-    fs::create_dir_all(&dest).map_err(|e| format!("cannot create {}: {e}", dest.display()))?;
-    fs::write(dest.join("manifest.json"), &manifest_json)
-        .map_err(|e| format!("cannot write manifest.json: {e}"))?;
-
+    // Validate every declared entry (present, within size caps) before
+    // anything touches disk, so a rejected package leaves nothing behind.
     let mut total: u64 = 0;
     for rel in info.install_files() {
-        use std::io::Read;
-        let mut entry = archive
+        let entry = archive
             .by_name(&rel)
             .map_err(|_| format!("declared plugin file \"{rel}\" is missing from the package"))?;
         if entry.size() > MAX_FILE_BYTES {
@@ -122,6 +118,18 @@ pub(crate) fn install_package(root: &Path, bytes: &[u8]) -> Result<InstalledPlug
         if total > MAX_TOTAL_BYTES {
             return Err(String::from("plugin package exceeds the total size limit"));
         }
+    }
+
+    let dest = root.join(&info.id);
+    fs::create_dir_all(&dest).map_err(|e| format!("cannot create {}: {e}", dest.display()))?;
+    fs::write(dest.join("manifest.json"), &manifest_json)
+        .map_err(|e| format!("cannot write manifest.json: {e}"))?;
+
+    for rel in info.install_files() {
+        use std::io::Read;
+        let mut entry = archive
+            .by_name(&rel)
+            .map_err(|_| format!("declared plugin file \"{rel}\" is missing from the package"))?;
         let mut bytes = Vec::with_capacity(entry.size() as usize);
         entry
             .read_to_end(&mut bytes)
