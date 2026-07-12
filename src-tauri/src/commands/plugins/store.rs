@@ -56,10 +56,9 @@ pub(crate) fn scan_plugins_root(root: &Path) -> Vec<InstalledPlugin> {
 /// nested asset directories. The path was already validated relative-only.
 pub(crate) fn write_plugin_file(dest: &Path, rel: &str, bytes: &[u8]) -> Result<(), String> {
     let target = dest.join(rel);
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
-    }
+    // A validated relative path joined onto dest always has a parent.
+    let parent = target.parent().unwrap_or(dest);
+    fs::create_dir_all(parent).map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
     fs::write(&target, bytes).map_err(|e| format!("cannot write {rel}: {e}"))
 }
 
