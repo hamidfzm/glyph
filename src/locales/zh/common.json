@@ -241,5 +241,12 @@
   },
   "headingAnchor": {
     "label": "复制标题链接"
+  },
+  "defaultAppBanner": {
+    "message": "将 Glyph 设为你的默认 Markdown 应用？",
+    "setDefault": "设为默认",
+    "notNow": "以后再说",
+    "never": "不再提示",
+    "dismiss": "关闭默认应用提示"
   }
 }

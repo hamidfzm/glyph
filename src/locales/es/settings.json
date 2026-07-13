@@ -283,5 +283,18 @@
       "label": "Wikienlaces",
       "description": "Resolver enlaces [[nota]] en el espacio de trabajo"
     }
+  },
+  "defaultApp": {
+    "title": "App predeterminada",
+    "label": "App de Markdown predeterminada",
+    "description": "Abrir archivos Markdown en Glyph de forma predeterminada.",
+    "button": "Establecer Glyph como predeterminada",
+    "working": "Procesando…",
+    "outcome": {
+      "registered": "Glyph ahora es tu app de Markdown predeterminada.",
+      "openedSettings": "Se abrió la configuración de Apps predeterminadas. Elige Glyph para los archivos Markdown.",
+      "guidance": "En el Finder, haz clic derecho en un archivo Markdown, elige Obtener información, ajusta Abrir con a Glyph y pulsa Cambiar todo.",
+      "error": "No se pudo establecer la app predeterminada. Configúrala desde los ajustes del sistema."
+    }
   }
 }

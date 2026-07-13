@@ -99,7 +99,13 @@ export interface BehaviorSettings {
   // tabs). Used to restore which tab is selected on launch.
   activeTabPath: string;
   defaultEditorMode: EditorMode;
+  // Answer to the first-run "make Glyph your default Markdown app?" prompt.
+  // The prompt auto-shows only while "unanswered", so any other value stops it
+  // from nagging; the Settings action stays available regardless.
+  defaultAppPrompt: DefaultAppPrompt;
 }
+
+export type DefaultAppPrompt = "unanswered" | "notNow" | "never" | "set";
 
 export interface AISettings {
   provider: "none" | "claude" | "openai" | "ollama";
@@ -203,6 +209,7 @@ export const DEFAULT_SETTINGS: Settings = {
     openTabs: [],
     activeTabPath: "",
     defaultEditorMode: EDITOR_MODE.view,
+    defaultAppPrompt: "unanswered",
   },
   ai: {
     provider: "none",

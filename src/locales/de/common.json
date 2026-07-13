@@ -241,5 +241,12 @@
     "circular": "Zirkuläre Einbettung: {{target}}",
     "headingNotFound": "Überschrift nicht gefunden: {{heading}}",
     "error": "Eingebettete Notiz konnte nicht geladen werden: {{target}}"
+  },
+  "defaultAppBanner": {
+    "message": "Glyph als Standard-Markdown-App festlegen?",
+    "setDefault": "Als Standard festlegen",
+    "notNow": "Jetzt nicht",
+    "never": "Nie",
+    "dismiss": "Hinweis zur Standard-App schließen"
   }
 }

@@ -283,5 +283,18 @@
       "label": "Wikilinks",
       "description": "[[Notiz]]-Links im Arbeitsbereich auflösen"
     }
+  },
+  "defaultApp": {
+    "title": "Standard-App",
+    "label": "Standard-Markdown-App",
+    "description": "Markdown-Dateien standardmäßig in Glyph öffnen.",
+    "button": "Glyph als Standard festlegen",
+    "working": "Wird ausgeführt…",
+    "outcome": {
+      "registered": "Glyph ist jetzt deine Standard-Markdown-App.",
+      "openedSettings": "Einstellungen für Standard-Apps geöffnet. Wähle dort Glyph für Markdown-Dateien.",
+      "guidance": "Klicke im Finder mit der rechten Maustaste auf eine Markdown-Datei, wähle „Informationen“, stelle „Öffnen mit“ auf Glyph und klicke auf „Alle ändern“.",
+      "error": "Standard-App konnte nicht festgelegt werden. Lege sie stattdessen in den Systemeinstellungen fest."
+    }
   }
 }

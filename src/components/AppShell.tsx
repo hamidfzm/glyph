@@ -6,6 +6,7 @@ import { useAutoSave } from "@/hooks/useAutoSave";
 import { useCliExport } from "@/hooks/useCliExport";
 import { useCommandPaletteController } from "@/hooks/useCommandPaletteController";
 import { useContextMenu } from "@/hooks/useContextMenu";
+import { useDefaultAppPrompt } from "@/hooks/useDefaultAppPrompt";
 import { useDocumentUndoRedo } from "@/hooks/useDocumentUndoRedo";
 import { useErrorReporting } from "@/hooks/useErrorReporting";
 import { useExport } from "@/hooks/useExport";
@@ -30,6 +31,7 @@ import { openDocumentation, openReleaseNotes, openReportIssue } from "@/lib/help
 import { isImageFile } from "@/lib/imageExtensions";
 import { nextEditorMode } from "@/lib/settings";
 import { AIChatPanel } from "./ai/AIChatPanel";
+import { DefaultAppBanner } from "./layout/DefaultAppBanner";
 import { EmptyState } from "./layout/EmptyState";
 import { ExportProgress } from "./layout/ExportProgress";
 import { Sidebar } from "./layout/Sidebar";
@@ -71,6 +73,9 @@ export function AppShell() {
   // Once-per-session check for a newer GitHub release; the banner shows only
   // when the user has the feature on and an update is actually available.
   const updateCheck = useUpdateCheck(settings.behavior.checkForUpdates, loaded);
+
+  // One-time first-run nudge to make Glyph the default Markdown app.
+  const defaultAppPrompt = useDefaultAppPrompt();
 
   const {
     tabs: openTabs,
@@ -270,6 +275,13 @@ export function AppShell() {
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)]">
       <UpdateBanner update={updateCheck.update} onDismiss={updateCheck.dismiss} />
+      {defaultAppPrompt.show && (
+        <DefaultAppBanner
+          onSetDefault={defaultAppPrompt.setDefault}
+          onNotNow={defaultAppPrompt.notNow}
+          onNever={defaultAppPrompt.never}
+        />
+      )}
       <WorkspaceNoticeBanner
         notice={tabs.workspaceNotice}
         onDismiss={tabs.dismissWorkspaceNotice}
