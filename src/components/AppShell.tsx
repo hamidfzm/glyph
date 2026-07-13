@@ -253,14 +253,13 @@ export function AppShell() {
   const showEmptyState = !initializing && !activeTab;
   // With a workspace open but no tabs, nudge toward the sidebar tree.
   const folderEmptyHint = workspace !== null && !activeTab;
-  // Graph tabs have no file but always render content (the canvas). Image tabs
-  // carry no text content (it stays null — they render from the asset path), so
-  // gate them on the path, not on content, or they fall through to a blank pane.
-  const showContent =
-    !!activeTab &&
-    (activeTab.kind === "graph" ||
-      activeFile?.content != null ||
-      (!!activeFile && isImageFile(activeFile.path)));
+  // A file tab shows its pane once content has loaded (content != null; the
+  // empty string is loaded, not absent), or immediately for images, which carry
+  // no text content and render straight from the asset path.
+  const showDocument =
+    activeFile != null && (activeFile.content != null || isImageFile(activeFile.path));
+  // Graph tabs have no file but always render (the canvas).
+  const showContent = activeTab?.kind === "graph" || showDocument;
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)]">
