@@ -1,110 +1,132 @@
-import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useAutoSave } from "./useAutoSave";
+import { type SavableDocument, useAutoSave } from "./useAutoSave";
 
 describe("useAutoSave", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.mocked(invoke).mockReset();
-    vi.mocked(invoke).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("does not save when dirty is false", async () => {
-    const onSaved = vi.fn();
-    renderHook(() => useAutoSave({ path: "/p/doc.md", content: "hello", dirty: false, onSaved }));
+  it("saves a dirty document after the debounce", async () => {
+    const save = vi.fn();
+    renderHook(() => useAutoSave({ documents: [{ id: "a", revision: 1 }], save }));
 
     await act(async () => {
-      vi.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(1999);
     });
+    expect(save).not.toHaveBeenCalled();
 
-    expect(invoke).not.toHaveBeenCalled();
-    expect(onSaved).not.toHaveBeenCalled();
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(save).toHaveBeenCalledExactlyOnceWith("a");
   });
 
-  it("does not save when path is undefined", async () => {
+  it("gives every dirty document its own timer (switching tabs saves both)", async () => {
+    const save = vi.fn();
     renderHook(() =>
-      useAutoSave({ path: undefined, content: "hello", dirty: true, onSaved: vi.fn() }),
+      useAutoSave({
+        documents: [
+          { id: "a", revision: 1 },
+          { id: "b", revision: 1 },
+        ],
+        save,
+      }),
     );
 
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });
-    expect(invoke).not.toHaveBeenCalled();
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save).toHaveBeenCalledWith("a");
+    expect(save).toHaveBeenCalledWith("b");
   });
 
-  it("does not save when content is null", async () => {
-    renderHook(() =>
-      useAutoSave({ path: "/p/doc.md", content: null, dirty: true, onSaved: vi.fn() }),
+  it("keeps a document's pending save when another document becomes dirty", async () => {
+    const save = vi.fn();
+    // 'a' is dirty and waiting; then 'b' becomes dirty too (a tab switch + edit).
+    // 'a's timer must not be cancelled by the second document appearing.
+    const { rerender } = renderHook(
+      ({ docs }: { docs: SavableDocument[] }) => useAutoSave({ documents: docs, save }),
+      { initialProps: { docs: [{ id: "a", revision: 1 }] } },
     );
 
     await act(async () => {
-      vi.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(1000);
     });
-    expect(invoke).not.toHaveBeenCalled();
+    rerender({
+      docs: [
+        { id: "a", revision: 1 },
+        { id: "b", revision: 1 },
+      ],
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    // 'a' reached its 2000ms mark uninterrupted.
+    expect(save).toHaveBeenCalledExactlyOnceWith("a");
   });
 
-  it("debounces writes by 2000ms and calls onSaved after success", async () => {
-    const onSaved = vi.fn();
-    renderHook(() => useAutoSave({ path: "/p/doc.md", content: "v1", dirty: true, onSaved }));
+  it("restarts the debounce when a document's revision advances", async () => {
+    const save = vi.fn();
+    const { rerender } = renderHook(
+      ({ rev }: { rev: number }) => useAutoSave({ documents: [{ id: "a", revision: rev }], save }),
+      { initialProps: { rev: 1 } },
+    );
 
     await act(async () => {
       vi.advanceTimersByTime(1500);
     });
-    expect(invoke).not.toHaveBeenCalled();
+    rerender({ rev: 2 });
+    await act(async () => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(save).not.toHaveBeenCalled();
 
     await act(async () => {
       vi.advanceTimersByTime(500);
-      await Promise.resolve();
     });
-    expect(invoke).toHaveBeenCalledWith("write_file", { path: "/p/doc.md", content: "v1" });
-    expect(onSaved).toHaveBeenCalledWith("v1");
+    expect(save).toHaveBeenCalledExactlyOnceWith("a");
   });
 
-  it("logs and swallows errors from write_file", async () => {
-    vi.mocked(invoke).mockRejectedValue(new Error("disk full"));
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const onSaved = vi.fn();
-
-    renderHook(() => useAutoSave({ path: "/p/doc.md", content: "v1", dirty: true, onSaved }));
+  it("fires only once per revision across re-renders", async () => {
+    const save = vi.fn();
+    const { rerender } = renderHook(
+      ({ docs }: { docs: SavableDocument[] }) => useAutoSave({ documents: docs, save }),
+      { initialProps: { docs: [{ id: "a", revision: 1 }] } },
+    );
 
     await act(async () => {
       vi.advanceTimersByTime(2000);
-      await Promise.resolve();
-      await Promise.resolve();
     });
+    expect(save).toHaveBeenCalledTimes(1);
 
-    expect(errSpy).toHaveBeenCalled();
-    expect(onSaved).not.toHaveBeenCalled();
-    errSpy.mockRestore();
+    // Same revision still dirty (e.g. a failed save): must not re-fire.
+    rerender({ docs: [{ id: "a", revision: 1 }] });
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(save).toHaveBeenCalledTimes(1);
   });
 
-  it("restarts the timer when content changes mid-debounce", async () => {
-    const onSaved = vi.fn();
+  it("cancels a document's timer when it stops being dirty before the debounce", async () => {
+    const save = vi.fn();
     const { rerender } = renderHook(
-      ({ content }: { content: string }) =>
-        useAutoSave({ path: "/p/doc.md", content, dirty: true, onSaved }),
-      { initialProps: { content: "v1" } },
+      ({ docs }: { docs: SavableDocument[] }) => useAutoSave({ documents: docs, save }),
+      { initialProps: { docs: [{ id: "a", revision: 1 }] } },
     );
 
     await act(async () => {
       vi.advanceTimersByTime(1000);
     });
-    rerender({ content: "v2" });
+    rerender({ docs: [] });
     await act(async () => {
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(2000);
     });
-    expect(invoke).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(1000);
-      await Promise.resolve();
-    });
-    expect(invoke).toHaveBeenCalledTimes(1);
-    expect(invoke).toHaveBeenCalledWith("write_file", { path: "/p/doc.md", content: "v2" });
+    expect(save).not.toHaveBeenCalled();
   });
 });

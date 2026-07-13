@@ -36,6 +36,7 @@ function buildFileTab(path: string): FileTab {
       mode: "view",
       editContent: null,
       dirty: false,
+      revision: 0,
     },
   };
 }
@@ -72,7 +73,7 @@ function buildContext(opts: Opts): TabsContextValue {
     moveActiveTab: vi.fn(),
     setTabMode: vi.fn(),
     updateEditContent: vi.fn(),
-    markSaved: vi.fn(),
+    saveDocument: vi.fn(),
     toggleTask: vi.fn(),
     saveScrollPosition: vi.fn(),
     openFileDialog: vi.fn(),
@@ -191,7 +192,7 @@ function buildWorkspaceContext(): TabsContextValue {
     moveActiveTab: vi.fn(),
     setTabMode: vi.fn(),
     updateEditContent: vi.fn(),
-    markSaved: vi.fn(),
+    saveDocument: vi.fn(),
     toggleTask: vi.fn(),
     saveScrollPosition: vi.fn(),
     openFileDialog: vi.fn(),

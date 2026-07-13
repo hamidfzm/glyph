@@ -16,6 +16,7 @@ const makeFileTab = (i: number): FileTab => ({
     mode: "view",
     editContent: null,
     dirty: false,
+    revision: 0,
   },
 });
 
@@ -72,7 +73,7 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     moveTab: opts.moveTab ?? vi.fn(),
     moveActiveTab: vi.fn(),
     updateEditContent: vi.fn(),
-    markSaved: vi.fn(),
+    saveDocument: vi.fn(),
     toggleTask: vi.fn(),
     saveScrollPosition: vi.fn(),
     openFileDialog: vi.fn(),

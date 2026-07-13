@@ -85,7 +85,7 @@ export function AppShell() {
     openFileDialog,
     closeTab,
     setTabMode,
-    markSaved,
+    saveDocument,
     undoEdit,
     redoEdit,
     moveActiveTab,
@@ -101,17 +101,17 @@ export function AppShell() {
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  useAutoSave({
-    path: activeFile?.path,
-    content: activeFile?.editContent ?? null,
-    dirty: activeFile?.dirty ?? false,
-    onSaved: useCallback(
-      (savedContent: string) => {
-        if (activeTabId) markSaved(activeTabId, savedContent);
-      },
-      [activeTabId, markSaved],
-    ),
-  });
+  // Autosave every dirty editable tab, not just the active one, so switching
+  // tabs never cancels another document's pending save. Each carries its
+  // revision so the scheduler can debounce per document.
+  const dirtyDocuments = useMemo(
+    () =>
+      openTabs
+        .filter((t) => t.kind === "file" && t.file.dirty)
+        .map((t) => ({ id: t.id, revision: t.file?.revision ?? 0 })),
+    [openTabs],
+  );
+  useAutoSave({ documents: dirtyDocuments, save: saveDocument });
 
   const aiController = useAIController(
     settings.ai,
