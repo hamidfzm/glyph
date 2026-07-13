@@ -239,6 +239,25 @@ describe("TabContent", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it("renders the viewer for an empty document (empty string is loaded content, not absence)", () => {
+    const tab = makeFileTab("view");
+    tab.file.content = "";
+    renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
+    expect(screen.getByTestId("markdown-viewer")).toBeInTheDocument();
+  });
+
+  it("enters edit mode from an empty document", () => {
+    const tab = makeFileTab("edit");
+    tab.file.content = "";
+    tab.file.editContent = "";
+    const { getByTestId } = renderTabContent({
+      activeTab: tab,
+      activeTabId: tab.id,
+      activeFile: tab.file,
+    });
+    expect(getByTestId("lazy-editor")).toBeInTheDocument();
+  });
+
   it("renders the graph view for a graph tab", () => {
     const graph = makeGraphTab();
     renderTabContent({

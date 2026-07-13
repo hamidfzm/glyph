@@ -85,7 +85,9 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     return <ImageViewer key={`${activeTab.id}:${file.path}`} filePath={file.path} />;
   }
 
-  if (!file.content) return null;
+  // null is the loading/absent state; the empty string is a valid empty
+  // document and must still render the editor/viewer shell.
+  if (file.content == null) return null;
 
   const editorContent = file.editContent ?? file.content;
 
