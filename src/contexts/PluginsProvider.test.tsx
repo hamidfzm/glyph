@@ -1,14 +1,21 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { load } from "@tauri-apps/plugin-store";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
+import { pickPluginDir } from "@/lib/pickers";
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
 import { loadPluginSettings, savePluginSettings } from "@/lib/plugins/settingsStore";
 import type { InstalledPlugin } from "@/lib/plugins/types";
 import { usePluginsOptional } from "./PluginsContext";
 import { PluginsProvider } from "./PluginsProvider";
+
+// Backend-run folder picker for plugin installs; the real one stashes the
+// choice in Rust for install_plugin to consume.
+vi.mock("@/lib/pickers", () => ({
+  pickPluginDir: vi.fn(),
+}));
 
 vi.mock("@/lib/plugins/settingsStore", () => ({
   loadPluginSettings: vi.fn(() => Promise.resolve({})),
@@ -116,7 +123,7 @@ describe("PluginsProvider", () => {
         return Promise.resolve(installedPlugin({ id: "com.x.new", name: "Fresh" }));
       return Promise.resolve(undefined);
     });
-    vi.mocked(open).mockResolvedValue("/somewhere/plugin-folder");
+    vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
 
     function InstallProbe() {
       const plugins = usePluginsOptional();
@@ -137,9 +144,7 @@ describe("PluginsProvider", () => {
     screen.getByRole("button", { name: "install" }).click();
 
     await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.new"));
-    expect(vi.mocked(invoke)).toHaveBeenCalledWith("install_plugin", {
-      srcDir: "/somewhere/plugin-folder",
-    });
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("install_plugin");
     expect(screen.getByRole("status")).toHaveTextContent("Installed plugin: Fresh v1.0.0");
   });
 
@@ -147,7 +152,7 @@ describe("PluginsProvider", () => {
     vi.mocked(invoke).mockImplementation((cmd) =>
       Promise.resolve(cmd === "list_plugins" ? [] : undefined),
     );
-    vi.mocked(open).mockResolvedValue(null);
+    vi.mocked(pickPluginDir).mockResolvedValue(null);
 
     function InstallProbe() {
       const plugins = usePluginsOptional();
@@ -165,16 +170,14 @@ describe("PluginsProvider", () => {
     );
     screen.getByRole("button", { name: "install" }).click();
 
-    await waitFor(() =>
-      expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin", expect.anything()),
-    );
+    await waitFor(() => expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin"));
   });
 
   it("aborts a folder install when consent is declined", async () => {
     vi.mocked(invoke).mockImplementation((cmd) =>
       Promise.resolve(cmd === "list_plugins" ? [] : undefined),
     );
-    vi.mocked(open).mockResolvedValue("/somewhere/plugin-folder");
+    vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
     vi.mocked(ask).mockResolvedValueOnce(false);
 
     function InstallProbe() {
@@ -194,7 +197,7 @@ describe("PluginsProvider", () => {
     screen.getByRole("button", { name: "install" }).click();
 
     await waitFor(() => expect(vi.mocked(ask)).toHaveBeenCalled());
-    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin", expect.anything());
+    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin");
   });
 
   it("aborts a marketplace install when consent is declined, and lists permissions in the prompt", async () => {
@@ -405,7 +408,7 @@ describe("PluginsProvider", () => {
       if (cmd === "install_plugin") return Promise.resolve(installedPlugin());
       return Promise.resolve(undefined);
     });
-    vi.mocked(open).mockResolvedValue("/somewhere/plugin-folder");
+    vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
 
     function ManageProbe() {
       const p = usePluginsOptional();
@@ -511,7 +514,7 @@ describe("PluginsProvider", () => {
       if (cmd === "install_plugin") return Promise.reject(new Error("not a plugin folder"));
       return Promise.resolve(undefined);
     });
-    vi.mocked(open).mockResolvedValue("/bad/folder");
+    vi.mocked(pickPluginDir).mockResolvedValue("/bad/folder");
 
     function InstallProbe() {
       const plugins = usePluginsOptional();

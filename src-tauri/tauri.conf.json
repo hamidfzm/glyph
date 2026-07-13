@@ -21,13 +21,13 @@
       }
     ],
     "security": {
-      "csp": "default-src * asset: http://asset.localhost https://asset.localhost ipc: http://ipc.localhost data: blob: 'unsafe-inline'; script-src 'self' data: blob: 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'",
-      "devCsp": null,
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https: http:; img-src 'self' asset: http://asset.localhost https://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost https://asset.localhost; script-src 'self' data: blob: 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'",
+      "devCsp": "default-src 'self' http://localhost:1420; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420 https: http:; img-src 'self' asset: http://asset.localhost https://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost https://asset.localhost; script-src 'self' data: blob: 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'",
       "dangerousDisableAssetCspModification": ["style-src"],
       "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": ["**"],
+          "allow": [],
           "requireLiteralLeadingDot": false
         }
       }

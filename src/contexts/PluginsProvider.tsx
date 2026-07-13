@@ -1,11 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PluginStyles } from "@/components/plugins/PluginStyles";
 import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToasts";
 import { PluginsContext } from "@/contexts/PluginsContext";
 import { registerTranslations } from "@/lib/i18n";
+import { pickPluginDir } from "@/lib/pickers";
 import { loadDisabled, saveDisabled } from "@/lib/plugins/disabledStore";
 import { createPluginHost, type LoadedPluginInfo } from "@/lib/plugins/host";
 import {
@@ -147,13 +148,15 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
   );
 
   const installFromFolder = useCallback(async () => {
-    const dir = await open({ directory: true, multiple: false, title: "Select a plugin folder" });
+    // The backend picker stashes the chosen folder; install_plugin consumes
+    // it, so no path ever travels from the webview to the installer.
+    const dir = await pickPluginDir();
     if (typeof dir !== "string") return; // cancelled
     // Folder installs read the manifest during install, so consent names the
     // folder; declared permissions still show afterwards in Manage Plugins.
     if (!(await confirmInstall(dir))) return;
     try {
-      const plugin = await invoke<InstalledPlugin>("install_plugin", { srcDir: dir });
+      const plugin = await invoke<InstalledPlugin>("install_plugin");
       await host.load(plugin);
       afterInstall(plugin);
     } catch (err) {

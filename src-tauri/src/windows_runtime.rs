@@ -6,7 +6,31 @@
 
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder};
 
+use crate::grants::{self, GrantRegistry};
 use crate::windows::{route_open, OpenKind, OpenRoute, PendingOpen, WindowRegistry};
+
+/// Mint the filesystem grant for a backend-observed open (CLI second
+/// instance, drag-and-drop, macOS `RunEvent::Opened`, backend pick dialogs,
+/// spawned-window injected opens) and mirror it into the asset-protocol
+/// scope. Grant failures (path vanished between event and grant) are ignored:
+/// the open itself will surface the error and the path stays denied.
+fn grant_open<R: Runtime>(app: &AppHandle<R>, kind: OpenKind, path: &str) {
+    let Some(registry) = app.try_state::<GrantRegistry>() else {
+        return;
+    };
+    match kind {
+        OpenKind::Folder => {
+            if let Ok(canonical) = registry.grant_workspace(std::path::Path::new(path)) {
+                grants::allow_asset_dir(app, &canonical);
+            }
+        }
+        OpenKind::File => {
+            if let Ok(canonical) = registry.grant_file(std::path::Path::new(path)) {
+                grants::allow_asset_file(app, &canonical);
+            }
+        }
+    }
+}
 
 /// The frontend event a pending open is delivered as.
 fn event_name(kind: OpenKind) -> &'static str {
@@ -51,6 +75,7 @@ pub fn open_in_app<R: Runtime>(
     path: String,
     current_label: &str,
 ) {
+    grant_open(app, kind, &path);
     match route_open(kind, &path, &registry.snapshot(), current_label) {
         OpenRoute::Focus(label) => focus_window(app, &label),
         OpenRoute::Adopt(label, pending) => {
@@ -95,6 +120,13 @@ pub fn set_window_workspace<R: Runtime>(
     registry: State<'_, WindowRegistry>,
     root: Option<String>,
 ) {
+    // Re-opens routed through the restore flow report here without passing
+    // open_in_app, so mint the workspace grant too (idempotent for the rest).
+    // Clearing (None) does not revoke: another window may show the same root
+    // and loose tabs from it may stay open; grants are session-scoped.
+    if let Some(root) = &root {
+        grant_open(window.app_handle(), OpenKind::Folder, root);
+    }
     registry.set_workspace(window.label(), root);
 }
 

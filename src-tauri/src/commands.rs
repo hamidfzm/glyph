@@ -4,6 +4,7 @@ pub mod directory;
 pub mod export;
 pub mod export_runtime;
 pub mod file;
+pub mod pick;
 pub mod plugins;
 pub mod secrets;
 mod walk;

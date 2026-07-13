@@ -1,11 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { collectStyles } from "@/lib/export/collectStyles";
 import { buildHtmlDocument } from "@/lib/export/html";
 import { deriveExportMeta } from "@/lib/export/meta";
 import { prepareContent } from "@/lib/export/prepareContent";
+import { pickSave } from "@/lib/pickers";
 import type { PrintSettings } from "@/lib/settings";
 import type { TocEntry } from "./useTableOfContents";
 
@@ -73,10 +73,7 @@ export function useExport({
       if (document.querySelector(".glyph-canvas")) {
         const meta = deriveExportMeta(filePath, content);
         const ext = EXT[format];
-        const path = await save({
-          defaultPath: `${meta.baseName}.${ext}`,
-          filters: [{ name: t(`exportFilter.${format}`), extensions: [ext] }],
-        });
+        const path = await pickSave(`${meta.baseName}.${ext}`, t(`exportFilter.${format}`), [ext]);
         if (!path) return;
         setExporting(format);
         try {
@@ -146,10 +143,7 @@ export function useExport({
 
       const meta = deriveExportMeta(filePath, content);
       const ext = EXT[format];
-      const path = await save({
-        defaultPath: `${meta.baseName}.${ext}`,
-        filters: [{ name: t(`exportFilter.${format}`), extensions: [ext] }],
-      });
+      const path = await pickSave(`${meta.baseName}.${ext}`, t(`exportFilter.${format}`), [ext]);
       if (!path) return; // user cancelled
 
       // Show the indicator only for the real work — after the (blocking) native

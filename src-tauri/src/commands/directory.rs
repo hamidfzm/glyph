@@ -7,6 +7,7 @@ use tauri::State;
 use walkdir::WalkDir;
 
 use super::walk::{WALK_MAX_DEPTH, WALK_MAX_FILES, WALK_SKIP_DIRS};
+use crate::grants::GrantRegistry;
 
 pub struct InitialFolder(pub Mutex<Option<String>>);
 
@@ -27,7 +28,14 @@ pub fn get_initial_folder(state: State<'_, InitialFolder>) -> Option<String> {
 }
 
 #[tauri::command]
-pub fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
+pub fn read_directory(
+    path: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<Vec<DirEntry>, String> {
+    // Validate, then walk the path as given: returned entry paths must stay in
+    // the frontend's own path spelling (a canonical `\\?\` prefix on Windows
+    // would break workspace-containment string checks in the UI).
+    grants.ensure_readable(&path)?;
     let dir = Path::new(&path);
     let read_dir = fs::read_dir(dir).map_err(|e| format!("Failed to read directory: {e}"))?;
 
@@ -76,7 +84,11 @@ pub fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
 }
 
 #[tauri::command]
-pub fn list_markdown_files(path: String) -> Result<Vec<String>, String> {
+pub fn list_markdown_files(
+    path: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<Vec<String>, String> {
+    grants.ensure_readable(&path)?;
     list_markdown_files_capped(&path, WALK_MAX_FILES)
 }
 
@@ -133,6 +145,17 @@ fn list_markdown_files_capped(path: &str, max_files: usize) -> Result<Vec<String
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tauri::test::{mock_app, MockRuntime};
+    use tauri::Manager;
+
+    /// Mock app whose grant registry has `dir` granted as a workspace, so the
+    /// gated directory commands can be called directly.
+    fn app_with_workspace(dir: &Path) -> tauri::App<MockRuntime> {
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        app.state::<GrantRegistry>().grant_workspace(dir).unwrap();
+        app
+    }
 
     fn unique_tmp(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -159,7 +182,12 @@ mod tests {
         fs::write(dir.join("data.json"), b"x").unwrap();
         fs::create_dir_all(dir.join("subdir")).unwrap();
 
-        let result = read_directory(dir.to_string_lossy().to_string()).unwrap();
+        let app = app_with_workspace(&dir);
+        let result = read_directory(
+            dir.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
         let names: Vec<&str> = result.iter().map(|e| e.name.as_str()).collect();
 
         assert!(names.contains(&"subdir"));
@@ -183,7 +211,12 @@ mod tests {
         fs::write(dir.join(".hidden.md"), "x").unwrap();
         fs::create_dir_all(dir.join(".git")).unwrap();
 
-        let result = read_directory(dir.to_string_lossy().to_string()).unwrap();
+        let app = app_with_workspace(&dir);
+        let result = read_directory(
+            dir.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
         let names: Vec<&str> = result.iter().map(|e| e.name.as_str()).collect();
 
         assert_eq!(names, vec!["visible.md"]);
@@ -199,7 +232,12 @@ mod tests {
         fs::create_dir_all(dir.join("beta")).unwrap();
         fs::create_dir_all(dir.join("Apple")).unwrap();
 
-        let result = read_directory(dir.to_string_lossy().to_string()).unwrap();
+        let app = app_with_workspace(&dir);
+        let result = read_directory(
+            dir.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
         let order: Vec<&str> = result.iter().map(|e| e.name.as_str()).collect();
 
         assert_eq!(order, vec!["Apple", "beta", "alpha.md", "zeta.md"]);
@@ -210,16 +248,63 @@ mod tests {
     #[test]
     fn read_directory_empty_dir_returns_empty() {
         let dir = unique_tmp("read_dir_empty");
-        let result = read_directory(dir.to_string_lossy().to_string()).unwrap();
+        let app = app_with_workspace(&dir);
+        let result = read_directory(
+            dir.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
         assert!(result.is_empty());
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn read_directory_not_found_returns_err() {
-        let result = read_directory("/nonexistent/glyph/path/abc123".to_string());
+        // A granted but since-deleted subfolder hits the filesystem error, not
+        // the grant gate.
+        let dir = unique_tmp("read_dir_missing");
+        let app = app_with_workspace(&dir);
+        let missing = dir.join("gone");
+        let result = read_directory(
+            missing.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Failed to read directory"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_directory_denied_without_a_grant() {
+        let dir = unique_tmp("read_dir_denied");
+        fs::write(dir.join("readme.md"), "x").unwrap();
+
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        let result = read_directory(
+            dir.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
+        let err = result.expect_err("must be denied");
+        assert!(err.starts_with("path is outside the allowed workspaces and files:"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn list_markdown_files_denied_without_a_grant() {
+        let dir = unique_tmp("list_md_denied");
+        fs::write(dir.join("keep.md"), "x").unwrap();
+
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        let result = list_markdown_files(
+            dir.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
+        assert!(result.is_err());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -231,7 +316,12 @@ mod tests {
         fs::write(dir.join("nested/deep/b.markdown"), "x").unwrap();
         fs::write(dir.join("nested/image.png"), b"x").unwrap();
 
-        let mut result = list_markdown_files(dir.to_string_lossy().to_string()).unwrap();
+        let app = app_with_workspace(&dir);
+        let mut result = list_markdown_files(
+            dir.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
         result.sort();
         let names: Vec<String> = result
             .iter()
@@ -262,7 +352,12 @@ mod tests {
         fs::create_dir_all(dir.join(".hidden")).unwrap();
         fs::write(dir.join(".hidden/ignored.md"), "x").unwrap();
 
-        let result = list_markdown_files(dir.to_string_lossy().to_string()).unwrap();
+        let app = app_with_workspace(&dir);
+        let result = list_markdown_files(
+            dir.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
         let names: Vec<String> = result
             .iter()
             .map(|p| {
@@ -297,7 +392,11 @@ mod tests {
         let file = dir.join("file.md");
         fs::write(&file, "x").unwrap();
 
-        let result = list_markdown_files(file.to_string_lossy().to_string());
+        let app = app_with_workspace(&dir);
+        let result = list_markdown_files(
+            file.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_err());
 
         let _ = fs::remove_dir_all(&dir);

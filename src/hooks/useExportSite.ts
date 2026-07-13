@@ -1,6 +1,6 @@
-import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useMemo, useState } from "react";
 import { isPathInside } from "@/lib/paths";
+import { pickExportDir } from "@/lib/pickers";
 
 export interface SiteExportProgress {
   done: number;
@@ -25,7 +25,7 @@ export function useExportSite(root: string | undefined): ExportSiteHandlers {
 
   const exportWebsite = useCallback(async () => {
     if (!root) return;
-    const outDir = await open({ directory: true, multiple: false });
+    const outDir = await pickExportDir();
     if (typeof outDir !== "string" || outDir === "") return; // cancelled
     if (isPathInside(outDir, root)) {
       // Exporting into the watched workspace would pollute it (and re-export

@@ -4,8 +4,10 @@
 // source returned here via a dynamic module import; no plugin code runs in Rust.
 
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::Manager;
+
+use crate::grants::GrantRegistry;
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -55,12 +57,19 @@ pub fn list_plugins<R: tauri::Runtime>(
     Ok(scan_plugins_root(&plugins_root(&app)?))
 }
 
+/// Install from the folder the user picked via `pick_plugin_dir`. The source
+/// directory is consumed from the grant registry's pending slot instead of
+/// being a command argument, so the webview can never point an install at a
+/// path of its own choosing.
 #[tauri::command]
 pub fn install_plugin<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
-    src_dir: String,
+    grants: tauri::State<'_, GrantRegistry>,
 ) -> Result<InstalledPlugin, String> {
-    install_into(&plugins_root(&app)?, Path::new(&src_dir))
+    let src_dir = grants
+        .take_pending_plugin_dir()
+        .ok_or("no plugin folder was picked")?;
+    install_into(&plugins_root(&app)?, &src_dir)
 }
 
 #[tauri::command]

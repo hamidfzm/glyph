@@ -2,6 +2,7 @@ mod canvas;
 mod cli;
 mod commands;
 mod d2;
+mod grants;
 mod image;
 mod markdown;
 // Menus (tauri::menu), sync (git2), and telemetry (sentry) don't exist on
@@ -184,6 +185,7 @@ pub fn run() {
         .manage(commands::InitialFolder(Mutex::new(None)))
         .manage(commands::CliExport(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
+        .manage(grants::GrantRegistry::default())
         .setup(|app| {
             // Seed the registry's "main" entry so routing knows what the first
             // window shows; a desktop folder launch overrides it below.
@@ -229,6 +231,33 @@ pub fn run() {
                 let plugin_path = plugin_arg("file");
                 let plugin_export = plugin_arg("export-website");
                 let env_args: Vec<String> = std::env::args().collect();
+                // Session restore and the recent-files menu re-open paths from
+                // earlier sessions; seed their grants from the persisted settings
+                // store (AppData, with AppConfig as the Linux fallback spelling).
+                {
+                    let grant_registry = app.state::<grants::GrantRegistry>();
+                    let handle = app.handle();
+                    for base in [
+                        handle.path().app_data_dir().ok(),
+                        handle.path().app_config_dir().ok(),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    {
+                        let Ok(raw) = std::fs::read_to_string(base.join("settings.json")) else {
+                            continue;
+                        };
+                        let (workspaces, files) = grant_registry.seed_from_settings_json(&raw);
+                        for dir in &workspaces {
+                            grants::allow_asset_dir(handle, dir);
+                        }
+                        for file in &files {
+                            grants::allow_asset_file(handle, file);
+                        }
+                        break;
+                    }
+                }
+                let grant_registry = app.state::<grants::GrantRegistry>();
                 match cli::launch_plan(
                     plugin_path.as_deref(),
                     plugin_export.as_deref(),
@@ -243,15 +272,25 @@ pub fn run() {
                         // Headless: the workspace is not opened in the UI and the
                         // window stays hidden; the frontend runs the export on
                         // mount and exits via `finish_cli_export`.
+                        let _ = grant_registry.grant_workspace(std::path::Path::new(&root));
+                        let _ = grant_registry.grant_export_dir(std::path::Path::new(&out_dir));
                         *app.state::<commands::CliExport>().0.lock().unwrap() =
                             Some(commands::export::CliExportRequest { root, out_dir });
                     }
                     Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::Folder(p)))) => {
+                        if let Ok(canonical) =
+                            grant_registry.grant_workspace(std::path::Path::new(&p))
+                        {
+                            grants::allow_asset_dir(app.handle(), &canonical);
+                        }
                         app.state::<windows::WindowRegistry>()
                             .set_workspace("main", Some(p.clone()));
                         *app.state::<commands::InitialFolder>().0.lock().unwrap() = Some(p);
                     }
                     Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::File(p)))) => {
+                        if let Ok(canonical) = grant_registry.grant_file(std::path::Path::new(&p)) {
+                            grants::allow_asset_file(app.handle(), &canonical);
+                        }
                         *app.state::<commands::InitialFile>().0.lock().unwrap() = Some(p);
                     }
                     Ok(cli::CliLaunch::Open(Some(
@@ -316,6 +355,12 @@ pub fn run() {
             commands::file::get_initial_file,
             #[cfg(desktop)]
             commands::file::print_document,
+            commands::pick::pick_folder,
+            commands::pick::pick_files,
+            commands::pick::pick_save,
+            commands::pick::pick_export_dir,
+            commands::pick::pick_plugin_dir,
+            commands::pick::pick_move_dir,
             commands::export::get_cli_export,
             commands::export_runtime::finish_cli_export,
             commands::default_app::set_default_markdown_app,
@@ -410,6 +455,7 @@ mod tests {
     fn routed_app() -> tauri::App<MockRuntime> {
         let app = mock_app_with_main_window();
         app.manage(crate::windows::WindowRegistry::new());
+        app.manage(crate::grants::GrantRegistry::default());
         // The initial-file/folder state that `handle_opened_paths` stashes into
         // (the cold-start safety net) so tests can read the stash back.
         app.manage(commands::InitialFile(Mutex::new(None)));
@@ -549,6 +595,37 @@ mod tests {
             Some(folder.to_string_lossy().as_ref())
         );
         assert_eq!(stashed_file(&app), None);
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn handle_opened_paths_mints_grants_for_routed_paths() {
+        // Routing an OS-level open through open_in_app must mint the
+        // filesystem grant, or the frontend's follow-up read_file /
+        // read_directory calls would be denied.
+        let cwd = unique_tmp("op_grants");
+        let folder = cwd.join("workspace");
+        fs::create_dir_all(&folder).unwrap();
+        let file = cwd.join("note.md");
+        fs::write(&file, "hi").unwrap();
+
+        let app = routed_app();
+        handle_opened_paths(&app.handle().clone(), vec![folder.clone()]);
+        let app2 = routed_app();
+        handle_opened_paths(&app2.handle().clone(), vec![file.clone()]);
+
+        let grants = app.state::<crate::grants::GrantRegistry>();
+        assert!(grants
+            .ensure_workspace(folder.to_string_lossy().as_ref())
+            .is_ok());
+        let grants2 = app2.state::<crate::grants::GrantRegistry>();
+        assert!(grants2
+            .ensure_readable(file.to_string_lossy().as_ref())
+            .is_ok());
+        // The other app never saw the file, so it stays denied there.
+        assert!(grants
+            .ensure_readable(file.to_string_lossy().as_ref())
+            .is_err());
         let _ = fs::remove_dir_all(&cwd);
     }
 

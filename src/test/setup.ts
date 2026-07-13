@@ -37,9 +37,9 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   readTextFile: vi.fn(() => Promise.resolve("")),
 }));
 
+// Only ask/message remain in use: open/save moved to backend pickers
+// (src/lib/pickers.ts), which run the dialogs in Rust.
 vi.mock("@tauri-apps/plugin-dialog", () => ({
-  open: vi.fn(),
-  save: vi.fn(),
   ask: vi.fn(() => Promise.resolve(true)),
 }));
 

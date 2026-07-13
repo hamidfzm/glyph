@@ -1,7 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { pickSave } from "@/lib/pickers";
 import { runExporter } from "./runExporter";
+
+// Backend-run save dialog (grants the target write-only in Rust).
+vi.mock("@/lib/pickers", () => ({
+  pickSave: vi.fn(),
+}));
+
 import type { ExporterContribution } from "./types";
 
 function exporter(over: Partial<ExporterContribution> = {}): ExporterContribution {
@@ -23,26 +29,26 @@ describe("runExporter", () => {
     document.body.innerHTML = "";
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockResolvedValue(undefined);
-    vi.mocked(save).mockReset();
+    vi.mocked(pickSave).mockReset();
   });
 
   it("does nothing when no document is rendered", async () => {
-    vi.mocked(save).mockResolvedValue("/out.html");
+    vi.mocked(pickSave).mockResolvedValue("/out.html");
     await runExporter({ exporter: exporter(), entries: [], content: null });
-    expect(save).not.toHaveBeenCalled();
+    expect(pickSave).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
   });
 
   it("does nothing when the save dialog is cancelled", async () => {
     setBody();
-    vi.mocked(save).mockResolvedValue(null);
+    vi.mocked(pickSave).mockResolvedValue(null);
     await runExporter({ exporter: exporter(), entries: [], content: null });
     expect(invoke).not.toHaveBeenCalled();
   });
 
   it("writes string output via write_file with the derived filename", async () => {
     setBody();
-    vi.mocked(save).mockResolvedValue("/out.html");
+    vi.mocked(pickSave).mockResolvedValue("/out.html");
     await runExporter({
       exporter: exporter(),
       entries: [],
@@ -50,9 +56,7 @@ describe("runExporter", () => {
       content: "# Doc",
     });
 
-    expect(save).toHaveBeenCalledWith(
-      expect.objectContaining({ defaultPath: expect.stringMatching(/note\.html$/) }),
-    );
+    expect(pickSave).toHaveBeenCalledWith(expect.stringMatching(/note\.html$/), "Slides", ["html"]);
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_file");
     expect(call?.[1]).toMatchObject({ path: "/out.html" });
     expect((call![1] as { content: string }).content).toContain("<deck>");
@@ -60,7 +64,7 @@ describe("runExporter", () => {
 
   it("writes binary output via write_binary_file", async () => {
     setBody();
-    vi.mocked(save).mockResolvedValue("/out.bin");
+    vi.mocked(pickSave).mockResolvedValue("/out.bin");
     await runExporter({
       exporter: exporter({ extension: "bin", build: async () => new Uint8Array([1, 2, 3]) }),
       entries: [],

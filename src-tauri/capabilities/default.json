@@ -9,8 +9,6 @@
     "core:window:allow-set-focus",
     "core:window:allow-close",
     "dialog:default",
-    "dialog:allow-open",
-    "dialog:allow-save",
     "fs:default",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",

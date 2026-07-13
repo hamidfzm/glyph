@@ -1,4 +1,3 @@
-import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,6 +12,7 @@ import { useTabsContext } from "@/contexts/TabsContext";
 import { useActiveHeading } from "@/hooks/useActiveHeading";
 import { usePanelResize } from "@/hooks/usePanelResize";
 import type { Workspace } from "@/hooks/useTabs";
+import { pickMoveDir } from "@/lib/pickers";
 import { BACKLINKS_HEIGHT_MIN } from "@/lib/settings";
 import { BacklinksSection } from "./BacklinksSection";
 import { EdgeExpand } from "./EdgeExpand";
@@ -57,7 +57,7 @@ export function Sidebar({ side }: SidebarProps) {
   // "Move to…": pick a destination folder (within the workspace), then relocate.
   const handleMove = useCallback(
     async (root: string, from: string) => {
-      const dir = await open({ directory: true, defaultPath: root });
+      const dir = await pickMoveDir(root);
       if (typeof dir === "string") movePath(from, dir);
     },
     [movePath],

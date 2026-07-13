@@ -1,7 +1,12 @@
-import { open } from "@tauri-apps/plugin-dialog";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { pickExportDir } from "@/lib/pickers";
 import { useExportSite } from "./useExportSite";
+
+// Backend-run folder picker (grants the destination write-only in Rust).
+vi.mock("@/lib/pickers", () => ({
+  pickExportDir: vi.fn(),
+}));
 
 const exportSiteMock = vi.fn();
 vi.mock("@/lib/export/site/exportSite", () => ({
@@ -9,7 +14,7 @@ vi.mock("@/lib/export/site/exportSite", () => ({
 }));
 
 beforeEach(() => {
-  vi.mocked(open).mockReset();
+  vi.mocked(pickExportDir).mockReset();
   exportSiteMock.mockReset().mockResolvedValue({ pages: 2, assets: 0 });
 });
 
@@ -17,21 +22,21 @@ describe("useExportSite", () => {
   it("does nothing without a workspace root", async () => {
     const { result } = renderHook(() => useExportSite(undefined));
     await act(() => result.current.exportWebsite());
-    expect(open).not.toHaveBeenCalled();
+    expect(pickExportDir).not.toHaveBeenCalled();
     expect(exportSiteMock).not.toHaveBeenCalled();
   });
 
   it("aborts when the folder picker is cancelled", async () => {
-    vi.mocked(open).mockResolvedValue(null);
+    vi.mocked(pickExportDir).mockResolvedValue(null);
     const { result } = renderHook(() => useExportSite("/ws"));
     await act(() => result.current.exportWebsite());
-    expect(open).toHaveBeenCalledWith({ directory: true, multiple: false });
+    expect(pickExportDir).toHaveBeenCalled();
     expect(exportSiteMock).not.toHaveBeenCalled();
   });
 
   it("refuses a destination inside the workspace", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(open).mockResolvedValue("/ws/site");
+    vi.mocked(pickExportDir).mockResolvedValue("/ws/site");
     const { result } = renderHook(() => useExportSite("/ws"));
     await act(() => result.current.exportWebsite());
     expect(exportSiteMock).not.toHaveBeenCalled();
@@ -40,7 +45,7 @@ describe("useExportSite", () => {
   });
 
   it("runs the export and surfaces determinate progress", async () => {
-    vi.mocked(open).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue("/out");
     let capturedProgress: ((done: number, total: number) => void) | undefined;
     exportSiteMock.mockImplementation(
       (opts: { onProgress: (done: number, total: number) => void }) => {
@@ -62,7 +67,7 @@ describe("useExportSite", () => {
 
   it("clears progress and logs when the export fails", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(open).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue("/out");
     exportSiteMock.mockRejectedValue(new Error("boom"));
     const { result } = renderHook(() => useExportSite("/ws"));
     await act(() => result.current.exportWebsite());
