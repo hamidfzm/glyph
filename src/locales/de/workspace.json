@@ -4,7 +4,8 @@
   },
   "notice": {
     "nestedWorkspace": "Dieser Ordner liegt innerhalb eines anderen Glyph-Arbeitsbereichs (\"{{path}}\"). Verschachtelte Arbeitsbereiche werden nicht unterstützt.",
-    "nestedUnderGit": "Dieser Ordner liegt innerhalb des Git-Repositorys unter \"{{path}}\". Glyph behandelt ein Repository als einen Arbeitsbereich, daher können einige Arbeitsbereich-Funktionen auf das gesamte Repository wirken."
+    "nestedUnderGit": "Dieser Ordner liegt innerhalb des Git-Repositorys unter \"{{path}}\". Glyph behandelt ein Repository als einen Arbeitsbereich, daher können einige Arbeitsbereich-Funktionen auf das gesamte Repository wirken.",
+    "saveFailed": "\"{{name}}\" konnte nicht gespeichert werden. Deine Änderungen sind noch vorhanden; bearbeite erneut, um es noch einmal zu versuchen."
   },
   "confirmDelete": {
     "message": "\"{{name}}\" löschen? Das kann nicht rückgängig gemacht werden.",

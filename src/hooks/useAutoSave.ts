@@ -1,36 +1,69 @@
-import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
 
 const AUTO_SAVE_DELAY = 2000;
 
-interface UseAutoSaveOptions {
-  path: string | undefined;
-  content: string | null;
-  dirty: boolean;
-  onSaved: (content: string) => void;
+/** A dirty editable tab awaiting an autosave, identified so each document keeps
+ *  its own debounce timer independent of which tab is active. */
+export interface SavableDocument {
+  id: string;
+  /** Monotonic edit counter; a fresh value means new edits to (re)schedule. */
+  revision: number;
 }
 
-export function useAutoSave({ path, content, dirty, onSaved }: UseAutoSaveOptions) {
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const onSavedRef = useRef(onSaved);
-  onSavedRef.current = onSaved;
+interface UseAutoSaveOptions {
+  /** Every currently-dirty editable tab, not just the active one. */
+  documents: SavableDocument[];
+  /** Persist one document by id (revision-guarded and serialized upstream). */
+  save: (id: string) => void;
+}
+
+/**
+ * Per-document debounced autosave. Each dirty tab owns its own timer, so
+ * switching tabs never cancels another document's pending save. A save fires
+ * once per revision: a new edit bumps the revision and reschedules; a completed
+ * or failed save leaves the revision recorded, so it won't re-fire until the
+ * next edit (retry-on-edit rather than a tight retry loop).
+ */
+export function useAutoSave({ documents, save }: UseAutoSaveOptions) {
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const scheduled = useRef<Map<string, number>>(new Map());
+  const saveRef = useRef(save);
+  saveRef.current = save;
 
   useEffect(() => {
-    if (!path || !content || !dirty) return;
-
-    if (timerRef.current) clearTimeout(timerRef.current);
-
-    timerRef.current = setTimeout(async () => {
-      try {
-        await invoke("write_file", { path, content });
-        onSavedRef.current(content);
-      } catch (err) {
-        console.error("Auto-save failed:", err);
+    const live = new Set(documents.map((d) => d.id));
+    // Drop timers for tabs that are no longer dirty or have closed.
+    for (const [id, timer] of timers.current) {
+      if (!live.has(id)) {
+        clearTimeout(timer);
+        timers.current.delete(id);
       }
-    }, AUTO_SAVE_DELAY);
+    }
+    for (const id of scheduled.current.keys()) {
+      if (!live.has(id)) scheduled.current.delete(id);
+    }
+    // (Re)schedule a debounce whenever a document's revision advances.
+    for (const doc of documents) {
+      if (scheduled.current.get(doc.id) === doc.revision) continue;
+      scheduled.current.set(doc.id, doc.revision);
+      const existing = timers.current.get(doc.id);
+      if (existing) clearTimeout(existing);
+      timers.current.set(
+        doc.id,
+        setTimeout(() => {
+          timers.current.delete(doc.id);
+          saveRef.current(doc.id);
+        }, AUTO_SAVE_DELAY),
+      );
+    }
+  }, [documents]);
 
+  // Clear every pending timer on unmount so none fire into a dead tree.
+  useEffect(() => {
+    const map = timers.current;
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+      for (const timer of map.values()) clearTimeout(timer);
+      map.clear();
     };
-  }, [path, content, dirty]);
+  }, []);
 }

@@ -11,7 +11,7 @@ import { isImageFile } from "@/lib/imageExtensions";
 import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
-import { isPathInside, parentDir, pruneInside } from "@/lib/paths";
+import { basename, isPathInside, parentDir, pruneInside } from "@/lib/paths";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
 import { subscribe } from "@/lib/tauriEvent";
@@ -45,6 +45,10 @@ interface FileState {
   mode: EditorMode;
   editContent: string | null;
   dirty: boolean;
+  /** Monotonic edit counter. Every edit bumps it; a save records the revision
+   *  it wrote, and clears `dirty` only if the revision is still current. This
+   *  stops an in-flight write from marking a newer edit clean. */
+  revision: number;
 }
 
 export interface FileTab {
@@ -136,6 +140,7 @@ function makeFileState(path: string, mode: EditorMode): FileState {
     mode,
     editContent: null,
     dirty: false,
+    revision: 0,
   };
 }
 
@@ -829,7 +834,12 @@ export function useTabs(options: UseTabsOptions) {
 
   const updateEditContent = useCallback(
     (id: string, editContent: string) => {
-      updateActiveFile(id, (f) => ({ ...f, editContent, dirty: true }));
+      updateActiveFile(id, (f) => ({
+        ...f,
+        editContent,
+        dirty: true,
+        revision: f.revision + 1,
+      }));
     },
     [updateActiveFile],
   );
@@ -845,12 +855,52 @@ export function useTabs(options: UseTabsOptions) {
   // rename refactors). The editor's own history covers typed input.
   const editHistory = useRef<Map<string, TabHistory>>(new Map());
 
-  const markSaved = useCallback(
-    (id: string, content: string) => {
-      updateActiveFile(id, (f) => {
-        selfSaveTimes.current.set(f.path, Date.now());
-        return { ...f, content, dirty: false };
+  // Per-path write queue: serializes saves for the same file so two writes
+  // can't complete out of order (the newer edit must land last on disk).
+  const writeChains = useRef<Map<string, Promise<unknown>>>(new Map());
+
+  // Persist one dirty editable tab. Safe to call for any tab id: skips graph,
+  // clean, and still-loading tabs. The write is serialized per path, and the
+  // dirty flag is cleared only when the written revision is still current, so a
+  // slow write completing after a newer edit never strands that edit.
+  const saveDocument = useCallback(
+    (id: string): Promise<void> => {
+      const tab = stateRef.current.tabs.find((t) => t.id === id);
+      if (tab?.kind !== "file") return Promise.resolve();
+      const file = tab.file;
+      // editContent is the edit buffer; null means still loading, "" is valid
+      // (a fully-deleted document must still save — see #432).
+      if (!file.dirty || file.editContent == null) return Promise.resolve();
+      const { path, editContent: content, revision } = file;
+
+      const prev = writeChains.current.get(path) ?? Promise.resolve();
+      const run = prev.then(async () => {
+        try {
+          await invoke("write_file", { path, content });
+          selfSaveTimes.current.set(path, Date.now());
+          updateActiveFile(id, (f) => ({
+            ...f,
+            content,
+            // Stay dirty when a newer edit landed while this write was in
+            // flight, so the newer revision is saved on its own timer.
+            dirty: f.revision !== revision,
+          }));
+        } catch (err) {
+          console.error("Auto-save failed:", err);
+          // Leave the tab dirty (it retries on the next edit or shutdown flush)
+          // and surface a visible, actionable notice instead of failing silently.
+          optionsRef.current.onWorkspaceNotice(
+            { key: "notice.saveFailed", values: { name: basename(path) } },
+            { persistent: true },
+          );
+        }
       });
+      // Keep the chain intact even if this write threw, so ordering holds.
+      writeChains.current.set(
+        path,
+        run.catch(() => {}),
+      );
+      return run;
     },
     [updateActiveFile],
   );
@@ -867,7 +917,12 @@ export function useTabs(options: UseTabsOptions) {
       if (!file) return false;
 
       if (file.mode !== EDITOR_MODE.view) {
-        updateActiveFile(id, (f) => ({ ...f, editContent: next, dirty: true }));
+        updateActiveFile(id, (f) => ({
+          ...f,
+          editContent: next,
+          dirty: true,
+          revision: f.revision + 1,
+        }));
         return true;
       }
 
@@ -1203,7 +1258,7 @@ export function useTabs(options: UseTabsOptions) {
     moveActiveTab,
     setTabMode,
     updateEditContent,
-    markSaved,
+    saveDocument,
     toggleTask,
     undoEdit,
     redoEdit,

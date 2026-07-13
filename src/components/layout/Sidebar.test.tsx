@@ -30,6 +30,7 @@ function makeFileTab(): FileTab {
       mode: "view",
       editContent: null,
       dirty: false,
+      revision: 0,
     },
   };
 }
@@ -101,7 +102,7 @@ function buildTabsContext(opts: RenderOpts): TabsContextValue {
     moveActiveTab: vi.fn(),
     setTabMode: vi.fn(),
     updateEditContent: vi.fn(),
-    markSaved: vi.fn(),
+    saveDocument: vi.fn(),
     toggleTask: vi.fn(),
     saveScrollPosition: vi.fn(),
     openFileDialog: vi.fn(),

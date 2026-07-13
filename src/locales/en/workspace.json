@@ -4,7 +4,8 @@
   },
   "notice": {
     "nestedWorkspace": "This folder sits inside another Glyph workspace (\"{{path}}\"). Nested workspaces aren't supported.",
-    "nestedUnderGit": "This folder is inside the git repository at \"{{path}}\". Glyph treats one repository as one workspace, so some workspace features may act on the whole repository."
+    "nestedUnderGit": "This folder is inside the git repository at \"{{path}}\". Glyph treats one repository as one workspace, so some workspace features may act on the whole repository.",
+    "saveFailed": "Couldn't save \"{{name}}\". Your changes are still here; edit again to retry."
   },
   "confirmDelete": {
     "message": "Delete \"{{name}}\"? This can't be undone.",

@@ -4,7 +4,8 @@
   },
   "notice": {
     "nestedWorkspace": "此文件夹位于另一个 Glyph 工作区 (\"{{path}}\") 内。不支持嵌套工作区。",
-    "nestedUnderGit": "此文件夹位于 \"{{path}}\" 处的 git 仓库内。Glyph 将一个仓库视为一个工作区，因此某些工作区功能可能作用于整个仓库。"
+    "nestedUnderGit": "此文件夹位于 \"{{path}}\" 处的 git 仓库内。Glyph 将一个仓库视为一个工作区，因此某些工作区功能可能作用于整个仓库。",
+    "saveFailed": "无法保存 \"{{name}}\"。你的更改仍然在此；再次编辑以重试。"
   },
   "confirmDelete": {
     "message": "删除 \"{{name}}\"？此操作无法撤销。",

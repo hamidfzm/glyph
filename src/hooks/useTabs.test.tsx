@@ -607,10 +607,9 @@ describe("useTabs file operations", () => {
     }
   });
 
-  it("updateEditContent marks the file dirty and markSaved clears it", async () => {
-    const { result } = renderHook(() => useTabs(defaultOptions()));
+  // Open /p/a.md in edit mode and return its tab id, ready for saveDocument tests.
+  async function openEditable(result: { current: ReturnType<typeof useTabs> }) {
     await waitFor(() => expect(result.current.initializing).toBe(false));
-
     await act(async () => {
       await result.current.openFile("/p/a.md");
     });
@@ -618,23 +617,156 @@ describe("useTabs file operations", () => {
     act(() => {
       result.current.setTabMode(tabId, "edit");
     });
+    return tabId;
+  }
+
+  function fileOf(result: { current: ReturnType<typeof useTabs> }, index = 0) {
+    const tab = result.current.tabs[index];
+    if (tab.kind !== "file") throw new Error("expected a file tab");
+    return tab.file;
+  }
+
+  it("updateEditContent marks the file dirty and saveDocument writes and clears it", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await openEditable(result);
+
     act(() => {
       result.current.updateEditContent(tabId, "EDITED");
     });
+    expect(fileOf(result).dirty).toBe(true);
+    expect(fileOf(result).editContent).toBe("EDITED");
 
-    if (result.current.tabs[0].kind === "file") {
-      expect(result.current.tabs[0].file.dirty).toBe(true);
-      expect(result.current.tabs[0].file.editContent).toBe("EDITED");
-    }
-
-    act(() => {
-      result.current.markSaved(tabId, "EDITED");
+    await act(async () => {
+      await result.current.saveDocument(tabId);
     });
 
-    if (result.current.tabs[0].kind === "file") {
-      expect(result.current.tabs[0].file.dirty).toBe(false);
-      expect(result.current.tabs[0].file.content).toBe("EDITED");
-    }
+    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/a.md", content: "EDITED" });
+    expect(fileOf(result).dirty).toBe(false);
+    expect(fileOf(result).content).toBe("EDITED");
+  });
+
+  it("keeps the tab dirty when a newer edit lands during an in-flight write", async () => {
+    let releaseWrite!: () => void;
+    const writeGate = new Promise<void>((r) => {
+      releaseWrite = r;
+    });
+    let signalStarted!: () => void;
+    const writeStarted = new Promise<void>((r) => {
+      signalStarted = r;
+    });
+    const writeFile = vi.fn().mockImplementation(async () => {
+      signalStarted();
+      await writeGate;
+    });
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await openEditable(result);
+
+    act(() => {
+      result.current.updateEditContent(tabId, "V1");
+    });
+
+    let savePromise: Promise<void> | undefined;
+    await act(async () => {
+      savePromise = result.current.saveDocument(tabId);
+      await writeStarted;
+    });
+
+    // A newer edit arrives while the V1 write is still in flight.
+    act(() => {
+      result.current.updateEditContent(tabId, "V2");
+    });
+
+    await act(async () => {
+      releaseWrite();
+      await savePromise;
+    });
+
+    // The V1 write landed on disk, but the tab stays dirty because V2 is newer.
+    expect(fileOf(result).content).toBe("V1");
+    expect(fileOf(result).editContent).toBe("V2");
+    expect(fileOf(result).dirty).toBe(true);
+  });
+
+  it("serializes writes for the same path so they can't complete out of order", async () => {
+    const order: string[] = [];
+    const gates: Array<() => void> = [];
+    const writeFile = vi.fn().mockImplementation(async (_cmd, args) => {
+      const content = (args as { content: string }).content;
+      order.push(`start:${content}`);
+      await new Promise<void>((r) => gates.push(r));
+      order.push(`end:${content}`);
+    });
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await openEditable(result);
+
+    act(() => {
+      result.current.updateEditContent(tabId, "V1");
+    });
+    let p1: Promise<void> | undefined;
+    await act(async () => {
+      p1 = result.current.saveDocument(tabId);
+      await waitFor(() => expect(gates).toHaveLength(1));
+    });
+
+    // Queue a second save for the same path while the first write is gated open.
+    act(() => {
+      result.current.updateEditContent(tabId, "V2");
+    });
+    let p2: Promise<void> | undefined;
+    act(() => {
+      p2 = result.current.saveDocument(tabId);
+    });
+    // The second write must not start until the first has finished.
+    expect(order).toEqual(["start:V1"]);
+
+    await act(async () => {
+      gates[0]();
+      await waitFor(() => expect(gates).toHaveLength(2));
+    });
+    expect(order).toEqual(["start:V1", "end:V1", "start:V2"]);
+
+    await act(async () => {
+      gates[1]();
+      await Promise.all([p1, p2]);
+    });
+    expect(order).toEqual(["start:V1", "end:V1", "start:V2", "end:V2"]);
+    expect(fileOf(result).content).toBe("V2");
+    expect(fileOf(result).dirty).toBe(false);
+  });
+
+  it("keeps the tab dirty and surfaces a notice when the write fails", async () => {
+    const onWorkspaceNotice = vi.fn();
+    const writeFile = vi.fn().mockRejectedValue(new Error("disk full"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    const tabId = await openEditable(result);
+
+    act(() => {
+      result.current.updateEditContent(tabId, "X");
+    });
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+
+    expect(fileOf(result).dirty).toBe(true);
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      { key: "notice.saveFailed", values: { name: "a.md" } },
+      { persistent: true },
+    );
+    errSpy.mockRestore();
   });
 
   it("toggleTask in view mode writes to disk and records an undoable edit", async () => {

@@ -63,7 +63,7 @@ function tabsValue(workspace: Workspace | null): TabsContextValue {
     moveActiveTab: vi.fn(),
     setTabMode: vi.fn(),
     updateEditContent: vi.fn(),
-    markSaved: vi.fn(),
+    saveDocument: vi.fn(),
     toggleTask: vi.fn(),
     saveScrollPosition: vi.fn(),
     openFileDialog: vi.fn(),

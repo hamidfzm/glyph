@@ -4,7 +4,8 @@
   },
   "notice": {
     "nestedWorkspace": "Esta carpeta está dentro de otro espacio de trabajo de Glyph (\"{{path}}\"). Los espacios de trabajo anidados no son compatibles.",
-    "nestedUnderGit": "Esta carpeta está dentro del repositorio git en \"{{path}}\". Glyph trata un repositorio como un espacio de trabajo, por lo que algunas funciones del espacio de trabajo pueden afectar a todo el repositorio."
+    "nestedUnderGit": "Esta carpeta está dentro del repositorio git en \"{{path}}\". Glyph trata un repositorio como un espacio de trabajo, por lo que algunas funciones del espacio de trabajo pueden afectar a todo el repositorio.",
+    "saveFailed": "No se pudo guardar \"{{name}}\". Tus cambios siguen aquí; edita de nuevo para reintentar."
   },
   "confirmDelete": {
     "message": "¿Eliminar \"{{name}}\"? Esto no se puede deshacer.",

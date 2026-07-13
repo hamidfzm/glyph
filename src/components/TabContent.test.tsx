@@ -100,6 +100,7 @@ function makeNotebookTab(mode: EditorMode = "view"): FileTab {
       mode,
       editContent: null,
       dirty: false,
+      revision: 0,
     },
   };
 }
@@ -116,6 +117,7 @@ function makeCanvasTab(mode: EditorMode = "view"): FileTab {
       mode,
       editContent: null,
       dirty: false,
+      revision: 0,
     },
   };
 }
@@ -132,6 +134,7 @@ function makeFileTab(mode: EditorMode = "view"): FileTab {
       mode,
       editContent: null,
       dirty: false,
+      revision: 0,
     },
   };
 }
@@ -149,6 +152,7 @@ function makeImageTab(): FileTab {
       mode: "view",
       editContent: null,
       dirty: false,
+      revision: 0,
     },
   };
 }
@@ -188,7 +192,7 @@ function buildContext(over: Partial<TabsContextValue>): TabsContextValue {
     moveActiveTab: vi.fn(),
     setTabMode: vi.fn(),
     updateEditContent: vi.fn(),
-    markSaved: vi.fn(),
+    saveDocument: vi.fn(),
     toggleTask: vi.fn(),
     saveScrollPosition: vi.fn(),
     openFileDialog: vi.fn(),
