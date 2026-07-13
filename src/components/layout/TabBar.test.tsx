@@ -34,7 +34,7 @@ interface RenderOpts {
   activeTabId?: string | null;
   workspace?: TabsContextValue["workspace"];
   setActiveTab?: (id: string) => void;
-  closeTab?: (id: string) => void;
+  closeTab?: (id: string) => Promise<void>;
   setTabMode?: TabsContextValue["setTabMode"];
   moveTab?: (id: string, toIndex: number) => void;
 }
@@ -74,6 +74,7 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     moveActiveTab: vi.fn(),
     updateEditContent: vi.fn(),
     saveDocument: vi.fn(),
+    flushForClose: vi.fn(),
     toggleTask: vi.fn(),
     saveScrollPosition: vi.fn(),
     openFileDialog: vi.fn(),

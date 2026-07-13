@@ -10,5 +10,11 @@
   "confirmDelete": {
     "message": "¿Eliminar \"{{name}}\"? Esto no se puede deshacer.",
     "title": "Eliminar"
+  },
+  "unsavedChanges": {
+    "title": "Cambios sin guardar",
+    "message": "No se pudieron guardar estos cambios:\n{{files}}\n\n¿Cerrar de todos modos y descartarlos?",
+    "discard": "Descartar y cerrar",
+    "cancel": "Cancelar"
   }
 }

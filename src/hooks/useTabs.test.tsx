@@ -491,8 +491,8 @@ describe("useTabs file operations", () => {
     });
 
     const toClose = result.current.tabs[0].id;
-    act(() => {
-      result.current.closeTab(toClose);
+    await act(async () => {
+      await result.current.closeTab(toClose);
     });
 
     expect(result.current.tabs).toHaveLength(1);
@@ -512,8 +512,8 @@ describe("useTabs file operations", () => {
 
     const activeId = result.current.activeTabId;
     expect(activeId).toBe(result.current.tabs[1].id);
-    act(() => {
-      result.current.closeTab(activeId as string);
+    await act(async () => {
+      await result.current.closeTab(activeId as string);
     });
 
     expect(result.current.tabs).toHaveLength(1);
@@ -535,7 +535,7 @@ describe("useTabs file operations", () => {
     });
 
     await act(async () => {
-      result.current.closeTab(result.current.tabs[0].id);
+      await result.current.closeTab(result.current.tabs[0].id);
     });
 
     expect(result.current.tabs).toHaveLength(0);
@@ -659,10 +659,12 @@ describe("useTabs file operations", () => {
     const tabId = await openEditable(result);
     expect(fileOf(result).dirty).toBe(false);
 
+    let ok: boolean | undefined;
     await act(async () => {
-      await result.current.saveDocument(tabId);
+      ok = await result.current.saveDocument(tabId);
     });
 
+    expect(ok).toBe(true);
     expect(writeFile).not.toHaveBeenCalled();
   });
 
@@ -674,10 +676,12 @@ describe("useTabs file operations", () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
+    let ok: boolean | undefined;
     await act(async () => {
-      await result.current.saveDocument("does-not-exist");
+      ok = await result.current.saveDocument("does-not-exist");
     });
 
+    expect(ok).toBe(true);
     expect(writeFile).not.toHaveBeenCalled();
   });
 
@@ -704,7 +708,7 @@ describe("useTabs file operations", () => {
       result.current.updateEditContent(tabId, "V1");
     });
 
-    let savePromise: Promise<void> | undefined;
+    let savePromise: Promise<boolean> | undefined;
     await act(async () => {
       savePromise = result.current.saveDocument(tabId);
       await writeStarted;
@@ -744,7 +748,7 @@ describe("useTabs file operations", () => {
     act(() => {
       result.current.updateEditContent(tabId, "V1");
     });
-    let p1: Promise<void> | undefined;
+    let p1: Promise<boolean> | undefined;
     await act(async () => {
       p1 = result.current.saveDocument(tabId);
       await waitFor(() => expect(gates).toHaveLength(1));
@@ -754,7 +758,7 @@ describe("useTabs file operations", () => {
     act(() => {
       result.current.updateEditContent(tabId, "V2");
     });
-    let p2: Promise<void> | undefined;
+    let p2: Promise<boolean> | undefined;
     act(() => {
       p2 = result.current.saveDocument(tabId);
     });
@@ -1232,6 +1236,218 @@ describe("useTabs file operations", () => {
     if (second.kind === "file") {
       expect(second.file.scrollTop).toBe(420);
     }
+  });
+});
+
+describe("useTabs close coordinator", () => {
+  type Hook = { current: ReturnType<typeof useTabs> };
+
+  async function ready(result: Hook) {
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+  }
+
+  // Open `path` as a loose tab in edit mode with a dirty buffer, returning its id.
+  async function openDirty(result: Hook, path: string, content = "EDITED") {
+    await act(async () => {
+      await result.current.openFile(path);
+    });
+    const id = result.current.tabs.find((t) => t.kind === "file" && t.file.path === path)?.id;
+    if (!id) throw new Error(`no tab for ${path}`);
+    act(() => {
+      result.current.setTabMode(id, "edit");
+    });
+    act(() => {
+      result.current.updateEditContent(id, content);
+    });
+    return id;
+  }
+
+  function hasTab(result: Hook, id: string) {
+    return result.current.tabs.some((t) => t.id === id);
+  }
+
+  function isDirty(result: Hook, id: string) {
+    const tab = result.current.tabs.find((t) => t.id === id);
+    return tab?.kind === "file" && tab.file.dirty;
+  }
+
+  function writeInvoker(writeFile: ReturnType<typeof vi.fn>) {
+    return makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke;
+  }
+
+  // Closing a tab by mouse click or Cmd/Ctrl+W both route through closeTab.
+  it("closeTab flushes a dirty tab, then removes it", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    const id = await openDirty(result, "/p/a.md", "BODY");
+
+    await act(async () => {
+      await result.current.closeTab(id);
+    });
+
+    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/a.md", content: "BODY" });
+    expect(hasTab(result, id)).toBe(false);
+  });
+
+  it("closeTab keeps the tab open when a failed save's discard is cancelled", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(ask).mockResolvedValue(false);
+    vi.mocked(invoke).mockImplementation(
+      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    const id = await openDirty(result, "/p/a.md");
+
+    await act(async () => {
+      await result.current.closeTab(id);
+    });
+
+    expect(ask).toHaveBeenCalled();
+    expect(hasTab(result, id)).toBe(true);
+    expect(isDirty(result, id)).toBe(true);
+    errSpy.mockRestore();
+  });
+
+  it("closeTab discards and closes after the user confirms a failed save", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(ask).mockResolvedValue(true);
+    vi.mocked(invoke).mockImplementation(
+      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    const id = await openDirty(result, "/p/a.md");
+
+    await act(async () => {
+      await result.current.closeTab(id);
+    });
+
+    expect(hasTab(result, id)).toBe(false);
+    errSpy.mockRestore();
+  });
+
+  it("closeWorkspace flushes every dirty tab in the workspace", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    await act(async () => {
+      await result.current.openFolder("/ws", { autoLoad: false });
+    });
+    const id = await openDirty(result, "/ws/a.md", "WS");
+
+    await act(async () => {
+      await result.current.closeWorkspace();
+    });
+
+    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/ws/a.md", content: "WS" });
+    expect(result.current.workspace).toBeNull();
+    expect(hasTab(result, id)).toBe(false);
+  });
+
+  it("cancelling the discard keeps the workspace open", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(ask).mockResolvedValue(false);
+    vi.mocked(invoke).mockImplementation(
+      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    await act(async () => {
+      await result.current.openFolder("/ws", { autoLoad: false });
+    });
+    const id = await openDirty(result, "/ws/a.md");
+
+    await act(async () => {
+      await result.current.closeWorkspace();
+    });
+
+    // A cancelled discard leaves the workspace and its dirty tab intact.
+    expect(result.current.workspace?.root).toBe("/ws");
+    expect(hasTab(result, id)).toBe(true);
+    errSpy.mockRestore();
+  });
+
+  it("replacing the workspace flushes the outgoing workspace's dirty tabs", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    await act(async () => {
+      await result.current.openFolder("/ws1", { autoLoad: false });
+    });
+    await openDirty(result, "/ws1/a.md", "R");
+
+    await act(async () => {
+      await result.current.openFolder("/ws2", { autoLoad: false });
+    });
+
+    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/ws1/a.md", content: "R" });
+    expect(result.current.workspace?.root).toBe("/ws2");
+  });
+
+  it("cancelling the discard aborts a workspace replacement", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(ask).mockResolvedValue(false);
+    vi.mocked(invoke).mockImplementation(
+      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    await act(async () => {
+      await result.current.openFolder("/ws1", { autoLoad: false });
+    });
+    await openDirty(result, "/ws1/a.md");
+
+    await act(async () => {
+      await result.current.openFolder("/ws2", { autoLoad: false });
+    });
+
+    // The switch was aborted: the original workspace is still open.
+    expect(result.current.workspace?.root).toBe("/ws1");
+    errSpy.mockRestore();
+  });
+
+  it("flushForClose saves every dirty tab (multi-tab shutdown) and reports success", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    const a = await openDirty(result, "/p/a.md", "A");
+    const b = await openDirty(result, "/p/b.md", "B");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.flushForClose();
+    });
+
+    expect(ok).toBe(true);
+    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/a.md", content: "A" });
+    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/b.md", content: "B" });
+    expect(isDirty(result, a)).toBe(false);
+    expect(isDirty(result, b)).toBe(false);
+  });
+
+  it("flushForClose returns false when the user cancels after a failed save", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(ask).mockResolvedValue(false);
+    vi.mocked(invoke).mockImplementation(
+      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    await openDirty(result, "/p/a.md");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.flushForClose();
+    });
+
+    expect(ok).toBe(false);
+    errSpy.mockRestore();
   });
 });
 
@@ -2327,8 +2543,8 @@ describe("useTabs workspace lifecycle", () => {
     });
     expect(result.current.tabs).toHaveLength(3);
 
-    act(() => {
-      result.current.closeWorkspace();
+    await act(async () => {
+      await result.current.closeWorkspace();
     });
 
     expect(result.current.workspace).toBeNull();
@@ -2344,8 +2560,8 @@ describe("useTabs workspace lifecycle", () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
-    act(() => {
-      result.current.closeWorkspace();
+    await act(async () => {
+      await result.current.closeWorkspace();
     });
 
     expect(invoke).not.toHaveBeenCalledWith("unwatch_directory", expect.anything());
@@ -2369,7 +2585,7 @@ describe("useTabs workspace lifecycle", () => {
     });
 
     await act(async () => {
-      result.current.closeWorkspace();
+      await result.current.closeWorkspace();
     });
 
     expect(result.current.workspace).toBeNull();
@@ -2458,7 +2674,7 @@ describe("useTabs workspace teardown races", () => {
       const pending = run(result.current);
       // Let the operation pass its command and park on the deferred read.
       await new Promise((r) => setTimeout(r, 0));
-      result.current.closeWorkspace();
+      await result.current.closeWorkspace();
       deferred.release();
       await pending;
     });
@@ -2865,8 +3081,8 @@ describe("useTabs guards and no-ops", () => {
       await result.current.openFile("/p/a.md");
     });
 
-    act(() => {
-      result.current.closeTab("nope");
+    await act(async () => {
+      await result.current.closeTab("nope");
     });
 
     expect(result.current.tabs).toHaveLength(1);
@@ -2981,8 +3197,8 @@ describe("useTabs guards and no-ops", () => {
     });
     expect(writeFile).toHaveBeenCalledTimes(1);
 
-    act(() => {
-      result.current.closeTab(tabId);
+    await act(async () => {
+      await result.current.closeTab(tabId);
     });
     await act(async () => {
       await result.current.undoEdit(tabId);
@@ -3419,7 +3635,9 @@ describe("useTabs graph tabs", () => {
   it("closeWorkspace closes the graph tab", async () => {
     const result = await openWorkspace();
     act(() => result.current.openGraph());
-    act(() => result.current.closeWorkspace());
+    await act(async () => {
+      await result.current.closeWorkspace();
+    });
     expect(result.current.tabs).toHaveLength(0);
     expect(result.current.activeTabId).toBeNull();
   });
@@ -3428,7 +3646,9 @@ describe("useTabs graph tabs", () => {
     const result = await openWorkspace();
     act(() => result.current.openGraph());
     const graphId = result.current.activeTabId as string;
-    act(() => result.current.closeTab(graphId));
+    await act(async () => {
+      await result.current.closeTab(graphId);
+    });
     expect(result.current.tabs).toHaveLength(0);
     expect(result.current.workspace?.root).toBe("/p/ws");
   });

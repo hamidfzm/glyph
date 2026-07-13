@@ -57,5 +57,8 @@ vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     show: vi.fn(() => Promise.resolve()),
     setFocus: vi.fn(() => Promise.resolve()),
+    // Returns an unlisten fn, like the real API; the close guard registers here.
+    onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
+    close: vi.fn(() => Promise.resolve()),
   }),
 }));
