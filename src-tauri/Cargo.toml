@@ -18,27 +18,13 @@ tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-os = "2"
-tauri-plugin-cli = "2"
-tauri-plugin-window-state = "2"
 tauri-plugin-store = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 notify = "8"
 tauri-plugin-opener = "2.5.4"
 walkdir = "2.5.0"
-# Statically-linked libgit2 so end users don't need a system Git install.
-# `vendored-openssl` keeps SSH/HTTPS support self-contained too.
-git2 = { version = "0.20", default-features = false, features = ["vendored-libgit2", "vendored-openssl"] }
 thiserror = "2"
-# rustls (not native-tls) so release builds don't need OpenSSL system libs on
-# Linux. Default integrations include the panic handler we rely on.
-sentry = { version = "0.42", default-features = false, features = [
-    "backtrace",
-    "contexts",
-    "panic",
-    "reqwest",
-    "rustls",
-] }
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
@@ -50,3 +36,23 @@ tokio = { version = "1", features = ["macros", "rt"] }
 
 [target."cfg(any(target_os = \"linux\", target_os = \"windows\"))".dependencies]
 tauri-plugin-single-instance = "2"
+
+# Desktop-only dependencies. The plugins have no mobile equivalent (no CLI
+# args or OS window state there); git2's vendored OpenSSL and sentry don't
+# cross-compile for android/ios, and the features they power (workspace sync,
+# git repo detection, crash reporting) are desktop-only for now (see #79).
+[target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
+tauri-plugin-cli = "2"
+tauri-plugin-window-state = "2"
+# Statically-linked libgit2 so end users don't need a system Git install.
+# `vendored-openssl` keeps SSH/HTTPS support self-contained too.
+git2 = { version = "0.20", default-features = false, features = ["vendored-libgit2", "vendored-openssl"] }
+# rustls (not native-tls) so release builds don't need OpenSSL system libs on
+# Linux. Default integrations include the panic handler we rely on.
+sentry = { version = "0.42", default-features = false, features = [
+    "backtrace",
+    "contexts",
+    "panic",
+    "reqwest",
+    "rustls",
+] }

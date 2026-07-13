@@ -252,3 +252,42 @@ jobs:
           CODECOV_TOKEN: ${{ matrix.bundle_analysis && secrets.CODECOV_TOKEN || '' }}
         with:
           args: ${{ matrix.args }}
+
+  build-android:
+    name: Build (Android)
+    needs: [lint, typecheck, test-frontend, test-rust, clippy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install NDK
+        run: sdkmanager "ndk;29.0.14206865"
+      - run: pnpm install --frozen-lockfile
+      - name: Build Android APK (debug, aarch64)
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/29.0.14206865
+        run: pnpm tauri android build --debug --apk --target aarch64
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v5
+        with:
+          name: glyph-android-debug-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/universal/debug/*.apk
+          retention-days: 14

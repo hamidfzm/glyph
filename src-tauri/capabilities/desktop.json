@@ -1,0 +1,8 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/v2/crates/tauri-utils/schema/capability.json",
+  "identifier": "desktop",
+  "description": "Desktop-only capabilities for Glyph (plugins that don't exist on mobile)",
+  "platforms": ["macOS", "windows", "linux"],
+  "windows": ["main"],
+  "permissions": ["cli:default", "cli:allow-cli-matches", "window-state:default"]
+}

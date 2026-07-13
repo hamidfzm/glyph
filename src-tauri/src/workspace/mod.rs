@@ -17,4 +17,6 @@ pub mod config;
 mod paths;
 mod resolve;
 
+// Consumed only by the sync module, which is desktop-gated.
+#[cfg(desktop)]
 pub use config::{clear_sync_config, load_sync_config, store_sync_config};

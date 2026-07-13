@@ -7,11 +7,24 @@
 #![allow(dead_code, unused_imports)]
 
 mod backend;
+// The git backend (git2 + vendored OpenSSL) doesn't cross-compile for
+// android/ios, so everything that touches it is desktop-only; mobile gets
+// stub commands and an empty state so the command surface stays identical.
+#[cfg(desktop)]
+pub mod commands;
+#[cfg(mobile)]
+#[path = "commands_mobile.rs"]
 pub mod commands;
 mod config;
 mod error;
+#[cfg(desktop)]
 pub mod git;
+#[cfg(desktop)]
 mod ops;
+#[cfg(desktop)]
+mod state;
+#[cfg(mobile)]
+#[path = "state_mobile.rs"]
 mod state;
 
 pub use backend::{BackendKind, ConflictPolicy, StatusReport, SyncBackend, SyncResult};

@@ -33,6 +33,10 @@ vi.mock("@tauri-apps/plugin-os", () => ({
   locale: vi.fn(() => Promise.resolve("en-US")),
 }));
 
+vi.mock("@tauri-apps/plugin-fs", () => ({
+  readTextFile: vi.fn(() => Promise.resolve("")),
+}));
+
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
   save: vi.fn(),

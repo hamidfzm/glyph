@@ -3886,3 +3886,28 @@ describe("useTabs moveTab / moveActiveTab", () => {
     });
   });
 });
+
+describe("mobile file opening", () => {
+  it("reads picked files via the fs plugin and skips metadata and watch", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("android");
+    const { readTextFile } = await import("@tauri-apps/plugin-fs");
+    vi.mocked(readTextFile).mockResolvedValue("# from the picker");
+
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("content://com.provider/doc.md");
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+    expect(result.current.activeFile?.content).toBe("# from the picker");
+    expect(result.current.activeFile?.metadata).toBeNull();
+    expect(vi.mocked(readTextFile)).toHaveBeenCalledWith("content://com.provider/doc.md");
+    const commands = vi.mocked(invoke).mock.calls.map((c) => c[0]);
+    expect(commands).not.toContain("read_file");
+    expect(commands).not.toContain("get_file_metadata");
+    expect(commands).not.toContain("watch_file");
+  });
+});

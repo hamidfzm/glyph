@@ -41,6 +41,27 @@ describe("usePlatform", () => {
     });
   });
 
+  it("detects android platform", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("android");
+
+    const { result } = renderHook(() => usePlatform());
+    await waitFor(() => {
+      expect(result.current).toBe("android");
+    });
+    expect(document.documentElement.getAttribute("data-platform")).toBe("android");
+  });
+
+  it("detects ios platform", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("ios");
+
+    const { result } = renderHook(() => usePlatform());
+    await waitFor(() => {
+      expect(result.current).toBe("ios");
+    });
+  });
+
   it("maps unknown platforms to unknown", async () => {
     const { platform } = await import("@tauri-apps/plugin-os");
     vi.mocked(platform).mockReturnValue("freebsd" as ReturnType<typeof platform>);

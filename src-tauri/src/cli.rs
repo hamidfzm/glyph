@@ -1,3 +1,8 @@
+// Mobile has no CLI; the launch-plan half of this module is only called from
+// the desktop-gated setup block, while the classifiers stay in use by the
+// drag-drop and file-association handlers.
+#![cfg_attr(mobile, allow(dead_code))]
+
 use std::path::{Path, PathBuf};
 
 use crate::is_supported_file;

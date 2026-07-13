@@ -13,6 +13,9 @@
 //! All stored paths are workspace-relative and forward-slash normalized (see
 //! [`super::paths`]) so they stay valid across machines and on Windows.
 
+// The sync-facing helpers are only called from the desktop-gated sync module.
+#![cfg_attr(mobile, allow(dead_code))]
+
 use std::fs;
 use std::path::Path;
 
