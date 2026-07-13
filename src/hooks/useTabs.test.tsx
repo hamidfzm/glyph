@@ -649,6 +649,38 @@ describe("useTabs file operations", () => {
     expect(fileOf(result).content).toBe("EDITED");
   });
 
+  it("saveDocument is a no-op for a clean tab", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    // openEditable enters edit mode but makes no edit, so the tab stays clean.
+    const tabId = await openEditable(result);
+    expect(fileOf(result).dirty).toBe(false);
+
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("saveDocument is a no-op for an unknown or non-file tab id", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.saveDocument("does-not-exist");
+    });
+
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
   it("keeps the tab dirty when a newer edit lands during an in-flight write", async () => {
     let releaseWrite!: () => void;
     const writeGate = new Promise<void>((r) => {
