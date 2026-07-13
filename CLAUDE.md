@@ -23,7 +23,7 @@ The spec stays current throughout: acceptance-criteria and task checkboxes on th
 
 - **Plan before non-trivial work.** Anything beyond a one-line change starts from a spec (`/spec`) or an existing issue, not freeform edits.
 - **Ask, don't guess.** When acceptance criteria or scope are ambiguous, ask the user before writing code.
-- **Follow the rules in `.claude/rules/`**, which are authoritative for code organization, frontend, i18n, Rust, app-shell, docs, cleanup, CI hygiene, the worktree workflow, and Sentry issue fixes.
+- **Follow the rules in `.claude/rules/`**, which are authoritative for code organization, frontend, i18n, Rust, app-shell, docs, cleanup, CI hygiene, the worktree workflow, sibling repos (the glyph-md org), and Sentry issue fixes.
 - **Run the gates before every PR** (the same gate the Husky pre-commit hook and CI enforce):
   ```bash
   pnpm typecheck && pnpm check && pnpm test
@@ -87,24 +87,6 @@ Run the **Create Release** workflow from GitHub Actions (`create-release.yml`) w
 The release workflow builds all platforms and publishes to Homebrew, winget, Chocolatey, Scoop, AUR, PPA, the Debian apt repo, and the Fedora/RHEL dnf repo.
 
 Do **not** create releases manually with `gh release create` or push tags by hand. Use the workflow.
-
-## Sibling Repos (glyph-md org)
-
-The main repo is `hamidfzm/glyph`. Every satellite (Homebrew tap, Scoop bucket, apt/rpm repos, plugin marketplace, plugin template, export-website action, org profile, and the `glyph-md.github.io` website) lives in the **glyph-md** GitHub org. Clone them all into a `glyph-md/` directory **adjacent to this repo** (i.e. `../glyph-md/<repo>` relative to the `glyph` checkout, not inside a worktree or a temp dir) and make cross-repo changes there so the working copies persist between sessions.
-
-Clone/refresh them with:
-
-```bash
-mkdir -p ../glyph-md && cd ../glyph-md
-TOKEN=$(gh auth token)
-for r in $(gh repo list glyph-md --limit 100 --json name -q '.[].name'); do
-  [ -d "$r/.git" ] && (cd "$r" && git pull --ff-only) && continue
-  git clone "https://x-access-token:${TOKEN}@github.com/glyph-md/$r.git" "$r"
-  git -C "$r" remote set-url origin "git@github.com:glyph-md/$r.git"  # scrub token; push over SSH
-done
-```
-
-SSH auth isn't loaded in the Bash tool, so clone over HTTPS with the gh token, then reset `origin` to the SSH URL for pushing (SSH works from PowerShell). Never commit a remote URL with the token baked in.
 
 ## Key Files
 
