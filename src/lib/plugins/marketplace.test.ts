@@ -1,7 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PLUGIN_API_VERSION } from "./apiVersion";
-import { fetchRegistry, findUpdates, installFromRegistry, type RegistryEntry } from "./marketplace";
+import {
+  fetchRegistry,
+  filterRegistry,
+  findUpdates,
+  installFromRegistry,
+  type RegistryEntry,
+  registryReadmeUrl,
+} from "./marketplace";
 
 // Fixed package bytes for install tests, with their real SHA-256 (hex of
 // the four bytes 1,2,3,4). Zip parsing happens in Rust, so the frontend
@@ -95,5 +102,40 @@ describe("installFromRegistry", () => {
 
     await expect(installFromRegistry(entry())).rejects.toThrow(/checksum mismatch/);
     expect(vi.mocked(invoke)).not.toHaveBeenCalled();
+  });
+});
+
+describe("filterRegistry", () => {
+  const entries = [
+    entry({ id: "a.theme", name: "Nord Theme", category: "themes" }),
+    entry({
+      id: "b.dict",
+      name: "Dictionary",
+      category: "language",
+      keywords: ["farsi", "spellcheck"],
+    }),
+  ];
+
+  it("returns everything for an empty query and no category", () => {
+    expect(filterRegistry(entries, "", "")).toHaveLength(2);
+  });
+
+  it("matches name, id, and keywords case-insensitively", () => {
+    expect(filterRegistry(entries, "NORD", "").map((e) => e.id)).toEqual(["a.theme"]);
+    expect(filterRegistry(entries, "b.dict", "").map((e) => e.id)).toEqual(["b.dict"]);
+    expect(filterRegistry(entries, "FARSI", "").map((e) => e.id)).toEqual(["b.dict"]);
+  });
+
+  it("restricts to a category, combined with the query", () => {
+    expect(filterRegistry(entries, "", "language").map((e) => e.id)).toEqual(["b.dict"]);
+    expect(filterRegistry(entries, "nord", "language")).toHaveLength(0);
+  });
+});
+
+describe("registryReadmeUrl", () => {
+  it("points at the plugin's registry folder README", () => {
+    expect(registryReadmeUrl("com.x.demo")).toBe(
+      "https://raw.githubusercontent.com/glyph-md/plugins/main/plugins/com.x.demo/README.md",
+    );
   });
 });

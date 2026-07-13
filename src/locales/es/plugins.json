@@ -15,5 +15,21 @@
   "consentPermissions": "Solicita:",
   "permissionsLabel": "Permisos",
   "permissionsNone": "Ninguno",
-  "sandboxBadge": "Aislado"
+  "sandboxBadge": "Aislado",
+  "searchPlaceholder": "Buscar complementos…",
+  "categoryLabel": "Categoría",
+  "categoryAll": "Todos",
+  "categories": {
+    "themes": "Temas",
+    "markdown": "Markdown",
+    "exporters": "Exportación",
+    "tools": "Herramientas",
+    "integrations": "Integraciones",
+    "language": "Idioma",
+    "ai": "IA"
+  },
+  "officialBadge": "Oficial",
+  "back": "Atrás",
+  "detailsLoading": "Cargando…",
+  "detailsError": "No se pudieron cargar los detalles del complemento."
 }

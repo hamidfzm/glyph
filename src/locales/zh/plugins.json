@@ -15,5 +15,21 @@
   "consentPermissions": "它请求：",
   "permissionsLabel": "权限",
   "permissionsNone": "无",
-  "sandboxBadge": "沙盒"
+  "sandboxBadge": "沙盒",
+  "searchPlaceholder": "搜索插件…",
+  "categoryLabel": "分类",
+  "categoryAll": "全部",
+  "categories": {
+    "themes": "主题",
+    "markdown": "Markdown",
+    "exporters": "导出",
+    "tools": "工具",
+    "integrations": "集成",
+    "language": "语言",
+    "ai": "AI"
+  },
+  "officialBadge": "官方",
+  "back": "返回",
+  "detailsLoading": "加载中…",
+  "detailsError": "无法加载插件详情。"
 }
