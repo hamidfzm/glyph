@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
+import { PluginMarketplace } from "./PluginMarketplace";
 import { PluginMountSlot } from "./PluginMountSlot";
 import { PluginPermissionsLine } from "./PluginPermissionsLine";
 
@@ -39,8 +40,6 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
   if (!plugins) return null;
 
   const updatesById = new Map(plugins.updates.map((u) => [u.entry.id, u.entry]));
-  const installedIds = new Set(plugins.installed.map((p) => p.id));
-  const available = plugins.registry.filter((e) => !installedIds.has(e.id));
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: Escape is handled globally above.
@@ -121,36 +120,7 @@ export function PluginsModal({ onClose }: { onClose: () => void }) {
             })
           )}
 
-          <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] mt-5 mb-1">
-            {t("availableHeading")}
-          </h3>
-          {available.length === 0 ? (
-            <p className="text-sm text-[var(--color-text-secondary)] py-2">{t("noAvailable")}</p>
-          ) : (
-            available.map((e) => (
-              <div key={e.id} className={rowClass}>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-[var(--color-text-primary)]">
-                    {e.name}{" "}
-                    <span className="text-[var(--color-text-secondary)]">v{e.version}</span>
-                  </div>
-                  {e.description && (
-                    <div className="text-xs text-[var(--color-text-secondary)] truncate">
-                      {e.description}
-                    </div>
-                  )}
-                  <PluginPermissionsLine permissions={e.permissions} sandbox={e.sandbox} />
-                </div>
-                <button
-                  type="button"
-                  className={btnClass}
-                  onClick={() => void plugins.installFromRegistry(e)}
-                >
-                  {t("install")}
-                </button>
-              </div>
-            ))
-          )}
+          <PluginMarketplace />
         </div>
       </div>
     </div>

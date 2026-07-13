@@ -15,5 +15,21 @@
   "consentPermissions": "It requests:",
   "permissionsLabel": "Permissions",
   "permissionsNone": "None",
-  "sandboxBadge": "Sandboxed"
+  "sandboxBadge": "Sandboxed",
+  "searchPlaceholder": "Search plugins…",
+  "categoryLabel": "Category",
+  "categoryAll": "All",
+  "categories": {
+    "themes": "Themes",
+    "markdown": "Markdown",
+    "exporters": "Exporters",
+    "tools": "Tools",
+    "integrations": "Integrations",
+    "language": "Language",
+    "ai": "AI"
+  },
+  "officialBadge": "Official",
+  "back": "Back",
+  "detailsLoading": "Loading…",
+  "detailsError": "Could not load the plugin details."
 }

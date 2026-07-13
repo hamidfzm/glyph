@@ -1,11 +1,51 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { InstalledPlugin } from "./types";
 
-// The marketplace is a single static JSON file maintained in the glyph-md org.
-// The app reads it to discover plugins and detect new versions; plugin code
-// itself lives in each plugin's own repo (referenced by `packageUrl`).
-// ponytail: hardcoded URL; make it a setting if users ever want a custom registry.
+// The marketplace index is generated from per-plugin registrations in the
+// glyph-md/plugins repo. The app reads it to discover plugins and detect new
+// versions; plugin code itself lives in each plugin's own repo (referenced by
+// `packageUrl`), and each plugin's README (its details page) sits next to its
+// registration.
+// ponytail: hardcoded URLs; make them a setting if users ever want a custom registry.
 export const REGISTRY_URL = "https://raw.githubusercontent.com/glyph-md/plugins/main/index.json";
+
+/** URL of a plugin's registry README, shown in the marketplace details view. */
+export function registryReadmeUrl(id: string): string {
+  return `https://raw.githubusercontent.com/glyph-md/plugins/main/plugins/${id}/README.md`;
+}
+
+/** The marketplace categories, in display order. Mirrors the registry schema enum. */
+export const REGISTRY_CATEGORIES = [
+  "themes",
+  "markdown",
+  "exporters",
+  "tools",
+  "integrations",
+  "language",
+  "ai",
+] as const;
+
+export type RegistryCategory = (typeof REGISTRY_CATEGORIES)[number];
+
+/**
+ * Case-insensitive marketplace filter: a category (or "" for all) plus a free
+ * text query matched against name, description, id, and keywords.
+ */
+export function filterRegistry(
+  entries: readonly RegistryEntry[],
+  query: string,
+  category: string,
+): RegistryEntry[] {
+  const needle = query.trim().toLowerCase();
+  return entries.filter((e) => {
+    if (category && e.category !== category) return false;
+    if (!needle) return true;
+    const haystack = [e.name, e.description ?? "", e.id, ...(e.keywords ?? [])]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(needle);
+  });
+}
 
 /** One marketplace entry. Carries everything the app needs to install + version-check. */
 export interface RegistryEntry {
@@ -30,6 +70,12 @@ export interface RegistryEntry {
   sha256: string;
   /** Run isolated in a worker; see the manifest `sandbox` flag. */
   sandbox?: boolean;
+  /** Marketplace section, one of {@link REGISTRY_CATEGORIES}. */
+  category?: string;
+  /** Extra search terms matched by the marketplace search. */
+  keywords?: string[];
+  /** Maintained in the marketplace repo; shown with an Official badge. */
+  official?: boolean;
 }
 
 /** Hex SHA-256 of raw bytes, via WebCrypto (available in the webview and Node). */

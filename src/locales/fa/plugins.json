@@ -15,5 +15,21 @@
   "consentPermissions": "درخواست می‌کند:",
   "permissionsLabel": "دسترسی‌ها",
   "permissionsNone": "ندارد",
-  "sandboxBadge": "ایزوله"
+  "sandboxBadge": "ایزوله",
+  "searchPlaceholder": "جستجوی افزونه‌ها…",
+  "categoryLabel": "دسته‌بندی",
+  "categoryAll": "همه",
+  "categories": {
+    "themes": "پوسته‌ها",
+    "markdown": "مارک‌داون",
+    "exporters": "خروجی‌گیری",
+    "tools": "ابزارها",
+    "integrations": "یکپارچه‌سازی‌ها",
+    "language": "زبان",
+    "ai": "هوش مصنوعی"
+  },
+  "officialBadge": "رسمی",
+  "back": "بازگشت",
+  "detailsLoading": "در حال بارگذاری…",
+  "detailsError": "جزئیات افزونه بارگذاری نشد."
 }

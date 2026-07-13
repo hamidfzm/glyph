@@ -15,5 +15,21 @@
   "consentPermissions": "Es fordert an:",
   "permissionsLabel": "Berechtigungen",
   "permissionsNone": "Keine",
-  "sandboxBadge": "Sandbox"
+  "sandboxBadge": "Sandbox",
+  "searchPlaceholder": "Plugins durchsuchen…",
+  "categoryLabel": "Kategorie",
+  "categoryAll": "Alle",
+  "categories": {
+    "themes": "Themes",
+    "markdown": "Markdown",
+    "exporters": "Export",
+    "tools": "Werkzeuge",
+    "integrations": "Integrationen",
+    "language": "Sprache",
+    "ai": "KI"
+  },
+  "officialBadge": "Offiziell",
+  "back": "Zurück",
+  "detailsLoading": "Wird geladen…",
+  "detailsError": "Die Plugin-Details konnten nicht geladen werden."
 }
