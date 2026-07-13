@@ -259,7 +259,7 @@ export function AppShell() {
   const showContent =
     !!activeTab &&
     (activeTab.kind === "graph" ||
-      !!activeFile?.content ||
+      activeFile?.content != null ||
       (!!activeFile && isImageFile(activeFile.path)));
 
   return (
