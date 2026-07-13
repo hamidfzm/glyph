@@ -200,6 +200,41 @@ export function useTabs(options: UseTabsOptions) {
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
+  // The single close coordinator. Defined up here so every destructive
+  // lifecycle path (tab close, workspace close/replace, window close) flushes
+  // through it. It reaches saveDocument via a ref because that lives further
+  // down; the ref is reassigned each render below.
+  const saveDocumentRef = useRef<(id: string) => Promise<boolean>>(() => Promise.resolve(true));
+
+  const flushForClose = useCallback(
+    async (ids?: Iterable<string>): Promise<boolean> => {
+      const scope = ids ? new Set(ids) : null;
+      const dirty = stateRef.current.tabs.filter(
+        (tab): tab is FileTab =>
+          tab.kind === "file" && tab.file.dirty && (!scope || scope.has(tab.id)),
+      );
+      if (dirty.length === 0) return true;
+
+      // Flush every dirty document and wait for the writes to settle. Each save
+      // reports its own success, so a failed write can't be missed by a
+      // dirty-flag read that hasn't re-rendered yet.
+      const saved = await Promise.all(dirty.map((tab) => saveDocumentRef.current(tab.id)));
+      const unsaved = dirty.filter((_, i) => !saved[i]);
+      if (unsaved.length === 0) return true;
+
+      // Some documents couldn't be saved; closing now would drop those edits,
+      // so confirm an explicit discard.
+      const files = unsaved.map((tab) => `• ${basename(tab.file.path)}`).join("\n");
+      return ask(t("unsavedChanges.message", { files }), {
+        title: t("unsavedChanges.title"),
+        kind: "warning",
+        okLabel: t("unsavedChanges.discard"),
+        cancelLabel: t("unsavedChanges.cancel"),
+      });
+    },
+    [t],
+  );
+
   const { tabs, activeTabId } = state;
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
   const activeFile = activeFileOf(activeTab);
@@ -363,16 +398,21 @@ export function useTabs(options: UseTabsOptions) {
 
   // Close the window's workspace: stop watching it, close its tabs, drop the
   // tree + indexes. Loose file tabs stay open.
-  const closeWorkspace = useCallback(() => {
+  const closeWorkspace = useCallback(async () => {
     const ws = workspaceRef.current;
     if (!ws) return;
+    // Protect every dirty document in the workspace before tearing it down.
+    const ids = stateRef.current.tabs
+      .filter((t) => t.kind === "file" && isInWorkspace(t.file.path, ws.root))
+      .map((t) => t.id);
+    if (!(await flushForClose(ids))) return;
     invoke("unwatch_directory", { path: ws.root }).catch(() => {});
     closeWorkspaceTabs(ws.root);
     workspaceRef.current = null;
     setWorkspace(null);
     setWorkspaceFiles([]);
     setWikilinkRefs([]);
-  }, [closeWorkspaceTabs]);
+  }, [closeWorkspaceTabs, flushForClose]);
 
   // Guards concurrent openFolder calls for the same root (StrictMode double
   // mount, rapid re-invocation) so the folder is only watched/loaded once.
@@ -441,9 +481,15 @@ export function useTabs(options: UseTabsOptions) {
       folderOpenInFlight.current = resolvedRoot;
       try {
         // One workspace per window: switching folders replaces the current
-        // one and closes its tabs (loose external files stay).
+        // one and closes its tabs (loose external files stay). Flush the
+        // outgoing workspace's dirty tabs first; a cancelled discard aborts the
+        // switch and keeps the current workspace open.
         const previous = workspaceRef.current;
         if (previous) {
+          const ids = stateRef.current.tabs
+            .filter((t) => t.kind === "file" && isInWorkspace(t.file.path, previous.root))
+            .map((t) => t.id);
+          if (!(await flushForClose(ids))) return;
           invoke("unwatch_directory", { path: previous.root }).catch(() => {});
           closeWorkspaceTabs(previous.root);
         }
@@ -486,7 +532,14 @@ export function useTabs(options: UseTabsOptions) {
         folderOpenInFlight.current = null;
       }
     },
-    [closeWorkspaceTabs, loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, openFile],
+    [
+      closeWorkspaceTabs,
+      flushForClose,
+      loadDirectory,
+      loadWikilinkRefs,
+      loadWorkspaceFiles,
+      openFile,
+    ],
   );
 
   // Open (or re-activate) the graph view of the workspace. The optional root
@@ -747,18 +800,23 @@ export function useTabs(options: UseTabsOptions) {
     [loadDirectory, t],
   );
 
-  const closeTab = useCallback((id: string) => {
-    setState((prev) => {
-      const tab = prev.tabs.find((t) => t.id === id);
-      if (!tab) return prev;
-      if (tab.kind === "file") {
-        invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
-      }
-      scrollRefsMap.current.delete(id);
-      editHistory.current.delete(id);
-      return removeTabs(prev, new Set([id]));
-    });
-  }, []);
+  const closeTab = useCallback(
+    async (id: string) => {
+      // Flush (and confirm on failure) before discarding the tab's state.
+      if (!(await flushForClose([id]))) return;
+      setState((prev) => {
+        const tab = prev.tabs.find((t) => t.id === id);
+        if (!tab) return prev;
+        if (tab.kind === "file") {
+          invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
+        }
+        scrollRefsMap.current.delete(id);
+        editHistory.current.delete(id);
+        return removeTabs(prev, new Set([id]));
+      });
+    },
+    [flushForClose],
+  );
 
   // Reorder the tab strip: move tab `id` to `toIndex` (clamped to the strip).
   // Only the array order changes; the active tab and every tab's state are
@@ -862,23 +920,26 @@ export function useTabs(options: UseTabsOptions) {
   // Persist one dirty editable tab. Safe to call for any tab id: skips graph,
   // clean, and still-loading tabs. The write is serialized per path, and the
   // dirty flag is cleared only when the written revision is still current, so a
-  // slow write completing after a newer edit never strands that edit.
+  // slow write completing after a newer edit never strands that edit. Resolves
+  // true when the document is safely on disk (or there was nothing to save),
+  // false when the write failed — the close coordinator reads this directly
+  // rather than re-checking dirty state, which may not have re-rendered yet.
   const saveDocument = useCallback(
-    (id: string): Promise<void> => {
+    (id: string): Promise<boolean> => {
       const tab = stateRef.current.tabs.find((t) => t.id === id);
-      if (tab?.kind !== "file") return Promise.resolve();
+      if (tab?.kind !== "file") return Promise.resolve(true);
       const file = tab.file;
-      if (!file.dirty) return Promise.resolve();
+      if (!file.dirty) return Promise.resolve(true);
       // editContent is the edit buffer, always set once a tab is dirty; the null
       // check only narrows the type for the write below ("" stays valid, since a
       // fully-deleted document must still save, see #432).
       /* v8 ignore start -- unreachable: a dirty tab always has an edit buffer */
-      if (file.editContent == null) return Promise.resolve();
+      if (file.editContent == null) return Promise.resolve(true);
       /* v8 ignore stop */
       const { path, editContent: content, revision } = file;
 
       const prev = writeChains.current.get(path) ?? Promise.resolve();
-      const run = prev.then(async () => {
+      const run = prev.then(async (): Promise<boolean> => {
         try {
           await invoke("write_file", { path, content });
           selfSaveTimes.current.set(path, Date.now());
@@ -889,6 +950,7 @@ export function useTabs(options: UseTabsOptions) {
             // flight, so the newer revision is saved on its own timer.
             dirty: f.revision !== revision,
           }));
+          return true;
         } catch (err) {
           console.error("Auto-save failed:", err);
           // Leave the tab dirty (it retries on the next edit or shutdown flush)
@@ -897,6 +959,7 @@ export function useTabs(options: UseTabsOptions) {
             { key: "notice.saveFailed", values: { name: basename(path) } },
             { persistent: true },
           );
+          return false;
         }
       });
       // Keep the chain intact even if this write threw, so ordering holds.
@@ -908,6 +971,8 @@ export function useTabs(options: UseTabsOptions) {
     },
     [updateActiveFile],
   );
+  // Let the close coordinator (defined above) flush through this saveDocument.
+  saveDocumentRef.current = saveDocument;
 
   // Apply a programmatic edit. In view mode writes straight to disk (with the
   // self-save grace so the file-watcher doesn't re-enter); in edit/split mode
@@ -1257,6 +1322,7 @@ export function useTabs(options: UseTabsOptions) {
     expandAll,
     deletePath,
     closeTab,
+    flushForClose,
     setActiveTab,
     moveTab,
     moveActiveTab,

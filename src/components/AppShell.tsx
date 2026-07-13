@@ -23,6 +23,7 @@ import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
 import { useTabReorderShortcuts } from "@/hooks/useTabReorderShortcuts";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
+import { useWindowClose } from "@/hooks/useWindowClose";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
 import { aiDocContext } from "@/lib/aiPrompts";
 import { openDocumentation, openReleaseNotes, openReportIssue } from "@/lib/helpLinks";
@@ -86,6 +87,7 @@ export function AppShell() {
     closeTab,
     setTabMode,
     saveDocument,
+    flushForClose,
     undoEdit,
     redoEdit,
     moveActiveTab,
@@ -112,6 +114,10 @@ export function AppShell() {
     [openTabs],
   );
   useAutoSave({ documents: dirtyDocuments, save: saveDocument });
+
+  // Intercept native window close / app exit: flush every dirty tab (and
+  // confirm on failure) before the window is allowed to close.
+  useWindowClose(flushForClose);
 
   const aiController = useAIController(
     settings.ai,

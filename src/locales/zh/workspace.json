@@ -10,5 +10,11 @@
   "confirmDelete": {
     "message": "删除 \"{{name}}\"？此操作无法撤销。",
     "title": "删除"
+  },
+  "unsavedChanges": {
+    "title": "未保存的更改",
+    "message": "这些更改无法保存：\n{{files}}\n\n仍要关闭并放弃它们吗？",
+    "discard": "放弃并关闭",
+    "cancel": "取消"
   }
 }

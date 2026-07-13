@@ -103,6 +103,7 @@ function buildTabsContext(opts: RenderOpts): TabsContextValue {
     setTabMode: vi.fn(),
     updateEditContent: vi.fn(),
     saveDocument: vi.fn(),
+    flushForClose: vi.fn(),
     toggleTask: vi.fn(),
     saveScrollPosition: vi.fn(),
     openFileDialog: vi.fn(),

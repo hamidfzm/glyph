@@ -10,5 +10,11 @@
   "confirmDelete": {
     "message": "Delete \"{{name}}\"? This can't be undone.",
     "title": "Delete"
+  },
+  "unsavedChanges": {
+    "title": "Unsaved changes",
+    "message": "These changes couldn't be saved:\n{{files}}\n\nClose anyway and discard them?",
+    "discard": "Discard & Close",
+    "cancel": "Cancel"
   }
 }

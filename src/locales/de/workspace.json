@@ -10,5 +10,11 @@
   "confirmDelete": {
     "message": "\"{{name}}\" löschen? Das kann nicht rückgängig gemacht werden.",
     "title": "Löschen"
+  },
+  "unsavedChanges": {
+    "title": "Ungespeicherte Änderungen",
+    "message": "Diese Änderungen konnten nicht gespeichert werden:\n{{files}}\n\nTrotzdem schließen und verwerfen?",
+    "discard": "Verwerfen & schließen",
+    "cancel": "Abbrechen"
   }
 }
