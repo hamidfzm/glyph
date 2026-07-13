@@ -868,9 +868,13 @@ export function useTabs(options: UseTabsOptions) {
       const tab = stateRef.current.tabs.find((t) => t.id === id);
       if (tab?.kind !== "file") return Promise.resolve();
       const file = tab.file;
-      // editContent is the edit buffer; null means still loading, "" is valid
-      // (a fully-deleted document must still save — see #432).
-      if (!file.dirty || file.editContent == null) return Promise.resolve();
+      if (!file.dirty) return Promise.resolve();
+      // editContent is the edit buffer, always set once a tab is dirty; the null
+      // check only narrows the type for the write below ("" stays valid, since a
+      // fully-deleted document must still save, see #432).
+      /* v8 ignore start -- unreachable: a dirty tab always has an edit buffer */
+      if (file.editContent == null) return Promise.resolve();
+      /* v8 ignore stop */
       const { path, editContent: content, revision } = file;
 
       const prev = writeChains.current.get(path) ?? Promise.resolve();
