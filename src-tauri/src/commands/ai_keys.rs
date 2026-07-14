@@ -125,6 +125,26 @@ mod tests {
     }
 
     #[test]
+    fn read_and_write_failures_map_to_prefixed_errors() {
+        use_mock_store();
+        let entry = entry_for("claude").unwrap();
+        let mock: &keyring::mock::MockCredential = entry.get_credential().downcast_ref().unwrap();
+
+        mock.set_error(keyring::Error::Invalid("mock".into(), "read boom".into()));
+        let err = read_entry(&entry).unwrap_err();
+        assert!(err.starts_with("keychain read failed:"));
+
+        mock.set_error(keyring::Error::Invalid("mock".into(), "write boom".into()));
+        let err = write_entry(&entry, "sk-x").unwrap_err();
+        assert!(err.starts_with("keychain write failed:"));
+        assert!(!err.contains("sk-x"));
+
+        mock.set_error(keyring::Error::Invalid("mock".into(), "delete boom".into()));
+        let err = write_entry(&entry, "").unwrap_err();
+        assert!(err.starts_with("keychain delete failed:"));
+    }
+
+    #[test]
     fn error_strings_never_contain_the_secret() {
         use_mock_store();
         let entry = entry_for("claude").unwrap();

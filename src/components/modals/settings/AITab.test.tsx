@@ -101,6 +101,27 @@ describe("AITab", () => {
     }
   });
 
+  it("restarts the keychain debounce while typing, saving only the final value", async () => {
+    vi.useFakeTimers();
+    try {
+      setup(withAI({ provider: "claude" }));
+      const input = screen.getByPlaceholderText("sk-ant-...");
+
+      fireEvent.change(input, { target: { value: "sk-a" } });
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+      fireEvent.change(input, { target: { value: "sk-ab" } });
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+      });
+
+      expect(setAiKeyMock).toHaveBeenCalledExactlyOnceWith("claude", "sk-ab");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("shows an actionable error when the keychain write fails", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     setAiKeyMock.mockRejectedValue(new Error("keyring locked"));

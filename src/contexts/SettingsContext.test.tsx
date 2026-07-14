@@ -626,6 +626,55 @@ describe("SettingsProvider", () => {
       errSpy.mockRestore();
     });
 
+    it("logs when removing the migrated plaintext copy from the store fails", async () => {
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      mockStore({ ai: { apiKeys: { claude: "sk-legacy" } } }, { setRejects: true });
+      mockKeychain();
+
+      render(
+        <SettingsProvider>
+          <TestConsumer />
+        </SettingsProvider>,
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId("loaded").textContent).toBe("true");
+      });
+
+      expect(errSpy).toHaveBeenCalledWith(
+        "Failed to remove migrated API keys from settings.json:",
+        expect.any(Error),
+      );
+      errSpy.mockRestore();
+    });
+
+    it("logs when clearing a keychain entry on reset fails", async () => {
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      mockStore(null);
+      vi.mocked(invoke).mockImplementation(async (cmd) => {
+        if (cmd === "ai_key_set") throw new Error("keyring locked");
+        return null;
+      });
+
+      render(
+        <SettingsProvider>
+          <TestConsumer />
+        </SettingsProvider>,
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId("loaded").textContent).toBe("true");
+      });
+
+      act(() => screen.getByTestId("reset").click());
+
+      await waitFor(() => {
+        expect(errSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Failed to clear the"),
+          expect.any(Error),
+        );
+      });
+      errSpy.mockRestore();
+    });
+
     it("strips API keys from every persisted settings write", async () => {
       const { set } = mockStore(null);
       mockKeychain();
