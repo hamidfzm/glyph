@@ -360,6 +360,27 @@ mod tests {
     }
 
     #[test]
+    fn revoke_tolerates_missing_paths_and_a_poisoned_lock() {
+        let tmp = TempDir::new().unwrap();
+        let grants = GrantRegistry::default();
+        grants.grant_workspace(tmp.path()).unwrap();
+
+        // A path that no longer exists cannot canonicalize; revoke is a no-op.
+        grants.revoke_workspace(&tmp.path().join("never-existed"));
+        assert!(grants.ensure_workspace(&as_str(tmp.path())).is_ok());
+
+        // Poison the mutex by panicking while holding it: revoke must not
+        // panic, and validators surface the lock error instead of allowing.
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = grants.inner.lock().unwrap();
+            panic!("poison");
+        }));
+        grants.revoke_workspace(tmp.path());
+        let err = grants.ensure_readable(&as_str(tmp.path())).unwrap_err();
+        assert!(err.contains("Lock error"));
+    }
+
+    #[test]
     fn loose_file_grant_is_exact_and_read_write() {
         let tmp = TempDir::new().unwrap();
         let file = tmp.path().join("open.md");
@@ -462,8 +483,13 @@ mod tests {
                         { "kind": "folder", "path": ws.to_string_lossy(), "expanded": [] },
                         { "kind": "file", "path": loose.to_string_lossy() },
                         { "kind": "graph", "path": ws.to_string_lossy() },
+                        // Degenerate entries are skipped: no path, and a kind
+                        // this version doesn't know.
+                        { "kind": "file" },
+                        { "kind": "hologram", "path": loose.to_string_lossy() },
                     ],
-                    "recentFiles": [recent.to_string_lossy(), gone.to_string_lossy()],
+                    // The non-string entry is skipped too.
+                    "recentFiles": [recent.to_string_lossy(), gone.to_string_lossy(), 42],
                 }
             }
         })
