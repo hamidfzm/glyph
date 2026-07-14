@@ -1,10 +1,10 @@
 //! Process-lifetime state for the sync subsystem: per-workspace
 //! credentials.
 //!
-//! Sync *config* now lives in the workspace's committed `.glyph/config.json`
-//! (see [`crate::workspace`]) — `build_backend` reads it from there. Only
-//! tokens remain in memory; the OS-keychain PR will replace that storage
-//! while keeping the lookup API identical.
+//! Sync *config* lives in the workspace's committed `.glyph/config.json`
+//! (see [`crate::workspace`]) and `build_backend` reads it from there. Tokens
+//! persist in the OS keychain through [`crate::secrets`], with an in-memory
+//! copy as the fast path and the fallback when the keychain is unavailable.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -14,11 +14,16 @@ use super::config::WorkspaceSyncConfig;
 use super::error::SyncError;
 use super::git::GitBackend;
 
+/// Keychain account for a workspace's sync token.
+fn keychain_account(workspace_path: &str) -> String {
+    format!("sync-token-{workspace_path}")
+}
+
 #[derive(Default)]
 pub struct SyncState {
-    /// Per-workspace HTTPS PAT / token. Memory only — wiped on app
-    /// restart. The OS-keychain PR will replace this storage while
-    /// keeping the lookup API identical.
+    /// Per-workspace HTTPS PAT / token. The keychain is the durable store;
+    /// this map serves reads and keeps tokens usable when the keychain is
+    /// locked or missing (session-only in that case).
     tokens: Mutex<HashMap<String, String>>,
 }
 
@@ -28,14 +33,31 @@ impl SyncState {
     }
 
     pub fn set_token(&self, workspace_path: String, token: String) {
+        // Keychain write is best-effort: a locked keyring degrades to the
+        // pre-existing session-only behavior instead of failing the command.
+        if let Err(e) = crate::secrets::set(&keychain_account(&workspace_path), &token) {
+            eprintln!("sync: failed to store the token in the keychain: {e}");
+        }
         self.tokens.lock().unwrap().insert(workspace_path, token);
     }
 
     pub fn get_token(&self, workspace_path: &str) -> Option<String> {
-        self.tokens.lock().unwrap().get(workspace_path).cloned()
+        if let Some(token) = self.tokens.lock().unwrap().get(workspace_path).cloned() {
+            return Some(token);
+        }
+        // Miss: hydrate from the keychain (first lookup after an app restart).
+        let token = crate::secrets::get(&keychain_account(workspace_path)).ok()??;
+        self.tokens
+            .lock()
+            .unwrap()
+            .insert(workspace_path.to_string(), token.clone());
+        Some(token)
     }
 
     pub fn clear_token(&self, workspace_path: &str) {
+        if let Err(e) = crate::secrets::set(&keychain_account(workspace_path), "") {
+            eprintln!("sync: failed to clear the token from the keychain: {e}");
+        }
         self.tokens.lock().unwrap().remove(workspace_path);
     }
 
@@ -88,6 +110,7 @@ mod tests {
 
     #[test]
     fn tokens_are_stored_separately_per_workspace() {
+        let _guard = crate::secrets::test_store::install();
         let state = SyncState::new();
         state.set_token("/a".into(), "token-a".into());
         state.set_token("/b".into(), "token-b".into());
@@ -96,6 +119,48 @@ mod tests {
         state.clear_token("/a");
         assert!(state.get_token("/a").is_none());
         assert_eq!(state.get_token("/b").as_deref(), Some("token-b"));
+    }
+
+    #[test]
+    fn tokens_survive_a_restart_via_the_keychain() {
+        let _guard = crate::secrets::test_store::install();
+        let state = SyncState::new();
+        state.set_token("/restart".into(), "tok-persisted".into());
+
+        // A fresh SyncState models an app restart: the memory map is empty,
+        // so the first lookup hydrates from the keychain.
+        let fresh = SyncState::new();
+        assert_eq!(
+            fresh.get_token("/restart").as_deref(),
+            Some("tok-persisted")
+        );
+        // And the hydrated copy serves subsequent reads from memory.
+        assert_eq!(
+            fresh.get_token("/restart").as_deref(),
+            Some("tok-persisted")
+        );
+
+        // Clearing removes the durable copy too; the next restart sees nothing.
+        fresh.clear_token("/restart");
+        assert!(SyncState::new().get_token("/restart").is_none());
+    }
+
+    #[test]
+    fn a_locked_keychain_degrades_to_session_only_tokens() {
+        let _guard = crate::secrets::test_store::install();
+        let account = keychain_account("/locked");
+        crate::secrets::test_store::set_error(&account, "keyring locked");
+
+        let state = SyncState::new();
+        state.set_token("/locked".into(), "tok-memory".into());
+        // The write failed but the token still works for this session.
+        assert_eq!(state.get_token("/locked").as_deref(), Some("tok-memory"));
+        // A restart loses it, and the keychain read error maps to a miss.
+        assert!(SyncState::new().get_token("/locked").is_none());
+
+        state.clear_token("/locked");
+        assert!(state.get_token("/locked").is_none());
+        crate::secrets::test_store::clear_error(&account);
     }
 
     #[test]

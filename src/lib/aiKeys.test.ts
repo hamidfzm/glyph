@@ -7,26 +7,24 @@ describe("aiKeys", () => {
     vi.mocked(invoke).mockReset();
   });
 
-  it("getAiKey maps a missing key (null) to the empty string", async () => {
+  it("getAiKey reads the provider's namespaced secret", async () => {
     vi.mocked(invoke).mockResolvedValueOnce(null);
     expect(await getAiKey("claude")).toBe("");
-    expect(invoke).toHaveBeenCalledWith("ai_key_get", { provider: "claude" });
+    expect(invoke).toHaveBeenCalledWith("secret_get", { name: "ai-api-key-claude" });
   });
 
-  it("getAiKey returns the stored value", async () => {
-    vi.mocked(invoke).mockResolvedValueOnce("sk-live");
-    expect(await getAiKey("openai")).toBe("sk-live");
-  });
-
-  it("setAiKey forwards provider and value", async () => {
+  it("setAiKey writes the provider's namespaced secret", async () => {
     vi.mocked(invoke).mockResolvedValueOnce(undefined);
-    await setAiKey("claude", "sk-new");
-    expect(invoke).toHaveBeenCalledWith("ai_key_set", { provider: "claude", value: "sk-new" });
+    await setAiKey("openai", "sk-new");
+    expect(invoke).toHaveBeenCalledWith("secret_set", {
+      name: "ai-api-key-openai",
+      value: "sk-new",
+    });
   });
 
   it("loadAiKeys collects stored keys and skips empty ones", async () => {
     vi.mocked(invoke).mockImplementation(async (_cmd, args) => {
-      return (args as { provider: string }).provider === "claude" ? "sk-c" : null;
+      return (args as { name: string }).name === "ai-api-key-claude" ? "sk-c" : null;
     });
     expect(await loadAiKeys()).toEqual({ claude: "sk-c" });
   });

@@ -546,17 +546,19 @@ describe("SettingsProvider", () => {
       vi.mocked(invoke).mockReset();
     });
 
-    // Stateful keychain fake: ai_key_set records, ai_key_get reads back.
+    // Stateful keychain fake keyed by provider: secret_set records,
+    // secret_get reads back (names are ai-api-key-<provider>).
     function mockKeychain(initial: Record<string, string> = {}) {
       const stored: Record<string, string> = { ...initial };
       vi.mocked(invoke).mockImplementation(async (cmd, args) => {
-        const a = args as { provider: string; value?: string };
-        if (cmd === "ai_key_set") {
-          if (a.value) stored[a.provider] = a.value;
-          else delete stored[a.provider];
+        const a = args as { name: string; value?: string };
+        const provider = a.name.replace("ai-api-key-", "");
+        if (cmd === "secret_set") {
+          if (a.value) stored[provider] = a.value;
+          else delete stored[provider];
           return undefined;
         }
-        if (cmd === "ai_key_get") return stored[a.provider] ?? null;
+        if (cmd === "secret_get") return stored[provider] ?? null;
         return undefined;
       });
       return stored;
@@ -605,8 +607,8 @@ describe("SettingsProvider", () => {
       const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       const { set } = mockStore({ ai: { apiKeys: { claude: "sk-legacy" } } });
       vi.mocked(invoke).mockImplementation(async (cmd) => {
-        if (cmd === "ai_key_set") throw new Error("keyring locked");
-        if (cmd === "ai_key_get") return null;
+        if (cmd === "secret_set") throw new Error("keyring locked");
+        if (cmd === "secret_get") return null;
         return undefined;
       });
 
@@ -651,7 +653,7 @@ describe("SettingsProvider", () => {
       const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       mockStore(null);
       vi.mocked(invoke).mockImplementation(async (cmd) => {
-        if (cmd === "ai_key_set") throw new Error("keyring locked");
+        if (cmd === "secret_set") throw new Error("keyring locked");
         return null;
       });
 

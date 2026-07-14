@@ -6,9 +6,9 @@
 //! implied by the file's location and injected back on read.
 //!
 //! Credentials (PAT / SSH passphrase / etc.) are *not* in this struct —
-//! a follow-up PR routes them through the OS keychain via
-//! `tauri-plugin-stronghold` or `keyring-rs`. This struct only carries
-//! the bits we'd happily write to disk in plaintext.
+//! they live in the OS keychain via [`crate::secrets`] (see
+//! [`crate::sync::state`]). This struct only carries the bits we'd happily
+//! write to disk in plaintext.
 
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,3 @@
-pub mod ai_keys;
 pub mod create;
 pub mod default_app;
 pub mod directory;
@@ -6,6 +5,7 @@ pub mod export;
 pub mod export_runtime;
 pub mod file;
 pub mod plugins;
+pub mod secrets;
 mod walk;
 pub mod wikilinks;
 
