@@ -195,7 +195,9 @@
       "ollama": "Ollama (本地)"
     },
     "apiKey": {
-      "label": "API 密钥"
+      "label": "API 密钥",
+      "description": "保存在系统钥匙串中，绝不写入设置文件。",
+      "keychainError": "无法将密钥保存到系统钥匙串。本次会话内仍然可用；请确认钥匙串或 keyring 服务已解锁后重试。"
     },
     "ollamaUrl": {
       "label": "Ollama URL",

@@ -1,8 +1,14 @@
+import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOllamaModels } from "@/hooks/useOllamaModels";
 import { useSettings } from "@/hooks/useSettings";
 import { useSystemVoices } from "@/hooks/useSystemVoices";
+import { type KeyedProvider, setAiKey } from "@/lib/aiKeys";
 import { MODEL_SUGGESTIONS } from "@/lib/settings";
+
+// Keychain writes are debounced so typing a key doesn't hit the OS credential
+// manager on every keystroke (Linux keyrings may prompt per write).
+const KEY_SAVE_DEBOUNCE = 600;
 
 export function AITab() {
   const { t } = useTranslation("settings");
@@ -11,6 +17,27 @@ export function AITab() {
 
   const ollama = useOllamaModels(ai.ollamaUrl, ai.provider === "ollama");
   const voices = useSystemVoices();
+
+  // Keys live in memory (settings.ai.apiKeys) for the session and in the OS
+  // keychain for persistence; this writes through to the keychain. The timer
+  // deliberately survives unmount so a quickly-closed modal still saves.
+  const [keychainError, setKeychainError] = useState(false);
+  const keySaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const handleKeyChange = useCallback(
+    (provider: KeyedProvider, value: string) => {
+      updateSettings("ai.apiKeys", { ...ai.apiKeys, [provider]: value });
+      if (keySaveTimer.current) clearTimeout(keySaveTimer.current);
+      keySaveTimer.current = setTimeout(() => {
+        setAiKey(provider, value)
+          .then(() => setKeychainError(false))
+          .catch((err) => {
+            console.error("Failed to store the API key in the keychain:", err);
+            setKeychainError(true);
+          });
+      }, KEY_SAVE_DEBOUNCE);
+    },
+    [ai.apiKeys, updateSettings],
+  );
 
   // With a reachable Ollama server the model field is a dropdown of what is
   // actually installed (anything else cannot run anyway). Otherwise, and for
@@ -37,18 +64,26 @@ export function AITab() {
         </div>
 
         {(ai.provider === "claude" || ai.provider === "openai") && (
-          <div className="settings-row">
-            <span className="settings-label">{t("ai.apiKey.label")}</span>
-            <input
-              className="settings-input"
-              type="password"
-              value={ai.apiKeys[ai.provider] ?? ""}
-              onChange={(e) =>
-                updateSettings("ai.apiKeys", { ...ai.apiKeys, [ai.provider]: e.target.value })
-              }
-              placeholder={ai.provider === "claude" ? "sk-ant-..." : "sk-..."}
-            />
-          </div>
+          <>
+            <div className="settings-row">
+              <div>
+                <span className="settings-label">{t("ai.apiKey.label")}</span>
+                <div className="settings-description">{t("ai.apiKey.description")}</div>
+              </div>
+              <input
+                className="settings-input"
+                type="password"
+                value={ai.apiKeys[ai.provider] ?? ""}
+                onChange={(e) => handleKeyChange(ai.provider as KeyedProvider, e.target.value)}
+                placeholder={ai.provider === "claude" ? "sk-ant-..." : "sk-..."}
+              />
+            </div>
+            {keychainError && (
+              <div className="settings-description" style={{ marginTop: 4 }}>
+                {t("ai.apiKey.keychainError")}
+              </div>
+            )}
+          </>
         )}
 
         {ai.provider === "ollama" && (

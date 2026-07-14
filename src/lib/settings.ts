@@ -109,6 +109,8 @@ export type DefaultAppPrompt = "unanswered" | "notNow" | "never" | "set";
 
 export interface AISettings {
   provider: "none" | "claude" | "openai" | "ollama";
+  /** In-memory only: loaded from the OS keychain on startup and stripped from
+   *  every settings.json write (see stripSecrets). */
   apiKeys: Record<string, string>;
   ollamaUrl: string;
   model: string;
@@ -176,6 +178,12 @@ export interface Settings {
   keybindings: KeybindingSettings;
   editor: EditorSettings;
   markdown: MarkdownSettings;
+}
+
+/** Copy of `settings` that is safe to persist: provider API keys live in the
+ *  OS keychain, never in settings.json. */
+export function stripSecrets(settings: Settings): Settings {
+  return { ...settings, ai: { ...settings.ai, apiKeys: {} } };
 }
 
 export const DEFAULT_SETTINGS: Settings = {

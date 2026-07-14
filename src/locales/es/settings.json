@@ -195,7 +195,9 @@
       "ollama": "Ollama (local)"
     },
     "apiKey": {
-      "label": "Clave de API"
+      "label": "Clave de API",
+      "description": "Se guarda en el llavero del sistema, nunca en archivos de configuración.",
+      "keychainError": "No se pudo guardar la clave en el llavero del sistema. Sigue disponible durante esta sesión; comprueba que tu llavero esté desbloqueado e inténtalo de nuevo."
     },
     "ollamaUrl": {
       "label": "URL de Ollama",

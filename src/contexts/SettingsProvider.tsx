@@ -1,11 +1,13 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { KEYED_PROVIDERS, loadAiKeys, setAiKey } from "@/lib/aiKeys";
 import {
   CONTENT_WIDTH_MAP,
   DEFAULT_SETTINGS,
   FONT_FAMILY_MAP,
   LINE_HEIGHT_MAP,
   type Settings,
+  stripSecrets,
 } from "@/lib/settings";
 import { migrateLegacySettings } from "@/lib/settingsMigrations";
 import { deepMerge, setNestedValue } from "@/lib/settingsObject";
@@ -54,6 +56,39 @@ function applyCSSVariables(settings: Settings) {
 const STORE_KEY = "settings";
 const SAVE_DEBOUNCE = 500;
 
+/**
+ * Move any legacy plaintext API keys from settings.json into the OS keychain,
+ * then overlay the keychain's stored keys onto the in-memory settings. The
+ * plaintext copy is removed from the store only once every key migrated, so a
+ * locked keyring never destroys the only copy of a key; every subsequent store
+ * write is stripped regardless (see saveToStore). Never throws.
+ */
+async function loadSecrets(store: Store, merged: Settings): Promise<Settings> {
+  const legacy = merged.ai.apiKeys;
+  const legacyProviders = KEYED_PROVIDERS.filter((p) => legacy[p]);
+  let migrated = true;
+  for (const provider of legacyProviders) {
+    try {
+      await setAiKey(provider, legacy[provider]);
+    } catch (err) {
+      migrated = false;
+      console.error(`Failed to migrate the ${provider} API key to the keychain:`, err);
+    }
+  }
+  const withKeys: Settings = {
+    ...merged,
+    ai: { ...merged.ai, apiKeys: { ...legacy, ...(await loadAiKeys()) } },
+  };
+  if (legacyProviders.length > 0 && migrated) {
+    try {
+      await store.set(STORE_KEY, stripSecrets(withKeys));
+    } catch (err) {
+      console.error("Failed to remove migrated API keys from settings.json:", err);
+    }
+  }
+  return withKeys;
+}
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
@@ -72,17 +107,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         });
         storeRef.current = store;
         const saved = await store.get<Partial<Settings>>(STORE_KEY);
-        if (!cancelled && saved) {
-          const merged = deepMerge(
-            DEFAULT_SETTINGS as unknown as Record<string, unknown>,
-            migrateLegacySettings(saved as unknown as Record<string, unknown>),
-          ) as unknown as Settings;
+        const base = saved
+          ? (deepMerge(
+              DEFAULT_SETTINGS as unknown as Record<string, unknown>,
+              migrateLegacySettings(saved as unknown as Record<string, unknown>),
+            ) as unknown as Settings)
+          : DEFAULT_SETTINGS;
+        // API keys live in the OS keychain, not the store: migrate any legacy
+        // plaintext keys out of settings.json and load the stored ones.
+        const merged = await loadSecrets(store, base);
+        if (!cancelled) {
           setSettings(merged);
           applyTheme(merged.appearance.theme);
           applyCSSVariables(merged);
-        } else if (!cancelled) {
-          applyTheme(DEFAULT_SETTINGS.appearance.theme);
-          applyCSSVariables(DEFAULT_SETTINGS);
         }
       } catch (err) {
         console.error("Failed to load settings:", err);
@@ -110,12 +147,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener("change", handler);
   }, [settings.appearance.theme]);
 
-  // Save settings to store (debounced)
+  // Save settings to store (debounced). Secrets never reach the store: every
+  // write persists a stripped copy, so settings.json cannot contain API keys.
   const saveToStore = useCallback((newSettings: Settings) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       try {
-        await storeRef.current?.set(STORE_KEY, newSettings);
+        await storeRef.current?.set(STORE_KEY, stripSecrets(newSettings));
       } catch (err) {
         console.error("Failed to save settings:", err);
       }
@@ -149,6 +187,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     applyTheme(DEFAULT_SETTINGS.appearance.theme);
     applyCSSVariables(DEFAULT_SETTINGS);
     saveToStore(DEFAULT_SETTINGS);
+    // Reset clears the in-memory keys, so drop the keychain copies too or the
+    // "cleared" keys would silently reappear on the next launch.
+    for (const provider of KEYED_PROVIDERS) {
+      setAiKey(provider, "").catch((err) => {
+        console.error(`Failed to clear the ${provider} API key from the keychain:`, err);
+      });
+    }
   }, [saveToStore]);
 
   return (

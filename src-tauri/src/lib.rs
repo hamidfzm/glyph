@@ -303,6 +303,8 @@ pub fn run() {
             commands::export::get_cli_export,
             commands::export_runtime::finish_cli_export,
             commands::default_app::set_default_markdown_app,
+            commands::ai_keys::ai_key_get,
+            commands::ai_keys::ai_key_set,
             commands::directory::get_initial_folder,
             commands::directory::read_directory,
             commands::directory::list_markdown_files,

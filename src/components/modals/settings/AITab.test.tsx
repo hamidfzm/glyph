@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
@@ -10,12 +10,17 @@ import { AITab } from "./AITab";
 vi.mock("@/hooks/useOllamaModels", () => ({ useOllamaModels: vi.fn() }));
 vi.mock("@/hooks/useSystemVoices", () => ({ useSystemVoices: vi.fn() }));
 
+const { setAiKeyMock } = vi.hoisted(() => ({ setAiKeyMock: vi.fn() }));
+vi.mock("@/lib/aiKeys", () => ({ setAiKey: setAiKeyMock }));
+
 const mockModels = vi.mocked(useOllamaModels);
 const mockVoices = vi.mocked(useSystemVoices);
 
 beforeEach(() => {
   mockModels.mockReturnValue({ models: [], status: "idle" });
   mockVoices.mockReturnValue([]);
+  setAiKeyMock.mockReset();
+  setAiKeyMock.mockResolvedValue(undefined);
 });
 
 function setup(settings: Settings = DEFAULT_SETTINGS) {
@@ -74,6 +79,52 @@ describe("AITab", () => {
   it("with OpenAI: shows the OpenAI key placeholder", () => {
     setup(withAI({ provider: "openai" }));
     expect(screen.getByPlaceholderText("sk-...")).toBeInTheDocument();
+  });
+
+  it("writes the API key to the OS keychain after the debounce", async () => {
+    vi.useFakeTimers();
+    try {
+      setup(withAI({ provider: "claude" }));
+
+      fireEvent.change(screen.getByPlaceholderText("sk-ant-..."), {
+        target: { value: "sk-ant-xyz" },
+      });
+      // Debounced: typing does not hit the keychain immediately.
+      expect(setAiKeyMock).not.toHaveBeenCalled();
+
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+      });
+      expect(setAiKeyMock).toHaveBeenCalledExactlyOnceWith("claude", "sk-ant-xyz");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows an actionable error when the keychain write fails", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    setAiKeyMock.mockRejectedValue(new Error("keyring locked"));
+    vi.useFakeTimers();
+    try {
+      setup(withAI({ provider: "claude" }));
+
+      fireEvent.change(screen.getByPlaceholderText("sk-ant-..."), {
+        target: { value: "sk-ant-xyz" },
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+      });
+
+      expect(screen.getByText(/couldn't save the key/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+      errSpy.mockRestore();
+    }
+  });
+
+  it("explains that keys are stored in the system keychain", () => {
+    setup(withAI({ provider: "claude" }));
+    expect(screen.getByText(/never in settings files/i)).toBeInTheDocument();
   });
 
   it("with Ollama: edits the server URL", () => {
