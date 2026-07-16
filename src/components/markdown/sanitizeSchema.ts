@@ -3,8 +3,8 @@ import { defaultSchema } from "rehype-sanitize";
 // Inline SVG drawing primitives that are safe to render from markdown. We keep
 // out anything that can smuggle behaviour: <foreignObject> (arbitrary HTML),
 // <script>, <style> (CSS injection), <a>/<use href> (external refs), and
-// <animate>/<set> (attribute injection). <image> is allowed with http(s)-only
-// hrefs, matching the remote-image policy for plain markdown (#460).
+// <animate>/<set> (attribute injection). <image> is allowed; SvgImage drops
+// every scheme except http(s) before resolving relative paths (#460).
 const svgTagNames = [
   "svg",
   "g",
@@ -121,7 +121,7 @@ const svgAttributes: Record<string, string[]> = {
   ],
   symbol: ["viewBox", "preserveAspectRatio", ...svgCommonAttributes],
   clipPath: ["clipPathUnits", ...svgCommonAttributes],
-  image: ["href", "xLinkHref", "preserveAspectRatio", "crossOrigin", ...svgCommonAttributes],
+  image: ["href", "xLinkHref", "preserveAspectRatio", ...svgCommonAttributes],
 };
 
 // Allowlist for raw HTML in markdown. Glyph is a local-file viewer so the
@@ -148,6 +148,9 @@ export const markdownSanitizeSchema = {
   // Glyph is a local viewer with no host-page collisions to worry about.
   clobberPrefix: "",
   clobber: [],
+  // Disallowed elements are unwrapped by default; foreignObject carries
+  // arbitrary HTML children that must not leak into the svg as stray DOM.
+  strip: [...(defaultSchema.strip ?? []), "foreignObject"],
   tagNames: [
     ...(defaultSchema.tagNames ?? []),
     "kbd",

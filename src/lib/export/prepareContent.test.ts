@@ -304,6 +304,20 @@ describe("prepareContent", () => {
     expect(html).not.toContain("https://example.com/pic.png");
   });
 
+  it("inlines svg <image> hrefs as data URIs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        blob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }),
+      })),
+    );
+    setBody(`<svg><image href="asset://localhost/ws/icon.png"></image></svg>`);
+    const html = await prepareHtml();
+    expect(html).toContain('href="data:image/png;base64,');
+    expect(html).not.toContain("asset://localhost");
+  });
+
   it("leaves the original src when the fetch is not ok", async () => {
     vi.stubGlobal(
       "fetch",

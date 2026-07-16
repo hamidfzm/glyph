@@ -29,7 +29,7 @@ Review the current diff (`git diff` + `git diff --cached`, or `git diff origin/m
 
 5. **Right altitude.** Fix the mechanism, not a symptom: a special case layered on shared infrastructure means the fix is too shallow. Prefer gating/configuring the underlying seam once over sprinkling checks at call sites.
 
-6. **Tests assert the surface that exists.** Cover the branches the diff adds (Codecov patch must stay green), but do not write tests for capabilities the code no longer has.
+6. **Tests assert the surface that exists.** Cover the branches the diff adds (Codecov patch must stay green), but do not write tests for capabilities the code no longer has. Asserting the absence of an attribute the component never emits is vacuous (an `xlink:href`-is-null assertion on a component that only ever renders `href` passes with sanitization deleted); assert the observable the guard actually controls.
 
 ## Procedure
 

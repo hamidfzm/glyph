@@ -14,7 +14,7 @@ import { resolveWorkspacePath } from "@/lib/relativePath";
 import { CodeBlockComponent } from "./CodeBlockComponent";
 import { EmbedComponent } from "./EmbedComponent";
 import { FrontmatterBlock } from "./FrontmatterBlock";
-import { useImageComponent } from "./ImageComponent";
+import { useImageComponent, useSvgImageComponent } from "./ImageComponent";
 import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
 import { MarkdownHeading } from "./MarkdownHeading";
 import { TaskListItem } from "./TaskListItem";
@@ -83,6 +83,7 @@ export function MarkdownContent({
   );
 
   const ImageComponent = useImageComponent(filePath);
+  const SvgImageComponent = useSvgImageComponent(filePath);
 
   // Resolve a relative link against this document's directory and open it only
   // when it stays inside the opened workspace. Gating on workspaceRoot keeps
@@ -136,6 +137,7 @@ export function MarkdownContent({
           components={{
             a: LinkWithWikilink,
             img: ImageComponent,
+            image: SvgImageComponent,
             pre: CodeBlockComponent,
             li: TaskListLi,
             div: DivComponent,
