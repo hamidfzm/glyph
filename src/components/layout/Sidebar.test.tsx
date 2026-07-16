@@ -1,4 +1,3 @@
-import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -10,8 +9,13 @@ import {
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { FileTab, Tab, Workspace } from "@/hooks/useTabs";
+import { pickMoveDir } from "@/lib/pickers";
 import { SIDEBAR_WIDTH_DEFAULT, type SidebarLayout } from "@/lib/settings";
 import { Sidebar } from "./Sidebar";
+
+vi.mock("@/lib/pickers", () => ({
+  pickMoveDir: vi.fn(),
+}));
 
 const mockEntries: TocEntry[] = [
   { id: "intro", text: "Introduction", level: 1 },
@@ -407,7 +411,7 @@ describe("Sidebar", () => {
   });
 
   it("file menu duplicates, reveals, and moves an entry", async () => {
-    vi.mocked(open).mockResolvedValue("/tmp/notes/sub");
+    vi.mocked(pickMoveDir).mockResolvedValue("/tmp/notes/sub");
     const duplicatePath = vi.fn();
     const movePath = vi.fn();
     renderSidebar({ workspace: makeWorkspace(), tabs: { duplicatePath, movePath } });
@@ -459,13 +463,13 @@ describe("Sidebar", () => {
   });
 
   it("Move to… does nothing when the picker is cancelled", async () => {
-    vi.mocked(open).mockResolvedValue(null);
+    vi.mocked(pickMoveDir).mockResolvedValue(null);
     const movePath = vi.fn();
     renderSidebar({ workspace: makeWorkspace(), tabs: { movePath } });
 
     fireEvent.contextMenu(screen.getByText("readme.md"));
     fireEvent.click(screen.getByText("Move to…"));
-    await waitFor(() => expect(open).toHaveBeenCalled());
+    await waitFor(() => expect(pickMoveDir).toHaveBeenCalled());
     expect(movePath).not.toHaveBeenCalled();
   });
 });

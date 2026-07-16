@@ -25,7 +25,9 @@ fn uninstall_plugin_command_runs_via_mock_app() {
 #[test]
 fn install_plugin_command_installs_via_mock_app() {
     use tauri::test::mock_app;
+    use tauri::Manager;
     let app = mock_app();
+    app.manage(crate::grants::GrantRegistry::default());
     let src = temp_root("cmd_install_src");
     write_plugin(
         &src,
@@ -33,7 +35,13 @@ fn install_plugin_command_installs_via_mock_app() {
         "export default { activate(){} };",
     );
 
-    let plugin = install_plugin(app.handle().clone(), src.to_string_lossy().to_string()).unwrap();
+    app.state::<crate::grants::GrantRegistry>()
+        .set_pending_plugin_dir(src.clone());
+    let plugin = install_plugin(
+        app.handle().clone(),
+        app.state::<crate::grants::GrantRegistry>(),
+    )
+    .unwrap();
     assert_eq!(plugin.id, "com.x.cmdinstalled");
     assert!(Path::new(&plugin.dir).join("main.js").is_file());
 
@@ -41,6 +49,19 @@ fn install_plugin_command_installs_via_mock_app() {
     // dir and run in parallel, so removing the parent races the other tests.
     let _ = fs::remove_dir_all(&plugin.dir);
     let _ = fs::remove_dir_all(&src);
+}
+
+#[test]
+fn install_plugin_command_errors_without_a_pending_pick() {
+    use tauri::test::mock_app;
+    use tauri::Manager;
+    let app = mock_app();
+    app.manage(crate::grants::GrantRegistry::default());
+    let result = install_plugin(
+        app.handle().clone(),
+        app.state::<crate::grants::GrantRegistry>(),
+    );
+    assert_eq!(result.unwrap_err(), "no plugin folder was picked");
 }
 
 #[test]

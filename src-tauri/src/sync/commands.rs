@@ -8,26 +8,46 @@
 
 use tauri::State;
 
+use crate::grants::GrantRegistry;
+
 use super::backend::{StatusReport, SyncResult};
 use super::config::{CommitAuthorHint, WorkspaceSyncConfig};
 use super::error::SyncError;
 use super::ops;
 use super::state::SyncState;
 
+/// Every sync command's workspace root must be a granted (open) workspace.
+fn ensure_workspace(grants: &GrantRegistry, workspace_path: &str) -> Result<(), SyncError> {
+    grants
+        .ensure_workspace(workspace_path)
+        .map(|_| ())
+        .map_err(SyncError::Io)
+}
+
 #[tauri::command]
-pub async fn sync_set_config(config: WorkspaceSyncConfig) -> Result<(), SyncError> {
+pub async fn sync_set_config(
+    config: WorkspaceSyncConfig,
+    grants: State<'_, GrantRegistry>,
+) -> Result<(), SyncError> {
+    ensure_workspace(&grants, &config.workspace_path)?;
     ops::set_config(config)
 }
 
 #[tauri::command]
 pub async fn sync_get_config(
     workspace_path: String,
+    grants: State<'_, GrantRegistry>,
 ) -> Result<Option<WorkspaceSyncConfig>, SyncError> {
+    ensure_workspace(&grants, &workspace_path)?;
     ops::get_config(&workspace_path)
 }
 
 #[tauri::command]
-pub async fn sync_remove_config(workspace_path: String) -> Result<(), SyncError> {
+pub async fn sync_remove_config(
+    workspace_path: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<(), SyncError> {
+    ensure_workspace(&grants, &workspace_path)?;
     ops::remove_config(&workspace_path)
 }
 
@@ -36,7 +56,9 @@ pub async fn sync_set_token(
     workspace_path: String,
     token: String,
     state: State<'_, SyncState>,
+    grants: State<'_, GrantRegistry>,
 ) -> Result<(), SyncError> {
+    ensure_workspace(&grants, &workspace_path)?;
     ops::set_token(&state, workspace_path, token);
     Ok(())
 }
@@ -45,7 +67,9 @@ pub async fn sync_set_token(
 pub async fn sync_clear_token(
     workspace_path: String,
     state: State<'_, SyncState>,
+    grants: State<'_, GrantRegistry>,
 ) -> Result<(), SyncError> {
+    ensure_workspace(&grants, &workspace_path)?;
     ops::clear_token(&state, &workspace_path);
     Ok(())
 }
@@ -55,7 +79,9 @@ pub async fn sync_init_repo(
     workspace_path: String,
     default_branch: Option<String>,
     remote_url: Option<String>,
+    grants: State<'_, GrantRegistry>,
 ) -> Result<(), SyncError> {
+    ensure_workspace(&grants, &workspace_path)?;
     ops::init_repo(workspace_path, default_branch, remote_url).await
 }
 
@@ -64,7 +90,10 @@ pub async fn sync_clone_remote(
     workspace_path: String,
     remote_url: String,
     token: Option<String>,
+    grants: State<'_, GrantRegistry>,
 ) -> Result<(), SyncError> {
+    // The clone lands INSIDE the workspace path, so the same grant applies.
+    ensure_workspace(&grants, &workspace_path)?;
     ops::clone_remote(workspace_path, remote_url, token).await
 }
 
@@ -73,7 +102,12 @@ pub async fn sync_clone_remote(
 /// already exists so libgit2's fetch/push uses Glyph's configured URL
 /// instead of whatever stale origin the existing repo happens to carry.
 #[tauri::command]
-pub async fn sync_set_origin(workspace_path: String, remote_url: String) -> Result<(), SyncError> {
+pub async fn sync_set_origin(
+    workspace_path: String,
+    remote_url: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<(), SyncError> {
+    ensure_workspace(&grants, &workspace_path)?;
     ops::set_origin(workspace_path, remote_url).await
 }
 
@@ -81,7 +115,9 @@ pub async fn sync_set_origin(workspace_path: String, remote_url: String) -> Resu
 pub async fn sync_commit_config(
     workspace_path: String,
     state: State<'_, SyncState>,
+    grants: State<'_, GrantRegistry>,
 ) -> Result<bool, SyncError> {
+    ensure_workspace(&grants, &workspace_path)?;
     ops::commit_config(&state, &workspace_path).await
 }
 
@@ -89,7 +125,9 @@ pub async fn sync_commit_config(
 pub async fn sync_status(
     workspace_path: String,
     state: State<'_, SyncState>,
+    grants: State<'_, GrantRegistry>,
 ) -> Result<StatusReport, SyncError> {
+    ensure_workspace(&grants, &workspace_path)?;
     ops::run_status(&state, &workspace_path).await
 }
 
@@ -98,34 +136,41 @@ pub async fn sync_run(
     workspace_path: String,
     message: Option<String>,
     state: State<'_, SyncState>,
+    grants: State<'_, GrantRegistry>,
 ) -> Result<SyncResult, SyncError> {
+    ensure_workspace(&grants, &workspace_path)?;
     ops::run_sync(&state, &workspace_path, message).await
 }
 
 #[tauri::command]
-pub async fn sync_default_author(workspace_path: String) -> Result<CommitAuthorHint, SyncError> {
+pub async fn sync_default_author(
+    workspace_path: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<CommitAuthorHint, SyncError> {
+    ensure_workspace(&grants, &workspace_path)?;
     Ok(ops::default_author(&workspace_path))
 }
 
 #[tauri::command]
-pub async fn sync_repo_present(workspace_path: String) -> Result<bool, SyncError> {
+pub async fn sync_repo_present(
+    workspace_path: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<bool, SyncError> {
+    ensure_workspace(&grants, &workspace_path)?;
     Ok(ops::repo_present(&workspace_path))
 }
 
 #[cfg(test)]
 mod tests {
-    //! Each wrapper is one line of `ops::* (...).await`, but they still
-    //! need exercising so the `pub async fn ...` body line is covered.
-    //! Tests build a mock app, register `SyncState`, and call the
-    //! wrappers directly via `Manager::state()`. Real IPC routing (the
-    //! proc-macro-emitted `__cmd__sync_*` marshalling) is not reached
-    //! here — that's framework code we can't drive without spinning up
-    //! a webview, and covering it isn't this PR's goal.
+    //! Each wrapper is one line of `ops::* (...).await` behind the grant
+    //! gate, but still needs exercising so the `pub async fn` body line is
+    //! covered. Tests call the wrappers directly via `Manager::state()`;
+    //! real IPC routing is covered by the IPC dispatch test below.
     use super::*;
     use crate::sync::backend::{BackendKind, ConflictPolicy};
     use crate::sync::config::CommitIdentity;
     use std::fs;
-    use tauri::test::mock_app;
+    use tauri::test::{mock_app, MockRuntime};
     use tauri::Manager;
     use tempfile::TempDir;
 
@@ -133,6 +178,7 @@ mod tests {
 
     struct Workspace {
         tmp: TempDir,
+        app: tauri::App<MockRuntime>,
         workspace_path: String,
         remote_path: String,
     }
@@ -145,11 +191,36 @@ mod tests {
             opts.bare(true);
             opts.initial_head(DEFAULT_REMOTE_BRANCH);
             git2::Repository::init_opts(&remote, &opts).unwrap();
+            let local = tmp.path().join("local");
+            fs::create_dir_all(&local).unwrap();
+            let app = mock_app();
+            app.manage(SyncState::new());
+            app.manage(GrantRegistry::default());
+            app.state::<GrantRegistry>()
+                .grant_workspace(&local)
+                .unwrap();
             Self {
-                workspace_path: tmp.path().join("local").to_string_lossy().into(),
+                workspace_path: local.to_string_lossy().into(),
                 remote_path: remote.to_string_lossy().into(),
                 tmp,
+                app,
             }
+        }
+
+        fn grants(&self) -> State<'_, GrantRegistry> {
+            self.app.state::<GrantRegistry>()
+        }
+
+        fn sync_state(&self) -> State<'_, SyncState> {
+            self.app.state::<SyncState>()
+        }
+
+        fn grant_dir(&self, dir: &std::path::Path) {
+            fs::create_dir_all(dir).unwrap();
+            self.app
+                .state::<GrantRegistry>()
+                .grant_workspace(dir)
+                .unwrap();
         }
 
         fn config(&self) -> WorkspaceSyncConfig {
@@ -170,9 +241,9 @@ mod tests {
     #[tokio::test]
     async fn sync_set_config_wrapper_writes_the_workspace_config() {
         let ws = Workspace::new();
-        sync_set_config(ws.config()).await.unwrap();
+        sync_set_config(ws.config(), ws.grants()).await.unwrap();
         // Reads back through the same command surface from `.glyph/config.json`.
-        let got = sync_get_config(ws.workspace_path.clone())
+        let got = sync_get_config(ws.workspace_path.clone(), ws.grants())
             .await
             .unwrap()
             .expect("config present");
@@ -180,9 +251,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sync_commands_reject_an_ungranted_workspace() {
+        let ws = Workspace::new();
+        let outside = ws.tmp.path().join("not-open");
+        fs::create_dir_all(&outside).unwrap();
+        let path = outside.to_string_lossy().to_string();
+
+        let result = sync_repo_present(path.clone(), ws.grants()).await;
+        assert!(matches!(result, Err(SyncError::Io(_))));
+        let result = sync_init_repo(path, None, None, ws.grants()).await;
+        assert!(matches!(result, Err(SyncError::Io(_))));
+        assert!(!outside.join(".git").exists());
+    }
+
+    #[tokio::test]
     async fn sync_get_config_wrapper_returns_none_when_unconfigured() {
-        let tmp = TempDir::new().unwrap();
-        let result = sync_get_config(tmp.path().to_string_lossy().into())
+        let ws = Workspace::new();
+        let result = sync_get_config(ws.workspace_path.clone(), ws.grants())
             .await
             .unwrap();
         assert!(result.is_none());
@@ -192,7 +277,7 @@ mod tests {
     async fn sync_get_config_wrapper_returns_the_stored_config() {
         let ws = Workspace::new();
         crate::workspace::store_sync_config(&ws.config()).unwrap();
-        let result = sync_get_config(ws.workspace_path.clone())
+        let result = sync_get_config(ws.workspace_path.clone(), ws.grants())
             .await
             .unwrap()
             .expect("config present");
@@ -203,8 +288,10 @@ mod tests {
     async fn sync_remove_config_wrapper_drops_the_entry() {
         let ws = Workspace::new();
         crate::workspace::store_sync_config(&ws.config()).unwrap();
-        sync_remove_config(ws.workspace_path.clone()).await.unwrap();
-        assert!(sync_get_config(ws.workspace_path.clone())
+        sync_remove_config(ws.workspace_path.clone(), ws.grants())
+            .await
+            .unwrap();
+        assert!(sync_get_config(ws.workspace_path.clone(), ws.grants())
             .await
             .unwrap()
             .is_none());
@@ -216,25 +303,29 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn sync_set_token_and_clear_wrappers_round_trip() {
         let _guard = crate::secrets::test_store::install();
-        let app = mock_app();
-        app.manage(SyncState::new());
-        sync_set_token("/w".into(), "tok".into(), app.state::<SyncState>())
-            .await
-            .unwrap();
+        let ws = Workspace::new();
+        sync_set_token(
+            ws.workspace_path.clone(),
+            "tok".into(),
+            ws.sync_state(),
+            ws.grants(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
-            app.state::<SyncState>().get_token("/w").as_deref(),
+            ws.sync_state().get_token(&ws.workspace_path).as_deref(),
             Some("tok")
         );
-        sync_clear_token("/w".into(), app.state::<SyncState>())
+        sync_clear_token(ws.workspace_path.clone(), ws.sync_state(), ws.grants())
             .await
             .unwrap();
-        assert!(app.state::<SyncState>().get_token("/w").is_none());
+        assert!(ws.sync_state().get_token(&ws.workspace_path).is_none());
     }
 
     #[tokio::test]
     async fn sync_init_repo_wrapper_creates_a_repo() {
         let ws = Workspace::new();
-        sync_init_repo(ws.workspace_path.clone(), None, None)
+        sync_init_repo(ws.workspace_path.clone(), None, None, ws.grants())
             .await
             .unwrap();
         assert!(std::path::Path::new(&ws.workspace_path)
@@ -249,6 +340,7 @@ mod tests {
             ws.workspace_path.clone(),
             None,
             Some(ws.remote_path.clone()),
+            ws.grants(),
         )
         .await
         .unwrap();
@@ -257,34 +349,42 @@ mod tests {
             "# seed\n",
         )
         .unwrap();
-        let app = mock_app();
-        app.manage(SyncState::new());
         crate::workspace::store_sync_config(&ws.config()).unwrap();
-        sync_run(ws.workspace_path.clone(), None, app.state::<SyncState>())
-            .await
-            .unwrap();
+        sync_run(
+            ws.workspace_path.clone(),
+            None,
+            ws.sync_state(),
+            ws.grants(),
+        )
+        .await
+        .unwrap();
 
         let dest = ws.tmp.path().join("clone-via-wrapper");
-        sync_clone_remote(dest.to_string_lossy().into(), ws.remote_path.clone(), None)
-            .await
-            .unwrap();
+        ws.grant_dir(&dest);
+        sync_clone_remote(
+            dest.to_string_lossy().into(),
+            ws.remote_path.clone(),
+            None,
+            ws.grants(),
+        )
+        .await
+        .unwrap();
         assert!(dest.join("seed.md").exists());
     }
 
     #[tokio::test]
     async fn sync_status_wrapper_returns_a_status_report() {
-        let app = mock_app();
-        app.manage(SyncState::new());
         let ws = Workspace::new();
         sync_init_repo(
             ws.workspace_path.clone(),
             None,
             Some(ws.remote_path.clone()),
+            ws.grants(),
         )
         .await
         .unwrap();
         crate::workspace::store_sync_config(&ws.config()).unwrap();
-        let status = sync_status(ws.workspace_path.clone(), app.state::<SyncState>())
+        let status = sync_status(ws.workspace_path.clone(), ws.sync_state(), ws.grants())
             .await
             .unwrap();
         // Storing the config wrote `.glyph/config.json` into the working
@@ -295,13 +395,12 @@ mod tests {
 
     #[tokio::test]
     async fn sync_run_wrapper_pushes_local_changes() {
-        let app = mock_app();
-        app.manage(SyncState::new());
         let ws = Workspace::new();
         sync_init_repo(
             ws.workspace_path.clone(),
             None,
             Some(ws.remote_path.clone()),
+            ws.grants(),
         )
         .await
         .unwrap();
@@ -314,7 +413,8 @@ mod tests {
         let result = sync_run(
             ws.workspace_path.clone(),
             Some("test commit".into()),
-            app.state::<SyncState>(),
+            ws.sync_state(),
+            ws.grants(),
         )
         .await
         .unwrap();
@@ -328,22 +428,25 @@ mod tests {
         // actual fields depend on whether the test host has any git
         // config at all, which we can't pin from a unit test.
         let ws = Workspace::new();
-        let _hint = sync_default_author(ws.workspace_path).await.unwrap();
+        let _hint = sync_default_author(ws.workspace_path.clone(), ws.grants())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn sync_default_author_wrapper_returns_config_values() {
         // With per-workspace `[user]` set we can pin the returned hint
         // regardless of what the host's global git config carries.
-        let tmp = tempfile::TempDir::new().unwrap();
-        let workspace = tmp.path().to_string_lossy().to_string();
-        git2::Repository::init(tmp.path()).unwrap();
-        let cfg_path = tmp.path().join(".git/config");
+        let ws = Workspace::new();
+        git2::Repository::init(&ws.workspace_path).unwrap();
+        let cfg_path = std::path::Path::new(&ws.workspace_path).join(".git/config");
         let mut cfg = git2::Config::open(&cfg_path).unwrap();
         cfg.set_str("user.name", "Cmd Author").unwrap();
         cfg.set_str("user.email", "cmd@example.com").unwrap();
 
-        let hint = sync_default_author(workspace).await.unwrap();
+        let hint = sync_default_author(ws.workspace_path.clone(), ws.grants())
+            .await
+            .unwrap();
         assert_eq!(hint.name.as_deref(), Some("Cmd Author"));
         assert_eq!(hint.email.as_deref(), Some("cmd@example.com"));
     }
@@ -352,12 +455,13 @@ mod tests {
     async fn sync_set_origin_wrapper_writes_remote_url() {
         let ws = Workspace::new();
         // Init the workspace via the same wrapper the frontend would use.
-        sync_init_repo(ws.workspace_path.clone(), None, None)
+        sync_init_repo(ws.workspace_path.clone(), None, None, ws.grants())
             .await
             .unwrap();
         sync_set_origin(
             ws.workspace_path.clone(),
             "https://example.com/x.git".into(),
+            ws.grants(),
         )
         .await
         .unwrap();
@@ -369,16 +473,18 @@ mod tests {
     #[tokio::test]
     async fn sync_repo_present_wrapper_returns_true_after_init() {
         let ws = Workspace::new();
-        sync_init_repo(ws.workspace_path.clone(), None, None)
+        sync_init_repo(ws.workspace_path.clone(), None, None, ws.grants())
             .await
             .unwrap();
-        assert!(sync_repo_present(ws.workspace_path).await.unwrap());
+        assert!(sync_repo_present(ws.workspace_path.clone(), ws.grants())
+            .await
+            .unwrap());
     }
 
     #[tokio::test]
     async fn sync_repo_present_wrapper_returns_false_for_empty_dir() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        assert!(!sync_repo_present(tmp.path().to_string_lossy().into())
+        let ws = Workspace::new();
+        assert!(!sync_repo_present(ws.workspace_path.clone(), ws.grants())
             .await
             .unwrap());
     }
@@ -386,11 +492,15 @@ mod tests {
     #[tokio::test]
     async fn sync_repo_present_wrapper_reports_true_after_init() {
         let ws = Workspace::new();
-        assert!(!sync_repo_present(ws.workspace_path.clone()).await.unwrap());
-        sync_init_repo(ws.workspace_path.clone(), None, None)
+        assert!(!sync_repo_present(ws.workspace_path.clone(), ws.grants())
+            .await
+            .unwrap());
+        sync_init_repo(ws.workspace_path.clone(), None, None, ws.grants())
             .await
             .unwrap();
-        assert!(sync_repo_present(ws.workspace_path).await.unwrap());
+        assert!(sync_repo_present(ws.workspace_path.clone(), ws.grants())
+            .await
+            .unwrap());
     }
 
     // -- Full IPC dispatch test -----------------------------------------
@@ -401,7 +511,7 @@ mod tests {
     // reached when an actual IPC message is delivered. The test below
     // builds a real `mock_builder()` with `generate_handler!`, hands it
     // a webview, and calls `tauri::test::get_ipc_response` for every
-    // command — covering the proc-macro lines so codecov's patch
+    // command, covering the proc-macro lines so codecov's patch
     // metric matches the real test surface.
 
     use tauri::test::{get_ipc_response, mock_builder, mock_context, noop_assets, INVOKE_KEY};
@@ -409,8 +519,8 @@ mod tests {
     use tauri::WebviewWindowBuilder;
 
     /// Build a fully-wired `App<MockRuntime>` with every sync command
-    /// registered and `SyncState` managed, plus a "main" webview ready
-    /// for IPC dispatch.
+    /// registered and `SyncState` + `GrantRegistry` managed, plus a "main"
+    /// webview ready for IPC dispatch.
     fn build_ipc_test_app() -> (
         tauri::App<tauri::test::MockRuntime>,
         tauri::WebviewWindow<tauri::test::MockRuntime>,
@@ -434,6 +544,7 @@ mod tests {
             .build(mock_context(noop_assets()))
             .expect("mock app builds");
         app.manage(SyncState::new());
+        app.manage(GrantRegistry::default());
         let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
             .build()
             .expect("webview builds");
@@ -477,8 +588,12 @@ mod tests {
         // app + webview is expensive (compiles the IPC init script), so
         // share the setup and walk through every command's IPC arm.
         let _guard = crate::secrets::test_store::install();
-        let (_app, webview) = build_ipc_test_app();
+        let (app, webview) = build_ipc_test_app();
         let ws = Workspace::new();
+        // The IPC app has its own registry; grant the workspace there too.
+        app.state::<GrantRegistry>()
+            .grant_workspace(std::path::Path::new(&ws.workspace_path))
+            .unwrap();
 
         // sync_init_repo
         let _: () = invoke_ipc(
@@ -519,7 +634,7 @@ mod tests {
             }),
         );
 
-        // sync_status — the config we just set wrote `.glyph/config.json`
+        // sync_status, the config we just set wrote `.glyph/config.json`
         // into the working tree, so the workspace reads as dirty until the
         // first sync commits it.
         let status: crate::sync::backend::StatusReport = invoke_ipc(
@@ -529,7 +644,7 @@ mod tests {
         );
         assert!(!status.clean);
 
-        // Write a file, then sync_run — commits + pushes.
+        // Write a file, then sync_run, commits + pushes.
         fs::write(
             std::path::Path::new(&ws.workspace_path).join("note.md"),
             "# hi\n",
@@ -546,7 +661,7 @@ mod tests {
         assert_eq!(result.committed_count, 1);
         assert_eq!(result.pushed_count, 1);
 
-        // sync_commit_config — the prior sync_run already committed `.glyph/`
+        // sync_commit_config, the prior sync_run already committed `.glyph/`
         // via `git add -A`, so this reports no new commit (false).
         let committed: bool = invoke_ipc(
             &webview,
@@ -568,10 +683,13 @@ mod tests {
         );
         assert!(present);
 
-        // sync_repo_present against an empty dir round-trips through IPC
-        // and returns the false arm.
+        // sync_repo_present against an empty (granted) dir round-trips
+        // through IPC and returns the false arm.
         let empty_dir = ws.tmp.path().join("nope");
         std::fs::create_dir_all(&empty_dir).unwrap();
+        app.state::<GrantRegistry>()
+            .grant_workspace(&empty_dir)
+            .unwrap();
         let absent: bool = invoke_ipc(
             &webview,
             "sync_repo_present",
@@ -592,8 +710,10 @@ mod tests {
         let remote = repo.find_remote("origin").unwrap();
         assert_eq!(remote.url(), Some("https://example.com/ipc-set.git"));
 
-        // sync_clone_remote into a fresh path.
+        // sync_clone_remote into a fresh (granted) path.
         let dest = ws.tmp.path().join("ipc-clone");
+        std::fs::create_dir_all(&dest).unwrap();
+        app.state::<GrantRegistry>().grant_workspace(&dest).unwrap();
         let _: () = invoke_ipc(
             &webview,
             "sync_clone_remote",
@@ -612,7 +732,7 @@ mod tests {
             serde_json::json!({ "workspacePath": ws.workspace_path }),
         );
 
-        // sync_remove_config — leaves the workspace unconfigured.
+        // sync_remove_config, leaves the workspace unconfigured.
         let _: () = invoke_ipc(
             &webview,
             "sync_remove_config",

@@ -5,6 +5,8 @@ use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 use tauri::State;
 
+use crate::grants::GrantRegistry;
+
 pub struct InitialFile(pub Mutex<Option<String>>);
 
 #[derive(Debug, Serialize)]
@@ -27,7 +29,8 @@ pub fn get_initial_file(state: State<'_, InitialFile>) -> Option<String> {
 }
 
 #[tauri::command]
-pub fn read_file(path: String) -> Result<String, String> {
+pub fn read_file(path: String, grants: State<'_, GrantRegistry>) -> Result<String, String> {
+    let path = grants.ensure_readable(&path)?;
     fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {e}"))
 }
 
@@ -38,7 +41,12 @@ pub fn print_document<R: tauri::Runtime>(window: tauri::WebviewWindow<R>) -> Res
 }
 
 #[tauri::command]
-pub fn write_file(path: String, content: String) -> Result<(), String> {
+pub fn write_file(
+    path: String,
+    content: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<(), String> {
+    let path = grants.ensure_writable(&path)?;
     fs::write(&path, &content).map_err(|e| format!("Failed to write file: {e}"))
 }
 
@@ -46,30 +54,46 @@ pub fn write_file(path: String, content: String) -> Result<(), String> {
 /// (DOCX, EPUB) that the frontend builds in-memory; `write_file` only handles
 /// UTF-8 text.
 #[tauri::command]
-pub fn write_binary_file(path: String, contents: Vec<u8>) -> Result<(), String> {
+pub fn write_binary_file(
+    path: String,
+    contents: Vec<u8>,
+    grants: State<'_, GrantRegistry>,
+) -> Result<(), String> {
+    let path = grants.ensure_writable(&path)?;
     fs::write(&path, &contents).map_err(|e| format!("Failed to write file: {e}"))
 }
 
 /// Create a directory and all missing parents. Used by the website exporter,
 /// which mirrors the workspace's folder tree into the output directory.
 #[tauri::command]
-pub fn create_dir_all(path: String) -> Result<(), String> {
+pub fn create_dir_all(path: String, grants: State<'_, GrantRegistry>) -> Result<(), String> {
+    let path = grants.ensure_writable(&path)?;
     fs::create_dir_all(&path).map_err(|e| format!("Failed to create directory: {e}"))
 }
 
 /// Copy a file byte-for-byte, e.g. an image referenced by an exported page.
 /// The destination's parent must already exist (`create_dir_all`).
 #[tauri::command]
-pub fn copy_file(src: String, dest: String) -> Result<(), String> {
+pub fn copy_file(
+    src: String,
+    dest: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<(), String> {
+    let src = grants.ensure_readable(&src)?;
+    let dest = grants.ensure_writable(&dest)?;
     fs::copy(&src, &dest)
         .map(|_| ())
         .map_err(|e| format!("Failed to copy file: {e}"))
 }
 
 #[tauri::command]
-pub fn get_file_metadata(path: String) -> Result<FileMetadata, String> {
+pub fn get_file_metadata(
+    path: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<FileMetadata, String> {
+    let canonical = grants.ensure_readable(&path)?;
     let p = Path::new(&path);
-    let metadata = fs::metadata(p).map_err(|e| format!("Failed to get metadata: {e}"))?;
+    let metadata = fs::metadata(&canonical).map_err(|e| format!("Failed to get metadata: {e}"))?;
     let modified = metadata
         .modified()
         .map_err(|e| format!("Failed to get modified time: {e}"))?
@@ -96,6 +120,20 @@ pub fn get_file_metadata(path: String) -> Result<FileMetadata, String> {
 mod tests {
     use super::*;
     use std::io::Write;
+    use tauri::test::{mock_app, MockRuntime};
+    use tauri::Manager;
+
+    fn app_with_grants() -> tauri::App<MockRuntime> {
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        app
+    }
+
+    fn app_with_workspace(dir: &Path) -> tauri::App<MockRuntime> {
+        let app = app_with_grants();
+        app.state::<GrantRegistry>().grant_workspace(dir).unwrap();
+        app
+    }
 
     #[test]
     fn read_file_success() {
@@ -105,7 +143,11 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         file.write_all(b"# Hello\nWorld").unwrap();
 
-        let result = read_file(file_path.to_string_lossy().to_string());
+        let app = app_with_workspace(&dir);
+        let result = read_file(
+            file_path.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "# Hello\nWorld");
 
@@ -114,9 +156,54 @@ mod tests {
 
     #[test]
     fn read_file_not_found() {
-        let result = read_file("/nonexistent/path/file.md".to_string());
+        let dir = std::env::temp_dir().join("glyph_test_read_missing");
+        let _ = fs::create_dir_all(&dir);
+        let app = app_with_workspace(&dir);
+        let result = read_file(
+            dir.join("nope.md").to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Failed to read file"));
+    }
+
+    #[test]
+    fn read_file_denied_without_a_grant() {
+        let dir = std::env::temp_dir().join("glyph_test_read_denied");
+        let _ = fs::create_dir_all(&dir);
+        let file_path = dir.join("secret.md");
+        fs::write(&file_path, "top secret").unwrap();
+
+        let app = app_with_grants();
+        let result = read_file(
+            file_path.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
+        let err = result.expect_err("must be denied");
+        assert!(
+            err.starts_with("path is outside the allowed workspaces and files:"),
+            "got: {err}"
+        );
+
+        let _ = fs::remove_file(&file_path);
+    }
+
+    #[test]
+    fn read_file_traversal_out_of_the_workspace_is_denied() {
+        let outer = std::env::temp_dir().join(format!("glyph_test_trav_{}", std::process::id()));
+        let root = outer.join("ws");
+        let _ = fs::create_dir_all(&root);
+        fs::write(outer.join("secret.md"), "x").unwrap();
+
+        let app = app_with_workspace(&root);
+        let sneaky = root.join("..").join("secret.md");
+        let result = read_file(
+            sneaky.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
+        assert!(result.is_err());
+
+        let _ = fs::remove_dir_all(&outer);
     }
 
     #[test]
@@ -126,7 +213,11 @@ mod tests {
         let file_path = dir.join("empty.md");
         fs::File::create(&file_path).unwrap();
 
-        let result = read_file(file_path.to_string_lossy().to_string());
+        let app = app_with_workspace(&dir);
+        let result = read_file(
+            file_path.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "");
 
@@ -141,9 +232,31 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         file.write_all("# 你好世界\nHello 🌍".as_bytes()).unwrap();
 
-        let result = read_file(file_path.to_string_lossy().to_string());
+        let app = app_with_workspace(&dir);
+        let result = read_file(
+            file_path.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_ok());
         assert!(result.unwrap().contains("你好世界"));
+
+        let _ = fs::remove_file(&file_path);
+    }
+
+    #[test]
+    fn read_file_allows_a_granted_loose_file() {
+        let dir = std::env::temp_dir().join("glyph_test_read_loose");
+        let _ = fs::create_dir_all(&dir);
+        let file_path = dir.join("loose.md");
+        fs::write(&file_path, "# loose").unwrap();
+
+        let app = app_with_grants();
+        app.state::<GrantRegistry>().grant_file(&file_path).unwrap();
+        let result = read_file(
+            file_path.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
+        assert_eq!(result.unwrap(), "# loose");
 
         let _ = fs::remove_file(&file_path);
     }
@@ -155,7 +268,12 @@ mod tests {
         let file_path = dir.join("out.bin");
         let bytes = vec![0u8, 1, 2, 255, 254, 0, 42];
 
-        let result = write_binary_file(file_path.to_string_lossy().to_string(), bytes.clone());
+        let app = app_with_workspace(&dir);
+        let result = write_binary_file(
+            file_path.to_string_lossy().to_string(),
+            bytes.clone(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_ok());
         assert_eq!(fs::read(&file_path).unwrap(), bytes);
 
@@ -163,10 +281,46 @@ mod tests {
     }
 
     #[test]
-    fn write_binary_file_bad_path_errors() {
-        let result = write_binary_file("/nonexistent/dir/out.bin".to_string(), vec![1, 2, 3]);
+    fn write_binary_file_denied_without_a_grant() {
+        let dir = std::env::temp_dir().join("glyph_test_write_binary_denied");
+        let _ = fs::create_dir_all(&dir);
+        let file_path = dir.join("out.bin");
+
+        let app = app_with_grants();
+        let result = write_binary_file(
+            file_path.to_string_lossy().to_string(),
+            vec![1, 2, 3],
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to write file"));
+        assert!(!file_path.exists(), "denied write must not create the file");
+    }
+
+    #[test]
+    fn write_binary_file_allows_a_granted_export_file() {
+        let dir = std::env::temp_dir().join("glyph_test_write_binary_export");
+        let _ = fs::create_dir_all(&dir);
+        let target = dir.join("doc.docx");
+        let sibling = dir.join("other.docx");
+
+        let app = app_with_grants();
+        app.state::<GrantRegistry>()
+            .grant_export_file(&target)
+            .unwrap();
+        assert!(write_binary_file(
+            target.to_string_lossy().to_string(),
+            vec![9],
+            app.state::<GrantRegistry>(),
+        )
+        .is_ok());
+        assert!(write_binary_file(
+            sibling.to_string_lossy().to_string(),
+            vec![9],
+            app.state::<GrantRegistry>(),
+        )
+        .is_err());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -177,7 +331,11 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         file.write_all(b"content").unwrap();
 
-        let result = get_file_metadata(file_path.to_string_lossy().to_string());
+        let app = app_with_workspace(&dir);
+        let result = get_file_metadata(
+            file_path.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_ok());
 
         let metadata = result.unwrap();
@@ -191,9 +349,32 @@ mod tests {
 
     #[test]
     fn get_metadata_not_found() {
-        let result = get_file_metadata("/nonexistent/path/file.md".to_string());
+        let dir = std::env::temp_dir().join("glyph_test_meta_missing");
+        let _ = fs::create_dir_all(&dir);
+        let app = app_with_workspace(&dir);
+        let result = get_file_metadata(
+            dir.join("nope.md").to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Failed to get metadata"));
+    }
+
+    #[test]
+    fn get_metadata_denied_without_a_grant() {
+        let dir = std::env::temp_dir().join("glyph_test_meta_denied");
+        let _ = fs::create_dir_all(&dir);
+        let file_path = dir.join("meta.md");
+        fs::write(&file_path, "x").unwrap();
+
+        let app = app_with_grants();
+        let result = get_file_metadata(
+            file_path.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
+        assert!(result.is_err());
+
+        let _ = fs::remove_file(&file_path);
     }
 
     #[test]
@@ -228,9 +409,6 @@ mod tests {
 
     #[test]
     fn get_initial_file_returns_managed_value() {
-        use tauri::test::mock_app;
-        use tauri::Manager;
-
         let app = mock_app();
         app.manage(InitialFile(Mutex::new(Some("/ws/file.md".to_string()))));
         let result = get_initial_file(app.state::<InitialFile>());
@@ -239,9 +417,6 @@ mod tests {
 
     #[test]
     fn get_initial_file_returns_none_when_unset() {
-        use tauri::test::mock_app;
-        use tauri::Manager;
-
         let app = mock_app();
         app.manage(InitialFile(Mutex::new(None)));
         let result = get_initial_file(app.state::<InitialFile>());
@@ -250,9 +425,6 @@ mod tests {
 
     #[test]
     fn get_initial_file_is_consumed_on_read() {
-        use tauri::test::mock_app;
-        use tauri::Manager;
-
         // The stash is read-once: a macOS `RunEvent::Opened` may have written a
         // launch path, and once the primary window reads it, no later window (or
         // dev hot-reload) should resurface it.
@@ -271,9 +443,11 @@ mod tests {
         let _ = fs::create_dir_all(&dir);
         let file_path = dir.join("out.md");
 
+        let app = app_with_workspace(&dir);
         let result = write_file(
             file_path.to_string_lossy().to_string(),
             "# Saved\n".to_string(),
+            app.state::<GrantRegistry>(),
         );
         assert!(result.is_ok());
         assert_eq!(fs::read_to_string(&file_path).unwrap(), "# Saved\n");
@@ -282,15 +456,62 @@ mod tests {
     }
 
     #[test]
+    fn write_file_denied_without_a_grant() {
+        let dir = std::env::temp_dir().join("glyph_test_write_denied");
+        let _ = fs::create_dir_all(&dir);
+        let file_path = dir.join("out.md");
+
+        let app = app_with_grants();
+        let result = write_file(
+            file_path.to_string_lossy().to_string(),
+            "x".to_string(),
+            app.state::<GrantRegistry>(),
+        );
+        let err = result.expect_err("must be denied");
+        assert!(err.starts_with("path is outside the allowed workspaces and files:"));
+        assert!(!file_path.exists());
+    }
+
+    #[test]
+    fn write_file_allows_autosave_of_a_granted_loose_file() {
+        let dir = std::env::temp_dir().join("glyph_test_write_loose");
+        let _ = fs::create_dir_all(&dir);
+        let file_path = dir.join("loose.md");
+        fs::write(&file_path, "before").unwrap();
+
+        let app = app_with_grants();
+        app.state::<GrantRegistry>().grant_file(&file_path).unwrap();
+        assert!(write_file(
+            file_path.to_string_lossy().to_string(),
+            "after".to_string(),
+            app.state::<GrantRegistry>(),
+        )
+        .is_ok());
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "after");
+
+        let _ = fs::remove_file(&file_path);
+    }
+
+    #[test]
     fn write_file_bad_path_errors() {
-        let result = write_file("/nonexistent/dir/out.md".to_string(), "x".to_string());
+        // Granted but unwritable (parent directory missing): the fs error path.
+        let dir = std::env::temp_dir().join("glyph_test_write_bad");
+        let _ = fs::create_dir_all(&dir);
+        let app = app_with_workspace(&dir);
+        let result = write_file(
+            dir.join("missing")
+                .join("out.md")
+                .to_string_lossy()
+                .to_string(),
+            "x".to_string(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Failed to write file"));
     }
 
     #[test]
     fn print_document_succeeds_on_a_mock_window() {
-        use tauri::test::mock_app;
         use tauri::WebviewWindowBuilder;
 
         let app = mock_app();
@@ -303,15 +524,42 @@ mod tests {
     #[test]
     fn create_dir_all_creates_nested_directories() {
         let root = std::env::temp_dir().join(format!("glyph_test_mkdir_{}", std::process::id()));
+        let _ = fs::create_dir_all(&root);
         let nested = root.join("a").join("b").join("c");
 
-        let result = create_dir_all(nested.to_string_lossy().to_string());
+        let app = app_with_grants();
+        app.state::<GrantRegistry>()
+            .grant_export_dir(&root)
+            .unwrap();
+        let result = create_dir_all(
+            nested.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_ok());
         assert!(nested.is_dir());
         // Idempotent: creating an existing tree is fine.
-        assert!(create_dir_all(nested.to_string_lossy().to_string()).is_ok());
+        assert!(create_dir_all(
+            nested.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        )
+        .is_ok());
 
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn create_dir_all_denied_without_a_grant() {
+        let root =
+            std::env::temp_dir().join(format!("glyph_test_mkdir_denied_{}", std::process::id()));
+        let nested = root.join("a").join("b");
+
+        let app = app_with_grants();
+        let result = create_dir_all(
+            nested.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
+        assert!(result.is_err());
+        assert!(!nested.exists());
     }
 
     #[test]
@@ -323,9 +571,12 @@ mod tests {
         let blocker = root.join("file.txt");
         fs::write(&blocker, "x").unwrap();
 
-        let result = create_dir_all(blocker.join("sub").to_string_lossy().to_string());
+        let app = app_with_workspace(&root);
+        let result = create_dir_all(
+            blocker.join("sub").to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to create directory"));
 
         let _ = fs::remove_dir_all(&root);
     }
@@ -338,12 +589,62 @@ mod tests {
         let dest = root.join("dest.png");
         fs::write(&src, [0x89u8, 0x50, 0x4e, 0x47]).unwrap();
 
+        let app = app_with_workspace(&root);
         let result = copy_file(
             src.to_string_lossy().to_string(),
             dest.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
         );
         assert!(result.is_ok());
         assert_eq!(fs::read(&dest).unwrap(), vec![0x89u8, 0x50, 0x4e, 0x47]);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn copy_file_denied_when_source_is_not_granted() {
+        let root =
+            std::env::temp_dir().join(format!("glyph_test_copy_nosrc_{}", std::process::id()));
+        let src_dir = root.join("outside");
+        let out_dir = root.join("out");
+        let _ = fs::create_dir_all(&src_dir);
+        let _ = fs::create_dir_all(&out_dir);
+        let src = src_dir.join("img.png");
+        fs::write(&src, [1u8]).unwrap();
+
+        let app = app_with_grants();
+        app.state::<GrantRegistry>()
+            .grant_export_dir(&out_dir)
+            .unwrap();
+        let result = copy_file(
+            src.to_string_lossy().to_string(),
+            out_dir.join("img.png").to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
+        assert!(result.is_err());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn copy_file_denied_when_destination_is_not_granted() {
+        let root =
+            std::env::temp_dir().join(format!("glyph_test_copy_nodest_{}", std::process::id()));
+        let ws = root.join("ws");
+        let elsewhere = root.join("elsewhere");
+        let _ = fs::create_dir_all(&ws);
+        let _ = fs::create_dir_all(&elsewhere);
+        let src = ws.join("img.png");
+        fs::write(&src, [1u8]).unwrap();
+
+        let app = app_with_workspace(&ws);
+        let result = copy_file(
+            src.to_string_lossy().to_string(),
+            elsewhere.join("img.png").to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
+        assert!(result.is_err());
+        assert!(!elsewhere.join("img.png").exists());
 
         let _ = fs::remove_dir_all(&root);
     }
@@ -354,9 +655,11 @@ mod tests {
             std::env::temp_dir().join(format!("glyph_test_copy_miss_{}", std::process::id()));
         let _ = fs::create_dir_all(&root);
 
+        let app = app_with_workspace(&root);
         let result = copy_file(
             root.join("nope.png").to_string_lossy().to_string(),
             root.join("dest.png").to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Failed to copy file"));

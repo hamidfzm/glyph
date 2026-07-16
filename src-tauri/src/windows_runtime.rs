@@ -6,7 +6,29 @@
 
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder};
 
+use crate::grants::{self, GrantRegistry};
 use crate::windows::{route_open, OpenKind, OpenRoute, PendingOpen, WindowRegistry};
+
+/// Mint the grant for a backend-observed open and mirror it into the
+/// asset-protocol scope; grant failures are ignored (the open surfaces the
+/// error and the path stays denied).
+fn grant_open<R: Runtime>(app: &AppHandle<R>, kind: OpenKind, path: &str) {
+    let Some(registry) = app.try_state::<GrantRegistry>() else {
+        return;
+    };
+    match kind {
+        OpenKind::Folder => {
+            if let Ok(canonical) = registry.grant_workspace(std::path::Path::new(path)) {
+                grants::allow_asset_dir(app, &canonical);
+            }
+        }
+        OpenKind::File => {
+            if let Ok(canonical) = registry.grant_file(std::path::Path::new(path)) {
+                grants::allow_asset_file(app, &canonical);
+            }
+        }
+    }
+}
 
 /// The frontend event a pending open is delivered as.
 fn event_name(kind: OpenKind) -> &'static str {
@@ -51,6 +73,7 @@ pub fn open_in_app<R: Runtime>(
     path: String,
     current_label: &str,
 ) {
+    grant_open(app, kind, &path);
     match route_open(kind, &path, &registry.snapshot(), current_label) {
         OpenRoute::Focus(label) => focus_window(app, &label),
         OpenRoute::Adopt(label, pending) => {
@@ -95,6 +118,11 @@ pub fn set_window_workspace<R: Runtime>(
     registry: State<'_, WindowRegistry>,
     root: Option<String>,
 ) {
+    // Restore-flow re-opens skip open_in_app, so mint the grant here too.
+    // Clearing (None) does not revoke: grants are session-scoped.
+    if let Some(root) = &root {
+        grant_open(window.app_handle(), OpenKind::Folder, root);
+    }
     registry.set_workspace(window.label(), root);
 }
 

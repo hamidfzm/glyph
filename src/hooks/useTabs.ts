@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,6 +13,7 @@ import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
 import { basename, isPathInside, parentDir, pruneInside } from "@/lib/paths";
+import { pickFiles, pickFolder } from "@/lib/pickers";
 import { isMobilePlatform } from "@/lib/platform";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
@@ -446,7 +447,7 @@ export function useTabs(options: UseTabsOptions) {
     ) => {
       const resolvedRoot = root;
       if (!resolvedRoot) {
-        const selected = await open({ directory: true, multiple: false });
+        const selected = await pickFolder();
         if (typeof selected !== "string") return;
         // No explicit root means a user "Open Folder" action: route it through
         // the window manager. A folder already open elsewhere focuses that
@@ -1111,34 +1112,26 @@ export function useTabs(options: UseTabsOptions) {
   );
 
   const openFileDialog = useCallback(async () => {
-    const selected = await open({
-      multiple: true,
-      filters: [
-        {
-          name: t("common:fileDialog.documents"),
-          extensions: [
-            ...MARKDOWN_EXTENSIONS,
-            ...NOTEBOOK_EXTENSIONS,
-            ...D2_EXTENSIONS,
-          ] as string[],
-        },
-        {
-          name: t("common:fileDialog.markdown"),
-          extensions: MARKDOWN_EXTENSIONS as string[],
-        },
-        {
-          name: t("common:fileDialog.notebook"),
-          extensions: NOTEBOOK_EXTENSIONS as string[],
-        },
-        {
-          name: t("common:fileDialog.d2"),
-          extensions: D2_EXTENSIONS as string[],
-        },
-      ],
-    });
+    const selected = await pickFiles([
+      {
+        name: t("common:fileDialog.documents"),
+        extensions: [...MARKDOWN_EXTENSIONS, ...NOTEBOOK_EXTENSIONS, ...D2_EXTENSIONS] as string[],
+      },
+      {
+        name: t("common:fileDialog.markdown"),
+        extensions: MARKDOWN_EXTENSIONS as string[],
+      },
+      {
+        name: t("common:fileDialog.notebook"),
+        extensions: NOTEBOOK_EXTENSIONS as string[],
+      },
+      {
+        name: t("common:fileDialog.d2"),
+        extensions: D2_EXTENSIONS as string[],
+      },
+    ]);
     if (selected) {
-      const paths = Array.isArray(selected) ? selected : [selected];
-      for (const path of paths) {
+      for (const path of selected) {
         await openFile(path);
       }
     }

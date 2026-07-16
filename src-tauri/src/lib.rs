@@ -2,6 +2,7 @@ mod canvas;
 mod cli;
 mod commands;
 mod d2;
+mod grants;
 mod image;
 mod markdown;
 // Menus (tauri::menu), sync (git2), and telemetry (sentry) don't exist on
@@ -184,6 +185,7 @@ pub fn run() {
         .manage(commands::InitialFolder(Mutex::new(None)))
         .manage(commands::CliExport(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
+        .manage(grants::GrantRegistry::default())
         .setup(|app| {
             // Seed the registry's "main" entry so routing knows what the first
             // window shows; a desktop folder launch overrides it below.
@@ -229,6 +231,33 @@ pub fn run() {
                 let plugin_path = plugin_arg("file");
                 let plugin_export = plugin_arg("export-website");
                 let env_args: Vec<String> = std::env::args().collect();
+                // Session restore and the recent-files menu re-open paths from
+                // earlier sessions; seed their grants from the persisted settings
+                // store (AppData, with AppConfig as the Linux fallback spelling).
+                {
+                    let grant_registry = app.state::<grants::GrantRegistry>();
+                    let handle = app.handle();
+                    for base in [
+                        handle.path().app_data_dir().ok(),
+                        handle.path().app_config_dir().ok(),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    {
+                        let Ok(raw) = std::fs::read_to_string(base.join("settings.json")) else {
+                            continue;
+                        };
+                        let (workspaces, files) = grant_registry.seed_from_settings_json(&raw);
+                        for dir in &workspaces {
+                            grants::allow_asset_dir(handle, dir);
+                        }
+                        for file in &files {
+                            grants::allow_asset_file(handle, file);
+                        }
+                        break;
+                    }
+                }
+                let grant_registry = app.state::<grants::GrantRegistry>();
                 match cli::launch_plan(
                     plugin_path.as_deref(),
                     plugin_export.as_deref(),
@@ -243,15 +272,25 @@ pub fn run() {
                         // Headless: the workspace is not opened in the UI and the
                         // window stays hidden; the frontend runs the export on
                         // mount and exits via `finish_cli_export`.
+                        let _ = grant_registry.grant_workspace(std::path::Path::new(&root));
+                        let _ = grant_registry.grant_export_dir(std::path::Path::new(&out_dir));
                         *app.state::<commands::CliExport>().0.lock().unwrap() =
                             Some(commands::export::CliExportRequest { root, out_dir });
                     }
                     Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::Folder(p)))) => {
+                        if let Ok(canonical) =
+                            grant_registry.grant_workspace(std::path::Path::new(&p))
+                        {
+                            grants::allow_asset_dir(app.handle(), &canonical);
+                        }
                         app.state::<windows::WindowRegistry>()
                             .set_workspace("main", Some(p.clone()));
                         *app.state::<commands::InitialFolder>().0.lock().unwrap() = Some(p);
                     }
                     Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::File(p)))) => {
+                        if let Ok(canonical) = grant_registry.grant_file(std::path::Path::new(&p)) {
+                            grants::allow_asset_file(app.handle(), &canonical);
+                        }
                         *app.state::<commands::InitialFile>().0.lock().unwrap() = Some(p);
                     }
                     Ok(cli::CliLaunch::Open(Some(
@@ -316,6 +355,18 @@ pub fn run() {
             commands::file::get_initial_file,
             #[cfg(desktop)]
             commands::file::print_document,
+            #[cfg(desktop)]
+            commands::pick::pick_folder,
+            #[cfg(desktop)]
+            commands::pick::pick_files,
+            #[cfg(desktop)]
+            commands::pick::pick_save,
+            #[cfg(desktop)]
+            commands::pick::pick_export_dir,
+            #[cfg(desktop)]
+            commands::pick::pick_plugin_dir,
+            #[cfg(desktop)]
+            commands::pick::pick_move_dir,
             commands::export::get_cli_export,
             commands::export_runtime::finish_cli_export,
             commands::default_app::set_default_markdown_app,
@@ -410,6 +461,7 @@ mod tests {
     fn routed_app() -> tauri::App<MockRuntime> {
         let app = mock_app_with_main_window();
         app.manage(crate::windows::WindowRegistry::new());
+        app.manage(crate::grants::GrantRegistry::default());
         // The initial-file/folder state that `handle_opened_paths` stashes into
         // (the cold-start safety net) so tests can read the stash back.
         app.manage(commands::InitialFile(Mutex::new(None)));
@@ -553,6 +605,34 @@ mod tests {
     }
 
     #[test]
+    fn handle_opened_paths_mints_grants_for_routed_paths() {
+        let cwd = unique_tmp("op_grants");
+        let folder = cwd.join("workspace");
+        fs::create_dir_all(&folder).unwrap();
+        let file = cwd.join("note.md");
+        fs::write(&file, "hi").unwrap();
+
+        let app = routed_app();
+        handle_opened_paths(&app.handle().clone(), vec![folder.clone()]);
+        let app2 = routed_app();
+        handle_opened_paths(&app2.handle().clone(), vec![file.clone()]);
+
+        let grants = app.state::<crate::grants::GrantRegistry>();
+        assert!(grants
+            .ensure_workspace(folder.to_string_lossy().as_ref())
+            .is_ok());
+        let grants2 = app2.state::<crate::grants::GrantRegistry>();
+        assert!(grants2
+            .ensure_readable(file.to_string_lossy().as_ref())
+            .is_ok());
+        // The other app never saw the file, so it stays denied there.
+        assert!(grants
+            .ensure_readable(file.to_string_lossy().as_ref())
+            .is_err());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
     fn handle_opened_paths_ignores_unsupported_files() {
         let cwd = unique_tmp("op_txt");
         let file = cwd.join("evil.txt");
@@ -584,5 +664,53 @@ mod tests {
         // manager), but constructing it covers the cfg-gated plugin setup.
         let builder = make_app_builder();
         std::mem::drop(builder);
+    }
+
+    // Each (directive, source) pair backs a shipped surface: WASM for
+    // Mermaid/D2, blob/data scripts for the plugin worker sandbox, remote
+    // schemes for document-embedded images/media, https for AI providers and
+    // the marketplace, inline styles for theme injection.
+    #[test]
+    fn csp_keeps_every_surface_the_app_depends_on() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let sec = &conf["app"]["security"];
+        for key in ["csp", "devCsp"] {
+            let csp = sec[key].as_str().unwrap();
+            for (directive, source) in [
+                ("script-src", "'wasm-unsafe-eval'"),
+                ("script-src", "blob:"),
+                ("script-src", "data:"),
+                ("img-src", "https:"),
+                ("img-src", "http:"),
+                ("img-src", "asset:"),
+                ("img-src", "data:"),
+                ("img-src", "blob:"),
+                ("media-src", "https:"),
+                ("connect-src", "https:"),
+                ("connect-src", "ipc:"),
+                ("style-src", "'unsafe-inline'"),
+                ("font-src", "data:"),
+            ] {
+                let value = csp
+                    .split(';')
+                    .find(|d| d.trim_start().starts_with(directive))
+                    .unwrap_or_else(|| panic!("{key} is missing {directive}"));
+                assert!(
+                    value.contains(source),
+                    "{key}: {directive} must keep {source}"
+                );
+            }
+            assert!(
+                csp.contains("object-src 'none'"),
+                "{key} must keep object-src 'none'"
+            );
+            assert!(
+                csp.contains("frame-src 'none'"),
+                "{key} must keep frame-src 'none'"
+            );
+        }
+        let allow = sec["assetProtocol"]["scope"]["allow"].as_array().unwrap();
+        assert!(allow.is_empty(), "asset scope must stay empty at rest");
     }
 }

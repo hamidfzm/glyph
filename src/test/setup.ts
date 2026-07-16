@@ -37,9 +37,8 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   readTextFile: vi.fn(() => Promise.resolve("")),
 }));
 
+// open/save moved to the backend pickers in src/lib/pickers.ts.
 vi.mock("@tauri-apps/plugin-dialog", () => ({
-  open: vi.fn(),
-  save: vi.fn(),
   ask: vi.fn(() => Promise.resolve(true)),
 }));
 

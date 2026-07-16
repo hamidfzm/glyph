@@ -7,6 +7,9 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use tauri::State;
+
+use crate::grants::GrantRegistry;
 
 const DEFAULT_NOTE_STEM: &str = "Untitled";
 const DEFAULT_FOLDER_NAME: &str = "Untitled Folder";
@@ -58,27 +61,42 @@ fn sanitize_name(name: &str) -> String {
 }
 
 #[tauri::command]
-pub fn create_note(dir: String, root: String) -> Result<String, String> {
+pub fn create_note(
+    dir: String,
+    root: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<String, String> {
+    let root = grants.ensure_workspace(&root)?;
     let dir = Path::new(&dir);
-    ensure_within_root(dir, Path::new(&root))?;
+    ensure_within_root(dir, &root)?;
     let path = unique_path(dir, DEFAULT_NOTE_STEM, Some("md"));
     fs::write(&path, "").map_err(|e| format!("Failed to create note: {e}"))?;
     Ok(path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
-pub fn create_canvas(dir: String, root: String) -> Result<String, String> {
+pub fn create_canvas(
+    dir: String,
+    root: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<String, String> {
+    let root = grants.ensure_workspace(&root)?;
     let dir = Path::new(&dir);
-    ensure_within_root(dir, Path::new(&root))?;
+    ensure_within_root(dir, &root)?;
     let path = unique_path(dir, DEFAULT_NOTE_STEM, Some("canvas"));
     fs::write(&path, EMPTY_CANVAS).map_err(|e| format!("Failed to create canvas: {e}"))?;
     Ok(path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
-pub fn create_folder(dir: String, root: String) -> Result<String, String> {
+pub fn create_folder(
+    dir: String,
+    root: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<String, String> {
+    let root = grants.ensure_workspace(&root)?;
     let dir = Path::new(&dir);
-    ensure_within_root(dir, Path::new(&root))?;
+    ensure_within_root(dir, &root)?;
     let path = unique_path(dir, DEFAULT_FOLDER_NAME, None);
     fs::create_dir(&path).map_err(|e| format!("Failed to create folder: {e}"))?;
     Ok(path.to_string_lossy().to_string())
@@ -89,12 +107,18 @@ pub fn create_folder(dir: String, root: String) -> Result<String, String> {
 /// the typed name doesn't carry one (so "My Note" stays a `.md` file). Returns
 /// the final (collision-safe) path.
 #[tauri::command]
-pub fn rename_path(path: String, new_name: String, root: String) -> Result<String, String> {
+pub fn rename_path(
+    path: String,
+    new_name: String,
+    root: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<String, String> {
+    let root = grants.ensure_workspace(&root)?;
     let source = Path::new(&path);
     let parent = source
         .parent()
         .ok_or_else(|| "Path has no parent directory".to_string())?;
-    ensure_within_root(parent, Path::new(&root))?;
+    ensure_within_root(parent, &root)?;
 
     let sanitized = sanitize_name(&new_name);
     if sanitized.is_empty() {
@@ -150,12 +174,17 @@ fn copy_dir_recursive(from: &Path, to: &Path) -> std::io::Result<()> {
 /// (`Note copy 1.md` on collision), `Folder` → `Folder copy`. Returns the new
 /// path. Folders are copied recursively. Validated to stay inside `root`.
 #[tauri::command]
-pub fn duplicate_path(path: String, root: String) -> Result<String, String> {
+pub fn duplicate_path(
+    path: String,
+    root: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<String, String> {
+    let root = grants.ensure_workspace(&root)?;
     let source = Path::new(&path);
     let parent = source
         .parent()
         .ok_or_else(|| "Path has no parent directory".to_string())?;
-    ensure_within_root(parent, Path::new(&root))?;
+    ensure_within_root(parent, &root)?;
 
     let ext = source.extension().and_then(|e| e.to_str());
     let stem = if ext.is_some() {
@@ -180,14 +209,20 @@ pub fn duplicate_path(path: String, root: String) -> Result<String, String> {
 /// can't be moved into itself or a descendant. Returns the new path; a move
 /// into the current directory is a no-op that returns the original path.
 #[tauri::command]
-pub fn move_path(from: String, to_dir: String, root: String) -> Result<String, String> {
+pub fn move_path(
+    from: String,
+    to_dir: String,
+    root: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<String, String> {
+    let root = grants.ensure_workspace(&root)?;
     let source = Path::new(&from);
     let dest_dir = Path::new(&to_dir);
     let parent = source
         .parent()
         .ok_or_else(|| "Path has no parent directory".to_string())?;
-    ensure_within_root(parent, Path::new(&root))?;
-    ensure_within_root(dest_dir, Path::new(&root))?;
+    ensure_within_root(parent, &root)?;
+    ensure_within_root(dest_dir, &root)?;
 
     let source_abs = source
         .canonicalize()
@@ -222,12 +257,17 @@ pub fn move_path(from: String, to_dir: String, root: String) -> Result<String, S
 /// Permanently delete a note or folder. The frontend always confirms first.
 /// Folders are removed recursively. Validated to stay inside `root`.
 #[tauri::command]
-pub fn delete_path(path: String, root: String) -> Result<(), String> {
+pub fn delete_path(
+    path: String,
+    root: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<(), String> {
+    let root = grants.ensure_workspace(&root)?;
     let target = Path::new(&path);
     let parent = target
         .parent()
         .ok_or_else(|| "Path has no parent directory".to_string())?;
-    ensure_within_root(parent, Path::new(&root))?;
+    ensure_within_root(parent, &root)?;
     if target.is_dir() {
         fs::remove_dir_all(target).map_err(|e| format!("Failed to delete folder: {e}"))
     } else {
@@ -239,6 +279,54 @@ pub fn delete_path(path: String, root: String) -> Result<(), String> {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use tauri::test::{mock_app, MockRuntime};
+    use tauri::Manager;
+
+    fn app_with_root(root: &str) -> tauri::App<MockRuntime> {
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        app.state::<GrantRegistry>()
+            .grant_workspace(Path::new(root))
+            .unwrap();
+        app
+    }
+
+    // Local wrappers shadow the real commands (local items win over the
+    // `use super::*` glob) so the pre-grant test bodies stay unchanged.
+    fn create_note(dir: String, root: String) -> Result<String, String> {
+        let app = app_with_root(&root);
+        super::create_note(dir, root, app.state::<GrantRegistry>())
+    }
+
+    fn create_canvas(dir: String, root: String) -> Result<String, String> {
+        let app = app_with_root(&root);
+        super::create_canvas(dir, root, app.state::<GrantRegistry>())
+    }
+
+    fn create_folder(dir: String, root: String) -> Result<String, String> {
+        let app = app_with_root(&root);
+        super::create_folder(dir, root, app.state::<GrantRegistry>())
+    }
+
+    fn rename_path(path: String, new_name: String, root: String) -> Result<String, String> {
+        let app = app_with_root(&root);
+        super::rename_path(path, new_name, root, app.state::<GrantRegistry>())
+    }
+
+    fn duplicate_path(path: String, root: String) -> Result<String, String> {
+        let app = app_with_root(&root);
+        super::duplicate_path(path, root, app.state::<GrantRegistry>())
+    }
+
+    fn move_path(from: String, to_dir: String, root: String) -> Result<String, String> {
+        let app = app_with_root(&root);
+        super::move_path(from, to_dir, root, app.state::<GrantRegistry>())
+    }
+
+    fn delete_path(path: String, root: String) -> Result<(), String> {
+        let app = app_with_root(&root);
+        super::delete_path(path, root, app.state::<GrantRegistry>())
+    }
 
     fn unique_tmp(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -309,6 +397,18 @@ mod tests {
         .unwrap();
         assert!(Path::new(&path).starts_with(&sub));
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn ungranted_root_is_refused_even_when_dir_equals_root() {
+        let dir = unique_tmp("ungranted_root");
+        let root = dir.to_string_lossy().to_string();
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        let result = super::create_note(root.clone(), root.clone(), app.state::<GrantRegistry>());
+        let err = result.expect_err("must be denied");
+        assert!(err.starts_with("path is outside the allowed workspaces and files:"));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

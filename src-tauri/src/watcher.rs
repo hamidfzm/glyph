@@ -1,8 +1,9 @@
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
+
+use crate::grants::GrantRegistry;
 
 pub struct FileWatcherState(pub Arc<Mutex<HashMap<String, RecommendedWatcher>>>);
 
@@ -45,7 +46,14 @@ fn forward_watch_event(
 }
 
 #[tauri::command]
-pub fn watch_file<R: Runtime>(path: String, app: AppHandle<R>) -> Result<(), String> {
+pub fn watch_file<R: Runtime>(
+    path: String,
+    app: AppHandle<R>,
+    grants: State<'_, GrantRegistry>,
+) -> Result<(), String> {
+    // Watch the canonical path, but key the map and emit events in the
+    // frontend's own path spelling so they keep matching its tab paths.
+    let canonical = grants.ensure_watchable(&path)?;
     let state = app.state::<FileWatcherState>();
     let mut watchers = state.0.lock().map_err(|e| format!("Lock error: {e}"))?;
 
@@ -64,7 +72,7 @@ pub fn watch_file<R: Runtime>(path: String, app: AppHandle<R>) -> Result<(), Str
     .map_err(|e| format!("Failed to create watcher: {e}"))?;
 
     watcher
-        .watch(Path::new(&path), RecursiveMode::NonRecursive)
+        .watch(&canonical, RecursiveMode::NonRecursive)
         .map_err(|e| format!("Failed to watch file: {e}"))?;
 
     watchers.insert(path, watcher);
@@ -80,7 +88,12 @@ pub fn unwatch_file<R: Runtime>(path: String, app: AppHandle<R>) -> Result<(), S
 }
 
 #[tauri::command]
-pub fn watch_directory<R: Runtime>(path: String, app: AppHandle<R>) -> Result<(), String> {
+pub fn watch_directory<R: Runtime>(
+    path: String,
+    app: AppHandle<R>,
+    grants: State<'_, GrantRegistry>,
+) -> Result<(), String> {
+    let canonical = grants.ensure_watchable(&path)?;
     let state = app.state::<FileWatcherState>();
     let mut watchers = state.0.lock().map_err(|e| format!("Lock error: {e}"))?;
 
@@ -98,7 +111,7 @@ pub fn watch_directory<R: Runtime>(path: String, app: AppHandle<R>) -> Result<()
     .map_err(|e| format!("Failed to create watcher: {e}"))?;
 
     watcher
-        .watch(Path::new(&path), RecursiveMode::Recursive)
+        .watch(&canonical, RecursiveMode::Recursive)
         .map_err(|e| format!("Failed to watch directory: {e}"))?;
 
     watchers.insert(path, watcher);
@@ -136,7 +149,12 @@ mod tests {
     fn mock_app_with_state() -> App<MockRuntime> {
         let app = mock_app();
         app.manage(FileWatcherState(Arc::new(Mutex::new(HashMap::new()))));
+        app.manage(GrantRegistry::default());
         app
+    }
+
+    fn grant_dir(app: &App<MockRuntime>, dir: &std::path::Path) {
+        app.state::<GrantRegistry>().grant_workspace(dir).unwrap();
     }
 
     /// Number of paths currently registered in the watcher state map.
@@ -331,7 +349,13 @@ mod tests {
         let path = file.to_string_lossy().to_string();
 
         let app = mock_app_with_state();
-        assert!(watch_file(path.clone(), app.handle().clone()).is_ok());
+        grant_dir(&app, &dir);
+        assert!(watch_file(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .is_ok());
 
         assert!(is_watched(&app, &path));
         assert_eq!(watched_count(&app), 1);
@@ -346,10 +370,21 @@ mod tests {
         let path = file.to_string_lossy().to_string();
 
         let app = mock_app_with_state();
-        assert!(watch_file(path.clone(), app.handle().clone()).is_ok());
+        grant_dir(&app, &dir);
+        assert!(watch_file(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .is_ok());
         // Second call hits the early `contains_key` return and must not add a
         // duplicate entry.
-        assert!(watch_file(path.clone(), app.handle().clone()).is_ok());
+        assert!(watch_file(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .is_ok());
 
         assert_eq!(watched_count(&app), 1);
         let _ = std::fs::remove_dir_all(&dir);
@@ -362,7 +397,12 @@ mod tests {
         let path = missing.to_string_lossy().to_string();
 
         let app = mock_app_with_state();
-        let result = watch_file(path.clone(), app.handle().clone());
+        grant_dir(&app, &dir);
+        let result = watch_file(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        );
 
         assert!(result.is_err(), "watching a missing path should fail");
         // A failed watch must not leave a dangling entry behind.
@@ -378,7 +418,13 @@ mod tests {
         let path = file.to_string_lossy().to_string();
 
         let app = mock_app_with_state();
-        watch_file(path.clone(), app.handle().clone()).unwrap();
+        grant_dir(&app, &dir);
+        watch_file(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
         assert_eq!(watched_count(&app), 1);
 
         assert!(unwatch_file(path.clone(), app.handle().clone()).is_ok());
@@ -400,7 +446,13 @@ mod tests {
         let path = dir.to_string_lossy().to_string();
 
         let app = mock_app_with_state();
-        assert!(watch_directory(path.clone(), app.handle().clone()).is_ok());
+        grant_dir(&app, &dir);
+        assert!(watch_directory(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .is_ok());
 
         assert!(is_watched(&app, &path));
         assert_eq!(watched_count(&app), 1);
@@ -413,8 +465,19 @@ mod tests {
         let path = dir.to_string_lossy().to_string();
 
         let app = mock_app_with_state();
-        assert!(watch_directory(path.clone(), app.handle().clone()).is_ok());
-        assert!(watch_directory(path.clone(), app.handle().clone()).is_ok());
+        grant_dir(&app, &dir);
+        assert!(watch_directory(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .is_ok());
+        assert!(watch_directory(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .is_ok());
 
         assert_eq!(watched_count(&app), 1);
         let _ = std::fs::remove_dir_all(&dir);
@@ -427,7 +490,12 @@ mod tests {
         let path = missing.to_string_lossy().to_string();
 
         let app = mock_app_with_state();
-        let result = watch_directory(path.clone(), app.handle().clone());
+        grant_dir(&app, &dir);
+        let result = watch_directory(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        );
 
         assert!(result.is_err(), "watching a missing directory should fail");
         assert!(!is_watched(&app, &path));
@@ -440,7 +508,13 @@ mod tests {
         let path = dir.to_string_lossy().to_string();
 
         let app = mock_app_with_state();
-        watch_directory(path.clone(), app.handle().clone()).unwrap();
+        grant_dir(&app, &dir);
+        watch_directory(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
         assert_eq!(watched_count(&app), 1);
 
         assert!(unwatch_directory(path.clone(), app.handle().clone()).is_ok());
@@ -457,6 +531,32 @@ mod tests {
     }
 
     #[test]
+    fn watch_commands_are_denied_without_a_grant() {
+        let dir = unique_tmp("watch_denied");
+        let file = dir.join("note.md");
+        std::fs::write(&file, "hello").unwrap();
+
+        let app = mock_app_with_state();
+        let file_result = watch_file(
+            file.to_string_lossy().to_string(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        );
+        let dir_result = watch_directory(
+            dir.to_string_lossy().to_string(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        );
+
+        for result in [file_result, dir_result] {
+            let err = result.expect_err("must be denied");
+            assert!(err.starts_with("path is outside the allowed workspaces and files:"));
+        }
+        assert_eq!(watched_count(&app), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn watch_file_emits_file_changed_when_the_file_is_modified() {
         let dir = unique_tmp("watch_file_emit");
         let file = dir.join("note.md");
@@ -464,8 +564,14 @@ mod tests {
         let path = file.to_string_lossy().to_string();
 
         let app = mock_app_with_state();
+        grant_dir(&app, &dir);
         let fired = count_event(&app, "file-changed");
-        watch_file(path.clone(), app.handle().clone()).unwrap();
+        watch_file(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
 
         // Modify the watched file; the watcher closure should emit on Modify.
         std::fs::write(&file, "changed").unwrap();
@@ -481,8 +587,14 @@ mod tests {
         let path = dir.to_string_lossy().to_string();
 
         let app = mock_app_with_state();
+        grant_dir(&app, &dir);
         let fired = count_event(&app, "directory-changed");
-        watch_directory(path.clone(), app.handle().clone()).unwrap();
+        watch_directory(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
 
         // Creating a markdown file inside the watched dir is a relevant change.
         std::fs::write(dir.join("new.md"), "# hi").unwrap();

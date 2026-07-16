@@ -1,5 +1,7 @@
 # Security Policy
 
+See the [filesystem threat model](docs/security/threat-model.md) for how Glyph limits what the app's webview can read and write.
+
 ## Supported Versions
 
 | Version | Supported          |

@@ -1,9 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { pickFiles, pickFolder } from "@/lib/pickers";
 import { useTabs } from "./useTabs";
+
+vi.mock("@/lib/pickers", () => ({
+  pickFolder: vi.fn(),
+  pickFiles: vi.fn(),
+}));
 
 type Invoker = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -96,7 +102,8 @@ beforeEach(() => {
   vi.mocked(invoke).mockImplementation(makeInvoker() as typeof invoke);
   vi.mocked(listen).mockReset();
   vi.mocked(listen).mockResolvedValue(() => {});
-  vi.mocked(open).mockReset();
+  vi.mocked(pickFolder).mockReset();
+  vi.mocked(pickFiles).mockReset();
 });
 
 afterEach(() => {
@@ -1453,7 +1460,7 @@ describe("useTabs close coordinator", () => {
 
 describe("useTabs dialog and events", () => {
   it("openFileDialog opens each selected path", async () => {
-    vi.mocked(open).mockResolvedValue(["/p/x.md", "/p/y.md"]);
+    vi.mocked(pickFiles).mockResolvedValue(["/p/x.md", "/p/y.md"]);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
@@ -1465,7 +1472,7 @@ describe("useTabs dialog and events", () => {
   });
 
   it("openFileDialog is a no-op when nothing is selected", async () => {
-    vi.mocked(open).mockResolvedValue(null);
+    vi.mocked(pickFiles).mockResolvedValue(null);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
@@ -2919,7 +2926,7 @@ describe("useTabs concurrent opens", () => {
 
 describe("useTabs workspace interactions", () => {
   it("openFolder with no path prompts a dialog and routes the choice via the window manager", async () => {
-    vi.mocked(open).mockResolvedValue("/p/picked");
+    vi.mocked(pickFolder).mockResolvedValue("/p/picked");
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
@@ -2927,14 +2934,14 @@ describe("useTabs workspace interactions", () => {
       await result.current.openFolder();
     });
 
-    expect(open).toHaveBeenCalledWith({ directory: true, multiple: false });
+    expect(pickFolder).toHaveBeenCalled();
     // The pick is handed to Rust routing (which may focus, adopt, or spawn a
     // window); the frontend does not adopt it directly here.
     expect(invoke).toHaveBeenCalledWith("request_open", { kind: "folder", path: "/p/picked" });
   });
 
   it("openFolder bails when the directory dialog is cancelled", async () => {
-    vi.mocked(open).mockResolvedValue(null);
+    vi.mocked(pickFolder).mockResolvedValue(null);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
@@ -3279,8 +3286,8 @@ describe("useTabs guards and no-ops", () => {
     expect(onSettingsChange).toHaveBeenCalledWith("behavior.recentFiles", ["/p/first.md"]);
   });
 
-  it("openFileDialog opens a single path when the dialog returns a string", async () => {
-    vi.mocked(open).mockResolvedValue("/p/solo.md");
+  it("openFileDialog opens a single selected path", async () => {
+    vi.mocked(pickFiles).mockResolvedValue(["/p/solo.md"]);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 

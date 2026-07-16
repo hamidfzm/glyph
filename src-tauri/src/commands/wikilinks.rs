@@ -4,6 +4,7 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 use super::walk::{WALK_MAX_DEPTH, WALK_MAX_FILES, WALK_SKIP_DIRS};
+use crate::grants::GrantRegistry;
 
 const SCAN_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 const SCAN_MAX_SNIPPET: usize = 200;
@@ -22,7 +23,11 @@ pub struct WikilinkRef {
 }
 
 #[tauri::command]
-pub fn scan_wikilinks(path: String) -> Result<Vec<WikilinkRef>, String> {
+pub fn scan_wikilinks(
+    path: String,
+    grants: tauri::State<'_, GrantRegistry>,
+) -> Result<Vec<WikilinkRef>, String> {
+    grants.ensure_readable(&path)?;
     scan_wikilinks_capped(&path, WALK_MAX_FILES)
 }
 
@@ -142,6 +147,15 @@ fn snippet_for(line: &str) -> String {
 mod tests {
     use super::*;
     use std::time::UNIX_EPOCH;
+    use tauri::test::{mock_app, MockRuntime};
+    use tauri::Manager;
+
+    fn app_with_workspace(dir: &std::path::Path) -> tauri::App<MockRuntime> {
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        app.state::<GrantRegistry>().grant_workspace(dir).unwrap();
+        app
+    }
 
     fn unique_tmp(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -167,7 +181,11 @@ mod tests {
         .unwrap();
         fs::write(dir.join("b.md"), "no links here").unwrap();
 
-        let mut refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let mut refs = scan_wikilinks(
+            dir.to_string_lossy().to_string(),
+            app_with_workspace(&dir).state::<GrantRegistry>(),
+        )
+        .unwrap();
         refs.sort_by_key(|r| (r.source.clone(), r.line));
         let from_a: Vec<_> = refs.iter().filter(|r| r.source.ends_with("a.md")).collect();
         assert_eq!(from_a.len(), 2);
@@ -189,7 +207,11 @@ mod tests {
         )
         .unwrap();
 
-        let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let refs = scan_wikilinks(
+            dir.to_string_lossy().to_string(),
+            app_with_workspace(&dir).state::<GrantRegistry>(),
+        )
+        .unwrap();
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert!(targets.contains(&"Real"));
         assert!(targets.contains(&"AlsoReal"));
@@ -203,7 +225,11 @@ mod tests {
         let dir = unique_tmp("scan_multi");
         fs::write(dir.join("a.md"), "[[One]] then [[Two]] then [[Three]]\n").unwrap();
 
-        let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let refs = scan_wikilinks(
+            dir.to_string_lossy().to_string(),
+            app_with_workspace(&dir).state::<GrantRegistry>(),
+        )
+        .unwrap();
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert_eq!(targets, vec!["One", "Two", "Three"]);
         for r in &refs {
@@ -222,7 +248,11 @@ mod tests {
         )
         .unwrap();
 
-        let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let refs = scan_wikilinks(
+            dir.to_string_lossy().to_string(),
+            app_with_workspace(&dir).state::<GrantRegistry>(),
+        )
+        .unwrap();
         assert_eq!(refs.len(), 1);
         assert_eq!(refs[0].line, 2);
         assert_eq!(refs[0].target, "Target#section|alias");
@@ -237,10 +267,31 @@ mod tests {
         let long_line = format!("{}[[Target]]{}", "x".repeat(150), "y".repeat(150));
         fs::write(dir.join("a.md"), &long_line).unwrap();
 
-        let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let refs = scan_wikilinks(
+            dir.to_string_lossy().to_string(),
+            app_with_workspace(&dir).state::<GrantRegistry>(),
+        )
+        .unwrap();
         assert_eq!(refs.len(), 1);
         assert!(refs[0].snippet.ends_with('…'));
         assert!(refs[0].snippet.chars().count() <= SCAN_MAX_SNIPPET + 1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_wikilinks_denied_without_a_grant() {
+        let dir = unique_tmp("scan_denied");
+        fs::write(dir.join("a.md"), "[[B]]").unwrap();
+
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        let result = scan_wikilinks(
+            dir.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
+        let err = result.expect_err("must be denied");
+        assert!(err.starts_with("path is outside the allowed workspaces and files:"));
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -250,7 +301,11 @@ mod tests {
         let dir = unique_tmp("scan_not_dir");
         let file = dir.join("a.md");
         fs::write(&file, "x").unwrap();
-        let result = scan_wikilinks(file.to_string_lossy().to_string());
+        let app = app_with_workspace(&dir);
+        let result = scan_wikilinks(
+            file.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
         assert!(result.is_err());
         let _ = fs::remove_dir_all(&dir);
     }
@@ -266,7 +321,11 @@ mod tests {
         fs::create_dir_all(dir.join(".hidden")).unwrap();
         fs::write(dir.join(".hidden/ignored.md"), "see [[Hidden]]").unwrap();
 
-        let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let refs = scan_wikilinks(
+            dir.to_string_lossy().to_string(),
+            app_with_workspace(&dir).state::<GrantRegistry>(),
+        )
+        .unwrap();
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert_eq!(targets, vec!["Kept"]);
 
@@ -279,7 +338,11 @@ mod tests {
         fs::write(dir.join("a.md"), "see [[FromMd]]").unwrap();
         fs::write(dir.join("notes.txt"), "see [[FromTxt]]").unwrap();
 
-        let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let refs = scan_wikilinks(
+            dir.to_string_lossy().to_string(),
+            app_with_workspace(&dir).state::<GrantRegistry>(),
+        )
+        .unwrap();
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert_eq!(targets, vec!["FromMd"]);
 
@@ -294,7 +357,11 @@ mod tests {
         fs::write(dir.join("big.md"), big).unwrap();
         fs::write(dir.join("small.md"), "see [[FromSmall]]").unwrap();
 
-        let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let refs = scan_wikilinks(
+            dir.to_string_lossy().to_string(),
+            app_with_workspace(&dir).state::<GrantRegistry>(),
+        )
+        .unwrap();
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert_eq!(targets, vec!["FromSmall"]);
 
@@ -311,7 +378,11 @@ mod tests {
         .unwrap();
         fs::write(dir.join("good.md"), "see [[Good]]").unwrap();
 
-        let refs = scan_wikilinks(dir.to_string_lossy().to_string()).unwrap();
+        let refs = scan_wikilinks(
+            dir.to_string_lossy().to_string(),
+            app_with_workspace(&dir).state::<GrantRegistry>(),
+        )
+        .unwrap();
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert_eq!(targets, vec!["Good"]);
 

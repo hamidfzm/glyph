@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { deriveExportMeta } from "@/lib/export/meta";
 import { prepareContent } from "@/lib/export/prepareContent";
+import { pickSave } from "@/lib/pickers";
 import type { ExporterContribution } from "./types";
 
 export interface RunExporterOptions {
@@ -28,10 +28,9 @@ export async function runExporter({
   if (prepared == null) return; // nothing rendered to export
 
   const meta = deriveExportMeta(filePath, content);
-  const path = await save({
-    defaultPath: `${meta.baseName}.${exporter.extension}`,
-    filters: [{ name: exporter.label, extensions: [exporter.extension] }],
-  });
+  const path = await pickSave(`${meta.baseName}.${exporter.extension}`, exporter.label, [
+    exporter.extension,
+  ]);
   if (!path) return; // user cancelled
 
   const output = await exporter.build(prepared.html);
