@@ -1,9 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { isMac, isMobile, isMobilePlatform, modKey } from "./platform";
+import { currentPlatform, isMac, isMobile, isMobilePlatform, modKey } from "./platform";
 
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: vi.fn(() => "windows"),
-}));
+// @tauri-apps/plugin-os is mocked globally in src/test/setup.ts.
+
+describe("currentPlatform", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("narrows a known platform", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("android");
+    expect(currentPlatform()).toBe("android");
+  });
+
+  it("maps unrecognized platforms to unknown", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("freebsd" as ReturnType<typeof platform>);
+    expect(currentPlatform()).toBe("unknown");
+  });
+
+  it("falls back to unknown when the OS plugin throws", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockImplementation(() => {
+      throw new Error("no tauri runtime");
+    });
+    expect(currentPlatform()).toBe("unknown");
+  });
+});
 
 describe("isMac", () => {
   it("returns true for macos", () => {

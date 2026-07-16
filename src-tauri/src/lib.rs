@@ -4,25 +4,18 @@ mod commands;
 mod d2;
 mod image;
 mod markdown;
+// Menus (tauri::menu), sync (git2), and telemetry (sentry) don't exist or
+// don't cross-compile on mobile. Their modules, managed state, and
+// `generate_handler!` entries are all cfg-gated to desktop; the frontend
+// never invokes them on mobile.
 #[cfg(desktop)]
 mod menu;
 #[cfg(desktop)]
 mod menu_runtime;
-// `tauri::menu` doesn't exist on mobile; a stub module answers the same
-// commands so one `generate_handler!` list serves both targets.
-#[cfg(mobile)]
-#[path = "menu_runtime_mobile.rs"]
-mod menu_runtime;
 mod notebook;
 mod secrets;
 mod sync;
-// Telemetry (sentry) doesn't cross-compile for mobile; a stub module
-// answers the same command there. Sync gates its git backend the same
-// way inside sync/mod.rs.
 #[cfg(desktop)]
-mod telemetry;
-#[cfg(mobile)]
-#[path = "telemetry_mobile.rs"]
 mod telemetry;
 mod watcher;
 mod windows;
@@ -165,9 +158,8 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_store::Builder::new().build());
 
-    // CLI args, window-state restoration, and the native menu bar only exist
-    // on desktop; both plugins are desktop-only crates (see the Cargo.toml
-    // target table).
+    // CLI args, window-state restoration, the native menu bar, sync, and
+    // telemetry only exist on desktop (see the Cargo.toml target table).
     #[cfg(desktop)]
     let builder = builder
         .plugin(tauri_plugin_cli::init())
@@ -182,7 +174,9 @@ pub fn run() {
                 )
                 .build(),
         )
-        .on_menu_event(menu::handle_menu_event);
+        .on_menu_event(menu::handle_menu_event)
+        .manage(sync::SyncState::new())
+        .manage(telemetry::TelemetryState(Mutex::new(None)));
 
     let app = builder
         .manage(FileWatcherState(Arc::new(Mutex::new(
@@ -191,13 +185,12 @@ pub fn run() {
         .manage(commands::InitialFile(Mutex::new(None)))
         .manage(commands::InitialFolder(Mutex::new(None)))
         .manage(commands::CliExport(Mutex::new(None)))
-        .manage(sync::SyncState::new())
-        .manage(telemetry::TelemetryState(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
         .setup(|app| {
-            // Mobile has no menu bar and no CLI: the main window simply starts
-            // with no workspace, and the desktop-only block below compiles out.
-            #[cfg(mobile)]
+            // Seed the window registry's "main" entry so routing knows what
+            // the first window shows before its frontend reports back; the
+            // desktop CLI block below overrides it for folder launches.
+            // Mobile stops here (no menu bar, no CLI).
             app.state::<windows::WindowRegistry>()
                 .set_workspace("main", None);
 
@@ -240,11 +233,9 @@ pub fn run() {
                 let plugin_path = plugin_arg("file");
                 let plugin_export = plugin_arg("export-website");
                 let env_args: Vec<String> = std::env::args().collect();
-                // Seed the window registry's "main" entry so routing knows what the
-                // first window shows before its frontend reports back. A folder
-                // launch pre-registers the workspace; everything else leaves main
+                // "main" is already seeded workspace-less above; only a folder
+                // launch pre-registers a workspace. Everything else leaves it
                 // empty (loose file / no document / headless export).
-                let registry = app.state::<windows::WindowRegistry>();
                 match cli::launch_plan(
                     plugin_path.as_deref(),
                     plugin_export.as_deref(),
@@ -259,27 +250,23 @@ pub fn run() {
                         // Headless: the workspace is not opened in the UI and the
                         // window stays hidden; the frontend runs the export on
                         // mount and exits via `finish_cli_export`.
-                        registry.set_workspace("main", None);
                         *app.state::<commands::CliExport>().0.lock().unwrap() =
                             Some(commands::export::CliExportRequest { root, out_dir });
                     }
                     Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::Folder(p)))) => {
-                        registry.set_workspace("main", Some(p.clone()));
+                        app.state::<windows::WindowRegistry>()
+                            .set_workspace("main", Some(p.clone()));
                         *app.state::<commands::InitialFolder>().0.lock().unwrap() = Some(p);
                     }
                     Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::File(p)))) => {
-                        registry.set_workspace("main", None);
                         *app.state::<commands::InitialFile>().0.lock().unwrap() = Some(p);
                     }
                     Ok(cli::CliLaunch::Open(Some(
                         cli::InitialOpenAction::RejectedUnsupported(p),
                     ))) => {
-                        registry.set_workspace("main", None);
                         eprintln!("Refusing to open unsupported file type: {p}");
                     }
-                    Ok(cli::CliLaunch::Open(None)) => {
-                        registry.set_workspace("main", None);
-                    }
+                    Ok(cli::CliLaunch::Open(None)) => {}
                 }
             }
             Ok(())
@@ -334,6 +321,7 @@ pub fn run() {
             commands::file::copy_file,
             commands::file::get_file_metadata,
             commands::file::get_initial_file,
+            #[cfg(desktop)]
             commands::file::print_document,
             commands::export::get_cli_export,
             commands::export_runtime::finish_cli_export,
@@ -360,27 +348,44 @@ pub fn run() {
             watcher::unwatch_file,
             watcher::watch_directory,
             watcher::unwatch_directory,
+            #[cfg(desktop)]
             menu_runtime::set_menu_state,
+            #[cfg(desktop)]
             menu_runtime::apply_keybindings,
+            #[cfg(desktop)]
             menu_runtime::set_menu_labels,
             windows_runtime::set_window_workspace,
             windows_runtime::request_open,
+            #[cfg(desktop)]
             sync::commands::sync_set_config,
+            #[cfg(desktop)]
             sync::commands::sync_get_config,
+            #[cfg(desktop)]
             sync::commands::sync_remove_config,
+            #[cfg(desktop)]
             sync::commands::sync_set_token,
+            #[cfg(desktop)]
             sync::commands::sync_clear_token,
+            #[cfg(desktop)]
             sync::commands::sync_init_repo,
+            #[cfg(desktop)]
             sync::commands::sync_clone_remote,
+            #[cfg(desktop)]
             sync::commands::sync_set_origin,
+            #[cfg(desktop)]
             sync::commands::sync_commit_config,
+            #[cfg(desktop)]
             sync::commands::sync_status,
+            #[cfg(desktop)]
             sync::commands::sync_run,
+            #[cfg(desktop)]
             sync::commands::sync_default_author,
+            #[cfg(desktop)]
             sync::commands::sync_repo_present,
             workspace::commands::workspace_resolve,
             workspace::commands::workspace_get_last_file,
             workspace::commands::workspace_set_last_file,
+            #[cfg(desktop)]
             telemetry::set_error_reporting,
         ])
         .build(tauri::generate_context!())

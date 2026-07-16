@@ -53,4 +53,12 @@ describe("useNativeKeybindings", () => {
     renderHook(() => useNativeKeybindings(), { wrapper: wrapperFor(ctx()) });
     await waitFor(() => expect(error).toHaveBeenCalled());
   });
+
+  it("does nothing on mobile (no native menu there)", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("android");
+    renderHook(() => useNativeKeybindings(), { wrapper: wrapperFor(ctx()) });
+    expect(invoke).not.toHaveBeenCalled();
+    vi.mocked(platform).mockReturnValue("macos");
+  });
 });

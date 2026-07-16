@@ -24,21 +24,25 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
         <h2 className="text-xl font-semibold text-[var(--color-text-primary)] mb-2">
           {folderEmpty ? t("emptyState.folderHeading") : t("emptyState.openHeading")}
         </h2>
-        <p className="text-sm text-[var(--color-text-secondary)]">
-          {folderEmpty ? (
-            t("emptyState.folderHint")
-          ) : mobile ? null : (
-            <Trans
-              i18nKey="emptyState.openHint"
-              values={{ shortcut: `${modKey(platform)}+O` }}
-              components={{
-                kbd: (
-                  <kbd className="px-1.5 py-0.5 text-xs bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-[var(--glyph-radius-sm)]" />
-                ),
-              }}
-            />
-          )}
-        </p>
+        {/* folderEmpty can't happen on mobile (no folder workspaces), so the
+            hint is simply absent there instead of an empty element. */}
+        {!mobile && (
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            {folderEmpty ? (
+              t("emptyState.folderHint")
+            ) : (
+              <Trans
+                i18nKey="emptyState.openHint"
+                values={{ shortcut: `${modKey(platform)}+O` }}
+                components={{
+                  kbd: (
+                    <kbd className="px-1.5 py-0.5 text-xs bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-[var(--glyph-radius-sm)]" />
+                  ),
+                }}
+              />
+            )}
+          </p>
+        )}
       </div>
       {!folderEmpty && (
         <div className="flex items-center gap-2">

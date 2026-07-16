@@ -128,15 +128,13 @@ async function loadFileContent(path: string): Promise<{
   // Mobile document pickers hand back sandboxed URIs (content:// on Android)
   // that the Rust fs commands cannot open; the fs plugin's native layer can,
   // and the dialog plugin has already scoped the picked file for it. Metadata
-  // and file watching don't apply to those URIs.
-  if (isMobilePlatform()) {
-    const raw = await readTextFile(path);
-    return { content: adaptD2Content(path, adaptMmdContent(path, raw)), metadata: null };
-  }
-  const [raw, metadata] = await Promise.all([
-    invoke<string>("read_file", { path }),
-    invoke<FileMetadata>("get_file_metadata", { path }),
-  ]);
+  // (and therefore file watching, see the caller) doesn't apply to those URIs.
+  const [raw, metadata] = isMobilePlatform()
+    ? [await readTextFile(path), null]
+    : await Promise.all([
+        invoke<string>("read_file", { path }),
+        invoke<FileMetadata>("get_file_metadata", { path }),
+      ]);
   // `.mmd` files double as Mermaid diagram source; `.d2` files are D2 diagram
   // source. Each adapter fence-wraps its own extension so the existing markdown
   // renderer turns the body into a diagram, and is a no-op for other paths.
@@ -348,10 +346,16 @@ export function useTabs(options: UseTabsOptions) {
         let metadata: FileMetadata | null;
         if (isImage) {
           content = null;
-          metadata = await invoke<FileMetadata>("get_file_metadata", { path });
+          // Same sandboxed-URI caveat as loadFileContent: no Rust-side
+          // metadata for mobile picker URIs.
+          metadata = isMobilePlatform()
+            ? null
+            : await invoke<FileMetadata>("get_file_metadata", { path });
         } else {
           ({ content, metadata } = await loadFileContent(path));
-          if (!isMobilePlatform()) {
+          // No metadata means a mobile picker URI, which the watcher can't
+          // follow either.
+          if (metadata) {
             await invoke("watch_file", { path });
           }
         }

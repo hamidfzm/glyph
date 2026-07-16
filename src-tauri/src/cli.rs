@@ -1,7 +1,7 @@
-// Mobile has no CLI; the launch-plan half of this module is only called from
-// the desktop-gated setup block, while the classifiers stay in use by the
-// drag-drop and file-association handlers.
-#![cfg_attr(mobile, allow(dead_code))]
+// Mobile has no CLI; the launch-plan half of this module (marked
+// `#[cfg(desktop)]` item by item) is only called from the desktop-gated setup
+// block, while the classifiers stay in use everywhere by the drag-drop and
+// file-association handlers.
 
 use std::path::{Path, PathBuf};
 
@@ -79,6 +79,7 @@ pub fn classify_initial_arg(path_str: &str, cwd: &Path) -> Option<InitialOpenAct
 ///    is the Windows-friendly path: `pnpm tauri dev -- samples` can land
 ///    `samples` in argv without ever populating the plugin's matches, so we
 ///    fall back to argv when the plugin yields nothing.
+#[cfg(desktop)]
 pub fn initial_open_action(
     plugin_path: Option<&str>,
     env_args: &[String],
@@ -120,6 +121,7 @@ pub fn second_instance_event(argv: &[String], cwd: &Path) -> Option<SecondInstan
 
 /// Value of a `--flag value` / `--flag=value` pair in argv, if present. The
 /// argv fallback for `tauri-plugin-cli` flags, mirroring [`pick_path_arg`].
+#[cfg(desktop)]
 pub fn pick_flag_value<'a>(argv: &'a [String], flag: &str) -> Option<&'a str> {
     let prefix = format!("{flag}=");
     let mut iter = argv.iter().skip(1);
@@ -136,6 +138,7 @@ pub fn pick_flag_value<'a>(argv: &'a [String], flag: &str) -> Option<&'a str> {
 
 /// Remove `--flag value` / `--flag=value` from argv so positional scanning
 /// ([`pick_path_arg`]) can't mistake the flag's value for the path argument.
+#[cfg(desktop)]
 pub fn strip_flag(argv: &[String], flag: &str) -> Vec<String> {
     let prefix = format!("{flag}=");
     let mut out = Vec::new();
@@ -155,6 +158,7 @@ pub fn strip_flag(argv: &[String], flag: &str) -> Vec<String> {
 
 /// Resolve the `--export-website` output directory against `cwd`. Unlike
 /// input paths it does not need to exist yet, so there is no canonicalize.
+#[cfg(desktop)]
 pub fn resolve_out_dir(path_str: &str, cwd: &Path) -> Option<String> {
     if path_str.trim().is_empty() {
         return None;
@@ -169,6 +173,7 @@ pub fn resolve_out_dir(path_str: &str, cwd: &Path) -> Option<String> {
 }
 
 /// What this process launch should do, decided from the CLI once at startup.
+#[cfg(desktop)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum CliLaunch {
     /// Normal interactive launch, optionally opening a path.
@@ -180,6 +185,7 @@ pub enum CliLaunch {
 /// Combine the positional path and the `--export-website` flag into a launch
 /// plan. `Err` is a usage error the caller should print before exiting
 /// nonzero: an export was requested without a valid workspace folder.
+#[cfg(desktop)]
 pub fn launch_plan(
     plugin_path: Option<&str>,
     plugin_export: Option<&str>,

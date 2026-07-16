@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect } from "react";
 import { i18n } from "@/lib/i18n";
+import { isMobilePlatform } from "@/lib/platform";
 
 // Pushes localized native-menu labels to the Rust side. The menu is built in
 // Rust with English defaults; this re-labels it via `set_menu_labels` whenever
@@ -9,6 +10,8 @@ import { i18n } from "@/lib/i18n";
 // is merged underneath the active locale so any missing key falls back.
 export function useNativeMenuLabels() {
   useEffect(() => {
+    // No native menu (or set_menu_labels command) exists on mobile.
+    if (isMobilePlatform()) return;
     const push = async () => {
       // Nothing else mounts useTranslation("menu"), so the active locale's menu
       // bundle isn't pulled in by render; load it explicitly before reading.

@@ -8,12 +8,11 @@
 
 mod backend;
 // The git backend (git2 + vendored OpenSSL) doesn't cross-compile for
-// android/ios, so everything that touches it is desktop-only; mobile gets
-// stub commands and an empty state so the command surface stays identical.
+// android/ios, so everything that touches it is desktop-only. The command
+// entries are cfg-gated the same way in lib.rs's `generate_handler!` list;
+// only the pure config/serde types stay cross-platform (the workspace config
+// schema embeds them).
 #[cfg(desktop)]
-pub mod commands;
-#[cfg(mobile)]
-#[path = "commands_mobile.rs"]
 pub mod commands;
 mod config;
 mod error;
@@ -23,13 +22,11 @@ pub mod git;
 mod ops;
 #[cfg(desktop)]
 mod state;
-#[cfg(mobile)]
-#[path = "state_mobile.rs"]
-mod state;
 
 pub use backend::{BackendKind, ConflictPolicy, StatusReport, SyncBackend, SyncResult};
 pub use config::{CommitAuthorHint, CommitIdentity, WorkspaceSyncConfig};
 pub use error::SyncError;
+#[cfg(desktop)]
 pub use state::SyncState;
 
 /// Default branch name Glyph uses for new workspaces and as the canonical

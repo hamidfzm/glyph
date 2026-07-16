@@ -257,6 +257,8 @@ jobs:
     name: Build (Android)
     needs: [lint, typecheck, test-frontend, test-rust, clippy]
     runs-on: ubuntu-latest
+    env:
+      NDK_VERSION: 29.0.14206865
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
@@ -276,14 +278,22 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+      - name: Cache NDK
+        id: ndk-cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
+          key: ndk-${{ env.NDK_VERSION }}
       - name: Install NDK
-        run: sdkmanager "ndk;29.0.14206865"
+        if: steps.ndk-cache.outputs.cache-hit != 'true'
+        run: sdkmanager "ndk;${{ env.NDK_VERSION }}"
       - run: pnpm install --frozen-lockfile
       - name: Build Android APK (debug, aarch64)
         env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/29.0.14206865
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
         run: pnpm tauri android build --debug --apk --target aarch64
       - name: Upload debug APK
         uses: actions/upload-artifact@v5
