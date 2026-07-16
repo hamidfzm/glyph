@@ -241,5 +241,12 @@
     "circular": "Circular embed: {{target}}",
     "headingNotFound": "Heading not found: {{heading}}",
     "error": "Could not load embed: {{target}}"
+  },
+  "defaultAppBanner": {
+    "message": "Make Glyph your default Markdown app?",
+    "setDefault": "Set as default",
+    "notNow": "Not now",
+    "never": "Never",
+    "dismiss": "Dismiss default-app prompt"
   }
 }

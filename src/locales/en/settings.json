@@ -283,5 +283,18 @@
       "label": "Wikilinks",
       "description": "Resolve [[note]] links against the workspace"
     }
+  },
+  "defaultApp": {
+    "title": "Default app",
+    "label": "Default Markdown app",
+    "description": "Open Markdown files in Glyph by default.",
+    "button": "Set Glyph as default",
+    "working": "Working…",
+    "outcome": {
+      "registered": "Glyph is now your default Markdown app.",
+      "openedSettings": "Opened Default Apps settings. Choose Glyph for Markdown files.",
+      "guidance": "In Finder, right-click a Markdown file, choose Get Info, set Open With to Glyph, then Change All.",
+      "error": "Couldn't set the default app. Set it from your system settings instead."
+    }
   }
 }

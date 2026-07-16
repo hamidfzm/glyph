@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
+import { DefaultAppSection } from "./DefaultAppSection";
 import { Toggle } from "./Toggle";
 import { UpdatesSection } from "./UpdatesSection";
 
@@ -47,6 +48,8 @@ export function BehaviorTab() {
           />
         </div>
       </div>
+
+      <DefaultAppSection />
 
       <UpdatesSection />
 

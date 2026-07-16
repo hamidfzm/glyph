@@ -241,5 +241,12 @@
   },
   "headingAnchor": {
     "label": "Copiar enlace al encabezado"
+  },
+  "defaultAppBanner": {
+    "message": "¿Hacer de Glyph tu app de Markdown predeterminada?",
+    "setDefault": "Establecer como predeterminada",
+    "notNow": "Ahora no",
+    "never": "Nunca",
+    "dismiss": "Descartar aviso de app predeterminada"
   }
 }

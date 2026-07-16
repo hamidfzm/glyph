@@ -241,5 +241,12 @@
     "circular": "ارجاع حلقه‌ای: {{target}}",
     "headingNotFound": "عنوان پیدا نشد: {{heading}}",
     "error": "بارگذاری محتوای جاسازی‌شده ممکن نشد: {{target}}"
+  },
+  "defaultAppBanner": {
+    "message": "Glyph برنامه پیش‌فرض Markdown شما شود؟",
+    "setDefault": "تنظیم به‌عنوان پیش‌فرض",
+    "notNow": "اکنون نه",
+    "never": "هرگز",
+    "dismiss": "بستن پیام برنامه پیش‌فرض"
   }
 }

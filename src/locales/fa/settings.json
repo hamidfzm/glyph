@@ -283,5 +283,18 @@
       "label": "ویکی‌لینک",
       "description": "حل پیوندهای [[یادداشت]] در فضای کاری"
     }
+  },
+  "defaultApp": {
+    "title": "برنامه پیش‌فرض",
+    "label": "برنامه پیش‌فرض Markdown",
+    "description": "پرونده‌های Markdown به‌طور پیش‌فرض در Glyph باز شوند.",
+    "button": "تنظیم Glyph به‌عنوان پیش‌فرض",
+    "working": "در حال انجام…",
+    "outcome": {
+      "registered": "Glyph اکنون برنامه پیش‌فرض Markdown شماست.",
+      "openedSettings": "تنظیمات برنامه‌های پیش‌فرض باز شد. Glyph را برای پرونده‌های Markdown انتخاب کنید.",
+      "guidance": "در Finder روی یک پرونده Markdown راست‌کلیک کنید، Get Info را انتخاب کنید، Open With را روی Glyph بگذارید و سپس Change All را بزنید.",
+      "error": "تنظیم برنامه پیش‌فرض ممکن نبود. آن را از تنظیمات سیستم انجام دهید."
+    }
   }
 }

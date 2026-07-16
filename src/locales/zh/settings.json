@@ -283,5 +283,18 @@
       "label": "双链笔记",
       "description": "在工作区内解析 [[笔记]] 链接"
     }
+  },
+  "defaultApp": {
+    "title": "默认应用",
+    "label": "默认 Markdown 应用",
+    "description": "默认使用 Glyph 打开 Markdown 文件。",
+    "button": "将 Glyph 设为默认",
+    "working": "处理中…",
+    "outcome": {
+      "registered": "Glyph 现在是你的默认 Markdown 应用。",
+      "openedSettings": "已打开“默认应用”设置。请为 Markdown 文件选择 Glyph。",
+      "guidance": "在访达中右键点击 Markdown 文件，选择“显示简介”，将“打开方式”设为 Glyph，然后点击“全部更改”。",
+      "error": "无法设置默认应用。请从系统设置中进行设置。"
+    }
   }
 }
