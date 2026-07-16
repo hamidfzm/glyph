@@ -1,6 +1,6 @@
 ---
 name: self-review
-description: Review the working diff against Glyph's code standards (readable over clever, YAGNI, sparse comments) and fix findings before any commit or push. Run this on every non-trivial diff before committing; also when the user says "self review", "review your code", or "/self-review". Self-improving; fold every new code-quality correction from Hamid back into this file's rules.
+description: Review the working diff against Glyph's code standards (readable over clever, YAGNI, sparse comments) and fix findings before any commit or push. Run this on every non-trivial diff before committing; also when the user says "self review", "review your code", or "/self-review". Self-improving; fold rejected changes and human code-review feedback back into this file's rules.
 ---
 
 # Self-Review
@@ -41,7 +41,7 @@ Review the current diff (`git diff` + `git diff --cached`, or `git diff origin/m
 
 ## Self-improvement
 
-This file is the durable memory of Hamid's code-quality standards. Whenever he corrects code quality (in chat, a PR comment, or by rewriting something) or a problem slips past this review and is caught later:
+This file is the durable memory of the project's code-quality standards. When the human rejects a change (a refused edit or check, a change request) or gives code-review feedback:
 
 1. Distill the correction into a rule: one or two lines, with a real bad-to-good example when the correction came with one.
 2. If it refines an existing rule, sharpen that rule in place; only append a new numbered rule for a genuinely new category. Keep the list ordered by how often each rule catches something.
