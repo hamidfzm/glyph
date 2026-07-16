@@ -31,6 +31,7 @@ const FAVICON_TYPES: Record<string, string> = {
   gif: "image/gif",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
+  webp: "image/webp",
 };
 
 /** Browser-tab title: "Page · Site", or just the site name on the index. */

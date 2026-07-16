@@ -85,9 +85,11 @@ describe("buildPageMetaHtml", () => {
     expect(ico).toContain('<link rel="icon" type="image/x-icon" href="favicon.ico">');
   });
 
-  it("omits the type attribute for unknown favicon extensions", () => {
-    const html = buildPageMetaHtml({ ...BASE, pageRel: "a.html", faviconRel: "icon.webp" });
-    expect(html).toContain('<link rel="icon" href="icon.webp">');
+  it("maps webp and omits the type attribute for unknown extensions", () => {
+    const webp = buildPageMetaHtml({ ...BASE, pageRel: "a.html", faviconRel: "icon.webp" });
+    expect(webp).toContain('<link rel="icon" type="image/webp" href="icon.webp">');
+    const unknown = buildPageMetaHtml({ ...BASE, pageRel: "a.html", faviconRel: "icon.bmp" });
+    expect(unknown).toContain('<link rel="icon" href="icon.bmp">');
   });
 
   it("escapes titles and descriptions", () => {

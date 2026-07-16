@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSiteConfig, robotsTxt } from "./siteConfig";
+import { parseSiteConfig, resolveConfigAsset, robotsTxt } from "./siteConfig";
 
 describe("parseSiteConfig", () => {
   it("defaults everything when the workspace has no config", () => {
@@ -51,7 +51,41 @@ describe("parseSiteConfig", () => {
     expect(() => parseSiteConfig('{"robots": "some"}', "notes")).toThrow(
       /"robots" must be "all" or "none"/,
     );
-    expect(() => parseSiteConfig('{"baseUrl": "ftp://x"}', "notes")).toThrow(/http\(s\):\/\//);
+    expect(() => parseSiteConfig('{"baseUrl": "ftp://x.com"}', "notes")).toThrow(
+      /http\(s\) URL with a host/,
+    );
+    expect(() => parseSiteConfig('{"baseUrl": "https://"}', "notes")).toThrow(/valid URL|host/);
+    expect(() => parseSiteConfig('{"baseUrl": "not a url"}', "notes")).toThrow(/valid URL/);
+  });
+
+  it("rejects a social image without a base URL to point at it", () => {
+    expect(() => parseSiteConfig('{"socialImage": "card.png"}', "notes")).toThrow(
+      /"socialImage" requires "baseUrl"/,
+    );
+  });
+});
+
+describe("resolveConfigAsset", () => {
+  it("resolves nested workspace paths to source and site locations", () => {
+    expect(resolveConfigAsset("/ws", "assets/logo.png", "favicon")).toEqual({
+      abs: "/ws/assets/logo.png",
+      siteRel: "assets/logo.png",
+    });
+  });
+
+  it("collapses dot segments that stay inside the workspace", () => {
+    expect(resolveConfigAsset("/ws", "./assets/../logo.png", "favicon").siteRel).toBe("logo.png");
+  });
+
+  it("rejects paths that escape the workspace", () => {
+    // The config can come from an untrusted repo: a traversal must never
+    // become a read outside the root or a write outside the output dir.
+    expect(() => resolveConfigAsset("/ws", "../secrets.env", "favicon")).toThrow(
+      /"favicon" must stay inside the workspace/,
+    );
+    expect(() => resolveConfigAsset("/ws", "a/../../../etc/passwd", "socialImage")).toThrow(
+      /"socialImage" must stay inside the workspace/,
+    );
   });
 });
 
