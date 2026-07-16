@@ -384,35 +384,35 @@
 }
 
 /* Cloud Sync modal */
-.settings-sync .settings-field {
+:is(.settings-sync, .settings-site) .settings-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin-bottom: 14px;
 }
-.settings-sync .settings-field-label {
+:is(.settings-sync, .settings-site) .settings-field-label {
   font-size: 13px;
   font-weight: 500;
   color: var(--color-text-primary);
 }
-.settings-sync .settings-field-hint {
+:is(.settings-sync, .settings-site) .settings-field-hint {
   font-size: 11px;
   color: var(--color-text-secondary);
   font-weight: normal;
 }
-.settings-sync .settings-section-description {
+:is(.settings-sync, .settings-site) .settings-section-description {
   margin: 0 0 16px;
   font-size: 12px;
   color: var(--color-text-secondary);
 }
-.settings-sync .settings-empty,
-.settings-sync .settings-busy {
+:is(.settings-sync, .settings-site) .settings-empty,
+:is(.settings-sync, .settings-site) .settings-busy {
   padding: 24px 0;
   text-align: center;
   color: var(--color-text-secondary);
   font-size: 13px;
 }
-.settings-sync .settings-error {
+:is(.settings-sync, .settings-site) .settings-error {
   margin: 8px 0 0;
   padding: 8px 10px;
   font-size: 12px;
@@ -420,7 +420,7 @@
   background: rgba(229, 62, 62, 0.08);
   border-radius: var(--glyph-radius-sm);
 }
-.settings-sync .settings-actions {
+:is(.settings-sync, .settings-site) .settings-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

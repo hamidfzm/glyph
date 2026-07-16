@@ -6,6 +6,7 @@ import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import {
+  configString,
   parseSiteConfig,
   readSiteConfigFile,
   SITE_CONFIG_PATH,
@@ -40,10 +41,6 @@ const EMPTY_FORM: FormState = {
   theme: DEFAULT_SITE_THEME_ID,
 };
 
-function str(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
 /**
  * Per-workspace website-export settings: a form over `.glyph/site.json`
  * (title, description, base URL, favicon, social image, robots.txt, theme).
@@ -71,13 +68,13 @@ export function SiteSettingsModal({ open, onClose }: SiteSettingsModalProps) {
       if (cancelled) return;
       setRawConfig(raw);
       setForm({
-        title: str(raw.title),
-        description: str(raw.description),
-        baseUrl: str(raw.baseUrl),
-        favicon: str(raw.favicon),
-        socialImage: str(raw.socialImage),
+        title: configString(raw.title),
+        description: configString(raw.description),
+        baseUrl: configString(raw.baseUrl),
+        favicon: configString(raw.favicon),
+        socialImage: configString(raw.socialImage),
         robots: raw.robots === "all" || raw.robots === "none" ? raw.robots : "",
-        theme: str(raw.theme) || DEFAULT_SITE_THEME_ID,
+        theme: configString(raw.theme) || DEFAULT_SITE_THEME_ID,
       });
       setError(null);
     })();
@@ -166,7 +163,7 @@ export function SiteSettingsModal({ open, onClose }: SiteSettingsModalProps) {
           </button>
         </div>
 
-        <div className="settings-body">
+        <div className="settings-body settings-site">
           {!workspaceRoot ? (
             <p className="settings-empty">{t("empty")}</p>
           ) : (

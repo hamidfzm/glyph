@@ -157,6 +157,11 @@ export async function readSiteConfigFile(
   }
 }
 
+/** A raw config value as a string, for form fields: non-strings read as unset. */
+export function configString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 /**
  * Serialize a settings object for `.glyph/site.json`: entries whose value is
  * an empty/blank string or undefined are omitted, so unset fields stay
