@@ -30,8 +30,9 @@ jobs:
             args_full: ""
             args_pr: ""
             bundle_analysis: true
-          - platform: ubuntu-22.04-arm
-            args_full: ""
+          # No include entry for ubuntu-22.04-arm: include is processed
+          # AFTER exclude, so an entry here would resurrect the excluded
+          # PR leg as a new combination. Undefined args_full is ''.
           - platform: windows-latest
             args_full: ""
             args_pr: "--no-bundle"
