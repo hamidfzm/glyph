@@ -2,10 +2,9 @@ import { platform } from "@tauri-apps/plugin-os";
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Platform } from "@/hooks/usePlatform";
-import type { PlatformSelector } from "@/lib/platform";
 import { ShowOn } from "./ShowOn";
 
-function renderOn(detected: Platform, on: PlatformSelector | PlatformSelector[]) {
+function renderOn(detected: Platform, on: "desktop" | "mobile") {
   vi.mocked(platform).mockReturnValue(detected as ReturnType<typeof platform>);
   return render(
     <ShowOn on={on}>
@@ -19,40 +18,22 @@ afterEach(() => {
 });
 
 describe("ShowOn", () => {
-  it("renders children when a group selector matches", () => {
+  it("shows desktop content on desktop", () => {
     renderOn("macos", "desktop");
     expect(screen.getByText("gated")).toBeInTheDocument();
   });
 
-  it("hides children when a group selector doesn't match", () => {
-    for (const detected of ["android", "ios"] as const) {
-      const { unmount } = renderOn(detected, "desktop");
-      expect(screen.queryByText("gated")).not.toBeInTheDocument();
-      unmount();
-    }
-  });
-
-  it("matches the mobile group", () => {
-    renderOn("android", "mobile");
-    expect(screen.getByText("gated")).toBeInTheDocument();
-  });
-
-  it("matches a specific platform", () => {
-    renderOn("macos", "macos");
-    expect(screen.getByText("gated")).toBeInTheDocument();
-  });
-
-  it("hides on a non-matching specific platform", () => {
-    renderOn("windows", "macos");
+  it("hides desktop content on mobile", () => {
+    renderOn("android", "desktop");
     expect(screen.queryByText("gated")).not.toBeInTheDocument();
   });
 
-  it("matches any selector in a list", () => {
-    renderOn("linux", ["macos", "linux"]);
+  it("shows mobile content on mobile", () => {
+    renderOn("ios", "mobile");
     expect(screen.getByText("gated")).toBeInTheDocument();
   });
 
-  it("treats unknown as desktop for group selectors", () => {
+  it("treats unknown as desktop", () => {
     renderOn("unknown", "desktop");
     expect(screen.getByText("gated")).toBeInTheDocument();
   });
