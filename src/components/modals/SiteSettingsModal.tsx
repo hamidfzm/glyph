@@ -57,6 +57,9 @@ export function SiteSettingsModal({ open, onClose }: SiteSettingsModalProps) {
   const pluginThemes = useRegistryEntries(plugins?.siteThemes ?? null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
+  // The raw file contents as loaded, so Save preserves keys this modal does
+  // not know about (a config written by a newer Glyph must survive a visit).
+  const [rawConfig, setRawConfig] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     if (!open || !workspaceRoot) return;
@@ -66,6 +69,7 @@ export function SiteSettingsModal({ open, onClose }: SiteSettingsModalProps) {
         invoke<string>("read_file", { path }),
       );
       if (cancelled) return;
+      setRawConfig(raw);
       setForm({
         title: str(raw.title),
         description: str(raw.description),
@@ -106,6 +110,7 @@ export function SiteSettingsModal({ open, onClose }: SiteSettingsModalProps) {
   const handleSave = async () => {
     if (!workspaceRoot) return;
     const values: Record<string, unknown> = {
+      ...rawConfig,
       title: form.title,
       description: form.description,
       baseUrl: form.baseUrl,

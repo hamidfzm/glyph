@@ -57,6 +57,25 @@ describe("SiteSettingsModal", () => {
     expect(defaultProps.onClose).toHaveBeenCalled();
   });
 
+  it("preserves keys it does not know and drops fields the user cleared", async () => {
+    const writes = mockConfigFile(
+      JSON.stringify({ title: "Old", robots: "all", futureKey: { nested: true } }),
+    );
+    const user = userEvent.setup();
+    renderInWorkspace(<SiteSettingsModal {...defaultProps} />, "/ws");
+    const title = await screen.findByRole("textbox", { name: /site title/i });
+    await waitFor(() => expect(title).toHaveValue("Old"));
+
+    await user.clear(title);
+    await user.selectOptions(screen.getByRole("combobox", { name: /search engines/i }), "");
+    await user.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(writes.size).toBe(1));
+    const saved = JSON.parse(writes.get("/ws/.glyph/site.json") ?? "{}");
+    // A config written by a newer Glyph survives a visit; cleared fields go.
+    expect(saved).toEqual({ futureKey: { nested: true } });
+  });
+
   it("surfaces the parser's message instead of writing an invalid config", async () => {
     const writes = mockConfigFile(null);
     const user = userEvent.setup();
