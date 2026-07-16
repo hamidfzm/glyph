@@ -41,7 +41,9 @@ describe("parseSiteConfig", () => {
   });
 
   it("rejects invalid JSON with the file name in the message", () => {
-    expect(() => parseSiteConfig("{nope", "notes")).toThrow(/glyph-site\.json is not valid JSON/);
+    expect(() => parseSiteConfig("{nope", "notes")).toThrow(
+      /\.glyph\/site\.json is not valid JSON/,
+    );
   });
 
   it("rejects non-object roots and wrong field types", () => {

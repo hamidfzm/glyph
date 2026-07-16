@@ -197,10 +197,10 @@ describe("exportSite", () => {
     expect(fs.writes.has("/out/robots.txt")).toBe(false);
   });
 
-  it("applies glyph-site.json: titles, favicon, social tags, robots", async () => {
+  it("applies .glyph/site.json: titles, favicon, social tags, robots", async () => {
     const fs = mockFs({
       "/ws/README.md": "---\ndescription: The front page\n---\n\n# Home",
-      "/ws/glyph-site.json": JSON.stringify({
+      "/ws/.glyph/site.json": JSON.stringify({
         title: "Field Notes",
         description: "A site of notes",
         baseUrl: "https://example.com/notes/",
@@ -229,12 +229,12 @@ describe("exportSite", () => {
   });
 
   it("fails loudly on a malformed config or a missing configured favicon", async () => {
-    mockFs({ "/ws/notes.md": "# N", "/ws/glyph-site.json": "{nope" });
+    mockFs({ "/ws/notes.md": "# N", "/ws/.glyph/site.json": "{nope" });
     await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(/not valid JSON/);
 
     mockFs({
       "/ws/notes.md": "# N",
-      "/ws/glyph-site.json": JSON.stringify({ favicon: "gone.png" }),
+      "/ws/.glyph/site.json": JSON.stringify({ favicon: "gone.png" }),
     });
     await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(
       /favicon not found in the workspace: gone\.png/,
@@ -244,7 +244,7 @@ describe("exportSite", () => {
   it("rejects a config favicon that traverses out of the workspace", async () => {
     const fs = mockFs({
       "/ws/notes.md": "# N",
-      "/ws/glyph-site.json": JSON.stringify({ favicon: "../outside/secret.png" }),
+      "/ws/.glyph/site.json": JSON.stringify({ favicon: "../outside/secret.png" }),
       "/outside/secret.png": "<binary>",
     });
     await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(
