@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect } from "react";
+import { isMobilePlatform } from "@/lib/platform";
 
 export interface NativeMenuFlags {
   hasTab: boolean;
@@ -18,6 +19,8 @@ export interface NativeMenuFlags {
 export function useNativeMenuState(flags: NativeMenuFlags) {
   const { hasTab, hasFile, hasContent, hasWorkspace, aiConfigured, ttsAvailable } = flags;
   useEffect(() => {
+    // No native menu (or set_menu_state command) exists on mobile.
+    if (isMobilePlatform()) return;
     (async () => {
       try {
         await invoke("set_menu_state", {

@@ -1,6 +1,7 @@
 import { Trans, useTranslation } from "react-i18next";
+import { ShowOn } from "@/components/ShowOn";
 import type { Platform } from "@/hooks/usePlatform";
-import { isMobile, modKey } from "@/lib/platform";
+import { modKey } from "@/lib/platform";
 
 interface EmptyStateProps {
   platform: Platform;
@@ -13,9 +14,6 @@ interface EmptyStateProps {
 
 export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: EmptyStateProps) {
   const { t } = useTranslation("common");
-  // Mobile has no keyboard shortcuts and no folder workspaces: the document
-  // picker for single files is the only entry point.
-  const mobile = isMobile(platform);
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-6 select-none">
@@ -24,21 +22,24 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
         <h2 className="text-xl font-semibold text-[var(--color-text-primary)] mb-2">
           {folderEmpty ? t("emptyState.folderHeading") : t("emptyState.openHeading")}
         </h2>
-        <p className="text-sm text-[var(--color-text-secondary)]">
-          {folderEmpty ? (
-            t("emptyState.folderHint")
-          ) : mobile ? null : (
-            <Trans
-              i18nKey="emptyState.openHint"
-              values={{ shortcut: `${modKey(platform)}+O` }}
-              components={{
-                kbd: (
-                  <kbd className="px-1.5 py-0.5 text-xs bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-[var(--glyph-radius-sm)]" />
-                ),
-              }}
-            />
-          )}
-        </p>
+        {/* Keyboard-shortcut hint; folderEmpty can't happen on mobile. */}
+        <ShowOn on="desktop">
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            {folderEmpty ? (
+              t("emptyState.folderHint")
+            ) : (
+              <Trans
+                i18nKey="emptyState.openHint"
+                values={{ shortcut: `${modKey(platform)}+O` }}
+                components={{
+                  kbd: (
+                    <kbd className="px-1.5 py-0.5 text-xs bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-[var(--glyph-radius-sm)]" />
+                  ),
+                }}
+              />
+            )}
+          </p>
+        </ShowOn>
       </div>
       {!folderEmpty && (
         <div className="flex items-center gap-2">
@@ -49,7 +50,8 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
           >
             {t("emptyState.openFile")}
           </button>
-          {!mobile && (
+          {/* No folder workspaces on mobile. */}
+          <ShowOn on="desktop">
             <button
               type="button"
               onClick={onOpenFolder}
@@ -57,7 +59,7 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
             >
               {t("emptyState.openFolder")}
             </button>
-          )}
+          </ShowOn>
         </div>
       )}
     </div>

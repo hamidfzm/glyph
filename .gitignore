@@ -10,8 +10,13 @@ junit*.xml
 # Claude Code local settings (keep .claude/ committed, ignore local overrides)
 .claude/settings.local.json
 
-# Platform-specific Tauri ACL schemas (regenerated locally per-host by
-# `tauri dev` / `tauri build`; only the cross-platform `desktop-schema.json`
-# and `macOS-schema.json` are tracked upstream).
+# Platform-specific Tauri ACL schemas and manifests (regenerated locally
+# per-target by `tauri dev` / `tauri build` / `tauri android dev/build`;
+# acl-manifests.json flip-flops between the desktop and mobile plugin sets
+# depending on which target built last. Only the cross-platform
+# `desktop-schema.json` and `macOS-schema.json` are tracked upstream).
 src-tauri/gen/schemas/linux-schema.json
 src-tauri/gen/schemas/windows-schema.json
+src-tauri/gen/schemas/android-schema.json
+src-tauri/gen/schemas/mobile-schema.json
+src-tauri/gen/schemas/acl-manifests.json

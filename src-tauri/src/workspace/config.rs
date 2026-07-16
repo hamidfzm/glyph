@@ -13,15 +13,14 @@
 //! All stored paths are workspace-relative and forward-slash normalized (see
 //! [`super::paths`]) so they stay valid across machines and on Windows.
 
-// The sync-facing helpers are only called from the desktop-gated sync module.
-#![cfg_attr(mobile, allow(dead_code))]
-
 use std::fs;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::sync::{BackendKind, CommitIdentity, ConflictPolicy, WorkspaceSyncConfig};
+#[cfg(desktop)]
+use crate::sync::WorkspaceSyncConfig;
+use crate::sync::{BackendKind, CommitIdentity, ConflictPolicy};
 
 const CONFIG_FILE: &str = "config.json";
 const STATE_FILE: &str = "state.json";
@@ -68,6 +67,7 @@ pub struct SyncSettings {
 }
 
 impl SyncSettings {
+    #[cfg(desktop)]
     fn from_workspace(c: &WorkspaceSyncConfig) -> Self {
         Self {
             backend: c.backend,
@@ -78,6 +78,7 @@ impl SyncSettings {
         }
     }
 
+    #[cfg(desktop)]
     fn into_workspace(self, workspace_path: String) -> WorkspaceSyncConfig {
         WorkspaceSyncConfig {
             workspace_path,
@@ -122,6 +123,7 @@ pub fn read_config(workspace_root: &Path) -> Result<Option<WorkspaceConfig>, Str
 
 /// Write `.glyph/config.json`, creating `.glyph/` (and its `.gitignore`)
 /// if needed. Pretty-printed with a trailing newline for clean diffs.
+#[cfg(desktop)]
 pub fn write_config(workspace_root: &Path, config: &WorkspaceConfig) -> Result<(), String> {
     let dir = glyph_dir(workspace_root);
     fs::create_dir_all(&dir).map_err(|e| format!("failed to create .glyph: {e}"))?;
@@ -173,6 +175,7 @@ fn ensure_gitignore(glyph_dir: &Path) -> Result<(), String> {
 /// Load the sync config for the workspace at `root`, reconstructing a full
 /// [`WorkspaceSyncConfig`] by injecting the absolute root. `None` when the
 /// workspace has no `.glyph/config.json` or no sync block.
+#[cfg(desktop)]
 pub fn load_sync_config(root: &str) -> Result<Option<WorkspaceSyncConfig>, String> {
     let cfg = read_config(Path::new(root))?;
     Ok(cfg
@@ -182,6 +185,7 @@ pub fn load_sync_config(root: &str) -> Result<Option<WorkspaceSyncConfig>, Strin
 
 /// Persist `config`'s sync settings into the workspace's `.glyph/config.json`,
 /// preserving the version and any other (future) blocks already present.
+#[cfg(desktop)]
 pub fn store_sync_config(config: &WorkspaceSyncConfig) -> Result<(), String> {
     let root = Path::new(&config.workspace_path);
     let mut vc = read_config(root)?.unwrap_or_default();
@@ -191,6 +195,7 @@ pub fn store_sync_config(config: &WorkspaceSyncConfig) -> Result<(), String> {
 
 /// Drop the sync block (sync disabled) while keeping the file and version.
 /// No-op when the workspace has no config file yet.
+#[cfg(desktop)]
 pub fn clear_sync_config(root: &str) -> Result<(), String> {
     let path = Path::new(root);
     let Some(mut vc) = read_config(path)? else {

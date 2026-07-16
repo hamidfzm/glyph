@@ -24,4 +24,13 @@ describe("useNativeMenuLabels", () => {
       ),
     );
   });
+
+  it("does nothing on mobile (no native menu there)", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("android");
+    renderHook(() => useNativeMenuLabels());
+    await Promise.resolve();
+    expect(mockInvoke).not.toHaveBeenCalled();
+    vi.mocked(platform).mockReturnValue("macos");
+  });
 });

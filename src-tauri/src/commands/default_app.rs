@@ -1,3 +1,4 @@
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 use std::process::Command;
 
 /// Set, or guide the user to set, Glyph as the default application for Markdown

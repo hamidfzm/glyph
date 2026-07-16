@@ -37,14 +37,6 @@ pub fn print_document<R: tauri::Runtime>(window: tauri::WebviewWindow<R>) -> Res
     window.print().map_err(|e| format!("Failed to print: {e}"))
 }
 
-// `WebviewWindow::print` doesn't exist on mobile; the frontend hides the
-// print entry points there, so this is only a safety net.
-#[cfg(mobile)]
-#[tauri::command]
-pub fn print_document() -> Result<(), String> {
-    Err("Printing is not available on mobile".into())
-}
-
 #[tauri::command]
 pub fn write_file(path: String, content: String) -> Result<(), String> {
     fs::write(&path, &content).map_err(|e| format!("Failed to write file: {e}"))

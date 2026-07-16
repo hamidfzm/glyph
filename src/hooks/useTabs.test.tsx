@@ -3910,4 +3910,21 @@ describe("mobile file opening", () => {
     expect(commands).not.toContain("get_file_metadata");
     expect(commands).not.toContain("watch_file");
   });
+
+  it("opens picked images without Rust-side metadata", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("android");
+
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("content://com.provider/photo.png");
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+    expect(result.current.activeFile?.metadata).toBeNull();
+    const commands = vi.mocked(invoke).mock.calls.map((c) => c[0]);
+    expect(commands).not.toContain("get_file_metadata");
+  });
 });

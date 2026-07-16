@@ -1,6 +1,7 @@
+import { platform } from "@tauri-apps/plugin-os";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { EmptyState } from "./EmptyState";
 
 function renderEmptyState(overrides: Partial<ComponentProps<typeof EmptyState>> = {}) {
@@ -12,6 +13,10 @@ function renderEmptyState(overrides: Partial<ComponentProps<typeof EmptyState>> 
   };
   return { ...render(<EmptyState {...props} />), props };
 }
+
+afterEach(() => {
+  vi.mocked(platform).mockReturnValue("macos");
+});
 
 describe("EmptyState", () => {
   it("renders the heading", () => {
@@ -53,6 +58,7 @@ describe("EmptyState", () => {
   });
 
   it("hides the folder button and shortcut hint on android", () => {
+    vi.mocked(platform).mockReturnValue("android");
     renderEmptyState({ platform: "android" });
     expect(screen.getByText("Open File")).toBeInTheDocument();
     expect(screen.queryByText("Open Folder")).not.toBeInTheDocument();
@@ -60,6 +66,7 @@ describe("EmptyState", () => {
   });
 
   it("still calls onOpenFile on mobile", () => {
+    vi.mocked(platform).mockReturnValue("ios");
     const { props } = renderEmptyState({ platform: "ios" });
     fireEvent.click(screen.getByText("Open File"));
     expect(props.onOpenFile).toHaveBeenCalledOnce();

@@ -68,4 +68,12 @@ describe("useNativeMenuState", () => {
     await Promise.resolve();
     expect(consoleError).toHaveBeenCalled();
   });
+
+  it("does nothing on mobile (no native menu there)", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("android");
+    renderHook(() => useNativeMenuState(baseFlags));
+    expect(invoke).not.toHaveBeenCalled();
+    vi.mocked(platform).mockReturnValue("macos");
+  });
 });
