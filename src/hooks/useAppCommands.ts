@@ -195,10 +195,10 @@ export function useAppCommands({
           run: actions.exportWebsite,
         },
         {
-          id: "cmd:websiteSettings",
-          title: t("websiteSettings"),
+          id: "cmd:workspaceSettings",
+          title: t("workspaceSettings"),
           section: "Commands",
-          run: actions.websiteSettings,
+          run: actions.workspaceSettings,
         },
       );
     }

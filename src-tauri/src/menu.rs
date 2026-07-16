@@ -50,7 +50,7 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         "export-epub" => emit("menu-export-epub"),
         "export-pdf" => emit("menu-export-pdf"),
         "export-website" => emit("menu-export-website"),
-        "export-website-settings" => emit("menu-export-website-settings"),
+        "workspace-settings" => emit("menu-workspace-settings"),
         "close" => Some(MenuAction::CloseWindow),
         "toggle-files-sidebar" => emit("menu-toggle-files-sidebar"),
         "toggle-outline-sidebar" => emit("menu-toggle-outline-sidebar"),
@@ -189,8 +189,8 @@ mod tests {
             Some(emit("menu-export-website"))
         );
         assert_eq!(
-            menu_action_for_id("export-website-settings"),
-            Some(emit("menu-export-website-settings"))
+            menu_action_for_id("workspace-settings"),
+            Some(emit("menu-workspace-settings"))
         );
     }
 

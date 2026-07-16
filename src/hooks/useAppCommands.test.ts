@@ -35,7 +35,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     exportEpub: vi.fn(),
     exportPdf: vi.fn(),
     exportWebsite: vi.fn(),
-    websiteSettings: vi.fn(),
+    workspaceSettings: vi.fn(),
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
     zoomReset: vi.fn(),

@@ -32,7 +32,7 @@ pub struct MenuItemRefs {
     export_epub: MenuItem<Wry>,
     export_pdf: MenuItem<Wry>,
     export_website: MenuItem<Wry>,
-    export_website_settings: MenuItem<Wry>,
+    workspace_settings: MenuItem<Wry>,
     find: MenuItem<Wry>,
     command_palette: MenuItem<Wry>,
     toggle_files_sidebar: MenuItem<Wry>,
@@ -84,7 +84,7 @@ pub struct MenuLabels {
     export_epub: String,
     export_pdf: String,
     export_website: String,
-    export_website_settings: String,
+    workspace_settings: String,
     close_tab: String,
     close: String,
     settings: String,
@@ -147,8 +147,10 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
     // single-document items above which need an open file.
     let export_website =
         MenuItemBuilder::with_id("export-website", "Website\u{2026}").build(handle)?;
-    let export_website_settings =
-        MenuItemBuilder::with_id("export-website-settings", "Website Settings\u{2026}")
+    // Per-workspace settings dialog (stored in the workspace's .glyph folder),
+    // as opposed to the global Settings item; also gated on has_workspace.
+    let workspace_settings =
+        MenuItemBuilder::with_id("workspace-settings", "Workspace Settings\u{2026}")
             .build(handle)?;
 
     let close_tab = MenuItemBuilder::with_id("close-tab", "Close Tab")
@@ -295,7 +297,6 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         .item(&export_pdf)
         .separator()
         .item(&export_website)
-        .item(&export_website_settings)
         .build()?;
 
     // macOS: Settings goes in app menu, File menu is simple
@@ -308,6 +309,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .item(&print)
             .item(&export_menu)
             .separator()
+            .item(&workspace_settings)
             .item(&sync_settings)
             .separator()
             .item(&close_tab)
@@ -351,6 +353,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .item(&export_menu)
             .separator()
             .item(&settings)
+            .item(&workspace_settings)
             .item(&manage_plugins)
             .item(&sync_settings)
             .separator()
@@ -380,7 +383,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         export_epub,
         export_pdf,
         export_website,
-        export_website_settings,
+        workspace_settings,
         find,
         command_palette,
         toggle_files_sidebar,
@@ -484,7 +487,7 @@ pub fn apply_menu_state(refs: &MenuItemRefs, flags: &MenuStateFlags) -> Result<(
     refs.export_website
         .set_enabled(flags.has_workspace)
         .map_err(stringify)?;
-    refs.export_website_settings
+    refs.workspace_settings
         .set_enabled(flags.has_workspace)
         .map_err(stringify)?;
     refs.find.set_enabled(flags.has_file).map_err(stringify)?;
@@ -537,8 +540,8 @@ pub fn apply_menu_labels(refs: &MenuItemRefs, l: &MenuLabels) -> Result<(), Stri
     refs.export_epub.set_text(&l.export_epub).map_err(s)?;
     refs.export_pdf.set_text(&l.export_pdf).map_err(s)?;
     refs.export_website.set_text(&l.export_website).map_err(s)?;
-    refs.export_website_settings
-        .set_text(&l.export_website_settings)
+    refs.workspace_settings
+        .set_text(&l.workspace_settings)
         .map_err(s)?;
     refs.close_tab.set_text(&l.close_tab).map_err(s)?;
     refs.close.set_text(&l.close).map_err(s)?;

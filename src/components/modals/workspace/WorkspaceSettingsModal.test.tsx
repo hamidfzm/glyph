@@ -3,7 +3,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderInWorkspace } from "@/test/renderInWorkspace";
-import { SiteSettingsModal } from "./SiteSettingsModal";
+import { WorkspaceSettingsModal } from "./WorkspaceSettingsModal";
 
 const defaultProps = { open: true, onClose: vi.fn() };
 
@@ -31,10 +31,10 @@ beforeEach(() => {
   defaultProps.onClose = vi.fn();
 });
 
-describe("SiteSettingsModal", () => {
+describe("WorkspaceSettingsModal", () => {
   it("loads the existing config into the form", async () => {
     mockConfigFile(JSON.stringify({ title: "Field Notes", robots: "all", theme: "plain" }));
-    renderInWorkspace(<SiteSettingsModal {...defaultProps} />);
+    renderInWorkspace(<WorkspaceSettingsModal {...defaultProps} />);
     await waitFor(() =>
       expect(screen.getByRole("textbox", { name: /site title/i })).toHaveValue("Field Notes"),
     );
@@ -45,7 +45,7 @@ describe("SiteSettingsModal", () => {
   it("saves only the fields the user set, creating .glyph/", async () => {
     const writes = mockConfigFile(null);
     const user = userEvent.setup();
-    renderInWorkspace(<SiteSettingsModal {...defaultProps} />, "/ws");
+    renderInWorkspace(<WorkspaceSettingsModal {...defaultProps} />, "/ws");
 
     await user.type(screen.getByRole("textbox", { name: /site title/i }), "My Notes");
     await user.selectOptions(screen.getByRole("combobox", { name: /search engines/i }), "all");
@@ -62,7 +62,7 @@ describe("SiteSettingsModal", () => {
       JSON.stringify({ title: "Old", robots: "all", futureKey: { nested: true } }),
     );
     const user = userEvent.setup();
-    renderInWorkspace(<SiteSettingsModal {...defaultProps} />, "/ws");
+    renderInWorkspace(<WorkspaceSettingsModal {...defaultProps} />, "/ws");
     const title = await screen.findByRole("textbox", { name: /site title/i });
     await waitFor(() => expect(title).toHaveValue("Old"));
 
@@ -79,7 +79,7 @@ describe("SiteSettingsModal", () => {
   it("surfaces the parser's message instead of writing an invalid config", async () => {
     const writes = mockConfigFile(null);
     const user = userEvent.setup();
-    renderInWorkspace(<SiteSettingsModal {...defaultProps} />);
+    renderInWorkspace(<WorkspaceSettingsModal {...defaultProps} />);
 
     // socialImage without baseUrl is the parser's own rule.
     await user.type(screen.getByRole("textbox", { name: /social image/i }), "card.png");
@@ -92,7 +92,7 @@ describe("SiteSettingsModal", () => {
 
   it("offers the builtin themes in the picker", async () => {
     mockConfigFile(null);
-    renderInWorkspace(<SiteSettingsModal {...defaultProps} />);
+    renderInWorkspace(<WorkspaceSettingsModal {...defaultProps} />);
     const picker = await screen.findByRole("combobox", { name: /theme/i });
     const options = Array.from(picker.querySelectorAll("option")).map((o) => o.textContent);
     expect(options).toEqual(["GitHub", "Plain"]);
