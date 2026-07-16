@@ -14,10 +14,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Orchestrator: the actual jobs live in reusable workflows.
-#   checks.yml  fast static checks (lint, typecheck), gate the builds
-#   tests.yml   frontend/Rust tests + clippy, run alongside the builds
-#   build.yml   desktop matrix + Android
+# Orchestrator: the actual jobs live in the reusable workflows below.
 jobs:
   pr-title:
     name: PR title (conventional commits)

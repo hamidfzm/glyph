@@ -23,11 +23,17 @@ jobs:
           - platform: macos-latest
             args_full: "--target universal-apple-darwin"
             args_pr: "--target aarch64-apple-darwin --no-bundle"
+            targets_full: "aarch64-apple-darwin,x86_64-apple-darwin"
+            targets_pr: "aarch64-apple-darwin"
           - platform: ubuntu-22.04
-            # Bundle analysis needs the real bundle, so no --no-bundle here
-            # (empty args_pr falls through to empty args_full below).
+            # Bundle analysis needs the real bundle, so no --no-bundle here.
+            args_full: ""
+            args_pr: ""
             bundle_analysis: true
+          - platform: ubuntu-22.04-arm
+            args_full: ""
           - platform: windows-latest
+            args_full: ""
             args_pr: "--no-bundle"
     runs-on: ${{ matrix.platform }}
     steps:
@@ -40,7 +46,7 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ github.event_name == 'pull_request' && matrix.targets_pr || matrix.targets_full }}
       - name: Cache apt packages
         if: startsWith(matrix.platform, 'ubuntu')
         uses: actions/cache@v5
@@ -67,7 +73,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CODECOV_TOKEN: ${{ matrix.bundle_analysis && secrets.CODECOV_TOKEN || '' }}
         with:
-          args: ${{ matrix.is_pr && matrix.args_pr || matrix.args_full }}
+          args: ${{ github.event_name == 'pull_request' && matrix.args_pr || matrix.args_full }}
       # Boots the real webview under the production CSP and exercises the
       # grant-gated CLI export end to end; unit tests cannot enforce CSP.
       - name: Headless export smoke test
@@ -82,8 +88,9 @@ jobs:
 
   build-android:
     name: Build (Android)
-    # Android APK only builds on pushes to main; desktop builds cover PRs.
-    if: github.event_name == 'push'
+    # Android APK skips PRs; desktop builds cover them. Any non-PR event
+    # (push, and future dispatch/schedule triggers) gets the full build.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
       NDK_VERSION: 29.0.14206865
