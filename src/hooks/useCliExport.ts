@@ -1,8 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { getCliExportRequest } from "@/lib/cliExport";
+
+// How long the CLI export waits for the plugin host's startup load. A hung
+// plugin must not hang a CI job forever: past this, the export proceeds with
+// whatever themes have registered (a missing plugin theme then fails loudly
+// with the available ids, which beats a silent stall).
+export const CLI_PLUGIN_WAIT_MS = 10_000;
 
 // Once-per-process latch: the effect may fire more than once (StrictMode,
 // plugin readiness flipping) but the export itself must not.
@@ -29,8 +35,15 @@ export function useCliExport(): void {
   // Without a provider there are no plugins to wait for.
   const pluginsReady = plugins === null || plugins.initialLoadDone;
 
+  const [waitExpired, setWaitExpired] = useState(false);
   useEffect(() => {
-    if (!pluginsReady) return;
+    if (pluginsReady) return;
+    const timer = window.setTimeout(() => setWaitExpired(true), CLI_PLUGIN_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [pluginsReady]);
+
+  useEffect(() => {
+    if (!pluginsReady && !waitExpired) return;
     (async () => {
       const request = await getCliExportRequest();
       if (!request || started) return;
@@ -53,5 +66,5 @@ export function useCliExport(): void {
         });
       }
     })();
-  }, [pluginsReady, pluginThemes]);
+  }, [pluginsReady, waitExpired, pluginThemes]);
 }
