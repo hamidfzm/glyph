@@ -659,4 +659,50 @@ mod tests {
         let builder = make_app_builder();
         std::mem::drop(builder);
     }
+
+    // Each (directive, source) pair backs a shipped surface: WASM for
+    // Mermaid/D2, blob/data scripts for the plugin worker sandbox, remote
+    // schemes for document-embedded images/media, https for AI providers and
+    // the marketplace, inline styles for theme injection.
+    #[test]
+    fn csp_keeps_every_surface_the_app_depends_on() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let sec = &conf["app"]["security"];
+        for key in ["csp", "devCsp"] {
+            let csp = sec[key].as_str().unwrap();
+            for (directive, source) in [
+                ("script-src", "'wasm-unsafe-eval'"),
+                ("script-src", "blob:"),
+                ("script-src", "data:"),
+                ("img-src", "https:"),
+                ("img-src", "asset:"),
+                ("img-src", "data:"),
+                ("media-src", "https:"),
+                ("connect-src", "https:"),
+                ("connect-src", "ipc:"),
+                ("style-src", "'unsafe-inline'"),
+                ("font-src", "data:"),
+            ] {
+                let value = csp
+                    .split(';')
+                    .find(|d| d.trim_start().starts_with(directive))
+                    .unwrap_or_else(|| panic!("{key} is missing {directive}"));
+                assert!(
+                    value.contains(source),
+                    "{key}: {directive} must keep {source}"
+                );
+            }
+            assert!(
+                csp.contains("object-src 'none'"),
+                "{key} must keep object-src 'none'"
+            );
+            assert!(
+                csp.contains("frame-src 'none'"),
+                "{key} must keep frame-src 'none'"
+            );
+        }
+        let allow = sec["assetProtocol"]["scope"]["allow"].as_array().unwrap();
+        assert!(allow.is_empty(), "asset scope must stay empty at rest");
+    }
 }

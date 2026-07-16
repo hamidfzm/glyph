@@ -93,8 +93,10 @@ feature:
 - `style-src 'unsafe-inline'` is required by markdown theming and syntax
   highlighting (`dangerousDisableAssetCspModification` keeps Tauri from
   rewriting it).
-- `img-src`/`media-src` allow `asset:` (scoped by the runtime grants above)
-  plus `data:`/`blob:` for exports and diagram rendering.
+- `img-src`/`media-src` allow `asset:` (scoped by the runtime grants above),
+  `data:`/`blob:` for exports and diagram rendering, and `https:`/`http:`
+  because documents legitimately embed remote images and media; a remote fetch
+  exposes the viewer's IP to the embedded host, same as any markdown viewer.
 - `object-src 'none'`, `frame-src 'none'`, `base-uri 'self'`, and
   `form-action 'none'` close the remaining injection sinks.
 
