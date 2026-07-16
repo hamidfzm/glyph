@@ -1,0 +1,40 @@
+{
+  "modal": {
+    "heading": "Configuración del sitio web",
+    "close": "Cerrar"
+  },
+  "description": "Cómo se exporta este espacio de trabajo como sitio web. Se guarda en .glyph/site.json, así que viaja con la carpeta.",
+  "empty": "Abre un espacio de trabajo de carpeta para configurar su sitio web.",
+  "fields": {
+    "title": {
+      "label": "Título del sitio",
+      "hint": "pestaña del navegador, cabecera y tarjetas sociales"
+    },
+    "description": {
+      "label": "Descripción"
+    },
+    "baseUrl": {
+      "label": "URL base",
+      "hint": "habilita enlaces e imágenes sociales"
+    },
+    "favicon": {
+      "label": "Ruta del favicon",
+      "hint": "relativa al espacio de trabajo; un favicon.ico/png/svg en la raíz se detecta automáticamente"
+    },
+    "socialImage": {
+      "label": "Ruta de la imagen social",
+      "hint": "aparece en vistas previas de enlaces; necesita una URL base"
+    },
+    "robots": {
+      "label": "Buscadores (robots.txt)",
+      "none": "No escribir robots.txt",
+      "all": "Permitir todo",
+      "disallow": "Bloquear todo"
+    },
+    "theme": {
+      "label": "Tema"
+    }
+  },
+  "save": "Guardar",
+  "cancel": "Cancelar"
+}

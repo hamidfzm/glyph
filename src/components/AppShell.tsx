@@ -41,6 +41,7 @@ import { UpdateBanner } from "./layout/UpdateBanner";
 import { WorkspaceNoticeBanner } from "./layout/WorkspaceNoticeBanner";
 import { ContextMenu } from "./menu/ContextMenu";
 import { CommandPalette } from "./modals/CommandPalette";
+import { SiteSettingsModal } from "./modals/SiteSettingsModal";
 import { SyncSettingsModal } from "./modals/SyncSettingsModal";
 import { SettingsModal } from "./modals/settings/lazySettings";
 import { PluginsModal } from "./plugins/PluginsModal";
@@ -105,6 +106,7 @@ export function AppShell() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [syncSettingsOpen, setSyncSettingsOpen] = useState(false);
+  const [siteSettingsOpen, setSiteSettingsOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -193,6 +195,7 @@ export function AppShell() {
       exportEpub: exporters.exportEpub,
       exportPdf: exporters.exportPdf,
       exportWebsite: siteExporter.exportWebsite,
+      websiteSettings: () => setSiteSettingsOpen(true),
       zoomIn: zoom.zoomIn,
       zoomOut: zoom.zoomOut,
       zoomReset: zoom.zoomReset,
@@ -341,6 +344,7 @@ export function AppShell() {
       {/* Mounted only when open so the settings chunk loads on first use. */}
       {settingsOpen && <SettingsModal open onClose={() => setSettingsOpen(false)} />}
       {syncSettingsOpen && <SyncSettingsModal open onClose={() => setSyncSettingsOpen(false)} />}
+      {siteSettingsOpen && <SiteSettingsModal open onClose={() => setSiteSettingsOpen(false)} />}
       {pluginsOpen && <PluginsModal onClose={() => setPluginsOpen(false)} />}
     </div>
   );

@@ -1,0 +1,40 @@
+{
+  "modal": {
+    "heading": "Website Settings",
+    "close": "Close"
+  },
+  "description": "How this workspace exports as a website. Saved to .glyph/site.json, so it travels with the folder.",
+  "empty": "Open a folder workspace to configure its website.",
+  "fields": {
+    "title": {
+      "label": "Site title",
+      "hint": "browser tab, header, and social cards"
+    },
+    "description": {
+      "label": "Description"
+    },
+    "baseUrl": {
+      "label": "Base URL",
+      "hint": "enables social links and images"
+    },
+    "favicon": {
+      "label": "Favicon path",
+      "hint": "workspace-relative; a root favicon.ico/png/svg is picked up automatically"
+    },
+    "socialImage": {
+      "label": "Social image path",
+      "hint": "shown in link previews; needs a base URL"
+    },
+    "robots": {
+      "label": "Search engines (robots.txt)",
+      "none": "Don't write robots.txt",
+      "all": "Allow all",
+      "disallow": "Disallow all"
+    },
+    "theme": {
+      "label": "Theme"
+    }
+  },
+  "save": "Save",
+  "cancel": "Cancel"
+}

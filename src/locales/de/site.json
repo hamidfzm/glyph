@@ -1,0 +1,40 @@
+{
+  "modal": {
+    "heading": "Website-Einstellungen",
+    "close": "Schließen"
+  },
+  "description": "Wie dieser Arbeitsbereich als Website exportiert wird. Gespeichert in .glyph/site.json, wandert also mit dem Ordner mit.",
+  "empty": "Öffne einen Ordner-Arbeitsbereich, um seine Website zu konfigurieren.",
+  "fields": {
+    "title": {
+      "label": "Seitentitel",
+      "hint": "Browser-Tab, Kopfzeile und Social Cards"
+    },
+    "description": {
+      "label": "Beschreibung"
+    },
+    "baseUrl": {
+      "label": "Basis-URL",
+      "hint": "aktiviert Social-Links und -Bilder"
+    },
+    "favicon": {
+      "label": "Favicon-Pfad",
+      "hint": "relativ zum Arbeitsbereich; ein favicon.ico/png/svg im Stammordner wird automatisch erkannt"
+    },
+    "socialImage": {
+      "label": "Social-Bild-Pfad",
+      "hint": "erscheint in Link-Vorschauen; benötigt eine Basis-URL"
+    },
+    "robots": {
+      "label": "Suchmaschinen (robots.txt)",
+      "none": "Keine robots.txt schreiben",
+      "all": "Alles erlauben",
+      "disallow": "Alles verbieten"
+    },
+    "theme": {
+      "label": "Theme"
+    }
+  },
+  "save": "Speichern",
+  "cancel": "Abbrechen"
+}
