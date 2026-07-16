@@ -143,6 +143,18 @@ pub mod test_store {
         }
     }
 
+    // as_any is keyring trait plumbing nothing in the store exercises; touch
+    // both impls so coverage reflects reality instead of flagging trait glue.
+    #[test]
+    fn trait_boilerplate_is_wired() {
+        let cred = MemCredential {
+            key: "svc/acct".into(),
+            account: "acct".into(),
+        };
+        assert!(cred.as_any().is::<MemCredential>());
+        assert!(MemBuilder.as_any().is::<MemBuilder>());
+    }
+
     /// Install the shared store as the process-wide credential builder and
     /// return a guard serializing keychain tests (they share global state).
     pub fn install() -> MutexGuard<'static, ()> {
