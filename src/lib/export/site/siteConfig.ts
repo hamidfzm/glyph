@@ -56,7 +56,8 @@ export function parseSiteConfig(raw: string | null, workspaceName: string): Site
     data = JSON.parse(raw);
   } catch (err) {
     throw new Error(
-      `${SITE_CONFIG_PATH} is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+      // JSON.parse only throws Error subclasses; String keeps this total.
+      `${SITE_CONFIG_PATH} is not valid JSON: ${String(err)}`,
     );
   }
   if (data === null || typeof data !== "object" || Array.isArray(data)) {
