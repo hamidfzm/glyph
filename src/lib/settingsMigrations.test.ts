@@ -55,4 +55,32 @@ describe("migrateLegacySettings", () => {
     });
     expect(migrated.appearance).toEqual({ theme: "dark" });
   });
+
+  it("seeds spellCheckLanguages from the legacy single language and drops it", () => {
+    const migrated = migrateLegacySettings({
+      editor: { keymap: "vim", spellCheckLanguage: "fa" },
+    });
+    expect(migrated.editor).toEqual({ keymap: "vim", spellCheckLanguages: ["fa"] });
+  });
+
+  it("does not overwrite an existing spellCheckLanguages array", () => {
+    const migrated = migrateLegacySettings({
+      editor: { spellCheckLanguage: "fa", spellCheckLanguages: ["en", "de"] },
+    });
+    expect(migrated.editor).toEqual({ spellCheckLanguages: ["en", "de"] });
+  });
+
+  it("passes an editor section without the legacy key through unchanged", () => {
+    const saved = { editor: { spellCheckLanguages: ["en"] } };
+    expect(migrateLegacySettings(saved)).toBe(saved);
+  });
+
+  it("applies the sidebar and spell-check migrations together", () => {
+    const migrated = migrateLegacySettings({
+      layout: { sidebarWidth: 200 },
+      editor: { spellCheckLanguage: "en" },
+    });
+    expect(migrated.layout).toEqual({ filesSidebarWidth: 200, outlineSidebarWidth: 200 });
+    expect(migrated.editor).toEqual({ spellCheckLanguages: ["en"] });
+  });
 });

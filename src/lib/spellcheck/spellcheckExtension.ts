@@ -1,5 +1,7 @@
 import { type Extension, RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, ViewPlugin } from "@codemirror/view";
+import { getDictionarySource } from "./dictionarySources";
+import { scriptsForLanguage, type WordScript, wordScript } from "./scripts";
 import { getSpeller, type Speller } from "./speller";
 import { openSuggestionMenu, type SuggestionMenuLabels } from "./suggestionMenu";
 import { scanWords } from "./wordScanner";
@@ -22,75 +24,100 @@ const misspellingField = StateField.define<DecorationSet>({
 
 const misspelledMark = Decoration.mark({ class: "cm-misspelled" });
 
-// Only `correct` is needed to place underlines, so tests can pass a fake.
-interface Corrector {
+/** One enabled dictionary, reduced to what the underline pass needs. */
+export interface Checker {
+  scripts: readonly WordScript[];
   correct(word: string): boolean;
 }
 
-// Build the underline decorations for the given ranges. Exported for tests:
-// with a fake corrector it verifies which words get marked and that code, URLs
-// and frontmatter are skipped (that exclusion lives in scanWords).
+// Build the underline decorations for the given ranges. A word is checked only
+// against the checkers covering its script: covered by none means skipped (so
+// mixed-language text is not flagged wholesale), and it is marked only when
+// every covering checker rejects it. Exported for tests.
 export function buildMisspellings(
   state: EditorView["state"],
   ranges: readonly { from: number; to: number }[],
-  corrector: Corrector,
+  checkers: readonly Checker[],
   ignored: ReadonlySet<string>,
 ): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   for (const range of ranges) {
     for (const token of scanWords(state, range.from, range.to)) {
       if (ignored.has(token.word.toLowerCase())) continue;
-      if (corrector.correct(token.word)) continue;
+      const script = wordScript(token.word);
+      const covering = checkers.filter((checker) => checker.scripts.includes(script));
+      if (covering.length === 0) continue;
+      if (covering.some((checker) => checker.correct(token.word))) continue;
       builder.add(token.from, token.to, misspelledMark);
     }
   }
   return builder.finish();
 }
 
-// Words the user chose to ignore, per language, kept for the session so a
-// toggle off/on does not resurrect them. Not persisted to disk (see spec).
-const ignoredByLanguage = new Map<string, Set<string>>();
+// Words the user chose to ignore, kept for the session so toggling languages
+// or spell check off/on does not resurrect them. Not persisted to disk.
+const ignoredWords = new Set<string>();
 
-function ignoreSetFor(language: string): Set<string> {
-  let set = ignoredByLanguage.get(language);
-  if (!set) {
-    set = new Set();
-    ignoredByLanguage.set(language, set);
-  }
-  return set;
+// Test seam: reset the session ignore list between tests.
+export function clearIgnoredWords(): void {
+  ignoredWords.clear();
+}
+
+// A contribution may declare its script coverage; otherwise infer it from the
+// language code.
+function scriptsFor(language: string): readonly WordScript[] {
+  return getDictionarySource(language)?.scripts ?? scriptsForLanguage(language);
+}
+
+interface LoadedDictionary {
+  scripts: readonly WordScript[];
+  speller: Speller;
 }
 
 class SpellcheckPlugin {
-  speller: Speller | null = null;
+  loaded: LoadedDictionary[] = [];
   private timer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(
-    view: EditorView,
-    language: string,
-    private readonly ignored: ReadonlySet<string>,
-  ) {
-    getSpeller(language)
-      .then((speller) => {
-        this.speller = speller;
-        this.rescan(view);
-      })
-      .catch(() => {});
+  constructor(view: EditorView, languages: readonly string[]) {
+    // Clear leftovers from a previous configuration even if nothing loads
+    // (e.g. every language was disabled); each arriving dictionary then
+    // repaints progressively without waiting for the slowest one.
+    this.schedule(view, 0);
+    for (const language of languages) {
+      getSpeller(language)
+        .then((speller) => {
+          this.loaded.push({ scripts: scriptsFor(language), speller });
+          this.rescan(view);
+        })
+        .catch(() => {});
+    }
   }
 
   update(update: { docChanged: boolean; viewportChanged: boolean; view: EditorView }): void {
     if (update.docChanged || update.viewportChanged) {
-      clearTimeout(this.timer);
-      this.timer = setTimeout(() => this.rescan(update.view), SCAN_DEBOUNCE_MS);
+      this.schedule(update.view, SCAN_DEBOUNCE_MS);
     }
   }
 
+  private schedule(view: EditorView, delay: number): void {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.rescan(view), delay);
+  }
+
+  checkersFor(word: string): LoadedDictionary[] {
+    const script = wordScript(word);
+    return this.loaded.filter((dictionary) => dictionary.scripts.includes(script));
+  }
+
   rescan(view: EditorView): void {
-    if (!this.speller) return;
     const decorations = buildMisspellings(
       view.state,
       view.visibleRanges,
-      this.speller,
-      this.ignored,
+      this.loaded.map((dictionary) => ({
+        scripts: dictionary.scripts,
+        correct: (word: string) => dictionary.speller.correct(word),
+      })),
+      ignoredWords,
     );
     view.dispatch({ effects: setMisspellings.of(decorations) });
   }
@@ -115,44 +142,59 @@ function misspelledWordAt(
   return found;
 }
 
-// Enable spell checking for one language. Wrapped in a Compartment by the editor
-// so toggling on/off reconfigures in place without recreating the view.
+// Merge suggestions across dictionaries, first-seen order, deduplicated.
+function mergedSuggestions(covering: readonly LoadedDictionary[], word: string): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const dictionary of covering) {
+    for (const suggestion of dictionary.speller.suggest(word)) {
+      if (seen.has(suggestion)) continue;
+      seen.add(suggestion);
+      merged.push(suggestion);
+      if (merged.length === MAX_SUGGESTIONS) return merged;
+    }
+  }
+  return merged;
+}
+
+// Enable spell checking for a set of languages. Wrapped in a Compartment by
+// the editor so changing the set reconfigures in place without recreating the
+// view.
 export function buildSpellcheck(
-  language: string,
+  languages: readonly string[],
   getLabels: () => SuggestionMenuLabels,
 ): Extension {
-  const ignored = ignoreSetFor(language);
-  const plugin = ViewPlugin.define((view) => new SpellcheckPlugin(view, language, ignored));
+  const plugin = ViewPlugin.define((view) => new SpellcheckPlugin(view, languages));
 
   const contextMenu = EditorView.domEventHandlers({
     contextmenu(event, view) {
       const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
       if (pos == null) return false;
 
-      // The plugin is installed with this handler, so the instance is always
-      // present; its speller is null only until the dictionary finishes loading.
-      const instance = view.plugin(plugin) as SpellcheckPlugin;
-      const speller = instance.speller;
-      if (!speller) return false;
-
       const word = misspelledWordAt(view, pos);
       if (!word) return false;
+
+      // The plugin is installed with this handler, so the instance is always
+      // present; a marked word implies at least one covering dictionary.
+      const instance = view.plugin(plugin) as SpellcheckPlugin;
+      const covering = instance.checkersFor(word.text);
+      if (covering.length === 0) return false;
 
       event.preventDefault();
       openSuggestionMenu({
         x: event.clientX,
         y: event.clientY,
-        suggestions: speller.suggest(word.text).slice(0, MAX_SUGGESTIONS),
+        suggestions: mergedSuggestions(covering, word.text),
         labels: getLabels(),
         onPick: (replacement) => {
           view.dispatch({ changes: { from: word.from, to: word.to, insert: replacement } });
         },
         onIgnore: () => {
-          ignored.add(word.text.toLowerCase());
+          ignoredWords.add(word.text.toLowerCase());
           instance.rescan(view);
         },
         onAdd: () => {
-          speller.add(word.text);
+          for (const dictionary of covering) dictionary.speller.add(word.text);
           instance.rescan(view);
         },
       });

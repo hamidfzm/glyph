@@ -176,7 +176,8 @@
       "title": "Rechtschreibprüfung",
       "label": "Rechtschreibung prüfen",
       "description": "Falsch geschriebene Wörter werden beim Bearbeiten unterstrichen. Rechtsklick auf ein Wort zeigt Vorschläge. Gilt für den Bearbeitungs- und den geteilten Modus.",
-      "language": "Sprache",
+      "languagesLabel": "Sprachen",
+      "languagesDescription": "Wörter werden gegen jede aktivierte Sprache geprüft. Text in Schriften ohne aktiviertes Wörterbuch wird nicht markiert.",
       "languages": {
         "en": "Englisch (US)"
       },

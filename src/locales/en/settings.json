@@ -144,7 +144,8 @@
       "title": "Spell Check",
       "label": "Check spelling",
       "description": "Underline misspelled words while editing. Right-click a word for suggestions. Applies to edit and split modes.",
-      "language": "Language",
+      "languagesLabel": "Languages",
+      "languagesDescription": "Words are checked against every enabled language. Text in scripts with no enabled dictionary is not flagged.",
       "languages": {
         "en": "English (US)"
       },

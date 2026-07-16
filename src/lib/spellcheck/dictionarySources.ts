@@ -1,4 +1,5 @@
 import type { Disposer } from "@/lib/plugins/disposer";
+import type { WordScript } from "./scripts";
 
 /** Hunspell dictionary sources, resolved lazily when the language is used. */
 export interface DictionarySources {
@@ -14,6 +15,12 @@ export interface DictionaryContribution {
   label: string;
   /** Produce the dictionary text; called only once the language is selected. */
   load: () => Promise<DictionarySources>;
+  /**
+   * Scripts this dictionary covers; words in other scripts are never checked
+   * against it. Defaults to the language code's primary script (see
+   * `scriptsForLanguage`), so most dictionaries can omit it.
+   */
+  scripts?: readonly WordScript[];
 }
 
 // Module-level so the speller (plain module) and the settings UI (React) read
