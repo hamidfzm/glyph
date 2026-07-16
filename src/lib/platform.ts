@@ -24,6 +24,15 @@ export function isMobile(platform: Platform): boolean {
   return platform === "android" || platform === "ios";
 }
 
+/** A platform group or a single platform, for cfg-style UI gating. */
+export type PlatformSelector = "desktop" | "mobile" | Platform;
+
+export function matchesPlatform(platform: Platform, selector: PlatformSelector): boolean {
+  if (selector === "desktop") return !isMobile(platform);
+  if (selector === "mobile") return isMobile(platform);
+  return platform === selector;
+}
+
 /** Synchronous mobile check for code that runs before `usePlatform` settles. */
 export function isMobilePlatform(): boolean {
   return isMobile(currentPlatform());
