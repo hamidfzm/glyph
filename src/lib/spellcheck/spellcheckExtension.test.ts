@@ -1,5 +1,5 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -255,6 +255,31 @@ describe("buildSpellcheck (editor integration)", () => {
   it("marks nothing when no language is enabled", async () => {
     const view = mount("helo world", []);
     await flushMicrotasks();
+    rightClickAt(view, 2);
+    expect(document.querySelector(".spellcheck-menu")).toBeNull();
+    view.destroy();
+  });
+
+  it("a right-click on a stale mark right after a language-set change is a no-op", async () => {
+    const compartment = new Compartment();
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "helo world",
+        extensions: [
+          markdown({ base: markdownLanguage }),
+          compartment.of(buildSpellcheck(["en"], labels)),
+        ],
+      }),
+      parent,
+    });
+    await flushMicrotasks(); // "helo" is now marked by the English dictionary
+
+    // Reconfigure to a set whose dictionary never resolves. The old marks are
+    // still painted, but the fresh plugin instance has no loaded dictionaries
+    // yet, so the context menu must not open against a stale checker.
+    view.dispatch({ effects: compartment.reconfigure(buildSpellcheck(["pending"], labels)) });
     rightClickAt(view, 2);
     expect(document.querySelector(".spellcheck-menu")).toBeNull();
     view.destroy();

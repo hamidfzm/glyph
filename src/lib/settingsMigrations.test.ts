@@ -75,6 +75,11 @@ describe("migrateLegacySettings", () => {
     expect(migrateLegacySettings(saved)).toBe(saved);
   });
 
+  it("drops a blank legacy language without seeding the array", () => {
+    const migrated = migrateLegacySettings({ editor: { spellCheckLanguage: "" } });
+    expect(migrated.editor).toEqual({});
+  });
+
   it("applies the sidebar and spell-check migrations together", () => {
     const migrated = migrateLegacySettings({
       layout: { sidebarWidth: 200 },

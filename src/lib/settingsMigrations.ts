@@ -27,7 +27,11 @@ function migrateSpellCheckLanguages(saved: Record<string, unknown>): Record<stri
   const editor = saved.editor;
   if (!isSafePlainObject(editor) || typeof editor.spellCheckLanguage !== "string") return saved;
   const { spellCheckLanguage, ...rest } = editor;
-  if (!Array.isArray(rest.spellCheckLanguages)) rest.spellCheckLanguages = [spellCheckLanguage];
+  // A blank legacy value (hand-edited store) is dropped rather than seeded, so
+  // the default set applies instead of a useless [""] entry.
+  if (!Array.isArray(rest.spellCheckLanguages) && spellCheckLanguage.length > 0) {
+    rest.spellCheckLanguages = [spellCheckLanguage];
+  }
   return { ...saved, editor: rest };
 }
 
