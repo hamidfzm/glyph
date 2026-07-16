@@ -3,6 +3,10 @@
 // file is not required; a present-but-invalid file fails the export loudly,
 // because silently publishing wrong metadata is worse than no export.
 
+import { isPathInside } from "@/lib/paths";
+import { normalizeRelativePath } from "@/lib/relativePath";
+import { relFromRoot } from "./sitePaths";
+
 export const SITE_CONFIG_FILENAME = "glyph-site.json";
 
 export interface SiteConfig {
@@ -63,10 +67,23 @@ export function parseSiteConfig(raw: string | null, workspaceName: string): Site
   }
   let baseUrl = optionalString(obj, "baseUrl");
   if (baseUrl !== null) {
-    if (!/^https?:\/\//.test(baseUrl)) {
-      throw new Error(`${SITE_CONFIG_FILENAME}: "baseUrl" must start with http(s)://`);
+    let parsed: URL;
+    try {
+      parsed = new URL(baseUrl);
+    } catch {
+      throw new Error(`${SITE_CONFIG_FILENAME}: "baseUrl" is not a valid URL`);
+    }
+    if (!/^https?:$/.test(parsed.protocol) || parsed.host === "") {
+      throw new Error(`${SITE_CONFIG_FILENAME}: "baseUrl" must be an http(s) URL with a host`);
     }
     if (!baseUrl.endsWith("/")) baseUrl += "/";
+  }
+  const socialImage = optionalString(obj, "socialImage");
+  if (socialImage !== null && baseUrl === null) {
+    // og:image must be an absolute URL, so a social image without a base URL
+    // would be copied but never referenced. Fail instead of silently doing
+    // nothing with the author's config.
+    throw new Error(`${SITE_CONFIG_FILENAME}: "socialImage" requires "baseUrl"`);
   }
 
   return {
@@ -74,9 +91,31 @@ export function parseSiteConfig(raw: string | null, workspaceName: string): Site
     description: optionalString(obj, "description") ?? defaults.description,
     baseUrl,
     favicon: optionalString(obj, "favicon"),
-    socialImage: optionalString(obj, "socialImage"),
+    socialImage,
     robots: robots ?? null,
   };
+}
+
+/**
+ * Resolve a config-supplied workspace-relative asset path (favicon,
+ * socialImage) to its absolute source and site-relative destination,
+ * rejecting anything that escapes the workspace. glyph-site.json may come
+ * from an untrusted workspace (a cloned repo), so "../secrets" must not
+ * become a read outside the root or a write outside the output directory.
+ */
+export function resolveConfigAsset(
+  root: string,
+  rel: string,
+  key: string,
+): { abs: string; siteRel: string } {
+  // normalizeRelativePath resolves against the directory of its first
+  // argument, so anchor it at a synthetic file inside the root; it collapses
+  // "." and ".." segments, which is what makes the isPathInside clamp sound.
+  const abs = normalizeRelativePath(`${root}/glyph-site.json`, rel);
+  if (abs === root || !isPathInside(abs, root)) {
+    throw new Error(`${SITE_CONFIG_FILENAME}: "${key}" must stay inside the workspace: ${rel}`);
+  }
+  return { abs, siteRel: relFromRoot(root, abs) };
 }
 
 /** robots.txt body for the configured directive. */

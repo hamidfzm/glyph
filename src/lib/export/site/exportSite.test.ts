@@ -241,6 +241,18 @@ describe("exportSite", () => {
     );
   });
 
+  it("rejects a config favicon that traverses out of the workspace", async () => {
+    const fs = mockFs({
+      "/ws/notes.md": "# N",
+      "/ws/glyph-site.json": JSON.stringify({ favicon: "../outside/secret.png" }),
+      "/outside/secret.png": "<binary>",
+    });
+    await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(
+      /"favicon" must stay inside the workspace/,
+    );
+    expect(fs.copies).toEqual([]);
+  });
+
   it("tolerates a missing asset instead of failing the export", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const fs = mockFs({ "/ws/notes.md": "![gone](./missing.png) ![ok](./ok.png)" });
