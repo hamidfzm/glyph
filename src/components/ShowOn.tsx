@@ -8,5 +8,7 @@ interface ShowOnProps {
 }
 
 export function ShowOn({ on, children }: ShowOnProps) {
-  return isMobile(usePlatform()) === (on === "mobile") ? children : null;
+  const current = isMobile(usePlatform()) ? "mobile" : "desktop";
+  if (current !== on) return null;
+  return children;
 }
