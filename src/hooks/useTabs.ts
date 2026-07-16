@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ask, open } from "@tauri-apps/plugin-dialog";
+import { readTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
@@ -12,6 +13,7 @@ import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
 import { basename, isPathInside, parentDir, pruneInside } from "@/lib/paths";
+import { isMobilePlatform } from "@/lib/platform";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
 import { subscribe } from "@/lib/tauriEvent";
@@ -119,7 +121,18 @@ interface UseTabsOptions {
   onWorkspaceNotice: (notice: WorkspaceNotice, options?: { persistent?: boolean }) => void;
 }
 
-async function loadFileContent(path: string) {
+async function loadFileContent(path: string): Promise<{
+  content: string;
+  metadata: FileMetadata | null;
+}> {
+  // Mobile document pickers hand back sandboxed URIs (content:// on Android)
+  // that the Rust fs commands cannot open; the fs plugin's native layer can,
+  // and the dialog plugin has already scoped the picked file for it. Metadata
+  // and file watching don't apply to those URIs.
+  if (isMobilePlatform()) {
+    const raw = await readTextFile(path);
+    return { content: adaptD2Content(path, adaptMmdContent(path, raw)), metadata: null };
+  }
   const [raw, metadata] = await Promise.all([
     invoke<string>("read_file", { path }),
     invoke<FileMetadata>("get_file_metadata", { path }),
@@ -332,13 +345,15 @@ export function useTabs(options: UseTabsOptions) {
         // refresh it anyway.) Documents load their text and start a watch.
         const isImage = isImageFile(path);
         let content: string | null;
-        let metadata: FileMetadata;
+        let metadata: FileMetadata | null;
         if (isImage) {
           content = null;
           metadata = await invoke<FileMetadata>("get_file_metadata", { path });
         } else {
           ({ content, metadata } = await loadFileContent(path));
-          await invoke("watch_file", { path });
+          if (!isMobilePlatform()) {
+            await invoke("watch_file", { path });
+          }
         }
         // Notebooks, canvases, images, and D2 files are read-only; open straight
         // into the viewer regardless of the user's default editor mode. (`.d2`

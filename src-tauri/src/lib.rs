@@ -4,11 +4,25 @@ mod commands;
 mod d2;
 mod image;
 mod markdown;
+#[cfg(desktop)]
 mod menu;
+#[cfg(desktop)]
+mod menu_runtime;
+// `tauri::menu` doesn't exist on mobile; a stub module answers the same
+// commands so one `generate_handler!` list serves both targets.
+#[cfg(mobile)]
+#[path = "menu_runtime_mobile.rs"]
 mod menu_runtime;
 mod notebook;
 mod secrets;
 mod sync;
+// Telemetry (sentry) doesn't cross-compile for mobile; a stub module
+// answers the same command there. Sync gates its git backend the same
+// way inside sync/mod.rs.
+#[cfg(desktop)]
+mod telemetry;
+#[cfg(mobile)]
+#[path = "telemetry_mobile.rs"]
 mod telemetry;
 mod watcher;
 mod windows;
@@ -19,6 +33,7 @@ use std::sync::{Arc, Mutex};
 #[cfg(target_os = "macos")]
 use tauri::RunEvent;
 use tauri::{DragDropEvent, Manager, WindowEvent};
+#[cfg(desktop)]
 use tauri_plugin_cli::CliExt;
 use watcher::FileWatcherState;
 
@@ -143,12 +158,19 @@ pub fn make_app_builder() -> tauri::Builder<tauri::Wry> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = make_app_builder()
-        .plugin(tauri_plugin_cli::init())
+    let builder = make_app_builder()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_store::Builder::new().build());
+
+    // CLI args, window-state restoration, and the native menu bar only exist
+    // on desktop; both plugins are desktop-only crates (see the Cargo.toml
+    // target table).
+    #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_cli::init())
         .plugin(
             // Restore size/position/etc, but NOT visibility: the window is
             // created hidden (see tauri.conf.json) and revealed by the frontend
@@ -160,7 +182,9 @@ pub fn run() {
                 )
                 .build(),
         )
-        .plugin(tauri_plugin_store::Builder::new().build())
+        .on_menu_event(menu::handle_menu_event);
+
+    let app = builder
         .manage(FileWatcherState(Arc::new(Mutex::new(
             std::collections::HashMap::new(),
         ))))
@@ -171,85 +195,95 @@ pub fn run() {
         .manage(telemetry::TelemetryState(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
         .setup(|app| {
-            let (menu, menu_refs) = menu::build_menu(app)?;
-            app.set_menu(menu)?;
-            // Start with everything disabled — the frontend reasserts state
-            // as soon as it mounts and learns about the active tab and settings.
-            let initial_flags = menu::MenuStateFlags {
-                has_tab: false,
-                has_file: false,
-                has_content: false,
-                has_workspace: false,
-                ai_configured: false,
-                tts_available: false,
-            };
-            let _ = menu::apply_menu_state(&menu_refs, &initial_flags);
-            app.manage(menu_refs);
+            // Mobile has no menu bar and no CLI: the main window simply starts
+            // with no workspace, and the desktop-only block below compiles out.
+            #[cfg(mobile)]
+            app.state::<windows::WindowRegistry>()
+                .set_workspace("main", None);
 
-            // Parse CLI arguments and store the initial file/folder. The pure
-            // selection + classification logic lives in `cli` (tested
-            // there); this block is the thin Tauri-runtime adapter that maps
-            // each variant to managed state or a warning.
-            //
-            // We pass both the `tauri-plugin-cli` value and raw `std::env::args()`
-            // into `cli::initial_open_action`; the helper prefers the plugin
-            // (so OS file-association launches still work) and falls back to
-            // argv. The fallback is what makes `pnpm tauri dev -- samples`
-            // work on Windows: pnpm's arg forwarding can land the positional
-            // arg in argv without ever populating the plugin's matches.
-            let cwd = std::env::current_dir().unwrap_or_default();
-            let cli_matches = app.cli().matches().ok();
-            let plugin_arg = |name: &str| -> Option<String> {
-                cli_matches
-                    .as_ref()
-                    .and_then(|m| m.args.get(name))
-                    .and_then(|a| a.value.as_str().map(str::to_string))
-            };
-            let plugin_path = plugin_arg("file");
-            let plugin_export = plugin_arg("export-website");
-            let env_args: Vec<String> = std::env::args().collect();
-            // Seed the window registry's "main" entry so routing knows what the
-            // first window shows before its frontend reports back. A folder
-            // launch pre-registers the workspace; everything else leaves main
-            // empty (loose file / no document / headless export).
-            let registry = app.state::<windows::WindowRegistry>();
-            match cli::launch_plan(
-                plugin_path.as_deref(),
-                plugin_export.as_deref(),
-                &env_args,
-                &cwd,
-            ) {
-                Err(usage) => {
-                    eprintln!("{usage}");
-                    std::process::exit(2);
-                }
-                Ok(cli::CliLaunch::ExportWebsite { root, out_dir }) => {
-                    // Headless: the workspace is not opened in the UI and the
-                    // window stays hidden; the frontend runs the export on
-                    // mount and exits via `finish_cli_export`.
-                    registry.set_workspace("main", None);
-                    *app.state::<commands::CliExport>().0.lock().unwrap() =
-                        Some(commands::export::CliExportRequest { root, out_dir });
-                }
-                Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::Folder(p)))) => {
-                    registry.set_workspace("main", Some(p.clone()));
-                    *app.state::<commands::InitialFolder>().0.lock().unwrap() = Some(p);
-                }
-                Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::File(p)))) => {
-                    registry.set_workspace("main", None);
-                    *app.state::<commands::InitialFile>().0.lock().unwrap() = Some(p);
-                }
-                Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::RejectedUnsupported(p)))) => {
-                    registry.set_workspace("main", None);
-                    eprintln!("Refusing to open unsupported file type: {p}");
-                }
-                Ok(cli::CliLaunch::Open(None)) => {
-                    registry.set_workspace("main", None);
+            #[cfg(desktop)]
+            {
+                let (menu, menu_refs) = menu::build_menu(app)?;
+                app.set_menu(menu)?;
+                // Start with everything disabled — the frontend reasserts state
+                // as soon as it mounts and learns about the active tab and settings.
+                let initial_flags = menu::MenuStateFlags {
+                    has_tab: false,
+                    has_file: false,
+                    has_content: false,
+                    has_workspace: false,
+                    ai_configured: false,
+                    tts_available: false,
+                };
+                let _ = menu::apply_menu_state(&menu_refs, &initial_flags);
+                app.manage(menu_refs);
+
+                // Parse CLI arguments and store the initial file/folder. The pure
+                // selection + classification logic lives in `cli` (tested
+                // there); this block is the thin Tauri-runtime adapter that maps
+                // each variant to managed state or a warning.
+                //
+                // We pass both the `tauri-plugin-cli` value and raw `std::env::args()`
+                // into `cli::initial_open_action`; the helper prefers the plugin
+                // (so OS file-association launches still work) and falls back to
+                // argv. The fallback is what makes `pnpm tauri dev -- samples`
+                // work on Windows: pnpm's arg forwarding can land the positional
+                // arg in argv without ever populating the plugin's matches.
+                let cwd = std::env::current_dir().unwrap_or_default();
+                let cli_matches = app.cli().matches().ok();
+                let plugin_arg = |name: &str| -> Option<String> {
+                    cli_matches
+                        .as_ref()
+                        .and_then(|m| m.args.get(name))
+                        .and_then(|a| a.value.as_str().map(str::to_string))
+                };
+                let plugin_path = plugin_arg("file");
+                let plugin_export = plugin_arg("export-website");
+                let env_args: Vec<String> = std::env::args().collect();
+                // Seed the window registry's "main" entry so routing knows what the
+                // first window shows before its frontend reports back. A folder
+                // launch pre-registers the workspace; everything else leaves main
+                // empty (loose file / no document / headless export).
+                let registry = app.state::<windows::WindowRegistry>();
+                match cli::launch_plan(
+                    plugin_path.as_deref(),
+                    plugin_export.as_deref(),
+                    &env_args,
+                    &cwd,
+                ) {
+                    Err(usage) => {
+                        eprintln!("{usage}");
+                        std::process::exit(2);
+                    }
+                    Ok(cli::CliLaunch::ExportWebsite { root, out_dir }) => {
+                        // Headless: the workspace is not opened in the UI and the
+                        // window stays hidden; the frontend runs the export on
+                        // mount and exits via `finish_cli_export`.
+                        registry.set_workspace("main", None);
+                        *app.state::<commands::CliExport>().0.lock().unwrap() =
+                            Some(commands::export::CliExportRequest { root, out_dir });
+                    }
+                    Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::Folder(p)))) => {
+                        registry.set_workspace("main", Some(p.clone()));
+                        *app.state::<commands::InitialFolder>().0.lock().unwrap() = Some(p);
+                    }
+                    Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::File(p)))) => {
+                        registry.set_workspace("main", None);
+                        *app.state::<commands::InitialFile>().0.lock().unwrap() = Some(p);
+                    }
+                    Ok(cli::CliLaunch::Open(Some(
+                        cli::InitialOpenAction::RejectedUnsupported(p),
+                    ))) => {
+                        registry.set_workspace("main", None);
+                        eprintln!("Refusing to open unsupported file type: {p}");
+                    }
+                    Ok(cli::CliLaunch::Open(None)) => {
+                        registry.set_workspace("main", None);
+                    }
                 }
             }
             Ok(())
         })
-        .on_menu_event(menu::handle_menu_event)
         .on_window_event(|window, event| {
             // A closed window leaves the routing registry so its workspace no
             // longer counts toward "is this folder already open".

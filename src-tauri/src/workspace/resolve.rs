@@ -58,6 +58,12 @@ fn ancestor_glyph(start: &Path) -> Option<String> {
 pub fn resolve_workspace(selected: &Path) -> Result<WorkspaceResolution, String> {
     let selected_canon = canonical(selected);
 
+    // git2 is desktop-only (it doesn't cross-compile for mobile); mobile has
+    // no folder workspaces, so every selection resolves as a plain folder.
+    #[cfg(mobile)]
+    let (is_git_repo, git_top_level, nested_under) = (false, None, None);
+
+    #[cfg(desktop)]
     let (is_git_repo, git_top_level, nested_under) =
         match git2::Repository::discover(&selected_canon) {
             Ok(repo) => match repo.workdir() {

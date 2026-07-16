@@ -52,6 +52,19 @@ describe("EmptyState", () => {
     expect(button).toHaveAttribute("type", "button");
   });
 
+  it("hides the folder button and shortcut hint on android", () => {
+    renderEmptyState({ platform: "android" });
+    expect(screen.getByText("Open File")).toBeInTheDocument();
+    expect(screen.queryByText("Open Folder")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\+O/)).not.toBeInTheDocument();
+  });
+
+  it("still calls onOpenFile on mobile", () => {
+    const { props } = renderEmptyState({ platform: "ios" });
+    fireEvent.click(screen.getByText("Open File"));
+    expect(props.onOpenFile).toHaveBeenCalledOnce();
+  });
+
   it("shows the folder-empty prompt without open actions when folderEmpty", () => {
     renderEmptyState({ folderEmpty: true });
     expect(screen.getByText("No file open in this folder")).toBeInTheDocument();

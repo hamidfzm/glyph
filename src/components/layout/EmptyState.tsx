@@ -1,6 +1,6 @@
 import { Trans, useTranslation } from "react-i18next";
 import type { Platform } from "@/hooks/usePlatform";
-import { modKey } from "@/lib/platform";
+import { isMobile, modKey } from "@/lib/platform";
 
 interface EmptyStateProps {
   platform: Platform;
@@ -13,6 +13,9 @@ interface EmptyStateProps {
 
 export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: EmptyStateProps) {
   const { t } = useTranslation("common");
+  // Mobile has no keyboard shortcuts and no folder workspaces: the document
+  // picker for single files is the only entry point.
+  const mobile = isMobile(platform);
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-6 select-none">
@@ -24,7 +27,7 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
         <p className="text-sm text-[var(--color-text-secondary)]">
           {folderEmpty ? (
             t("emptyState.folderHint")
-          ) : (
+          ) : mobile ? null : (
             <Trans
               i18nKey="emptyState.openHint"
               values={{ shortcut: `${modKey(platform)}+O` }}
@@ -46,13 +49,15 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
           >
             {t("emptyState.openFile")}
           </button>
-          <button
-            type="button"
-            onClick={onOpenFolder}
-            className="px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
-          >
-            {t("emptyState.openFolder")}
-          </button>
+          {!mobile && (
+            <button
+              type="button"
+              onClick={onOpenFolder}
+              className="px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
+            >
+              {t("emptyState.openFolder")}
+            </button>
+          )}
         </div>
       )}
     </div>

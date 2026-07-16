@@ -19,6 +19,8 @@ fn event_name(kind: OpenKind) -> &'static str {
 /// Bring a window to the front (un-minimizing and showing it first).
 pub fn focus_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
     if let Some(window) = app.get_webview_window(label) {
+        // Mobile windows can't be minimized, and the method doesn't exist there.
+        #[cfg(desktop)]
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
