@@ -15,6 +15,7 @@ import type {
   PluginModule,
   SettingsPanelContribution,
   SidebarPanelContribution,
+  SiteThemeContribution,
   StatusBarItemContribution,
   StyleContribution,
 } from "./types";
@@ -60,6 +61,8 @@ export interface PluginHost {
   readonly styles: Registry<StyleContribution>;
   /** Export formats contributed by loaded plugins. */
   readonly exporters: Registry<ExporterContribution>;
+  /** Website-export themes contributed by loaded plugins. */
+  readonly siteThemes: Registry<SiteThemeContribution>;
   /**
    * Import and activate an installed plugin. Re-loading an already-loaded id
    * unloads the previous instance first. Throws on apiVersion mismatch, a bad
@@ -108,6 +111,7 @@ export function createPluginHost(
   const settingsPanels = createRegistry<SettingsPanelContribution>();
   const styles = createRegistry<StyleContribution>();
   const exporters = createRegistry<ExporterContribution>();
+  const siteThemes = createRegistry<SiteThemeContribution>();
   const loaded = new Map<string, LoadedPlugin>();
 
   // Route a registration through the plugin's own DisposerBag so unload removes
@@ -146,7 +150,10 @@ export function createPluginHost(
     },
     workspace: createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? []),
     assets: createAssetsApi(plugin.id),
-    exporters: { register: tracked(exporters.register, bag) },
+    exporters: {
+      register: tracked(exporters.register, bag),
+      registerSiteTheme: tracked(siteThemes.register, bag),
+    },
     // Dictionaries live in the spellcheck module's own registry (the speller
     // and the settings UI read it directly); only the disposal is routed
     // through the plugin's bag here.
@@ -191,6 +198,7 @@ export function createPluginHost(
     settingsPanels,
     styles,
     exporters,
+    siteThemes,
     async load(plugin, importer) {
       if (!satisfiesApiVersion(plugin.apiVersion)) {
         throw new Error(
@@ -213,6 +221,7 @@ export function createPluginHost(
               tracked(styles.register, bag)({ css });
             },
             registerExporter: tracked(exporters.register, bag),
+            registerSiteTheme: tracked(siteThemes.register, bag),
             notify,
             registerTranslations,
             settingsSet(key, value) {

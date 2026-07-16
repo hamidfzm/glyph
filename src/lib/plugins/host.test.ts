@@ -188,6 +188,11 @@ describe("createPluginHost", () => {
           extension: "txt",
           build: async () => "out",
         });
+        ctx.exporters.registerSiteTheme({
+          id: "p.theme",
+          label: "Theme",
+          css: "body { background: beige }",
+        });
       },
     };
 
@@ -198,12 +203,14 @@ describe("createPluginHost", () => {
     expect(host.settingsPanels.list().map((p) => p.pluginId)).toEqual(["com.x.demo"]);
     expect(host.styles.list().map((s) => s.css)).toEqual([".markdown-body { color: red }"]);
     expect(host.exporters.list().map((e) => e.id)).toEqual(["p.export"]);
+    expect(host.siteThemes.list().map((t) => t.id)).toEqual(["p.theme"]);
 
     host.unload("com.x.demo");
     expect(host.sidebarPanels.list()).toHaveLength(0);
     expect(host.settingsPanels.list()).toHaveLength(0);
     expect(host.styles.list()).toHaveLength(0);
     expect(host.exporters.list()).toHaveLength(0);
+    expect(host.siteThemes.list()).toHaveLength(0);
   });
 
   it("hydrates ctx.settings before activate and persists set() through the backend", async () => {
@@ -415,17 +422,20 @@ describe("createPluginHost", () => {
       worker.emit({ type: "register-command", id: "c1", title: "Boxed cmd" });
       worker.emit({ type: "add-styles", css: ".x{}" });
       worker.emit({ type: "register-exporter", id: "e1", label: "E", extension: "txt" });
+      worker.emit({ type: "register-site-theme", id: "t1", label: "T", css: "body{}" });
       worker.emit({ type: "notify", message: "hi from box" });
 
       expect(host.commands.list().map((c) => c.id)).toEqual(["c1"]);
       expect(host.styles.list().map((s) => s.css)).toEqual([".x{}"]);
       expect(host.exporters.list().map((e) => e.id)).toEqual(["e1"]);
+      expect(host.siteThemes.list().map((t) => t.id)).toEqual(["t1"]);
       expect(notify).toHaveBeenCalledWith("hi from box");
 
       host.unload("com.x.demo");
       expect(host.commands.list()).toHaveLength(0);
       expect(host.styles.list()).toHaveLength(0);
       expect(host.exporters.list()).toHaveLength(0);
+      expect(host.siteThemes.list()).toHaveLength(0);
       expect(worker.terminated).toBe(true);
     });
 

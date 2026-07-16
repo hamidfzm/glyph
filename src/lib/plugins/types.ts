@@ -150,8 +150,25 @@ export interface UiRegistryApi {
   addStyles(css: string): Disposer;
 }
 
+/**
+ * A theme for the exported website. Its CSS is appended to the site's shared
+ * style.css after the built-in chrome, so it can restyle anything: the
+ * `.glyph-site-header`, `.glyph-site-nav`, `.glyph-site-outline`, and
+ * `.markdown-body` content column. Selected per workspace via the `theme`
+ * field of `.glyph/site.json`.
+ */
+export interface SiteThemeContribution {
+  /** Id referenced from `.glyph/site.json`, e.g. `"solarized"`. */
+  id: string;
+  /** Human-readable name shown in docs and error messages. */
+  label: string;
+  css: string;
+}
+
 export interface ExportersRegistryApi {
   register(exporter: ExporterContribution): Disposer;
+  /** Contribute a theme for the website export. */
+  registerSiteTheme(theme: SiteThemeContribution): Disposer;
 }
 
 /**

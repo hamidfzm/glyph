@@ -84,6 +84,12 @@ function buildContext(init) {
         });
         return () => exporters.delete(exporter.id);
       },
+      registerSiteTheme(theme) {
+        // Pure data: the host owns the registry; worker teardown removes it
+        // via the plugin's DisposerBag like every other contribution.
+        postMessage({ type: "register-site-theme", id: theme.id, label: theme.label, css: theme.css });
+        return () => {};
+      },
     },
     workspace: {
       readFile(path) {

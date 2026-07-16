@@ -21,7 +21,7 @@ describe("importPluginModule", () => {
         addSettingsPanel: vi.fn(),
         addStyles: vi.fn(),
       },
-      exporters: { register: vi.fn() },
+      exporters: { register: vi.fn(), registerSiteTheme: vi.fn() },
       spellcheck: { registerDictionary: vi.fn() },
       settings: { get: vi.fn(), set: vi.fn() },
       markdown: {
@@ -51,7 +51,7 @@ describe("importPluginModule", () => {
         addSettingsPanel: vi.fn(),
         addStyles: vi.fn(),
       },
-      exporters: { register: vi.fn() },
+      exporters: { register: vi.fn(), registerSiteTheme: vi.fn() },
       spellcheck: { registerDictionary: vi.fn() },
       settings: { get: vi.fn(), set: vi.fn() },
       markdown: {
