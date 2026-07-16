@@ -1,6 +1,6 @@
 ---
 name: self-review
-description: Review the working diff against Glyph's code standards (readable over clever, YAGNI, sparse comments) and fix findings before any commit or push. Run this on every non-trivial diff before committing; also when the user says "self review", "review your code", or "/self-review".
+description: Review the working diff against Glyph's code standards (readable over clever, YAGNI, sparse comments) and fix findings before any commit or push. Run this on every non-trivial diff before committing; also when the user says "self review", "review your code", or "/self-review". Self-improving; fold every new code-quality correction from Hamid back into this file's rules.
 ---
 
 # Self-Review
@@ -34,7 +34,18 @@ Review the current diff (`git diff` + `git diff --cached`, or `git diff origin/m
 ## Procedure
 
 1. Collect the diff.
-2. Walk each changed hunk against rules 1 to 6; list findings as `file:line — rule — fix`.
+2. Walk each changed hunk against the rules above; list findings as `file:line — rule — fix`.
 3. Apply every fix. Skip only what would change intended behavior, and say so.
 4. Re-run the gates: `pnpm typecheck && pnpm check && pnpm test`, and `cargo clippy --all-targets -- -D warnings` if Rust changed.
 5. Report: what was cut or rewritten, net line delta.
+
+## Self-improvement
+
+This file is the durable memory of Hamid's code-quality standards. Whenever he corrects code quality (in chat, a PR comment, or by rewriting something) or a problem slips past this review and is caught later:
+
+1. Distill the correction into a rule: one or two lines, with a real bad-to-good example when the correction came with one.
+2. If it refines an existing rule, sharpen that rule in place; only append a new numbered rule for a genuinely new category. Keep the list ordered by how often each rule catches something.
+3. Commit the skill edit in the same PR as the code fix, so the standard and its first enforcement land together.
+4. Keep this file a checklist, not an essay. If a rule hasn't caught anything in months, fold it into a neighbor or delete it. Git history is the changelog; no dates or attribution inside the file.
+
+Seed corrections behind the current rules, for calibration: rule 1 came from `isMobile(usePlatform()) === (on === "mobile")` being rejected as unreadable; rule 2 from a gate component shipping selector unions and list props with zero callers; rule 3 from two PRs where comment lines rivaled code lines.
