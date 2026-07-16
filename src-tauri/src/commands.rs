@@ -4,11 +4,7 @@ pub mod directory;
 pub mod export;
 pub mod export_runtime;
 pub mod file;
-// Blocking pickers are desktop-only; a mobile stub answers the same commands.
 #[cfg(desktop)]
-pub mod pick;
-#[cfg(mobile)]
-#[path = "commands/pick_mobile.rs"]
 pub mod pick;
 pub mod plugins;
 pub mod secrets;

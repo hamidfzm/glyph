@@ -355,11 +355,17 @@ pub fn run() {
             commands::file::get_initial_file,
             #[cfg(desktop)]
             commands::file::print_document,
+            #[cfg(desktop)]
             commands::pick::pick_folder,
+            #[cfg(desktop)]
             commands::pick::pick_files,
+            #[cfg(desktop)]
             commands::pick::pick_save,
+            #[cfg(desktop)]
             commands::pick::pick_export_dir,
+            #[cfg(desktop)]
             commands::pick::pick_plugin_dir,
+            #[cfg(desktop)]
             commands::pick::pick_move_dir,
             commands::export::get_cli_export,
             commands::export_runtime::finish_cli_export,
