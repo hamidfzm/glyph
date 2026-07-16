@@ -35,9 +35,11 @@ Review the current diff (`git diff` + `git diff --cached`, or `git diff origin/m
 
 1. Collect the diff.
 2. Walk each changed hunk against the rules above; list findings as `file:line — rule — fix`.
-3. Apply every fix. Skip only what would change intended behavior, and say so.
-4. Re-run the gates: `pnpm typecheck && pnpm check && pnpm test`, and `cargo clippy --all-targets -- -D warnings` if Rust changed.
-5. Report: what was cut or rewritten, net line delta.
+3. Check the diff against the governing conventions, not just the code-quality rules: every `.claude/rules/*.md` whose scope covers a changed path, plus the global ones (no em dashes and no AI attribution in commits/PR bodies, branch naming, PR template). Verify, don't assume; grep the actual commit messages and PR body.
+4. Run `/code-review` (medium) on the same diff and fold its confirmed findings into the fix list. Self-review alone is the author grading their own homework; the independent pass catches what familiarity hides.
+5. Apply every fix. Skip only what would change intended behavior, and say so.
+6. Re-run the gates: `pnpm typecheck && pnpm check && pnpm test`, and `cargo clippy --all-targets -- -D warnings` if Rust changed.
+7. Report: what was cut or rewritten, net line delta.
 
 ## Self-improvement
 
