@@ -5,9 +5,6 @@ import { filterRegistry, REGISTRY_CATEGORIES, type RegistryEntry } from "@/lib/p
 import { PluginDetail } from "./PluginDetail";
 import { PluginMarketplaceRow } from "./PluginMarketplaceRow";
 
-const inputClass =
-  "px-2 py-1 text-xs rounded border border-[var(--color-border)] bg-transparent text-[var(--color-text-primary)]";
-
 /**
  * The marketplace section of Manage Plugins: search + category filter over
  * the not-yet-installed registry entries, with a per-plugin details view
@@ -46,14 +43,14 @@ export function PluginMarketplace() {
           <div className="flex items-center gap-2 mb-1">
             <input
               type="search"
-              className={`${inputClass} flex-1 min-w-0`}
+              className="settings-input flex-1 min-w-0"
               placeholder={t("searchPlaceholder")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               aria-label={t("searchPlaceholder")}
             />
             <select
-              className={inputClass}
+              className="settings-select"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               aria-label={t("categoryLabel")}
