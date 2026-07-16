@@ -220,6 +220,37 @@ describe("exportSite", () => {
     expect(fs.writes.get("/out/robots.txt")).toBe("User-agent: *\nDisallow: /\n");
   });
 
+  it("copies the social image and emits absolute og:image under the base URL", async () => {
+    const fs = mockFs({
+      "/ws/notes.md": "# N",
+      "/ws/.glyph/site.json": JSON.stringify({
+        baseUrl: "https://example.com/",
+        socialImage: "assets/card.png",
+      }),
+      "/ws/assets/card.png": "<binary>",
+    });
+    await exportSite({ root: "/ws", outDir: "/out" });
+    expect(fs.copies).toContainEqual({ src: "/ws/assets/card.png", dest: "/out/assets/card.png" });
+    const page = fs.writes.get("/out/notes.html") ?? "";
+    expect(page).toContain(
+      '<meta property="og:image" content="https://example.com/assets/card.png">',
+    );
+    expect(page).toContain('<meta name="twitter:card" content="summary_large_image">');
+  });
+
+  it("fails loudly on a missing configured social image", async () => {
+    mockFs({
+      "/ws/notes.md": "# N",
+      "/ws/.glyph/site.json": JSON.stringify({
+        baseUrl: "https://example.com/",
+        socialImage: "gone.png",
+      }),
+    });
+    await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(
+      /socialImage not found in the workspace: gone\.png/,
+    );
+  });
+
   it("auto-detects a conventional root favicon", async () => {
     const fs = mockFs({ "/ws/notes.md": "# N", "/ws/favicon.ico": "<binary>" });
     await exportSite({ root: "/ws", outDir: "/out" });
