@@ -17,3 +17,10 @@ Keep the GitHub Actions "Annotations" panel clean. Warnings and notices are real
 - If an existing workflow step prints a deprecation warning at runtime, fix it in the same PR you noticed it in. Don't file a follow-up.
 - Update every workflow in `.github/workflows/` in the same pass, not just the file that triggered the alert.
 - Don't disable rules or filter annotations to silence warnings. If a rule genuinely doesn't fit the codebase, change it in `biome.json` with a justification, not inline.
+
+## Required checks are pinned by name
+
+Required status checks are pinned by exact context name in **two places**: the legacy branch protection on `main` and repository ruleset 15172749 ("main branch protection"). With the reusable-workflow split, contexts look like `checks / Lint`, `tests / Test (Frontend)`, `build / Build (macos-latest)` (caller job id, slash, called job name).
+
+- Renaming, splitting, or merging a CI job silently blocks every PR: the old context never reports and the PR waits forever. After any job rename, read the real names from `gh api repos/hamidfzm/glyph/commits/<sha>/check-runs` on a pushed commit, then update **both** places.
+- A job skipped via job-level `if:` still reports a "skipped" check run and satisfies a required check. A job removed via matrix `exclude` reports **nothing** and must not be in the required list.
