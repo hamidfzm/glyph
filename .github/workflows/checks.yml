@@ -1,0 +1,36 @@
+name: Checks
+
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Biome lint
+        run: npx @biomejs/biome lint --error-on-warnings --reporter=github src/
+      - name: Biome format check
+        run: npx @biomejs/biome format --error-on-warnings --reporter=github src/
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Add TypeScript problem matcher
+        run: echo "::add-matcher::.github/matchers/tsc.json"
+      - run: pnpm typecheck
