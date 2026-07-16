@@ -148,8 +148,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
   );
 
   const installFromFolder = useCallback(async () => {
-    // The backend picker stashes the chosen folder; install_plugin consumes
-    // it, so no path ever travels from the webview to the installer.
+    // The backend picker stashes the folder; install_plugin consumes it.
     const dir = await pickPluginDir();
     if (typeof dir !== "string") return; // cancelled
     // Folder installs read the manifest during install, so consent names the

@@ -32,9 +32,8 @@ pub fn read_directory(
     path: String,
     grants: State<'_, GrantRegistry>,
 ) -> Result<Vec<DirEntry>, String> {
-    // Validate, then walk the path as given: returned entry paths must stay in
-    // the frontend's own path spelling (a canonical `\\?\` prefix on Windows
-    // would break workspace-containment string checks in the UI).
+    // Validate, then walk the path as given: a canonical `\\?\` prefix on
+    // Windows would break workspace-containment string checks in the UI.
     grants.ensure_readable(&path)?;
     let dir = Path::new(&path);
     let read_dir = fs::read_dir(dir).map_err(|e| format!("Failed to read directory: {e}"))?;
@@ -148,8 +147,6 @@ mod tests {
     use tauri::test::{mock_app, MockRuntime};
     use tauri::Manager;
 
-    /// Mock app whose grant registry has `dir` granted as a workspace, so the
-    /// gated directory commands can be called directly.
     fn app_with_workspace(dir: &Path) -> tauri::App<MockRuntime> {
         let app = mock_app();
         app.manage(GrantRegistry::default());
@@ -260,8 +257,7 @@ mod tests {
 
     #[test]
     fn read_directory_not_found_returns_err() {
-        // A granted but since-deleted subfolder hits the filesystem error, not
-        // the grant gate.
+        // Granted but since-deleted: hits the fs error, not the grant gate.
         let dir = unique_tmp("read_dir_missing");
         let app = app_with_workspace(&dir);
         let missing = dir.join("gone");

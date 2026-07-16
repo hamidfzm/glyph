@@ -282,8 +282,6 @@ mod tests {
     use tauri::test::{mock_app, MockRuntime};
     use tauri::Manager;
 
-    /// Mock app whose grant registry has `root` granted as a workspace,
-    /// mirroring the real flow (a root is granted when its folder is opened).
     fn app_with_root(root: &str) -> tauri::App<MockRuntime> {
         let app = mock_app();
         app.manage(GrantRegistry::default());
@@ -293,9 +291,8 @@ mod tests {
         app
     }
 
-    // Local wrappers shadow the real commands (locally defined items win over
-    // the `use super::*` glob) so the pre-grant test bodies stay unchanged:
-    // each call runs against a registry where `root` is a granted workspace.
+    // Local wrappers shadow the real commands (local items win over the
+    // `use super::*` glob) so the pre-grant test bodies stay unchanged.
     fn create_note(dir: String, root: String) -> Result<String, String> {
         let app = app_with_root(&root);
         super::create_note(dir, root, app.state::<GrantRegistry>())
@@ -404,8 +401,6 @@ mod tests {
 
     #[test]
     fn ungranted_root_is_refused_even_when_dir_equals_root() {
-        // The old frontend-trust hole: a webview could invent any `root` and
-        // pass `dir == root`. The root must now be a granted workspace.
         let dir = unique_tmp("ungranted_root");
         let root = dir.to_string_lossy().to_string();
         let app = mock_app();

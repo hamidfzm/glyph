@@ -1,7 +1,6 @@
-//! Mobile stub for `pick.rs`: the dialog plugin's blocking pickers are
-//! desktop-only, and the mobile UI never offers these flows (see #448's
-//! gating). Answering the same commands keeps one `generate_handler!` list
-//! serving both targets; every picker reports "nothing picked".
+//! Mobile stub for `pick.rs`: the blocking pickers are desktop-only and the
+//! mobile UI never offers these flows. Answering the same commands keeps one
+//! `generate_handler!` list serving both targets; every picker returns None.
 
 use serde::Deserialize;
 use tauri::{AppHandle, Runtime};

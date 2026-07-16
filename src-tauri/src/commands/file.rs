@@ -72,8 +72,7 @@ pub fn create_dir_all(path: String, grants: State<'_, GrantRegistry>) -> Result<
 }
 
 /// Copy a file byte-for-byte, e.g. an image referenced by an exported page.
-/// The destination's parent must already exist (`create_dir_all`). The source
-/// must be readable and the destination writable.
+/// The destination's parent must already exist (`create_dir_all`).
 #[tauri::command]
 pub fn copy_file(
     src: String,
@@ -124,15 +123,12 @@ mod tests {
     use tauri::test::{mock_app, MockRuntime};
     use tauri::Manager;
 
-    /// Mock app with an empty grant registry managed, so command signatures
-    /// taking `State<'_, GrantRegistry>` can be exercised directly.
     fn app_with_grants() -> tauri::App<MockRuntime> {
         let app = mock_app();
         app.manage(GrantRegistry::default());
         app
     }
 
-    /// Mock app whose registry has `dir` granted as a workspace.
     fn app_with_workspace(dir: &Path) -> tauri::App<MockRuntime> {
         let app = app_with_grants();
         app.state::<GrantRegistry>().grant_workspace(dir).unwrap();
@@ -607,7 +603,6 @@ mod tests {
 
     #[test]
     fn copy_file_denied_when_source_is_not_granted() {
-        // Granted destination + ungranted source must fail on the source.
         let root =
             std::env::temp_dir().join(format!("glyph_test_copy_nosrc_{}", std::process::id()));
         let src_dir = root.join("outside");
@@ -633,8 +628,6 @@ mod tests {
 
     #[test]
     fn copy_file_denied_when_destination_is_not_granted() {
-        // Granted (readable) source + ungranted destination must fail on the
-        // destination.
         let root =
             std::env::temp_dir().join(format!("glyph_test_copy_nodest_{}", std::process::id()));
         let ws = root.join("ws");

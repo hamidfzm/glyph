@@ -4,8 +4,7 @@ pub mod directory;
 pub mod export;
 pub mod export_runtime;
 pub mod file;
-// The dialog plugin's blocking pickers are desktop-only; a stub module
-// answers the same commands on mobile (mirrors the menu_runtime pattern).
+// Blocking pickers are desktop-only; a mobile stub answers the same commands.
 #[cfg(desktop)]
 pub mod pick;
 #[cfg(mobile)]

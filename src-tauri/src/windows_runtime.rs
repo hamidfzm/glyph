@@ -9,11 +9,9 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWind
 use crate::grants::{self, GrantRegistry};
 use crate::windows::{route_open, OpenKind, OpenRoute, PendingOpen, WindowRegistry};
 
-/// Mint the filesystem grant for a backend-observed open (CLI second
-/// instance, drag-and-drop, macOS `RunEvent::Opened`, backend pick dialogs,
-/// spawned-window injected opens) and mirror it into the asset-protocol
-/// scope. Grant failures (path vanished between event and grant) are ignored:
-/// the open itself will surface the error and the path stays denied.
+/// Mint the grant for a backend-observed open and mirror it into the
+/// asset-protocol scope; grant failures are ignored (the open surfaces the
+/// error and the path stays denied).
 fn grant_open<R: Runtime>(app: &AppHandle<R>, kind: OpenKind, path: &str) {
     let Some(registry) = app.try_state::<GrantRegistry>() else {
         return;
@@ -120,10 +118,8 @@ pub fn set_window_workspace<R: Runtime>(
     registry: State<'_, WindowRegistry>,
     root: Option<String>,
 ) {
-    // Re-opens routed through the restore flow report here without passing
-    // open_in_app, so mint the workspace grant too (idempotent for the rest).
-    // Clearing (None) does not revoke: another window may show the same root
-    // and loose tabs from it may stay open; grants are session-scoped.
+    // Restore-flow re-opens skip open_in_app, so mint the grant here too.
+    // Clearing (None) does not revoke: grants are session-scoped.
     if let Some(root) = &root {
         grant_open(window.app_handle(), OpenKind::Folder, root);
     }

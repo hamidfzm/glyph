@@ -6,9 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickFiles, pickFolder } from "@/lib/pickers";
 import { useTabs } from "./useTabs";
 
-// The backend-run pickers replace the JS dialog plugin: they mint filesystem
-// grants in Rust and return the picked path(s). Mocked as a module so tests
-// script the user's choice per case.
 vi.mock("@/lib/pickers", () => ({
   pickFolder: vi.fn(),
   pickFiles: vi.fn(),

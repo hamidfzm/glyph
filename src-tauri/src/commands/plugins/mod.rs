@@ -57,10 +57,8 @@ pub fn list_plugins<R: tauri::Runtime>(
     Ok(scan_plugins_root(&plugins_root(&app)?))
 }
 
-/// Install from the folder the user picked via `pick_plugin_dir`. The source
-/// directory is consumed from the grant registry's pending slot instead of
-/// being a command argument, so the webview can never point an install at a
-/// path of its own choosing.
+/// Install from the folder picked via `pick_plugin_dir`: the source is
+/// consumed from the pending slot, never a webview-supplied argument.
 #[tauri::command]
 pub fn install_plugin<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,

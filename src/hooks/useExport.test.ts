@@ -5,7 +5,6 @@ import { pickSave } from "@/lib/pickers";
 import type { PrintSettings } from "@/lib/settings";
 import { useExport } from "./useExport";
 
-// Backend-run save dialog (grants the target write-only in Rust).
 vi.mock("@/lib/pickers", () => ({
   pickSave: vi.fn(),
 }));

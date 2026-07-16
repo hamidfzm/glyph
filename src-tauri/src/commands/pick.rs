@@ -1,13 +1,7 @@
-//! Native file/folder pickers run in Rust.
-//!
-//! The webview never supplies a path of its own: it asks the backend to show
-//! a dialog, the user's choice is minted as a grant in [`GrantRegistry`], and
-//! only then is the path handed back. Every dialog runs on a blocking thread
-//! (the dialog plugin's blocking API must not run on the async runtime).
-//!
-//! Like `windows_runtime.rs`, this file drives live OS dialogs that cannot be
-//! exercised under `MockRuntime`, so it is excluded from codecov (see
-//! codecov.yml); the grant logic it calls into is tested in `grants.rs`.
+//! Native file/folder pickers run in Rust: the webview never supplies a path;
+//! the user's choice is minted as a grant in [`GrantRegistry`]. Dialogs run on
+//! a blocking thread (the plugin's blocking API must not run on the async
+//! runtime). Drives live OS dialogs, so excluded from codecov (see codecov.yml).
 
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -16,8 +10,7 @@ use tauri_plugin_dialog::{DialogExt, FilePath};
 
 use crate::grants::{self, GrantRegistry};
 
-/// One entry of the file-open filter list, mirroring the shape the frontend
-/// passed to the JS dialog plugin before pickers moved backend-side.
+/// File-open filter entry, mirroring the JS dialog plugin's shape.
 #[derive(Deserialize)]
 pub struct PickFilter {
     pub name: String,
@@ -112,9 +105,8 @@ pub async fn pick_export_dir<R: Runtime>(app: AppHandle<R>) -> Result<Option<Str
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
-/// Plugin install: pick the plugin source folder. The choice is stashed as the
-/// pending plugin dir (not granted as a workspace) and consumed by
-/// `install_plugin`, so the install source can never be a webview-typed path.
+/// Plugin install: the pick is stashed as the pending plugin dir (not a
+/// workspace grant) and consumed by `install_plugin`.
 #[tauri::command]
 pub async fn pick_plugin_dir<R: Runtime>(app: AppHandle<R>) -> Result<Option<String>, String> {
     let dialog = app.dialog().file();
@@ -130,9 +122,8 @@ pub async fn pick_plugin_dir<R: Runtime>(app: AppHandle<R>) -> Result<Option<Str
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
-/// "Move to..." destination picker. No grant is minted: the returned path is
-/// only ever handed to `move_path`, which independently validates it against
-/// the granted workspace root.
+/// "Move to..." destination picker. No grant is minted; `move_path`
+/// independently validates the destination against the workspace root.
 #[tauri::command]
 pub async fn pick_move_dir<R: Runtime>(
     app: AppHandle<R>,

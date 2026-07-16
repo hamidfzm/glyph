@@ -1,13 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 
 /**
- * Backend-run native file/folder pickers.
- *
- * These replace the JS dialog plugin's `open()`/`save()`: the dialog runs in
- * Rust, and the user's choice is minted as a filesystem grant there before
- * the path is returned, so filesystem commands only ever accept paths the
- * user actually picked (or opened via CLI/drag-drop/OS events). See
- * docs/security/threat-model.md.
+ * Backend-run native pickers replacing the JS dialog plugin's `open()`/`save()`:
+ * the dialog runs in Rust and the choice is minted as a filesystem grant before
+ * the path is returned. See docs/security/threat-model.md.
  */
 
 export interface PickFilter {
@@ -39,18 +35,12 @@ export function pickExportDir(): Promise<string | null> {
   return invoke<string | null>("pick_export_dir");
 }
 
-/**
- * Folder picker for plugin installs. The backend stashes the choice for the
- * next `install_plugin` call instead of granting filesystem access.
- */
+/** Plugin-install picker; the backend stashes the choice for the next `install_plugin` call. */
 export function pickPluginDir(): Promise<string | null> {
   return invoke<string | null>("pick_plugin_dir");
 }
 
-/**
- * Folder picker for "Move to...". Mints no grant: the result is only ever
- * passed to `move_path`, which validates it against the workspace root.
- */
+/** "Move to..." picker; mints no grant, `move_path` validates the destination. */
 export function pickMoveDir(defaultDir: string): Promise<string | null> {
   return invoke<string | null>("pick_move_dir", { defaultDir });
 }

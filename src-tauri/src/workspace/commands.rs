@@ -15,10 +15,8 @@ use super::resolve::{resolve_workspace, WorkspaceResolution};
 
 /// Resolve a selected folder for the "one folder = one workspace" guard (#262).
 ///
-/// Deliberately not grant-gated: this is the pre-open probe that runs on a
-/// folder BEFORE it becomes a workspace (the grant is minted when the open is
-/// routed). It only canonicalizes and inspects to decide adoption; it neither
-/// reads document content nor writes anything.
+/// Deliberately not grant-gated: this pre-open probe runs before the folder
+/// becomes a workspace and only inspects, never reads content or writes.
 #[tauri::command]
 pub fn workspace_resolve(selected: String) -> Result<WorkspaceResolution, String> {
     resolve_workspace(Path::new(&selected))
@@ -77,7 +75,6 @@ mod tests {
     use tauri::Manager;
     use tempfile::TempDir;
 
-    /// Mock app with `root` granted as a workspace.
     fn app_with_root(root: &str) -> tauri::App<MockRuntime> {
         let app = mock_app();
         app.manage(GrantRegistry::default());
@@ -87,8 +84,7 @@ mod tests {
         app
     }
 
-    // Shadow the real commands so the pre-grant test bodies run against a
-    // registry where `root` is a granted workspace.
+    // Shadow the real commands so the pre-grant test bodies run with `root` granted.
     fn workspace_get_last_file(workspace_root: String) -> Result<Option<String>, String> {
         let app = app_with_root(&workspace_root);
         super::workspace_get_last_file(workspace_root, app.state::<GrantRegistry>())

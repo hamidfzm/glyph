@@ -1,11 +1,7 @@
-//! Backend-managed filesystem grants.
-//!
-//! The webview is treated as untrusted: every filesystem command validates its
-//! path against this registry before touching disk. Grants are minted only
-//! from backend-observed events (CLI arguments, drag-and-drop, OS open events,
-//! session restore, and native dialogs run in Rust via `commands/pick.rs`),
-//! never from a bare webview-supplied path. Grants live for the app session;
-//! see docs/security/threat-model.md for the full model.
+//! Backend-managed filesystem grants: every filesystem command validates its
+//! path against this registry. Grants are minted only from backend-observed
+//! events (CLI args, drag-and-drop, native dialogs), never from a bare
+//! webview-supplied path. See docs/security/threat-model.md.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -27,14 +23,11 @@ struct Grants {
     export_dirs: HashSet<PathBuf>,
     /// Approved single-file export targets: exact-path write only.
     export_files: HashSet<PathBuf>,
-    /// Folder picked for a plugin install, consumed by `install_plugin` so the
-    /// install source can never be a webview-invented path.
+    /// Folder picked for a plugin install, consumed once by `install_plugin`.
     pending_plugin_dir: Option<PathBuf>,
 }
 
-/// The one denial message every gate returns. It echoes only the requested
-/// path, never the grant list, so a probing renderer learns nothing about
-/// what else is open.
+/// Denials echo only the requested path, never the grant list.
 fn denied(path: &Path) -> String {
     format!(
         "path is outside the allowed workspaces and files: {}",
@@ -42,11 +35,8 @@ fn denied(path: &Path) -> String {
     )
 }
 
-/// Canonicalize `path`, tolerating a not-yet-existing tail: the nearest
-/// existing ancestor is canonicalized (resolving symlinks and `..`) and the
-/// missing remainder re-appended. A `..` or `.` inside the missing remainder
-/// makes `file_name()` return `None`, which is rejected, so a crafted missing
-/// suffix cannot walk back out of the resolved ancestor.
+/// Canonicalize tolerating a not-yet-existing tail; a `..` or `.` in the
+/// missing tail makes `file_name()` return `None` and is rejected.
 fn canonicalize_lenient(path: &Path) -> Result<PathBuf, String> {
     if let Ok(canonical) = path.canonicalize() {
         return Ok(canonical);
@@ -61,21 +51,15 @@ impl GrantRegistry {
         self.inner.lock().map_err(|e| format!("Lock error: {e}"))
     }
 
-    /// Grant recursive read + write on an existing workspace root. Returns the
-    /// canonical path so callers can mirror it into the asset-protocol scope.
+    /// Grant recursive read + write on an existing workspace root.
     pub fn grant_workspace(&self, root: &Path) -> Result<PathBuf, String> {
         let canonical = root.canonicalize().map_err(|_| denied(root))?;
         self.lock()?.workspaces.insert(canonical.clone());
         Ok(canonical)
     }
 
-    /// Drop a workspace grant. Loose-file grants inside it are kept: they were
-    /// minted independently and the file may still be open as a tab.
-    ///
-    /// Not wired to any command yet: grants are session-scoped because a
-    /// closed workspace can still be shown by another window, and revoking on
-    /// close would race their reads. Kept (and tested) as the API for a
-    /// future explicit-revoke flow.
+    /// Not wired to any command yet: grants stay session-scoped; kept as the
+    /// API for a future explicit-revoke flow.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn revoke_workspace(&self, root: &Path) {
         if let Ok(canonical) = root.canonicalize() {
@@ -92,25 +76,21 @@ impl GrantRegistry {
         Ok(canonical)
     }
 
-    /// Grant recursive write on an export destination folder (which may not
-    /// exist yet; exports create it).
+    /// Grant recursive write on an export destination folder (may not exist yet).
     pub fn grant_export_dir(&self, dir: &Path) -> Result<PathBuf, String> {
         let canonical = canonicalize_lenient(dir)?;
         self.lock()?.export_dirs.insert(canonical.clone());
         Ok(canonical)
     }
 
-    /// Grant exact-path write on a single export target (usually not existing
-    /// yet; the save dialog only names it).
+    /// Grant exact-path write on a single export target (may not exist yet).
     pub fn grant_export_file(&self, path: &Path) -> Result<PathBuf, String> {
         let canonical = canonicalize_lenient(path)?;
         self.lock()?.export_files.insert(canonical.clone());
         Ok(canonical)
     }
 
-    /// Allow reading `path`: inside a granted workspace or exactly a granted
-    /// loose file. Export destinations are write-only and deliberately do not
-    /// count. Returns the canonical path the caller should operate on.
+    /// Export grants are write-only and deliberately do not count as readable.
     pub fn ensure_readable(&self, path: &str) -> Result<PathBuf, String> {
         let requested = Path::new(path);
         let canonical = canonicalize_lenient(requested)?;
@@ -124,9 +104,6 @@ impl GrantRegistry {
         }
     }
 
-    /// Allow writing `path`: inside a granted workspace, exactly a granted
-    /// loose file (autosave of a loose opened file), exactly a granted export
-    /// file, or inside a granted export folder.
     pub fn ensure_writable(&self, path: &str) -> Result<PathBuf, String> {
         let requested = Path::new(path);
         let canonical = canonicalize_lenient(requested)?;
@@ -147,9 +124,7 @@ impl GrantRegistry {
         self.ensure_readable(path)
     }
 
-    /// Require `root` to be exactly a granted workspace root (not merely a
-    /// path inside one). Used by commands that take a workspace root as an
-    /// argument (`commands/create.rs`, workspace state, sync).
+    /// Require `root` to be exactly a granted workspace root, not a path inside one.
     pub fn ensure_workspace(&self, root: &str) -> Result<PathBuf, String> {
         let requested = Path::new(root);
         let canonical = requested.canonicalize().map_err(|_| denied(requested))?;
@@ -160,7 +135,6 @@ impl GrantRegistry {
         }
     }
 
-    /// Stash the folder the user picked in the native plugin-install dialog.
     pub fn set_pending_plugin_dir(&self, dir: PathBuf) {
         if let Ok(mut grants) = self.lock() {
             grants.pending_plugin_dir = Some(dir);
@@ -172,18 +146,11 @@ impl GrantRegistry {
         self.lock().ok()?.pending_plugin_dir.take()
     }
 
-    /// Mint grants from the persisted settings store so session restore and
-    /// the recent-files menu keep working: folder/graph tabs become workspace
-    /// grants, file tabs and recent files become loose-file grants. Returns
-    /// the granted canonical paths (workspaces, files) so the caller can
-    /// mirror them into the asset-protocol scope. Absent keys, corrupt JSON,
-    /// and since-deleted paths are all tolerated silently; whatever fails to
-    /// grant simply stays denied.
+    /// Seed grants from the persisted settings store (open tabs, recent files);
+    /// absent keys, corrupt JSON, and deleted paths silently stay denied.
     ///
-    /// Trust note: settings.json is renderer-writable state, so a compromised
-    /// renderer can stage grants for the NEXT launch by editing it. That
-    /// matches the trust the file already carries today (it decides what
-    /// reopens on launch); see docs/security/threat-model.md.
+    /// Trust note: settings.json is renderer-writable, so it can stage grants for
+    /// the next launch; that matches the trust it already carries (see docs/security/threat-model.md).
     pub fn seed_from_settings_json(&self, raw: &str) -> (Vec<PathBuf>, Vec<PathBuf>) {
         let mut workspaces = Vec::new();
         let mut files = Vec::new();
@@ -225,9 +192,8 @@ impl GrantRegistry {
     }
 }
 
-/// Mirror a directory read grant into the runtime asset-protocol scope so
-/// `asset://` URLs (images in the viewer) resolve inside it. Failure is
-/// ignored: the protocol keeps denying, which fails closed.
+/// Mirror a directory read grant into the asset-protocol scope; failure is
+/// ignored because the protocol keeps denying, which fails closed.
 pub fn allow_asset_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>, dir: &Path) {
     use tauri::Manager;
     let _ = app.asset_protocol_scope().allow_directory(dir, true);
@@ -300,10 +266,9 @@ mod tests {
         let grants = GrantRegistry::default();
         grants.grant_workspace(&root).unwrap();
 
-        // `root/../secret.md` canonicalizes outside the grant.
         let sneaky = root.join("..").join("secret.md");
         assert!(grants.ensure_readable(&as_str(&sneaky)).is_err());
-        // But `root/sub/../note.md` resolves back inside and is fine.
+        // `root/sub/../note.md` resolves back inside and is fine.
         fs::create_dir_all(root.join("sub")).unwrap();
         fs::write(root.join("note.md"), "x").unwrap();
         let inside = root.join("sub").join("..").join("note.md");
@@ -318,8 +283,7 @@ mod tests {
         let grants = GrantRegistry::default();
         grants.grant_workspace(&root).unwrap();
 
-        // The `nope` segment does not exist, so the `..` after it cannot be
-        // resolved by canonicalize; the lenient fallback must reject it
+        // `nope` does not exist, so the lenient fallback must reject the `..`
         // instead of textually appending it.
         let sneaky = root.join("nope").join("..").join("..").join("out.md");
         assert!(grants.ensure_writable(&as_str(&sneaky)).is_err());
@@ -339,8 +303,6 @@ mod tests {
         let grants = GrantRegistry::default();
         grants.grant_workspace(&root).unwrap();
 
-        // The link lives inside the granted root, but canonicalize resolves it
-        // to the target outside, so it is denied.
         assert!(grants.ensure_readable(&as_str(&link)).is_err());
     }
 
@@ -365,12 +327,10 @@ mod tests {
         let grants = GrantRegistry::default();
         grants.grant_workspace(tmp.path()).unwrap();
 
-        // A path that no longer exists cannot canonicalize; revoke is a no-op.
         grants.revoke_workspace(&tmp.path().join("never-existed"));
         assert!(grants.ensure_workspace(&as_str(tmp.path())).is_ok());
 
-        // Poison the mutex by panicking while holding it: revoke must not
-        // panic, and validators surface the lock error instead of allowing.
+        // Poison the mutex on purpose: validators must fail closed, not allow.
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let _guard = grants.inner.lock().unwrap();
             panic!("poison");
@@ -392,7 +352,6 @@ mod tests {
         grants.grant_file(&file).unwrap();
 
         assert!(grants.ensure_readable(&as_str(&file)).is_ok());
-        // Autosave of a loose opened file must work.
         assert!(grants.ensure_writable(&as_str(&file)).is_ok());
         assert!(grants.ensure_watchable(&as_str(&file)).is_ok());
         assert!(grants.ensure_readable(&as_str(&sibling)).is_err());
@@ -405,7 +364,6 @@ mod tests {
         let out = tmp.path().join("site");
 
         let grants = GrantRegistry::default();
-        // The destination does not exist yet; exports create it.
         grants.grant_export_dir(&out).unwrap();
 
         let nested = out.join("assets").join("img.png");
@@ -431,8 +389,8 @@ mod tests {
 
     #[test]
     fn grants_match_regardless_of_path_spelling() {
-        // The frontend sends back paths in its own spelling (no Windows
-        // verbatim prefix); both sides canonicalize so they still match.
+        // Both sides canonicalize, so the frontend's spelling (no Windows
+        // verbatim prefix) still matches.
         let tmp = TempDir::new().unwrap();
         let file = tmp.path().join("a.md");
         fs::write(&file, "x").unwrap();
@@ -483,12 +441,10 @@ mod tests {
                         { "kind": "folder", "path": ws.to_string_lossy(), "expanded": [] },
                         { "kind": "file", "path": loose.to_string_lossy() },
                         { "kind": "graph", "path": ws.to_string_lossy() },
-                        // Degenerate entries are skipped: no path, and a kind
-                        // this version doesn't know.
+                        // Degenerate entries: missing path and an unknown kind.
                         { "kind": "file" },
                         { "kind": "hologram", "path": loose.to_string_lossy() },
                     ],
-                    // The non-string entry is skipped too.
                     "recentFiles": [recent.to_string_lossy(), gone.to_string_lossy(), 42],
                 }
             }

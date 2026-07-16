@@ -35,8 +35,6 @@ fn install_plugin_command_installs_via_mock_app() {
         "export default { activate(){} };",
     );
 
-    // The install source comes from the pending slot the picker fills, not
-    // from a command argument.
     app.state::<crate::grants::GrantRegistry>()
         .set_pending_plugin_dir(src.clone());
     let plugin = install_plugin(

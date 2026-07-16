@@ -600,9 +600,6 @@ mod tests {
 
     #[test]
     fn handle_opened_paths_mints_grants_for_routed_paths() {
-        // Routing an OS-level open through open_in_app must mint the
-        // filesystem grant, or the frontend's follow-up read_file /
-        // read_directory calls would be denied.
         let cwd = unique_tmp("op_grants");
         let folder = cwd.join("workspace");
         fs::create_dir_all(&folder).unwrap();

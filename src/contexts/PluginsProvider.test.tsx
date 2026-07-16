@@ -11,8 +11,6 @@ import type { InstalledPlugin } from "@/lib/plugins/types";
 import { usePluginsOptional } from "./PluginsContext";
 import { PluginsProvider } from "./PluginsProvider";
 
-// Backend-run folder picker for plugin installs; the real one stashes the
-// choice in Rust for install_plugin to consume.
 vi.mock("@/lib/pickers", () => ({
   pickPluginDir: vi.fn(),
 }));

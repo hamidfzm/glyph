@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pickSave } from "@/lib/pickers";
 import { runExporter } from "./runExporter";
 
-// Backend-run save dialog (grants the target write-only in Rust).
 vi.mock("@/lib/pickers", () => ({
   pickSave: vi.fn(),
 }));

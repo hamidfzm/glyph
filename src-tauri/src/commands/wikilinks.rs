@@ -150,7 +150,6 @@ mod tests {
     use tauri::test::{mock_app, MockRuntime};
     use tauri::Manager;
 
-    /// Mock app whose grant registry has `dir` granted as a workspace.
     fn app_with_workspace(dir: &std::path::Path) -> tauri::App<MockRuntime> {
         let app = mock_app();
         app.manage(GrantRegistry::default());

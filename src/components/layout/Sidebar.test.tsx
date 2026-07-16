@@ -13,8 +13,6 @@ import { pickMoveDir } from "@/lib/pickers";
 import { SIDEBAR_WIDTH_DEFAULT, type SidebarLayout } from "@/lib/settings";
 import { Sidebar } from "./Sidebar";
 
-// Backend-run folder picker for "Move to..." (no grant; move_path validates
-// the destination against the workspace root in Rust).
 vi.mock("@/lib/pickers", () => ({
   pickMoveDir: vi.fn(),
 }));

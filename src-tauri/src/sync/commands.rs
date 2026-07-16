@@ -16,8 +16,7 @@ use super::error::SyncError;
 use super::ops;
 use super::state::SyncState;
 
-/// Every sync command operates on a workspace root supplied by the webview;
-/// require it to be a granted (open) workspace before touching the repo.
+/// Every sync command's workspace root must be a granted (open) workspace.
 fn ensure_workspace(grants: &GrantRegistry, workspace_path: &str) -> Result<(), SyncError> {
     grants
         .ensure_workspace(workspace_path)
@@ -164,13 +163,9 @@ pub async fn sync_repo_present(
 #[cfg(test)]
 mod tests {
     //! Each wrapper is one line of `ops::* (...).await` behind the grant
-    //! gate, but they still need exercising so the `pub async fn ...` body
-    //! line is covered. Tests build a mock app, register `SyncState` and a
-    //! `GrantRegistry` with the workspace granted, and call the wrappers
-    //! directly via `Manager::state()`. Real IPC routing (the
-    //! proc-macro-emitted `__cmd__sync_*` marshalling) is not reached
-    //! here; that's framework code we can't drive without spinning up
-    //! a webview, and covering it isn't this PR's goal.
+    //! gate, but still needs exercising so the `pub async fn` body line is
+    //! covered. Tests call the wrappers directly via `Manager::state()`;
+    //! real IPC routing is covered by the IPC dispatch test below.
     use super::*;
     use crate::sync::backend::{BackendKind, ConflictPolicy};
     use crate::sync::config::CommitIdentity;
@@ -196,8 +191,6 @@ mod tests {
             opts.bare(true);
             opts.initial_head(DEFAULT_REMOTE_BRANCH);
             git2::Repository::init_opts(&remote, &opts).unwrap();
-            // The workspace folder exists up front, mirroring the real flow:
-            // sync always configures the already-open (and granted) workspace.
             let local = tmp.path().join("local");
             fs::create_dir_all(&local).unwrap();
             let app = mock_app();
@@ -222,7 +215,6 @@ mod tests {
             self.app.state::<SyncState>()
         }
 
-        /// Grant an extra folder (created if needed) as a workspace.
         fn grant_dir(&self, dir: &std::path::Path) {
             fs::create_dir_all(dir).unwrap();
             self.app
@@ -260,8 +252,6 @@ mod tests {
 
     #[tokio::test]
     async fn sync_commands_reject_an_ungranted_workspace() {
-        // A webview-invented path (existing, but never opened as a workspace)
-        // must be denied before any repo work happens.
         let ws = Workspace::new();
         let outside = ws.tmp.path().join("not-open");
         fs::create_dir_all(&outside).unwrap();

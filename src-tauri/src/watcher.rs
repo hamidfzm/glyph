@@ -51,9 +51,8 @@ pub fn watch_file<R: Runtime>(
     app: AppHandle<R>,
     grants: State<'_, GrantRegistry>,
 ) -> Result<(), String> {
-    // Watching follows the read rule. The watch itself targets the canonical
-    // path; the map key and the emitted payload stay in the frontend's own
-    // path spelling so `file-changed` events keep matching its tab paths.
+    // Watch the canonical path, but key the map and emit events in the
+    // frontend's own path spelling so they keep matching its tab paths.
     let canonical = grants.ensure_watchable(&path)?;
     let state = app.state::<FileWatcherState>();
     let mut watchers = state.0.lock().map_err(|e| format!("Lock error: {e}"))?;
@@ -154,7 +153,6 @@ mod tests {
         app
     }
 
-    /// Grant `dir` as a workspace so watch commands pass the grant gate.
     fn grant_dir(app: &App<MockRuntime>, dir: &std::path::Path) {
         app.state::<GrantRegistry>().grant_workspace(dir).unwrap();
     }

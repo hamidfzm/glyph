@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pickExportDir } from "@/lib/pickers";
 import { useExportSite } from "./useExportSite";
 
-// Backend-run folder picker (grants the destination write-only in Rust).
 vi.mock("@/lib/pickers", () => ({
   pickExportDir: vi.fn(),
 }));
