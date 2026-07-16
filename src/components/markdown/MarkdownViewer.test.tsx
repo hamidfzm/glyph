@@ -28,6 +28,43 @@ describe("MarkdownViewer raw HTML", () => {
     expect(container.querySelector("summary")?.textContent).toBe("More");
   });
 
+  it("renders svg <image> icons with http(s) hrefs", () => {
+    const { container } = renderMd(
+      '<svg viewBox="0 0 24 24"><image href="https://icons.example.com/aws/s3.svg" width="24" height="24"/></svg>',
+    );
+    const image = container.querySelector("svg image");
+    expect(image?.getAttribute("href")).toBe("https://icons.example.com/aws/s3.svg");
+    expect(image?.getAttribute("width")).toBe("24");
+  });
+
+  it("renders svg <image> via the legacy xlink:href spelling", () => {
+    const { container } = renderMd('<svg><image xlink:href="https://x.test/i.png"/></svg>');
+    const image = container.querySelector("svg image");
+    expect(
+      image?.getAttribute("xlink:href") ??
+        image?.getAttributeNS("http://www.w3.org/1999/xlink", "href"),
+    ).toBe("https://x.test/i.png");
+  });
+
+  it("strips non-http(s) hrefs from svg <image> but keeps the element", () => {
+    const { container } = renderMd(
+      '<svg><image href="javascript:alert(1)" xlink:href="data:text/html,x" width="24"/></svg>',
+    );
+    const image = container.querySelector("svg image");
+    expect(image).not.toBeNull();
+    expect(image?.getAttribute("href")).toBeNull();
+    expect(image?.getAttribute("xlink:href")).toBeNull();
+  });
+
+  it("keeps <use> and <foreignObject> out of inline SVG", () => {
+    const { container } = renderMd(
+      '<svg><use href="https://x.test/s.svg#i"/><foreignObject><b>x</b></foreignObject><image href="https://x.test/i.png"/></svg>',
+    );
+    expect(container.querySelector("use")).toBeNull();
+    expect(container.querySelector("foreignObject, foreignobject")).toBeNull();
+    expect(container.querySelector("svg image")).not.toBeNull();
+  });
+
   it("strips <script> tags from raw HTML", () => {
     const { container } = renderMd("ok <script>alert('xss')</script> done");
     expect(container.querySelector("script")).toBeNull();

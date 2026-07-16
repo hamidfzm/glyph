@@ -1,10 +1,10 @@
 import { defaultSchema } from "rehype-sanitize";
 
 // Inline SVG drawing primitives that are safe to render from markdown. We keep
-// out anything that can smuggle behaviour or external content: <foreignObject>
-// (arbitrary HTML), <script>, <style> (CSS injection), <a>/<use href>/<image
-// href> (external refs), and <animate>/<set> (attribute injection). What's left
-// is static, self-contained geometry.
+// out anything that can smuggle behaviour: <foreignObject> (arbitrary HTML),
+// <script>, <style> (CSS injection), <a>/<use href> (external refs), and
+// <animate>/<set> (attribute injection). <image> is allowed with http(s)-only
+// hrefs, matching the remote-image policy for plain markdown (#460).
 const svgTagNames = [
   "svg",
   "g",
@@ -26,6 +26,7 @@ const svgTagNames = [
   "marker",
   "symbol",
   "clipPath",
+  "image",
 ];
 
 // Geometry + paint attributes shared by the SVG elements above. hast-util-sanitize
@@ -120,6 +121,7 @@ const svgAttributes: Record<string, string[]> = {
   ],
   symbol: ["viewBox", "preserveAspectRatio", ...svgCommonAttributes],
   clipPath: ["clipPathUnits", ...svgCommonAttributes],
+  image: ["href", "xLinkHref", "preserveAspectRatio", "crossOrigin", ...svgCommonAttributes],
 };
 
 // Allowlist for raw HTML in markdown. Glyph is a local-file viewer so the
@@ -133,6 +135,11 @@ const svgAttributes: Record<string, string[]> = {
 // content this needs to be revisited.
 export const markdownSanitizeSchema = {
   ...defaultSchema,
+  // xlink:href needs its own protocol entry or it would bypass URL filtering.
+  protocols: {
+    ...defaultSchema.protocols,
+    xLinkHref: ["http", "https"],
+  },
   // Disable id/name namespacing. The default schema rewrites these by
   // prepending `user-content-`, but remark-gfm v4 already emits footnote
   // ids with that prefix (`user-content-fn-1`). The double-prefix breaks
