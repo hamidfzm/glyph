@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { parseSiteConfig, resolveConfigAsset, robotsTxt } from "./siteConfig";
 
 describe("parseSiteConfig", () => {
+  it("keeps an already-trailing slash on baseUrl unchanged", () => {
+    const config = parseSiteConfig(JSON.stringify({ baseUrl: "https://example.com/" }), "n");
+    expect(config.baseUrl).toBe("https://example.com/");
+  });
+
   it("defaults everything when the workspace has no config", () => {
     expect(parseSiteConfig(null, "notes")).toEqual({
       title: "notes",

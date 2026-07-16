@@ -318,6 +318,36 @@ describe("exportSite", () => {
     );
   });
 
+  it("ships the configured social image and points og:image at it", async () => {
+    const fs = mockFs({
+      "/ws/README.md": "# Home",
+      "/ws/.glyph/site.json": JSON.stringify({
+        baseUrl: "https://example.com/",
+        socialImage: "assets/card.png",
+      }),
+      "/ws/assets/card.png": "<binary>",
+    });
+    await exportSite({ root: "/ws", outDir: "/out" });
+    const index = fs.writes.get("/out/index.html") ?? "";
+    expect(index).toContain(
+      '<meta property="og:image" content="https://example.com/assets/card.png">',
+    );
+    expect(fs.copies).toContainEqual({ src: "/ws/assets/card.png", dest: "/out/assets/card.png" });
+  });
+
+  it("fails loudly on a missing configured social image", async () => {
+    mockFs({
+      "/ws/notes.md": "# N",
+      "/ws/.glyph/site.json": JSON.stringify({
+        baseUrl: "https://example.com/",
+        socialImage: "gone.png",
+      }),
+    });
+    await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(
+      /socialImage not found in the workspace: gone\.png/,
+    );
+  });
+
   it("rejects a config favicon that traverses out of the workspace", async () => {
     const fs = mockFs({
       "/ws/notes.md": "# N",

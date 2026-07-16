@@ -59,10 +59,7 @@ export function parseSiteConfig(raw: string | null, workspaceName: string): Site
   try {
     data = JSON.parse(raw);
   } catch (err) {
-    throw new Error(
-      // JSON.parse only throws Error subclasses; String keeps this total.
-      `${SITE_CONFIG_PATH} is not valid JSON: ${String(err)}`,
-    );
+    throw new Error(`${SITE_CONFIG_PATH} is not valid JSON: ${(err as Error).message}`);
   }
   if (data === null || typeof data !== "object" || Array.isArray(data)) {
     throw new Error(`${SITE_CONFIG_PATH} must contain a JSON object`);
