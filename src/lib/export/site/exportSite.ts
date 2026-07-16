@@ -13,7 +13,7 @@ import { buildOutlineHtml } from "./outline";
 import { buildPageMetaHtml, pageDescription, pageDocumentTitle } from "./pageMeta";
 import { renderPageHtml } from "./renderPage";
 import { rehypeSiteUrls } from "./rewriteUrls";
-import { parseSiteConfig, resolveConfigAsset, robotsTxt, SITE_CONFIG_FILENAME } from "./siteConfig";
+import { parseSiteConfig, resolveConfigAsset, robotsTxt, SITE_CONFIG_PATH } from "./siteConfig";
 import { indexSourcePriority, pageRelPath, relativeHref, relFromRoot } from "./sitePaths";
 
 export interface ExportSiteOptions {
@@ -65,12 +65,12 @@ export async function exportSite({
     throw new Error("The workspace contains no markdown files to export.");
   }
 
-  // Site-wide metadata: optional glyph-site.json at the root; absence is
+  // Site-wide metadata: optional .glyph/site.json at the root; absence is
   // fine, a present-but-invalid file fails the export loudly. The read error
   // string doesn't distinguish "missing" from "unreadable" portably, so any
   // read failure falls back to defaults; parse errors still throw.
   const rawConfig = await invoke<string>("read_file", {
-    path: `${root}/${SITE_CONFIG_FILENAME}`,
+    path: `${root}/${SITE_CONFIG_PATH}`,
   }).catch(() => null);
   const config = parseSiteConfig(rawConfig ?? null, basename(root));
 
@@ -89,9 +89,7 @@ export async function exportSite({
   if (config.favicon !== null) {
     const resolved = resolveConfigAsset(root, config.favicon, "favicon");
     if (!(await fileExists(resolved.abs))) {
-      throw new Error(
-        `${SITE_CONFIG_FILENAME}: favicon not found in the workspace: ${config.favicon}`,
-      );
+      throw new Error(`${SITE_CONFIG_PATH}: favicon not found in the workspace: ${config.favicon}`);
     }
     faviconAbs = resolved.abs;
     faviconRel = resolved.siteRel;
@@ -110,7 +108,7 @@ export async function exportSite({
     const resolved = resolveConfigAsset(root, config.socialImage, "socialImage");
     if (!(await fileExists(resolved.abs))) {
       throw new Error(
-        `${SITE_CONFIG_FILENAME}: socialImage not found in the workspace: ${config.socialImage}`,
+        `${SITE_CONFIG_PATH}: socialImage not found in the workspace: ${config.socialImage}`,
       );
     }
     socialImageAbs = resolved.abs;
