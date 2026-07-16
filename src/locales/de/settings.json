@@ -195,7 +195,9 @@
       "ollama": "Ollama (Lokal)"
     },
     "apiKey": {
-      "label": "API-Schlüssel"
+      "label": "API-Schlüssel",
+      "description": "Wird im Schlüsselbund deines Systems gespeichert, nie in Einstellungsdateien.",
+      "keychainError": "Der Schlüssel konnte nicht im System-Schlüsselbund gespeichert werden. Er bleibt für diese Sitzung verfügbar; prüfe, ob dein Schlüsselbund entsperrt ist, und versuche es erneut."
     },
     "ollamaUrl": {
       "label": "Ollama-URL",

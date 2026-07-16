@@ -195,7 +195,9 @@
       "ollama": "Ollama (Local)"
     },
     "apiKey": {
-      "label": "API Key"
+      "label": "API Key",
+      "description": "Stored in your system keychain, never in settings files.",
+      "keychainError": "Couldn't save the key to the system keychain. It stays available for this session; check that your keychain or keyring service is unlocked and try again."
     },
     "ollamaUrl": {
       "label": "Ollama URL",

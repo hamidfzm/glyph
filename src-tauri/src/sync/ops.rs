@@ -37,13 +37,13 @@ pub fn remove_config(workspace_path: &str) -> Result<(), SyncError> {
     crate::workspace::clear_sync_config(workspace_path).map_err(SyncError::Backend)
 }
 
-/// Stash a credential token in memory for `workspace_path`. The OS-keychain
-/// PR replaces this implementation; the call signature stays the same.
+/// Store a credential token for `workspace_path`: durable in the OS
+/// keychain, mirrored in memory (see [`SyncState::set_token`]).
 pub fn set_token(state: &SyncState, workspace_path: String, token: String) {
     state.set_token(workspace_path, token);
 }
 
-/// Drop the in-memory token for a workspace.
+/// Drop a workspace's token from both the keychain and memory.
 pub fn clear_token(state: &SyncState, workspace_path: &str) {
     state.clear_token(workspace_path);
 }
@@ -396,7 +396,11 @@ mod tests {
     }
 
     #[tokio::test]
+    // The test-store guard intentionally serializes keychain tests, so
+    // holding it across the awaits below is the point, not a hazard.
+    #[allow(clippy::await_holding_lock)]
     async fn token_set_clear_round_trip() {
+        let _guard = crate::secrets::test_store::install();
         let state = SyncState::new();
         set_token(&state, "/ws".into(), "tok".into());
         assert_eq!(state.get_token("/ws").as_deref(), Some("tok"));

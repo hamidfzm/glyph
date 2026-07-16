@@ -211,7 +211,11 @@ mod tests {
     }
 
     #[tokio::test]
+    // The test-store guard intentionally serializes keychain tests, so
+    // holding it across the awaits below is the point, not a hazard.
+    #[allow(clippy::await_holding_lock)]
     async fn sync_set_token_and_clear_wrappers_round_trip() {
+        let _guard = crate::secrets::test_store::install();
         let app = mock_app();
         app.manage(SyncState::new());
         sync_set_token("/w".into(), "tok".into(), app.state::<SyncState>())
@@ -472,6 +476,7 @@ mod tests {
         // One big sequential test rather than nine: building the mock
         // app + webview is expensive (compiles the IPC init script), so
         // share the setup and walk through every command's IPC arm.
+        let _guard = crate::secrets::test_store::install();
         let (_app, webview) = build_ipc_test_app();
         let ws = Workspace::new();
 

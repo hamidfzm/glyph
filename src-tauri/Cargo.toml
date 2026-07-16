@@ -40,6 +40,15 @@ sentry = { version = "0.42", default-features = false, features = [
     "rustls",
 ] }
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+# OS credential manager for AI provider API keys (macOS Keychain, Windows
+# Credential Manager, Linux Secret Service). `vendored` builds libdbus from
+# source so Linux builds and CI don't need libdbus-1-dev installed.
+keyring = { version = "3", features = [
+    "apple-native",
+    "windows-native",
+    "sync-secret-service",
+    "vendored",
+] }
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
