@@ -24,6 +24,9 @@ export interface HtmlDocOptions {
   // Extra head markup (favicon link, social meta tags), emitted verbatim
   // after <title>. The caller is responsible for escaping.
   headHtml?: string;
+  // Multi-page site export: site header bar markup, rendered before the
+  // two-column layout. Only honored alongside navHtml.
+  headerHtml?: string;
 }
 
 // The app's base styles lock the shell to the viewport (`html, body, #root {
@@ -89,6 +92,8 @@ const SITE_LAYOUT = `
 .glyph-site-nav a[aria-current="page"] { color: var(--color-accent, #0969da); font-weight: 600; }
 .glyph-site-main { flex: 1 1 auto; min-width: 0; }
 .glyph-site-main .markdown-body { margin: 0; }
+.glyph-site-header { max-width: 1320px; margin: 0 auto 1.25rem; font-size: 1.05rem; }
+.glyph-site-header a { color: var(--color-text-primary, inherit); font-weight: 600; text-decoration: none; }
 .glyph-site-outline { position: sticky; top: 1rem; flex: 0 0 200px; max-height: calc(100vh - 2rem); overflow-y: auto; font-size: 0.8125rem; }
 .glyph-site-outline ul { list-style: none; margin: 0; padding: 0; }
 .glyph-site-outline li { margin: 0.2rem 0; }
@@ -102,7 +107,7 @@ const SITE_LAYOUT = `
   .glyph-site { flex-direction: column; }
   .glyph-site-nav { position: static; flex: none; width: 100%; }
 }
-@media print { .glyph-site-nav, .glyph-site-outline { display: none; } }`;
+@media print { .glyph-site-header, .glyph-site-nav, .glyph-site-outline { display: none; } }`;
 
 /**
  * Wrap prepared body HTML and collected CSS into a standalone, offline HTML
@@ -122,6 +127,7 @@ export function buildHtmlDocument({
   navHtml,
   outlineHtml,
   headHtml,
+  headerHtml,
 }: HtmlDocOptions): string {
   const initialClass = dark ? ' class="dark"' : "";
   const stylesheetLink = stylesheetHref
@@ -146,7 +152,7 @@ ${LAYOUT_OVERRIDES}${navHtml ? SITE_LAYOUT : ""}
 ${bodyHtml}
 </div>`;
   const body = navHtml
-    ? `<div class="glyph-site">
+    ? `${headerHtml ? `${headerHtml}\n` : ""}<div class="glyph-site">
 ${navHtml}
 <main class="glyph-site-main">
 ${content}

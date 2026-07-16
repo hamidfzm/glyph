@@ -10,6 +10,7 @@ describe("parseSiteConfig", () => {
       favicon: null,
       socialImage: null,
       robots: null,
+      theme: "github",
     });
   });
 
@@ -38,6 +39,12 @@ describe("parseSiteConfig", () => {
     expect(config.title).toBe("T");
     expect(config.baseUrl).toBeNull();
     expect(config.robots).toBeNull();
+    expect(config.theme).toBe("github");
+  });
+
+  it("passes a configured theme id through for the exporter to validate", () => {
+    expect(parseSiteConfig('{"theme": "solarized"}', "notes").theme).toBe("solarized");
+    expect(() => parseSiteConfig('{"theme": ""}', "notes")).toThrow(/"theme" must be/);
   });
 
   it("rejects invalid JSON with the file name in the message", () => {

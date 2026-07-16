@@ -30,6 +30,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation("plugins");
   const [toasts, setToasts] = useState<PluginToast[]>([]);
   const [installed, setInstalled] = useState<InstalledPlugin[]>([]);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [disabled, setDisabled] = useState<string[]>([]);
   const [loaded, setLoaded] = useState<LoadedPluginInfo[]>([]);
   const [registry, setRegistry] = useState<RegistryEntry[]>([]);
@@ -84,6 +85,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         setInstalled(all);
         setDisabled(dis);
         setLoaded(host.listLoaded());
+        setInitialLoadDone(true);
       }
     })();
     // Marketplace index is best-effort: offline just means no available/updates.
@@ -226,6 +228,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         settingsPanels: host.settingsPanels,
         styles: host.styles,
         exporters: host.exporters,
+        siteThemes: host.siteThemes,
         installed,
         disabled,
         loaded,
@@ -236,6 +239,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         setEnabled,
         uninstall,
         setWorkspaceRoot,
+        initialLoadDone,
       }}
     >
       {children}

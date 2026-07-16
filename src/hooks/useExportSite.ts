@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
+import { usePluginsOptional } from "@/contexts/PluginsContext";
+import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { isPathInside } from "@/lib/paths";
 import { pickExportDir } from "@/lib/pickers";
 
@@ -22,6 +24,9 @@ export interface ExportSiteHandlers {
  */
 export function useExportSite(root: string | undefined): ExportSiteHandlers {
   const [siteProgress, setSiteProgress] = useState<SiteExportProgress | null>(null);
+  // Plugin-contributed site themes; empty without a PluginsProvider (tests).
+  const plugins = usePluginsOptional();
+  const pluginThemes = useRegistryEntries(plugins?.siteThemes ?? null);
 
   const exportWebsite = useCallback(async () => {
     if (!root) return;
@@ -41,6 +46,7 @@ export function useExportSite(root: string | undefined): ExportSiteHandlers {
       await exportSite({
         root,
         outDir,
+        themes: pluginThemes,
         onProgress: (done, total) => setSiteProgress({ done, total }),
       });
     } catch (err) {
@@ -48,7 +54,7 @@ export function useExportSite(root: string | undefined): ExportSiteHandlers {
     } finally {
       setSiteProgress(null);
     }
-  }, [root]);
+  }, [root, pluginThemes]);
 
   return useMemo(() => ({ exportWebsite, siteProgress }), [exportWebsite, siteProgress]);
 }
