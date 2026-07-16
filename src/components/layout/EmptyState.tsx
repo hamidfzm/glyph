@@ -1,5 +1,5 @@
 import { Trans, useTranslation } from "react-i18next";
-import { PlatformGate } from "@/components/PlatformGate";
+import { ShowOn } from "@/components/ShowOn";
 import type { Platform } from "@/hooks/usePlatform";
 import { modKey } from "@/lib/platform";
 
@@ -23,7 +23,7 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
           {folderEmpty ? t("emptyState.folderHeading") : t("emptyState.openHeading")}
         </h2>
         {/* Keyboard-shortcut hint; folderEmpty can't happen on mobile. */}
-        <PlatformGate platform={platform} on="desktop">
+        <ShowOn on="desktop">
           <p className="text-sm text-[var(--color-text-secondary)]">
             {folderEmpty ? (
               t("emptyState.folderHint")
@@ -39,7 +39,7 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
               />
             )}
           </p>
-        </PlatformGate>
+        </ShowOn>
       </div>
       {!folderEmpty && (
         <div className="flex items-center gap-2">
@@ -51,7 +51,7 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
             {t("emptyState.openFile")}
           </button>
           {/* No folder workspaces on mobile. */}
-          <PlatformGate platform={platform} on="desktop">
+          <ShowOn on="desktop">
             <button
               type="button"
               onClick={onOpenFolder}
@@ -59,7 +59,7 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
             >
               {t("emptyState.openFolder")}
             </button>
-          </PlatformGate>
+          </ShowOn>
         </div>
       )}
     </div>

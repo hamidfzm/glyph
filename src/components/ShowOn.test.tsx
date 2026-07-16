@@ -1,53 +1,59 @@
+import { platform } from "@tauri-apps/plugin-os";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Platform } from "@/hooks/usePlatform";
 import type { PlatformSelector } from "@/lib/platform";
-import { PlatformGate } from "./PlatformGate";
+import { ShowOn } from "./ShowOn";
 
-function renderGate(platform: Platform, on: PlatformSelector | PlatformSelector[]) {
+function renderOn(detected: Platform, on: PlatformSelector | PlatformSelector[]) {
+  vi.mocked(platform).mockReturnValue(detected as ReturnType<typeof platform>);
   return render(
-    <PlatformGate platform={platform} on={on}>
+    <ShowOn on={on}>
       <span>gated</span>
-    </PlatformGate>,
+    </ShowOn>,
   );
 }
 
-describe("PlatformGate", () => {
+afterEach(() => {
+  vi.mocked(platform).mockReturnValue("macos");
+});
+
+describe("ShowOn", () => {
   it("renders children when a group selector matches", () => {
-    renderGate("macos", "desktop");
+    renderOn("macos", "desktop");
     expect(screen.getByText("gated")).toBeInTheDocument();
   });
 
   it("hides children when a group selector doesn't match", () => {
-    for (const platform of ["android", "ios"] as const) {
-      const { unmount } = renderGate(platform, "desktop");
+    for (const detected of ["android", "ios"] as const) {
+      const { unmount } = renderOn(detected, "desktop");
       expect(screen.queryByText("gated")).not.toBeInTheDocument();
       unmount();
     }
   });
 
   it("matches the mobile group", () => {
-    renderGate("android", "mobile");
+    renderOn("android", "mobile");
     expect(screen.getByText("gated")).toBeInTheDocument();
   });
 
   it("matches a specific platform", () => {
-    renderGate("macos", "macos");
+    renderOn("macos", "macos");
     expect(screen.getByText("gated")).toBeInTheDocument();
   });
 
   it("hides on a non-matching specific platform", () => {
-    renderGate("windows", "macos");
+    renderOn("windows", "macos");
     expect(screen.queryByText("gated")).not.toBeInTheDocument();
   });
 
   it("matches any selector in a list", () => {
-    renderGate("linux", ["macos", "linux"]);
+    renderOn("linux", ["macos", "linux"]);
     expect(screen.getByText("gated")).toBeInTheDocument();
   });
 
   it("treats unknown as desktop for group selectors", () => {
-    renderGate("unknown", "desktop");
+    renderOn("unknown", "desktop");
     expect(screen.getByText("gated")).toBeInTheDocument();
   });
 });
