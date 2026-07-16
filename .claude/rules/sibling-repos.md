@@ -17,3 +17,14 @@ The main repo is `hamidfzm/glyph`. Every satellite (Homebrew tap, Scoop bucket, 
     git -C "$r" remote set-url origin "git@github.com:glyph-md/$r.git"  # scrub token; push over SSH
   done
   ```
+
+## Namespace and website
+
+- **The main repo stays `hamidfzm/glyph`** (decided in #128); the org holds only satellites. Create any new satellite repo under `glyph-md/`, and keep `hamidfzm/glyph` URLs in README/workflows as-is.
+- **The marketing website** is `glyph-md/glyph-md.github.io` (Astro, GitHub Pages, 5 locales in `src/i18n/ui.ts`), cloned at `../glyph-md/glyph-md.github.io`.
+- **Canonical install/docs URL is the `homepage` field of this repo's `package.json`** (currently `https://glyph-md.github.io`; the release workflow reads it with `jq`). Do not switch prose or package-repo URLs to the `glyph.md` custom domain until `package.json` flips first; a premature switch has been fully reverted before.
+
+## Satellite gotchas
+
+- **PR APIs 404 on repos with Issues disabled** (`homebrew-tap`, `scoop-bucket`): GitHub's `/pulls` endpoints ride on the issues subsystem, so `gh pr create` fails even with admin. Either enable Issues first, or push doc-level changes to `main` directly via the contents API.
+- **Plugin API phases ship ecosystem-wide**: any change to `ctx.*`, manifest fields, or registry entry fields also updates `glyph-md/plugin-template` (`types/glyph.d.ts`, "API vX.Y" header) and `glyph-md/plugins` (`docs/api-reference.md`, `index.schema.json`, CONTRIBUTING) in the same delivery, with matching `PLUGIN_API_VERSION`.

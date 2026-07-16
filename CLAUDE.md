@@ -88,6 +88,8 @@ The release workflow builds all platforms and publishes to Homebrew, winget, Cho
 
 Do **not** create releases manually with `gh release create` or push tags by hand. Use the workflow.
 
+Releases are not always cut from main's tip: hotfixes may build on a previous tag's lineage (v0.15.2 did), so "latest release" does not imply "contains everything merged". Before wiring CI or satellite repos to the latest release, verify the feature is in the tag: `git merge-base --is-ancestor <feature-sha> <tag>`.
+
 ## Key Files
 
 - `src-tauri/tauri.conf.json`: App window config, CLI plugin config, bundle settings
