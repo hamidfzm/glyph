@@ -3,11 +3,8 @@ import type { Platform } from "@/hooks/usePlatform";
 
 const KNOWN_PLATFORMS: readonly Platform[] = ["macos", "windows", "linux", "android", "ios"];
 
-/**
- * Detect and narrow the OS-plugin platform to Glyph's `Platform` union.
- * Falls back to `"unknown"` when the plugin is unavailable (tests, plain
- * browsers) or reports something Glyph has no styling/behavior for.
- */
+/** Detect and narrow to Glyph's `Platform` union; `"unknown"` when the OS
+ *  plugin is unavailable (tests, plain browsers) or reports something else. */
 export function currentPlatform(): Platform {
   try {
     const detected = detectPlatform();
@@ -27,10 +24,7 @@ export function isMobile(platform: Platform): boolean {
   return platform === "android" || platform === "ios";
 }
 
-/**
- * Synchronous mobile check for code that runs before `usePlatform` state
- * settles (module-level helpers, first-render effects).
- */
+/** Synchronous mobile check for code that runs before `usePlatform` settles. */
 export function isMobilePlatform(): boolean {
   return isMobile(currentPlatform());
 }

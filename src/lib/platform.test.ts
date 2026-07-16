@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { currentPlatform, isMac, isMobile, isMobilePlatform, modKey } from "./platform";
 
-// @tauri-apps/plugin-os is mocked globally in src/test/setup.ts.
-
 describe("currentPlatform", () => {
   beforeEach(() => {
     vi.clearAllMocks();

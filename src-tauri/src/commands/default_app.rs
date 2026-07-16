@@ -1,5 +1,3 @@
-// Only the Linux and Windows arms shell out; the import is unused elsewhere
-// (macOS guidance-only, mobile fallback).
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 use std::process::Command;
 

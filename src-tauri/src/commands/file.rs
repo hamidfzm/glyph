@@ -31,9 +31,6 @@ pub fn read_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {e}"))
 }
 
-// `WebviewWindow::print` doesn't exist on mobile; the command is registered
-// only on desktop (cfg-gated in lib.rs's generate_handler list) and the
-// frontend hides the print entry points there.
 #[cfg(desktop)]
 #[tauri::command]
 pub fn print_document<R: tauri::Runtime>(window: tauri::WebviewWindow<R>) -> Result<(), String> {

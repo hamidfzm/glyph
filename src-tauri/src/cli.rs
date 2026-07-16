@@ -1,7 +1,5 @@
-// Mobile has no CLI; the launch-plan half of this module (marked
-// `#[cfg(desktop)]` item by item) is only called from the desktop-gated setup
-// block, while the classifiers stay in use everywhere by the drag-drop and
-// file-association handlers.
+// The `#[cfg(desktop)]` items are the CLI launch-plan half; the ungated
+// classifiers stay in use by the drag-drop and file-association handlers.
 
 use std::path::{Path, PathBuf};
 

@@ -4,10 +4,8 @@ mod commands;
 mod d2;
 mod image;
 mod markdown;
-// Menus (tauri::menu), sync (git2), and telemetry (sentry) don't exist or
-// don't cross-compile on mobile. Their modules, managed state, and
-// `generate_handler!` entries are all cfg-gated to desktop; the frontend
-// never invokes them on mobile.
+// Menus (tauri::menu), sync (git2), and telemetry (sentry) don't exist on
+// mobile; their `generate_handler!` entries and managed state are gated too.
 #[cfg(desktop)]
 mod menu;
 #[cfg(desktop)]
@@ -187,10 +185,8 @@ pub fn run() {
         .manage(commands::CliExport(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
         .setup(|app| {
-            // Seed the window registry's "main" entry so routing knows what
-            // the first window shows before its frontend reports back; the
-            // desktop CLI block below overrides it for folder launches.
-            // Mobile stops here (no menu bar, no CLI).
+            // Seed the registry's "main" entry so routing knows what the first
+            // window shows; a desktop folder launch overrides it below.
             app.state::<windows::WindowRegistry>()
                 .set_workspace("main", None);
 
@@ -233,9 +229,6 @@ pub fn run() {
                 let plugin_path = plugin_arg("file");
                 let plugin_export = plugin_arg("export-website");
                 let env_args: Vec<String> = std::env::args().collect();
-                // "main" is already seeded workspace-less above; only a folder
-                // launch pre-registers a workspace. Everything else leaves it
-                // empty (loose file / no document / headless export).
                 match cli::launch_plan(
                     plugin_path.as_deref(),
                     plugin_export.as_deref(),

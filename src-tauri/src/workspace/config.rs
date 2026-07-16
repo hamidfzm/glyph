@@ -18,10 +18,9 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::sync::{BackendKind, CommitIdentity, ConflictPolicy};
-// Only the desktop-gated sync helpers below build full workspace configs.
 #[cfg(desktop)]
 use crate::sync::WorkspaceSyncConfig;
+use crate::sync::{BackendKind, CommitIdentity, ConflictPolicy};
 
 const CONFIG_FILE: &str = "config.json";
 const STATE_FILE: &str = "state.json";
@@ -68,9 +67,6 @@ pub struct SyncSettings {
 }
 
 impl SyncSettings {
-    // The converters (like the sync helpers below) are only called from the
-    // desktop-gated sync module; the struct itself stays in the config schema
-    // on every platform.
     #[cfg(desktop)]
     fn from_workspace(c: &WorkspaceSyncConfig) -> Self {
         Self {

@@ -125,10 +125,9 @@ async function loadFileContent(path: string): Promise<{
   content: string;
   metadata: FileMetadata | null;
 }> {
-  // Mobile document pickers hand back sandboxed URIs (content:// on Android)
-  // that the Rust fs commands cannot open; the fs plugin's native layer can,
-  // and the dialog plugin has already scoped the picked file for it. Metadata
-  // (and therefore file watching, see the caller) doesn't apply to those URIs.
+  // Mobile pickers hand back sandboxed URIs (content:// on Android) that the
+  // Rust fs commands cannot open; only the fs plugin's native layer can, and
+  // metadata (and therefore file watching) doesn't apply to them.
   const [raw, metadata] = isMobilePlatform()
     ? [await readTextFile(path), null]
     : await Promise.all([
@@ -346,15 +345,13 @@ export function useTabs(options: UseTabsOptions) {
         let metadata: FileMetadata | null;
         if (isImage) {
           content = null;
-          // Same sandboxed-URI caveat as loadFileContent: no Rust-side
-          // metadata for mobile picker URIs.
+          // Same sandboxed-URI caveat as loadFileContent.
           metadata = isMobilePlatform()
             ? null
             : await invoke<FileMetadata>("get_file_metadata", { path });
         } else {
           ({ content, metadata } = await loadFileContent(path));
-          // No metadata means a mobile picker URI, which the watcher can't
-          // follow either.
+          // metadata is null exactly for mobile picker URIs, unwatchable too.
           if (metadata) {
             await invoke("watch_file", { path });
           }

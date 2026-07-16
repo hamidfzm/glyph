@@ -7,11 +7,8 @@
 #![allow(dead_code, unused_imports)]
 
 mod backend;
-// The git backend (git2 + vendored OpenSSL) doesn't cross-compile for
-// android/ios, so everything that touches it is desktop-only. The command
-// entries are cfg-gated the same way in lib.rs's `generate_handler!` list;
-// only the pure config/serde types stay cross-platform (the workspace config
-// schema embeds them).
+// git2 doesn't cross-compile for mobile; only the pure config/serde types
+// stay cross-platform (the workspace config schema embeds them).
 #[cfg(desktop)]
 pub mod commands;
 mod config;
