@@ -176,7 +176,8 @@
       "title": "Revisión ortográfica",
       "label": "Revisar ortografía",
       "description": "Subraya las palabras mal escritas mientras editas. Haz clic derecho en una palabra para ver sugerencias. Se aplica al modo de edición y al modo dividido.",
-      "language": "Idioma",
+      "languagesLabel": "Idiomas",
+      "languagesDescription": "Las palabras se comprueban con cada idioma activado. El texto en alfabetos sin diccionario activado no se marca.",
       "languages": {
         "en": "Inglés (EE. UU.)"
       },

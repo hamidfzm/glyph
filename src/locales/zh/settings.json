@@ -176,7 +176,8 @@
       "title": "拼写检查",
       "label": "检查拼写",
       "description": "编辑时为拼写错误的单词加下划线。右键单击单词查看建议。适用于编辑和分屏模式。",
-      "language": "语言",
+      "languagesLabel": "语言",
+      "languagesDescription": "单词会用每个已启用的语言进行检查。没有启用词典的文字不会被标记。",
       "languages": {
         "en": "英语（美国）"
       },

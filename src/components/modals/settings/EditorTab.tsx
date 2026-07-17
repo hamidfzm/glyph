@@ -63,22 +63,30 @@ export function EditorTab() {
 
   // Built-in English plus every plugin-contributed dictionary, live-updating
   // as plugins load and unload. A plugin may override "en" itself; dedupe by
-  // language with the plugin's entry winning, like the speller does.
+  // language with the plugin's entry winning, like the speller does. Languages
+  // whose plugin was uninstalled but are still enabled stay listed (by raw
+  // code) so they can be turned off instead of silently lingering.
   const pluginDictionaries = useSyncExternalStore(
     subscribeDictionarySources,
     listDictionarySources,
   );
-  const languageOptions = [
+  const knownOptions = [
     ...(pluginDictionaries.some((d) => d.language === "en")
       ? []
       : [{ language: "en", label: t("editor.spellCheck.languages.en") }]),
     ...pluginDictionaries.map((d) => ({ language: d.language, label: d.label })),
   ];
-  // A language whose plugin was uninstalled stays selectable (and stored), so
-  // the choice survives a disable/enable cycle instead of silently resetting.
-  const orphanedLanguage = languageOptions.some((o) => o.language === editor.spellCheckLanguage)
-    ? null
-    : editor.spellCheckLanguage;
+  const enabledLanguages = editor.spellCheckLanguages;
+  const languageOptions = [
+    ...knownOptions,
+    ...enabledLanguages
+      .filter((code) => !knownOptions.some((o) => o.language === code))
+      .map((code) => ({ language: code, label: code })),
+  ];
+  const setLanguageEnabled = (code: string, on: boolean) => {
+    const next = on ? [...enabledLanguages, code] : enabledLanguages.filter((l) => l !== code);
+    updateSettings("editor.spellCheckLanguages", next);
+  };
 
   return (
     <Fragment>
@@ -127,21 +135,25 @@ export function EditorTab() {
         </div>
 
         {editor.spellCheck && (
-          <div className="settings-row">
-            <span className="settings-label">{t("editor.spellCheck.language")}</span>
-            <select
-              className="settings-select"
-              value={editor.spellCheckLanguage}
-              onChange={(e) => updateSettings("editor.spellCheckLanguage", e.target.value)}
-            >
-              {languageOptions.map((option) => (
-                <option key={option.language} value={option.language}>
-                  {option.label}
-                </option>
-              ))}
-              {orphanedLanguage && <option value={orphanedLanguage}>{orphanedLanguage}</option>}
-            </select>
-          </div>
+          <Fragment>
+            <div className="settings-row">
+              <div>
+                <span className="settings-label">{t("editor.spellCheck.languagesLabel")}</span>
+                <div className="settings-description">
+                  {t("editor.spellCheck.languagesDescription")}
+                </div>
+              </div>
+            </div>
+            {languageOptions.map((option) => (
+              <div className="settings-row" key={option.language}>
+                <span className="settings-label">{option.label}</span>
+                <Toggle
+                  checked={enabledLanguages.includes(option.language)}
+                  onChange={(v) => setLanguageEnabled(option.language, v)}
+                />
+              </div>
+            ))}
+          </Fragment>
         )}
       </div>
     </Fragment>

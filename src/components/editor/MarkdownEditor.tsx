@@ -47,7 +47,10 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
   const { t } = useTranslation("settings");
   const { settings } = useSettings();
   const keymapPreset = settings.editor.keymap;
-  const { spellCheck, spellCheckLanguage } = settings.editor;
+  const { spellCheck, spellCheckLanguages } = settings.editor;
+  // Settings saves produce a fresh array identity every time; key the
+  // reconfigure effect on the joined value so only real set changes fire it.
+  const spellCheckLanguagesKey = spellCheckLanguages.join(",");
 
   // Spell check lives in a Compartment so toggling it reconfigures the editor in
   // place (cursor, selection and undo history survive). Kept in a ref so the
@@ -62,8 +65,8 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
     add: t("editor.spellCheck.add"),
     empty: t("editor.spellCheck.noSuggestions"),
   };
-  const spellcheckExtension = (enabled: boolean, language: string) =>
-    enabled ? buildSpellcheck(language, () => spellLabelsRef.current) : [];
+  const spellcheckExtension = (enabled: boolean, languages: readonly string[]) =>
+    enabled ? buildSpellcheck(languages, () => spellLabelsRef.current) : [];
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: content is synced via separate effect below to avoid destroying the editor on every keystroke
   useEffect(() => {
@@ -126,7 +129,7 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
           }),
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(glyphHighlight),
-          spellcheckCompartment.of(spellcheckExtension(spellCheck, spellCheckLanguage)),
+          spellcheckCompartment.of(spellcheckExtension(spellCheck, spellCheckLanguages)),
           EditorView.lineWrapping,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
@@ -198,17 +201,18 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
     }
   }, [content]);
 
-  // Toggle or switch spell-check language in place, keeping editor state intact.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: spellcheckCompartment is a stable ref and spellcheckExtension only reads refs
+  // Toggle spell check or change the enabled language set in place, keeping
+  // editor state intact.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: spellcheckCompartment is a stable ref, and spellCheckLanguages is deliberately keyed by its joined value (settings saves churn the array identity)
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     view.dispatch({
       effects: spellcheckCompartment.reconfigure(
-        spellcheckExtension(spellCheck, spellCheckLanguage),
+        spellcheckExtension(spellCheck, spellCheckLanguages),
       ),
     });
-  }, [spellCheck, spellCheckLanguage]);
+  }, [spellCheck, spellCheckLanguagesKey]);
 
   return <div ref={containerRef} className="editor-container" />;
 }
