@@ -15,6 +15,7 @@ function renderLink(props: Partial<LinkComponentProps>, settings: Settings = DEF
         settings,
         updateSettings: vi.fn(),
         resetSettings: vi.fn(),
+        flushSettings: async () => true,
         loaded: true,
       }}
     >

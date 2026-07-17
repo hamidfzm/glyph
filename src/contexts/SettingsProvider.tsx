@@ -94,6 +94,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const storeRef = useRef<Store | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<Settings | null>(null);
 
   // Load settings from store on mount
   useEffect(() => {
@@ -147,18 +148,59 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener("change", handler);
   }, [settings.appearance.theme]);
 
-  // Save settings to store (debounced). Secrets never reach the store: every
-  // write persists a stripped copy, so settings.json cannot contain API keys.
-  const saveToStore = useCallback((newSettings: Settings) => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      try {
-        await storeRef.current?.set(STORE_KEY, stripSecrets(newSettings));
-      } catch (err) {
-        console.error("Failed to save settings:", err);
-      }
-    }, SAVE_DEBOUNCE);
+  // Write the latest pending settings to the store and disk. Secrets never
+  // reach the store: every write persists a stripped copy, so settings.json
+  // cannot contain API keys. On failure the pending value is kept so a later
+  // flush can retry.
+  const writePending = useCallback(async () => {
+    const store = storeRef.current;
+    const pending = pendingRef.current;
+    if (!store || !pending) return true;
+    try {
+      await store.set(STORE_KEY, stripSecrets(pending));
+      // save() awaits the disk write; autoSave's own debounce could still be
+      // pending when the process exits.
+      await store.save();
+      // A newer update may have arrived while awaiting; keep it pending.
+      if (pendingRef.current === pending) pendingRef.current = null;
+      return true;
+    } catch (err) {
+      console.error("Failed to save settings:", err);
+      return false;
+    }
   }, []);
+
+  // Save settings to store (debounced).
+  const saveToStore = useCallback(
+    (newSettings: Settings) => {
+      pendingRef.current = newSettings;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        saveTimerRef.current = null;
+        void writePending();
+      }, SAVE_DEBOUNCE);
+    },
+    [writePending],
+  );
+
+  // Persist any update still inside the debounce window; called before the
+  // window is allowed to close so a just-changed setting is not lost.
+  const flushSettings = useCallback(async () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    return writePending();
+  }, [writePending]);
+
+  // Unmount (tests, hot reload) clears the timer without abandoning the
+  // pending update.
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      void writePending();
+    };
+  }, [writePending]);
 
   const updateSettings = useCallback(
     (path: string, value: unknown) => {
@@ -197,7 +239,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [saveToStore]);
 
   return (
-    <SettingsContext value={{ settings, updateSettings, resetSettings, loaded }}>
+    <SettingsContext value={{ settings, updateSettings, resetSettings, flushSettings, loaded }}>
       {children}
     </SettingsContext>
   );

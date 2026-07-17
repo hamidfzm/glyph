@@ -12,6 +12,7 @@ describe("lazySettings", { timeout: CHUNK_LOAD_TIMEOUT_MS }, () => {
       settings: DEFAULT_SETTINGS,
       updateSettings: vi.fn(),
       resetSettings: vi.fn(),
+      flushSettings: async () => true,
       loaded: true,
     };
     const wrapper = ({ children }: { children: ReactNode }) => (

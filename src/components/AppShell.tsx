@@ -4,6 +4,7 @@ import { useTabsContext } from "@/contexts/TabsContext";
 import { useAIController } from "@/hooks/useAIController";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { useCliExport } from "@/hooks/useCliExport";
+import { useCloseFlush } from "@/hooks/useCloseFlush";
 import { useCommandPaletteController } from "@/hooks/useCommandPaletteController";
 import { useContextMenu } from "@/hooks/useContextMenu";
 import { useDefaultAppPrompt } from "@/hooks/useDefaultAppPrompt";
@@ -122,9 +123,9 @@ export function AppShell() {
   );
   useAutoSave({ documents: dirtyDocuments, save: saveDocument });
 
-  // Intercept native window close / app exit: flush every dirty tab (and
-  // confirm on failure) before the window is allowed to close.
-  useWindowClose(flushForClose);
+  // Intercept native window close / app exit: flush pending settings and every
+  // dirty tab (confirming on failure) before the window is allowed to close.
+  useWindowClose(useCloseFlush(flushForClose));
 
   const aiController = useAIController(
     settings.ai,

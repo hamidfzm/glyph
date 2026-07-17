@@ -10,6 +10,7 @@ function withSettings(overrides: Partial<SettingsContextValue> = {}) {
     settings: DEFAULT_SETTINGS,
     updateSettings: vi.fn(),
     resetSettings: vi.fn(),
+    flushSettings: async () => true,
     loaded: true,
     ...overrides,
   };
