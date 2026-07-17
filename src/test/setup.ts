@@ -52,6 +52,7 @@ vi.mock("@tauri-apps/plugin-store", () => ({
     Promise.resolve({
       get: vi.fn(() => Promise.resolve(null)),
       set: vi.fn(() => Promise.resolve()),
+      save: vi.fn(() => Promise.resolve()),
     }),
   ),
 }));

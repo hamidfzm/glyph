@@ -18,6 +18,7 @@ describe("useSettings", () => {
       settings: { ...DEFAULT_SETTINGS },
       updateSettings: () => {},
       resetSettings: () => {},
+      flushSettings: async () => true,
       loaded: true,
     };
     const wrapper = ({ children }: { children: React.ReactNode }) => (

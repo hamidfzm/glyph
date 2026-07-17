@@ -23,6 +23,7 @@ function wrapper(settings: Settings) {
     settings,
     updateSettings: vi.fn(),
     resetSettings: vi.fn(),
+    flushSettings: async () => true,
     loaded: true,
   };
   return ({ children }: { children: ReactNode }) => (
@@ -52,7 +53,13 @@ describe("MarkdownEditor spell-check wiring", () => {
   it("reconfigures spell check in place when the setting toggles on", () => {
     const tree = (settings: Settings) => (
       <SettingsContext.Provider
-        value={{ settings, updateSettings: vi.fn(), resetSettings: vi.fn(), loaded: true }}
+        value={{
+          settings,
+          updateSettings: vi.fn(),
+          resetSettings: vi.fn(),
+          flushSettings: async () => true,
+          loaded: true,
+        }}
       >
         <MarkdownEditor content="helo world" onChange={() => {}} />
       </SettingsContext.Provider>
@@ -69,7 +76,13 @@ describe("MarkdownEditor spell-check wiring", () => {
   it("reconfigures when the enabled language set changes", () => {
     const tree = (settings: Settings) => (
       <SettingsContext.Provider
-        value={{ settings, updateSettings: vi.fn(), resetSettings: vi.fn(), loaded: true }}
+        value={{
+          settings,
+          updateSettings: vi.fn(),
+          resetSettings: vi.fn(),
+          flushSettings: async () => true,
+          loaded: true,
+        }}
       >
         <MarkdownEditor content="helo world" onChange={() => {}} />
       </SettingsContext.Provider>

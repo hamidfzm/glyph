@@ -11,6 +11,7 @@ function ctx(over: Partial<SettingsContextValue> = {}): SettingsContextValue {
     settings: DEFAULT_SETTINGS,
     updateSettings: vi.fn(),
     resetSettings: vi.fn(),
+    flushSettings: async () => true,
     loaded: true,
     ...over,
   };
