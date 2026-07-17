@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
+import { PLUGIN_API_COMPAT_FLOOR, PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 
 describe("satisfiesApiVersion", () => {
   it("matches an exact version", () => {
@@ -22,13 +22,35 @@ describe("satisfiesApiVersion", () => {
     expect(satisfiesApiVersion("^2.0.0", "1.9.9")).toBe(false);
   });
 
-  it("requires an exact match while the API major is 0, caret or not", () => {
-    expect(satisfiesApiVersion("0.16.0", "0.16.0")).toBe(true);
-    expect(satisfiesApiVersion("^0.16.0", "0.16.0")).toBe(true);
-    expect(satisfiesApiVersion("^0.16.0", "0.16.4")).toBe(false);
-    expect(satisfiesApiVersion("^0.15.1", "0.16.0")).toBe(false);
-    expect(satisfiesApiVersion("0.16.0", "0.15.9")).toBe(false);
-    expect(satisfiesApiVersion("^0.16.0", "1.0.0")).toBe(false);
+  it("accepts declared versions inside the compatibility window while major is 0", () => {
+    expect(satisfiesApiVersion("0.16.0", "0.17.0", "0.16.0")).toBe(true);
+    expect(satisfiesApiVersion("0.17.0", "0.17.0", "0.16.0")).toBe(true);
+    expect(satisfiesApiVersion("0.16.5", "0.17.0", "0.16.0")).toBe(true);
+  });
+
+  it("rejects declared versions outside the window while major is 0", () => {
+    expect(satisfiesApiVersion("0.15.9", "0.17.0", "0.16.0")).toBe(false); // below the floor
+    expect(satisfiesApiVersion("0.18.0", "0.17.0", "0.16.0")).toBe(false); // newer than the host
+    expect(satisfiesApiVersion("0.16.0", "0.15.9", "0.15.0")).toBe(false); // newer than the host
+  });
+
+  it("a caret adds nothing below major 1", () => {
+    expect(satisfiesApiVersion("^0.16.0", "0.17.0", "0.16.0")).toBe(true); // same as exact
+    expect(satisfiesApiVersion("^0.15.0", "0.17.0", "0.16.0")).toBe(false);
+    expect(satisfiesApiVersion("^0.16.0", "1.0.0")).toBe(false); // major differs
+  });
+
+  it("treats an unparseable floor as incompatible", () => {
+    expect(satisfiesApiVersion("0.16.0", "0.17.0", "not-a-version")).toBe(false);
+  });
+
+  it("a floor from a different major rejects instead of matching accidentally", () => {
+    expect(satisfiesApiVersion("0.16.0", "0.17.0", "1.0.0")).toBe(false);
+  });
+
+  it("defaults the floor to the shipped compatibility floor", () => {
+    expect(satisfiesApiVersion(PLUGIN_API_COMPAT_FLOOR)).toBe(true);
+    expect(satisfiesApiVersion("0.1.0")).toBe(false);
   });
 
   it("treats unparseable input as incompatible", () => {

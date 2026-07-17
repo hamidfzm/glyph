@@ -31,7 +31,11 @@ export interface PluginManifest {
   name: string;
   /** The plugin's own semver. */
   version: string;
-  /** Semver range against {@link PLUGIN_API_VERSION}, e.g. `^1.0.0`. */
+  /**
+   * Plugin API version this plugin targets. While the API major is 0, any
+   * version inside the host's compatibility window (floor through current)
+   * loads; from 1.0 on, exact or caret semver ranges apply.
+   */
   apiVersion: string;
   description?: string;
   /** Entry file relative to the plugin folder. Defaults to `main.js`. */
