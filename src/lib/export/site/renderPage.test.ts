@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { MarkdownPlugin } from "@/lib/plugins/types";
 import { renderPageHtml } from "./renderPage";
 
 const FILE = "/ws/notes.md";
@@ -57,5 +58,28 @@ describe("renderPageHtml", () => {
     const html = await render("---\ntitle: T\n---\n\nBody");
     expect(html).not.toContain("title: T");
     expect(html).toContain("<p>Body</p>");
+  });
+
+  it("runs plugin-contributed remark plugins after the built-ins", async () => {
+    interface Node {
+      type: string;
+      value?: string;
+      children?: Node[];
+    }
+    // A minimal remark plugin that upper-cases every text node.
+    const shout = () => (tree: Node) => {
+      const visit = (node: Node) => {
+        if (node.type === "text" && node.value) node.value = node.value.toUpperCase();
+        for (const child of node.children ?? []) visit(child);
+      };
+      visit(tree);
+    };
+    const html = await renderPageHtml({
+      content: "quiet words",
+      filePath: FILE,
+      workspaceFiles: FILES,
+      extraRemark: [shout as MarkdownPlugin],
+    });
+    expect(html).toContain("QUIET WORDS");
   });
 });

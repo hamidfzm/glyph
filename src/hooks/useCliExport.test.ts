@@ -84,7 +84,14 @@ describe("useCliExport", () => {
     );
     renderHook(() => useCliExport());
     await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
-    expect(exportSiteMock).toHaveBeenCalledWith({ root: "/ws", outDir: "/out", themes: [] });
+    // No provider: themes and plugin markdown contributions are all empty.
+    expect(exportSiteMock).toHaveBeenCalledWith({
+      root: "/ws",
+      outDir: "/out",
+      themes: [],
+      remarkPlugins: [],
+      rehypePlugins: [],
+    });
     expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
       code: 0,
       message: "Exported 3 pages and 1 assets to /out",

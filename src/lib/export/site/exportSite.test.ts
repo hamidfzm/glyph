@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { restoreMermaidTheme } from "@/lib/export/rasterize";
+import type { MarkdownPlugin } from "@/lib/plugins/types";
 import { exportSite } from "./exportSite";
 
 vi.mock("@/lib/export/rasterize", () => ({
@@ -49,6 +50,40 @@ beforeEach(() => {
 });
 
 describe("exportSite", () => {
+  it("renders plugin remark and rehype contributions into the pages", async () => {
+    interface Node {
+      type: string;
+      value?: string;
+      children?: Node[];
+    }
+    // remark: upper-case text; rehype: append a footer element to the tree.
+    const shout = () => (tree: Node) => {
+      const visit = (node: Node) => {
+        if (node.type === "text" && node.value) node.value = node.value.toUpperCase();
+        for (const child of node.children ?? []) visit(child);
+      };
+      visit(tree);
+    };
+    const stamp = () => (tree: { children: unknown[] }) => {
+      tree.children.push({
+        type: "element",
+        tagName: "footer",
+        properties: { className: ["plugin-stamp"] },
+        children: [{ type: "text", value: "stamped" }],
+      });
+    };
+    const fs = mockFs({ "/ws/notes.md": "plugin text" });
+    await exportSite({
+      root: "/ws",
+      outDir: "/out",
+      remarkPlugins: [shout as MarkdownPlugin],
+      rehypePlugins: [stamp as MarkdownPlugin],
+    });
+    const page = fs.writes.get("/out/notes.html") ?? "";
+    expect(page).toContain("PLUGIN TEXT");
+    expect(page).toContain('<footer class="plugin-stamp">stamped</footer>');
+  });
+
   it("writes one page per file, promotes README, and emits shared style.css", async () => {
     const fs = mockFs({
       "/ws/README.md": "# Home",

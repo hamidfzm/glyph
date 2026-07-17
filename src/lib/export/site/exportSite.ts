@@ -7,7 +7,7 @@ import { restoreMermaidTheme } from "@/lib/export/rasterize";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { basename } from "@/lib/paths";
-import type { SiteThemeContribution } from "@/lib/plugins/types";
+import type { MarkdownPlugin, SiteThemeContribution } from "@/lib/plugins/types";
 import { buildIndexBodyHtml } from "./indexPage";
 import { inlineMermaidSvgs } from "./mermaidInline";
 import { buildNavHtml, type SitePage } from "./nav";
@@ -34,6 +34,10 @@ export interface ExportSiteOptions {
   onProgress?: (done: number, total: number) => void;
   /** Plugin-contributed site themes, offered alongside the built-ins. */
   themes?: readonly SiteThemeContribution[];
+  /** Plugin-contributed remark plugins, so plugin syntax renders in the export. */
+  remarkPlugins?: readonly MarkdownPlugin[];
+  /** Plugin-contributed rehype plugins, applied before the site URL rewriter. */
+  rehypePlugins?: readonly MarkdownPlugin[];
 }
 
 export interface ExportSiteResult {
@@ -67,6 +71,8 @@ export async function exportSite({
   outDir,
   onProgress,
   themes = [],
+  remarkPlugins = [],
+  rehypePlugins = [],
 }: ExportSiteOptions): Promise<ExportSiteResult> {
   // `list_markdown_files` returns every openable document type; the site
   // renders the markdown family only (notebooks, canvases, and D2 sources
@@ -233,7 +239,13 @@ export async function exportSite({
         content,
         filePath: file,
         workspaceFiles: files,
-        extraRehype: [[rehypeSiteUrls, { filePath: file, pageRel, root, pages, assets }]],
+        extraRemark: remarkPlugins,
+        // The URL rewriter runs last so links emitted by plugin rehype plugins
+        // are relativized like every other in-document link.
+        extraRehype: [
+          ...rehypePlugins,
+          [rehypeSiteUrls, { filePath: file, pageRel, root, pages, assets }],
+        ],
       });
       if (MERMAID_FENCE.test(content)) {
         usedMermaid = true;
