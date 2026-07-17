@@ -32,7 +32,8 @@
     "closeWorkspace": "Cerrar espacio de trabajo",
     "outline": "Esquema",
     "resize": "Cambiar tamaño de la barra lateral",
-    "resizeBacklinks": "Cambiar tamaño de los enlaces entrantes"
+    "resizeBacklinks": "Cambiar tamaño de los enlaces entrantes",
+    "indexIncomplete": "Índice incompleto"
   },
   "backlinks": {
     "heading": "Enlaces entrantes"

@@ -5,7 +5,9 @@
   "notice": {
     "nestedWorkspace": "This folder sits inside another Glyph workspace (\"{{path}}\"). Nested workspaces aren't supported.",
     "nestedUnderGit": "This folder is inside the git repository at \"{{path}}\". Glyph treats one repository as one workspace, so some workspace features may act on the whole repository.",
-    "saveFailed": "Couldn't save \"{{name}}\". Your changes are still here; edit again to retry."
+    "saveFailed": "Couldn't save \"{{name}}\". Your changes are still here; edit again to retry.",
+    "indexIncompleteFiles": "The workspace index is incomplete: only the first {{limit}} documents were indexed, so the file list, graph, backlinks, and wikilinks may be missing results.",
+    "indexIncompleteDepth": "The workspace index is incomplete: folders nested deeper than {{limit}} levels were not indexed, so the file list, graph, backlinks, and wikilinks may be missing results."
   },
   "confirmDelete": {
     "message": "Delete \"{{name}}\"? This can't be undone.",

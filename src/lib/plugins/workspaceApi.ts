@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { FileScan } from "@/lib/workspaceScan";
 import type { WorkspaceApi } from "./types";
 import { resolveInsideRoot } from "./workspacePath";
 
@@ -30,7 +31,8 @@ export function createWorkspaceApi(
     },
     async listFiles() {
       const root = requireRoot();
-      return invoke<string[]>("list_markdown_files", { path: root });
+      const scan = await invoke<FileScan>("list_markdown_files", { path: root });
+      return scan.files;
     },
   };
 }

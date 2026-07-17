@@ -4,9 +4,8 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 use tauri::State;
-use walkdir::WalkDir;
 
-use super::walk::{WALK_MAX_DEPTH, WALK_MAX_FILES, WALK_SKIP_DIRS};
+use super::walk::{workspace_walker, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
 use crate::grants::GrantRegistry;
 
 pub struct InitialFolder(pub Mutex<Option<String>>);
@@ -82,42 +81,46 @@ pub fn read_directory(
     Ok(entries)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileScan {
+    pub files: Vec<String>,
+    pub status: ScanStatus,
+}
+
 #[tauri::command]
 pub fn list_markdown_files(
     path: String,
     grants: State<'_, GrantRegistry>,
-) -> Result<Vec<String>, String> {
+) -> Result<FileScan, String> {
     grants.ensure_readable(&path)?;
-    list_markdown_files_capped(&path, WALK_MAX_FILES)
+    list_markdown_files_capped(&path, WALK_MAX_FILES, WALK_MAX_DEPTH)
 }
 
-/// Body of [`list_markdown_files`] with the file cap as a parameter, so the
-/// truncation branch is testable without creating `WALK_MAX_FILES` real files.
-fn list_markdown_files_capped(path: &str, max_files: usize) -> Result<Vec<String>, String> {
+/// Body of [`list_markdown_files`] with the caps as parameters, so the
+/// truncation branches are testable without creating `WALK_MAX_FILES` real
+/// files or a `WALK_MAX_DEPTH`-deep tree.
+fn list_markdown_files_capped(
+    path: &str,
+    max_files: usize,
+    max_depth: usize,
+) -> Result<FileScan, String> {
     let root = Path::new(path);
     if !root.is_dir() {
         return Err(format!("Not a directory: {path}"));
     }
 
-    let walker = WalkDir::new(root)
-        .max_depth(WALK_MAX_DEPTH)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|e| {
-            // Skip hidden entries and known noisy directories
-            let name = e.file_name().to_string_lossy();
-            if name.starts_with('.') && e.depth() > 0 {
-                return false;
+    let mut files: Vec<String> = Vec::new();
+    let mut status = ScanStatus::complete();
+    for entry in workspace_walker(root, max_depth) {
+        if entry.file_type().is_dir() {
+            // A directory yielded at the depth cap is not descended into, so
+            // anything below it is missing from the index.
+            if entry.depth() >= max_depth {
+                status = ScanStatus::depth_limit(max_depth);
             }
-            if e.file_type().is_dir() && WALK_SKIP_DIRS.contains(&name.as_ref()) {
-                return false;
-            }
-            true
-        });
-
-    let mut results: Vec<String> = Vec::new();
-    let mut truncated = false;
-    for entry in walker.flatten() {
+            continue;
+        }
         if !entry.file_type().is_file() {
             continue;
         }
@@ -125,20 +128,14 @@ fn list_markdown_files_capped(path: &str, max_files: usize) -> Result<Vec<String
         if !crate::is_supported_file(p) {
             continue;
         }
-        if results.len() >= max_files {
-            truncated = true;
+        if files.len() >= max_files {
+            status = ScanStatus::file_limit(max_files);
             break;
         }
-        results.push(p.to_string_lossy().to_string());
+        files.push(p.to_string_lossy().to_string());
     }
 
-    if truncated {
-        eprintln!(
-            "list_markdown_files: workspace at {path} exceeds {max_files} files; results truncated"
-        );
-    }
-
-    Ok(results)
+    Ok(FileScan { files, status })
 }
 
 #[cfg(test)]
@@ -313,11 +310,13 @@ mod tests {
         fs::write(dir.join("nested/image.png"), b"x").unwrap();
 
         let app = app_with_workspace(&dir);
-        let mut result = list_markdown_files(
+        let scan = list_markdown_files(
             dir.to_string_lossy().to_string(),
             app.state::<GrantRegistry>(),
         )
         .unwrap();
+        assert_eq!(scan.status, ScanStatus::complete());
+        let mut result = scan.files;
         result.sort();
         let names: Vec<String> = result
             .iter()
@@ -353,7 +352,8 @@ mod tests {
             dir.to_string_lossy().to_string(),
             app.state::<GrantRegistry>(),
         )
-        .unwrap();
+        .unwrap()
+        .files;
         let names: Vec<String> = result
             .iter()
             .map(|p| {
@@ -370,14 +370,54 @@ mod tests {
     }
 
     #[test]
-    fn list_markdown_files_truncates_at_the_cap() {
+    fn list_markdown_files_truncates_at_the_file_cap() {
         let dir = unique_tmp("list_md_cap");
         for i in 0..3 {
             fs::write(dir.join(format!("f{i}.md")), "x").unwrap();
         }
 
-        let result = list_markdown_files_capped(&dir.to_string_lossy(), 2).unwrap();
-        assert_eq!(result.len(), 2);
+        let scan = list_markdown_files_capped(&dir.to_string_lossy(), 2, WALK_MAX_DEPTH).unwrap();
+        assert_eq!(scan.files.len(), 2);
+        assert_eq!(scan.status, ScanStatus::file_limit(2));
+        // Sorted traversal makes the covered subset deterministic.
+        assert!(scan.files[0].ends_with("f0.md"));
+        assert!(scan.files[1].ends_with("f1.md"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn list_markdown_files_reports_the_depth_cap() {
+        let dir = unique_tmp("list_md_depth");
+        fs::write(dir.join("top.md"), "x").unwrap();
+        fs::create_dir_all(dir.join("nested/deep")).unwrap();
+        fs::write(dir.join("nested/deep/hidden.md"), "x").unwrap();
+
+        let scan = list_markdown_files_capped(&dir.to_string_lossy(), WALK_MAX_FILES, 1).unwrap();
+        let names: Vec<&str> = scan
+            .files
+            .iter()
+            .filter_map(|p| Path::new(p).file_name())
+            .filter_map(|n| n.to_str())
+            .collect();
+        assert_eq!(names, vec!["top.md"]);
+        assert_eq!(scan.status, ScanStatus::depth_limit(1));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn list_markdown_files_complete_scan_reports_no_truncation() {
+        let dir = unique_tmp("list_md_complete");
+        fs::write(dir.join("a.md"), "x").unwrap();
+        fs::create_dir_all(dir.join("nested")).unwrap();
+        fs::write(dir.join("nested/b.md"), "x").unwrap();
+
+        let scan =
+            list_markdown_files_capped(&dir.to_string_lossy(), WALK_MAX_FILES, WALK_MAX_DEPTH)
+                .unwrap();
+        assert_eq!(scan.files.len(), 2);
+        assert_eq!(scan.status, ScanStatus::complete());
 
         let _ = fs::remove_dir_all(&dir);
     }

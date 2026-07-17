@@ -5,7 +5,9 @@
   "notice": {
     "nestedWorkspace": "Dieser Ordner liegt innerhalb eines anderen Glyph-Arbeitsbereichs (\"{{path}}\"). Verschachtelte Arbeitsbereiche werden nicht unterstützt.",
     "nestedUnderGit": "Dieser Ordner liegt innerhalb des Git-Repositorys unter \"{{path}}\". Glyph behandelt ein Repository als einen Arbeitsbereich, daher können einige Arbeitsbereich-Funktionen auf das gesamte Repository wirken.",
-    "saveFailed": "\"{{name}}\" konnte nicht gespeichert werden. Deine Änderungen sind noch vorhanden; bearbeite erneut, um es noch einmal zu versuchen."
+    "saveFailed": "\"{{name}}\" konnte nicht gespeichert werden. Deine Änderungen sind noch vorhanden; bearbeite erneut, um es noch einmal zu versuchen.",
+    "indexIncompleteFiles": "Der Arbeitsbereich-Index ist unvollständig: Nur die ersten {{limit}} Dokumente wurden indiziert, daher können Dateiliste, Graph, Rückverweise und Wikilinks unvollständig sein.",
+    "indexIncompleteDepth": "Der Arbeitsbereich-Index ist unvollständig: Ordner mit mehr als {{limit}} Verschachtelungsebenen wurden nicht indiziert, daher können Dateiliste, Graph, Rückverweise und Wikilinks unvollständig sein."
   },
   "confirmDelete": {
     "message": "\"{{name}}\" löschen? Das kann nicht rückgängig gemacht werden.",

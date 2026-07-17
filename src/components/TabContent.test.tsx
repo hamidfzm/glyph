@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { FileTab, GraphTab } from "@/hooks/useTabs";
 import type { EditorMode } from "@/lib/settings";
+import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 import { TabContent } from "./TabContent";
 
 vi.mock("./editor/lazyEditor", () => ({
@@ -170,6 +171,7 @@ function buildContext(over: Partial<TabsContextValue>): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    indexStatus: COMPLETE_INDEX_STATUS,
     workspace: null,
     openFile: vi.fn(),
     openFolder: vi.fn(),

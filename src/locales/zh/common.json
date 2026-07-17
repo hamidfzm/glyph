@@ -32,7 +32,8 @@
     "closeWorkspace": "关闭工作区",
     "outline": "大纲",
     "resize": "调整侧边栏大小",
-    "resizeBacklinks": "调整反向链接大小"
+    "resizeBacklinks": "调整反向链接大小",
+    "indexIncomplete": "索引不完整"
   },
   "backlinks": {
     "heading": "反向链接"

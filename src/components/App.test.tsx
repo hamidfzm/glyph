@@ -275,9 +275,15 @@ describe("App", () => {
         case "read_directory":
           return Promise.resolve([{ name: "a.md", path: "/workspace/a.md", isDirectory: false }]);
         case "list_markdown_files":
-          return Promise.resolve(["/workspace/a.md"]);
+          return Promise.resolve({
+            files: ["/workspace/a.md"],
+            status: { truncated: false, reason: null, limit: null },
+          });
         case "scan_wikilinks":
-          return Promise.resolve([]);
+          return Promise.resolve({
+            refs: [],
+            status: { truncated: false, reason: null, limit: null },
+          });
         case "workspace_resolve":
           return Promise.resolve({
             selected: String(args?.selected ?? ""),

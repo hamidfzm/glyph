@@ -4,6 +4,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickFiles, pickFolder } from "@/lib/pickers";
+import { COMPLETE_SCAN } from "@/lib/workspaceScan";
 import { useTabs } from "./useTabs";
 
 vi.mock("@/lib/pickers", () => ({
@@ -12,6 +13,10 @@ vi.mock("@/lib/pickers", () => ({
 }));
 
 type Invoker = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
+
+// The workspace scan commands return items plus a truncation status (#436).
+const fileScan = (files: string[]) => ({ files, status: COMPLETE_SCAN });
+const wikilinkScan = (refs: unknown[]) => ({ refs, status: COMPLETE_SCAN });
 
 function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): Invoker {
   return async (cmd, args) => {
@@ -42,9 +47,9 @@ function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): Invoker 
       case "read_directory":
         return [];
       case "list_markdown_files":
-        return [];
+        return fileScan([]);
       case "scan_wikilinks":
-        return [];
+        return wikilinkScan([]);
       case "workspace_resolve":
         // Default: a plain, non-nested folder that's always adoptable.
         return {
@@ -2198,7 +2203,7 @@ describe("useTabs dialog and events", () => {
   it("auto-opens the first markdown file when opening a folder with no remembered file", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+        list_markdown_files: async () => fileScan(["/p/ws/a.md", "/p/ws/b.md"]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -2216,7 +2221,7 @@ describe("useTabs dialog and events", () => {
   it("auto-opens the remembered file when it still exists in the workspace", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+        list_markdown_files: async () => fileScan(["/p/ws/a.md", "/p/ws/b.md"]),
         workspace_get_last_file: async () => "/p/ws/b.md",
       }) as typeof invoke,
     );
@@ -2235,7 +2240,7 @@ describe("useTabs dialog and events", () => {
   it("falls back to the first file when the remembered file no longer exists", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
+        list_markdown_files: async () => fileScan(["/p/ws/a.md", "/p/ws/b.md"]),
         workspace_get_last_file: async () => "/p/ws/gone.md",
       }) as typeof invoke,
     );
@@ -2253,7 +2258,7 @@ describe("useTabs dialog and events", () => {
   it("falls back to the first file when the remembered-file lookup fails", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => ["/p/ws/a.md"],
+        list_markdown_files: async () => fileScan(["/p/ws/a.md"]),
         workspace_get_last_file: async () => {
           throw new Error("state.json unreadable");
         },
@@ -2273,7 +2278,7 @@ describe("useTabs dialog and events", () => {
   it("does not auto-open anything when the workspace has no markdown files", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => [],
+        list_markdown_files: async () => fileScan([]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -2288,7 +2293,7 @@ describe("useTabs dialog and events", () => {
   it("skips the auto-open probe when autoLoad is false", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => ["/p/ws/a.md"],
+        list_markdown_files: async () => fileScan(["/p/ws/a.md"]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -2309,7 +2314,7 @@ describe("useTabs dialog and events", () => {
     // but the guard exists for defence in depth.
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => ["/p/ws/notes.txt"],
+        list_markdown_files: async () => fileScan(["/p/ws/notes.txt"]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -2327,7 +2332,7 @@ describe("useTabs dialog and events", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => ["/p/ws/a.md"],
+        list_markdown_files: async () => fileScan(["/p/ws/a.md"]),
         read_file: async () => {
           throw new Error("vanished");
         },
@@ -2471,7 +2476,7 @@ describe("useTabs workspace lifecycle", () => {
   it("opening another folder replaces the workspace and closes its tabs", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => [],
+        list_markdown_files: async () => fileScan([]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -2529,10 +2534,9 @@ describe("useTabs workspace lifecycle", () => {
   it("closeWorkspace closes member tabs and the graph but keeps loose tabs", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => ["/p/ws/note.md"],
-        scan_wikilinks: async () => [
-          { source: "/p/ws/note.md", target: "x", line: 1, snippet: "[[x]]" },
-        ],
+        list_markdown_files: async () => fileScan(["/p/ws/note.md"]),
+        scan_wikilinks: async () =>
+          wikilinkScan([{ source: "/p/ws/note.md", target: "x", line: 1, snippet: "[[x]]" }]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -2600,7 +2604,7 @@ describe("useTabs workspace lifecycle", () => {
   });
 
   it("drops a stale wikilink scan that lands after the workspace was replaced", async () => {
-    let releaseStale: ((refs: unknown[]) => void) | null = null;
+    let releaseStale: ((scan: unknown) => void) | null = null;
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         scan_wikilinks: (_cmd, args) => {
@@ -2609,7 +2613,7 @@ describe("useTabs workspace lifecycle", () => {
               releaseStale = resolve;
             });
           }
-          return Promise.resolve([]);
+          return Promise.resolve(wikilinkScan([]));
         },
       }) as typeof invoke,
     );
@@ -2624,7 +2628,9 @@ describe("useTabs workspace lifecycle", () => {
     });
 
     await act(async () => {
-      releaseStale?.([{ source: "/p/a/x.md", target: "y", line: 1, snippet: "[[y]]" }]);
+      releaseStale?.(
+        wikilinkScan([{ source: "/p/a/x.md", target: "y", line: 1, snippet: "[[y]]" }]),
+      );
       await Promise.resolve();
     });
 
@@ -2719,7 +2725,7 @@ describe("useTabs workspace teardown races", () => {
 
   it("a directory-changed refresh finishing after closeWorkspace is dropped", async () => {
     const dirChanged = captureListener("directory-changed");
-    let release: ((files: string[]) => void) | null = null;
+    let release: ((scan: unknown) => void) | null = null;
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: (_cmd, args) => {
@@ -2728,7 +2734,7 @@ describe("useTabs workspace teardown races", () => {
               release = resolve;
             });
           }
-          return Promise.resolve([]);
+          return Promise.resolve(fileScan([]));
         },
       }) as typeof invoke,
     );
@@ -2739,7 +2745,7 @@ describe("useTabs workspace teardown races", () => {
       // awaiting the open; the event's refresh then gets a fresh deferred.
       const opening = result.current.openFolder("/p/ws");
       await new Promise((r) => setTimeout(r, 0));
-      release?.([]);
+      release?.(fileScan([]));
       release = null;
       await opening;
     });
@@ -2749,7 +2755,7 @@ describe("useTabs workspace teardown races", () => {
       // Past the refresh debounce: the handler is now parked on the index read.
       await new Promise((r) => setTimeout(r, 350));
       result.current.closeWorkspace();
-      release?.([]);
+      release?.(fileScan([]));
       await new Promise((r) => setTimeout(r, 0));
     });
 
@@ -3502,7 +3508,7 @@ describe("useTabs directory-changed events", () => {
       makeInvoker({
         read_directory: async (_cmd, args) =>
           String(args?.path ?? "") === "/p/ws" ? rootEntries : [],
-        list_markdown_files: async () => files,
+        list_markdown_files: async () => fileScan(files),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -3622,10 +3628,9 @@ describe("useTabs graph tabs", () => {
   it("a graph tab exposes the window-level workspace index", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => ["/p/ws/a.md", "/p/ws/b.md"],
-        scan_wikilinks: async () => [
-          { source: "/p/ws/a.md", target: "b", line: 1, snippet: "[[b]]" },
-        ],
+        list_markdown_files: async () => fileScan(["/p/ws/a.md", "/p/ws/b.md"]),
+        scan_wikilinks: async () =>
+          wikilinkScan([{ source: "/p/ws/a.md", target: "b", line: 1, snippet: "[[b]]" }]),
       }) as typeof invoke,
     );
     const result = await openWorkspace();
@@ -3637,6 +3642,113 @@ describe("useTabs graph tabs", () => {
     expect(result.current.wikilinkRefs).toEqual([
       { source: "/p/ws/a.md", target: "b", line: 1, snippet: "[[b]]" },
     ]);
+  });
+
+  it("a truncated file scan sets indexStatus and fires a persistent notice", async () => {
+    const truncated = { truncated: true, reason: "fileLimit", limit: 2 };
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ({ files: ["/p/ws/a.md"], status: truncated }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    await waitFor(() => expect(result.current.indexStatus.files).toEqual(truncated));
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      { key: "notice.indexIncompleteFiles", values: { limit: "2" } },
+      { persistent: true },
+    );
+  });
+
+  it("a depth-truncated wikilink scan surfaces the depth notice", async () => {
+    const truncated = { truncated: true, reason: "depthLimit", limit: 32 };
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        scan_wikilinks: async () => ({ refs: [], status: truncated }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    await waitFor(() => expect(result.current.indexStatus.wikilinks).toEqual(truncated));
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      { key: "notice.indexIncompleteDepth", values: { limit: "32" } },
+      { persistent: true },
+    );
+  });
+
+  it("fires the notice once when both indexes report the same truncation", async () => {
+    const truncated = { truncated: true, reason: "fileLimit", limit: 10 };
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ({ files: [], status: truncated }),
+        scan_wikilinks: async () => ({ refs: [], status: truncated }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    await waitFor(() => expect(result.current.indexStatus.wikilinks).toEqual(truncated));
+    expect(onWorkspaceNotice).toHaveBeenCalledTimes(1);
+  });
+
+  it("switching workspaces re-fires the notice for the new workspace", async () => {
+    const truncated = { truncated: true, reason: "fileLimit", limit: 10 };
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ({ files: [], status: truncated }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/a");
+    });
+    await waitFor(() => expect(onWorkspaceNotice).toHaveBeenCalledTimes(1));
+
+    // The second workspace truncates identically; the reset on switch means it
+    // still notifies.
+    await act(async () => {
+      await result.current.openFolder("/p/b");
+    });
+    await waitFor(() => expect(onWorkspaceNotice).toHaveBeenCalledTimes(2));
+  });
+
+  it("closeWorkspace resets the index status to complete", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ({
+          files: ["/p/ws/a.md"],
+          status: { truncated: true, reason: "fileLimit", limit: 1 },
+        }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => expect(result.current.indexStatus.files.truncated).toBe(true));
+
+    await act(async () => {
+      await result.current.closeWorkspace();
+    });
+    expect(result.current.indexStatus.files.truncated).toBe(false);
+    expect(result.current.indexStatus.wikilinks.truncated).toBe(false);
   });
 
   it("closeWorkspace closes the graph tab", async () => {
