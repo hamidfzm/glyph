@@ -58,21 +58,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      - name: Cache apt packages
-        uses: actions/cache@v5
-        with:
-          path: ~/apt-cache/*.deb
-          key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
       - name: Install Linux dependencies
         timeout-minutes: 8
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          mkdir -p ~/apt-cache/partial
-          sudo apt-get update
-          sudo apt-get -o Dir::Cache::archives="$HOME/apt-cache" \
-            -o Binary::apt::APT::Keep-Downloaded-Packages=true \
-            install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+        uses: ./.github/actions/linux-deps
+        with:
+          cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Install cargo-nextest
@@ -114,21 +104,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      - name: Cache apt packages
-        uses: actions/cache@v5
-        with:
-          path: ~/apt-cache/*.deb
-          key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
       - name: Install Linux dependencies
         timeout-minutes: 8
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          mkdir -p ~/apt-cache/partial
-          sudo apt-get update
-          sudo apt-get -o Dir::Cache::archives="$HOME/apt-cache" \
-            -o Binary::apt::APT::Keep-Downloaded-Packages=true \
-            install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+        uses: ./.github/actions/linux-deps
+        with:
+          cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
       - name: Add Clippy problem matcher
         run: echo "::add-matcher::.github/matchers/rust.json"
       - name: Run Clippy
