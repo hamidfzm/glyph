@@ -32,19 +32,19 @@ jobs:
             exit 1
           fi
 
-  # All three caller jobs are displayed as "CI" so every check context
-  # reads "CI / <job>" (e.g. "CI / Lint"), like the pre-split names.
+  # The PR box renders these as "CI / <caller name> / <job>", e.g.
+  # "CI / Checks / Lint"; required contexts are "<caller name> / <job>".
   checks:
-    name: CI
+    name: Checks
     uses: ./.github/workflows/ci-checks.yml
 
   tests:
-    name: CI
+    name: Tests
     uses: ./.github/workflows/ci-tests.yml
     secrets: inherit
 
   build:
-    name: CI
+    name: Build
     # Gate builds on the fast checks only (~40s); tests run in parallel
     # with the builds instead of in front of them.
     needs: checks
