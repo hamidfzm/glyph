@@ -32,6 +32,8 @@ export function resetCliExportRunner(): void {
 export function useCliExport(): void {
   const plugins = usePluginsOptional();
   const pluginThemes = useRegistryEntries(plugins?.siteThemes ?? null);
+  const remarkPlugins = useRegistryEntries(plugins?.remarkPlugins ?? null);
+  const rehypePlugins = useRegistryEntries(plugins?.rehypePlugins ?? null);
   // Without a provider there are no plugins to wait for.
   const pluginsReady = plugins === null || plugins.initialLoadDone;
 
@@ -54,6 +56,8 @@ export function useCliExport(): void {
           root: request.root,
           outDir: request.outDir,
           themes: pluginThemes,
+          remarkPlugins,
+          rehypePlugins,
         });
         await invoke("finish_cli_export", {
           code: 0,
@@ -66,5 +70,5 @@ export function useCliExport(): void {
         });
       }
     })();
-  }, [pluginsReady, waitExpired, pluginThemes]);
+  }, [pluginsReady, waitExpired, pluginThemes, remarkPlugins, rehypePlugins]);
 }

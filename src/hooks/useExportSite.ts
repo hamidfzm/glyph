@@ -24,9 +24,11 @@ export interface ExportSiteHandlers {
  */
 export function useExportSite(root: string | undefined): ExportSiteHandlers {
   const [siteProgress, setSiteProgress] = useState<SiteExportProgress | null>(null);
-  // Plugin-contributed site themes; empty without a PluginsProvider (tests).
+  // Plugin contributions; empty without a PluginsProvider (tests).
   const plugins = usePluginsOptional();
   const pluginThemes = useRegistryEntries(plugins?.siteThemes ?? null);
+  const remarkPlugins = useRegistryEntries(plugins?.remarkPlugins ?? null);
+  const rehypePlugins = useRegistryEntries(plugins?.rehypePlugins ?? null);
 
   const exportWebsite = useCallback(async () => {
     if (!root) return;
@@ -47,6 +49,9 @@ export function useExportSite(root: string | undefined): ExportSiteHandlers {
         root,
         outDir,
         themes: pluginThemes,
+        // Plugin markdown syntax renders in the export as it does in the viewer.
+        remarkPlugins,
+        rehypePlugins,
         onProgress: (done, total) => setSiteProgress({ done, total }),
       });
     } catch (err) {
@@ -54,7 +59,7 @@ export function useExportSite(root: string | undefined): ExportSiteHandlers {
     } finally {
       setSiteProgress(null);
     }
-  }, [root, pluginThemes]);
+  }, [root, pluginThemes, remarkPlugins, rehypePlugins]);
 
   return useMemo(() => ({ exportWebsite, siteProgress }), [exportWebsite, siteProgress]);
 }
