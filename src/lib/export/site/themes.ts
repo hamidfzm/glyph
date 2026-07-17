@@ -24,7 +24,6 @@ body { padding: 0 0 4rem; }
 }
 .glyph-site-header a:hover { color: var(--color-accent, #0969da); }
 .glyph-site { padding: 0 1.5rem; }
-/* The header is sticky and opaque; pin the columns below it, not under it. */
 .glyph-site-nav, .glyph-site-outline { top: 4rem; max-height: calc(100vh - 5rem); }
 #glyph-theme-toggle { top: 0.55rem; right: 1rem; width: 2rem; height: 2rem; box-shadow: none; z-index: 200; }
 .glyph-site-nav { font-size: 0.875rem; padding-right: 0.5rem; }
