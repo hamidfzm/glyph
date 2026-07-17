@@ -28,6 +28,15 @@ describe("satisfiesApiVersion", () => {
     expect(satisfiesApiVersion("0.16.5", "0.17.0", "0.16.0")).toBe(true);
   });
 
+  it("older plugins keep loading on any later host while the floor holds", () => {
+    // The forward guarantee: additive API bumps (and app releases, which the
+    // gate never sees) do not evict plugins; only a floor move does.
+    expect(satisfiesApiVersion("0.16.0", "0.18.0", "0.16.0")).toBe(true);
+    expect(satisfiesApiVersion("0.16.0", "0.20.0", "0.16.0")).toBe(true);
+    expect(satisfiesApiVersion("0.17.0", "0.20.0", "0.16.0")).toBe(true);
+    expect(satisfiesApiVersion("0.16.0", "0.20.0", "0.17.0")).toBe(false); // floor moved past it
+  });
+
   it("rejects declared versions outside the window while major is 0", () => {
     expect(satisfiesApiVersion("0.15.9", "0.17.0", "0.16.0")).toBe(false); // below the floor
     expect(satisfiesApiVersion("0.18.0", "0.17.0", "0.16.0")).toBe(false); // newer than the host
