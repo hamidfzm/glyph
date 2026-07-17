@@ -96,7 +96,7 @@
     }
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.3",
+    "@biomejs/biome": "^2.5.4",
     "@codecov/vite-plugin": "^2.0.1",
     "@sentry/vite-plugin": "^5.4.0",
     "@tailwindcss/vite": "^4",

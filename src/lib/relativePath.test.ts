@@ -59,14 +59,12 @@ describe("normalizeRelativePath", () => {
 });
 
 describe("isRelativeLocalHref", () => {
-  it.each([
-    "other.md",
-    "./a.md",
-    "../b/c.md",
-    "sub/d.canvas",
-  ])("treats %s as a relative local href", (href) => {
-    expect(isRelativeLocalHref(href)).toBe(true);
-  });
+  it.each(["other.md", "./a.md", "../b/c.md", "sub/d.canvas"])(
+    "treats %s as a relative local href",
+    (href) => {
+      expect(isRelativeLocalHref(href)).toBe(true);
+    },
+  );
 
   it.each([
     "#heading",
@@ -105,14 +103,12 @@ describe("resolveWorkspacePath", () => {
 });
 
 describe("isOpenableRelativeHref", () => {
-  it.each([
-    "./sibling.md",
-    "../notes.markdown",
-    "../diagrams/board.canvas",
-    "sub/note.md#heading",
-  ])("opens %s in the workspace", (href) => {
-    expect(isOpenableRelativeHref(href)).toBe(true);
-  });
+  it.each(["./sibling.md", "../notes.markdown", "../diagrams/board.canvas", "sub/note.md#heading"])(
+    "opens %s in the workspace",
+    (href) => {
+      expect(isOpenableRelativeHref(href)).toBe(true);
+    },
+  );
 
   it.each([
     "./image.png", // relative, but not a markdown/canvas target
