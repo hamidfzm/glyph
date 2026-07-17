@@ -12,6 +12,15 @@ describe("builtin site themes", () => {
     expect(github.css).toContain("var(--color-accent, #0969da)");
   });
 
+  it("pins the nav and outline below the sticky header", () => {
+    const github = resolveSiteTheme("github");
+    // The base layout sticks the columns at 1rem; the theme's opaque header
+    // would cover their top rows without a matching offset.
+    expect(github.css).toContain(
+      ".glyph-site-nav, .glyph-site-outline { top: 4rem; max-height: calc(100vh - 5rem); }",
+    );
+  });
+
   it("keeps the pre-theme look available as plain", () => {
     expect(resolveSiteTheme("plain").css).toBe("");
   });
