@@ -39,7 +39,7 @@ export default defineConfig(async ({ mode }) => ({
         ]
       : []),
   ],
-  // Expose package.json version to the app (Sentry release id).
+  // Expose package.json version to the app (Sentry release id, plugin API ceiling).
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
