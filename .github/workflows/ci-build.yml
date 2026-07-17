@@ -48,23 +48,13 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ github.event_name == 'pull_request' && matrix.targets_pr || matrix.targets_full }}
-      - name: Cache apt packages
-        if: startsWith(matrix.platform, 'ubuntu')
-        uses: actions/cache@v5
-        with:
-          path: ~/apt-cache/*.deb
-          key: apt-webkit-${{ matrix.platform }}-v1
       - name: Install Linux dependencies
         if: startsWith(matrix.platform, 'ubuntu')
         timeout-minutes: 8
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          mkdir -p ~/apt-cache/partial
-          sudo apt-get update
-          sudo apt-get -o Dir::Cache::archives="$HOME/apt-cache" \
-            -o Binary::apt::APT::Keep-Downloaded-Packages=true \
-            install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils xvfb
+        uses: ./.github/actions/linux-deps
+        with:
+          cache-key: apt-webkit-${{ matrix.platform }}-v1
+          extra-packages: xdg-utils xvfb
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
