@@ -150,7 +150,9 @@ export const markdownSanitizeSchema = {
   clobber: [],
   // Disallowed elements are unwrapped by default; foreignObject carries
   // arbitrary HTML children that must not leak into the svg as stray DOM.
-  strip: [...(defaultSchema.strip ?? []), "foreignObject"],
+  // rehype's default strip is the static ["script"], listed inline (like `div`
+  // below) so there's no dead `?? []` fallback branch.
+  strip: ["script", "foreignObject"],
   tagNames: [
     ...(defaultSchema.tagNames ?? []),
     "kbd",

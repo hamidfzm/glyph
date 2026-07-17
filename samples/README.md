@@ -317,6 +317,13 @@ You can also embed SVG straight into the markdown. It renders inline from a sani
   <text x="190" y="68" text-anchor="middle" font-family="sans-serif" font-size="24" font-weight="700" fill="#ffffff">Inline SVG</text>
 </svg>
 
+Inline SVG can also embed raster or vector icons through `<image>`. A workspace-relative `href` resolves against this file's folder (through the asset protocol), and `http(s)` URLs load directly; every other scheme is dropped by the sanitiser.
+
+<svg viewBox="0 0 160 80" width="160" height="80" role="img" aria-label="Inline SVG with embedded image icons">
+  <image href="./diagram.svg" x="0" y="0" width="72" height="72" preserveAspectRatio="xMidYMid meet" />
+  <image href="https://raw.githubusercontent.com/hamidfzm/glyph/main/src-tauri/icons/128x128.png" x="88" y="8" width="56" height="56" preserveAspectRatio="xMidYMid meet" />
+</svg>
+
 ## Links
 
 - [Glyph on GitHub](https://github.com/hamidfzm/glyph) — External links open in your system browser
