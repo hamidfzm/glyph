@@ -80,6 +80,18 @@ describe("migrateLegacySettings", () => {
     expect(migrated.editor).toEqual({});
   });
 
+  it("discards a corrupt non-array spellCheckLanguages so the default applies", () => {
+    const migrated = migrateLegacySettings({ editor: { spellCheckLanguages: "en" } });
+    expect(migrated.editor).toEqual({});
+  });
+
+  it("repairs a corrupt value from the legacy key when both are present", () => {
+    const migrated = migrateLegacySettings({
+      editor: { spellCheckLanguage: "de", spellCheckLanguages: "en" },
+    });
+    expect(migrated.editor).toEqual({ spellCheckLanguages: ["de"] });
+  });
+
   it("applies the sidebar and spell-check migrations together", () => {
     const migrated = migrateLegacySettings({
       layout: { sidebarWidth: 200 },

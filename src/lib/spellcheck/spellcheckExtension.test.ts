@@ -29,6 +29,7 @@ const { getSpeller, makeSpeller, spellers } = vi.hoisted(() => {
 });
 vi.mock("./speller", () => ({ getSpeller }));
 
+import { scriptCoverage } from "./scripts";
 import {
   buildMisspellings,
   buildSpellcheck,
@@ -40,8 +41,10 @@ import {
 const SALAM = "سلام";
 const GHALAT = "غلط";
 
-const enChecker: Checker = { scripts: ["latin"], correct: (word) => word === "world" };
-const faChecker: Checker = { scripts: ["arabic"], correct: (word) => word === SALAM };
+const latinOnly = scriptCoverage(["Latn"]);
+const arabicOnly = scriptCoverage(["Arab"]);
+const enChecker: Checker = { covers: latinOnly, correct: (word) => word === "world" };
+const faChecker: Checker = { covers: arabicOnly, correct: (word) => word === SALAM };
 
 function stateOf(doc: string): EditorState {
   return EditorState.create({ doc, extensions: [markdown({ base: markdownLanguage })] });
@@ -74,7 +77,7 @@ describe("buildMisspellings", () => {
   });
 
   it("accepts a word when any covering checker accepts it", () => {
-    const second: Checker = { scripts: ["latin"], correct: (word) => word === "helo" };
+    const second: Checker = { covers: latinOnly, correct: (word) => word === "helo" };
     expect(markedWords("helo world", [enChecker, second])).toEqual([]);
   });
 
@@ -121,13 +124,22 @@ function menuItems(): string[] {
   );
 }
 
+// Suggestion entries only, excluding the Ignore/Add action buttons.
+function suggestionItems(): string[] {
+  return [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      ".spellcheck-menu-item:not(.spellcheck-menu-action)",
+    ),
+  ].map((item) => item.textContent ?? "");
+}
+
 describe("buildSpellcheck (editor integration)", () => {
   beforeEach(() => {
     clearIgnoredWords();
     spellers.clear();
     spellers.set("en", makeSpeller(["world"], { helo: ["hello", "hell"] }));
     spellers.set("fa", makeSpeller([SALAM], { [GHALAT]: [SALAM] }));
-    // A second Latin-script dictionary (unknown codes default to latin).
+    // A second Latin-script dictionary (unresolvable codes default to Latn).
     spellers.set("xx", makeSpeller(["helo"], { helo: ["hell", "halo"] }));
     getSpeller.mockClear();
   });
@@ -190,7 +202,18 @@ describe("buildSpellcheck (editor integration)", () => {
 
     rightClickAt(view, 2);
     // en offers [hello, hell], xx offers [hell, halo]; merged keeps first-seen order.
-    expect(menuItems().slice(0, 3)).toEqual(["hello", "hell", "halo"]);
+    expect(suggestionItems()).toEqual(["hello", "hell", "halo"]);
+    view.destroy();
+  });
+
+  it("caps merged suggestions at seven", async () => {
+    spellers.set("en", makeSpeller([], { helo: ["a", "b", "c", "d", "e"] }));
+    spellers.set("xx", makeSpeller([], { helo: ["f", "g", "h", "i"] }));
+    const view = mount("helo", ["en", "xx"]);
+    await flushMicrotasks();
+
+    rightClickAt(view, 2);
+    expect(suggestionItems()).toEqual(["a", "b", "c", "d", "e", "f", "g"]);
     view.destroy();
   });
 
@@ -258,6 +281,56 @@ describe("buildSpellcheck (editor integration)", () => {
     rightClickAt(view, 2);
     expect(document.querySelector(".spellcheck-menu")).toBeNull();
     view.destroy();
+  });
+
+  it("a dictionary resolving after its configuration was replaced does not paint", async () => {
+    let releaseSlow!: (speller: FakeSpeller) => void;
+    const slow = new Promise<FakeSpeller>((resolve) => {
+      releaseSlow = resolve;
+    });
+    getSpeller.mockImplementation((language: string) => {
+      if (language === "slow") return slow;
+      const speller = spellers.get(language);
+      return speller ? Promise.resolve(speller) : new Promise<FakeSpeller>(() => {});
+    });
+
+    const compartment = new Compartment();
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "helo world",
+        extensions: [
+          markdown({ base: markdownLanguage }),
+          compartment.of(buildSpellcheck(["slow"], labels)),
+        ],
+      }),
+      parent,
+    });
+    await flushMicrotasks();
+
+    // Switch to English while the slow dictionary is still loading, then let
+    // it resolve with a speller that would flag "world".
+    view.dispatch({ effects: compartment.reconfigure(buildSpellcheck(["en"], labels)) });
+    await flushMicrotasks();
+    releaseSlow(makeSpeller([], { world: ["word"] }));
+    await flushMicrotasks();
+
+    rightClickAt(view, 7); // inside "world", correct per the live English dictionary
+    expect(document.querySelector(".spellcheck-menu")).toBeNull();
+    view.destroy();
+  });
+
+  it("a menu action issued after the configuration is torn down is a no-op", async () => {
+    const view = mount("helo world", ["en"]);
+    await flushMicrotasks();
+    rightClickAt(view, 2);
+    expect(document.querySelector(".spellcheck-menu")).not.toBeNull();
+
+    // The menu outlives the editor teardown; its Ignore must not repaint.
+    view.destroy();
+    document.querySelectorAll<HTMLButtonElement>(".spellcheck-menu-action")[0].click();
+    expect(document.querySelector(".spellcheck-menu")).toBeNull();
   });
 
   it("a right-click on a stale mark right after a language-set change is a no-op", async () => {

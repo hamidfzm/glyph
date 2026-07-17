@@ -201,8 +201,9 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
     }
   }, [content]);
 
-  // Toggle or switch spell-check language in place, keeping editor state intact.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: spellcheckCompartment is a stable ref and spellcheckExtension only reads refs
+  // Toggle spell check or change the enabled language set in place, keeping
+  // editor state intact.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: spellcheckCompartment is a stable ref, and spellCheckLanguages is deliberately keyed by its joined value (settings saves churn the array identity)
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;

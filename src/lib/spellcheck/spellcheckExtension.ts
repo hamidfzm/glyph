@@ -1,14 +1,13 @@
 import { type Extension, RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, ViewPlugin } from "@codemirror/view";
 import { getDictionarySource } from "./dictionarySources";
-import { scriptsForLanguage, type WordScript, wordScript } from "./scripts";
+import { scriptCoverage, scriptsForLanguage } from "./scripts";
 import { getSpeller, type Speller } from "./speller";
-import { openSuggestionMenu, type SuggestionMenuLabels } from "./suggestionMenu";
+import { mergedSuggestions, openSuggestionMenu, type SuggestionMenuLabels } from "./suggestionMenu";
 import { scanWords } from "./wordScanner";
 
 // Rescan is debounced by this much after edits/scroll so typing stays smooth.
 const SCAN_DEBOUNCE_MS = 300;
-const MAX_SUGGESTIONS = 7;
 
 const setMisspellings = StateEffect.define<DecorationSet>();
 
@@ -26,7 +25,7 @@ const misspelledMark = Decoration.mark({ class: "cm-misspelled" });
 
 /** One enabled dictionary, reduced to what the underline pass needs. */
 export interface Checker {
-  scripts: readonly WordScript[];
+  covers(word: string): boolean;
   correct(word: string): boolean;
 }
 
@@ -44,8 +43,7 @@ export function buildMisspellings(
   for (const range of ranges) {
     for (const token of scanWords(state, range.from, range.to)) {
       if (ignored.has(token.word.toLowerCase())) continue;
-      const script = wordScript(token.word);
-      const covering = checkers.filter((checker) => checker.scripts.includes(script));
+      const covering = checkers.filter((checker) => checker.covers(token.word));
       if (covering.length === 0) continue;
       if (covering.some((checker) => checker.correct(token.word))) continue;
       builder.add(token.from, token.to, misspelledMark);
@@ -65,18 +63,18 @@ export function clearIgnoredWords(): void {
 
 // A contribution may declare its script coverage; otherwise infer it from the
 // language code.
-function scriptsFor(language: string): readonly WordScript[] {
-  return getDictionarySource(language)?.scripts ?? scriptsForLanguage(language);
+function coverageFor(language: string): (word: string) => boolean {
+  return scriptCoverage(getDictionarySource(language)?.scripts ?? scriptsForLanguage(language));
 }
 
-interface LoadedDictionary {
-  scripts: readonly WordScript[];
+interface LoadedDictionary extends Checker {
   speller: Speller;
 }
 
 class SpellcheckPlugin {
   loaded: LoadedDictionary[] = [];
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private destroyed = false;
 
   constructor(view: EditorView, languages: readonly string[]) {
     // Clear leftovers from a previous configuration even if nothing loads
@@ -86,7 +84,14 @@ class SpellcheckPlugin {
     for (const language of languages) {
       getSpeller(language)
         .then((speller) => {
-          this.loaded.push({ scripts: scriptsFor(language), speller });
+          // A load resolving after this configuration was replaced must not
+          // paint stale marks onto the live view.
+          if (this.destroyed) return;
+          this.loaded.push({
+            covers: coverageFor(language),
+            correct: (word) => speller.correct(word),
+            speller,
+          });
           this.rescan(view);
         })
         .catch(() => {});
@@ -105,24 +110,22 @@ class SpellcheckPlugin {
   }
 
   checkersFor(word: string): LoadedDictionary[] {
-    const script = wordScript(word);
-    return this.loaded.filter((dictionary) => dictionary.scripts.includes(script));
+    return this.loaded.filter((dictionary) => dictionary.covers(word));
   }
 
   rescan(view: EditorView): void {
+    if (this.destroyed) return;
     const decorations = buildMisspellings(
       view.state,
       view.visibleRanges,
-      this.loaded.map((dictionary) => ({
-        scripts: dictionary.scripts,
-        correct: (word: string) => dictionary.speller.correct(word),
-      })),
+      this.loaded,
       ignoredWords,
     );
     view.dispatch({ effects: setMisspellings.of(decorations) });
   }
 
   destroy(): void {
+    this.destroyed = true;
     clearTimeout(this.timer);
   }
 }
@@ -140,21 +143,6 @@ function misspelledWordAt(
     return false;
   });
   return found;
-}
-
-// Merge suggestions across dictionaries, first-seen order, deduplicated.
-function mergedSuggestions(covering: readonly LoadedDictionary[], word: string): string[] {
-  const seen = new Set<string>();
-  const merged: string[] = [];
-  for (const dictionary of covering) {
-    for (const suggestion of dictionary.speller.suggest(word)) {
-      if (seen.has(suggestion)) continue;
-      seen.add(suggestion);
-      merged.push(suggestion);
-      if (merged.length === MAX_SUGGESTIONS) return merged;
-    }
-  }
-  return merged;
 }
 
 // Enable spell checking for a set of languages. Wrapped in a Compartment by
@@ -184,7 +172,10 @@ export function buildSpellcheck(
       openSuggestionMenu({
         x: event.clientX,
         y: event.clientY,
-        suggestions: mergedSuggestions(covering, word.text),
+        suggestions: mergedSuggestions(
+          covering.map((dictionary) => dictionary.speller),
+          word.text,
+        ),
         labels: getLabels(),
         onPick: (replacement) => {
           view.dispatch({ changes: { from: word.from, to: word.to, insert: replacement } });

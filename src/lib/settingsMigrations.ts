@@ -25,12 +25,18 @@ function migrateSidebarWidth(saved: Record<string, unknown>): Record<string, unk
  */
 function migrateSpellCheckLanguages(saved: Record<string, unknown>): Record<string, unknown> {
   const editor = saved.editor;
-  if (!isSafePlainObject(editor) || typeof editor.spellCheckLanguage !== "string") return saved;
+  if (!isSafePlainObject(editor)) return saved;
+  const legacy = editor.spellCheckLanguage;
+  const corrupt = "spellCheckLanguages" in editor && !Array.isArray(editor.spellCheckLanguages);
+  if (typeof legacy !== "string" && !corrupt) return saved;
   const { spellCheckLanguage, ...rest } = editor;
+  // The consumers assume an array, so a corrupt store value is discarded here
+  // (the default then applies) rather than crashing the editor on mount.
+  if (corrupt) delete rest.spellCheckLanguages;
   // A blank legacy value (hand-edited store) is dropped rather than seeded, so
   // the default set applies instead of a useless [""] entry.
-  if (!Array.isArray(rest.spellCheckLanguages) && spellCheckLanguage.length > 0) {
-    rest.spellCheckLanguages = [spellCheckLanguage];
+  if (!Array.isArray(rest.spellCheckLanguages) && typeof legacy === "string" && legacy.length > 0) {
+    rest.spellCheckLanguages = [legacy];
   }
   return { ...saved, editor: rest };
 }
