@@ -95,6 +95,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const storeRef = useRef<Store | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<Settings | null>(null);
+  const writeChainRef = useRef<Promise<boolean>>(Promise.resolve(true));
 
   // Load settings from store on mount
   useEffect(() => {
@@ -151,23 +152,29 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // Write the latest pending settings to the store and disk. Secrets never
   // reach the store: every write persists a stripped copy, so settings.json
   // cannot contain API keys. On failure the pending value is kept so a later
-  // flush can retry.
-  const writePending = useCallback(async () => {
-    const store = storeRef.current;
-    const pending = pendingRef.current;
-    if (!store || !pending) return true;
-    try {
-      await store.set(STORE_KEY, stripSecrets(pending));
-      // save() awaits the disk write; autoSave's own debounce could still be
-      // pending when the process exits.
-      await store.save();
-      // A newer update may have arrived while awaiting; keep it pending.
-      if (pendingRef.current === pending) pendingRef.current = null;
-      return true;
-    } catch (err) {
-      console.error("Failed to save settings:", err);
-      return false;
-    }
+  // flush can retry. Writes are serialized through writeChainRef so a flush
+  // cannot overlap an in-flight debounced write and land the older value last.
+  const writePending = useCallback(() => {
+    const write = async () => {
+      const store = storeRef.current;
+      const pending = pendingRef.current;
+      if (!store || !pending) return true;
+      try {
+        await store.set(STORE_KEY, stripSecrets(pending));
+        // save() awaits the disk write; the store plugin's own autosave
+        // debounce could still be pending when the process exits.
+        await store.save();
+        // A newer update may have arrived while awaiting; keep it pending.
+        if (pendingRef.current === pending) pendingRef.current = null;
+        return true;
+      } catch (err) {
+        console.error("Failed to save settings:", err);
+        return false;
+      }
+    };
+    const next = writeChainRef.current.then(write);
+    writeChainRef.current = next;
+    return next;
   }, []);
 
   // Save settings to store (debounced).
