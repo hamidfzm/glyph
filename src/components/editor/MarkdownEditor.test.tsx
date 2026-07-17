@@ -76,7 +76,13 @@ describe("MarkdownEditor spell-check wiring", () => {
   it("reconfigures when the enabled language set changes", () => {
     const tree = (settings: Settings) => (
       <SettingsContext.Provider
-        value={{ settings, updateSettings: vi.fn(), resetSettings: vi.fn(), loaded: true }}
+        value={{
+          settings,
+          updateSettings: vi.fn(),
+          resetSettings: vi.fn(),
+          flushSettings: async () => true,
+          loaded: true,
+        }}
       >
         <MarkdownEditor content="helo world" onChange={() => {}} />
       </SettingsContext.Provider>
