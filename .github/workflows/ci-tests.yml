@@ -5,7 +5,7 @@ on:
 
 jobs:
   test-frontend:
-    name: Test (Frontend)
+    name: Frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -47,7 +47,7 @@ jobs:
           use_pypi: true
 
   test-rust:
-    name: Test (Rust)
+    name: Rust
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

@@ -32,16 +32,21 @@ jobs:
             exit 1
           fi
 
+  # The PR box renders these as "CI / <caller name> / <job>", e.g.
+  # "CI / Checks / Lint"; required contexts are "<caller name> / <job>".
   checks:
-    uses: ./.github/workflows/checks.yml
+    name: Checks
+    uses: ./.github/workflows/ci-checks.yml
 
   tests:
-    uses: ./.github/workflows/tests.yml
+    name: Tests
+    uses: ./.github/workflows/ci-tests.yml
     secrets: inherit
 
   build:
+    name: Build
     # Gate builds on the fast checks only (~40s); tests run in parallel
     # with the builds instead of in front of them.
     needs: checks
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/ci-build.yml
     secrets: inherit
