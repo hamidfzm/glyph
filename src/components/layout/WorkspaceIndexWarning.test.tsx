@@ -37,6 +37,14 @@ describe("WorkspaceIndexWarning", () => {
     expect(status.getAttribute("title")).toContain("10000");
   });
 
+  it("falls back to a zero limit when the scan status carries none", () => {
+    renderWith({
+      files: { truncated: true, reason: "fileLimit", limit: null },
+      wikilinks: COMPLETE_SCAN,
+    });
+    expect(screen.getByRole("status").getAttribute("title")).toContain("first 0 documents");
+  });
+
   it("falls back to the wikilink scan's depth message", () => {
     renderWith({
       files: COMPLETE_SCAN,
