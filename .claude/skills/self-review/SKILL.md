@@ -26,6 +26,7 @@ Review the current diff (`git diff` + `git diff --cached`, or `git diff origin/m
    - If comment lines rival code lines in the diff, trim before pushing.
 
 4. **Reuse before writing.** Grep `src/lib/`, `src/hooks/`, and `src-tauri/src/` for an existing helper before adding one. A new predicate joins the module that owns its siblings.
+   - Tool-owned manifests stay standard: no custom fields in `package.json` or other files owned by external tooling. Derive from the standard field through an existing seam (`"pluginApi": {...}` in package.json was rejected; `PLUGIN_API_VERSION = __APP_VERSION__` via the Vite define is the accepted shape), and keep facts that only the code interprets (like a compat floor) beside their checker.
 
 5. **Right altitude.** Fix the mechanism, not a symptom: a special case layered on shared infrastructure means the fix is too shallow. Prefer gating/configuring the underlying seam once over sprinkling checks at call sites.
 
