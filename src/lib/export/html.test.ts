@@ -162,4 +162,18 @@ describe("buildHtmlDocument", () => {
     });
     expect(out).not.toContain('<nav class="glyph-site-outline">');
   });
+
+  it("emits extra head markup verbatim after the title", () => {
+    const out = buildHtmlDocument({
+      bodyHtml: "",
+      title: "t",
+      css: "",
+      dark: false,
+      headHtml: '<link rel="icon" href="favicon.ico">\n<meta property="og:title" content="t">',
+    });
+    const title = out.indexOf("</title>");
+    const icon = out.indexOf('<link rel="icon"');
+    expect(icon).toBeGreaterThan(title);
+    expect(out).toContain('<meta property="og:title" content="t">');
+  });
 });

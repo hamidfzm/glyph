@@ -21,6 +21,9 @@ export interface HtmlDocOptions {
   // Multi-page site export: per-page "On this page" outline, shown as a
   // second sticky column on wide viewports. Only honored alongside navHtml.
   outlineHtml?: string | null;
+  // Extra head markup (favicon link, social meta tags), emitted verbatim
+  // after <title>. The caller is responsible for escaping.
+  headHtml?: string;
 }
 
 // The app's base styles lock the shell to the viewport (`html, body, #root {
@@ -118,6 +121,7 @@ export function buildHtmlDocument({
   scriptHref,
   navHtml,
   outlineHtml,
+  headHtml,
 }: HtmlDocOptions): string {
   const initialClass = dark ? ' class="dark"' : "";
   const stylesheetLink = stylesheetHref
@@ -156,7 +160,7 @@ ${content}
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${escapeXml(title)}</title>
-${themeScript}${stylesheetLink}${styleBlock}
+${headHtml ? `${headHtml}\n` : ""}${themeScript}${stylesheetLink}${styleBlock}
 </head>
 <body>
 ${THEME_TOGGLE_BUTTON}

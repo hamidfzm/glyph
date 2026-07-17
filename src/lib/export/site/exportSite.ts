@@ -10,8 +10,10 @@ import { buildIndexBodyHtml } from "./indexPage";
 import { inlineMermaidSvgs } from "./mermaidInline";
 import { buildNavHtml, type SitePage } from "./nav";
 import { buildOutlineHtml } from "./outline";
+import { buildPageMetaHtml, pageDescription, pageDocumentTitle } from "./pageMeta";
 import { renderPageHtml } from "./renderPage";
 import { rehypeSiteUrls } from "./rewriteUrls";
+import { parseSiteConfig, resolveConfigAsset, robotsTxt, SITE_CONFIG_PATH } from "./siteConfig";
 import { indexSourcePriority, pageRelPath, relativeHref, relFromRoot } from "./sitePaths";
 
 export interface ExportSiteOptions {
@@ -62,6 +64,56 @@ export async function exportSite({
   if (unordered.length === 0) {
     throw new Error("The workspace contains no markdown files to export.");
   }
+
+  // Site-wide metadata: optional .glyph/site.json at the root; absence is
+  // fine, a present-but-invalid file fails the export loudly. The read error
+  // string doesn't distinguish "missing" from "unreadable" portably, so any
+  // read failure falls back to defaults; parse errors still throw.
+  const rawConfig = await invoke<string>("read_file", {
+    path: `${root}/${SITE_CONFIG_PATH}`,
+  }).catch(() => null);
+  const config = parseSiteConfig(rawConfig ?? null, basename(root));
+
+  const fileExists = (path: string) =>
+    invoke("get_file_metadata", { path }).then(
+      () => true,
+      () => false,
+    );
+  // A configured favicon/social image that doesn't exist is a config error,
+  // not a broken <link> discovered after publishing; resolveConfigAsset also
+  // clamps the path to the workspace, since the config may come from an
+  // untrusted repo. Without a config, a conventional root favicon is picked
+  // up automatically.
+  let faviconAbs: string | null = null;
+  let faviconRel: string | null = null;
+  if (config.favicon !== null) {
+    const resolved = resolveConfigAsset(root, config.favicon, "favicon");
+    if (!(await fileExists(resolved.abs))) {
+      throw new Error(`${SITE_CONFIG_PATH}: favicon not found in the workspace: ${config.favicon}`);
+    }
+    faviconAbs = resolved.abs;
+    faviconRel = resolved.siteRel;
+  } else {
+    for (const candidate of ["favicon.ico", "favicon.png", "favicon.svg"]) {
+      if (await fileExists(`${root}/${candidate}`)) {
+        faviconAbs = `${root}/${candidate}`;
+        faviconRel = candidate;
+        break;
+      }
+    }
+  }
+  let socialImageAbs: string | null = null;
+  let socialImageRel: string | null = null;
+  if (config.socialImage !== null) {
+    const resolved = resolveConfigAsset(root, config.socialImage, "socialImage");
+    if (!(await fileExists(resolved.abs))) {
+      throw new Error(
+        `${SITE_CONFIG_PATH}: socialImage not found in the workspace: ${config.socialImage}`,
+      );
+    }
+    socialImageAbs = resolved.abs;
+    socialImageRel = resolved.siteRel;
+  }
   // One root file owns the site's index.html: a root index.* first, a root
   // README.* as fallback. It goes first so nothing can collide with
   // index.html before it claims the name; a README that lost the promotion
@@ -97,13 +149,19 @@ export async function exportSite({
     sitePages.push({ rel, title: deriveExportMeta(file, content).title });
   }
   const hasIndex = sitePages.some((p) => p.rel === "index.html");
-  if (!hasIndex) sitePages.push({ rel: "index.html", title: basename(root) });
+  if (!hasIndex) sitePages.push({ rel: "index.html", title: config.title });
 
   const total = files.length + (hasIndex ? 0 : 1);
   onProgress?.(0, total);
 
   const dark = document.documentElement.classList.contains("dark");
   const assets = new Map<string, string>();
+  // The favicon and social image ship with the site, mirroring their
+  // workspace location; the shared asset-copy pass below picks them up.
+  if (faviconAbs !== null && faviconRel !== null) assets.set(faviconAbs, faviconRel);
+  if (socialImageAbs !== null && socialImageRel !== null) {
+    assets.set(socialImageAbs, socialImageRel);
+  }
   const madeDirs = new Set<string>();
   const ensureDir = async (rel: string) => {
     const dir = siteDir(rel);
@@ -112,10 +170,16 @@ export async function exportSite({
     await invoke("create_dir_all", { path: dir === "" ? outDir : outPath(outDir, dir) });
   };
 
-  const writePage = async (rel: string, bodyHtml: string, title: string) => {
+  const writePage = async (
+    rel: string,
+    bodyHtml: string,
+    title: string,
+    description: string | null,
+  ) => {
+    const isIndex = rel === "index.html";
     const html = buildHtmlDocument({
       bodyHtml,
-      title,
+      title: pageDocumentTitle(title, config.title, isIndex),
       css: "",
       dark,
       // Pages share one stylesheet and one theme script (all pages carry the
@@ -124,6 +188,16 @@ export async function exportSite({
       scriptHref: relativeHref(rel, "site.js"),
       navHtml: buildNavHtml(sitePages, rel),
       outlineHtml: buildOutlineHtml(bodyHtml),
+      headHtml: buildPageMetaHtml({
+        siteTitle: config.title,
+        pageTitle: title,
+        isIndex,
+        description,
+        pageRel: rel,
+        baseUrl: config.baseUrl,
+        faviconRel,
+        socialImageRel,
+      }),
     });
     await ensureDir(rel);
     await invoke("write_file", { path: outPath(outDir, rel), content: html });
@@ -144,13 +218,23 @@ export async function exportSite({
         usedMermaid = true;
         body = await inlineMermaidSvgs(body);
       }
-      await writePage(pageRel, body, deriveExportMeta(file, content).title);
+      await writePage(
+        pageRel,
+        body,
+        deriveExportMeta(file, content).title,
+        pageDescription(content, config.description),
+      );
       done++;
       onProgress?.(done, total);
     }
 
     if (!hasIndex) {
-      await writePage("index.html", buildIndexBodyHtml(basename(root), sitePages), basename(root));
+      await writePage(
+        "index.html",
+        buildIndexBodyHtml(config.title, sitePages),
+        config.title,
+        pageDescription("", config.description),
+      );
       done++;
       onProgress?.(done, total);
     }
@@ -177,6 +261,12 @@ export async function exportSite({
       content: `${collectStyles()}\n${siteChromeCss()}`,
     });
     await invoke("write_file", { path: outPath(outDir, "site.js"), content: siteChromeScript() });
+    if (config.robots !== null) {
+      await invoke("write_file", {
+        path: outPath(outDir, "robots.txt"),
+        content: robotsTxt(config.robots),
+      });
+    }
   } finally {
     if (usedMermaid) await restoreMermaidTheme(dark);
   }

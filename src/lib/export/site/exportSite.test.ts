@@ -32,6 +32,10 @@ function mockFs(files: Record<string, string>): FakeFs {
       case "copy_file":
         fs.copies.push({ src: a.src, dest: a.dest });
         return Promise.resolve(undefined);
+      case "get_file_metadata":
+        return a.path in files
+          ? Promise.resolve({ name: "", path: a.path, size: 1, modified: 0 })
+          : Promise.reject(new Error("not found"));
       default:
         return Promise.reject(new Error(`unexpected command ${cmd}`));
     }
@@ -176,6 +180,110 @@ describe("exportSite", () => {
     expect(short).not.toContain('<nav class="glyph-site-outline"');
   });
 
+  it("emits default site metadata without a config file", async () => {
+    const fs = mockFs({ "/ws/README.md": "# Home", "/ws/guide/intro.md": "# Intro" });
+    await exportSite({ root: "/ws", outDir: "/out" });
+    const intro = fs.writes.get("/out/guide/intro.html") ?? "";
+    // Site title defaults to the workspace folder name.
+    expect(intro).toContain("<title>intro · ws</title>");
+    expect(intro).toContain('<meta property="og:site_name" content="ws">');
+    expect(intro).toContain('<meta property="og:type" content="article">');
+    const index = fs.writes.get("/out/index.html") ?? "";
+    expect(index).toContain("<title>ws</title>");
+    expect(index).toContain('<meta property="og:type" content="website">');
+    // No favicon, no robots.txt, no absolute URLs without configuration.
+    expect(intro).not.toContain('rel="icon"');
+    expect(intro).not.toContain("og:url");
+    expect(fs.writes.has("/out/robots.txt")).toBe(false);
+  });
+
+  it("applies .glyph/site.json: titles, favicon, social tags, robots", async () => {
+    const fs = mockFs({
+      "/ws/README.md": "---\ndescription: The front page\n---\n\n# Home",
+      "/ws/.glyph/site.json": JSON.stringify({
+        title: "Field Notes",
+        description: "A site of notes",
+        baseUrl: "https://example.com/notes/",
+        favicon: "assets/logo.png",
+        robots: "none",
+      }),
+      "/ws/assets/logo.png": "<binary>",
+    });
+    await exportSite({ root: "/ws", outDir: "/out" });
+    const index = fs.writes.get("/out/index.html") ?? "";
+    expect(index).toContain("<title>Field Notes</title>");
+    expect(index).toContain('<meta property="og:site_name" content="Field Notes">');
+    expect(index).toContain('<meta name="description" content="The front page">');
+    expect(index).toContain('<meta property="og:url" content="https://example.com/notes/">');
+    expect(index).toContain('<link rel="icon" type="image/png" href="assets/logo.png">');
+    expect(fs.copies).toContainEqual({ src: "/ws/assets/logo.png", dest: "/out/assets/logo.png" });
+    expect(fs.writes.get("/out/robots.txt")).toBe("User-agent: *\nDisallow: /\n");
+  });
+
+  it("copies the social image and emits absolute og:image under the base URL", async () => {
+    const fs = mockFs({
+      "/ws/notes.md": "# N",
+      "/ws/.glyph/site.json": JSON.stringify({
+        baseUrl: "https://example.com/",
+        socialImage: "assets/card.png",
+      }),
+      "/ws/assets/card.png": "<binary>",
+    });
+    await exportSite({ root: "/ws", outDir: "/out" });
+    expect(fs.copies).toContainEqual({ src: "/ws/assets/card.png", dest: "/out/assets/card.png" });
+    const page = fs.writes.get("/out/notes.html") ?? "";
+    expect(page).toContain(
+      '<meta property="og:image" content="https://example.com/assets/card.png">',
+    );
+    expect(page).toContain('<meta name="twitter:card" content="summary_large_image">');
+  });
+
+  it("fails loudly on a missing configured social image", async () => {
+    mockFs({
+      "/ws/notes.md": "# N",
+      "/ws/.glyph/site.json": JSON.stringify({
+        baseUrl: "https://example.com/",
+        socialImage: "gone.png",
+      }),
+    });
+    await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(
+      /socialImage not found in the workspace: gone\.png/,
+    );
+  });
+
+  it("auto-detects a conventional root favicon", async () => {
+    const fs = mockFs({ "/ws/notes.md": "# N", "/ws/favicon.ico": "<binary>" });
+    await exportSite({ root: "/ws", outDir: "/out" });
+    const page = fs.writes.get("/out/notes.html") ?? "";
+    expect(page).toContain('<link rel="icon" type="image/x-icon" href="favicon.ico">');
+    expect(fs.copies).toContainEqual({ src: "/ws/favicon.ico", dest: "/out/favicon.ico" });
+  });
+
+  it("fails loudly on a malformed config or a missing configured favicon", async () => {
+    mockFs({ "/ws/notes.md": "# N", "/ws/.glyph/site.json": "{nope" });
+    await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(/not valid JSON/);
+
+    mockFs({
+      "/ws/notes.md": "# N",
+      "/ws/.glyph/site.json": JSON.stringify({ favicon: "gone.png" }),
+    });
+    await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(
+      /favicon not found in the workspace: gone\.png/,
+    );
+  });
+
+  it("rejects a config favicon that traverses out of the workspace", async () => {
+    const fs = mockFs({
+      "/ws/notes.md": "# N",
+      "/ws/.glyph/site.json": JSON.stringify({ favicon: "../outside/secret.png" }),
+      "/outside/secret.png": "<binary>",
+    });
+    await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(
+      /"favicon" must stay inside the workspace/,
+    );
+    expect(fs.copies).toEqual([]);
+  });
+
   it("tolerates a missing asset instead of failing the export", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const fs = mockFs({ "/ws/notes.md": "![gone](./missing.png) ![ok](./ok.png)" });
@@ -202,13 +310,19 @@ describe("exportSite", () => {
 
   it("propagates write failures", async () => {
     mockFs({ "/ws/a.md": "# A" });
-    vi.mocked(invoke).mockImplementation((cmd: string) =>
-      cmd === "list_markdown_files"
-        ? Promise.resolve(["/ws/a.md"])
-        : cmd === "read_file"
+    vi.mocked(invoke).mockImplementation((cmd, args) => {
+      const a = (args ?? {}) as Record<string, string>;
+      if (cmd === "list_markdown_files") return Promise.resolve(["/ws/a.md"]);
+      // Only the markdown file exists; the config probe rejects like a real
+      // missing file, which the exporter treats as "no config".
+      if (cmd === "read_file") {
+        return a.path === "/ws/a.md"
           ? Promise.resolve("# A")
-          : Promise.reject(new Error("disk full")),
-    );
+          : Promise.reject(new Error("not found"));
+      }
+      if (cmd === "get_file_metadata") return Promise.reject(new Error("not found"));
+      return Promise.reject(new Error("disk full"));
+    });
     await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow("disk full");
   });
 });
