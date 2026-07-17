@@ -1,6 +1,6 @@
 import { PLUGIN_API_VERSION } from "../apiVersion";
 import type { Disposer } from "../disposer";
-import type { ExporterContribution, InstalledPlugin } from "../types";
+import type { ExporterContribution, InstalledPlugin, SiteThemeContribution } from "../types";
 import { buildWorkerBootstrap } from "./bootstrap";
 import type { HostMessage, WorkerMessage } from "./protocol";
 
@@ -20,6 +20,7 @@ export interface SandboxHostApi {
   registerCommand(command: { id: string; title: string; run: () => void }): void;
   addStyles(css: string): void;
   registerExporter(exporter: ExporterContribution): void;
+  registerSiteTheme(theme: SiteThemeContribution): void;
   notify(message: string): void;
   registerTranslations(locale: string, namespace: string, resources: Record<string, unknown>): void;
   settingsSet(key: string, value: unknown): void;
@@ -98,6 +99,9 @@ export function startSandbox(
           break;
         case "settings-set":
           api.settingsSet(data.key, data.value);
+          break;
+        case "register-site-theme":
+          api.registerSiteTheme({ id: data.id, label: data.label, css: data.css });
           break;
         case "register-exporter":
           api.registerExporter({

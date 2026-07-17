@@ -1,8 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import { resetCliExportRequestCache } from "@/lib/cliExport";
-import { resetCliExportRunner, useCliExport } from "./useCliExport";
+import { createRegistry } from "@/lib/plugins/registry";
+import { CLI_PLUGIN_WAIT_MS, resetCliExportRunner, useCliExport } from "./useCliExport";
 
 const exportSiteMock = vi.fn();
 vi.mock("@/lib/export/site/exportSite", () => ({
@@ -20,7 +23,51 @@ beforeEach(() => {
   resetCliExportRunner();
 });
 
+// Only the fields useCliExport reads; the full provider surface is
+// irrelevant to the readiness gate under test.
+function pluginsStub(initialLoadDone: boolean): PluginsContextValue {
+  return { siteThemes: createRegistry(), initialLoadDone } as unknown as PluginsContextValue;
+}
+
+function providerWrapper(initialLoadDone: boolean) {
+  return ({ children }: { children: ReactNode }) =>
+    createElement(PluginsContext.Provider, { value: pluginsStub(initialLoadDone) }, children);
+}
+
 describe("useCliExport", () => {
+  it("waits for the plugin startup load, then exports", async () => {
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      cmd === "get_cli_export"
+        ? Promise.resolve({ root: "/ws", outDir: "/out" })
+        : Promise.resolve(undefined),
+    );
+    const { unmount } = renderHook(() => useCliExport(), { wrapper: providerWrapper(false) });
+    // Not ready: the export must not even probe for a request.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(invokeCalls("get_cli_export")).toHaveLength(0);
+    unmount();
+
+    renderHook(() => useCliExport(), { wrapper: providerWrapper(true) });
+    await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
+    expect(exportSiteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives up waiting after the timeout so a hung plugin cannot hang CI", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(invoke).mockImplementation((cmd: string) =>
+        cmd === "get_cli_export"
+          ? Promise.resolve({ root: "/ws", outDir: "/out" })
+          : Promise.resolve(undefined),
+      );
+      renderHook(() => useCliExport(), { wrapper: providerWrapper(false) });
+      await vi.advanceTimersByTimeAsync(CLI_PLUGIN_WAIT_MS + 1);
+      await vi.waitFor(() => expect(exportSiteMock).toHaveBeenCalledTimes(1));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("is a no-op on interactive launches", async () => {
     vi.mocked(invoke).mockResolvedValue(null);
     renderHook(() => useCliExport());
@@ -37,7 +84,7 @@ describe("useCliExport", () => {
     );
     renderHook(() => useCliExport());
     await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
-    expect(exportSiteMock).toHaveBeenCalledWith({ root: "/ws", outDir: "/out" });
+    expect(exportSiteMock).toHaveBeenCalledWith({ root: "/ws", outDir: "/out", themes: [] });
     expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
       code: 0,
       message: "Exported 3 pages and 1 assets to /out",

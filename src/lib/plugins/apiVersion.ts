@@ -5,11 +5,10 @@
  *
  * The contract is unstable until it ships as 1.0.0: while the major is 0,
  * plugins must match this version exactly (ranges grant nothing), and it is
- * bumped by hand whenever the API decisions change. 0.16.0 marks the current
- * decision set, aligned with the app release that first ships the plugin
- * system as stable.
+ * bumped by hand whenever the API decisions change. 0.17.0 adds the website
+ * export theme contribution (`exporters.registerSiteTheme`).
  */
-export const PLUGIN_API_VERSION = "0.16.0";
+export const PLUGIN_API_VERSION = "0.17.0";
 
 interface SemVer {
   major: number;

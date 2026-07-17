@@ -10,6 +10,7 @@ import type {
   MarkdownPlugin,
   SettingsPanelContribution,
   SidebarPanelContribution,
+  SiteThemeContribution,
   StatusBarItemContribution,
   StyleContribution,
 } from "@/lib/plugins/types";
@@ -251,6 +252,8 @@ describe("useAppCommands", () => {
       setEnabled: vi.fn(async () => {}),
       uninstall: vi.fn(async () => {}),
       setWorkspaceRoot: vi.fn(),
+      siteThemes: createRegistry<SiteThemeContribution>(),
+      initialLoadDone: true,
     };
     const wrapper = ({ children }: { children: ReactNode }) =>
       createElement(PluginsContext.Provider, { value }, children);
@@ -291,6 +294,7 @@ describe("useAppCommands", () => {
       settingsPanels: createRegistry<SettingsPanelContribution>(),
       styles: createRegistry<StyleContribution>(),
       exporters,
+      siteThemes: createRegistry<SiteThemeContribution>(),
       installed: [],
       disabled: [],
       loaded: [],
@@ -301,6 +305,7 @@ describe("useAppCommands", () => {
       setEnabled: vi.fn(async () => {}),
       uninstall: vi.fn(async () => {}),
       setWorkspaceRoot: vi.fn(),
+      initialLoadDone: true,
     };
     const wrapper = ({ children }: { children: ReactNode }) =>
       createElement(PluginsContext.Provider, { value }, children);

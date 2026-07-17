@@ -6,6 +6,7 @@
 import { isPathInside } from "@/lib/paths";
 import { normalizeRelativePath } from "@/lib/relativePath";
 import { relFromRoot } from "./sitePaths";
+import { DEFAULT_SITE_THEME_ID } from "./themes";
 
 // Lives in the .glyph/ workspace-configuration folder (the walker skips
 // dot-directories, so it never shows up as content). Paths inside the file
@@ -25,6 +26,8 @@ export interface SiteConfig {
   socialImage: string | null;
   /** robots.txt directive: allow all, disallow all, or don't write one. */
   robots: "all" | "none" | null;
+  /** Site theme id: a built-in ("github", "plain") or plugin-contributed. */
+  theme: string;
 }
 
 function optionalString(obj: Record<string, unknown>, key: string): string | null {
@@ -48,6 +51,7 @@ export function parseSiteConfig(raw: string | null, workspaceName: string): Site
     favicon: null,
     socialImage: null,
     robots: null,
+    theme: DEFAULT_SITE_THEME_ID,
   };
   if (raw == null) return defaults;
 
@@ -55,10 +59,7 @@ export function parseSiteConfig(raw: string | null, workspaceName: string): Site
   try {
     data = JSON.parse(raw);
   } catch (err) {
-    throw new Error(
-      // JSON.parse only throws Error subclasses; String keeps this total.
-      `${SITE_CONFIG_PATH} is not valid JSON: ${String(err)}`,
-    );
+    throw new Error(`${SITE_CONFIG_PATH} is not valid JSON: ${(err as Error).message}`);
   }
   if (data === null || typeof data !== "object" || Array.isArray(data)) {
     throw new Error(`${SITE_CONFIG_PATH} must contain a JSON object`);
@@ -97,6 +98,8 @@ export function parseSiteConfig(raw: string | null, workspaceName: string): Site
     favicon: optionalString(obj, "favicon"),
     socialImage,
     robots: robots ?? null,
+    // Existence is validated by the exporter, which knows the plugin themes.
+    theme: optionalString(obj, "theme") ?? defaults.theme,
   };
 }
 

@@ -1,5 +1,6 @@
 {
   "title": "Glyph Samples",
   "description": "Every rendering feature Glyph supports, exported as a static website.",
-  "robots": "all"
+  "robots": "all",
+  "theme": "github"
 }

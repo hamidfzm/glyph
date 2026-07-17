@@ -180,6 +180,52 @@ describe("exportSite", () => {
     expect(short).not.toContain('<nav class="glyph-site-outline"');
   });
 
+  it("applies the github theme by default: header on every page, themed style.css", async () => {
+    const fs = mockFs({ "/ws/README.md": "# Home", "/ws/guide/intro.md": "# Intro" });
+    await exportSite({ root: "/ws", outDir: "/out" });
+    const intro = fs.writes.get("/out/guide/intro.html") ?? "";
+    expect(intro).toContain(
+      '<header class="glyph-site-header"><a href="../index.html">ws</a></header>',
+    );
+    const index = fs.writes.get("/out/index.html") ?? "";
+    expect(index).toContain('<a href="index.html">ws</a>');
+    const css = fs.writes.get("/out/style.css") ?? "";
+    expect(css).toContain('content: "On this page"');
+    expect(css).toContain(".glyph-site-header {");
+  });
+
+  it("restores the minimal look with theme plain", async () => {
+    const fs = mockFs({
+      "/ws/notes.md": "# N",
+      "/ws/.glyph/site.json": JSON.stringify({ theme: "plain" }),
+    });
+    await exportSite({ root: "/ws", outDir: "/out" });
+    expect(fs.writes.get("/out/style.css")).not.toContain('content: "On this page"');
+  });
+
+  it("applies a plugin-contributed theme by id", async () => {
+    const fs = mockFs({
+      "/ws/notes.md": "# N",
+      "/ws/.glyph/site.json": JSON.stringify({ theme: "solarized" }),
+    });
+    await exportSite({
+      root: "/ws",
+      outDir: "/out",
+      themes: [{ id: "solarized", label: "Solarized", css: "body { background: #fdf6e3; }" }],
+    });
+    expect(fs.writes.get("/out/style.css")).toContain("background: #fdf6e3");
+  });
+
+  it("fails loudly on an unknown theme id, listing the available ones", async () => {
+    mockFs({
+      "/ws/notes.md": "# N",
+      "/ws/.glyph/site.json": JSON.stringify({ theme: "neon" }),
+    });
+    await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(
+      /Unknown site theme "neon"\. Available themes: github, plain/,
+    );
+  });
+
   it("emits default site metadata without a config file", async () => {
     const fs = mockFs({ "/ws/README.md": "# Home", "/ws/guide/intro.md": "# Intro" });
     await exportSite({ root: "/ws", outDir: "/out" });

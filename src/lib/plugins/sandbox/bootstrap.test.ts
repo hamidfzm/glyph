@@ -51,6 +51,7 @@ const fullPlugin = `export default {
     ctx.registerTranslations("en", "ns", { k: "v" });
     ctx.settings.set("who", "world");
     ctx.exporters.register({ id: "e1", label: "Upper", extension: "txt", build: async (html) => html.toUpperCase() });
+    ctx.exporters.registerSiteTheme({ id: "t1", label: "Theme", css: "body { background: beige }" });
   },
 }`;
 
@@ -73,6 +74,12 @@ describe("worker bootstrap", () => {
       id: "e1",
       label: "Upper",
       extension: "txt",
+    });
+    expect(w.posted).toContainEqual({
+      type: "register-site-theme",
+      id: "t1",
+      label: "Theme",
+      css: "body { background: beige }",
     });
   });
 

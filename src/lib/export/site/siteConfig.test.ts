@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { parseSiteConfig, resolveConfigAsset, robotsTxt } from "./siteConfig";
 
 describe("parseSiteConfig", () => {
+  it("keeps an already-trailing slash on baseUrl unchanged", () => {
+    const config = parseSiteConfig(JSON.stringify({ baseUrl: "https://example.com/" }), "n");
+    expect(config.baseUrl).toBe("https://example.com/");
+  });
+
   it("defaults everything when the workspace has no config", () => {
     expect(parseSiteConfig(null, "notes")).toEqual({
       title: "notes",
@@ -10,6 +15,7 @@ describe("parseSiteConfig", () => {
       favicon: null,
       socialImage: null,
       robots: null,
+      theme: "github",
     });
   });
 
@@ -38,6 +44,12 @@ describe("parseSiteConfig", () => {
     expect(config.title).toBe("T");
     expect(config.baseUrl).toBeNull();
     expect(config.robots).toBeNull();
+    expect(config.theme).toBe("github");
+  });
+
+  it("passes a configured theme id through for the exporter to validate", () => {
+    expect(parseSiteConfig('{"theme": "solarized"}', "notes").theme).toBe("solarized");
+    expect(() => parseSiteConfig('{"theme": ""}', "notes")).toThrow(/"theme" must be/);
   });
 
   it("rejects invalid JSON with the file name in the message", () => {
