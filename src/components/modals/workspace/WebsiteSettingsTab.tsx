@@ -103,7 +103,7 @@ export function WebsiteSettingsTab({ onClose }: WebsiteSettingsTabProps) {
       // The exporter's parser is the source of truth for what is valid.
       parseSiteConfig(serialized, basename(workspaceRoot));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError((err as Error).message);
       return;
     }
     try {

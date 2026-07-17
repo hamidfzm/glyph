@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSiteConfig, resolveConfigAsset, robotsTxt } from "./siteConfig";
+import { parseSiteConfig, readSiteConfigFile, resolveConfigAsset, robotsTxt } from "./siteConfig";
 
 describe("parseSiteConfig", () => {
   it("keeps an already-trailing slash on baseUrl unchanged", () => {
@@ -107,5 +107,25 @@ describe("robotsTxt", () => {
   it("allows or disallows everything", () => {
     expect(robotsTxt("all")).toBe("User-agent: *\nAllow: /\n");
     expect(robotsTxt("none")).toBe("User-agent: *\nDisallow: /\n");
+  });
+});
+
+describe("readSiteConfigFile", () => {
+  it("returns the raw object from the workspace config", async () => {
+    const read = async () => JSON.stringify({ title: "Notes", futureKey: 1 });
+    await expect(readSiteConfigFile("/ws", read)).resolves.toEqual({
+      title: "Notes",
+      futureKey: 1,
+    });
+  });
+
+  // The settings UI starts from defaults rather than refusing to open; only
+  // the exporter fails loudly on a broken config.
+  it("collapses a missing, unparsable, or non-object file to {}", async () => {
+    await expect(
+      readSiteConfigFile("/ws", async () => Promise.reject(new Error("nope"))),
+    ).resolves.toEqual({});
+    await expect(readSiteConfigFile("/ws", async () => "not json {")).resolves.toEqual({});
+    await expect(readSiteConfigFile("/ws", async () => "[1, 2]")).resolves.toEqual({});
   });
 });
