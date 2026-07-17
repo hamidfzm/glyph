@@ -1,5 +1,5 @@
 import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
-import { PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
+import { PLUGIN_API_COMPAT_FLOOR, PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 import { createAssetsApi } from "./assetsApi";
 import { type Disposer, DisposerBag } from "./disposer";
 import { importPluginModule, type ModuleImporter } from "./loader";
@@ -202,7 +202,7 @@ export function createPluginHost(
     async load(plugin, importer) {
       if (!satisfiesApiVersion(plugin.apiVersion)) {
         throw new Error(
-          `${plugin.name} requires plugin API ${plugin.apiVersion}, but this Glyph provides ${PLUGIN_API_VERSION}`,
+          `${plugin.name} requires plugin API ${plugin.apiVersion}, but this Glyph accepts ${PLUGIN_API_COMPAT_FLOOR} through ${PLUGIN_API_VERSION}`,
         );
       }
       const generation = (loadGeneration.get(plugin.id) ?? 0) + 1;
