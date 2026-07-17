@@ -3686,6 +3686,30 @@ describe("useTabs graph tabs", () => {
     );
   });
 
+  it("falls back to a zero limit in the notice when the scan status carries none", async () => {
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ({
+          files: [],
+          status: { truncated: true, reason: "fileLimit", limit: null },
+        }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    await waitFor(() =>
+      expect(onWorkspaceNotice).toHaveBeenCalledWith(
+        { key: "notice.indexIncompleteFiles", values: { limit: "0" } },
+        { persistent: true },
+      ),
+    );
+  });
+
   it("fires the notice once when both indexes report the same truncation", async () => {
     const truncated = { truncated: true, reason: "fileLimit", limit: 10 };
     const onWorkspaceNotice = vi.fn();

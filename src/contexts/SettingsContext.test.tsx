@@ -148,6 +148,15 @@ describe("SettingsContext", () => {
     act(() => screen.getByTestId("reset").click());
     expect(screen.getByTestId("font-size").textContent).toBe("16");
   });
+
+  it("the default flushSettings resolves true without a provider", async () => {
+    render(<FlushConsumer />);
+    await act(async () => {
+      screen.getByTestId("flush").click();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("flush-result").textContent).toBe("true");
+  });
 });
 
 describe("SettingsProvider", () => {
@@ -683,6 +692,55 @@ describe("SettingsProvider", () => {
       expect(screen.getByTestId("flush-result").textContent).toBe("true");
       expect(set).not.toHaveBeenCalled();
       expect(save).not.toHaveBeenCalled();
+    });
+
+    it("keeps a newer update pending when it lands during an in-flight write", async () => {
+      let resolveSet: (() => void) | null = null;
+      const set = vi.fn(
+        () =>
+          new Promise<void>((r) => {
+            resolveSet = r;
+          }),
+      );
+      const save = vi.fn(() => Promise.resolve());
+      const get = vi.fn(() => Promise.resolve(null));
+      mockedLoad.mockResolvedValueOnce({ get, set, save } as unknown as Awaited<
+        ReturnType<typeof load>
+      >);
+      await renderFlushConsumer();
+
+      vi.useFakeTimers();
+      act(() => screen.getByTestId("update-font").click());
+      act(() => screen.getByTestId("flush").click());
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(set).toHaveBeenCalledTimes(1);
+
+      // The write for fontSize 21 is still awaiting; a newer update arrives.
+      act(() => screen.getByTestId("update-font-again").click());
+      await act(async () => {
+        resolveSet?.();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // The newer value stayed pending, so the next flush writes it.
+      await act(async () => {
+        screen.getByTestId("flush").click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(set).toHaveBeenCalledTimes(2);
+      expect(set).toHaveBeenLastCalledWith(
+        "settings",
+        expect.objectContaining({
+          appearance: expect.objectContaining({ fontSize: 22 }),
+        }),
+      );
     });
 
     it("writes a pending update on unmount instead of abandoning it", async () => {
