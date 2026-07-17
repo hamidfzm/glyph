@@ -3686,6 +3686,48 @@ describe("useTabs graph tabs", () => {
     );
   });
 
+  it("fires the notice once when both indexes report the same truncation", async () => {
+    const truncated = { truncated: true, reason: "fileLimit", limit: 10 };
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ({ files: [], status: truncated }),
+        scan_wikilinks: async () => ({ refs: [], status: truncated }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    await waitFor(() => expect(result.current.indexStatus.wikilinks).toEqual(truncated));
+    expect(onWorkspaceNotice).toHaveBeenCalledTimes(1);
+  });
+
+  it("switching workspaces re-fires the notice for the new workspace", async () => {
+    const truncated = { truncated: true, reason: "fileLimit", limit: 10 };
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => ({ files: [], status: truncated }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/a");
+    });
+    await waitFor(() => expect(onWorkspaceNotice).toHaveBeenCalledTimes(1));
+
+    // The second workspace truncates identically; the reset on switch means it
+    // still notifies.
+    await act(async () => {
+      await result.current.openFolder("/p/b");
+    });
+    await waitFor(() => expect(onWorkspaceNotice).toHaveBeenCalledTimes(2));
+  });
+
   it("closeWorkspace resets the index status to complete", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({

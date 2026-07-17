@@ -44,8 +44,6 @@ export function truncatedScan(status: WorkspaceIndexStatus): ScanStatus | null {
 }
 
 /** Translation key (workspace namespace) describing a truncated scan. */
-export function indexIncompleteKey(status: ScanStatus): string {
-  return status.reason === "depthLimit"
-    ? "notice.indexIncompleteDepth"
-    : "notice.indexIncompleteFiles";
+export function indexIncompleteKey(reason: ScanStatus["reason"]): string {
+  return reason === "depthLimit" ? "notice.indexIncompleteDepth" : "notice.indexIncompleteFiles";
 }

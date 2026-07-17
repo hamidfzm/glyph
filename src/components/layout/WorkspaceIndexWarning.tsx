@@ -19,7 +19,7 @@ export function WorkspaceIndexWarning() {
   return (
     <div
       role="status"
-      title={t(indexIncompleteKey(status), { ns: "workspace", limit: status.limit ?? 0 })}
+      title={t(indexIncompleteKey(status.reason), { ns: "workspace", limit: status.limit ?? 0 })}
       className="flex items-center gap-1.5 mt-1 px-1 py-0.5 text-xs text-[var(--color-warning,#b45309)] select-none shrink-0"
     >
       <WarningIcon />

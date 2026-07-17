@@ -340,16 +340,25 @@ export function useTabs(options: UseTabsOptions) {
   }, []);
 
   // Surface a persistent banner when a workspace index is incomplete (#436).
-  // The user can dismiss it; the sidebar keeps its own indicator. It re-shows
-  // only when the truncation state actually changes, not on every rescan.
+  // The user can dismiss it; the sidebar keeps its own indicator. Keyed on the
+  // workspace root plus the effective reason + limit: a dismissed banner
+  // re-shows only when the surfaced truncation actually changes (a rescan or
+  // the second index reporting the same one refires nothing), while switching
+  // workspaces notifies afresh even for an identical truncation.
+  const truncation = truncatedScan(indexStatus);
+  const truncationReason = truncation?.reason ?? null;
+  const truncationLimit = truncation?.limit ?? null;
+  const workspaceRoot = workspace?.root ?? null;
   useEffect(() => {
-    const status = truncatedScan(indexStatus);
-    if (!status) return;
+    if (!truncationReason || !workspaceRoot) return;
     optionsRef.current.onWorkspaceNotice(
-      { key: indexIncompleteKey(status), values: { limit: String(status.limit ?? 0) } },
+      {
+        key: indexIncompleteKey(truncationReason),
+        values: { limit: String(truncationLimit ?? 0) },
+      },
       { persistent: true },
     );
-  }, [indexStatus]);
+  }, [workspaceRoot, truncationReason, truncationLimit]);
 
   // Open a file as a document tab; if it's already open, activate its tab.
   const openFile = useCallback(
@@ -545,6 +554,9 @@ export function useTabs(options: UseTabsOptions) {
           if (!(await flushForClose(ids))) return;
           invoke("unwatch_directory", { path: previous.root }).catch(() => {});
           closeWorkspaceTabs(previous.root);
+          // Drop the outgoing workspace's scan state so the incoming one's
+          // truncation (even an identical one) notifies afresh.
+          setIndexStatus(COMPLETE_INDEX_STATUS);
         }
 
         try {
