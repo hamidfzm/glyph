@@ -36,7 +36,10 @@ describe("createWorkspaceApi", () => {
   });
 
   it("lists workspace markdown files", async () => {
-    vi.mocked(invoke).mockResolvedValue(["/ws/a.md"]);
+    vi.mocked(invoke).mockResolvedValue({
+      files: ["/ws/a.md"],
+      status: { truncated: false, reason: null, limit: null },
+    });
     const api = createWorkspaceApi(() => "/ws", ["workspace:read"]);
 
     await expect(api.listFiles()).resolves.toEqual(["/ws/a.md"]);

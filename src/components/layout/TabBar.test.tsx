@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import { activeFileOf, type FileTab, type GraphTab, type Tab } from "@/hooks/useTabs";
+import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 import { TabBar } from "./TabBar";
 
 const makeFileTab = (i: number): FileTab => ({
@@ -51,6 +52,7 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    indexStatus: COMPLETE_INDEX_STATUS,
     workspace: opts.workspace ?? null,
     openFile: vi.fn(),
     openFolder: vi.fn(),

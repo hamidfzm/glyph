@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
 import type { Workspace } from "@/hooks/useTabs";
 import type { WorkspaceSyncConfig } from "@/lib/sync";
+import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 import { useSyncConfigContext } from "./SyncConfigContext";
 import { SyncConfigProvider } from "./SyncConfigProvider";
 import { TabsContext, type TabsContextValue } from "./TabsContext";
@@ -34,6 +35,7 @@ function tabsValue(workspace: Workspace | null): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    indexStatus: COMPLETE_INDEX_STATUS,
     workspace,
     openFile: vi.fn(),
     openFolder: vi.fn(),

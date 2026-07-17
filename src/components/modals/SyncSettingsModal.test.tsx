@@ -6,6 +6,7 @@ import { SyncConfigProvider } from "@/contexts/SyncConfigProvider";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { Workspace } from "@/hooks/useTabs";
 import type { WorkspaceSyncConfig } from "@/lib/sync";
+import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 import {
   commitSaveConfig,
   type FormState,
@@ -41,6 +42,7 @@ function tabsValue(workspace: Workspace | null): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    indexStatus: COMPLETE_INDEX_STATUS,
     workspace,
     openFile: vi.fn(),
     openFolder: vi.fn(),

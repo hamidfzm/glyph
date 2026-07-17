@@ -25,6 +25,16 @@ import {
   setWorkspaceLastFile,
   type WorkspaceResolution,
 } from "@/lib/workspace";
+import {
+  COMPLETE_INDEX_STATUS,
+  COMPLETE_SCAN,
+  type FileScan,
+  indexIncompleteKey,
+  sameScanStatus,
+  truncatedScan,
+  type WikilinkScan,
+  type WorkspaceIndexStatus,
+} from "@/lib/workspaceScan";
 
 interface FileMetadata {
   name: string;
@@ -203,6 +213,7 @@ export function useTabs(options: UseTabsOptions) {
   // ephemeral (rebuilt on open / dir change).
   const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
   const [wikilinkRefs, setWikilinkRefs] = useState<WikilinkRef[]>([]);
+  const [indexStatus, setIndexStatus] = useState<WorkspaceIndexStatus>(COMPLETE_INDEX_STATUS);
   const scrollRefsMap = useRef<Map<string, number>>(new Map());
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -298,23 +309,47 @@ export function useTabs(options: UseTabsOptions) {
     }
   }, []);
 
-  const loadWorkspaceFiles = useCallback(async (root: string): Promise<string[]> => {
+  const loadWorkspaceFiles = useCallback(async (root: string): Promise<FileScan> => {
     try {
-      return await invoke<string[]>("list_markdown_files", { path: root });
+      return await invoke<FileScan>("list_markdown_files", { path: root });
     } catch (err) {
       console.error(`Failed to list markdown files for ${root}:`, err);
-      return [];
+      return { files: [], status: COMPLETE_SCAN };
     }
   }, []);
 
-  const loadWikilinkRefs = useCallback(async (root: string): Promise<WikilinkRef[]> => {
+  const loadWikilinkRefs = useCallback(async (root: string): Promise<WikilinkScan> => {
     try {
-      return await invoke<WikilinkRef[]>("scan_wikilinks", { path: root });
+      return await invoke<WikilinkScan>("scan_wikilinks", { path: root });
     } catch (err) {
       console.error(`Failed to scan wikilinks for ${root}:`, err);
-      return [];
+      return { refs: [], status: COMPLETE_SCAN };
     }
   }, []);
+
+  // Merge new scan statuses, keeping the previous object identity while the
+  // values are unchanged so the incomplete-index banner effect below doesn't
+  // refire on every directory refresh.
+  const updateIndexStatus = useCallback((part: Partial<WorkspaceIndexStatus>) => {
+    setIndexStatus((prev) => {
+      const next = { ...prev, ...part };
+      const unchanged =
+        sameScanStatus(next.files, prev.files) && sameScanStatus(next.wikilinks, prev.wikilinks);
+      return unchanged ? prev : next;
+    });
+  }, []);
+
+  // Surface a persistent banner when a workspace index is incomplete (#436).
+  // The user can dismiss it; the sidebar keeps its own indicator. It re-shows
+  // only when the truncation state actually changes, not on every rescan.
+  useEffect(() => {
+    const status = truncatedScan(indexStatus);
+    if (!status) return;
+    optionsRef.current.onWorkspaceNotice(
+      { key: indexIncompleteKey(status), values: { limit: String(status.limit ?? 0) } },
+      { persistent: true },
+    );
+  }, [indexStatus]);
 
   // Open a file as a document tab; if it's already open, activate its tab.
   const openFile = useCallback(
@@ -429,6 +464,7 @@ export function useTabs(options: UseTabsOptions) {
     setWorkspace(null);
     setWorkspaceFiles([]);
     setWikilinkRefs([]);
+    setIndexStatus(COMPLETE_INDEX_STATUS);
   }, [closeWorkspaceTabs, flushForClose]);
 
   // Guards concurrent openFolder calls for the same root (StrictMode double
@@ -528,11 +564,15 @@ export function useTabs(options: UseTabsOptions) {
         setWorkspace(ws);
 
         // Build the workspace markdown index so wikilinks can resolve.
-        const files = await loadWorkspaceFiles(resolvedRoot);
+        const { files, status } = await loadWorkspaceFiles(resolvedRoot);
         setWorkspaceFiles(files);
-        loadWikilinkRefs(resolvedRoot).then((refs) => {
+        updateIndexStatus({ files: status });
+        loadWikilinkRefs(resolvedRoot).then((scan) => {
           // A replacement may have started meanwhile; don't clobber its refs.
-          if (workspaceRef.current?.root === resolvedRoot) setWikilinkRefs(refs);
+          if (workspaceRef.current?.root === resolvedRoot) {
+            setWikilinkRefs(scan.refs);
+            updateIndexStatus({ wikilinks: scan.status });
+          }
         });
 
         // Auto-open the workspace's remembered file (or its first note) as a
@@ -556,6 +596,7 @@ export function useTabs(options: UseTabsOptions) {
       loadWikilinkRefs,
       loadWorkspaceFiles,
       openFile,
+      updateIndexStatus,
     ],
   );
 
@@ -1296,15 +1337,16 @@ export function useTabs(options: UseTabsOptions) {
           }
           return { ...prev, nodes: newNodes };
         });
-        setWorkspaceFiles(freshFiles);
-        setWikilinkRefs(freshRefs);
+        setWorkspaceFiles(freshFiles.files);
+        setWikilinkRefs(freshRefs.refs);
+        updateIndexStatus({ files: freshFiles.status, wikilinks: freshRefs.status });
       }, DIRECTORY_REFRESH_DEBOUNCE);
     });
     return () => {
       if (timeout) clearTimeout(timeout);
       unsubscribe();
     };
-  }, [loadDirectory, loadWikilinkRefs, loadWorkspaceFiles]);
+  }, [loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, updateIndexStatus]);
 
   return {
     tabs,
@@ -1315,6 +1357,7 @@ export function useTabs(options: UseTabsOptions) {
     workspace,
     workspaceFiles,
     wikilinkRefs,
+    indexStatus,
     openFile,
     openFolder,
     openGraph,

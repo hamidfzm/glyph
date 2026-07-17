@@ -5,7 +5,9 @@
   "notice": {
     "nestedWorkspace": "Esta carpeta está dentro de otro espacio de trabajo de Glyph (\"{{path}}\"). Los espacios de trabajo anidados no son compatibles.",
     "nestedUnderGit": "Esta carpeta está dentro del repositorio git en \"{{path}}\". Glyph trata un repositorio como un espacio de trabajo, por lo que algunas funciones del espacio de trabajo pueden afectar a todo el repositorio.",
-    "saveFailed": "No se pudo guardar \"{{name}}\". Tus cambios siguen aquí; edita de nuevo para reintentar."
+    "saveFailed": "No se pudo guardar \"{{name}}\". Tus cambios siguen aquí; edita de nuevo para reintentar.",
+    "indexIncompleteFiles": "El índice del espacio de trabajo está incompleto: solo se indexaron los primeros {{limit}} documentos, por lo que la lista de archivos, el grafo, los enlaces entrantes y los wikilinks pueden estar incompletos.",
+    "indexIncompleteDepth": "El índice del espacio de trabajo está incompleto: las carpetas anidadas a más de {{limit}} niveles no se indexaron, por lo que la lista de archivos, el grafo, los enlaces entrantes y los wikilinks pueden estar incompletos."
   },
   "confirmDelete": {
     "message": "¿Eliminar \"{{name}}\"? Esto no se puede deshacer.",

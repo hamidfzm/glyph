@@ -22,6 +22,7 @@ import { PanelHeader } from "./PanelHeader";
 import { ResizeHandle } from "./ResizeHandle";
 import { SidebarPanel } from "./SidebarPanel";
 import { ToolbarButton } from "./ToolbarButton";
+import { WorkspaceIndexWarning } from "./WorkspaceIndexWarning";
 
 interface SidebarProps {
   side: "left" | "right";
@@ -183,6 +184,7 @@ export function Sidebar({ side }: SidebarProps) {
           onDelete={deletePath}
         />
       </div>
+      <WorkspaceIndexWarning />
       {backlinks.length > 0 && (
         <>
           <ResizeHandle

@@ -8,6 +8,7 @@ import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { basename } from "@/lib/paths";
 import type { MarkdownPlugin, SiteThemeContribution } from "@/lib/plugins/types";
+import type { FileScan } from "@/lib/workspaceScan";
 import { buildIndexBodyHtml } from "./indexPage";
 import { inlineMermaidSvgs } from "./mermaidInline";
 import { buildNavHtml, type SitePage } from "./nav";
@@ -77,8 +78,8 @@ export async function exportSite({
   // `list_markdown_files` returns every openable document type; the site
   // renders the markdown family only (notebooks, canvases, and D2 sources
   // have their own renderers the headless pipeline can't reproduce).
-  const listed = await invoke<string[]>("list_markdown_files", { path: root });
-  const unordered = listed.filter(isMarkdownFile);
+  const listed = await invoke<FileScan>("list_markdown_files", { path: root });
+  const unordered = listed.files.filter(isMarkdownFile);
   if (unordered.length === 0) {
     throw new Error("The workspace contains no markdown files to export.");
   }

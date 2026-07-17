@@ -21,7 +21,10 @@ function mockFs(files: Record<string, string>): FakeFs {
     const a = (args ?? {}) as Record<string, string>;
     switch (cmd) {
       case "list_markdown_files":
-        return Promise.resolve(Object.keys(files));
+        return Promise.resolve({
+          files: Object.keys(files),
+          status: { truncated: false, reason: null, limit: null },
+        });
       case "read_file":
         return Promise.resolve(files[a.path]);
       case "write_file":
@@ -393,7 +396,11 @@ describe("exportSite", () => {
     mockFs({ "/ws/a.md": "# A" });
     vi.mocked(invoke).mockImplementation((cmd, args) => {
       const a = (args ?? {}) as Record<string, string>;
-      if (cmd === "list_markdown_files") return Promise.resolve(["/ws/a.md"]);
+      if (cmd === "list_markdown_files")
+        return Promise.resolve({
+          files: ["/ws/a.md"],
+          status: { truncated: false, reason: null, limit: null },
+        });
       // Only the markdown file exists; the config probe rejects like a real
       // missing file, which the exporter treats as "no config".
       if (cmd === "read_file") {
