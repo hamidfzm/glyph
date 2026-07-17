@@ -187,12 +187,20 @@ export function useAppCommands({
 
     // Workspace-wide export; pointless (and menu-disabled) without a folder.
     if (workspaceOpen) {
-      out.push({
-        id: "cmd:exportWebsite",
-        title: t("exportWebsite"),
-        section: "Commands",
-        run: actions.exportWebsite,
-      });
+      out.push(
+        {
+          id: "cmd:exportWebsite",
+          title: t("exportWebsite"),
+          section: "Commands",
+          run: actions.exportWebsite,
+        },
+        {
+          id: "cmd:workspaceSettings",
+          title: t("workspaceSettings"),
+          section: "Commands",
+          run: actions.workspaceSettings,
+        },
+      );
     }
 
     out.push(

@@ -10,12 +10,14 @@ import enPlugins from "@/locales/en/plugins.json";
 import enSettings from "@/locales/en/settings.json";
 import enSync from "@/locales/en/sync.json";
 import enWorkspace from "@/locales/en/workspace.json";
+import enWorkspaceSettings from "@/locales/en/workspaceSettings.json";
 
 export const NAMESPACES = [
   "common",
   "settings",
   "commands",
   "ai",
+  "workspaceSettings",
   "sync",
   "workspace",
   "menu",
@@ -52,6 +54,7 @@ i18n
       en: {
         common: enCommon,
         settings: enSettings,
+        workspaceSettings: enWorkspaceSettings,
         commands: enCommands,
         ai: enAi,
         sync: enSync,

@@ -130,3 +130,49 @@ export function resolveConfigAsset(
 export function robotsTxt(robots: "all" | "none"): string {
   return robots === "all" ? "User-agent: *\nAllow: /\n" : "User-agent: *\nDisallow: /\n";
 }
+
+/**
+ * The raw key/value object stored in `.glyph/site.json`, or `{}` when the
+ * workspace has none (or the file is unreadable/unparsable: the settings UI
+ * starts from defaults rather than refusing to open; the exporter is the one
+ * that fails loudly). Non-object roots also collapse to `{}`.
+ */
+export async function readSiteConfigFile(
+  root: string,
+  readFile: (path: string) => Promise<string>,
+): Promise<Record<string, unknown>> {
+  let raw: string;
+  try {
+    raw = await readFile(`${root}/${SITE_CONFIG_PATH}`);
+  } catch {
+    return {};
+  }
+  try {
+    const data = JSON.parse(raw);
+    return data !== null && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+/** A raw config value as a string, for form fields: non-strings read as unset. */
+export function configString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/**
+ * Serialize a settings object for `.glyph/site.json`: entries whose value is
+ * an empty/blank string or undefined are omitted, so unset fields stay
+ * implicit and pick up future defaults.
+ */
+export function serializeSiteConfig(values: Record<string, unknown>): string {
+  const kept: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) continue;
+    if (typeof value === "string" && value.trim() === "") continue;
+    kept[key] = value;
+  }
+  return `${JSON.stringify(kept, null, 2)}\n`;
+}
