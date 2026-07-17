@@ -144,18 +144,18 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-// Inline an <img> as a base64 data URI so the export is portable and offline.
-// Already-inlined (data:) images are left alone; a fetch failure leaves the
-// original src untouched rather than dropping the image.
-async function embedImage(img: HTMLImageElement): Promise<void> {
-  const src = img.getAttribute("src");
-  if (!src || src.startsWith("data:")) return;
+// Inline an image asset as a base64 data URI so the export is portable and
+// offline. Already-inlined (data:) values are left alone; a fetch failure
+// leaves the original untouched rather than dropping the image.
+async function embedAsset(el: Element, attr: "src" | "href"): Promise<void> {
+  const value = el.getAttribute(attr);
+  if (!value || value.startsWith("data:")) return;
   try {
-    const res = await fetch(src);
+    const res = await fetch(value);
     if (!res.ok) return;
-    img.setAttribute("src", await blobToDataUrl(await res.blob()));
+    el.setAttribute(attr, await blobToDataUrl(await res.blob()));
   } catch {
-    // Leave the original src; the reader may still resolve it.
+    // Leave the original; the reader may still resolve it.
   }
 }
 
@@ -207,7 +207,12 @@ export async function prepareContent({
     }
   }
 
-  await Promise.all(Array.from(clone.querySelectorAll("img")).map(embedImage));
+  await Promise.all([
+    ...Array.from(clone.querySelectorAll("img")).map((el) => embedAsset(el, "src")),
+    // SVG <image> icons carry asset: URLs from the live DOM; inline them too
+    // or exported files leak absolute local paths that resolve nowhere.
+    ...Array.from(clone.querySelectorAll("image")).map((el) => embedAsset(el, "href")),
+  ]);
 
   if (includeToc && entries.length > 0) {
     clone.insertBefore(buildTocElement(entries), clone.firstChild);

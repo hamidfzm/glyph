@@ -93,11 +93,26 @@ function rewriteAnchor(ctx: SiteUrlContext, props: Record<string, unknown>): voi
 }
 
 function rewriteImage(ctx: SiteUrlContext, props: Record<string, unknown>): void {
-  const src = props.src;
-  if (typeof src !== "string" || !isRelativeLocalHref(src)) return;
-  const abs = normalizeRelativePath(ctx.filePath, decodeHref(src));
+  rewriteAssetRef(ctx, props, "src");
+}
+
+// Inline-SVG <image> icons: rewrite both href spellings and register the
+// referenced files so the exporter copies them into the site tree.
+function rewriteSvgImage(ctx: SiteUrlContext, props: Record<string, unknown>): void {
+  rewriteAssetRef(ctx, props, "href");
+  rewriteAssetRef(ctx, props, "xLinkHref");
+}
+
+function rewriteAssetRef(
+  ctx: SiteUrlContext,
+  props: Record<string, unknown>,
+  key: "src" | "href" | "xLinkHref",
+): void {
+  const value = props[key];
+  if (typeof value !== "string" || !isRelativeLocalHref(value)) return;
+  const abs = normalizeRelativePath(ctx.filePath, decodeHref(value));
   const dest = assetDestination(ctx, abs);
-  props.src = encodeHref(relativeHref(ctx.pageRel, dest));
+  props[key] = encodeHref(relativeHref(ctx.pageRel, dest));
 }
 
 // A unified attacher: use as `[rehypeSiteUrls, ctx]` so unified invokes it
@@ -109,6 +124,7 @@ export function rehypeSiteUrls(ctx: SiteUrlContext) {
       if (!props) return;
       if (node.tagName === "a") rewriteAnchor(ctx, props);
       else if (node.tagName === "img") rewriteImage(ctx, props);
+      else if (node.tagName === "image") rewriteSvgImage(ctx, props);
     });
   };
 }

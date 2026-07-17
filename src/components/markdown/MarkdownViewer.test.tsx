@@ -28,6 +28,66 @@ describe("MarkdownViewer raw HTML", () => {
     expect(container.querySelector("summary")?.textContent).toBe("More");
   });
 
+  it("renders svg <image> icons with http(s) hrefs", () => {
+    const { container } = renderMd(
+      '<svg viewBox="0 0 24 24"><image href="https://icons.example.com/aws/s3.svg" width="24" height="24"/></svg>',
+    );
+    const image = container.querySelector("svg image");
+    expect(image?.getAttribute("href")).toBe("https://icons.example.com/aws/s3.svg");
+    expect(image?.getAttribute("width")).toBe("24");
+    expect(image?.getAttribute("node")).toBeNull();
+  });
+
+  it("normalizes the legacy xlink:href spelling to href", () => {
+    const { container } = renderMd('<svg><image xlink:href="https://x.test/i.png"/></svg>');
+    expect(container.querySelector("svg image")?.getAttribute("href")).toBe("https://x.test/i.png");
+  });
+
+  it("resolves workspace-relative svg <image> hrefs through the asset protocol", () => {
+    const { container } = renderMd('<svg><image href="assets/icon.png" width="24"/></svg>', {
+      filePath: "/ws/doc.md",
+    });
+    const image = container.querySelector("svg image");
+    expect(image?.getAttribute("href")).toBe("asset://localhost//ws/assets/icon.png");
+  });
+
+  it("strips non-http(s) hrefs from svg <image> but keeps the element", () => {
+    const { container } = renderMd('<svg><image href="javascript:alert(1)" width="24"/></svg>');
+    const image = container.querySelector("svg image");
+    expect(image).not.toBeNull();
+    expect(image?.getAttribute("href")).toBeNull();
+  });
+
+  it("strips a data: xlink:href on its own", () => {
+    const { container } = renderMd('<svg><image xlink:href="data:text/html,x"/></svg>');
+    const image = container.querySelector("svg image");
+    expect(image).not.toBeNull();
+    expect(image?.getAttribute("href")).toBeNull();
+  });
+
+  it("drops anchor-only schemes that pass the shared href protocol list", () => {
+    const { container } = renderMd('<svg><image href="mailto:a@b.test"/></svg>', {
+      filePath: "/ws/doc.md",
+    });
+    expect(container.querySelector("svg image")?.getAttribute("href")).toBeNull();
+  });
+
+  it("falls back to xlink:href when href is empty", () => {
+    const { container } = renderMd('<svg><image href="" xlink:href="https://x.test/i.png"/></svg>');
+    expect(container.querySelector("svg image")?.getAttribute("href")).toBe("https://x.test/i.png");
+  });
+
+  it("keeps <use> and <foreignObject> out of inline SVG", () => {
+    const { container } = renderMd(
+      '<svg><use href="https://x.test/s.svg#i"/><foreignObject><b>x</b></foreignObject><image href="https://x.test/i.png"/></svg>',
+    );
+    expect(container.querySelector("use")).toBeNull();
+    expect(container.querySelector("foreignObject, foreignobject")).toBeNull();
+    // foreignObject is stripped with its children, not unwrapped into the svg.
+    expect(container.querySelector("svg")?.textContent).not.toContain("x");
+    expect(container.querySelector("svg image")).not.toBeNull();
+  });
+
   it("strips <script> tags from raw HTML", () => {
     const { container } = renderMd("ok <script>alert('xss')</script> done");
     expect(container.querySelector("script")).toBeNull();
