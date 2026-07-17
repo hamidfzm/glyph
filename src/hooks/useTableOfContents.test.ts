@@ -66,6 +66,23 @@ describe("useTableOfContents", () => {
     expect(result.current).toBe(first);
   });
 
+  it("ignores # lines inside fenced code blocks", () => {
+    const content = "# Title\n```python\n# not a heading\n#also not\n```\n## Real";
+    const { result } = renderHook(() => useTableOfContents(content));
+    expect(result.current.map((e) => e.text)).toEqual(["Title", "Real"]);
+  });
+
+  it("handles tilde fences", () => {
+    const content = "# Title\n~~~\n# nope\n~~~\n## Real";
+    const { result } = renderHook(() => useTableOfContents(content));
+    expect(result.current.map((e) => e.text)).toEqual(["Title", "Real"]);
+  });
+
+  it("strips trailing hashes from closed ATX headings", () => {
+    const { result } = renderHook(() => useTableOfContents("## Heading ##"));
+    expect(result.current[0]).toEqual({ id: "heading", text: "Heading", level: 2 });
+  });
+
   it("disambiguates duplicate heading slugs (matches GitHub)", () => {
     const content = "## Setup\n## Setup\n## Setup";
     const { result } = renderHook(() => useTableOfContents(content));
