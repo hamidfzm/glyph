@@ -3,6 +3,9 @@
  * the version they were built against in their manifest (`apiVersion`) and
  * {@link satisfiesApiVersion} gates loading on it.
  *
+ * Both values are stored once in package.json under `pluginApi` and injected
+ * at build time, so no version literal is duplicated in code.
+ *
  * Version discipline while the major is 0:
  * - {@link PLUGIN_API_VERSION} moves only when the contract gains surface, so
  *   a plugin that needs the new capability can require it. 0.17.0 added the
@@ -12,14 +15,14 @@
  * - An app release that does not touch the contract moves neither number, so
  *   the API version deliberately does not track the app version.
  */
-export const PLUGIN_API_VERSION = "0.17.0";
+export const PLUGIN_API_VERSION = __PLUGIN_API_VERSION__;
 
 /**
  * The oldest declared `apiVersion` this build still runs unchanged. Everything
  * added since 0.16.0 (site themes, the dictionary `scripts` field) is
  * backwards compatible, so 0.16.0 plugins load as-is.
  */
-export const PLUGIN_API_COMPAT_FLOOR = "0.16.0";
+export const PLUGIN_API_COMPAT_FLOOR = __PLUGIN_API_COMPAT_FLOOR__;
 
 interface SemVer {
   major: number;
