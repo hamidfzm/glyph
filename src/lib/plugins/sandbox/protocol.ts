@@ -32,6 +32,7 @@ export type WorkerMessage =
   | { type: "notify"; message: string }
   | { type: "settings-set"; key: string; value: unknown }
   | { type: "register-exporter"; id: string; label: string; extension: string }
+  | { type: "register-site-theme"; id: string; label: string; css: string }
   | {
       type: "export-result";
       callId: number;

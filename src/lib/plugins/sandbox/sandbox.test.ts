@@ -21,6 +21,7 @@ function apiStub(): SandboxHostApi {
     registerCommand: vi.fn(),
     addStyles: vi.fn(),
     registerExporter: vi.fn(),
+    registerSiteTheme: vi.fn(),
     notify: vi.fn(),
     registerTranslations: vi.fn(),
     settingsSet: vi.fn(),

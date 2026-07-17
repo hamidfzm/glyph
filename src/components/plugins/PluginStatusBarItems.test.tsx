@@ -25,6 +25,7 @@ function value(statusBarItems = createRegistry<StatusBarItemContribution>()): Pl
     settingsPanels: createRegistry<SettingsPanelContribution>(),
     styles: createRegistry<StyleContribution>(),
     exporters: createRegistry<ExporterContribution>(),
+    siteThemes: createRegistry(),
     installed: [],
     disabled: [],
     loaded: [],
@@ -35,6 +36,7 @@ function value(statusBarItems = createRegistry<StatusBarItemContribution>()): Pl
     setEnabled: async () => {},
     uninstall: async () => {},
     setWorkspaceRoot: () => {},
+    initialLoadDone: true,
   };
 }
 

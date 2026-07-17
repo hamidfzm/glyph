@@ -74,7 +74,7 @@ export function buildPageMetaHtml(options: PageMetaOptions): string {
   const lines: string[] = [];
 
   if (faviconRel !== null) {
-    const ext = faviconRel.slice(faviconRel.lastIndexOf(".") + 1).toLowerCase();
+    const ext = String(faviconRel.split(".").pop()).toLowerCase();
     const type = FAVICON_TYPES[ext];
     const href = escapeXml(encodeHref(relativeHref(pageRel, faviconRel)));
     lines.push(`<link rel="icon"${type ? ` type="${type}"` : ""} href="${href}">`);

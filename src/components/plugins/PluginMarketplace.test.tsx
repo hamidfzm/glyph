@@ -44,6 +44,7 @@ function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
     settingsPanels: createRegistry<SettingsPanelContribution>(),
     styles: createRegistry<StyleContribution>(),
     exporters: createRegistry<ExporterContribution>(),
+    siteThemes: createRegistry(),
     installed: [],
     disabled: [],
     loaded: [],
@@ -63,6 +64,7 @@ function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
     setEnabled: vi.fn(async () => {}),
     uninstall: vi.fn(async () => {}),
     setWorkspaceRoot: vi.fn(),
+    initialLoadDone: true,
     ...over,
   };
 }

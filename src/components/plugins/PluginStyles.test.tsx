@@ -25,6 +25,7 @@ function value(styles = createRegistry<StyleContribution>()): PluginsContextValu
     settingsPanels: createRegistry<SettingsPanelContribution>(),
     styles,
     exporters: createRegistry<ExporterContribution>(),
+    siteThemes: createRegistry(),
     installed: [],
     disabled: [],
     loaded: [],
@@ -35,6 +36,7 @@ function value(styles = createRegistry<StyleContribution>()): PluginsContextValu
     setEnabled: async () => {},
     uninstall: async () => {},
     setWorkspaceRoot: () => {},
+    initialLoadDone: true,
   };
 }
 

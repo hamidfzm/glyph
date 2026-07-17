@@ -1,11 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { collectStyles } from "@/lib/export/collectStyles";
+import { escapeXml } from "@/lib/export/escape";
 import { buildHtmlDocument, siteChromeCss, siteChromeScript } from "@/lib/export/html";
 import { deriveExportMeta } from "@/lib/export/meta";
 import { restoreMermaidTheme } from "@/lib/export/rasterize";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { basename } from "@/lib/paths";
+import type { SiteThemeContribution } from "@/lib/plugins/types";
 import { buildIndexBodyHtml } from "./indexPage";
 import { inlineMermaidSvgs } from "./mermaidInline";
 import { buildNavHtml, type SitePage } from "./nav";
@@ -14,7 +16,14 @@ import { buildPageMetaHtml, pageDescription, pageDocumentTitle } from "./pageMet
 import { renderPageHtml } from "./renderPage";
 import { rehypeSiteUrls } from "./rewriteUrls";
 import { parseSiteConfig, resolveConfigAsset, robotsTxt, SITE_CONFIG_PATH } from "./siteConfig";
-import { indexSourcePriority, pageRelPath, relativeHref, relFromRoot } from "./sitePaths";
+import {
+  encodeHref,
+  indexSourcePriority,
+  pageRelPath,
+  relativeHref,
+  relFromRoot,
+} from "./sitePaths";
+import { resolveSiteTheme } from "./themes";
 
 export interface ExportSiteOptions {
   /** Absolute workspace root to export. */
@@ -23,6 +32,8 @@ export interface ExportSiteOptions {
   outDir: string;
   /** Determinate progress: `done` pages written out of `total`. */
   onProgress?: (done: number, total: number) => void;
+  /** Plugin-contributed site themes, offered alongside the built-ins. */
+  themes?: readonly SiteThemeContribution[];
 }
 
 export interface ExportSiteResult {
@@ -55,6 +66,7 @@ export async function exportSite({
   root,
   outDir,
   onProgress,
+  themes = [],
 }: ExportSiteOptions): Promise<ExportSiteResult> {
   // `list_markdown_files` returns every openable document type; the site
   // renders the markdown family only (notebooks, canvases, and D2 sources
@@ -73,6 +85,8 @@ export async function exportSite({
     path: `${root}/${SITE_CONFIG_PATH}`,
   }).catch(() => null);
   const config = parseSiteConfig(rawConfig ?? null, basename(root));
+  // Fails loudly on an unknown theme id before any rendering happens.
+  const theme = resolveSiteTheme(config.theme, themes);
 
   const fileExists = (path: string) =>
     invoke("get_file_metadata", { path }).then(
@@ -170,6 +184,12 @@ export async function exportSite({
     await invoke("create_dir_all", { path: dir === "" ? outDir : outPath(outDir, dir) });
   };
 
+  // Every page carries the site header: the site title linking home. Themes
+  // style it (.glyph-site-header). Closes over the config, so it stays a
+  // local rather than a lib helper.
+  const buildHeaderHtml = (rel: string) =>
+    `<header class="glyph-site-header"><a href="${escapeXml(encodeHref(relativeHref(rel, "index.html")))}">${escapeXml(config.title)}</a></header>`;
+
   const writePage = async (
     rel: string,
     bodyHtml: string,
@@ -188,6 +208,7 @@ export async function exportSite({
       scriptHref: relativeHref(rel, "site.js"),
       navHtml: buildNavHtml(sitePages, rel),
       outlineHtml: buildOutlineHtml(bodyHtml),
+      headerHtml: buildHeaderHtml(rel),
       headHtml: buildPageMetaHtml({
         siteTitle: config.title,
         pageTitle: title,
@@ -258,7 +279,7 @@ export async function exportSite({
     await ensureDir("style.css");
     await invoke("write_file", {
       path: outPath(outDir, "style.css"),
-      content: `${collectStyles()}\n${siteChromeCss()}`,
+      content: `${collectStyles()}\n${siteChromeCss()}\n${theme.css}`,
     });
     await invoke("write_file", { path: outPath(outDir, "site.js"), content: siteChromeScript() });
     if (config.robots !== null) {

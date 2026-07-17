@@ -45,11 +45,25 @@ function Probe() {
     <div>
       <span data-testid="loaded">{plugins?.loaded.map((p) => p.id).join(",")}</span>
       <span data-testid="commands">{commands.map((c) => c.id).join(",")}</span>
+      <span data-testid="initial-load">{String(plugins?.initialLoadDone)}</span>
     </div>
   );
 }
 
 describe("PluginsProvider", () => {
+  it("flips initialLoadDone once the startup scan and load pass finishes", async () => {
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    render(
+      <PluginsProvider>
+        <Probe />
+      </PluginsProvider>,
+    );
+    // Renders false first, then true after the async startup pass, even with
+    // nothing installed: the CLI website export gates on this.
+    await waitFor(() => expect(screen.getByTestId("initial-load")).toHaveTextContent("true"));
+  });
+
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockResolvedValue(undefined);

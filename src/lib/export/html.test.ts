@@ -130,7 +130,7 @@ describe("buildHtmlDocument", () => {
     expect(out).toContain('<main class="glyph-site-main">');
     // Nav and outline are chrome, not content: hidden when printing.
     expect(out).toContain(
-      "@media print { .glyph-site-nav, .glyph-site-outline { display: none; } }",
+      "@media print { .glyph-site-header, .glyph-site-nav, .glyph-site-outline { display: none; } }",
     );
   });
 
@@ -161,6 +161,22 @@ describe("buildHtmlDocument", () => {
       outlineHtml: null,
     });
     expect(out).not.toContain('<nav class="glyph-site-outline">');
+  });
+
+  it("renders the site header before the columns when given", () => {
+    const out = buildHtmlDocument({
+      bodyHtml: "<p>x</p>",
+      title: "t",
+      css: "",
+      dark: false,
+      navHtml: '<nav class="glyph-site-nav"><ul></ul></nav>',
+      headerHtml: '<header class="glyph-site-header"><a href="index.html">Site</a></header>',
+    });
+    expect(out.indexOf("glyph-site-header")).toBeLessThan(out.indexOf('<div class="glyph-site">'));
+    // Chrome, not content: hidden when printing along with nav and outline.
+    expect(out).toContain(
+      "@media print { .glyph-site-header, .glyph-site-nav, .glyph-site-outline { display: none; } }",
+    );
   });
 
   it("emits extra head markup verbatim after the title", () => {

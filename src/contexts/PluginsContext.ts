@@ -14,6 +14,7 @@ export interface PluginsContextValue {
   settingsPanels: PluginHost["settingsPanels"];
   styles: PluginHost["styles"];
   exporters: PluginHost["exporters"];
+  siteThemes: PluginHost["siteThemes"];
   /** Every plugin on disk, enabled or not. */
   installed: InstalledPlugin[];
   /** Ids the user has deactivated (installed but not loaded). */
@@ -34,6 +35,12 @@ export interface PluginsContextValue {
   uninstall: (id: string) => Promise<void>;
   /** Mirror the opened workspace root into the host (for ctx.workspace). */
   setWorkspaceRoot: (root: string | null) => void;
+  /**
+   * The startup plugin scan and load pass has finished (an empty or failed
+   * scan counts). Gate work that must see every enabled plugin's
+   * contributions (the CLI website export resolving a plugin theme) on this.
+   */
+  initialLoadDone: boolean;
 }
 
 export const PluginsContext = createContext<PluginsContextValue | null>(null);
