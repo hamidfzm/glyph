@@ -16,8 +16,6 @@ class Glyph < Formula
   end
 
   depends_on :linux
-  depends_on "webkit2gtk"
-  depends_on "gtk+3"
 
   def install
     # Extract binary from deb
@@ -25,6 +23,15 @@ class Glyph < Formula
     system "tar", "xf", "data.tar.gz"
     bin.install Dir["usr/bin/*"]
     share.install Dir["usr/share/*"]
+  end
+
+  def caveats
+    <<~EOS
+      Glyph links against the system WebKitGTK and GTK 3 libraries, which
+      Homebrew does not provide. Install them with your distro's package
+      manager, e.g. on Debian/Ubuntu:
+        sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0
+    EOS
   end
 
   test do

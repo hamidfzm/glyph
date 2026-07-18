@@ -9,6 +9,14 @@
             "hash": "{{SHA256}}"
         }
     },
+    "extract_dir": "PFiles\\Glyph",
+    "bin": "glyph.exe",
+    "shortcuts": [
+        [
+            "glyph.exe",
+            "Glyph"
+        ]
+    ],
     "checkver": {
         "github": "https://github.com/hamidfzm/glyph"
     },
