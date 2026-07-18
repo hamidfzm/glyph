@@ -1,0 +1,449 @@
+name: Release Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to test (defaults to the latest release)"
+        required: false
+        type: string
+  schedule:
+    # Daily; the resolve job only proceeds when the latest release is 2-3
+    # days old, so each release gets exactly one automatic check.
+    - cron: "23 6 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.resolve.outputs.run }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Resolve target release
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          TAG="${INPUT_TAG:-$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)}"
+          PUBLISHED=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json publishedAt --jq .publishedAt)
+
+          RUN=true
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            AGE=$(( $(date +%s) - $(date -d "$PUBLISHED" +%s) ))
+            if [ "$AGE" -lt 172800 ] || [ "$AGE" -ge 259200 ]; then
+              RUN=false
+              echo "Latest release $TAG is outside the 2-3 day window; nothing to do."
+            fi
+          fi
+
+          {
+            echo "run=$RUN"
+            echo "tag=$TAG"
+            echo "version=${TAG#v}"
+          } >> "$GITHUB_OUTPUT"
+
+  homebrew-cask:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 15
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Install from Homebrew cask and verify
+        id: check
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          brew tap glyph-md/tap
+          brew trust glyph-md/tap || true
+
+          AVAILABLE=$(brew info --cask --json=v2 glyph-md/tap/glyph | jq -r '.casks[0].version')
+          if [ "$AVAILABLE" != "$VERSION" ]; then
+            echo "status=pending" >> "$GITHUB_OUTPUT"
+            echo "Cask serves $AVAILABLE, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          brew install --cask glyph-md/tap/glyph
+          INSTALLED=$(defaults read /Applications/Glyph.app/Contents/Info CFBundleShortVersionString)
+          [ "$INSTALLED" = "$VERSION" ]
+          test -x /Applications/Glyph.app/Contents/MacOS/glyph || test -x "/Applications/Glyph.app/Contents/MacOS/Glyph"
+          echo "status=verified" >> "$GITHUB_OUTPUT"
+
+  homebrew-formula:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Install from Homebrew formula and verify
+        id: check
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew tap glyph-md/tap
+
+          AVAILABLE=$(brew info --json=v2 glyph-md/tap/glyph | jq -r '.formulae[0].versions.stable')
+          if [ "$AVAILABLE" != "$VERSION" ]; then
+            echo "status=pending" >> "$GITHUB_OUTPUT"
+            echo "Formula serves $AVAILABLE, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          brew install glyph-md/tap/glyph
+          sudo apt-get update && sudo apt-get install -y xvfb
+
+          set +e
+          WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a timeout 15 "$(brew --prefix)/bin/glyph"
+          CODE=$?
+          set -e
+          [ "$CODE" -eq 124 ] || { echo "launch check failed (exit $CODE)"; exit 1; }
+          echo "status=verified" >> "$GITHUB_OUTPUT"
+
+  apt:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Install from apt repo and verify
+        id: check
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          curl -fsSL https://glyph-md.github.io/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
+          echo "deb [signed-by=/usr/share/keyrings/glyph.gpg] https://glyph-md.github.io/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/glyph.list
+          sudo apt-get update
+
+          CANDIDATE=$(apt-cache policy glyph | awk '/Candidate:/ {print $2}')
+          if [ "$CANDIDATE" != "$VERSION" ]; then
+            echo "status=pending" >> "$GITHUB_OUTPUT"
+            echo "apt repo serves $CANDIDATE, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          sudo apt-get install -y glyph xvfb
+          INSTALLED=$(dpkg-query -W -f='${Version}' glyph)
+          [ "$INSTALLED" = "$VERSION" ]
+
+          set +e
+          WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a timeout 15 glyph
+          CODE=$?
+          set -e
+          [ "$CODE" -eq 124 ] || { echo "launch check failed (exit $CODE)"; exit 1; }
+          echo "status=verified" >> "$GITHUB_OUTPUT"
+
+  ppa:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - series: jammy
+            runner: ubuntu-22.04
+          - series: noble
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    outputs:
+      # One output per matrix leg; each leg writes only its own key.
+      status-jammy: ${{ steps.check.outputs.status-jammy }}
+      status-noble: ${{ steps.check.outputs.status-noble }}
+    steps:
+      - name: Install from PPA and verify
+        id: check
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          SERIES: ${{ matrix.series }}
+        run: |
+          sudo add-apt-repository -y ppa:hamidfzm/glyph
+          sudo apt-get update
+
+          CANDIDATE=$(apt-cache policy glyph | awk '/Candidate:/ {print $2}')
+          case "$CANDIDATE" in
+            "$VERSION"-*) ;;
+            *)
+              echo "status-$SERIES=pending" >> "$GITHUB_OUTPUT"
+              echo "PPA ($SERIES) serves $CANDIDATE, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+              ;;
+          esac
+
+          sudo apt-get install -y glyph xvfb
+          INSTALLED=$(dpkg-query -W -f='${Version}' glyph)
+          case "$INSTALLED" in "$VERSION"-*) ;; *) echo "installed $INSTALLED"; exit 1 ;; esac
+
+          set +e
+          WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a timeout 15 glyph
+          CODE=$?
+          set -e
+          [ "$CODE" -eq 124 ] || { echo "launch check failed (exit $CODE)"; exit 1; }
+          echo "status-$SERIES=verified" >> "$GITHUB_OUTPUT"
+
+  snap:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Install from Snap Store and verify
+        id: check
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          AVAILABLE=$(snap info glyph | awk '$1 == "latest/stable:" {print $2}')
+          if [ "$AVAILABLE" != "$VERSION" ]; then
+            echo "status=pending" >> "$GITHUB_OUTPUT"
+            echo "Snap stable serves ${AVAILABLE:-nothing}, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          sudo snap install glyph
+          INSTALLED=$(snap list glyph | awk 'NR==2 {print $2}')
+          [ "$INSTALLED" = "$VERSION" ]
+          sudo apt-get update && sudo apt-get install -y xvfb
+
+          set +e
+          WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a timeout 15 snap run glyph
+          CODE=$?
+          set -e
+          [ "$CODE" -eq 124 ] || { echo "launch check failed (exit $CODE)"; exit 1; }
+          echo "status=verified" >> "$GITHUB_OUTPUT"
+
+  dnf:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    timeout-minutes: 20
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Install from dnf repo and verify
+        id: check
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          curl -fsSL https://glyph-md.github.io/rpm-repo/glyph.repo -o /etc/yum.repos.d/glyph.repo
+
+          read -r NAME AVAILABLE <<< "$(dnf -q repoquery --queryformat '%{name} %{version}\n' glyph Glyph 2>/dev/null | head -1)"
+          if [ "$AVAILABLE" != "$VERSION" ]; then
+            echo "status=pending" >> "$GITHUB_OUTPUT"
+            echo "dnf repo serves ${AVAILABLE:-nothing}, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          dnf install -y "$NAME" xorg-x11-server-Xvfb
+          INSTALLED=$(rpm -q --qf '%{VERSION}' "$NAME")
+          [ "$INSTALLED" = "$VERSION" ]
+          command -v glyph
+
+          Xvfb :99 >/dev/null 2>&1 &
+          sleep 1
+          set +e
+          DISPLAY=:99 WEBKIT_DISABLE_COMPOSITING_MODE=1 timeout 15 glyph
+          CODE=$?
+          set -e
+          [ "$CODE" -eq 124 ] || { echo "launch check failed (exit $CODE)"; exit 1; }
+          echo "status=verified" >> "$GITHUB_OUTPUT"
+
+  aur:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 20
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Build from AUR and verify
+        id: check
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git sudo jq xorg-server-xvfb
+
+          AVAILABLE=$(curl -s 'https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=glyph-md-bin' | jq -r '.results[0].Version // empty')
+          if [ "${AVAILABLE%%-*}" != "$VERSION" ]; then
+            echo "status=pending" >> "$GITHUB_OUTPUT"
+            echo "AUR serves ${AVAILABLE:-nothing}, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          sudo -u builder git clone https://aur.archlinux.org/glyph-md-bin.git /home/builder/pkg
+          cd /home/builder/pkg
+          sudo -u builder makepkg -si --noconfirm
+
+          INSTALLED=$(pacman -Q glyph-md-bin | awk '{print $2}')
+          [ "${INSTALLED%%-*}" = "$VERSION" ]
+          command -v glyph
+
+          Xvfb :99 >/dev/null 2>&1 &
+          sleep 1
+          set +e
+          DISPLAY=:99 WEBKIT_DISABLE_COMPOSITING_MODE=1 timeout 15 glyph
+          CODE=$?
+          set -e
+          [ "$CODE" -eq 124 ] || { echo "launch check failed (exit $CODE)"; exit 1; }
+          echo "status=verified" >> "$GITHUB_OUTPUT"
+
+  scoop:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Install from Scoop and verify
+        id: check
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          $manifest = Invoke-RestMethod https://raw.githubusercontent.com/glyph-md/scoop-bucket/main/bucket/glyph.json
+          if ($manifest.version -ne $env:VERSION) {
+            "status=pending" | Out-File -Append $env:GITHUB_OUTPUT
+            "Scoop bucket serves $($manifest.version), not $env:VERSION yet." | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+
+          Invoke-RestMethod get.scoop.sh -OutFile install-scoop.ps1
+          .\install-scoop.ps1 -RunAsAdmin
+          $env:Path = "$env:USERPROFILE\scoop\shims;$env:Path"
+
+          scoop bucket add glyph-md https://github.com/glyph-md/scoop-bucket
+          scoop install glyph
+          $installed = (scoop list glyph 6>$null | Where-Object Name -eq glyph).Version
+          if ($installed -ne $env:VERSION) { Write-Error "installed $installed"; exit 1 }
+          if (-not (Get-Command glyph -ErrorAction SilentlyContinue)) { Write-Error "no glyph shim"; exit 1 }
+          "status=verified" | Out-File -Append $env:GITHUB_OUTPUT
+
+  chocolatey:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Install from Chocolatey and verify
+        id: check
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          # choco search only lists approved versions, so moderation shows as pending.
+          $available = (choco search glyph --exact --limit-output) -split '\|' | Select-Object -Last 1
+          if ($available -ne $env:VERSION) {
+            "status=pending" | Out-File -Append $env:GITHUB_OUTPUT
+            "Chocolatey serves $available, not $env:VERSION yet (moderation queue)." | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+
+          choco install glyph --version $env:VERSION -y
+          $installed = (choco list glyph --limit-output) -split '\|' | Select-Object -Last 1
+          if ($installed -ne $env:VERSION) { Write-Error "installed $installed"; exit 1 }
+          if (-not (Test-Path "$env:ProgramFiles\Glyph\Glyph.exe")) { Write-Error "Glyph.exe not found"; exit 1 }
+          "status=verified" | Out-File -Append $env:GITHUB_OUTPUT
+
+  winget:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Install from winget and verify
+        id: check
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if ! gh api repos/microsoft/winget-pkgs/contents/manifests/h/hamidfzm/Glyph >/dev/null 2>&1; then
+            echo "status=pending" >> "$GITHUB_OUTPUT"
+            echo "hamidfzm.Glyph not yet in winget-pkgs (bootstrap pending)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if ! winget show hamidfzm.Glyph --versions --accept-source-agreements --disable-interactivity | grep -qx "$VERSION"; then
+            echo "status=pending" >> "$GITHUB_OUTPUT"
+            echo "winget does not serve $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          winget install hamidfzm.Glyph --version "$VERSION" --silent \
+            --accept-package-agreements --accept-source-agreements --disable-interactivity
+          test -x "$PROGRAMFILES/Glyph/Glyph.exe"
+          echo "status=verified" >> "$GITHUB_OUTPUT"
+
+  summary:
+    needs:
+      - resolve
+      - homebrew-cask
+      - homebrew-formula
+      - apt
+      - ppa
+      - snap
+      - dnf
+      - aur
+      - scoop
+      - chocolatey
+      - winget
+    if: ${{ !cancelled() && needs.resolve.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build channel summary
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+          ROWS: |
+            homebrew-cask ${{ needs.homebrew-cask.result }} ${{ needs.homebrew-cask.outputs.status }}
+            homebrew-formula ${{ needs.homebrew-formula.result }} ${{ needs.homebrew-formula.outputs.status }}
+            apt ${{ needs.apt.result }} ${{ needs.apt.outputs.status }}
+            ppa-jammy ${{ needs.ppa.result }} ${{ needs.ppa.outputs.status-jammy }}
+            ppa-noble ${{ needs.ppa.result }} ${{ needs.ppa.outputs.status-noble }}
+            snap ${{ needs.snap.result }} ${{ needs.snap.outputs.status }}
+            dnf ${{ needs.dnf.result }} ${{ needs.dnf.outputs.status }}
+            aur ${{ needs.aur.result }} ${{ needs.aur.outputs.status }}
+            scoop ${{ needs.scoop.result }} ${{ needs.scoop.outputs.status }}
+            chocolatey ${{ needs.chocolatey.result }} ${{ needs.chocolatey.outputs.status }}
+            winget ${{ needs.winget.result }} ${{ needs.winget.outputs.status }}
+        run: |
+          {
+            echo "## Release Smoke Test: $TAG"
+            echo ""
+            echo "| Channel | Status |"
+            echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          FAILED=0
+          while read -r CHANNEL RESULT STATUS; do
+            [ -z "$CHANNEL" ] && continue
+            if [ "$RESULT" = "success" ] && [ -n "$STATUS" ]; then
+              ROW="$STATUS"
+            elif [ "$RESULT" = "success" ]; then
+              ROW="verified"
+            else
+              ROW="failed ($RESULT)"
+              FAILED=1
+            fi
+            echo "| $CHANNEL | $ROW |" >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$ROWS"
+
+          exit "$FAILED"
