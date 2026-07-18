@@ -26,9 +26,10 @@ jobs:
             targets_full: "aarch64-apple-darwin,x86_64-apple-darwin"
             targets_pr: "aarch64-apple-darwin"
           - platform: ubuntu-22.04
-            # Bundle analysis needs the real bundle, so no --no-bundle here.
+            # Bundle analysis is the codecov Vite plugin, which runs during
+            # the frontend build; it does not need installer packaging.
             args_full: ""
-            args_pr: ""
+            args_pr: "--no-bundle"
             bundle_analysis: true
           # No include entry for ubuntu-22.04-arm: include is processed
           # AFTER exclude, so an entry here would resurrect the excluded

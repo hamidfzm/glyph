@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { clearDictionarySources, getDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { FakeWorker } from "@/test/fakeWorker";
-import { PLUGIN_API_VERSION } from "./apiVersion";
+import { PLUGIN_API_COMPAT_FLOOR, PLUGIN_API_VERSION } from "./apiVersion";
 import { createPluginHost } from "./host";
 import type { ModuleImporter } from "./loader";
 import type { InstalledPlugin, PluginModule } from "./types";
@@ -56,6 +56,28 @@ describe("createPluginHost", () => {
     expect(host.listLoaded()).toEqual([
       { id: "com.x.demo", name: "Demo", version: "1.0.0", description: undefined },
     ]);
+  });
+
+  it("loads a plugin declaring an older version inside the compatibility window", async () => {
+    // Pins the published-plugin guarantee: marketplace plugins pinned to the
+    // floor version keep loading after additive host bumps, no republish.
+    const host = createPluginHost(vi.fn());
+    const module: PluginModule = {
+      activate(ctx) {
+        ctx.commands.register({ id: "old-but-compatible", title: "Old", run: () => {} });
+      },
+    };
+
+    await host.load(installed({ apiVersion: PLUGIN_API_COMPAT_FLOOR }), importerFor(module));
+
+    expect(host.commands.list().map((c) => c.id)).toEqual(["old-but-compatible"]);
+  });
+
+  it("rejects a below-floor plugin naming the accepted range", async () => {
+    const host = createPluginHost(vi.fn());
+    await expect(
+      host.load(installed({ apiVersion: "0.15.0" }), importerFor({ activate: () => {} })),
+    ).rejects.toThrow(`accepts ${PLUGIN_API_COMPAT_FLOOR} through ${PLUGIN_API_VERSION}`);
   });
 
   it("unload removes exactly that plugin's contributions and calls deactivate", async () => {
