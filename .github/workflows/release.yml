@@ -583,7 +583,7 @@ jobs:
           mkdir -p /tmp/glyph-${VERSION}/debian
           HOMEPAGE=$(jq -r .homepage package.json)
           sed "s|{{HOMEPAGE}}|$HOMEPAGE|g" ppa/debian/control > /tmp/glyph-${VERSION}/debian/control
-          cp ppa/debian/rules /tmp/glyph-${VERSION}/debian/
+          cp ppa/debian/rules ppa/debian/install /tmp/glyph-${VERSION}/debian/
 
           # Generate debian/copyright from repo LICENSE file
           {
