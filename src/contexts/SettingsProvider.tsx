@@ -245,9 +245,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [saveToStore]);
 
+  // Gate children on loaded: a mount-time settings write would persist
+  // DEFAULT_SETTINGS over the stored settings (#490); reveal waits for load anyway.
   return (
     <SettingsContext value={{ settings, updateSettings, resetSettings, flushSettings, loaded }}>
-      {children}
+      {loaded ? children : null}
     </SettingsContext>
   );
 }

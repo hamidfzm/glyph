@@ -22,10 +22,11 @@ Worked bad-to-good examples and the correction history live in `references/examp
 
 1. Collect the diff; walk each hunk against the checklist; list findings as `file:line - rule - fix`.
 2. Check governing conventions, not just code quality: every `.claude/rules/*.md` whose scope covers a changed path, plus the global ones (no em dashes and no AI attribution in commits/PR bodies, branch naming, PR template). Verify by grepping the actual commit messages and PR body.
-3. Run `/code-review` (medium) on the same diff and fold its confirmed findings into the fix list; self-review alone is the author grading their own homework.
-4. Apply every fix; skip only what would change intended behavior, and say so.
-5. Re-run the gates: `pnpm typecheck && pnpm check && pnpm test`, and `cargo clippy --all-targets -- -D warnings` if Rust changed.
-6. Report what was cut or rewritten and the net line delta.
+3. When the change ships as a PR, re-read CONTRIBUTING.md's Pull Requests section before `gh pr create` and verify against the posted result, not the draft: PR title in conventional commit style (`fix(settings): ...`, not a bare imperative sentence; squash merge makes the title the `main` commit), `Closes #N` present, and the template's Testing checkboxes claiming only what actually ran (automated gates are not "Tested on <platform>"; leave the box unchecked and say what ran).
+4. Run `/code-review` (medium) on the same diff and fold its confirmed findings into the fix list; self-review alone is the author grading their own homework.
+5. Apply every fix; skip only what would change intended behavior, and say so.
+6. Re-run the gates: `pnpm typecheck && pnpm check && pnpm test`, and `cargo clippy --all-targets -- -D warnings` if Rust changed.
+7. Report what was cut or rewritten and the net line delta.
 
 ## Self-improvement
 

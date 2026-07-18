@@ -12,17 +12,29 @@ const realMatchMedia = window.matchMedia;
 
 // Builds a fake store whose `get` resolves the given saved value, registered as
 // the next `load()` result. Returns the `set` and `save` spies so tests can
-// assert persisted writes.
-function mockStore(saved: unknown, { setRejects = false } = {}) {
+// assert persisted writes. With `deferLoad`, `load()` stays pending until the
+// returned `resolveLoad` is called.
+function mockStore(saved: unknown, { setRejects = false, deferLoad = false } = {}) {
   const set = vi.fn(() =>
     setRejects ? Promise.reject(new Error("disk full")) : Promise.resolve(),
   );
   const save = vi.fn(() => Promise.resolve());
   const get = vi.fn(() => Promise.resolve(saved));
-  mockedLoad.mockResolvedValueOnce({ get, set, save } as unknown as Awaited<
-    ReturnType<typeof load>
-  >);
-  return { get, set, save };
+  const store = { get, set, save } as unknown as Awaited<ReturnType<typeof load>>;
+  // Captured when the provider calls load(), so resolveLoad must stay a stable
+  // wrapper that reads the latest resolver.
+  let resolve: ((store: Awaited<ReturnType<typeof load>>) => void) | undefined;
+  if (deferLoad) {
+    mockedLoad.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
+  } else {
+    mockedLoad.mockResolvedValueOnce(store);
+  }
+  return { get, set, save, resolveLoad: () => resolve?.(store) };
 }
 
 // Generic consumer that fires a sequence of updateSettings(path, value) calls,
@@ -330,6 +342,30 @@ describe("SettingsProvider", () => {
       expect(screen.getByTestId("theme").textContent).toBe("system");
       expect(document.documentElement.style.getPropertyValue("--glyph-font-size")).toBe("16px");
       errSpy.mockRestore();
+    });
+
+    it("does not render children until the store has loaded (#490)", async () => {
+      const { resolveLoad } = mockStore({ appearance: { fontSize: 22 } }, { deferLoad: true });
+
+      render(
+        <SettingsProvider>
+          <TestConsumer />
+        </SettingsProvider>,
+      );
+
+      // While the load is pending no consumer is mounted, so nothing can read
+      // DEFAULT_SETTINGS and persist it over the user's stored settings.
+      expect(screen.queryByTestId("loaded")).toBeNull();
+
+      await act(async () => {
+        resolveLoad();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("loaded").textContent).toBe("true");
+      });
+      // Children mount straight into the merged settings, never the defaults.
+      expect(screen.getByTestId("font-size").textContent).toBe("22");
     });
 
     it("does not apply settings when unmounted before the load resolves", async () => {
