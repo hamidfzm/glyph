@@ -40,11 +40,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
+      - uses: ./.github/actions/pnpm-setup
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -88,18 +84,10 @@ jobs:
       NDK_VERSION: 29.0.14206865
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/pnpm-setup
+      - uses: ./.github/actions/rust-setup
         with:
           targets: aarch64-linux-android
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
       - name: Set up JDK
         uses: actions/setup-java@v5
         with:
