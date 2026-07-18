@@ -1,10 +1,14 @@
 name: Release Smoke Test
+# run-name is evaluated at queue time, before any job runs, so a run
+# without an explicit tag can only be titled "latest"; the resolve job
+# posts the resolved tag as a notice and at the top of the run summary.
+run-name: Release Smoke Test ${{ inputs.tag || 'latest' }}
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to test (defaults to the latest release)"
+        description: "Release tag to test, e.g. v0.17.0 (defaults to the latest release)"
         required: false
         type: string
   schedule:
@@ -47,6 +51,13 @@ jobs:
             echo "tag=$TAG"
             echo "version=${TAG#v}"
           } >> "$GITHUB_OUTPUT"
+
+          if [ "$RUN" = true ]; then
+            echo "::notice::Testing release $TAG"
+            echo "Testing release **$TAG**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::notice::Skipping: latest release $TAG is outside the 2-3 day window"
+          fi
 
   homebrew-cask:
     needs: resolve
