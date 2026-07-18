@@ -1,6 +1,8 @@
 name: Release Smoke Test
 
 on:
+  push:
+    branches: [feat/release-smoke-test]
   workflow_dispatch:
     inputs:
       tag:
