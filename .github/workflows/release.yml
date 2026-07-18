@@ -482,7 +482,12 @@ jobs:
           mkdir -p ~/.ssh
           echo "$AUR_SSH_KEY" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
-          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+          # Retry: a transient AUR outage silently failed this step before.
+          for i in 1 2 3; do
+            ssh-keyscan -T 10 aur.archlinux.org >> ~/.ssh/known_hosts && break
+            [ "$i" = 3 ] && exit 1
+            sleep 10
+          done
           cat >> ~/.ssh/config << EOF
           Host aur.archlinux.org
             IdentityFile ~/.ssh/aur
