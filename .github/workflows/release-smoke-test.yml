@@ -124,7 +124,7 @@ jobs:
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
-          curl -fsSL https://glyph-md.github.io/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
+          curl -fsSL --retry 5 --retry-all-errors https://glyph-md.github.io/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
           echo "deb [signed-by=/usr/share/keyrings/glyph.gpg] https://glyph-md.github.io/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/glyph.list
           sudo apt-get update
 
@@ -240,7 +240,7 @@ jobs:
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
-          curl -fsSL https://glyph-md.github.io/rpm-repo/glyph.repo -o /etc/yum.repos.d/glyph.repo
+          curl -fsSL --retry 5 --retry-all-errors https://glyph-md.github.io/rpm-repo/glyph.repo -o /etc/yum.repos.d/glyph.repo
 
           read -r NAME AVAILABLE <<< "$(dnf -q repoquery --queryformat '%{name} %{version}\n' glyph Glyph 2>/dev/null | head -1)"
           if [ "$AVAILABLE" != "$VERSION" ]; then
