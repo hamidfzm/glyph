@@ -100,7 +100,7 @@ jobs:
           fi
 
           brew install glyph-md/tap/glyph
-          sudo apt-get update && sudo apt-get install -y xvfb
+          sudo apt-get update && sudo apt-get install -y xvfb libwebkit2gtk-4.1-0 libgtk-3-0
 
           set +e
           WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a timeout 15 "$(brew --prefix)/bin/glyph"
