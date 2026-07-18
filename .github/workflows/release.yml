@@ -10,7 +10,72 @@ permissions:
   discussions: write
 
 jobs:
+  # Create the release once before the build matrix; parallel tauri-action
+  # jobs racing to create it fail with "already_exists".
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && exit 0
+          cat > /tmp/release-body.md <<'BODY'
+          ## Install
+
+          ### macOS
+          ```bash
+          brew tap glyph-md/tap && brew trust glyph-md/tap && brew install --cask glyph
+          ```
+          Or download `Glyph_*_universal.dmg` below.
+
+          ### Windows
+          ```powershell
+          # winget
+          winget install hamidfzm.Glyph
+
+          # Chocolatey
+          choco install glyph
+
+          # Scoop
+          scoop bucket add glyph-md https://github.com/glyph-md/scoop-bucket
+          scoop install glyph
+          ```
+          Or download `Glyph_*_x64_en-US.msi` below.
+
+          ### Linux
+          ```bash
+          # Snap Store
+          sudo snap install glyph
+
+          # Arch (AUR)
+          yay -S glyph-md-bin
+
+          # Homebrew (Linuxbrew)
+          brew tap glyph-md/tap && brew install glyph
+
+          # Debian/Ubuntu (PPA)
+          sudo add-apt-repository ppa:hamidfzm/glyph
+          sudo apt update
+          sudo apt install glyph
+
+          # Debian (apt repo)
+          curl -fsSL https://glyph-md.github.io/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
+          echo "deb [signed-by=/usr/share/keyrings/glyph.gpg] https://glyph-md.github.io/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/glyph.list
+          sudo apt update && sudo apt install glyph
+
+          # Fedora/RHEL (dnf)
+          sudo tee /etc/yum.repos.d/glyph.repo < <(curl -fsSL https://glyph-md.github.io/rpm-repo/glyph.repo)
+          sudo dnf install glyph
+          ```
+          Or download the `.deb` / `.rpm` / `.AppImage` below.
+          BODY
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --title "Glyph $GITHUB_REF_NAME" \
+            --notes-file /tmp/release-body.md
+
   build:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -55,58 +120,6 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "Glyph ${{ github.ref_name }}"
-          releaseBody: |
-            ## Install
-
-            ### macOS
-            ```bash
-            brew tap glyph-md/tap && brew trust glyph-md/tap && brew install --cask glyph
-            ```
-            Or download `Glyph_*_universal.dmg` below.
-
-            ### Windows
-            ```powershell
-            # winget
-            winget install hamidfzm.Glyph
-
-            # Chocolatey
-            choco install glyph
-
-            # Scoop
-            scoop bucket add glyph-md https://github.com/glyph-md/scoop-bucket
-            scoop install glyph
-            ```
-            Or download `Glyph_*_x64_en-US.msi` below.
-
-            ### Linux
-            ```bash
-            # Snap Store
-            sudo snap install glyph
-
-            # Arch (AUR)
-            yay -S glyph-md-bin
-
-            # Homebrew (Linuxbrew)
-            brew tap glyph-md/tap && brew install glyph
-
-            # Debian/Ubuntu (PPA)
-            sudo add-apt-repository ppa:hamidfzm/glyph
-            sudo apt update
-            sudo apt install glyph
-
-            # Debian (apt repo)
-            curl -fsSL https://glyph-md.github.io/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
-            echo "deb [signed-by=/usr/share/keyrings/glyph.gpg] https://glyph-md.github.io/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/glyph.list
-            sudo apt update && sudo apt install glyph
-
-            # Fedora/RHEL (dnf)
-            sudo tee /etc/yum.repos.d/glyph.repo < <(curl -fsSL https://glyph-md.github.io/rpm-repo/glyph.repo)
-            sudo dnf install glyph
-            ```
-            Or download the `.deb` / `.rpm` / `.AppImage` below.
-          releaseDraft: false
-          prerelease: false
           args: ${{ matrix.args }}
 
   update-release-notes:
@@ -570,7 +583,7 @@ jobs:
           mkdir -p /tmp/glyph-${VERSION}/debian
           HOMEPAGE=$(jq -r .homepage package.json)
           sed "s|{{HOMEPAGE}}|$HOMEPAGE|g" ppa/debian/control > /tmp/glyph-${VERSION}/debian/control
-          cp ppa/debian/rules /tmp/glyph-${VERSION}/debian/
+          cp ppa/debian/rules ppa/debian/install /tmp/glyph-${VERSION}/debian/
 
           # Generate debian/copyright from repo LICENSE file
           {
