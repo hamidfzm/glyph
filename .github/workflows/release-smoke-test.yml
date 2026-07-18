@@ -18,6 +18,7 @@ permissions:
 jobs:
   resolve:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       run: ${{ steps.resolve.outputs.run }}
       tag: ${{ steps.resolve.outputs.tag }}
@@ -144,29 +145,21 @@ jobs:
           [ "$CODE" -eq 124 ] || { echo "launch check failed (exit $CODE)"; exit 1; }
           echo "status=verified" >> "$GITHUB_OUTPUT"
 
-  ppa:
+  # Separate jobs per series: matrix jobs share one outputs map (last leg
+  # wins), which would let a pending leg report the other leg's status.
+  ppa-jammy:
     needs: resolve
     if: needs.resolve.outputs.run == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - series: jammy
-            runner: ubuntu-22.04
-          - series: noble
-            runner: ubuntu-24.04
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     outputs:
-      # One output per matrix leg; each leg writes only its own key.
-      status-jammy: ${{ steps.check.outputs.status-jammy }}
-      status-noble: ${{ steps.check.outputs.status-noble }}
+      status: ${{ steps.check.outputs.status }}
     steps:
       - name: Install from PPA and verify
         id: check
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
-          SERIES: ${{ matrix.series }}
+          SERIES: jammy
         run: |
           sudo add-apt-repository -y ppa:hamidfzm/glyph
           sudo apt-get update
@@ -175,7 +168,7 @@ jobs:
           case "$CANDIDATE" in
             "$VERSION"-*) ;;
             *)
-              echo "status-$SERIES=pending" >> "$GITHUB_OUTPUT"
+              echo "status=pending" >> "$GITHUB_OUTPUT"
               echo "PPA ($SERIES) serves $CANDIDATE, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
               exit 0
               ;;
@@ -190,7 +183,45 @@ jobs:
           CODE=$?
           set -e
           [ "$CODE" -eq 124 ] || { echo "launch check failed (exit $CODE)"; exit 1; }
-          echo "status-$SERIES=verified" >> "$GITHUB_OUTPUT"
+          echo "status=verified" >> "$GITHUB_OUTPUT"
+
+  ppa-noble:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Install from PPA and verify
+        id: check
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          SERIES: noble
+        run: |
+          sudo add-apt-repository -y ppa:hamidfzm/glyph
+          sudo apt-get update
+
+          CANDIDATE=$(apt-cache policy glyph | awk '/Candidate:/ {print $2}')
+          case "$CANDIDATE" in
+            "$VERSION"-*) ;;
+            *)
+              echo "status=pending" >> "$GITHUB_OUTPUT"
+              echo "PPA ($SERIES) serves $CANDIDATE, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+              ;;
+          esac
+
+          sudo apt-get install -y glyph xvfb
+          INSTALLED=$(dpkg-query -W -f='${Version}' glyph)
+          case "$INSTALLED" in "$VERSION"-*) ;; *) echo "installed $INSTALLED"; exit 1 ;; esac
+
+          set +e
+          WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a timeout 15 glyph
+          CODE=$?
+          set -e
+          [ "$CODE" -eq 124 ] || { echo "launch check failed (exit $CODE)"; exit 1; }
+          echo "status=verified" >> "$GITHUB_OUTPUT"
 
   snap:
     needs: resolve
@@ -253,7 +284,8 @@ jobs:
           command -v glyph
 
           Xvfb :99 >/dev/null 2>&1 &
-          sleep 1
+          for _ in $(seq 1 20); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 0.5; done
+          [ -S /tmp/.X11-unix/X99 ] || { echo "Xvfb failed to start"; exit 1; }
           set +e
           DISPLAY=:99 WEBKIT_DISABLE_COMPOSITING_MODE=1 timeout 15 glyph
           CODE=$?
@@ -285,7 +317,7 @@ jobs:
           fi
 
           useradd -m builder
-          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/builder
           sudo -u builder git clone https://aur.archlinux.org/glyph-md-bin.git /home/builder/pkg
           cd /home/builder/pkg
           sudo -u builder makepkg -si --noconfirm
@@ -295,7 +327,8 @@ jobs:
           command -v glyph
 
           Xvfb :99 >/dev/null 2>&1 &
-          sleep 1
+          for _ in $(seq 1 20); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 0.5; done
+          [ -S /tmp/.X11-unix/X99 ] || { echo "Xvfb failed to start"; exit 1; }
           set +e
           DISPLAY=:99 WEBKIT_DISABLE_COMPOSITING_MODE=1 timeout 15 glyph
           CODE=$?
@@ -313,6 +346,7 @@ jobs:
     steps:
       - name: Install from Scoop and verify
         id: check
+        shell: pwsh
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
@@ -344,11 +378,12 @@ jobs:
     steps:
       - name: Install from Chocolatey and verify
         id: check
+        shell: pwsh
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           # choco search only lists approved versions, so moderation shows as pending.
-          $available = (choco search glyph --exact --limit-output) -split '\|' | Select-Object -Last 1
+          $available = ((choco search glyph --exact --limit-output | Select-Object -First 1) -split '\|')[-1]
           if ($available -ne $env:VERSION) {
             "status=pending" | Out-File -Append $env:GITHUB_OUTPUT
             "Chocolatey serves $available, not $env:VERSION yet (moderation queue)." | Out-File -Append $env:GITHUB_STEP_SUMMARY
@@ -356,7 +391,7 @@ jobs:
           }
 
           choco install glyph --version $env:VERSION -y
-          $installed = (choco list glyph --limit-output) -split '\|' | Select-Object -Last 1
+          $installed = ((choco list glyph --limit-output | Select-Object -First 1) -split '\|')[-1]
           if ($installed -ne $env:VERSION) { Write-Error "installed $installed"; exit 1 }
           if (-not (Test-Path "$env:ProgramFiles\Glyph\Glyph.exe")) { Write-Error "Glyph.exe not found"; exit 1 }
           "status=verified" | Out-File -Append $env:GITHUB_OUTPUT
@@ -399,7 +434,8 @@ jobs:
       - homebrew-cask
       - homebrew-formula
       - apt
-      - ppa
+      - ppa-jammy
+      - ppa-noble
       - snap
       - dnf
       - aur
@@ -408,6 +444,7 @@ jobs:
       - winget
     if: ${{ !cancelled() && needs.resolve.outputs.run == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Build channel summary
         env:
@@ -416,8 +453,8 @@ jobs:
             homebrew-cask ${{ needs.homebrew-cask.result }} ${{ needs.homebrew-cask.outputs.status }}
             homebrew-formula ${{ needs.homebrew-formula.result }} ${{ needs.homebrew-formula.outputs.status }}
             apt ${{ needs.apt.result }} ${{ needs.apt.outputs.status }}
-            ppa-jammy ${{ needs.ppa.result }} ${{ needs.ppa.outputs.status-jammy }}
-            ppa-noble ${{ needs.ppa.result }} ${{ needs.ppa.outputs.status-noble }}
+            ppa-jammy ${{ needs.ppa-jammy.result }} ${{ needs.ppa-jammy.outputs.status }}
+            ppa-noble ${{ needs.ppa-noble.result }} ${{ needs.ppa-noble.outputs.status }}
             snap ${{ needs.snap.result }} ${{ needs.snap.outputs.status }}
             dnf ${{ needs.dnf.result }} ${{ needs.dnf.outputs.status }}
             aur ${{ needs.aur.result }} ${{ needs.aur.outputs.status }}
