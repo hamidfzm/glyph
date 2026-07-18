@@ -2,13 +2,13 @@ name: Release Smoke Test
 # run-name is evaluated at queue time, before any job runs, so a run
 # without an explicit tag can only be titled "latest"; the resolve job
 # posts the resolved tag as a notice and at the top of the run summary.
-run-name: Release Smoke Test ${{ inputs.tag || 'latest' }}
+run-name: Release Smoke Test ${{ inputs.version && format('v{0}', inputs.version) || 'latest' }}
 
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Release tag to test, e.g. v0.17.0 (defaults to the latest release)"
+      version:
+        description: "Release version to test, e.g. 0.17.0 (defaults to the latest release)"
         required: false
         type: string
   schedule:
@@ -32,9 +32,12 @@ jobs:
         id: resolve
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          TAG="${INPUT_TAG:-$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)}"
+          # Accept a bare version (0.17.0) or a tag (v0.17.0): strip any
+          # leading v, then prepend it, so both forms resolve to the tag.
+          TAG="${INPUT_VERSION:+v${INPUT_VERSION#v}}"
+          TAG="${TAG:-$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)}"
           PUBLISHED=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json publishedAt --jq .publishedAt)
 
           RUN=true
