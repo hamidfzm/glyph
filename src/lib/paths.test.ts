@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { basename, isPathInside, parentDir, pruneInside } from "./paths";
+import { basename, displayName, isPathInside, parentDir, pruneInside } from "./paths";
 
 describe("basename", () => {
   it("returns the final segment of a posix path", () => {
@@ -12,6 +12,26 @@ describe("basename", () => {
 
   it("returns the input unchanged when there is no directory", () => {
     expect(basename("c.md")).toBe("c.md");
+  });
+});
+
+describe("displayName", () => {
+  it("returns the file name of a plain path", () => {
+    expect(displayName("/a/b/Note.md")).toBe("Note.md");
+  });
+
+  it("decodes percent-encoding in an iOS file URI", () => {
+    expect(displayName("file:///On%20My%20iPhone/Picked%20Note.md")).toBe("Picked Note.md");
+  });
+
+  it("strips the encoded folder prefix of an Android SAF URI", () => {
+    const uri =
+      "content://com.android.externalstorage.documents/document/primary%3ADownload%2Fnote.md";
+    expect(displayName(uri)).toBe("note.md");
+  });
+
+  it("keeps the raw segment when decoding fails", () => {
+    expect(displayName("/a/bad%2segment.md")).toBe("bad%2segment.md");
   });
 });
 

@@ -6,6 +6,16 @@
   --glyph-titlebar-height: 0px;
   --glyph-sidebar-blur: 0px;
   --glyph-sidebar-bg: var(--color-surface-secondary);
+  --glyph-safe-top: 0px;
+  --glyph-safe-bottom: 0px;
+}
+
+/* Mobile draws edge-to-edge (viewport-fit=cover), so the shell's top and
+   bottom bars pad themselves past the notch and home indicator. */
+[data-platform="ios"],
+[data-platform="android"] {
+  --glyph-safe-top: env(safe-area-inset-top);
+  --glyph-safe-bottom: env(safe-area-inset-bottom);
 }
 
 [data-platform="macos"] {

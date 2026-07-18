@@ -32,7 +32,7 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
   return (
     <div
       data-print-hide="true"
-      className="flex items-center gap-4 px-4 h-7 border-t border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-xs text-[var(--color-text-secondary)] select-none shrink-0"
+      className="flex items-center gap-4 px-4 min-h-7 pb-[var(--glyph-safe-bottom)] border-t border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-xs text-[var(--color-text-secondary)] select-none shrink-0"
     >
       {filePath && (
         <span className="truncate max-w-[50%]" title={filePath}>

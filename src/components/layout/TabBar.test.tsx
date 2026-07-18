@@ -203,9 +203,19 @@ describe("TabBar", () => {
     expect(container.querySelector(".tab-dirty-dot")).toBeInTheDocument();
   });
 
-  it("falls back to Untitled when a file tab has no metadata", () => {
+  it("derives the label from the path when a file tab has no metadata (mobile picker)", () => {
     const tab = makeFileTab(0);
-    const bare: FileTab = { ...tab, file: { ...tab.file, metadata: null } };
+    const bare: FileTab = {
+      ...tab,
+      file: { ...tab.file, path: "file:///On%20My%20iPhone/Picked%20Note.md", metadata: null },
+    };
+    renderTabBar({ tabs: [bare], activeTabId: "tab-0" });
+    expect(screen.getByText("Picked Note.md")).toBeInTheDocument();
+  });
+
+  it("falls back to Untitled when a file tab has no metadata and no usable path", () => {
+    const tab = makeFileTab(0);
+    const bare: FileTab = { ...tab, file: { ...tab.file, path: "", metadata: null } };
     renderTabBar({ tabs: [bare], activeTabId: "tab-0" });
     expect(screen.getByText("Untitled")).toBeInTheDocument();
   });
