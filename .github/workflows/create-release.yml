@@ -17,8 +17,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      # main's ruleset only lets deploy keys push; humans and PATs go through PRs.
+      - name: Set up release deploy key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.RELEASE_DEPLOY_KEY }}" > ~/.ssh/release_key
+          chmod 600 ~/.ssh/release_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git remote set-url --push origin "git@github.com:${{ github.repository }}.git"
+          echo "GIT_SSH_COMMAND=ssh -i ~/.ssh/release_key -o IdentitiesOnly=yes" >> "$GITHUB_ENV"
 
       - name: Validate version format
         run: |
