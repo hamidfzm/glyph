@@ -1,3 +1,4 @@
+import { setTheme } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { load } from "@tauri-apps/plugin-store";
 import { act, render, screen, waitFor } from "@testing-library/react";
@@ -436,6 +437,60 @@ describe("SettingsProvider", () => {
 
       act(() => screen.getByTestId("update-1").click());
       expect(document.documentElement.classList.contains("dark")).toBe(false);
+    });
+
+    it("syncs the native window theme with the theme setting", async () => {
+      const mockedSetTheme = vi.mocked(setTheme);
+      mockedSetTheme.mockClear();
+
+      render(
+        <SettingsProvider>
+          <UpdateConsumer
+            updates={[
+              ["appearance.theme", "dark"],
+              ["appearance.theme", "light"],
+              ["appearance.theme", "system"],
+            ]}
+          />
+        </SettingsProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("loaded").textContent).toBe("true");
+      });
+      // Mount applies the stored theme (system) to the native window too.
+      expect(mockedSetTheme).toHaveBeenCalledWith(null);
+
+      act(() => screen.getByTestId("update-0").click());
+      expect(mockedSetTheme).toHaveBeenLastCalledWith("dark");
+
+      act(() => screen.getByTestId("update-1").click());
+      expect(mockedSetTheme).toHaveBeenLastCalledWith("light");
+
+      act(() => screen.getByTestId("update-2").click());
+      expect(mockedSetTheme).toHaveBeenLastCalledWith(null);
+    });
+
+    it("logs and keeps going when the native theme call fails", async () => {
+      vi.mocked(setTheme).mockRejectedValueOnce(new Error("unsupported"));
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      render(
+        <SettingsProvider>
+          <TestConsumer />
+        </SettingsProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("loaded").textContent).toBe("true");
+      });
+      await waitFor(() => {
+        expect(errSpy).toHaveBeenCalledWith(
+          "Failed to set the native window theme:",
+          expect.any(Error),
+        );
+      });
+      errSpy.mockRestore();
     });
 
     it("reacts to system theme changes while on the system theme", async () => {
