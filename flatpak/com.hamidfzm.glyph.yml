@@ -2,9 +2,10 @@
 #
 # This installs the released Debian package into the GNOME runtime rather than
 # recompiling from source, matching the AUR/PPA pattern already used in
-# `.github/workflows/release.yml`. flatpak-builder understands `.deb` archives
-# and unpacks the embedded data tarball, so `usr/...` paths below come straight
-# from the Tauri-generated package.
+# `.github/workflows/release.yml`. flatpak-builder cannot unpack `.deb`
+# archives itself, so the build extracts the embedded data tarball with
+# `ar` + `tar`; the `usr/...` paths below come straight from the
+# Tauri-generated package.
 #
 # The `url` versions and `sha256` checksums below are placeholders. They are
 # filled in per release (the SHA256s are the same ones computed by the
@@ -35,6 +36,8 @@ modules:
   - name: glyph
     buildsystem: simple
     build-commands:
+      - ar -x glyph.deb
+      - tar -xf data.tar.*
       - install -Dm755 usr/bin/glyph /app/bin/glyph
       - install -Dm644 com.hamidfzm.glyph.desktop /app/share/applications/com.hamidfzm.glyph.desktop
       - install -Dm644 com.hamidfzm.glyph.metainfo.xml /app/share/metainfo/com.hamidfzm.glyph.metainfo.xml
@@ -48,16 +51,18 @@ modules:
           install -Dm644 "$src" "${dest%/glyph.png}/com.hamidfzm.glyph.png"
         done
     sources:
-      - type: archive
+      - type: file
         only-arches:
           - x86_64
         url: https://github.com/hamidfzm/glyph/releases/download/v0.17.1/Glyph_0.17.1_amd64.deb
         sha256: 34a44ff3ff37ccaa1408b7797600daa6bcc05a835fd6b8a324bd8e25570dac7b
-      - type: archive
+        dest-filename: glyph.deb
+      - type: file
         only-arches:
           - aarch64
         url: https://github.com/hamidfzm/glyph/releases/download/v0.17.1/Glyph_0.17.1_arm64.deb
         sha256: 71690dd8a5b4a9b38926681acb9b115524af4cebefc29e037674503115835b92
+        dest-filename: glyph.deb
       - type: file
         path: com.hamidfzm.glyph.desktop
       - type: file
