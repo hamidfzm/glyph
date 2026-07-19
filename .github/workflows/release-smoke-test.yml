@@ -1,19 +1,28 @@
 name: Release Smoke Test
+# run-name is evaluated at queue time, before any job runs, and a run
+# cannot be renamed afterwards. So a run without a version only resolves
+# the latest release and re-dispatches this workflow with the version
+# filled in; that second run does the actual testing and carries the
+# version in its title.
+run-name: Release Smoke Test ${{ inputs.version && format('v{0}', inputs.version) || '(dispatching latest)' }}
 
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Release tag to test (defaults to the latest release)"
+      version:
+        description: "Release version to test, e.g. 0.17.0 (defaults to the latest release)"
         required: false
         type: string
   schedule:
-    # Daily; the resolve job only proceeds when the latest release is 2-3
-    # days old, so each release gets exactly one automatic check.
+    # Daily; the resolve job only dispatches the testing run when the
+    # latest release is 2-3 days old, so each release gets exactly one
+    # automatic check.
     - cron: "23 6 * * *"
 
 permissions:
   contents: read
+  # Needed to re-dispatch this workflow with the resolved version.
+  actions: write
 
 jobs:
   resolve:
@@ -28,9 +37,12 @@ jobs:
         id: resolve
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          TAG="${INPUT_TAG:-$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)}"
+          # Accept a bare version (0.17.0) or a tag (v0.17.0): strip any
+          # leading v, then prepend it, so both forms resolve to the tag.
+          TAG="${INPUT_VERSION:+v${INPUT_VERSION#v}}"
+          TAG="${TAG:-$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)}"
           PUBLISHED=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json publishedAt --jq .publishedAt)
 
           RUN=true
@@ -38,8 +50,19 @@ jobs:
             AGE=$(( $(date +%s) - $(date -d "$PUBLISHED" +%s) ))
             if [ "$AGE" -lt 172800 ] || [ "$AGE" -ge 259200 ]; then
               RUN=false
-              echo "Latest release $TAG is outside the 2-3 day window; nothing to do."
+              echo "::notice::Skipping: latest release $TAG is outside the 2-3 day window"
             fi
+          fi
+
+          # No version input means this run was only asked to resolve the
+          # latest release: re-dispatch with the version filled in so the
+          # testing run carries it in its title, and do nothing here. The
+          # dispatched run has the input set, so it cannot recurse.
+          if [ -z "$INPUT_VERSION" ] && [ "$RUN" = true ]; then
+            gh workflow run release-smoke-test.yml --repo "$GITHUB_REPOSITORY" -f version="${TAG#v}"
+            RUN=false
+            echo "::notice::Dispatched Release Smoke Test $TAG"
+            echo "Dispatched a titled run for **$TAG**." >> "$GITHUB_STEP_SUMMARY"
           fi
 
           {
