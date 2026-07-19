@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
 
 const conf = JSON.parse(
-  readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf-8"),
+  readFileSync(new URL("../../../src-tauri/tauri.conf.json", import.meta.url), "utf-8"),
 );
 
 /** The production CSP as shipped in tauri.conf.json. */

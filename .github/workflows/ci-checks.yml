@@ -12,9 +12,9 @@ jobs:
       - uses: ./.github/actions/pnpm-setup
       - run: pnpm install --frozen-lockfile
       - name: Biome lint
-        run: npx @biomejs/biome lint --error-on-warnings --reporter=github src/ e2e/
+        run: npx @biomejs/biome lint --error-on-warnings --reporter=github src/
       - name: Biome format check
-        run: npx @biomejs/biome format --error-on-warnings --reporter=github src/ e2e/
+        run: npx @biomejs/biome format --error-on-warnings --reporter=github src/
 
   typecheck:
     name: Typecheck

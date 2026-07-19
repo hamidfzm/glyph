@@ -9,7 +9,7 @@ import { runCspProbe, shippedCsp } from "./cspPage";
 // the real d2 bundle under the CSP read from tauri.conf.json.
 
 const d2Bundle = readFileSync(
-  new URL("../node_modules/@terrastruct/d2/dist/browser/index.js", import.meta.url),
+  new URL("../../../node_modules/@terrastruct/d2/dist/browser/index.js", import.meta.url),
   "utf-8",
 );
 

@@ -14,7 +14,7 @@ const PNG_BASE64 =
 // by font-src" (a CSP-blocked font in WebKit fails silently, with neither a
 // load error nor a securitypolicyviolation event to observe).
 const FONT_BASE64 = readFileSync(
-  new URL("../node_modules/katex/dist/fonts/KaTeX_Main-Regular.woff2", import.meta.url),
+  new URL("../../../node_modules/katex/dist/fonts/KaTeX_Main-Regular.woff2", import.meta.url),
 ).toString("base64");
 
 // The @font-face lives in an external stylesheet (allowed via style-src
