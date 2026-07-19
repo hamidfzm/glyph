@@ -84,6 +84,21 @@ jobs:
           # PyPI uploader: the GPG-verified binary intermittently fails.
           use_pypi: true
 
+  # Renders a real D2 diagram in Playwright WebKit under the CSP shipped in
+  # tauri.conf.json. WebKit enforces the page CSP inside D2's blob worker
+  # (Chromium does not), so only a WebKit run catches a CSP that breaks D2
+  # on Linux/macOS.
+  test-webkit-smoke:
+    name: WebKit smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/pnpm-setup
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright WebKit
+        run: pnpm exec playwright install --with-deps webkit
+      - run: pnpm test:e2e
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest

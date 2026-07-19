@@ -7,7 +7,7 @@
 // extra arguments.
 
 export default {
-  "src/**/*.{ts,tsx,js,jsx,css}":
+  "{src,e2e}/**/*.{ts,tsx,js,jsx,css}":
     "biome check --error-on-warnings --write --no-errors-on-unmatched",
   "src-tauri/**/*.rs": () =>
     "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
