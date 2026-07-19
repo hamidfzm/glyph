@@ -69,8 +69,8 @@
   </branding>
 
   <releases>
-    <release version="0.10.0" date="2026-06-11">
-      <url type="details">https://github.com/hamidfzm/glyph/releases/tag/v0.10.0</url>
+    <release version="0.17.1" date="2026-07-18">
+      <url type="details">https://github.com/hamidfzm/glyph/releases/tag/v0.17.1</url>
     </release>
   </releases>
 </component>

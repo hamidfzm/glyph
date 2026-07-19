@@ -51,13 +51,13 @@ modules:
       - type: archive
         only-arches:
           - x86_64
-        url: https://github.com/hamidfzm/glyph/releases/download/v0.10.0/Glyph_0.10.0_amd64.deb
-        sha256: 93e5d40ba44ee78563bc27e717ee954c714bbe6e63337d361a801c6c8cb53e4d
+        url: https://github.com/hamidfzm/glyph/releases/download/v0.17.1/Glyph_0.17.1_amd64.deb
+        sha256: 34a44ff3ff37ccaa1408b7797600daa6bcc05a835fd6b8a324bd8e25570dac7b
       - type: archive
         only-arches:
           - aarch64
-        url: https://github.com/hamidfzm/glyph/releases/download/v0.10.0/Glyph_0.10.0_arm64.deb
-        sha256: 86dbc1e9b0f29e8c20464b7e2aaa33daead86f270d65a3b0f8ebed7f204c8dcb
+        url: https://github.com/hamidfzm/glyph/releases/download/v0.17.1/Glyph_0.17.1_arm64.deb
+        sha256: 71690dd8a5b4a9b38926681acb9b115524af4cebefc29e037674503115835b92
       - type: file
         path: com.hamidfzm.glyph.desktop
       - type: file
