@@ -1,3 +1,4 @@
+import { setTheme } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { load } from "@tauri-apps/plugin-store";
 import { act, render, screen, waitFor } from "@testing-library/react";
@@ -436,6 +437,38 @@ describe("SettingsProvider", () => {
 
       act(() => screen.getByTestId("update-1").click());
       expect(document.documentElement.classList.contains("dark")).toBe(false);
+    });
+
+    it("syncs the native window theme with the theme setting", async () => {
+      const mockedSetTheme = vi.mocked(setTheme);
+      mockedSetTheme.mockClear();
+
+      render(
+        <SettingsProvider>
+          <UpdateConsumer
+            updates={[
+              ["appearance.theme", "dark"],
+              ["appearance.theme", "light"],
+              ["appearance.theme", "system"],
+            ]}
+          />
+        </SettingsProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("loaded").textContent).toBe("true");
+      });
+      // Mount applies the stored theme (system) to the native window too.
+      expect(mockedSetTheme).toHaveBeenCalledWith(null);
+
+      act(() => screen.getByTestId("update-0").click());
+      expect(mockedSetTheme).toHaveBeenLastCalledWith("dark");
+
+      act(() => screen.getByTestId("update-1").click());
+      expect(mockedSetTheme).toHaveBeenLastCalledWith("light");
+
+      act(() => screen.getByTestId("update-2").click());
+      expect(mockedSetTheme).toHaveBeenLastCalledWith(null);
     });
 
     it("reacts to system theme changes while on the system theme", async () => {
