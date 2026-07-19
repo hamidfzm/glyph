@@ -918,6 +918,10 @@ jobs:
             { print }
           ' flatpak/com.hamidfzm.glyph.yml > /tmp/manifest.yml
 
+          # Stamp the metainfo release entry with this release; the committed
+          # file only carries the entry that was current when it last changed.
+          sed -i "s|<release version=\"[0-9.]*\" date=\"[0-9-]*\">|<release version=\"$VERSION\" date=\"$(date -u +%F)\">|; s|releases/tag/v[0-9.]*|releases/tag/v$VERSION|" flatpak/com.hamidfzm.glyph.metainfo.xml
+
           # Single-source the homepage URL from package.json (falls back to the
           # committed value if the field is absent).
           HOMEPAGE=$(jq -r '.homepage // empty' package.json)
