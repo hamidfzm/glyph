@@ -7,11 +7,11 @@
 # `ar` + `tar`; the `usr/...` paths below come straight from the
 # Tauri-generated package.
 #
-# The `url` versions and `sha256` checksums below are placeholders. They are
-# filled in per release (the SHA256s are the same ones computed by the
-# `publish-aur` / `publish-debian` jobs). Validate this manifest in a Linux
-# environment with:
-#   flatpak-builder --user --install --force-clean build-dir flatpak/com.hamidfzm.glyph.yml
+# The `url` versions and `sha256` checksums below are pinned to the release
+# that was current when this file last changed; the `publish-flathub` job in
+# `release.yml` rewrites them on every release. Validate this manifest in a
+# Linux environment with:
+#   flatpak run org.flatpak.Builder --user --install --force-clean builddir flatpak/com.hamidfzm.glyph.yml
 #
 # See the Tauri Flatpak guide: https://v2.tauri.app/distribute/flatpak/
 id: com.hamidfzm.glyph
