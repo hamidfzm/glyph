@@ -90,6 +90,13 @@ feature:
   plugin marketplace over HTTPS).
 - `script-src data: blob: 'wasm-unsafe-eval'` is required by the Mermaid and
   D2 WASM renderers.
+- `script-src 'unsafe-eval'` is required by D2 alone: its blob-URL worker
+  loads the ELK layout engine via `new Function(...)`, and WebKit (WebKitGTK
+  on Linux, WKWebView on macOS) enforces the page CSP inside blob workers, so
+  without it every D2 render fails there. CSP offers no way to grant eval to
+  one worker only. The practical loss is small: `script-src` already allows
+  `data:` and `blob:` scripts, so an attacker who can inject markup can
+  already run arbitrary script without `eval`.
 - `style-src 'unsafe-inline'` is required by markdown theming and syntax
   highlighting (`dangerousDisableAssetCspModification` keeps Tauri from
   rewriting it).
