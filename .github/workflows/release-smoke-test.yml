@@ -278,6 +278,37 @@ jobs:
           [ "$CODE" -eq 124 ] || { echo "launch check failed (exit $CODE)"; exit 1; }
           echo "status=verified" >> "$GITHUB_OUTPUT"
 
+  flathub:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Install from Flathub and verify
+        id: check
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y flatpak xvfb
+          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          AVAILABLE=$(flatpak remote-info flathub com.hamidfzm.glyph 2>/dev/null | awk '$1 == "Version:" {print $2}')
+          if [ "$AVAILABLE" != "$VERSION" ]; then
+            echo "status=pending" >> "$GITHUB_OUTPUT"
+            echo "Flathub serves ${AVAILABLE:-nothing}, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          sudo flatpak install -y --noninteractive flathub com.hamidfzm.glyph
+
+          set +e
+          WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a timeout 15 flatpak run com.hamidfzm.glyph
+          CODE=$?
+          set -e
+          [ "$CODE" -eq 124 ] || { echo "launch check failed (exit $CODE)"; exit 1; }
+          echo "status=verified" >> "$GITHUB_OUTPUT"
+
   dnf:
     needs: resolve
     if: needs.resolve.outputs.run == 'true'
@@ -460,6 +491,7 @@ jobs:
       - ppa-jammy
       - ppa-noble
       - snap
+      - flathub
       - dnf
       - aur
       - scoop
@@ -479,6 +511,7 @@ jobs:
             ppa-jammy ${{ needs.ppa-jammy.result }} ${{ needs.ppa-jammy.outputs.status }}
             ppa-noble ${{ needs.ppa-noble.result }} ${{ needs.ppa-noble.outputs.status }}
             snap ${{ needs.snap.result }} ${{ needs.snap.outputs.status }}
+            flathub ${{ needs.flathub.result }} ${{ needs.flathub.outputs.status }}
             dnf ${{ needs.dnf.result }} ${{ needs.dnf.outputs.status }}
             aur ${{ needs.aur.result }} ${{ needs.aur.outputs.status }}
             scoop ${{ needs.scoop.result }} ${{ needs.scoop.outputs.status }}

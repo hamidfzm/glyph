@@ -45,6 +45,9 @@ jobs:
 
           ### Linux
           ```bash
+          # Flathub (Flatpak)
+          flatpak install flathub com.hamidfzm.glyph
+
           # Snap Store
           sudo snap install glyph
 
@@ -156,6 +159,9 @@ jobs:
 
           ### Linux
           ```bash
+          # Flathub (Flatpak)
+          flatpak install flathub com.hamidfzm.glyph
+
           # Snap Store
           sudo snap install glyph
 
