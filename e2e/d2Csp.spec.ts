@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
+import { runCspProbe, shippedCsp } from "./cspPage";
 
 // Smoke test for the D2/CSP regression: the D2 engine runs in a blob-URL
 // worker whose init calls `new Function(...)`, and WebKit enforces the page
@@ -7,36 +8,12 @@ import { expect, type Page, test } from "@playwright/test";
 // or every D2 render fails on Linux/macOS. This renders a real diagram with
 // the real d2 bundle under the CSP read from tauri.conf.json.
 
-const conf = JSON.parse(
-  readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf-8"),
-);
-const shippedCsp: string = conf.app.security.csp;
-
 const d2Bundle = readFileSync(
   new URL("../node_modules/@terrastruct/d2/dist/browser/index.js", import.meta.url),
   "utf-8",
 );
 
-// A synthetic origin; page.route intercepts before DNS so nothing is fetched.
-const ORIGIN = "http://glyph-csp-smoke.test";
-
-// The runner script is served as a separate file: the CSP under test has no
-// 'unsafe-inline' in script-src (the real app loads scripts via 'self' too),
-// so an inline <script> would be blocked before D2 ever ran.
-function pageHtml(csp: string): string {
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="${csp}">
-</head>
-<body>
-<script type="module" src="/run.js"></script>
-</body>
-</html>`;
-}
-
-const runJs = `
+const RUN_JS = `
 import { D2 } from "/d2.js";
 try {
   const d2 = new D2();
@@ -48,20 +25,13 @@ try {
 }
 `;
 
-async function renderUnderCsp(page: Page, csp: string): Promise<string> {
-  await page.route(`${ORIGIN}/**`, (route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname === "/d2.js") {
-      return route.fulfill({ contentType: "text/javascript", body: d2Bundle });
-    }
-    if (url.pathname === "/run.js") {
-      return route.fulfill({ contentType: "text/javascript", body: runJs });
-    }
-    return route.fulfill({ contentType: "text/html", body: pageHtml(csp) });
+function renderUnderCsp(page: Page, csp: string): Promise<string> {
+  return runCspProbe(page, {
+    csp,
+    runJs: RUN_JS,
+    files: { "/d2.js": { contentType: "text/javascript", body: d2Bundle } },
+    titlePrefix: "D2_",
   });
-  await page.goto(`${ORIGIN}/`);
-  await page.waitForFunction(() => document.title.startsWith("D2_"));
-  return page.title();
 }
 
 test("D2 renders a diagram under the shipped CSP", async ({ page }) => {
