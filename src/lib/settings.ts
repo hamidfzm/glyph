@@ -137,11 +137,13 @@ export type EditorKeymap = "default" | "vim" | "vscode";
 export interface EditorSettings {
   keymap: EditorKeymap;
   // Underline misspelled words in the editor (edit and split modes). Off by
-  // default; the dictionary only loads once enabled.
+  // default; dictionaries only load once enabled.
   spellCheck: boolean;
-  // Dictionary language for spell check, as a folder name under
-  // public/dictionaries (currently only "en" ships).
-  spellCheckLanguage: string;
+  // Enabled dictionary languages. A word is checked against every enabled
+  // dictionary covering its script and flagged only when all of them reject
+  // it; words in scripts no enabled dictionary covers are skipped. An empty
+  // array checks nothing.
+  spellCheckLanguages: string[];
 }
 
 export interface KeybindingSettings {
@@ -241,7 +243,7 @@ export const DEFAULT_SETTINGS: Settings = {
   editor: {
     keymap: "default",
     spellCheck: false,
-    spellCheckLanguage: "en",
+    spellCheckLanguages: ["en"],
   },
   markdown: {
     gfm: true,

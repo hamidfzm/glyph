@@ -5,22 +5,7 @@
 // and `note#my-heading` resolve to the same section (the slug is what
 // rehype-slug puts on the rendered anchor).
 import { slug } from "github-slugger";
-
-const ATX = /^(#{1,6})\s+(.*)$/;
-const FENCE = /^(```|~~~)/;
-
-interface Heading {
-  level: number;
-  text: string;
-}
-
-function parseHeading(line: string): Heading | null {
-  const m = ATX.exec(line);
-  if (!m) return null;
-  // Drop a trailing run of `#` (closed ATX headings) and surrounding space.
-  const text = m[2].replace(/\s+#+\s*$/, "").trim();
-  return { level: m[1].length, text };
-}
+import { parseHeadings } from "@/lib/markdownHeadings";
 
 function matches(heading: string, target: string): boolean {
   const a = heading.trim();
@@ -33,33 +18,15 @@ function matches(heading: string, target: string): boolean {
  * when no heading matches. Headings inside fenced code blocks are ignored.
  */
 export function extractHeadingSection(md: string, heading: string): string {
+  const headings = parseHeadings(md);
+  const startIdx = headings.findIndex((h) => matches(h.text, heading));
+  if (startIdx < 0) return "";
+
+  const start = headings[startIdx];
+  // Section runs to the next heading of the same or higher level.
+  const end = headings.slice(startIdx + 1).find((h) => h.level <= start.level);
+
   const lines = md.split("\n");
-  let inFence = false;
-  let startLevel = -1;
-  const out: string[] = [];
-
-  for (const line of lines) {
-    if (FENCE.test(line)) {
-      // Toggle fence state; a fenced line is never a heading.
-      if (startLevel >= 0) out.push(line);
-      inFence = !inFence;
-      continue;
-    }
-
-    const h = inFence ? null : parseHeading(line);
-
-    if (startLevel < 0) {
-      if (h && matches(h.text, heading)) {
-        startLevel = h.level;
-        out.push(line);
-      }
-      continue;
-    }
-
-    // Collecting: stop at the next same-or-higher heading.
-    if (h && h.level <= startLevel) break;
-    out.push(line);
-  }
-
-  return startLevel < 0 ? "" : out.join("\n").trimEnd();
+  const section = lines.slice(start.line, end?.line);
+  return section.join("\n").trimEnd();
 }

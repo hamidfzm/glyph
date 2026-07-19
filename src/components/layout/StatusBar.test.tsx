@@ -6,6 +6,7 @@ import { SyncConfigProvider } from "@/contexts/SyncConfigProvider";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { FileTab, Workspace } from "@/hooks/useTabs";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 import { StatusBar } from "./StatusBar";
 
 // useSettings is read for the zoom indicator. Mock it so a test can drive a
@@ -51,6 +52,7 @@ function buildContext(opts: Opts): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    indexStatus: COMPLETE_INDEX_STATUS,
     workspace: null,
     openFile: vi.fn(),
     openFolder: vi.fn(),
@@ -171,6 +173,7 @@ function buildWorkspaceContext(): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    indexStatus: COMPLETE_INDEX_STATUS,
     workspace: makeWorkspace(),
     openFile: vi.fn(),
     openFolder: vi.fn(),

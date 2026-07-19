@@ -55,4 +55,49 @@ describe("migrateLegacySettings", () => {
     });
     expect(migrated.appearance).toEqual({ theme: "dark" });
   });
+
+  it("seeds spellCheckLanguages from the legacy single language and drops it", () => {
+    const migrated = migrateLegacySettings({
+      editor: { keymap: "vim", spellCheckLanguage: "fa" },
+    });
+    expect(migrated.editor).toEqual({ keymap: "vim", spellCheckLanguages: ["fa"] });
+  });
+
+  it("does not overwrite an existing spellCheckLanguages array", () => {
+    const migrated = migrateLegacySettings({
+      editor: { spellCheckLanguage: "fa", spellCheckLanguages: ["en", "de"] },
+    });
+    expect(migrated.editor).toEqual({ spellCheckLanguages: ["en", "de"] });
+  });
+
+  it("passes an editor section without the legacy key through unchanged", () => {
+    const saved = { editor: { spellCheckLanguages: ["en"] } };
+    expect(migrateLegacySettings(saved)).toBe(saved);
+  });
+
+  it("drops a blank legacy language without seeding the array", () => {
+    const migrated = migrateLegacySettings({ editor: { spellCheckLanguage: "" } });
+    expect(migrated.editor).toEqual({});
+  });
+
+  it("discards a corrupt non-array spellCheckLanguages so the default applies", () => {
+    const migrated = migrateLegacySettings({ editor: { spellCheckLanguages: "en" } });
+    expect(migrated.editor).toEqual({});
+  });
+
+  it("repairs a corrupt value from the legacy key when both are present", () => {
+    const migrated = migrateLegacySettings({
+      editor: { spellCheckLanguage: "de", spellCheckLanguages: "en" },
+    });
+    expect(migrated.editor).toEqual({ spellCheckLanguages: ["de"] });
+  });
+
+  it("applies the sidebar and spell-check migrations together", () => {
+    const migrated = migrateLegacySettings({
+      layout: { sidebarWidth: 200 },
+      editor: { spellCheckLanguage: "en" },
+    });
+    expect(migrated.layout).toEqual({ filesSidebarWidth: 200, outlineSidebarWidth: 200 });
+    expect(migrated.editor).toEqual({ spellCheckLanguages: ["en"] });
+  });
 });

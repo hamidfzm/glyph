@@ -9,11 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
+      - uses: ./.github/actions/pnpm-setup
       - run: pnpm install --frozen-lockfile
       - name: Run tests with coverage
         run: pnpm test:coverage
@@ -51,28 +47,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/rust-setup
         with:
           components: llvm-tools-preview
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-      - name: Cache apt packages
-        uses: actions/cache@v5
-        with:
-          path: ~/apt-cache/*.deb
-          key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
       - name: Install Linux dependencies
         timeout-minutes: 8
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          mkdir -p ~/apt-cache/partial
-          sudo apt-get update
-          sudo apt-get -o Dir::Cache::archives="$HOME/apt-cache" \
-            -o Binary::apt::APT::Keep-Downloaded-Packages=true \
-            install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+        uses: ./.github/actions/linux-deps
+        with:
+          cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Install cargo-nextest
@@ -107,28 +89,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/rust-setup
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-      - name: Cache apt packages
-        uses: actions/cache@v5
-        with:
-          path: ~/apt-cache/*.deb
-          key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
       - name: Install Linux dependencies
         timeout-minutes: 8
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          mkdir -p ~/apt-cache/partial
-          sudo apt-get update
-          sudo apt-get -o Dir::Cache::archives="$HOME/apt-cache" \
-            -o Binary::apt::APT::Keep-Downloaded-Packages=true \
-            install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+        uses: ./.github/actions/linux-deps
+        with:
+          cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
       - name: Add Clippy problem matcher
         run: echo "::add-matcher::.github/matchers/rust.json"
       - name: Run Clippy

@@ -1,6 +1,9 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import { pickExportDir } from "@/lib/pickers";
+import { createRegistry } from "@/lib/plugins/registry";
 import { useExportSite } from "./useExportSite";
 
 vi.mock("@/lib/pickers", () => ({
@@ -73,5 +76,24 @@ describe("useExportSite", () => {
     expect(result.current.siteProgress).toBeNull();
     expect(error).toHaveBeenCalledWith("Failed to export website:", expect.any(Error));
     error.mockRestore();
+  });
+
+  it("passes plugin markdown contributions to the exporter", async () => {
+    vi.mocked(pickExportDir).mockResolvedValue("/out");
+    const remark = [vi.fn()];
+    const rehype = [vi.fn()];
+    const siteThemes = createRegistry();
+    const remarkPlugins = createRegistry();
+    const rehypePlugins = createRegistry();
+    remarkPlugins.register(remark[0]);
+    rehypePlugins.register(rehype[0]);
+    const value = { siteThemes, remarkPlugins, rehypePlugins } as unknown as PluginsContextValue;
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(PluginsContext.Provider, { value }, children);
+    const { result } = renderHook(() => useExportSite("/ws"), { wrapper });
+    await act(() => result.current.exportWebsite());
+    expect(exportSiteMock).toHaveBeenCalledWith(
+      expect.objectContaining({ remarkPlugins: remark, rehypePlugins: rehype }),
+    );
   });
 });

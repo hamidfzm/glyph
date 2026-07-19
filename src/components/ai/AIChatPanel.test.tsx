@@ -36,7 +36,13 @@ describe("AIChatPanel", () => {
     const updateSettings = vi.fn();
     render(
       <SettingsContext.Provider
-        value={{ settings: DEFAULT_SETTINGS, updateSettings, resetSettings: noop, loaded: true }}
+        value={{
+          settings: DEFAULT_SETTINGS,
+          updateSettings,
+          resetSettings: noop,
+          flushSettings: async () => true,
+          loaded: true,
+        }}
       >
         <AIChatPanel {...defaultProps} />
       </SettingsContext.Provider>,
@@ -58,7 +64,13 @@ describe("AIChatPanel", () => {
       const updateSettings = vi.fn();
       render(
         <SettingsContext.Provider
-          value={{ settings: DEFAULT_SETTINGS, updateSettings, resetSettings: noop, loaded: true }}
+          value={{
+            settings: DEFAULT_SETTINGS,
+            updateSettings,
+            resetSettings: noop,
+            flushSettings: async () => true,
+            loaded: true,
+          }}
         >
           <AIChatPanel {...defaultProps} />
         </SettingsContext.Provider>,
@@ -81,7 +93,13 @@ describe("AIChatPanel", () => {
     const updateSettings = vi.fn();
     render(
       <SettingsContext.Provider
-        value={{ settings: DEFAULT_SETTINGS, updateSettings, resetSettings: noop, loaded: true }}
+        value={{
+          settings: DEFAULT_SETTINGS,
+          updateSettings,
+          resetSettings: noop,
+          flushSettings: async () => true,
+          loaded: true,
+        }}
       >
         <AIChatPanel {...defaultProps} />
       </SettingsContext.Provider>,

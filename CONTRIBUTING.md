@@ -208,6 +208,10 @@ Do **not** create releases manually with `gh release create` or push tags by han
 
 **Wait for CI to pass on `main` before triggering Create Release.** The release workflow assumes the latest commit is green; running it on a red `main` produces broken artifacts that get published to every package manager simultaneously. Check the CI badge or `gh run list --branch main --limit 1` first.
 
+### Post-release smoke test
+
+The **Release Smoke Test** workflow (`release-smoke-test.yml`) installs Glyph from every package channel (Homebrew cask and formula, Scoop, Chocolatey, winget, apt, PPA, dnf, Snap, AUR) on a matching runner, asserts the installed version matches the release, and on Linux verifies the app launches. It runs automatically once per release, 2 to 3 days after publish (slow channels like Chocolatey moderation and the PPA build queue need the head start), and can be dispatched manually anytime with an optional tag input. Channels that do not serve the version yet report **pending** without failing the run; the run summary shows a per-channel verified/pending/failed table.
+
 ## Reporting Issues
 
 - **Bugs**: Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.yml)

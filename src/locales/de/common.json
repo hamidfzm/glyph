@@ -32,7 +32,8 @@
     "closeWorkspace": "Arbeitsbereich schließen",
     "outline": "Gliederung",
     "resize": "Größe der Seitenleiste ändern",
-    "resizeBacklinks": "Größe der Rückverweise ändern"
+    "resizeBacklinks": "Größe der Rückverweise ändern",
+    "indexIncomplete": "Index unvollständig"
   },
   "backlinks": {
     "heading": "Rückverweise"

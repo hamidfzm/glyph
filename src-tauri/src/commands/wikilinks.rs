@@ -1,9 +1,8 @@
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
-use walkdir::WalkDir;
 
-use super::walk::{WALK_MAX_DEPTH, WALK_MAX_FILES, WALK_SKIP_DIRS};
+use super::walk::{workspace_walker, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
 use crate::grants::GrantRegistry;
 
 const SCAN_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
@@ -22,41 +21,47 @@ pub struct WikilinkRef {
     pub snippet: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WikilinkScan {
+    pub refs: Vec<WikilinkRef>,
+    pub status: ScanStatus,
+}
+
 #[tauri::command]
 pub fn scan_wikilinks(
     path: String,
     grants: tauri::State<'_, GrantRegistry>,
-) -> Result<Vec<WikilinkRef>, String> {
+) -> Result<WikilinkScan, String> {
     grants.ensure_readable(&path)?;
-    scan_wikilinks_capped(&path, WALK_MAX_FILES)
+    scan_wikilinks_capped(&path, WALK_MAX_FILES, WALK_MAX_DEPTH)
 }
 
-/// Body of [`scan_wikilinks`] with the file cap as a parameter, so the
-/// truncation branch is testable without creating `WALK_MAX_FILES` real files.
-fn scan_wikilinks_capped(path: &str, max_files: usize) -> Result<Vec<WikilinkRef>, String> {
+/// Body of [`scan_wikilinks`] with the caps as parameters, so the truncation
+/// branches are testable without creating `WALK_MAX_FILES` real files or a
+/// `WALK_MAX_DEPTH`-deep tree.
+fn scan_wikilinks_capped(
+    path: &str,
+    max_files: usize,
+    max_depth: usize,
+) -> Result<WikilinkScan, String> {
     let root = Path::new(path);
     if !root.is_dir() {
         return Err(format!("Not a directory: {path}"));
     }
 
-    let walker = WalkDir::new(root)
-        .max_depth(WALK_MAX_DEPTH)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|e| {
-            let name = e.file_name().to_string_lossy();
-            if name.starts_with('.') && e.depth() > 0 {
-                return false;
-            }
-            if e.file_type().is_dir() && WALK_SKIP_DIRS.contains(&name.as_ref()) {
-                return false;
-            }
-            true
-        });
-
     let mut refs: Vec<WikilinkRef> = Vec::new();
+    let mut status = ScanStatus::complete();
     let mut files_scanned = 0usize;
-    for entry in walker.flatten() {
+    for entry in workspace_walker(root, max_depth) {
+        if entry.file_type().is_dir() {
+            // A directory yielded at the depth cap is not descended into, so
+            // its wikilinks are missing from the index.
+            if entry.depth() >= max_depth {
+                status = ScanStatus::depth_limit(max_depth);
+            }
+            continue;
+        }
         if !entry.file_type().is_file() {
             continue;
         }
@@ -65,6 +70,7 @@ fn scan_wikilinks_capped(path: &str, max_files: usize) -> Result<Vec<WikilinkRef
             continue;
         }
         if files_scanned >= max_files {
+            status = ScanStatus::file_limit(max_files);
             break;
         }
         files_scanned += 1;
@@ -82,7 +88,7 @@ fn scan_wikilinks_capped(path: &str, max_files: usize) -> Result<Vec<WikilinkRef
         scan_wikilinks_in_file(&content, &source, &mut refs);
     }
 
-    Ok(refs)
+    Ok(WikilinkScan { refs, status })
 }
 
 fn scan_wikilinks_in_file(content: &str, source: &str, out: &mut Vec<WikilinkRef>) {
@@ -146,6 +152,7 @@ fn snippet_for(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::walk::WALK_SKIP_DIRS;
     use std::time::UNIX_EPOCH;
     use tauri::test::{mock_app, MockRuntime};
     use tauri::Manager;
@@ -185,7 +192,8 @@ mod tests {
             dir.to_string_lossy().to_string(),
             app_with_workspace(&dir).state::<GrantRegistry>(),
         )
-        .unwrap();
+        .unwrap()
+        .refs;
         refs.sort_by_key(|r| (r.source.clone(), r.line));
         let from_a: Vec<_> = refs.iter().filter(|r| r.source.ends_with("a.md")).collect();
         assert_eq!(from_a.len(), 2);
@@ -211,7 +219,8 @@ mod tests {
             dir.to_string_lossy().to_string(),
             app_with_workspace(&dir).state::<GrantRegistry>(),
         )
-        .unwrap();
+        .unwrap()
+        .refs;
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert!(targets.contains(&"Real"));
         assert!(targets.contains(&"AlsoReal"));
@@ -229,7 +238,8 @@ mod tests {
             dir.to_string_lossy().to_string(),
             app_with_workspace(&dir).state::<GrantRegistry>(),
         )
-        .unwrap();
+        .unwrap()
+        .refs;
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert_eq!(targets, vec!["One", "Two", "Three"]);
         for r in &refs {
@@ -252,7 +262,8 @@ mod tests {
             dir.to_string_lossy().to_string(),
             app_with_workspace(&dir).state::<GrantRegistry>(),
         )
-        .unwrap();
+        .unwrap()
+        .refs;
         assert_eq!(refs.len(), 1);
         assert_eq!(refs[0].line, 2);
         assert_eq!(refs[0].target, "Target#section|alias");
@@ -271,7 +282,8 @@ mod tests {
             dir.to_string_lossy().to_string(),
             app_with_workspace(&dir).state::<GrantRegistry>(),
         )
-        .unwrap();
+        .unwrap()
+        .refs;
         assert_eq!(refs.len(), 1);
         assert!(refs[0].snippet.ends_with('…'));
         assert!(refs[0].snippet.chars().count() <= SCAN_MAX_SNIPPET + 1);
@@ -325,7 +337,8 @@ mod tests {
             dir.to_string_lossy().to_string(),
             app_with_workspace(&dir).state::<GrantRegistry>(),
         )
-        .unwrap();
+        .unwrap()
+        .refs;
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert_eq!(targets, vec!["Kept"]);
 
@@ -342,7 +355,8 @@ mod tests {
             dir.to_string_lossy().to_string(),
             app_with_workspace(&dir).state::<GrantRegistry>(),
         )
-        .unwrap();
+        .unwrap()
+        .refs;
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert_eq!(targets, vec!["FromMd"]);
 
@@ -361,7 +375,8 @@ mod tests {
             dir.to_string_lossy().to_string(),
             app_with_workspace(&dir).state::<GrantRegistry>(),
         )
-        .unwrap();
+        .unwrap()
+        .refs;
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert_eq!(targets, vec!["FromSmall"]);
 
@@ -382,7 +397,8 @@ mod tests {
             dir.to_string_lossy().to_string(),
             app_with_workspace(&dir).state::<GrantRegistry>(),
         )
-        .unwrap();
+        .unwrap()
+        .refs;
         let targets: Vec<&str> = refs.iter().map(|r| r.target.as_str()).collect();
         assert_eq!(targets, vec!["Good"]);
 
@@ -395,8 +411,38 @@ mod tests {
         fs::write(dir.join("a.md"), "see [[FromA]]").unwrap();
         fs::write(dir.join("b.md"), "see [[FromB]]").unwrap();
 
-        let refs = scan_wikilinks_capped(&dir.to_string_lossy(), 1).unwrap();
-        assert_eq!(refs.len(), 1);
+        let scan = scan_wikilinks_capped(&dir.to_string_lossy(), 1, WALK_MAX_DEPTH).unwrap();
+        assert_eq!(scan.refs.len(), 1);
+        assert_eq!(scan.status, ScanStatus::file_limit(1));
+        // Sorted traversal makes the covered subset deterministic.
+        assert_eq!(scan.refs[0].target, "FromA");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_wikilinks_reports_the_depth_cap() {
+        let dir = unique_tmp("scan_depth");
+        fs::write(dir.join("top.md"), "see [[FromTop]]").unwrap();
+        fs::create_dir_all(dir.join("nested")).unwrap();
+        fs::write(dir.join("nested/deep.md"), "see [[FromDeep]]").unwrap();
+
+        let scan = scan_wikilinks_capped(&dir.to_string_lossy(), WALK_MAX_FILES, 1).unwrap();
+        let targets: Vec<&str> = scan.refs.iter().map(|r| r.target.as_str()).collect();
+        assert_eq!(targets, vec!["FromTop"]);
+        assert_eq!(scan.status, ScanStatus::depth_limit(1));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_wikilinks_complete_scan_reports_no_truncation() {
+        let dir = unique_tmp("scan_complete");
+        fs::write(dir.join("a.md"), "see [[B]]").unwrap();
+
+        let scan =
+            scan_wikilinks_capped(&dir.to_string_lossy(), WALK_MAX_FILES, WALK_MAX_DEPTH).unwrap();
+        assert_eq!(scan.status, ScanStatus::complete());
 
         let _ = fs::remove_dir_all(&dir);
     }

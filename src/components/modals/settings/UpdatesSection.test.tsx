@@ -20,6 +20,7 @@ function renderWith(overrides: Partial<SettingsContextValue> = {}) {
     settings: DEFAULT_SETTINGS,
     updateSettings,
     resetSettings: vi.fn(),
+    flushSettings: async () => true,
     loaded: true,
     ...overrides,
   };

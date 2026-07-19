@@ -11,6 +11,7 @@ function setup() {
     settings: DEFAULT_SETTINGS,
     updateSettings,
     resetSettings: vi.fn(),
+    flushSettings: async () => true,
     loaded: true,
   };
   const wrapper = ({ children }: { children: ReactNode }) => (

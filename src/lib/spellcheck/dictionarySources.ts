@@ -14,6 +14,13 @@ export interface DictionaryContribution {
   label: string;
   /** Produce the dictionary text; called only once the language is selected. */
   load: () => Promise<DictionarySources>;
+  /**
+   * ISO 15924 script codes this dictionary covers (e.g. `["Arab"]`); words in
+   * other scripts are never checked against it. Defaults to the language
+   * code's likely script (see `scriptsForLanguage`), so most dictionaries can
+   * omit it.
+   */
+  scripts?: readonly string[];
 }
 
 // Module-level so the speller (plain module) and the settings UI (React) read

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { load } from "@tauri-apps/plugin-store";
 import { act, render, screen, waitFor } from "@testing-library/react";
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { SettingsContext } from "./SettingsContext";
@@ -11,15 +11,30 @@ const mockedLoad = vi.mocked(load);
 const realMatchMedia = window.matchMedia;
 
 // Builds a fake store whose `get` resolves the given saved value, registered as
-// the next `load()` result. Returns the `set` spy so tests can assert persisted
-// writes.
-function mockStore(saved: unknown, { setRejects = false } = {}) {
+// the next `load()` result. Returns the `set` and `save` spies so tests can
+// assert persisted writes. With `deferLoad`, `load()` stays pending until the
+// returned `resolveLoad` is called.
+function mockStore(saved: unknown, { setRejects = false, deferLoad = false } = {}) {
   const set = vi.fn(() =>
     setRejects ? Promise.reject(new Error("disk full")) : Promise.resolve(),
   );
+  const save = vi.fn(() => Promise.resolve());
   const get = vi.fn(() => Promise.resolve(saved));
-  mockedLoad.mockResolvedValueOnce({ get, set } as unknown as Awaited<ReturnType<typeof load>>);
-  return { get, set };
+  const store = { get, set, save } as unknown as Awaited<ReturnType<typeof load>>;
+  // Captured when the provider calls load(), so resolveLoad must stay a stable
+  // wrapper that reads the latest resolver.
+  let resolve: ((store: Awaited<ReturnType<typeof load>>) => void) | undefined;
+  if (deferLoad) {
+    mockedLoad.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
+  } else {
+    mockedLoad.mockResolvedValueOnce(store);
+  }
+  return { get, set, save, resolveLoad: () => resolve?.(store) };
 }
 
 // Generic consumer that fires a sequence of updateSettings(path, value) calls,
@@ -40,6 +55,40 @@ function UpdateConsumer({ updates }: { updates: Array<[string, unknown]> }) {
           update
         </button>
       ))}
+    </div>
+  );
+}
+
+// Drives updateSettings + flushSettings so tests can exercise the pending-write
+// queue: two font-size updates, a flush whose boolean result is rendered.
+function FlushConsumer() {
+  const { updateSettings, flushSettings, loaded } = useContext(SettingsContext);
+  const [flushResult, setFlushResult] = useState("");
+  return (
+    <div>
+      <span data-testid="loaded">{String(loaded)}</span>
+      <span data-testid="flush-result">{flushResult}</span>
+      <button
+        type="button"
+        data-testid="update-font"
+        onClick={() => updateSettings("appearance.fontSize", 21)}
+      >
+        first update
+      </button>
+      <button
+        type="button"
+        data-testid="update-font-again"
+        onClick={() => updateSettings("appearance.fontSize", 22)}
+      >
+        second update
+      </button>
+      <button
+        type="button"
+        data-testid="flush"
+        onClick={async () => setFlushResult(String(await flushSettings()))}
+      >
+        flush
+      </button>
     </div>
   );
 }
@@ -110,6 +159,15 @@ describe("SettingsContext", () => {
     act(() => screen.getByTestId("change-font").click());
     act(() => screen.getByTestId("reset").click());
     expect(screen.getByTestId("font-size").textContent).toBe("16");
+  });
+
+  it("the default flushSettings resolves true without a provider", async () => {
+    render(<FlushConsumer />);
+    await act(async () => {
+      screen.getByTestId("flush").click();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("flush-result").textContent).toBe("true");
   });
 });
 
@@ -284,6 +342,30 @@ describe("SettingsProvider", () => {
       expect(screen.getByTestId("theme").textContent).toBe("system");
       expect(document.documentElement.style.getPropertyValue("--glyph-font-size")).toBe("16px");
       errSpy.mockRestore();
+    });
+
+    it("does not render children until the store has loaded (#490)", async () => {
+      const { resolveLoad } = mockStore({ appearance: { fontSize: 22 } }, { deferLoad: true });
+
+      render(
+        <SettingsProvider>
+          <TestConsumer />
+        </SettingsProvider>,
+      );
+
+      // While the load is pending no consumer is mounted, so nothing can read
+      // DEFAULT_SETTINGS and persist it over the user's stored settings.
+      expect(screen.queryByTestId("loaded")).toBeNull();
+
+      await act(async () => {
+        resolveLoad();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("loaded").textContent).toBe("true");
+      });
+      // Children mount straight into the merged settings, never the defaults.
+      expect(screen.getByTestId("font-size").textContent).toBe("22");
     });
 
     it("does not apply settings when unmounted before the load resolves", async () => {
@@ -537,6 +619,186 @@ describe("SettingsProvider", () => {
       });
 
       expect(set).toHaveBeenCalledWith("settings", DEFAULT_SETTINGS);
+    });
+  });
+
+  describe("flushSettings", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    async function renderFlushConsumer() {
+      const view = render(
+        <SettingsProvider>
+          <FlushConsumer />
+        </SettingsProvider>,
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId("loaded").textContent).toBe("true");
+      });
+      return view;
+    }
+
+    it("persists an update still inside the debounce window", async () => {
+      const { set, save } = mockStore(null);
+      await renderFlushConsumer();
+
+      vi.useFakeTimers();
+      act(() => screen.getByTestId("update-font").click());
+      expect(set).not.toHaveBeenCalled();
+
+      await act(async () => {
+        screen.getByTestId("flush").click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(set).toHaveBeenCalledTimes(1);
+      expect(set).toHaveBeenCalledWith(
+        "settings",
+        expect.objectContaining({
+          appearance: expect.objectContaining({ fontSize: 21 }),
+        }),
+      );
+      expect(save).toHaveBeenCalled();
+      expect(screen.getByTestId("flush-result").textContent).toBe("true");
+
+      // The debounce timer was cleared, so nothing writes a second time.
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+        await Promise.resolve();
+      });
+      expect(set).toHaveBeenCalledTimes(1);
+    });
+
+    it("coalesces rapid updates into one write of the latest value", async () => {
+      const { set } = mockStore(null);
+      await renderFlushConsumer();
+
+      vi.useFakeTimers();
+      act(() => screen.getByTestId("update-font").click());
+      act(() => screen.getByTestId("update-font-again").click());
+
+      await act(async () => {
+        screen.getByTestId("flush").click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(set).toHaveBeenCalledTimes(1);
+      expect(set).toHaveBeenCalledWith(
+        "settings",
+        expect.objectContaining({
+          appearance: expect.objectContaining({ fontSize: 22 }),
+        }),
+      );
+    });
+
+    it("reports a failed write", async () => {
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      mockStore(null, { setRejects: true });
+      await renderFlushConsumer();
+
+      vi.useFakeTimers();
+      act(() => screen.getByTestId("update-font").click());
+
+      await act(async () => {
+        screen.getByTestId("flush").click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(screen.getByTestId("flush-result").textContent).toBe("false");
+      expect(errSpy).toHaveBeenCalledWith("Failed to save settings:", expect.any(Error));
+      errSpy.mockRestore();
+    });
+
+    it("is a no-op without a pending update", async () => {
+      const { set, save } = mockStore(null);
+      await renderFlushConsumer();
+
+      await act(async () => {
+        screen.getByTestId("flush").click();
+        await Promise.resolve();
+      });
+
+      expect(screen.getByTestId("flush-result").textContent).toBe("true");
+      expect(set).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
+    });
+
+    it("keeps a newer update pending when it lands during an in-flight write", async () => {
+      let resolveSet: (() => void) | null = null;
+      const set = vi.fn(
+        () =>
+          new Promise<void>((r) => {
+            resolveSet = r;
+          }),
+      );
+      const save = vi.fn(() => Promise.resolve());
+      const get = vi.fn(() => Promise.resolve(null));
+      mockedLoad.mockResolvedValueOnce({ get, set, save } as unknown as Awaited<
+        ReturnType<typeof load>
+      >);
+      await renderFlushConsumer();
+
+      vi.useFakeTimers();
+      act(() => screen.getByTestId("update-font").click());
+      act(() => screen.getByTestId("flush").click());
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(set).toHaveBeenCalledTimes(1);
+
+      // The write for fontSize 21 is still awaiting; a newer update arrives.
+      act(() => screen.getByTestId("update-font-again").click());
+      await act(async () => {
+        resolveSet?.();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // The newer value stayed pending, so the next flush writes it.
+      await act(async () => {
+        screen.getByTestId("flush").click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(set).toHaveBeenCalledTimes(2);
+      expect(set).toHaveBeenLastCalledWith(
+        "settings",
+        expect.objectContaining({
+          appearance: expect.objectContaining({ fontSize: 22 }),
+        }),
+      );
+    });
+
+    it("writes a pending update on unmount instead of abandoning it", async () => {
+      const { set } = mockStore(null);
+      const { unmount } = await renderFlushConsumer();
+
+      vi.useFakeTimers();
+      act(() => screen.getByTestId("update-font").click());
+      expect(set).not.toHaveBeenCalled();
+
+      await act(async () => {
+        unmount();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(set).toHaveBeenCalledWith(
+        "settings",
+        expect.objectContaining({
+          appearance: expect.objectContaining({ fontSize: 21 }),
+        }),
+      );
     });
   });
 

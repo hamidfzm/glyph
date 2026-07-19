@@ -9,11 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
+      - uses: ./.github/actions/pnpm-setup
       - run: pnpm install --frozen-lockfile
       - name: Biome lint
         run: npx @biomejs/biome lint --error-on-warnings --reporter=github src/
@@ -25,11 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
+      - uses: ./.github/actions/pnpm-setup
       - run: pnpm install --frozen-lockfile
       - name: Add TypeScript problem matcher
         run: echo "::add-matcher::.github/matchers/tsc.json"

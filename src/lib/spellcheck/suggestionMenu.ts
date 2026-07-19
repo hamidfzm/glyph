@@ -1,3 +1,26 @@
+const MAX_SUGGESTIONS = 7;
+
+/**
+ * Merge suggestions across the dictionaries covering a word, first-seen order,
+ * deduplicated, capped at {@link MAX_SUGGESTIONS}.
+ */
+export function mergedSuggestions(
+  spellers: readonly { suggest(word: string): string[] }[],
+  word: string,
+): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const speller of spellers) {
+    for (const suggestion of speller.suggest(word)) {
+      if (seen.has(suggestion)) continue;
+      seen.add(suggestion);
+      merged.push(suggestion);
+      if (merged.length === MAX_SUGGESTIONS) return merged;
+    }
+  }
+  return merged;
+}
+
 export interface SuggestionMenuLabels {
   ignore: string;
   add: string;

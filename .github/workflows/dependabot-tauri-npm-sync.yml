@@ -45,31 +45,13 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: ".nvmrc"
-          cache: pnpm
+      - uses: ./.github/actions/pnpm-setup
 
-      - name: Cache apt packages
-        uses: actions/cache@v5
-        with:
-          path: ~/apt-cache/*.deb
-          key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
       - name: Install Linux Tauri build deps
         timeout-minutes: 8
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          mkdir -p ~/apt-cache/partial
-          sudo apt-get update
-          sudo apt-get -o Dir::Cache::archives="$HOME/apt-cache" \
-            -o Binary::apt::APT::Keep-Downloaded-Packages=true \
-            install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
+        uses: ./.github/actions/linux-deps
+        with:
+          cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
 
       - run: pnpm install --frozen-lockfile
 

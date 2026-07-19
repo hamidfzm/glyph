@@ -10,6 +10,7 @@ export interface SettingsContextValue {
   settings: Settings;
   updateSettings: (path: string, value: unknown) => void;
   resetSettings: () => void;
+  flushSettings: () => Promise<boolean>;
   loaded: boolean;
 }
 
@@ -17,5 +18,6 @@ export const SettingsContext = createContext<SettingsContextValue>({
   settings: DEFAULT_SETTINGS,
   updateSettings: () => {},
   resetSettings: () => {},
+  flushSettings: async () => true,
   loaded: false,
 });

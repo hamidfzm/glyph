@@ -11,6 +11,7 @@ import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { FileTab, Tab, Workspace } from "@/hooks/useTabs";
 import { pickMoveDir } from "@/lib/pickers";
 import { SIDEBAR_WIDTH_DEFAULT, type SidebarLayout } from "@/lib/settings";
+import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 import { Sidebar } from "./Sidebar";
 
 vi.mock("@/lib/pickers", () => ({
@@ -84,6 +85,7 @@ function buildTabsContext(opts: RenderOpts): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    indexStatus: COMPLETE_INDEX_STATUS,
     workspace: opts.workspace ?? null,
     openFile: vi.fn(),
     openFolder: vi.fn(),

@@ -11,10 +11,10 @@ vi.mock("@/lib/spellcheck/spellcheckExtension", () => ({ buildSpellcheck }));
 
 import { MarkdownEditor } from "./MarkdownEditor";
 
-function settingsWith(spellCheck: boolean, spellCheckLanguage = "en"): Settings {
+function settingsWith(spellCheck: boolean, spellCheckLanguages: string[] = ["en"]): Settings {
   return {
     ...DEFAULT_SETTINGS,
-    editor: { ...DEFAULT_SETTINGS.editor, spellCheck, spellCheckLanguage },
+    editor: { ...DEFAULT_SETTINGS.editor, spellCheck, spellCheckLanguages },
   };
 }
 
@@ -23,6 +23,7 @@ function wrapper(settings: Settings) {
     settings,
     updateSettings: vi.fn(),
     resetSettings: vi.fn(),
+    flushSettings: async () => true,
     loaded: true,
   };
   return ({ children }: { children: ReactNode }) => (
@@ -35,11 +36,11 @@ afterEach(() => {
 });
 
 describe("MarkdownEditor spell-check wiring", () => {
-  it("builds the spell-check extension for the configured language when enabled", () => {
+  it("builds the spell-check extension for the enabled languages", () => {
     render(<MarkdownEditor content="helo world" onChange={() => {}} />, {
-      wrapper: wrapper(settingsWith(true, "en")),
+      wrapper: wrapper(settingsWith(true, ["en", "fa"])),
     });
-    expect(buildSpellcheck).toHaveBeenCalledWith("en", expect.any(Function));
+    expect(buildSpellcheck).toHaveBeenCalledWith(["en", "fa"], expect.any(Function));
   });
 
   it("does not build the spell-check extension when disabled", () => {
@@ -52,7 +53,13 @@ describe("MarkdownEditor spell-check wiring", () => {
   it("reconfigures spell check in place when the setting toggles on", () => {
     const tree = (settings: Settings) => (
       <SettingsContext.Provider
-        value={{ settings, updateSettings: vi.fn(), resetSettings: vi.fn(), loaded: true }}
+        value={{
+          settings,
+          updateSettings: vi.fn(),
+          resetSettings: vi.fn(),
+          flushSettings: async () => true,
+          loaded: true,
+        }}
       >
         <MarkdownEditor content="helo world" onChange={() => {}} />
       </SettingsContext.Provider>
@@ -62,7 +69,33 @@ describe("MarkdownEditor spell-check wiring", () => {
 
     // Same editor instance, spell check flipped on: the reconfigure effect runs
     // without a remount (mount effect is keyed on keymap only).
-    rerender(tree(settingsWith(true, "en")));
-    expect(buildSpellcheck).toHaveBeenCalledWith("en", expect.any(Function));
+    rerender(tree(settingsWith(true)));
+    expect(buildSpellcheck).toHaveBeenCalledWith(["en"], expect.any(Function));
+  });
+
+  it("reconfigures when the enabled language set changes", () => {
+    const tree = (settings: Settings) => (
+      <SettingsContext.Provider
+        value={{
+          settings,
+          updateSettings: vi.fn(),
+          resetSettings: vi.fn(),
+          flushSettings: async () => true,
+          loaded: true,
+        }}
+      >
+        <MarkdownEditor content="helo world" onChange={() => {}} />
+      </SettingsContext.Provider>
+    );
+    const { rerender } = render(tree(settingsWith(true, ["en"])));
+    buildSpellcheck.mockClear();
+
+    // A fresh array with the same contents must not reconfigure...
+    rerender(tree(settingsWith(true, ["en"])));
+    expect(buildSpellcheck).not.toHaveBeenCalled();
+
+    // ...but a real set change must.
+    rerender(tree(settingsWith(true, ["en", "fa"])));
+    expect(buildSpellcheck).toHaveBeenCalledWith(["en", "fa"], expect.any(Function));
   });
 });

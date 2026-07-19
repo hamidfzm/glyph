@@ -15,6 +15,7 @@ function setup(overrides: Record<string, string> = {}) {
     settings,
     updateSettings,
     resetSettings: vi.fn(),
+    flushSettings: async () => true,
     loaded: true,
   };
   const wrapper = ({ children }: { children: ReactNode }) => (

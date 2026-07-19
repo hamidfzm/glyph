@@ -1,0 +1,19 @@
+name: Set up Rust
+description: Install stable Rust and restore the src-tauri cargo cache
+inputs:
+  targets:
+    description: Comma-separated extra compilation targets
+    default: ""
+  components:
+    description: Comma-separated extra toolchain components
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ inputs.targets }}
+        components: ${{ inputs.components }}
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: src-tauri

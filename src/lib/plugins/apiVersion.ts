@@ -1,14 +1,22 @@
 /**
- * The version of the Glyph plugin API this build implements. Plugins declare
- * the version they were built against in their manifest (`apiVersion`) and
- * {@link satisfiesApiVersion} gates loading on it.
- *
- * The contract is unstable until it ships as 1.0.0: while the major is 0,
- * plugins must match this version exactly (ranges grant nothing), and it is
- * bumped by hand whenever the API decisions change. 0.17.0 adds the website
- * export theme contribution (`exporters.registerSiteTheme`).
+ * The plugin API version this build implements: the app version itself,
+ * injected from package.json (the single source of truth for versions).
+ * Plugins declare the version they were built against in their manifest
+ * (`apiVersion`) and {@link satisfiesApiVersion} gates loading on it: while
+ * the major is 0, anything from {@link PLUGIN_API_COMPAT_FLOOR} up to this
+ * version loads. Every release widens the window at the top automatically;
+ * only a breaking contract change moves the floor.
  */
-export const PLUGIN_API_VERSION = "0.17.0";
+export const PLUGIN_API_VERSION = __APP_VERSION__;
+
+/**
+ * The oldest declared `apiVersion` this build still runs unchanged. This is
+ * the one hand-maintained number: bump it to the current app version in the
+ * release that breaks the plugin contract, and never otherwise. Everything
+ * since 0.16.0 (site themes, the dictionary `scripts` field) is additive, so
+ * 0.16.0 plugins load as-is.
+ */
+export const PLUGIN_API_COMPAT_FLOOR = "0.16.0";
 
 interface SemVer {
   major: number;
@@ -26,16 +34,27 @@ function parse(version: string): SemVer | null {
   };
 }
 
+function compare(a: SemVer, b: SemVer): number {
+  if (a.major !== b.major) return a.major - b.major;
+  if (a.minor !== b.minor) return a.minor - b.minor;
+  return a.patch - b.patch;
+}
+
 /**
- * Does the host API satisfy a plugin's required range? Supports an exact
- * version (`"1.2.3"`) or a caret range (`"^1.2.3"`: same major, with host
- * `minor.patch >= required`). While the API major is 0 nothing is backwards
- * compatible, so the required version must equal the host version exactly and
- * a caret grants nothing. Intentionally tiny: the plugin contract only needs
- * caret/exact, not the full semver grammar. Unparseable input is treated as
- * incompatible rather than throwing.
+ * Does the host API satisfy a plugin's required range? While the major is 0
+ * the declared version must fall inside the compatibility window
+ * ({@link PLUGIN_API_COMPAT_FLOOR} up to the current version, inclusive); a
+ * caret adds nothing below 1.0. From 1.0 on, an exact version must match
+ * `minor.patch` and a caret range (`"^1.2.3"`) accepts any host with the same
+ * major and `minor.patch >= required`. Intentionally tiny: the plugin
+ * contract only needs caret/exact, not the full semver grammar. Unparseable
+ * input is treated as incompatible rather than throwing.
  */
-export function satisfiesApiVersion(range: string, current: string = PLUGIN_API_VERSION): boolean {
+export function satisfiesApiVersion(
+  range: string,
+  current: string = PLUGIN_API_VERSION,
+  floor: string = PLUGIN_API_COMPAT_FLOOR,
+): boolean {
   const host = parse(current);
   if (!host) return false;
 
@@ -45,7 +64,12 @@ export function satisfiesApiVersion(range: string, current: string = PLUGIN_API_
   if (!required) return false;
 
   if (host.major !== required.major) return false;
-  if (required.major === 0 || !caret) {
+  if (required.major === 0) {
+    const oldest = parse(floor);
+    if (!oldest) return false;
+    return compare(required, oldest) >= 0 && compare(required, host) <= 0;
+  }
+  if (!caret) {
     return host.minor === required.minor && host.patch === required.patch;
   }
   if (host.minor !== required.minor) return host.minor > required.minor;

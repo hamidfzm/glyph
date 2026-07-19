@@ -32,7 +32,8 @@
     "closeWorkspace": "بستن فضای کاری",
     "outline": "رئوس مطالب",
     "resize": "تغییر اندازه نوار کناری",
-    "resizeBacklinks": "تغییر اندازه پیوندهای ورودی"
+    "resizeBacklinks": "تغییر اندازه پیوندهای ورودی",
+    "indexIncomplete": "نمایه ناقص"
   },
   "backlinks": {
     "heading": "پیوندهای ورودی"

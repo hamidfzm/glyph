@@ -26,9 +26,10 @@ jobs:
             targets_full: "aarch64-apple-darwin,x86_64-apple-darwin"
             targets_pr: "aarch64-apple-darwin"
           - platform: ubuntu-22.04
-            # Bundle analysis needs the real bundle, so no --no-bundle here.
+            # Bundle analysis is the codecov Vite plugin, which runs during
+            # the frontend build; it does not need installer packaging.
             args_full: ""
-            args_pr: ""
+            args_pr: "--no-bundle"
             bundle_analysis: true
           # No include entry for ubuntu-22.04-arm: include is processed
           # AFTER exclude, so an entry here would resurrect the excluded
@@ -39,32 +40,18 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
+      - uses: ./.github/actions/pnpm-setup
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ github.event_name == 'pull_request' && matrix.targets_pr || matrix.targets_full }}
-      - name: Cache apt packages
-        if: startsWith(matrix.platform, 'ubuntu')
-        uses: actions/cache@v5
-        with:
-          path: ~/apt-cache/*.deb
-          key: apt-webkit-${{ matrix.platform }}-v1
       - name: Install Linux dependencies
         if: startsWith(matrix.platform, 'ubuntu')
         timeout-minutes: 8
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          mkdir -p ~/apt-cache/partial
-          sudo apt-get update
-          sudo apt-get -o Dir::Cache::archives="$HOME/apt-cache" \
-            -o Binary::apt::APT::Keep-Downloaded-Packages=true \
-            install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils xvfb
+        uses: ./.github/actions/linux-deps
+        with:
+          cache-key: apt-webkit-${{ matrix.platform }}-v1
+          extra-packages: xdg-utils xvfb
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -97,18 +84,10 @@ jobs:
       NDK_VERSION: 29.0.14206865
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.nvmrc'
-          cache: pnpm
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/pnpm-setup
+      - uses: ./.github/actions/rust-setup
         with:
           targets: aarch64-linux-android
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
       - name: Set up JDK
         uses: actions/setup-java@v5
         with:

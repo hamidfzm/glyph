@@ -123,6 +123,13 @@ describe("rehypeSiteUrls images", () => {
     expect(ctx.assets.get("/ws/guide/img/shot.png")).toBe("guide/img/shot.png");
   });
 
+  it("rewrites svg <image> hrefs and records the asset copy", async () => {
+    const ctx = makeCtx("/ws/guide/intro.md", "guide/intro.html");
+    const html = await render('<svg><image href="./img/icon.png"/></svg>', ctx);
+    expect(html).toContain('href="img/icon.png"');
+    expect(ctx.assets.get("/ws/guide/img/icon.png")).toBe("guide/img/icon.png");
+  });
+
   it("sends out-of-workspace images to assets/ and dedupes name collisions", async () => {
     const ctx = makeCtx("/ws/other.md", "other.html");
     ctx.assets.set("/elsewhere/pic.png", "assets/pic.png");

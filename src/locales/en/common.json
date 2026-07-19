@@ -32,7 +32,8 @@
     "closeWorkspace": "Close workspace",
     "outline": "Outline",
     "resize": "Resize sidebar",
-    "resizeBacklinks": "Resize backlinks"
+    "resizeBacklinks": "Resize backlinks",
+    "indexIncomplete": "Index incomplete"
   },
   "backlinks": {
     "heading": "Backlinks"

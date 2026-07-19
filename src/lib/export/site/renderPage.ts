@@ -16,7 +16,9 @@ export interface RenderPageOptions {
   /** Absolute path of the markdown file, for wikilink resolution. */
   filePath: string;
   workspaceFiles: string[];
-  /** Extra rehype plugins appended after the built-ins (site URL rewriting). */
+  /** Extra remark plugins appended after the built-ins (plugin-contributed syntax). */
+  extraRemark?: readonly MarkdownPlugin[];
+  /** Extra rehype plugins appended after the built-ins (plugin-contributed, then site URL rewriting). */
   extraRehype?: readonly MarkdownPlugin[];
 }
 
@@ -31,6 +33,7 @@ export async function renderPageHtml({
   content,
   filePath,
   workspaceFiles,
+  extraRemark = [],
   extraRehype = [],
 }: RenderPageOptions): Promise<string> {
   const highlightPlugin = hasCodeBlock(content)
@@ -40,7 +43,7 @@ export async function renderPageHtml({
 
   const file = await unified()
     .use(remarkParse)
-    .use(buildRemarkPlugins({ workspaceFiles, filePath }) as PluggableList)
+    .use(buildRemarkPlugins({ workspaceFiles, filePath, extra: extraRemark }) as PluggableList)
     // Raw HTML must survive into the hast tree so rehype-raw can parse it and
     // rehype-sanitize can clean it, exactly as react-markdown does internally.
     .use(remarkRehype, { allowDangerousHtml: true })
