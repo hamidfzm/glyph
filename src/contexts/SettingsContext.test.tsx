@@ -471,6 +471,28 @@ describe("SettingsProvider", () => {
       expect(mockedSetTheme).toHaveBeenLastCalledWith(null);
     });
 
+    it("logs and keeps going when the native theme call fails", async () => {
+      vi.mocked(setTheme).mockRejectedValueOnce(new Error("unsupported"));
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      render(
+        <SettingsProvider>
+          <TestConsumer />
+        </SettingsProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("loaded").textContent).toBe("true");
+      });
+      await waitFor(() => {
+        expect(errSpy).toHaveBeenCalledWith(
+          "Failed to set the native window theme:",
+          expect.any(Error),
+        );
+      });
+      errSpy.mockRestore();
+    });
+
     it("reacts to system theme changes while on the system theme", async () => {
       let changeHandler: ((e: { matches: boolean }) => void) | undefined;
       const addEventListener = vi.fn((_evt: string, handler: (e: { matches: boolean }) => void) => {
