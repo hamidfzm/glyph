@@ -52,6 +52,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 
 ### Editor
 - Markdown editor mode: syntax highlighting, line numbers, undo/redo history
+- Wrap selection: with text selected, type `*`, `_`, `` ` ``, or `~` to surround it; type twice for `**bold**`
 - Split view: edit and preview side-by-side, or switch between modes per tab
 - Live preview updates as you type
 - Wikilink autocomplete: type `[[` in a folder workspace to pick from existing notes; Tab/Enter to insert

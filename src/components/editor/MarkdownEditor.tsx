@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { useSettings } from "@/hooks/useSettings";
 import { editorKeymapExtensions } from "@/lib/editorKeymap";
+import { wrapSelectionExtension } from "@/lib/editorWrapSelection";
 import { buildSpellcheck } from "@/lib/spellcheck/spellcheckExtension";
 import type { SuggestionMenuLabels } from "@/lib/spellcheck/suggestionMenu";
 import { wikilinkCompletionSource } from "@/lib/wikilinkCompletion";
@@ -128,6 +129,7 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
             closeOnBlur: false,
           }),
           markdown({ base: markdownLanguage, codeLanguages: languages }),
+          wrapSelectionExtension,
           syntaxHighlighting(glyphHighlight),
           spellcheckCompartment.of(spellcheckExtension(spellCheck, spellCheckLanguages)),
           EditorView.lineWrapping,
