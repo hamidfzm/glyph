@@ -714,7 +714,9 @@ mod tests {
     }
 
     // Each (directive, source) pair backs a shipped surface: WASM for
-    // Mermaid/D2, blob/data scripts for the plugin worker sandbox, remote
+    // Mermaid/D2, blob/data scripts for the plugin worker sandbox, eval for
+    // the D2 blob worker's `new Function` ELK loader (WebKit enforces the page
+    // CSP inside blob workers, so without it D2 never renders there), remote
     // schemes for document-embedded images/media, https for AI providers and
     // the marketplace, inline styles for theme injection.
     #[test]
@@ -726,6 +728,7 @@ mod tests {
             let csp = sec[key].as_str().unwrap();
             for (directive, source) in [
                 ("script-src", "'wasm-unsafe-eval'"),
+                ("script-src", "'unsafe-eval'"),
                 ("script-src", "blob:"),
                 ("script-src", "data:"),
                 ("img-src", "https:"),

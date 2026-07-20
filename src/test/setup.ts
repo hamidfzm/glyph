@@ -18,6 +18,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: vi.fn(() => Promise.resolve("0.0.0")),
+  setTheme: vi.fn(() => Promise.resolve()),
 }));
 
 // Default network stub so the on-launch update check (and any other fetch) never
