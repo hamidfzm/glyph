@@ -13,6 +13,18 @@ export function basename(path: string): string {
   return path.replace(/^.*[/\\]/, "");
 }
 
+/** Human-readable file name from a plain path or a mobile picker URI
+ *  (`file://` percent-encodes spaces; SAF `content://` URIs also encode
+ *  separators, so strip again after decoding). */
+export function displayName(path: string): string {
+  const last = basename(path);
+  try {
+    return decodeURIComponent(last).replace(/^.*[/\\:]/, "");
+  } catch {
+    return last;
+  }
+}
+
 /** True when `candidate` is `base` itself or a descendant (file or folder) of it. */
 export function isPathInside(candidate: string, base: string): boolean {
   return (

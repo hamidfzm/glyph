@@ -32,6 +32,18 @@ describe("pickers", () => {
     expect(invoke).toHaveBeenCalledWith("pick_files", { filters });
   });
 
+  it("pickFiles uses the OS document picker on mobile (no Rust pick commands there)", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    vi.mocked(platform).mockReturnValue("ios");
+    vi.mocked(open).mockResolvedValue(["/picked.md"]);
+    const filters = [{ name: "Markdown", extensions: ["md"] }];
+    await expect(pickFiles(filters)).resolves.toEqual(["/picked.md"]);
+    expect(open).toHaveBeenCalledWith({ multiple: true, filters });
+    expect(invoke).not.toHaveBeenCalled();
+    vi.mocked(platform).mockReturnValue("macos");
+  });
+
   it("pickSave forwards name, filter label, and extensions", async () => {
     vi.mocked(invoke).mockResolvedValue("/out.pdf");
     await expect(pickSave("note.pdf", "PDF", ["pdf"])).resolves.toBe("/out.pdf");

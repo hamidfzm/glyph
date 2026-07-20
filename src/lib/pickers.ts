@@ -1,9 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { isMobilePlatform } from "@/lib/platform";
 
 /**
  * Backend-run native pickers replacing the JS dialog plugin's `open()`/`save()`:
  * the dialog runs in Rust and the choice is minted as a filesystem grant before
  * the path is returned. See docs/security/threat-model.md.
+ *
+ * Mobile is the exception: the Rust `pick` commands are desktop-only, so file
+ * picking goes through the dialog plugin's OS document picker, and reads go
+ * through the fs plugin (which owns the sandbox scope), not the Rust grants.
  */
 
 export interface PickFilter {
@@ -17,7 +23,10 @@ export function pickFolder(): Promise<string | null> {
 }
 
 /** Multi-select file picker; grants each choice as a loose file. */
-export function pickFiles(filters: PickFilter[]): Promise<string[] | null> {
+export async function pickFiles(filters: PickFilter[]): Promise<string[] | null> {
+  if (isMobilePlatform()) {
+    return open({ multiple: true, filters });
+  }
   return invoke<string[] | null>("pick_files", { filters });
 }
 

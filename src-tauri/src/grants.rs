@@ -77,6 +77,8 @@ impl GrantRegistry {
     }
 
     /// Grant recursive write on an export destination folder (may not exist yet).
+    /// Export flows are desktop-only (native pickers, CLI export).
+    #[cfg(desktop)]
     pub fn grant_export_dir(&self, dir: &Path) -> Result<PathBuf, String> {
         let canonical = canonicalize_lenient(dir)?;
         self.lock()?.export_dirs.insert(canonical.clone());
@@ -84,6 +86,7 @@ impl GrantRegistry {
     }
 
     /// Grant exact-path write on a single export target (may not exist yet).
+    #[cfg(desktop)]
     pub fn grant_export_file(&self, path: &Path) -> Result<PathBuf, String> {
         let canonical = canonicalize_lenient(path)?;
         self.lock()?.export_files.insert(canonical.clone());
@@ -135,6 +138,8 @@ impl GrantRegistry {
         }
     }
 
+    /// Plugin installs start from the desktop-only native folder picker.
+    #[cfg(desktop)]
     pub fn set_pending_plugin_dir(&self, dir: PathBuf) {
         if let Ok(mut grants) = self.lock() {
             grants.pending_plugin_dir = Some(dir);
@@ -151,6 +156,8 @@ impl GrantRegistry {
     ///
     /// Trust note: settings.json is renderer-writable, so it can stage grants for
     /// the next launch; that matches the trust it already carries (see docs/security/threat-model.md).
+    /// Session restore runs from the desktop-only CLI setup block.
+    #[cfg(desktop)]
     pub fn seed_from_settings_json(&self, raw: &str) -> (Vec<PathBuf>, Vec<PathBuf>) {
         let mut workspaces = Vec::new();
         let mut files = Vec::new();
