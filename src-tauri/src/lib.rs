@@ -218,20 +218,18 @@ pub fn run() {
 
             #[cfg(desktop)]
             {
-                let (menu, menu_refs) = menu::build_menu(app)?;
+                // Windows uses per-window menus with owner-prefixed item ids
+                // (see build_menu); other platforms share one app menu.
+                #[cfg(windows)]
+                let menu_owner = Some("main");
+                #[cfg(not(windows))]
+                let menu_owner = None;
+                let (menu, menu_refs) = menu::build_menu(app.handle(), menu_owner)?;
                 app.set_menu(menu)?;
-                // Start with everything disabled — the frontend reasserts state
+                // Start with everything disabled; the frontend reasserts state
                 // as soon as it mounts and learns about the active tab and settings.
-                let initial_flags = menu::MenuStateFlags {
-                    has_tab: false,
-                    has_file: false,
-                    has_content: false,
-                    has_workspace: false,
-                    ai_configured: false,
-                    tts_available: false,
-                };
-                let _ = menu::apply_menu_state(&menu_refs, &initial_flags);
-                app.manage(menu_refs);
+                let _ = menu::apply_menu_state(&menu_refs, &menu::MenuStateFlags::default());
+                app.manage(menu::MenuRegistry::with_main(menu_refs));
 
                 // Parse CLI arguments and store the initial file/folder. The pure
                 // selection + classification logic lives in `cli` (tested
@@ -333,6 +331,10 @@ pub fn run() {
             if matches!(event, WindowEvent::Destroyed) {
                 if let Some(registry) = window.try_state::<windows::WindowRegistry>() {
                     registry.remove(window.label());
+                }
+                #[cfg(desktop)]
+                if let Some(menus) = window.try_state::<menu::MenuRegistry>() {
+                    menus.remove(window.label());
                 }
             }
             // Drag and drop of folders or markdown files, routed the same way as
@@ -721,9 +723,8 @@ mod tests {
     // the marketplace, inline styles for theme injection.
     // Spawned secondary windows for a second folder are labelled `w1`, `w2`, …
     // (windows::WindowRegistry::next_label). The capability files must apply to
-    // them as well as `main`, or a spawned window gets zero permissions and
-    // renders blank with no way to close it. Regression for the "opening a
-    // second folder shows a white window" hotfix.
+    // them as well as `main`, or a spawned window gets zero permissions once it
+    // loads (no store, dialog, or IPC events).
     #[test]
     fn capabilities_apply_to_spawned_windows() {
         for capability in [
@@ -742,6 +743,29 @@ mod tests {
                 windows.contains(&"w*"),
                 "capability must cover spawned `w*` windows, got {windows:?}"
             );
+        }
+    }
+
+    // useWindowClose intercepts close-requested, then re-issues close(); the
+    // @tauri-apps/api wrapper finishes the un-prevented pass with destroy().
+    // Missing any of these permissions leaves every window un-closable (#530).
+    #[test]
+    fn close_pipeline_permissions_are_granted() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        let perms: Vec<&str> = conf["permissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p.as_str())
+            .collect();
+        for perm in [
+            "core:window:allow-show",
+            "core:window:allow-set-focus",
+            "core:window:allow-close",
+            "core:window:allow-destroy",
+        ] {
+            assert!(perms.contains(&perm), "default capability must keep {perm}");
         }
     }
 

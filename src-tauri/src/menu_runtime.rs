@@ -7,60 +7,60 @@
 // codecov so it doesn't drag the patch coverage down.
 
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 use serde::Deserialize;
 use tauri::{
     menu::{AboutMetadataBuilder, MenuBuilder, MenuItem, MenuItemBuilder, Submenu, SubmenuBuilder},
-    App, State, Wry,
+    AppHandle, Runtime, State, Wry,
 };
 
 use crate::menu::{dispatch_menu_action, menu_action_for_id};
 
 /// Handles to the menu items whose enabled state or accelerator changes at
-/// runtime. Held in managed state so the `set_menu_state` and
-/// `apply_keybindings` commands can mutate them.
-#[derive(Clone)]
-pub struct MenuItemRefs {
-    open: MenuItem<Wry>,
-    open_folder: MenuItem<Wry>,
-    reset_view: MenuItem<Wry>,
-    close_tab: MenuItem<Wry>,
-    close_workspace: MenuItem<Wry>,
-    close: MenuItem<Wry>,
-    print: MenuItem<Wry>,
-    export_html: MenuItem<Wry>,
-    export_docx: MenuItem<Wry>,
-    export_epub: MenuItem<Wry>,
-    export_pdf: MenuItem<Wry>,
-    export_website: MenuItem<Wry>,
-    workspace_settings: MenuItem<Wry>,
-    find: MenuItem<Wry>,
-    command_palette: MenuItem<Wry>,
-    toggle_files_sidebar: MenuItem<Wry>,
-    toggle_outline_sidebar: MenuItem<Wry>,
-    toggle_edit: MenuItem<Wry>,
-    open_graph: MenuItem<Wry>,
-    zoom_in: MenuItem<Wry>,
-    zoom_out: MenuItem<Wry>,
-    actual_size: MenuItem<Wry>,
-    settings: MenuItem<Wry>,
-    sync_settings: MenuItem<Wry>,
-    manage_plugins: MenuItem<Wry>,
-    ai_chat: MenuItem<Wry>,
-    ai_summarize: MenuItem<Wry>,
-    ai_explain: MenuItem<Wry>,
-    ai_simplify: MenuItem<Wry>,
-    ai_read_aloud: MenuItem<Wry>,
-    documentation: MenuItem<Wry>,
-    release_notes: MenuItem<Wry>,
-    report_issue: MenuItem<Wry>,
+/// runtime. Held per window in the [`MenuRegistry`] so the `set_menu_state`
+/// and `apply_keybindings` commands can mutate the calling window's menu.
+pub struct MenuItemRefs<R: Runtime = Wry> {
+    open: MenuItem<R>,
+    open_folder: MenuItem<R>,
+    reset_view: MenuItem<R>,
+    close_tab: MenuItem<R>,
+    close_workspace: MenuItem<R>,
+    close: MenuItem<R>,
+    print: MenuItem<R>,
+    export_html: MenuItem<R>,
+    export_docx: MenuItem<R>,
+    export_epub: MenuItem<R>,
+    export_pdf: MenuItem<R>,
+    export_website: MenuItem<R>,
+    workspace_settings: MenuItem<R>,
+    find: MenuItem<R>,
+    command_palette: MenuItem<R>,
+    toggle_files_sidebar: MenuItem<R>,
+    toggle_outline_sidebar: MenuItem<R>,
+    toggle_edit: MenuItem<R>,
+    open_graph: MenuItem<R>,
+    zoom_in: MenuItem<R>,
+    zoom_out: MenuItem<R>,
+    actual_size: MenuItem<R>,
+    settings: MenuItem<R>,
+    sync_settings: MenuItem<R>,
+    manage_plugins: MenuItem<R>,
+    ai_chat: MenuItem<R>,
+    ai_summarize: MenuItem<R>,
+    ai_explain: MenuItem<R>,
+    ai_simplify: MenuItem<R>,
+    ai_read_aloud: MenuItem<R>,
+    documentation: MenuItem<R>,
+    release_notes: MenuItem<R>,
+    report_issue: MenuItem<R>,
     // Submenu handles, kept so their titles can be re-localized at runtime.
-    file_menu: Submenu<Wry>,
-    edit_menu: Submenu<Wry>,
-    view_menu: Submenu<Wry>,
-    ai_menu: Submenu<Wry>,
-    help_menu: Submenu<Wry>,
-    export_menu: Submenu<Wry>,
+    file_menu: Submenu<R>,
+    edit_menu: Submenu<R>,
+    view_menu: Submenu<R>,
+    ai_menu: Submenu<R>,
+    help_menu: Submenu<R>,
+    export_menu: Submenu<R>,
 }
 
 /// Localized labels for every Glyph-defined menu entry. Pushed from the
@@ -111,7 +111,7 @@ pub struct MenuLabels {
     report_issue: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MenuStateFlags {
     pub has_tab: bool,
@@ -122,61 +122,100 @@ pub struct MenuStateFlags {
     pub tts_available: bool,
 }
 
-pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemRefs)> {
-    let handle = app.handle();
+/// Per-window menu handles, keyed by window label. Windows cannot share one
+/// native menu across windows (a Win32 HMENU attaches to a single window), so
+/// each spawned window owns a full menu instance; commands resolve the calling
+/// window's refs here and fall back to `main` on platforms with one app menu.
+pub struct MenuRegistry<R: Runtime = Wry>(Mutex<HashMap<String, MenuItemRefs<R>>>);
+
+impl<R: Runtime> MenuRegistry<R> {
+    pub fn with_main(refs: MenuItemRefs<R>) -> Self {
+        Self(Mutex::new(HashMap::from([("main".to_string(), refs)])))
+    }
+
+    pub fn insert(&self, label: &str, refs: MenuItemRefs<R>) {
+        self.0.lock().unwrap().insert(label.to_string(), refs);
+    }
+
+    pub fn remove(&self, label: &str) {
+        self.0.lock().unwrap().remove(label);
+    }
+
+    /// Run `f` against the refs for `label`, falling back to `main` (platforms
+    /// with one app-wide menu). Returns None when neither exists (teardown).
+    fn with_refs<T>(&self, label: &str, f: impl FnOnce(&MenuItemRefs<R>) -> T) -> Option<T> {
+        let map = self.0.lock().unwrap();
+        map.get(label).or_else(|| map.get("main")).map(f)
+    }
+}
+
+/// Build the full menu. With `owner: Some(label)` (per-window menus on
+/// Windows) every item id is prefixed `label:` so menu events route to the
+/// owning window by id instead of by focus, which is unreliable while the
+/// Win32 menu loop is closing. `None` keeps bare ids (shared app menu).
+pub fn build_menu<R: Runtime>(
+    handle: &AppHandle<R>,
+    owner: Option<&str>,
+) -> tauri::Result<(tauri::menu::Menu<R>, MenuItemRefs<R>)> {
+    let mid = |base: &str| -> String {
+        match owner {
+            Some(label) => format!("{label}:{base}"),
+            None => base.to_string(),
+        }
+    };
 
     // Shared menu items
-    let open = MenuItemBuilder::with_id("open", "Open\u{2026}")
+    let open = MenuItemBuilder::with_id(mid("open"), "Open\u{2026}")
         .accelerator("CmdOrCtrl+O")
         .build(handle)?;
-    let open_folder = MenuItemBuilder::with_id("open-folder", "Open Folder\u{2026}")
+    let open_folder = MenuItemBuilder::with_id(mid("open-folder"), "Open Folder\u{2026}")
         .accelerator("CmdOrCtrl+Shift+O")
         .build(handle)?;
-    let reset_view = MenuItemBuilder::with_id("reset-view", "Reset View").build(handle)?;
-    let print = MenuItemBuilder::with_id("print", "Print\u{2026}")
+    let reset_view = MenuItemBuilder::with_id(mid("reset-view"), "Reset View").build(handle)?;
+    let print = MenuItemBuilder::with_id(mid("print"), "Print\u{2026}")
         .accelerator("CmdOrCtrl+P")
         .build(handle)?;
 
     // Export submenu items — all convert in the frontend and write a file
     // directly. PDF is a vector export here (the File > Print item, Cmd/Ctrl+P,
     // is the separate print-dialog path).
-    let export_html = MenuItemBuilder::with_id("export-html", "HTML\u{2026}").build(handle)?;
+    let export_html = MenuItemBuilder::with_id(mid("export-html"), "HTML\u{2026}").build(handle)?;
     let export_docx =
-        MenuItemBuilder::with_id("export-docx", "Word (DOCX)\u{2026}").build(handle)?;
-    let export_epub = MenuItemBuilder::with_id("export-epub", "EPUB\u{2026}").build(handle)?;
-    let export_pdf = MenuItemBuilder::with_id("export-pdf", "PDF\u{2026}").build(handle)?;
+        MenuItemBuilder::with_id(mid("export-docx"), "Word (DOCX)\u{2026}").build(handle)?;
+    let export_epub = MenuItemBuilder::with_id(mid("export-epub"), "EPUB\u{2026}").build(handle)?;
+    let export_pdf = MenuItemBuilder::with_id(mid("export-pdf"), "PDF\u{2026}").build(handle)?;
     // Whole-workspace static site export; gated on has_workspace, unlike the
     // single-document items above which need an open file.
     let export_website =
-        MenuItemBuilder::with_id("export-website", "Website\u{2026}").build(handle)?;
+        MenuItemBuilder::with_id(mid("export-website"), "Website\u{2026}").build(handle)?;
     // Per-workspace settings dialog (stored in the workspace's .glyph folder),
     // as opposed to the global Settings item; also gated on has_workspace.
     let workspace_settings =
-        MenuItemBuilder::with_id("workspace-settings", "Workspace Settings\u{2026}")
+        MenuItemBuilder::with_id(mid("workspace-settings"), "Workspace Settings\u{2026}")
             .build(handle)?;
 
-    let close_tab = MenuItemBuilder::with_id("close-tab", "Close Tab")
+    let close_tab = MenuItemBuilder::with_id(mid("close-tab"), "Close Tab")
         .accelerator("CmdOrCtrl+W")
         .build(handle)?;
     // Gated on has_workspace in apply_menu_state; leaves loose files open.
     let close_workspace =
-        MenuItemBuilder::with_id("close-workspace", "Close Workspace").build(handle)?;
-    let close = MenuItemBuilder::with_id("close", "Close Window")
+        MenuItemBuilder::with_id(mid("close-workspace"), "Close Workspace").build(handle)?;
+    let close = MenuItemBuilder::with_id(mid("close"), "Close Window")
         .accelerator("CmdOrCtrl+Shift+W")
         .build(handle)?;
-    let settings = MenuItemBuilder::with_id("open-settings", "Settings\u{2026}")
+    let settings = MenuItemBuilder::with_id(mid("open-settings"), "Settings\u{2026}")
         .accelerator("CmdOrCtrl+,")
         .build(handle)?;
     // Cloud Sync is per-workspace; the modal handles the no-folder
     // case with an empty state, so the item is always enabled and a
     // first-time click teaches the user what it needs.
     let sync_settings =
-        MenuItemBuilder::with_id("open-sync-settings", "Cloud Sync\u{2026}").build(handle)?;
+        MenuItemBuilder::with_id(mid("open-sync-settings"), "Cloud Sync\u{2026}").build(handle)?;
     let manage_plugins =
-        MenuItemBuilder::with_id("manage-plugins", "Plugins\u{2026}").build(handle)?;
+        MenuItemBuilder::with_id(mid("manage-plugins"), "Plugins\u{2026}").build(handle)?;
 
     // Edit menu
-    let find = MenuItemBuilder::with_id("find", "Find\u{2026}")
+    let find = MenuItemBuilder::with_id(mid("find"), "Find\u{2026}")
         .accelerator("CmdOrCtrl+F")
         .build(handle)?;
 
@@ -189,44 +228,45 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
 
     // View menu
     let command_palette =
-        MenuItemBuilder::with_id("open-command-palette", "Command Palette\u{2026}")
+        MenuItemBuilder::with_id(mid("open-command-palette"), "Command Palette\u{2026}")
             .accelerator("CmdOrCtrl+K")
             .build(handle)?;
     let toggle_files_sidebar =
-        MenuItemBuilder::with_id("toggle-files-sidebar", "Toggle Files Sidebar")
+        MenuItemBuilder::with_id(mid("toggle-files-sidebar"), "Toggle Files Sidebar")
             .accelerator("CmdOrCtrl+B")
             .build(handle)?;
     let toggle_outline_sidebar =
-        MenuItemBuilder::with_id("toggle-outline-sidebar", "Toggle Outline Sidebar")
+        MenuItemBuilder::with_id(mid("toggle-outline-sidebar"), "Toggle Outline Sidebar")
             .accelerator("CmdOrCtrl+\\")
             .build(handle)?;
 
-    let zoom_in = MenuItemBuilder::with_id("zoom-in", "Zoom In")
+    let zoom_in = MenuItemBuilder::with_id(mid("zoom-in"), "Zoom In")
         .accelerator("CmdOrCtrl+=")
         .build(handle)?;
-    let zoom_out = MenuItemBuilder::with_id("zoom-out", "Zoom Out")
+    let zoom_out = MenuItemBuilder::with_id(mid("zoom-out"), "Zoom Out")
         .accelerator("CmdOrCtrl+-")
         .build(handle)?;
-    let actual_size = MenuItemBuilder::with_id("actual-size", "Actual Size")
+    let actual_size = MenuItemBuilder::with_id(mid("actual-size"), "Actual Size")
         .accelerator("CmdOrCtrl+0")
         .build(handle)?;
 
-    let toggle_edit = MenuItemBuilder::with_id("toggle-edit", "Toggle Edit Mode")
+    let toggle_edit = MenuItemBuilder::with_id(mid("toggle-edit"), "Toggle Edit Mode")
         .accelerator("CmdOrCtrl+E")
         .build(handle)?;
 
     // Workspace graph view; only meaningful with a folder workspace open, so
     // it's gated by `has_workspace` in apply_menu_state.
-    let open_graph = MenuItemBuilder::with_id("open-graph", "Open Graph")
+    let open_graph = MenuItemBuilder::with_id(mid("open-graph"), "Open Graph")
         .accelerator("CmdOrCtrl+G")
         .build(handle)?;
 
     // DevTools menu item: only built into debug binaries so release builds
     // don't expose an "Open Developer Tools" affordance to end users.
     #[cfg(debug_assertions)]
-    let toggle_devtools = MenuItemBuilder::with_id("toggle-devtools", "Toggle Developer Tools")
-        .accelerator("CmdOrCtrl+Shift+I")
-        .build(handle)?;
+    let toggle_devtools =
+        MenuItemBuilder::with_id(mid("toggle-devtools"), "Toggle Developer Tools")
+            .accelerator("CmdOrCtrl+Shift+I")
+            .build(handle)?;
 
     let view_menu = {
         let builder = SubmenuBuilder::new(handle, "View")
@@ -250,14 +290,17 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
     };
 
     // AI menu
-    let ai_chat = MenuItemBuilder::with_id("ai-chat", "AI Chat")
+    let ai_chat = MenuItemBuilder::with_id(mid("ai-chat"), "AI Chat")
         .accelerator("CmdOrCtrl+Shift+A")
         .build(handle)?;
     let ai_summarize =
-        MenuItemBuilder::with_id("ai-summarize", "Summarize Document").build(handle)?;
-    let ai_explain = MenuItemBuilder::with_id("ai-explain", "Explain Document").build(handle)?;
-    let ai_simplify = MenuItemBuilder::with_id("ai-simplify", "Simplify Document").build(handle)?;
-    let ai_read_aloud = MenuItemBuilder::with_id("ai-read-aloud", "Read Aloud").build(handle)?;
+        MenuItemBuilder::with_id(mid("ai-summarize"), "Summarize Document").build(handle)?;
+    let ai_explain =
+        MenuItemBuilder::with_id(mid("ai-explain"), "Explain Document").build(handle)?;
+    let ai_simplify =
+        MenuItemBuilder::with_id(mid("ai-simplify"), "Simplify Document").build(handle)?;
+    let ai_read_aloud =
+        MenuItemBuilder::with_id(mid("ai-read-aloud"), "Read Aloud").build(handle)?;
 
     let ai_menu = SubmenuBuilder::new(handle, "AI")
         .item(&ai_chat)
@@ -280,9 +323,12 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
 
     // Help menu external links, always enabled. Each emits a menu event the
     // frontend handles by opening the URL via the opener plugin.
-    let documentation = MenuItemBuilder::with_id("documentation", "Documentation").build(handle)?;
-    let release_notes = MenuItemBuilder::with_id("release-notes", "Release Notes").build(handle)?;
-    let report_issue = MenuItemBuilder::with_id("report-issue", "Report an Issue").build(handle)?;
+    let documentation =
+        MenuItemBuilder::with_id(mid("documentation"), "Documentation").build(handle)?;
+    let release_notes =
+        MenuItemBuilder::with_id(mid("release-notes"), "Release Notes").build(handle)?;
+    let report_issue =
+        MenuItemBuilder::with_id(mid("report-issue"), "Report an Issue").build(handle)?;
 
     // Help menu
     let help_menu = SubmenuBuilder::new(handle, "Help")
@@ -424,7 +470,10 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
 }
 
 /// Maps a bindable command id to its menu item, for accelerator updates.
-fn accelerator_target<'a>(refs: &'a MenuItemRefs, id: &str) -> Option<&'a MenuItem<Wry>> {
+fn accelerator_target<'a, R: Runtime>(
+    refs: &'a MenuItemRefs<R>,
+    id: &str,
+) -> Option<&'a MenuItem<R>> {
     let item = match id {
         "open" => &refs.open,
         "open-folder" => &refs.open_folder,
@@ -451,8 +500,8 @@ fn accelerator_target<'a>(refs: &'a MenuItemRefs, id: &str) -> Option<&'a MenuIt
 /// command id to a Tauri accelerator string ("CmdOrCtrl+O"); unknown ids are
 /// ignored. The frontend resolves defaults + overrides before calling this, so
 /// the map is the full source of truth.
-pub fn apply_keybindings_impl(
-    refs: &MenuItemRefs,
+pub fn apply_keybindings_impl<R: Runtime>(
+    refs: &MenuItemRefs<R>,
     bindings: &HashMap<String, String>,
 ) -> Result<(), String> {
     for (id, accelerator) in bindings {
@@ -466,15 +515,24 @@ pub fn apply_keybindings_impl(
 
 #[tauri::command]
 pub fn apply_keybindings(
-    refs: State<MenuItemRefs>,
+    window: tauri::WebviewWindow,
+    registry: State<MenuRegistry>,
     bindings: HashMap<String, String>,
 ) -> Result<(), String> {
-    apply_keybindings_impl(&refs, &bindings)
+    // A missing entry means the window is mid-teardown; nothing to update.
+    registry
+        .with_refs(window.label(), |refs| {
+            apply_keybindings_impl(refs, &bindings)
+        })
+        .unwrap_or(Ok(()))
 }
 
 /// Apply enabled flags to every conditional menu item. Errors from individual
 /// items are propagated as strings so the command can surface them.
-pub fn apply_menu_state(refs: &MenuItemRefs, flags: &MenuStateFlags) -> Result<(), String> {
+pub fn apply_menu_state<R: Runtime>(
+    refs: &MenuItemRefs<R>,
+    flags: &MenuStateFlags,
+) -> Result<(), String> {
     let stringify = |e: tauri::Error| e.to_string();
     refs.close_tab
         .set_enabled(flags.has_tab)
@@ -527,14 +585,20 @@ pub fn apply_menu_state(refs: &MenuItemRefs, flags: &MenuStateFlags) -> Result<(
 }
 
 #[tauri::command]
-pub fn set_menu_state(refs: State<MenuItemRefs>, flags: MenuStateFlags) -> Result<(), String> {
-    apply_menu_state(&refs, &flags)
+pub fn set_menu_state(
+    window: tauri::WebviewWindow,
+    registry: State<MenuRegistry>,
+    flags: MenuStateFlags,
+) -> Result<(), String> {
+    registry
+        .with_refs(window.label(), |refs| apply_menu_state(refs, &flags))
+        .unwrap_or(Ok(()))
 }
 
 /// Re-label every Glyph-defined menu item and submenu title in place via
 /// `set_text` — no menu rebuild, so item handles and accelerators stay valid.
 /// The frontend calls this with translated strings whenever the locale changes.
-pub fn apply_menu_labels(refs: &MenuItemRefs, l: &MenuLabels) -> Result<(), String> {
+pub fn apply_menu_labels<R: Runtime>(refs: &MenuItemRefs<R>, l: &MenuLabels) -> Result<(), String> {
     let s = |e: tauri::Error| e.to_string();
     refs.file_menu.set_text(&l.file).map_err(s)?;
     refs.edit_menu.set_text(&l.edit).map_err(s)?;
@@ -589,14 +653,25 @@ pub fn apply_menu_labels(refs: &MenuItemRefs, l: &MenuLabels) -> Result<(), Stri
 }
 
 #[tauri::command]
-pub fn set_menu_labels(refs: State<MenuItemRefs>, labels: MenuLabels) -> Result<(), String> {
-    apply_menu_labels(&refs, &labels)
+pub fn set_menu_labels(
+    window: tauri::WebviewWindow,
+    registry: State<MenuRegistry>,
+    labels: MenuLabels,
+) -> Result<(), String> {
+    registry
+        .with_refs(window.label(), |refs| apply_menu_labels(refs, &labels))
+        .unwrap_or(Ok(()))
 }
 
 pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
-    if let Some(action) = menu_action_for_id(event.id().as_ref()) {
-        // Menu events carry no window; target the focused one (whose menu was used).
-        let label = crate::windows_runtime::current_window_label(app);
+    let (owner, base) = crate::menu::parse_menu_id(event.id().as_ref());
+    if let Some(action) = menu_action_for_id(base) {
+        // Per-window menus carry their owner in the id; bare ids (shared app
+        // menu) fall back to the focused window.
+        let label = match owner {
+            Some(label) => label.to_string(),
+            None => crate::windows_runtime::current_window_label(app),
+        };
         dispatch_menu_action(app, &label, action);
     }
 }

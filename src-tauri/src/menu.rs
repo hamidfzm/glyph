@@ -8,7 +8,9 @@
 // the surface here so callers can write `menu::build_menu(...)` and don't have
 // to know about the split.
 
-pub use crate::menu_runtime::{apply_menu_state, build_menu, handle_menu_event, MenuStateFlags};
+pub use crate::menu_runtime::{
+    apply_menu_state, build_menu, handle_menu_event, MenuRegistry, MenuStateFlags,
+};
 
 use tauri::{Emitter, Manager};
 
@@ -26,6 +28,17 @@ pub enum MenuAction {
     CloseWindow,
     #[cfg(debug_assertions)]
     ToggleDevTools,
+}
+
+/// Split a menu item id into its owning-window label and base id. Per-window
+/// menus (Windows) build ids like "w1:close-tab" so events route to the owning
+/// window without relying on focus; bare ids (shared app menu on macOS/Linux)
+/// return None and the caller falls back to the focused window.
+pub fn parse_menu_id(id: &str) -> (Option<&str>, &str) {
+    match id.split_once(':') {
+        Some((label, base)) => (Some(label), base),
+        None => (None, id),
+    }
 }
 
 /// Pure mapping from a native menu item id to the action `handle_menu_event`
@@ -142,6 +155,21 @@ mod tests {
     fn unknown_id_returns_none() {
         assert!(menu_action_for_id("not-a-thing").is_none());
         assert!(menu_action_for_id("").is_none());
+    }
+
+    #[test]
+    fn parse_menu_id_splits_owner_prefixed_ids() {
+        // Regression: per-window menus (Windows) embed the owning label so a
+        // menu click routes to its own window, not the focused-window guess
+        // (focus reads false while the Win32 menu loop is closing, which sent
+        // one window's Close Workspace to main).
+        assert_eq!(
+            parse_menu_id("w1:close-workspace"),
+            (Some("w1"), "close-workspace")
+        );
+        assert_eq!(parse_menu_id("main:open"), (Some("main"), "open"));
+        assert_eq!(parse_menu_id("close-tab"), (None, "close-tab"));
+        assert_eq!(parse_menu_id(""), (None, ""));
     }
 
     #[test]
