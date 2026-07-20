@@ -133,6 +133,8 @@ impl<R: Runtime> MenuRegistry<R> {
         Self(Mutex::new(HashMap::from([("main".to_string(), refs)])))
     }
 
+    // Spawned windows get their own menu only on Windows (see spawn_window).
+    #[cfg(windows)]
     pub fn insert(&self, label: &str, refs: MenuItemRefs<R>) {
         self.0.lock().unwrap().insert(label.to_string(), refs);
     }
