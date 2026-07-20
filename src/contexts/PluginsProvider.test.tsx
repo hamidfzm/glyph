@@ -385,6 +385,45 @@ describe("PluginsProvider", () => {
     expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin_package", expect.anything());
   });
 
+  it("rolls back a folder install when the installed manifest demands more trust than inspected", async () => {
+    // What lands on disk claims full trust even though the inspected (and
+    // consented) manifest was sandboxed, e.g. the pending pick changed
+    // between inspect_plugin and install_plugin.
+    vi.mocked(invoke).mockImplementation((cmd) => {
+      if (cmd === "list_plugins") return Promise.resolve([]);
+      if (cmd === "inspect_plugin") return Promise.resolve(inspection({ sandbox: true }));
+      if (cmd === "install_plugin")
+        return Promise.resolve(installedPlugin({ id: "com.x.new", name: "Fresh" }));
+      return Promise.resolve(undefined);
+    });
+    vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
+    vi.mocked(ask).mockClear();
+    vi.mocked(ask).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    function InstallProbe() {
+      const plugins = usePluginsOptional();
+      return (
+        <button type="button" onClick={() => void plugins?.installFromFolder()}>
+          install
+        </button>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <InstallProbe />
+        <Probe />
+      </PluginsProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("initial-load")).toHaveTextContent("true"));
+    screen.getByRole("button", { name: "install" }).click();
+
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("uninstall_plugin", { id: "com.x.new" }),
+    );
+    expect(screen.getByTestId("loaded").textContent).toBe("");
+  });
+
   it("rolls back a marketplace install when the package demands more trust than advertised", async () => {
     // The registry entry claims a sandboxed, permissionless plugin; the
     // downloaded package's manifest opts out of the sandbox.

@@ -140,6 +140,20 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     [pushToast],
   );
 
+  // Consent for what actually landed on disk, which may differ from what the
+  // pre-install prompt described (a package manifest demanding more than the
+  // registry advertised, or the pending picked folder changing between
+  // inspect_plugin and install_plugin). A covered grant makes this a no-op;
+  // a refusal uninstalls the plugin again.
+  const consentInstalledOrRollBack = useCallback(
+    async (plugin: InstalledPlugin) => {
+      if (await ensureConsent(plugin)) return true;
+      await invoke("uninstall_plugin", { id: plugin.id });
+      return false;
+    },
+    [ensureConsent],
+  );
+
   const installFromFolder = useCallback(async () => {
     // The backend picker stashes the folder; inspect_plugin peeks it and
     // install_plugin consumes it, so consent shows the manifest's identity,
@@ -150,38 +164,33 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       const inspection = await invoke<PluginInspection>("inspect_plugin");
       if (!(await ensureConsent(inspection))) return;
       const plugin = await invoke<InstalledPlugin>("install_plugin");
+      if (!(await consentInstalledOrRollBack(plugin))) return;
       await host.load(plugin);
       afterInstall(plugin);
     } catch (err) {
       reportFailure(err);
     }
-  }, [host, afterInstall, reportFailure, ensureConsent]);
+  }, [host, afterInstall, reportFailure, ensureConsent, consentInstalledOrRollBack]);
 
   const installFromRegistry = useCallback(
     async (entry: RegistryEntry) => {
-      const advertised = {
-        id: entry.id,
-        name: entry.name,
-        sandbox: entry.sandbox !== false,
-        permissions: entry.permissions,
-      };
-      if (!(await ensureConsent(advertised))) return;
       try {
+        const advertised = {
+          id: entry.id,
+          name: entry.name,
+          sandbox: entry.sandbox !== false,
+          permissions: entry.permissions,
+        };
+        if (!(await ensureConsent(advertised))) return;
         const plugin = await downloadAndInstall(entry);
-        // The package manifest is the authority: if it demands more than the
-        // registry advertised, consent runs again before any code executes,
-        // and a refusal rolls the install back.
-        if (!(await ensureConsent(plugin))) {
-          await invoke("uninstall_plugin", { id: plugin.id });
-          return;
-        }
+        if (!(await consentInstalledOrRollBack(plugin))) return;
         await host.load(plugin);
         afterInstall(plugin);
       } catch (err) {
         reportFailure(err);
       }
     },
-    [host, afterInstall, reportFailure, ensureConsent],
+    [host, afterInstall, reportFailure, ensureConsent, consentInstalledOrRollBack],
   );
 
   const setEnabled = useCallback(
