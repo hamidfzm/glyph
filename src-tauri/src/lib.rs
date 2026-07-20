@@ -408,6 +408,7 @@ pub fn run() {
             commands::create::delete_path,
             commands::wikilinks::scan_wikilinks,
             commands::plugins::list_plugins,
+            commands::plugins::inspect_plugin,
             commands::plugins::install_plugin,
             commands::plugins::install_plugin_package,
             commands::plugins::read_plugin_asset,

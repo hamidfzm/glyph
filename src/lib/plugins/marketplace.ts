@@ -68,7 +68,10 @@ export interface RegistryEntry {
    * different package than the reviewed index entry.
    */
   sha256: string;
-  /** Run isolated in a worker; see the manifest `sandbox` flag. */
+  /**
+   * Run isolated in a worker; see the manifest `sandbox` flag. Absent means
+   * sandboxed; only an explicit `false` marks a full-trust plugin.
+   */
   sandbox?: boolean;
   /** Marketplace section, one of {@link REGISTRY_CATEGORIES}. */
   category?: string;
@@ -76,6 +79,13 @@ export interface RegistryEntry {
   keywords?: string[];
   /** Maintained in the marketplace repo; shown with an Official badge. */
   official?: boolean;
+}
+
+const SHA256_HEX = /^[0-9a-f]{64}$/i;
+
+/** An entry is installable only with a well-formed SHA-256 to verify against. */
+export function hasValidChecksum(entry: RegistryEntry): boolean {
+  return typeof entry.sha256 === "string" && SHA256_HEX.test(entry.sha256);
 }
 
 /** Hex SHA-256 of raw bytes, via WebCrypto (available in the webview and Node). */
@@ -89,12 +99,21 @@ export interface RegistryUpdate {
   installedVersion: string;
 }
 
-/** Fetch and parse the marketplace index. Malformed/empty yields []. */
+/**
+ * Fetch and parse the marketplace index. Malformed/empty yields []. Entries
+ * without a well-formed sha256 are dropped here, so nothing unverifiable is
+ * ever offered for install or flagged as an update.
+ */
 export async function fetchRegistry(url = REGISTRY_URL): Promise<RegistryEntry[]> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`registry fetch failed: ${res.status}`);
   const data = (await res.json()) as { plugins?: RegistryEntry[] };
-  return Array.isArray(data?.plugins) ? data.plugins : [];
+  const entries = Array.isArray(data?.plugins) ? data.plugins : [];
+  return entries.filter((entry) => {
+    if (hasValidChecksum(entry)) return true;
+    console.warn(`Dropping registry entry ${entry.id}: missing or malformed sha256`);
+    return false;
+  });
 }
 
 /**
@@ -123,6 +142,9 @@ export function findUpdates(
  * manifest inside the package is the source of truth for what gets installed.
  */
 export async function installFromRegistry(entry: RegistryEntry): Promise<InstalledPlugin> {
+  if (!hasValidChecksum(entry)) {
+    throw new Error(`registry entry ${entry.id} has no valid sha256; refusing to install`);
+  }
   const res = await fetch(entry.packageUrl);
   if (!res.ok) throw new Error(`download failed: ${res.status}`);
   const buffer = await res.arrayBuffer();

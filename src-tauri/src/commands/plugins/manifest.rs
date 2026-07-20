@@ -137,8 +137,10 @@ pub(crate) fn parse_manifest(json: &str) -> Result<ManifestInfo, String> {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
         permissions: parse_permissions(&value)?,
+        // Absent means sandboxed: isolation is the default, and only an
+        // explicit `"sandbox": false` opts a plugin into full trust.
         sandbox: match value.get("sandbox") {
-            None => false,
+            None => true,
             Some(serde_json::Value::Bool(b)) => *b,
             Some(_) => return Err("manifest \"sandbox\" must be a boolean".into()),
         },
@@ -283,8 +285,9 @@ mod tests {
         };
         assert!(parse_manifest(&with_sandbox("true")).unwrap().sandbox);
         assert!(!parse_manifest(&with_sandbox("false")).unwrap().sandbox);
+        // Absent defaults to sandboxed.
         assert!(
-            !parse_manifest(r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0"}"#)
+            parse_manifest(r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0"}"#)
                 .unwrap()
                 .sandbox
         );
