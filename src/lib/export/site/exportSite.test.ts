@@ -268,8 +268,8 @@ describe("exportSite", () => {
     const fs = mockFs({ "/ws/README.md": "# Home", "/ws/guide/intro.md": "# Intro" });
     await exportSite({ root: "/ws", outDir: "/out" });
     const intro = fs.writes.get("/out/guide/intro.html") ?? "";
-    // Site title defaults to the workspace folder name.
-    expect(intro).toContain("<title>intro · ws</title>");
+    // Page title comes from the h1; the site title defaults to the folder name.
+    expect(intro).toContain("<title>Intro · ws</title>");
     expect(intro).toContain('<meta property="og:site_name" content="ws">');
     expect(intro).toContain('<meta property="og:type" content="article">');
     const index = fs.writes.get("/out/index.html") ?? "";
