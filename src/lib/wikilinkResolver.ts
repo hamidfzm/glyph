@@ -35,6 +35,11 @@ function normalizeTarget(raw: string): string {
   return t;
 }
 
+/** A target that names a location ("folder/note") rather than a bare note name. */
+export function isNestedTarget(target: string): boolean {
+  return target.includes("/") || target.includes("\\");
+}
+
 export function resolveWikilink(
   rawTarget: string,
   workspaceFiles: string[],
@@ -49,7 +54,7 @@ export function resolveWikilink(
   // Two match modes:
   //  1. relative-path-ish target ("folder/note") → match the suffix of any path
   //  2. bare name → match by stem
-  const looksLikePath = cleaned.includes("/") || cleaned.includes("\\");
+  const nested = isNestedTarget(cleaned);
   // Path-suffix matching normalizes separators: workspace paths arrive with the
   // OS separator (backslashes on Windows), while a wikilink target is authored
   // with `/`, so `[[Notes/Ingredients]]` must still match `…\Notes\Ingredients`.
@@ -57,7 +62,7 @@ export function resolveWikilink(
 
   const candidates: string[] = [];
   for (const file of workspaceFiles) {
-    if (looksLikePath) {
+    if (nested) {
       const noExt = file
         .replace(/\.[^./\\]+$/, "")
         .replace(/\\/g, "/")

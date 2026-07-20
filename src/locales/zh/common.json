@@ -240,6 +240,13 @@
     "headingNotFound": "找不到标题：{{heading}}",
     "error": "无法加载嵌入内容：{{target}}"
   },
+  "wikilinkPreview": {
+    "loading": "正在加载预览…",
+    "notFound": "未找到笔记：{{target}}",
+    "createNote": "创建笔记",
+    "headingNotFound": "未找到标题：{{heading}}",
+    "error": "无法加载预览：{{target}}"
+  },
   "headingAnchor": {
     "label": "复制标题链接"
   },
