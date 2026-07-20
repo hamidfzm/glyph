@@ -6,6 +6,7 @@ export interface MenuEventHandlers {
   openFolder: () => void;
   openGraph: () => void;
   closeTab: () => void;
+  closeWorkspace: () => void;
   toggleFilesSidebar: () => void;
   toggleOutlineSidebar: () => void;
   resetView: () => void;
@@ -42,6 +43,7 @@ export function useMenuEvents(handlers: MenuEventHandlers) {
       subscribe("menu-open-folder", handlers.openFolder),
       subscribe("menu-open-graph", handlers.openGraph),
       subscribe("menu-close-tab", handlers.closeTab),
+      subscribe("menu-close-workspace", handlers.closeWorkspace),
       subscribe("menu-toggle-files-sidebar", handlers.toggleFilesSidebar),
       subscribe("menu-toggle-outline-sidebar", handlers.toggleOutlineSidebar),
       subscribe("menu-reset-view", handlers.resetView),
