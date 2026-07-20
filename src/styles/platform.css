@@ -3,9 +3,18 @@
   --glyph-radius: 6px;
   --glyph-radius-sm: 4px;
   --glyph-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --glyph-titlebar-height: 0px;
   --glyph-sidebar-blur: 0px;
   --glyph-sidebar-bg: var(--color-surface-secondary);
+  --glyph-safe-top: 0px;
+  --glyph-safe-bottom: 0px;
+}
+
+/* Mobile draws edge-to-edge (viewport-fit=cover), so the shell's top and
+   bottom bars pad themselves past the notch and home indicator. */
+[data-platform="ios"],
+[data-platform="android"] {
+  --glyph-safe-top: env(safe-area-inset-top);
+  --glyph-safe-bottom: env(safe-area-inset-bottom);
 }
 
 [data-platform="macos"] {
@@ -14,7 +23,6 @@
   --glyph-radius: 8px;
   --glyph-radius-sm: 6px;
   --glyph-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  --glyph-titlebar-height: 52px;
   --glyph-sidebar-blur: 20px;
   --glyph-sidebar-bg: rgba(245, 245, 247, 0.8);
 }

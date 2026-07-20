@@ -20,5 +20,6 @@ playwright-report/
 src-tauri/gen/schemas/linux-schema.json
 src-tauri/gen/schemas/windows-schema.json
 src-tauri/gen/schemas/android-schema.json
+src-tauri/gen/schemas/iOS-schema.json
 src-tauri/gen/schemas/mobile-schema.json
 src-tauri/gen/schemas/acl-manifests.json

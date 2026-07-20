@@ -1,5 +1,6 @@
 .tab-bar-container {
   display: flex;
+  padding-top: var(--glyph-safe-top);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface-secondary);
   flex-shrink: 0;

@@ -88,13 +88,16 @@ export default defineConfig(async ({ mode }) => ({
       // editor config files should drive HMR. Without this, auto-save into
       // samples/README.md while testing wikilinks bounces the webview and
       // kills any in-flight UI state (autocomplete popup, cursor, etc.).
+      // Anchored to the project root: a bare `**/.claude/**` would match the
+      // checkout's own absolute path inside a `.claude/worktrees/` worktree
+      // and silently ignore every file (dead HMR, stale transform cache).
       ignored: [
-        "**/src-tauri/**",
-        "**/samples/**",
-        "**/dist/**",
-        "**/.github/**",
-        "**/.claude/**",
-        "**/docs/**",
+        path.resolve(__dirname, "src-tauri/**"),
+        path.resolve(__dirname, "samples/**"),
+        path.resolve(__dirname, "dist/**"),
+        path.resolve(__dirname, ".github/**"),
+        path.resolve(__dirname, ".claude/**"),
+        path.resolve(__dirname, "docs/**"),
         "**/*.md",
       ],
     },

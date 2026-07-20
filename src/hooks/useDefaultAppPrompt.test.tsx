@@ -13,6 +13,8 @@ const { setDefaultMock } = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/defaultApp", () => ({ setDefaultMarkdownApp: setDefaultMock }));
 
+vi.mock("@tauri-apps/plugin-os", () => ({ platform: vi.fn(() => "macos") }));
+
 function setup(prompt: string, loaded = true, primary = true) {
   const updateSettings = vi.fn();
   useSettingsMock.mockReturnValue({
@@ -37,6 +39,13 @@ describe("useDefaultAppPrompt", () => {
     expect(setup("never").result.current.show).toBe(false);
     expect(setup("unanswered", false).result.current.show).toBe(false);
     expect(setup("unanswered", true, false).result.current.show).toBe(false);
+  });
+
+  it("never shows on mobile (default-app registration is desktop-only)", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("ios");
+    expect(setup("unanswered").result.current.show).toBe(false);
+    vi.mocked(platform).mockReturnValue("macos");
   });
 
   it("records the answer and triggers registration on 'set default'", () => {

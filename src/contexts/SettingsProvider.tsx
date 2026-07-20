@@ -1,3 +1,4 @@
+import { setTheme as setNativeTheme } from "@tauri-apps/api/app";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { KEYED_PROVIDERS, loadAiKeys, setAiKey } from "@/lib/aiKeys";
@@ -20,6 +21,10 @@ function applyTheme(theme: Settings["appearance"]["theme"]) {
   } else {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }
+  // Native window chrome (Linux CSD, Windows frame) keeps its launch theme unless told; null follows the OS.
+  setNativeTheme(theme === "system" ? null : theme).catch((err) => {
+    console.error("Failed to set the native window theme:", err);
+  });
 }
 
 function applyCSSVariables(settings: Settings) {

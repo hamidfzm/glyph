@@ -12,6 +12,7 @@ import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isImageFile } from "@/lib/imageExtensions";
 import { isLooseFilePath } from "@/lib/looseFile";
+import { displayName } from "@/lib/paths";
 import { EDITOR_MODE } from "@/lib/settings";
 
 function tabLabel(tab: Tab, t: TFunction<"common">): string {
@@ -19,7 +20,8 @@ function tabLabel(tab: Tab, t: TFunction<"common">): string {
     const segments = tab.root.split(/[\\/]/).filter(Boolean);
     return t("tabBar.graphLabel", { name: segments[segments.length - 1] ?? tab.root });
   }
-  return tab.file.metadata?.name ?? t("tabBar.untitled");
+  // Mobile picker files carry no metadata; fall back to the path itself.
+  return tab.file.metadata?.name ?? (displayName(tab.file.path) || t("tabBar.untitled"));
 }
 
 interface TabBarProps {
