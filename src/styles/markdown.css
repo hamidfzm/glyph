@@ -243,11 +243,23 @@
 .markdown-body .markdown-alert-warning   { --alert-accent: var(--color-alert-warning); }
 .markdown-body .markdown-alert-caution   { --alert-accent: var(--color-alert-caution); }
 
-.markdown-body ul,
-.markdown-body ol {
+/* Tailwind's preflight resets list-style to none on ul/ol, so restore the
+ * native markers that a markdown reader expects. */
+.markdown-body ul {
+  list-style: disc;
   margin: 0 0 1em;
   padding-inline-start: 2em;
 }
+
+.markdown-body ol {
+  list-style: decimal;
+  margin: 0 0 1em;
+  padding-inline-start: 2em;
+}
+
+/* Nested unordered lists cycle marker shapes like a browser default. */
+.markdown-body ul ul { list-style: circle; }
+.markdown-body ul ul ul { list-style: square; }
 
 .markdown-body li { margin: 0.25em 0; }
 
