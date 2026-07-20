@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/v2/crates/tauri-utils/schema/capability.json",
   "identifier": "default",
   "description": "Default capabilities for Glyph",
-  "windows": ["main"],
+  "windows": ["main", "w*"],
   "permissions": [
     "core:default",
     "core:app:allow-set-app-theme",

@@ -25,6 +25,7 @@ pub struct MenuItemRefs {
     open_folder: MenuItem<Wry>,
     reset_view: MenuItem<Wry>,
     close_tab: MenuItem<Wry>,
+    close_workspace: MenuItem<Wry>,
     close: MenuItem<Wry>,
     print: MenuItem<Wry>,
     export_html: MenuItem<Wry>,
@@ -86,6 +87,7 @@ pub struct MenuLabels {
     export_website: String,
     workspace_settings: String,
     close_tab: String,
+    close_workspace: String,
     close: String,
     settings: String,
     sync_settings: String,
@@ -156,6 +158,9 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
     let close_tab = MenuItemBuilder::with_id("close-tab", "Close Tab")
         .accelerator("CmdOrCtrl+W")
         .build(handle)?;
+    // Gated on has_workspace in apply_menu_state; leaves loose files open.
+    let close_workspace =
+        MenuItemBuilder::with_id("close-workspace", "Close Workspace").build(handle)?;
     let close = MenuItemBuilder::with_id("close", "Close Window")
         .accelerator("CmdOrCtrl+Shift+W")
         .build(handle)?;
@@ -313,6 +318,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .item(&sync_settings)
             .separator()
             .item(&close_tab)
+            .item(&close_workspace)
             .item(&close)
             .build()?;
 
@@ -358,6 +364,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
             .item(&sync_settings)
             .separator()
             .item(&close_tab)
+            .item(&close_workspace)
             .item(&close)
             .build()?;
 
@@ -376,6 +383,7 @@ pub fn build_menu(app: &App) -> tauri::Result<(tauri::menu::Menu<Wry>, MenuItemR
         open_folder,
         reset_view,
         close_tab,
+        close_workspace,
         close,
         print,
         export_html,
@@ -471,6 +479,9 @@ pub fn apply_menu_state(refs: &MenuItemRefs, flags: &MenuStateFlags) -> Result<(
     refs.close_tab
         .set_enabled(flags.has_tab)
         .map_err(stringify)?;
+    refs.close_workspace
+        .set_enabled(flags.has_workspace)
+        .map_err(stringify)?;
     refs.print.set_enabled(flags.has_file).map_err(stringify)?;
     refs.export_html
         .set_enabled(flags.has_file)
@@ -544,6 +555,9 @@ pub fn apply_menu_labels(refs: &MenuItemRefs, l: &MenuLabels) -> Result<(), Stri
         .set_text(&l.workspace_settings)
         .map_err(s)?;
     refs.close_tab.set_text(&l.close_tab).map_err(s)?;
+    refs.close_workspace
+        .set_text(&l.close_workspace)
+        .map_err(s)?;
     refs.close.set_text(&l.close).map_err(s)?;
     refs.settings.set_text(&l.settings).map_err(s)?;
     refs.sync_settings.set_text(&l.sync_settings).map_err(s)?;
@@ -581,6 +595,8 @@ pub fn set_menu_labels(refs: State<MenuItemRefs>, labels: MenuLabels) -> Result<
 
 pub fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
     if let Some(action) = menu_action_for_id(event.id().as_ref()) {
-        dispatch_menu_action(app, action);
+        // Menu events carry no window; target the focused one (whose menu was used).
+        let label = crate::windows_runtime::current_window_label(app);
+        dispatch_menu_action(app, &label, action);
     }
 }

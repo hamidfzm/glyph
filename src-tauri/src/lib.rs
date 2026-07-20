@@ -719,6 +719,32 @@ mod tests {
     // CSP inside blob workers, so without it D2 never renders there), remote
     // schemes for document-embedded images/media, https for AI providers and
     // the marketplace, inline styles for theme injection.
+    // Spawned secondary windows for a second folder are labelled `w1`, `w2`, …
+    // (windows::WindowRegistry::next_label). The capability files must apply to
+    // them as well as `main`, or a spawned window gets zero permissions and
+    // renders blank with no way to close it. Regression for the "opening a
+    // second folder shows a white window" hotfix.
+    #[test]
+    fn capabilities_apply_to_spawned_windows() {
+        for capability in [
+            include_str!("../capabilities/default.json"),
+            include_str!("../capabilities/desktop.json"),
+        ] {
+            let conf: serde_json::Value = serde_json::from_str(capability).unwrap();
+            let windows: Vec<&str> = conf["windows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|w| w.as_str().unwrap())
+                .collect();
+            assert!(windows.contains(&"main"), "capability must cover main");
+            assert!(
+                windows.contains(&"w*"),
+                "capability must cover spawned `w*` windows, got {windows:?}"
+            );
+        }
+    }
+
     #[test]
     fn csp_keeps_every_surface_the_app_depends_on() {
         let conf: serde_json::Value =

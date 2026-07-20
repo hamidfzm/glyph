@@ -13,10 +13,10 @@ pub use crate::menu_runtime::{apply_menu_state, build_menu, handle_menu_event, M
 use tauri::{Emitter, Manager};
 
 /// What a native menu item id maps to. `Emit` forwards an event (with an
-/// optional string payload) to the frontend; `CloseWindow` closes the main
-/// window; `ToggleDevTools` (debug builds only) toggles the WebView's
-/// DevTools panel. Returning `None` from [`menu_action_for_id`] means the id
-/// isn't recognised, so `handle_menu_event` is a no-op.
+/// optional string payload) to the frontend; `CloseWindow` closes the window
+/// whose menu was used; `ToggleDevTools` (debug builds only) toggles the
+/// WebView's DevTools panel. Returning `None` from [`menu_action_for_id`] means
+/// the id isn't recognised, so `handle_menu_event` is a no-op.
 #[derive(Debug, PartialEq, Eq)]
 pub enum MenuAction {
     Emit {
@@ -43,6 +43,7 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         "open-folder" => emit("menu-open-folder"),
         "open-graph" => emit("menu-open-graph"),
         "close-tab" => emit("menu-close-tab"),
+        "close-workspace" => emit("menu-close-workspace"),
         "reset-view" => emit("menu-reset-view"),
         "print" => emit("menu-print"),
         "export-html" => emit("menu-export-html"),
@@ -86,22 +87,29 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
     }
 }
 
-/// Dispatch a resolved [`MenuAction`] against an `AppHandle`. Split out from
+/// Dispatch a resolved [`MenuAction`] against an `AppHandle`, targeting the
+/// window whose menu was used (`window_label`). Split out from
 /// `handle_menu_event` (in `menu_runtime`) so it can be unit-tested with
 /// `tauri::test::MockRuntime` — `MenuEvent` itself has no public constructor.
-pub fn dispatch_menu_action<R: tauri::Runtime>(app: &tauri::AppHandle<R>, action: MenuAction) {
+pub fn dispatch_menu_action<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    window_label: &str,
+    action: MenuAction,
+) {
     match action {
         MenuAction::Emit { event, payload } => {
-            let _ = app.emit(event, payload);
+            // emit_to targets just this window; a plain app.emit would broadcast
+            // to every window in Tauri v2, firing the action in all of them.
+            let _ = app.emit_to(window_label, event, payload);
         }
         MenuAction::CloseWindow => {
-            if let Some(window) = app.get_webview_window("main") {
+            if let Some(window) = app.get_webview_window(window_label) {
                 let _ = window.close();
             }
         }
         #[cfg(debug_assertions)]
         MenuAction::ToggleDevTools => {
-            if let Some(window) = app.get_webview_window("main") {
+            if let Some(window) = app.get_webview_window(window_label) {
                 if window.is_devtools_open() {
                     window.close_devtools();
                 } else {
@@ -146,6 +154,10 @@ mod tests {
         assert_eq!(
             menu_action_for_id("close-tab"),
             Some(emit("menu-close-tab"))
+        );
+        assert_eq!(
+            menu_action_for_id("close-workspace"),
+            Some(emit("menu-close-workspace"))
         );
         assert_eq!(
             menu_action_for_id("reset-view"),
@@ -286,13 +298,13 @@ mod tests {
         use tauri::test::{mock_app, MockRuntime};
         use tauri::{Listener, WebviewWindowBuilder};
 
-        fn capture(
-            handle: &tauri::AppHandle<MockRuntime>,
+        fn capture<L: Listener<MockRuntime>>(
+            listener: &L,
             event: &'static str,
         ) -> Arc<Mutex<Vec<String>>> {
             let bucket: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
             let sink = Arc::clone(&bucket);
-            handle.listen(event, move |evt| {
+            listener.listen(event, move |evt| {
                 let raw = evt.payload().to_string();
                 sink.lock().unwrap().push(raw.trim_matches('"').to_string());
             });
@@ -302,11 +314,15 @@ mod tests {
         #[test]
         fn emit_action_fires_the_event_with_no_payload() {
             let app = mock_app();
+            let win = WebviewWindowBuilder::new(&app, "main", Default::default())
+                .build()
+                .expect("mock main window should build");
             let handle = app.handle().clone();
-            let seen = capture(&handle, "menu-open-file");
+            let seen = capture(&win, "menu-open-file");
 
             dispatch_menu_action(
                 &handle,
+                "main",
                 MenuAction::Emit {
                     event: "menu-open-file",
                     payload: None,
@@ -320,11 +336,15 @@ mod tests {
         #[test]
         fn emit_action_fires_the_event_with_string_payload() {
             let app = mock_app();
+            let win = WebviewWindowBuilder::new(&app, "main", Default::default())
+                .build()
+                .expect("mock main window should build");
             let handle = app.handle().clone();
-            let seen = capture(&handle, "menu-ai-action");
+            let seen = capture(&win, "menu-ai-action");
 
             dispatch_menu_action(
                 &handle,
+                "main",
                 MenuAction::Emit {
                     event: "menu-ai-action",
                     payload: Some("summarize"),
@@ -337,30 +357,60 @@ mod tests {
         }
 
         #[test]
-        fn close_window_action_with_no_main_window_is_a_silent_noop() {
-            // Plain mock_app() has no main window; the if-let-Some arm short
-            // -circuits without panicking.
+        fn emit_action_targets_only_the_named_window() {
+            // Regression for the multi-window broadcast bug: dispatching to "w1"
+            // must reach only w1's listener, never main's — otherwise Close
+            // Workspace / Close Tab in one window would fire in every window.
             let app = mock_app();
+            let main = WebviewWindowBuilder::new(&app, "main", Default::default())
+                .build()
+                .expect("mock main window should build");
+            let w1 = WebviewWindowBuilder::new(&app, "w1", Default::default())
+                .build()
+                .expect("mock w1 window should build");
             let handle = app.handle().clone();
-            dispatch_menu_action(&handle, MenuAction::CloseWindow);
+            let on_main = capture(&main, "menu-close-workspace");
+            let on_w1 = capture(&w1, "menu-close-workspace");
+
+            dispatch_menu_action(
+                &handle,
+                "w1",
+                MenuAction::Emit {
+                    event: "menu-close-workspace",
+                    payload: None,
+                },
+            );
+            std::thread::sleep(std::time::Duration::from_millis(50));
+
+            assert_eq!(on_w1.lock().unwrap().len(), 1);
+            assert_eq!(on_main.lock().unwrap().len(), 0);
         }
 
         #[test]
-        fn close_window_action_takes_the_some_arm_when_a_main_window_exists() {
-            // Building a "main" webview means get_webview_window("main") resolves
-            // to Some, which is the branch we couldn't reach with the bare
-            // mock_app() above. We don't assert the post-close manager state
-            // because MockRuntime's close() doesn't synchronously drop the
-            // registered window; reaching the dispatch path without panicking
-            // is the coverage we need.
+        fn close_window_action_with_no_such_window_is_a_silent_noop() {
+            // Plain mock_app() has no matching window; the if-let-Some arm short
+            // -circuits without panicking.
             let app = mock_app();
-            WebviewWindowBuilder::new(&app, "main", Default::default())
-                .build()
-                .expect("mock main window should build");
             let handle = app.handle().clone();
-            assert!(handle.get_webview_window("main").is_some());
+            dispatch_menu_action(&handle, "main", MenuAction::CloseWindow);
+        }
 
-            dispatch_menu_action(&handle, MenuAction::CloseWindow);
+        #[test]
+        fn close_window_action_closes_the_named_window() {
+            // Close Window must target the window whose menu was used, not a
+            // hardcoded "main": building "w1" and dispatching with "w1" drives
+            // the get_webview_window(label) Some arm. We don't assert the
+            // post-close manager state because MockRuntime's close() doesn't
+            // synchronously drop the registered window; reaching the dispatch
+            // path for the named window without panicking is the coverage.
+            let app = mock_app();
+            WebviewWindowBuilder::new(&app, "w1", Default::default())
+                .build()
+                .expect("mock w1 window should build");
+            let handle = app.handle().clone();
+            assert!(handle.get_webview_window("w1").is_some());
+
+            dispatch_menu_action(&handle, "w1", MenuAction::CloseWindow);
         }
 
         #[cfg(debug_assertions)]
@@ -368,7 +418,7 @@ mod tests {
         fn toggle_devtools_with_no_main_window_is_a_silent_noop() {
             let app = mock_app();
             let handle = app.handle().clone();
-            dispatch_menu_action(&handle, MenuAction::ToggleDevTools);
+            dispatch_menu_action(&handle, "main", MenuAction::ToggleDevTools);
         }
 
         #[cfg(debug_assertions)]
@@ -384,7 +434,7 @@ mod tests {
                 .expect("mock main window should build");
             let handle = app.handle().clone();
 
-            dispatch_menu_action(&handle, MenuAction::ToggleDevTools);
+            dispatch_menu_action(&handle, "main", MenuAction::ToggleDevTools);
         }
     }
 }
