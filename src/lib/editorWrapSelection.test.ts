@@ -29,6 +29,14 @@ describe("wrapSelection", () => {
     expect(second.selection.main.to).toBe(5);
   });
 
+  it("keeps a right-to-left selection reversed after wrapping", () => {
+    const state = EditorState.create({ doc: "foo", selection: { anchor: 3, head: 0 } });
+    const result = applyWrap(state, "*");
+    expect(result?.doc).toBe("*foo*");
+    expect(result?.selection.main.anchor).toBe(4);
+    expect(result?.selection.main.head).toBe(1);
+  });
+
   it("returns null when nothing is selected", () => {
     const state = EditorState.create({ doc: "foo", selection: { anchor: 1 } });
     expect(wrapSelection(state, "*")).toBeNull();
@@ -81,6 +89,14 @@ describe("wrapSelectionExtension", () => {
   it("lets a non-styling character pass through", () => {
     const view = viewWith("foo", { anchor: 0, head: 3 });
     expect(typeInto(view, "x")).toBe(false);
+    view.destroy();
+  });
+
+  it("does not wrap while a composition is in progress (IME / dead keys)", () => {
+    const view = viewWith("foo", { anchor: 0, head: 3 });
+    Object.defineProperty(view, "compositionStarted", { get: () => true });
+    expect(typeInto(view, "`")).toBe(false);
+    expect(view.state.doc.toString()).toBe("foo");
     view.destroy();
   });
 });

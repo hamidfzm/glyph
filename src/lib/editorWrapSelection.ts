@@ -3,7 +3,7 @@ import { EditorView } from "@codemirror/view";
 
 // Typed marker -> the character it pairs with. Markdown inline markers are
 // symmetric, so open and close match. Adding a bracket/quote pair is one entry.
-export const WRAP_PAIRS: Record<string, string> = {
+const WRAP_PAIRS: Record<string, string> = {
   "*": "*",
   _: "_",
   "`": "`",
@@ -16,20 +16,24 @@ export const WRAP_PAIRS: Record<string, string> = {
 export function wrapSelection(state: EditorState, marker: string): TransactionSpec | null {
   const close = WRAP_PAIRS[marker];
   if (!close) return null;
-  const { from, to } = state.selection.main;
-  if (from === to) return null;
+  const { from, to, anchor, head, empty } = state.selection.main;
+  if (empty) return null;
 
   const inner = state.sliceDoc(from, to);
   return {
     changes: { from, to, insert: marker + inner + close },
-    selection: { anchor: from + marker.length, head: to + marker.length },
+    // Shift both endpoints by the opening marker so the selection keeps its
+    // direction (a right-to-left selection stays right-to-left).
+    selection: { anchor: anchor + marker.length, head: head + marker.length },
   };
 }
 
-// Intercept typed styling markers before they replace the selection. Only fires
-// on real input (not paste or IME), so wrapping never triggers unexpectedly.
-// Returning true suppresses the default insert that would replace the selection.
+// Intercept typed styling markers before they replace the selection. Skips
+// composition so dead keys (`` ` `` and `~` on US-International layouts) and IME
+// input still compose accented characters instead of wrapping; paste already
+// bypasses input handlers. Returning true suppresses the default insert.
 export const wrapSelectionExtension = EditorView.inputHandler.of((view, _from, _to, text) => {
+  if (view.compositionStarted) return false;
   const spec = wrapSelection(view.state, text);
   if (!spec) return false;
   view.dispatch(spec);
