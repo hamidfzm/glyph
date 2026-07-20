@@ -8,13 +8,15 @@ import { readNoteCached } from "@/lib/noteContentCache";
 import { isNestedTarget } from "@/lib/wikilinkResolver";
 import { MarkdownContent } from "./MarkdownContent";
 
-const WIDTH = 380;
-const MAX_HEIGHT = 320;
+const WIDTH = 440;
+const MAX_HEIGHT = 400;
 const VIEWPORT_MARGIN = 8;
 const ANCHOR_GAP = 6;
 
+// `wikilink-preview` (markdown.css) adds the materialize-in transition and its
+// transform-origin follows the flip via the inline style below.
 const SURFACE_CLASS =
-  "fixed z-50 overflow-y-auto overscroll-contain rounded-[var(--glyph-radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.22)] text-[var(--color-text-primary)]";
+  "wikilink-preview fixed z-50 overflow-y-auto overscroll-contain rounded-[var(--glyph-radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.22)] text-[var(--color-text-primary)]";
 
 const PLACEHOLDER_CLASS = "text-sm text-[var(--color-text-secondary)]";
 
@@ -50,6 +52,9 @@ export function WikilinkPreview({
   const createNote = useCreateWikilinkNote();
   const rootRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0 });
+  // Scale-in origin: from the top when the popover sits below the anchor, from
+  // the bottom when it flips above, so it grows out of the link either way.
+  const [origin, setOrigin] = useState("top left");
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
   // Only ever read a file the resolver already matched to a workspace member.
@@ -92,6 +97,7 @@ export function WikilinkPreview({
       top: Math.max(VIEWPORT_MARGIN, Math.min(rawTop, maxTop)),
       left: Math.max(VIEWPORT_MARGIN, Math.min(rect.left, maxLeft)),
     });
+    setOrigin(flipUp ? "bottom left" : "top left");
   }, [anchor, state]);
 
   useEffect(() => {
@@ -123,7 +129,13 @@ export function WikilinkPreview({
       role="dialog"
       aria-label={target}
       className={SURFACE_CLASS}
-      style={{ top: pos.top, left: pos.left, width: WIDTH, maxHeight: MAX_HEIGHT }}
+      style={{
+        top: pos.top,
+        left: pos.left,
+        width: WIDTH,
+        maxHeight: MAX_HEIGHT,
+        transformOrigin: origin,
+      }}
       onMouseEnter={onKeepOpen}
       onMouseLeave={onClose}
       onClick={handleOpen}
@@ -189,7 +201,7 @@ function renderBody(
   // filePath=path resolves the preview's own wikilinks against the target and
   // extends EmbedContext.chain, so an embed inside it can't recurse forever.
   return (
-    <div className="markdown-body" dir="auto">
+    <div className="markdown-body markdown-preview-body" dir="auto">
       <MarkdownContent
         content={content}
         filePath={path}
