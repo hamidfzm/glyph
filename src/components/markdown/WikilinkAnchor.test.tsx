@@ -96,4 +96,24 @@ describe("WikilinkAnchor", () => {
 
     expect(screen.queryByTestId("preview")).not.toBeInTheDocument();
   });
+
+  it("wires up no hover handlers on mobile, where hover has no equivalent", async () => {
+    // The platform gate is a module-level const, so the mock has to be in place
+    // before the module is imported.
+    vi.resetModules();
+    vi.doMock("@/lib/platform", () => ({ isMobilePlatform: () => true }));
+    const { WikilinkAnchor: MobileAnchor } = await import("./WikilinkAnchor");
+
+    try {
+      render(<MobileAnchor {...defaultProps}>Note</MobileAnchor>);
+      const link = screen.getByText("Note");
+
+      fireEvent.mouseEnter(link);
+      act(() => vi.advanceTimersByTime(1000));
+      expect(screen.queryByTestId("preview")).not.toBeInTheDocument();
+    } finally {
+      vi.doUnmock("@/lib/platform");
+      vi.resetModules();
+    }
+  });
 });

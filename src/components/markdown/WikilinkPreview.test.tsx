@@ -101,6 +101,20 @@ describe("WikilinkPreview", () => {
     expect(screen.queryByTestId("nested")).not.toBeInTheDocument();
   });
 
+  it("ignores a read that rejects after unmount", async () => {
+    let reject: ((e: unknown) => void) | undefined;
+    vi.mocked(readNoteCached).mockReturnValueOnce(
+      new Promise<string>((_, r) => {
+        reject = r;
+      }),
+    );
+    const { unmount } = renderPreview();
+    unmount();
+    reject?.(new Error("late"));
+    await Promise.resolve();
+    expect(screen.queryByText(/Could not load preview/)).not.toBeInTheDocument();
+  });
+
   it("refuses to read a path outside the workspace (raw-HTML injection guard)", () => {
     renderPreview({ path: "/etc/passwd", target: "passwd" });
 
@@ -141,6 +155,30 @@ describe("WikilinkPreview", () => {
     expect(brokenOnOpen).not.toHaveBeenCalled();
   });
 
+  it("opens the note on Enter but ignores other keys", async () => {
+    vi.mocked(readNoteCached).mockResolvedValueOnce("body");
+    const onOpen = vi.fn();
+    renderPreview({ onOpen });
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.keyDown(dialog, { key: "a" });
+    expect(onOpen).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(dialog, { key: "Enter" });
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays open on a press inside it and on keys other than Escape", async () => {
+    vi.mocked(readNoteCached).mockResolvedValueOnce("body");
+    const onClose = vi.fn();
+    renderPreview({ onClose });
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.mouseDown(dialog);
+    fireEvent.keyDown(window, { key: "a" });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("dismisses on Escape, on an outside press, and when the pointer leaves", async () => {
     vi.mocked(readNoteCached).mockResolvedValue("body");
     const onClose = vi.fn();
@@ -150,5 +188,32 @@ describe("WikilinkPreview", () => {
     fireEvent.mouseDown(document.body);
     fireEvent.mouseLeave(await screen.findByRole("dialog"));
     expect(onClose).toHaveBeenCalledTimes(3);
+  });
+
+  it("flips above the link when it would not fit below", async () => {
+    // happy-dom reports every element as 0-height, so the popover has to be
+    // given a real height for the fit calculation to have anything to weigh.
+    const height = 200;
+    const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+      configurable: true,
+      get: () => height,
+    });
+
+    const bottomAnchor = document.createElement("a");
+    const top = window.innerHeight - 20;
+    bottomAnchor.getBoundingClientRect = () => ({ top, bottom: top + 18, left: 40 }) as DOMRect;
+
+    try {
+      vi.mocked(readNoteCached).mockResolvedValueOnce("body");
+      renderPreview({ anchor: bottomAnchor });
+
+      const dialog = await screen.findByRole("dialog");
+      // Sits above the anchor and grows downward from its own bottom edge.
+      expect(dialog.style.transformOrigin).toBe("bottom left");
+      expect(dialog.style.top).toBe(`${top - 6 - height}px`);
+    } finally {
+      if (offsetHeight) Object.defineProperty(HTMLElement.prototype, "offsetHeight", offsetHeight);
+    }
   });
 });

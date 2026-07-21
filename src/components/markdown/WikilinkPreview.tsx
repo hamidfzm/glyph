@@ -83,8 +83,8 @@ export function WikilinkPreview({
   // clamps both axes into the viewport.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `state` is a re-measure trigger, not a value read; the height changes when content replaces the loading line
   useLayoutEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
+    // Attached before any layout effect runs, so it is never null here.
+    const el = rootRef.current!;
     const rect = anchor.getBoundingClientRect();
     const height = el.offsetHeight;
     const spaceBelow = window.innerHeight - rect.bottom - ANCHOR_GAP - VIEWPORT_MARGIN;
