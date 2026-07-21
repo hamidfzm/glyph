@@ -85,11 +85,15 @@ export function formatToolbar(getLabels: () => FormatToolbarLabels): Extension {
         const end = this.view.coordsAtPos(to);
         if (!start || !end) return null;
 
+        const width = this.dom.offsetWidth;
+        const height = this.dom.offsetHeight;
+        // A zero height means layout hasn't settled; placing now would drop the
+        // toolbar on the text. Report unplaceable so apply() retries.
+        if (height === 0 || width === 0) return null;
+
         const box = this.view.dom.getBoundingClientRect();
         // Center over the selection, clamped inside the editor.
         const centre = (Math.min(start.left, end.left) + Math.max(start.right, end.right)) / 2;
-        const width = this.dom.offsetWidth;
-        const height = this.dom.offsetHeight;
         // Sit above the selection, or below it when the first line leaves no
         // room, so the toolbar is never clipped outside the editor.
         const above = start.top - box.top - height - 6;
