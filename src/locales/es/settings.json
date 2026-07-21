@@ -184,6 +184,12 @@
       "ignore": "Ignorar",
       "add": "Añadir al diccionario",
       "noSuggestions": "Sin sugerencias"
+    },
+    "format": {
+      "bold": "Negrita",
+      "italic": "Cursiva",
+      "code": "Código en línea",
+      "strikethrough": "Tachado"
     }
   },
   "ai": {

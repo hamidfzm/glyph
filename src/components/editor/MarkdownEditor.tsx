@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { usePlatform } from "@/hooks/usePlatform";
 import { useSettings } from "@/hooks/useSettings";
+import { type FormatToolbarLabels, formatToolbar } from "@/lib/editorFormatToolbar";
 import { editorKeymapExtensions } from "@/lib/editorKeymap";
 import {
   type FormatBindings,
@@ -65,6 +66,21 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
   formatBindingsRef.current = {
     resolved: resolveBindings(settings.keybindings.overrides),
     platform,
+  };
+
+  // Read once when the toolbar mounts; a locale change remounts the editor
+  // through the same keymap-keyed effect that owns the rest of the extensions.
+  const formatLabelsRef = useRef<FormatToolbarLabels>({
+    bold: "",
+    italic: "",
+    code: "",
+    strikethrough: "",
+  });
+  formatLabelsRef.current = {
+    bold: t("editor.format.bold"),
+    italic: t("editor.format.italic"),
+    code: t("editor.format.code"),
+    strikethrough: t("editor.format.strikethrough"),
   };
   const { spellCheck, spellCheckLanguages } = settings.editor;
   // Settings saves produce a fresh array identity every time; key the
@@ -149,6 +165,7 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           wrapSelectionExtension,
           formatBindingsExtension(() => formatBindingsRef.current),
+          formatToolbar(() => formatLabelsRef.current),
           syntaxHighlighting(glyphHighlight),
           spellcheckCompartment.of(spellcheckExtension(spellCheck, spellCheckLanguages)),
           EditorView.lineWrapping,

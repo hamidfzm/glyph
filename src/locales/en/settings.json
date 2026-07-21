@@ -184,6 +184,12 @@
         "comment": "toggle line comment",
         "multiSelect": "select the next occurrence; Cmd/Ctrl+] or [ to indent / outdent"
       }
+    },
+    "format": {
+      "bold": "Bold",
+      "italic": "Italic",
+      "code": "Inline code",
+      "strikethrough": "Strikethrough"
     }
   },
   "ai": {

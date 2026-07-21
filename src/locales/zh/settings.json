@@ -184,6 +184,12 @@
       "ignore": "忽略",
       "add": "添加到词典",
       "noSuggestions": "无建议"
+    },
+    "format": {
+      "bold": "粗体",
+      "italic": "斜体",
+      "code": "行内代码",
+      "strikethrough": "删除线"
     }
   },
   "ai": {

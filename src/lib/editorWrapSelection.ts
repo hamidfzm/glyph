@@ -34,6 +34,11 @@ export function wrapSelection(state: EditorState, marker: string): TransactionSp
   return wrapWith(state, marker, close);
 }
 
+/** Wrap the selection with a symmetric marker, e.g. `**` for bold. */
+export function wrapSelectionWith(state: EditorState, marker: string): TransactionSpec | null {
+  return wrapWith(state, marker, marker);
+}
+
 // A keyboard command that wraps the selection, e.g. `**` for bold. Reports
 // false on an empty selection so the key falls through to the next binding.
 export function wrapCommand(marker: string): Command {

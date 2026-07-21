@@ -184,6 +184,12 @@
       "ignore": "Ignorieren",
       "add": "Zum Wörterbuch hinzufügen",
       "noSuggestions": "Keine Vorschläge"
+    },
+    "format": {
+      "bold": "Fett",
+      "italic": "Kursiv",
+      "code": "Inline-Code",
+      "strikethrough": "Durchgestrichen"
     }
   },
   "ai": {

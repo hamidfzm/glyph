@@ -199,3 +199,43 @@
   margin: 4px 0;
   background: var(--color-border);
 }
+
+/* Floating toolbar above a non-empty editor selection. */
+.cm-format-toolbar {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--glyph-radius);
+  box-shadow: var(--glyph-shadow);
+  font-family: var(--glyph-font, system-ui, -apple-system, sans-serif);
+}
+
+.cm-format-toolbar[hidden] {
+  display: none;
+}
+
+.cm-format-toolbar-button {
+  min-width: 28px;
+  padding: 3px 6px;
+  border: none;
+  background: none;
+  border-radius: var(--glyph-radius-sm);
+  color: var(--color-text-primary);
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.cm-format-toolbar-button:hover {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.cm-format-toolbar-button[data-action="bold"] { font-weight: 700; }
+.cm-format-toolbar-button[data-action="italic"] { font-style: italic; }
+.cm-format-toolbar-button[data-action="strikethrough"] { text-decoration: line-through; }
+.cm-format-toolbar-button[data-action="code"] { font-family: var(--glyph-code-font, monospace); }
