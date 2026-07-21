@@ -341,6 +341,11 @@ When you open a folder as a workspace, `[[note]]` style links resolve to other m
 
 Opening this file on its own (no folder) treats every wikilink as broken.
 
+On desktop, resting the pointer on any of them pops up a preview of the target
+without leaving this page: `[[Index#setup]]` previews just that section, and
+`[[Missing]]` offers to create the note instead. Click the preview to open the
+note for real, or move away (or press `Esc`) to dismiss it.
+
 ### Note embeds
 
 Prefix a wikilink with `!` to render its target inline instead of linking to

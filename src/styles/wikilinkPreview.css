@@ -1,0 +1,47 @@
+/* Hover preview popover (WikilinkPreview). Kept out of markdown.css so the main
+   renderer's stylesheet (which also feeds the HTML/EPUB exports via
+   collectStyles) stays untouched. Imported after markdown.css so the
+   `.markdown-preview-body` overrides win on equal specificity. */
+
+/* Scales in from the anchor; transform-origin is set inline per flip. */
+.wikilink-preview {
+  transition:
+    opacity 150ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@starting-style {
+  .wikilink-preview {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+/* Denser than the document: smaller type, no outer margins so the content sits
+   flush with the popover padding, and no 70vh scroll tail (the box sizes to
+   its content). */
+.markdown-preview-body {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  padding-bottom: 0;
+}
+
+.markdown-preview-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-preview-body > :last-child {
+  margin-bottom: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wikilink-preview {
+    transition: opacity 120ms ease;
+  }
+
+  @starting-style {
+    .wikilink-preview {
+      transform: none;
+    }
+  }
+}

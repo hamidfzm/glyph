@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./platform.css";
 @import "./markdown.css";
+@import "./wikilinkPreview.css";
 @import "./notebook.css";
 @import "./canvas.css";
 @import "./settings.css";
