@@ -189,7 +189,11 @@
       "bold": "Fett",
       "italic": "Kursiv",
       "code": "Inline-Code",
-      "strikethrough": "Durchgestrichen"
+      "strikethrough": "Durchgestrichen",
+      "cut": "Ausschneiden",
+      "copy": "Kopieren",
+      "paste": "Einfügen",
+      "selectAll": "Alles auswählen"
     }
   },
   "ai": {

@@ -189,7 +189,11 @@
       "bold": "درشت",
       "italic": "مورب",
       "code": "کد درون‌خطی",
-      "strikethrough": "خط‌خورده"
+      "strikethrough": "خط‌خورده",
+      "cut": "برش",
+      "copy": "رونوشت",
+      "paste": "چسباندن",
+      "selectAll": "انتخاب همه"
     }
   },
   "ai": {

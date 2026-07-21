@@ -266,6 +266,19 @@ function tokenFromCode(code: string): string | null {
   return CODE_TO_TOKEN[code] ?? null;
 }
 
+// `code` is the physical key and is layout-independent, so it is preferred. Some
+// input paths (virtual keyboards, remote sessions, synthesized events) deliver
+// an empty `code`; fall back to the produced character so the binding still
+// matches instead of silently doing nothing.
+function tokenFromEvent(event: KeyboardEvent): string | null {
+  const fromCode = tokenFromCode(event.code);
+  if (fromCode !== null) return fromCode;
+  const key = event.key;
+  if (/^[a-zA-Z]$/.test(key)) return key.toUpperCase();
+  if (/^[0-9]$/.test(key)) return key;
+  return CODE_TO_TOKEN[key] ?? null;
+}
+
 const MODIFIER_TOKENS = new Set(["CmdOrCtrl", "Cmd", "Ctrl", "Control", "Command", "Alt", "Shift"]);
 
 /** Parse a Tauri-style accelerator string into its parts, or null if invalid. */
@@ -323,7 +336,7 @@ export function matchesAccelerator(
 ): boolean {
   const parsed = parseAccelerator(accelerator);
   if (!parsed) return false;
-  const token = tokenFromCode(event.code);
+  const token = tokenFromEvent(event);
   if (token === null) return false;
   const cmdOrCtrl = isMac(platform) ? event.metaKey : event.ctrlKey;
   // The "other" primary modifier must not be held, so Ctrl+O on macOS doesn't

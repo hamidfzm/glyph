@@ -189,7 +189,11 @@
       "bold": "Negrita",
       "italic": "Cursiva",
       "code": "Código en línea",
-      "strikethrough": "Tachado"
+      "strikethrough": "Tachado",
+      "cut": "Cortar",
+      "copy": "Copiar",
+      "paste": "Pegar",
+      "selectAll": "Seleccionar todo"
     }
   },
   "ai": {

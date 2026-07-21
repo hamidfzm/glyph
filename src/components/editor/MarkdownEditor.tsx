@@ -17,7 +17,8 @@ import { useTranslation } from "react-i18next";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { usePlatform } from "@/hooks/usePlatform";
 import { useSettings } from "@/hooks/useSettings";
-import { type FormatToolbarLabels, formatToolbar } from "@/lib/editorFormatToolbar";
+import { type EditorMenuLabels, editorContextMenu } from "@/lib/editorContextMenu";
+import { formatToolbar } from "@/lib/editorFormatToolbar";
 import { editorKeymapExtensions } from "@/lib/editorKeymap";
 import {
   type FormatBindings,
@@ -70,17 +71,25 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
 
   // Read once when the toolbar mounts; a locale change remounts the editor
   // through the same keymap-keyed effect that owns the rest of the extensions.
-  const formatLabelsRef = useRef<FormatToolbarLabels>({
+  const formatLabelsRef = useRef<EditorMenuLabels>({
     bold: "",
     italic: "",
     code: "",
     strikethrough: "",
+    cut: "",
+    copy: "",
+    paste: "",
+    selectAll: "",
   });
   formatLabelsRef.current = {
     bold: t("editor.format.bold"),
     italic: t("editor.format.italic"),
     code: t("editor.format.code"),
     strikethrough: t("editor.format.strikethrough"),
+    cut: t("editor.format.cut"),
+    copy: t("editor.format.copy"),
+    paste: t("editor.format.paste"),
+    selectAll: t("editor.format.selectAll"),
   };
   const { spellCheck, spellCheckLanguages } = settings.editor;
   // Settings saves produce a fresh array identity every time; key the
@@ -168,6 +177,9 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
           formatToolbar(() => formatLabelsRef.current),
           syntaxHighlighting(glyphHighlight),
           spellcheckCompartment.of(spellcheckExtension(spellCheck, spellCheckLanguages)),
+          // After spell check, so a right-click on a misspelled word still gets
+          // the suggestion menu instead of this one.
+          editorContextMenu(() => formatLabelsRef.current),
           EditorView.lineWrapping,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {

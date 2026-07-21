@@ -189,7 +189,11 @@
       "bold": "Bold",
       "italic": "Italic",
       "code": "Inline code",
-      "strikethrough": "Strikethrough"
+      "strikethrough": "Strikethrough",
+      "cut": "Cut",
+      "copy": "Copy",
+      "paste": "Paste",
+      "selectAll": "Select all"
     }
   },
   "ai": {
