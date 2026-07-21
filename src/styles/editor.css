@@ -214,9 +214,6 @@
   font-family: var(--glyph-font, system-ui, -apple-system, sans-serif);
 }
 
-.cm-format-toolbar[hidden] {
-  display: none;
-}
 
 .cm-format-toolbar-button {
   min-width: 28px;

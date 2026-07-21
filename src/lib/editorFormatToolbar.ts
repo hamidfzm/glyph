@@ -34,7 +34,11 @@ export function formatToolbar(getLabels: () => FormatToolbarLabels): Extension {
       constructor(readonly view: EditorView) {
         this.dom = document.createElement("div");
         this.dom.className = "cm-format-toolbar";
-        this.dom.hidden = true;
+        // Hidden via inline visibility, not the `hidden` attribute: `hidden`
+        // sets display:none (Tailwind's preflight enforces it), which zeroes the
+        // measured height and drops the toolbar onto the text. visibility:hidden
+        // keeps the box measurable.
+        this.setVisible(false);
         const labels = getLabels();
         for (const action of ACTIONS) {
           const button = document.createElement("button");
@@ -97,7 +101,7 @@ export function formatToolbar(getLabels: () => FormatToolbarLabels): Extension {
 
       apply(placement: Placement | null) {
         if (!placement) {
-          this.dom.hidden = true;
+          this.setVisible(false);
           // Right after mount the editor's geometry can still be settling, so a
           // live selection may measure as unplaceable. Retry a couple of frames
           // rather than leave the toolbar invisible until the next edit.
@@ -107,9 +111,14 @@ export function formatToolbar(getLabels: () => FormatToolbarLabels): Extension {
           }
           return;
         }
-        this.dom.hidden = false;
         this.dom.style.left = `${placement.left}px`;
         this.dom.style.top = `${placement.top}px`;
+        this.setVisible(true);
+      }
+
+      setVisible(visible: boolean) {
+        this.dom.style.visibility = visible ? "visible" : "hidden";
+        this.dom.style.pointerEvents = visible ? "auto" : "none";
       }
 
       destroy() {

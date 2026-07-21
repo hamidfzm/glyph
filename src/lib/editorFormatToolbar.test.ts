@@ -28,7 +28,7 @@ function mount(doc: string, selection: { anchor: number; head?: number }) {
 describe("formatToolbar", () => {
   it("stays hidden while nothing is selected", () => {
     const { toolbar, cleanup } = mount("foo bar", { anchor: 1 });
-    expect(toolbar?.hidden).toBe(true);
+    expect(toolbar?.style.visibility).toBe("hidden");
     cleanup();
   });
 
@@ -52,7 +52,7 @@ describe("formatToolbar", () => {
   it("hides again once the selection collapses", () => {
     const { view, toolbar, cleanup } = mount("foo bar", { anchor: 0, head: 3 });
     view.dispatch({ selection: { anchor: 2 } });
-    expect(toolbar?.hidden).toBe(true);
+    expect(toolbar?.style.visibility).toBe("hidden");
     cleanup();
   });
 });
