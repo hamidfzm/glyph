@@ -1,8 +1,21 @@
 import { type EventCallback, type EventName, listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+
+// A default listen() has target Any, which also receives events emit_to'd at
+// OTHER windows, so a menu action in one window would fire in all of them.
+// Scope every listener to this window; broadcasts still reach scoped listeners.
+function currentWindowTarget(): { target: { kind: "WebviewWindow"; label: string } } | undefined {
+  try {
+    return { target: { kind: "WebviewWindow", label: getCurrentWebviewWindow().label } };
+  } catch {
+    // Non-Tauri environment (tests); scope is irrelevant there.
+    return undefined;
+  }
+}
 
 /**
- * Subscribe to a Tauri event and return a teardown function suitable for a
- * React effect cleanup.
+ * Subscribe to a Tauri event, scoped to the current window, and return a
+ * teardown function suitable for a React effect cleanup.
  *
  * The teardown swallows errors from the underlying `unlisten`. That call can
  * reject with "undefined is not an object (evaluating 'listeners[eventId]…')"
@@ -12,7 +25,7 @@ import { type EventCallback, type EventName, listen } from "@tauri-apps/api/even
  * though nothing went wrong.
  */
 export function subscribe<T>(event: EventName, handler: EventCallback<T>): () => void {
-  const unlisten = listen<T>(event, handler);
+  const unlisten = listen<T>(event, handler, currentWindowTarget());
   return () => {
     unlisten.then((fn) => fn()).catch(() => {});
   };

@@ -6,6 +6,7 @@ import { ExternalLinkIcon } from "@/components/icons/ExternalLinkIcon";
 import { SettingsContext } from "@/contexts/SettingsContext";
 import { isOpenableRelativeHref } from "@/lib/relativePath";
 import { scrollToHeading } from "@/lib/scrollToHeading";
+import { WikilinkAnchor } from "./WikilinkAnchor";
 
 export interface LinkComponentProps extends ComponentPropsWithoutRef<"a"> {
   onOpenWikilink?: (path: string, heading?: string) => void;
@@ -35,9 +36,8 @@ export function LinkComponent(props: LinkComponentProps) {
 
   // Wikilink: identified by remarkWikilink-emitted data attributes. We never
   // route these through openUrl — they're either a workspace file (resolved)
-  // or a no-op (broken).
+  // or a no-op (broken). WikilinkAnchor owns click and hover preview.
   const wikilinkTarget = (rest as Record<string, unknown>)["data-wikilink"];
-  const isWikilink = typeof wikilinkTarget === "string";
   const wikilinkPath = (rest as Record<string, unknown>)["data-wikilink-path"] as
     | string
     | undefined;
@@ -48,13 +48,6 @@ export function LinkComponent(props: LinkComponentProps) {
 
   const handleClick = useCallback(
     async (e: React.MouseEvent<HTMLAnchorElement>) => {
-      if (isWikilink) {
-        e.preventDefault();
-        if (wikilinkBroken || !wikilinkPath) return;
-        onOpenWikilink?.(wikilinkPath, wikilinkHeading);
-        return;
-      }
-
       if (!href) return;
 
       if (href.startsWith("#")) {
@@ -86,25 +79,21 @@ export function LinkComponent(props: LinkComponentProps) {
 
       await openUrl(href);
     },
-    [
-      href,
-      isWikilink,
-      wikilinkBroken,
-      wikilinkPath,
-      wikilinkHeading,
-      onOpenWikilink,
-      onOpenRelativeFile,
-      settings.behavior.confirmExternalLinks,
-      t,
-    ],
+    [href, onOpenRelativeFile, settings.behavior.confirmExternalLinks, t],
   );
 
-  if (isWikilink) {
+  if (typeof wikilinkTarget === "string") {
     return (
-      // biome-ignore lint/a11y/useValidAnchor: navigation routes through onClick by design — wikilinks resolve to in-app file paths, not URLs
-      <a href="#" onClick={handleClick} aria-disabled={wikilinkBroken ? true : undefined} {...rest}>
+      <WikilinkAnchor
+        wikilinkTarget={wikilinkTarget}
+        path={wikilinkPath}
+        heading={wikilinkHeading}
+        broken={wikilinkBroken}
+        onOpenWikilink={onOpenWikilink}
+        {...rest}
+      >
         {children}
-      </a>
+      </WikilinkAnchor>
     );
   }
 

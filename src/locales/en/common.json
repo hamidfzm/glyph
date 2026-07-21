@@ -243,6 +243,13 @@
     "headingNotFound": "Heading not found: {{heading}}",
     "error": "Could not load embed: {{target}}"
   },
+  "wikilinkPreview": {
+    "loading": "Loading preview...",
+    "notFound": "Note not found: {{target}}",
+    "createNote": "Create note",
+    "headingNotFound": "Heading not found: {{heading}}",
+    "error": "Could not load preview: {{target}}"
+  },
   "defaultAppBanner": {
     "message": "Make Glyph your default Markdown app?",
     "setDefault": "Set as default",
