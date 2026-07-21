@@ -15,9 +15,15 @@ import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
+import { usePlatform } from "@/hooks/usePlatform";
 import { useSettings } from "@/hooks/useSettings";
 import { editorKeymapExtensions } from "@/lib/editorKeymap";
-import { wrapSelectionExtension } from "@/lib/editorWrapSelection";
+import {
+  type FormatBindings,
+  formatBindingsExtension,
+  wrapSelectionExtension,
+} from "@/lib/editorWrapSelection";
+import { resolveBindings } from "@/lib/keybindings";
 import { buildSpellcheck } from "@/lib/spellcheck/spellcheckExtension";
 import type { SuggestionMenuLabels } from "@/lib/spellcheck/suggestionMenu";
 import { wikilinkCompletionSource } from "@/lib/wikilinkCompletion";
@@ -47,7 +53,19 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
 
   const { t } = useTranslation("settings");
   const { settings } = useSettings();
+  const platform = usePlatform();
   const keymapPreset = settings.editor.keymap;
+
+  // Formatting accelerators are read at keydown time through this ref, so a
+  // remap in Settings -> Hotkeys applies without rebuilding the editor.
+  const formatBindingsRef = useRef<FormatBindings>({
+    resolved: new Map(),
+    platform,
+  });
+  formatBindingsRef.current = {
+    resolved: resolveBindings(settings.keybindings.overrides),
+    platform,
+  };
   const { spellCheck, spellCheckLanguages } = settings.editor;
   // Settings saves produce a fresh array identity every time; key the
   // reconfigure effect on the joined value so only real set changes fire it.
@@ -130,6 +148,7 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
           }),
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           wrapSelectionExtension,
+          formatBindingsExtension(() => formatBindingsRef.current),
           syntaxHighlighting(glyphHighlight),
           spellcheckCompartment.of(spellcheckExtension(spellCheck, spellCheckLanguages)),
           EditorView.lineWrapping,

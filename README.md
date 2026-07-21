@@ -53,6 +53,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 
 ### Editor
 - Markdown editor mode: syntax highlighting, line numbers, undo/redo history
+- Inline formatting: style the selection with Bold (`Ctrl/Cmd+Shift+B`), Italic (`Ctrl/Cmd+I`), Inline Code (`Ctrl/Cmd+Shift+C`), or Strikethrough (`Ctrl/Cmd+Shift+X`), all remappable in Settings → Hotkeys
 - Wrap selection: with text selected, type `*`, `_`, `` ` ``, or `~` to surround it; type twice for `**bold**`
 - Split view: edit and preview side-by-side, or switch between modes per tab
 - Live preview updates as you type

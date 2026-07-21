@@ -1,7 +1,12 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
-import { wrapSelection, wrapSelectionExtension } from "./editorWrapSelection";
+import {
+  formatBindingsExtension,
+  wrapCommand,
+  wrapSelection,
+  wrapSelectionExtension,
+} from "./editorWrapSelection";
 
 // Apply wrapSelection and return the resulting doc + selection for assertions.
 function applyWrap(state: EditorState, marker: string) {
@@ -54,6 +59,85 @@ describe("wrapSelection", () => {
       expect(applyWrap(state, marker)?.doc).toBe(expected);
     },
   );
+});
+
+describe("formatBindingsExtension", () => {
+  // Drive the shipped extension the way CodeMirror does: dispatch a real
+  // keydown at the editor's DOM and let the handler claim it.
+  function pressWith(accelerators: Record<string, string>, init: KeyboardEventInit) {
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "foo bar",
+        selection: { anchor: 0, head: 3 },
+        extensions: [
+          formatBindingsExtension(() => ({
+            resolved: new Map(Object.entries(accelerators)),
+            platform: "windows",
+          })),
+        ],
+      }),
+    });
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+    view.contentDOM.dispatchEvent(event);
+    const doc = view.state.doc.toString();
+    view.destroy();
+    return { doc, handled: event.defaultPrevented };
+  }
+
+  it("wraps in bold on the configured accelerator", () => {
+    const { doc, handled } = pressWith(
+      { "format-bold": "CmdOrCtrl+Shift+B" },
+      { key: "B", code: "KeyB", ctrlKey: true, shiftKey: true },
+    );
+    expect(handled).toBe(true);
+    expect(doc).toBe("**foo** bar");
+  });
+
+  it("honours a remapped accelerator", () => {
+    // Same command, rebound to plain CmdOrCtrl+B.
+    const { doc } = pressWith(
+      { "format-bold": "CmdOrCtrl+B" },
+      { key: "b", code: "KeyB", ctrlKey: true },
+    );
+    expect(doc).toBe("**foo** bar");
+  });
+
+  it("ignores a keystroke that matches no formatting binding", () => {
+    const { doc, handled } = pressWith(
+      { "format-bold": "CmdOrCtrl+Shift+B" },
+      { key: "d", code: "KeyD", ctrlKey: true },
+    );
+    expect(handled).toBe(false);
+    expect(doc).toBe("foo bar");
+  });
+});
+
+describe("wrapCommand", () => {
+  function runOn(doc: string, selection: { anchor: number; head?: number }, marker: string) {
+    const view = new EditorView({ state: EditorState.create({ doc, selection }) });
+    const handled = wrapCommand(marker)(view);
+    const result = { handled, doc: view.state.doc.toString(), sel: view.state.selection.main };
+    view.destroy();
+    return result;
+  }
+
+  it("wraps with a two-character marker for bold", () => {
+    const { handled, doc, sel } = runOn("foo", { anchor: 0, head: 3 }, "**");
+    expect(handled).toBe(true);
+    expect(doc).toBe("**foo**");
+    // Inner text stays selected so the next command nests around it.
+    expect([sel.from, sel.to]).toEqual([2, 5]);
+  });
+
+  it("wraps with a single-character marker for italic", () => {
+    expect(runOn("foo", { anchor: 0, head: 3 }, "*").doc).toBe("*foo*");
+  });
+
+  it("reports false on an empty selection so the key falls through", () => {
+    const { handled, doc } = runOn("foo", { anchor: 1 }, "**");
+    expect(handled).toBe(false);
+    expect(doc).toBe("foo");
+  });
 });
 
 // Drive the shipped extension through a real EditorView: read the inputHandler

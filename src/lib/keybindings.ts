@@ -88,6 +88,36 @@ export const BINDABLE_COMMANDS: readonly BindableCommand[] = [
     defaultAccelerator: "CmdOrCtrl+Shift+Z",
     nativeMenu: false,
   },
+  // Editor-only inline formatting. Bold defaults to Shift because CmdOrCtrl+B
+  // is Toggle Files Sidebar; remap either one in Settings -> Hotkeys.
+  {
+    id: "format-bold",
+    label: "Bold",
+    category: "Edit",
+    defaultAccelerator: "CmdOrCtrl+Shift+B",
+    nativeMenu: false,
+  },
+  {
+    id: "format-italic",
+    label: "Italic",
+    category: "Edit",
+    defaultAccelerator: "CmdOrCtrl+I",
+    nativeMenu: false,
+  },
+  {
+    id: "format-code",
+    label: "Inline Code",
+    category: "Edit",
+    defaultAccelerator: "CmdOrCtrl+Shift+C",
+    nativeMenu: false,
+  },
+  {
+    id: "format-strikethrough",
+    label: "Strikethrough",
+    category: "Edit",
+    defaultAccelerator: "CmdOrCtrl+Shift+X",
+    nativeMenu: false,
+  },
   {
     id: "open-command-palette",
     label: "Command Palette",

@@ -1,5 +1,7 @@
-import type { EditorState, TransactionSpec } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import type { EditorState, Extension, TransactionSpec } from "@codemirror/state";
+import { type Command, EditorView } from "@codemirror/view";
+import type { Platform } from "@/hooks/usePlatform";
+import { matchesAccelerator } from "@/lib/keybindings";
 
 // Typed marker -> the character it pairs with. Markdown inline markers are
 // symmetric, so open and close match. Adding a bracket/quote pair is one entry.
@@ -10,22 +12,75 @@ const WRAP_PAIRS: Record<string, string> = {
   "~": "~",
 };
 
-// Wrap the current selection with `marker`, keeping the inner text selected so
-// repeated markers nest (`*` twice yields `**...**`). Returns null when `marker`
-// isn't a known pair or nothing is selected, letting the marker type normally.
-export function wrapSelection(state: EditorState, marker: string): TransactionSpec | null {
-  const close = WRAP_PAIRS[marker];
-  if (!close) return null;
+// Surround the selection with `open`/`close`, keeping the inner text selected so
+// repeated markers nest and both endpoints keep their direction. Returns null
+// when nothing is selected.
+function wrapWith(state: EditorState, open: string, close: string): TransactionSpec | null {
   const { from, to, anchor, head, empty } = state.selection.main;
   if (empty) return null;
 
   const inner = state.sliceDoc(from, to);
   return {
-    changes: { from, to, insert: marker + inner + close },
-    // Shift both endpoints by the opening marker so the selection keeps its
-    // direction (a right-to-left selection stays right-to-left).
-    selection: { anchor: anchor + marker.length, head: head + marker.length },
+    changes: { from, to, insert: open + inner + close },
+    selection: { anchor: anchor + open.length, head: head + open.length },
   };
+}
+
+// Wrap the selection with a typed single-character marker (`*`, `_`, `` ` ``, `~`).
+// Returns null when `marker` isn't a known pair, letting the key type normally.
+export function wrapSelection(state: EditorState, marker: string): TransactionSpec | null {
+  const close = WRAP_PAIRS[marker];
+  if (!close) return null;
+  return wrapWith(state, marker, close);
+}
+
+// A keyboard command that wraps the selection, e.g. `**` for bold. Reports
+// false on an empty selection so the key falls through to the next binding.
+export function wrapCommand(marker: string): Command {
+  return (view) => {
+    const spec = wrapWith(view.state, marker, marker);
+    if (!spec) return false;
+    view.dispatch(spec);
+    return true;
+  };
+}
+
+// Bindable command id -> the marker it wraps with. Accelerators live in
+// BINDABLE_COMMANDS so formatting is remappable in Settings -> Hotkeys like
+// every other shortcut, instead of being hardcoded here.
+const FORMAT_MARKERS: readonly (readonly [string, string])[] = [
+  ["format-bold", "**"],
+  ["format-italic", "*"],
+  ["format-code", "`"],
+  ["format-strikethrough", "~~"],
+];
+
+/** Resolved accelerators plus the platform they are matched against. */
+export interface FormatBindings {
+  resolved: Map<string, string>;
+  platform: Platform;
+}
+
+// Formatting shortcuts, read through a getter so a remap takes effect without
+// tearing down the editor. Handled on keydown (not a CodeMirror keymap) so the
+// accelerator strings stay the single source of truth.
+export function formatBindingsExtension(getBindings: () => FormatBindings): Extension {
+  return EditorView.domEventHandlers({
+    keydown(event, view) {
+      const { resolved, platform } = getBindings();
+      for (const [id, marker] of FORMAT_MARKERS) {
+        const accelerator = resolved.get(id);
+        if (!accelerator || !matchesAccelerator(event, accelerator, platform)) continue;
+        const spec = wrapWith(view.state, marker, marker);
+        // Claim the key even with no selection, so a formatting shortcut never
+        // falls through and types a stray character.
+        if (spec) view.dispatch(spec);
+        event.preventDefault();
+        return true;
+      }
+      return false;
+    },
+  });
 }
 
 // Intercept typed styling markers before they replace the selection. Skips
