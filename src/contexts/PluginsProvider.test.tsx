@@ -331,6 +331,223 @@ describe("PluginsProvider", () => {
     );
   });
 
+  it("keeps a parked full-trust plugin off when the enable warning is declined", async () => {
+    const store = { get: vi.fn(() => Promise.resolve(null)), set: vi.fn(() => Promise.resolve()) };
+    vi.mocked(load).mockResolvedValue(store as never);
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "list_plugins" ? [installedPlugin()] : undefined),
+    );
+    vi.mocked(ask).mockClear();
+    vi.mocked(ask).mockResolvedValueOnce(false);
+
+    function ManageProbe() {
+      const p = usePluginsOptional();
+      if (!p) return null;
+      return (
+        <div>
+          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
+          <span data-testid="disabled">{p.disabled.join(",")}</span>
+          <button type="button" onClick={() => void p.setEnabled("com.x.demo", true)}>
+            on
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <ManageProbe />
+      </PluginsProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo"));
+
+    screen.getByRole("button", { name: "on" }).click();
+
+    await waitFor(() => expect(vi.mocked(ask)).toHaveBeenCalled());
+    expect(screen.getByTestId("loaded").textContent).toBe("");
+    expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo");
+    expect(store.set).not.toHaveBeenCalledWith("grants", expect.anything());
+  });
+
+  it("shows the full-trust warning for a registry entry that opts out of the sandbox", async () => {
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "list_plugins" ? [] : undefined),
+    );
+    vi.mocked(ask).mockClear();
+    vi.mocked(ask).mockResolvedValueOnce(false);
+    const entry = {
+      id: "com.x.trusty",
+      name: "Trusty",
+      version: "1.0.0",
+      apiVersion: `^${PLUGIN_API_VERSION}`,
+      sandbox: false,
+      packageUrl: "https://example.test/plugin.zip",
+      sha256: "a".repeat(64),
+    };
+
+    function InstallProbe() {
+      const plugins = usePluginsOptional();
+      return (
+        <button type="button" onClick={() => void plugins?.installFromRegistry(entry)}>
+          market
+        </button>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <InstallProbe />
+        <Probe />
+      </PluginsProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("initial-load")).toHaveTextContent("true"));
+    screen.getByRole("button", { name: "market" }).click();
+
+    await waitFor(() => expect(vi.mocked(ask)).toHaveBeenCalled());
+    const [message] = vi.mocked(ask).mock.calls.at(-1) ?? [];
+    expect(message).toContain("WITHOUT the plugin sandbox");
+    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin_package", expect.anything());
+  });
+
+  it("loads sandboxed plugins without a grant and uninstalls them without touching grants", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const store = { get: vi.fn(() => Promise.resolve(null)), set: vi.fn(() => Promise.resolve()) };
+    vi.mocked(load).mockResolvedValue(store as never);
+    // Sandboxed plugin: never parked at startup (jsdom has no Worker, so the
+    // load itself fails, which is fine; the gate must not have blocked it).
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "list_plugins" ? [installedPlugin({ sandbox: true })] : undefined),
+    );
+
+    function ManageProbe() {
+      const p = usePluginsOptional();
+      if (!p) return null;
+      return (
+        <div>
+          <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
+          <span data-testid="disabled">{p.disabled.join(",")}</span>
+          <button type="button" onClick={() => void p.uninstall("com.x.demo")}>
+            rm
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <ManageProbe />
+      </PluginsProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("installed")).toHaveTextContent("com.x.demo"));
+    expect(screen.getByTestId("disabled").textContent).toBe("");
+
+    // No grant was ever recorded, so uninstall has nothing to revoke.
+    screen.getByRole("button", { name: "rm" }).click();
+    await waitFor(() => expect(screen.getByTestId("installed").textContent).toBe(""));
+    expect(store.set).not.toHaveBeenCalledWith("grants", expect.anything());
+    spy.mockRestore();
+  });
+
+  it("abandons the startup pass when unmounted while a plugin is still loading", async () => {
+    // First scenario: unmount during the only plugin's load; the pass must
+    // finish without committing state. Second: unmount with a second plugin
+    // still queued; the loop must stop before touching it.
+    for (const plugins of [
+      [installedPlugin()],
+      [installedPlugin(), installedPlugin({ id: "com.x.second", name: "Second" })],
+    ]) {
+      let releaseSettings!: (v: Record<string, unknown>) => void;
+      vi.mocked(loadPluginSettings).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseSettings = resolve;
+          }),
+      );
+      let releaseFetch!: () => void;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          () =>
+            new Promise((resolve) => {
+              releaseFetch = () =>
+                resolve({ ok: true, json: () => Promise.resolve({ plugins: [] }) });
+            }),
+        ),
+      );
+      vi.mocked(invoke).mockImplementation((cmd) =>
+        Promise.resolve(cmd === "list_plugins" ? plugins : undefined),
+      );
+
+      const { unmount } = render(
+        <PluginsProvider>
+          <Probe />
+        </PluginsProvider>,
+      );
+      await waitFor(() => expect(vi.mocked(loadPluginSettings)).toHaveBeenCalled());
+      unmount();
+      releaseSettings({});
+      releaseFetch();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      vi.mocked(loadPluginSettings).mockClear();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("tolerates enable and disable edge states across repeat calls", async () => {
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "list_plugins" ? [installedPlugin()] : undefined),
+    );
+
+    function ManageProbe() {
+      const p = usePluginsOptional();
+      if (!p) return null;
+      return (
+        <div>
+          <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
+          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
+          <span data-testid="disabled">{p.disabled.join(",")}</span>
+          <button type="button" onClick={() => void p.setEnabled("com.x.absent", true)}>
+            on-absent
+          </button>
+          <button type="button" onClick={() => void p.setEnabled("com.x.demo", true)}>
+            on
+          </button>
+          <button type="button" onClick={() => void p.setEnabled("com.x.demo", false)}>
+            off
+          </button>
+          <button type="button" onClick={() => void p.uninstall("com.x.demo")}>
+            rm
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <ManageProbe />
+      </PluginsProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
+
+    // Enabling an id that is not installed is a no-op.
+    screen.getByRole("button", { name: "on-absent" }).click();
+    // Enabling an already-enabled plugin stays enabled and never marks it disabled.
+    screen.getByRole("button", { name: "on" }).click();
+    await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
+    expect(screen.getByTestId("disabled").textContent).toBe("");
+
+    // Disabling twice keeps a single disabled entry.
+    screen.getByRole("button", { name: "off" }).click();
+    await waitFor(() => expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo"));
+    screen.getByRole("button", { name: "off" }).click();
+    await waitFor(() => expect(screen.getByTestId("disabled").textContent).toBe("com.x.demo"));
+
+    // Uninstalling a disabled plugin clears both lists.
+    screen.getByRole("button", { name: "rm" }).click();
+    await waitFor(() => expect(screen.getByTestId("installed").textContent).toBe(""));
+    expect(screen.getByTestId("disabled").textContent).toBe("");
+  });
+
   it("asks fresh consent listing only the new permissions when an update expands them", async () => {
     const store = {
       get: vi.fn((key: string) =>
@@ -780,6 +997,39 @@ describe("PluginsProvider", () => {
       expect(screen.getByRole("status")).toHaveTextContent("Plugin error: not a plugin folder"),
     );
     expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("stringifies non-Error failures in the error toast", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation((cmd) => {
+      if (cmd === "list_plugins") return Promise.resolve([]);
+      if (cmd === "inspect_plugin") return Promise.resolve(inspection());
+      // Tauri commands reject with plain strings, not Error objects.
+      if (cmd === "install_plugin") return Promise.reject("not a plugin folder");
+      return Promise.resolve(undefined);
+    });
+    vi.mocked(pickPluginDir).mockResolvedValue("/bad/folder");
+
+    function InstallProbe() {
+      const plugins = usePluginsOptional();
+      return (
+        <button type="button" onClick={() => void plugins?.installFromFolder()}>
+          install
+        </button>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <InstallProbe />
+      </PluginsProvider>,
+    );
+    screen.getByRole("button", { name: "install" }).click();
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Plugin error: not a plugin folder"),
+    );
     spy.mockRestore();
   });
 
