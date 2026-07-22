@@ -22,6 +22,7 @@ describe("deriveExportMeta", () => {
     expect(deriveExportMeta("/x/a.md", "# The `ctx` *guide*").title).toBe("The ctx guide");
     expect(deriveExportMeta("/x/b.md", "# [API Reference](api.md)").title).toBe("API Reference");
     expect(deriveExportMeta("/x/c.md", "## Not a title\ntext").title).toBe("c");
+    expect(deriveExportMeta("/x/d.md", "# ***\n# Real Heading").title).toBe("Real Heading");
   });
 
   it("handles Windows-style paths", () => {
