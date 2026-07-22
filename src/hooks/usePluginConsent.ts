@@ -56,8 +56,8 @@ export function usePluginConsent() {
     [t],
   );
 
+  // Deleting an absent id is a no-op, so revoking is unconditional.
   const revokeGrant = useCallback((id: string) => {
-    if (!(id in grantsRef.current)) return;
     const next = { ...grantsRef.current };
     delete next[id];
     grantsRef.current = next;

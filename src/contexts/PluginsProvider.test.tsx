@@ -441,10 +441,10 @@ describe("PluginsProvider", () => {
     await waitFor(() => expect(screen.getByTestId("installed")).toHaveTextContent("com.x.demo"));
     expect(screen.getByTestId("disabled").textContent).toBe("");
 
-    // No grant was ever recorded, so uninstall has nothing to revoke.
+    // No grant was ever recorded; revoking on uninstall persists an empty map.
     screen.getByRole("button", { name: "rm" }).click();
     await waitFor(() => expect(screen.getByTestId("installed").textContent).toBe(""));
-    expect(store.set).not.toHaveBeenCalledWith("grants", expect.anything());
+    expect(store.set).toHaveBeenCalledWith("grants", {});
     spy.mockRestore();
   });
 
