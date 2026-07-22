@@ -257,3 +257,22 @@ describe("matchesAccelerator without a physical code", () => {
     );
   });
 });
+
+describe("tokenFromEvent fallback for named keys", () => {
+  it("matches a named key when the code is missing", () => {
+    const event = new KeyboardEvent("keydown", { key: "Enter", code: "", ctrlKey: true });
+    expect(matchesAccelerator(event, "CmdOrCtrl+Enter", "windows")).toBe(true);
+  });
+
+  it("rejects a key it cannot map", () => {
+    const event = new KeyboardEvent("keydown", { key: "Unidentified", code: "", ctrlKey: true });
+    expect(matchesAccelerator(event, "CmdOrCtrl+Enter", "windows")).toBe(false);
+  });
+});
+
+describe("tokenFromEvent digit fallback", () => {
+  it("matches a digit binding when the code is missing", () => {
+    const event = new KeyboardEvent("keydown", { key: "0", code: "", ctrlKey: true });
+    expect(matchesAccelerator(event, "CmdOrCtrl+0", "windows")).toBe(true);
+  });
+});

@@ -85,9 +85,9 @@ function openMenu(x: number, y: number, entries: (MenuEntry | "separator")[]): v
 export function editorContextMenu(getLabels: () => EditorMenuLabels): Extension {
   return EditorView.domEventHandlers({
     contextmenu(event, view) {
-      // Spell check claims the event first when a misspelled word is hit, so
-      // its suggestion menu still wins over this one.
-      if (event.defaultPrevented) return false;
+      // Spell check is installed before this and claims the event on a
+      // misspelled word, so its suggestion menu still wins: CodeMirror skips
+      // handlers once an event is prevented (see eventBelongsToEditor).
       event.preventDefault();
 
       const labels = getLabels();

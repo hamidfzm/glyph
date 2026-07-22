@@ -179,3 +179,68 @@ describe("editorContextMenu clipboard and dismissal", () => {
     parent.remove();
   });
 });
+
+describe("editorContextMenu edge branches", () => {
+  it("ignores keys other than Escape while open", () => {
+    const { view, parent } = mount({ anchor: 0, head: 3 });
+    rightClick(view);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
+    expect(menu()).not.toBeNull();
+    view.destroy();
+    parent.remove();
+  });
+
+  it("stays open when the click lands inside the menu", () => {
+    const { view, parent } = mount({ anchor: 0, head: 3 });
+    rightClick(view);
+    menu()?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    expect(menu()).not.toBeNull();
+    view.destroy();
+    parent.remove();
+  });
+
+  it("does nothing when the selection collapsed before the entry was clicked", () => {
+    const { view, parent } = mount({ anchor: 0, head: 3 });
+    rightClick(view);
+    // Entries read the selection at click time, not at menu-open time.
+    view.dispatch({ selection: { anchor: 1 } });
+    items()
+      .find((b) => b.textContent === "Bold")
+      ?.click();
+    expect(view.state.doc.toString()).toBe("foo bar");
+    view.destroy();
+    parent.remove();
+  });
+
+  it("leaves the document alone when the clipboard is empty", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { readText: () => Promise.resolve("") },
+      configurable: true,
+    });
+    const { view, parent } = mount({ anchor: 0, head: 3 });
+    rightClick(view);
+    items()
+      .find((b) => b.textContent === "Paste")
+      ?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(view.state.doc.toString()).toBe("foo bar");
+    view.destroy();
+    parent.remove();
+  });
+
+  it("pulls the menu back inside the viewport near the edges", () => {
+    const { view, parent } = mount({ anchor: 0, head: 3 });
+    const original = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function rect() {
+      return { width: 170, height: 200, right: 99999, bottom: 99999 } as DOMRect;
+    };
+    rightClick(view, { clientX: 5000, clientY: 5000 });
+    Element.prototype.getBoundingClientRect = original;
+
+    const style = (menu() as HTMLElement).style;
+    expect(Number.parseInt(style.left, 10)).toBe(window.innerWidth - 170 - 4);
+    expect(Number.parseInt(style.top, 10)).toBe(window.innerHeight - 200 - 4);
+    view.destroy();
+    parent.remove();
+  });
+});

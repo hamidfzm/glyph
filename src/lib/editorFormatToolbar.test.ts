@@ -159,3 +159,70 @@ describe("formatToolbar placement in the editor", () => {
     cleanup();
   });
 });
+
+describe("formatToolbar visibility and retries", () => {
+  function mountPlugin(selection: { anchor: number; head?: number }) {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const plugin = formatToolbar(() => LABELS);
+    const view = new EditorView({
+      state: EditorState.create({ doc: "foo bar", selection, extensions: [plugin] }),
+      parent,
+    });
+    const instance = view.plugin(plugin);
+    const cleanup = () => {
+      view.destroy();
+      parent.remove();
+    };
+    return { view, instance, bar: instance?.dom as HTMLElement, cleanup };
+  }
+
+  it("measures as unplaceable when the selection is empty", () => {
+    const { instance, cleanup } = mountPlugin({ anchor: 2 });
+    expect(instance?.measure()).toBeNull();
+    cleanup();
+  });
+
+  it("hides and stops retrying once the budget is spent", () => {
+    const { instance, bar, cleanup } = mountPlugin({ anchor: 0, head: 3 });
+    // A live selection retries; the counter stops it after three attempts.
+    for (let i = 0; i < 5; i++) instance?.apply(null);
+    expect(bar.style.visibility).toBe("hidden");
+    expect(instance?.retries).toBe(3);
+    cleanup();
+  });
+
+  it("does not retry when nothing is selected", () => {
+    const { instance, bar, cleanup } = mountPlugin({ anchor: 2 });
+    instance?.apply(null);
+    expect(bar.style.visibility).toBe("hidden");
+    expect(instance?.retries).toBe(0);
+    cleanup();
+  });
+
+  it("leaves the document alone when the selection collapsed before the click", () => {
+    const { view, bar, cleanup } = mountPlugin({ anchor: 0, head: 3 });
+    // The button reads the selection at click time, so a collapsed selection
+    // must be a no-op rather than inserting stray markers.
+    view.dispatch({ selection: { anchor: 1 } });
+    bar
+      .querySelector<HTMLButtonElement>('[data-action="bold"]')
+      ?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    expect(view.state.doc.toString()).toBe("foo bar");
+    cleanup();
+  });
+
+  it("runs the scheduled measure and write pass", async () => {
+    const { instance, bar, cleanup } = mountPlugin({ anchor: 0, head: 3 });
+    Object.defineProperty(bar, "offsetWidth", { value: 120, configurable: true });
+    Object.defineProperty(bar, "offsetHeight", { value: 30, configurable: true });
+    instance!.view.coordsAtPos = () => ({ top: 100, bottom: 120, left: 50, right: 150 });
+    instance!.view.dom.getBoundingClientRect = () =>
+      ({ top: 0, bottom: 300, left: 0, right: 400 }) as DOMRect;
+    instance?.schedule();
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(bar.style.visibility).toBe("visible");
+    cleanup();
+  });
+});

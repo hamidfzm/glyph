@@ -105,8 +105,8 @@ export function formatToolbar(getLabels: () => FormatToolbarLabels) {
       // deferred to CodeMirror's measure cycle.
       schedule() {
         this.view.requestMeasure({
-          read: () => this.measure(),
-          write: (placement) => this.apply(placement),
+          read: this.measure.bind(this),
+          write: this.apply.bind(this),
         });
       }
 

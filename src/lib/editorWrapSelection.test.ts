@@ -277,3 +277,59 @@ describe("formatting undo", () => {
     view.destroy();
   });
 });
+
+describe("toggle boundary conditions", () => {
+  it("wraps rather than unwraps at the very start of the document", () => {
+    // No room for a marker before the selection, so the unwrap check bails.
+    const state = EditorState.create({ doc: "foo*", selection: { anchor: 0, head: 3 } });
+    expect(state.update(wrapSelectionWith(state, "*")!).state.doc.toString()).toBe("*foo**");
+  });
+
+  it("wraps rather than unwraps at the very end of the document", () => {
+    const state = EditorState.create({ doc: "*foo", selection: { anchor: 1, head: 4 } });
+    expect(state.update(wrapSelectionWith(state, "*")!).state.doc.toString()).toBe("**foo*");
+  });
+
+  it("claims the shortcut but makes no edit without a selection", () => {
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "foo bar",
+        selection: { anchor: 2 },
+        extensions: [
+          formatBindingsExtension(() => ({
+            resolved: new Map([["format-bold", "CmdOrCtrl+Shift+B"]]),
+            platform: "windows",
+          })),
+        ],
+      }),
+    });
+    const event = new KeyboardEvent("keydown", {
+      key: "B",
+      code: "KeyB",
+      ctrlKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    view.contentDOM.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.doc.toString()).toBe("foo bar");
+    view.destroy();
+  });
+});
+
+describe("toggle only unwraps a matched pair", () => {
+  const roundTrip = (doc: string, anchor: number, head: number, marker: string) => {
+    const state = EditorState.create({ doc, selection: { anchor, head } });
+    return state.update(wrapSelectionWith(state, marker)!).state.doc.toString();
+  };
+
+  it("wraps when the preceding character is not the marker", () => {
+    expect(roundTrip("xfoox", 1, 4, "*")).toBe("x*foo*x");
+  });
+
+  it("wraps when only the preceding character is the marker", () => {
+    // Marker before but not after, so this is not a pair to strip.
+    expect(roundTrip("*fooy", 1, 4, "*")).toBe("**foo*y");
+  });
+});
