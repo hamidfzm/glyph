@@ -1,6 +1,11 @@
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { subscribe } from "@/lib/tauriEvent";
+
+vi.mock("@tauri-apps/api/webviewWindow", () => ({
+  getCurrentWebviewWindow: vi.fn(() => ({ label: "w1" })),
+}));
 
 describe("subscribe", () => {
   afterEach(() => {
@@ -8,10 +13,23 @@ describe("subscribe", () => {
     vi.mocked(listen).mockImplementation(() => Promise.resolve(vi.fn()));
   });
 
-  it("registers a listener for the given event", () => {
+  it("registers a listener scoped to the current window", () => {
+    // Regression: an unscoped listen() has target Any and also receives events
+    // emit_to'd at other windows, so one window's menu action fired in all.
     const handler = vi.fn();
     subscribe("file-changed", handler);
-    expect(listen).toHaveBeenCalledWith("file-changed", handler);
+    expect(listen).toHaveBeenCalledWith("file-changed", handler, {
+      target: { kind: "WebviewWindow", label: "w1" },
+    });
+  });
+
+  it("falls back to an unscoped listener outside Tauri", () => {
+    vi.mocked(getCurrentWebviewWindow).mockImplementationOnce(() => {
+      throw new Error("no Tauri internals");
+    });
+    const handler = vi.fn();
+    subscribe("file-changed", handler);
+    expect(listen).toHaveBeenCalledWith("file-changed", handler, undefined);
   });
 
   it("calls the underlying unlisten when the teardown runs", async () => {

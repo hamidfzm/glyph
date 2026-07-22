@@ -1,6 +1,9 @@
+import { captureException } from "@sentry/react";
 import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWindowClose } from "./useWindowClose";
+
+vi.mock("@sentry/react", () => ({ captureException: vi.fn() }));
 
 // Mock the Tauri window API. `onCloseRequested` captures the handler the hook
 // registers so tests can fire a synthetic close request; `close` is asserted on.
@@ -25,6 +28,7 @@ describe("useWindowClose", () => {
     handler = undefined;
     unlisten = vi.fn();
     close.mockClear();
+    vi.mocked(captureException).mockClear();
     getCurrentWindow.mockClear();
     getCurrentWindow.mockReturnValue({ onCloseRequested, close });
     onCloseRequested.mockClear();
@@ -55,6 +59,23 @@ describe("useWindowClose", () => {
     expect(event.preventDefault).toHaveBeenCalled();
     expect(flush).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the window and reports when the flush rejects (never traps the user)", async () => {
+    const error = new Error("save failed");
+    const flush = vi.fn().mockRejectedValue(error);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderHook(() => useWindowClose(flush));
+    await settle();
+
+    const event = { preventDefault: vi.fn() };
+    await handler?.(event);
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(flush).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(error);
+    consoleError.mockRestore();
   });
 
   it("keeps the window open when the flush is cancelled", async () => {

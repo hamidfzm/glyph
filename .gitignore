@@ -4,6 +4,8 @@ coverage/
 src-tauri/target/
 coverage/
 junit*.xml
+test-results/
+playwright-report/
 *.log
 .DS_Store
 

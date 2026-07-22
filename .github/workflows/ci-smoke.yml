@@ -1,0 +1,24 @@
+name: Smoke
+
+on:
+  workflow_call:
+
+# CI-time smoke tests: fast checks that drive real engines or binaries, as
+# opposed to unit tests. Future smoke jobs (e.g. the built-app tauri-driver
+# smoke from #502) belong here. Post-release channel smoke tests live in
+# release-smoke-test.yml instead.
+jobs:
+  webkit:
+    # Renders a real D2 diagram and probes every CSP-dependent render surface
+    # in Playwright WebKit under the CSP shipped in tauri.conf.json. WebKit
+    # enforces the page CSP inside blob workers (Chromium does not), so only
+    # a WebKit run catches a CSP that breaks rendering on Linux/macOS.
+    name: WebKit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/pnpm-setup
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright WebKit
+        run: pnpm exec playwright install --with-deps webkit
+      - run: pnpm test:e2e

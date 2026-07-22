@@ -243,6 +243,13 @@
     "headingNotFound": "Überschrift nicht gefunden: {{heading}}",
     "error": "Eingebettete Notiz konnte nicht geladen werden: {{target}}"
   },
+  "wikilinkPreview": {
+    "loading": "Vorschau wird geladen…",
+    "notFound": "Notiz nicht gefunden: {{target}}",
+    "createNote": "Notiz erstellen",
+    "headingNotFound": "Überschrift nicht gefunden: {{heading}}",
+    "error": "Vorschau konnte nicht geladen werden: {{target}}"
+  },
   "defaultAppBanner": {
     "message": "Glyph als Standard-Markdown-App festlegen?",
     "setDefault": "Als Standard festlegen",
