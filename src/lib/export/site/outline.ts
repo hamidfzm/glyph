@@ -9,9 +9,9 @@ import { escapeXml } from "@/lib/export/escape";
  */
 export function buildOutlineHtml(bodyHtml: string): string | null {
   const doc = new DOMParser().parseFromString(bodyHtml, "text/html");
-  const headings = Array.from(
-    doc.body.querySelectorAll("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]"),
-  );
+  // h1 is the page title; repeating it as the first outline entry is noise,
+  // so the outline lists sections only.
+  const headings = Array.from(doc.body.querySelectorAll("h2[id], h3[id], h4[id], h5[id], h6[id]"));
   if (headings.length < 2) return null;
   const items = headings.map((heading) => {
     const level = Number(heading.tagName.charAt(1));
