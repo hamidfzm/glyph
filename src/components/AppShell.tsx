@@ -92,6 +92,7 @@ export function AppShell() {
     openFile,
     openFileDialog,
     closeTab,
+    closeWorkspace,
     setTabMode,
     saveDocument,
     flushForClose,
@@ -182,6 +183,7 @@ export function AppShell() {
       // payload into openGraph's optional root parameter.
       openGraph: () => openGraph(),
       closeTab: closeActiveTab,
+      closeWorkspace,
       toggleFilesSidebar: sidebar.toggleFiles,
       toggleOutlineSidebar: sidebar.toggleOutline,
       resetView: sidebar.resetLayout,
@@ -213,6 +215,7 @@ export function AppShell() {
       openFolder,
       openGraph,
       closeActiveTab,
+      closeWorkspace,
       sidebar.toggleFiles,
       sidebar.toggleOutline,
       sidebar.resetLayout,

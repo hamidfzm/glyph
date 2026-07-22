@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import { setDefaultMarkdownApp } from "@/lib/defaultApp";
+import { isMobilePlatform } from "@/lib/platform";
 import { isPrimaryWindow } from "@/lib/windowContext";
 
 /**
@@ -12,7 +13,12 @@ import { isPrimaryWindow } from "@/lib/windowContext";
 export function useDefaultAppPrompt() {
   const { settings, updateSettings, loaded } = useSettings();
 
-  const show = loaded && isPrimaryWindow() && settings.behavior.defaultAppPrompt === "unanswered";
+  // Default-app registration is a desktop concept; mobile never prompts.
+  const show =
+    loaded &&
+    !isMobilePlatform() &&
+    isPrimaryWindow() &&
+    settings.behavior.defaultAppPrompt === "unanswered";
 
   const setDefault = useCallback(() => {
     updateSettings("behavior.defaultAppPrompt", "set");

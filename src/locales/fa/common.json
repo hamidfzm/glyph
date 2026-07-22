@@ -243,6 +243,13 @@
     "headingNotFound": "عنوان پیدا نشد: {{heading}}",
     "error": "بارگذاری محتوای جاسازی‌شده ممکن نشد: {{target}}"
   },
+  "wikilinkPreview": {
+    "loading": "در حال بارگذاری پیش‌نمایش…",
+    "notFound": "یادداشت پیدا نشد: {{target}}",
+    "createNote": "ایجاد یادداشت",
+    "headingNotFound": "سرفصل پیدا نشد: {{heading}}",
+    "error": "پیش‌نمایش بارگذاری نشد: {{target}}"
+  },
   "defaultAppBanner": {
     "message": "Glyph برنامه پیش‌فرض Markdown شما شود؟",
     "setDefault": "تنظیم به‌عنوان پیش‌فرض",

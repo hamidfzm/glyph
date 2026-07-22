@@ -49,17 +49,21 @@ pub fn focus_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
     }
 }
 
-/// The window an OS-level open should treat as "current": the focused one, else
-/// any window, else `main`.
+/// The window an OS-level open (or menu action) should treat as "current":
+/// the focused one, else `main`, else any window. Preferring `main` keeps the
+/// no-focus fallback deterministic instead of HashMap iteration order.
 pub fn current_window_label<R: Runtime>(app: &AppHandle<R>) -> String {
-    if let Some((label, _)) = app
-        .webview_windows()
-        .into_iter()
+    let windows = app.webview_windows();
+    if let Some((label, _)) = windows
+        .iter()
         .find(|(_, w)| w.is_focused().unwrap_or(false))
     {
-        return label;
+        return label.clone();
     }
-    app.webview_windows()
+    if windows.contains_key("main") {
+        return "main".to_string();
+    }
+    windows
         .into_keys()
         .next()
         .unwrap_or_else(|| "main".to_string())
@@ -91,23 +95,51 @@ pub fn open_in_app<R: Runtime>(
 /// spawning a duplicate, and injected as `window.__GLYPH_OPEN__` so the
 /// frontend adopts it on mount. `__GLYPH_PRIMARY__ = false` marks the window as
 /// secondary (it neither persists nor restores the session).
+///
+/// The build runs off-thread: every caller sits on the main thread (sync
+/// command, drag-drop, single-instance callback), and building a webview there
+/// deadlocks Windows (wry#583). WebView2 init completes via the message pump
+/// the caller is blocking, freezing every window and leaving the new one white.
 fn spawn_window<R: Runtime>(app: &AppHandle<R>, registry: &WindowRegistry, pending: PendingOpen) {
     let label = registry.next_label();
     if pending.kind == OpenKind::Folder {
         registry.set_workspace(&label, Some(pending.path.clone()));
     }
-    let payload = serde_json::to_string(&pending).unwrap_or_else(|_| "null".to_string());
-    let script = format!("window.__GLYPH_OPEN__={payload};window.__GLYPH_PRIMARY__=false;");
-    let built = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("index.html".into()))
-        .title("Glyph")
-        .inner_size(960.0, 720.0)
-        .initialization_script(&script)
-        .build();
-    if built.is_err() {
-        // Building failed, so the window will never report back — don't leave a
-        // phantom workspace entry that would swallow future open requests.
-        registry.remove(&label);
-    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let payload = serde_json::to_string(&pending).unwrap_or_else(|_| "null".to_string());
+        let script = format!("window.__GLYPH_OPEN__={payload};window.__GLYPH_PRIMARY__=false;");
+        #[allow(unused_mut)]
+        // Hidden like the main window (tauri.conf.json visible: false): the
+        // frontend's useWindowReveal shows it after the first themed paint,
+        // instead of flashing a white native window while the webview loads.
+        let mut builder =
+            WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
+                .title("Glyph")
+                .inner_size(960.0, 720.0)
+                .visible(false)
+                .initialization_script(&script);
+        // Windows cannot share one native menu across windows (a Win32 HMENU
+        // attaches to a single window), so each spawned window gets its own
+        // menu instance instead of inheriting the app-wide one. Its state and
+        // labels are pushed by the window's own frontend on mount.
+        #[cfg(windows)]
+        if let Ok((menu, refs)) = crate::menu::build_menu(&app, Some(&label)) {
+            let _ = crate::menu::apply_menu_state(&refs, &crate::menu::MenuStateFlags::default());
+            if let Some(menus) = app.try_state::<crate::menu::MenuRegistry<R>>() {
+                menus.insert(&label, refs);
+            }
+            builder = builder.menu(menu);
+        }
+        let built = builder.build();
+        if built.is_err() {
+            // The window will never report back, so drop the phantom workspace
+            // entry that would swallow future open requests.
+            if let Some(registry) = app.try_state::<WindowRegistry>() {
+                registry.remove(&label);
+            }
+        }
+    });
 }
 
 /// Frontend reports the workspace its window now shows (or `None` when cleared),

@@ -240,6 +240,13 @@
     "headingNotFound": "Encabezado no encontrado: {{heading}}",
     "error": "No se pudo cargar la inserción: {{target}}"
   },
+  "wikilinkPreview": {
+    "loading": "Cargando vista previa...",
+    "notFound": "Nota no encontrada: {{target}}",
+    "createNote": "Crear nota",
+    "headingNotFound": "Encabezado no encontrado: {{heading}}",
+    "error": "No se pudo cargar la vista previa: {{target}}"
+  },
   "headingAnchor": {
     "label": "Copiar enlace al encabezado"
   },

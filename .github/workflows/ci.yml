@@ -43,6 +43,10 @@ jobs:
     uses: ./.github/workflows/ci-tests.yml
     secrets: inherit
 
+  smoke:
+    name: Smoke
+    uses: ./.github/workflows/ci-smoke.yml
+
   validate-flatpak:
     name: Validate Flatpak metadata
     runs-on: ubuntu-latest

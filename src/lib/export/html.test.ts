@@ -111,6 +111,21 @@ describe("buildHtmlDocument", () => {
     expect(siteChromeScript()).toContain("glyph-export-theme");
   });
 
+  it("animates the nav disclosures and anchor jumps, gated on reduced motion", () => {
+    const css = siteChromeCss();
+    expect(css).toContain("scroll-behavior: smooth");
+    expect(css).toContain("scroll-margin-top");
+    expect(css).toContain("details[open] > summary::before");
+    expect(css).toContain("prefers-reduced-motion");
+  });
+
+  it("ships the outline scroll spy in the shared site script, not in single files", () => {
+    expect(siteChromeScript()).toContain("glyph-site-outline");
+    expect(siteChromeScript()).toContain("classList.add('active')");
+    const single = buildHtmlDocument({ bodyHtml: "<p>x</p>", title: "t", css: "", dark: false });
+    expect(single).not.toContain("glyph-site-outline");
+  });
+
   it("omits the stylesheet link and site layout for single-file exports", () => {
     const out = buildHtmlDocument({ bodyHtml: "", title: "t", css: "", dark: false });
     expect(out).not.toContain("<link rel=");

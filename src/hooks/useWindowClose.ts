@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useRef } from "react";
 
@@ -33,7 +34,16 @@ export function useWindowClose(flush: () => Promise<boolean>) {
         // The second request is the one we re-issued after approval; let it go.
         if (approved) return;
         event.preventDefault();
-        if (await flushRef.current()) {
+        let proceed: boolean;
+        try {
+          proceed = await flushRef.current();
+        } catch (err) {
+          // Don't trap the window closed when the flush fails (#530).
+          console.error("Close flush failed; closing anyway:", err);
+          Sentry.captureException(err);
+          proceed = true;
+        }
+        if (proceed) {
           approved = true;
           void win.close();
         }
