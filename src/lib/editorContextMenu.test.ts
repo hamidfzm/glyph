@@ -1,6 +1,6 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { editorContextMenu } from "./editorContextMenu";
 
 const LABELS = {
@@ -106,6 +106,75 @@ describe("editorContextMenu", () => {
     event.preventDefault();
     view.contentDOM.dispatchEvent(event);
     expect(menu()).toBeNull();
+    view.destroy();
+    parent.remove();
+  });
+});
+
+describe("editorContextMenu clipboard and dismissal", () => {
+  it("cuts and copies through the document command", () => {
+    const exec = vi.fn();
+    const original = document.execCommand;
+    document.execCommand = exec as unknown as typeof document.execCommand;
+
+    const { view, parent } = mount({ anchor: 0, head: 3 });
+    rightClick(view);
+    items()
+      .find((b) => b.textContent === "Copy")
+      ?.click();
+    expect(exec).toHaveBeenCalledWith("copy");
+
+    rightClick(view);
+    items()
+      .find((b) => b.textContent === "Cut")
+      ?.click();
+    expect(exec).toHaveBeenCalledWith("cut");
+
+    document.execCommand = original;
+    view.destroy();
+    parent.remove();
+  });
+
+  it("pastes clipboard text over the selection", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { readText: () => Promise.resolve("XY") },
+      configurable: true,
+    });
+    const { view, parent } = mount({ anchor: 0, head: 3 });
+    rightClick(view);
+    items()
+      .find((b) => b.textContent === "Paste")
+      ?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(view.state.doc.toString()).toBe("XY bar");
+    view.destroy();
+    parent.remove();
+  });
+
+  it("closes on Escape", () => {
+    const { view, parent } = mount({ anchor: 0, head: 3 });
+    rightClick(view);
+    expect(menu()).not.toBeNull();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(menu()).toBeNull();
+    view.destroy();
+    parent.remove();
+  });
+
+  it("closes when clicking outside", () => {
+    const { view, parent } = mount({ anchor: 0, head: 3 });
+    rightClick(view);
+    document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    expect(menu()).toBeNull();
+    view.destroy();
+    parent.remove();
+  });
+
+  it("replaces a previous menu instead of stacking", () => {
+    const { view, parent } = mount({ anchor: 0, head: 3 });
+    rightClick(view);
+    rightClick(view);
+    expect(document.querySelectorAll(".cm-editor-menu")).toHaveLength(1);
     view.destroy();
     parent.remove();
   });

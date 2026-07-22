@@ -1,4 +1,3 @@
-import type { Extension } from "@codemirror/state";
 import { type EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { wrapSelectionWith } from "@/lib/editorWrapSelection";
 
@@ -22,10 +21,43 @@ interface Placement {
   top: number;
 }
 
+/** The bits of a DOMRect the placement math needs. */
+export interface PlacementRect {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
+const GAP = 6;
+const EDGE = 4;
+
+/**
+ * Place the toolbar centred over the selection and clear of it: above the first
+ * selected line, or below the last one when the top leaves no room. Coordinates
+ * are relative to the editor box, matching the toolbar's absolute positioning.
+ */
+export function formatToolbarPlacement(
+  selStart: PlacementRect,
+  selEnd: PlacementRect,
+  box: PlacementRect,
+  width: number,
+  height: number,
+): Placement {
+  const centre =
+    (Math.min(selStart.left, selEnd.left) + Math.max(selStart.right, selEnd.right)) / 2;
+  const boxWidth = box.right - box.left;
+  const above = selStart.top - box.top - height - GAP;
+  return {
+    left: Math.max(EDGE, Math.min(centre - box.left - width / 2, boxWidth - width - EDGE)),
+    top: above >= EDGE ? above : selEnd.bottom - box.top + GAP,
+  };
+}
+
 // A small toolbar that follows a non-empty selection, so styling is reachable
 // with the mouse alone. Plain DOM inside the editor's own layer, positioned
 // from selection coordinates.
-export function formatToolbar(getLabels: () => FormatToolbarLabels): Extension {
+export function formatToolbar(getLabels: () => FormatToolbarLabels) {
   return ViewPlugin.fromClass(
     class {
       readonly dom: HTMLDivElement;
@@ -92,15 +124,7 @@ export function formatToolbar(getLabels: () => FormatToolbarLabels): Extension {
         if (height === 0 || width === 0) return null;
 
         const box = this.view.dom.getBoundingClientRect();
-        // Center over the selection, clamped inside the editor.
-        const centre = (Math.min(start.left, end.left) + Math.max(start.right, end.right)) / 2;
-        // Sit above the selection, or below it when the first line leaves no
-        // room, so the toolbar is never clipped outside the editor.
-        const above = start.top - box.top - height - 6;
-        return {
-          left: Math.max(4, Math.min(centre - box.left - width / 2, box.width - width - 4)),
-          top: above >= 4 ? above : end.bottom - box.top + 6,
-        };
+        return formatToolbarPlacement(start, end, box, width, height);
       }
 
       apply(placement: Placement | null) {

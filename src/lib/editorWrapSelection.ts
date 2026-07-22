@@ -34,16 +34,60 @@ export function wrapSelection(state: EditorState, marker: string): TransactionSp
   return wrapWith(state, marker, close);
 }
 
-/** Wrap the selection with a symmetric marker, e.g. `**` for bold. */
+// True when the marker sits immediately outside the selection and is not part
+// of a longer run of the same character. The run check keeps italic (`*`) from
+// stripping one asterisk off a bold (`**`) span, which would turn bold into
+// italic instead of adding emphasis.
+function isWrappedBy(state: EditorState, from: number, to: number, marker: string): boolean {
+  const len = marker.length;
+  if (from - len < 0 || to + len > state.doc.length) return false;
+  if (state.sliceDoc(from - len, from) !== marker) return false;
+  if (state.sliceDoc(to, to + len) !== marker) return false;
+
+  const char = marker[0];
+  const runsLonger =
+    (from - len > 0 && state.sliceDoc(from - len - 1, from - len) === char) ||
+    (to + len < state.doc.length && state.sliceDoc(to + len, to + len + 1) === char);
+  return !runsLonger;
+}
+
+/**
+ * Toggle a symmetric marker around the selection, e.g. `**` for bold. Adds the
+ * marker, or removes it when the selection is already wrapped, so pressing the
+ * same action twice returns the original text instead of nesting forever.
+ */
 export function wrapSelectionWith(state: EditorState, marker: string): TransactionSpec | null {
+  const { from, to, empty } = state.selection.main;
+  if (empty) return null;
+
+  const len = marker.length;
+  if (isWrappedBy(state, from, to, marker)) {
+    return {
+      changes: [
+        { from: from - len, to: from },
+        { from: to, to: to + len },
+      ],
+      selection: { anchor: from - len, head: to - len },
+    };
+  }
+
+  // The markers may sit inside the selection instead (e.g. selecting `*foo*`).
+  const inner = state.sliceDoc(from, to);
+  if (inner.length > 2 * len && inner.startsWith(marker) && inner.endsWith(marker)) {
+    return {
+      changes: { from, to, insert: inner.slice(len, -len) },
+      selection: { anchor: from, head: to - 2 * len },
+    };
+  }
+
   return wrapWith(state, marker, marker);
 }
 
-// A keyboard command that wraps the selection, e.g. `**` for bold. Reports
+// A keyboard command that toggles the marker around the selection. Reports
 // false on an empty selection so the key falls through to the next binding.
 export function wrapCommand(marker: string): Command {
   return (view) => {
-    const spec = wrapWith(view.state, marker, marker);
+    const spec = wrapSelectionWith(view.state, marker);
     if (!spec) return false;
     view.dispatch(spec);
     return true;
@@ -76,7 +120,7 @@ export function formatBindingsExtension(getBindings: () => FormatBindings): Exte
       for (const [id, marker] of FORMAT_MARKERS) {
         const accelerator = resolved.get(id);
         if (!accelerator || !matchesAccelerator(event, accelerator, platform)) continue;
-        const spec = wrapWith(view.state, marker, marker);
+        const spec = wrapSelectionWith(view.state, marker);
         // Claim the key even with no selection, so a formatting shortcut never
         // falls through and types a stray character.
         if (spec) view.dispatch(spec);

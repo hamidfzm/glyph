@@ -1,11 +1,13 @@
+import { defaultKeymap, history, historyKeymap, undo } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
 import {
   formatBindingsExtension,
   wrapCommand,
   wrapSelection,
   wrapSelectionExtension,
+  wrapSelectionWith,
 } from "./editorWrapSelection";
 
 // Apply wrapSelection and return the resulting doc + selection for assertions.
@@ -181,6 +183,97 @@ describe("wrapSelectionExtension", () => {
     Object.defineProperty(view, "compositionStarted", { get: () => true });
     expect(typeInto(view, "`")).toBe(false);
     expect(view.state.doc.toString()).toBe("foo");
+    view.destroy();
+  });
+});
+
+describe("formatBindingsExtension precedence", () => {
+  // defaultKeymap binds Mod-i to selectParentSyntax with preventDefault, so the
+  // formatting handler must be installed ahead of the keymap or italic is eaten.
+  it("wins over defaultKeymap's Mod-i binding", () => {
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "foo bar",
+        selection: { anchor: 0, head: 3 },
+        extensions: [
+          formatBindingsExtension(() => ({
+            resolved: new Map([["format-italic", "CmdOrCtrl+I"]]),
+            platform: "windows",
+          })),
+          keymap.of(defaultKeymap),
+        ],
+      }),
+    });
+    view.contentDOM.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "i",
+        code: "KeyI",
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(view.state.doc.toString()).toBe("*foo* bar");
+    view.destroy();
+  });
+});
+
+describe("wrapSelectionWith toggling", () => {
+  const stateWith = (doc: string, anchor: number, head: number) =>
+    EditorState.create({ doc, selection: { anchor, head } });
+
+  const apply = (state: EditorState, marker: string) => {
+    const spec = wrapSelectionWith(state, marker);
+    if (!spec) return null;
+    const next = state.update(spec).state;
+    return { doc: next.doc.toString(), sel: next.selection.main };
+  };
+
+  it("removes the marker when the selection is already wrapped", () => {
+    // "*foo*" with "foo" selected: pressing italic again unwraps it.
+    const result = apply(stateWith("*foo* bar", 1, 4), "*");
+    expect(result?.doc).toBe("foo bar");
+    expect([result?.sel.from, result?.sel.to]).toEqual([0, 3]);
+  });
+
+  it("round-trips instead of nesting forever", () => {
+    let state = stateWith("foo bar", 0, 3);
+    state = state.update(wrapSelectionWith(state, "*")!).state;
+    expect(state.doc.toString()).toBe("*foo* bar");
+    state = state.update(wrapSelectionWith(state, "*")!).state;
+    expect(state.doc.toString()).toBe("foo bar");
+  });
+
+  it("unwraps when the markers are inside the selection", () => {
+    const result = apply(stateWith("*foo* bar", 0, 5), "*");
+    expect(result?.doc).toBe("foo bar");
+  });
+
+  it("adds emphasis to a bold span rather than stripping one asterisk", () => {
+    // "**foo**" with "foo" selected: italic must nest, not turn bold into italic.
+    const result = apply(stateWith("**foo**", 2, 5), "*");
+    expect(result?.doc).toBe("***foo***");
+  });
+
+  it("unwraps bold with the two-character marker", () => {
+    const result = apply(stateWith("**foo**", 2, 5), "**");
+    expect(result?.doc).toBe("foo");
+  });
+});
+
+describe("formatting undo", () => {
+  it("reverts a formatting change with the history command", () => {
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "foo bar",
+        selection: { anchor: 0, head: 3 },
+        extensions: [history(), keymap.of(historyKeymap)],
+      }),
+    });
+    view.dispatch(wrapSelectionWith(view.state, "**")!);
+    expect(view.state.doc.toString()).toBe("**foo** bar");
+    undo(view);
+    expect(view.state.doc.toString()).toBe("foo bar");
     view.destroy();
   });
 });

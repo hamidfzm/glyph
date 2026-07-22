@@ -145,6 +145,10 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
           ...leading,
           lineNumbers(),
           history(),
+          // Formatting binds ahead of the keymap below: defaultKeymap claims
+          // Mod-i for selectParentSyntax (with preventDefault), which would
+          // otherwise swallow the italic shortcut before it is seen.
+          formatBindingsExtension(() => formatBindingsRef.current),
           // Completion keymap (Tab-accept, Esc-close, arrows-navigate) goes
           // before defaultKeymap so it can claim Tab when the popup is open.
           keymap.of([
@@ -173,7 +177,6 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
           }),
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           wrapSelectionExtension,
-          formatBindingsExtension(() => formatBindingsRef.current),
           formatToolbar(() => formatLabelsRef.current),
           syntaxHighlighting(glyphHighlight),
           spellcheckCompartment.of(spellcheckExtension(spellCheck, spellCheckLanguages)),
