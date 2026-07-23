@@ -1549,6 +1549,10 @@ describe("useTabs dialog and events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
+    // A second open tab so the mode-switch walk also visits a non-matching tab.
+    await act(async () => {
+      await result.current.openFile("/p/ws/other.md");
+    });
 
     await act(async () => {
       await result.current.createNoteInWorkspace();
@@ -1562,6 +1566,35 @@ describe("useTabs dialog and events", () => {
     if (tab?.kind === "file") {
       expect(tab.file.mode).toBe("edit");
     }
+    // The pre-existing note is untouched (stayed in its default view mode).
+    const other = result.current.tabs.find(
+      (t) => t.kind === "file" && t.file.path === "/p/ws/other.md",
+    );
+    if (other?.kind === "file") {
+      expect(other.file.mode).toBe("view");
+    }
+  });
+
+  it("createNoteInWorkspace does nothing when the note cannot be created", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        create_note: async () => {
+          throw new Error("permission denied");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    const before = result.current.tabs.length;
+
+    await act(async () => {
+      await result.current.createNoteInWorkspace();
+    });
+
+    expect(result.current.tabs).toHaveLength(before);
   });
 
   it("createNoteInWorkspace is a no-op without a workspace", async () => {

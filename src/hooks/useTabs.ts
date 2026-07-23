@@ -697,7 +697,7 @@ export function useTabs(options: UseTabsOptions) {
       ...prev,
       tabs: prev.tabs.map((t) =>
         t.kind === "file" && t.file.path === path
-          ? { ...t, file: { ...t.file, mode: EDITOR_MODE.edit, editContent: t.file.content ?? "" } }
+          ? { ...t, file: { ...t.file, mode: EDITOR_MODE.edit, editContent: t.file.content } }
           : t,
       ),
     }));
