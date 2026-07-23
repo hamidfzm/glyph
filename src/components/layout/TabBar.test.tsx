@@ -17,6 +17,7 @@ const makeFileTab = (i: number): FileTab => ({
     mode: "view",
     editContent: null,
     dirty: false,
+    virtual: false,
     revision: 0,
   },
 });
@@ -54,6 +55,7 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     wikilinkRefs: [],
     indexStatus: COMPLETE_INDEX_STATUS,
     workspace: opts.workspace ?? null,
+    newDocument: vi.fn(),
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),

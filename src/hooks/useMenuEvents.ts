@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { subscribe } from "@/lib/tauriEvent";
 
 export interface MenuEventHandlers {
+  newDocument: () => void;
   openFile: () => void;
   openFolder: () => void;
   openGraph: () => void;
@@ -41,6 +42,7 @@ export interface MenuEventHandlers {
 export function useMenuEvents(handlers: MenuEventHandlers) {
   useEffect(() => {
     const unsubscribes = [
+      subscribe("menu-new", handlers.newDocument),
       subscribe("menu-open-file", handlers.openFile),
       subscribe("menu-open-folder", handlers.openFolder),
       subscribe("menu-open-graph", handlers.openGraph),

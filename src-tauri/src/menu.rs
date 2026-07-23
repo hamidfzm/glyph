@@ -52,6 +52,7 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         })
     };
     match id {
+        "new" => emit("menu-new"),
         "open" => emit("menu-open-file"),
         "open-folder" => emit("menu-open-folder"),
         "save" => emit("menu-save"),
@@ -181,6 +182,7 @@ mod tests {
             menu_action_for_id("open-folder"),
             Some(emit("menu-open-folder"))
         );
+        assert_eq!(menu_action_for_id("new"), Some(emit("menu-new")));
         assert_eq!(menu_action_for_id("save"), Some(emit("menu-save")));
         assert_eq!(
             menu_action_for_id("toggle-auto-save"),

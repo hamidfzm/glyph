@@ -24,6 +24,7 @@ use crate::menu::{dispatch_menu_action, menu_action_for_id};
 /// runtime. Held per window in the [`MenuRegistry`] so the `set_menu_state`
 /// and `apply_keybindings` commands can mutate the calling window's menu.
 pub struct MenuItemRefs<R: Runtime = Wry> {
+    new_document: MenuItem<R>,
     open: MenuItem<R>,
     open_folder: MenuItem<R>,
     save: MenuItem<R>,
@@ -76,6 +77,7 @@ pub struct MenuItemRefs<R: Runtime = Wry> {
 #[serde(rename_all = "camelCase")]
 pub struct MenuLabels {
     file: String,
+    new_document: String,
     edit: String,
     view: String,
     ai: String,
@@ -176,6 +178,9 @@ pub fn build_menu<R: Runtime>(
     };
 
     // Shared menu items
+    let new_document = MenuItemBuilder::with_id(mid("new"), "New")
+        .accelerator("CmdOrCtrl+N")
+        .build(handle)?;
     let open = MenuItemBuilder::with_id(mid("open"), "Open\u{2026}")
         .accelerator("CmdOrCtrl+O")
         .build(handle)?;
@@ -372,6 +377,7 @@ pub fn build_menu<R: Runtime>(
     #[cfg(target_os = "macos")]
     let (menu, file_menu) = {
         let file_menu = SubmenuBuilder::new(handle, "File")
+            .item(&new_document)
             .item(&open)
             .item(&open_folder)
             .separator()
@@ -419,6 +425,7 @@ pub fn build_menu<R: Runtime>(
     #[cfg(not(target_os = "macos"))]
     let (menu, file_menu) = {
         let file_menu = SubmenuBuilder::new(handle, "File")
+            .item(&new_document)
             .item(&open)
             .item(&open_folder)
             .separator()
@@ -449,6 +456,7 @@ pub fn build_menu<R: Runtime>(
     };
 
     let refs = MenuItemRefs {
+        new_document,
         open,
         open_folder,
         save,
@@ -636,6 +644,7 @@ pub fn apply_menu_labels<R: Runtime>(refs: &MenuItemRefs<R>, l: &MenuLabels) -> 
     refs.ai_menu.set_text(&l.ai).map_err(s)?;
     refs.help_menu.set_text(&l.help).map_err(s)?;
     refs.export_menu.set_text(&l.export).map_err(s)?;
+    refs.new_document.set_text(&l.new_document).map_err(s)?;
     refs.open.set_text(&l.open).map_err(s)?;
     refs.open_folder.set_text(&l.open_folder).map_err(s)?;
     refs.save.set_text(&l.save).map_err(s)?;

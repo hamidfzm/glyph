@@ -3,13 +3,14 @@ import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { pickFiles, pickFolder } from "@/lib/pickers";
+import { pickFiles, pickFolder, pickSave } from "@/lib/pickers";
 import { COMPLETE_SCAN } from "@/lib/workspaceScan";
 import { useTabs } from "./useTabs";
 
 vi.mock("@/lib/pickers", () => ({
   pickFolder: vi.fn(),
   pickFiles: vi.fn(),
+  pickSave: vi.fn(),
 }));
 
 type Invoker = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -109,6 +110,7 @@ beforeEach(() => {
   vi.mocked(listen).mockResolvedValue(() => {});
   vi.mocked(pickFolder).mockReset();
   vi.mocked(pickFiles).mockReset();
+  vi.mocked(pickSave).mockReset();
 });
 
 afterEach(() => {
@@ -4069,5 +4071,90 @@ describe("mobile file opening", () => {
     expect(result.current.activeFile?.metadata).toBeNull();
     const commands = vi.mocked(invoke).mock.calls.map((c) => c[0]);
     expect(commands).not.toContain("get_file_metadata");
+  });
+});
+
+describe("useTabs in-memory documents", () => {
+  it("newDocument opens a virtual editable buffer", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    act(() => {
+      result.current.newDocument();
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+    const tab = result.current.tabs[0];
+    expect(tab.kind).toBe("file");
+    if (tab.kind === "file") {
+      expect(tab.file.virtual).toBe(true);
+      expect(tab.file.mode).toBe("edit");
+      expect(tab.file.content).toBe("");
+      expect(tab.file.path).toMatch(/^Untitled-\d+$/);
+    }
+    expect(result.current.activeTabId).toBe(tab.id);
+  });
+
+  it("saveDocument on a virtual tab writes via Save As and adopts the path", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    vi.mocked(pickSave).mockResolvedValue("/p/saved.md");
+    const onSettingsChange = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onSettingsChange })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    act(() => {
+      result.current.newDocument();
+    });
+    const tabId = result.current.tabs[0].id;
+    act(() => {
+      result.current.updateEditContent(tabId, "HELLO");
+    });
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(tabId);
+    });
+
+    expect(ok).toBe(true);
+    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/saved.md", content: "HELLO" });
+    const tab = result.current.tabs[0];
+    if (tab.kind === "file") {
+      expect(tab.file.virtual).toBe(false);
+      expect(tab.file.path).toBe("/p/saved.md");
+      expect(tab.file.dirty).toBe(false);
+      expect(tab.file.content).toBe("HELLO");
+    }
+    expect(onSettingsChange).toHaveBeenCalledWith("behavior.recentFiles", ["/p/saved.md"]);
+  });
+
+  it("saveDocument keeps the buffer virtual when Save As is cancelled", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    vi.mocked(pickSave).mockResolvedValue(null);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    act(() => {
+      result.current.newDocument();
+    });
+    const tabId = result.current.tabs[0].id;
+    act(() => {
+      result.current.updateEditContent(tabId, "X");
+    });
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(tabId);
+    });
+
+    expect(ok).toBe(false);
+    expect(writeFile).not.toHaveBeenCalled();
+    const tab = result.current.tabs[0];
+    if (tab.kind === "file") expect(tab.file.virtual).toBe(true);
   });
 });
