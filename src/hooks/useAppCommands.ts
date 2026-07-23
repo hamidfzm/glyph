@@ -88,6 +88,13 @@ export function useAppCommands({
     // menu only, not the palette.
     out.push(
       {
+        id: "cmd:newDocument",
+        title: t("newDocument"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+N",
+        run: actions.newDocument,
+      },
+      {
         id: "cmd:openFile",
         title: t("openFile"),
         section: "Commands",

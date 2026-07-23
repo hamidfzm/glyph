@@ -11,6 +11,7 @@
     "Commands": "Commands"
   },
   "openFile": "Open File…",
+  "newDocument": "New Document",
   "openFolder": "Open Folder…",
   "closeTab": "Close Tab",
   "toggleFilesSidebar": "Toggle Files Sidebar",

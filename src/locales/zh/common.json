@@ -11,6 +11,7 @@
     "folderHeading": "此文件夹中未打开任何文件",
     "folderHint": "从侧边栏选择一个文件开始阅读。",
     "openFile": "打开文件",
+    "newDocument": "新建文档",
     "openFolder": "打开文件夹"
   },
   "statusBar": {

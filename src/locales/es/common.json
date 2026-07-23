@@ -11,6 +11,7 @@
     "folderHeading": "No hay ningún archivo abierto en esta carpeta",
     "folderHint": "Elige un archivo en la barra lateral para empezar a leer.",
     "openFile": "Abrir archivo",
+    "newDocument": "Nuevo documento",
     "openFolder": "Abrir carpeta"
   },
   "statusBar": {

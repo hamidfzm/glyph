@@ -44,6 +44,7 @@ function tabsValue(workspace: Workspace | null): TabsContextValue {
     wikilinkRefs: [],
     indexStatus: COMPLETE_INDEX_STATUS,
     workspace,
+    newDocument: vi.fn(),
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),

@@ -11,6 +11,7 @@
     "folderHeading": "Keine Datei in diesem Ordner geöffnet",
     "folderHint": "Wähle eine Datei in der Seitenleiste, um mit dem Lesen zu beginnen.",
     "openFile": "Datei öffnen",
+    "newDocument": "Neues Dokument",
     "openFolder": "Ordner öffnen"
   },
   "statusBar": {

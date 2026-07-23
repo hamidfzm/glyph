@@ -11,6 +11,7 @@
     "Commands": "命令"
   },
   "openFile": "打开文件…",
+  "newDocument": "新建文档",
   "openFolder": "打开文件夹…",
   "closeTab": "关闭标签页",
   "toggleFilesSidebar": "切换文件侧边栏",

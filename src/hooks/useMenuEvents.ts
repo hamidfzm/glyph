@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { subscribe } from "@/lib/tauriEvent";
 
 export interface MenuEventHandlers {
+  newDocument: () => void;
   openFile: () => void;
   openFolder: () => void;
   openGraph: () => void;
@@ -40,6 +41,7 @@ export interface MenuEventHandlers {
  *  two can never drift. `menu-ai-action` is excluded: it carries a payload. */
 export function menuEventActions(handlers: MenuEventHandlers): Record<string, () => void> {
   return {
+    "menu-new": handlers.newDocument,
     "menu-open-file": handlers.openFile,
     "menu-open-folder": handlers.openFolder,
     "menu-open-graph": handlers.openGraph,

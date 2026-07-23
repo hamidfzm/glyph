@@ -11,6 +11,7 @@
     "Commands": "Comandos"
   },
   "openFile": "Abrir archivo…",
+  "newDocument": "Nuevo documento",
   "openFolder": "Abrir carpeta…",
   "closeTab": "Cerrar pestaña",
   "toggleFilesSidebar": "Mostrar u ocultar barra de archivos",
