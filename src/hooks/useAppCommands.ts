@@ -137,6 +137,12 @@ export function useAppCommands({
         run: actions.openSyncSettings,
       },
       {
+        id: "cmd:toggleAutoSave",
+        title: t("toggleAutoSave"),
+        section: "Commands",
+        run: actions.toggleAutoSave,
+      },
+      {
         id: "cmd:find",
         title: t("find"),
         section: "Commands",

@@ -11,24 +11,44 @@ export interface NativeMenuFlags {
   hasWorkspace: boolean;
   aiConfigured: boolean;
   ttsAvailable: boolean;
+  hasDirty: boolean;
+  autoSave: boolean;
 }
 
 // Keeps native menu items in sync with what the user can actually do.
 // The backend starts with every conditional item disabled; this hook
 // reasserts the state whenever any input changes.
 export function useNativeMenuState(flags: NativeMenuFlags) {
-  const { hasTab, hasFile, hasContent, hasWorkspace, aiConfigured, ttsAvailable } = flags;
+  const {
+    hasTab,
+    hasFile,
+    hasContent,
+    hasWorkspace,
+    aiConfigured,
+    ttsAvailable,
+    hasDirty,
+    autoSave,
+  } = flags;
   useEffect(() => {
     // No native menu (or set_menu_state command) exists on mobile.
     if (isMobilePlatform()) return;
     (async () => {
       try {
         await invoke("set_menu_state", {
-          flags: { hasTab, hasFile, hasContent, hasWorkspace, aiConfigured, ttsAvailable },
+          flags: {
+            hasTab,
+            hasFile,
+            hasContent,
+            hasWorkspace,
+            aiConfigured,
+            ttsAvailable,
+            hasDirty,
+            autoSave,
+          },
         });
       } catch (err) {
         console.error("Failed to update menu state:", err);
       }
     })();
-  }, [hasTab, hasFile, hasContent, hasWorkspace, aiConfigured, ttsAvailable]);
+  }, [hasTab, hasFile, hasContent, hasWorkspace, aiConfigured, ttsAvailable, hasDirty, autoSave]);
 }

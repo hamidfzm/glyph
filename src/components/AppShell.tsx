@@ -117,13 +117,17 @@ export function AppShell() {
 
   // Autosave every dirty editable tab, not just the active one, so switching
   // tabs never cancels another document's pending save. Each carries its
-  // revision so the scheduler can debounce per document.
+  // revision so the scheduler can debounce per document. With autosave off the
+  // list is empty, so nothing is scheduled (Save and close-flush still work).
+  const autoSave = settings.behavior.autoSave;
   const dirtyDocuments = useMemo(
     () =>
-      openTabs
-        .filter((t) => t.kind === "file" && t.file.dirty)
-        .map((t) => ({ id: t.id, revision: t.file?.revision ?? 0 })),
-    [openTabs],
+      autoSave
+        ? openTabs
+            .filter((t) => t.kind === "file" && t.file.dirty)
+            .map((t) => ({ id: t.id, revision: t.file?.revision ?? 0 }))
+        : [],
+    [openTabs, autoSave],
   );
   useAutoSave({ documents: dirtyDocuments, save: saveDocument });
 
@@ -164,6 +168,8 @@ export function AppShell() {
     hasWorkspace: workspace !== null,
     aiConfigured: aiController.configured,
     ttsAvailable: tts.available,
+    hasDirty: activeFile?.dirty ?? false,
+    autoSave,
   });
   useNativeMenuLabels();
 
@@ -178,6 +184,14 @@ export function AppShell() {
     setTabMode(activeTabId, nextEditorMode(activeFile?.mode));
   }, [activeTabId, activeFile?.mode, setTabMode]);
 
+  const handleSave = useCallback(() => {
+    if (activeTabId) saveDocument(activeTabId);
+  }, [activeTabId, saveDocument]);
+
+  const handleToggleAutoSave = useCallback(() => {
+    updateSettings("behavior.autoSave", !autoSave);
+  }, [autoSave, updateSettings]);
+
   const menuHandlers = useMemo(
     () => ({
       openFile: openFileDialog,
@@ -185,6 +199,8 @@ export function AppShell() {
       // No-arg wrapper: menu/palette callers must not leak their event
       // payload into openGraph's optional root parameter.
       openGraph: () => openGraph(),
+      save: handleSave,
+      toggleAutoSave: handleToggleAutoSave,
       closeTab: closeActiveTab,
       closeWorkspace,
       toggleFilesSidebar: sidebar.toggleFiles,
@@ -217,6 +233,8 @@ export function AppShell() {
       openFileDialog,
       openFolder,
       openGraph,
+      handleSave,
+      handleToggleAutoSave,
       closeActiveTab,
       closeWorkspace,
       sidebar.toggleFiles,

@@ -112,6 +112,10 @@
       "label": "Automatisch neu laden",
       "description": "Datei neu laden, wenn sie auf dem Datenträger geändert wurde"
     },
+    "autoSave": {
+      "label": "Automatisch speichern",
+      "description": "Änderungen automatisch auf der Festplatte speichern"
+    },
     "reopenLastFile": {
       "label": "Letzte Datei erneut öffnen",
       "description": "Beim Start die zuletzt angesehene Datei öffnen"

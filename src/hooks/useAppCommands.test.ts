@@ -21,6 +21,8 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),
+    save: vi.fn(),
+    toggleAutoSave: vi.fn(),
     closeTab: vi.fn(),
     closeWorkspace: vi.fn(),
     toggleFilesSidebar: vi.fn(),
