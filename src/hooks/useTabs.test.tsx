@@ -1530,6 +1530,56 @@ describe("useTabs dialog and events", () => {
     expect(entries?.some((e) => e.path === "/p/ws/Untitled.md")).toBe(true);
   });
 
+  it("createNoteInWorkspace creates a note at the root and opens it in edit mode", async () => {
+    const created = {
+      name: "Untitled.md",
+      path: "/p/ws/Untitled.md",
+      isDirectory: false,
+      modified: 0,
+    };
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        create_note: async () => "/p/ws/Untitled.md",
+        read_directory: async () => [created],
+        read_file: async () => "",
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    await act(async () => {
+      await result.current.createNoteInWorkspace();
+    });
+
+    expect(invoke).toHaveBeenCalledWith("create_note", { dir: "/p/ws", root: "/p/ws" });
+    const tab = result.current.tabs.find(
+      (t) => t.kind === "file" && t.file.path === "/p/ws/Untitled.md",
+    );
+    expect(tab).toBeTruthy();
+    if (tab?.kind === "file") {
+      expect(tab.file.mode).toBe("edit");
+    }
+  });
+
+  it("createNoteInWorkspace is a no-op without a workspace", async () => {
+    const createNote = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ create_note: createNote as unknown as Invoker }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.createNoteInWorkspace();
+    });
+
+    expect(createNote).not.toHaveBeenCalled();
+    expect(result.current.tabs).toHaveLength(0);
+  });
+
   it("createCanvas invokes create_canvas and refreshes the target directory", async () => {
     const created = {
       name: "Untitled.canvas",

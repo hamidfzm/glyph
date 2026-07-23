@@ -9,6 +9,7 @@ function renderEmptyState(overrides: Partial<ComponentProps<typeof EmptyState>> 
     platform: "macos",
     onOpenFile: vi.fn(),
     onOpenFolder: vi.fn(),
+    onNewNote: vi.fn(),
     ...overrides,
   };
   return { ...render(<EmptyState {...props} />), props };
@@ -72,11 +73,18 @@ describe("EmptyState", () => {
     expect(props.onOpenFile).toHaveBeenCalledOnce();
   });
 
-  it("shows the folder-empty prompt without open actions when folderEmpty", () => {
+  it("shows the folder-empty prompt with a New Note action when folderEmpty", () => {
     renderEmptyState({ folderEmpty: true });
     expect(screen.getByText("No file open in this folder")).toBeInTheDocument();
     expect(screen.getByText("Pick a file from the sidebar to start reading.")).toBeInTheDocument();
     expect(screen.queryByText("Open File")).not.toBeInTheDocument();
     expect(screen.queryByText("Open Folder")).not.toBeInTheDocument();
+    expect(screen.getByText("New Note")).toBeInTheDocument();
+  });
+
+  it("calls onNewNote when the folder-empty New Note button is clicked", () => {
+    const { props } = renderEmptyState({ folderEmpty: true });
+    fireEvent.click(screen.getByText("New Note"));
+    expect(props.onNewNote).toHaveBeenCalledOnce();
   });
 });

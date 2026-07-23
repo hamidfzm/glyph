@@ -10,6 +10,7 @@
     "openHint": "Drop a file here, use the menu, or press <kbd>{{shortcut}}</kbd>",
     "folderHeading": "No file open in this folder",
     "folderHint": "Pick a file from the sidebar to start reading.",
+    "newNote": "New Note",
     "openFile": "Open File",
     "openFolder": "Open Folder"
   },
