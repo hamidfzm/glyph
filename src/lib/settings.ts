@@ -85,6 +85,8 @@ export interface PersistedTab {
 
 export interface BehaviorSettings {
   autoReload: boolean;
+  // When off, edits stay dirty until an explicit Save; close still flush-saves.
+  autoSave: boolean;
   reopenLastFile: boolean;
   confirmExternalLinks: boolean;
   // Check GitHub for a newer release on launch and show a banner when one is
@@ -212,6 +214,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   behavior: {
     autoReload: true,
+    autoSave: true,
     reopenLastFile: false,
     confirmExternalLinks: true,
     checkForUpdates: true,

@@ -11,7 +11,10 @@ use std::sync::Mutex;
 
 use serde::Deserialize;
 use tauri::{
-    menu::{AboutMetadataBuilder, MenuBuilder, MenuItem, MenuItemBuilder, Submenu, SubmenuBuilder},
+    menu::{
+        AboutMetadataBuilder, CheckMenuItem, CheckMenuItemBuilder, MenuBuilder, MenuItem,
+        MenuItemBuilder, Submenu, SubmenuBuilder,
+    },
     AppHandle, Runtime, State, Wry,
 };
 
@@ -23,6 +26,8 @@ use crate::menu::{dispatch_menu_action, menu_action_for_id};
 pub struct MenuItemRefs<R: Runtime = Wry> {
     open: MenuItem<R>,
     open_folder: MenuItem<R>,
+    save: MenuItem<R>,
+    auto_save: CheckMenuItem<R>,
     reset_view: MenuItem<R>,
     close_tab: MenuItem<R>,
     close_workspace: MenuItem<R>,
@@ -78,6 +83,8 @@ pub struct MenuLabels {
     export: String,
     open: String,
     open_folder: String,
+    save: String,
+    auto_save: String,
     reset_view: String,
     print: String,
     export_html: String,
@@ -120,6 +127,8 @@ pub struct MenuStateFlags {
     pub has_workspace: bool,
     pub ai_configured: bool,
     pub tts_available: bool,
+    pub has_dirty: bool,
+    pub auto_save: bool,
 }
 
 /// Per-window menu handles, keyed by window label. Windows cannot share one
@@ -174,6 +183,13 @@ pub fn build_menu<R: Runtime>(
         .accelerator("CmdOrCtrl+Shift+O")
         .build(handle)?;
     let reset_view = MenuItemBuilder::with_id(mid("reset-view"), "Reset View").build(handle)?;
+    let save = MenuItemBuilder::with_id(mid("save"), "Save")
+        .accelerator("CmdOrCtrl+S")
+        .build(handle)?;
+    // Built checked (default-on); set_menu_state corrects it on mount.
+    let auto_save = CheckMenuItemBuilder::with_id(mid("toggle-auto-save"), "Auto Save")
+        .checked(true)
+        .build(handle)?;
     let print = MenuItemBuilder::with_id(mid("print"), "Print\u{2026}")
         .accelerator("CmdOrCtrl+P")
         .build(handle)?;
@@ -359,6 +375,9 @@ pub fn build_menu<R: Runtime>(
             .item(&open)
             .item(&open_folder)
             .separator()
+            .item(&save)
+            .item(&auto_save)
+            .separator()
             .item(&print)
             .item(&export_menu)
             .separator()
@@ -403,6 +422,9 @@ pub fn build_menu<R: Runtime>(
             .item(&open)
             .item(&open_folder)
             .separator()
+            .item(&save)
+            .item(&auto_save)
+            .separator()
             .item(&print)
             .item(&export_menu)
             .separator()
@@ -429,6 +451,8 @@ pub fn build_menu<R: Runtime>(
     let refs = MenuItemRefs {
         open,
         open_folder,
+        save,
+        auto_save,
         reset_view,
         close_tab,
         close_workspace,
@@ -542,6 +566,10 @@ pub fn apply_menu_state<R: Runtime>(
     refs.close_workspace
         .set_enabled(flags.has_workspace)
         .map_err(stringify)?;
+    refs.save.set_enabled(flags.has_dirty).map_err(stringify)?;
+    refs.auto_save
+        .set_checked(flags.auto_save)
+        .map_err(stringify)?;
     refs.print.set_enabled(flags.has_file).map_err(stringify)?;
     refs.export_html
         .set_enabled(flags.has_file)
@@ -610,6 +638,8 @@ pub fn apply_menu_labels<R: Runtime>(refs: &MenuItemRefs<R>, l: &MenuLabels) -> 
     refs.export_menu.set_text(&l.export).map_err(s)?;
     refs.open.set_text(&l.open).map_err(s)?;
     refs.open_folder.set_text(&l.open_folder).map_err(s)?;
+    refs.save.set_text(&l.save).map_err(s)?;
+    refs.auto_save.set_text(&l.auto_save).map_err(s)?;
     refs.reset_view.set_text(&l.reset_view).map_err(s)?;
     refs.print.set_text(&l.print).map_err(s)?;
     refs.export_html.set_text(&l.export_html).map_err(s)?;

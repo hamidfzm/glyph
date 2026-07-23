@@ -18,6 +18,7 @@
   "resetView": "Restablecer vista",
   "openSettings": "Ajustes…",
   "openSyncSettings": "Sincronización en la nube…",
+  "toggleAutoSave": "Alternar guardado automático",
   "find": "Buscar en el documento",
   "toggleEdit": "Activar o desactivar el modo de edición",
   "openGraph": "Abrir grafo",

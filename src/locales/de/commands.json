@@ -18,6 +18,7 @@
   "resetView": "Ansicht zurücksetzen",
   "openSettings": "Einstellungen…",
   "openSyncSettings": "Cloud-Synchronisierung…",
+  "toggleAutoSave": "Automatisches Speichern umschalten",
   "find": "Im Dokument suchen",
   "toggleEdit": "Bearbeitungsmodus umschalten",
   "openGraph": "Graph öffnen",
