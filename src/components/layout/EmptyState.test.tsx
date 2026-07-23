@@ -9,6 +9,7 @@ function renderEmptyState(overrides: Partial<ComponentProps<typeof EmptyState>> 
     platform: "macos",
     onOpenFile: vi.fn(),
     onOpenFolder: vi.fn(),
+    onNewWorkspace: vi.fn(),
     ...overrides,
   };
   return { ...render(<EmptyState {...props} />), props };
@@ -49,6 +50,12 @@ describe("EmptyState", () => {
     const { props } = renderEmptyState();
     fireEvent.click(screen.getByText("Open Folder"));
     expect(props.onOpenFolder).toHaveBeenCalledOnce();
+  });
+
+  it("calls onNewWorkspace when New Workspace button is clicked", () => {
+    const { props } = renderEmptyState();
+    fireEvent.click(screen.getByText("New Workspace"));
+    expect(props.onNewWorkspace).toHaveBeenCalledOnce();
   });
 
   it("renders Open File button with type=button", () => {

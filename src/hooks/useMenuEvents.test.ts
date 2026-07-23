@@ -7,6 +7,7 @@ function noopHandlers(overrides: Partial<MenuEventHandlers> = {}): MenuEventHand
   return {
     openFile: vi.fn(),
     openFolder: vi.fn(),
+    newWorkspace: vi.fn(),
     openGraph: vi.fn(),
     closeTab: vi.fn(),
     closeWorkspace: vi.fn(),
@@ -51,6 +52,7 @@ describe("useMenuEvents", () => {
       expect.arrayContaining([
         "menu-open-file",
         "menu-open-folder",
+        "menu-new-workspace",
         "menu-open-graph",
         "menu-close-tab",
         "menu-close-workspace",

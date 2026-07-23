@@ -88,6 +88,7 @@ export function AppShell() {
     displayContent,
     workspace,
     openFolder,
+    createWorkspace,
     openGraph,
     openFile,
     openFileDialog,
@@ -179,6 +180,7 @@ export function AppShell() {
     () => ({
       openFile: openFileDialog,
       openFolder: () => openFolder(),
+      newWorkspace: createWorkspace,
       // No-arg wrapper: menu/palette callers must not leak their event
       // payload into openGraph's optional root parameter.
       openGraph: () => openGraph(),
@@ -213,6 +215,7 @@ export function AppShell() {
     [
       openFileDialog,
       openFolder,
+      createWorkspace,
       openGraph,
       closeActiveTab,
       closeWorkspace,
@@ -304,6 +307,7 @@ export function AppShell() {
               platform={platform}
               onOpenFile={openFileDialog}
               onOpenFolder={() => openFolder()}
+              onNewWorkspace={createWorkspace}
               folderEmpty={folderEmptyHint}
             />
           </div>

@@ -3,13 +3,14 @@ import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { pickFiles, pickFolder } from "@/lib/pickers";
+import { pickFiles, pickFolder, pickNewWorkspace } from "@/lib/pickers";
 import { COMPLETE_SCAN } from "@/lib/workspaceScan";
 import { useTabs } from "./useTabs";
 
 vi.mock("@/lib/pickers", () => ({
   pickFolder: vi.fn(),
   pickFiles: vi.fn(),
+  pickNewWorkspace: vi.fn(),
 }));
 
 type Invoker = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -109,6 +110,7 @@ beforeEach(() => {
   vi.mocked(listen).mockResolvedValue(() => {});
   vi.mocked(pickFolder).mockReset();
   vi.mocked(pickFiles).mockReset();
+  vi.mocked(pickNewWorkspace).mockReset();
 });
 
 afterEach(() => {
@@ -2944,6 +2946,34 @@ describe("useTabs workspace interactions", () => {
     // The pick is handed to Rust routing (which may focus, adopt, or spawn a
     // window); the frontend does not adopt it directly here.
     expect(invoke).toHaveBeenCalledWith("request_open", { kind: "folder", path: "/p/picked" });
+  });
+
+  it("createWorkspace creates a folder and routes it via the window manager", async () => {
+    vi.mocked(pickNewWorkspace).mockResolvedValue("/p/new-ws");
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.createWorkspace();
+    });
+
+    expect(pickNewWorkspace).toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalledWith("request_open", { kind: "folder", path: "/p/new-ws" });
+  });
+
+  it("createWorkspace bails when the dialog is cancelled", async () => {
+    vi.mocked(pickNewWorkspace).mockResolvedValue(null);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.createWorkspace();
+    });
+
+    expect(invoke).not.toHaveBeenCalledWith(
+      "request_open",
+      expect.objectContaining({ kind: "folder" }),
+    );
   });
 
   it("openFolder bails when the directory dialog is cancelled", async () => {

@@ -11,7 +11,8 @@
     "folderHeading": "此文件夹中未打开任何文件",
     "folderHint": "从侧边栏选择一个文件开始阅读。",
     "openFile": "打开文件",
-    "openFolder": "打开文件夹"
+    "openFolder": "打开文件夹",
+    "newWorkspace": "新建工作区"
   },
   "statusBar": {
     "jupyter": "Jupyter Notebook",
@@ -224,7 +225,8 @@
     "documents": "文档",
     "markdown": "Markdown",
     "notebook": "Jupyter Notebook",
-    "d2": "D2 图表"
+    "d2": "D2 图表",
+    "newWorkspace": "未命名工作区"
   },
   "exportFilter": {
     "html": "HTML",

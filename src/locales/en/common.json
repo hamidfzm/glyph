@@ -11,7 +11,8 @@
     "folderHeading": "No file open in this folder",
     "folderHint": "Pick a file from the sidebar to start reading.",
     "openFile": "Open File",
-    "openFolder": "Open Folder"
+    "openFolder": "Open Folder",
+    "newWorkspace": "New Workspace"
   },
   "statusBar": {
     "jupyter": "Jupyter Notebook",
@@ -227,7 +228,8 @@
     "documents": "Documents",
     "markdown": "Markdown",
     "notebook": "Jupyter Notebook",
-    "d2": "D2 Diagram"
+    "d2": "D2 Diagram",
+    "newWorkspace": "Untitled Workspace"
   },
   "exportFilter": {
     "html": "HTML",

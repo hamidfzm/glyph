@@ -23,6 +23,7 @@ use crate::menu::{dispatch_menu_action, menu_action_for_id};
 pub struct MenuItemRefs<R: Runtime = Wry> {
     open: MenuItem<R>,
     open_folder: MenuItem<R>,
+    new_workspace: MenuItem<R>,
     reset_view: MenuItem<R>,
     close_tab: MenuItem<R>,
     close_workspace: MenuItem<R>,
@@ -78,6 +79,7 @@ pub struct MenuLabels {
     export: String,
     open: String,
     open_folder: String,
+    new_workspace: String,
     reset_view: String,
     print: String,
     export_html: String,
@@ -173,6 +175,8 @@ pub fn build_menu<R: Runtime>(
     let open_folder = MenuItemBuilder::with_id(mid("open-folder"), "Open Folder\u{2026}")
         .accelerator("CmdOrCtrl+Shift+O")
         .build(handle)?;
+    let new_workspace =
+        MenuItemBuilder::with_id(mid("new-workspace"), "New Workspace\u{2026}").build(handle)?;
     let reset_view = MenuItemBuilder::with_id(mid("reset-view"), "Reset View").build(handle)?;
     let print = MenuItemBuilder::with_id(mid("print"), "Print\u{2026}")
         .accelerator("CmdOrCtrl+P")
@@ -358,6 +362,7 @@ pub fn build_menu<R: Runtime>(
         let file_menu = SubmenuBuilder::new(handle, "File")
             .item(&open)
             .item(&open_folder)
+            .item(&new_workspace)
             .separator()
             .item(&print)
             .item(&export_menu)
@@ -402,6 +407,7 @@ pub fn build_menu<R: Runtime>(
         let file_menu = SubmenuBuilder::new(handle, "File")
             .item(&open)
             .item(&open_folder)
+            .item(&new_workspace)
             .separator()
             .item(&print)
             .item(&export_menu)
@@ -429,6 +435,7 @@ pub fn build_menu<R: Runtime>(
     let refs = MenuItemRefs {
         open,
         open_folder,
+        new_workspace,
         reset_view,
         close_tab,
         close_workspace,
@@ -610,6 +617,7 @@ pub fn apply_menu_labels<R: Runtime>(refs: &MenuItemRefs<R>, l: &MenuLabels) -> 
     refs.export_menu.set_text(&l.export).map_err(s)?;
     refs.open.set_text(&l.open).map_err(s)?;
     refs.open_folder.set_text(&l.open_folder).map_err(s)?;
+    refs.new_workspace.set_text(&l.new_workspace).map_err(s)?;
     refs.reset_view.set_text(&l.reset_view).map_err(s)?;
     refs.print.set_text(&l.print).map_err(s)?;
     refs.export_html.set_text(&l.export_html).map_err(s)?;

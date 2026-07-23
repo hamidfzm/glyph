@@ -20,6 +20,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
   return {
     openFile: vi.fn(),
     openFolder: vi.fn(),
+    newWorkspace: vi.fn(),
     openGraph: vi.fn(),
     closeTab: vi.fn(),
     closeWorkspace: vi.fn(),

@@ -102,6 +102,12 @@ export function useAppCommands({
         run: actions.openFolder,
       },
       {
+        id: "cmd:newWorkspace",
+        title: t("newWorkspace"),
+        section: "Commands",
+        run: actions.newWorkspace,
+      },
+      {
         id: "cmd:closeTab",
         title: t("closeTab"),
         section: "Commands",

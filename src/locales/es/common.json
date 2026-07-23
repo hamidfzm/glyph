@@ -11,7 +11,8 @@
     "folderHeading": "No hay ningún archivo abierto en esta carpeta",
     "folderHint": "Elige un archivo en la barra lateral para empezar a leer.",
     "openFile": "Abrir archivo",
-    "openFolder": "Abrir carpeta"
+    "openFolder": "Abrir carpeta",
+    "newWorkspace": "Nuevo espacio de trabajo"
   },
   "statusBar": {
     "jupyter": "Jupyter Notebook",
@@ -224,7 +225,8 @@
     "documents": "Documentos",
     "markdown": "Markdown",
     "notebook": "Jupyter Notebook",
-    "d2": "Diagrama D2"
+    "d2": "Diagrama D2",
+    "newWorkspace": "Espacio de trabajo sin título"
   },
   "exportFilter": {
     "html": "HTML",

@@ -7,12 +7,19 @@ interface EmptyStateProps {
   platform: Platform;
   onOpenFile: () => void;
   onOpenFolder: () => void;
+  onNewWorkspace: () => void;
   // True when a folder tab is active but no file has been opened yet: shows a
   // "pick a file" prompt instead of the open-file actions.
   folderEmpty?: boolean;
 }
 
-export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: EmptyStateProps) {
+export function EmptyState({
+  platform,
+  onOpenFile,
+  onOpenFolder,
+  onNewWorkspace,
+  folderEmpty,
+}: EmptyStateProps) {
   const { t } = useTranslation("common");
 
   return (
@@ -58,6 +65,13 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
               className="px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
             >
               {t("emptyState.openFolder")}
+            </button>
+            <button
+              type="button"
+              onClick={onNewWorkspace}
+              className="px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
+            >
+              {t("emptyState.newWorkspace")}
             </button>
           </ShowOn>
         </div>
