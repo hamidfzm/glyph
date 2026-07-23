@@ -225,3 +225,54 @@ describe("BINDABLE_COMMANDS", () => {
     expect(getBindableCommand("close")?.nativeMenu).toBe(true);
   });
 });
+
+describe("matchesAccelerator without a physical code", () => {
+  // Virtual keyboards, remote sessions and synthesized events can deliver an
+  // empty `code`; the binding must still match on the produced character.
+  const press = (init: KeyboardEventInit) => new KeyboardEvent("keydown", { code: "", ...init });
+
+  it("matches a letter binding from event.key", () => {
+    expect(matchesAccelerator(press({ key: "i", ctrlKey: true }), "CmdOrCtrl+I", "windows")).toBe(
+      true,
+    );
+  });
+
+  it("still respects modifiers", () => {
+    expect(matchesAccelerator(press({ key: "i" }), "CmdOrCtrl+I", "windows")).toBe(false);
+  });
+
+  it("matches a shifted letter binding", () => {
+    expect(
+      matchesAccelerator(
+        press({ key: "B", ctrlKey: true, shiftKey: true }),
+        "CmdOrCtrl+Shift+B",
+        "windows",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not match a different letter", () => {
+    expect(matchesAccelerator(press({ key: "j", ctrlKey: true }), "CmdOrCtrl+I", "windows")).toBe(
+      false,
+    );
+  });
+});
+
+describe("tokenFromEvent fallback for named keys", () => {
+  it("matches a named key when the code is missing", () => {
+    const event = new KeyboardEvent("keydown", { key: "Enter", code: "", ctrlKey: true });
+    expect(matchesAccelerator(event, "CmdOrCtrl+Enter", "windows")).toBe(true);
+  });
+
+  it("rejects a key it cannot map", () => {
+    const event = new KeyboardEvent("keydown", { key: "Unidentified", code: "", ctrlKey: true });
+    expect(matchesAccelerator(event, "CmdOrCtrl+Enter", "windows")).toBe(false);
+  });
+});
+
+describe("tokenFromEvent digit fallback", () => {
+  it("matches a digit binding when the code is missing", () => {
+    const event = new KeyboardEvent("keydown", { key: "0", code: "", ctrlKey: true });
+    expect(matchesAccelerator(event, "CmdOrCtrl+0", "windows")).toBe(true);
+  });
+});

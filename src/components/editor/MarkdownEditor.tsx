@@ -15,8 +15,17 @@ import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
+import { usePlatform } from "@/hooks/usePlatform";
 import { useSettings } from "@/hooks/useSettings";
+import { type EditorMenuLabels, editorContextMenu } from "@/lib/editorContextMenu";
+import { formatToolbar } from "@/lib/editorFormatToolbar";
 import { editorKeymapExtensions } from "@/lib/editorKeymap";
+import {
+  type FormatBindings,
+  formatBindingsExtension,
+  wrapSelectionExtension,
+} from "@/lib/editorWrapSelection";
+import { resolveBindings } from "@/lib/keybindings";
 import { buildSpellcheck } from "@/lib/spellcheck/spellcheckExtension";
 import type { SuggestionMenuLabels } from "@/lib/spellcheck/suggestionMenu";
 import { wikilinkCompletionSource } from "@/lib/wikilinkCompletion";
@@ -46,7 +55,42 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
 
   const { t } = useTranslation("settings");
   const { settings } = useSettings();
+  const platform = usePlatform();
   const keymapPreset = settings.editor.keymap;
+
+  // Formatting accelerators are read at keydown time through this ref, so a
+  // remap in Settings -> Hotkeys applies without rebuilding the editor.
+  const formatBindingsRef = useRef<FormatBindings>({
+    resolved: new Map(),
+    platform,
+  });
+  formatBindingsRef.current = {
+    resolved: resolveBindings(settings.keybindings.overrides),
+    platform,
+  };
+
+  // Read once when the toolbar mounts; a locale change remounts the editor
+  // through the same keymap-keyed effect that owns the rest of the extensions.
+  const formatLabelsRef = useRef<EditorMenuLabels>({
+    bold: "",
+    italic: "",
+    code: "",
+    strikethrough: "",
+    cut: "",
+    copy: "",
+    paste: "",
+    selectAll: "",
+  });
+  formatLabelsRef.current = {
+    bold: t("editor.format.bold"),
+    italic: t("editor.format.italic"),
+    code: t("editor.format.code"),
+    strikethrough: t("editor.format.strikethrough"),
+    cut: t("editor.format.cut"),
+    copy: t("editor.format.copy"),
+    paste: t("editor.format.paste"),
+    selectAll: t("editor.format.selectAll"),
+  };
   const { spellCheck, spellCheckLanguages } = settings.editor;
   // Settings saves produce a fresh array identity every time; key the
   // reconfigure effect on the joined value so only real set changes fire it.
@@ -101,6 +145,10 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
           ...leading,
           lineNumbers(),
           history(),
+          // Formatting binds ahead of the keymap below: defaultKeymap claims
+          // Mod-i for selectParentSyntax (with preventDefault), which would
+          // otherwise swallow the italic shortcut before it is seen.
+          formatBindingsExtension(() => formatBindingsRef.current),
           // Completion keymap (Tab-accept, Esc-close, arrows-navigate) goes
           // before defaultKeymap so it can claim Tab when the popup is open.
           keymap.of([
@@ -128,8 +176,13 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
             closeOnBlur: false,
           }),
           markdown({ base: markdownLanguage, codeLanguages: languages }),
+          wrapSelectionExtension,
+          formatToolbar(() => formatLabelsRef.current),
           syntaxHighlighting(glyphHighlight),
           spellcheckCompartment.of(spellcheckExtension(spellCheck, spellCheckLanguages)),
+          // After spell check, so a right-click on a misspelled word still gets
+          // the suggestion menu instead of this one.
+          editorContextMenu(() => formatLabelsRef.current),
           EditorView.lineWrapping,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
