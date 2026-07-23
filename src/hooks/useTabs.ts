@@ -1025,11 +1025,11 @@ export function useTabs(options: UseTabsOptions) {
   // tab sheds its virtual flag and becomes an ordinary file tab; a cancelled
   // dialog returns false so the close coordinator can fall back to discard.
   const saveVirtualAs = useCallback(
-    async (id: string): Promise<boolean> => {
-      const tab = stateRef.current.tabs.find((t) => t.id === id);
-      if (tab?.kind !== "file") return true;
-      const file = tab.file;
-      const content = file.editContent ?? file.content ?? "";
+    async (id: string, file: FileState): Promise<boolean> => {
+      // A virtual tab always carries a string edit buffer (newDocument seeds "").
+      /* v8 ignore start -- unreachable: editContent is never null for a virtual tab */
+      const content = file.editContent ?? "";
+      /* v8 ignore stop */
       const target = await pickSave(
         `${file.path}.md`,
         t("common:fileDialog.markdown"),
@@ -1086,7 +1086,7 @@ export function useTabs(options: UseTabsOptions) {
       if (tab?.kind !== "file") return Promise.resolve(true);
       const file = tab.file;
       // A virtual buffer has no disk path yet: route through Save As.
-      if (file.virtual) return saveVirtualAs(id);
+      if (file.virtual) return saveVirtualAs(id, file);
       if (!file.dirty) return Promise.resolve(true);
       // editContent is the edit buffer, always set once a tab is dirty; the null
       // check only narrows the type for the write below ("" stays valid, since a

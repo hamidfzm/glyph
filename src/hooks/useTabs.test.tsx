@@ -4157,4 +4157,130 @@ describe("useTabs in-memory documents", () => {
     const tab = result.current.tabs[0];
     if (tab.kind === "file") expect(tab.file.virtual).toBe(true);
   });
+
+  it("saveDocument surfaces a notice and stays virtual when the write fails", async () => {
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        write_file: async () => {
+          throw new Error("disk full");
+        },
+      }) as typeof invoke,
+    );
+    vi.mocked(pickSave).mockResolvedValue("/p/saved.md");
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    act(() => {
+      result.current.newDocument();
+    });
+    const tabId = result.current.tabs[0].id;
+    act(() => {
+      result.current.updateEditContent(tabId, "HELLO");
+    });
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(tabId);
+    });
+
+    expect(ok).toBe(false);
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "notice.saveFailed" }),
+      { persistent: true },
+    );
+    const tab = result.current.tabs[0];
+    if (tab.kind === "file") expect(tab.file.virtual).toBe(true);
+  });
+
+  it("saveDocument adopts the path outside the workspace even when metadata is declined", async () => {
+    const setLastFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        write_file: async () => undefined,
+        get_file_metadata: async (_cmd, args) => {
+          // The pre-existing note's open reads metadata fine; only the saved
+          // target's read is declined (write-only grant).
+          if ((args as { path: string }).path === "/save-out/note.md") {
+            throw new Error("no read grant");
+          }
+          return { name: "", path: "", size: 0, modified: 0 };
+        },
+        workspace_set_last_file: setLastFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+    // Save target sits outside the open workspace, so no last-file is recorded.
+    vi.mocked(pickSave).mockResolvedValue("/save-out/note.md");
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    // A second open tab so the update walk also visits a non-matching tab.
+    await act(async () => {
+      await result.current.openFile("/p/ws/note.md");
+    });
+
+    act(() => {
+      result.current.newDocument();
+    });
+    const tabId = result.current.tabs.find((t) => t.kind === "file" && t.file.virtual)?.id;
+    if (!tabId) throw new Error("expected a virtual tab");
+    act(() => {
+      result.current.updateEditContent(tabId, "HELLO");
+    });
+
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+
+    const tab = result.current.tabs.find(
+      (t) => t.kind === "file" && t.file.path === "/save-out/note.md",
+    );
+    expect(tab).toBeTruthy();
+    if (tab?.kind === "file") {
+      expect(tab.file.virtual).toBe(false);
+      expect(tab.file.metadata).toBeNull();
+    }
+    // The save target sits outside the workspace, so it is never recorded as
+    // the workspace's last file (the earlier in-workspace open is unrelated).
+    expect(setLastFile).not.toHaveBeenCalledWith(
+      "workspace_set_last_file",
+      expect.objectContaining({ filePath: "/save-out/note.md" }),
+    );
+  });
+
+  it("saveDocument records a note saved inside the open workspace as its last file", async () => {
+    const setLastFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        write_file: async () => undefined,
+        workspace_set_last_file: setLastFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+    vi.mocked(pickSave).mockResolvedValue("/p/ws/saved.md");
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    act(() => {
+      result.current.newDocument();
+    });
+    const tabId = result.current.tabs.find((t) => t.kind === "file" && t.file.virtual)?.id;
+    if (!tabId) throw new Error("expected a virtual tab");
+    act(() => {
+      result.current.updateEditContent(tabId, "HELLO");
+    });
+
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+
+    expect(setLastFile).toHaveBeenCalledWith("workspace_set_last_file", {
+      workspaceRoot: "/p/ws",
+      filePath: "/p/ws/saved.md",
+    });
+  });
 });
