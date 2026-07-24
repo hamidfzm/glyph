@@ -1,7 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, type Mock } from "vitest";
+import { useZoomApi } from "@/contexts/ZoomContext";
+import { ZoomProvider } from "@/contexts/ZoomProvider";
 import { ImageViewer } from "./ImageViewer";
+
+function zoomLevel(container: HTMLElement): number {
+  return parseInt(container.querySelector(".image-viewer-zoom-level")?.textContent ?? "", 10);
+}
 
 describe("ImageViewer", () => {
   it("renders a raster image through the asset protocol", () => {
@@ -41,6 +47,19 @@ describe("ImageViewer", () => {
     // The cleanup flag must suppress the setSrc on the unmounted component
     // (no act warning / state-update-after-unmount).
     resolveRead("<svg/>");
+    await Promise.resolve();
+  });
+
+  it("ignores a late SVG read that fails after unmount", async () => {
+    let rejectRead!: (err: Error) => void;
+    (invoke as Mock).mockReturnValueOnce(
+      new Promise<string>((_resolve, reject) => {
+        rejectRead = reject;
+      }),
+    );
+    const { unmount } = render(<ImageViewer filePath="/notes/late-fail.svg" />);
+    unmount();
+    rejectRead(new Error("read failed"));
     await Promise.resolve();
   });
 
@@ -119,6 +138,63 @@ describe("ImageViewer", () => {
     fireEvent.load(img);
     fireEvent(window, new Event("resize"));
     expect(screen.getByText("100%")).toBeInTheDocument();
+  });
+
+  it("zooms with Ctrl or Cmd + wheel and ignores a plain wheel", () => {
+    const { container } = render(<ImageViewer filePath="/a/b/photo.png" />);
+    const stage = container.querySelector(".image-viewer-stage") as HTMLElement;
+    // happy-dom drops WheelEvent modifiers from its init, so set them directly.
+    const wheel = (modifiers: { ctrlKey?: boolean; metaKey?: boolean }, deltaY: number) =>
+      act(() => {
+        const event = new Event("wheel", { bubbles: true, cancelable: true });
+        Object.defineProperty(event, "ctrlKey", { value: modifiers.ctrlKey ?? false });
+        Object.defineProperty(event, "metaKey", { value: modifiers.metaKey ?? false });
+        Object.defineProperty(event, "deltaY", { value: deltaY });
+        stage.dispatchEvent(event);
+      });
+
+    wheel({}, -100);
+    expect(zoomLevel(container)).toBe(100);
+
+    wheel({ ctrlKey: true }, -100);
+    const afterCtrl = zoomLevel(container);
+    expect(afterCtrl).toBeGreaterThan(100);
+
+    // Cmd+wheel is the macOS equivalent; scrolling down zooms back out.
+    wheel({ metaKey: true }, 100);
+    expect(zoomLevel(container)).toBeLessThan(afterCtrl);
+  });
+
+  it("responds to the Zoom In/Out/Actual-Size commands", () => {
+    const ZoomButtons = () => {
+      const api = useZoomApi();
+      return (
+        <>
+          <button type="button" onClick={() => api?.actions.zoomIn()}>
+            cmd-zoom-in
+          </button>
+          <button type="button" onClick={() => api?.actions.zoomOut()}>
+            cmd-zoom-out
+          </button>
+          <button type="button" onClick={() => api?.actions.zoomReset()}>
+            cmd-actual-size
+          </button>
+        </>
+      );
+    };
+    const { container } = render(
+      <ZoomProvider>
+        <ImageViewer filePath="/a/b/photo.png" />
+        <ZoomButtons />
+      </ZoomProvider>,
+    );
+    act(() => screen.getByText("cmd-zoom-in").click());
+    expect(zoomLevel(container)).toBe(125);
+    act(() => screen.getByText("cmd-zoom-out").click());
+    expect(zoomLevel(container)).toBe(100);
+    act(() => screen.getByText("cmd-zoom-in").click());
+    act(() => screen.getByText("cmd-actual-size").click());
+    expect(zoomLevel(container)).toBe(100);
   });
 
   it("stops refitting on resize once the user has zoomed", () => {
