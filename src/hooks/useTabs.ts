@@ -685,8 +685,7 @@ export function useTabs(options: UseTabsOptions) {
   const createCanvas = useCallback((dir: string) => createEntry(dir, "canvas"), [createEntry]);
   const createFolder = useCallback((dir: string) => createEntry(dir, "folder"), [createEntry]);
 
-  // Create a note at the workspace root and open it in edit mode. Backs the
-  // empty-workspace state's New Note button; a no-op without a workspace.
+  // Create a note at the workspace root and open it in edit mode.
   const createNoteInWorkspace = useCallback(async () => {
     const ws = workspaceRef.current;
     if (!ws) return;
