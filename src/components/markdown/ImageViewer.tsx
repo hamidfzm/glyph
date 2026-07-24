@@ -5,6 +5,7 @@ import { ActualSizeIcon } from "@/components/icons/ActualSizeIcon";
 import { FitIcon } from "@/components/icons/FitIcon";
 import { ZoomInIcon } from "@/components/icons/ZoomInIcon";
 import { ZoomOutIcon } from "@/components/icons/ZoomOutIcon";
+import { useZoomApi } from "@/contexts/ZoomContext";
 import { useDragPan } from "@/hooks/useDragPan";
 import { isSvgFile } from "@/lib/imageExtensions";
 import { clampScale, fitScale, ZOOM_STEP } from "@/lib/lightbox";
@@ -15,6 +16,8 @@ import { toAssetUrl } from "./resolveImageSrc";
 interface ImageViewerProps {
   filePath: string;
 }
+
+const WHEEL_ZOOM_SPEED = 0.0015;
 
 // Read-only viewer for an image/SVG file tab. The asset is served through
 // Tauri's asset protocol (never read as text), laid out inside a scrollable
@@ -114,6 +117,34 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [isFit, computeFit]);
+
+  // Route the Zoom In/Out/Actual-Size commands to this viewer while it's the
+  // active surface. Actual Size maps to 100%, matching the toolbar button.
+  const registerZoomTarget = useZoomApi()?.registerTarget;
+  useEffect(() => {
+    if (!registerZoomTarget) return;
+    registerZoomTarget({
+      zoomIn: () => zoomBy(ZOOM_STEP),
+      zoomOut: () => zoomBy(1 / ZOOM_STEP),
+      zoomReset: actualSize,
+    });
+    return () => registerZoomTarget(null);
+  }, [registerZoomTarget, zoomBy, actualSize]);
+
+  // Ctrl/Cmd + wheel zooms; a plain wheel keeps panning a zoomed image. Native
+  // non-passive listener so preventDefault cancels the scroll.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      setScale((s) => clampScale(s * Math.exp(-event.deltaY * WHEEL_ZOOM_SPEED)));
+      setIsFit(false);
+    };
+    stage.addEventListener("wheel", handleWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", handleWheel);
+  }, []);
 
   // With an intrinsic size we lay the image out at `natural × scale` so zooming
   // past the viewport pans. Without one (an SVG with only a viewBox) there are

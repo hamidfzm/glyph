@@ -1,7 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, type Mock } from "vitest";
+import { useZoomApi } from "@/contexts/ZoomContext";
+import { ZoomProvider } from "@/contexts/ZoomProvider";
 import { ImageViewer } from "./ImageViewer";
+
+function zoomLevel(container: HTMLElement): number {
+  return parseInt(container.querySelector(".image-viewer-zoom-level")?.textContent ?? "", 10);
+}
 
 describe("ImageViewer", () => {
   it("renders a raster image through the asset protocol", () => {
@@ -114,6 +120,51 @@ describe("ImageViewer", () => {
     fireEvent.load(img);
     fireEvent(window, new Event("resize"));
     expect(screen.getByText("100%")).toBeInTheDocument();
+  });
+
+  it("zooms with Ctrl + wheel and ignores a plain wheel", () => {
+    const { container } = render(<ImageViewer filePath="/a/b/photo.png" />);
+    const stage = container.querySelector(".image-viewer-stage") as HTMLElement;
+    // happy-dom drops WheelEvent modifiers from its init, so set them directly.
+    const wheel = (ctrlKey: boolean, deltaY: number) =>
+      act(() => {
+        const event = new Event("wheel", { bubbles: true, cancelable: true });
+        Object.defineProperty(event, "ctrlKey", { value: ctrlKey });
+        Object.defineProperty(event, "deltaY", { value: deltaY });
+        stage.dispatchEvent(event);
+      });
+
+    wheel(false, -100);
+    expect(zoomLevel(container)).toBe(100);
+
+    wheel(true, -100);
+    expect(zoomLevel(container)).toBeGreaterThan(100);
+  });
+
+  it("responds to the Zoom In/Actual-Size commands", () => {
+    const ZoomButtons = () => {
+      const api = useZoomApi();
+      return (
+        <>
+          <button type="button" onClick={() => api?.actions.zoomIn()}>
+            cmd-zoom-in
+          </button>
+          <button type="button" onClick={() => api?.actions.zoomReset()}>
+            cmd-actual-size
+          </button>
+        </>
+      );
+    };
+    const { container } = render(
+      <ZoomProvider>
+        <ImageViewer filePath="/a/b/photo.png" />
+        <ZoomButtons />
+      </ZoomProvider>,
+    );
+    act(() => screen.getByText("cmd-zoom-in").click());
+    expect(zoomLevel(container)).toBe(125);
+    act(() => screen.getByText("cmd-actual-size").click());
+    expect(zoomLevel(container)).toBe(100);
   });
 
   it("stops refitting on resize once the user has zoomed", () => {
