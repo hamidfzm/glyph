@@ -68,7 +68,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Multiple files in tabs: open, switch, close, middle-click to close; reorder by dragging a tab or with `Cmd/Ctrl+Shift+PageUp/PageDown`, and the order persists across restarts
 - Command palette: `Cmd/Ctrl+K` to fuzzy-jump to any workspace file, document heading, or app action
 - In-document search: `Cmd/Ctrl+F` with match highlighting and navigation
-- Zoom in/out: `Cmd/Ctrl+=/-/0` with zoom level in status bar
+- Temporary per-tab zoom: `Cmd/Ctrl+=/-/0` or `Cmd/Ctrl`+scroll scales the active note's text (or the graph), with the level shown in the status bar. It's local to the tab and resets when the tab closes, and never changes the saved font size (Settings → Appearance)
 - Table of Contents sidebar with active heading tracking
 - Resizable panels: drag the edge of the files sidebar, outline sidebar, AI chat panel, or the backlinks divider to resize it (double-click resets); sizes persist across restarts
 - Print: `Cmd/Ctrl+P` with configurable page breaks, optional TOC, and theme-color control

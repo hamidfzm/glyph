@@ -10,6 +10,7 @@ import { MarkdownEditor, SplitView } from "./editor/lazyEditor";
 import { GraphView } from "./graph/lazyGraph";
 import { ImageViewer } from "./markdown/ImageViewer";
 import { MarkdownViewer } from "./markdown/MarkdownViewer";
+import { NoteZoomLayer } from "./markdown/NoteZoomLayer";
 import { NotebookSource, NotebookSplit, NotebookViewer } from "./notebook/lazyNotebook";
 
 interface TabContentProps {
@@ -148,47 +149,53 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
 
   if (file.mode === EDITOR_MODE.edit) {
     return (
-      <div className="flex-1 overflow-hidden">
-        <MarkdownEditor
-          content={editorContent}
-          onChange={handleEditorChange}
-          workspaceFiles={workspaceFiles}
-        />
-      </div>
+      <NoteZoomLayer tabId={activeTab.id}>
+        <div className="flex-1 overflow-hidden">
+          <MarkdownEditor
+            content={editorContent}
+            onChange={handleEditorChange}
+            workspaceFiles={workspaceFiles}
+          />
+        </div>
+      </NoteZoomLayer>
     );
   }
 
   if (file.mode === EDITOR_MODE.split) {
     return (
-      <div className="flex-1 overflow-hidden">
-        <SplitView
-          content={editorContent}
-          filePath={file.path}
-          onChange={handleEditorChange}
-          searchOpen={searchOpen}
-          onSearchClose={onSearchClose}
-          workspaceFiles={workspaceFiles}
-          onOpenWikilink={handleOpenWikilink}
-          onOpenRelativeFile={openFile}
-          onTaskToggle={handleTaskToggle}
-        />
-      </div>
+      <NoteZoomLayer tabId={activeTab.id}>
+        <div className="flex-1 overflow-hidden">
+          <SplitView
+            content={editorContent}
+            filePath={file.path}
+            onChange={handleEditorChange}
+            searchOpen={searchOpen}
+            onSearchClose={onSearchClose}
+            workspaceFiles={workspaceFiles}
+            onOpenWikilink={handleOpenWikilink}
+            onOpenRelativeFile={openFile}
+            onTaskToggle={handleTaskToggle}
+          />
+        </div>
+      </NoteZoomLayer>
     );
   }
 
   return (
-    <MarkdownViewer
-      key={`${activeTab.id}:${file.path}`}
-      content={file.content}
-      filePath={file.path}
-      initialScrollTop={file.scrollTop}
-      onScrollChange={saveScrollPosition}
-      searchOpen={searchOpen}
-      onSearchClose={onSearchClose}
-      workspaceFiles={workspaceFiles}
-      onOpenWikilink={handleOpenWikilink}
-      onOpenRelativeFile={openFile}
-      onTaskToggle={handleTaskToggle}
-    />
+    <NoteZoomLayer tabId={activeTab.id}>
+      <MarkdownViewer
+        key={`${activeTab.id}:${file.path}`}
+        content={file.content}
+        filePath={file.path}
+        initialScrollTop={file.scrollTop}
+        onScrollChange={saveScrollPosition}
+        searchOpen={searchOpen}
+        onSearchClose={onSearchClose}
+        workspaceFiles={workspaceFiles}
+        onOpenWikilink={handleOpenWikilink}
+        onOpenRelativeFile={openFile}
+        onTaskToggle={handleTaskToggle}
+      />
+    </NoteZoomLayer>
   );
 }
