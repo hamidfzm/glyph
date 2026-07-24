@@ -12,6 +12,9 @@ function installed(overrides: Partial<InstalledPlugin> = {}): InstalledPlugin {
     name: "Demo",
     version: "1.0.0",
     apiVersion: `^${PLUGIN_API_VERSION}`,
+    // Host tests drive the full-trust module path unless a case opts into
+    // the sandbox; the consent gating above the host is the provider's job.
+    sandbox: false,
     dir: "/plugins/com.x.demo",
     mainSource: "export default …",
     ...overrides,

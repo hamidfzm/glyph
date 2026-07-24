@@ -55,6 +55,20 @@ describe("fetchRegistry", () => {
     expect(await fetchRegistry()).toEqual([]);
   });
 
+  it("drops entries whose sha256 is missing or malformed", async () => {
+    const plugins = [
+      entry(),
+      entry({ id: "b.nohash", sha256: undefined as never }),
+      entry({ id: "c.short", sha256: "abc123" }),
+      entry({ id: "d.nonhex", sha256: "z".repeat(64) }),
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ plugins }) }),
+    );
+    expect((await fetchRegistry()).map((e) => e.id)).toEqual(["com.x.demo"]);
+  });
+
   it("throws on a non-ok response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404 }));
     await expect(fetchRegistry()).rejects.toThrow(/404/);
@@ -89,6 +103,16 @@ describe("installFromRegistry", () => {
     expect(vi.mocked(invoke)).toHaveBeenCalledWith("install_plugin_package", {
       bytes: [1, 2, 3, 4],
     });
+  });
+
+  it("refuses to download at all without a valid sha256", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    vi.mocked(invoke).mockReset();
+
+    await expect(installFromRegistry(entry({ sha256: "" }))).rejects.toThrow(/no valid sha256/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(vi.mocked(invoke)).not.toHaveBeenCalled();
   });
 
   it("throws when the download fails", async () => {

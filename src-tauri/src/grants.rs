@@ -151,6 +151,12 @@ impl GrantRegistry {
         self.lock().ok()?.pending_plugin_dir.take()
     }
 
+    /// Read the pending plugin-install folder without consuming it, so the
+    /// manifest can be inspected for consent before the install.
+    pub fn peek_pending_plugin_dir(&self) -> Option<PathBuf> {
+        self.lock().ok()?.pending_plugin_dir.clone()
+    }
+
     /// Seed grants from the persisted settings store (open tabs, recent files);
     /// absent keys, corrupt JSON, and deleted paths silently stay denied.
     ///

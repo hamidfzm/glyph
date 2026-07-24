@@ -109,5 +109,46 @@ fn installed_plugin_serializes_camel_case() {
     assert!(json.contains("\"mainSource\""));
     assert!(!json.contains("\"description\""));
     assert!(!json.contains("\"permissions\""));
-    assert!(!json.contains("\"sandbox\""));
+    // Full trust must be visible on the wire, never an absent-field default.
+    assert!(json.contains("\"sandbox\":false"));
+}
+
+#[test]
+fn inspect_plugin_command_peeks_without_consuming_the_pick() {
+    use tauri::test::mock_app;
+    use tauri::Manager;
+    let app = mock_app();
+    app.manage(crate::grants::GrantRegistry::default());
+    let src = temp_root("cmd_inspect_src");
+    write_plugin(&src, "com.x.inspected", "export default { activate(){} };");
+
+    app.state::<crate::grants::GrantRegistry>()
+        .set_pending_plugin_dir(src.clone());
+    let inspection = inspect_plugin(app.state::<crate::grants::GrantRegistry>()).unwrap();
+    assert_eq!(inspection.id, "com.x.inspected");
+    assert!(
+        inspection.sandbox,
+        "absent manifest flag must inspect as sandboxed"
+    );
+
+    // The pick survives inspection, so the install that follows still works.
+    let plugin = install_plugin(
+        app.handle().clone(),
+        app.state::<crate::grants::GrantRegistry>(),
+    )
+    .unwrap();
+    assert_eq!(plugin.id, "com.x.inspected");
+
+    let _ = fs::remove_dir_all(&plugin.dir);
+    let _ = fs::remove_dir_all(&src);
+}
+
+#[test]
+fn inspect_plugin_command_errors_without_a_pending_pick() {
+    use tauri::test::mock_app;
+    use tauri::Manager;
+    let app = mock_app();
+    app.manage(crate::grants::GrantRegistry::default());
+    let result = inspect_plugin(app.state::<crate::grants::GrantRegistry>());
+    assert_eq!(result.unwrap_err(), "no plugin folder was picked");
 }

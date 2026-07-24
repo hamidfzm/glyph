@@ -5,9 +5,24 @@
 use super::manifest::{
     parse_manifest, validate_file_path, validate_id, MAX_FILE_BYTES, MAX_TOTAL_BYTES,
 };
-use super::InstalledPlugin;
+use super::{InstalledPlugin, PluginInspection};
 use std::fs;
 use std::path::Path;
+
+/// Read only a folder's manifest metadata, for the pre-install consent dialog.
+pub(crate) fn inspect_dir(dir: &Path) -> Result<PluginInspection, String> {
+    let manifest_json = fs::read_to_string(dir.join("manifest.json"))
+        .map_err(|e| format!("not a plugin folder (no manifest.json): {e}"))?;
+    let info = parse_manifest(&manifest_json)?;
+    Ok(PluginInspection {
+        id: info.id,
+        name: info.name,
+        version: info.version,
+        description: info.description,
+        permissions: info.permissions,
+        sandbox: info.sandbox,
+    })
+}
 
 /// Read one installed plugin folder (manifest + entry source).
 pub(crate) fn read_plugin_dir(dir: &Path) -> Result<InstalledPlugin, String> {
@@ -184,6 +199,26 @@ mod tests {
         assert_eq!(plugin.main_source, "export default {};");
         assert_eq!(plugin.dir, dir.to_string_lossy());
 
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn inspect_dir_reads_metadata_only() {
+        let root = temp_root("inspect");
+        let dir = root.join("com.x.demo");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("manifest.json"),
+            r#"{"id":"com.x.demo","name":"Demo","version":"1.0.0","apiVersion":"^1.0.0","permissions":["workspace:read"],"sandbox":false}"#,
+        )
+        .unwrap();
+        // No main.js on disk: inspection must not need the entry source.
+        let inspection = inspect_dir(&dir).unwrap();
+        assert_eq!(inspection.id, "com.x.demo");
+        assert_eq!(inspection.permissions, ["workspace:read"]);
+        assert!(!inspection.sandbox);
+
+        assert!(inspect_dir(&root.join("missing")).is_err());
         let _ = fs::remove_dir_all(&root);
     }
 

@@ -3,7 +3,8 @@
 Glyph renders untrusted markdown (and runs third-party plugins) inside a Tauri
 webview that can invoke Rust commands. This document describes the trust
 boundary and the backend-managed filesystem grants that enforce it (issue
-#433). Plugin sandboxing is tracked separately in issue #434.
+#433). Plugin sandboxing (issue #434) narrows what plugins get: isolation is
+the default, and full trust is a separate, persisted user grant.
 
 ## Trust boundary
 
@@ -128,5 +129,11 @@ capability file; only `ask`/`message` remain. All pickers run in Rust.
   it can read. The grants bound what that is.
 - **`style-src 'unsafe-inline'`.** CSS injection in rendered markdown remains
   possible; it cannot reach the filesystem.
-- **Plugins.** Installed plugins execute in the app context by design and see
-  everything the renderer sees. Narrowing that is issue #434.
+- **Plugins.** Plugins run sandboxed by default (issue #434): a manifest
+  without a `sandbox` flag is isolated in a worker, filesystem reads require
+  the declared-and-accepted `workspace:read` permission, and the worker's
+  network is fenced to declared `network:` hosts. A plugin that declares
+  `"sandbox": false` still executes in the app context and sees everything the
+  renderer sees; that mode requires an explicit full-trust consent, persisted
+  per plugin, and marketplace packages are SHA-256-verified against the
+  reviewed registry entry before install.
