@@ -485,10 +485,8 @@ export function useTabs(options: UseTabsOptions) {
   // event) the folder is adopted into this window. With no root (the user's
   // Open Folder dialog) the choice is routed through the window manager so a
   // different folder opens a new window instead of replacing this one.
-  // Create a brand-new empty folder and adopt it as a workspace. The save
-  // dialog names + creates the directory (backend), then routing goes through
-  // the same window manager as Open Folder (empty window adopts it, occupied
-  // one opens a new window).
+  // Create an empty folder and adopt it as a workspace, routing through the
+  // same window manager as Open Folder.
   const createWorkspace = useCallback(async () => {
     const path = await pickNewWorkspace(t("common:fileDialog.newWorkspace"));
     if (typeof path !== "string") return;

@@ -22,8 +22,7 @@ export function pickFolder(): Promise<string | null> {
   return invoke<string | null>("pick_folder");
 }
 
-/** New Workspace: a save dialog names a folder that is created on disk and
- *  granted as a workspace. Null on cancel. */
+/** New Workspace: names + creates a folder, granted as a workspace. Null on cancel. */
 export function pickNewWorkspace(defaultName: string): Promise<string | null> {
   return invoke<string | null>("pick_new_workspace", { defaultName });
 }

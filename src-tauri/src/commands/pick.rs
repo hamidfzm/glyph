@@ -37,9 +37,8 @@ pub async fn pick_folder<R: Runtime>(app: AppHandle<R>) -> Result<Option<String>
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
-/// New Workspace: a save dialog names a new folder, which is created on disk
-/// and granted as a workspace. `grant_workspace` requires the directory to
-/// exist, so the create must precede it.
+/// New Workspace: name a folder via a save dialog, create it, grant it as a
+/// workspace. The create must precede the grant (grant_workspace needs it to exist).
 #[tauri::command]
 pub async fn pick_new_workspace<R: Runtime>(
     app: AppHandle<R>,
