@@ -11,6 +11,7 @@
     "Commands": "فرمان‌ها"
   },
   "openFile": "باز کردن فایل…",
+  "newDocument": "سند جدید",
   "openFolder": "باز کردن پوشه…",
   "closeTab": "بستن زبانه",
   "toggleFilesSidebar": "نمایش/پنهان‌کردن نوار فایل‌ها",

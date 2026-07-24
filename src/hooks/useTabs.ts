@@ -13,7 +13,7 @@ import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
 import { basename, isPathInside, parentDir, pruneInside } from "@/lib/paths";
-import { pickFiles, pickFolder } from "@/lib/pickers";
+import { pickFiles, pickFolder, pickSave } from "@/lib/pickers";
 import { isMobilePlatform } from "@/lib/platform";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
@@ -58,6 +58,9 @@ interface FileState {
   mode: EditorMode;
   editContent: string | null;
   dirty: boolean;
+  /** Unsaved buffer with no file on disk; `path` holds a display title until
+   *  the first Save. Virtual tabs are never watched, indexed, or persisted. */
+  virtual: boolean;
   /** Monotonic edit counter. Every edit bumps it; a save records the revision
    *  it wrote, and clears `dirty` only if the revision is still current. This
    *  stops an in-flight write from marking a newer edit clean. */
@@ -117,6 +120,13 @@ function generateId() {
   return `tab-${nextId}`;
 }
 
+// Session-monotonic so a title is never reused, even after a close or save.
+let nextUntitled = 0;
+function nextUntitledTitle() {
+  nextUntitled++;
+  return `Untitled-${nextUntitled}`;
+}
+
 interface UseTabsOptions {
   reopenLastFile: boolean;
   openTabs: PersistedTab[] | string[]; // legacy: string[] = file-only persistence
@@ -161,6 +171,7 @@ function makeFileState(path: string, mode: EditorMode): FileState {
     mode,
     editContent: null,
     dirty: false,
+    virtual: false,
     revision: 0,
   };
 }
@@ -277,6 +288,8 @@ export function useTabs(options: UseTabsOptions) {
       });
     }
     for (const tab of tabs) {
+      // Unsaved in-memory buffers have no disk path to restore to; skip them.
+      if (tab.kind === "file" && tab.file.virtual) continue;
       persisted.push(
         tab.kind === "graph"
           ? { kind: "graph", path: tab.root }
@@ -435,6 +448,23 @@ export function useTabs(options: UseTabsOptions) {
     },
     [addToRecent],
   );
+
+  // Open a fresh in-memory buffer (Untitled-N) in edit mode.
+  const newDocument = useCallback(() => {
+    const id = generateId();
+    const title = nextUntitledTitle();
+    const newTab: FileTab = {
+      id,
+      kind: "file",
+      file: {
+        ...makeFileState(title, EDITOR_MODE.edit),
+        content: "",
+        editContent: "",
+        virtual: true,
+      },
+    };
+    setState((prev) => ({ tabs: [...prev.tabs, newTab], activeTabId: id }));
+  }, []);
 
   // Close every tab that belongs to the workspace at `root`: file tabs inside
   // it plus graph tabs (they render its index). Loose external files survive.
@@ -987,6 +1017,57 @@ export function useTabs(options: UseTabsOptions) {
   // can't complete out of order (the newer edit must land last on disk).
   const writeChains = useRef<Map<string, Promise<unknown>>>(new Map());
 
+  // Save a virtual buffer to a chosen path (Save As): on success it becomes an
+  // ordinary file tab; a cancelled dialog returns false so close can discard.
+  const saveVirtualAs = useCallback(
+    async (id: string, file: FileState): Promise<boolean> => {
+      // A virtual tab always carries a string edit buffer (newDocument seeds "").
+      /* v8 ignore start -- unreachable: editContent is never null for a virtual tab */
+      const content = file.editContent ?? "";
+      /* v8 ignore stop */
+      const target = await pickSave(
+        `${file.path}.md`,
+        t("common:fileDialog.markdown"),
+        MARKDOWN_EXTENSIONS as string[],
+      );
+      if (!target) return false;
+      try {
+        await invoke("write_file", { path: target, content });
+      } catch (err) {
+        console.error("Failed to save document:", err);
+        optionsRef.current.onWorkspaceNotice(
+          { key: "notice.saveFailed", values: { name: basename(target) } },
+          { persistent: true },
+        );
+        return false;
+      }
+      selfSaveTimes.current.set(target, Date.now());
+      // pickSave grants write-only, so watch/metadata may be declined; both are
+      // best-effort and never block the save.
+      invoke("watch_file", { path: target }).catch(() => {});
+      const metadata = await invoke<FileMetadata>("get_file_metadata", { path: target }).catch(
+        () => null,
+      );
+      setState((prev) => ({
+        ...prev,
+        tabs: prev.tabs.map((t) => {
+          if (t.id !== id || t.kind !== "file") return t;
+          return {
+            ...t,
+            file: { ...t.file, path: target, virtual: false, dirty: false, content, metadata },
+          };
+        }),
+      }));
+      addToRecent(target);
+      const root = workspaceRef.current?.root;
+      if (root && isInWorkspace(target, root)) {
+        setWorkspaceLastFile(root, target).catch(() => {});
+      }
+      return true;
+    },
+    [addToRecent, t],
+  );
+
   // Persist one dirty editable tab. Safe to call for any tab id: skips graph,
   // clean, and still-loading tabs. The write is serialized per path, and the
   // dirty flag is cleared only when the written revision is still current, so a
@@ -999,6 +1080,8 @@ export function useTabs(options: UseTabsOptions) {
       const tab = stateRef.current.tabs.find((t) => t.id === id);
       if (tab?.kind !== "file") return Promise.resolve(true);
       const file = tab.file;
+      // A virtual buffer has no disk path yet: route through Save As.
+      if (file.virtual) return saveVirtualAs(id, file);
       if (!file.dirty) return Promise.resolve(true);
       // editContent is the edit buffer, always set once a tab is dirty; the null
       // check only narrows the type for the write below ("" stays valid, since a
@@ -1039,7 +1122,7 @@ export function useTabs(options: UseTabsOptions) {
       );
       return run;
     },
-    [updateActiveFile],
+    [updateActiveFile, saveVirtualAs],
   );
   // Let the close coordinator (defined above) flush through this saveDocument.
   saveDocumentRef.current = saveDocument;
@@ -1371,6 +1454,7 @@ export function useTabs(options: UseTabsOptions) {
     wikilinkRefs,
     indexStatus,
     openFile,
+    newDocument,
     openFolder,
     openGraph,
     closeWorkspace,

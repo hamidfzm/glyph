@@ -91,6 +91,7 @@ export function AppShell() {
     openGraph,
     openFile,
     openFileDialog,
+    newDocument,
     closeTab,
     closeWorkspace,
     setTabMode,
@@ -191,6 +192,7 @@ export function AppShell() {
 
   const menuHandlers = useMemo(
     () => ({
+      newDocument,
       openFile: openFileDialog,
       openFolder: () => openFolder(),
       // No-arg wrapper: menu/palette callers must not leak their event
@@ -227,6 +229,7 @@ export function AppShell() {
       reportIssue: openReportIssue,
     }),
     [
+      newDocument,
       openFileDialog,
       openFolder,
       openGraph,
@@ -320,6 +323,7 @@ export function AppShell() {
           <div className="flex-1">
             <EmptyState
               platform={platform}
+              onNewDocument={newDocument}
               onOpenFile={openFileDialog}
               onOpenFolder={() => openFolder()}
               folderEmpty={folderEmptyHint}

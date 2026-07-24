@@ -7,6 +7,7 @@ import { EmptyState } from "./EmptyState";
 function renderEmptyState(overrides: Partial<ComponentProps<typeof EmptyState>> = {}) {
   const props: ComponentProps<typeof EmptyState> = {
     platform: "macos",
+    onNewDocument: vi.fn(),
     onOpenFile: vi.fn(),
     onOpenFolder: vi.fn(),
     ...overrides,
@@ -37,6 +38,12 @@ describe("EmptyState", () => {
   it("shows Ctrl+O shortcut on Linux", () => {
     renderEmptyState({ platform: "linux" });
     expect(screen.getByText("Ctrl+O")).toBeInTheDocument();
+  });
+
+  it("calls onNewDocument when New Document button is clicked", () => {
+    const { props } = renderEmptyState();
+    fireEvent.click(screen.getByText("New Document"));
+    expect(props.onNewDocument).toHaveBeenCalledOnce();
   });
 
   it("calls onOpenFile when Open File button is clicked", () => {
@@ -76,6 +83,7 @@ describe("EmptyState", () => {
     renderEmptyState({ folderEmpty: true });
     expect(screen.getByText("No file open in this folder")).toBeInTheDocument();
     expect(screen.getByText("Pick a file from the sidebar to start reading.")).toBeInTheDocument();
+    expect(screen.queryByText("New Document")).not.toBeInTheDocument();
     expect(screen.queryByText("Open File")).not.toBeInTheDocument();
     expect(screen.queryByText("Open Folder")).not.toBeInTheDocument();
   });

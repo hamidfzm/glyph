@@ -11,6 +11,7 @@
     "folderHeading": "No file open in this folder",
     "folderHint": "Pick a file from the sidebar to start reading.",
     "openFile": "Open File",
+    "newDocument": "New Document",
     "openFolder": "Open Folder"
   },
   "statusBar": {

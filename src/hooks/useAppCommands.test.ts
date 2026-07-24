@@ -18,6 +18,7 @@ import { type AppActions, useAppCommands } from "./useAppCommands";
 
 function makeActions(over: Partial<AppActions> = {}): AppActions {
   return {
+    newDocument: vi.fn(),
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),

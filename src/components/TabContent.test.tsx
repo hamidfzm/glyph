@@ -101,6 +101,7 @@ function makeNotebookTab(mode: EditorMode = "view"): FileTab {
       mode,
       editContent: null,
       dirty: false,
+      virtual: false,
       revision: 0,
     },
   };
@@ -118,6 +119,7 @@ function makeCanvasTab(mode: EditorMode = "view"): FileTab {
       mode,
       editContent: null,
       dirty: false,
+      virtual: false,
       revision: 0,
     },
   };
@@ -135,6 +137,7 @@ function makeFileTab(mode: EditorMode = "view"): FileTab {
       mode,
       editContent: null,
       dirty: false,
+      virtual: false,
       revision: 0,
     },
   };
@@ -153,6 +156,7 @@ function makeImageTab(): FileTab {
       mode: "view",
       editContent: null,
       dirty: false,
+      virtual: false,
       revision: 0,
     },
   };
@@ -173,6 +177,7 @@ function buildContext(over: Partial<TabsContextValue>): TabsContextValue {
     wikilinkRefs: [],
     indexStatus: COMPLETE_INDEX_STATUS,
     workspace: null,
+    newDocument: vi.fn(),
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),
