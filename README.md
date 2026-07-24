@@ -52,7 +52,6 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - External links open in system browser with optional confirmation dialog; right-click one to copy its address or open it in the external browser
 
 ### Editor
-- New in-memory document: `Cmd/Ctrl+N` (File → New) opens an untitled buffer with no file on disk; write freely and `Cmd/Ctrl+S` saves it to a location you pick, or close to discard
 - Markdown editor mode: syntax highlighting, line numbers, undo/redo history
 - Format toolbar: select text in the editor and a small Bold / Italic / Code / Strikethrough bar appears above it
 - Inline formatting: style the selection with Bold (`Ctrl/Cmd+Shift+B`), Italic (`Ctrl/Cmd+I`), Inline Code (`Ctrl/Cmd+Shift+C`), or Strikethrough (`Ctrl/Cmd+Shift+X`), all remappable in Settings → Hotkeys

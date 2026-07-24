@@ -58,9 +58,8 @@ interface FileState {
   mode: EditorMode;
   editContent: string | null;
   dirty: boolean;
-  /** An unsaved in-memory buffer with no file on disk yet. `path` holds a
-   *  display title ("Untitled-1"); the first Save writes it out and clears
-   *  this. Virtual tabs are never watched, indexed, or session-persisted. */
+  /** Unsaved buffer with no file on disk; `path` holds a display title until
+   *  the first Save. Virtual tabs are never watched, indexed, or persisted. */
   virtual: boolean;
   /** Monotonic edit counter. Every edit bumps it; a save records the revision
    *  it wrote, and clears `dirty` only if the revision is still current. This
@@ -121,9 +120,7 @@ function generateId() {
   return `tab-${nextId}`;
 }
 
-// Names successive in-memory buffers Untitled-1, Untitled-2, … The counter
-// never resets within a session, so a title is never reused even after a
-// buffer is closed or saved.
+// Session-monotonic so a title is never reused, even after a close or save.
 let nextUntitled = 0;
 function nextUntitledTitle() {
   nextUntitled++;
@@ -452,8 +449,7 @@ export function useTabs(options: UseTabsOptions) {
     [addToRecent],
   );
 
-  // Open a fresh in-memory buffer (Untitled-N) in edit mode. It has no file on
-  // disk until the first Save, which routes through saveDocument's virtual path.
+  // Open a fresh in-memory buffer (Untitled-N) in edit mode.
   const newDocument = useCallback(() => {
     const id = generateId();
     const title = nextUntitledTitle();
@@ -1021,9 +1017,8 @@ export function useTabs(options: UseTabsOptions) {
   // can't complete out of order (the newer edit must land last on disk).
   const writeChains = useRef<Map<string, Promise<unknown>>>(new Map());
 
-  // Save an in-memory buffer to a user-chosen path (Save As). On success the
-  // tab sheds its virtual flag and becomes an ordinary file tab; a cancelled
-  // dialog returns false so the close coordinator can fall back to discard.
+  // Save a virtual buffer to a chosen path (Save As): on success it becomes an
+  // ordinary file tab; a cancelled dialog returns false so close can discard.
   const saveVirtualAs = useCallback(
     async (id: string, file: FileState): Promise<boolean> => {
       // A virtual tab always carries a string edit buffer (newDocument seeds "").
@@ -1047,8 +1042,8 @@ export function useTabs(options: UseTabsOptions) {
         return false;
       }
       selfSaveTimes.current.set(target, Date.now());
-      // The pickSave grant is write-only, so watching and metadata reads may be
-      // declined; both are best-effort and never block the save.
+      // pickSave grants write-only, so watch/metadata may be declined; both are
+      // best-effort and never block the save.
       invoke("watch_file", { path: target }).catch(() => {});
       const metadata = await invoke<FileMetadata>("get_file_metadata", { path: target }).catch(
         () => null,
