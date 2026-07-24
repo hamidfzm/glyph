@@ -84,6 +84,18 @@ describe("ImageViewer", () => {
     expect(parseFloat(img.style.width)).toBeCloseTo(fitWidth * 1.25);
   });
 
+  it("lays out a viewBox-only SVG at its intrinsic size instead of the contain path", async () => {
+    (invoke as Mock).mockResolvedValueOnce('<svg viewBox="0 0 200 100"/>');
+    const { container } = render(<ImageViewer filePath="/a/chart.svg" />);
+    const img = container.querySelector("img.image-viewer-img") as HTMLImageElement;
+    await waitFor(() => expect(img.getAttribute("src")).toMatch(/^data:image\/svg\+xml,/));
+    // happy-dom reports naturalWidth/Height === 0; the parsed viewBox size takes over.
+    fireEvent.load(img);
+    expect(img.style.objectFit).toBe("");
+    expect(img.style.width).toMatch(/px$/);
+    expect(parseFloat(img.style.width)).toBeGreaterThan(0);
+  });
+
   it("contains a dimensionless SVG (no intrinsic pixel size) and zooms via transform", () => {
     const { container } = render(<ImageViewer filePath="/a/icon.svg" />);
     const img = container.querySelector("img.image-viewer-img") as HTMLImageElement;

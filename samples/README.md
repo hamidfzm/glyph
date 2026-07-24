@@ -461,8 +461,8 @@ Open [AI Playground](AI%20Playground.md) for a guided set of prompts to try agai
 | `Cmd+G` | Workspace graph |
 | `Cmd+P` | Print / Export to PDF |
 | `Cmd+F` | Find in document |
-| `Cmd+=` / `Cmd+-` | Zoom in / out |
-| `Cmd+0` | Reset zoom |
+| `Cmd+=` / `Cmd+-` | Zoom the current tab in / out (or `Cmd`+scroll) |
+| `Cmd+0` | Reset this tab's zoom |
 | `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo task checkbox toggles |
 | `Cmd+Shift+PageUp` / `Cmd+Shift+PageDown` | Move tab left / right |
 | `Cmd+B` | Toggle sidebar |

@@ -1,9 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncConfigProvider } from "@/contexts/SyncConfigProvider";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
+import { useZoomApi } from "@/contexts/ZoomContext";
+import { ZoomProvider } from "@/contexts/ZoomProvider";
 import type { FileTab, Workspace } from "@/hooks/useTabs";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
@@ -148,6 +150,29 @@ describe("StatusBar", () => {
     renderStatusBar({ displayContent: "some content" });
     // 20 / 16 = 125%
     expect(screen.getByText("125%")).toBeInTheDocument();
+  });
+
+  it("scales the zoom percentage by the active tab's temporary multiplier", () => {
+    const value = buildContext({ filePath: "/a.md", displayContent: "some content" });
+    function Bump() {
+      const api = useZoomApi();
+      return (
+        <button type="button" onClick={() => api?.setNoteZoom("tab-1", () => 1.5)}>
+          bump
+        </button>
+      );
+    }
+    render(
+      <Wrapper value={value}>
+        <ZoomProvider>
+          <StatusBar onOpenSync={vi.fn()} />
+          <Bump />
+        </ZoomProvider>
+      </Wrapper>,
+    );
+    act(() => screen.getByText("bump").click());
+    // 16 / 16 * 1.5 = 150%
+    expect(screen.getByText("150%")).toBeInTheDocument();
   });
 
   it("shows a Jupyter Notebook label (not word count) for an .ipynb file", () => {

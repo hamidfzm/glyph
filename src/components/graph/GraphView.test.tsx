@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useZoomApi } from "@/contexts/ZoomContext";
+import { ZoomProvider } from "@/contexts/ZoomProvider";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { buildWorkspaceGraph, type WorkspaceGraph } from "@/lib/graph";
 import { fitCameraToNodes, worldToScreen } from "@/lib/graphCanvas";
@@ -284,6 +286,39 @@ describe("GraphView", () => {
     ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
     expect(() => renderGraph()).not.toThrow();
     expect(ctx.clearRect).not.toHaveBeenCalled();
+  });
+
+  it("zooms the camera from the Zoom In/Out/Actual-Size commands", () => {
+    const ZoomButtons = () => {
+      const api = useZoomApi();
+      return (
+        <>
+          <button type="button" onClick={() => api?.actions.zoomIn()}>
+            cmd-zoom-in
+          </button>
+          <button type="button" onClick={() => api?.actions.zoomReset()}>
+            cmd-zoom-reset
+          </button>
+        </>
+      );
+    };
+    render(
+      <ZoomProvider>
+        <GraphView workspaceFiles={FILES} wikilinkRefs={REFS} onOpenFile={vi.fn()} />
+        <ZoomButtons />
+      </ZoomProvider>,
+    );
+    const reset = screen.getByRole("button", { name: "Reset view" });
+    expect(reset).toBeDisabled();
+
+    fireEvent.click(screen.getByText("cmd-zoom-in"));
+    // Taking manual control (via the command) enables Reset and enlarges the draw.
+    expect(reset).toBeEnabled();
+    expect(lastWorldTransform().scale).toBeGreaterThan(FIT.scale);
+
+    fireEvent.click(screen.getByText("cmd-zoom-reset"));
+    expect(reset).toBeDisabled();
+    expect(lastWorldTransform().scale).toBeCloseTo(FIT.scale);
   });
 
   it("treats a missing bounding rect as the origin without crashing", () => {
