@@ -10,6 +10,7 @@
     "openHint": "Suelta un archivo aquí, usa el menú o pulsa <kbd>{{shortcut}}</kbd>",
     "folderHeading": "No hay ningún archivo abierto en esta carpeta",
     "folderHint": "Elige un archivo en la barra lateral para empezar a leer.",
+    "newNote": "Nueva nota",
     "openFile": "Abrir archivo",
     "openFolder": "Abrir carpeta"
   },

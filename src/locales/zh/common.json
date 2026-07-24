@@ -10,6 +10,7 @@
     "openHint": "将文件拖放到此处、使用菜单，或按 <kbd>{{shortcut}}</kbd>",
     "folderHeading": "此文件夹中未打开任何文件",
     "folderHint": "从侧边栏选择一个文件开始阅读。",
+    "newNote": "新建笔记",
     "openFile": "打开文件",
     "openFolder": "打开文件夹"
   },

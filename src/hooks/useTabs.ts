@@ -685,6 +685,23 @@ export function useTabs(options: UseTabsOptions) {
   const createCanvas = useCallback((dir: string) => createEntry(dir, "canvas"), [createEntry]);
   const createFolder = useCallback((dir: string) => createEntry(dir, "folder"), [createEntry]);
 
+  // Create a note at the workspace root and open it in edit mode.
+  const createNoteInWorkspace = useCallback(async () => {
+    const ws = workspaceRef.current;
+    if (!ws) return;
+    const path = await createNote(ws.root);
+    if (!path) return;
+    await openFile(path);
+    setState((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) =>
+        t.kind === "file" && t.file.path === path
+          ? { ...t, file: { ...t.file, mode: EDITOR_MODE.edit, editContent: t.file.content } }
+          : t,
+      ),
+    }));
+  }, [createNote, openFile]);
+
   // Re-point every open file tab under `oldPath` to its location under
   // `newPath`, moving the file watchers along. Used by rename and move.
   const repointOpenFiles = useCallback((oldPath: string, newPath: string) => {
@@ -1376,6 +1393,7 @@ export function useTabs(options: UseTabsOptions) {
     closeWorkspace,
     toggleExpand,
     createNote,
+    createNoteInWorkspace,
     createCanvas,
     createFolder,
     commitEdit,

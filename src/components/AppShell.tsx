@@ -91,6 +91,7 @@ export function AppShell() {
     openGraph,
     openFile,
     openFileDialog,
+    createNoteInWorkspace,
     closeTab,
     closeWorkspace,
     setTabMode,
@@ -304,6 +305,7 @@ export function AppShell() {
               platform={platform}
               onOpenFile={openFileDialog}
               onOpenFolder={() => openFolder()}
+              onNewNote={createNoteInWorkspace}
               folderEmpty={folderEmptyHint}
             />
           </div>
