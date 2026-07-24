@@ -9,6 +9,7 @@ import { useDragPan } from "@/hooks/useDragPan";
 import { isSvgFile } from "@/lib/imageExtensions";
 import { clampScale, fitScale, ZOOM_STEP } from "@/lib/lightbox";
 import { svgToDataUrl } from "@/lib/svgDataUrl";
+import { svgIntrinsicSize } from "@/lib/svgIntrinsicSize";
 import { toAssetUrl } from "./resolveImageSrc";
 
 interface ImageViewerProps {
@@ -27,9 +28,14 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
   const [scale, setScale] = useState(1);
   const [isFit, setIsFit] = useState(true);
   const [loaded, setLoaded] = useState(false);
-  // Intrinsic pixel size, or null when the image has none (SVGs with only a
-  // `viewBox` report naturalWidth/Height === 0). Drives the sizing model below.
+  // Intrinsic pixel size, or null when the image has none. Drives the sizing
+  // model below. `naturalRef` mirrors it for the fit math, which runs inside a
+  // load handler before the state has committed.
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  const naturalRef = useRef<{ w: number; h: number } | null>(null);
+  // Intrinsic size parsed from an SVG's markup, used when the webview reports
+  // naturalWidth/Height as 0 (SVGs with only a `viewBox`).
+  const svgSizeRef = useRef<{ w: number; h: number } | null>(null);
 
   // SVGs render from their inlined markup as a `data:` URL rather than the asset
   // protocol: it always loads (no protocol round-trip that can come back empty)
@@ -46,7 +52,9 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
     let cancelled = false;
     invoke<string>("read_file", { path: filePath })
       .then((svg) => {
-        if (!cancelled) setSrc(svgToDataUrl(svg));
+        if (cancelled) return;
+        svgSizeRef.current = svgIntrinsicSize(svg);
+        setSrc(svgToDataUrl(svg));
       })
       // Fall back to the asset protocol if the read fails for any reason.
       .catch(() => {
@@ -59,14 +67,14 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
 
   const computeFit = useCallback(() => {
     const stage = stageRef.current;
-    const img = imgRef.current;
-    if (!stage || !img?.naturalWidth) return 1;
+    const size = naturalRef.current;
+    if (!stage || !size) return 1;
     const styles = getComputedStyle(stage);
     const availWidth =
       stage.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
     const availHeight =
       stage.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom);
-    return fitScale(img.naturalWidth, img.naturalHeight, availWidth, availHeight);
+    return fitScale(size.w, size.h, availWidth, availHeight);
   }, []);
 
   const applyFit = useCallback(() => {
@@ -86,12 +94,16 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
 
   const handleLoad = useCallback(() => {
     const img = imgRef.current;
-    setLoaded(true);
-    setNatural(
+    // Prefer the webview's measured pixels; fall back to an SVG's parsed size
+    // (viewBox-only SVGs report naturalWidth/Height === 0). Both give a real
+    // layout size so zooming past the viewport pans instead of clipping.
+    const size =
       img && img.naturalWidth > 0 && img.naturalHeight > 0
         ? { w: img.naturalWidth, h: img.naturalHeight }
-        : null,
-    );
+        : svgSizeRef.current;
+    naturalRef.current = size;
+    setLoaded(true);
+    setNatural(size);
     applyFit();
   }, [applyFit]);
 
