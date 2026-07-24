@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { PluginStatusBarItems } from "@/components/plugins/PluginStatusBarItems";
 import { useTabsContext } from "@/contexts/TabsContext";
+import { useNoteZoomMap } from "@/contexts/ZoomContext";
 import { useSettings } from "@/hooks/useSettings";
 import { countWords, readingMinutes } from "@/lib/markdown";
 import { isNotebookFile } from "@/lib/notebookExtensions";
@@ -16,8 +17,14 @@ interface StatusBarProps {
 export function StatusBar({ onOpenSync }: StatusBarProps) {
   const { t } = useTranslation("common");
   const { settings } = useSettings();
-  const { activeFile, displayContent } = useTabsContext();
-  const zoomPercent = Math.round((settings.appearance.fontSize / ZOOM_DEFAULT) * 100);
+  const { activeFile, activeTabId, displayContent } = useTabsContext();
+  const noteZoomMap = useNoteZoomMap();
+  // The saved font ratio, scaled by the active note tab's temporary multiplier
+  // (Ctrl/Cmd +/-/0 or Ctrl/Cmd+scroll). Non-note tabs have no multiplier.
+  const noteMultiplier = activeTabId ? (noteZoomMap?.[activeTabId] ?? 1) : 1;
+  const zoomPercent = Math.round(
+    (settings.appearance.fontSize / ZOOM_DEFAULT) * noteMultiplier * 100,
+  );
 
   const filePath = activeFile?.path;
   // Notebooks suppress `displayContent` (it would be raw JSON) in every mode,

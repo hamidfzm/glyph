@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { useZoomApi, type ZoomHandlers } from "@/contexts/ZoomContext";
 import { useElementSize } from "@/hooks/useElementSize";
 import { useGraphCamera } from "@/hooks/useGraphCamera";
 import { useGraphSimulation } from "@/hooks/useGraphSimulation";
@@ -33,6 +34,8 @@ interface GraphViewProps {
 // A press that travels further than this (screen px) is a drag, not a click.
 const CLICK_SLOP_PX = 4;
 const WHEEL_ZOOM_SPEED = 0.0015;
+// Zoom factor per Zoom In / Zoom Out command (keyboard / menu).
+const HOTKEY_ZOOM_FACTOR = 1.2;
 
 interface ActivePointer {
   id: number;
@@ -60,6 +63,7 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
   const { t } = useTranslation("common");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { ref: containerRef, size: viewport } = useElementSize<HTMLDivElement>();
+  const registerZoomTarget = useZoomApi()?.registerTarget;
   const graph = useMemo(
     () => buildWorkspaceGraph(workspaceFiles, wikilinkRefs),
     [workspaceFiles, wikilinkRefs],
@@ -216,6 +220,36 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
     autoFitRef.current = true;
     setAutoFit(true);
   }, []);
+
+  // Route the Zoom In/Out/Actual-Size commands to the camera while the graph is
+  // the active surface, anchored on the viewport centre. Wheel zoom is wired
+  // separately above. The handlers read the latest camera/viewport through a
+  // ref so registration happens once per mount, not on every camera frame.
+  const zoomImplRef = useRef<() => ZoomHandlers>(() => ({
+    zoomIn: () => {},
+    zoomOut: () => {},
+    zoomReset: () => {},
+  }));
+  zoomImplRef.current = () => {
+    const zoomCenter = (factor: number) => {
+      takeManualControl();
+      camera.zoomAt(viewport.width / 2, viewport.height / 2, factor, viewport);
+    };
+    return {
+      zoomIn: () => zoomCenter(HOTKEY_ZOOM_FACTOR),
+      zoomOut: () => zoomCenter(1 / HOTKEY_ZOOM_FACTOR),
+      zoomReset: refit,
+    };
+  };
+  useEffect(() => {
+    if (!registerZoomTarget) return;
+    registerZoomTarget({
+      zoomIn: () => zoomImplRef.current().zoomIn(),
+      zoomOut: () => zoomImplRef.current().zoomOut(),
+      zoomReset: () => zoomImplRef.current().zoomReset(),
+    });
+    return () => registerZoomTarget(null);
+  }, [registerZoomTarget]);
 
   if (graph.nodes.length === 0) {
     return (
