@@ -5,6 +5,8 @@ export interface MenuEventHandlers {
   openFile: () => void;
   openFolder: () => void;
   openGraph: () => void;
+  save: () => void;
+  toggleAutoSave: () => void;
   closeTab: () => void;
   closeWorkspace: () => void;
   toggleFilesSidebar: () => void;
@@ -42,6 +44,8 @@ export function useMenuEvents(handlers: MenuEventHandlers) {
       subscribe("menu-open-file", handlers.openFile),
       subscribe("menu-open-folder", handlers.openFolder),
       subscribe("menu-open-graph", handlers.openGraph),
+      subscribe("menu-save", handlers.save),
+      subscribe("menu-toggle-auto-save", handlers.toggleAutoSave),
       subscribe("menu-close-tab", handlers.closeTab),
       subscribe("menu-close-workspace", handlers.closeWorkspace),
       subscribe("menu-toggle-files-sidebar", handlers.toggleFilesSidebar),

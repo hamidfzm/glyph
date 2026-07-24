@@ -112,6 +112,10 @@
       "label": "Auto-reload",
       "description": "Reload file when changed on disk"
     },
+    "autoSave": {
+      "label": "Auto Save",
+      "description": "Save edits to disk automatically"
+    },
     "reopenLastFile": {
       "label": "Reopen Last File",
       "description": "Open the last viewed file on startup"

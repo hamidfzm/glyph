@@ -26,6 +26,17 @@ export function BehaviorTab() {
 
         <div className="settings-row">
           <div>
+            <span className="settings-label">{t("behavior.autoSave.label")}</span>
+            <div className="settings-description">{t("behavior.autoSave.description")}</div>
+          </div>
+          <Toggle
+            checked={behavior.autoSave}
+            onChange={(v) => updateSettings("behavior.autoSave", v)}
+          />
+        </div>
+
+        <div className="settings-row">
+          <div>
             <span className="settings-label">{t("behavior.reopenLastFile.label")}</span>
             <div className="settings-description">{t("behavior.reopenLastFile.description")}</div>
           </div>

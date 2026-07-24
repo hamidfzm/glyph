@@ -10,6 +10,8 @@ const baseFlags: NativeMenuFlags = {
   hasWorkspace: false,
   aiConfigured: false,
   ttsAvailable: false,
+  hasDirty: false,
+  autoSave: true,
 };
 
 beforeEach(() => {
@@ -28,6 +30,8 @@ describe("useNativeMenuState", () => {
         hasWorkspace: true,
         aiConfigured: true,
         ttsAvailable: true,
+        hasDirty: true,
+        autoSave: false,
       }),
     );
     expect(invoke).toHaveBeenCalledWith("set_menu_state", {
@@ -38,6 +42,8 @@ describe("useNativeMenuState", () => {
         hasWorkspace: true,
         aiConfigured: true,
         ttsAvailable: true,
+        hasDirty: true,
+        autoSave: false,
       },
     });
   });

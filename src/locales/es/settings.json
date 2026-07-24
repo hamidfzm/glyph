@@ -112,6 +112,10 @@
       "label": "Recarga automática",
       "description": "Recargar el archivo cuando cambie en el disco"
     },
+    "autoSave": {
+      "label": "Guardado automático",
+      "description": "Guardar los cambios en el disco automáticamente"
+    },
     "reopenLastFile": {
       "label": "Reabrir último archivo",
       "description": "Abrir el último archivo visto al iniciar"

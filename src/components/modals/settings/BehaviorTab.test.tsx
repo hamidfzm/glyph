@@ -25,9 +25,11 @@ describe("BehaviorTab", () => {
   it("toggles each file-handling option", () => {
     const { updateSettings } = setup();
 
-    const [autoReload, reopen, confirmLinks] = screen.getAllByRole("checkbox");
+    const [autoReload, autoSave, reopen, confirmLinks] = screen.getAllByRole("checkbox");
     fireEvent.click(autoReload);
     expect(updateSettings).toHaveBeenCalledWith("behavior.autoReload", false);
+    fireEvent.click(autoSave);
+    expect(updateSettings).toHaveBeenCalledWith("behavior.autoSave", false);
     fireEvent.click(reopen);
     expect(updateSettings).toHaveBeenCalledWith("behavior.reopenLastFile", true);
     fireEvent.click(confirmLinks);
