@@ -12,6 +12,7 @@
   },
   "openFile": "Open File…",
   "openFolder": "Open Folder…",
+  "newWorkspace": "New Workspace…",
   "closeTab": "Close Tab",
   "toggleFilesSidebar": "Toggle Files Sidebar",
   "toggleOutlineSidebar": "Toggle Outline Sidebar",

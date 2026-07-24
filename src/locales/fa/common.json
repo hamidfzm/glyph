@@ -11,7 +11,8 @@
     "folderHeading": "هیچ فایلی در این پوشه باز نیست",
     "folderHint": "برای شروع خواندن، فایلی را از نوار کناری انتخاب کنید.",
     "openFile": "باز کردن فایل",
-    "openFolder": "باز کردن پوشه"
+    "openFolder": "باز کردن پوشه",
+    "newWorkspace": "فضای کاری جدید"
   },
   "statusBar": {
     "jupyter": "نوت‌بوک Jupyter",
@@ -224,7 +225,8 @@
     "documents": "اسناد",
     "markdown": "Markdown",
     "notebook": "نوت‌بوک Jupyter",
-    "d2": "نمودار D2"
+    "d2": "نمودار D2",
+    "newWorkspace": "فضای کاری بدون عنوان"
   },
   "exportFilter": {
     "html": "HTML",

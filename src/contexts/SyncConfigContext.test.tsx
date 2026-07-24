@@ -39,6 +39,7 @@ function tabsValue(workspace: Workspace | null): TabsContextValue {
     workspace,
     openFile: vi.fn(),
     openFolder: vi.fn(),
+    createWorkspace: vi.fn(),
     openGraph: vi.fn(),
     closeWorkspace: vi.fn(),
     toggleExpand: vi.fn(),

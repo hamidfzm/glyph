@@ -4,6 +4,7 @@ import { subscribe } from "@/lib/tauriEvent";
 export interface MenuEventHandlers {
   openFile: () => void;
   openFolder: () => void;
+  newWorkspace: () => void;
   openGraph: () => void;
   closeTab: () => void;
   closeWorkspace: () => void;
@@ -41,6 +42,7 @@ export function useMenuEvents(handlers: MenuEventHandlers) {
     const unsubscribes = [
       subscribe("menu-open-file", handlers.openFile),
       subscribe("menu-open-folder", handlers.openFolder),
+      subscribe("menu-new-workspace", handlers.newWorkspace),
       subscribe("menu-open-graph", handlers.openGraph),
       subscribe("menu-close-tab", handlers.closeTab),
       subscribe("menu-close-workspace", handlers.closeWorkspace),

@@ -11,7 +11,8 @@
     "folderHeading": "Keine Datei in diesem Ordner geöffnet",
     "folderHint": "Wähle eine Datei in der Seitenleiste, um mit dem Lesen zu beginnen.",
     "openFile": "Datei öffnen",
-    "openFolder": "Ordner öffnen"
+    "openFolder": "Ordner öffnen",
+    "newWorkspace": "Neuer Arbeitsbereich"
   },
   "statusBar": {
     "jupyter": "Jupyter Notebook",
@@ -224,7 +225,8 @@
     "documents": "Dokumente",
     "markdown": "Markdown",
     "notebook": "Jupyter Notebook",
-    "d2": "D2-Diagramm"
+    "d2": "D2-Diagramm",
+    "newWorkspace": "Unbenannter Arbeitsbereich"
   },
   "exportFilter": {
     "html": "HTML",

@@ -37,6 +37,27 @@ pub async fn pick_folder<R: Runtime>(app: AppHandle<R>) -> Result<Option<String>
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
+/// New Workspace: name a folder via a save dialog, create it, grant it as a
+/// workspace. The create must precede the grant (grant_workspace needs it to exist).
+#[tauri::command]
+pub async fn pick_new_workspace<R: Runtime>(
+    app: AppHandle<R>,
+    default_name: String,
+) -> Result<Option<String>, String> {
+    let dialog = app.dialog().file().set_file_name(default_name);
+    let picked = tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file())
+        .await
+        .map_err(|e| e.to_string())?;
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let path = to_path(picked)?;
+    std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+    let canonical = app.state::<GrantRegistry>().grant_workspace(&path)?;
+    grants::allow_asset_dir(&app, &canonical);
+    Ok(Some(path.to_string_lossy().to_string()))
+}
+
 /// Open File(s): multi-select picker; each choice is granted as a loose file.
 #[tauri::command]
 pub async fn pick_files<R: Runtime>(

@@ -22,6 +22,11 @@ export function pickFolder(): Promise<string | null> {
   return invoke<string | null>("pick_folder");
 }
 
+/** New Workspace: names + creates a folder, granted as a workspace. Null on cancel. */
+export function pickNewWorkspace(defaultName: string): Promise<string | null> {
+  return invoke<string | null>("pick_new_workspace", { defaultName });
+}
+
 /** Multi-select file picker; grants each choice as a loose file. */
 export async function pickFiles(filters: PickFilter[]): Promise<string[] | null> {
   if (isMobilePlatform()) {

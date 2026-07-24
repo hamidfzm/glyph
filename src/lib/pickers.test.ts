@@ -5,6 +5,7 @@ import {
   pickFiles,
   pickFolder,
   pickMoveDir,
+  pickNewWorkspace,
   pickPluginDir,
   pickSave,
 } from "./pickers";
@@ -51,6 +52,14 @@ describe("pickers", () => {
       defaultName: "note.pdf",
       filterName: "PDF",
       extensions: ["pdf"],
+    });
+  });
+
+  it("pickNewWorkspace forwards the default folder name", async () => {
+    vi.mocked(invoke).mockResolvedValue("/p/new-ws");
+    await expect(pickNewWorkspace("Untitled Workspace")).resolves.toBe("/p/new-ws");
+    expect(invoke).toHaveBeenCalledWith("pick_new_workspace", {
+      defaultName: "Untitled Workspace",
     });
   });
 

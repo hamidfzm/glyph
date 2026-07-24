@@ -384,6 +384,8 @@ pub fn run() {
             #[cfg(desktop)]
             commands::pick::pick_folder,
             #[cfg(desktop)]
+            commands::pick::pick_new_workspace,
+            #[cfg(desktop)]
             commands::pick::pick_files,
             #[cfg(desktop)]
             commands::pick::pick_save,

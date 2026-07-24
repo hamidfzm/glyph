@@ -12,6 +12,7 @@
   },
   "openFile": "Abrir archivo…",
   "openFolder": "Abrir carpeta…",
+  "newWorkspace": "Nuevo espacio de trabajo…",
   "closeTab": "Cerrar pestaña",
   "toggleFilesSidebar": "Mostrar u ocultar barra de archivos",
   "toggleOutlineSidebar": "Mostrar u ocultar barra de esquema",
