@@ -58,6 +58,8 @@ describe("fetchRegistry", () => {
   it("drops entries whose sha256 is missing or malformed", async () => {
     const plugins = [
       entry(),
+      null as never,
+      "junk" as never,
       entry({ id: "b.nohash", sha256: undefined as never }),
       entry({ id: "c.short", sha256: "abc123" }),
       entry({ id: "d.nonhex", sha256: "z".repeat(64) }),
@@ -95,7 +97,7 @@ describe("findUpdates", () => {
 describe("installFromRegistry", () => {
   it("downloads the package, verifies it, and hands the bytes to Rust", async () => {
     vi.stubGlobal("fetch", fetchPackage());
-    vi.mocked(invoke).mockResolvedValue(undefined);
+    vi.mocked(invoke).mockResolvedValue({ id: "com.x.demo" });
 
     // Uppercase digest proves the comparison is case-insensitive.
     await installFromRegistry(entry({ sha256: PACKAGE_SHA.toUpperCase() }));
@@ -103,6 +105,17 @@ describe("installFromRegistry", () => {
     expect(vi.mocked(invoke)).toHaveBeenCalledWith("install_plugin_package", {
       bytes: [1, 2, 3, 4],
     });
+  });
+
+  it("uninstalls and rejects a package whose manifest id differs from the entry", async () => {
+    vi.stubGlobal("fetch", fetchPackage());
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "install_plugin_package" ? { id: "com.x.other" } : undefined),
+    );
+
+    await expect(installFromRegistry(entry())).rejects.toThrow(/declares manifest id/);
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("uninstall_plugin", { id: "com.x.other" });
   });
 
   it("refuses to download at all without a valid sha256", async () => {

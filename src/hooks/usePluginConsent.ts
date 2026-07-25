@@ -28,41 +28,77 @@ export function usePluginConsent() {
   // A ref, not state: only async install/enable flows read the grants, and
   // they always want the current value.
   const grantsRef = useRef<Record<string, PluginGrant>>({});
+  // Grant reads and writes wait for hydration, so a consent accepted during a
+  // slow startup cannot persist a map missing the other plugins' grants.
+  const hydrationRef = useRef<Promise<void>>(Promise.resolve());
 
-  const hydrateGrants = useCallback(async () => {
-    grantsRef.current = await loadGrants();
+  const hydrateGrants = useCallback(() => {
+    hydrationRef.current = loadGrants().then((grants) => {
+      grantsRef.current = grants;
+    });
+    return hydrationRef.current;
   }, []);
 
   const hasFullTrust = useCallback((id: string) => grantsRef.current[id]?.fullTrust === true, []);
 
+  const writeGrant = useCallback((id: string, grant: PluginGrant | undefined) => {
+    const next = { ...grantsRef.current };
+    if (grant === undefined) {
+      delete next[id];
+    } else {
+      next[id] = grant;
+    }
+    grantsRef.current = next;
+    void saveGrants(next);
+  }, []);
+
+  /** Snapshot one plugin's grant, for undoing a failed flow via restoreGrant. */
+  const getGrant = useCallback(async (id: string): Promise<PluginGrant | undefined> => {
+    await hydrationRef.current;
+    return grantsRef.current[id];
+  }, []);
+
   const ensureConsent = useCallback(
     async (subject: ConsentSubject): Promise<boolean> => {
+      await hydrationRef.current;
       const permissions = subject.permissions ?? [];
-      const request = consentRequest(subject.sandbox, permissions, grantsRef.current[subject.id]);
-      if (!request) return true;
+      const grant = grantsRef.current[subject.id];
+      const request = consentRequest(subject.sandbox, permissions, grant);
+      if (!request) {
+        // A sandboxed version retires an older full-trust grant, so a later
+        // flip back to sandbox:false re-runs the full-access warning.
+        if (subject.sandbox && grant?.fullTrust) {
+          writeGrant(subject.id, grantAfterConsent(true, permissions));
+        }
+        return true;
+      }
       const accepted = await ask(consentBody(t, subject.name, request), {
         title: consentTitle(t, request),
         kind: "warning",
       });
       if (accepted) {
-        grantsRef.current = {
-          ...grantsRef.current,
-          [subject.id]: grantAfterConsent(subject.sandbox, permissions),
-        };
-        void saveGrants(grantsRef.current);
+        writeGrant(subject.id, grantAfterConsent(subject.sandbox, permissions));
       }
       return accepted;
     },
-    [t],
+    [t, writeGrant],
   );
 
-  // Deleting an absent id is a no-op, so revoking is unconditional.
-  const revokeGrant = useCallback((id: string) => {
-    const next = { ...grantsRef.current };
-    delete next[id];
-    grantsRef.current = next;
-    void saveGrants(next);
-  }, []);
+  const revokeGrant = useCallback(
+    async (id: string) => {
+      await hydrationRef.current;
+      if (!(id in grantsRef.current)) return;
+      writeGrant(id, undefined);
+    },
+    [writeGrant],
+  );
 
-  return { hydrateGrants, hasFullTrust, ensureConsent, revokeGrant };
+  return {
+    hydrateGrants,
+    hasFullTrust,
+    getGrant,
+    restoreGrant: writeGrant,
+    ensureConsent,
+    revokeGrant,
+  };
 }

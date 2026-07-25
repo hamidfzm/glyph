@@ -1,4 +1,4 @@
-import { load } from "@tauri-apps/plugin-store";
+import { readPluginsKey, writePluginsKey } from "./pluginsFile";
 
 /** What the user has consented to for one plugin, persisted across restarts. */
 export interface PluginGrant {
@@ -8,23 +8,17 @@ export interface PluginGrant {
   fullTrust: boolean;
 }
 
-// Shares the plugins store file with the disabled-id list.
-const FILE = "plugins.json";
 const KEY = "grants";
 
+const isGrantMap = (value: unknown): value is Record<string, PluginGrant> =>
+  value !== null && typeof value === "object";
+
 /** Read the persisted per-plugin grants. Missing/unreadable yields {}. */
-export async function loadGrants(): Promise<Record<string, PluginGrant>> {
-  try {
-    const store = await load(FILE, { defaults: {}, autoSave: true });
-    const value = await store.get<Record<string, PluginGrant>>(KEY);
-    return value && typeof value === "object" ? value : {};
-  } catch {
-    return {}; // No store yet: nothing has been granted.
-  }
+export function loadGrants(): Promise<Record<string, PluginGrant>> {
+  return readPluginsKey(KEY, isGrantMap, {});
 }
 
 /** Persist the per-plugin grants. */
-export async function saveGrants(grants: Record<string, PluginGrant>): Promise<void> {
-  const store = await load(FILE, { defaults: {}, autoSave: true });
-  await store.set(KEY, grants);
+export function saveGrants(grants: Record<string, PluginGrant>): Promise<void> {
+  return writePluginsKey(KEY, grants);
 }

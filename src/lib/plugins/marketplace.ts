@@ -84,7 +84,7 @@ export interface RegistryEntry {
 const SHA256_HEX = /^[0-9a-f]{64}$/i;
 
 /** An entry is installable only with a well-formed SHA-256 to verify against. */
-export function hasValidChecksum(entry: RegistryEntry): boolean {
+function hasValidChecksum(entry: RegistryEntry): boolean {
   return typeof entry.sha256 === "string" && SHA256_HEX.test(entry.sha256);
 }
 
@@ -110,8 +110,8 @@ export async function fetchRegistry(url = REGISTRY_URL): Promise<RegistryEntry[]
   const data = (await res.json()) as { plugins?: RegistryEntry[] };
   const entries = Array.isArray(data?.plugins) ? data.plugins : [];
   return entries.filter((entry) => {
-    if (hasValidChecksum(entry)) return true;
-    console.warn(`Dropping registry entry ${entry.id}: missing or malformed sha256`);
+    if (entry && typeof entry === "object" && hasValidChecksum(entry)) return true;
+    console.warn("Dropping registry entry with missing or malformed sha256:", entry?.id ?? entry);
     return false;
   });
 }
@@ -152,7 +152,16 @@ export async function installFromRegistry(entry: RegistryEntry): Promise<Install
   if (actual !== entry.sha256.toLowerCase()) {
     throw new Error(`checksum mismatch for ${entry.id}: expected ${entry.sha256}, got ${actual}`);
   }
-  return invoke<InstalledPlugin>("install_plugin_package", {
+  const plugin = await invoke<InstalledPlugin>("install_plugin_package", {
     bytes: Array.from(new Uint8Array(buffer)),
   });
+  // The user consented to the reviewed entry's id; a package that identifies
+  // as a different plugin must not stay installed under that consent.
+  if (plugin.id !== entry.id) {
+    await invoke("uninstall_plugin", { id: plugin.id });
+    throw new Error(
+      `package for ${entry.id} declares manifest id ${plugin.id}; refusing to install`,
+    );
+  }
+  return plugin;
 }
