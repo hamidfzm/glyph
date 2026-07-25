@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickFiles, pickFolder } from "@/lib/pickers";
 import { COMPLETE_SCAN } from "@/lib/workspaceScan";
@@ -157,6 +158,34 @@ describe("useTabs initialization", () => {
     });
     expect(invoke).toHaveBeenCalledWith("watch_directory", { path: "/p/workspace" });
     expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/cli.md" });
+  });
+
+  it("keeps the CLI folder when StrictMode double-invokes the init effect", async () => {
+    // Regression: get_initial_folder consumes its value, so the second dev-mode
+    // run read None and fell through to session restore, replacing the folder
+    // the CLI had just opened.
+    let folderReads = 0;
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        get_initial_folder: async () => {
+          folderReads += 1;
+          return folderReads === 1 ? "/p/cli-workspace" : null;
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(
+      () =>
+        useTabs(
+          defaultOptions({
+            openTabs: [{ kind: "folder" as const, path: "/p/old-session" }],
+          }),
+        ),
+      { wrapper: StrictMode },
+    );
+
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    expect(result.current.workspace?.root).toBe("/p/cli-workspace");
+    expect(invoke).not.toHaveBeenCalledWith("watch_directory", { path: "/p/old-session" });
   });
 
   it("restores legacy string[] open tabs", async () => {

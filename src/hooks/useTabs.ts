@@ -221,6 +221,8 @@ export function useTabs(options: UseTabsOptions) {
   workspaceRef.current = workspace;
   const optionsRef = useRef(options);
   optionsRef.current = options;
+  // Guards the mount-only init effect against StrictMode's double invoke.
+  const didInit = useRef(false);
 
   // The single close coordinator. Defined up here so every destructive
   // lifecycle path (tab close, workspace close/replace, window close) flushes
@@ -1193,6 +1195,12 @@ export function useTabs(options: UseTabsOptions) {
   // Initialize: load CLI arg, restore workspace + tabs, or reopen last file
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only effect
   useEffect(() => {
+    // `get_initial_file` / `get_initial_folder` consume their value, so a second
+    // run reads None and would fall through to session restore, replacing the
+    // folder the CLI just opened. StrictMode double-invokes effects in dev, so
+    // this must run exactly once per mount lifetime.
+    if (didInit.current) return;
+    didInit.current = true;
     (async () => {
       try {
         // A spawned secondary window was created to open one specific path.
