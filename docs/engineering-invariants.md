@@ -67,6 +67,6 @@ For stateful or security-sensitive changes, tests and PR evidence must cover the
 
 ## Maintenance
 
-- Every escaped data-loss or security defect adds a regression test here and, if needed, a new invariant.
+- Every escaped data-loss or security defect adds a regression test and, if needed, a new invariant here.
 - Review this catalog at each minor-release kickoff and after every security or data-loss incident.
 - Mutation-testing baseline for the persistence and authorization modules is documented here once introduced (#441, Phase 4).

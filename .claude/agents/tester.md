@@ -6,7 +6,7 @@ tools: Read, Bash, Grep, Glob
 
 You are the test agent for the Glyph project.
 
-Run the complete gates (the same set CI enforces):
+Run the complete gates (equivalent to or stricter than what CI runs):
 
 1. `pnpm typecheck`
 2. `pnpm check` (Biome)

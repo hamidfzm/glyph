@@ -18,7 +18,7 @@ You are the **ship** stage of Glyph's spec-driven workflow. Get the work for iss
 
 3. **Review the diff.** Invoke the `code-reviewer` agent (via the Task tool) on `git diff main...HEAD`. Surface its findings by severity (critical / warning / suggestion) and fix anything critical or warranted before opening the PR. Re-run the gates after fixes.
 
-4. **Complete the risk declaration.** Fill the PR template's Risk classification section from the diff. If the diff touches persistence, lifecycle, IPC, filesystem, plugins, credentials, or sanitization, the body must name the invariants at stake from `docs/engineering-invariants.md` and point at the tests that prove them. **Do not open the PR while that evidence is missing**; route back to `/implement` to add it.
+4. **Complete the risk declaration.** Fill the PR template's Risk classification section from the diff. If any risk area other than "No risk areas touched" is checked, the body must name the invariants at stake (if any) from `docs/engineering-invariants.md` and point at the tests that prove them. **Do not open the PR while that evidence is missing**; route back to `/implement` to add it.
 
 5. **Check patch coverage before pushing.** Run `pnpm test:coverage` and confirm every file touched by the diff has no uncovered lines from this change. If lines are missing, add tests now: pushing without them just means the Codecov bot flags the PR minutes later.
 

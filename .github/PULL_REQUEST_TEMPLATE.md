@@ -10,7 +10,7 @@
 
 ## Risk classification
 
-<!-- Check every area this PR touches. Each checked area requires the invariants at stake and evidence below. If none apply, check the last box. -->
+<!-- Check every area this PR touches. Each checked area requires the invariants at stake (if any) and evidence below. If none apply, check the last box. -->
 
 - [ ] Persistence / data loss
 - [ ] Asynchronous ordering / races
