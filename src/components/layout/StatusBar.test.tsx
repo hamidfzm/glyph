@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncConfigProvider } from "@/contexts/SyncConfigProvider";
@@ -219,13 +219,16 @@ describe("StatusBar sync indicator gating", () => {
     vi.mocked(invoke).mockResolvedValue(null as unknown as never);
   });
 
-  it("does not render the sync pill when onOpenSync is null", () => {
+  it("does not render the sync pill when onOpenSync is null", async () => {
     const value = buildWorkspaceContext();
     render(
       <Wrapper value={value}>
         <StatusBar onOpenSync={null} />
       </Wrapper>,
     );
+    // SyncConfigProvider fetches sync_get_config on mount; let it settle so
+    // its state updates land inside act before asserting.
+    await act(async () => {});
     expect(screen.queryByText(/Sync/)).toBeNull();
   });
 

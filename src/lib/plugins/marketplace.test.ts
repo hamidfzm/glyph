@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectConsole } from "@/test/consoleGuard";
 import { PLUGIN_API_VERSION } from "./apiVersion";
 import {
   fetchRegistry,
@@ -56,6 +57,7 @@ describe("fetchRegistry", () => {
   });
 
   it("drops entries whose sha256 is missing or malformed", async () => {
+    expectConsole(/Dropping registry entry with missing or malformed sha256/);
     const plugins = [
       entry(),
       null as never,

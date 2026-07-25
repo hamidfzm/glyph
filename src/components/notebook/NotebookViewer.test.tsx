@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { expectConsole } from "@/test/consoleGuard";
 import { NotebookViewer } from "./NotebookViewer";
 
 function notebook(cells: unknown[], metadata?: unknown): string {
@@ -119,6 +120,9 @@ describe("NotebookViewer", () => {
   });
 
   it("renders the search bar when searchOpen and closes it", () => {
+    // React DOM does not know the native <search> element (SearchBar's root)
+    // and warns once per run, in whichever test renders it first.
+    expectConsole(/The tag <%s> is unrecognized in this browser/);
     const onSearchClose = vi.fn();
     render(
       <NotebookViewer

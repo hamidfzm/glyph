@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MermaidDiagram } from "./MermaidDiagram";
 
@@ -28,8 +28,13 @@ describe("MermaidDiagram", () => {
     document.documentElement.classList.remove("dark");
   });
 
-  afterEach(() => {
-    document.documentElement.classList.remove("dark");
+  afterEach(async () => {
+    // happy-dom writes the class attribute even when "dark" is absent, which
+    // fires the useIsDarkMode MutationObserver while the component is still
+    // mounted (RTL cleanup runs later), so the write must happen inside act.
+    await act(async () => {
+      document.documentElement.classList.remove("dark");
+    });
   });
 
   it("renders the diagram SVG into the container on mount", async () => {
@@ -104,7 +109,9 @@ describe("MermaidDiagram", () => {
     });
     const initialCalls = renderMermaid.mock.calls.length;
 
-    document.documentElement.classList.add("dark");
+    await act(async () => {
+      document.documentElement.classList.add("dark");
+    });
     await waitFor(() => {
       expect(renderMermaid.mock.calls.length).toBeGreaterThan(initialCalls);
     });
@@ -119,7 +126,9 @@ describe("MermaidDiagram", () => {
   it("passes a fresh id to mermaid.render on every call", async () => {
     renderMermaid.mockResolvedValue({ svg: "<svg/>" });
     render(<MermaidDiagram code="graph TD; A-->B" />);
-    document.documentElement.classList.add("dark");
+    await act(async () => {
+      document.documentElement.classList.add("dark");
+    });
     await waitFor(() => {
       expect(renderMermaid.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
@@ -146,7 +155,9 @@ describe("MermaidDiagram", () => {
 
     const { container } = render(<MermaidDiagram code="graph TD; A-->B" />);
     // Trigger a second render via the theme MutationObserver path.
-    document.documentElement.classList.add("dark");
+    await act(async () => {
+      document.documentElement.classList.add("dark");
+    });
 
     await waitFor(() => {
       expect(container.querySelector("svg#winner")).not.toBeNull();
@@ -202,7 +213,9 @@ describe("MermaidDiagram", () => {
     renderMermaid.mockResolvedValueOnce({ svg: "<svg id='winner'/>" });
 
     const { container } = render(<MermaidDiagram code="graph TD; A-->B" />);
-    document.documentElement.classList.add("dark");
+    await act(async () => {
+      document.documentElement.classList.add("dark");
+    });
 
     await waitFor(() => {
       expect(container.querySelector("svg#winner")).not.toBeNull();

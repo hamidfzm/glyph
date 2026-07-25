@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { D2Diagram } from "./D2Diagram";
 
@@ -23,8 +23,13 @@ describe("D2Diagram", () => {
     document.documentElement.classList.remove("dark");
   });
 
-  afterEach(() => {
-    document.documentElement.classList.remove("dark");
+  afterEach(async () => {
+    // happy-dom writes the class attribute even when "dark" is absent, which
+    // fires the useIsDarkMode MutationObserver while the component is still
+    // mounted (RTL cleanup runs later), so the write must happen inside act.
+    await act(async () => {
+      document.documentElement.classList.remove("dark");
+    });
   });
 
   it("renders the diagram SVG into the container on mount", async () => {
@@ -113,7 +118,9 @@ describe("D2Diagram", () => {
     renderD2.mockResolvedValueOnce("<svg id='winner'></svg>");
 
     const { container } = render(<D2Diagram code="x -> y" />);
-    document.documentElement.classList.add("dark");
+    await act(async () => {
+      document.documentElement.classList.add("dark");
+    });
 
     await waitFor(() => expect(container.querySelector("svg#winner")).not.toBeNull());
 
@@ -151,7 +158,9 @@ describe("D2Diagram", () => {
     renderD2.mockResolvedValueOnce("<svg id='winner'></svg>");
 
     const { container } = render(<D2Diagram code="x -> y" />);
-    document.documentElement.classList.add("dark");
+    await act(async () => {
+      document.documentElement.classList.add("dark");
+    });
 
     await waitFor(() => expect(container.querySelector("svg#winner")).not.toBeNull());
 

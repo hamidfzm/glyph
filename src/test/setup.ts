@@ -3,6 +3,9 @@ import { vi } from "vitest";
 // Initialise the shared i18next instance so components using useTranslation /
 // Trans render their English strings synchronously in tests.
 import "@/lib/i18n";
+import { installConsoleGuard } from "@/test/consoleGuard";
+
+installConsoleGuard();
 
 vi.mock("@tauri-apps/api/core", () => ({
   // Mirrors the real API: invoke always returns a Promise. Tests that need a

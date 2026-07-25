@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import { createRegistry } from "@/lib/plugins/registry";
@@ -66,8 +66,11 @@ describe("PluginStyles", () => {
     const rendered = [...container.querySelectorAll("style[data-plugin-style]")];
     expect(rendered.map((el) => el.textContent)).toEqual(["a { color: red }", "b { color: blue }"]);
 
-    // Disposing (plugin unload) removes exactly that sheet.
-    dispose();
+    // Disposing (plugin unload) removes exactly that sheet. The registry
+    // notifies the mounted subscriber, so the dispose renders and needs act.
+    act(() => {
+      dispose();
+    });
     rerender(
       <PluginsContext.Provider value={value(styles)}>
         <PluginStyles />

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
@@ -61,7 +61,10 @@ describe("useCliExport", () => {
           : Promise.resolve(undefined),
       );
       renderHook(() => useCliExport(), { wrapper: providerWrapper(false) });
-      await vi.advanceTimersByTimeAsync(CLI_PLUGIN_WAIT_MS + 1);
+      // The expiring timer sets state, so the advance must run inside act.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(CLI_PLUGIN_WAIT_MS + 1);
+      });
       await vi.waitFor(() => expect(exportSiteMock).toHaveBeenCalledTimes(1));
     } finally {
       vi.useRealTimers();

@@ -1,4 +1,4 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useIsDarkMode } from "./useIsDarkMode";
@@ -8,6 +8,9 @@ describe("useIsDarkMode", () => {
     document.documentElement.classList.remove("dark");
   });
   afterEach(() => {
+    // Unmount before restoring the class: a still-mounted hook would observe
+    // the removal and setState outside act.
+    cleanup();
     document.documentElement.classList.remove("dark");
   });
 

@@ -5,6 +5,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { useContext, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { expectConsole } from "@/test/consoleGuard";
 import { SettingsContext } from "./SettingsContext";
 import { SettingsProvider } from "./SettingsProvider";
 
@@ -630,6 +631,9 @@ describe("SettingsProvider", () => {
     });
 
     it("logs and swallows store write errors", async () => {
+      // The unmount-time flush retries the still-rejecting store after the
+      // spy below is restored, so that late log is declared to the guard.
+      expectConsole(/Failed to save settings/);
       const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       mockStore(null, { setRejects: true });
 
@@ -752,6 +756,9 @@ describe("SettingsProvider", () => {
     });
 
     it("reports a failed write", async () => {
+      // The unmount-time flush retries the still-rejecting store after the
+      // spy below is restored, so that late log is declared to the guard.
+      expectConsole(/Failed to save settings/);
       const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       mockStore(null, { setRejects: true });
       await renderFlushConsumer();

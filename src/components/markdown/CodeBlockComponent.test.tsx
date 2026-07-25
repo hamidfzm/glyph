@@ -179,10 +179,10 @@ describe("CodeBlockComponent", () => {
         </CodeBlockComponent>,
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
-      await vi.waitFor(() => {
-        expect(writeTextMock).toHaveBeenCalledWith("const x = 1;");
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
       });
+      expect(writeTextMock).toHaveBeenCalledWith("const x = 1;");
     });
 
     it("shows copied feedback after clicking", async () => {
@@ -192,10 +192,10 @@ describe("CodeBlockComponent", () => {
         </CodeBlockComponent>,
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
-      await vi.waitFor(() => {
-        expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
       });
+      expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
     });
 
     it("reverts to copy icon after timeout", async () => {
@@ -207,10 +207,10 @@ describe("CodeBlockComponent", () => {
         </CodeBlockComponent>,
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
-      await vi.waitFor(() => {
-        expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
       });
+      expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
 
       act(() => {
         vi.advanceTimersByTime(2000);
@@ -229,17 +229,17 @@ describe("CodeBlockComponent", () => {
         </CodeBlockComponent>,
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
-      await vi.waitFor(() => {
-        expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
       });
+      expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
 
       // Copy again while the 2s revert timer is still pending: the existing
       // timer is cleared and restarted, so the button stays in "Copied".
-      fireEvent.click(screen.getByRole("button", { name: "Copied" }));
-      await vi.waitFor(() => {
-        expect(writeTextMock).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Copied" }));
       });
+      expect(writeTextMock).toHaveBeenCalledTimes(2);
       expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
 
       vi.useRealTimers();
