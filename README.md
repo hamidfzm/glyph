@@ -66,6 +66,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 
 ### Platform
 - macOS, Windows, and Linux; native menu bar with remappable shortcuts and update notifications
+- iOS and Android (experimental): open and read single files, with a touch layout for phones and tablets; folder workspaces are desktop-only for now
 - Plugins (experimental): extend rendering, palette, status bar, dictionaries, and themes; sandboxed by default with consent-gated permissions and checksum-verified marketplace installs (see the [plugin docs](https://glyph-md.github.io/plugins/))
 - Local-first with opt-in crash reporting (off by default; see [Privacy & Error Reporting](#privacy--error-reporting))
 
@@ -279,7 +280,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Native window styling | ✅ (vibrancy/Mica) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
 | Native bundle (non-Electron) | ✅ Tauri (~3 MB core) | ❌ | ✅ Qt | ❌ | ❌ | ❌ | ❌ |
 | macOS / Windows / Linux | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Mobile (iOS / Android) | planned | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| Mobile (iOS / Android) | ⚠️ experimental (viewing) | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | File associations + CLI | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ❌ | ✅ |
 | Open source | ✅ MIT | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Free | ✅ | ✅ | $14.99 | ✅ | ✅ | ✅ | ✅ |
