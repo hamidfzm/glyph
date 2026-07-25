@@ -112,6 +112,10 @@
       "label": "自动重新加载",
       "description": "文件在磁盘上更改时重新加载"
     },
+    "autoSave": {
+      "label": "自动保存",
+      "description": "自动将编辑保存到磁盘"
+    },
     "reopenLastFile": {
       "label": "重新打开上次的文件",
       "description": "启动时打开上次查看的文件"

@@ -54,6 +54,8 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
     match id {
         "open" => emit("menu-open-file"),
         "open-folder" => emit("menu-open-folder"),
+        "save" => emit("menu-save"),
+        "toggle-auto-save" => emit("menu-toggle-auto-save"),
         "open-graph" => emit("menu-open-graph"),
         "close-tab" => emit("menu-close-tab"),
         "close-workspace" => emit("menu-close-workspace"),
@@ -178,6 +180,11 @@ mod tests {
         assert_eq!(
             menu_action_for_id("open-folder"),
             Some(emit("menu-open-folder"))
+        );
+        assert_eq!(menu_action_for_id("save"), Some(emit("menu-save")));
+        assert_eq!(
+            menu_action_for_id("toggle-auto-save"),
+            Some(emit("menu-toggle-auto-save"))
         );
         assert_eq!(
             menu_action_for_id("close-tab"),

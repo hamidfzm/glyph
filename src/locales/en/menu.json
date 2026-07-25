@@ -7,6 +7,8 @@
   "export": "Export",
   "open": "Open…",
   "openFolder": "Open Folder…",
+  "save": "Save",
+  "autoSave": "Auto Save",
   "resetView": "Reset View",
   "print": "Print…",
   "exportHtml": "HTML…",
