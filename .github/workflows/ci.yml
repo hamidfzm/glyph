@@ -14,6 +14,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only for every job, including the reusable workflows below: a called
+# workflow can never hold more than the caller grants it.
+permissions:
+  contents: read
+
 # Orchestrator: the actual jobs live in the reusable workflows below.
 jobs:
   pr-title:
@@ -51,7 +56,7 @@ jobs:
     name: Validate Flatpak metadata
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Install validators
         run: |
           sudo apt-get update
