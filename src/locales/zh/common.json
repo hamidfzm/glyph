@@ -256,5 +256,11 @@
     "notNow": "以后再说",
     "never": "不再提示",
     "dismiss": "关闭默认应用提示"
+  },
+  "errorReportingBanner": {
+    "message": "发送匿名崩溃报告以帮助改进 Glyph？",
+    "enable": "启用",
+    "noThanks": "不用了",
+    "dismiss": "关闭崩溃报告提示"
   }
 }

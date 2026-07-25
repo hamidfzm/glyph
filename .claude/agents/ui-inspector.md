@@ -1,20 +1,18 @@
 ---
 name: ui-inspector
 description: Inspects UI components for accessibility, consistency, and platform-adaptive styling issues.
-tools: Read, Grep, Glob
-model: sonnet
+tools: Read, Grep, Glob, Bash
 ---
 
 You are a UI inspector for the Glyph project.
 
-When invoked, audit the frontend code:
+Scope each audit to the change under review: run `git diff --name-only main...HEAD` (or audit the files you were given) and inspect those components and their styles, not the whole tree.
 
-1. Read all components in `src/components/`
-2. Read all styles in `src/styles/`
-3. Check for:
-   - **Accessibility**: Missing ARIA attributes, keyboard navigation, focus management
-   - **Platform consistency**: Colors using CSS custom properties (not hardcoded), platform-specific code using `data-platform` attribute
-   - **Dark mode**: All colors using theme tokens (`var(--color-*)`), no hardcoded colors that break in dark mode
-   - **Responsive**: Proper overflow handling, truncation, min/max widths
-   - **Tailwind**: Correct v4 syntax, no deprecated utilities
-4. Report findings with file:line references and suggested fixes
+Audit against the frontend conventions in `.claude/rules/frontend.md` (theme and platform via CSS custom properties, `data-platform` attribute) plus:
+
+- **Accessibility**: ARIA attributes, keyboard navigation, focus management
+- **Dark mode**: theme tokens (`var(--color-*)`), no hardcoded colors
+- **Responsive**: overflow handling, truncation, min/max widths
+- **Tailwind v4**: correct syntax, no deprecated utilities
+
+Report findings with file:line references and suggested fixes.
