@@ -23,6 +23,7 @@ const installed: InstalledPlugin = {
   version: "1.0.0",
   apiVersion: `^${PLUGIN_API_VERSION}`,
   description: "the alpha plugin",
+  sandbox: false,
   dir: "/p/a.b",
   mainSource: "export default {};",
 };
@@ -107,21 +108,27 @@ describe("PluginsModal", () => {
     expect(screen.queryByText("size: 12")).not.toBeInTheDocument();
   });
 
-  it("shows an installed plugin's declared permissions", () => {
+  it("shows an installed plugin's declared permissions and full-trust marker", () => {
     renderModal(
       ctx({ installed: [{ ...installed, permissions: ["workspace:read", "network:api.test"] }] }),
     );
     expect(
       screen.getByText(
-        (_, el) => el?.textContent === "Permissions: workspace:read, network:api.test",
+        (_, el) => el?.textContent === "Permissions: workspace:read, network:api.test · Full trust",
       ),
     ).toBeInTheDocument();
   });
 
   it("shows an explicit None for plugins without permissions, on both lists", () => {
     renderModal(ctx());
-    // One installed (Alpha, no permissions) and one marketplace entry (Charlie, none declared).
-    expect(screen.getAllByText((_, el) => el?.textContent === "Permissions: None")).toHaveLength(2);
+    // Installed Alpha opted out of the sandbox; marketplace Charlie declares
+    // nothing, which defaults to sandboxed.
+    expect(
+      screen.getByText((_, el) => el?.textContent === "Permissions: None · Full trust"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((_, el) => el?.textContent === "Permissions: None · Sandboxed"),
+    ).toBeInTheDocument();
   });
 
   it("shows a marketplace entry's permissions and sandbox badge before install", () => {
@@ -139,9 +146,10 @@ describe("PluginsModal", () => {
 
   it("marks sandboxed installed plugins", () => {
     renderModal(ctx({ installed: [{ ...installed, sandbox: true }] }));
+    // Both the sandboxed install and the (default-sandboxed) marketplace entry.
     expect(
-      screen.getByText((_, el) => el?.textContent === "Permissions: None · Sandboxed"),
-    ).toBeInTheDocument();
+      screen.getAllByText((_, el) => el?.textContent === "Permissions: None · Sandboxed"),
+    ).toHaveLength(2);
   });
 
   it("toggles an installed plugin's active state", () => {

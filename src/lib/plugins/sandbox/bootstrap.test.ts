@@ -192,6 +192,29 @@ describe("worker bootstrap", () => {
     expect(w.fakeGlobal.importScripts).toBeUndefined();
   });
 
+  it("denies all network access when no network permission is declared", async () => {
+    const realFetch = vi.fn().mockResolvedValue("response");
+    const w = bootWorker(realFetch as unknown as typeof fetch);
+    await w.send(init("export default { activate(){} }", { permissions: ["workspace:read"] }));
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
+
+    const fenced = w.fakeGlobal.fetch as typeof fetch;
+    await expect(fenced("https://example.com/")).rejects.toThrow("not covered");
+    expect(realFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects lookalike hosts that only resemble the declared one", async () => {
+    const realFetch = vi.fn().mockResolvedValue("response");
+    const w = bootWorker(realFetch as unknown as typeof fetch);
+    await w.send(init("export default { activate(){} }", { permissions: ["network:example.com"] }));
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
+
+    const fenced = w.fakeGlobal.fetch as typeof fetch;
+    await expect(fenced("https://evilexample.com/")).rejects.toThrow("not covered");
+    await expect(fenced("https://example.com.evil.net/")).rejects.toThrow("not covered");
+    expect(realFetch).not.toHaveBeenCalled();
+  });
+
   it("reports a plugin without a default activate export as an error", async () => {
     const w = bootWorker();
     await w.send(init("export const nothing = 1;"));

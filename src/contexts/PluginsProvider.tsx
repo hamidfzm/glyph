@@ -1,13 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { PluginStyles } from "@/components/plugins/PluginStyles";
 import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToasts";
 import { PluginsContext } from "@/contexts/PluginsContext";
+import { usePluginConsent } from "@/hooks/usePluginConsent";
 import { registerTranslations } from "@/lib/i18n";
 import { pickPluginDir } from "@/lib/pickers";
 import { loadDisabled, saveDisabled } from "@/lib/plugins/disabledStore";
+import type { PluginGrant } from "@/lib/plugins/grantsStore";
 import { createPluginHost, type LoadedPluginInfo } from "@/lib/plugins/host";
 import {
   installFromRegistry as downloadAndInstall,
@@ -16,7 +16,7 @@ import {
   type RegistryEntry,
 } from "@/lib/plugins/marketplace";
 import { loadPluginSettings, savePluginSettings } from "@/lib/plugins/settingsStore";
-import type { InstalledPlugin } from "@/lib/plugins/types";
+import type { InstalledPlugin, PluginInspection } from "@/lib/plugins/types";
 
 const TOAST_DURATION_MS = 4000;
 
@@ -27,7 +27,8 @@ const TOAST_DURATION_MS = 4000;
  * management modal drives.
  */
 export function PluginsProvider({ children }: { children: ReactNode }) {
-  const { t } = useTranslation("plugins");
+  const { hydrateGrants, hasFullTrust, getGrant, restoreGrant, ensureConsent, revokeGrant } =
+    usePluginConsent();
   const [toasts, setToasts] = useState<PluginToast[]>([]);
   const [installed, setInstalled] = useState<InstalledPlugin[]>([]);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
@@ -64,7 +65,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const dis = await loadDisabled();
+      const [dis] = await Promise.all([loadDisabled(), hydrateGrants()]);
       let all: InstalledPlugin[] = [];
       try {
         const result = await invoke<InstalledPlugin[]>("list_plugins");
@@ -72,9 +73,18 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error("Failed to list installed plugins:", err);
       }
+      // Full-trust plugins never run on an implicit grant: without one they
+      // are parked as disabled for this session, and re-enabling routes
+      // through the warning. Parking is recomputed each launch rather than
+      // persisted, so a transient grants-store read failure cannot overwrite
+      // the user's saved enable choices.
+      const ungranted = all
+        .filter((p) => !p.sandbox && !dis.includes(p.id) && !hasFullTrust(p.id))
+        .map((p) => p.id);
+      const nextDisabled = [...dis, ...ungranted];
       for (const plugin of all) {
         if (cancelled) return;
-        if (dis.includes(plugin.id)) continue; // deactivated: on disk, not loaded
+        if (nextDisabled.includes(plugin.id)) continue; // deactivated: on disk, not loaded
         try {
           await host.load(plugin);
         } catch (err) {
@@ -83,7 +93,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       }
       if (!cancelled) {
         setInstalled(all);
-        setDisabled(dis);
+        setDisabled(nextDisabled);
         setLoaded(host.listLoaded());
         setInitialLoadDone(true);
       }
@@ -98,7 +108,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       host.unloadAll();
     };
-  }, [host]);
+  }, [host, hydrateGrants, hasFullTrust]);
 
   const updates = useMemo(() => findUpdates(installed, registry), [installed, registry]);
 
@@ -134,49 +144,105 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     [pushToast],
   );
 
-  // Native yes/no consent before any code is installed. Installing implies
-  // consent, so re-enabling an already-installed plugin never re-prompts.
-  const confirmInstall = useCallback(
-    (name: string, permissions?: string[]) => {
-      const requests = permissions?.length
-        ? `\n\n${t("consentPermissions")}\n${permissions.map((p) => `- ${p}`).join("\n")}`
-        : "";
-      return ask(`${t("consentBody", { name })}${requests}`, {
-        title: t("consentTitle"),
-        kind: "warning",
-      });
+  const uninstall = useCallback(
+    async (id: string) => {
+      host.unload(id);
+      try {
+        await invoke("uninstall_plugin", { id });
+      } catch (err) {
+        reportFailure(err);
+        return;
+      }
+      setInstalled((prev) => prev.filter((p) => p.id !== id));
+      persistDisabled((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : prev));
+      void revokeGrant(id);
+      setLoaded(host.listLoaded());
     },
-    [t],
+    [host, reportFailure, persistDisabled, revokeGrant],
+  );
+
+  // Consent for what actually landed on disk, which may differ from what the
+  // pre-install prompt described (a package manifest demanding more than the
+  // registry advertised, or the pending picked folder changing between
+  // inspect_plugin and install_plugin). A covered grant makes this a no-op; a
+  // refusal uninstalls the plugin with the full cleanup (unload, state,
+  // grant), since on the update path the previous version is already gone.
+  const consentInstalledOrRollBack = useCallback(
+    async (plugin: InstalledPlugin) => {
+      if (await ensureConsent(plugin)) return true;
+      await uninstall(plugin.id);
+      return false;
+    },
+    [ensureConsent, uninstall],
   );
 
   const installFromFolder = useCallback(async () => {
-    // The backend picker stashes the folder; install_plugin consumes it.
+    // The backend picker stashes the folder; inspect_plugin peeks it and
+    // install_plugin consumes it, so consent shows the manifest's identity,
+    // trust mode, and permissions before any code is copied.
     const dir = await pickPluginDir();
     if (typeof dir !== "string") return; // cancelled
-    // Folder installs read the manifest during install, so consent names the
-    // folder; declared permissions still show afterwards in Manage Plugins.
-    if (!(await confirmInstall(dir))) return;
+    let consentedId: string | null = null;
+    let previousGrant: PluginGrant | undefined;
+    let plugin: InstalledPlugin | null = null;
     try {
-      const plugin = await invoke<InstalledPlugin>("install_plugin");
+      const inspection = await invoke<PluginInspection>("inspect_plugin");
+      previousGrant = await getGrant(inspection.id);
+      if (!(await ensureConsent(inspection))) return;
+      consentedId = inspection.id;
+      plugin = await invoke<InstalledPlugin>("install_plugin");
+      if (!(await consentInstalledOrRollBack(plugin))) return;
       await host.load(plugin);
       afterInstall(plugin);
     } catch (err) {
+      // Nothing was installed, so the grant recorded at consent must not
+      // outlive the failed flow and pre-authorize a future install.
+      if (consentedId !== null && plugin === null) {
+        restoreGrant(consentedId, previousGrant);
+      }
       reportFailure(err);
     }
-  }, [host, afterInstall, reportFailure, confirmInstall]);
+  }, [
+    host,
+    afterInstall,
+    reportFailure,
+    ensureConsent,
+    consentInstalledOrRollBack,
+    getGrant,
+    restoreGrant,
+  ]);
 
   const installFromRegistry = useCallback(
     async (entry: RegistryEntry) => {
-      if (!(await confirmInstall(entry.name, entry.permissions))) return;
+      let consented = false;
+      let previousGrant: PluginGrant | undefined;
+      let plugin: InstalledPlugin | null = null;
       try {
-        const plugin = await downloadAndInstall(entry);
+        previousGrant = await getGrant(entry.id);
+        if (!(await ensureConsent({ ...entry, sandbox: entry.sandbox !== false }))) return;
+        consented = true;
+        plugin = await downloadAndInstall(entry);
+        if (!(await consentInstalledOrRollBack(plugin))) return;
         await host.load(plugin);
         afterInstall(plugin);
       } catch (err) {
+        // See installFromFolder: an accepted consent for a failed install
+        // rolls back to whatever grant existed before.
+        if (consented && plugin === null) {
+          restoreGrant(entry.id, previousGrant);
+        }
         reportFailure(err);
       }
     },
-    [host, afterInstall, reportFailure, confirmInstall],
+    [
+      host,
+      afterInstall,
+      reportFailure,
+      ensureConsent,
+      consentInstalledOrRollBack,
+      getGrant,
+      restoreGrant,
+    ],
   );
 
   const setEnabled = useCallback(
@@ -184,6 +250,9 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       if (enabled) {
         const plugin = installed.find((p) => p.id === id);
         if (!plugin) return;
+        // Covers legacy full-trust plugins parked disabled at startup: the
+        // warning runs here and the grant persists on acceptance.
+        if (!(await ensureConsent(plugin))) return;
         try {
           await host.load(plugin);
         } catch (err) {
@@ -197,23 +266,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       }
       setLoaded(host.listLoaded());
     },
-    [installed, host, reportFailure, persistDisabled],
-  );
-
-  const uninstall = useCallback(
-    async (id: string) => {
-      host.unload(id);
-      try {
-        await invoke("uninstall_plugin", { id });
-      } catch (err) {
-        reportFailure(err);
-        return;
-      }
-      setInstalled((prev) => prev.filter((p) => p.id !== id));
-      persistDisabled((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : prev));
-      setLoaded(host.listLoaded());
-    },
-    [host, reportFailure, persistDisabled],
+    [installed, host, reportFailure, persistDisabled, ensureConsent],
   );
 
   return (

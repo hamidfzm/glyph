@@ -21,8 +21,9 @@ pub struct InstalledPlugin {
     /// Capabilities the plugin declares; shown to the user before install.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub permissions: Vec<String>,
-    /// Run isolated in a worker instead of the app context.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    /// Run isolated in a worker instead of the app context. Always serialized
+    /// so the frontend sees the resolved default (absent manifest flag = true),
+    /// never re-derives it.
     pub sandbox: bool,
     /// Files the plugin consists of (entry + assets), as declared in the
     /// manifest. Empty for legacy two-file plugins (manifest + main only).
@@ -41,7 +42,9 @@ mod test_support;
 #[cfg(test)]
 mod tests;
 
-use store::{install_into, install_package, read_asset_from, scan_plugins_root, uninstall_from};
+use store::{
+    inspect_dir, install_into, install_package, read_asset_from, scan_plugins_root, uninstall_from,
+};
 
 fn plugins_root<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
     app.path()
@@ -55,6 +58,31 @@ pub fn list_plugins<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<Vec<InstalledPlugin>, String> {
     Ok(scan_plugins_root(&plugins_root(&app)?))
+}
+
+/// Metadata of a picked-but-not-yet-installed plugin folder, shown on the
+/// consent dialog before anything is copied.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginInspection {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub permissions: Vec<String>,
+    pub sandbox: bool,
+}
+
+/// Peek the manifest of the folder picked via `pick_plugin_dir` without
+/// consuming the pending slot, so consent can show identity, sandbox mode,
+/// and permissions before `install_plugin` runs.
+#[tauri::command]
+pub fn inspect_plugin(grants: tauri::State<'_, GrantRegistry>) -> Result<PluginInspection, String> {
+    let src_dir = grants
+        .peek_pending_plugin_dir()
+        .ok_or("no plugin folder was picked")?;
+    inspect_dir(&src_dir)
 }
 
 /// Install from the folder picked via `pick_plugin_dir`: the source is

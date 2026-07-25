@@ -120,6 +120,7 @@ describe("PluginMarketplace", () => {
             name: "Demo",
             version: "1.0.0",
             apiVersion: PLUGIN_API_VERSION,
+            sandbox: true,
             dir: "/p",
             mainSource: "",
           },

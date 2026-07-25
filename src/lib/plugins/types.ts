@@ -47,6 +47,9 @@ export interface PluginManifest {
    * get no DOM and network fenced to their `network:` permissions, but only
    * the non-UI API subset: commands, styles, exporters, workspace, settings,
    * notify, and translations. No markdown pipeline or panel mounts.
+   *
+   * Absent defaults to `true`: isolation is the default, and only an explicit
+   * `false` opts into full trust, which needs a distinct user grant.
    */
   sandbox?: boolean;
   /**
@@ -70,14 +73,30 @@ export interface InstalledPlugin {
   description?: string;
   /** Capabilities the plugin declares; shown to the user before install. */
   permissions?: string[];
-  /** Run isolated in a worker; see {@link PluginManifest.sandbox}. */
-  sandbox?: boolean;
+  /**
+   * Run isolated in a worker; see {@link PluginManifest.sandbox}. Always set:
+   * Rust resolves the manifest default (absent = true) before serializing.
+   */
+  sandbox: boolean;
   /** Manifest-declared files; see {@link PluginManifest.files}. */
   files?: string[];
   /** Absolute path of the installed plugin folder. */
   dir: string;
   /** Source text of the plugin's ESM entry file. */
   mainSource: string;
+}
+
+/**
+ * Metadata of a picked-but-not-yet-installed plugin folder, as returned by the
+ * Rust `inspect_plugin` command. Backs the pre-install consent dialog.
+ */
+export interface PluginInspection {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  permissions: string[];
+  sandbox: boolean;
 }
 
 /** A command contributed to the palette. */
