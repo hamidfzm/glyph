@@ -1,0 +1,95 @@
+name: Official Plugin Request
+description: Propose a plugin maintained by the Glyph team (doubles as the implementable spec)
+labels: ["enhancement", "plugin"]
+assignees: ["hamidfzm"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for functionality that should ship as a **plugin** rather than as part of the app: anything opinionated, optional, or only useful to some writers.
+
+        Building your own plugin instead? You don't need an issue: start from [plugin-template](https://github.com/glyph-md/plugin-template) and list it in [the plugin registry](https://github.com/glyph-md/plugins). This template is only for plugins you're asking the Glyph team to build and maintain.
+
+  - type: input
+    id: name
+    attributes:
+      label: Plugin name
+      placeholder: Markdown Linter
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't a writer do today? Who runs into it, and how often?
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What the plugin does
+      description: The user-visible behavior. Commands it adds, UI it shows, when it runs.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: api
+    attributes:
+      label: Plugin API surfaces needed
+      description: Which parts of `ctx` does this need? See the [API reference](https://github.com/glyph-md/plugins/blob/main/docs/api-reference.md).
+      multiple: true
+      options:
+        - ctx.commands
+        - ctx.ui
+        - ctx.markdown
+        - ctx.workspace
+        - ctx.assets
+        - ctx.exporters
+        - ctx.spellcheck
+        - ctx.settings
+        - ctx.notify
+        - ctx.registerTranslations
+        - Something the API doesn't expose yet
+    validations:
+      required: true
+
+  - type: textarea
+    id: api_gap
+    attributes:
+      label: Missing API
+      description: If the current API can't express this, what needs to be added? Adding API surface is a separate change that ships across `plugin-template` and the registry, so call it out early.
+      placeholder: |
+        Needs a way to report per-line diagnostics into the editor gutter.
+
+  - type: textarea
+    id: official
+    attributes:
+      label: Why official rather than community
+      description: Official plugins carry a maintenance cost. What makes this one worth the Glyph team owning it?
+    validations:
+      required: true
+
+  - type: textarea
+    id: prior_art
+    attributes:
+      label: Prior art
+      description: Existing tools or libraries this would wrap or borrow from, and their licenses.
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Observable, testable outcomes that define "done". One per line as a checklist.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, mockups, or screenshots.
