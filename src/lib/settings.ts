@@ -128,7 +128,13 @@ export interface PrivacySettings {
   // Opt-in crash/error reporting to Sentry. Off by default — nothing leaves the
   // machine until the user turns this on, and it stays inert in dev builds.
   errorReporting: boolean;
+  // Answer to the first-run "enable crash reporting?" banner. The banner shows
+  // only while "unanswered", so either answer stops it permanently; the Settings
+  // toggle stays the authoritative control.
+  errorReportingPrompt: ErrorReportingPrompt;
 }
+
+export type ErrorReportingPrompt = "unanswered" | "enabled" | "declined";
 
 // Editor keymap preset for the markdown editor pane. "default" is Glyph's own
 // (CodeMirror default) bindings; "vim" and "vscode" load the matching keymap.
@@ -236,6 +242,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   privacy: {
     errorReporting: false,
+    errorReportingPrompt: "unanswered",
   },
   keybindings: {
     overrides: {},

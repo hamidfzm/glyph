@@ -256,5 +256,11 @@
     "notNow": "Not now",
     "never": "Never",
     "dismiss": "Dismiss default-app prompt"
+  },
+  "errorReportingBanner": {
+    "message": "Help improve Glyph by sending anonymous crash reports?",
+    "enable": "Enable",
+    "noThanks": "No thanks",
+    "dismiss": "Dismiss crash-reporting prompt"
   }
 }

@@ -256,5 +256,11 @@
     "notNow": "Ahora no",
     "never": "Nunca",
     "dismiss": "Descartar aviso de app predeterminada"
+  },
+  "errorReportingBanner": {
+    "message": "¿Ayudar a mejorar Glyph enviando informes de errores anónimos?",
+    "enable": "Activar",
+    "noThanks": "No, gracias",
+    "dismiss": "Descartar aviso de informes de errores"
   }
 }

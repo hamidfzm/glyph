@@ -10,6 +10,7 @@ import { useContextMenu } from "@/hooks/useContextMenu";
 import { useDefaultAppPrompt } from "@/hooks/useDefaultAppPrompt";
 import { useDocumentUndoRedo } from "@/hooks/useDocumentUndoRedo";
 import { useErrorReporting } from "@/hooks/useErrorReporting";
+import { useErrorReportingPrompt } from "@/hooks/useErrorReportingPrompt";
 import { useExport } from "@/hooks/useExport";
 import { useExportSite } from "@/hooks/useExportSite";
 import { useFontZoom } from "@/hooks/useFontZoom";
@@ -34,6 +35,7 @@ import { nextEditorMode } from "@/lib/settings";
 import { AIChatPanel } from "./ai/AIChatPanel";
 import { DefaultAppBanner } from "./layout/DefaultAppBanner";
 import { EmptyState } from "./layout/EmptyState";
+import { ErrorReportingBanner } from "./layout/ErrorReportingBanner";
 import { ExportProgress } from "./layout/ExportProgress";
 import { Sidebar } from "./layout/Sidebar";
 import { StatusBar } from "./layout/StatusBar";
@@ -78,6 +80,7 @@ export function AppShell() {
 
   // One-time first-run nudge to make Glyph the default Markdown app.
   const defaultAppPrompt = useDefaultAppPrompt();
+  const errorReportingPrompt = useErrorReportingPrompt();
 
   const {
     tabs: openTabs,
@@ -287,6 +290,12 @@ export function AppShell() {
           onSetDefault={defaultAppPrompt.setDefault}
           onNotNow={defaultAppPrompt.notNow}
           onNever={defaultAppPrompt.never}
+        />
+      )}
+      {errorReportingPrompt.show && (
+        <ErrorReportingBanner
+          onEnable={errorReportingPrompt.enable}
+          onDecline={errorReportingPrompt.decline}
         />
       )}
       <WorkspaceNoticeBanner

@@ -256,5 +256,11 @@
     "notNow": "Jetzt nicht",
     "never": "Nie",
     "dismiss": "Hinweis zur Standard-App schließen"
+  },
+  "errorReportingBanner": {
+    "message": "Glyph durch das Senden anonymer Fehlerberichte verbessern?",
+    "enable": "Aktivieren",
+    "noThanks": "Nein, danke",
+    "dismiss": "Hinweis zu Fehlerberichten schließen"
   }
 }
