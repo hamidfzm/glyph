@@ -6,12 +6,15 @@ paths:
 
 # Documentation Rules
 
-When shipping a user-facing feature, update in the same commit:
+**`README.md` is a lean overview, not a changelog.** Its `## Features` list stays short: one terse line per capability, grouped by the existing subsections. Do **not** add a bullet for every feature. Most changes need no README edit at all; release notes and the PR history are the changelog.
 
-- **`README.md`**: add a bullet under the relevant `## Features` subsection; if the feature adds a keyboard shortcut, add a row to the `## Keyboard Shortcuts` table
-- **`samples/README.md`**: showcase the feature where applicable (new markdown syntax gets a demo section; new shortcuts go in the shortcuts table). The `samples/` folder also doubles as a demo workspace, so add or update sibling files when introducing workspace-level features (wikilinks, backlinks, etc.)
+Only touch the Features list when a change adds a genuinely new *category* of capability (a new file type, export target, sync backend, etc.), and even then fold it into an existing terse bullet rather than adding a new one where possible. Incremental additions to an existing capability (another shortcut, another toggle, another provider) do not get their own bullet.
 
-Treat these as part of the feature's definition of done, not a follow-up.
+When a feature is worth documenting, still update in the same commit:
+
+- **`samples/README.md`**: showcase new markdown syntax where applicable. The `samples/` folder also doubles as a demo workspace, so add or update sibling files when introducing workspace-level features (wikilinks, backlinks, etc.)
+
+Treat this as part of the feature's definition of done, not a follow-up.
 
 ## Style
 

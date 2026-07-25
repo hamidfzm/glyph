@@ -1,6 +1,7 @@
 name: Feature Request
 description: Suggest a new feature or improvement (doubles as the implementable spec)
 labels: ["enhancement"]
+assignees: ["hamidfzm"]
 body:
   - type: markdown
     attributes:

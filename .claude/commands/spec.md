@@ -27,6 +27,7 @@ Idea: **$ARGUMENTS**
    - Create the issue with an **imperative-mood title** (per CONTRIBUTING.md, e.g. "Add word count to the status bar"):
      ```
      gh issue create --title "<imperative title>" --body "<spec markdown>" \
+       --assignee hamidfzm \
        --label enhancement --label "priority: <low|medium|high>" --label <category>
      ```
      Category labels where they fit: `markdown`, `ui`, `navigation` (check `gh label list` first; omit if none fit).
