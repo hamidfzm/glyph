@@ -51,6 +51,18 @@ describe("pickers", () => {
       defaultName: "note.pdf",
       filterName: "PDF",
       extensions: ["pdf"],
+      defaultDir: undefined,
+    });
+  });
+
+  it("pickSave forwards a default directory when given", async () => {
+    vi.mocked(invoke).mockResolvedValue("/ws/note.md");
+    await expect(pickSave("Untitled-1.md", "Markdown", ["md"], "/ws")).resolves.toBe("/ws/note.md");
+    expect(invoke).toHaveBeenCalledWith("pick_save", {
+      defaultName: "Untitled-1.md",
+      filterName: "Markdown",
+      extensions: ["md"],
+      defaultDir: "/ws",
     });
   });
 

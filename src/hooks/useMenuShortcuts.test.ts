@@ -3,8 +3,30 @@ import { describe, expect, it, vi } from "vitest";
 import type { MenuEventHandlers } from "./useMenuEvents";
 import { useMenuShortcuts } from "./useMenuShortcuts";
 
+// A registry entry nothing else knows about: no handler in menuEventActions and
+// no accelerator from resolveBindings. Registering a menu command without
+// wiring it up must skip the binding rather than throw.
+vi.mock("@/lib/keybindings", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/keybindings")>();
+  return {
+    ...actual,
+    BINDABLE_COMMANDS: [
+      ...actual.BINDABLE_COMMANDS,
+      {
+        id: "unwired",
+        label: "Unwired",
+        category: "File",
+        defaultAccelerator: "CmdOrCtrl+J",
+        event: "menu-unwired",
+        nativeMenu: true,
+      },
+    ],
+  };
+});
+
 function makeHandlers(): MenuEventHandlers {
   return {
+    newDocument: vi.fn(),
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),
@@ -95,6 +117,16 @@ describe("useMenuShortcuts", () => {
     const event = dispatch({ code: "KeyO", key: "o" });
     expect(handlers.openFile).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("skips a registered command that has no handler wired up", () => {
+    const { handlers } = setup();
+    const event = dispatch({ code: "KeyJ", key: "j", ctrlKey: true });
+    // Nothing fires, the key is left for the page, and no error is thrown.
+    expect(event.defaultPrevented).toBe(false);
+    for (const handler of Object.values(handlers)) {
+      expect(handler).not.toHaveBeenCalled();
+    }
   });
 
   it("stops listening after unmount", () => {

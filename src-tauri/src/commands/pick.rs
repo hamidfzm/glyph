@@ -66,19 +66,24 @@ pub async fn pick_files<R: Runtime>(
 }
 
 /// Export save dialog: pick a destination file and grant it write-only.
+/// `default_dir` preselects a starting folder (the open workspace) when given.
 #[tauri::command]
 pub async fn pick_save<R: Runtime>(
     app: AppHandle<R>,
     default_name: String,
     filter_name: String,
     extensions: Vec<String>,
+    default_dir: Option<String>,
 ) -> Result<Option<String>, String> {
     let exts: Vec<&str> = extensions.iter().map(String::as_str).collect();
-    let dialog = app
+    let mut dialog = app
         .dialog()
         .file()
         .set_file_name(default_name)
         .add_filter(filter_name, &exts);
+    if let Some(dir) = default_dir {
+        dialog = dialog.set_directory(dir);
+    }
     let picked = tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file())
         .await
         .map_err(|e| e.to_string())?;

@@ -4188,6 +4188,13 @@ describe("useTabs moveTab / moveActiveTab", () => {
 });
 
 describe("mobile file opening", () => {
+  // These tests flip the platform mock to mobile; restore it so later describes
+  // don't silently take the mobile read path.
+  afterEach(async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("macos");
+  });
+
   it("reads picked files via the fs plugin and skips metadata and watch", async () => {
     const { platform } = await import("@tauri-apps/plugin-os");
     vi.mocked(platform).mockReturnValue("android");
@@ -4248,6 +4255,50 @@ describe("useTabs in-memory documents", () => {
       expect(tab.file.path).toMatch(/^Untitled-\d+$/);
     }
     expect(result.current.activeTabId).toBe(tab.id);
+  });
+
+  it("keeps a virtual buffer's content in sync so the preview renders it", async () => {
+    // Regression: the view/preview pane reads file.content, which stayed "" for
+    // an unsaved buffer, so switching an untitled doc to preview showed nothing.
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    act(() => {
+      result.current.newDocument();
+    });
+    const virtualId = result.current.tabs[0].id;
+    act(() => {
+      result.current.updateEditContent(virtualId, "# hello");
+    });
+
+    const virtualTab = result.current.tabs[0];
+    if (virtualTab.kind === "file") {
+      expect(virtualTab.file.editContent).toBe("# hello");
+      expect(virtualTab.file.content).toBe("# hello");
+    }
+  });
+
+  it("leaves a saved file's content untouched while editing", async () => {
+    // The sync above must not leak into ordinary tabs: their content stays the
+    // last-saved text until a write lands.
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ read_file: async () => "ON DISK" }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    const fileId = result.current.tabs[0].id;
+    act(() => {
+      result.current.updateEditContent(fileId, "TYPED");
+    });
+
+    const fileTab = result.current.tabs[0];
+    if (fileTab.kind === "file") {
+      expect(fileTab.file.editContent).toBe("TYPED");
+      expect(fileTab.file.content).toBe("ON DISK");
+    }
   });
 
   it("saveDocument on a virtual tab writes via Save As and adopts the path", async () => {
@@ -4315,6 +4366,7 @@ describe("useTabs in-memory documents", () => {
 
   it("saveDocument surfaces a notice and stays virtual when the write fails", async () => {
     const onWorkspaceNotice = vi.fn();
+    expectConsole(/Failed to save document/);
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         write_file: async () => {

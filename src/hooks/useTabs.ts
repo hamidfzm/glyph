@@ -997,6 +997,9 @@ export function useTabs(options: UseTabsOptions) {
       updateActiveFile(id, (f) => ({
         ...f,
         editContent,
+        // A virtual buffer has no disk copy, so its edits are its content;
+        // without this the view/preview pane would render an empty document.
+        ...(f.virtual ? { content: editContent } : {}),
         dirty: true,
         revision: f.revision + 1,
       }));
@@ -1027,10 +1030,12 @@ export function useTabs(options: UseTabsOptions) {
       /* v8 ignore start -- unreachable: editContent is never null for a virtual tab */
       const content = file.editContent ?? "";
       /* v8 ignore stop */
+      // Default into the open workspace so a new note lands beside its siblings.
       const target = await pickSave(
         `${file.path}.md`,
         t("common:fileDialog.markdown"),
         MARKDOWN_EXTENSIONS as string[],
+        workspaceRef.current?.root,
       );
       if (!target) return false;
       try {

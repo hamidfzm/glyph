@@ -30,13 +30,15 @@ export async function pickFiles(filters: PickFilter[]): Promise<string[] | null>
   return invoke<string[] | null>("pick_files", { filters });
 }
 
-/** Save dialog for exports; grants the target write-only. */
+/** Save dialog for exports; grants the target write-only. `defaultDir` picks the
+ *  folder it opens in (the workspace root when saving a new note). */
 export function pickSave(
   defaultName: string,
   filterName: string,
   extensions: string[],
+  defaultDir?: string,
 ): Promise<string | null> {
-  return invoke<string | null>("pick_save", { defaultName, filterName, extensions });
+  return invoke<string | null>("pick_save", { defaultName, filterName, extensions, defaultDir });
 }
 
 /** Folder picker for website export; grants the folder write-only. */
