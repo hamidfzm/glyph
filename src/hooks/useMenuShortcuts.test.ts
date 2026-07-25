@@ -53,8 +53,8 @@ function setup(platform: "windows" | "macos" = "windows") {
 
 describe("useMenuShortcuts", () => {
   // Regression: every command whose only trigger was a native menu accelerator
-  // (Open, Find, Print, zoom, ...) did nothing on Windows, because WebView2
-  // consumes the keys before the menu sees them.
+  // (Open, Find, Print, zoom, ...) did nothing on Windows, because nothing in
+  // the Tauri stack calls TranslateAcceleratorW on muda's accelerator table.
   it.each([
     ["opens a file on Ctrl+O", { code: "KeyO", key: "o" }, "openFile"],
     ["opens a folder on Ctrl+Shift+O", { code: "KeyO", key: "o", shiftKey: true }, "openFolder"],

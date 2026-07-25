@@ -16,23 +16,30 @@ interface UseMenuShortcutsOptions {
 const HANDLED_ELSEWHERE = new Set(["open-command-palette"]);
 
 /**
- * Keyboard fallback for the native menu accelerators.
+ * Keyboard fallback for the native menu accelerators, which never fire on
+ * Windows.
  *
- * On Windows the WebView2 child window consumes key combinations before the
- * native menu sees them, so every command whose only trigger is a menu
- * accelerator (Open, Save, Find, Print, zoom, ...) does nothing, while the menu
- * item still works when clicked. Commands registered with `nativeMenu: false`
- * already have their own listeners and are skipped, as is anything in
- * HANDLED_ELSEWHERE.
+ * muda builds a Win32 accelerator table, but that table only does anything if
+ * the host's message loop calls `TranslateAcceleratorW` (muda exposes
+ * `Menu::haccel()` for exactly this). Tauri's windowing layer never does, so
+ * every command whose only trigger is a menu accelerator (Open, Save, Find,
+ * Print, zoom, ...) does nothing while its menu item still works when clicked.
  *
- * macOS delivers menu accelerators reliably, so the fallback stays off there to
- * avoid running an action twice.
+ * The other platforms deliver accelerators themselves, so the fallback stays
+ * off there to avoid running an action twice: macOS attaches them as NSMenuItem
+ * key equivalents (handled before the responder chain) and GTK adds an accel
+ * group to the window (handled before the focused widget).
+ *
+ * Commands registered with `nativeMenu: false` already have their own document
+ * listeners and are skipped, as is anything in HANDLED_ELSEWHERE.
  */
 export function useMenuShortcuts({ platform, handlers }: UseMenuShortcutsOptions) {
   const { settings } = useSettings();
   const overrides = settings.keybindings.overrides;
 
   useEffect(() => {
+    // Windows only: see the note above on how each platform delivers (or fails
+    // to deliver) menu accelerators.
     if (platform !== "windows") return;
     const resolved = resolveBindings(overrides);
     const actions = menuEventActions(handlers);
