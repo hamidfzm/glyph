@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SidebarLayoutContext,
   type SidebarLayoutContextValue,
@@ -10,7 +10,9 @@ import { activeFileOf, type FileTab, type GraphTab, type Tab } from "@/hooks/use
 import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 import { TabBar } from "./TabBar";
 
-const sidebarContext: SidebarLayoutContextValue = {
+const buildSidebarContext = (
+  overrides: Partial<SidebarLayoutContextValue> = {},
+): SidebarLayoutContextValue => ({
   filesVisible: true,
   outlineVisible: true,
   compact: false,
@@ -26,7 +28,8 @@ const sidebarContext: SidebarLayoutContextValue = {
   setFilesSidebarWidth: vi.fn(),
   setOutlineSidebarWidth: vi.fn(),
   setBacklinksHeight: vi.fn(),
-};
+  ...overrides,
+});
 
 const makeFileTab = (i: number): FileTab => ({
   id: `tab-${i}`,
@@ -60,6 +63,9 @@ interface RenderOpts {
   closeTab?: (id: string) => Promise<void>;
   setTabMode?: TabsContextValue["setTabMode"];
   moveTab?: (id: string, toIndex: number) => void;
+  tocEntries?: TabsContextValue["tocEntries"];
+  openFileDialog?: TabsContextValue["openFileDialog"];
+  sidebar?: Partial<SidebarLayoutContextValue>;
 }
 
 function buildContext(opts: RenderOpts): TabsContextValue {
@@ -101,36 +107,44 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     flushForClose: vi.fn(),
     toggleTask: vi.fn(),
     saveScrollPosition: vi.fn(),
-    openFileDialog: vi.fn(),
+    openFileDialog: opts.openFileDialog ?? vi.fn(),
     undoEdit: vi.fn(),
     redoEdit: vi.fn(),
     displayContent: null,
-    tocEntries: [],
+    tocEntries: opts.tocEntries ?? [],
     backlinks: [],
     workspaceNotice: null,
     dismissWorkspaceNotice: vi.fn(),
   };
 }
 
-function Wrapper({ value, children }: { value: TabsContextValue; children: ReactNode }) {
+function Wrapper({
+  value,
+  sidebar,
+  children,
+}: {
+  value: TabsContextValue;
+  sidebar: SidebarLayoutContextValue;
+  children: ReactNode;
+}) {
   return (
     <TabsContext.Provider value={value}>
-      <SidebarLayoutContext.Provider value={sidebarContext}>
-        {children}
-      </SidebarLayoutContext.Provider>
+      <SidebarLayoutContext.Provider value={sidebar}>{children}</SidebarLayoutContext.Provider>
     </TabsContext.Provider>
   );
 }
 
 function renderTabBar(opts: RenderOpts = {}, onToggleAIChat: (() => void) | null = null) {
   const value = buildContext(opts);
+  const sidebar = buildSidebarContext(opts.sidebar);
   return {
     ...render(
-      <Wrapper value={value}>
+      <Wrapper value={value} sidebar={sidebar}>
         <TabBar onToggleAIChat={onToggleAIChat} />
       </Wrapper>,
     ),
     value,
+    sidebar,
   };
 }
 
@@ -406,5 +420,94 @@ describe("TabBar", () => {
     for (const button of container.querySelectorAll("button")) {
       expect(button.querySelector("button")).toBeNull();
     }
+  });
+});
+
+describe("TabBar on mobile", () => {
+  const heading = [{ id: "h1", text: "Heading", level: 1 }];
+
+  beforeEach(async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("android");
+  });
+
+  afterEach(async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("macos");
+  });
+
+  // Mobile has no native menu or keyboard shortcut, so the tab bar is the only
+  // way to open another file once a tab is showing.
+  it("offers Open File and runs the picker", () => {
+    const openFileDialog = vi.fn();
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0", openFileDialog });
+    fireEvent.click(screen.getByRole("button", { name: "Open File" }));
+    expect(openFileDialog).toHaveBeenCalled();
+  });
+
+  it("keeps Open File off the desktop tab bar", async () => {
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("macos");
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0" });
+    expect(screen.queryByRole("button", { name: "Open File" })).not.toBeInTheDocument();
+  });
+
+  it("toggles the outline drawer from the tab bar", () => {
+    const toggleOutline = vi.fn();
+    renderTabBar({
+      tabs: makeTabs(1),
+      activeTabId: "tab-0",
+      tocEntries: heading,
+      sidebar: { outlineVisible: false, toggleOutline },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Show outline sidebar" }));
+    expect(toggleOutline).toHaveBeenCalled();
+  });
+
+  it("labels the outline button as hide while the drawer is open", () => {
+    renderTabBar({
+      tabs: makeTabs(1),
+      activeTabId: "tab-0",
+      tocEntries: heading,
+      sidebar: { outlineVisible: true },
+    });
+    expect(screen.getByRole("button", { name: "Hide outline sidebar" })).toBeInTheDocument();
+  });
+
+  it("hides the outline button for a document with no headings", () => {
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0", tocEntries: [] });
+    expect(screen.queryByRole("button", { name: /outline sidebar/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("TabBar on a viewport too small to split", () => {
+  const originalMatchMedia = window.matchMedia;
+
+  beforeEach(() => {
+    window.matchMedia = vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it("hides the Split button", () => {
+    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0" });
+    expect(screen.queryByLabelText("Split mode")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("View mode")).toBeInTheDocument();
+    expect(screen.getByLabelText("Edit mode")).toBeInTheDocument();
+  });
+
+  // A tab persisted as split from a desktop session renders as the read-only
+  // view here, so View is the button that reads as active.
+  it("marks View active for a tab stored as split", () => {
+    const splitTab = makeFileTab(0);
+    splitTab.file.mode = "split";
+    renderTabBar({ tabs: [splitTab], activeTabId: "tab-0" });
+    expect(screen.getByLabelText("View mode")).toHaveAttribute("data-active", "true");
   });
 });
