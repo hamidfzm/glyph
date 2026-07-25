@@ -41,7 +41,7 @@ export function Sidebar({ side }: SidebarProps) {
     tocEntries,
     backlinks,
     toggleExpand: onToggleExpand,
-    openFile: onOpenFile,
+    openFile: onOpenFileRaw,
     closeWorkspace,
     createNote,
     createCanvas,
@@ -71,6 +71,8 @@ export function Sidebar({ side }: SidebarProps) {
     filesSidebarWidth,
     outlineSidebarWidth,
     backlinksHeight,
+    compact,
+    closeCompactPanels,
     setFilesSidebarWidth,
     setOutlineSidebarWidth,
     setBacklinksHeight,
@@ -78,6 +80,16 @@ export function Sidebar({ side }: SidebarProps) {
     toggleOutline: onToggleOutline,
   } = useSidebarLayoutContext();
   const activeId = useActiveHeading(tocEntries);
+
+  // On a phone the sidebar is a drawer over the document, so opening a file
+  // dismisses it — otherwise the freshly opened doc stays hidden behind it.
+  const onOpenFile = useCallback(
+    (path: string) => {
+      onOpenFileRaw(path);
+      if (compact) closeCompactPanels();
+    },
+    [onOpenFileRaw, compact, closeCompactPanels],
+  );
 
   // Vertical divider between the file tree and the backlinks block. The idle
   // height is DOM-measured so a drag starts from the rendered height even when

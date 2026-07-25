@@ -371,7 +371,13 @@ export function useTabs(options: UseTabsOptions) {
       // (`.ipynb`) are allowed — they take the dedicated NotebookViewer path.
       // Images/SVGs are allowed too — they render in the read-only image
       // viewer, never as text. See memory/reject-unsupported-file-types.md.
-      if (!isSupportedFile(path) && !isImageFile(path)) {
+      // Android's document picker returns opaque `content://` URIs with no file
+      // extension, so the extension-based check below can't classify them. The
+      // picker's own type filters already restricted selection to supported
+      // files, so trust them here. (iOS returns `file://` URLs that keep the
+      // extension and take the normal path.)
+      const isAndroidContentUri = path.startsWith("content://");
+      if (!isAndroidContentUri && !isSupportedFile(path) && !isImageFile(path)) {
         console.warn(`Refusing to open unsupported file: ${path}`);
         return;
       }

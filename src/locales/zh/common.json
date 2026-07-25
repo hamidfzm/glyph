@@ -25,6 +25,7 @@
     "hideOutline": "隐藏大纲侧边栏",
     "showFiles": "显示文件侧边栏",
     "showOutline": "显示大纲侧边栏",
+    "closeDrawer": "关闭",
     "newNote": "新建笔记",
     "newFolder": "新建文件夹",
     "collapseAll": "全部折叠",

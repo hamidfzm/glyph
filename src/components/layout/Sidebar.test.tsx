@@ -61,6 +61,8 @@ interface RenderOpts {
   tocEntries?: TocEntry[];
   filesVisible?: boolean;
   outlineVisible?: boolean;
+  compact?: boolean;
+  closeCompactPanels?: () => void;
   sidebarLayout?: SidebarLayout;
   swapSidebarSides?: boolean;
   toggleFiles?: () => void;
@@ -128,6 +130,8 @@ function buildSidebarContext(opts: RenderOpts): SidebarLayoutContextValue {
   return {
     filesVisible: opts.filesVisible ?? true,
     outlineVisible: opts.outlineVisible ?? true,
+    compact: opts.compact ?? false,
+    closeCompactPanels: opts.closeCompactPanels ?? vi.fn(),
     toggleFiles: opts.toggleFiles ?? vi.fn(),
     toggleOutline: opts.toggleOutline ?? vi.fn(),
     resetLayout: vi.fn(),

@@ -5,6 +5,7 @@ import {
   CONTENT_WIDTH_MAP,
   DEFAULT_SETTINGS,
   EDITOR_MODE,
+  effectiveEditorMode,
   FONT_FAMILY_MAP,
   LINE_HEIGHT_MAP,
   MODEL_SUGGESTIONS,
@@ -135,5 +136,24 @@ describe("nextEditorMode", () => {
 
   it("treats an undefined current mode as view (cycles to edit)", () => {
     expect(nextEditorMode(undefined)).toBe(EDITOR_MODE.edit);
+  });
+
+  it("skips split on a narrow viewport (view → edit → view)", () => {
+    expect(nextEditorMode(EDITOR_MODE.view, false)).toBe(EDITOR_MODE.edit);
+    expect(nextEditorMode(EDITOR_MODE.edit, false)).toBe(EDITOR_MODE.view);
+    // A tab already stored as split advances to edit, not back into split.
+    expect(nextEditorMode(EDITOR_MODE.split, false)).toBe(EDITOR_MODE.edit);
+  });
+});
+
+describe("effectiveEditorMode", () => {
+  it("collapses split to view when the viewport is too narrow to split", () => {
+    expect(effectiveEditorMode(EDITOR_MODE.split, false)).toBe(EDITOR_MODE.view);
+  });
+
+  it("leaves the stored mode untouched when split fits or the mode isn't split", () => {
+    expect(effectiveEditorMode(EDITOR_MODE.split, true)).toBe(EDITOR_MODE.split);
+    expect(effectiveEditorMode(EDITOR_MODE.edit, false)).toBe(EDITOR_MODE.edit);
+    expect(effectiveEditorMode(EDITOR_MODE.view, false)).toBe(EDITOR_MODE.view);
   });
 });

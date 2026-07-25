@@ -1,10 +1,32 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import {
+  SidebarLayoutContext,
+  type SidebarLayoutContextValue,
+} from "@/contexts/SidebarLayoutContext";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import { activeFileOf, type FileTab, type GraphTab, type Tab } from "@/hooks/useTabs";
 import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 import { TabBar } from "./TabBar";
+
+const sidebarContext: SidebarLayoutContextValue = {
+  filesVisible: true,
+  outlineVisible: true,
+  compact: false,
+  closeCompactPanels: vi.fn(),
+  toggleFiles: vi.fn(),
+  toggleOutline: vi.fn(),
+  resetLayout: vi.fn(),
+  sidebarLayout: "split",
+  swapSidebarSides: false,
+  filesSidebarWidth: 200,
+  outlineSidebarWidth: 260,
+  backlinksHeight: null,
+  setFilesSidebarWidth: vi.fn(),
+  setOutlineSidebarWidth: vi.fn(),
+  setBacklinksHeight: vi.fn(),
+};
 
 const makeFileTab = (i: number): FileTab => ({
   id: `tab-${i}`,
@@ -91,7 +113,13 @@ function buildContext(opts: RenderOpts): TabsContextValue {
 }
 
 function Wrapper({ value, children }: { value: TabsContextValue; children: ReactNode }) {
-  return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;
+  return (
+    <TabsContext.Provider value={value}>
+      <SidebarLayoutContext.Provider value={sidebarContext}>
+        {children}
+      </SidebarLayoutContext.Provider>
+    </TabsContext.Provider>
+  );
 }
 
 function renderTabBar(opts: RenderOpts = {}, onToggleAIChat: (() => void) | null = null) {

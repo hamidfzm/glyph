@@ -14,6 +14,7 @@ import { useErrorReportingPrompt } from "@/hooks/useErrorReportingPrompt";
 import { useExport } from "@/hooks/useExport";
 import { useExportSite } from "@/hooks/useExportSite";
 import { useFontZoom } from "@/hooks/useFontZoom";
+import { useCanSplit } from "@/hooks/useMediaQuery";
 import { useMenuEvents } from "@/hooks/useMenuEvents";
 import { useNativeKeybindings } from "@/hooks/useNativeKeybindings";
 import { useNativeMenuLabels } from "@/hooks/useNativeMenuLabels";
@@ -38,6 +39,7 @@ import { EmptyState } from "./layout/EmptyState";
 import { ErrorReportingBanner } from "./layout/ErrorReportingBanner";
 import { ExportProgress } from "./layout/ExportProgress";
 import { Sidebar } from "./layout/Sidebar";
+import { SidebarDrawerBackdrop } from "./layout/SidebarDrawerBackdrop";
 import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
 import { UpdateBanner } from "./layout/UpdateBanner";
@@ -177,12 +179,15 @@ export function AppShell() {
     if (activeTabId) closeTab(activeTabId);
   }, [activeTabId, closeTab]);
 
+  // Narrow (phone) viewports drop split from the cycle, so the toggle goes
+  // view → edit → view.
+  const canSplit = useCanSplit();
   const handleToggleEdit = useCallback(() => {
     if (!activeTabId) return;
     // nextEditorMode treats an undefined mode as view, so no fallback branch
     // is needed at the call site.
-    setTabMode(activeTabId, nextEditorMode(activeFile?.mode));
-  }, [activeTabId, activeFile?.mode, setTabMode]);
+    setTabMode(activeTabId, nextEditorMode(activeFile?.mode, canSplit));
+  }, [activeTabId, activeFile?.mode, setTabMode, canSplit]);
 
   const handleSave = useCallback(() => {
     if (activeTabId) saveDocument(activeTabId);
@@ -301,7 +306,18 @@ export function AppShell() {
   const showContent = activeTab?.kind === "graph" || showDocument;
 
   return (
-    <div className="flex flex-col h-full bg-[var(--color-surface)]">
+    // Safe-area insets pad the whole shell so whatever sits at each edge — a
+    // banner or the tab bar at the top, the status bar at the bottom — clears
+    // the status bar / cutout / home indicator. The bottom bar adds its own
+    // gesture-nav floor on top of this (see .status-bar).
+    <div
+      className="flex flex-col h-full bg-[var(--color-surface)]"
+      style={{
+        paddingTop: "var(--glyph-safe-top)",
+        paddingLeft: "var(--glyph-safe-left)",
+        paddingRight: "var(--glyph-safe-right)",
+      }}
+    >
       <UpdateBanner update={updateCheck.update} onDismiss={updateCheck.dismiss} />
       {defaultAppPrompt.show && (
         <DefaultAppBanner
@@ -321,7 +337,8 @@ export function AppShell() {
         onDismiss={tabs.dismissWorkspaceNotice}
       />
       <TabBar onToggleAIChat={aiController.configured ? aiController.togglePanel : null} />
-      <div className="flex flex-1 min-h-0">
+      <div className="relative flex flex-1 min-h-0">
+        <SidebarDrawerBackdrop />
         <Sidebar side="left" />
         {showContent ? (
           <TabContent searchOpen={searchOpen} onSearchClose={() => setSearchOpen(false)} />

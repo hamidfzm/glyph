@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useCanSplit } from "@/hooks/useMediaQuery";
 import { AI_PANEL_WIDTH_DEFAULT, type Settings, SIDEBAR_WIDTH_DEFAULT } from "@/lib/settings";
 
 interface UseSidebarLayoutOptions {
@@ -17,6 +18,13 @@ export function useSidebarLayout({
 }: UseSidebarLayoutOptions) {
   const [filesVisible, setFilesVisible] = useState(filesVisibleSetting);
   const [outlineVisible, setOutlineVisible] = useState(outlineVisibleSetting);
+  // On a narrow (phone) viewport the sidebars are drawers overlaying the
+  // document, so they default closed and toggle local state instead of the
+  // persisted desktop visibility — resizing back to a wide window restores
+  // whatever the user had there.
+  const compact = !useCanSplit();
+  const [compactFilesOpen, setCompactFilesOpen] = useState(false);
+  const [compactOutlineOpen, setCompactOutlineOpen] = useState(false);
 
   useEffect(() => {
     setFilesVisible(filesVisibleSetting);
@@ -30,16 +38,30 @@ export function useSidebarLayout({
   // side effect there updates SettingsProvider mid-render and can cascade
   // into an update-depth loop.
   const toggleFiles = useCallback(() => {
+    if (compact) {
+      setCompactFilesOpen((v) => !v);
+      return;
+    }
     const next = !filesVisible;
     setFilesVisible(next);
     updateSettings("layout.filesSidebarVisible", next);
-  }, [filesVisible, updateSettings]);
+  }, [compact, filesVisible, updateSettings]);
 
   const toggleOutline = useCallback(() => {
+    if (compact) {
+      setCompactOutlineOpen((v) => !v);
+      return;
+    }
     const next = !outlineVisible;
     setOutlineVisible(next);
     updateSettings("layout.outlineSidebarVisible", next);
-  }, [outlineVisible, updateSettings]);
+  }, [compact, outlineVisible, updateSettings]);
+
+  // Dismiss the compact drawers (backdrop tap, or after opening a file).
+  const closeCompactPanels = useCallback(() => {
+    setCompactFilesOpen(false);
+    setCompactOutlineOpen(false);
+  }, []);
 
   const setFilesSidebarWidth = useCallback(
     (width: number) => updateSettings("layout.filesSidebarWidth", width),
@@ -68,8 +90,12 @@ export function useSidebarLayout({
   }, [updateSettings]);
 
   return {
-    filesVisible,
-    outlineVisible,
+    filesVisible: compact ? compactFilesOpen : filesVisible,
+    outlineVisible: compact ? compactOutlineOpen : outlineVisible,
+    // Phone drawers overlay the document instead of pushing it; consumers use
+    // this to switch the panel to an overlay and show a dismiss backdrop.
+    compact,
+    closeCompactPanels,
     toggleFiles,
     toggleOutline,
     setFilesSidebarWidth,

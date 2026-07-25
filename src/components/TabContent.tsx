@@ -1,10 +1,11 @@
 import { useCallback } from "react";
 import { useTabsContext } from "@/contexts/TabsContext";
+import { useCanSplit } from "@/hooks/useMediaQuery";
 import { useTaskList } from "@/hooks/useTaskList";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isImageFile } from "@/lib/imageExtensions";
 import { isNotebookFile } from "@/lib/notebookExtensions";
-import { EDITOR_MODE } from "@/lib/settings";
+import { EDITOR_MODE, effectiveEditorMode } from "@/lib/settings";
 import { CanvasEditor, CanvasViewer } from "./canvas/lazyCanvas";
 import { MarkdownEditor, SplitView } from "./editor/lazyEditor";
 import { GraphView } from "./graph/lazyGraph";
@@ -41,6 +42,9 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   );
 
   const { handleToggle: handleTaskToggle } = useTaskList({ activeTabId, toggleTask });
+  // Split needs two panes' width; on a narrow (phone) viewport a split tab
+  // renders as the single-pane view instead. See effectiveEditorMode.
+  const canSplit = useCanSplit();
 
   const handleEditorChange = useCallback(
     (newContent: string) => {
@@ -78,6 +82,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   // `activeTab` is narrowed to a file tab here (graph returned above), so its
   // file is always present.
   const file = activeTab.file;
+  const mode = effectiveEditorMode(file.mode, canSplit);
 
   // Image/SVG tabs carry no text content (they're never read as text); they
   // render straight from the asset protocol in the read-only image viewer.
@@ -97,9 +102,9 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   // would let autosave write malformed content back and corrupt the file.
   if (isNotebookFile(file.path)) {
     const NotebookComponent =
-      file.mode === EDITOR_MODE.view
+      mode === EDITOR_MODE.view
         ? NotebookViewer
-        : file.mode === EDITOR_MODE.split
+        : mode === EDITOR_MODE.split
           ? NotebookSplit
           : NotebookSource;
     return (
@@ -146,7 +151,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     );
   }
 
-  if (file.mode === EDITOR_MODE.edit) {
+  if (mode === EDITOR_MODE.edit) {
     return (
       <div className="flex-1 overflow-hidden">
         <MarkdownEditor
@@ -158,7 +163,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     );
   }
 
-  if (file.mode === EDITOR_MODE.split) {
+  if (mode === EDITOR_MODE.split) {
     return (
       <div className="flex-1 overflow-hidden">
         <SplitView
