@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { load } from "@tauri-apps/plugin-store";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { pickPluginDir } from "@/lib/pickers";
@@ -101,6 +101,12 @@ describe("PluginsProvider", () => {
     vi.mocked(invoke).mockResolvedValue(undefined);
     vi.mocked(load).mockReset();
     vi.mocked(load).mockResolvedValue(grantedStore() as never);
+    // The provider fetches the marketplace index on every mount; the global
+    // setup stub answers ok: false, which would log a fetch failure in every
+    // test. Serve an empty index instead; fetch-driven tests restub per case.
+    globalThis.fetch = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ plugins: [] }) } as Response),
+    ) as unknown as typeof fetch;
   });
 
   it("hydrates and persists plugin settings through the store", async () => {
@@ -545,21 +551,33 @@ describe("PluginsProvider", () => {
     );
     await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
 
+    // These handlers set state synchronously (unload path) or in a microtask
+    // tail the following waitFor can miss, so each click settles inside act.
     // Enabling an id that is not installed is a no-op.
-    screen.getByRole("button", { name: "on-absent" }).click();
+    await act(async () => {
+      screen.getByRole("button", { name: "on-absent" }).click();
+    });
     // Enabling an already-enabled plugin stays enabled and never marks it disabled.
-    screen.getByRole("button", { name: "on" }).click();
+    await act(async () => {
+      screen.getByRole("button", { name: "on" }).click();
+    });
     await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
     expect(screen.getByTestId("disabled").textContent).toBe("");
 
     // Disabling twice keeps a single disabled entry.
-    screen.getByRole("button", { name: "off" }).click();
+    await act(async () => {
+      screen.getByRole("button", { name: "off" }).click();
+    });
     await waitFor(() => expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo"));
-    screen.getByRole("button", { name: "off" }).click();
+    await act(async () => {
+      screen.getByRole("button", { name: "off" }).click();
+    });
     await waitFor(() => expect(screen.getByTestId("disabled").textContent).toBe("com.x.demo"));
 
     // Uninstalling a disabled plugin clears both lists.
-    screen.getByRole("button", { name: "rm" }).click();
+    await act(async () => {
+      screen.getByRole("button", { name: "rm" }).click();
+    });
     await waitFor(() => expect(screen.getByTestId("installed").textContent).toBe(""));
     expect(screen.getByTestId("disabled").textContent).toBe("");
   });
@@ -813,12 +831,19 @@ describe("PluginsProvider", () => {
       packageUrl: "https://example.test/plugin.zip",
       sha256: "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
     };
+    // URL-aware: the mount-time registry fetch needs json, the package
+    // download needs arrayBuffer.
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer),
-      }),
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          Promise.resolve(
+            url === entry.packageUrl
+              ? { ok: true, arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer) }
+              : { ok: true, json: () => Promise.resolve({ plugins: [] }) },
+          ),
+        ),
     );
     vi.mocked(invoke).mockImplementation((cmd) => {
       if (cmd === "list_plugins")
@@ -937,12 +962,19 @@ describe("PluginsProvider", () => {
       packageUrl: "https://example.test/plugin.zip",
       sha256: "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
     };
+    // URL-aware: the mount-time registry fetch needs json, the package
+    // download needs arrayBuffer.
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer),
-      }),
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          Promise.resolve(
+            url === entry.packageUrl
+              ? { ok: true, arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer) }
+              : { ok: true, json: () => Promise.resolve({ plugins: [] }) },
+          ),
+        ),
     );
     vi.mocked(invoke).mockImplementation((cmd) => {
       if (cmd === "list_plugins") return Promise.resolve([]);
@@ -1243,8 +1275,10 @@ describe("PluginsProvider", () => {
     await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.market"));
     expect(screen.getByRole("status")).toHaveTextContent("Installed plugin: Market v1.0.0");
 
-    // The toast auto-expires.
-    vi.advanceTimersByTime(4100);
+    // The toast auto-expires; the timer callback sets state, so it runs in act.
+    act(() => {
+      vi.advanceTimersByTime(4100);
+    });
     await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
 
     vi.unstubAllGlobals();
@@ -1348,12 +1382,18 @@ describe("PluginsProvider", () => {
 
     await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
 
-    screen.getByRole("button", { name: "off" }).click();
+    // The disable handler sets state synchronously and the enable handler in a
+    // microtask tail the waitFor can miss, so each click settles inside act.
+    await act(async () => {
+      screen.getByRole("button", { name: "off" }).click();
+    });
     await waitFor(() => expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo"));
     expect(screen.getByTestId("loaded")).toHaveTextContent("");
     expect(screen.getByTestId("commands")).toHaveTextContent("0");
 
-    screen.getByRole("button", { name: "on" }).click();
+    await act(async () => {
+      screen.getByRole("button", { name: "on" }).click();
+    });
     await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
     expect(screen.getByTestId("disabled").textContent).toBe("");
   });

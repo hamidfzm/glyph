@@ -3,6 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickSave } from "@/lib/pickers";
 import type { PrintSettings } from "@/lib/settings";
+import { deferred } from "@/test/deferred";
 import { useExport } from "./useExport";
 
 vi.mock("@/lib/pickers", () => ({
@@ -297,12 +298,8 @@ describe("useExport", () => {
   it("flags the chosen format while a canvas write is in flight", async () => {
     setCanvas();
     vi.mocked(pickSave).mockResolvedValue("/out.html");
-    let finishWrite!: () => void;
-    vi.mocked(invoke).mockReturnValue(
-      new Promise<void>((resolve) => {
-        finishWrite = () => resolve();
-      }),
-    );
+    const write = deferred();
+    vi.mocked(invoke).mockReturnValue(write.promise);
 
     const { result } = renderHook(() => useExport(options()));
     expect(result.current.exporting).toBeNull();
@@ -314,7 +311,7 @@ describe("useExport", () => {
     expect(result.current.exporting).toBe("html");
 
     await act(async () => {
-      finishWrite();
+      write.resolve();
       await pending;
     });
     expect(result.current.exporting).toBeNull();
@@ -323,12 +320,8 @@ describe("useExport", () => {
   it("flags the active format while writing and clears it when done", async () => {
     setBody();
     vi.mocked(pickSave).mockResolvedValue("/out.html");
-    let finishWrite!: () => void;
-    vi.mocked(invoke).mockReturnValue(
-      new Promise<void>((resolve) => {
-        finishWrite = () => resolve();
-      }),
-    );
+    const write = deferred();
+    vi.mocked(invoke).mockReturnValue(write.promise);
 
     const { result } = renderHook(() => useExport(options()));
     expect(result.current.exporting).toBeNull();
@@ -341,7 +334,7 @@ describe("useExport", () => {
     expect(result.current.exporting).toBe("html");
 
     await act(async () => {
-      finishWrite();
+      write.resolve();
       await pending;
     });
     expect(result.current.exporting).toBeNull();

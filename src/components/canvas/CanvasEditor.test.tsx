@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { parseCanvas } from "@/lib/canvas/parse";
 import { saveViewport } from "@/lib/canvas/viewportStore";
@@ -26,9 +26,10 @@ const withEdge = JSON.stringify({
   edges: [{ id: "e", fromNode: "a", toNode: "b" }],
 });
 
-// Commit-on-end is deferred one microtask (StrictMode-safe cleanup), so
-// tests ending an edit indirectly must flush before asserting.
-const flushMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+// Commit-on-end is deferred one microtask (StrictMode-safe cleanup), so tests
+// ending an edit indirectly must flush before asserting. Wrapped in act so the
+// deferred commit's state updates land inside it.
+const flushMicrotasks = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
 
 const lastData = (onChange: ReturnType<typeof vi.fn>) =>
   parseCanvas(onChange.mock.calls.at(-1)?.[0] as string);
@@ -376,7 +377,7 @@ describe("CanvasEditor", () => {
     expect(lastData(onChange).edges[0]).toMatchObject({ label: "labelled" });
   });
 
-  it("deleting the edge while its label editor is open closes the editor", () => {
+  it("deleting the edge while its label editor is open closes the editor", async () => {
     const onChange = vi.fn();
     const { container } = render(<CanvasEditor content={withEdge} onChange={onChange} />);
     fireEvent.doubleClick(container.querySelector(".glyph-canvas-edge-hit") as Element);
@@ -385,6 +386,8 @@ describe("CanvasEditor", () => {
     // points at a no-longer-existing edge, which must render as "no editor".
     fireEvent.contextMenu(container.querySelector(".glyph-canvas-edge-hit") as Element);
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete connection" }));
+    // The unmounted editor's deferred cleanup still runs; flush it inside act.
+    await flushMicrotasks();
     expect(lastData(onChange).edges).toHaveLength(0);
     expect(container.querySelector(".glyph-canvas-edge-label-editor")).toBeNull();
   });

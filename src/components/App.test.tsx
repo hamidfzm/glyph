@@ -76,6 +76,12 @@ beforeEach(() => {
   vi.mocked(listen).mockReset();
   vi.mocked(listen).mockResolvedValue(() => {});
   vi.mocked(useExport).mockReturnValue(IDLE_EXPORTERS);
+  // PluginsProvider fetches the marketplace index on every App mount; resolve
+  // it with an empty registry so the best-effort fetch does not log an error.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ plugins: [] }) })),
+  );
 });
 
 describe("App", () => {
