@@ -24,6 +24,7 @@ The spec stays current throughout: acceptance-criteria and task checkboxes on th
 - **Plan before non-trivial work.** Anything beyond a one-line change starts from a spec (`/spec`) or an existing issue, not freeform edits.
 - **Ask, don't guess.** When acceptance criteria or scope are ambiguous, ask the user before writing code.
 - **Follow the rules in `.claude/rules/`**, which are authoritative for code organization, frontend, i18n, Rust, app-shell, docs, cleanup, CI hygiene, the worktree workflow, sibling repos (the glyph-md org), and Sentry issue fixes.
+- **Never break the [engineering invariants](docs/engineering-invariants.md).** Stateful or security-sensitive changes name the invariants they touch and cover the adversarial scenario matrix with tests.
 - **Run the gates before every PR** (the same gate the Husky pre-commit hook and CI enforce):
   ```bash
   pnpm typecheck && pnpm check && pnpm test
@@ -37,7 +38,7 @@ The spec stays current throughout: acceptance-criteria and task checkboxes on th
 
 Delegate to the project agents in `.claude/agents/` rather than doing their job inline:
 
-- **`tester`**: runs `pnpm typecheck`, `pnpm test`, `cargo check`, `cargo clippy`; use it to gate `/implement` and `/ship`.
+- **`tester`**: runs the full gates (typecheck, Biome, frontend tests and build, `cargo test`, strict clippy) and reports missing scenario coverage; use it to gate `/implement` and `/ship`.
 - **`code-reviewer`**: reviews the diff for correctness, typing, Rust error handling, security, and consistency; used by `/ship` before opening a PR.
 - **`builder`**: runs the production `pnpm tauri build` and reports bundle/binary size and warnings.
 - **`ui-inspector`**: audits components for accessibility, platform-adaptive styling, and dark mode.
