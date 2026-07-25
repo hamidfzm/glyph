@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 /**
  * Subscribe to a CSS media query and re-render when it flips. Used for
  * viewport-width responsiveness (phone vs tablet/desktop): the app otherwise
- * only knows the OS family, not the screen size. SSR/test-safe — returns
+ * only knows the OS family, not the screen size. SSR/test-safe: returns
  * `false` when `matchMedia` is unavailable.
  */
 export function useMediaQuery(query: string): boolean {

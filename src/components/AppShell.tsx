@@ -306,9 +306,9 @@ export function AppShell() {
   const showContent = activeTab?.kind === "graph" || showDocument;
 
   return (
-    // Safe-area insets pad the whole shell so whatever sits at each edge — a
-    // banner or the tab bar at the top, the status bar at the bottom — clears
-    // the status bar / cutout / home indicator. The bottom bar adds its own
+    // Safe-area insets pad the whole shell so whatever sits at each edge (a
+    // banner or the tab bar at the top, the status bar at the bottom) clears
+    // the status bar, cutout, and home indicator. The bottom bar adds its own
     // gesture-nav floor on top of this (see .status-bar).
     <div
       className="flex flex-col h-full bg-[var(--color-surface)]"

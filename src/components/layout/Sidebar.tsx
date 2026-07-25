@@ -82,7 +82,7 @@ export function Sidebar({ side }: SidebarProps) {
   const activeId = useActiveHeading(tocEntries);
 
   // On a phone the sidebar is a drawer over the document, so opening a file
-  // dismisses it — otherwise the freshly opened doc stays hidden behind it.
+  // dismisses it, otherwise the freshly opened doc stays hidden behind it.
   const onOpenFile = useCallback(
     (path: string) => {
       onOpenFileRaw(path);

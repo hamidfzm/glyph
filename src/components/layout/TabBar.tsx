@@ -63,7 +63,7 @@ export function TabBar({ onToggleAIChat }: TabBarProps) {
   // hidden for them (as opposed to canvas, which keeps view + edit).
   const showModeToggle = activeTab !== null && activeFile !== null && !isImageFile(activeFile.path);
   // Split is offered only for markdown (canvas is its own editor) and only when
-  // the viewport is wide enough for two panes — phones get view + edit only.
+  // the viewport is wide enough for two panes; phones get view + edit only.
   const showSplit = activeFile !== null && !isCanvasFile(activeFile.path) && canSplit;
   // The rendered mode: a tab stored as split shows as view on a narrow screen,
   // so the view button, not the (hidden) split button, reads as active.

@@ -33,8 +33,8 @@ export function SidebarPanel({
     onReset: () => onWidthCommit(SIDEBAR_WIDTH_DEFAULT),
   });
   const borderClass = side === "left" ? "border-e" : "border-s";
-  // Compact (phone): the panel is a drawer overlaying the document — absolutely
-  // positioned against its edge, capped so it never covers the whole screen —
+  // Compact (phone): the panel is a drawer overlaying the document, absolutely
+  // positioned against its edge and capped so it never covers the whole screen,
   // rather than a flex column that squeezes the content into a sliver.
   const layoutClass = compact
     ? `absolute inset-y-0 ${side === "left" ? "start-0" : "end-0"} z-20 max-w-[85%] shadow-xl`

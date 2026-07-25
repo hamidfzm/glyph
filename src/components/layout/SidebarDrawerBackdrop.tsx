@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 
 // Dimmed backdrop behind the compact (phone) sidebar drawers. Tapping it
-// dismisses the open drawer — the "tap outside to close" that makes the panel
+// dismisses the open drawer, the "tap outside to close" that makes the panel
 // read as a drawer. Only rendered on compact when a drawer is actually open,
 // so it never covers the desktop beside-layout. Sits below the panel (z-20)
 // and above the document.

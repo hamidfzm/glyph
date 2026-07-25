@@ -20,7 +20,7 @@ export function useSidebarLayout({
   const [outlineVisible, setOutlineVisible] = useState(outlineVisibleSetting);
   // On a narrow (phone) viewport the sidebars are drawers overlaying the
   // document, so they default closed and toggle local state instead of the
-  // persisted desktop visibility — resizing back to a wide window restores
+  // persisted desktop visibility, so resizing back to a wide window restores
   // whatever the user had there.
   const compact = !useCanSplit();
   const [compactFilesOpen, setCompactFilesOpen] = useState(false);

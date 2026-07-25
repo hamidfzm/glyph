@@ -12,7 +12,7 @@
 }
 
 /* Mobile draws edge-to-edge (viewport-fit=cover), so the shell pads itself past
-   the notch, home indicator, and — in landscape — the side cutout/status bar. */
+   the notch, home indicator, and (in landscape) the side cutout/status bar. */
 [data-platform="ios"],
 [data-platform="android"] {
   --glyph-safe-top: env(safe-area-inset-top);

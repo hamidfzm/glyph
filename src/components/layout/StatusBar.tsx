@@ -36,7 +36,7 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
     >
       {filePath && (
         // Hidden on mobile (see platform.css): the path there is an opaque
-        // `content://…` picker URI — long and meaningless — and it crowds the
+        // `content://…` picker URI, long and meaningless, and it crowds the
         // word count / reading time off a narrow bar.
         <span className="status-bar-path truncate max-w-[50%]" title={filePath}>
           {filePath}
