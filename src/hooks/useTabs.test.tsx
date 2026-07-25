@@ -890,7 +890,7 @@ describe("useTabs file operations", () => {
     expect(fileOf(result).dirty).toBe(false);
   });
 
-  it("a failed save retries on the next edit and clears dirty on success", async () => {
+  it("a failed save leaves the document dirty and a later save succeeds", async () => {
     expectConsole(/Auto-save failed/);
     const writeFile = vi
       .fn()
@@ -1596,6 +1596,8 @@ describe("useTabs close coordinator", () => {
 
   it("flushForClose returns true when the user confirms discarding a failed save", async () => {
     expectConsole(/Auto-save failed/);
+    // The shared ask mock accumulates calls across this file; count only ours.
+    vi.mocked(ask).mockClear();
     vi.mocked(ask).mockResolvedValue(true);
     vi.mocked(invoke).mockImplementation(
       writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
@@ -1609,8 +1611,10 @@ describe("useTabs close coordinator", () => {
       ok = await result.current.flushForClose();
     });
 
-    // Shutdown proceeds on an explicit informed discard.
+    // Shutdown proceeds only through an explicit informed discard (INV-1):
+    // the confirmation dialog must actually have been shown.
     expect(ok).toBe(true);
+    expect(ask).toHaveBeenCalledTimes(1);
   });
 });
 

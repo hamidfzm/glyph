@@ -1,6 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { expectConsole } from "@/test/consoleGuard";
 import { SearchBar } from "./SearchBar";
 
 const defaultProps = {
@@ -15,9 +14,6 @@ const defaultProps = {
 
 describe("SearchBar", () => {
   it("renders input and navigation buttons", () => {
-    // React DOM does not know the native <search> element and warns once per
-    // run, in whichever test renders the component first.
-    expectConsole(/The tag <%s> is unrecognized in this browser/);
     render(<SearchBar {...defaultProps} />);
     expect(screen.getByRole("textbox", { name: "Search" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Previous match" })).toBeInTheDocument();

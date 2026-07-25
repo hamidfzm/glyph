@@ -15,15 +15,29 @@ const originals: Record<Method, (...args: unknown[]) => void> = {
   warn: console.warn,
 };
 
-// Environment artifacts, not app behavior: happy-dom has no doctype, which
-// KaTeX warns about on every import.
-const ENVIRONMENT_NOISE = [/KaTeX doesn't work in quirks mode/];
+// Environment artifacts, not app behavior: happy-dom has no doctype (KaTeX
+// warns on import), and react-dom's tag list predates the native <search>
+// element SearchBar renders, warning once per run in whichever test renders
+// it first (which breaks single-test filtered runs if declared per test).
+const ENVIRONMENT_NOISE = [
+  /KaTeX doesn't work in quirks mode/,
+  /The tag <%s> is unrecognized in this browser.*\bsearch\b/s,
+];
 
+// Module-level state ties output to the currently running test, so this guard
+// is incompatible with it.concurrent (none exists in the suite today).
 let recorded: Array<{ method: Method; text: string }> = [];
 let allowed: RegExp[] = [];
 
 function format(arg: unknown): string {
   if (arg instanceof Error) return arg.message;
+  if (typeof arg === "object" && arg !== null) {
+    try {
+      return JSON.stringify(arg);
+    } catch {
+      return String(arg);
+    }
+  }
   return String(arg);
 }
 

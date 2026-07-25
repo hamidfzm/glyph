@@ -1,6 +1,5 @@
 import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { expectConsole } from "@/test/consoleGuard";
 import { MarkdownViewer } from "./MarkdownViewer";
 
 vi.mock("./MermaidDiagram", () => ({
@@ -237,9 +236,6 @@ describe("MarkdownViewer scrolling", () => {
 
 describe("MarkdownViewer search", () => {
   it("clears the query and notifies the parent when search closes", () => {
-    // React DOM does not know the native <search> element (SearchBar's root)
-    // and warns once per run, in whichever test renders it first.
-    expectConsole(/The tag <%s> is unrecognized in this browser/);
     const onSearchClose = vi.fn();
     const { getByRole, getByLabelText } = renderMd("# Title", { searchOpen: true, onSearchClose });
     const input = getByLabelText("Search") as HTMLInputElement;
