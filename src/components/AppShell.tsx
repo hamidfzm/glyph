@@ -28,6 +28,7 @@ import { useTabReorderShortcuts } from "@/hooks/useTabReorderShortcuts";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { useWindowClose } from "@/hooks/useWindowClose";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
+import { useZoomShortcuts } from "@/hooks/useZoomShortcuts";
 import { aiDocContext } from "@/lib/aiPrompts";
 import { openDocumentation, openReleaseNotes, openReportIssue } from "@/lib/helpLinks";
 import { isImageFile } from "@/lib/imageExtensions";
@@ -155,6 +156,12 @@ export function AppShell() {
   });
   const siteExporter = useExportSite(workspace?.root);
   const zoom = useFontZoom({ fontSize: settings.appearance.fontSize, updateSettings });
+  useZoomShortcuts({
+    platform,
+    onZoomIn: zoom.zoomIn,
+    onZoomOut: zoom.zoomOut,
+    onZoomReset: zoom.zoomReset,
+  });
   const runPluginExporter = usePluginExporterRunner({
     entries: tabs.tocEntries,
     filePath: activeFile?.path,
