@@ -426,6 +426,34 @@ mod tests {
     }
 
     #[test]
+    fn rename_with_separators_or_dot_dot_stays_inside_root() {
+        let root = unique_tmp("rename_guard");
+        fs::create_dir_all(&root).unwrap();
+        let canonical_root = root.canonicalize().unwrap();
+
+        // sanitize_name strips separators but keeps dots; whatever survives
+        // must land inside the workspace, never above it.
+        for (i, evil) in ["../escape", "..\\escape", ".."].iter().enumerate() {
+            let file = root.join(format!("victim{i}.md"));
+            fs::write(&file, "x").unwrap();
+            let result = rename_path(
+                file.to_string_lossy().to_string(),
+                evil.to_string(),
+                root.to_string_lossy().to_string(),
+            );
+            if let Ok(new_path) = result {
+                let landed = Path::new(&new_path).canonicalize().unwrap();
+                assert!(
+                    landed.starts_with(&canonical_root),
+                    "rename to {evil:?} escaped the root: {new_path}"
+                );
+            }
+        }
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn rename_preserves_extension_when_omitted() {
         let dir = unique_tmp("rename_ext");
         let root = dir.to_string_lossy().to_string();

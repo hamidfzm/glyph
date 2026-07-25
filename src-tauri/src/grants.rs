@@ -335,6 +335,85 @@ mod tests {
     }
 
     #[test]
+    fn revocation_denies_every_ensure_path() {
+        let tmp = TempDir::new().unwrap();
+        let file = tmp.path().join("a.md");
+        fs::write(&file, "x").unwrap();
+
+        let grants = GrantRegistry::default();
+        grants.grant_workspace(tmp.path()).unwrap();
+        grants.revoke_workspace(tmp.path());
+
+        // A stale grant must not survive on any validation path.
+        assert!(grants.ensure_readable(&as_str(&file)).is_err());
+        assert!(grants.ensure_writable(&as_str(&file)).is_err());
+        assert!(grants.ensure_watchable(&as_str(&file)).is_err());
+        assert!(grants.ensure_workspace(&as_str(tmp.path())).is_err());
+    }
+
+    #[test]
+    fn export_grants_never_satisfy_workspace_or_watch() {
+        let tmp = TempDir::new().unwrap();
+        let out = tmp.path().join("site");
+        fs::create_dir_all(&out).unwrap();
+        let target = tmp.path().join("doc.pdf");
+
+        let grants = GrantRegistry::default();
+        grants.grant_export_dir(&out).unwrap();
+        grants.grant_export_file(&target).unwrap();
+
+        // Write-only grants must not open the read-side surfaces.
+        assert!(grants.ensure_workspace(&as_str(&out)).is_err());
+        assert!(grants.ensure_watchable(&as_str(&out)).is_err());
+        assert!(grants.ensure_watchable(&as_str(&target)).is_err());
+    }
+
+    #[test]
+    fn export_dir_missing_tail_with_dot_dot_is_denied() {
+        let tmp = TempDir::new().unwrap();
+        let out = tmp.path().join("site");
+
+        let grants = GrantRegistry::default();
+        grants.grant_export_dir(&out).unwrap();
+
+        // The destination may not exist yet; a crafted tail cannot climb out.
+        let sneaky = out.join("nope").join("..").join("..").join("evil.html");
+        assert!(grants.ensure_writable(&as_str(&sneaky)).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn junction_inside_a_workspace_cannot_escape_it() {
+        let outer = TempDir::new().unwrap();
+        let root = outer.path().join("ws");
+        let secret_dir = outer.path().join("secret");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&secret_dir).unwrap();
+        fs::write(secret_dir.join("secret.md"), "classified").unwrap();
+
+        // Junctions are the Windows escape vector symlinks are on unix, and
+        // unlike symlinks they need no privilege to create.
+        let link = root.join("innocent");
+        let status = std::process::Command::new("cmd")
+            .arg("/C")
+            .arg("mklink")
+            .arg("/J")
+            .arg(&link)
+            .arg(&secret_dir)
+            .status()
+            .expect("cmd should run");
+        assert!(status.success(), "mklink /J failed");
+
+        let grants = GrantRegistry::default();
+        grants.grant_workspace(&root).unwrap();
+
+        assert!(grants
+            .ensure_readable(&as_str(&link.join("secret.md")))
+            .is_err());
+        assert!(grants.ensure_readable(&as_str(&link)).is_err());
+    }
+
+    #[test]
     fn revoke_tolerates_missing_paths_and_a_poisoned_lock() {
         let tmp = TempDir::new().unwrap();
         let grants = GrantRegistry::default();
