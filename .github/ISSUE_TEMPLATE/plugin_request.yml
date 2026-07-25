@@ -1,20 +1,33 @@
-name: Official Plugin Request
-description: Propose a plugin maintained by the Glyph team (doubles as the implementable spec)
+name: Plugin Request
+description: Propose functionality that should ship as a plugin rather than as part of the app
 labels: ["enhancement", "plugin"]
 assignees: ["hamidfzm"]
 body:
   - type: markdown
     attributes:
       value: |
-        Use this for functionality that should ship as a **plugin** rather than as part of the app: anything opinionated, optional, or only useful to some writers.
+        Use this for functionality that belongs in a **plugin** rather than in the app core: anything opinionated, optional, network-dependent, or only useful to some writers.
 
-        Building your own plugin instead? You don't need an issue: start from [plugin-template](https://github.com/glyph-md/plugin-template) and list it in [the plugin registry](https://github.com/glyph-md/plugins). This template is only for plugins you're asking the Glyph team to build and maintain.
+        Building your own plugin instead? You don't need an issue: start from [plugin-template](https://github.com/glyph-md/plugin-template) and list it in [the plugin registry](https://github.com/glyph-md/plugins). This template is for plugins you're asking the Glyph team to build and maintain.
 
   - type: input
     id: name
     attributes:
       label: Plugin name
       placeholder: Markdown Linter
+    validations:
+      required: true
+
+  - type: dropdown
+    id: channel
+    attributes:
+      label: Core or community
+      description: |
+        **Core** plugins are bundled with the app and toggled on and off in Settings (see #526). **Community** plugins are installed from the marketplace registry, whoever writes them. Bundling costs install size for every user, so the bar for core is higher.
+      options:
+        - Core (bundled with the app, toggleable in Settings)
+        - Community (installed from the marketplace registry)
+        - Not sure, needs a maintainer call
     validations:
       required: true
 
@@ -64,10 +77,10 @@ body:
         Needs a way to report per-line diagnostics into the editor gutter.
 
   - type: textarea
-    id: official
+    id: rationale
     attributes:
-      label: Why official rather than community
-      description: Official plugins carry a maintenance cost. What makes this one worth the Glyph team owning it?
+      label: Why a plugin rather than core app code
+      description: What makes this optional or opinionated enough to live outside the core? If you picked Core above, also say why it earns bundle weight for every user.
     validations:
       required: true
 
