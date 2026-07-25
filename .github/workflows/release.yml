@@ -5,15 +5,19 @@ on:
     tags:
       - "v*"
 
+# Read-only by default: the publish-* jobs only download release assets and
+# push to satellite repos with their own secrets, so only the three jobs that
+# touch this repo's release get write.
 permissions:
-  contents: write
-  discussions: write
+  contents: read
 
 jobs:
   # Create the release once before the build matrix; parallel tauri-action
   # jobs racing to create it fail with "already_exists".
   create-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Create GitHub release
         env:
@@ -89,11 +93,14 @@ jobs:
           - platform: windows-latest
             args: ""
     runs-on: ${{ matrix.platform }}
+    # tauri-action uploads the bundles to the release.
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: ./.github/actions/pnpm-setup
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - name: Install Linux dependencies
@@ -103,11 +110,11 @@ jobs:
         with:
           cache-key: apt-webkit-${{ matrix.platform }}-v1
           extra-packages: xdg-utils
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           workspaces: src-tauri
       - run: pnpm install --frozen-lockfile
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Enables source-map upload from the Vite build (vite.config.ts). When
@@ -121,6 +128,10 @@ jobs:
   update-release-notes:
     needs: build
     runs-on: ubuntu-latest
+    # Edits the release body and links the Announcements discussion.
+    permissions:
+      contents: write
+      discussions: write
     steps:
       - name: Generate changelog and prepend install instructions
         env:
@@ -199,7 +210,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
@@ -287,7 +298,7 @@ jobs:
     needs: build
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
@@ -363,7 +374,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
@@ -441,7 +452,7 @@ jobs:
         id: version
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-      - uses: vedantmgoyal9/winget-releaser@v2
+      - uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
         if: steps.gate.outputs.enabled == 'true'
         with:
           identifier: hamidfzm.Glyph
@@ -454,7 +465,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
@@ -526,7 +537,7 @@ jobs:
       matrix:
         series: [jammy, noble]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Install packaging tools
         timeout-minutes: 8
         env:
@@ -612,7 +623,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Install packaging tools
         timeout-minutes: 8
         env:
@@ -711,7 +722,7 @@ jobs:
             runner: ubuntu-22.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       # The snap is built from the released .deb (see snap/snapcraft.yaml), so
       # this job needs no toolchain. It is a no-op until the maintainer adds the
       # SNAPCRAFT_STORE_CREDENTIALS secret (snapcraft export-login), so it never
@@ -740,10 +751,10 @@ jobs:
       - name: Build snap
         if: steps.gate.outputs.enabled == 'true'
         id: build
-        uses: snapcore/action-build@v1
+        uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79 # v1.3.0
       - name: Publish snap to stable
         if: steps.gate.outputs.enabled == 'true'
-        uses: snapcore/action-publish@v1
+        uses: snapcore/action-publish@214b86e5ca036ead1668c79afb81e550e6c54d40 # v1.2.0
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
@@ -754,7 +765,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       # The signed DNF repo lives in glyph-md/rpm-repo (GitHub Pages), mirroring
       # the apt-repo. Skip cleanly until that repo exists, so a missing target
       # never fails the release (gated like publish-snap, though this probes the
@@ -860,7 +871,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       # The canonical Flatpak manifest lives in this repo (flatpak/). Flathub
       # builds from its own app repo (flathub/com.hamidfzm.glyph), so each
       # release we rewrite the version + per-arch sha256 in the manifest and

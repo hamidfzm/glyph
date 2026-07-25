@@ -21,13 +21,15 @@ on:
 
 permissions:
   contents: read
-  # Needed to re-dispatch this workflow with the resolved version.
-  actions: write
 
 jobs:
   resolve:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      # Needed to re-dispatch this workflow with the resolved version.
+      actions: write
     outputs:
       run: ${{ steps.resolve.outputs.run }}
       tag: ${{ steps.resolve.outputs.tag }}

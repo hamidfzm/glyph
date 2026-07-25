@@ -205,6 +205,26 @@ Right-to-left locales (Arabic, Hebrew, Persian) are supported: set `dir: "rtl"` 
 - Linear history enforced (rebase/squash only, no merge commits)
 - No force pushes or branch deletion on `main`
 
+### Pinned GitHub Actions
+
+Every third-party `uses:` in `.github/workflows/` and `.github/actions/` is pinned to a full 40-character commit SHA with the human-readable version in a trailing comment:
+
+```yaml
+- uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+```
+
+A version tag is mutable: whoever controls the action's repo can repoint `v6` at new code, and a compromised publishing account then runs that code with our release secrets. A SHA cannot be repointed.
+
+Rules:
+
+- **Never add a `uses:` on a tag or branch.** Resolve it first: `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`. Pin the SHA of a published release, not of a moving branch head, so the comment names a real version.
+- **Keep the `# vX.Y.Z` comment accurate.** Dependabot parses it to know the current version, and it is the only readable signal of what a SHA is.
+- **Local composite actions** (`./.github/actions/…`) are referenced by path and are not pinned; they live in this repo and are reviewed with the rest of the diff.
+- **Updates come through Dependabot**, weekly, under `chore(ci)`. Dependabot rewrites the SHA and the comment together. Review the upstream diff between the old and new tag (`https://github.com/<owner>/<repo>/compare/<old>...<new>`) before merging, especially for actions used by `release.yml`, which holds publishing secrets.
+- **Some actions need the tool name spelled out.** `taiki-e/install-action` is normally used as `@cargo-llvm-cov`, where the tag name selects the tool; pinned by SHA that shorthand is gone, so pass `with: { tool: … }` explicitly.
+
+Workflow permissions follow the same minimum-blast-radius rule: each workflow declares `permissions: contents: read` (or `{}`) at the top, and only the individual jobs that need to write declare the extra scope.
+
 ### Project Board
 
 - **GitHub Project**: "Glyph Roadmap" (kanban board linked to this repo)

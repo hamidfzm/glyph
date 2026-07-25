@@ -47,8 +47,13 @@ updates:
         exclude-patterns:
           - "tauri-plugin-*"
 
+  # Every `uses:` is pinned to a commit SHA (see CONTRIBUTING.md); Dependabot
+  # rewrites the SHA and the `# vX.Y.Z` comment together. "/" only covers
+  # .github/workflows, so the composite actions need their own entries.
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: "weekly"
     commit-message:

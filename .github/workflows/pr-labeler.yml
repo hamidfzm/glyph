@@ -14,9 +14,7 @@ on:
   pull_request_target:
     types: [opened, edited, reopened, synchronize]
 
-permissions:
-  contents: read
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: pr-labeler-${{ github.event.pull_request.number }}
@@ -25,9 +23,13 @@ concurrency:
 jobs:
   label:
     runs-on: ubuntu-latest
+    # Nothing is checked out, so no contents scope: labelling a PR is all
+    # this pull_request_target job can do with its base-repo token.
+    permissions:
+      pull-requests: write
     steps:
       - name: Label by conventional-commit title
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             // type (and optional scope) -> changelog category label.

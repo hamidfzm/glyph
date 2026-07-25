@@ -16,7 +16,7 @@ jobs:
     name: WebKit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: ./.github/actions/pnpm-setup
       - run: pnpm install --frozen-lockfile
       - name: Install Playwright WebKit
