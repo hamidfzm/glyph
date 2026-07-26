@@ -68,11 +68,24 @@ const EDITOR_MODE_CYCLE: readonly EditorMode[] = [
 /**
  * The next mode when cycling the editor toggle (wraps view → edit → split →
  * view). An undefined/unknown current mode is treated as `view`, so the cycle
- * starts at `edit`.
+ * starts at `edit`. On a narrow viewport `canSplit` is false, so the cycle
+ * skips split (view → edit → view).
  */
-export function nextEditorMode(current: EditorMode | undefined): EditorMode {
-  const idx = current ? EDITOR_MODE_CYCLE.indexOf(current) : 0;
-  return EDITOR_MODE_CYCLE[(idx + 1) % EDITOR_MODE_CYCLE.length];
+export function nextEditorMode(current: EditorMode | undefined, canSplit = true): EditorMode {
+  const cycle = canSplit ? EDITOR_MODE_CYCLE : [EDITOR_MODE.view, EDITOR_MODE.edit];
+  const idx = current ? cycle.indexOf(current) : 0;
+  // indexOf is -1 when the stored mode is split but split is no longer in the
+  // cycle; treat that as position 0 so the next tap lands on edit.
+  return cycle[((idx < 0 ? 0 : idx) + 1) % cycle.length];
+}
+
+/**
+ * The mode to actually render. Split needs two panes' worth of width, so on a
+ * narrow viewport (`canSplit` false) a tab stored as split falls back to the
+ * read-only view. The stored mode is left untouched, so widening restores it.
+ */
+export function effectiveEditorMode(mode: EditorMode, canSplit: boolean): EditorMode {
+  return mode === EDITOR_MODE.split && !canSplit ? EDITOR_MODE.view : mode;
 }
 
 export interface PersistedTab {

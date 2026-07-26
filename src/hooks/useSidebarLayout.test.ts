@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSidebarLayout } from "./useSidebarLayout";
 
 describe("useSidebarLayout", () => {
@@ -98,5 +98,71 @@ describe("useSidebarLayout", () => {
     expect(updateSettings).toHaveBeenCalledWith("layout.outlineSidebarWidth", 224);
     expect(updateSettings).toHaveBeenCalledWith("layout.aiPanelWidth", 340);
     expect(updateSettings).toHaveBeenCalledWith("layout.backlinksHeight", null);
+  });
+});
+
+describe("useSidebarLayout on a compact viewport", () => {
+  const originalMatchMedia = window.matchMedia;
+
+  // Compact is "the tablet query does not match", so the panels behave as
+  // drawers: closed by default and toggled without touching the settings.
+  beforeEach(() => {
+    window.matchMedia = vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  const renderCompact = (updateSettings = vi.fn()) =>
+    renderHook(() =>
+      useSidebarLayout({
+        filesVisibleSetting: true,
+        outlineVisibleSetting: true,
+        updateSettings,
+      }),
+    );
+
+  it("starts with both drawers closed even when the settings say visible", () => {
+    const { result } = renderCompact();
+    expect(result.current.compact).toBe(true);
+    expect(result.current.filesVisible).toBe(false);
+    expect(result.current.outlineVisible).toBe(false);
+  });
+
+  it("toggles the drawers without writing the desktop visibility settings", () => {
+    const updateSettings = vi.fn();
+    const { result } = renderCompact(updateSettings);
+
+    act(() => {
+      result.current.toggleFiles();
+    });
+    expect(result.current.filesVisible).toBe(true);
+
+    act(() => {
+      result.current.toggleOutline();
+    });
+    expect(result.current.outlineVisible).toBe(true);
+
+    expect(updateSettings).not.toHaveBeenCalledWith("layout.filesSidebarVisible", true);
+    expect(updateSettings).not.toHaveBeenCalledWith("layout.outlineSidebarVisible", true);
+  });
+
+  it("closeCompactPanels dismisses both drawers", () => {
+    const { result } = renderCompact();
+    act(() => {
+      result.current.toggleFiles();
+      result.current.toggleOutline();
+    });
+
+    act(() => {
+      result.current.closeCompactPanels();
+    });
+    expect(result.current.filesVisible).toBe(false);
+    expect(result.current.outlineVisible).toBe(false);
   });
 });

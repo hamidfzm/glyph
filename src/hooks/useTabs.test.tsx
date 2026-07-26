@@ -4218,6 +4218,31 @@ describe("mobile file opening", () => {
     expect(commands).not.toContain("watch_file");
   });
 
+  it("opens an extensionless Android content URI instead of refusing it", async () => {
+    // Android's document picker returns opaque `content://` URIs with no file
+    // extension, so the extension-based support gate can't classify them; the
+    // picker's type filter already restricted the choice, so they must open.
+    const { platform } = await import("@tauri-apps/plugin-os");
+    vi.mocked(platform).mockReturnValue("android");
+    const { readTextFile } = await import("@tauri-apps/plugin-fs");
+    vi.mocked(readTextFile).mockResolvedValue("# picked");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile(
+        "content://com.android.providers.media.documents/document/document%3A1000000036",
+      );
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+    expect(result.current.activeFile?.content).toBe("# picked");
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("unsupported"));
+    warnSpy.mockRestore();
+  });
+
   it("opens picked images without Rust-side metadata", async () => {
     const { platform } = await import("@tauri-apps/plugin-os");
     vi.mocked(platform).mockReturnValue("android");
