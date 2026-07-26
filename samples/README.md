@@ -298,7 +298,7 @@ Relative paths resolve against this file's folder, so SVGs and other images comm
 
 Click any image to open it in the lightbox: zoom in/out, fit or actual size, drag to pan around a zoomed-in image, and use the arrow keys to move between them. Press `Esc` or click the backdrop to close.
 
-The workspace also ships standalone image files in several formats. Open `diagram.png`, `diagram.jpg`, `diagram.gif`, or `diagram.svg` from the file tree: each opens in the image viewer, where the same controls (zoom in/out, fit, actual size, scroll or drag to pan) apply. SVGs render crisply at any zoom.
+The workspace also ships standalone image files in several formats. Open `diagram.png`, `diagram.jpg`, `diagram.gif`, or `diagram.svg` from the file tree: each opens in the image viewer, where the same controls (zoom in/out, fit, actual size, scroll or drag to pan) apply, plus `Cmd/Ctrl+=/-/0` or `Cmd/Ctrl`+scroll to zoom. SVGs render crisply at any zoom.
 
 ### Inline SVG
 
