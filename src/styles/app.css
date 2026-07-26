@@ -40,6 +40,8 @@
   --color-alert-important: #8250df;
   --color-alert-warning: #9a6700;
   --color-alert-caution: #cf222e;
+  --color-error: #d70015;
+  --color-error-bg: rgba(215, 0, 21, 0.08);
 }
 
 /* Scoped to :root so a non-theme "dark" class on a subtree can't flip its native controls. */
@@ -65,6 +67,8 @@
   --color-alert-important: #bf8cff;
   --color-alert-warning: #d29922;
   --color-alert-caution: #f85149;
+  --color-error: #ff6961;
+  --color-error-bg: rgba(255, 105, 97, 0.14);
 }
 
 html,

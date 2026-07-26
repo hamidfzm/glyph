@@ -147,7 +147,7 @@
 
 /* Spell check: red wavy underline under misspelled words. */
 .cm-misspelled {
-  text-decoration: underline wavy var(--color-error, #e5484d);
+  text-decoration: underline wavy var(--color-error);
   text-decoration-skip-ink: none;
   text-underline-offset: 2px;
 }

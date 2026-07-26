@@ -37,5 +37,9 @@
   "officialBadge": "官方",
   "back": "返回",
   "detailsLoading": "加载中…",
-  "detailsError": "无法加载插件详情。"
+  "detailsError": "无法加载插件详情。",
+  "toast": {
+    "installed": "已安装插件：{{name}} v{{version}}",
+    "error": "插件错误：{{message}}"
+  }
 }

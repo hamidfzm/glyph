@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { PluginStyles } from "@/components/plugins/PluginStyles";
 import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToasts";
 import { PluginsContext } from "@/contexts/PluginsContext";
@@ -27,6 +28,7 @@ const TOAST_DURATION_MS = 4000;
  * management modal drives.
  */
 export function PluginsProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation("plugins");
   const { hydrateGrants, hasFullTrust, getGrant, restoreGrant, ensureConsent, revokeGrant } =
     usePluginConsent();
   const [toasts, setToasts] = useState<PluginToast[]>([]);
@@ -37,9 +39,9 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
   const [registry, setRegistry] = useState<RegistryEntry[]>([]);
   const toastId = useRef(0);
 
-  const pushToast = useCallback((message: string) => {
+  const pushToast = useCallback((message: string, tone?: "error") => {
     const id = ++toastId.current;
-    setToasts((prev) => [...prev, { id, message }]);
+    setToasts((prev) => [...prev, { id, message, tone }]);
     window.setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, TOAST_DURATION_MS);
@@ -131,17 +133,18 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         prev.includes(plugin.id) ? prev.filter((d) => d !== plugin.id) : prev,
       );
       setLoaded(host.listLoaded());
-      pushToast(`Installed plugin: ${plugin.name} v${plugin.version}`);
+      pushToast(t("toast.installed", { name: plugin.name, version: plugin.version }));
     },
-    [host, pushToast, persistDisabled],
+    [host, pushToast, persistDisabled, t],
   );
 
   const reportFailure = useCallback(
     (err: unknown) => {
       console.error("Plugin operation failed:", err);
-      pushToast(`Plugin error: ${err instanceof Error ? err.message : String(err)}`);
+      const message = err instanceof Error ? err.message : String(err);
+      pushToast(t("toast.error", { message }), "error");
     },
-    [pushToast],
+    [pushToast, t],
   );
 
   const uninstall = useCallback(
