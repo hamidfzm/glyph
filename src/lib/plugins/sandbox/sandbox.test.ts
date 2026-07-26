@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
 import { FakeWorker } from "@/test/fakeWorker";
 import { PLUGIN_API_VERSION } from "../apiVersion";
 import type { ExporterContribution, InstalledPlugin } from "../types";
@@ -22,6 +23,7 @@ function apiStub(): SandboxHostApi {
     addStyles: vi.fn(),
     registerExporter: vi.fn(),
     registerSiteTheme: vi.fn(),
+    registerDictionary: vi.fn(),
     notify: vi.fn(),
     registerTranslations: vi.fn(),
     settingsSet: vi.fn(),
@@ -173,6 +175,54 @@ describe("startSandbox", () => {
 
     // Unknown callId is ignored rather than crashing the bridge.
     worker.emit({ type: "export-result", callId: 99, ok: true, output: "x" });
+  });
+
+  it("round-trips a dictionary load through the worker", async () => {
+    const { worker, api } = await startActivated();
+    worker.emit({
+      type: "register-dictionary",
+      language: "fa",
+      label: "Persian",
+      scripts: ["Arab"],
+    });
+    const [dictionary] = vi.mocked(api.registerDictionary).mock.calls[0] as [
+      DictionaryContribution,
+    ];
+    expect(dictionary).toMatchObject({ language: "fa", label: "Persian", scripts: ["Arab"] });
+
+    // Registering must not read anything: load() only runs once asked.
+    expect(worker.posted.some((m) => m.type === "load-dictionary")).toBe(false);
+
+    const loading = dictionary.load();
+    const request = worker.posted.find((m) => m.type === "load-dictionary");
+    expect(request).toMatchObject({ language: "fa" });
+
+    worker.emit({
+      type: "dictionary-result",
+      callId: (request as { callId: number }).callId,
+      ok: true,
+      sources: { aff: "SET UTF-8", dic: "1\nسلام" },
+    });
+    await expect(loading).resolves.toEqual({ aff: "SET UTF-8", dic: "1\nسلام" });
+  });
+
+  it("rejects a failed dictionary load and ignores an unknown callId", async () => {
+    const { worker, api } = await startActivated();
+    worker.emit({ type: "register-dictionary", language: "fa", label: "Persian" });
+    const [dictionary] = vi.mocked(api.registerDictionary).mock.calls[0] as [
+      DictionaryContribution,
+    ];
+
+    const first = dictionary.load();
+    worker.emit({ type: "dictionary-result", callId: 1, ok: false, error: "asset missing" });
+    await expect(first).rejects.toThrow("asset missing");
+
+    // An ok result with no sources rejects rather than resolving undefined.
+    const second = dictionary.load();
+    worker.emit({ type: "dictionary-result", callId: 2, ok: true });
+    await expect(second).rejects.toThrow("dictionary load failed");
+
+    worker.emit({ type: "dictionary-result", callId: 99, ok: true, sources: { aff: "", dic: "" } });
   });
 
   it("answers workspace-read and workspace-list with host-result", async () => {
