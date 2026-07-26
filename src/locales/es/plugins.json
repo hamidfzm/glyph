@@ -37,5 +37,9 @@
   "officialBadge": "Oficial",
   "back": "Atrás",
   "detailsLoading": "Cargando…",
-  "detailsError": "No se pudieron cargar los detalles del complemento."
+  "detailsError": "No se pudieron cargar los detalles del complemento.",
+  "toast": {
+    "installed": "Complemento instalado: {{name}} v{{version}}",
+    "error": "Error del complemento: {{message}}"
+  }
 }

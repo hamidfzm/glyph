@@ -37,5 +37,9 @@
   "officialBadge": "Offiziell",
   "back": "Zurück",
   "detailsLoading": "Wird geladen…",
-  "detailsError": "Die Plugin-Details konnten nicht geladen werden."
+  "detailsError": "Die Plugin-Details konnten nicht geladen werden.",
+  "toast": {
+    "installed": "Plugin installiert: {{name}} v{{version}}",
+    "error": "Plugin-Fehler: {{message}}"
+  }
 }

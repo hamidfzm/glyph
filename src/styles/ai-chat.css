@@ -275,10 +275,10 @@
 }
 
 .ai-error {
-  color: #e53e3e;
+  color: var(--color-error);
   font-size: 12px;
   padding: 10px;
-  background: rgba(229, 62, 62, 0.08);
+  background: var(--color-error-bg);
   border-radius: var(--glyph-radius-sm);
 }
 

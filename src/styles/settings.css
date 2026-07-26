@@ -417,7 +417,7 @@
   padding: 8px 10px;
   font-size: 12px;
   color: var(--color-error);
-  background: rgba(229, 62, 62, 0.08);
+  background: var(--color-error-bg);
   border-radius: var(--glyph-radius-sm);
 }
 :is(.settings-sync, .settings-workspace) .settings-actions {
