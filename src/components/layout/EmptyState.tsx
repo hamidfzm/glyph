@@ -5,6 +5,7 @@ import { modKey } from "@/lib/platform";
 
 interface EmptyStateProps {
   platform: Platform;
+  onNewDocument: () => void;
   onOpenFile: () => void;
   onOpenFolder: () => void;
   // True when a folder tab is active but no file has been opened yet: shows a
@@ -12,7 +13,13 @@ interface EmptyStateProps {
   folderEmpty?: boolean;
 }
 
-export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: EmptyStateProps) {
+export function EmptyState({
+  platform,
+  onNewDocument,
+  onOpenFile,
+  onOpenFolder,
+  folderEmpty,
+}: EmptyStateProps) {
   const { t } = useTranslation("common");
 
   return (
@@ -45,8 +52,15 @@ export function EmptyState({ platform, onOpenFile, onOpenFolder, folderEmpty }: 
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onOpenFile}
+            onClick={onNewDocument}
             className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] rounded-[var(--glyph-radius)] transition-colors"
+          >
+            {t("emptyState.newDocument")}
+          </button>
+          <button
+            type="button"
+            onClick={onOpenFile}
+            className="px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
           >
             {t("emptyState.openFile")}
           </button>

@@ -11,6 +11,7 @@
     "Commands": "Befehle"
   },
   "openFile": "Datei öffnen…",
+  "newDocument": "Neues Dokument",
   "openFolder": "Ordner öffnen…",
   "closeTab": "Tab schließen",
   "toggleFilesSidebar": "Dateien-Seitenleiste umschalten",

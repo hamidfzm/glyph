@@ -37,6 +37,7 @@ function buildFileTab(path: string): FileTab {
       mode: "view",
       editContent: null,
       dirty: false,
+      virtual: false,
       revision: 0,
     },
   };
@@ -54,6 +55,7 @@ function buildContext(opts: Opts): TabsContextValue {
     wikilinkRefs: [],
     indexStatus: COMPLETE_INDEX_STATUS,
     workspace: null,
+    newDocument: vi.fn(),
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),
@@ -175,6 +177,7 @@ function buildWorkspaceContext(): TabsContextValue {
     wikilinkRefs: [],
     indexStatus: COMPLETE_INDEX_STATUS,
     workspace: makeWorkspace(),
+    newDocument: vi.fn(),
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),

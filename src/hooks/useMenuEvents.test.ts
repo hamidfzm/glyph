@@ -5,6 +5,7 @@ import { type MenuEventHandlers, useMenuEvents } from "./useMenuEvents";
 
 function noopHandlers(overrides: Partial<MenuEventHandlers> = {}): MenuEventHandlers {
   return {
+    newDocument: vi.fn(),
     openFile: vi.fn(),
     openFolder: vi.fn(),
     openGraph: vi.fn(),
@@ -51,6 +52,7 @@ describe("useMenuEvents", () => {
     const channels = vi.mocked(listen).mock.calls.map((c) => c[0]);
     expect(channels).toEqual(
       expect.arrayContaining([
+        "menu-new",
         "menu-open-file",
         "menu-open-folder",
         "menu-open-graph",
