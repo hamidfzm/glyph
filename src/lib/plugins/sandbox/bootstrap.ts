@@ -19,6 +19,7 @@ let callSeq = 0;
 const pendingHost = new Map(); // callId -> {resolve, reject}
 const commands = new Map();    // id -> run
 const exporters = new Map();   // id -> build
+const dictionaries = new Map(); // language -> load
 let settings = {};
 
 function hostCall(message) {
@@ -108,6 +109,20 @@ function buildContext(init) {
         return new TextDecoder().decode(new Uint8Array(bytes));
       },
     },
+    spellcheck: {
+      // Only the picker metadata crosses now; load() stays in the worker and
+      // runs on demand, so a dictionary the user never selects is never read.
+      registerDictionary(dictionary) {
+        dictionaries.set(dictionary.language, dictionary.load);
+        postMessage({
+          type: "register-dictionary",
+          language: dictionary.language,
+          label: dictionary.label,
+          scripts: dictionary.scripts ? Array.from(dictionary.scripts) : undefined,
+        });
+        return () => dictionaries.delete(dictionary.language);
+      },
+    },
     settings: {
       get(key) {
         return settings[key];
@@ -155,6 +170,25 @@ onmessage = async (event) => {
         });
       } catch (err) {
         postMessage({ type: "export-result", callId: msg.callId, ok: false, error: String(err) });
+      }
+    } else if (msg.type === "load-dictionary") {
+      const load = dictionaries.get(msg.language);
+      try {
+        if (!load) throw new Error("no dictionary registered for " + msg.language);
+        const sources = await load();
+        postMessage({
+          type: "dictionary-result",
+          callId: msg.callId,
+          ok: true,
+          sources: { aff: String(sources.aff), dic: String(sources.dic) },
+        });
+      } catch (err) {
+        postMessage({
+          type: "dictionary-result",
+          callId: msg.callId,
+          ok: false,
+          error: String(err),
+        });
       }
     } else if (msg.type === "host-result") {
       const pending = pendingHost.get(msg.callId);

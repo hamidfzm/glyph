@@ -222,6 +222,7 @@ export function createPluginHost(
             },
             registerExporter: tracked(exporters.register, bag),
             registerSiteTheme: tracked(siteThemes.register, bag),
+            registerDictionary: tracked(registerDictionarySource, bag),
             notify,
             registerTranslations,
             settingsSet(key, value) {

@@ -14,6 +14,8 @@ export type HostMessage =
     }
   | { type: "run-command"; id: string }
   | { type: "build-export"; callId: number; id: string; bodyHtml: string }
+  /** Run a registered dictionary's `load()`; nothing is read until a language is selected. */
+  | { type: "load-dictionary"; callId: number; language: string }
   /** Reply to any worker-initiated call (workspace-read/list, asset-read). */
   | { type: "host-result"; callId: number; ok: boolean; value?: unknown; error?: string };
 
@@ -38,6 +40,14 @@ export type WorkerMessage =
       callId: number;
       ok: boolean;
       output?: string | number[];
+      error?: string;
+    }
+  | { type: "register-dictionary"; language: string; label: string; scripts?: string[] }
+  | {
+      type: "dictionary-result";
+      callId: number;
+      ok: boolean;
+      sources?: { aff: string; dic: string };
       error?: string;
     }
   | { type: "workspace-read"; callId: number; path: string }

@@ -96,6 +96,112 @@ describe("worker bootstrap", () => {
     await w.send({ type: "run-command", id: "ghost" });
   });
 
+  // The entry file of the published com.glyph.dictionary-fa package, verbatim.
+  // Before the sandbox context gained ctx.spellcheck this threw during
+  // activate, which the host reports as a failed install.
+  it("activates the real Persian dictionary plugin and loads it on demand", async () => {
+    const w = bootWorker();
+    const plugin = `export default {
+      activate(ctx) {
+        ctx.spellcheck.registerDictionary({
+          language: "fa",
+          label: "فارسی (Persian)",
+          load: async () => ({
+            aff: await ctx.assets.readText("assets/fa.aff"),
+            dic: await ctx.assets.readText("assets/fa.dic"),
+          }),
+        });
+      },
+    };`;
+    await w.send(init(plugin));
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
+    expect(w.typesPosted()).not.toContain("error");
+    expect(w.posted).toContainEqual({
+      type: "register-dictionary",
+      language: "fa",
+      label: "فارسی (Persian)",
+      scripts: undefined,
+    });
+    // Registering reads nothing; the 2.5MB of assets are touched only on demand.
+    expect(w.typesPosted()).not.toContain("asset-read");
+
+    void w.send({ type: "load-dictionary", callId: 1, language: "fa" });
+    // The plugin awaits its two reads in sequence, so each has to be answered
+    // before the next is even requested.
+    const answered = new Set<number>();
+    for (const path of ["assets/fa.aff", "assets/fa.dic"]) {
+      await vi.waitFor(() =>
+        expect(
+          w.posted.some(
+            (m) => m.type === "asset-read" && m.path === path && !answered.has(m.callId),
+          ),
+        ).toBe(true),
+      );
+      const read = w.posted.find((m) => m.type === "asset-read" && m.path === path) as Extract<
+        WorkerMessage,
+        { type: "asset-read" }
+      >;
+      answered.add(read.callId);
+      await w.send({
+        type: "host-result",
+        callId: read.callId,
+        ok: true,
+        value: Array.from(new TextEncoder().encode(`data-${read.callId}`)),
+      });
+    }
+    await vi.waitFor(() =>
+      expect(w.posted).toContainEqual({
+        type: "dictionary-result",
+        callId: 1,
+        ok: true,
+        sources: { aff: "data-1", dic: "data-2" },
+      }),
+    );
+  });
+
+  it("reports a dictionary load failure instead of leaving the host waiting", async () => {
+    const w = bootWorker();
+    const plugin = `export default {
+      activate(ctx) {
+        ctx.spellcheck.registerDictionary({
+          language: "xx",
+          label: "Broken",
+          scripts: ["Latn"],
+          load: async () => { throw new Error("asset missing"); },
+        });
+      },
+    }`;
+    await w.send(init(plugin));
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
+    expect(w.posted).toContainEqual({
+      type: "register-dictionary",
+      language: "xx",
+      label: "Broken",
+      scripts: ["Latn"],
+    });
+
+    await w.send({ type: "load-dictionary", callId: 7, language: "xx" });
+    await vi.waitFor(() =>
+      expect(w.posted).toContainEqual({
+        type: "dictionary-result",
+        callId: 7,
+        ok: false,
+        error: "Error: asset missing",
+      }),
+    );
+
+    // A language with nothing registered fails the call rather than going quiet.
+    await w.send({ type: "load-dictionary", callId: 8, language: "ghost" });
+    await vi.waitFor(() =>
+      expect(w.posted).toContainEqual({
+        type: "dictionary-result",
+        callId: 8,
+        ok: false,
+        error: "Error: no dictionary registered for ghost",
+      }),
+    );
+  });
+
   it("builds exports and reports build failures", async () => {
     const w = bootWorker();
     const plugin = `export default {

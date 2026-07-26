@@ -1,3 +1,4 @@
+import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_VERSION } from "../apiVersion";
 import type { Disposer } from "../disposer";
 import type { ExporterContribution, InstalledPlugin, SiteThemeContribution } from "../types";
@@ -21,6 +22,7 @@ export interface SandboxHostApi {
   addStyles(css: string): void;
   registerExporter(exporter: ExporterContribution): void;
   registerSiteTheme(theme: SiteThemeContribution): void;
+  registerDictionary(dictionary: DictionaryContribution): void;
   notify(message: string): void;
   registerTranslations(locale: string, namespace: string, resources: Record<string, unknown>): void;
   settingsSet(key: string, value: unknown): void;
@@ -58,6 +60,11 @@ export function startSandbox(
   const pendingExports = new Map<
     number,
     { resolve: (v: string | Uint8Array) => void; reject: (e: Error) => void }
+  >();
+  let dictionarySeq = 0;
+  const pendingDictionaries = new Map<
+    number,
+    { resolve: (v: { aff: string; dic: string }) => void; reject: (e: Error) => void }
   >();
 
   return new Promise<Disposer>((resolve, reject) => {
@@ -127,6 +134,27 @@ export function startSandbox(
           } else {
             pending.reject(new Error(data.error ?? "export failed"));
           }
+          break;
+        }
+        case "register-dictionary":
+          api.registerDictionary({
+            language: data.language,
+            label: data.label,
+            scripts: data.scripts,
+            load: () =>
+              new Promise((res, rej) => {
+                const callId = ++dictionarySeq;
+                pendingDictionaries.set(callId, { resolve: res, reject: rej });
+                worker.postMessage({ type: "load-dictionary", callId, language: data.language });
+              }),
+          });
+          break;
+        case "dictionary-result": {
+          const pending = pendingDictionaries.get(data.callId);
+          if (!pending) break;
+          pendingDictionaries.delete(data.callId);
+          if (data.ok && data.sources) pending.resolve(data.sources);
+          else pending.reject(new Error(data.error ?? "dictionary load failed"));
           break;
         }
         case "workspace-read":
