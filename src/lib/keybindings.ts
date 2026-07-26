@@ -44,6 +44,14 @@ export const BINDABLE_COMMANDS: readonly BindableCommand[] = [
     nativeMenu: true,
   },
   {
+    id: "save",
+    label: "Save",
+    category: "File",
+    defaultAccelerator: "CmdOrCtrl+S",
+    event: "menu-save",
+    nativeMenu: true,
+  },
+  {
     id: "print",
     label: "Print",
     category: "File",

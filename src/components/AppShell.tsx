@@ -15,6 +15,7 @@ import { useExport } from "@/hooks/useExport";
 import { useExportSite } from "@/hooks/useExportSite";
 import { useFontZoom } from "@/hooks/useFontZoom";
 import { useMenuEvents } from "@/hooks/useMenuEvents";
+import { useMenuShortcuts } from "@/hooks/useMenuShortcuts";
 import { useNativeKeybindings } from "@/hooks/useNativeKeybindings";
 import { useNativeMenuLabels } from "@/hooks/useNativeMenuLabels";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
@@ -256,6 +257,7 @@ export function AppShell() {
     ],
   );
   useMenuEvents(menuHandlers);
+  useMenuShortcuts({ platform, handlers: menuHandlers });
   useNativeKeybindings();
 
   const palette = useCommandPaletteController({
