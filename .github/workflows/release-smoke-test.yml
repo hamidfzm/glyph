@@ -34,6 +34,7 @@ jobs:
       run: ${{ steps.resolve.outputs.run }}
       tag: ${{ steps.resolve.outputs.tag }}
       version: ${{ steps.resolve.outputs.version }}
+      mature: ${{ steps.resolve.outputs.mature }}
     steps:
       - name: Resolve target release
         id: resolve
@@ -47,9 +48,16 @@ jobs:
           TAG="${TAG:-$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)}"
           PUBLISHED=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json publishedAt --jq .publishedAt)
 
+          AGE=$(( $(date +%s) - $(date -d "$PUBLISHED" +%s) ))
+
+          # Two days is long enough for every channel we publish to ourselves to
+          # have built and indexed, so a channel still serving an older version
+          # by then is broken, not slow. Below that, pending stays informational.
+          MATURE=false
+          [ "$AGE" -ge 172800 ] && MATURE=true
+
           RUN=true
           if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
-            AGE=$(( $(date +%s) - $(date -d "$PUBLISHED" +%s) ))
             if [ "$AGE" -lt 172800 ] || [ "$AGE" -ge 259200 ]; then
               RUN=false
               echo "::notice::Skipping: latest release $TAG is outside the 2-3 day window"
@@ -71,6 +79,7 @@ jobs:
             echo "run=$RUN"
             echo "tag=$TAG"
             echo "version=${TAG#v}"
+            echo "mature=$MATURE"
           } >> "$GITHUB_OUTPUT"
 
   homebrew-cask:
@@ -99,7 +108,10 @@ jobs:
           brew install --cask glyph-md/tap/glyph
           INSTALLED=$(defaults read /Applications/Glyph.app/Contents/Info CFBundleShortVersionString)
           [ "$INSTALLED" = "$VERSION" ]
-          test -x /Applications/Glyph.app/Contents/MacOS/glyph || test -x "/Applications/Glyph.app/Contents/MacOS/Glyph"
+
+          BIN=/Applications/Glyph.app/Contents/MacOS/glyph
+          [ -x "$BIN" ] || BIN=/Applications/Glyph.app/Contents/MacOS/Glyph
+          [ "$("$BIN" --version)" = "glyph $VERSION" ]
           echo "status=verified" >> "$GITHUB_OUTPUT"
 
   homebrew-formula:
@@ -127,6 +139,7 @@ jobs:
 
           brew install glyph-md/tap/glyph
           sudo apt-get update && sudo apt-get install -y xvfb libwebkit2gtk-4.1-0 libgtk-3-0
+          [ "$("$(brew --prefix)/bin/glyph" --version)" = "glyph $VERSION" ]
 
           set +e
           WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a timeout 15 "$(brew --prefix)/bin/glyph"
@@ -162,6 +175,7 @@ jobs:
           sudo apt-get install -y glyph xvfb
           INSTALLED=$(dpkg-query -W -f='${Version}' glyph)
           [ "$INSTALLED" = "$VERSION" ]
+          [ "$(glyph --version)" = "glyph $VERSION" ]
 
           set +e
           WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a timeout 15 glyph
@@ -202,6 +216,8 @@ jobs:
           sudo apt-get install -y glyph xvfb
           INSTALLED=$(dpkg-query -W -f='${Version}' glyph)
           case "$INSTALLED" in "$VERSION"-*) ;; *) echo "installed $INSTALLED"; exit 1 ;; esac
+          # Catches a package that installs cleanly but ships no binary.
+          [ "$(glyph --version)" = "glyph $VERSION" ]
 
           set +e
           WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a timeout 15 glyph
@@ -240,6 +256,8 @@ jobs:
           sudo apt-get install -y glyph xvfb
           INSTALLED=$(dpkg-query -W -f='${Version}' glyph)
           case "$INSTALLED" in "$VERSION"-*) ;; *) echo "installed $INSTALLED"; exit 1 ;; esac
+          # Catches a package that installs cleanly but ships no binary.
+          [ "$(glyph --version)" = "glyph $VERSION" ]
 
           set +e
           WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a timeout 15 glyph
@@ -271,6 +289,7 @@ jobs:
           sudo snap install glyph
           INSTALLED=$(snap list glyph | awk 'NR==2 {print $2}')
           [ "$INSTALLED" = "$VERSION" ]
+          [ "$(snap run glyph --version)" = "glyph $VERSION" ]
           sudo apt-get update && sudo apt-get install -y xvfb
 
           set +e
@@ -306,7 +325,7 @@ jobs:
           dnf install -y "$NAME" xorg-x11-server-Xvfb
           INSTALLED=$(rpm -q --qf '%{VERSION}' "$NAME")
           [ "$INSTALLED" = "$VERSION" ]
-          command -v glyph
+          [ "$(glyph --version)" = "glyph $VERSION" ]
 
           Xvfb :99 >/dev/null 2>&1 &
           for _ in $(seq 1 20); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 0.5; done
@@ -349,7 +368,7 @@ jobs:
 
           INSTALLED=$(pacman -Q glyph-md-bin | awk '{print $2}')
           [ "${INSTALLED%%-*}" = "$VERSION" ]
-          command -v glyph
+          [ "$(glyph --version)" = "glyph $VERSION" ]
 
           Xvfb :99 >/dev/null 2>&1 &
           for _ in $(seq 1 20); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 0.5; done
@@ -474,18 +493,23 @@ jobs:
       - name: Build channel summary
         env:
           TAG: ${{ needs.resolve.outputs.tag }}
+          MATURE: ${{ needs.resolve.outputs.mature }}
+          # Field 2 is the publishing model: "direct" channels are pushed by our
+          # own release workflow, so once the release has matured a pending one
+          # means publishing broke. "queued" channels wait on third-party review
+          # (Chocolatey moderation, winget-pkgs PRs) and stay informational.
           ROWS: |
-            homebrew-cask ${{ needs.homebrew-cask.result }} ${{ needs.homebrew-cask.outputs.status }}
-            homebrew-formula ${{ needs.homebrew-formula.result }} ${{ needs.homebrew-formula.outputs.status }}
-            apt ${{ needs.apt.result }} ${{ needs.apt.outputs.status }}
-            ppa-jammy ${{ needs.ppa-jammy.result }} ${{ needs.ppa-jammy.outputs.status }}
-            ppa-noble ${{ needs.ppa-noble.result }} ${{ needs.ppa-noble.outputs.status }}
-            snap ${{ needs.snap.result }} ${{ needs.snap.outputs.status }}
-            dnf ${{ needs.dnf.result }} ${{ needs.dnf.outputs.status }}
-            aur ${{ needs.aur.result }} ${{ needs.aur.outputs.status }}
-            scoop ${{ needs.scoop.result }} ${{ needs.scoop.outputs.status }}
-            chocolatey ${{ needs.chocolatey.result }} ${{ needs.chocolatey.outputs.status }}
-            winget ${{ needs.winget.result }} ${{ needs.winget.outputs.status }}
+            homebrew-cask direct ${{ needs.homebrew-cask.result }} ${{ needs.homebrew-cask.outputs.status }}
+            homebrew-formula direct ${{ needs.homebrew-formula.result }} ${{ needs.homebrew-formula.outputs.status }}
+            apt direct ${{ needs.apt.result }} ${{ needs.apt.outputs.status }}
+            ppa-jammy direct ${{ needs.ppa-jammy.result }} ${{ needs.ppa-jammy.outputs.status }}
+            ppa-noble direct ${{ needs.ppa-noble.result }} ${{ needs.ppa-noble.outputs.status }}
+            snap direct ${{ needs.snap.result }} ${{ needs.snap.outputs.status }}
+            dnf direct ${{ needs.dnf.result }} ${{ needs.dnf.outputs.status }}
+            aur direct ${{ needs.aur.result }} ${{ needs.aur.outputs.status }}
+            scoop direct ${{ needs.scoop.result }} ${{ needs.scoop.outputs.status }}
+            chocolatey queued ${{ needs.chocolatey.result }} ${{ needs.chocolatey.outputs.status }}
+            winget queued ${{ needs.winget.result }} ${{ needs.winget.outputs.status }}
         run: |
           {
             echo "## Release Smoke Test: $TAG"
@@ -495,9 +519,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           FAILED=0
-          while read -r CHANNEL RESULT STATUS; do
+          while read -r CHANNEL MODEL RESULT STATUS; do
             [ -z "$CHANNEL" ] && continue
-            if [ "$RESULT" = "success" ] && [ -n "$STATUS" ]; then
+            if [ "$STATUS" = "pending" ] && [ "$MODEL" = "direct" ] && [ "$MATURE" = "true" ]; then
+              ROW="pending (never published)"
+              FAILED=1
+            elif [ "$RESULT" = "success" ] && [ -n "$STATUS" ]; then
               ROW="$STATUS"
             elif [ "$RESULT" = "success" ]; then
               ROW="verified"
