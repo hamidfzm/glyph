@@ -185,6 +185,8 @@ function buildContext(over: Partial<TabsContextValue>): TabsContextValue {
     closeWorkspace: vi.fn(),
     toggleExpand: vi.fn(),
     createNote: vi.fn(),
+    createNoteInWorkspace: vi.fn(),
+    createCanvasInWorkspace: vi.fn(),
     createCanvas: vi.fn(),
     commitEdit: vi.fn(),
     createFolder: vi.fn(),
