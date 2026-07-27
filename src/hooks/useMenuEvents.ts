@@ -5,6 +5,7 @@ export interface MenuEventHandlers {
   newDocument: () => void;
   openFile: () => void;
   openFolder: () => void;
+  newWorkspace: () => void;
   openGraph: () => void;
   save: () => void;
   toggleAutoSave: () => void;
@@ -44,6 +45,7 @@ export function menuEventActions(handlers: MenuEventHandlers): Record<string, ()
     "menu-new": handlers.newDocument,
     "menu-open-file": handlers.openFile,
     "menu-open-folder": handlers.openFolder,
+    "menu-new-workspace": handlers.newWorkspace,
     "menu-open-graph": handlers.openGraph,
     "menu-save": handlers.save,
     "menu-toggle-auto-save": handlers.toggleAutoSave,

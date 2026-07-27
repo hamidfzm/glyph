@@ -13,6 +13,7 @@
   "openFile": "Abrir archivo…",
   "newDocument": "Nuevo documento",
   "openFolder": "Abrir carpeta…",
+  "newWorkspace": "Nuevo espacio de trabajo…",
   "closeTab": "Cerrar pestaña",
   "toggleFilesSidebar": "Mostrar u ocultar barra de archivos",
   "toggleOutlineSidebar": "Mostrar u ocultar barra de esquema",

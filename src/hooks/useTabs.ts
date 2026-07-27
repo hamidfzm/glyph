@@ -13,7 +13,7 @@ import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { adaptMmdContent } from "@/lib/mmd";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
 import { basename, isPathInside, parentDir, pruneInside } from "@/lib/paths";
-import { pickFiles, pickFolder, pickSave } from "@/lib/pickers";
+import { pickFiles, pickFolder, pickNewWorkspace, pickSave } from "@/lib/pickers";
 import { isMobilePlatform } from "@/lib/platform";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { toggleTaskAtLine } from "@/lib/taskList";
@@ -523,6 +523,14 @@ export function useTabs(options: UseTabsOptions) {
   // event) the folder is adopted into this window. With no root (the user's
   // Open Folder dialog) the choice is routed through the window manager so a
   // different folder opens a new window instead of replacing this one.
+  // Create an empty folder and adopt it as a workspace, routing through the
+  // same window manager as Open Folder.
+  const createWorkspace = useCallback(async () => {
+    const path = await pickNewWorkspace(t("common:fileDialog.newWorkspace"));
+    if (typeof path !== "string") return;
+    await invoke("request_open", { kind: "folder", path });
+  }, [t]);
+
   const openFolder = useCallback(
     async (
       root?: string,
@@ -1475,6 +1483,7 @@ export function useTabs(options: UseTabsOptions) {
     openFile,
     newDocument,
     openFolder,
+    createWorkspace,
     openGraph,
     closeWorkspace,
     toggleExpand,

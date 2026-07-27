@@ -29,6 +29,7 @@ function makeHandlers(): MenuEventHandlers {
     newDocument: vi.fn(),
     openFile: vi.fn(),
     openFolder: vi.fn(),
+    newWorkspace: vi.fn(),
     openGraph: vi.fn(),
     save: vi.fn(),
     toggleAutoSave: vi.fn(),
