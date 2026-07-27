@@ -29,6 +29,7 @@ pub struct MenuItemRefs<R: Runtime = Wry> {
     open_folder: MenuItem<R>,
     save: MenuItem<R>,
     auto_save: CheckMenuItem<R>,
+    new_workspace: MenuItem<R>,
     reset_view: MenuItem<R>,
     close_tab: MenuItem<R>,
     close_workspace: MenuItem<R>,
@@ -87,6 +88,7 @@ pub struct MenuLabels {
     open_folder: String,
     save: String,
     auto_save: String,
+    new_workspace: String,
     reset_view: String,
     print: String,
     export_html: String,
@@ -187,6 +189,8 @@ pub fn build_menu<R: Runtime>(
     let open_folder = MenuItemBuilder::with_id(mid("open-folder"), "Open Folder\u{2026}")
         .accelerator("CmdOrCtrl+Shift+O")
         .build(handle)?;
+    let new_workspace =
+        MenuItemBuilder::with_id(mid("new-workspace"), "New Workspace\u{2026}").build(handle)?;
     let reset_view = MenuItemBuilder::with_id(mid("reset-view"), "Reset View").build(handle)?;
     let save = MenuItemBuilder::with_id(mid("save"), "Save")
         .accelerator("CmdOrCtrl+S")
@@ -380,6 +384,7 @@ pub fn build_menu<R: Runtime>(
             .item(&new_document)
             .item(&open)
             .item(&open_folder)
+            .item(&new_workspace)
             .separator()
             .item(&save)
             .item(&auto_save)
@@ -428,6 +433,7 @@ pub fn build_menu<R: Runtime>(
             .item(&new_document)
             .item(&open)
             .item(&open_folder)
+            .item(&new_workspace)
             .separator()
             .item(&save)
             .item(&auto_save)
@@ -461,6 +467,7 @@ pub fn build_menu<R: Runtime>(
         open_folder,
         save,
         auto_save,
+        new_workspace,
         reset_view,
         close_tab,
         close_workspace,
@@ -649,6 +656,7 @@ pub fn apply_menu_labels<R: Runtime>(refs: &MenuItemRefs<R>, l: &MenuLabels) -> 
     refs.open_folder.set_text(&l.open_folder).map_err(s)?;
     refs.save.set_text(&l.save).map_err(s)?;
     refs.auto_save.set_text(&l.auto_save).map_err(s)?;
+    refs.new_workspace.set_text(&l.new_workspace).map_err(s)?;
     refs.reset_view.set_text(&l.reset_view).map_err(s)?;
     refs.print.set_text(&l.print).map_err(s)?;
     refs.export_html.set_text(&l.export_html).map_err(s)?;

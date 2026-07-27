@@ -86,6 +86,7 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     newDocument: vi.fn(),
     openFile: vi.fn(),
     openFolder: vi.fn(),
+    createWorkspace: vi.fn(),
     openGraph: vi.fn(),
     closeWorkspace: vi.fn(),
     toggleExpand: vi.fn(),
