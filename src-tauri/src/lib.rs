@@ -174,6 +174,17 @@ pub fn make_app_builder() -> tauri::Builder<tauri::Wry> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Answered before Tauri (and therefore GTK/WebKit) starts, so packaging
+    // smoke tests can verify an installed binary headlessly. `tauri-plugin-cli`
+    // parses args from inside `setup`, which is far too late for that.
+    if std::env::args()
+        .skip(1)
+        .any(|a| a == "--version" || a == "-V")
+    {
+        println!("glyph {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     let builder = make_app_builder()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
