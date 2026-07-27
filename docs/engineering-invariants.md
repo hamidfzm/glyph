@@ -69,4 +69,12 @@ For stateful or security-sensitive changes, tests and PR evidence must cover the
 
 - Every escaped data-loss or security defect adds a regression test and, if needed, a new invariant here.
 - Review this catalog at each minor-release kickoff and after every security or data-loss incident.
-- Mutation-testing baseline for the persistence and authorization modules is documented here once introduced (#441, Phase 4).
+## Mutation testing
+
+Targeted mutation testing guards the authorization and persistence command
+modules: `src-tauri/src/grants.rs`, `src-tauri/src/commands/file.rs`, and
+`src-tauri/src/commands/create.rs`, scoped in `src-tauri/.cargo/mutants.toml`.
+
+- Run locally with `cargo mutants` in `src-tauri/` (install: `cargo install cargo-mutants`). CI runs it weekly and on demand via the Mutation workflow (`ci-mutation.yml`), non-blocking.
+- **Baseline (2026-07-27): 70 mutants tested, 0 missed** (64 caught, 5 unviable, 1 caught by test timeout). The threshold is non-decreasing: a run that reports any missed mutant is a review failure; either kill the mutant with a test or triage it into the config's `exclude_re` with a written justification (current triage: `print_document`, a one-line webview delegation the mock runtime cannot make observably fail).
+- Every surviving high-impact mutant found by a scheduled run gets the same treatment before the next release.

@@ -1,0 +1,14 @@
+# Targeted mutation testing for the persistence and authorization modules
+# (#441 Phase 4). Scope is deliberate: these files carry the security and
+# data-safety invariants (docs/engineering-invariants.md), and a full-crate
+# run would take hours for little extra signal.
+examine_globs = [
+    "src/grants.rs",
+    "src/commands/file.rs",
+    "src/commands/create.rs",
+]
+
+# Triaged acceptable miss: print_document is a one-line delegation to the
+# webview's print(); making it observably fail needs a real window, which the
+# mock runtime cannot provide. Low impact: no state, no filesystem access.
+exclude_re = ["print_document"]

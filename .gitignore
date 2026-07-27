@@ -23,3 +23,6 @@ src-tauri/gen/schemas/android-schema.json
 src-tauri/gen/schemas/iOS-schema.json
 src-tauri/gen/schemas/mobile-schema.json
 src-tauri/gen/schemas/acl-manifests.json
+
+# cargo-mutants output (ci-mutation.yml uploads it as an artifact)
+src-tauri/mutants.out*/

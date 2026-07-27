@@ -1,0 +1,40 @@
+name: Mutation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Monday 04:00 UTC. Non-blocking: this workflow is not in the
+    # required-checks ruleset; a missed mutant is a review finding, not a
+    # red X on someone's PR.
+    - cron: "0 4 * * 1"
+
+jobs:
+  mutants:
+    name: cargo-mutants
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: ./.github/actions/rust-setup
+      - name: Install Linux dependencies
+        timeout-minutes: 8
+        uses: ./.github/actions/linux-deps
+        with:
+          cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@3d7d7cd5ac7f994c1892ae0c06165095b9139094 # v2.85.1
+        with:
+          tool: cargo-mutants
+      - name: Run targeted mutation tests
+        working-directory: src-tauri
+        # Scope comes from src-tauri/.cargo/mutants.toml (grants + file/create
+        # commands). Fails the job when any mutant is missed, keeping the
+        # documented baseline non-decreasing (docs/engineering-invariants.md).
+        run: cargo mutants -j 2 --no-shuffle
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: mutants-report
+          path: src-tauri/mutants.out/
+          retention-days: 30
