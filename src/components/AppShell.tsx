@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
+import { useZoomApi } from "@/contexts/ZoomContext";
 import { useAIController } from "@/hooks/useAIController";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { useCliExport } from "@/hooks/useCliExport";
@@ -13,7 +14,6 @@ import { useErrorReporting } from "@/hooks/useErrorReporting";
 import { useErrorReportingPrompt } from "@/hooks/useErrorReportingPrompt";
 import { useExport } from "@/hooks/useExport";
 import { useExportSite } from "@/hooks/useExportSite";
-import { useFontZoom } from "@/hooks/useFontZoom";
 import { useCanSplit } from "@/hooks/useMediaQuery";
 import { useMenuEvents } from "@/hooks/useMenuEvents";
 import { useMenuShortcuts } from "@/hooks/useMenuShortcuts";
@@ -158,7 +158,9 @@ export function AppShell() {
     content: displayContent,
   });
   const siteExporter = useExportSite(workspace?.root);
-  const zoom = useFontZoom({ fontSize: settings.appearance.fontSize, updateSettings });
+  // Zoom In/Out/Actual-Size dispatch to whichever document surface is active
+  // (note font, graph camera) via the ZoomProvider; no-op with nothing focused.
+  const zoomActions = useZoomApi()?.actions;
   const runPluginExporter = usePluginExporterRunner({
     entries: tabs.tocEntries,
     filePath: activeFile?.path,
@@ -226,9 +228,9 @@ export function AppShell() {
       exportPdf: exporters.exportPdf,
       exportWebsite: siteExporter.exportWebsite,
       workspaceSettings: () => setWorkspaceSettingsOpen(true),
-      zoomIn: zoom.zoomIn,
-      zoomOut: zoom.zoomOut,
-      zoomReset: zoom.zoomReset,
+      zoomIn: () => zoomActions?.zoomIn(),
+      zoomOut: () => zoomActions?.zoomOut(),
+      zoomReset: () => zoomActions?.zoomReset(),
       aiAction: aiController.runAction,
       aiChat: aiController.togglePanel,
       readAloud: readAloud.toggle,
@@ -256,9 +258,7 @@ export function AppShell() {
       exporters.exportEpub,
       exporters.exportPdf,
       siteExporter.exportWebsite,
-      zoom.zoomIn,
-      zoom.zoomOut,
-      zoom.zoomReset,
+      zoomActions,
       aiController.runAction,
       aiController.togglePanel,
       readAloud.toggle,

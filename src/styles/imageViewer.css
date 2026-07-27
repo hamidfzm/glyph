@@ -28,6 +28,9 @@
   margin: auto;
   display: block;
   max-width: none;
+  /* As a flex item the image would otherwise shrink back to the stage width,
+     pinning it at the fitted size so zooming past fit changed nothing. */
+  flex-shrink: 0;
   border-radius: var(--glyph-radius-sm);
   box-shadow: var(--glyph-shadow);
   user-select: none;

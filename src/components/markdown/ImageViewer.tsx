@@ -5,15 +5,19 @@ import { ActualSizeIcon } from "@/components/icons/ActualSizeIcon";
 import { FitIcon } from "@/components/icons/FitIcon";
 import { ZoomInIcon } from "@/components/icons/ZoomInIcon";
 import { ZoomOutIcon } from "@/components/icons/ZoomOutIcon";
+import { useZoomApi } from "@/contexts/ZoomContext";
 import { useDragPan } from "@/hooks/useDragPan";
 import { isSvgFile } from "@/lib/imageExtensions";
 import { clampScale, fitScale, ZOOM_STEP } from "@/lib/lightbox";
 import { svgToDataUrl } from "@/lib/svgDataUrl";
+import { svgIntrinsicSize } from "@/lib/svgIntrinsicSize";
 import { toAssetUrl } from "./resolveImageSrc";
 
 interface ImageViewerProps {
   filePath: string;
 }
+
+const WHEEL_ZOOM_SPEED = 0.0015;
 
 // Read-only viewer for an image/SVG file tab. The asset is served through
 // Tauri's asset protocol (never read as text), laid out inside a scrollable
@@ -27,9 +31,14 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
   const [scale, setScale] = useState(1);
   const [isFit, setIsFit] = useState(true);
   const [loaded, setLoaded] = useState(false);
-  // Intrinsic pixel size, or null when the image has none (SVGs with only a
-  // `viewBox` report naturalWidth/Height === 0). Drives the sizing model below.
+  // Intrinsic pixel size, or null when the image has none. Drives the sizing
+  // model below. `naturalRef` mirrors it for the fit math, which runs inside a
+  // load handler before the state has committed.
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  const naturalRef = useRef<{ w: number; h: number } | null>(null);
+  // Intrinsic size parsed from an SVG's markup, used when the webview reports
+  // naturalWidth/Height as 0 (SVGs with only a `viewBox`).
+  const svgSizeRef = useRef<{ w: number; h: number } | null>(null);
 
   // SVGs render from their inlined markup as a `data:` URL rather than the asset
   // protocol: it always loads (no protocol round-trip that can come back empty)
@@ -46,7 +55,9 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
     let cancelled = false;
     invoke<string>("read_file", { path: filePath })
       .then((svg) => {
-        if (!cancelled) setSrc(svgToDataUrl(svg));
+        if (cancelled) return;
+        svgSizeRef.current = svgIntrinsicSize(svg);
+        setSrc(svgToDataUrl(svg));
       })
       // Fall back to the asset protocol if the read fails for any reason.
       .catch(() => {
@@ -59,14 +70,14 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
 
   const computeFit = useCallback(() => {
     const stage = stageRef.current;
-    const img = imgRef.current;
-    if (!stage || !img?.naturalWidth) return 1;
+    const size = naturalRef.current;
+    if (!stage || !size) return 1;
     const styles = getComputedStyle(stage);
     const availWidth =
       stage.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
     const availHeight =
       stage.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom);
-    return fitScale(img.naturalWidth, img.naturalHeight, availWidth, availHeight);
+    return fitScale(size.w, size.h, availWidth, availHeight);
   }, []);
 
   const applyFit = useCallback(() => {
@@ -86,12 +97,16 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
 
   const handleLoad = useCallback(() => {
     const img = imgRef.current;
-    setLoaded(true);
-    setNatural(
+    // Prefer the webview's measured pixels; fall back to an SVG's parsed size
+    // (viewBox-only SVGs report naturalWidth/Height === 0). Both give a real
+    // layout size so zooming past the viewport pans instead of clipping.
+    const size =
       img && img.naturalWidth > 0 && img.naturalHeight > 0
         ? { w: img.naturalWidth, h: img.naturalHeight }
-        : null,
-    );
+        : svgSizeRef.current;
+    naturalRef.current = size;
+    setLoaded(true);
+    setNatural(size);
     applyFit();
   }, [applyFit]);
 
@@ -102,6 +117,36 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [isFit, computeFit]);
+
+  // Route the Zoom In/Out/Actual-Size commands to this viewer while it's the
+  // active surface. Actual Size maps to 100%, matching the toolbar button.
+  const registerZoomTarget = useZoomApi()?.registerTarget;
+  useEffect(() => {
+    if (!registerZoomTarget) return;
+    registerZoomTarget({
+      zoomIn: () => zoomBy(ZOOM_STEP),
+      zoomOut: () => zoomBy(1 / ZOOM_STEP),
+      zoomReset: actualSize,
+    });
+    return () => registerZoomTarget(null);
+  }, [registerZoomTarget, zoomBy, actualSize]);
+
+  // Ctrl/Cmd + wheel zooms; a plain wheel keeps panning a zoomed image. Native
+  // non-passive listener so preventDefault cancels the scroll.
+  useEffect(() => {
+    const stage = stageRef.current;
+    /* v8 ignore start -- defensive: the stage div is always mounted by now */
+    if (!stage) return;
+    /* v8 ignore stop */
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      setScale((s) => clampScale(s * Math.exp(-event.deltaY * WHEEL_ZOOM_SPEED)));
+      setIsFit(false);
+    };
+    stage.addEventListener("wheel", handleWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", handleWheel);
+  }, []);
 
   // With an intrinsic size we lay the image out at `natural × scale` so zooming
   // past the viewport pans. Without one (an SVG with only a viewBox) there are
