@@ -99,6 +99,8 @@ export function AppShell() {
     openFile,
     openFileDialog,
     newDocument,
+    createNoteInWorkspace,
+    createCanvasInWorkspace,
     closeTab,
     closeWorkspace,
     setTabMode,
@@ -358,6 +360,8 @@ export function AppShell() {
               onOpenFile={openFileDialog}
               onOpenFolder={() => openFolder()}
               onNewWorkspace={createWorkspace}
+              onNewNote={createNoteInWorkspace}
+              onNewCanvas={createCanvasInWorkspace}
               folderEmpty={folderEmptyHint}
             />
           </div>
