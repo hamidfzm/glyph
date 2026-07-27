@@ -226,6 +226,19 @@ describe("CommandPalette", () => {
     expect(screen.getByText("/workspace/note.md")).toBeInTheDocument();
   });
 
+  it("renders the leading icon when provided, and an empty slot when not", () => {
+    const { container } = renderPalette({
+      commands: [
+        cmd({ id: "with", title: "With Icon", icon: () => <svg aria-label="icon" role="img" /> }),
+        cmd({ id: "without", title: "Without Icon" }),
+      ],
+    });
+    expect(screen.getByRole("img", { name: "icon" })).toBeInTheDocument();
+    // Both rows keep the slot, so titles stay aligned when only some have icons.
+    expect(container.querySelectorAll(".command-palette-icon")).toHaveLength(2);
+    expect(screen.getByText("Without Icon")).toBeInTheDocument();
+  });
+
   it("focuses the input when opened", () => {
     renderPalette({});
     expect(document.activeElement).toBe(screen.getByLabelText("Command palette query"));

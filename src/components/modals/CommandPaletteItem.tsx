@@ -8,14 +8,15 @@ interface CommandPaletteItemProps {
   onHover: () => void;
 }
 
-// A single result row in the command palette: title (with fuzzy-match
-// highlights), optional subtitle, and optional shortcut hint.
+// A single result row in the command palette: optional leading icon, title
+// (with fuzzy-match highlights), optional subtitle, and optional shortcut hint.
 export function CommandPaletteItem({
   row,
   selected,
   onActivate,
   onHover,
 }: CommandPaletteItemProps) {
+  const Icon = row.command.icon;
   return (
     <button
       type="button"
@@ -28,6 +29,8 @@ export function CommandPaletteItem({
       // are pointer-actionable but never the keyboard's focus target.
       tabIndex={-1}
     >
+      {/* Slot renders even without an icon so titles line up across rows. */}
+      <span className="command-palette-icon">{Icon && <Icon />}</span>
       <span className="command-palette-title">
         {renderHighlight(row.command.title, row.matches)}
       </span>

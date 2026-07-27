@@ -1,5 +1,21 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { ActualSizeIcon } from "@/components/icons/ActualSizeIcon";
+import { EditModeIcon } from "@/components/icons/EditModeIcon";
+import { ExternalLinkIcon } from "@/components/icons/ExternalLinkIcon";
+import { FileTextIcon } from "@/components/icons/FileTextIcon";
+import { FitIcon } from "@/components/icons/FitIcon";
+import { FolderIcon } from "@/components/icons/FolderIcon";
+import { FolderOpenIcon } from "@/components/icons/FolderOpenIcon";
+import { GraphIcon } from "@/components/icons/GraphIcon";
+import { NewFolderIcon } from "@/components/icons/NewFolderIcon";
+import { NewNoteIcon } from "@/components/icons/NewNoteIcon";
+import { OpenIcon } from "@/components/icons/OpenIcon";
+import { OutlineIcon } from "@/components/icons/OutlineIcon";
+import { SparkleIcon } from "@/components/icons/SparkleIcon";
+import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
+import { ZoomInIcon } from "@/components/icons/ZoomInIcon";
+import { ZoomOutIcon } from "@/components/icons/ZoomOutIcon";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import type { MenuEventHandlers } from "@/hooks/useMenuEvents";
 import type { TocEntry } from "@/hooks/useTableOfContents";
@@ -91,6 +107,7 @@ export function useAppCommands({
         id: "cmd:newDocument",
         title: t("newDocument"),
         section: "Commands",
+        icon: NewNoteIcon,
         shortcut: "Cmd/Ctrl+N",
         run: actions.newDocument,
       },
@@ -98,6 +115,7 @@ export function useAppCommands({
         id: "cmd:openFile",
         title: t("openFile"),
         section: "Commands",
+        icon: OpenIcon,
         shortcut: "Cmd/Ctrl+O",
         run: actions.openFile,
       },
@@ -105,6 +123,7 @@ export function useAppCommands({
         id: "cmd:openFolder",
         title: t("openFolder"),
         section: "Commands",
+        icon: FolderOpenIcon,
         shortcut: "Cmd/Ctrl+Shift+O",
         run: actions.openFolder,
       },
@@ -112,12 +131,14 @@ export function useAppCommands({
         id: "cmd:newWorkspace",
         title: t("newWorkspace"),
         section: "Commands",
+        icon: NewFolderIcon,
         run: actions.newWorkspace,
       },
       {
         id: "cmd:closeTab",
         title: t("closeTab"),
         section: "Commands",
+        icon: TabCloseIcon,
         shortcut: "Cmd/Ctrl+W",
         run: actions.closeTab,
       },
@@ -125,6 +146,7 @@ export function useAppCommands({
         id: "cmd:toggleFilesSidebar",
         title: t("toggleFilesSidebar"),
         section: "Commands",
+        icon: FolderIcon,
         shortcut: "Cmd/Ctrl+B",
         run: actions.toggleFilesSidebar,
       },
@@ -132,10 +154,17 @@ export function useAppCommands({
         id: "cmd:toggleOutlineSidebar",
         title: t("toggleOutlineSidebar"),
         section: "Commands",
+        icon: OutlineIcon,
         shortcut: "Cmd/Ctrl+\\",
         run: actions.toggleOutlineSidebar,
       },
-      { id: "cmd:resetView", title: t("resetView"), section: "Commands", run: actions.resetView },
+      {
+        id: "cmd:resetView",
+        title: t("resetView"),
+        section: "Commands",
+        icon: FitIcon,
+        run: actions.resetView,
+      },
       {
         id: "cmd:openSettings",
         title: t("openSettings"),
@@ -166,6 +195,7 @@ export function useAppCommands({
         id: "cmd:toggleEdit",
         title: t("toggleEdit"),
         section: "Commands",
+        icon: EditModeIcon,
         shortcut: "Cmd/Ctrl+E",
         run: actions.toggleEdit,
       },
@@ -173,6 +203,7 @@ export function useAppCommands({
         id: "cmd:openGraph",
         title: t("openGraph"),
         section: "Commands",
+        icon: GraphIcon,
         shortcut: "Cmd/Ctrl+G",
         run: actions.openGraph,
       },
@@ -187,21 +218,30 @@ export function useAppCommands({
         id: "cmd:exportHtml",
         title: t("exportHtml"),
         section: "Commands",
+        icon: FileTextIcon,
         run: actions.exportHtml,
       },
       {
         id: "cmd:exportDocx",
         title: t("exportDocx"),
         section: "Commands",
+        icon: FileTextIcon,
         run: actions.exportDocx,
       },
       {
         id: "cmd:exportEpub",
         title: t("exportEpub"),
         section: "Commands",
+        icon: FileTextIcon,
         run: actions.exportEpub,
       },
-      { id: "cmd:exportPdf", title: t("exportPdf"), section: "Commands", run: actions.exportPdf },
+      {
+        id: "cmd:exportPdf",
+        title: t("exportPdf"),
+        section: "Commands",
+        icon: FileTextIcon,
+        run: actions.exportPdf,
+      },
     );
 
     // Workspace-wide export; pointless (and menu-disabled) without a folder.
@@ -211,6 +251,7 @@ export function useAppCommands({
           id: "cmd:exportWebsite",
           title: t("exportWebsite"),
           section: "Commands",
+          icon: ExternalLinkIcon,
           run: actions.exportWebsite,
         },
         {
@@ -227,6 +268,7 @@ export function useAppCommands({
         id: "cmd:zoomIn",
         title: t("zoomIn"),
         section: "Commands",
+        icon: ZoomInIcon,
         shortcut: "Cmd/Ctrl+=",
         run: actions.zoomIn,
       },
@@ -234,6 +276,7 @@ export function useAppCommands({
         id: "cmd:zoomOut",
         title: t("zoomOut"),
         section: "Commands",
+        icon: ZoomOutIcon,
         shortcut: "Cmd/Ctrl+-",
         run: actions.zoomOut,
       },
@@ -241,6 +284,7 @@ export function useAppCommands({
         id: "cmd:zoomReset",
         title: t("zoomReset"),
         section: "Commands",
+        icon: ActualSizeIcon,
         shortcut: "Cmd/Ctrl+0",
         run: actions.zoomReset,
       },
@@ -248,6 +292,7 @@ export function useAppCommands({
         id: "cmd:aiChat",
         title: t("aiChat"),
         section: "Commands",
+        icon: SparkleIcon,
         shortcut: "Cmd/Ctrl+Shift+A",
         run: actions.aiChat,
       },
@@ -279,6 +324,7 @@ export function useAppCommands({
         id: `plugin-export:${exporter.id}`,
         title: t("exportAs", { label: exporter.label }),
         section: "Commands",
+        icon: FileTextIcon,
         run: () => actions.runPluginExporter(exporter),
       });
     }

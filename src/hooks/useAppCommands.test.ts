@@ -328,6 +328,16 @@ describe("useAppCommands", () => {
     expect(actions.runPluginExporter).toHaveBeenCalledWith(slides);
   });
 
+  it("gives navigation and view commands a palette icon", () => {
+    const actions = makeActions();
+    const { result } = renderHook(() =>
+      useAppCommands({ workspaceOpen: false, workspaceFiles: [], tocEntries: [], actions }),
+    );
+    for (const id of ["cmd:openFile", "cmd:openGraph", "cmd:zoomIn", "cmd:exportPdf"]) {
+      expect(result.current.find((c) => c.id === id)?.icon).toBeTypeOf("function");
+    }
+  });
+
   it("includes a Manage Plugins command", () => {
     const actions = makeActions();
     const { result } = renderHook(() =>

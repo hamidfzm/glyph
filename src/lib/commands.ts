@@ -6,6 +6,7 @@
 // the fuzzy matcher in `./fuzzyMatch`. Empty queries pass through in source
 // order (modulo per-section priority).
 
+import type { ComponentType } from "react";
 import { fuzzyMatch } from "./fuzzyMatch";
 
 export type CommandSection = "Files" | "Headings" | "Commands";
@@ -17,6 +18,8 @@ export interface Command {
   /** Optional secondary line (file path, parent heading, accelerator). */
   subtitle?: string;
   section: CommandSection;
+  /** Optional leading icon component from `src/components/icons/`. */
+  icon?: ComponentType<{ className?: string }>;
   /** Optional keyboard shortcut hint shown on the right edge of the row. */
   shortcut?: string;
   run: () => void;
