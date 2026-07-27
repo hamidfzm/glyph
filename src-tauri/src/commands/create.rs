@@ -428,7 +428,6 @@ mod tests {
     #[test]
     fn rename_with_separators_or_dot_dot_stays_inside_root() {
         let root = unique_tmp("rename_guard");
-        fs::create_dir_all(&root).unwrap();
         let canonical_root = root.canonicalize().unwrap();
 
         // sanitize_name strips separators but keeps dots; whatever survives

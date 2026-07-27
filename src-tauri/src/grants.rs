@@ -329,22 +329,8 @@ mod tests {
         grants.grant_workspace(tmp.path()).unwrap();
         assert!(grants.ensure_readable(&as_str(&file)).is_ok());
 
-        grants.revoke_workspace(tmp.path());
-        assert!(grants.ensure_readable(&as_str(&file)).is_err());
-        assert!(grants.ensure_workspace(&as_str(tmp.path())).is_err());
-    }
-
-    #[test]
-    fn revocation_denies_every_ensure_path() {
-        let tmp = TempDir::new().unwrap();
-        let file = tmp.path().join("a.md");
-        fs::write(&file, "x").unwrap();
-
-        let grants = GrantRegistry::default();
-        grants.grant_workspace(tmp.path()).unwrap();
-        grants.revoke_workspace(tmp.path());
-
         // A stale grant must not survive on any validation path.
+        grants.revoke_workspace(tmp.path());
         assert!(grants.ensure_readable(&as_str(&file)).is_err());
         assert!(grants.ensure_writable(&as_str(&file)).is_err());
         assert!(grants.ensure_watchable(&as_str(&file)).is_err());
@@ -394,15 +380,17 @@ mod tests {
         // Junctions are the Windows escape vector symlinks are on unix, and
         // unlike symlinks they need no privilege to create.
         let link = root.join("innocent");
-        let status = std::process::Command::new("cmd")
+        // .output() captures the child's console chatter that .status() would
+        // leak past libtest's output capture.
+        let output = std::process::Command::new("cmd")
             .arg("/C")
             .arg("mklink")
             .arg("/J")
             .arg(&link)
             .arg(&secret_dir)
-            .status()
+            .output()
             .expect("cmd should run");
-        assert!(status.success(), "mklink /J failed");
+        assert!(output.status.success(), "mklink /J failed");
 
         let grants = GrantRegistry::default();
         grants.grant_workspace(&root).unwrap();
@@ -411,6 +399,9 @@ mod tests {
             .ensure_readable(&as_str(&link.join("secret.md")))
             .is_err());
         assert!(grants.ensure_readable(&as_str(&link)).is_err());
+        assert!(grants
+            .ensure_writable(&as_str(&link.join("planted.md")))
+            .is_err());
     }
 
     #[test]
