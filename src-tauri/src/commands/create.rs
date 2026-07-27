@@ -435,18 +435,19 @@ mod tests {
         for (i, evil) in ["../escape", "..\\escape", ".."].iter().enumerate() {
             let file = root.join(format!("victim{i}.md"));
             fs::write(&file, "x").unwrap();
-            let result = rename_path(
+            // Every sanitized name is a valid single component, so the rename
+            // must succeed; requiring it keeps the containment assert reachable.
+            let new_path = rename_path(
                 file.to_string_lossy().to_string(),
                 evil.to_string(),
                 root.to_string_lossy().to_string(),
+            )
+            .expect("sanitized rename should succeed");
+            let landed = Path::new(&new_path).canonicalize().unwrap();
+            assert!(
+                landed.starts_with(&canonical_root),
+                "rename to {evil:?} escaped the root: {new_path}"
             );
-            if let Ok(new_path) = result {
-                let landed = Path::new(&new_path).canonicalize().unwrap();
-                assert!(
-                    landed.starts_with(&canonical_root),
-                    "rename to {evil:?} escaped the root: {new_path}"
-                );
-            }
         }
 
         let _ = fs::remove_dir_all(&root);
