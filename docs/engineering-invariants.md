@@ -69,6 +69,7 @@ For stateful or security-sensitive changes, tests and PR evidence must cover the
 
 - Every escaped data-loss or security defect adds a regression test and, if needed, a new invariant here.
 - Review this catalog at each minor-release kickoff and after every security or data-loss incident.
+
 ## Mutation testing
 
 Targeted mutation testing guards the authorization and persistence command
