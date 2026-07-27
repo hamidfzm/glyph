@@ -88,6 +88,19 @@ jobs:
           # PyPI uploader: the GPG-verified binary intermittently fails.
           use_pypi: true
 
+  # Windows-gated guards (the junction escape test in grants.rs) never compile
+  # on the ubuntu coverage job above; this keeps them exercised in CI. Not in
+  # the required-checks ruleset.
+  test-rust-windows:
+    name: Rust Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: ./.github/actions/rust-setup
+      - name: Run Rust unit tests
+        working-directory: src-tauri
+        run: cargo test --lib
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
