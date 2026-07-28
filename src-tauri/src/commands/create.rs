@@ -426,6 +426,40 @@ mod tests {
     }
 
     #[test]
+    fn unique_path_keeps_counting_past_existing_collisions() {
+        let dir = unique_tmp("unique_counter");
+        fs::write(dir.join("Untitled.md"), "x").unwrap();
+        fs::write(dir.join("Untitled 1.md"), "x").unwrap();
+
+        // Two collisions deep: the counter must advance monotonically.
+        let next = unique_path(&dir, "Untitled", Some("md"));
+        assert_eq!(next, dir.join("Untitled 2.md"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn move_into_own_subfolder_is_refused() {
+        let root = unique_tmp("move_into_self");
+        let folder = root.join("folder");
+        let child = folder.join("child");
+        fs::create_dir_all(&child).unwrap();
+
+        let app = app_with_root(&root.to_string_lossy());
+        let result = super::move_path(
+            folder.to_string_lossy().to_string(),
+            child.to_string_lossy().to_string(),
+            root.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
+        // The guard must answer, not the OS rename failure.
+        assert_eq!(result.unwrap_err(), "Can't move an item into itself");
+        assert!(folder.is_dir());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn rename_with_separators_or_dot_dot_stays_inside_root() {
         let root = unique_tmp("rename_guard");
         let canonical_root = root.canonicalize().unwrap();

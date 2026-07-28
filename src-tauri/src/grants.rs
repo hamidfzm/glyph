@@ -564,6 +564,29 @@ mod tests {
     }
 
     #[test]
+    fn asset_scope_mirrors_dir_and_file_grants() {
+        use tauri::Manager;
+        let app = tauri::test::mock_app();
+
+        let dir_grant = TempDir::new().unwrap();
+        let nested = dir_grant.path().join("sub");
+        fs::create_dir_all(&nested).unwrap();
+        let inside = nested.join("img.png");
+        fs::write(&inside, "x").unwrap();
+        allow_asset_dir(app.handle(), dir_grant.path());
+        assert!(app.asset_protocol_scope().is_allowed(&inside));
+
+        let file_grant = TempDir::new().unwrap();
+        let file = file_grant.path().join("cover.png");
+        let sibling = file_grant.path().join("other.png");
+        fs::write(&file, "x").unwrap();
+        fs::write(&sibling, "x").unwrap();
+        allow_asset_file(app.handle(), &file);
+        assert!(app.asset_protocol_scope().is_allowed(&file));
+        assert!(!app.asset_protocol_scope().is_allowed(&sibling));
+    }
+
+    #[test]
     fn ensure_readable_returns_the_canonical_path() {
         let tmp = TempDir::new().unwrap();
         let file = tmp.path().join("a.md");
