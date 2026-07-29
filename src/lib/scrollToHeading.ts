@@ -1,6 +1,8 @@
-// Smooth-scrolls to an anchor by id and notifies the outline so it can
-// highlight the new active entry without waiting on the IntersectionObserver,
-// which lags during programmatic scrolls.
+// Scrolls to an anchor by id and notifies the outline so it can highlight the
+// new active entry without waiting on the IntersectionObserver, which lags
+// during programmatic scrolls.
+import { scrollBehavior } from "./reducedMotion";
+
 const ACTIVE_HEADING_EVENT = "glyph:active-heading";
 
 // Pick `start` when the target can scroll to the top of its scroll container,
@@ -24,7 +26,7 @@ function autoBlock(target: HTMLElement): ScrollLogicalPosition {
 export function scrollToHeading(id: string): boolean {
   const target = document.getElementById(id);
   if (!target) return false;
-  target.scrollIntoView({ behavior: "smooth", block: autoBlock(target) });
+  target.scrollIntoView({ behavior: scrollBehavior(), block: autoBlock(target) });
   window.dispatchEvent(new CustomEvent(ACTIVE_HEADING_EVENT, { detail: { id } }));
   return true;
 }

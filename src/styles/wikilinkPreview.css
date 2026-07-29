@@ -35,8 +35,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Opacity-only fades are safe under reduced motion and help the popover read
+     as arriving, so this one opts out of the global duration reset in app.css. */
   .wikilink-preview {
-    transition: opacity 120ms ease;
+    transition: opacity 120ms ease !important;
   }
 
   @starting-style {

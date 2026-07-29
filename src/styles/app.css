@@ -96,3 +96,38 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--color-text-tertiary) transparent;
 }
+
+/* One global opt-out, so stylesheets added later are covered without being
+   touched. A surface that must keep moving opts back out with a class selector
+   plus `!important`, which outranks the universal selector here. JS-driven
+   motion reads the preference through `useReducedMotion` instead. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Busy indicators keep looping: frozen mid-spin they read as a hung app. */
+  .animate-spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  .ai-typing span {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  /* The located block is marked by a static tint rather than a pulse. Left to
+     the reset it would flash for a hundredth of a millisecond and vanish, which
+     removes the answer to "which block?" instead of removing motion. */
+  .ai-flash {
+    animation: none !important;
+    background-color: color-mix(in srgb, var(--color-accent) 20%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 20%, transparent);
+  }
+}

@@ -1,38 +1,9 @@
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { restoreMatchMedia, stubMatchMedia } from "@/test/matchMedia";
 import { TABLET_QUERY, useCanSplit, useMediaQuery } from "./useMediaQuery";
 
-const originalMatchMedia = window.matchMedia;
-
-// Minimal MediaQueryList stub that records its change listeners so a test can
-// flip `matches` and fire them, the way a real resize/rotation would.
-function stubMatchMedia(matches: boolean) {
-  const listeners = new Set<() => void>();
-  const mql = {
-    matches,
-    addEventListener: vi.fn((_: string, fn: () => void) => {
-      listeners.add(fn);
-    }),
-    removeEventListener: vi.fn((_: string, fn: () => void) => {
-      listeners.delete(fn);
-    }),
-  };
-  const matchMedia = vi.fn(() => mql);
-  window.matchMedia = matchMedia as unknown as typeof window.matchMedia;
-  return {
-    matchMedia,
-    mql,
-    fire(next: boolean) {
-      mql.matches = next;
-      for (const fn of listeners) fn();
-    },
-    listenerCount: () => listeners.size,
-  };
-}
-
-afterEach(() => {
-  window.matchMedia = originalMatchMedia;
-});
+afterEach(restoreMatchMedia);
 
 describe("useMediaQuery", () => {
   it("reports whether the query currently matches", () => {

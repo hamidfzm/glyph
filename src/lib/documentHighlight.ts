@@ -1,5 +1,6 @@
 // Locates a quoted passage inside the rendered markdown viewer and flashes it,
 // so the user can see which part of the document an AI reply refers to.
+import { scrollBehavior } from "./reducedMotion";
 
 const BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, td, th";
 const FLASH_CLASS = "ai-flash";
@@ -39,7 +40,7 @@ export function locateInDocument(text: string): boolean {
   for (const previous of container.querySelectorAll(`.${FLASH_CLASS}`)) {
     previous.classList.remove(FLASH_CLASS);
   }
-  block.scrollIntoView({ behavior: "smooth", block: "center" });
+  block.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
   block.classList.add(FLASH_CLASS);
   window.setTimeout(() => block.classList.remove(FLASH_CLASS), FLASH_DURATION_MS);
   return true;

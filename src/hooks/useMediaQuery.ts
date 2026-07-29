@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 /**
  * Subscribe to a CSS media query and re-render when it flips. Used for
@@ -7,15 +7,20 @@ import { useSyncExternalStore } from "react";
  * `matchMedia` is unavailable, so a non-browser render never throws.
  */
 export function useMediaQuery(query: string): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
+  // Memoised so the listener isn't torn down and rebuilt on every render; the
+  // graph simulation reads this while re-rendering at frame rate.
+  const subscribe = useCallback(
+    (onChange: () => void) => {
       if (typeof window === "undefined" || !window.matchMedia) return () => {};
       const mql = window.matchMedia(query);
       mql.addEventListener("change", onChange);
       return () => mql.removeEventListener("change", onChange);
     },
-    () =>
-      typeof window !== "undefined" && window.matchMedia ? window.matchMedia(query).matches : false,
+    [query],
+  );
+
+  return useSyncExternalStore(subscribe, () =>
+    typeof window !== "undefined" && window.matchMedia ? window.matchMedia(query).matches : false,
   );
 }
 
