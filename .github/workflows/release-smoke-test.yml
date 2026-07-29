@@ -95,6 +95,9 @@ jobs:
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
+          # The runner image ships aws/tap, which we never use; leaving it
+          # tapped makes every brew command warn that it is untrusted.
+          brew untap aws/tap || true
           brew tap glyph-md/tap
           brew trust glyph-md/tap || true
 
@@ -128,16 +131,22 @@ jobs:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          # Ubuntu 24.04 blocks unprivileged user namespaces, so Homebrew's
+          # bubblewrap probe fails and it falls back to no sandboxing. Best
+          # effort: the knob is AppArmor-specific and only silences a warning.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           brew tap glyph-md/tap
 
-          AVAILABLE=$(brew info --json=v2 glyph-md/tap/glyph | jq -r '.formulae[0].versions.stable')
+          # The tap ships both a formula and a cask named glyph; without
+          # --formula brew warns about the ambiguity on every invocation.
+          AVAILABLE=$(brew info --formula --json=v2 glyph-md/tap/glyph | jq -r '.formulae[0].versions.stable')
           if [ "$AVAILABLE" != "$VERSION" ]; then
             echo "status=pending" >> "$GITHUB_OUTPUT"
             echo "Formula serves $AVAILABLE, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          brew install glyph-md/tap/glyph
+          brew install --formula glyph-md/tap/glyph
           sudo apt-get update && sudo apt-get install -y xvfb libwebkit2gtk-4.1-0 libgtk-3-0
           [ "$("$(brew --prefix)/bin/glyph" --version)" = "glyph $VERSION" ]
 
@@ -472,6 +481,94 @@ jobs:
           test -x "$PROGRAMFILES/Glyph/Glyph.exe"
           echo "status=verified" >> "$GITHUB_OUTPUT"
 
+  # Direct-download artifacts. Unlike the package channels these are served by
+  # the release itself, so there is nothing to wait for: the artifact is there
+  # and works, or the release is broken. They never report pending.
+  dmg:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Mount the DMG and verify
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DMG="Glyph_${VERSION}_universal.dmg"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$DMG"
+
+          MOUNT=$(mktemp -d)
+          hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNT"
+          trap 'hdiutil detach "$MOUNT" -quiet || true' EXIT
+
+          APP="$MOUNT/Glyph.app"
+          [ "$(defaults read "$APP/Contents/Info" CFBundleShortVersionString)" = "$VERSION" ]
+
+          BIN="$APP/Contents/MacOS/glyph"
+          [ -x "$BIN" ] || BIN="$APP/Contents/MacOS/Glyph"
+          [ "$("$BIN" --version)" = "glyph $VERSION" ]
+
+  appimage:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Extract the AppImage and verify
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APPIMAGE="Glyph_${VERSION}_amd64.AppImage"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$APPIMAGE"
+          chmod +x "$APPIMAGE"
+
+          # Runners have no FUSE, so extract rather than mount.
+          "./$APPIMAGE" --appimage-extract >/dev/null
+          sudo apt-get update && sudo apt-get install -y xvfb libwebkit2gtk-4.1-0 libgtk-3-0
+          [ "$(squashfs-root/AppRun --version)" = "glyph $VERSION" ]
+
+          set +e
+          WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a timeout 15 squashfs-root/AppRun
+          CODE=$?
+          set -e
+          [ "$CODE" -eq 124 ] || { echo "launch check failed (exit $CODE)"; exit 1; }
+
+  # The MSI is what Chocolatey, Scoop, and winget repackage, so it is covered
+  # by those jobs; the NSIS setup.exe is only ever installed directly.
+  nsis:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Silent-install the NSIS setup and verify
+        shell: pwsh
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $setup = "Glyph_$($env:VERSION)_x64-setup.exe"
+          gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --pattern $setup
+
+          $proc = Start-Process -FilePath ".\$setup" -ArgumentList "/S" -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { Write-Error "installer exited $($proc.ExitCode)"; exit 1 }
+
+          # Tauri's NSIS installer defaults to a per-user install; a
+          # per-machine build lands under Program Files instead.
+          $exe = "$env:LOCALAPPDATA\Programs\Glyph\Glyph.exe"
+          if (-not (Test-Path $exe)) { $exe = "$env:ProgramFiles\Glyph\Glyph.exe" }
+          if (-not (Test-Path $exe)) { Write-Error "Glyph.exe not found after install"; exit 1 }
+
+          # Glyph.exe is a GUI subsystem binary with no console to print to, so
+          # the embedded file version is the assertion available here.
+          $installed = (Get-Item $exe).VersionInfo.FileVersion
+          if ($installed -notlike "$($env:VERSION)*") { Write-Error "installed $installed"; exit 1 }
+
   summary:
     needs:
       - resolve
@@ -486,6 +583,9 @@ jobs:
       - scoop
       - chocolatey
       - winget
+      - dmg
+      - appimage
+      - nsis
     if: ${{ !cancelled() && needs.resolve.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -510,6 +610,9 @@ jobs:
             scoop direct ${{ needs.scoop.result }} ${{ needs.scoop.outputs.status }}
             chocolatey queued ${{ needs.chocolatey.result }} ${{ needs.chocolatey.outputs.status }}
             winget queued ${{ needs.winget.result }} ${{ needs.winget.outputs.status }}
+            dmg direct ${{ needs.dmg.result }}
+            appimage direct ${{ needs.appimage.result }}
+            nsis direct ${{ needs.nsis.result }}
         run: |
           {
             echo "## Release Smoke Test: $TAG"
