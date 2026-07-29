@@ -1,4 +1,5 @@
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { scrollBehavior } from "@/lib/reducedMotion";
 
 interface UseSearchOptions {
   containerRef: RefObject<HTMLDivElement | null>;
@@ -89,7 +90,7 @@ function setActiveMatch(container: HTMLElement, index: number) {
   const active = marks[index];
   if (active) {
     active.classList.add("search-highlight-active");
-    active.scrollIntoView({ behavior: "smooth", block: "center" });
+    active.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
   }
 }
 

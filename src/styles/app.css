@@ -96,3 +96,33 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--color-text-tertiary) transparent;
 }
+
+/* One global opt-out so every stylesheet, including ones added later, honours
+   the OS preference. Durations collapse instead of hitting 0s so transitionend
+   and animationend still fire and no listener is left waiting. JS-driven
+   animation reads the same preference through `useReducedMotion` (React) or
+   `prefersReducedMotion` (plain modules). A surface that needs to keep moving
+   opts out with a class selector plus `!important`, which outranks the
+   universal selector here; see `.wikilink-preview` and the indicators below. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Busy indicators keep looping: frozen mid-spin they read as a hung app,
+     which is worse than the motion. Both are small and stay in one place. */
+  .animate-spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  .ai-typing span {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
+  }
+}

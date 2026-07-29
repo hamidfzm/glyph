@@ -8,6 +8,7 @@ import {
   type NodePosition,
   tickLayout,
 } from "@/lib/graphSimulation";
+import { useReducedMotion } from "./useReducedMotion";
 
 export interface UseGraphSimulationOptions {
   /** Simulation steps per animation frame. Tuned for 60fps; tests raise it. */
@@ -47,6 +48,7 @@ export function useGraphSimulation(
 ): GraphSimulationState {
   const ticksPerFrame = options?.ticksPerFrame ?? DEFAULT_TICKS_PER_FRAME;
   const maxTicks = options?.maxTicks ?? LAYOUT_MAX_TICKS;
+  const reducedMotion = useReducedMotion();
   const previousPositions = useRef<Map<string, NodePosition> | null>(null);
   const [version, setVersion] = useState(0);
   const [settled, setSettled] = useState(false);
@@ -62,44 +64,53 @@ export function useGraphSimulation(
     [graph],
   );
 
-  const runLoop = useCallback(() => {
-    if (runningRef.current) return;
-    runningRef.current = true;
-    setSettled(false);
+  // `paintEveryFrame` off still ticks on animation frames (a synchronous pass
+  // would block the thread for seconds on a large graph); it just withholds the
+  // redraws in between, so the layout appears settled in one step.
+  const runLoop = useCallback(
+    (paintEveryFrame: boolean) => {
+      if (runningRef.current) return;
+      runningRef.current = true;
+      setSettled(false);
 
-    const step = () => {
-      const done = tickLayout(layout, ticksPerFrame);
-      budgetRef.current -= ticksPerFrame;
-      previousPositions.current = capturePositions(layout);
-      setVersion((v) => v + 1);
-      if (done || budgetRef.current <= 0) {
-        runningRef.current = false;
-        setSettled(true);
-        return;
-      }
+      const step = () => {
+        const done = tickLayout(layout, ticksPerFrame);
+        budgetRef.current -= ticksPerFrame;
+        previousPositions.current = capturePositions(layout);
+        const finished = done || budgetRef.current <= 0;
+        if (paintEveryFrame || finished) setVersion((v) => v + 1);
+        if (finished) {
+          runningRef.current = false;
+          setSettled(true);
+          return;
+        }
+        frameRef.current = requestAnimationFrame(step);
+      };
       frameRef.current = requestAnimationFrame(step);
-    };
-    frameRef.current = requestAnimationFrame(step);
-  }, [layout, ticksPerFrame]);
+    },
+    [layout, ticksPerFrame],
+  );
 
   // Fresh layout (mount or graph change): refill the budget and run.
   useEffect(() => {
     budgetRef.current = maxTicks;
-    runLoop();
+    runLoop(!reducedMotion);
     return () => {
       cancelAnimationFrame(frameRef.current);
       runningRef.current = false;
       layout.simulation.stop();
     };
-  }, [layout, maxTicks, runLoop]);
+  }, [layout, maxTicks, runLoop, reducedMotion]);
 
   const reheat = useCallback(
     (alpha = REHEAT_ALPHA) => {
       const sim = layout.simulation;
       sim.alpha(Math.max(sim.alpha(), alpha));
       // Refill the budget so a sustained drag keeps animating, then resume.
+      // Always paints: a reheat tracks the pointer, and withholding frames
+      // would freeze the node under the user's finger.
       budgetRef.current = maxTicks;
-      runLoop();
+      runLoop(true);
     },
     [layout, maxTicks, runLoop],
   );
