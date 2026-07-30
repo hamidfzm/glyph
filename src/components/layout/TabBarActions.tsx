@@ -10,9 +10,10 @@ interface TabBarActionsProps {
 export function TabBarActions({ onOpenPalette }: TabBarActionsProps) {
   const { t } = useTranslation("common");
   const { workspace } = useTabsContext();
+  const openGraph = useOpenGraph();
   const items = actionBarItems({
     openPalette: onOpenPalette,
-    openGraph: useOpenGraph(),
+    openGraph,
     hasWorkspace: workspace !== null,
   });
 

@@ -16,8 +16,8 @@ export interface ActionBarOptions {
   hasWorkspace: boolean;
 }
 
-// The palette and the graph otherwise need a keyboard shortcut or the native
-// menu, neither of which exists on mobile.
+// Shown on every platform: mobile has neither the shortcut nor the native menu,
+// and on desktop the buttons are what tells a user the features exist at all.
 export function actionBarItems(options: ActionBarOptions): ActionBarItem[] {
   const items: ActionBarItem[] = [
     {
