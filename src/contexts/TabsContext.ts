@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useCallback, useContext } from "react";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { useTabs } from "@/hooks/useTabs";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
@@ -39,4 +39,12 @@ export function useTabsContext(): TabsContextValue {
 // resolution.
 export function useWorkspaceRoot(): string | undefined {
   return useContext(TabsContext)?.workspace?.root;
+}
+
+// `openGraph` bound to no arguments, for menu handlers and click handlers.
+// Passing it raw would let the event land in its optional `root`, which then
+// fails the "root matches the open workspace" guard and silently does nothing.
+export function useOpenGraph(): () => void {
+  const { openGraph } = useTabsContext();
+  return useCallback(() => openGraph(), [openGraph]);
 }

@@ -53,7 +53,9 @@
     "edit": "ویرایش",
     "splitMode": "حالت تقسیم",
     "split": "تقسیم",
-    "aiChat": "گفتگو با هوش مصنوعی"
+    "aiChat": "گفتگو با هوش مصنوعی",
+    "commandPalette": "پالت فرمان",
+    "openGraph": "باز کردن گراف"
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> در دسترس است",

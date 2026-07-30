@@ -53,7 +53,9 @@
     "edit": "Edit",
     "splitMode": "Split mode",
     "split": "Split",
-    "aiChat": "AI Chat"
+    "aiChat": "AI Chat",
+    "commandPalette": "Command palette",
+    "openGraph": "Open graph"
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> is available",

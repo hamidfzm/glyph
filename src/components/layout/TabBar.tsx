@@ -20,6 +20,8 @@ import { isLooseFilePath } from "@/lib/looseFile";
 import { displayName } from "@/lib/paths";
 import { isMobile } from "@/lib/platform";
 import { EDITOR_MODE, effectiveEditorMode } from "@/lib/settings";
+import { ActionBarButton } from "./ActionBarButton";
+import { TabBarActions } from "./TabBarActions";
 
 function tabLabel(tab: Tab, t: TFunction<"common">): string {
   if (tab.kind === "graph") {
@@ -34,9 +36,10 @@ interface TabBarProps {
   // `null` when no AI provider is configured, hiding the chat toggle (same
   // convention as StatusBar's onOpenSync).
   onToggleAIChat?: (() => void) | null;
+  onOpenPalette: () => void;
 }
 
-export function TabBar({ onToggleAIChat }: TabBarProps) {
+export function TabBar({ onToggleAIChat, onOpenPalette }: TabBarProps) {
   const { t } = useTranslation("common");
   const {
     tabs,
@@ -55,7 +58,17 @@ export function TabBar({ onToggleAIChat }: TabBarProps) {
   // Mobile has no native menu or keyboard shortcut, so the tab bar carries the
   // in-app controls: opening a file and toggling the outline drawer.
   const mobile = isMobile(usePlatform());
-  if (tabs.length === 0) return null;
+  // With nothing open the strip still carries the action buttons: on mobile
+  // they are the only route to the palette and the graph, and "workspace open,
+  // no document open" is exactly when the graph is most useful.
+  if (tabs.length === 0) {
+    return (
+      <div className="tab-bar-container" data-print-hide="true">
+        <div className="tab-bar-scroll" />
+        <TabBarActions onOpenPalette={onOpenPalette} />
+      </div>
+    );
+  }
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
   const activeFile = activeFileOf(activeTab);
@@ -125,75 +138,55 @@ export function TabBar({ onToggleAIChat }: TabBarProps) {
       {mobile && (
         <div className="mode-toggle">
           {activeFile !== null && tocEntries.length > 0 && (
-            <button
-              type="button"
-              className="mode-toggle-btn"
-              data-active={outlineVisible || undefined}
+            <ActionBarButton
               onClick={toggleOutline}
-              aria-label={outlineVisible ? t("sidebar.hideOutline") : t("sidebar.showOutline")}
-              title={outlineVisible ? t("sidebar.hideOutline") : t("sidebar.showOutline")}
+              label={outlineVisible ? t("sidebar.hideOutline") : t("sidebar.showOutline")}
+              active={outlineVisible}
             >
               <OutlineIcon active={outlineVisible} />
-            </button>
+            </ActionBarButton>
           )}
-          <button
-            type="button"
-            className="mode-toggle-btn"
-            onClick={openFileDialog}
-            aria-label={t("emptyState.openFile")}
-            title={t("emptyState.openFile")}
-          >
+          <ActionBarButton onClick={openFileDialog} label={t("emptyState.openFile")}>
             <OpenIcon />
-          </button>
+          </ActionBarButton>
         </div>
       )}
       {showModeToggle && (
         <div className="mode-toggle">
-          <button
-            type="button"
-            className="mode-toggle-btn"
-            data-active={shownMode === EDITOR_MODE.view || undefined}
+          <ActionBarButton
             onClick={() => onModeChange(activeTab.id, EDITOR_MODE.view)}
-            aria-label={t("tabBar.viewMode")}
+            label={t("tabBar.viewMode")}
             title={t("tabBar.view")}
+            active={shownMode === EDITOR_MODE.view}
           >
             <ViewModeIcon />
-          </button>
-          <button
-            type="button"
-            className="mode-toggle-btn"
-            data-active={shownMode === EDITOR_MODE.edit || undefined}
+          </ActionBarButton>
+          <ActionBarButton
             onClick={() => onModeChange(activeTab.id, EDITOR_MODE.edit)}
-            aria-label={t("tabBar.editMode")}
+            label={t("tabBar.editMode")}
             title={t("tabBar.edit")}
+            active={shownMode === EDITOR_MODE.edit}
           >
             <EditModeIcon />
-          </button>
+          </ActionBarButton>
           {showSplit && (
-            <button
-              type="button"
-              className="mode-toggle-btn"
-              data-active={activeFile.mode === EDITOR_MODE.split || undefined}
+            <ActionBarButton
               onClick={() => onModeChange(activeTab.id, EDITOR_MODE.split)}
-              aria-label={t("tabBar.splitMode")}
+              label={t("tabBar.splitMode")}
               title={t("tabBar.split")}
+              active={activeFile.mode === EDITOR_MODE.split}
             >
               <SplitModeIcon />
-            </button>
+            </ActionBarButton>
           )}
         </div>
       )}
+      <TabBarActions onOpenPalette={onOpenPalette} />
       {onToggleAIChat && (
         <div className="mode-toggle">
-          <button
-            type="button"
-            className="mode-toggle-btn"
-            onClick={onToggleAIChat}
-            aria-label={t("tabBar.aiChat")}
-            title={t("tabBar.aiChat")}
-          >
+          <ActionBarButton onClick={onToggleAIChat} label={t("tabBar.aiChat")}>
             <SparkleIcon />
-          </button>
+          </ActionBarButton>
         </div>
       )}
     </div>

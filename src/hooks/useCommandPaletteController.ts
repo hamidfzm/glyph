@@ -18,6 +18,7 @@ export interface CommandPaletteController {
   open: boolean;
   query: string;
   setQuery: (next: string) => void;
+  openPalette: () => void;
   close: () => void;
   commands: readonly Command[];
 }
@@ -46,9 +47,17 @@ export function useCommandPaletteController({
       open: palette.open,
       query: palette.query,
       setQuery: palette.setQuery,
+      openPalette: palette.openPalette,
       close: palette.closePalette,
       commands,
     }),
-    [palette.open, palette.query, palette.setQuery, palette.closePalette, commands],
+    [
+      palette.open,
+      palette.query,
+      palette.setQuery,
+      palette.openPalette,
+      palette.closePalette,
+      commands,
+    ],
   );
 }

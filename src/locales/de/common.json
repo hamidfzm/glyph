@@ -53,7 +53,9 @@
     "edit": "Bearbeiten",
     "splitMode": "Geteilter Modus",
     "split": "Geteilt",
-    "aiChat": "KI-Chat"
+    "aiChat": "KI-Chat",
+    "commandPalette": "Befehlspalette",
+    "openGraph": "Graph öffnen"
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> ist verfügbar",

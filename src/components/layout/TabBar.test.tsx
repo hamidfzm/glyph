@@ -145,7 +145,7 @@ function renderTabBar(opts: RenderOpts = {}, onToggleAIChat: (() => void) | null
   return {
     ...render(
       <Wrapper value={value} sidebar={sidebar}>
-        <TabBar onToggleAIChat={onToggleAIChat} />
+        <TabBar onToggleAIChat={onToggleAIChat} onOpenPalette={vi.fn()} />
       </Wrapper>,
     ),
     value,
@@ -154,9 +154,14 @@ function renderTabBar(opts: RenderOpts = {}, onToggleAIChat: (() => void) | null
 }
 
 describe("TabBar", () => {
-  it("renders nothing when no tabs", () => {
-    const { container } = renderTabBar({ tabs: [] });
-    expect(container.firstChild).toBeNull();
+  it("keeps the action buttons but shows no tabs when nothing is open", () => {
+    const { container } = renderTabBar({
+      tabs: [],
+      workspace: { root: "/vault", expanded: new Set(), nodes: new Map() },
+    });
+    expect(container.querySelectorAll(".tab-item")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Command palette" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open graph" })).toBeTruthy();
   });
 
   it("shows the AI chat toggle only when a callback is provided", () => {
