@@ -36,6 +36,11 @@
   transition: background 0.1s ease, color 0.1s ease;
 }
 
+.mode-toggle-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
 .mode-toggle-btn:hover {
   background: var(--color-surface-tertiary);
   color: var(--color-text-primary);

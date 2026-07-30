@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
-import { useTabsContext } from "@/contexts/TabsContext";
+import { useOpenGraph, useTabsContext } from "@/contexts/TabsContext";
 import { useZoomApi } from "@/contexts/ZoomContext";
 import { useAIController } from "@/hooks/useAIController";
 import { useAutoSave } from "@/hooks/useAutoSave";
@@ -61,6 +61,7 @@ export function AppShell() {
   const platform = usePlatform();
   const { settings, updateSettings, loaded } = useSettings();
   const tabs = useTabsContext();
+  const openGraphAction = useOpenGraph();
   const sidebar = useSidebarLayoutContext();
 
   // Opt-in crash/error reporting; inert in dev and until the user enables it.
@@ -95,7 +96,6 @@ export function AppShell() {
     workspace,
     openFolder,
     createWorkspace,
-    openGraph,
     openFile,
     openFileDialog,
     newDocument,
@@ -210,9 +210,7 @@ export function AppShell() {
       openFile: openFileDialog,
       openFolder: () => openFolder(),
       newWorkspace: createWorkspace,
-      // No-arg wrapper: menu/palette callers must not leak their event
-      // payload into openGraph's optional root parameter.
-      openGraph: () => openGraph(),
+      openGraph: openGraphAction,
       save: handleSave,
       toggleAutoSave: handleToggleAutoSave,
       closeTab: closeActiveTab,
@@ -248,7 +246,7 @@ export function AppShell() {
       openFileDialog,
       openFolder,
       createWorkspace,
-      openGraph,
+      openGraphAction,
       handleSave,
       handleToggleAutoSave,
       closeActiveTab,
@@ -346,7 +344,10 @@ export function AppShell() {
         notice={tabs.workspaceNotice}
         onDismiss={tabs.dismissWorkspaceNotice}
       />
-      <TabBar onToggleAIChat={aiController.configured ? aiController.togglePanel : null} />
+      <TabBar
+        onToggleAIChat={aiController.configured ? aiController.togglePanel : null}
+        onOpenPalette={palette.openPalette}
+      />
       <div className="relative flex flex-1 min-h-0">
         <SidebarDrawerBackdrop />
         <Sidebar side="left" />

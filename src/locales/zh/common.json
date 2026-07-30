@@ -53,7 +53,9 @@
     "edit": "编辑",
     "splitMode": "分屏模式",
     "split": "分屏",
-    "aiChat": "AI 聊天"
+    "aiChat": "AI 聊天",
+    "commandPalette": "命令面板",
+    "openGraph": "打开图谱"
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> 可用",
