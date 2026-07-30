@@ -22,7 +22,7 @@ mod windows_runtime;
 mod workspace;
 
 use std::sync::{Arc, Mutex};
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use tauri::RunEvent;
 use tauri::{DragDropEvent, Manager, WindowEvent};
 #[cfg(desktop)]
@@ -483,6 +483,16 @@ pub fn run() {
                 .filter_map(|url| url.to_file_path().ok())
                 .collect();
             handle_opened_paths(_app_handle, paths);
+        }
+        // Windows only: after the event loop is torn down, a late Win32 message
+        // reaching tao's runner panics outside any catch_unwind, which aborts
+        // the process on exit (tauri-apps/tao#1180). Plugin `on_event` handlers
+        // (window state, stores) run before this callback, so everything that
+        // must persist is already written by the time `Exit` arrives.
+        #[cfg(target_os = "windows")]
+        if matches!(_event, RunEvent::Exit) {
+            telemetry::flush();
+            std::process::exit(0);
         }
     });
 }

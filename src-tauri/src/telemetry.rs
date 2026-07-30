@@ -142,6 +142,16 @@ pub fn set_error_reporting(enabled: bool, state: State<'_, TelemetryState>) -> R
     set_enabled(&state, enabled)
 }
 
+/// Send everything still queued. Needed on the Windows exit path, which calls
+/// `process::exit` and so never drops the guard that would flush on its own.
+/// No-op when reporting is off (no client installed).
+#[cfg(target_os = "windows")]
+pub fn flush() {
+    if let Some(client) = sentry::Hub::current().client() {
+        client.flush(Some(std::time::Duration::from_secs(2)));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,6 +247,14 @@ mod tests {
         assert!(state.0.lock().unwrap().is_none());
         assert!(set_enabled(&state, false).is_ok());
         assert!(state.0.lock().unwrap().is_none());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn flush_is_a_no_op_without_a_client() {
+        // The Windows exit path calls this before `process::exit`, including
+        // when the user never opted in.
+        flush();
     }
 
     #[test]
