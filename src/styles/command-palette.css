@@ -104,6 +104,19 @@
   background: color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 
+.command-palette-icon {
+  flex: 0 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Icons stroke with currentColor, so this is the whole theme story. */
+  color: var(--color-text-tertiary);
+}
+
+.command-palette-item[data-selected="true"] .command-palette-icon {
+  color: var(--color-text-secondary);
+}
+
 .command-palette-title {
   flex: 1 1 auto;
   min-width: 0;

@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { FitIcon } from "@/components/icons/FitIcon";
 import { useZoomApi, type ZoomHandlers } from "@/contexts/ZoomContext";
 import { useElementSize } from "@/hooks/useElementSize";
 import { useGraphCamera } from "@/hooks/useGraphCamera";
@@ -280,9 +281,10 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
         type="button"
         onClick={refit}
         disabled={autoFit}
-        className="absolute top-3 end-3 px-2.5 py-1 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)] enabled:hover:text-[var(--color-text-primary)] disabled:opacity-40"
+        className="absolute top-3 end-3 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)] enabled:hover:text-[var(--color-text-primary)] disabled:opacity-40"
         title={t("graph.reset")}
       >
+        <FitIcon className="w-3.5 h-3.5" />
         {t("graph.resetView")}
       </button>
       {hovered && (
