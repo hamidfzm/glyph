@@ -537,6 +537,14 @@ describe("Sidebar", () => {
       expect(screen.queryByText("#work (2)")).not.toBeInTheDocument();
     });
 
+    it("clears the filter when the active tag chip is clicked again", () => {
+      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
+      fireEvent.click(screen.getByTitle("Filter by #work"));
+      fireEvent.click(screen.getByTitle("Filter by #work"));
+      expect(screen.getByText("readme.md")).toBeInTheDocument();
+      expect(screen.queryByText("#work (2)")).not.toBeInTheDocument();
+    });
+
     it("hides the tree-only toolbar actions while a tag filters the panel", () => {
       renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
       fireEvent.click(screen.getByTitle("Filter by #work"));

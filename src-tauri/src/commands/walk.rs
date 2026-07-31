@@ -123,6 +123,30 @@ pub(super) fn scan_markdown_files(
 mod tests {
     use super::*;
 
+    // Symlinks are not followed, so a linked note is yielded as a symlink entry
+    // and must be skipped rather than read (it would otherwise be a way out of
+    // the granted workspace). Unix-only: creating a symlink on Windows needs
+    // elevation or Developer Mode.
+    #[cfg(unix)]
+    #[test]
+    fn scan_markdown_files_skips_symlinked_entries() {
+        let dir = std::env::temp_dir().join(format!("glyph_walk_symlink_{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        fs::write(dir.join("real.md"), "body").unwrap();
+        let _ = std::os::unix::fs::symlink(dir.join("real.md"), dir.join("link.md"));
+
+        let mut seen: Vec<String> = Vec::new();
+        let status = scan_markdown_files(&dir, WALK_MAX_FILES, WALK_MAX_DEPTH, |path, _| {
+            seen.push(path.file_name().unwrap().to_string_lossy().to_string());
+        })
+        .unwrap();
+
+        assert_eq!(seen, vec!["real.md"]);
+        assert_eq!(status, ScanStatus::complete());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn scan_status_camel_case_keys() {
         let json = serde_json::to_string(&ScanStatus::file_limit(10)).unwrap();

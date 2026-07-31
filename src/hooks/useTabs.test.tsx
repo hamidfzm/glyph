@@ -2882,6 +2882,39 @@ describe("useTabs workspace lifecycle", () => {
     expect(result.current.tabs).toHaveLength(0);
   });
 
+  it("drops a stale metadata scan that lands after the workspace was replaced", async () => {
+    let releaseStale: ((scan: unknown) => void) | null = null;
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        scan_metadata: (_cmd, args) => {
+          if (String(args?.path ?? "") === "/p/a") {
+            return new Promise((resolve) => {
+              releaseStale = resolve;
+            });
+          }
+          return Promise.resolve(metadataScan([]));
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/a");
+    });
+    await act(async () => {
+      await result.current.openFolder("/p/b");
+    });
+
+    await act(async () => {
+      releaseStale?.(metadataScan([{ path: "/p/a/x.md", frontmatter: null, tags: ["work"] }]));
+      await Promise.resolve();
+    });
+
+    // The slow scan for the replaced workspace must not clobber /p/b's index.
+    expect(result.current.metadataEntries).toEqual([]);
+  });
+
   it("drops a stale wikilink scan that lands after the workspace was replaced", async () => {
     let releaseStale: ((scan: unknown) => void) | null = null;
     vi.mocked(invoke).mockImplementation(
