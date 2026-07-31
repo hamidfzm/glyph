@@ -1,3 +1,8 @@
+---
+status: published
+tags: [cooking]
+---
+
 # Techniques
 
 The third note in the cooking cluster, linked from [[Cooking]] and pairing with

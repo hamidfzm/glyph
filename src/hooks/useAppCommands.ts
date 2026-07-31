@@ -81,6 +81,7 @@ export function useAppCommands({
           title: basename(path),
           subtitle: path,
           section: "Files",
+          path,
           run: () => actions.openWorkspaceFile(path),
         });
       }

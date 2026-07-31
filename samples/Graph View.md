@@ -1,3 +1,8 @@
+---
+status: published
+tags: [demo, navigation]
+---
+
 # Graph View
 
 The graph view draws your whole workspace as a force-directed map: every

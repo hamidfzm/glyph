@@ -1,5 +1,6 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useMetadataIndex } from "@/contexts/TabsContext";
 import { type Command, type CommandSection, rankCommands } from "@/lib/commands";
 import { CommandPaletteItem } from "./CommandPaletteItem";
 
@@ -24,7 +25,13 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const ranked = useMemo(() => rankCommands(query, commands), [query, commands]);
+  // `tag:foo` / `status:draft` terms in the query filter Files rows against
+  // the workspace metadata index; the rest of the query is fuzzy-matched.
+  const metadata = useMetadataIndex();
+  const ranked = useMemo(
+    () => rankCommands(query, commands, { metadata }),
+    [query, commands, metadata],
+  );
 
   // Reset selection when the result set changes so the top match is primed
   // for Enter.

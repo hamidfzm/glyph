@@ -422,6 +422,7 @@ pub fn run() {
             commands::create::move_path,
             commands::create::delete_path,
             commands::wikilinks::scan_wikilinks,
+            commands::metadata::scan_metadata,
             commands::plugins::list_plugins,
             commands::plugins::inspect_plugin,
             commands::plugins::install_plugin,

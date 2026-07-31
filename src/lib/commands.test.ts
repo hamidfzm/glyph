@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { type Command, rankCommands } from "./commands";
+import { buildMetadataIndex } from "./metadata";
 
 function cmd(over: Partial<Command>): Command {
   return {
@@ -55,8 +56,8 @@ describe("rankCommands", () => {
     const list: Command[] = Array.from({ length: 100 }, (_, i) =>
       cmd({ id: `n${i}`, title: `note ${i}`, section: "Files" }),
     );
-    expect(rankCommands("note", list, 5)).toHaveLength(5);
-    expect(rankCommands("", list, 7)).toHaveLength(7);
+    expect(rankCommands("note", list, { limit: 5 })).toHaveLength(5);
+    expect(rankCommands("", list, { limit: 7 })).toHaveLength(7);
   });
 
   it("returns an empty list when no commands are supplied", () => {
@@ -70,5 +71,36 @@ describe("rankCommands", () => {
       cmd({ id: "b", title: "B", section: "Files" }),
     ]);
     expect(result.map((r) => r.command.id)).toEqual(["b", "a"]);
+  });
+
+  describe("metadata queries", () => {
+    const metadata = buildMetadataIndex([
+      { path: "/ws/spec.md", frontmatter: "---\nstatus: draft\n---\n", tags: ["work"] },
+      { path: "/ws/diary.md", frontmatter: null, tags: ["personal"] },
+    ]);
+    const files = [
+      cmd({ id: "spec", title: "spec.md", section: "Files", path: "/ws/spec.md" }),
+      cmd({ id: "diary", title: "diary.md", section: "Files", path: "/ws/diary.md" }),
+      cmd({ id: "settings", title: "Settings" }),
+    ];
+
+    it("keeps only the files matching a tag filter", () => {
+      const result = rankCommands("tag:work", files, { metadata });
+      expect(result.map((r) => r.command.id)).toEqual(["spec"]);
+    });
+
+    it("combines a field filter with fuzzy text", () => {
+      expect(rankCommands("status:draft spec", files, { metadata })[0].command.id).toBe("spec");
+      expect(rankCommands("status:draft diary", files, { metadata })).toEqual([]);
+    });
+
+    it("drops non-file commands from a metadata query", () => {
+      const result = rankCommands("tag:personal", files, { metadata });
+      expect(result.map((r) => r.command.id)).toEqual(["diary"]);
+    });
+
+    it("returns nothing when the index is unavailable", () => {
+      expect(rankCommands("tag:work", files)).toEqual([]);
+    });
   });
 });

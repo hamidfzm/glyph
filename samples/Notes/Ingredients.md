@@ -1,3 +1,8 @@
+---
+status: draft
+tags: [cooking]
+---
+
 # Ingredients
 
 A short note in the cooking cluster. It links to [[Cooking]] (its parent topic)

@@ -19,10 +19,11 @@ export interface WikilinkScan {
   status: ScanStatus;
 }
 
-/** Scan statuses of both workspace indexes, as tracked by `useTabs`. */
+/** Scan statuses of the workspace indexes, as tracked by `useTabs`. */
 export interface WorkspaceIndexStatus {
   files: ScanStatus;
   wikilinks: ScanStatus;
+  metadata: ScanStatus;
 }
 
 export const COMPLETE_SCAN: ScanStatus = { truncated: false, reason: null, limit: null };
@@ -30,6 +31,7 @@ export const COMPLETE_SCAN: ScanStatus = { truncated: false, reason: null, limit
 export const COMPLETE_INDEX_STATUS: WorkspaceIndexStatus = {
   files: COMPLETE_SCAN,
   wikilinks: COMPLETE_SCAN,
+  metadata: COMPLETE_SCAN,
 };
 
 export function sameScanStatus(a: ScanStatus, b: ScanStatus): boolean {
@@ -40,6 +42,7 @@ export function sameScanStatus(a: ScanStatus, b: ScanStatus): boolean {
 export function truncatedScan(status: WorkspaceIndexStatus): ScanStatus | null {
   if (status.files.truncated) return status.files;
   if (status.wikilinks.truncated) return status.wikilinks;
+  if (status.metadata.truncated) return status.metadata;
   return null;
 }
 

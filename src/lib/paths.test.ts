@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { basename, displayName, isPathInside, parentDir, pruneInside } from "./paths";
+import {
+  basename,
+  displayName,
+  isPathInside,
+  parentDir,
+  pruneInside,
+  relativeToRoot,
+} from "./paths";
 
 describe("basename", () => {
   it("returns the final segment of a posix path", () => {
@@ -86,5 +93,16 @@ describe("pruneInside", () => {
     const removed: string[] = [];
     pruneInside(["/x", "/y/z"], "/a/b", (k) => removed.push(k));
     expect(removed).toEqual([]);
+  });
+});
+
+describe("relativeToRoot", () => {
+  it("strips the root prefix on both separators", () => {
+    expect(relativeToRoot("/ws/Notes/Plan.md", "/ws")).toBe("Notes/Plan.md");
+    expect(relativeToRoot("C:\\ws\\Plan.md", "C:\\ws")).toBe("Plan.md");
+  });
+
+  it("falls back to the file name outside the root", () => {
+    expect(relativeToRoot("/elsewhere/Plan.md", "/ws")).toBe("Plan.md");
   });
 });

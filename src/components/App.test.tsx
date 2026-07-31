@@ -291,6 +291,11 @@ describe("App", () => {
             refs: [],
             status: { truncated: false, reason: null, limit: null },
           });
+        case "scan_metadata":
+          return Promise.resolve({
+            files: [],
+            status: { truncated: false, reason: null, limit: null },
+          });
         case "workspace_resolve":
           return Promise.resolve({
             selected: String(args?.selected ?? ""),

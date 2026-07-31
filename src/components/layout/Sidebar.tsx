@@ -1,5 +1,5 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CollapseAllIcon } from "@/components/icons/CollapseAllIcon";
 import { ExpandAllIcon } from "@/components/icons/ExpandAllIcon";
@@ -12,6 +12,7 @@ import { useTabsContext } from "@/contexts/TabsContext";
 import { useActiveHeading } from "@/hooks/useActiveHeading";
 import { usePanelResize } from "@/hooks/usePanelResize";
 import type { Workspace } from "@/hooks/useTabs";
+import { pathsWithTag, tagCounts } from "@/lib/metadata";
 import { pickMoveDir } from "@/lib/pickers";
 import { BACKLINKS_HEIGHT_MIN } from "@/lib/settings";
 import { BacklinksSection } from "./BacklinksSection";
@@ -21,6 +22,8 @@ import { OutlineSection } from "./OutlineSection";
 import { PanelHeader } from "./PanelHeader";
 import { ResizeHandle } from "./ResizeHandle";
 import { SidebarPanel } from "./SidebarPanel";
+import { TagFileList } from "./TagFileList";
+import { TagsSection } from "./TagsSection";
 import { ToolbarButton } from "./ToolbarButton";
 import { WorkspaceIndexWarning } from "./WorkspaceIndexWarning";
 
@@ -40,6 +43,7 @@ export function Sidebar({ side }: SidebarProps) {
     workspace,
     tocEntries,
     backlinks,
+    metadata,
     toggleExpand: onToggleExpand,
     openFile: onOpenFileRaw,
     closeWorkspace,
@@ -54,6 +58,16 @@ export function Sidebar({ side }: SidebarProps) {
     deletePath,
   } = useTabsContext();
   const fileTreeRef = useRef<FileTreeHandle>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const tags = useMemo(() => tagCounts(metadata), [metadata]);
+  // Derived rather than stored, so a filter whose tag disappears (workspace
+  // switched, tag edited away) falls back to the tree instead of stranding the
+  // panel on an empty list.
+  const activeTag = tags.some((t) => t.tag === selectedTag) ? selectedTag : null;
+  const taggedPaths = useMemo(
+    () => (activeTag ? pathsWithTag(metadata, activeTag) : []),
+    [metadata, activeTag],
+  );
 
   // "Move to…": pick a destination folder (within the workspace), then relocate.
   const handleMove = useCallback(
@@ -145,26 +159,32 @@ export function Sidebar({ side }: SidebarProps) {
         collapseTitle={t("sidebar.hideFiles")}
         actions={
           <>
-            <ToolbarButton
-              title={t("sidebar.newNote")}
-              onClick={() => fileTreeRef.current?.createNote()}
-            >
-              <NewNoteIcon />
-            </ToolbarButton>
-            <ToolbarButton
-              title={t("sidebar.newFolder")}
-              onClick={() => fileTreeRef.current?.createFolder()}
-            >
-              <NewFolderIcon />
-            </ToolbarButton>
-            {ws.expanded.size > 0 ? (
-              <ToolbarButton title={t("sidebar.collapseAll")} onClick={() => collapseAll()}>
-                <CollapseAllIcon />
-              </ToolbarButton>
-            ) : (
-              <ToolbarButton title={t("sidebar.expandAll")} onClick={() => expandAll()}>
-                <ExpandAllIcon />
-              </ToolbarButton>
+            {/* Create and expand/collapse act on the tree, which the tag
+                filter replaces, so they only show alongside it. */}
+            {!activeTag && (
+              <>
+                <ToolbarButton
+                  title={t("sidebar.newNote")}
+                  onClick={() => fileTreeRef.current?.createNote()}
+                >
+                  <NewNoteIcon />
+                </ToolbarButton>
+                <ToolbarButton
+                  title={t("sidebar.newFolder")}
+                  onClick={() => fileTreeRef.current?.createFolder()}
+                >
+                  <NewFolderIcon />
+                </ToolbarButton>
+                {ws.expanded.size > 0 ? (
+                  <ToolbarButton title={t("sidebar.collapseAll")} onClick={() => collapseAll()}>
+                    <CollapseAllIcon />
+                  </ToolbarButton>
+                ) : (
+                  <ToolbarButton title={t("sidebar.expandAll")} onClick={() => expandAll()}>
+                    <ExpandAllIcon />
+                  </ToolbarButton>
+                )}
+              </>
             )}
             <ToolbarButton title={t("sidebar.closeWorkspace")} onClick={closeWorkspace}>
               <TabCloseIcon />
@@ -176,26 +196,42 @@ export function Sidebar({ side }: SidebarProps) {
           over the backlinks block pinned below it (visible when the panel is
           short, e.g. with devtools open). */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <FileTree
-          ref={fileTreeRef}
-          root={ws.root}
-          nodes={ws.nodes}
-          expanded={ws.expanded}
-          activeFilePath={activeFile?.path}
-          onToggle={onToggleExpand}
-          onOpenFile={onOpenFile}
-          onCreateNote={createNote}
-          onCreateCanvas={createCanvas}
-          onCreateFolder={createFolder}
-          onRename={renamePath}
-          onDuplicate={duplicatePath}
-          onMove={(path) => handleMove(ws.root, path)}
-          onReveal={(path) => {
-            void revealItemInDir(path);
-          }}
-          onDelete={deletePath}
-        />
+        {activeTag ? (
+          <TagFileList
+            tag={activeTag}
+            paths={taggedPaths}
+            workspaceRoot={ws.root}
+            activeFilePath={activeFile?.path}
+            onOpen={onOpenFile}
+            onClear={() => setSelectedTag(null)}
+          />
+        ) : (
+          <FileTree
+            ref={fileTreeRef}
+            root={ws.root}
+            nodes={ws.nodes}
+            expanded={ws.expanded}
+            activeFilePath={activeFile?.path}
+            onToggle={onToggleExpand}
+            onOpenFile={onOpenFile}
+            onCreateNote={createNote}
+            onCreateCanvas={createCanvas}
+            onCreateFolder={createFolder}
+            onRename={renamePath}
+            onDuplicate={duplicatePath}
+            onMove={(path) => handleMove(ws.root, path)}
+            onReveal={(path) => {
+              void revealItemInDir(path);
+            }}
+            onDelete={deletePath}
+          />
+        )}
       </div>
+      {tags.length > 0 && (
+        <div className="pt-2 mt-2 border-t border-[var(--color-border)] shrink-0 max-h-40 overflow-y-auto">
+          <TagsSection tags={tags} selected={activeTag} onSelect={setSelectedTag} />
+        </div>
+      )}
       <WorkspaceIndexWarning />
       {backlinks.length > 0 && (
         <>

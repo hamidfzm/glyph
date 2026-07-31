@@ -1,0 +1,44 @@
+/* Sidebar tag chips. The per-tag hue comes from src/lib/tagColor.ts, the same
+   hash the rendered frontmatter tags use, so a tag keeps one colour app-wide. */
+
+.tag-chip {
+  --tag-color: hsl(var(--tag-h, 220) 65% 42%);
+  --tag-bg: hsl(var(--tag-h, 220) 70% 96%);
+  --tag-border: hsl(var(--tag-h, 220) 55% 86%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.1em 0.6em;
+  font-size: 0.78rem;
+  font-weight: 500;
+  background: var(--tag-bg);
+  color: var(--tag-color);
+  border: 1px solid var(--tag-border);
+  border-radius: 999px;
+  transition: box-shadow 0.15s ease;
+}
+
+.tag-chip:hover {
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--tag-color) 30%, transparent);
+}
+
+.tag-chip[aria-pressed="true"] {
+  background: var(--tag-color);
+  color: var(--color-surface);
+  border-color: var(--tag-color);
+}
+
+.tag-chip-hash {
+  opacity: 0.55;
+}
+
+.tag-chip-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.dark .tag-chip {
+  --tag-color: hsl(var(--tag-h, 220) 65% 78%);
+  --tag-bg: hsl(var(--tag-h, 220) 35% 17%);
+  --tag-border: hsl(var(--tag-h, 220) 35% 28%);
+}

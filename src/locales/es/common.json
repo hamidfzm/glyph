@@ -43,6 +43,12 @@
   "backlinks": {
     "heading": "Enlaces entrantes"
   },
+  "tags": {
+    "heading": "Etiquetas",
+    "filterBy": "Filtrar por #{{tag}}",
+    "filtered": "#{{tag}} ({{total}})",
+    "clearFilter": "Quitar el filtro de etiqueta"
+  },
   "tabBar": {
     "graphLabel": "Grafo: {{name}}",
     "untitled": "Sin título",

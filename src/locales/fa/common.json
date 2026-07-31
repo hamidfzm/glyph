@@ -43,6 +43,12 @@
   "backlinks": {
     "heading": "پیوندهای ورودی"
   },
+  "tags": {
+    "heading": "برچسب‌ها",
+    "filterBy": "فیلتر بر پایهٔ #{{tag}}",
+    "filtered": "#{{tag}} ({{total}})",
+    "clearFilter": "پاک کردن فیلتر برچسب"
+  },
   "tabBar": {
     "graphLabel": "گراف: {{name}}",
     "untitled": "بدون عنوان",

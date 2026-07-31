@@ -1,10 +1,12 @@
 use serde::Serialize;
+use std::fs;
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 
 pub(super) const WALK_MAX_DEPTH: usize = 32;
 pub(super) const WALK_MAX_FILES: usize = 10_000;
 pub(super) const WALK_SKIP_DIRS: &[&str] = &[".git", "node_modules", "target", ".svn", ".hg"];
+pub(super) const SCAN_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 
 /// Whether a workspace scan covered every file, returned alongside the items
 /// so the UI can warn instead of presenting a truncated index as complete.
@@ -64,6 +66,57 @@ pub(super) fn workspace_walker(root: &Path, max_depth: usize) -> impl Iterator<I
             true
         })
         .flatten()
+}
+
+/// Read every markdown file under `root` within the scan caps and hand its
+/// path and contents to `visit`. Oversized and non-UTF-8 files are skipped so
+/// one unreadable note can't fail a whole workspace index.
+pub(super) fn scan_markdown_files(
+    root: &Path,
+    max_files: usize,
+    max_depth: usize,
+    mut visit: impl FnMut(&Path, &str),
+) -> Result<ScanStatus, String> {
+    if !root.is_dir() {
+        return Err(format!("Not a directory: {}", root.display()));
+    }
+
+    let mut status = ScanStatus::complete();
+    let mut files_scanned = 0usize;
+    for entry in workspace_walker(root, max_depth) {
+        if entry.file_type().is_dir() {
+            // A directory yielded at the depth cap is not descended into, so
+            // its contents are missing from the index.
+            if entry.depth() >= max_depth {
+                status = ScanStatus::depth_limit(max_depth);
+            }
+            continue;
+        }
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        if !crate::is_markdown_file(path) {
+            continue;
+        }
+        if files_scanned >= max_files {
+            status = ScanStatus::file_limit(max_files);
+            break;
+        }
+        files_scanned += 1;
+
+        if let Ok(meta) = entry.metadata() {
+            if meta.len() > SCAN_MAX_FILE_BYTES {
+                continue;
+            }
+        }
+        let Ok(content) = fs::read_to_string(path) else {
+            continue;
+        };
+        visit(path, &content);
+    }
+
+    Ok(status)
 }
 
 #[cfg(test)]
