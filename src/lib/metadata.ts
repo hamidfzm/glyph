@@ -40,22 +40,29 @@ export function normalizeTag(tag: string): string {
   return tag.trim().replace(/^#+/, "").toLowerCase();
 }
 
+// A plain scalar (`tags: work, ideas`) reaches us as one string, so split it
+// the way Obsidian does instead of indexing "work, ideas" as a single tag.
+function addTags(raw: string, into: Set<string>): void {
+  for (const part of raw.split(/[,\s]+/)) {
+    const tag = normalizeTag(part);
+    if (tag) into.add(tag);
+  }
+}
+
 export function buildMetadataIndex(files: readonly MetadataEntry[]): MetadataIndex {
   const index = new Map<string, NoteMetadata>();
 
   for (const file of files) {
     const tags = new Set<string>();
     for (const tag of file.tags) {
-      const normalized = normalizeTag(tag);
-      if (normalized) tags.add(normalized);
+      addTags(tag, tags);
     }
 
     const fields = new Map<string, string>();
     const parsed = file.frontmatter ? parseFrontmatter(file.frontmatter) : null;
     if (parsed) {
       for (const tag of parsed.tags ?? []) {
-        const normalized = normalizeTag(tag);
-        if (normalized) tags.add(normalized);
+        addTags(tag, tags);
       }
       if (parsed.title) fields.set("title", parsed.title);
       if (parsed.author) fields.set("author", parsed.author);
@@ -70,6 +77,15 @@ export function buildMetadataIndex(files: readonly MetadataEntry[]): MetadataInd
   }
 
   return index;
+}
+
+/** Every frontmatter field name used anywhere in the workspace. */
+export function metadataFields(index: MetadataIndex): Set<string> {
+  const fields = new Set<string>();
+  for (const meta of index.values()) {
+    for (const field of meta.fields.keys()) fields.add(field);
+  }
+  return fields;
 }
 
 /** Every tag in the workspace, most frequent first, ties broken by name. */

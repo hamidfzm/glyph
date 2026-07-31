@@ -4,6 +4,14 @@ use std::path::Path;
 use super::walk::{scan_markdown_files, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
 use crate::grants::GrantRegistry;
 
+// Note content is untrusted, and the index ships every block to the frontend
+// for YAML parsing, so both the block and each tag are bounded here rather than
+// at the far end. A file whose frontmatter exceeds the cap is indexed for its
+// inline tags only.
+const SCAN_MAX_FRONTMATTER_BYTES: usize = 8 * 1024;
+const SCAN_MAX_TAG_CHARS: usize = 64;
+const SCAN_MAX_TAGS_PER_FILE: usize = 100;
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetadataEntry {
@@ -72,6 +80,9 @@ fn split_frontmatter(content: &str) -> (Option<String>, usize) {
             block.push_str("---\n");
             return (Some(block), idx + 2);
         }
+        if block.len() + line.len() > SCAN_MAX_FRONTMATTER_BYTES {
+            return (None, 0);
+        }
         block.push_str(line);
         block.push('\n');
     }
@@ -94,6 +105,7 @@ fn inline_tags<'a>(body: impl Iterator<Item = &'a str>) -> Vec<String> {
     }
     tags.sort();
     tags.dedup();
+    tags.truncate(SCAN_MAX_TAGS_PER_FILE);
     tags
 }
 
@@ -112,7 +124,10 @@ fn push_line_tags(line: &str, out: &mut Vec<String>) {
         }
         let tag: String = chars[start..end].iter().collect();
         // A digits-only run is an issue reference (`#42`), not a tag.
-        if !tag.is_empty() && tag.chars().any(|c| !c.is_ascii_digit()) {
+        let usable = !tag.is_empty()
+            && tag.chars().count() <= SCAN_MAX_TAG_CHARS
+            && tag.chars().any(|c| !c.is_ascii_digit());
+        if usable {
             out.push(tag.to_lowercase());
         }
         i = end.max(start);
@@ -233,6 +248,40 @@ mod tests {
 
         let files = scan(&dir);
         assert_eq!(files[0].tags, vec!["alpha", "beta/nested"]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_metadata_drops_oversized_frontmatter_but_keeps_inline_tags() {
+        let dir = unique_tmp("meta_big_frontmatter");
+        let filler = "x".repeat(SCAN_MAX_FRONTMATTER_BYTES + 1);
+        fs::write(
+            dir.join("a.md"),
+            format!("---\nnote: {filler}\n---\nBody #alpha\n"),
+        )
+        .unwrap();
+
+        let files = scan(&dir);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].frontmatter, None);
+        assert_eq!(files[0].tags, vec!["alpha"]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_metadata_caps_tag_length_and_count() {
+        let dir = unique_tmp("meta_tag_caps");
+        let long = "y".repeat(SCAN_MAX_TAG_CHARS + 1);
+        let many: String = (0..SCAN_MAX_TAGS_PER_FILE + 10)
+            .map(|i| format!("#tag{i} "))
+            .collect();
+        fs::write(dir.join("a.md"), format!("#{long} #ok\n{many}\n")).unwrap();
+
+        let files = scan(&dir);
+        assert_eq!(files[0].tags.len(), SCAN_MAX_TAGS_PER_FILE);
+        assert!(!files[0].tags.iter().any(|t| t.len() > SCAN_MAX_TAG_CHARS));
 
         let _ = fs::remove_dir_all(&dir);
     }

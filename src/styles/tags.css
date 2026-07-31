@@ -8,6 +8,12 @@
   display: inline-flex;
   align-items: center;
   gap: 0.25em;
+  /* A tag is note content, so a long one truncates instead of stretching the
+     panel past its width. */
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   padding: 0.1em 0.6em;
   font-size: 0.78rem;
   font-weight: 500;

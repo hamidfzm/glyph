@@ -3857,6 +3857,40 @@ describe("useTabs directory-changed events", () => {
     expect(result.current.metadataEntries).toEqual(tagged);
   });
 
+  it("drops a refresh that lands after the workspace was replaced", async () => {
+    const dirChanged = captureListener("directory-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async (_cmd, args) =>
+          fileScan(String(args?.path ?? "") === "/p/ws" ? ["/p/ws/a.md"] : []),
+        scan_metadata: async (_cmd, args) =>
+          metadataScan(
+            String(args?.path ?? "") === "/p/ws"
+              ? [{ path: "/p/ws/a.md", frontmatter: null, tags: ["work"] }]
+              : [],
+          ),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => expect(result.current.metadataEntries).toHaveLength(1));
+
+    // The rescan of /p/ws is still in flight when the window switches to
+    // /p/other; its results must not land on the new workspace.
+    await act(async () => {
+      dirChanged.handler?.({ payload: "/p/ws" });
+      await result.current.openFolder("/p/other");
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    expect(result.current.workspace?.root).toBe("/p/other");
+    expect(result.current.workspaceFiles).toEqual([]);
+    expect(result.current.metadataEntries).toEqual([]);
+  });
+
   it("ignores directory-changed for a root that isn't open", async () => {
     const dirChanged = captureListener("directory-changed");
     const readDirs: string[] = [];

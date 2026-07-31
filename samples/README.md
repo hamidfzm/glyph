@@ -45,6 +45,8 @@ Glyph reads YAML frontmatter at the top of a document and renders it as a headin
 
 Documents without frontmatter render as before — no extra spacing, no empty card.
 
+With a folder open, these keys are also indexed workspace-wide: tags (frontmatter or inline `#tag`) fill the sidebar's Tags panel, and the command palette takes `tag:demo` or any frontmatter field as a filter (`status:draft`). See [[Index]] for a walkthrough.
+
 ## GitHub Flavored Markdown
 
 ### Tables

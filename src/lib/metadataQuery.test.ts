@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMetadataIndex } from "./metadata";
+import { buildMetadataIndex, metadataFields } from "./metadata";
 import { matchesFilters, parseMetadataQuery } from "./metadataQuery";
 
 const index = buildMetadataIndex([
@@ -11,6 +11,8 @@ const index = buildMetadataIndex([
   { path: "/ws/plain.md", frontmatter: null, tags: ["personal"] },
 ]);
 
+const fields = new Set(["status", "project"]);
+
 describe("parseMetadataQuery", () => {
   it("pulls out field filters and leaves the rest as text", () => {
     expect(parseMetadataQuery("tag:work release notes")).toEqual({
@@ -19,14 +21,32 @@ describe("parseMetadataQuery", () => {
     });
   });
 
+  it("closes the gap a filter leaves mid-query", () => {
+    expect(parseMetadataQuery("release tag:work notes")).toEqual({
+      filters: [{ field: "tag", value: "work" }],
+      text: "release notes",
+    });
+  });
+
+  it("only treats a term as a filter when the workspace uses that field", () => {
+    expect(parseMetadataQuery("status:draft", fields).filters).toEqual([
+      { field: "status", value: "draft" },
+    ]);
+    // A pasted Windows path or a `Heading:Sub` term stays plain search text.
+    expect(parseMetadataQuery("C:\\notes\\release")).toEqual({
+      filters: [],
+      text: "C:\\notes\\release",
+    });
+  });
+
   it("accepts quoted values with spaces", () => {
-    expect(parseMetadataQuery('project:"side quest"').filters).toEqual([
+    expect(parseMetadataQuery('project:"side quest"', fields).filters).toEqual([
       { field: "project", value: "side quest" },
     ]);
   });
 
   it("lowercases fields and values", () => {
-    expect(parseMetadataQuery("Status:DRAFT").filters).toEqual([
+    expect(parseMetadataQuery("Status:DRAFT", fields).filters).toEqual([
       { field: "status", value: "draft" },
     ]);
   });
@@ -45,7 +65,7 @@ describe("parseMetadataQuery", () => {
 });
 
 describe("matchesFilters", () => {
-  const filters = (query: string) => parseMetadataQuery(query).filters;
+  const filters = (query: string) => parseMetadataQuery(query, metadataFields(index)).filters;
 
   it("passes everything when there are no filters", () => {
     expect(matchesFilters(index, "/ws/unknown.md", [])).toBe(true);

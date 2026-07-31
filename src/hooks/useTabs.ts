@@ -1509,6 +1509,11 @@ export function useTabs(options: UseTabsOptions) {
           }
           return { ...prev, nodes: newNodes };
         });
+        // The workspace can be replaced while the scans run; the indexes are
+        // window-wide, so writing this root's results into another root's
+        // workspace would leave the sidebar and palette pointing at files that
+        // are no longer open.
+        if (workspaceRef.current?.root !== watchedRoot) return;
         setWorkspaceFiles(freshFiles.files);
         setWikilinkRefs(freshRefs.refs);
         setMetadataEntries(freshMetadata.files);

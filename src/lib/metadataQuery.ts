@@ -20,16 +20,31 @@ export interface ParsedQuery {
 }
 
 const FILTER_RE = /([A-Za-z][\w-]*):("[^"]*"|\S+)/g;
+const TAG_FIELDS = ["tag", "tags"];
 
-export function parseMetadataQuery(query: string): ParsedQuery {
+/**
+ * Split `query` into metadata filters and leftover search text. `fields` is the
+ * set of frontmatter field names the workspace actually uses: a `word:value`
+ * term naming anything else (a pasted `C:\notes\x`, a `Section:Overview`
+ * heading) stays plain text instead of filtering the results down to nothing.
+ */
+export function parseMetadataQuery(
+  query: string,
+  fields: ReadonlySet<string> = new Set(),
+): ParsedQuery {
   const filters: MetadataFilter[] = [];
   const text = query
-    .replace(FILTER_RE, (match, field: string, rawValue: string) => {
+    .replace(FILTER_RE, (match, rawField: string, rawValue: string) => {
+      const field = rawField.toLowerCase();
       const value = rawValue.startsWith('"') ? rawValue.slice(1, -1) : rawValue;
       if (value.trim().length === 0) return match;
-      filters.push({ field: field.toLowerCase(), value: value.trim().toLowerCase() });
+      if (!TAG_FIELDS.includes(field) && !fields.has(field)) return match;
+      filters.push({ field, value: value.trim().toLowerCase() });
       return " ";
     })
+    // Removing a filter from the middle would otherwise leave a double space,
+    // which the fuzzy matcher treats as a character to match.
+    .replace(/\s+/g, " ")
     .trim();
 
   return { filters, text };

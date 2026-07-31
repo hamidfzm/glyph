@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildMetadataIndex,
   type MetadataEntry,
+  metadataFields,
   normalizeTag,
   pathsWithTag,
   tagCounts,
@@ -47,6 +48,11 @@ describe("buildMetadataIndex", () => {
     expect(fields?.get("date")).toBe("2026-01-02");
   });
 
+  it("splits a comma-separated scalar tag list", () => {
+    const index = buildMetadataIndex([entry({ frontmatter: "---\ntags: work, ideas\n---\n" })]);
+    expect(index.get("/ws/a.md")?.tags).toEqual(["ideas", "work"]);
+  });
+
   it("ignores a frontmatter tag that normalizes to nothing", () => {
     const index = buildMetadataIndex([entry({ frontmatter: '---\ntags: ["#", work]\n---\n' })]);
     expect(index.get("/ws/a.md")?.tags).toEqual(["work"]);
@@ -74,6 +80,17 @@ describe("tagCounts", () => {
       { tag: "alpha", count: 1 },
       { tag: "zebra", count: 1 },
     ]);
+  });
+});
+
+describe("metadataFields", () => {
+  it("collects every frontmatter field name in the workspace", () => {
+    const index = buildMetadataIndex([
+      entry({ path: "/ws/a.md", frontmatter: "---\nstatus: draft\n---\n" }),
+      entry({ path: "/ws/b.md", frontmatter: "---\nProject: Glyph\n---\n" }),
+      entry({ path: "/ws/c.md", tags: ["work"] }),
+    ]);
+    expect(metadataFields(index)).toEqual(new Set(["status", "project"]));
   });
 });
 

@@ -8,7 +8,7 @@
 
 import type { ComponentType } from "react";
 import { fuzzyMatch } from "./fuzzyMatch";
-import { EMPTY_METADATA_INDEX, type MetadataIndex } from "./metadata";
+import { EMPTY_METADATA_INDEX, type MetadataIndex, metadataFields } from "./metadata";
 import { matchesFilters, parseMetadataQuery } from "./metadataQuery";
 
 export type CommandSection = "Files" | "Headings" | "Commands";
@@ -61,7 +61,7 @@ export function rankCommands(
   commands: readonly Command[],
   { metadata = EMPTY_METADATA_INDEX, limit = 50 }: RankOptions = {},
 ): RankedCommand[] {
-  const { filters, text } = parseMetadataQuery(query);
+  const { filters, text } = parseMetadataQuery(query, metadataFields(metadata));
   // A metadata query is about documents, so non-file rows drop out entirely.
   const candidates =
     filters.length === 0

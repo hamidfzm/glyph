@@ -66,7 +66,7 @@ and files: <path>`), which never echoes the grant list.
 
 | Command | Check |
 | ------- | ----- |
-| `read_file`, `get_file_metadata`, `read_directory`, `list_markdown_files`, `scan_wikilinks` | readable |
+| `read_file`, `get_file_metadata`, `read_directory`, `list_markdown_files`, `scan_wikilinks`, `scan_metadata` | readable |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable |
 | `copy_file` | source readable and destination writable |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |

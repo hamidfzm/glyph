@@ -58,11 +58,12 @@ export function Sidebar({ side }: SidebarProps) {
     deletePath,
   } = useTabsContext();
   const fileTreeRef = useRef<FileTreeHandle>(null);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  // The filter carries the workspace it was picked in, and applies only while
+  // that tag still exists: a switched workspace or a tag edited away falls back
+  // to the tree instead of stranding the panel on a stale list.
+  const [tagFilter, setTagFilter] = useState<{ root: string; tag: string } | null>(null);
   const tags = useMemo(() => tagCounts(metadata), [metadata]);
-  // Derived rather than stored, so a filter whose tag disappears (workspace
-  // switched, tag edited away) falls back to the tree instead of stranding the
-  // panel on an empty list.
+  const selectedTag = tagFilter && tagFilter.root === workspace?.root ? tagFilter.tag : null;
   const activeTag = tags.some((t) => t.tag === selectedTag) ? selectedTag : null;
   const taggedPaths = useMemo(
     () => (activeTag ? pathsWithTag(metadata, activeTag) : []),
@@ -203,7 +204,7 @@ export function Sidebar({ side }: SidebarProps) {
             workspaceRoot={ws.root}
             activeFilePath={activeFile?.path}
             onOpen={onOpenFile}
-            onClear={() => setSelectedTag(null)}
+            onClear={() => setTagFilter(null)}
           />
         ) : (
           <FileTree
@@ -229,7 +230,11 @@ export function Sidebar({ side }: SidebarProps) {
       </div>
       {tags.length > 0 && (
         <div className="pt-2 mt-2 border-t border-[var(--color-border)] shrink-0 max-h-40 overflow-y-auto">
-          <TagsSection tags={tags} selected={activeTag} onSelect={setSelectedTag} />
+          <TagsSection
+            tags={tags}
+            selected={activeTag}
+            onSelect={(tag) => setTagFilter(tag ? { root: ws.root, tag } : null)}
+          />
         </div>
       )}
       <WorkspaceIndexWarning />

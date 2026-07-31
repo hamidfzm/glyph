@@ -544,6 +544,38 @@ describe("Sidebar", () => {
       expect(screen.getByTitle("Close workspace")).toBeInTheDocument();
     });
 
+    // Same tag name, different vault: the filter belongs to the workspace it
+    // was picked in, so it must not silently re-apply to unrelated files.
+    it("drops the filter when another workspace is opened", () => {
+      const { rerender } = renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
+      fireEvent.click(screen.getByTitle("Filter by #work"));
+
+      const opts = {
+        activeTab: makeFileTab(),
+        workspace: makeWorkspace({
+          root: "/tmp/other",
+          nodes: new Map([
+            [
+              "/tmp/other",
+              [{ name: "other.md", path: "/tmp/other/other.md", isDirectory: false, modified: 0 }],
+            ],
+          ]),
+        }),
+        tabs: {
+          metadata: buildMetadataIndex([
+            { path: "/tmp/other/other.md", frontmatter: null, tags: ["work"] },
+          ]),
+        },
+      };
+      rerender(
+        <Wrapper opts={opts}>
+          <Sidebar side="left" />
+        </Wrapper>,
+      );
+      expect(screen.getByText("other.md")).toBeInTheDocument();
+      expect(screen.queryByText("#work (1)")).not.toBeInTheDocument();
+    });
+
     // A rescan can drop the filtered tag (note deleted, tag edited away).
     it("falls back to the tree when the filtered tag leaves the index", () => {
       const { rerender } = renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });

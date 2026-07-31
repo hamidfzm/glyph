@@ -44,8 +44,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 
 ### Workspace & Navigation
 - Folder workspaces with a sidebar tree, tabs, and create/rename/move/delete; create a new workspace from within the app
-- Graph view (`Cmd/Ctrl+G`), command palette (`Cmd/Ctrl+K`), and in-document search (`Cmd/Ctrl+F`)
-- Tags panel plus metadata search: filter the sidebar by tag, or query the palette with `tag:foo` / `status:draft`
+- Graph view (`Cmd/Ctrl+G`), command palette (`Cmd/Ctrl+K`, with `tag:` / frontmatter filters), a sidebar Tags panel, and in-document search (`Cmd/Ctrl+F`)
 - Table of contents, resizable panels, zoom, and session/window restore
 - Drag-and-drop, file associations, and a `glyph` CLI (`glyph file.md`, `glyph ~/notes/`)
 
