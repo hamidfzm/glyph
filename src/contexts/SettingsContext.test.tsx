@@ -547,7 +547,14 @@ describe("SettingsProvider", () => {
 
     it("maps a named font family to its stack", async () => {
       await renderWithUpdates([["appearance.fontFamily", "serif"]]);
-      expect(root().getPropertyValue("--glyph-font")).toContain("Georgia");
+      expect(root().getPropertyValue("--glyph-reading-font")).toContain("Iowan Old Style");
+    });
+
+    it("re-faces the document without touching the interface font", async () => {
+      await renderWithUpdates([["appearance.fontFamily", "mono"]]);
+      expect(root().getPropertyValue("--glyph-reading-font")).toContain("monospace");
+      // Chrome stays on the per-platform stack from platform.css.
+      expect(root().getPropertyValue("--glyph-font")).toBe("");
     });
 
     it("uses the custom font when fontFamily is custom", async () => {
@@ -555,22 +562,34 @@ describe("SettingsProvider", () => {
         ["appearance.customFont", "Comic Sans MS"],
         ["appearance.fontFamily", "custom"],
       ]);
-      expect(root().getPropertyValue("--glyph-font")).toBe("Comic Sans MS");
+      expect(root().getPropertyValue("--glyph-reading-font")).toBe("Comic Sans MS");
     });
 
-    it("removes the font property when fontFamily is system", async () => {
+    it("clears the override for system, leaving the stylesheet reading serif", async () => {
       await renderWithUpdates([
         ["appearance.fontFamily", "serif"],
         ["appearance.fontFamily", "system"],
       ]);
-      expect(root().getPropertyValue("--glyph-font")).toBe("");
+      expect(root().getPropertyValue("--glyph-reading-font")).toBe("");
     });
 
-    it("leaves the font unset for custom family with no custom font", async () => {
-      // custom + empty customFont skips the custom branch, and "custom" has no
-      // entry in FONT_FAMILY_MAP, so nothing is written.
-      await renderWithUpdates([["appearance.fontFamily", "custom"]]);
-      expect(root().getPropertyValue("--glyph-font")).toBe("");
+    it("clears a previous face when custom is chosen with no font named", async () => {
+      // Without clearing, prose would stay stranded on the serif while the
+      // settings say "custom" with an empty name.
+      await renderWithUpdates([
+        ["appearance.fontFamily", "serif"],
+        ["appearance.fontFamily", "custom"],
+      ]);
+      expect(root().getPropertyValue("--glyph-reading-font")).toBe("");
+    });
+
+    it("clears the face again when a custom font name is emptied", async () => {
+      await renderWithUpdates([
+        ["appearance.customFont", "Comic Sans MS"],
+        ["appearance.fontFamily", "custom"],
+        ["appearance.customFont", ""],
+      ]);
+      expect(root().getPropertyValue("--glyph-reading-font")).toBe("");
     });
 
     it("sets the code font", async () => {

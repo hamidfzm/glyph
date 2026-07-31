@@ -111,6 +111,12 @@
    `unicode-bidi: plaintext` rule in markdown.css (the reply container carries
    .markdown-body). */
 
+/* The panel is chrome, so replies keep its UI face rather than the document's
+   reading serif, which .markdown-body would otherwise apply here. */
+.ai-msg-markdown {
+  font-family: inherit;
+}
+
 /* Per-message actions, revealed on hover to keep the transcript quiet. */
 .ai-msg-actions {
   display: flex;

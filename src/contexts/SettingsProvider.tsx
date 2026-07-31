@@ -5,8 +5,8 @@ import { KEYED_PROVIDERS, loadAiKeys, setAiKey } from "@/lib/aiKeys";
 import {
   CONTENT_WIDTH_MAP,
   DEFAULT_SETTINGS,
-  FONT_FAMILY_MAP,
   LINE_HEIGHT_MAP,
+  resolveReadingFont,
   type Settings,
   stripSecrets,
 } from "@/lib/settings";
@@ -31,14 +31,16 @@ function applyCSSVariables(settings: Settings) {
   const root = document.documentElement.style;
   const { appearance } = settings;
 
-  // Font family
-  if (appearance.fontFamily === "custom" && appearance.customFont) {
-    root.setProperty("--glyph-font", appearance.customFont);
-  } else if (appearance.fontFamily !== "system") {
-    const font = FONT_FAMILY_MAP[appearance.fontFamily];
-    if (font) root.setProperty("--glyph-font", font);
+  // Document font. Chrome keeps --glyph-font (per-platform, from platform.css);
+  // this only re-faces prose, so a reading choice can't restyle the toolbar.
+  // Always written or always cleared: leaving the previous value in place would
+  // strand prose on a face the settings no longer name.
+  const readingFont = resolveReadingFont(appearance);
+  if (readingFont) {
+    root.setProperty("--glyph-reading-font", readingFont);
   } else {
-    root.removeProperty("--glyph-font");
+    // Cleared, so prose falls back to the reading serif declared in app.css.
+    root.removeProperty("--glyph-reading-font");
   }
 
   // Font size

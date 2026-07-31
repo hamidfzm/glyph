@@ -9,6 +9,10 @@ interface InlineStyle {
   strike?: boolean;
 }
 
+/** The light-theme accent as a literal: pdfmake can't read CSS custom
+ *  properties, and pages always export on white even in dark mode. */
+export const LINK_COLOR = "#2f4fe0";
+
 const STYLE_TAGS: Record<string, keyof InlineStyle> = {
   strong: "bold",
   b: "bold",
@@ -91,7 +95,7 @@ function inlinePdf(node: Node, style: InlineStyle = {}): Content[] {
         // textContent is never null for an element; fall back to the URL when
         // the link has no visible label.
         const label = el.textContent!.trim() || href;
-        out.push({ text: label, link: href, color: "#1a56db", decoration: "underline" });
+        out.push({ text: label, link: href, color: LINK_COLOR, decoration: "underline" });
       } else {
         out.push(...inlinePdf(el, style));
       }

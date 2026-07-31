@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { convertHtmlToPdf } from "./htmlToPdf";
+import { convertHtmlToPdf, LINK_COLOR } from "./htmlToPdf";
 
 describe("convertHtmlToPdf", () => {
   it("maps headings and paragraphs to content nodes", () => {
@@ -271,7 +271,7 @@ describe("convertHtmlToPdf", () => {
     const json = JSON.stringify(content);
     expect(json).toContain('"link":"https://example.com"');
     expect(json).toContain('"site"');
-    expect(json).toContain("1a56db");
+    expect(json).toContain(LINK_COLOR);
   });
 
   it("falls back to the URL when an external link has no visible text", () => {
