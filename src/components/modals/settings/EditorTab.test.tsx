@@ -60,11 +60,23 @@ describe("EditorTab", () => {
     expect(screen.getByText("VSCode shortcuts")).toBeInTheDocument();
   });
 
+  function toggleIn(label: string) {
+    const row = screen.getByText(label).closest(".settings-row");
+    return within(row as HTMLElement).getByRole("checkbox");
+  }
+
   it("toggles spell check", () => {
     const { updateSettings } = setup();
-    expect(screen.getByText("Check spelling")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(toggleIn("Check spelling"));
     expect(updateSettings).toHaveBeenCalledWith("editor.spellCheck", true);
+  });
+
+  it("toggles pasting HTML as Markdown", () => {
+    const { updateSettings } = setup();
+    const toggle = toggleIn("Paste HTML as Markdown");
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(updateSettings).toHaveBeenCalledWith("editor.pasteHtmlAsMarkdown", false);
   });
 
   it("shows the language list only when spell check is on", () => {

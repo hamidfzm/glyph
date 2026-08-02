@@ -166,6 +166,10 @@
       "vim": "Vim",
       "vscode": "VSCode"
     },
+    "pasteHtml": {
+      "label": "Paste HTML as Markdown",
+      "description": "When you paste rich text from a browser or another app, convert it to Markdown. Turn this off to paste the plain text instead."
+    },
     "help": {
       "default": {
         "title": "Default (Glyph) shortcuts",

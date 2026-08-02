@@ -153,6 +153,10 @@
       "vim": "Vim",
       "vscode": "VSCode"
     },
+    "pasteHtml": {
+      "label": "以 Markdown 形式粘贴 HTML",
+      "description": "从浏览器或其他应用粘贴富文本时，将其转换为 Markdown。关闭后改为粘贴纯文本。"
+    },
     "help": {
       "default": {
         "title": "默认 (Glyph) 快捷键",

@@ -153,6 +153,10 @@
       "vim": "Vim",
       "vscode": "VSCode"
     },
+    "pasteHtml": {
+      "label": "HTML als Markdown einfügen",
+      "description": "Formatierten Text aus einem Browser oder einer anderen App beim Einfügen in Markdown umwandeln. Ausschalten, um stattdessen den reinen Text einzufügen."
+    },
     "help": {
       "default": {
         "title": "Standard-Tastenkürzel (Glyph)",

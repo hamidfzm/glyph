@@ -153,6 +153,10 @@
       "vim": "Vim",
       "vscode": "VSCode"
     },
+    "pasteHtml": {
+      "label": "Pegar HTML como Markdown",
+      "description": "Al pegar texto enriquecido desde un navegador u otra aplicación, convertirlo a Markdown. Desactiva esta opción para pegar el texto sin formato."
+    },
     "help": {
       "default": {
         "title": "Atajos predeterminados (Glyph)",
