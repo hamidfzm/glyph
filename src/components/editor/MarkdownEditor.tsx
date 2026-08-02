@@ -20,6 +20,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { type EditorMenuLabels, editorContextMenu } from "@/lib/editorContextMenu";
 import { formatToolbar } from "@/lib/editorFormatToolbar";
 import { editorKeymapExtensions } from "@/lib/editorKeymap";
+import { pasteHtmlExtension } from "@/lib/editorPasteHtml";
 import {
   type FormatBindings,
   formatBindingsExtension,
@@ -91,6 +92,11 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
     paste: t("editor.format.paste"),
     selectAll: t("editor.format.selectAll"),
   };
+  // Read at paste time through a ref, so toggling the setting applies without
+  // rebuilding the editor.
+  const pasteHtmlRef = useRef(settings.editor.pasteHtmlAsMarkdown);
+  pasteHtmlRef.current = settings.editor.pasteHtmlAsMarkdown;
+
   const { spellCheck, spellCheckLanguages } = settings.editor;
   // Settings saves produce a fresh array identity every time; key the
   // reconfigure effect on the joined value so only real set changes fire it.
@@ -176,6 +182,7 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
             closeOnBlur: false,
           }),
           markdown({ base: markdownLanguage, codeLanguages: languages }),
+          pasteHtmlExtension(() => pasteHtmlRef.current),
           wrapSelectionExtension,
           formatToolbar(() => formatLabelsRef.current),
           syntaxHighlighting(glyphHighlight),

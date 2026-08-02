@@ -165,6 +165,10 @@ export interface EditorSettings {
   // it; words in scripts no enabled dictionary covers are skipped. An empty
   // array checks nothing.
   spellCheckLanguages: string[];
+  // Convert a rich-text (text/html) paste into Markdown before inserting it.
+  // Off falls back to the plain-text clipboard flavor, as does a conversion
+  // that fails or yields nothing.
+  pasteHtmlAsMarkdown: boolean;
 }
 
 export interface KeybindingSettings {
@@ -267,6 +271,7 @@ export const DEFAULT_SETTINGS: Settings = {
     keymap: "default",
     spellCheck: false,
     spellCheckLanguages: ["en"],
+    pasteHtmlAsMarkdown: true,
   },
   markdown: {
     gfm: true,

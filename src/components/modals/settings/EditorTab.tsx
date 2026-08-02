@@ -104,6 +104,17 @@ export function EditorTab() {
           />
         </div>
 
+        <div className="settings-row">
+          <div>
+            <span className="settings-label">{t("editor.pasteHtml.label")}</span>
+            <div className="settings-description">{t("editor.pasteHtml.description")}</div>
+          </div>
+          <Toggle
+            checked={editor.pasteHtmlAsMarkdown}
+            onChange={(v) => updateSettings("editor.pasteHtmlAsMarkdown", v)}
+          />
+        </div>
+
         <div className="settings-description settings-keymap-help">
           <strong>{t(help.titleKey)}</strong>
           <ul>
