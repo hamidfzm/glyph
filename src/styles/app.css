@@ -19,7 +19,8 @@
   color-scheme: light;
   /* Declared here, not just by the settings provider (which writes inline
      styles on <html>), so collectStyles carries it into HTML and EPUB exports. */
-  --glyph-reading-font: "Iowan Old Style", Palatino, Georgia, serif;
+  --glyph-reading-font: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, ui-serif,
+    serif;
   --color-surface: #ffffff;
   --color-surface-secondary: #f5f5f7;
   --color-surface-tertiary: #e8e8ed;

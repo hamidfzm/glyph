@@ -24,7 +24,7 @@ That figure does not cover white text *on* the accent, which is what the primary
 
 | Role | Stack |
 | --- | --- |
-| Reading (document body) | `'Iowan Old Style', Palatino, Georgia, serif` |
+| Reading (document body) | `'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, ui-serif, serif` |
 | Interface (chrome) | per platform, see `src/styles/platform.css` |
 | Code | `'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace` (`markdown.css`; `FONT_FAMILY_MAP.mono` and a few `ui-monospace` fallbacks differ, and are not kept in step) |
 
@@ -42,5 +42,6 @@ Some values carry the accent as a separate literal and do **not** follow `var(--
 - `LINK_COLOR` (`src/lib/export/htmlToPdf.ts`), used by both PDF paths: pdfmake cannot read custom properties, and pages export on white even in dark mode, so this one is the *light* accent.
 - The reading stack itself, in `src/styles/app.css` and `FONT_FAMILY_MAP.serif` (`src/lib/settings.ts`). A test in `settings.test.ts` fails if the two drift.
 - The pre-paint splash colours in `index.html`, which run before any stylesheet loads.
+- On the website: the `theme-color` meta in `src/layouts/Base.astro` and the favicon gradient in `public/favicon.svg`, neither of which can read a custom property.
 
 Not part of the brand, and deliberately left alone: the `#0969da` values in `src/lib/export/html.ts` and `src/lib/export/site/themes.ts`. Those are the GitHub theme for documents users export, not Glyph's own chrome.

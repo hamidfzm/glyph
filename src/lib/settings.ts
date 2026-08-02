@@ -295,7 +295,7 @@ export function resolveReadingFont(appearance: AppearanceSettings): string {
 
 export const FONT_FAMILY_MAP: Record<string, string> = {
   system: "",
-  serif: "'Iowan Old Style', Palatino, Georgia, serif",
+  serif: "'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, ui-serif, serif",
   sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   mono: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
 };
