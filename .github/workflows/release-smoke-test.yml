@@ -129,12 +129,15 @@ jobs:
         id: check
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
+          # The formula ships no bottle, so it stages through Mktemp, which
+          # chowns the staging dir to brew's group. On the runner that group is
+          # "docker", a supplementary group of "runner"; Homebrew's Linux bwrap
+          # sandbox maps only the primary gid, so the chown fails with EINVAL
+          # (not the EPERM Mktemp rescues) and the install dies. This is the
+          # documented opt-out and only turns off build-time isolation.
+          HOMEBREW_NO_SANDBOX_LINUX: 1
         run: |
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          # Ubuntu 24.04 blocks unprivileged user namespaces, so Homebrew's
-          # bubblewrap probe fails and it falls back to no sandboxing. Best
-          # effort: the knob is AppArmor-specific and only silences a warning.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           brew tap glyph-md/tap
 
           # The tap ships both a formula and a cask named glyph; without
@@ -324,7 +327,14 @@ jobs:
         run: |
           curl -fsSL --retry 5 --retry-all-errors https://glyph-md.github.io/rpm-repo/glyph.repo -o /etc/yum.repos.d/glyph.repo
 
-          read -r NAME AVAILABLE <<< "$(dnf -q repoquery --queryformat '%{name} %{version}\n' glyph Glyph 2>/dev/null | head -1)"
+          # repo_gpgcheck=1 makes the first read of the repo prompt to import
+          # the signing key. Without --assumeyes dnf answers N and every query
+          # comes back empty, which reads as "never published".
+          dnf -y -q makecache --repo=glyph >/dev/null
+
+          # The repo keeps every release, and repoquery lists them oldest
+          # first, so --latest-limit is what picks the current one.
+          read -r NAME AVAILABLE <<< "$(dnf -q repoquery --latest-limit 1 --queryformat '%{name} %{version}\n' glyph Glyph 2>/dev/null | head -1)"
           if [ "$AVAILABLE" != "$VERSION" ]; then
             echo "status=pending" >> "$GITHUB_OUTPUT"
             echo "dnf repo serves ${AVAILABLE:-nothing}, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
@@ -558,13 +568,15 @@ jobs:
           $proc = Start-Process -FilePath ".\$setup" -ArgumentList "/S" -Wait -PassThru
           if ($proc.ExitCode -ne 0) { Write-Error "installer exited $($proc.ExitCode)"; exit 1 }
 
-          # Tauri's NSIS installer defaults to a per-user install; a
-          # per-machine build lands under Program Files instead.
-          $exe = "$env:LOCALAPPDATA\Programs\Glyph\Glyph.exe"
-          if (-not (Test-Path $exe)) { $exe = "$env:ProgramFiles\Glyph\Glyph.exe" }
-          if (-not (Test-Path $exe)) { Write-Error "Glyph.exe not found after install"; exit 1 }
+          # Tauri's NSIS installer defaults to a per-user install under
+          # $LOCALAPPDATA\<productName>; a per-machine build lands under
+          # Program Files instead. The payload binary is the Cargo package
+          # name, glyph.exe, not the product name.
+          $exe = "$env:LOCALAPPDATA\Glyph\glyph.exe"
+          if (-not (Test-Path $exe)) { $exe = "$env:ProgramFiles\Glyph\glyph.exe" }
+          if (-not (Test-Path $exe)) { Write-Error "glyph.exe not found after install"; exit 1 }
 
-          # Glyph.exe is a GUI subsystem binary with no console to print to, so
+          # glyph.exe is a GUI subsystem binary with no console to print to, so
           # the embedded file version is the assertion available here.
           $installed = (Get-Item $exe).VersionInfo.FileVersion
           if ($installed -notlike "$($env:VERSION)*") { Write-Error "installed $installed"; exit 1 }
