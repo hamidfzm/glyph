@@ -286,7 +286,10 @@ export const ZOOM_STEP = 1;
 /** The prose font stack for the current appearance settings, or "" to fall
  *  back to the reading serif declared in app.css. */
 export function resolveReadingFont(appearance: AppearanceSettings): string {
-  if (appearance.fontFamily === "custom") return appearance.customFont;
+  // Trimmed: a blank custom name would set an empty custom property, which
+  // makes font-family invalid and drops prose to the interface font instead of
+  // the serif.
+  if (appearance.fontFamily === "custom") return appearance.customFont.trim();
   return FONT_FAMILY_MAP[appearance.fontFamily] ?? "";
 }
 

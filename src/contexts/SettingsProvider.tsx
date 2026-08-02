@@ -31,15 +31,12 @@ function applyCSSVariables(settings: Settings) {
   const root = document.documentElement.style;
   const { appearance } = settings;
 
-  // Document font. Chrome keeps --glyph-font (per-platform, from platform.css);
-  // this only re-faces prose, so a reading choice can't restyle the toolbar.
-  // Always written or always cleared: leaving the previous value in place would
-  // strand prose on a face the settings no longer name.
+  // Prose only: chrome stays on --glyph-font. Always written or always cleared,
+  // so no transition strands prose on a face the settings no longer name.
   const readingFont = resolveReadingFont(appearance);
   if (readingFont) {
     root.setProperty("--glyph-reading-font", readingFont);
   } else {
-    // Cleared, so prose falls back to the reading serif declared in app.css.
     root.removeProperty("--glyph-reading-font");
   }
 

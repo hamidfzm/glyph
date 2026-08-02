@@ -167,9 +167,10 @@ describe("reading face", () => {
   // Nothing else keeps them in step, so this does.
   it("matches the app.css declaration", () => {
     const css = readFileSync("src/styles/app.css", "utf8");
-    const declared = css.match(/--glyph-reading-font:\s*([^;]+);/)?.[1].trim();
+    const declared = css.match(/--glyph-reading-font:\s*([^;]+);/)?.[1];
     expect(declared).toBeDefined();
-    expect(declared?.replace(/"/g, "'")).toBe(FONT_FAMILY_MAP.serif);
+    const normalise = (stack: string) => stack.replace(/"/g, "'").replace(/\s+/g, " ").trim();
+    expect(normalise(declared ?? "")).toBe(normalise(FONT_FAMILY_MAP.serif));
   });
 });
 
@@ -192,6 +193,10 @@ describe("resolveReadingFont", () => {
 
   it("is empty for custom with no font named, rather than stranding the old face", () => {
     expect(resolveReadingFont({ ...base, fontFamily: "custom", customFont: "" })).toBe("");
+  });
+
+  it("is empty for a custom font that is only whitespace", () => {
+    expect(resolveReadingFont({ ...base, fontFamily: "custom", customFont: "   " })).toBe("");
   });
 
   it("is empty for a family the map doesn't know, e.g. a hand-edited store", () => {
