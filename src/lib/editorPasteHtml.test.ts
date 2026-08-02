@@ -1,7 +1,13 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { pasteHtmlExtension } from "./editorPasteHtml";
+import { htmlToMarkdown } from "./htmlToMarkdown";
+
+vi.mock("./htmlToMarkdown", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./htmlToMarkdown")>();
+  return { htmlToMarkdown: vi.fn(actual.htmlToMarkdown) };
+});
 
 function mount(enabled: boolean, doc = "") {
   const parent = document.createElement("div");
@@ -53,5 +59,14 @@ describe("pasteHtmlExtension", () => {
     const view = mount(true);
     paste(view, { "text/html": "<div></div>", "text/plain": "plain" });
     expect(view.state.doc.toString()).toBe("plain");
+  });
+
+  it("does not convert when the conversion throws", () => {
+    vi.mocked(htmlToMarkdown).mockImplementationOnce(() => {
+      throw new Error("unparseable");
+    });
+    const view = mount(true);
+    paste(view, { "text/html": "<strong>bold</strong>", "text/plain": "bold" });
+    expect(view.state.doc.toString()).toBe("bold");
   });
 });
