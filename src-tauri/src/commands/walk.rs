@@ -105,10 +105,13 @@ pub(super) fn scan_markdown_files(
         }
         files_scanned += 1;
 
-        if let Ok(meta) = entry.metadata() {
-            if meta.len() > SCAN_MAX_FILE_BYTES {
-                continue;
-            }
+        // An unreadable stat leaves the file in: `read_to_string` below is the
+        // real gate, and the size check is only there to skip the huge ones.
+        if entry
+            .metadata()
+            .is_ok_and(|m| m.len() > SCAN_MAX_FILE_BYTES)
+        {
+            continue;
         }
         let Ok(content) = fs::read_to_string(path) else {
             continue;
