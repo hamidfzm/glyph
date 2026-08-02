@@ -8,6 +8,8 @@
 
 import type { ComponentType } from "react";
 import { fuzzyMatch } from "./fuzzyMatch";
+import { EMPTY_METADATA_INDEX, type MetadataIndex, metadataFields } from "./metadata";
+import { matchesFilters, parseMetadataQuery } from "./metadataQuery";
 
 export type CommandSection = "Files" | "Headings" | "Commands";
 
@@ -22,6 +24,8 @@ export interface Command {
   icon?: ComponentType<{ className?: string }>;
   /** Optional keyboard shortcut hint shown on the right edge of the row. */
   shortcut?: string;
+  /** Absolute file path, for Files rows; what metadata filters match against. */
+  path?: string;
   run: () => void;
 }
 
@@ -40,19 +44,32 @@ const SECTION_PRIORITY: Record<CommandSection, number> = {
   Commands: 2,
 };
 
+export interface RankOptions {
+  /** Workspace metadata, so `tag:`/`field:` terms in the query can filter. */
+  metadata?: MetadataIndex;
+  limit?: number;
+}
+
 /**
- * Filter and rank `commands` against `query`. When the query is empty, returns
- * the input ordered by section priority then input order. When non-empty,
- * returns only matches, sorted by descending score.
+ * Filter and rank `commands` against `query`. Metadata terms (`tag:foo`,
+ * `status:draft`) narrow the list to matching workspace files first; the rest
+ * of the query is fuzzy-matched. When nothing is left to match, returns the
+ * candidates ordered by section priority then input order.
  */
 export function rankCommands(
   query: string,
   commands: readonly Command[],
-  limit = 50,
+  { metadata = EMPTY_METADATA_INDEX, limit = 50 }: RankOptions = {},
 ): RankedCommand[] {
-  const trimmed = query.trim();
-  if (trimmed.length === 0) {
-    return commands
+  const { filters, text } = parseMetadataQuery(query, metadataFields(metadata));
+  // A metadata query is about documents, so non-file rows drop out entirely.
+  const candidates =
+    filters.length === 0
+      ? commands
+      : commands.filter((c) => c.path !== undefined && matchesFilters(metadata, c.path, filters));
+
+  if (text.length === 0) {
+    return candidates
       .slice()
       .sort((a, b) => SECTION_PRIORITY[a.section] - SECTION_PRIORITY[b.section])
       .slice(0, limit)
@@ -60,8 +77,8 @@ export function rankCommands(
   }
 
   const scored: Array<RankedCommand & { score: number }> = [];
-  for (const command of commands) {
-    const result = fuzzyMatch(trimmed, command.title);
+  for (const command of candidates) {
+    const result = fuzzyMatch(text, command.title);
     if (!result) continue;
     scored.push({ command, matches: result.indices, score: result.score });
   }

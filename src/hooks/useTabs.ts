@@ -10,6 +10,7 @@ import { adaptD2Content, D2_EXTENSIONS, isD2File } from "@/lib/d2Extensions";
 import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/lib/editHistory";
 import { isImageFile } from "@/lib/imageExtensions";
 import { isMarkdownFile, MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
+import type { MetadataEntry, MetadataScan } from "@/lib/metadata";
 import { adaptMmdContent } from "@/lib/mmd";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
 import { basename, isPathInside, parentDir, pruneInside } from "@/lib/paths";
@@ -220,10 +221,11 @@ export function useTabs(options: UseTabsOptions) {
   // The window's single folder workspace (or null when only loose files are
   // open). Tree state lives here; document tabs live in `state`.
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  // Recursive markdown index + outbound wikilink refs of the workspace;
-  // ephemeral (rebuilt on open / dir change).
+  // Recursive markdown index, outbound wikilink refs, and per-file tags and
+  // frontmatter of the workspace; ephemeral (rebuilt on open / dir change).
   const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
   const [wikilinkRefs, setWikilinkRefs] = useState<WikilinkRef[]>([]);
+  const [metadataEntries, setMetadataEntries] = useState<MetadataEntry[]>([]);
   const [indexStatus, setIndexStatus] = useState<WorkspaceIndexStatus>(COMPLETE_INDEX_STATUS);
   const scrollRefsMap = useRef<Map<string, number>>(new Map());
   const stateRef = useRef(state);
@@ -342,6 +344,15 @@ export function useTabs(options: UseTabsOptions) {
     }
   }, []);
 
+  const loadMetadata = useCallback(async (root: string): Promise<MetadataScan> => {
+    try {
+      return await invoke<MetadataScan>("scan_metadata", { path: root });
+    } catch (err) {
+      console.error(`Failed to scan metadata for ${root}:`, err);
+      return { files: [], status: COMPLETE_SCAN };
+    }
+  }, []);
+
   // Merge new scan statuses, keeping the previous object identity while the
   // values are unchanged so the incomplete-index banner effect below doesn't
   // refire on every directory refresh.
@@ -349,7 +360,9 @@ export function useTabs(options: UseTabsOptions) {
     setIndexStatus((prev) => {
       const next = { ...prev, ...part };
       const unchanged =
-        sameScanStatus(next.files, prev.files) && sameScanStatus(next.wikilinks, prev.wikilinks);
+        sameScanStatus(next.files, prev.files) &&
+        sameScanStatus(next.wikilinks, prev.wikilinks) &&
+        sameScanStatus(next.metadata, prev.metadata);
       return unchanged ? prev : next;
     });
   }, []);
@@ -511,6 +524,7 @@ export function useTabs(options: UseTabsOptions) {
     setWorkspace(null);
     setWorkspaceFiles([]);
     setWikilinkRefs([]);
+    setMetadataEntries([]);
     setIndexStatus(COMPLETE_INDEX_STATUS);
   }, [closeWorkspaceTabs, flushForClose]);
 
@@ -632,6 +646,12 @@ export function useTabs(options: UseTabsOptions) {
             updateIndexStatus({ wikilinks: scan.status });
           }
         });
+        loadMetadata(resolvedRoot).then((scan) => {
+          if (workspaceRef.current?.root === resolvedRoot) {
+            setMetadataEntries(scan.files);
+            updateIndexStatus({ metadata: scan.status });
+          }
+        });
 
         // Auto-open the workspace's remembered file (or its first note) as a
         // document tab. Restore passes autoLoad: false because the persisted
@@ -651,6 +671,7 @@ export function useTabs(options: UseTabsOptions) {
       closeWorkspaceTabs,
       flushForClose,
       loadDirectory,
+      loadMetadata,
       loadWikilinkRefs,
       loadWorkspaceFiles,
       openFile,
@@ -1474,10 +1495,11 @@ export function useTabs(options: UseTabsOptions) {
             dirsToRefresh.push(dir);
           }
         }
-        const [fresh, freshFiles, freshRefs] = await Promise.all([
+        const [fresh, freshFiles, freshRefs, freshMetadata] = await Promise.all([
           Promise.all(dirsToRefresh.map(async (d) => [d, await loadDirectory(d)] as const)),
           loadWorkspaceFiles(ws.root),
           loadWikilinkRefs(ws.root),
+          loadMetadata(ws.root),
         ]);
         setWorkspace((prev) => {
           if (!prev || prev.root !== watchedRoot) return prev;
@@ -1487,16 +1509,26 @@ export function useTabs(options: UseTabsOptions) {
           }
           return { ...prev, nodes: newNodes };
         });
+        // The workspace can be replaced while the scans run; the indexes are
+        // window-wide, so writing this root's results into another root's
+        // workspace would leave the sidebar and palette pointing at files that
+        // are no longer open.
+        if (workspaceRef.current?.root !== watchedRoot) return;
         setWorkspaceFiles(freshFiles.files);
         setWikilinkRefs(freshRefs.refs);
-        updateIndexStatus({ files: freshFiles.status, wikilinks: freshRefs.status });
+        setMetadataEntries(freshMetadata.files);
+        updateIndexStatus({
+          files: freshFiles.status,
+          wikilinks: freshRefs.status,
+          metadata: freshMetadata.status,
+        });
       }, DIRECTORY_REFRESH_DEBOUNCE);
     });
     return () => {
       if (timeout) clearTimeout(timeout);
       unsubscribe();
     };
-  }, [loadDirectory, loadWikilinkRefs, loadWorkspaceFiles, updateIndexStatus]);
+  }, [loadDirectory, loadMetadata, loadWikilinkRefs, loadWorkspaceFiles, updateIndexStatus]);
 
   return {
     tabs,
@@ -1507,6 +1539,7 @@ export function useTabs(options: UseTabsOptions) {
     workspace,
     workspaceFiles,
     wikilinkRefs,
+    metadataEntries,
     indexStatus,
     openFile,
     newDocument,

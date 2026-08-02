@@ -175,6 +175,8 @@ function buildContext(over: Partial<TabsContextValue>): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    metadataEntries: [],
+    metadata: new Map(),
     indexStatus: COMPLETE_INDEX_STATUS,
     workspace: null,
     newDocument: vi.fn(),

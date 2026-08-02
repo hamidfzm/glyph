@@ -43,6 +43,12 @@
   "backlinks": {
     "heading": "Rückverweise"
   },
+  "tags": {
+    "heading": "Tags",
+    "filterBy": "Nach #{{tag}} filtern",
+    "filtered": "#{{tag}} ({{total}})",
+    "clearFilter": "Tag-Filter aufheben"
+  },
   "tabBar": {
     "graphLabel": "Graph: {{name}}",
     "untitled": "Unbenannt",

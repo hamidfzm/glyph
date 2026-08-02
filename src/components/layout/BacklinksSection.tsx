@@ -1,18 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Backlink } from "@/lib/backlinks";
+import { relativeToRoot } from "@/lib/paths";
 
 interface BacklinksSectionProps {
   backlinks: Backlink[];
   workspaceRoot: string;
   onOpen: (path: string, line?: number) => void;
-}
-
-function relativeName(path: string, root: string): string {
-  if (path.startsWith(`${root}/`) || path.startsWith(`${root}\\`)) {
-    return path.slice(root.length + 1);
-  }
-  return path.split(/[\\/]/).pop() ?? path;
 }
 
 export function BacklinksSection({ backlinks, workspaceRoot, onOpen }: BacklinksSectionProps) {
@@ -47,7 +41,9 @@ export function BacklinksSection({ backlinks, workspaceRoot, onOpen }: Backlinks
                 className="block w-full text-start text-sm px-2 py-1 rounded-[var(--glyph-radius-sm)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
                 title={`${b.source}:${b.line}`}
               >
-                <div className="truncate font-medium">{relativeName(b.source, workspaceRoot)}</div>
+                <div className="truncate font-medium">
+                  {relativeToRoot(b.source, workspaceRoot)}
+                </div>
                 <div className="truncate text-xs text-[var(--color-text-tertiary)]">
                   {b.snippet}
                 </div>

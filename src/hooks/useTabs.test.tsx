@@ -22,6 +22,7 @@ type Invoker = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>
 // The workspace scan commands return items plus a truncation status (#436).
 const fileScan = (files: string[]) => ({ files, status: COMPLETE_SCAN });
 const wikilinkScan = (refs: unknown[]) => ({ refs, status: COMPLETE_SCAN });
+const metadataScan = (files: unknown[]) => ({ files, status: COMPLETE_SCAN });
 
 function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): Invoker {
   return async (cmd, args) => {
@@ -55,6 +56,8 @@ function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): Invoker 
         return fileScan([]);
       case "scan_wikilinks":
         return wikilinkScan([]);
+      case "scan_metadata":
+        return metadataScan([]);
       case "workspace_resolve":
         // Default: a plain, non-nested folder that's always adoptable.
         return {
@@ -2879,6 +2882,39 @@ describe("useTabs workspace lifecycle", () => {
     expect(result.current.tabs).toHaveLength(0);
   });
 
+  it("drops a stale metadata scan that lands after the workspace was replaced", async () => {
+    let releaseStale: ((scan: unknown) => void) | null = null;
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        scan_metadata: (_cmd, args) => {
+          if (String(args?.path ?? "") === "/p/a") {
+            return new Promise((resolve) => {
+              releaseStale = resolve;
+            });
+          }
+          return Promise.resolve(metadataScan([]));
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder("/p/a");
+    });
+    await act(async () => {
+      await result.current.openFolder("/p/b");
+    });
+
+    await act(async () => {
+      releaseStale?.(metadataScan([{ path: "/p/a/x.md", frontmatter: null, tags: ["work"] }]));
+      await Promise.resolve();
+    });
+
+    // The slow scan for the replaced workspace must not clobber /p/b's index.
+    expect(result.current.metadataEntries).toEqual([]);
+  });
+
   it("drops a stale wikilink scan that lands after the workspace was replaced", async () => {
     let releaseStale: ((scan: unknown) => void) | null = null;
     vi.mocked(invoke).mockImplementation(
@@ -3041,9 +3077,10 @@ describe("useTabs workspace teardown races", () => {
 
 describe("useTabs command failures", () => {
   it("falls back to empty listings when directory reads and workspace scans fail", async () => {
-    // Covers the catch arms of loadDirectory, loadWorkspaceFiles, and
-    // loadWikilinkRefs: each logs and degrades to an empty result so a
-    // permission error on one Rust command never breaks the workspace.
+    // Covers the catch arms of loadDirectory, loadWorkspaceFiles,
+    // loadWikilinkRefs, and loadMetadata: each logs and degrades to an empty
+    // result so a permission error on one Rust command never breaks the
+    // workspace.
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const boom = async () => {
       throw new Error("denied");
@@ -3053,6 +3090,7 @@ describe("useTabs command failures", () => {
         read_directory: boom,
         list_markdown_files: boom,
         scan_wikilinks: boom,
+        scan_metadata: boom,
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -3066,6 +3104,7 @@ describe("useTabs command failures", () => {
     expect(result.current.tabs).toHaveLength(0);
     expect(result.current.workspaceFiles).toEqual([]);
     expect(result.current.wikilinkRefs).toEqual([]);
+    expect(result.current.metadataEntries).toEqual([]);
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
   });
@@ -3807,12 +3846,14 @@ describe("useTabs directory-changed events", () => {
   it("refreshes the workspace tree and rebuilds the workspace indices", async () => {
     const dirChanged = captureListener("directory-changed");
     let files: string[] = [];
+    let tagged: unknown[] = [];
     let rootEntries = [{ name: "sub", path: "/p/ws/sub", isDirectory: true, modified: 0 }];
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         read_directory: async (_cmd, args) =>
           String(args?.path ?? "") === "/p/ws" ? rootEntries : [],
         list_markdown_files: async () => fileScan(files),
+        scan_metadata: async () => metadataScan(tagged),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -3827,6 +3868,7 @@ describe("useTabs directory-changed events", () => {
 
     // Something outside the app adds a file.
     files = ["/p/ws/new.md"];
+    tagged = [{ path: "/p/ws/new.md", frontmatter: null, tags: ["work"] }];
     rootEntries = [
       ...rootEntries,
       { name: "new.md", path: "/p/ws/new.md", isDirectory: false, modified: 0 },
@@ -3845,6 +3887,41 @@ describe("useTabs directory-changed events", () => {
     await waitFor(() => {
       expect(result.current.workspaceFiles).toEqual(["/p/ws/new.md"]);
     });
+    expect(result.current.metadataEntries).toEqual(tagged);
+  });
+
+  it("drops a refresh that lands after the workspace was replaced", async () => {
+    const dirChanged = captureListener("directory-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async (_cmd, args) =>
+          fileScan(String(args?.path ?? "") === "/p/ws" ? ["/p/ws/a.md"] : []),
+        scan_metadata: async (_cmd, args) =>
+          metadataScan(
+            String(args?.path ?? "") === "/p/ws"
+              ? [{ path: "/p/ws/a.md", frontmatter: null, tags: ["work"] }]
+              : [],
+          ),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await waitFor(() => expect(result.current.metadataEntries).toHaveLength(1));
+
+    // The rescan of /p/ws is still in flight when the window switches to
+    // /p/other; its results must not land on the new workspace.
+    await act(async () => {
+      dirChanged.handler?.({ payload: "/p/ws" });
+      await result.current.openFolder("/p/other");
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    expect(result.current.workspace?.root).toBe("/p/other");
+    expect(result.current.workspaceFiles).toEqual([]);
+    expect(result.current.metadataEntries).toEqual([]);
   });
 
   it("ignores directory-changed for a root that isn't open", async () => {
@@ -3946,6 +4023,49 @@ describe("useTabs graph tabs", () => {
     expect(result.current.wikilinkRefs).toEqual([
       { source: "/p/ws/a.md", target: "b", line: 1, snippet: "[[b]]" },
     ]);
+  });
+
+  it("scans workspace metadata on open and drops it on close", async () => {
+    const entry = { path: "/p/ws/a.md", frontmatter: "---\nstatus: draft\n---\n", tags: ["work"] };
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        list_markdown_files: async () => fileScan(["/p/ws/a.md"]),
+        scan_metadata: async () => metadataScan([entry]),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    await waitFor(() => expect(result.current.metadataEntries).toEqual([entry]));
+
+    await act(async () => {
+      await result.current.closeWorkspace();
+    });
+    expect(result.current.metadataEntries).toEqual([]);
+  });
+
+  it("a truncated metadata scan surfaces the incomplete-index notice", async () => {
+    const truncated = { truncated: true, reason: "depthLimit", limit: 32 };
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        scan_metadata: async () => ({ files: [], status: truncated }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    await waitFor(() => expect(result.current.indexStatus.metadata).toEqual(truncated));
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      { key: "notice.indexIncompleteDepth", values: { limit: "32" } },
+      { persistent: true },
+    );
   });
 
   it("a truncated file scan sets indexStatus and fires a persistent notice", async () => {

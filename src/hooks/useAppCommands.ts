@@ -20,6 +20,7 @@ import { usePluginsOptional } from "@/contexts/PluginsContext";
 import type { MenuEventHandlers } from "@/hooks/useMenuEvents";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { Command } from "@/lib/commands";
+import { basename } from "@/lib/paths";
 import type { ExporterContribution } from "@/lib/plugins/types";
 import { scrollToHeading } from "@/lib/scrollToHeading";
 import { useRegistryEntries } from "./usePluginRegistry";
@@ -45,11 +46,6 @@ export interface AppActions extends MenuEventHandlers {
   managePlugins: () => void;
   /** Run a plugin-contributed export format through the shared pipeline. */
   runPluginExporter: (exporter: ExporterContribution) => void;
-}
-
-function basename(path: string): string {
-  const segments = path.split(/[\\/]/);
-  return segments[segments.length - 1];
 }
 
 /**
@@ -81,6 +77,7 @@ export function useAppCommands({
           title: basename(path),
           subtitle: path,
           section: "Files",
+          path,
           run: () => actions.openWorkspaceFile(path),
         });
       }

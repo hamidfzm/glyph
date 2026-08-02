@@ -5,6 +5,7 @@ import { useTabs } from "@/hooks/useTabs";
 import { useWorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { filterBacklinks } from "@/lib/backlinks";
 import { displayContentFor, tocContentFor } from "@/lib/displayContent";
+import { buildMetadataIndex } from "@/lib/metadata";
 import { EDITOR_MODE } from "@/lib/settings";
 import { TabsContext, type TabsContextValue } from "./TabsContext";
 
@@ -48,16 +49,27 @@ export function TabsProvider({ children }: { children: ReactNode }) {
     [tabs.wikilinkRefs, tabs.workspaceFiles, tabs.activeFile?.path],
   );
 
+  const metadata = useMemo(() => buildMetadataIndex(tabs.metadataEntries), [tabs.metadataEntries]);
+
   const value = useMemo<TabsContextValue>(
     () => ({
       ...tabs,
       displayContent,
       tocEntries,
       backlinks,
+      metadata,
       workspaceNotice: workspaceNotice.notice,
       dismissWorkspaceNotice: workspaceNotice.dismiss,
     }),
-    [tabs, displayContent, tocEntries, backlinks, workspaceNotice.notice, workspaceNotice.dismiss],
+    [
+      tabs,
+      displayContent,
+      tocEntries,
+      backlinks,
+      metadata,
+      workspaceNotice.notice,
+      workspaceNotice.dismiss,
+    ],
   );
 
   return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;

@@ -1,3 +1,8 @@
+---
+status: draft
+tags: [cooking, demo]
+---
+
 # Cooking
 
 A note in a subdirectory, linked from [[Index]] and [[README|the showcase]] via `[[Notes/Cooking]]` (path-style) and `[[Cooking]]` (stem-only) — both resolve here.

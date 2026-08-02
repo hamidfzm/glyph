@@ -35,6 +35,8 @@ function tabsValue(workspace: Workspace | null): TabsContextValue {
     initializing: false,
     workspaceFiles: [],
     wikilinkRefs: [],
+    metadataEntries: [],
+    metadata: new Map(),
     indexStatus: COMPLETE_INDEX_STATUS,
     workspace,
     newDocument: vi.fn(),

@@ -1,11 +1,9 @@
 use serde::Serialize;
-use std::fs;
 use std::path::Path;
 
-use super::walk::{workspace_walker, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
+use super::walk::{scan_markdown_files, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
 use crate::grants::GrantRegistry;
 
-const SCAN_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 const SCAN_MAX_SNIPPET: usize = 200;
 
 #[derive(Debug, Serialize)]
@@ -45,48 +43,10 @@ fn scan_wikilinks_capped(
     max_files: usize,
     max_depth: usize,
 ) -> Result<WikilinkScan, String> {
-    let root = Path::new(path);
-    if !root.is_dir() {
-        return Err(format!("Not a directory: {path}"));
-    }
-
     let mut refs: Vec<WikilinkRef> = Vec::new();
-    let mut status = ScanStatus::complete();
-    let mut files_scanned = 0usize;
-    for entry in workspace_walker(root, max_depth) {
-        if entry.file_type().is_dir() {
-            // A directory yielded at the depth cap is not descended into, so
-            // its wikilinks are missing from the index.
-            if entry.depth() >= max_depth {
-                status = ScanStatus::depth_limit(max_depth);
-            }
-            continue;
-        }
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let p = entry.path();
-        if !crate::is_markdown_file(p) {
-            continue;
-        }
-        if files_scanned >= max_files {
-            status = ScanStatus::file_limit(max_files);
-            break;
-        }
-        files_scanned += 1;
-
-        if let Ok(meta) = entry.metadata() {
-            if meta.len() > SCAN_MAX_FILE_BYTES {
-                continue;
-            }
-        }
-
-        let Ok(content) = fs::read_to_string(p) else {
-            continue;
-        };
-        let source = p.to_string_lossy().to_string();
-        scan_wikilinks_in_file(&content, &source, &mut refs);
-    }
+    let status = scan_markdown_files(Path::new(path), max_files, max_depth, |p, content| {
+        scan_wikilinks_in_file(content, &p.to_string_lossy(), &mut refs);
+    })?;
 
     Ok(WikilinkScan { refs, status })
 }
@@ -152,7 +112,8 @@ fn snippet_for(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::walk::WALK_SKIP_DIRS;
+    use crate::commands::walk::{SCAN_MAX_FILE_BYTES, WALK_SKIP_DIRS};
+    use std::fs;
     use std::time::UNIX_EPOCH;
     use tauri::test::{mock_app, MockRuntime};
     use tauri::Manager;

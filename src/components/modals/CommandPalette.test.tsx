@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { Command } from "@/lib/commands";
+import { buildMetadataIndex } from "@/lib/metadata";
 import { CommandPalette } from "./CommandPalette";
 
 function cmd(over: Partial<Command>): Command {
@@ -242,5 +244,31 @@ describe("CommandPalette", () => {
   it("focuses the input when opened", () => {
     renderPalette({});
     expect(document.activeElement).toBe(screen.getByLabelText("Command palette query"));
+  });
+
+  it("narrows Files rows to a tag query using the workspace metadata", () => {
+    const metadata = buildMetadataIndex([
+      { path: "/ws/spec.md", frontmatter: null, tags: ["work"] },
+      { path: "/ws/diary.md", frontmatter: null, tags: ["personal"] },
+    ]);
+    render(
+      <TabsContext.Provider value={{ metadata } as unknown as TabsContextValue}>
+        <CommandPalette
+          open
+          query="tag:work"
+          commands={[
+            cmd({ id: "spec", title: "spec.md", section: "Files", path: "/ws/spec.md" }),
+            cmd({ id: "diary", title: "diary.md", section: "Files", path: "/ws/diary.md" }),
+            cmd({ id: "settings", title: "Settings" }),
+          ]}
+          onQueryChange={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </TabsContext.Provider>,
+    );
+
+    expect(screen.getByText("spec.md")).toBeInTheDocument();
+    expect(screen.queryByText("diary.md")).not.toBeInTheDocument();
+    expect(screen.queryByText("Settings")).not.toBeInTheDocument();
   });
 });

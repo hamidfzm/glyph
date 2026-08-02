@@ -31,6 +31,7 @@ describe("WorkspaceIndexWarning", () => {
     renderWith({
       files: { truncated: true, reason: "fileLimit", limit: 10000 },
       wikilinks: COMPLETE_SCAN,
+      metadata: COMPLETE_SCAN,
     });
     const status = screen.getByRole("status");
     expect(status).toHaveTextContent("Index incomplete");
@@ -41,6 +42,7 @@ describe("WorkspaceIndexWarning", () => {
     renderWith({
       files: { truncated: true, reason: "fileLimit", limit: null },
       wikilinks: COMPLETE_SCAN,
+      metadata: COMPLETE_SCAN,
     });
     expect(screen.getByRole("status").getAttribute("title")).toContain("first 0 documents");
   });
@@ -49,6 +51,7 @@ describe("WorkspaceIndexWarning", () => {
     renderWith({
       files: COMPLETE_SCAN,
       wikilinks: { truncated: true, reason: "depthLimit", limit: 32 },
+      metadata: COMPLETE_SCAN,
     });
     expect(screen.getByRole("status").getAttribute("title")).toContain("32 levels");
   });

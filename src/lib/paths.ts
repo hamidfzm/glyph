@@ -25,6 +25,14 @@ export function displayName(path: string): string {
   }
 }
 
+/** `path` written relative to `root`, or just its file name when outside it. */
+export function relativeToRoot(path: string, root: string): string {
+  if (path.startsWith(`${root}/`) || path.startsWith(`${root}\\`)) {
+    return path.slice(root.length + 1);
+  }
+  return basename(path);
+}
+
 /** True when `candidate` is `base` itself or a descendant (file or folder) of it. */
 export function isPathInside(candidate: string, base: string): boolean {
   return (

@@ -43,6 +43,12 @@
   "backlinks": {
     "heading": "Backlinks"
   },
+  "tags": {
+    "heading": "Tags",
+    "filterBy": "Filter by #{{tag}}",
+    "filtered": "#{{tag}} ({{total}})",
+    "clearFilter": "Clear tag filter"
+  },
   "tabBar": {
     "graphLabel": "Graph: {{name}}",
     "untitled": "Untitled",
