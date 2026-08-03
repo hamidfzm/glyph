@@ -81,7 +81,7 @@ function selectionPreview(selection: string): string {
 }
 
 /** Join non-empty groups with a single separator between each. */
-function joinGroups(groups: ContextMenuItem[][]): ContextMenuItem[] {
+export function joinGroups(groups: ContextMenuItem[][]): ContextMenuItem[] {
   const result: ContextMenuItem[] = [];
   for (const group of groups) {
     if (group.length === 0) continue;
