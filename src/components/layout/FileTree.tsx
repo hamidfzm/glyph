@@ -5,7 +5,7 @@ import { ImageIcon } from "@/components/icons/ImageIcon";
 import { NewCanvasIcon } from "@/components/icons/NewCanvasIcon";
 import type { DirEntry } from "@/hooks/useTabs";
 import { isCanvasFile } from "@/lib/canvasExtensions";
-import type { ContextMenuItem } from "@/lib/contextMenuItems";
+import { type ContextMenuItem, joinGroups } from "@/lib/contextMenuItems";
 import { isImageFile } from "@/lib/imageExtensions";
 import { ChevronRightIcon } from "../icons/ChevronRightIcon";
 import { CopyPathIcon } from "../icons/CopyPathIcon";
@@ -385,12 +385,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
       ]);
     }
 
-    const items: ContextMenuItem[] = [];
-    for (const group of groups) {
-      if (items.length > 0) items.push({ kind: "separator" });
-      items.push(...group);
-    }
-    return { x, y, items };
+    return { x, y, items: joinGroups(groups) };
   }, [
     contextMenu,
     onOpenFile,

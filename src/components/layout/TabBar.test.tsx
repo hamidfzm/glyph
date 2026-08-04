@@ -62,6 +62,7 @@ interface RenderOpts {
   workspace?: TabsContextValue["workspace"];
   setActiveTab?: (id: string) => void;
   closeTab?: (id: string) => Promise<void>;
+  closeTabs?: (ids: string[]) => Promise<void>;
   setTabMode?: TabsContextValue["setTabMode"];
   moveTab?: (id: string, toIndex: number) => void;
   tocEntries?: TabsContextValue["tocEntries"];
@@ -105,6 +106,7 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     expandAll: vi.fn(),
     deletePath: vi.fn(),
     closeTab: opts.closeTab ?? vi.fn(),
+    closeTabs: opts.closeTabs ?? vi.fn(),
     setActiveTab: opts.setActiveTab ?? vi.fn(),
     setTabMode: opts.setTabMode ?? vi.fn(),
     moveTab: opts.moveTab ?? vi.fn(),
@@ -421,6 +423,74 @@ describe("TabBar", () => {
       fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
       fireEvent.drop(tabEl("file1.md"), { dataTransfer: dt });
       expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
+    });
+  });
+
+  describe("context menu", () => {
+    const rightClick = (name: string, at = { clientX: 120, clientY: 30 }) => {
+      const tabEl = screen.getByText(name).closest(".tab-item") as HTMLElement;
+      const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, ...at });
+      fireEvent(tabEl, event);
+      return event;
+    };
+
+    it("opens the menu at the cursor and suppresses the native one", () => {
+      renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-0" });
+      const event = rightClick("file1.md");
+      expect(event.defaultPrevented).toBe(true);
+      const menu = screen.getByRole("menu");
+      expect(menu).toHaveStyle({ left: "120px", top: "30px" });
+      expect(screen.getByRole("menuitem", { name: "Close Others" })).toBeInTheDocument();
+    });
+
+    // The Menu key raises contextmenu with no pointer position (0,0 on WebKit),
+    // which would otherwise pin the menu to the viewport corner.
+    it("anchors a keyboard-raised menu to the tab", () => {
+      renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
+      const tabEl = screen.getByText("file0.md").closest(".tab-item") as HTMLElement;
+      vi.spyOn(tabEl, "getBoundingClientRect").mockReturnValue({
+        left: 8,
+        bottom: 34,
+      } as DOMRect);
+
+      rightClick("file0.md", { clientX: 0, clientY: 0 });
+      expect(screen.getByRole("menu")).toHaveStyle({ left: "8px", top: "34px" });
+    });
+
+    // The menu acts on the tab under the cursor, not on the active one.
+    it("closes the tabs after the right-clicked tab, not the active tab", () => {
+      const closeTabs = vi.fn();
+      renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-2", closeTabs });
+      rightClick("file0.md");
+      fireEvent.click(screen.getByRole("menuitem", { name: "Close to the Right" }));
+      expect(closeTabs).toHaveBeenCalledWith(["tab-1", "tab-2"]);
+    });
+
+    it("closes the menu after running an action", () => {
+      renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
+      rightClick("file0.md");
+      fireEvent.click(screen.getByRole("menuitem", { name: "Close All" }));
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+
+    it("drops the menu when the right-clicked tab disappears under it", () => {
+      const { rerender, value } = renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
+      rightClick("file1.md");
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+
+      rerender(
+        <Wrapper value={{ ...value, tabs: [makeFileTab(0)] }} sidebar={buildSidebarContext()}>
+          <TabBar onToggleAIChat={null} onOpenPalette={vi.fn()} />
+        </Wrapper>,
+      );
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+
+    it("closes the menu on Escape", () => {
+      renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
+      rightClick("file0.md");
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     });
   });
 

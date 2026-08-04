@@ -61,7 +61,14 @@
     "split": "تقسیم",
     "aiChat": "گفتگو با هوش مصنوعی",
     "commandPalette": "پالت فرمان",
-    "openGraph": "باز کردن گراف"
+    "openGraph": "باز کردن گراف",
+    "contextMenu": {
+      "close": "بستن",
+      "closeOthers": "بستن بقیه",
+      "closeToRight": "بستن زبانه‌های بعدی",
+      "closeToLeft": "بستن زبانه‌های قبلی",
+      "closeAll": "بستن همه"
+    }
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> در دسترس است",

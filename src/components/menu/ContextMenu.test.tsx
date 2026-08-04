@@ -57,6 +57,23 @@ describe("ContextMenu", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  // The anchor usually sits in an inner scroller (the tab strip, the file
+  // tree), whose scroll event does not bubble.
+  it("closes when a scroller under the anchor moves", () => {
+    const onClose = vi.fn();
+    const { container } = render(
+      <div>
+        <div data-testid="scroller" />
+        <ContextMenu
+          menu={menu([{ kind: "action", label: "Open File…", onSelect: vi.fn() }])}
+          onClose={onClose}
+        />
+      </div>,
+    );
+    fireEvent.scroll(container.querySelector("[data-testid=scroller]") as HTMLElement);
+    expect(onClose).toHaveBeenCalled();
+  });
+
   it("closes on an outside mousedown but not on an inside one", () => {
     const onClose = vi.fn();
     render(

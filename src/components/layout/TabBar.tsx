@@ -8,10 +8,12 @@ import { SparkleIcon } from "@/components/icons/SparkleIcon";
 import { SplitModeIcon } from "@/components/icons/SplitModeIcon";
 import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
 import { ViewModeIcon } from "@/components/icons/ViewModeIcon";
+import { ContextMenu } from "@/components/menu/ContextMenu";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { useCanSplit } from "@/hooks/useMediaQuery";
 import { usePlatform } from "@/hooks/usePlatform";
+import { useTabContextMenu } from "@/hooks/useTabContextMenu";
 import { useTabDragReorder } from "@/hooks/useTabDragReorder";
 import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
 import { isCanvasFile } from "@/lib/canvasExtensions";
@@ -54,6 +56,7 @@ export function TabBar({ onToggleAIChat, onOpenPalette }: TabBarProps) {
   } = useTabsContext();
   const { outlineVisible, toggleOutline } = useSidebarLayoutContext();
   const { indicator, handlersFor } = useTabDragReorder(onMove);
+  const { menu, openAt, close: closeMenu } = useTabContextMenu();
   const canSplit = useCanSplit();
   // Mobile has no native menu or keyboard shortcut, so the tab bar carries the
   // in-app controls: opening a file and toggling the outline drawer.
@@ -96,6 +99,7 @@ export function TabBar({ onToggleAIChat, onOpenPalette }: TabBarProps) {
             // Wrapper is a div, not a button, so the close <button> below it
             // is a valid sibling instead of an HTML-invalid nested button.
             // Click-to-activate lives on the inner `tab-activate` button.
+            // biome-ignore lint/a11y/noStaticElementInteractions: the wrapper only carries pointer affordances (drag, middle-click, right-click); the Menu key fires contextmenu on the focused inner button and bubbles here
             <div
               key={tab.id}
               className="tab-item"
@@ -110,6 +114,7 @@ export function TabBar({ onToggleAIChat, onOpenPalette }: TabBarProps) {
                   onClose(tab.id);
                 }
               }}
+              onContextMenu={(e) => openAt(e, tab.id)}
               title={tabPathOf(tab)}
             >
               <button
@@ -189,6 +194,7 @@ export function TabBar({ onToggleAIChat, onOpenPalette }: TabBarProps) {
           </ActionBarButton>
         </div>
       )}
+      <ContextMenu menu={menu} onClose={closeMenu} />
     </div>
   );
 }

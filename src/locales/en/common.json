@@ -61,7 +61,14 @@
     "split": "Split",
     "aiChat": "AI Chat",
     "commandPalette": "Command palette",
-    "openGraph": "Open graph"
+    "openGraph": "Open graph",
+    "contextMenu": {
+      "close": "Close",
+      "closeOthers": "Close Others",
+      "closeToRight": "Close to the Right",
+      "closeToLeft": "Close to the Left",
+      "closeAll": "Close All"
+    }
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> is available",

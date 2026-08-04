@@ -61,7 +61,14 @@
     "split": "分屏",
     "aiChat": "AI 聊天",
     "commandPalette": "命令面板",
-    "openGraph": "打开图谱"
+    "openGraph": "打开图谱",
+    "contextMenu": {
+      "close": "关闭",
+      "closeOthers": "关闭其他",
+      "closeToRight": "关闭右侧标签页",
+      "closeToLeft": "关闭左侧标签页",
+      "closeAll": "关闭全部"
+    }
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> 可用",

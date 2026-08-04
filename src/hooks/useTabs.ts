@@ -965,23 +965,31 @@ export function useTabs(options: UseTabsOptions) {
     [loadDirectory, t],
   );
 
-  const closeTab = useCallback(
-    async (id: string) => {
-      // Flush (and confirm on failure) before discarding the tab's state.
-      if (!(await flushForClose([id]))) return;
+  // One flush for the whole batch, so a cancelled save leaves every tab of the
+  // set open instead of the ones already walked past.
+  const closeTabs = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) return;
+      if (!(await flushForClose(ids))) return;
       setState((prev) => {
-        const tab = prev.tabs.find((t) => t.id === id);
-        if (!tab) return prev;
-        if (tab.kind === "file") {
-          invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
+        const removedIds = new Set<string>();
+        for (const id of ids) {
+          const tab = prev.tabs.find((t) => t.id === id);
+          if (!tab) continue;
+          if (tab.kind === "file") {
+            invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
+          }
+          scrollRefsMap.current.delete(id);
+          editHistory.current.delete(id);
+          removedIds.add(id);
         }
-        scrollRefsMap.current.delete(id);
-        editHistory.current.delete(id);
-        return removeTabs(prev, new Set([id]));
+        return removeTabs(prev, removedIds);
       });
     },
     [flushForClose],
   );
+
+  const closeTab = useCallback((id: string) => closeTabs([id]), [closeTabs]);
 
   // Reorder the tab strip: move tab `id` to `toIndex` (clamped to the strip).
   // Only the array order changes; the active tab and every tab's state are
@@ -1561,6 +1569,7 @@ export function useTabs(options: UseTabsOptions) {
     expandAll,
     deletePath,
     closeTab,
+    closeTabs,
     flushForClose,
     setActiveTab,
     moveTab,

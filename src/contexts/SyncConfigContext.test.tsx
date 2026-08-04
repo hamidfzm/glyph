@@ -59,6 +59,7 @@ function tabsValue(workspace: Workspace | null): TabsContextValue {
     expandAll: vi.fn(),
     deletePath: vi.fn(),
     closeTab: vi.fn(),
+    closeTabs: vi.fn(),
     setActiveTab: vi.fn(),
     moveTab: vi.fn(),
     moveActiveTab: vi.fn(),

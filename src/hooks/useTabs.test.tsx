@@ -591,6 +591,74 @@ describe("useTabs file operations", () => {
     expect(result.current.tabs).toHaveLength(0);
   });
 
+  it("closeTabs removes a batch in one pass and unwatches each file", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    for (const path of ["/p/a.md", "/p/b.md", "/p/c.md"]) {
+      await act(async () => {
+        await result.current.openFile(path);
+      });
+    }
+
+    const [first, , third] = result.current.tabs.map((t) => t.id);
+    await act(async () => {
+      await result.current.closeTabs([first, third]);
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+    expect(invoke).toHaveBeenCalledWith("unwatch_file", { path: "/p/a.md" });
+    expect(invoke).toHaveBeenCalledWith("unwatch_file", { path: "/p/c.md" });
+  });
+
+  it("closeTabs activates a survivor when the batch includes the active tab", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    for (const path of ["/p/a.md", "/p/b.md", "/p/c.md"]) {
+      await act(async () => {
+        await result.current.openFile(path);
+      });
+    }
+
+    const ids = result.current.tabs.map((t) => t.id);
+    expect(result.current.activeTabId).toBe(ids[2]);
+    await act(async () => {
+      await result.current.closeTabs([ids[1], ids[2]]);
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+    expect(result.current.activeTabId).toBe(ids[0]);
+  });
+
+  it("closeTabs ignores ids that are no longer open", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+
+    await act(async () => {
+      await result.current.closeTabs(["gone"]);
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+  });
+
+  it("closeTabs on an empty batch is a no-op", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+
+    await act(async () => {
+      await result.current.closeTabs([]);
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+  });
+
   it("setActiveTab switches the active tab", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
@@ -1459,6 +1527,31 @@ describe("useTabs close coordinator", () => {
     expect(ask).toHaveBeenCalled();
     expect(hasTab(result, id)).toBe(true);
     expect(isDirty(result, id)).toBe(true);
+    errSpy.mockRestore();
+  });
+
+  // A batch close is all-or-nothing: cancelling the prompt for one dirty tab
+  // must not leave the clean tabs of the same batch already closed.
+  it("closeTabs keeps every tab of the batch open when the discard is cancelled", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(ask).mockResolvedValue(false);
+    vi.mocked(invoke).mockImplementation(
+      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    const dirtyId = await openDirty(result, "/p/a.md");
+    await act(async () => {
+      await result.current.openFile("/p/b.md");
+    });
+    const cleanId = result.current.tabs.find((t) => t.id !== dirtyId)?.id as string;
+
+    await act(async () => {
+      await result.current.closeTabs([dirtyId, cleanId]);
+    });
+
+    expect(hasTab(result, dirtyId)).toBe(true);
+    expect(hasTab(result, cleanId)).toBe(true);
     errSpy.mockRestore();
   });
 

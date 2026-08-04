@@ -61,7 +61,14 @@
     "split": "Geteilt",
     "aiChat": "KI-Chat",
     "commandPalette": "Befehlspalette",
-    "openGraph": "Graph öffnen"
+    "openGraph": "Graph öffnen",
+    "contextMenu": {
+      "close": "Schließen",
+      "closeOthers": "Andere schließen",
+      "closeToRight": "Tabs rechts schließen",
+      "closeToLeft": "Tabs links schließen",
+      "closeAll": "Alle schließen"
+    }
   },
   "updateBanner": {
     "available": "<strong>Glyph {{version}}</strong> ist verfügbar",
