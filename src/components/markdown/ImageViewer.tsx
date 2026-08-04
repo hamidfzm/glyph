@@ -1,23 +1,13 @@
-import { invoke } from "@tauri-apps/api/core";
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActualSizeIcon } from "@/components/icons/ActualSizeIcon";
-import { FitIcon } from "@/components/icons/FitIcon";
-import { ZoomInIcon } from "@/components/icons/ZoomInIcon";
-import { ZoomOutIcon } from "@/components/icons/ZoomOutIcon";
-import { useZoomApi } from "@/contexts/ZoomContext";
 import { useDragPan } from "@/hooks/useDragPan";
-import { isSvgFile } from "@/lib/imageExtensions";
-import { clampScale, fitScale, ZOOM_STEP } from "@/lib/lightbox";
-import { svgToDataUrl } from "@/lib/svgDataUrl";
-import { svgIntrinsicSize } from "@/lib/svgIntrinsicSize";
-import { toAssetUrl } from "./resolveImageSrc";
+import { useImageSource } from "@/hooks/useImageSource";
+import { useImageZoom } from "@/hooks/useImageZoom";
+import { ImageViewerToolbar } from "./ImageViewerToolbar";
 
 interface ImageViewerProps {
   filePath: string;
 }
-
-const WHEEL_ZOOM_SPEED = 0.0015;
 
 // Read-only viewer for an image/SVG file tab. The asset is served through
 // Tauri's asset protocol (never read as text), laid out inside a scrollable
@@ -28,72 +18,14 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   useDragPan(stageRef);
-  const [scale, setScale] = useState(1);
-  const [isFit, setIsFit] = useState(true);
   const [loaded, setLoaded] = useState(false);
   // Intrinsic pixel size, or null when the image has none. Drives the sizing
   // model below. `naturalRef` mirrors it for the fit math, which runs inside a
   // load handler before the state has committed.
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const naturalRef = useRef<{ w: number; h: number } | null>(null);
-  // Intrinsic size parsed from an SVG's markup, used when the webview reports
-  // naturalWidth/Height as 0 (SVGs with only a `viewBox`).
-  const svgSizeRef = useRef<{ w: number; h: number } | null>(null);
-
-  // SVGs render from their inlined markup as a `data:` URL rather than the asset
-  // protocol: it always loads (no protocol round-trip that can come back empty)
-  // and the markup is cheap to read. Raster assets keep the asset protocol. The
-  // initial null src means the <img> stays empty for one tick until the read
-  // resolves, then `onLoad` measures it.
-  const [src, setSrc] = useState<string | null>(isSvgFile(filePath) ? null : toAssetUrl(filePath));
-
-  useEffect(() => {
-    if (!isSvgFile(filePath)) {
-      setSrc(toAssetUrl(filePath));
-      return;
-    }
-    let cancelled = false;
-    invoke<string>("read_file", { path: filePath })
-      .then((svg) => {
-        if (cancelled) return;
-        svgSizeRef.current = svgIntrinsicSize(svg);
-        setSrc(svgToDataUrl(svg));
-      })
-      // Fall back to the asset protocol if the read fails for any reason.
-      .catch(() => {
-        if (!cancelled) setSrc(toAssetUrl(filePath));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [filePath]);
-
-  const computeFit = useCallback(() => {
-    const stage = stageRef.current;
-    const size = naturalRef.current;
-    if (!stage || !size) return 1;
-    const styles = getComputedStyle(stage);
-    const availWidth =
-      stage.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
-    const availHeight =
-      stage.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom);
-    return fitScale(size.w, size.h, availWidth, availHeight);
-  }, []);
-
-  const applyFit = useCallback(() => {
-    setScale(computeFit());
-    setIsFit(true);
-  }, [computeFit]);
-
-  const zoomBy = useCallback((factor: number) => {
-    setScale((s) => clampScale(s * factor));
-    setIsFit(false);
-  }, []);
-
-  const actualSize = useCallback(() => {
-    setScale(1);
-    setIsFit(false);
-  }, []);
+  const { src, svgSizeRef } = useImageSource(filePath);
+  const { scale, applyFit, zoomBy, actualSize } = useImageZoom(stageRef, naturalRef);
 
   const handleLoad = useCallback(() => {
     const img = imgRef.current;
@@ -108,45 +40,7 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
     setLoaded(true);
     setNatural(size);
     applyFit();
-  }, [applyFit]);
-
-  // Keep a fitted image fitted on resize, unless the user has zoomed.
-  useEffect(() => {
-    if (!isFit) return;
-    const handleResize = () => setScale(computeFit());
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [isFit, computeFit]);
-
-  // Route the Zoom In/Out/Actual-Size commands to this viewer while it's the
-  // active surface. Actual Size maps to 100%, matching the toolbar button.
-  const registerZoomTarget = useZoomApi()?.registerTarget;
-  useEffect(() => {
-    if (!registerZoomTarget) return;
-    registerZoomTarget({
-      zoomIn: () => zoomBy(ZOOM_STEP),
-      zoomOut: () => zoomBy(1 / ZOOM_STEP),
-      zoomReset: actualSize,
-    });
-    return () => registerZoomTarget(null);
-  }, [registerZoomTarget, zoomBy, actualSize]);
-
-  // Ctrl/Cmd + wheel zooms; a plain wheel keeps panning a zoomed image. Native
-  // non-passive listener so preventDefault cancels the scroll.
-  useEffect(() => {
-    const stage = stageRef.current;
-    /* v8 ignore start -- defensive: the stage div is always mounted by now */
-    if (!stage) return;
-    /* v8 ignore stop */
-    const handleWheel = (event: WheelEvent) => {
-      if (!event.ctrlKey && !event.metaKey) return;
-      event.preventDefault();
-      setScale((s) => clampScale(s * Math.exp(-event.deltaY * WHEEL_ZOOM_SPEED)));
-      setIsFit(false);
-    };
-    stage.addEventListener("wheel", handleWheel, { passive: false });
-    return () => stage.removeEventListener("wheel", handleWheel);
-  }, []);
+  }, [applyFit, svgSizeRef]);
 
   // With an intrinsic size we lay the image out at `natural × scale` so zooming
   // past the viewport pans. Without one (an SVG with only a viewBox) there are
@@ -174,48 +68,12 @@ export function ImageViewer({ filePath }: ImageViewerProps) {
           draggable={false}
         />
       </div>
-      <div className="image-viewer-toolbar">
-        <button
-          type="button"
-          className="image-viewer-btn"
-          onClick={() => zoomBy(1 / ZOOM_STEP)}
-          aria-label={t("lightbox.zoomOut")}
-          title={t("lightbox.zoomOut")}
-        >
-          <ZoomOutIcon />
-        </button>
-        <span className="image-viewer-zoom-level" aria-live="polite">
-          {Math.round(scale * 100)}%
-        </span>
-        <button
-          type="button"
-          className="image-viewer-btn"
-          onClick={() => zoomBy(ZOOM_STEP)}
-          aria-label={t("lightbox.zoomIn")}
-          title={t("lightbox.zoomIn")}
-        >
-          <ZoomInIcon />
-        </button>
-        <span className="image-viewer-divider" aria-hidden="true" />
-        <button
-          type="button"
-          className="image-viewer-btn"
-          onClick={applyFit}
-          aria-label={t("lightbox.fit")}
-          title={t("lightbox.fit")}
-        >
-          <FitIcon />
-        </button>
-        <button
-          type="button"
-          className="image-viewer-btn"
-          onClick={actualSize}
-          aria-label={t("lightbox.actualSize")}
-          title={t("lightbox.actualSize")}
-        >
-          <ActualSizeIcon />
-        </button>
-      </div>
+      <ImageViewerToolbar
+        scale={scale}
+        onZoomBy={zoomBy}
+        onFit={applyFit}
+        onActualSize={actualSize}
+      />
     </section>
   );
 }

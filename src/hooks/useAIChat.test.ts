@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatMessage, ChatOptions } from "@/lib/ai-providers";
+import type { ChatMessage, ChatOptions } from "@/lib/ai/types";
 import { createAIProvider } from "@/lib/ai-providers";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useAIChat } from "./useAIChat";

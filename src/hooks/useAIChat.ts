@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { type ChatMessage, createAIProvider } from "@/lib/ai-providers";
+import type { ChatMessage } from "@/lib/ai/types";
+import { createAIProvider } from "@/lib/ai-providers";
 import { type AIDocContext, buildSystemPrompt } from "@/lib/aiPrompts";
 import type { AISettings } from "@/lib/settings";
 

@@ -1,6 +1,6 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FileTab, GraphTab, Tab } from "@/hooks/useTabs";
+import type { FileTab, GraphTab, Tab } from "@/lib/tabs";
 import type { ContextMenuActionItem } from "./contextMenuItems";
 import { buildTabMenuItems } from "./tabMenuItems";
 

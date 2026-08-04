@@ -1,10 +1,10 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchOllamaModels } from "@/lib/ai-providers";
+import { fetchOllamaModels } from "@/lib/ai/ollama";
 import { useOllamaModels } from "./useOllamaModels";
 
-vi.mock("@/lib/ai-providers", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/ai-providers")>()),
+vi.mock("@/lib/ai/ollama", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ai/ollama")>()),
   fetchOllamaModels: vi.fn(),
 }));
 

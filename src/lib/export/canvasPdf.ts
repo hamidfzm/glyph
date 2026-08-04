@@ -6,9 +6,10 @@
 
 import type { Content, TDocumentDefinitions } from "pdfmake/interfaces";
 import type { CanvasBoardModel } from "@/lib/canvas/exportModel";
-import { convertHtmlToPdf, cssColorToHex } from "./htmlToPdf";
+import { convertHtmlToPdf } from "./htmlToPdf";
 import type { PdfMetadata } from "./pdf";
 import { pdfEngine } from "./pdfEngine";
+import { cssColorToHex } from "./pdfInline";
 
 /** Mirrors the on-screen card content padding (canvas.css: 10px 14px). */
 const CARD_PAD_X = 14;

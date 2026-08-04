@@ -5,7 +5,7 @@ import { useNoteZoomMap } from "@/contexts/ZoomContext";
 import { useSettings } from "@/hooks/useSettings";
 import { countWords, readingMinutes } from "@/lib/markdown";
 import { isNotebookFile } from "@/lib/notebookExtensions";
-import { ZOOM_DEFAULT } from "@/lib/settings";
+import { ZOOM_DEFAULT } from "@/lib/settingsDisplay";
 import { SyncStatusIndicator } from "./SyncStatusIndicator";
 
 interface StatusBarProps {

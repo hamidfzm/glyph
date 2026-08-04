@@ -1,35 +1,16 @@
-import {
-  acceptCompletion,
-  autocompletion,
-  closeCompletion,
-  completionKeymap,
-  moveCompletionSelection,
-} from "@codemirror/autocomplete";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { languages } from "@codemirror/language-data";
 import { Compartment, EditorState } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers } from "@codemirror/view";
-import { tags } from "@lezer/highlight";
+import { EditorView } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { usePlatform } from "@/hooks/usePlatform";
 import { useSettings } from "@/hooks/useSettings";
-import { type EditorMenuLabels, editorContextMenu } from "@/lib/editorContextMenu";
-import { formatToolbar } from "@/lib/editorFormatToolbar";
-import { editorKeymapExtensions } from "@/lib/editorKeymap";
-import { pasteHtmlExtension } from "@/lib/editorPasteHtml";
-import {
-  type FormatBindings,
-  formatBindingsExtension,
-  wrapSelectionExtension,
-} from "@/lib/editorWrapSelection";
+import type { EditorMenuLabels } from "@/lib/editorContextMenu";
+import { buildEditorExtensions } from "@/lib/editorExtensions";
+import type { FormatBindings } from "@/lib/editorWrapSelection";
 import { resolveBindings } from "@/lib/keybindings";
 import { buildSpellcheck } from "@/lib/spellcheck/spellcheckExtension";
 import type { SuggestionMenuLabels } from "@/lib/spellcheck/suggestionMenu";
-import { wikilinkCompletionSource } from "@/lib/wikilinkCompletion";
 
 interface MarkdownEditorProps {
   content: string;
@@ -122,121 +103,20 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const { leading, extraKeys } = editorKeymapExtensions(keymapPreset);
-
-    const glyphHighlight = HighlightStyle.define([
-      { tag: tags.heading1, class: "cm-heading cm-heading-1" },
-      { tag: tags.heading2, class: "cm-heading cm-heading-2" },
-      { tag: tags.heading3, class: "cm-heading cm-heading-3" },
-      { tag: [tags.heading4, tags.heading5, tags.heading6], class: "cm-heading" },
-      { tag: tags.strong, class: "cm-strong" },
-      { tag: tags.emphasis, class: "cm-emphasis" },
-      { tag: tags.strikethrough, class: "cm-strikethrough" },
-      { tag: tags.link, class: "cm-link" },
-      { tag: tags.url, class: "cm-url" },
-      { tag: tags.processingInstruction, class: "cm-meta" },
-      { tag: tags.monospace, class: "cm-code" },
-      { tag: tags.quote, class: "cm-quote" },
-      { tag: [tags.meta, tags.comment], class: "cm-meta" },
-      { tag: tags.keyword, class: "cm-keyword" },
-      { tag: tags.string, class: "cm-string" },
-      { tag: tags.number, class: "cm-number" },
-    ]);
-
     const view = new EditorView({
       state: EditorState.create({
         doc: content,
-        extensions: [
-          // Vim (when selected) installs first so its modal handler wins.
-          ...leading,
-          lineNumbers(),
-          history(),
-          // Formatting binds ahead of the keymap below: defaultKeymap claims
-          // Mod-i for selectParentSyntax (with preventDefault), which would
-          // otherwise swallow the italic shortcut before it is seen.
-          formatBindingsExtension(() => formatBindingsRef.current),
-          // Completion keymap (Tab-accept, Esc-close, arrows-navigate) goes
-          // before defaultKeymap so it can claim Tab when the popup is open.
-          keymap.of([
-            { key: "Tab", run: acceptCompletion },
-            { key: "Escape", run: closeCompletion },
-            { key: "ArrowDown", run: (v) => moveCompletionSelection(true)(v) },
-            { key: "ArrowUp", run: (v) => moveCompletionSelection(false)(v) },
-            ...completionKeymap,
-            // VSCode preset bindings (empty for other presets) take precedence
-            // over the CodeMirror defaults below.
-            ...extraKeys,
-            ...defaultKeymap,
-            ...historyKeymap,
-          ]),
-          autocompletion({
-            override: [
-              wikilinkCompletionSource({
-                workspaceFilesRef,
-                workspaceRootRef,
-              }),
-            ],
-            activateOnTyping: true,
-            // Don't dismiss on transient focus changes (e.g. theme/setting
-            // updates that re-render React siblings) — Esc still closes.
-            closeOnBlur: false,
-          }),
-          markdown({ base: markdownLanguage, codeLanguages: languages }),
-          pasteHtmlExtension(() => pasteHtmlRef.current),
-          wrapSelectionExtension,
-          formatToolbar(() => formatLabelsRef.current),
-          syntaxHighlighting(glyphHighlight),
-          spellcheckCompartment.of(spellcheckExtension(spellCheck, spellCheckLanguages)),
-          // After spell check, so a right-click on a misspelled word still gets
-          // the suggestion menu instead of this one.
-          editorContextMenu(() => formatLabelsRef.current),
-          EditorView.lineWrapping,
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged) {
-              onChangeRef.current(update.state.doc.toString());
-            }
-          }),
-          EditorView.theme({
-            "&": {
-              height: "100%",
-              fontSize: "var(--glyph-font-size, 16px)",
-              fontFamily:
-                "var(--glyph-code-font, 'SF Mono', 'Fira Code', 'Cascadia Code', monospace)",
-              backgroundColor: "var(--color-surface)",
-              color: "var(--color-text-primary)",
-            },
-            ".cm-scroller": { overflow: "auto" },
-            ".cm-content": {
-              padding: "24px 32px",
-              maxWidth: "var(--glyph-content-width, 800px)",
-              margin: "0 auto",
-              caretColor: "var(--color-text-primary)",
-            },
-            ".cm-gutters": {
-              backgroundColor: "var(--color-surface-secondary)",
-              color: "var(--color-text-tertiary)",
-              border: "none",
-              borderRight: "1px solid var(--color-border)",
-            },
-            ".cm-activeLineGutter": {
-              backgroundColor: "var(--color-surface-tertiary)",
-            },
-            ".cm-activeLine": {
-              backgroundColor: "color-mix(in srgb, var(--color-accent) 5%, transparent)",
-            },
-            ".cm-cursor": {
-              borderLeftColor: "var(--color-text-primary)",
-            },
-            ".cm-selectionBackground": {
-              backgroundColor:
-                "color-mix(in srgb, var(--color-accent) 20%, transparent) !important",
-            },
-            "&.cm-focused .cm-selectionBackground": {
-              backgroundColor:
-                "color-mix(in srgb, var(--color-accent) 25%, transparent) !important",
-            },
-          }),
-        ],
+        extensions: buildEditorExtensions({
+          keymapPreset,
+          workspaceFilesRef,
+          workspaceRootRef,
+          formatBindingsRef,
+          formatLabelsRef,
+          pasteHtmlRef,
+          spellcheckCompartment,
+          spellcheckExtension: spellcheckExtension(spellCheck, spellCheckLanguages),
+          onDocChange: (doc: string) => onChangeRef.current(doc),
+        }),
       }),
       parent: containerRef.current,
     });

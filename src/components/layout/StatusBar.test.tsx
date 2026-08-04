@@ -6,8 +6,8 @@ import { SyncConfigProvider } from "@/contexts/SyncConfigProvider";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import { useZoomApi } from "@/contexts/ZoomContext";
 import { ZoomProvider } from "@/contexts/ZoomProvider";
-import type { FileTab, Workspace } from "@/hooks/useTabs";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
+import type { FileTab, Workspace } from "@/lib/tabs";
 import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 import { StatusBar } from "./StatusBar";
 

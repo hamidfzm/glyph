@@ -7,10 +7,10 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { canvasColorToCss } from "@/lib/canvas/color";
+import { editPlaceholderKey, editValue } from "@/lib/canvas/nodeText";
 import type { CanvasNode, NodeSide } from "@/lib/canvas/types";
+import { CanvasNodeChrome } from "./CanvasNodeChrome";
 import { CanvasNodeView } from "./CanvasNodeView";
-
-const SIDES: readonly NodeSide[] = ["top", "right", "bottom", "left"];
 
 interface CanvasEditableNodeProps {
   node: CanvasNode;
@@ -26,34 +26,6 @@ interface CanvasEditableNodeProps {
   onEditCancel: () => void;
   onContextMenu: (e: ReactMouseEvent) => void;
   onTaskToggle: (line: number) => void;
-}
-
-/** The inline-editable value for a node: markdown body, group label, or URL. */
-function editValue(node: CanvasNode): string {
-  switch (node.type) {
-    case "text":
-      return node.text;
-    case "group":
-      return node.label ?? "";
-    case "link":
-      return node.url;
-    /* v8 ignore start -- defensive: file nodes are not editable, so this is never read */
-    default:
-      return "";
-    /* v8 ignore stop */
-  }
-}
-
-/** i18n key for the inline-editor placeholder, per node type. */
-function editPlaceholderKey(node: CanvasNode): string {
-  switch (node.type) {
-    case "group":
-      return "canvasNode.groupPlaceholder";
-    case "link":
-      return "canvasNode.linkPlaceholder";
-    default:
-      return "canvasNode.textPlaceholder";
-  }
 }
 
 // A node in edit mode: the read-only content plus selection chrome, a
@@ -176,26 +148,10 @@ export function CanvasEditableNode(props: CanvasEditableNodeProps) {
       </div>
 
       {selected && !editing && (
-        <>
-          {SIDES.map((side) => (
-            <span
-              key={side}
-              className="glyph-canvas-connector"
-              data-side={side}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                props.onConnectStart(side, e);
-              }}
-            />
-          ))}
-          <span
-            className="glyph-canvas-resize"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              props.onResizeStart(e);
-            }}
-          />
-        </>
+        <CanvasNodeChrome
+          onConnectStart={props.onConnectStart}
+          onResizeStart={props.onResizeStart}
+        />
       )}
     </div>
   );

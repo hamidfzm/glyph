@@ -281,34 +281,3 @@ export const DEFAULT_SETTINGS: Settings = {
     wikilinks: true,
   },
 };
-
-export const ZOOM_DEFAULT = 16;
-export const ZOOM_MIN = 8;
-export const ZOOM_MAX = 32;
-export const ZOOM_STEP = 1;
-
-export const FONT_FAMILY_MAP: Record<string, string> = {
-  system: "",
-  serif: "Georgia, 'Times New Roman', serif",
-  sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-  mono: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
-};
-
-export const LINE_HEIGHT_MAP: Record<string, string> = {
-  compact: "1.5",
-  normal: "1.7",
-  relaxed: "2.0",
-};
-
-export const CONTENT_WIDTH_MAP: Record<string, string> = {
-  narrow: "640px",
-  medium: "800px",
-  wide: "1024px",
-  full: "100%",
-};
-
-export const MODEL_SUGGESTIONS: Record<string, string[]> = {
-  claude: ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"],
-  openai: ["gpt-4o", "gpt-4o-mini"],
-  ollama: ["llama3.2", "mistral", "gemma2"],
-};

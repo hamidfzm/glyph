@@ -1,98 +1,15 @@
-import { setTheme as setNativeTheme } from "@tauri-apps/api/app";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { KEYED_PROVIDERS, loadAiKeys, setAiKey } from "@/lib/aiKeys";
-import {
-  CONTENT_WIDTH_MAP,
-  DEFAULT_SETTINGS,
-  FONT_FAMILY_MAP,
-  LINE_HEIGHT_MAP,
-  type Settings,
-  stripSecrets,
-} from "@/lib/settings";
+import { KEYED_PROVIDERS, setAiKey } from "@/lib/aiKeys";
+import { applyCSSVariables, applyTheme } from "@/lib/applySettingsToDom";
+import { DEFAULT_SETTINGS, type Settings, stripSecrets } from "@/lib/settings";
 import { migrateLegacySettings } from "@/lib/settingsMigrations";
 import { deepMerge, setNestedValue } from "@/lib/settingsObject";
+import { loadSecrets } from "@/lib/settingsSecrets";
 import { SettingsContext } from "./SettingsContext";
-
-function applyTheme(theme: Settings["appearance"]["theme"]) {
-  if (theme === "system") {
-    const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.classList.toggle("dark", isDark);
-  } else {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-  }
-  // Native window chrome (Linux CSD, Windows frame) keeps its launch theme unless told; null follows the OS.
-  setNativeTheme(theme === "system" ? null : theme).catch((err) => {
-    console.error("Failed to set the native window theme:", err);
-  });
-}
-
-function applyCSSVariables(settings: Settings) {
-  const root = document.documentElement.style;
-  const { appearance } = settings;
-
-  // Font family
-  if (appearance.fontFamily === "custom" && appearance.customFont) {
-    root.setProperty("--glyph-font", appearance.customFont);
-  } else if (appearance.fontFamily !== "system") {
-    const font = FONT_FAMILY_MAP[appearance.fontFamily];
-    if (font) root.setProperty("--glyph-font", font);
-  } else {
-    root.removeProperty("--glyph-font");
-  }
-
-  // Font size
-  root.setProperty("--glyph-font-size", `${appearance.fontSize}px`);
-
-  // Line height
-  root.setProperty("--glyph-line-height", LINE_HEIGHT_MAP[appearance.lineHeight] ?? "1.7");
-
-  // Content width
-  root.setProperty("--glyph-content-width", CONTENT_WIDTH_MAP[appearance.contentWidth] ?? "800px");
-
-  // Code font
-  if (appearance.codeFont) {
-    root.setProperty("--glyph-code-font", appearance.codeFont);
-  } else {
-    root.removeProperty("--glyph-code-font");
-  }
-}
 
 const STORE_KEY = "settings";
 const SAVE_DEBOUNCE = 500;
-
-/**
- * Move any legacy plaintext API keys from settings.json into the OS keychain,
- * then overlay the keychain's stored keys onto the in-memory settings. The
- * plaintext copy is removed from the store only once every key migrated, so a
- * locked keyring never destroys the only copy of a key; every subsequent store
- * write is stripped regardless (see saveToStore). Never throws.
- */
-async function loadSecrets(store: Store, merged: Settings): Promise<Settings> {
-  const legacy = merged.ai.apiKeys;
-  const legacyProviders = KEYED_PROVIDERS.filter((p) => legacy[p]);
-  let migrated = true;
-  for (const provider of legacyProviders) {
-    try {
-      await setAiKey(provider, legacy[provider]);
-    } catch (err) {
-      migrated = false;
-      console.error(`Failed to migrate the ${provider} API key to the keychain:`, err);
-    }
-  }
-  const withKeys: Settings = {
-    ...merged,
-    ai: { ...merged.ai, apiKeys: { ...legacy, ...(await loadAiKeys()) } },
-  };
-  if (legacyProviders.length > 0 && migrated) {
-    try {
-      await store.set(STORE_KEY, stripSecrets(withKeys));
-    } catch (err) {
-      console.error("Failed to remove migrated API keys from settings.json:", err);
-    }
-  }
-  return withKeys;
-}
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -122,7 +39,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           : DEFAULT_SETTINGS;
         // API keys live in the OS keychain, not the store: migrate any legacy
         // plaintext keys out of settings.json and load the stored ones.
-        const merged = await loadSecrets(store, base);
+        const merged = await loadSecrets(store, STORE_KEY, base);
         if (!cancelled) {
           setSettings(merged);
           applyTheme(merged.appearance.theme);

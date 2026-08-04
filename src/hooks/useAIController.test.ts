@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatMessage } from "@/lib/ai-providers";
+import type { ChatMessage } from "@/lib/ai/types";
 import { createAIProvider } from "@/lib/ai-providers";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useAIController } from "./useAIController";

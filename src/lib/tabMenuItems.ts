@@ -4,7 +4,7 @@
 
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { TFunction } from "i18next";
-import type { Tab } from "@/hooks/useTabs";
+import type { Tab } from "@/lib/tabs";
 import { type ContextMenuItem, copySelection, joinGroups } from "./contextMenuItems";
 
 export function buildTabMenuItems(

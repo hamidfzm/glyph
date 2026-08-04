@@ -1,14 +1,12 @@
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActualSizeIcon } from "@/components/icons/ActualSizeIcon";
 import { ChevronLeftIcon } from "@/components/icons/ChevronLeftIcon";
 import { ChevronRightIcon } from "@/components/icons/ChevronRightIcon";
-import { FitIcon } from "@/components/icons/FitIcon";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
-import { ZoomInIcon } from "@/components/icons/ZoomInIcon";
-import { ZoomOutIcon } from "@/components/icons/ZoomOutIcon";
 import { useDragPan } from "@/hooks/useDragPan";
-import { clampScale, fitScale, type LightboxImage, ZOOM_STEP } from "@/lib/lightbox";
+import { useLightboxKeys } from "@/hooks/useLightboxKeys";
+import { clampScale, fitScale, type LightboxImage } from "@/lib/lightbox";
+import { LightboxToolbar } from "./LightboxToolbar";
 
 interface LightboxProps {
   images: LightboxImage[];
@@ -87,48 +85,15 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
     applyFit();
   }, [applyFit]);
 
-  // Keyboard controls: close, navigate, and zoom.
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      switch (e.key) {
-        case "Escape":
-          e.preventDefault();
-          onClose();
-          break;
-        case "ArrowLeft":
-          if (hasMultiple) {
-            e.preventDefault();
-            goTo(index - 1);
-          }
-          break;
-        case "ArrowRight":
-          if (hasMultiple) {
-            e.preventDefault();
-            goTo(index + 1);
-          }
-          break;
-        case "+":
-        case "=":
-          e.preventDefault();
-          zoomBy(ZOOM_STEP);
-          break;
-        case "-":
-          e.preventDefault();
-          zoomBy(1 / ZOOM_STEP);
-          break;
-        case "0":
-          e.preventDefault();
-          applyFit();
-          break;
-        case "1":
-          e.preventDefault();
-          actualSize();
-          break;
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [hasMultiple, index, goTo, zoomBy, applyFit, actualSize, onClose]);
+  useLightboxKeys({
+    hasMultiple,
+    index,
+    onGoTo: goTo,
+    onZoomBy: zoomBy,
+    onFit: applyFit,
+    onActualSize: actualSize,
+    onClose,
+  });
 
   // Keep the image fitted when the window resizes, unless the user has zoomed.
   useEffect(() => {
@@ -223,56 +188,14 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
         </button>
       )}
 
-      <div className="lightbox-toolbar">
-        <button
-          type="button"
-          className="lightbox-button"
-          onClick={() => zoomBy(1 / ZOOM_STEP)}
-          aria-label={t("lightbox.zoomOut")}
-          title={t("lightbox.zoomOut")}
-        >
-          <ZoomOutIcon />
-        </button>
-        <span className="lightbox-zoom-level" aria-live="polite">
-          {Math.round(scale * 100)}%
-        </span>
-        <button
-          type="button"
-          className="lightbox-button"
-          onClick={() => zoomBy(ZOOM_STEP)}
-          aria-label={t("lightbox.zoomIn")}
-          title={t("lightbox.zoomIn")}
-        >
-          <ZoomInIcon />
-        </button>
-        <span className="lightbox-toolbar-divider" aria-hidden="true" />
-        <button
-          type="button"
-          className="lightbox-button"
-          onClick={applyFit}
-          aria-label={t("lightbox.fit")}
-          title={t("lightbox.fit")}
-        >
-          <FitIcon />
-        </button>
-        <button
-          type="button"
-          className="lightbox-button"
-          onClick={actualSize}
-          aria-label={t("lightbox.actualSize")}
-          title={t("lightbox.actualSize")}
-        >
-          <ActualSizeIcon />
-        </button>
-        {hasMultiple && (
-          <>
-            <span className="lightbox-toolbar-divider" aria-hidden="true" />
-            <span className="lightbox-counter">
-              {index + 1} / {images.length}
-            </span>
-          </>
-        )}
-      </div>
+      <LightboxToolbar
+        scale={scale}
+        index={index}
+        total={images.length}
+        onZoomBy={zoomBy}
+        onFit={applyFit}
+        onActualSize={actualSize}
+      />
     </div>
   );
 }

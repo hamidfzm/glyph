@@ -1,29 +1,25 @@
 import { invoke } from "@tauri-apps/api/core";
 import { collectStyles } from "@/lib/export/collectStyles";
 import { escapeXml } from "@/lib/export/escape";
-import { buildHtmlDocument, siteChromeCss, siteChromeScript } from "@/lib/export/html";
+import { buildHtmlDocument } from "@/lib/export/html";
 import { deriveExportMeta } from "@/lib/export/meta";
 import { restoreMermaidTheme } from "@/lib/export/rasterize";
+import { siteChromeCss, siteChromeScript } from "@/lib/export/siteChrome";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
-import { adaptMmdContent } from "@/lib/mmd";
 import { basename } from "@/lib/paths";
 import type { MarkdownPlugin, SiteThemeContribution } from "@/lib/plugins/types";
 import type { FileScan } from "@/lib/workspaceScan";
 import { buildIndexBodyHtml } from "./indexPage";
 import { inlineMermaidSvgs } from "./mermaidInline";
-import { buildNavHtml, type SitePage } from "./nav";
+import { buildNavHtml } from "./nav";
 import { buildOutlineHtml } from "./outline";
 import { buildPageMetaHtml, pageDescription, pageDocumentTitle } from "./pageMeta";
 import { renderPageHtml } from "./renderPage";
 import { rehypeSiteUrls } from "./rewriteUrls";
-import { parseSiteConfig, resolveConfigAsset, robotsTxt, SITE_CONFIG_PATH } from "./siteConfig";
-import {
-  encodeHref,
-  indexSourcePriority,
-  pageRelPath,
-  relativeHref,
-  relFromRoot,
-} from "./sitePaths";
+import { resolveSiteBranding } from "./siteBranding";
+import { parseSiteConfig, robotsTxt, SITE_CONFIG_PATH } from "./siteConfig";
+import { planSitePages } from "./sitePagePlan";
+import { encodeHref, relativeHref } from "./sitePaths";
 import { resolveSiteTheme } from "./themes";
 
 export interface ExportSiteOptions {
@@ -95,82 +91,16 @@ export async function exportSite({
   // Fails loudly on an unknown theme id before any rendering happens.
   const theme = resolveSiteTheme(config.theme, themes);
 
-  const fileExists = (path: string) =>
-    invoke("get_file_metadata", { path }).then(
-      () => true,
-      () => false,
-    );
-  // A configured favicon/social image that doesn't exist is a config error,
-  // not a broken <link> discovered after publishing; resolveConfigAsset also
-  // clamps the path to the workspace, since the config may come from an
-  // untrusted repo. Without a config, a conventional root favicon is picked
-  // up automatically.
-  let faviconAbs: string | null = null;
-  let faviconRel: string | null = null;
-  if (config.favicon !== null) {
-    const resolved = resolveConfigAsset(root, config.favicon, "favicon");
-    if (!(await fileExists(resolved.abs))) {
-      throw new Error(`${SITE_CONFIG_PATH}: favicon not found in the workspace: ${config.favicon}`);
-    }
-    faviconAbs = resolved.abs;
-    faviconRel = resolved.siteRel;
-  } else {
-    for (const candidate of ["favicon.ico", "favicon.png", "favicon.svg"]) {
-      if (await fileExists(`${root}/${candidate}`)) {
-        faviconAbs = `${root}/${candidate}`;
-        faviconRel = candidate;
-        break;
-      }
-    }
-  }
-  let socialImageAbs: string | null = null;
-  let socialImageRel: string | null = null;
-  if (config.socialImage !== null) {
-    const resolved = resolveConfigAsset(root, config.socialImage, "socialImage");
-    if (!(await fileExists(resolved.abs))) {
-      throw new Error(
-        `${SITE_CONFIG_PATH}: socialImage not found in the workspace: ${config.socialImage}`,
-      );
-    }
-    socialImageAbs = resolved.abs;
-    socialImageRel = resolved.siteRel;
-  }
-  // One root file owns the site's index.html: a root index.* first, a root
-  // README.* as fallback. It goes first so nothing can collide with
-  // index.html before it claims the name; a README that lost the promotion
-  // exports as a normal README.html page.
-  const indexSource = unordered.reduce<string | null>((best, f) => {
-    const priority = indexSourcePriority(relFromRoot(root, f));
-    if (priority === 0) return best;
-    return best !== null && indexSourcePriority(relFromRoot(root, best)) >= priority ? best : f;
-  }, null);
-  const files =
-    indexSource !== null ? [indexSource, ...unordered.filter((f) => f !== indexSource)] : unordered;
+  const { faviconAbs, faviconRel, socialImageAbs, socialImageRel } = await resolveSiteBranding(
+    root,
+    config,
+  );
 
-  // Pass 1: read everything up front. Nav on every page needs the full page
-  // list with titles before the first page is written.
-  const jobs: Array<{ file: string; content: string; rel: string }> = [];
-  const pages = new Map<string, string>(); // abs md path -> site rel html path
-  const sitePages: SitePage[] = [];
-  // Output paths collide case-insensitively (Windows/macOS filesystems):
-  // a.md must not overwrite A.md's page, nor Cooking.mmd Cooking.md's.
-  const takenRels = new Set<string>();
-  for (const file of files) {
-    // .mmd files that sniff as Mermaid source render as a diagram, like the
-    // viewer does.
-    const content = adaptMmdContent(file, await invoke<string>("read_file", { path: file }));
-    const wanted = file === indexSource ? "index.html" : pageRelPath(relFromRoot(root, file));
-    let rel = wanted;
-    for (let n = 1; takenRels.has(rel.toLowerCase()); n++) {
-      rel = wanted.replace(/\.html$/, `-${n}.html`);
-    }
-    takenRels.add(rel.toLowerCase());
-    jobs.push({ file, content, rel });
-    pages.set(file, rel);
-    sitePages.push({ rel, title: deriveExportMeta(file, content).title });
-  }
-  const hasIndex = sitePages.some((p) => p.rel === "index.html");
-  if (!hasIndex) sitePages.push({ rel: "index.html", title: config.title });
+  const { files, jobs, pages, sitePages, hasIndex } = await planSitePages(
+    root,
+    unordered,
+    config.title,
+  );
 
   const total = files.length + (hasIndex ? 0 : 1);
   onProgress?.(0, total);

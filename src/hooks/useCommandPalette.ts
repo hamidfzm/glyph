@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Platform } from "@/hooks/usePlatform";
 import { useSettings } from "@/hooks/useSettings";
-import { matchesAccelerator, resolveBindings } from "@/lib/keybindings";
+import { matchesAccelerator } from "@/lib/accelerator";
+import { resolveBindings } from "@/lib/keybindings";
 import { KEYBOARD_EVENT } from "@/lib/keyboard";
 import { subscribe } from "@/lib/tauriEvent";
 

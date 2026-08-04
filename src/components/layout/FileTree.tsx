@@ -1,29 +1,15 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CanvasIcon } from "@/components/icons/CanvasIcon";
-import { ImageIcon } from "@/components/icons/ImageIcon";
-import { NewCanvasIcon } from "@/components/icons/NewCanvasIcon";
-import type { DirEntry } from "@/hooks/useTabs";
-import { isCanvasFile } from "@/lib/canvasExtensions";
-import { type ContextMenuItem, joinGroups } from "@/lib/contextMenuItems";
-import { isImageFile } from "@/lib/imageExtensions";
-import { ChevronRightIcon } from "../icons/ChevronRightIcon";
-import { CopyPathIcon } from "../icons/CopyPathIcon";
-import { DeleteIcon } from "../icons/DeleteIcon";
-import { DuplicateIcon } from "../icons/DuplicateIcon";
-import { FileTextIcon } from "../icons/FileTextIcon";
-import { FolderIcon } from "../icons/FolderIcon";
-import { FolderOpenIcon } from "../icons/FolderOpenIcon";
-import { MoveIcon } from "../icons/MoveIcon";
-import { NewFolderIcon } from "../icons/NewFolderIcon";
-import { NewNoteIcon } from "../icons/NewNoteIcon";
-import { OpenIcon } from "../icons/OpenIcon";
-import { RenameIcon } from "../icons/RenameIcon";
-import { RevealIcon } from "../icons/RevealIcon";
-import { ContextMenu, type ContextMenuModel } from "../menu/ContextMenu";
-import { InlineRenameInput } from "./InlineRenameInput";
-
-type CreateKind = "note" | "canvas" | "folder";
+import { ContextMenu, type ContextMenuModel } from "@/components/menu/ContextMenu";
+import { parentDir } from "@/lib/paths";
+import type { DirEntry } from "@/lib/tabs";
+import {
+  type EntryEditingState,
+  type EntryEditKind,
+  FileTreeEntry,
+  type FileTreeEntryProps,
+} from "./FileTreeEntry";
+import { buildFileTreeMenu, type FileTreeMenuTarget } from "./fileTreeMenu";
 
 interface FileTreeProps {
   root: string;
@@ -54,124 +40,6 @@ export interface FileTreeHandle {
   createFolder: () => void;
 }
 
-const INDENT_PX = 12;
-
-interface ContextMenuState {
-  x: number;
-  y: number;
-  dir: string;
-  filePath?: string;
-  entryPath?: string;
-  entryIsDir?: boolean;
-}
-
-interface EditingState {
-  path: string;
-  kind: CreateKind;
-  // Open the note after naming. True for fresh creates, false for renames
-  // (renaming the open file is handled by re-pointing the existing tab).
-  openOnCommit: boolean;
-}
-
-const INPUT_CLASS =
-  "w-full text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] bg-[var(--color-surface)] border border-[var(--color-accent)] text-[var(--color-text-primary)] outline-none";
-
-type EntryRenderProps = Pick<
-  FileTreeProps,
-  "nodes" | "expanded" | "activeFilePath" | "onToggle" | "onOpenFile"
-> & {
-  onContextMenu: (e: React.MouseEvent, entry: DirEntry) => void;
-  editing: EditingState | null;
-  onEditCommit: (editing: EditingState, value: string) => void;
-  onEditCancel: (editing: EditingState) => void;
-};
-
-/** Default inline-rename text: the file stem (no extension) or the folder name. */
-function editInitialValue(entry: DirEntry, kind: CreateKind): string {
-  return kind === "folder" ? entry.name : entry.name.replace(/\.[^.]+$/, "");
-}
-
-function renderEntry(entry: DirEntry, depth: number, props: EntryRenderProps): React.ReactNode {
-  const { nodes, expanded, activeFilePath, onToggle, onOpenFile, onContextMenu, editing } = props;
-  const indentStyle = { paddingLeft: `${depth * INDENT_PX + 8}px` };
-
-  if (editing && editing.path === entry.path) {
-    return (
-      <li key={entry.path}>
-        <InlineRenameInput
-          initialValue={editInitialValue(entry, editing.kind)}
-          onCommit={(value) => props.onEditCommit(editing, value)}
-          onCancel={() => props.onEditCancel(editing)}
-          className={INPUT_CLASS}
-          style={indentStyle}
-        />
-      </li>
-    );
-  }
-
-  if (entry.isDirectory) {
-    const isExpanded = expanded.has(entry.path);
-    const children = nodes.get(entry.path);
-    return (
-      <li key={entry.path}>
-        <button
-          type="button"
-          onClick={() => onToggle(entry.path)}
-          onContextMenu={(e) => onContextMenu(e, entry)}
-          className="w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] flex items-center gap-1.5"
-          style={indentStyle}
-          title={entry.path}
-        >
-          <ChevronRightIcon expanded={isExpanded} />
-          {isExpanded ? (
-            <FolderOpenIcon className="opacity-70" />
-          ) : (
-            <FolderIcon className="opacity-70" />
-          )}
-          <span className="truncate">{entry.name}</span>
-        </button>
-        {isExpanded && children && (
-          <ul>{children.map((child) => renderEntry(child, depth + 1, props))}</ul>
-        )}
-      </li>
-    );
-  }
-
-  const isActive = activeFilePath === entry.path;
-  return (
-    <li key={entry.path}>
-      <button
-        type="button"
-        onClick={() => onOpenFile(entry.path)}
-        onContextMenu={(e) => onContextMenu(e, entry)}
-        className={`w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors flex items-center gap-1.5 ${
-          isActive
-            ? "bg-[var(--color-accent)] text-white font-medium"
-            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)]"
-        }`}
-        style={indentStyle}
-        title={entry.path}
-      >
-        <span className="w-[10px]" aria-hidden="true" />
-        {isCanvasFile(entry.name) ? (
-          <CanvasIcon className={isActive ? "opacity-90" : "opacity-60"} />
-        ) : isImageFile(entry.name) ? (
-          <ImageIcon className={isActive ? "opacity-90" : "opacity-60"} />
-        ) : (
-          <FileTextIcon className={isActive ? "opacity-90" : "opacity-60"} />
-        )}
-        <span className="truncate">{entry.name}</span>
-      </button>
-    </li>
-  );
-}
-
-/** Parent directory of a path, or `fallback` for a top-level entry. */
-function parentDir(path: string, fallback: string): string {
-  const sep = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-  return sep > 0 ? path.slice(0, sep) : fallback;
-}
-
 export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileTree(
   {
     root,
@@ -193,17 +61,17 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
 ) {
   const { t } = useTranslation("common");
   const entries = nodes.get(root) ?? [];
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [editing, setEditing] = useState<EditingState | null>(null);
+  const [contextMenu, setContextMenu] = useState<FileTreeMenuTarget | null>(null);
+  const [editing, setEditing] = useState<EntryEditingState | null>(null);
   const closeMenu = useCallback(() => setContextMenu(null), []);
 
   // Enter inline-naming for a freshly-created entry (null = creation failed).
-  const beginNaming = useCallback((path: string | null, kind: CreateKind) => {
+  const beginNaming = useCallback((path: string | null, kind: EntryEditKind) => {
     if (path) setEditing({ path, kind, openOnCommit: true });
   }, []);
 
   const startCreate = useCallback(
-    async (kind: CreateKind, dir: string) => {
+    async (kind: EntryEditKind, dir: string) => {
       const create =
         kind === "note" ? onCreateNote : kind === "canvas" ? onCreateCanvas : onCreateFolder;
       beginNaming(await create(dir), kind);
@@ -239,7 +107,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
   // ("Untitled.md"); a freshly-created note is opened so creation lands on
   // content (renames don't re-open; the open tab is re-pointed instead).
   const handleEditCommit = useCallback(
-    async ({ path, kind, openOnCommit }: EditingState, value: string) => {
+    async ({ path, kind, openOnCommit }: EntryEditingState, value: string) => {
       setEditing(null);
       const name = value.trim();
       if (name) {
@@ -253,7 +121,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
   );
 
   const handleEditCancel = useCallback(
-    ({ path, kind, openOnCommit }: EditingState) => {
+    ({ path, kind, openOnCommit }: EntryEditingState) => {
       setEditing(null);
       if (kind !== "folder" && openOnCommit) onOpenFile(path);
     },
@@ -298,94 +166,20 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
 
   const menu = useMemo<ContextMenuModel | null>(() => {
     if (!contextMenu) return null;
-    const { x, y, dir, filePath, entryPath, entryIsDir } = contextMenu;
-    const groups: ContextMenuItem[][] = [];
-
-    if (filePath) {
-      groups.push([
-        {
-          kind: "action",
-          label: t("fileTree.open"),
-          icon: <OpenIcon />,
-          onSelect: () => onOpenFile(filePath),
-        },
-      ]);
-    }
-
-    groups.push([
+    return buildFileTreeMenu(
+      contextMenu,
       {
-        kind: "action",
-        label: t("fileTree.newNote"),
-        icon: <NewNoteIcon />,
-        onSelect: () => startCreate("note", dir),
+        onOpenFile,
+        onCreate: startCreate,
+        onStartRename: startRename,
+        onDuplicate,
+        onMove,
+        onCopyPath: copyPath,
+        onReveal,
+        onDelete,
       },
-      {
-        kind: "action",
-        label: t("fileTree.newCanvas"),
-        icon: <NewCanvasIcon />,
-        onSelect: () => startCreate("canvas", dir),
-      },
-      {
-        kind: "action",
-        label: t("fileTree.newFolder"),
-        icon: <NewFolderIcon />,
-        onSelect: () => startCreate("folder", dir),
-      },
-    ]);
-
-    if (entryPath) {
-      groups.push([
-        {
-          kind: "action",
-          label: t("fileTree.rename"),
-          icon: <RenameIcon />,
-          onSelect: () => startRename(entryPath, !!entryIsDir),
-        },
-        {
-          kind: "action",
-          label: t("fileTree.duplicate"),
-          icon: <DuplicateIcon />,
-          onSelect: () => onDuplicate(entryPath),
-        },
-        {
-          kind: "action",
-          label: t("fileTree.move"),
-          icon: <MoveIcon />,
-          onSelect: () => onMove(entryPath),
-        },
-      ]);
-      groups.push([
-        {
-          kind: "action",
-          label: t("fileTree.copyPath"),
-          icon: <CopyPathIcon />,
-          onSelect: () => copyPath(entryPath, false),
-        },
-        {
-          kind: "action",
-          label: t("fileTree.copyAbsolutePath"),
-          icon: <CopyPathIcon />,
-          onSelect: () => copyPath(entryPath, true),
-        },
-        {
-          kind: "action",
-          label: t("fileTree.reveal"),
-          icon: <RevealIcon />,
-          onSelect: () => onReveal(entryPath),
-        },
-      ]);
-      groups.push([
-        {
-          kind: "action",
-          label: t("fileTree.delete"),
-          icon: <DeleteIcon />,
-          danger: true,
-          onSelect: () => onDelete(entryPath),
-        },
-      ]);
-    }
-
-    return { x, y, items: joinGroups(groups) };
+      t,
+    );
   }, [
     contextMenu,
     onOpenFile,
@@ -399,7 +193,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
     t,
   ]);
 
-  const childProps: EntryRenderProps = {
+  const childProps: Omit<FileTreeEntryProps, "entry" | "depth"> = {
     nodes,
     expanded,
     activeFilePath,
@@ -414,7 +208,11 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: container only suppresses the native menu for empty-area right-clicks; keyboard users create via the menu reached from focusable rows
     <div data-filetree-root className="min-h-full" onContextMenu={handleRootContextMenu}>
-      <ul className="space-y-0.5">{entries.map((entry) => renderEntry(entry, 0, childProps))}</ul>
+      <ul className="space-y-0.5">
+        {entries.map((entry) => (
+          <FileTreeEntry key={entry.path} {...childProps} entry={entry} depth={0} />
+        ))}
+      </ul>
       <ContextMenu menu={menu} onClose={closeMenu} />
     </div>
   );

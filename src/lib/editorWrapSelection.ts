@@ -1,7 +1,7 @@
 import type { EditorState, Extension, TransactionSpec } from "@codemirror/state";
 import { type Command, EditorView } from "@codemirror/view";
 import type { Platform } from "@/hooks/usePlatform";
-import { matchesAccelerator } from "@/lib/keybindings";
+import { matchesAccelerator } from "@/lib/accelerator";
 
 // Typed marker -> the character it pairs with. Markdown inline markers are
 // symmetric, so open and close match. Adding a bracket/quote pair is one entry.

@@ -1,23 +1,8 @@
 import type { Content, TableCell } from "pdfmake/interfaces";
 import { decodeSvgDataUrl } from "@/lib/svgDataUrl";
 import { decodeDataUri } from "./imageSize";
+import { codeRuns, cssColorToHex, inlinePdf } from "./pdfInline";
 import { CONTENT_WIDTH, svgNode } from "./svgPdfNode";
-
-interface InlineStyle {
-  bold?: boolean;
-  italics?: boolean;
-  strike?: boolean;
-}
-
-const STYLE_TAGS: Record<string, keyof InlineStyle> = {
-  strong: "bold",
-  b: "bold",
-  em: "italics",
-  i: "italics",
-  del: "strike",
-  s: "strike",
-  strike: "strike",
-};
 
 const HEADING_SIZES: Record<string, number> = { h1: 24, h2: 20, h3: 16, h4: 14, h5: 12, h6: 11 };
 
@@ -37,108 +22,6 @@ const CONTAINER_TAGS = new Set([
   "details",
 ]);
 
-function styledText(text: string, style: InlineStyle): Content {
-  if (!style.bold && !style.italics && !style.strike) return text;
-  return {
-    text,
-    bold: style.bold,
-    italics: style.italics,
-    decoration: style.strike ? "lineThrough" : undefined,
-  };
-}
-
-// Flatten an element's inline descendants into pdfmake text fragments. Anchors
-// become links; `<br>` becomes a newline; KaTeX falls back to its LaTeX source;
-// an SVG at inline position is skipped (block-level SVG embeds as a vector
-// node). Inline images degrade to their alt text — block images are handled
-// separately and embedded.
-function inlinePdf(node: Node, style: InlineStyle = {}): Content[] {
-  const out: Content[] = [];
-  for (const child of Array.from(node.childNodes)) {
-    if (child.nodeType === 3) {
-      // Text nodes from parsed HTML are never empty; push directly.
-      out.push(styledText((child as Text).data, style));
-      continue;
-    }
-    if (child.nodeType !== 1) continue;
-    const el = child as Element;
-    const tag = el.tagName.toLowerCase();
-
-    if (el.classList.contains("katex")) {
-      const annotation = el.querySelector('annotation[encoding="application/x-tex"]');
-      // textContent is never null for an element, so no empty-string fallback.
-      const tex = (annotation?.textContent ?? el.textContent!).trim();
-      if (tex) out.push({ text: tex, italics: true });
-      continue;
-    }
-    if (tag === "svg") continue;
-    if (tag === "br") {
-      out.push("\n");
-      continue;
-    }
-    if (tag === "img") {
-      const alt = el.getAttribute("alt");
-      if (alt) out.push({ text: alt, italics: true });
-      continue;
-    }
-    if (tag === "a") {
-      const href = el.getAttribute("href") ?? "";
-      // Only real external links become clickable PDF links. pdfmake renders a
-      // link most reliably on a single text leaf, so use the anchor's label
-      // (its child icon SVG contributes no text). In-page/relative links just
-      // render as their inline content.
-      if (/^https?:/i.test(href)) {
-        // textContent is never null for an element; fall back to the URL when
-        // the link has no visible label.
-        const label = el.textContent!.trim() || href;
-        out.push({ text: label, link: href, color: "#1a56db", decoration: "underline" });
-      } else {
-        out.push(...inlinePdf(el, style));
-      }
-      continue;
-    }
-    const styleKey = STYLE_TAGS[tag];
-    out.push(...inlinePdf(el, styleKey ? { ...style, [styleKey]: true } : style));
-  }
-  return out;
-}
-
-// Convert a computed CSS color (`rgb()/rgba()`) to the hex pdfmake expects.
-// Hex/named values pass through; fully transparent resolves to undefined.
-export function cssColorToHex(color: string | undefined): string | undefined {
-  if (!color) return undefined;
-  const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?/i.exec(color);
-  if (!m) return color;
-  if (m[4] !== undefined && Number(m[4]) === 0) return undefined;
-  const hex = (n: string) => Number(n).toString(16).padStart(2, "0");
-  return `#${hex(m[1])}${hex(m[2])}${hex(m[3])}`;
-}
-
-// Flatten a highlighted <pre> into colored text runs, carrying each span's
-// inlined syntax-highlight color (set by prepareContent for PDF export) down
-// the tree and preserving newlines. The trailing newline is dropped.
-function codeRuns(pre: Element, baseColor?: string): Content[] {
-  const runs: Content[] = [];
-  const walk = (node: Node, color?: string) => {
-    for (const child of Array.from(node.childNodes)) {
-      if (child.nodeType === 3) {
-        const text = (child as Text).data;
-        runs.push(color ? { text, color } : { text });
-      } else if (child.nodeType === 1) {
-        const el = child as HTMLElement;
-        walk(el, cssColorToHex(el.style?.color) ?? color);
-      }
-    }
-  };
-  walk(pre, baseColor);
-  const last = runs[runs.length - 1] as { text?: string } | undefined;
-  if (last && typeof last.text === "string") {
-    last.text = last.text.replace(/\n$/, "");
-    if (!last.text) runs.pop();
-  }
-  return runs.length ? runs : [{ text: "" }];
-}
-
 function imageNode(el: Element): Content | null {
   const src = el.getAttribute("src") ?? "";
   // An SVG image (inlined by prepareContent as a data: URL) embeds as vectors.
@@ -154,7 +37,7 @@ function imageNode(el: Element): Content | null {
   return { image: src, width, margin: [0, 0, 0, 8] };
 }
 
-function listItems(listEl: Element, ctx: Ctx): Content[] {
+function listItems(listEl: Element): Content[] {
   const items: Content[] = [];
   for (const li of Array.from(listEl.children).filter((c) => c.tagName.toLowerCase() === "li")) {
     const clone = li.cloneNode(true) as Element;
@@ -168,7 +51,7 @@ function listItems(listEl: Element, ctx: Ctx): Content[] {
       continue;
     }
     const sublists = nested.map((n) =>
-      n.tagName.toLowerCase() === "ol" ? { ol: listItems(n, ctx) } : { ul: listItems(n, ctx) },
+      n.tagName.toLowerCase() === "ol" ? { ol: listItems(n) } : { ul: listItems(n) },
     );
     items.push({ stack: [text, ...sublists] });
   }
@@ -194,12 +77,7 @@ function tableNode(el: Element): Content {
   };
 }
 
-interface Ctx {
-  // reserved for future nesting state; kept for symmetry with the docx walker
-  depth: number;
-}
-
-function blocksForNode(node: Node, ctx: Ctx): Content[] {
+function blocksForNode(node: Node): Content[] {
   if (node.nodeType === 3) {
     const text = (node as Text).data.trim();
     return text ? [{ text, margin: [0, 0, 0, 8] }] : [];
@@ -229,8 +107,8 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
     const text = inlinePdf(el);
     return text.length ? [{ text, margin: [0, 0, 0, 8] }] : [];
   }
-  if (tag === "ul") return [{ ul: listItems(el, ctx), margin: [0, 0, 0, 8] }];
-  if (tag === "ol") return [{ ol: listItems(el, ctx), margin: [0, 0, 0, 8] }];
+  if (tag === "ul") return [{ ul: listItems(el), margin: [0, 0, 0, 8] }];
+  if (tag === "ol") return [{ ol: listItems(el), margin: [0, 0, 0, 8] }];
   if (tag === "blockquote") {
     const paras = Array.from(el.children).filter((c) => c.tagName.toLowerCase() === "p");
     const sources = paras.length > 0 ? paras : [el];
@@ -287,7 +165,7 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
   // that in the PDF by boxing its content in a single-cell table so the embed
   // stays visually distinct rather than flattening into the surrounding text.
   if (tag === "div" && el.classList.contains("markdown-embed")) {
-    const inner = Array.from(el.childNodes).flatMap((c) => blocksForNode(c, ctx));
+    const inner = Array.from(el.childNodes).flatMap((c) => blocksForNode(c));
     if (inner.length === 0) return [];
     return [
       {
@@ -308,7 +186,7 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
   }
 
   if (CONTAINER_TAGS.has(tag)) {
-    return Array.from(el.childNodes).flatMap((c) => blocksForNode(c, ctx));
+    return Array.from(el.childNodes).flatMap((c) => blocksForNode(c));
   }
 
   // Inline-level element at block position (e.g. a bare <span> or KaTeX's
@@ -325,7 +203,6 @@ function blocksForNode(node: Node, ctx: Ctx): Content[] {
  */
 export function convertHtmlToPdf(bodyHtml: string): Content[] {
   const doc = new DOMParser().parseFromString(bodyHtml, "text/html");
-  const ctx: Ctx = { depth: 0 };
-  const out = Array.from(doc.body.childNodes).flatMap((node) => blocksForNode(node, ctx));
+  const out = Array.from(doc.body.childNodes).flatMap((node) => blocksForNode(node));
   return out.length ? out : [{ text: "" }];
 }

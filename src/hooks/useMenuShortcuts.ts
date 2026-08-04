@@ -2,7 +2,9 @@ import { useEffect } from "react";
 import { type MenuEventHandlers, menuEventActions } from "@/hooks/useMenuEvents";
 import type { Platform } from "@/hooks/usePlatform";
 import { useSettings } from "@/hooks/useSettings";
-import { BINDABLE_COMMANDS, matchesAccelerator, resolveBindings } from "@/lib/keybindings";
+import { matchesAccelerator } from "@/lib/accelerator";
+import { BINDABLE_COMMANDS } from "@/lib/bindableCommands";
+import { resolveBindings } from "@/lib/keybindings";
 import { KEYBOARD_EVENT } from "@/lib/keyboard";
 
 interface UseMenuShortcutsOptions {

@@ -1,56 +1,38 @@
 import { useCallback, useMemo, useState } from "react";
-import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
-import { useOpenGraph, useTabsContext } from "@/contexts/TabsContext";
-import { useZoomApi } from "@/contexts/ZoomContext";
-import { useAIController } from "@/hooks/useAIController";
+import { useTabsContext } from "@/contexts/TabsContext";
+import { useAppModals } from "@/hooks/useAppModals";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { useCliExport } from "@/hooks/useCliExport";
 import { useCloseFlush } from "@/hooks/useCloseFlush";
 import { useCommandPaletteController } from "@/hooks/useCommandPaletteController";
 import { useContextMenu } from "@/hooks/useContextMenu";
-import { useDefaultAppPrompt } from "@/hooks/useDefaultAppPrompt";
 import { useDocumentUndoRedo } from "@/hooks/useDocumentUndoRedo";
 import { useErrorReporting } from "@/hooks/useErrorReporting";
-import { useErrorReportingPrompt } from "@/hooks/useErrorReportingPrompt";
-import { useExport } from "@/hooks/useExport";
-import { useExportSite } from "@/hooks/useExportSite";
-import { useCanSplit } from "@/hooks/useMediaQuery";
 import { useMenuEvents } from "@/hooks/useMenuEvents";
+import { useMenuHandlers } from "@/hooks/useMenuHandlers";
 import { useMenuShortcuts } from "@/hooks/useMenuShortcuts";
 import { useNativeKeybindings } from "@/hooks/useNativeKeybindings";
 import { useNativeMenuLabels } from "@/hooks/useNativeMenuLabels";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
 import { usePlatform } from "@/hooks/usePlatform";
-import { usePluginExporterRunner } from "@/hooks/usePluginExporterRunner";
 import { usePluginWorkspaceSync } from "@/hooks/usePluginWorkspaceSync";
-import { usePrint } from "@/hooks/usePrint";
-import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
+import { useShellControllers } from "@/hooks/useShellControllers";
 import { useTabReorderShortcuts } from "@/hooks/useTabReorderShortcuts";
-import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { useWindowClose } from "@/hooks/useWindowClose";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
-import { aiDocContext } from "@/lib/aiPrompts";
-import { openDocumentation, openReleaseNotes, openReportIssue } from "@/lib/helpLinks";
 import { isImageFile } from "@/lib/imageExtensions";
-import { nextEditorMode } from "@/lib/settings";
 import { AIChatPanel } from "./ai/AIChatPanel";
-import { DefaultAppBanner } from "./layout/DefaultAppBanner";
+import { AppBanners } from "./layout/AppBanners";
+import { AppModals } from "./layout/AppModals";
 import { EmptyState } from "./layout/EmptyState";
-import { ErrorReportingBanner } from "./layout/ErrorReportingBanner";
 import { ExportProgress } from "./layout/ExportProgress";
 import { Sidebar } from "./layout/Sidebar";
 import { SidebarDrawerBackdrop } from "./layout/SidebarDrawerBackdrop";
 import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
-import { UpdateBanner } from "./layout/UpdateBanner";
-import { WorkspaceNoticeBanner } from "./layout/WorkspaceNoticeBanner";
 import { ContextMenu } from "./menu/ContextMenu";
 import { CommandPalette } from "./modals/CommandPalette";
-import { SyncSettingsModal } from "./modals/SyncSettingsModal";
-import { SettingsModal } from "./modals/settings/lazySettings";
-import { WorkspaceSettingsModal } from "./modals/workspace/WorkspaceSettingsModal";
-import { PluginsModal } from "./plugins/PluginsModal";
 import { TabContent } from "./TabContent";
 
 // All the wiring that used to live inside App: menu events, AI/TTS/Print
@@ -59,10 +41,8 @@ import { TabContent } from "./TabContent";
 // real <App> is a tiny provider stack and we want both files to stay focused.
 export function AppShell() {
   const platform = usePlatform();
-  const { settings, updateSettings, loaded } = useSettings();
+  const { settings, loaded } = useSettings();
   const tabs = useTabsContext();
-  const openGraphAction = useOpenGraph();
-  const sidebar = useSidebarLayoutContext();
 
   // Opt-in crash/error reporting; inert in dev and until the user enables it.
   useErrorReporting(settings.privacy.errorReporting, loaded);
@@ -77,14 +57,6 @@ export function AppShell() {
   // Headless CLI website export: runs and exits when the process was launched
   // with --export-website, a no-op otherwise.
   useCliExport();
-
-  // Once-per-session check for a newer GitHub release; the banner shows only
-  // when the user has the feature on and an update is actually available.
-  const updateCheck = useUpdateCheck(settings.behavior.checkForUpdates, loaded);
-
-  // One-time first-run nudge to make Glyph the default Markdown app.
-  const defaultAppPrompt = useDefaultAppPrompt();
-  const errorReportingPrompt = useErrorReportingPrompt();
 
   const {
     tabs: openTabs,
@@ -101,9 +73,6 @@ export function AppShell() {
     newDocument,
     createNoteInWorkspace,
     createCanvasInWorkspace,
-    closeTab,
-    closeWorkspace,
-    setTabMode,
     saveDocument,
     flushForClose,
     undoEdit,
@@ -116,11 +85,10 @@ export function AppShell() {
   useDocumentUndoRedo({ activeTabId, platform, onUndo: undoEdit, onRedo: redoEdit });
   useTabReorderShortcuts({ platform, onMove: moveActiveTab });
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [syncSettingsOpen, setSyncSettingsOpen] = useState(false);
-  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
-  const [pluginsOpen, setPluginsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const openSearch = useCallback(() => setSearchOpen(true), []);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
+  const modals = useAppModals();
 
   // Autosave every dirty editable tab, not just the active one, so switching
   // tabs never cancels another document's pending save. Each carries its
@@ -142,33 +110,8 @@ export function AppShell() {
   // dirty tab (confirming on failure) before the window is allowed to close.
   useWindowClose(useCloseFlush(flushForClose));
 
-  const aiController = useAIController(
-    settings.ai,
-    aiDocContext({
-      path: activeFile?.path,
-      content: displayContent,
-      workspaceRoot: workspace?.root,
-      workspaceFiles,
-    }),
-  );
-  const readAloud = useReadAloudController(settings.ai, () => displayContent);
-  const tts = readAloud.tts;
-  const printDoc = usePrint({ entries: tabs.tocEntries, settings: settings.print });
-  const exporters = useExport({
-    entries: tabs.tocEntries,
-    settings: settings.print,
-    filePath: activeFile?.path,
-    content: displayContent,
-  });
-  const siteExporter = useExportSite(workspace?.root);
-  // Zoom In/Out/Actual-Size dispatch to whichever document surface is active
-  // (note font, graph camera) via the ZoomProvider; no-op with nothing focused.
-  const zoomActions = useZoomApi()?.actions;
-  const runPluginExporter = usePluginExporterRunner({
-    entries: tabs.tocEntries,
-    filePath: activeFile?.path,
-    content: displayContent,
-  });
+  const controllers = useShellControllers();
+  const { aiController, tts, exporters, siteExporter, runPluginExporter } = controllers;
 
   useNativeMenuState({
     hasTab: openTabs.length > 0,
@@ -182,91 +125,7 @@ export function AppShell() {
   });
   useNativeMenuLabels();
 
-  const closeActiveTab = useCallback(() => {
-    if (activeTabId) closeTab(activeTabId);
-  }, [activeTabId, closeTab]);
-
-  // Narrow (phone) viewports drop split from the cycle, so the toggle goes
-  // view → edit → view.
-  const canSplit = useCanSplit();
-  const handleToggleEdit = useCallback(() => {
-    if (!activeTabId) return;
-    // nextEditorMode treats an undefined mode as view, so no fallback branch
-    // is needed at the call site.
-    setTabMode(activeTabId, nextEditorMode(activeFile?.mode, canSplit));
-  }, [activeTabId, activeFile?.mode, setTabMode, canSplit]);
-
-  const handleSave = useCallback(() => {
-    if (activeTabId) saveDocument(activeTabId);
-  }, [activeTabId, saveDocument]);
-
-  const handleToggleAutoSave = useCallback(() => {
-    updateSettings("behavior.autoSave", !autoSave);
-  }, [autoSave, updateSettings]);
-
-  const menuHandlers = useMemo(
-    () => ({
-      newDocument,
-      openFile: openFileDialog,
-      openFolder: () => openFolder(),
-      newWorkspace: createWorkspace,
-      openGraph: openGraphAction,
-      save: handleSave,
-      toggleAutoSave: handleToggleAutoSave,
-      closeTab: closeActiveTab,
-      closeWorkspace,
-      toggleFilesSidebar: sidebar.toggleFiles,
-      toggleOutlineSidebar: sidebar.toggleOutline,
-      resetView: sidebar.resetLayout,
-      openSettings: () => setSettingsOpen(true),
-      openSyncSettings: () => setSyncSettingsOpen(true),
-      managePlugins: () => setPluginsOpen(true),
-      find: () => setSearchOpen(true),
-      toggleEdit: handleToggleEdit,
-      print: printDoc,
-      exportHtml: exporters.exportHtml,
-      exportDocx: exporters.exportDocx,
-      exportEpub: exporters.exportEpub,
-      exportPdf: exporters.exportPdf,
-      exportWebsite: siteExporter.exportWebsite,
-      workspaceSettings: () => setWorkspaceSettingsOpen(true),
-      zoomIn: () => zoomActions?.zoomIn(),
-      zoomOut: () => zoomActions?.zoomOut(),
-      zoomReset: () => zoomActions?.zoomReset(),
-      aiAction: aiController.runAction,
-      aiChat: aiController.togglePanel,
-      readAloud: readAloud.toggle,
-      // Static external links; module-level refs, so no deps entry needed.
-      documentation: openDocumentation,
-      releaseNotes: openReleaseNotes,
-      reportIssue: openReportIssue,
-    }),
-    [
-      newDocument,
-      openFileDialog,
-      openFolder,
-      createWorkspace,
-      openGraphAction,
-      handleSave,
-      handleToggleAutoSave,
-      closeActiveTab,
-      closeWorkspace,
-      sidebar.toggleFiles,
-      sidebar.toggleOutline,
-      sidebar.resetLayout,
-      handleToggleEdit,
-      printDoc,
-      exporters.exportHtml,
-      exporters.exportDocx,
-      exporters.exportEpub,
-      exporters.exportPdf,
-      siteExporter.exportWebsite,
-      zoomActions,
-      aiController.runAction,
-      aiController.togglePanel,
-      readAloud.toggle,
-    ],
-  );
+  const menuHandlers = useMenuHandlers({ modals, controllers, onFind: openSearch });
   useMenuEvents(menuHandlers);
   useMenuShortcuts({ platform, handlers: menuHandlers });
   useNativeKeybindings();
@@ -326,24 +185,7 @@ export function AppShell() {
         paddingRight: "var(--glyph-safe-right)",
       }}
     >
-      <UpdateBanner update={updateCheck.update} onDismiss={updateCheck.dismiss} />
-      {defaultAppPrompt.show && (
-        <DefaultAppBanner
-          onSetDefault={defaultAppPrompt.setDefault}
-          onNotNow={defaultAppPrompt.notNow}
-          onNever={defaultAppPrompt.never}
-        />
-      )}
-      {errorReportingPrompt.show && (
-        <ErrorReportingBanner
-          onEnable={errorReportingPrompt.enable}
-          onDecline={errorReportingPrompt.decline}
-        />
-      )}
-      <WorkspaceNoticeBanner
-        notice={tabs.workspaceNotice}
-        onDismiss={tabs.dismissWorkspaceNotice}
-      />
+      <AppBanners />
       <TabBar
         onToggleAIChat={aiController.configured ? aiController.togglePanel : null}
         onOpenPalette={palette.openPalette}
@@ -352,7 +194,7 @@ export function AppShell() {
         <SidebarDrawerBackdrop />
         <Sidebar side="left" />
         {showContent ? (
-          <TabContent searchOpen={searchOpen} onSearchClose={() => setSearchOpen(false)} />
+          <TabContent searchOpen={searchOpen} onSearchClose={closeSearch} />
         ) : showEmptyState ? (
           <div className="flex-1">
             <EmptyState
@@ -387,7 +229,7 @@ export function AppShell() {
           onStopReading={tts.stop}
         />
       </div>
-      <StatusBar onOpenSync={() => setSyncSettingsOpen(true)} />
+      <StatusBar onOpenSync={modals.openSyncSettings} />
 
       {exporters.exporting && <ExportProgress format={exporters.exporting} />}
       {siteExporter.siteProgress && (
@@ -404,13 +246,7 @@ export function AppShell() {
 
       <ContextMenu menu={contextMenu.menu} onClose={contextMenu.close} />
 
-      {/* Mounted only when open so the settings chunk loads on first use. */}
-      {settingsOpen && <SettingsModal open onClose={() => setSettingsOpen(false)} />}
-      {syncSettingsOpen && <SyncSettingsModal open onClose={() => setSyncSettingsOpen(false)} />}
-      {workspaceSettingsOpen && (
-        <WorkspaceSettingsModal open onClose={() => setWorkspaceSettingsOpen(false)} />
-      )}
-      {pluginsOpen && <PluginsModal onClose={() => setPluginsOpen(false)} />}
+      <AppModals modals={modals} />
     </div>
   );
 }

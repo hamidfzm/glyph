@@ -15,13 +15,13 @@ import { useCanSplit } from "@/hooks/useMediaQuery";
 import { usePlatform } from "@/hooks/usePlatform";
 import { useTabContextMenu } from "@/hooks/useTabContextMenu";
 import { useTabDragReorder } from "@/hooks/useTabDragReorder";
-import { activeFileOf, type Tab, tabPathOf } from "@/hooks/useTabs";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isImageFile } from "@/lib/imageExtensions";
 import { isLooseFilePath } from "@/lib/looseFile";
 import { displayName } from "@/lib/paths";
 import { isMobile } from "@/lib/platform";
 import { EDITOR_MODE, effectiveEditorMode } from "@/lib/settings";
+import { activeFileOf, type Tab, tabPathOf } from "@/lib/tabs";
 import { ActionBarButton } from "./ActionBarButton";
 import { TabBarActions } from "./TabBarActions";
 
