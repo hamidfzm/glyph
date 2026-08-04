@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   AI_PANEL_WIDTH_DEFAULT,
@@ -10,6 +11,7 @@ import {
   LINE_HEIGHT_MAP,
   MODEL_SUGGESTIONS,
   nextEditorMode,
+  resolveReadingFont,
   SIDEBAR_WIDTH_DEFAULT,
   SIDEBAR_WIDTH_MAX,
   SIDEBAR_WIDTH_MIN,
@@ -66,6 +68,7 @@ describe("FONT_FAMILY_MAP", () => {
   });
 
   it("has serif font stack", () => {
+    expect(FONT_FAMILY_MAP.serif).toContain("Iowan Old Style");
     expect(FONT_FAMILY_MAP.serif).toContain("Georgia");
   });
 
@@ -155,5 +158,49 @@ describe("effectiveEditorMode", () => {
     expect(effectiveEditorMode(EDITOR_MODE.split, true)).toBe(EDITOR_MODE.split);
     expect(effectiveEditorMode(EDITOR_MODE.edit, false)).toBe(EDITOR_MODE.edit);
     expect(effectiveEditorMode(EDITOR_MODE.view, false)).toBe(EDITOR_MODE.view);
+  });
+});
+
+describe("reading face", () => {
+  // The stack is declared twice by necessity: app.css so exports and the
+  // default path get it, FONT_FAMILY_MAP so the menu can pin it explicitly.
+  // Nothing else keeps them in step, so this does.
+  it("matches the app.css declaration", () => {
+    const css = readFileSync("src/styles/app.css", "utf8");
+    const declared = css.match(/--glyph-reading-font:\s*([^;]+);/)?.[1];
+    expect(declared).toBeDefined();
+    const normalise = (stack: string) => stack.replace(/"/g, "'").replace(/\s+/g, " ").trim();
+    expect(normalise(declared ?? "")).toBe(normalise(FONT_FAMILY_MAP.serif));
+  });
+});
+
+describe("resolveReadingFont", () => {
+  const base = DEFAULT_SETTINGS.appearance;
+
+  it("is empty for the default, so the app.css serif applies", () => {
+    expect(resolveReadingFont(base)).toBe("");
+  });
+
+  it("resolves a named family to its stack", () => {
+    expect(resolveReadingFont({ ...base, fontFamily: "mono" })).toContain("monospace");
+  });
+
+  it("uses the custom font when one is named", () => {
+    expect(resolveReadingFont({ ...base, fontFamily: "custom", customFont: "Comic Sans MS" })).toBe(
+      "Comic Sans MS",
+    );
+  });
+
+  it("is empty for custom with no font named, rather than stranding the old face", () => {
+    expect(resolveReadingFont({ ...base, fontFamily: "custom", customFont: "" })).toBe("");
+  });
+
+  it("is empty for a custom font that is only whitespace", () => {
+    expect(resolveReadingFont({ ...base, fontFamily: "custom", customFont: "   " })).toBe("");
+  });
+
+  it("is empty for a family the map doesn't know, e.g. a hand-edited store", () => {
+    const corrupt = { ...base, fontFamily: "papyrus" } as unknown as typeof base;
+    expect(resolveReadingFont(corrupt)).toBe("");
   });
 });

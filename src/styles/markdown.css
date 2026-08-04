@@ -1,4 +1,6 @@
 .markdown-body {
+  /* Prose reads in the document's face; chrome stays on --glyph-font. */
+  font-family: var(--glyph-reading-font);
   line-height: var(--glyph-line-height, 1.7);
   font-size: var(--glyph-font-size, 16px);
   color: var(--color-text-primary);

@@ -32,8 +32,8 @@
       "title": "排版"
     },
     "fontFamily": {
-      "label": "字体",
-      "system": "系统默认",
+      "label": "文档字体",
+      "system": "默认（衬线）",
       "serif": "衬线",
       "sans": "无衬线",
       "mono": "等宽",

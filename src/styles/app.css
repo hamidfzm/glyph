@@ -18,6 +18,10 @@
 :root {
   /* Native widgets (select popups, scrollbars) follow the app theme; WebKitGTK renders them unreadable otherwise. */
   color-scheme: light;
+  /* Declared here, not just by the settings provider (which writes inline
+     styles on <html>), so collectStyles carries it into HTML and EPUB exports. */
+  --glyph-reading-font: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, ui-serif,
+    serif;
   --color-surface: #ffffff;
   --color-surface-secondary: #f5f5f7;
   --color-surface-tertiary: #e8e8ed;
@@ -26,16 +30,16 @@
      re-renders the DOM through html2canvas, which can't parse modern color
      functions and aborts the whole capture on the first one it meets. */
   --glyph-canvas-group-bg: rgba(245, 245, 247, 0.6);
-  --glyph-canvas-selection: rgba(0, 122, 255, 0.45);
+  --glyph-canvas-selection: rgba(47, 79, 224, 0.45);
   --color-text-primary: #1d1d1f;
   --color-text-secondary: #6e6e73;
   --color-text-tertiary: #aeaeb2;
   --color-border: #d2d2d7;
-  --color-accent: #007aff;
-  --color-accent-hover: #0066d6;
+  --color-accent: #2f4fe0;
+  --color-accent-hover: #2540c4;
   /* Accent-tinted background for the update notification bar so it stands out
      from the toolbar while keeping high-contrast primary text. */
-  --color-banner-bg: #e3eeff;
+  --color-banner-bg: #e6eaff;
   --color-alert-note: #0969da;
   --color-alert-tip: #1a7f37;
   --color-alert-important: #8250df;
@@ -55,14 +59,14 @@
   --color-surface-secondary: #2c2c2e;
   --color-surface-tertiary: #3a3a3c;
   --glyph-canvas-group-bg: rgba(44, 44, 46, 0.6);
-  --glyph-canvas-selection: rgba(10, 132, 255, 0.45);
+  --glyph-canvas-selection: rgba(109, 139, 255, 0.45);
   --color-text-primary: #f5f5f7;
   --color-text-secondary: #98989d;
   --color-text-tertiary: #636366;
   --color-border: #38383a;
-  --color-accent: #0a84ff;
-  --color-accent-hover: #409cff;
-  --color-banner-bg: #12314f;
+  --color-accent: #6d8bff;
+  --color-accent-hover: #5b7cff;
+  --color-banner-bg: #1e2547;
   --color-alert-note: #58a6ff;
   --color-alert-tip: #3fb950;
   --color-alert-important: #bf8cff;

@@ -533,3 +533,9 @@
 .status-sync-indicator[data-tone="error"] {
   color: var(--color-error);
 }
+
+/* A plugin README renders through .markdown-body inside the plugins modal,
+   which is chrome, so it keeps the UI face rather than the reading serif. */
+.plugin-readme {
+  font-family: inherit;
+}

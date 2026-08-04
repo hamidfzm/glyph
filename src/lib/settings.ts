@@ -217,6 +217,7 @@ export const DEFAULT_SETTINGS: Settings = {
   appearance: {
     locale: "system",
     theme: "system",
+    // Unset leaves prose on the reading serif declared in app.css.
     fontFamily: "system",
     customFont: "",
     fontSize: 16,
@@ -287,9 +288,19 @@ export const ZOOM_MIN = 8;
 export const ZOOM_MAX = 32;
 export const ZOOM_STEP = 1;
 
+/** The prose font stack for the current appearance settings, or "" to fall
+ *  back to the reading serif declared in app.css. */
+export function resolveReadingFont(appearance: AppearanceSettings): string {
+  // Trimmed: a blank custom name would set an empty custom property, which
+  // makes font-family invalid and drops prose to the interface font instead of
+  // the serif.
+  if (appearance.fontFamily === "custom") return appearance.customFont.trim();
+  return FONT_FAMILY_MAP[appearance.fontFamily] ?? "";
+}
+
 export const FONT_FAMILY_MAP: Record<string, string> = {
   system: "",
-  serif: "Georgia, 'Times New Roman', serif",
+  serif: "'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, ui-serif, serif",
   sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   mono: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
 };

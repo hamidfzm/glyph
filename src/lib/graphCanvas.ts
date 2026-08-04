@@ -172,9 +172,9 @@ export function readGraphTheme(element: Element): GraphTheme {
   return {
     node: read("--color-text-secondary", "#888888"),
     nodeOrphan: read("--color-text-tertiary", "#666666"),
-    nodeActive: read("--color-accent", "#4a9eff"),
+    nodeActive: read("--color-accent", "#6d8bff"),
     edge: read("--color-border", "#44444466"),
-    edgeActive: read("--color-accent", "#4a9eff"),
+    edgeActive: read("--color-accent", "#6d8bff"),
     label: read("--color-text-primary", "#cccccc"),
   };
 }

@@ -62,7 +62,7 @@ export function PluginDetail({
         </button>
       </div>
       <PluginPermissionsLine permissions={entry.permissions} sandbox={entry.sandbox} />
-      <div className="mt-3 text-sm markdown-body">
+      <div className="mt-3 text-sm markdown-body plugin-readme">
         {failed ? (
           <p className="text-[var(--color-text-secondary)]">{t("detailsError")}</p>
         ) : readme === null ? (
