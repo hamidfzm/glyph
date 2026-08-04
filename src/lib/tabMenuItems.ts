@@ -60,18 +60,24 @@ export function buildTabMenuItems(
   }
 
   const path: ContextMenuItem[] = [];
-  if (target.kind === "file") {
+  // A virtual buffer's "path" is its Untitled title, so there is nothing to
+  // copy or reveal until it has been saved.
+  if (target.kind === "file" && !target.file.virtual) {
     const filePath = target.file.path;
     path.push(
       {
         kind: "action",
-        label: t("fileTree.copyPath"),
+        // The absolute label, because tab paths are absolute: the file tree's
+        // plain "Copy path" is its workspace-relative variant.
+        label: t("fileTree.copyAbsolutePath"),
         onSelect: () => copySelection(filePath),
       },
       {
         kind: "action",
         label: t("fileTree.reveal"),
-        onSelect: () => void revealItemInDir(filePath),
+        // Best-effort: the reveal rejects when the file is gone, and there is
+        // no meaningful recovery for the gesture.
+        onSelect: () => void revealItemInDir(filePath).catch(() => undefined),
       },
     );
   }

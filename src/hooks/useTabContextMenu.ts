@@ -20,7 +20,15 @@ export function useTabContextMenu() {
 
   const openAt = useCallback((e: MouseEvent, tabId: string) => {
     e.preventDefault();
-    setState({ x: e.clientX, y: e.clientY, tabId });
+    // The Menu key raises contextmenu with no pointer position, which WebKit
+    // reports as 0,0; anchor those to the tab instead of the viewport corner.
+    const keyboard = e.clientX === 0 && e.clientY === 0;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setState({
+      x: keyboard ? rect.left : e.clientX,
+      y: keyboard ? rect.bottom : e.clientY,
+      tabId,
+    });
   }, []);
 
   const menu = useMemo<ContextMenuModel | null>(() => {

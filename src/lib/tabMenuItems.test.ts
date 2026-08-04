@@ -4,12 +4,13 @@ import type { FileTab, GraphTab, Tab } from "@/hooks/useTabs";
 import type { ContextMenuActionItem } from "./contextMenuItems";
 import { buildTabMenuItems } from "./tabMenuItems";
 
-// The builder only reads ids, kinds, and paths, so the tab fixtures stay thin.
-const fileTab = (i: number): FileTab =>
+// The builder only reads ids, kinds, paths, and the virtual flag, so the tab
+// fixtures stay thin.
+const fileTab = (i: number, virtual = false): FileTab =>
   ({
     id: `tab-${i}`,
     kind: "file",
-    file: { path: `/p/file${i}.md` },
+    file: { path: virtual ? `Untitled-${i}` : `/p/file${i}.md`, virtual },
   }) as FileTab;
 
 const graphTab = (i: number): GraphTab =>
@@ -33,6 +34,7 @@ function select(items: ReturnType<typeof buildTabMenuItems>, label: string): voi
 describe("buildTabMenuItems", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(revealItemInDir).mockResolvedValue(undefined);
   });
 
   it("returns nothing when the target tab is gone", () => {
@@ -53,7 +55,11 @@ describe("buildTabMenuItems", () => {
 
   it("offers only Close when a single tab is open", () => {
     const items = labels(buildTabMenuItems(tabs(1), "tab-0", vi.fn(), t));
-    expect(items).toEqual(["tabBar.contextMenu.close", "fileTree.copyPath", "fileTree.reveal"]);
+    expect(items).toEqual([
+      "tabBar.contextMenu.close",
+      "fileTree.copyAbsolutePath",
+      "fileTree.reveal",
+    ]);
   });
 
   it("closes the target, the others, and each side with the right ids", () => {
@@ -79,7 +85,7 @@ describe("buildTabMenuItems", () => {
   it("copies the target tab's path", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });
-    select(buildTabMenuItems(tabs(2), "tab-1", vi.fn(), t), "fileTree.copyPath");
+    select(buildTabMenuItems(tabs(2), "tab-1", vi.fn(), t), "fileTree.copyAbsolutePath");
     expect(writeText).toHaveBeenCalledWith("/p/file1.md");
     vi.unstubAllGlobals();
   });
@@ -89,9 +95,23 @@ describe("buildTabMenuItems", () => {
     expect(revealItemInDir).toHaveBeenCalledWith("/p/file0.md");
   });
 
+  it("tolerates a reveal the OS refuses", async () => {
+    vi.mocked(revealItemInDir).mockRejectedValue(new Error("no such file"));
+    select(buildTabMenuItems(tabs(1), "tab-0", vi.fn(), t), "fileTree.reveal");
+    await Promise.resolve();
+    expect(revealItemInDir).toHaveBeenCalled();
+  });
+
+  // A virtual buffer's path is its "Untitled-N" title, which is neither worth
+  // copying nor revealable.
+  it("hides the path items for an unsaved document", () => {
+    const items = labels(buildTabMenuItems([fileTab(0, true)], "tab-0", vi.fn(), t));
+    expect(items).toEqual(["tabBar.contextMenu.close"]);
+  });
+
   it("hides the path items for a graph tab, which has no single file", () => {
     const items = labels(buildTabMenuItems([fileTab(0), graphTab(1)], "tab-1", vi.fn(), t));
-    expect(items).not.toContain("fileTree.copyPath");
+    expect(items).not.toContain("fileTree.copyAbsolutePath");
     expect(items).not.toContain("fileTree.reveal");
     expect(items).toContain("tabBar.contextMenu.close");
   });

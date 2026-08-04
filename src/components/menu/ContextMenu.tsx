@@ -56,11 +56,15 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("resize", onClose);
     window.addEventListener("blur", onClose);
+    // Capture: scroll doesn't bubble, and the anchor often sits in an inner
+    // scroller (the tab strip, the file tree) rather than the page itself.
+    window.addEventListener("scroll", onClose, true);
     return () => {
       window.removeEventListener("mousedown", handleMouseDown, true);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("resize", onClose);
       window.removeEventListener("blur", onClose);
+      window.removeEventListener("scroll", onClose, true);
     };
   }, [menu, onClose]);
 

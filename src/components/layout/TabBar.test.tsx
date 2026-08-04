@@ -427,19 +427,34 @@ describe("TabBar", () => {
   });
 
   describe("context menu", () => {
-    const rightClick = (name: string) => {
+    const rightClick = (name: string, at = { clientX: 120, clientY: 30 }) => {
       const tabEl = screen.getByText(name).closest(".tab-item") as HTMLElement;
-      const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+      const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, ...at });
       fireEvent(tabEl, event);
       return event;
     };
 
-    it("opens the menu on right-click and suppresses the native one", () => {
+    it("opens the menu at the cursor and suppresses the native one", () => {
       renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-0" });
       const event = rightClick("file1.md");
       expect(event.defaultPrevented).toBe(true);
-      expect(screen.getByRole("menu")).toBeInTheDocument();
+      const menu = screen.getByRole("menu");
+      expect(menu).toHaveStyle({ left: "120px", top: "30px" });
       expect(screen.getByRole("menuitem", { name: "Close Others" })).toBeInTheDocument();
+    });
+
+    // The Menu key raises contextmenu with no pointer position (0,0 on WebKit),
+    // which would otherwise pin the menu to the viewport corner.
+    it("anchors a keyboard-raised menu to the tab", () => {
+      renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
+      const tabEl = screen.getByText("file0.md").closest(".tab-item") as HTMLElement;
+      vi.spyOn(tabEl, "getBoundingClientRect").mockReturnValue({
+        left: 8,
+        bottom: 34,
+      } as DOMRect);
+
+      rightClick("file0.md", { clientX: 0, clientY: 0 });
+      expect(screen.getByRole("menu")).toHaveStyle({ left: "8px", top: "34px" });
     });
 
     // The menu acts on the tab under the cursor, not on the active one.
