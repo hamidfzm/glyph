@@ -3,6 +3,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectConsole } from "@/test/consoleGuard";
+import { deferred } from "@/test/deferred";
 import { defaultOptions, type Invoker, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
@@ -276,5 +277,174 @@ describe("useTabs close coordinator", () => {
     expect(hasTab(result, dirtyId)).toBe(true);
     expect(hasTab(result, cleanId)).toBe(true);
     errSpy.mockRestore();
+  });
+
+  it("does not prompt with autosave on: the close flush stays silent", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    const confirmUnsaved = vi.fn(async () => "cancel" as const);
+    const { result } = renderHook(() => useTabs(defaultOptions({ confirmUnsaved })));
+    await ready(result);
+    await openDirty(result, "/p/a.md", "A");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.flushForClose();
+    });
+
+    expect(ok).toBe(true);
+    expect(confirmUnsaved).not.toHaveBeenCalled();
+    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/a.md", content: "A" });
+  });
+
+  it("prompts with every dirty document when autosave is off", async () => {
+    vi.mocked(invoke).mockImplementation(writeInvoker(vi.fn().mockResolvedValue(undefined)));
+    const confirmUnsaved = vi.fn(async () => "save" as const);
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved })),
+    );
+    await ready(result);
+    await openDirty(result, "/p/a.md", "A");
+    await openDirty(result, "/p/b.md", "B");
+
+    await act(async () => {
+      await result.current.flushForClose();
+    });
+
+    expect(confirmUnsaved).toHaveBeenCalledWith(["/p/a.md", "/p/b.md"]);
+  });
+
+  it("saves and proceeds when the user picks Save", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved: async () => "save" as const })),
+    );
+    await ready(result);
+    const id = await openDirty(result, "/p/a.md", "A");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.flushForClose();
+    });
+
+    expect(ok).toBe(true);
+    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/a.md", content: "A" });
+    expect(isDirty(result, id)).toBe(false);
+  });
+
+  it("proceeds without writing when the user picks Don't Save", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved: async () => "discard" as const })),
+    );
+    await ready(result);
+    await openDirty(result, "/p/a.md", "A");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.flushForClose();
+    });
+
+    expect(ok).toBe(true);
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("aborts the close and keeps the tab dirty when the user cancels", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved: async () => "cancel" as const })),
+    );
+    await ready(result);
+    const id = await openDirty(result, "/p/a.md", "A");
+
+    // Through closeTab, so the abort is observed the way the user sees it.
+    await act(async () => {
+      await result.current.closeTab(id);
+    });
+
+    expect(hasTab(result, id)).toBe(true);
+    expect(isDirty(result, id)).toBe(true);
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("flushes edits made while the prompt was open, not just the snapshot", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    // The prompt is open for user time, during which the menu, plugins, or an
+    // external reload can dirty another document. The gate holds it open.
+    const answer = deferred<"save">();
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved: () => answer.promise })),
+    );
+    await ready(result);
+    await openDirty(result, "/p/a.md", "A");
+    await act(async () => {
+      await result.current.openFile("/p/b.md");
+    });
+    const bId = result.current.tabs.find((t) => t.kind === "file" && t.file.path === "/p/b.md")?.id;
+    if (!bId) throw new Error("no tab for /p/b.md");
+    act(() => {
+      result.current.setTabMode(bId, "edit");
+    });
+
+    let flush: Promise<boolean> | undefined;
+    await act(async () => {
+      flush = result.current.flushForClose();
+    });
+    // The prompt is up: B goes dirty only now, after the snapshot was taken.
+    act(() => {
+      result.current.updateEditContent(bId, "B LATE");
+    });
+    await act(async () => {
+      answer.resolve("save");
+      await flush;
+    });
+
+    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/b.md", content: "B LATE" });
+    expect(isDirty(result, bId)).toBe(false);
+  });
+
+  it("aborts a workspace switch when the user cancels the prompt", async () => {
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved: async () => "cancel" as const })),
+    );
+    await ready(result);
+    await act(async () => {
+      await result.current.openFolder("/ws1", { autoLoad: false });
+    });
+    await openDirty(result, "/ws1/a.md");
+
+    await act(async () => {
+      await result.current.openFolder("/ws2", { autoLoad: false });
+    });
+
+    expect(result.current.workspace?.root).toBe("/ws1");
+  });
+
+  it("still confirms a discard when a save chosen at the prompt fails", async () => {
+    expectConsole(/Auto-save failed/);
+    vi.mocked(ask).mockClear();
+    vi.mocked(ask).mockResolvedValue(false);
+    vi.mocked(invoke).mockImplementation(
+      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
+    );
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved: async () => "save" as const })),
+    );
+    await ready(result);
+    await openDirty(result, "/p/a.md", "A");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.flushForClose();
+    });
+
+    // The failed write falls through to the existing discard/cancel dialog
+    // rather than dropping the edits silently.
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ok).toBe(false);
   });
 });

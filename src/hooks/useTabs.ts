@@ -9,6 +9,7 @@ import { useSelfSaveTracker } from "@/hooks/useSelfSaveTracker";
 import { useTabEvents } from "@/hooks/useTabEvents";
 import { useTabStrip } from "@/hooks/useTabStrip";
 import { useTabsSession } from "@/hooks/useTabsSession";
+import type { UnsavedChoice } from "@/hooks/useUnsavedChangesPrompt";
 import { useWorkspaceIndex } from "@/hooks/useWorkspaceIndex";
 import { useWorkspaceLifecycle } from "@/hooks/useWorkspaceLifecycle";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
@@ -25,8 +26,11 @@ interface UseTabsOptions {
   activeTabPath: string;
   recentFiles: string[];
   autoReload: boolean;
+  autoSave: boolean;
   defaultEditorMode: EditorMode;
   onSettingsChange: (key: string, value: unknown) => void;
+  // Only consulted with autosave off (#563).
+  confirmUnsaved: (paths: string[]) => Promise<UnsavedChoice>;
   // Called to surface a workspace notice (see #262): a refusal (a folder nested
   // inside another Glyph workspace) or a `persistent` warning (a folder opened
   // despite sitting inside a parent git repo). The provider surfaces it as a
@@ -158,11 +162,23 @@ export function useTabs(options: UseTabsOptions) {
   const flushForClose = useCallback(
     async (ids?: Iterable<string>): Promise<boolean> => {
       const scope = ids ? new Set(ids) : null;
-      const dirty = stateRef.current.tabs.filter(
-        (tab): tab is FileTab =>
-          tab.kind === "file" && tab.file.dirty && (!scope || scope.has(tab.id)),
-      );
+      const dirtyTabs = () =>
+        stateRef.current.tabs.filter(
+          (tab): tab is FileTab =>
+            tab.kind === "file" && tab.file.dirty && (!scope || scope.has(tab.id)),
+        );
+      let dirty = dirtyTabs();
       if (dirty.length === 0) return true;
+
+      // With autosave off the user decides when a file hits disk (#563).
+      if (!optionsRef.current.autoSave) {
+        const choice = await optionsRef.current.confirmUnsaved(dirty.map((tab) => tab.file.path));
+        if (choice === "cancel") return false;
+        if (choice === "discard") return true;
+        // The prompt is open for an unbounded time, so flush what is dirty now
+        // rather than the snapshot it listed; edits made meanwhile still land.
+        dirty = dirtyTabs();
+      }
 
       // Flush every dirty document and wait for the writes to settle. Each save
       // reports its own success, so a failed write can't be missed by a

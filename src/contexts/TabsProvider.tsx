@@ -1,7 +1,9 @@
 import { type ReactNode, useMemo } from "react";
+import { UnsavedChangesModal } from "@/components/modals/UnsavedChangesModal";
 import { useSettings } from "@/hooks/useSettings";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
 import { useTabs } from "@/hooks/useTabs";
+import { useUnsavedChangesPrompt } from "@/hooks/useUnsavedChangesPrompt";
 import { useWorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { filterBacklinks } from "@/lib/backlinks";
 import { displayContentFor, tocContentFor } from "@/lib/displayContent";
@@ -12,15 +14,18 @@ import { TabsContext, type TabsContextValue } from "./TabsContext";
 export function TabsProvider({ children }: { children: ReactNode }) {
   const { settings, updateSettings } = useSettings();
   const workspaceNotice = useWorkspaceNotice();
+  const unsavedPrompt = useUnsavedChangesPrompt();
   const tabs = useTabs({
     reopenLastFile: settings.behavior.reopenLastFile,
     openTabs: settings.behavior.openTabs,
     activeTabPath: settings.behavior.activeTabPath,
     recentFiles: settings.behavior.recentFiles,
     autoReload: settings.behavior.autoReload,
+    autoSave: settings.behavior.autoSave,
     defaultEditorMode: settings.behavior.defaultEditorMode,
     onSettingsChange: updateSettings,
     onWorkspaceNotice: workspaceNotice.show,
+    confirmUnsaved: unsavedPrompt.confirm,
   });
 
   const activeMode = tabs.activeFile?.mode ?? EDITOR_MODE.view;
@@ -72,5 +77,12 @@ export function TabsProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;
+  return (
+    <TabsContext.Provider value={value}>
+      {children}
+      {unsavedPrompt.files && unsavedPrompt.files.length > 0 && (
+        <UnsavedChangesModal files={unsavedPrompt.files} onChoose={unsavedPrompt.choose} />
+      )}
+    </TabsContext.Provider>
+  );
 }

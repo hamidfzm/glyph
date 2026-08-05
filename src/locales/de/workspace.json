@@ -14,6 +14,9 @@
     "title": "Löschen"
   },
   "unsavedChanges": {
+    "promptMessage": "Diese Dateien haben ungespeicherte Änderungen:",
+    "save": "Speichern",
+    "dontSave": "Nicht speichern",
     "title": "Ungespeicherte Änderungen",
     "message": "Diese Änderungen konnten nicht gespeichert werden:\n{{files}}\n\nTrotzdem schließen und verwerfen?",
     "discard": "Verwerfen & schließen",

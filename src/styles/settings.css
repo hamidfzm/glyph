@@ -533,3 +533,40 @@
 .status-sync-indicator[data-tone="error"] {
   color: var(--color-error);
 }
+
+/* Unsaved-changes prompt (Save / Don't Save / Cancel) */
+
+/* The only dialog that blocks a close, so it outranks every other surface it
+   can be raised over (lightbox 200, editor context menus 1000). */
+.unsaved-overlay {
+  z-index: 1100;
+}
+
+.unsaved-modal {
+  width: 420px;
+  height: auto;
+}
+
+.unsaved-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+.unsaved-body p {
+  margin: 0 0 8px;
+  color: var(--color-text-primary);
+}
+
+.unsaved-body ul {
+  margin: 0;
+  padding-inline-start: 18px;
+  list-style: disc;
+  color: var(--color-text-secondary);
+  /* The enclosing modal is unselectable; these file names are worth copying. */
+  user-select: text;
+}
+
+.unsaved-footer {
+  justify-content: flex-end;
+  gap: 8px;
+}

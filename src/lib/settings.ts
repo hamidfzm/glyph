@@ -98,7 +98,8 @@ export interface PersistedTab {
 
 export interface BehaviorSettings {
   autoReload: boolean;
-  // When off, edits stay dirty until an explicit Save; close still flush-saves.
+  // When off, edits stay dirty until an explicit Save, and a close that would
+  // drop them prompts Save / Don't Save / Cancel instead of flush-saving.
   autoSave: boolean;
   reopenLastFile: boolean;
   confirmExternalLinks: boolean;

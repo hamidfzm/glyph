@@ -14,6 +14,9 @@
     "title": "Eliminar"
   },
   "unsavedChanges": {
+    "promptMessage": "Estos archivos tienen cambios sin guardar:",
+    "save": "Guardar",
+    "dontSave": "No guardar",
     "title": "Cambios sin guardar",
     "message": "No se pudieron guardar estos cambios:\n{{files}}\n\n¿Cerrar de todos modos y descartarlos?",
     "discard": "Descartar y cerrar",
