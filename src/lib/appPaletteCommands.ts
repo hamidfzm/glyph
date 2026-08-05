@@ -101,12 +101,6 @@ export function appPaletteCommands(
       run: actions.openSettings,
     },
     {
-      id: "cmd:openSyncSettings",
-      title: t("openSyncSettings"),
-      section: "Commands",
-      run: actions.openSyncSettings,
-    },
-    {
       id: "cmd:toggleAutoSave",
       title: t("toggleAutoSave"),
       section: "Commands",
@@ -187,6 +181,12 @@ export function appPaletteCommands(
         title: t("workspaceSettings"),
         section: "Commands",
         run: actions.workspaceSettings,
+      },
+      {
+        id: "cmd:openSyncSettings",
+        title: t("openSyncSettings"),
+        section: "Commands",
+        run: actions.openSyncSettings,
       },
     );
   }

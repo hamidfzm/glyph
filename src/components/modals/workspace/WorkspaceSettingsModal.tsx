@@ -1,25 +1,34 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
+import { SyncSettingsTab } from "./SyncSettingsTab";
 import { WebsiteSettingsTab } from "./WebsiteSettingsTab";
 
-type Tab = "website";
+export type WorkspaceSettingsTabId = "website" | "sync";
 
 interface WorkspaceSettingsModalProps {
   open: boolean;
   onClose: () => void;
+  tab: WorkspaceSettingsTabId;
+  onTabChange: (tab: WorkspaceSettingsTabId) => void;
 }
 
 /**
  * Per-workspace settings, stored under the workspace's `.glyph/` folder so
  * they travel with it (unlike the global Settings modal, which is per-app).
- * Tabbed like SettingsModal; Website is the first tab.
+ * Tabbed like SettingsModal; Website is the first tab. The active tab is
+ * controlled by the opener so "Cloud Sync…" still lands on the Sync tab when
+ * the modal is already showing another one.
  */
-export function WorkspaceSettingsModal({ open, onClose }: WorkspaceSettingsModalProps) {
+export function WorkspaceSettingsModal({
+  open,
+  onClose,
+  tab,
+  onTabChange,
+}: WorkspaceSettingsModalProps) {
   const { t } = useTranslation("workspaceSettings");
   const workspaceRoot = useWorkspaceRoot();
-  const [tab, setTab] = useState<Tab>("website");
 
   useEffect(() => {
     if (!open) return;
@@ -39,7 +48,10 @@ export function WorkspaceSettingsModal({ open, onClose }: WorkspaceSettingsModal
 
   if (!open) return null;
 
-  const tabs: { id: Tab; label: string }[] = [{ id: "website", label: t("tabs.website") }];
+  const tabs: { id: WorkspaceSettingsTabId; label: string }[] = [
+    { id: "website", label: t("tabs.website") },
+    { id: "sync", label: t("tabs.sync") },
+  ];
 
   return (
     <div
@@ -78,15 +90,20 @@ export function WorkspaceSettingsModal({ open, onClose }: WorkspaceSettingsModal
                   key={entry.id}
                   className="settings-tab"
                   data-active={tab === entry.id}
-                  onClick={() => setTab(entry.id)}
+                  onClick={() => onTabChange(entry.id)}
                 >
                   {entry.label}
                 </button>
               ))}
             </nav>
 
-            <div className="settings-body settings-workspace">
+            {/* `settings-sync` carries the segmented-control and init-banner
+                styles, which key off it as a direct parent. */}
+            <div
+              className={`settings-body settings-workspace${tab === "sync" ? " settings-sync" : ""}`}
+            >
               {tab === "website" && <WebsiteSettingsTab onClose={onClose} />}
+              {tab === "sync" && <SyncSettingsTab />}
             </div>
           </div>
         )}

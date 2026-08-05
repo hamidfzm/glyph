@@ -4,7 +4,8 @@
     "close": "Cerrar"
   },
   "tabs": {
-    "website": "Sitio web"
+    "website": "Sitio web",
+    "sync": "Sincronización en la nube"
   },
   "empty": "Abre un espacio de trabajo de carpeta para editar su configuración.",
   "website": {

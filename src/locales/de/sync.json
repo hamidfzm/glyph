@@ -1,11 +1,5 @@
 {
-  "modal": {
-    "title": "Einstellungen für Cloud-Synchronisierung",
-    "heading": "Cloud-Synchronisierung",
-    "close": "Einstellungen für Cloud-Synchronisierung schließen"
-  },
-  "empty": "Öffne einen Ordner-Arbeitsbereich, um die Cloud-Synchronisierung dafür einzurichten. Einzeldatei-Tabs werden als Teil des Ordners synchronisiert, in dem sie liegen.",
-  "description": "Git-basierte Synchronisierung für diesen Arbeitsbereich. Glyph bringt einen eigenen libgit2-Build mit, ein systemweites <kbd>git</kbd> ist nicht erforderlich.",
+  "description": "Git-basierte Synchronisierung für diesen Arbeitsbereich. Glyph bringt einen eigenen libgit2-Build mit, ein systemweites <kbd>git</kbd> ist nicht erforderlich. Einzeldatei-Tabs werden als Teil des Ordners synchronisiert, in dem sie liegen.",
   "loading": "Wird geladen…",
   "notRepo": "Dieser Ordner ist noch kein Git-Repository.",
   "initRepo": "Repository initialisieren",

@@ -1,13 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SyncConfigProvider } from "@/contexts/SyncConfigProvider";
-import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { WorkspaceSyncConfig } from "@/lib/sync";
-import type { Workspace } from "@/lib/tabs";
-import { tabsContextValue } from "@/test/fixtures/tabsContext";
-import { SyncSettingsModal } from "./SyncSettingsModal";
+import { routeInvoke } from "@/test/fixtures/sync";
+import { renderWithSync } from "@/test/renderWithSync";
+import { SyncSettingsTab } from "./SyncSettingsTab";
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
@@ -16,39 +13,14 @@ beforeEach(() => {
   vi.mocked(invoke).mockResolvedValue(null as unknown as never);
 });
 
-function routeInvoke(handlers: Record<string, (args: unknown) => unknown>) {
-  vi.mocked(invoke).mockImplementation((cmd: string, args?: unknown) => {
-    const handler = handlers[cmd];
-    if (!handler) return Promise.reject(new Error(`no handler for ${cmd}`));
-    return Promise.resolve(handler(args) as never);
-  });
-}
-
-function makeWorkspace(root = "/w"): Workspace {
-  return { root, expanded: new Set<string>(), nodes: new Map() };
-}
-
-function withTabs(value: TabsContextValue) {
-  // The modal reads sync state from SyncConfigContext, which derives the
-  // workspace path from TabsContext and drives the (mocked) sync commands —
-  // so wrap children in the real provider.
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <TabsContext.Provider value={value}>
-      <SyncConfigProvider>{children}</SyncConfigProvider>
-    </TabsContext.Provider>
-  );
-  return wrapper;
-}
-
-describe("SyncSettingsModal saving the config", () => {
+describe("SyncSettingsTab saving the config", () => {
   it("uses the git-config author name as the Author placeholder", async () => {
     routeInvoke({
       sync_get_config: () => null,
       sync_default_author: () => ({ name: "Hamid", email: "h@example.com" }),
       sync_repo_present: () => true,
     });
-    const wrapper = withTabs(tabsContextValue({ workspace: makeWorkspace() }));
-    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    renderWithSync(<SyncSettingsTab />);
 
     const nameInput = (await screen.findByPlaceholderText("Hamid")) as HTMLInputElement;
     expect(nameInput.value).toBe("");
@@ -67,8 +39,7 @@ describe("SyncSettingsModal saving the config", () => {
       sync_set_token: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsContextValue({ workspace: makeWorkspace() }));
-    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    renderWithSync(<SyncSettingsTab />);
 
     fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
       target: { value: "https://example.com/r.git" },
@@ -96,8 +67,7 @@ describe("SyncSettingsModal saving the config", () => {
       sync_set_origin: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsContextValue({ workspace: makeWorkspace() }));
-    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    renderWithSync(<SyncSettingsTab />);
 
     fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
       target: { value: "https://example.com/r.git" },
@@ -125,8 +95,7 @@ describe("SyncSettingsModal saving the config", () => {
       sync_set_origin: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsContextValue({ workspace: makeWorkspace() }));
-    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    renderWithSync(<SyncSettingsTab />);
 
     fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
       target: { value: "https://example.com/r.git" },
@@ -157,8 +126,7 @@ describe("SyncSettingsModal saving the config", () => {
       sync_set_origin: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsContextValue({ workspace: makeWorkspace() }));
-    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    renderWithSync(<SyncSettingsTab />);
 
     fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
       target: { value: "https://example.com/r.git" },
@@ -182,8 +150,7 @@ describe("SyncSettingsModal saving the config", () => {
       sync_set_config: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsContextValue({ workspace: makeWorkspace() }));
-    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    renderWithSync(<SyncSettingsTab />);
 
     const save = await screen.findByRole("button", { name: "Save config" });
     // No URL entered, yet the button is enabled — local-only is allowed.
@@ -198,27 +165,6 @@ describe("SyncSettingsModal saving the config", () => {
     expect((setConfigCall![1] as { config: { remoteUrl: string } }).config.remoteUrl).toBe("");
     const allCalls = vi.mocked(invoke).mock.calls.map((c) => c[0]);
     expect(allCalls).not.toContain("sync_set_origin");
-  });
-
-  it("Save does nothing when the workspace tab is missing (handleSave workspacePath guard)", async () => {
-    // Render with an active folder tab so the form mounts, then re-render
-    // with the tab gone. Save then exercises the `if (!workspacePath) return;`
-    // arm on line 159.
-    routeInvoke({
-      sync_get_config: () => null,
-      sync_default_author: () => ({ name: null, email: null }),
-      sync_repo_present: () => true,
-      sync_set_config: () => null,
-    });
-    // No tabs at all: the empty-state branch covers the negative guard
-    // because the modal mounts without a workspacePath.
-    const wrapper = withTabs(tabsContextValue({ workspace: null }));
-    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
-    expect(
-      await screen.findByText(/Open a folder workspace to configure cloud sync/i),
-    ).toBeInTheDocument();
-    // sync_set_config must not be reachable from this empty state.
-    expect(vi.mocked(invoke)).not.toHaveBeenCalled();
   });
 
   it("Save with a blank branch field persists 'main' (configFromForm fallback)", async () => {
@@ -237,8 +183,7 @@ describe("SyncSettingsModal saving the config", () => {
       sync_set_origin: () => null,
       sync_commit_config: () => false,
     });
-    const wrapper = withTabs(tabsContextValue({ workspace: makeWorkspace() }));
-    render(<SyncSettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    renderWithSync(<SyncSettingsTab />);
 
     fireEvent.change(await screen.findByPlaceholderText("https://github.com/you/notes.git"), {
       target: { value: "https://example.com/r.git" },

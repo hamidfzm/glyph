@@ -4,7 +4,8 @@
     "close": "Schließen"
   },
   "tabs": {
-    "website": "Website"
+    "website": "Website",
+    "sync": "Cloud-Synchronisierung"
   },
   "empty": "Öffne einen Ordner-Arbeitsbereich, um seine Einstellungen zu bearbeiten.",
   "website": {

@@ -6,9 +6,6 @@ import { AppModals } from "./AppModals";
 vi.mock("@/components/modals/settings/lazySettings", () => ({
   SettingsModal: () => <div>settings modal</div>,
 }));
-vi.mock("@/components/modals/SyncSettingsModal", () => ({
-  SyncSettingsModal: () => <div>sync modal</div>,
-}));
 vi.mock("@/components/modals/workspace/WorkspaceSettingsModal", () => ({
   WorkspaceSettingsModal: () => <div>workspace modal</div>,
 }));
@@ -18,21 +15,19 @@ vi.mock("@/components/plugins/PluginsModal", () => ({
 
 const CASES = [
   { flag: "settingsOpen", text: "settings modal" },
-  { flag: "syncSettingsOpen", text: "sync modal" },
-  { flag: "workspaceSettingsOpen", text: "workspace modal" },
+  { flag: "workspaceSettingsTab", text: "workspace modal" },
   { flag: "pluginsOpen", text: "plugins modal" },
 ] as const;
 
 function state(open?: (typeof CASES)[number]["flag"]): AppModalsState {
   return {
     settingsOpen: open === "settingsOpen",
-    syncSettingsOpen: open === "syncSettingsOpen",
-    workspaceSettingsOpen: open === "workspaceSettingsOpen",
+    workspaceSettingsTab: open === "workspaceSettingsTab" ? "website" : null,
     pluginsOpen: open === "pluginsOpen",
+    setWorkspaceSettingsTab: vi.fn(),
     openSettings: vi.fn(),
     closeSettings: vi.fn(),
     openSyncSettings: vi.fn(),
-    closeSyncSettings: vi.fn(),
     openWorkspaceSettings: vi.fn(),
     closeWorkspaceSettings: vi.fn(),
     openPlugins: vi.fn(),

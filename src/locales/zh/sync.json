@@ -1,11 +1,5 @@
 {
-  "modal": {
-    "title": "云同步设置",
-    "heading": "云同步",
-    "close": "关闭云同步设置"
-  },
-  "empty": "打开一个文件夹工作区以为其配置云同步。单文件标签页会作为其所在文件夹的一部分进行同步。",
-  "description": "基于 Git 同步此工作区。Glyph 内置 libgit2，无需系统 <kbd>git</kbd>。",
+  "description": "基于 Git 同步此工作区。Glyph 内置 libgit2，无需系统 <kbd>git</kbd>。单文件标签页会作为其所在文件夹的一部分进行同步。",
   "loading": "正在加载…",
   "notRepo": "此文件夹还不是 git 仓库。",
   "initRepo": "初始化仓库",

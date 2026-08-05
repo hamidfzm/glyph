@@ -1,11 +1,5 @@
 {
-  "modal": {
-    "title": "Ajustes de sincronización en la nube",
-    "heading": "Sincronización en la nube",
-    "close": "Cerrar ajustes de sincronización en la nube"
-  },
-  "empty": "Abre un espacio de trabajo de carpeta para configurar su sincronización en la nube. Las pestañas de un solo archivo se sincronizan como parte de la carpeta en la que residen.",
-  "description": "Sincronización basada en Git para este espacio de trabajo. Glyph incluye su propia compilación de libgit2: no se necesita <kbd>git</kbd> del sistema.",
+  "description": "Sincronización basada en Git para este espacio de trabajo. Glyph incluye su propia compilación de libgit2: no se necesita <kbd>git</kbd> del sistema. Las pestañas de un solo archivo se sincronizan como parte de la carpeta en la que residen.",
   "loading": "Cargando…",
   "notRepo": "Esta carpeta aún no es un repositorio git.",
   "initRepo": "Inicializar repositorio",

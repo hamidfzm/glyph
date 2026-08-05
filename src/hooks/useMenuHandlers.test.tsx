@@ -16,13 +16,12 @@ import { tabsContextValue } from "@/test/fixtures/tabsContext";
 function makeModals(): AppModals {
   return {
     settingsOpen: false,
-    syncSettingsOpen: false,
-    workspaceSettingsOpen: false,
+    workspaceSettingsTab: null,
     pluginsOpen: false,
+    setWorkspaceSettingsTab: vi.fn(),
     openSettings: vi.fn(),
     closeSettings: vi.fn(),
     openSyncSettings: vi.fn(),
-    closeSyncSettings: vi.fn(),
     openWorkspaceSettings: vi.fn(),
     closeWorkspaceSettings: vi.fn(),
     openPlugins: vi.fn(),
