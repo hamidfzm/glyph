@@ -2,12 +2,8 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePlatform } from "@/hooks/usePlatform";
 import { useSettings } from "@/hooks/useSettings";
-import {
-  BINDABLE_COMMANDS,
-  type CommandCategory,
-  findConflicts,
-  resolveBindings,
-} from "@/lib/keybindings";
+import { BINDABLE_COMMANDS, type CommandCategory } from "@/lib/bindableCommands";
+import { findConflicts, resolveBindings } from "@/lib/keybindings";
 import { HotkeyRow } from "./HotkeyRow";
 
 const CATEGORY_ORDER: CommandCategory[] = ["File", "Edit", "View", "Application"];

@@ -13,6 +13,17 @@ export function basename(path: string): string {
   return path.replace(/^.*[/\\]/, "");
 }
 
+/** Final non-empty segment, so a directory path keeps its name whether or not
+ *  it ends in a separator (`/a/b` and `/a/b/` both give `b`). */
+export function lastSegment(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+}
+
+/** File name with its extension removed; a name without one is unchanged. */
+export function stem(name: string): string {
+  return name.replace(/\.[^.]+$/, "");
+}
+
 /** Human-readable file name from a plain path or a mobile picker URI
  *  (`file://` percent-encodes spaces; SAF `content://` URIs also encode
  *  separators, so strip again after decoding). */

@@ -1,12 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   SidebarLayoutContext,
   type SidebarLayoutContextValue,
 } from "@/contexts/SidebarLayoutContext";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import { activeFileOf, type FileTab, type GraphTab, type Tab } from "@/hooks/useTabs";
+import { activeFileOf, type FileTab, type GraphTab, type Tab } from "@/lib/tabs";
 import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 import { TabBar } from "./TabBar";
 
@@ -344,88 +344,6 @@ describe("TabBar", () => {
     expect(screen.queryByLabelText("View mode")).not.toBeInTheDocument();
   });
 
-  describe("drag-and-drop reordering", () => {
-    const dataTransfer = () => ({ setData: vi.fn(), effectAllowed: "", dropEffect: "" });
-    const tabEl = (name: string) => screen.getByText(name).closest(".tab-item") as HTMLElement;
-
-    it("marks every tab as draggable", () => {
-      renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
-      expect(tabEl("file0.md").getAttribute("draggable")).toBe("true");
-      expect(tabEl("file1.md").getAttribute("draggable")).toBe("true");
-    });
-
-    it("moves the dragged tab to the drop target's index", () => {
-      const moveTab = vi.fn();
-      renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-0", moveTab });
-      const dt = dataTransfer();
-      fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
-      fireEvent.dragOver(tabEl("file2.md"), { dataTransfer: dt });
-      fireEvent.drop(tabEl("file2.md"), { dataTransfer: dt });
-      expect(moveTab).toHaveBeenCalledWith("tab-0", 2);
-    });
-
-    it("shows the drop indicator on the trailing edge when dragging right", () => {
-      renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-0" });
-      const dt = dataTransfer();
-      fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
-      fireEvent.dragOver(tabEl("file2.md"), { dataTransfer: dt });
-      // dragover fires repeatedly over the same target; the indicator is stable.
-      fireEvent.dragOver(tabEl("file2.md"), { dataTransfer: dt });
-      expect(tabEl("file2.md").getAttribute("data-drop")).toBe("after");
-    });
-
-    it("shows the drop indicator on the leading edge when dragging left", () => {
-      renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-2" });
-      const dt = dataTransfer();
-      fireEvent.dragStart(tabEl("file2.md"), { dataTransfer: dt });
-      fireEvent.dragOver(tabEl("file0.md"), { dataTransfer: dt });
-      expect(tabEl("file0.md").getAttribute("data-drop")).toBe("before");
-    });
-
-    it("shows no indicator over the dragged tab itself and does not move on self-drop", () => {
-      const moveTab = vi.fn();
-      renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0", moveTab });
-      const dt = dataTransfer();
-      fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
-      fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
-      fireEvent.dragOver(tabEl("file0.md"), { dataTransfer: dt });
-      expect(tabEl("file0.md").hasAttribute("data-drop")).toBe(false);
-      expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
-      fireEvent.drop(tabEl("file0.md"), { dataTransfer: dt });
-      expect(moveTab).not.toHaveBeenCalled();
-    });
-
-    it("clears the indicator when the drag ends without a drop", () => {
-      renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
-      const dt = dataTransfer();
-      fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
-      fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
-      expect(tabEl("file1.md").getAttribute("data-drop")).toBe("after");
-      fireEvent.dragEnd(tabEl("file0.md"), { dataTransfer: dt });
-      expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
-    });
-
-    it("ignores dragover and drop when no tab drag is in progress", () => {
-      const moveTab = vi.fn();
-      renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0", moveTab });
-      const dt = dataTransfer();
-      fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
-      expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
-      fireEvent.drop(tabEl("file1.md"), { dataTransfer: dt });
-      expect(moveTab).not.toHaveBeenCalled();
-    });
-
-    it("clears the indicator after a completed drop", () => {
-      const moveTab = vi.fn();
-      renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-0", moveTab });
-      const dt = dataTransfer();
-      fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
-      fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
-      fireEvent.drop(tabEl("file1.md"), { dataTransfer: dt });
-      expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
-    });
-  });
-
   describe("context menu", () => {
     const rightClick = (name: string, at = { clientX: 120, clientY: 30 }) => {
       const tabEl = screen.getByText(name).closest(".tab-item") as HTMLElement;
@@ -492,104 +410,5 @@ describe("TabBar", () => {
       fireEvent.keyDown(window, { key: "Escape" });
       expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     });
-  });
-
-  // Regression: <button> cannot be a descendant of <button> per the HTML
-  // spec, and React 19 logs a hydration error when it sees it. The close
-  // button used to sit inside the tab activate button; now it's a sibling.
-  it("does not nest a button inside another button", () => {
-    const { container } = renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
-    for (const button of container.querySelectorAll("button")) {
-      expect(button.querySelector("button")).toBeNull();
-    }
-  });
-});
-
-describe("TabBar on mobile", () => {
-  const heading = [{ id: "h1", text: "Heading", level: 1 }];
-
-  beforeEach(async () => {
-    const { platform } = await import("@tauri-apps/plugin-os");
-    vi.mocked(platform).mockReturnValue("android");
-  });
-
-  afterEach(async () => {
-    const { platform } = await import("@tauri-apps/plugin-os");
-    vi.mocked(platform).mockReturnValue("macos");
-  });
-
-  // Mobile has no native menu or keyboard shortcut, so the tab bar is the only
-  // way to open another file once a tab is showing.
-  it("offers Open File and runs the picker", () => {
-    const openFileDialog = vi.fn();
-    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0", openFileDialog });
-    fireEvent.click(screen.getByRole("button", { name: "Open File" }));
-    expect(openFileDialog).toHaveBeenCalled();
-  });
-
-  it("keeps Open File off the desktop tab bar", async () => {
-    const { platform } = await import("@tauri-apps/plugin-os");
-    vi.mocked(platform).mockReturnValue("macos");
-    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0" });
-    expect(screen.queryByRole("button", { name: "Open File" })).not.toBeInTheDocument();
-  });
-
-  it("toggles the outline drawer from the tab bar", () => {
-    const toggleOutline = vi.fn();
-    renderTabBar({
-      tabs: makeTabs(1),
-      activeTabId: "tab-0",
-      tocEntries: heading,
-      sidebar: { outlineVisible: false, toggleOutline },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Show outline sidebar" }));
-    expect(toggleOutline).toHaveBeenCalled();
-  });
-
-  it("labels the outline button as hide while the drawer is open", () => {
-    renderTabBar({
-      tabs: makeTabs(1),
-      activeTabId: "tab-0",
-      tocEntries: heading,
-      sidebar: { outlineVisible: true },
-    });
-    expect(screen.getByRole("button", { name: "Hide outline sidebar" })).toBeInTheDocument();
-  });
-
-  it("hides the outline button for a document with no headings", () => {
-    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0", tocEntries: [] });
-    expect(screen.queryByRole("button", { name: /outline sidebar/ })).not.toBeInTheDocument();
-  });
-});
-
-describe("TabBar on a viewport too small to split", () => {
-  const originalMatchMedia = window.matchMedia;
-
-  beforeEach(() => {
-    window.matchMedia = vi.fn(() => ({
-      matches: false,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })) as unknown as typeof window.matchMedia;
-  });
-
-  afterEach(() => {
-    window.matchMedia = originalMatchMedia;
-  });
-
-  it("hides the Split button", () => {
-    renderTabBar({ tabs: makeTabs(1), activeTabId: "tab-0" });
-    expect(screen.queryByLabelText("Split mode")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("View mode")).toBeInTheDocument();
-    expect(screen.getByLabelText("Edit mode")).toBeInTheDocument();
-  });
-
-  // A tab persisted as split from a desktop session renders as the read-only
-  // view here, so View is the button that reads as active.
-  it("marks View active for a tab stored as split", () => {
-    const splitTab = makeFileTab(0);
-    splitTab.file.mode = "split";
-    renderTabBar({ tabs: [splitTab], activeTabId: "tab-0" });
-    expect(screen.getByLabelText("View mode")).toHaveAttribute("data-active", "true");
   });
 });

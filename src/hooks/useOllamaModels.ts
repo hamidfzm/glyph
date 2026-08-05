@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchOllamaModels } from "@/lib/ai-providers";
+import { fetchOllamaModels } from "@/lib/ai/ollama";
 
 // Debounce so a URL being typed character-by-character doesn't fire a fetch
 // per keystroke.

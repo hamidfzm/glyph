@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Platform } from "@/hooks/usePlatform";
-import { acceleratorFromEvent, type BindableCommand, formatAccelerator } from "@/lib/keybindings";
+import { acceleratorFromEvent, formatAccelerator } from "@/lib/accelerator";
+import type { BindableCommand } from "@/lib/bindableCommands";
 
 interface HotkeyRowProps {
   command: BindableCommand;

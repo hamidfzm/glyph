@@ -1,0 +1,244 @@
+import { describe, expect, it, vi } from "vitest";
+import type { WikilinkRef } from "./backlinks";
+import { buildWorkspaceGraph } from "./graph";
+import { DEFAULT_CAMERA } from "./graphCanvas";
+import { drawGraph, readGraphTheme } from "./graphDraw";
+import { createGraphLayout, type GraphLayout, type LayoutNode } from "./graphSimulation";
+
+const VIEWPORT = { width: 800, height: 600 };
+
+describe("readGraphTheme", () => {
+  it("falls back to defaults when variables are missing", () => {
+    const theme = readGraphTheme(document.documentElement);
+    expect(theme.node).toBeTruthy();
+    expect(theme.edge).toBeTruthy();
+    expect(theme.label).toBeTruthy();
+  });
+
+  it("reads CSS custom properties when present", () => {
+    document.documentElement.style.setProperty("--color-accent", "#ff0000");
+    try {
+      const theme = readGraphTheme(document.documentElement);
+      expect(theme.nodeActive).toBe("#ff0000");
+      expect(theme.edgeActive).toBe("#ff0000");
+    } finally {
+      document.documentElement.style.removeProperty("--color-accent");
+    }
+  });
+});
+
+// A recording stand-in for CanvasRenderingContext2D: drawGraph only needs the
+// calls below, and asserting against the recorder keeps these tests
+// independent of a real rasterizer.
+function stubContext() {
+  return {
+    setTransform: vi.fn(),
+    clearRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    closePath: vi.fn(),
+    stroke: vi.fn(),
+    arc: vi.fn(),
+    fill: vi.fn(),
+    fillText: vi.fn(),
+    lineWidth: 0,
+    globalAlpha: 1,
+    strokeStyle: "",
+    fillStyle: "",
+    font: "",
+    textAlign: "",
+    textBaseline: "",
+  };
+}
+
+const THEME = {
+  node: "node",
+  nodeOrphan: "orphan",
+  nodeActive: "active",
+  edge: "edge",
+  edgeActive: "edge-active",
+  label: "label",
+};
+
+function makeLayout(): GraphLayout {
+  const refs: WikilinkRef[] = [{ source: "/v/a.md", target: "b", line: 1, snippet: "[[b]]" }];
+  return createGraphLayout(buildWorkspaceGraph(["/v/a.md", "/v/b.md", "/v/lone.md"], refs));
+}
+
+function drawOptions(hoveredId: string | null = null) {
+  const graph = buildWorkspaceGraph(
+    ["/v/a.md", "/v/b.md", "/v/lone.md"],
+    [{ source: "/v/a.md", target: "b", line: 1, snippet: "[[b]]" }],
+  );
+  return {
+    viewport: VIEWPORT,
+    dpr: 2,
+    camera: DEFAULT_CAMERA,
+    theme: THEME,
+    hoveredId,
+    neighbors: graph.neighbors,
+  };
+}
+
+describe("drawGraph", () => {
+  it("clears the viewport and applies the DPR + camera transforms", () => {
+    const ctx = stubContext();
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, makeLayout(), drawOptions());
+    expect(ctx.clearRect).toHaveBeenCalledWith(0, 0, VIEWPORT.width, VIEWPORT.height);
+    expect(ctx.setTransform).toHaveBeenNthCalledWith(1, 2, 0, 0, 2, 0, 0);
+    expect(ctx.setTransform).toHaveBeenNthCalledWith(2, 2, 0, 0, 2, 2 * 400, 2 * 300);
+  });
+
+  it("draws one circle per node and one line per edge", () => {
+    const ctx = stubContext();
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, makeLayout(), drawOptions());
+    expect(ctx.arc).toHaveBeenCalledTimes(3);
+    expect(ctx.stroke).toHaveBeenCalledTimes(1);
+  });
+
+  it("labels every node when zoomed in", () => {
+    const ctx = stubContext();
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, makeLayout(), drawOptions());
+    const labels = ctx.fillText.mock.calls.map((c) => c[0]);
+    expect(labels).toEqual(["a", "b", "lone"]);
+  });
+
+  it("hides labels when zoomed far out, except the hovered neighborhood", () => {
+    const ctx = stubContext();
+    const zoomedOut = { ...drawOptions("/v/a.md"), camera: { dx: 0, dy: 0, scale: 0.3 } };
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, makeLayout(), zoomedOut);
+    const labels = ctx.fillText.mock.calls.map((c) => c[0]);
+    expect(labels).toEqual(["a", "b"]);
+  });
+
+  it("draws an arrow tip only for edges touching the hovered node", () => {
+    const plain = stubContext();
+    drawGraph(plain as unknown as CanvasRenderingContext2D, makeLayout(), drawOptions());
+    const hovered = stubContext();
+    drawGraph(hovered as unknown as CanvasRenderingContext2D, makeLayout(), drawOptions("/v/a.md"));
+    // The arrow tip adds a closePath + fill pair beyond the node circles.
+    expect(plain.closePath).not.toHaveBeenCalled();
+    expect(hovered.closePath).toHaveBeenCalledTimes(1);
+  });
+
+  it("styles orphan nodes with the muted color", () => {
+    const ctx = stubContext();
+    const fills: string[] = [];
+    Object.defineProperty(ctx, "fillStyle", {
+      set: (v: string) => fills.push(v),
+      get: () => "",
+    });
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, makeLayout(), drawOptions());
+    expect(fills).toContain("orphan");
+    expect(fills).toContain("node");
+  });
+
+  it("uses the active color for the hovered neighborhood", () => {
+    const ctx = stubContext();
+    const fills: string[] = [];
+    Object.defineProperty(ctx, "fillStyle", {
+      set: (v: string) => fills.push(v),
+      get: () => "",
+    });
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, makeLayout(), drawOptions("/v/a.md"));
+    // a and its neighbor b are active; lone is not.
+    expect(fills.filter((f) => f === "active").length).toBeGreaterThanOrEqual(2);
+    expect(fills).toContain("orphan");
+  });
+
+  it("resets globalAlpha when done", () => {
+    const ctx = stubContext();
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, makeLayout(), drawOptions("/v/a.md"));
+    expect(ctx.globalAlpha).toBe(1);
+  });
+
+  it("dims everything when hovering an orphan absent from the neighbour map", () => {
+    // "lone" has no entry in `neighbors`, so isActive falls through its `?? false`.
+    const ctx = stubContext();
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, makeLayout(), drawOptions("/v/lone.md"));
+    expect(ctx.arc).toHaveBeenCalledTimes(3);
+  });
+
+  // A node whose simulation hasn't assigned coordinates yet exercises the
+  // defensive `?? 0` fallbacks in the edge, node, label, and arrow-tip paths.
+  it("treats nodes without computed coordinates as the origin", () => {
+    const a: LayoutNode = { id: "a", label: "a", degree: 1, orphan: false };
+    const b: LayoutNode = { id: "b", label: "b", degree: 1, orphan: false };
+    const layout = {
+      nodes: [a, b],
+      links: [{ source: a, target: b }],
+      simulation: null,
+    } as unknown as GraphLayout;
+    const neighbors = new Map<string, ReadonlySet<string>>([
+      ["a", new Set(["b"])],
+      ["b", new Set(["a"])],
+    ]);
+    const ctx = stubContext();
+    // Hover "a" so the arrow-tip path (which also reads `?? 0`) runs.
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, layout, {
+      viewport: VIEWPORT,
+      dpr: 1,
+      camera: DEFAULT_CAMERA,
+      theme: THEME,
+      hoveredId: "a",
+      neighbors,
+    });
+    // Both endpoints collapse to (0, 0); the line and arc still draw finite coords.
+    for (const call of [
+      ...ctx.moveTo.mock.calls,
+      ...ctx.lineTo.mock.calls,
+      ...ctx.arc.mock.calls,
+    ]) {
+      for (const arg of call) expect(Number.isFinite(arg)).toBe(true);
+    }
+    expect(ctx.arc).toHaveBeenCalledTimes(2);
+  });
+
+  // Hovering with an edge that does NOT touch the hovered node, plus an inactive
+  // non-orphan node, covers the dimmed-edge and plain-node colour branches that
+  // the 3-node fixture never reaches.
+  it("dims non-neighbour edges and keeps inactive non-orphan nodes plain", () => {
+    const mk = (id: string): LayoutNode => ({ id, label: id, degree: 1, orphan: false });
+    const [a, b, c, d] = [mk("a"), mk("b"), mk("c"), mk("d")].map((n, i) => ({
+      ...n,
+      x: i * 50,
+      y: 0,
+    }));
+    const layout = {
+      nodes: [a, b, c, d],
+      links: [
+        { source: a, target: b },
+        { source: c, target: d },
+      ],
+      simulation: null,
+    } as unknown as GraphLayout;
+    const neighbors = new Map<string, ReadonlySet<string>>([
+      ["a", new Set(["b"])],
+      ["b", new Set(["a"])],
+      ["c", new Set(["d"])],
+      ["d", new Set(["c"])],
+    ]);
+    const ctx = stubContext();
+    const fills: string[] = [];
+    const alphas: number[] = [];
+    Object.defineProperty(ctx, "fillStyle", { set: (v: string) => fills.push(v), get: () => "" });
+    Object.defineProperty(ctx, "globalAlpha", {
+      set: (v: number) => alphas.push(v),
+      get: () => 1,
+    });
+    drawGraph(ctx as unknown as CanvasRenderingContext2D, layout, {
+      viewport: VIEWPORT,
+      dpr: 1,
+      camera: DEFAULT_CAMERA,
+      theme: THEME,
+      hoveredId: "a",
+      neighbors,
+    });
+    // c and d are inactive but not orphans → plain node colour while dimmed.
+    expect(fills).toContain("node");
+    expect(fills).not.toContain("orphan");
+    // The c–d edge doesn't touch the hovered node, so it draws at the dimmed alpha.
+    expect(alphas).toContain(0.18);
+  });
+});

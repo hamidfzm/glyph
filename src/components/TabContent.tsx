@@ -6,13 +6,13 @@ import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isImageFile } from "@/lib/imageExtensions";
 import { isNotebookFile } from "@/lib/notebookExtensions";
 import { EDITOR_MODE, effectiveEditorMode } from "@/lib/settings";
-import { CanvasEditor, CanvasViewer } from "./canvas/lazyCanvas";
+import { CanvasPane } from "./CanvasPane";
 import { MarkdownEditor, SplitView } from "./editor/lazyEditor";
 import { GraphView } from "./graph/lazyGraph";
 import { ImageViewer } from "./markdown/ImageViewer";
 import { MarkdownViewer } from "./markdown/MarkdownViewer";
 import { NoteZoomLayer } from "./markdown/NoteZoomLayer";
-import { NotebookSource, NotebookSplit, NotebookViewer } from "./notebook/lazyNotebook";
+import { NotebookPane } from "./NotebookPane";
 
 interface TabContentProps {
   searchOpen: boolean;
@@ -97,57 +97,28 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
 
   const editorContent = file.editContent ?? file.content;
 
-  // Notebooks are read-only, so the three modes map to read-only views rather
-  // than editors: view = rendered cells, split = cells + raw JSON side by side,
-  // edit = raw JSON source. None drop the JSON into the markdown editor, which
-  // would let autosave write malformed content back and corrupt the file.
   if (isNotebookFile(file.path)) {
-    const NotebookComponent =
-      mode === EDITOR_MODE.view
-        ? NotebookViewer
-        : mode === EDITOR_MODE.split
-          ? NotebookSplit
-          : NotebookSource;
     return (
-      <NotebookComponent
-        key={`${activeTab.id}:${file.path}`}
+      <NotebookPane
+        tabId={activeTab.id}
+        file={file}
         content={file.content}
-        filePath={file.path}
-        initialScrollTop={file.scrollTop}
-        onScrollChange={saveScrollPosition}
+        mode={mode}
         searchOpen={searchOpen}
         onSearchClose={onSearchClose}
+        onScrollChange={saveScrollPosition}
       />
     );
   }
 
-  // Canvas files (JSON Canvas spec) render on an infinite pan/zoom board rather
-  // than as text. View mode is the read-only board; edit mode is the full
-  // editor (the split button is hidden for canvas — the board IS the editor).
-  // The serialized JSON never flows through the markdown editor — edits are
-  // committed straight to the tab content pipeline via commitEdit. The viewer
-  // renders editorContent, not file.content, so switching back to view right
-  // after an edit shows the latest board instead of the last autosaved one.
   if (isCanvasFile(file.path)) {
-    if (file.mode === EDITOR_MODE.view) {
-      return (
-        <CanvasViewer
-          key={`${activeTab.id}:${file.path}`}
-          content={editorContent}
-          filePath={file.path}
-          onOpenFile={handleOpenWikilink}
-          onChange={handleCanvasChange}
-          viewportKey={`${activeTab.id}:${file.path}`}
-        />
-      );
-    }
     return (
-      <CanvasEditor
-        key={`${activeTab.id}:${file.path}`}
+      <CanvasPane
+        tabId={activeTab.id}
+        file={file}
         content={editorContent}
-        filePath={file.path}
+        onOpenFile={handleOpenWikilink}
         onChange={handleCanvasChange}
-        viewportKey={`${activeTab.id}:${file.path}`}
       />
     );
   }

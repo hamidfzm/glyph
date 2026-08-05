@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import type { Workspace } from "@/hooks/useTabs";
+import type { Workspace } from "@/lib/tabs";
 import { TabBarActions } from "./TabBarActions";
 
 const WORKSPACE: Workspace = { root: "/vault", expanded: new Set(), nodes: new Map() };

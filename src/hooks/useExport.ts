@@ -1,38 +1,20 @@
-import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { collectStyles } from "@/lib/export/collectStyles";
-import { buildHtmlDocument } from "@/lib/export/html";
+import { exportCanvas } from "@/lib/export/exportCanvas";
+import { exportDocument } from "@/lib/export/exportDocument";
 import { deriveExportMeta } from "@/lib/export/meta";
-import { prepareContent } from "@/lib/export/prepareContent";
+import { EXPORT_EXT, type ExportFormat } from "@/lib/export/writeExport";
 import { pickSave } from "@/lib/pickers";
 import type { PrintSettings } from "@/lib/settings";
 import type { TocEntry } from "./useTableOfContents";
 
-export type ExportFormat = "html" | "docx" | "epub" | "pdf";
+export type { ExportFormat };
 
 interface UseExportOptions {
   entries: TocEntry[];
   settings: PrintSettings;
   filePath: string | undefined;
   content: string | null;
-}
-
-// File extension per format. The save-dialog filter *name* is translated at
-// call time (see `exportFilter.<format>` in common.json).
-const EXT: Record<ExportFormat, string> = {
-  html: "html",
-  docx: "docx",
-  epub: "epub",
-  pdf: "pdf",
-};
-
-// Write binary export output via the Rust command. The bytes are sent as a
-// plain number array: `@tauri-apps/api`'s `invoke` JSON-serializes arguments,
-// and a nested `Uint8Array` would become an object (`{"0":..}`) that Rust's
-// `Vec<u8>` can't deserialize — so DOCX/EPUB/PDF must be converted first.
-function writeBinary(path: string, bytes: Uint8Array): Promise<void> {
-  return invoke("write_binary_file", { path, contents: Array.from(bytes) });
 }
 
 export interface ExportHandlers {
@@ -64,85 +46,14 @@ export function useExport({
 
   const run = useCallback(
     async (format: ExportFormat) => {
-      // A canvas tab exports as vectors, never rasterised: HTML and PDF keep
-      // the spatial board 1:1 (HTML via the app stylesheet, PDF via vector
-      // primitives on a board-sized page); DOCX and EPUB are flowing
-      // documents, so the cards are linearised in board order. The check runs
-      // first: cards contain their own small `.markdown-body` elements which
-      // would fool the document guard.
-      if (document.querySelector(".glyph-canvas")) {
-        const meta = deriveExportMeta(filePath, content);
-        const ext = EXT[format];
-        const path = await pickSave(`${meta.baseName}.${ext}`, t(`exportFilter.${format}`), [ext]);
-        if (!path) return;
-        setExporting(format);
-        try {
-          const { buildCanvasBoardHtml, buildCanvasDocumentHtml } = await import(
-            "@/lib/canvas/exportDoc"
-          );
-          if (format === "html") {
-            const body = await buildCanvasBoardHtml();
-            if (body == null) return;
-            const html = buildHtmlDocument({
-              bodyHtml: body,
-              title: meta.title,
-              css: collectStyles(),
-              dark: document.documentElement.classList.contains("dark"),
-              bodyClass: "glyph-canvas-page",
-            });
-            await invoke("write_file", { path, content: html });
-          } else if (format === "pdf") {
-            // The PDF keeps the spatial board too — cards, edges, and labels
-            // as vectors on one board-sized page.
-            const { buildCanvasBoardModel } = await import("@/lib/canvas/exportModel");
-            const model = await buildCanvasBoardModel();
-            if (model == null) return;
-            const { buildCanvasPdf } = await import("@/lib/export/canvasPdf");
-            await writeBinary(
-              path,
-              await buildCanvasPdf(model, { title: meta.title, author: meta.author }),
-            );
-          } else {
-            const body = await buildCanvasDocumentHtml();
-            if (body == null) return;
-            if (format === "epub") {
-              const { buildEpub } = await import("@/lib/export/epub");
-              await writeBinary(
-                path,
-                await buildEpub({
-                  bodyHtml: body,
-                  css: collectStyles(),
-                  entries: [],
-                  metadata: {
-                    title: meta.title,
-                    author: meta.author,
-                    language: "en",
-                    identifier: crypto.randomUUID(),
-                    modified: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-                  },
-                }),
-              );
-            } else {
-              const { buildDocx } = await import("@/lib/export/docx");
-              await writeBinary(
-                path,
-                await buildDocx(body, { title: meta.title, author: meta.author }),
-              );
-            }
-          }
-        } catch (err) {
-          console.error(`Failed to export canvas ${format}:`, err);
-        } finally {
-          setExporting(null);
-        }
-        return;
-      }
-
+      // The canvas check runs first: cards contain their own small
+      // `.markdown-body` elements which would fool the document guard.
+      const canvas = document.querySelector(".glyph-canvas") !== null;
       // Cheap guard so we don't pop a save dialog with nothing to export.
-      if (!document.querySelector(".markdown-body")) return;
+      if (!canvas && !document.querySelector(".markdown-body")) return;
 
       const meta = deriveExportMeta(filePath, content);
-      const ext = EXT[format];
+      const ext = EXPORT_EXT[format];
       const path = await pickSave(`${meta.baseName}.${ext}`, t(`exportFilter.${format}`), [ext]);
       if (!path) return; // user cancelled
 
@@ -150,57 +61,8 @@ export function useExport({
       // dialog, covering image inlining and the build/write.
       setExporting(format);
       try {
-        const prepared = await prepareContent({
-          entries,
-          includeToc,
-          // PDF needs inlined code colors, rasterized math, and diagrams
-          // re-rendered light as inline SVG for vector embedding.
-          pdf: format === "pdf",
-        });
-        // The body can vanish if the file is closed during the (async) save
-        // dialog, even though the pre-dialog guard passed.
-        if (prepared == null) return;
-        const { html: body, bodyClass } = prepared;
-
-        if (format === "html") {
-          const html = buildHtmlDocument({
-            bodyHtml: body,
-            title: meta.title,
-            css: collectStyles(),
-            dark: document.documentElement.classList.contains("dark"),
-            bodyClass,
-          });
-          await invoke("write_file", { path, content: html });
-        } else if (format === "epub") {
-          // Heavy deps (jszip / docx / pdfmake) load only when the user actually
-          // exports, keeping them out of the main bundle.
-          const { buildEpub } = await import("@/lib/export/epub");
-          await writeBinary(
-            path,
-            await buildEpub({
-              bodyHtml: body,
-              css: collectStyles(),
-              entries,
-              bodyClass,
-              metadata: {
-                title: meta.title,
-                author: meta.author,
-                language: "en",
-                identifier: crypto.randomUUID(),
-                modified: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-              },
-            }),
-          );
-        } else if (format === "docx") {
-          const { buildDocx } = await import("@/lib/export/docx");
-          await writeBinary(
-            path,
-            await buildDocx(body, { title: meta.title, author: meta.author }),
-          );
-        } else {
-          const { buildPdf } = await import("@/lib/export/pdf");
-          await writeBinary(path, await buildPdf(body, { title: meta.title, author: meta.author }));
-        }
+        if (canvas) await exportCanvas(format, path, meta);
+        else await exportDocument(format, path, meta, { entries, includeToc });
       } catch (err) {
         console.error(`Failed to export ${format}:`, err);
       } finally {

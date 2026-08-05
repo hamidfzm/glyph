@@ -1,192 +1,13 @@
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import {
-  SidebarLayoutContext,
-  type SidebarLayoutContextValue,
-} from "@/contexts/SidebarLayoutContext";
-import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import type { TocEntry } from "@/hooks/useTableOfContents";
-import type { FileTab, Tab, Workspace } from "@/hooks/useTabs";
-import { buildMetadataIndex } from "@/lib/metadata";
-import { pickMoveDir } from "@/lib/pickers";
-import { SIDEBAR_WIDTH_DEFAULT, type SidebarLayout } from "@/lib/settings";
-import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
-import { Sidebar } from "./Sidebar";
+import { SIDEBAR_WIDTH_DEFAULT } from "@/lib/settings";
+import { makeWorkspace, renderBothSides, renderSidebar } from "@/test/fixtures/sidebar";
 
 vi.mock("@/lib/pickers", () => ({
   pickMoveDir: vi.fn(),
 }));
 
-const mockEntries: TocEntry[] = [
-  { id: "intro", text: "Introduction", level: 1 },
-  { id: "details", text: "Details", level: 2 },
-];
-
-function makeFileTab(): FileTab {
-  return {
-    id: "tab-1",
-    kind: "file",
-    file: {
-      path: "/tmp/post.md",
-      content: "# Post",
-      metadata: { name: "post.md", path: "/tmp/post.md", size: 1, modified: 0 },
-      scrollTop: 0,
-      mode: "view",
-      editContent: null,
-      dirty: false,
-      virtual: false,
-      revision: 0,
-    },
-  };
-}
-
-function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
-  return {
-    root: "/tmp/notes",
-    expanded: new Set(),
-    nodes: new Map([
-      [
-        "/tmp/notes",
-        [{ name: "readme.md", path: "/tmp/notes/readme.md", isDirectory: false, modified: 0 }],
-      ],
-    ]),
-    ...overrides,
-  };
-}
-
-interface RenderOpts {
-  side?: "left" | "right";
-  activeTab?: Tab | null;
-  workspace?: Workspace | null;
-  tocEntries?: TocEntry[];
-  filesVisible?: boolean;
-  outlineVisible?: boolean;
-  compact?: boolean;
-  closeCompactPanels?: () => void;
-  sidebarLayout?: SidebarLayout;
-  swapSidebarSides?: boolean;
-  toggleFiles?: () => void;
-  toggleOutline?: () => void;
-  setFilesSidebarWidth?: (width: number) => void;
-  setOutlineSidebarWidth?: (width: number) => void;
-  setBacklinksHeight?: (height: number | null) => void;
-  backlinksHeight?: number | null;
-  tabs?: Partial<TabsContextValue>;
-}
-
-function buildTabsContext(opts: RenderOpts): TabsContextValue {
-  return {
-    tabs: opts.activeTab ? [opts.activeTab] : [],
-    activeTab: opts.activeTab ?? null,
-    activeTabId: opts.activeTab?.id ?? null,
-    activeFile: opts.activeTab
-      ? opts.activeTab.kind === "file"
-        ? opts.activeTab.file
-        : opts.activeTab.file
-      : null,
-    initializing: false,
-    workspaceFiles: [],
-    wikilinkRefs: [],
-    metadataEntries: [],
-    metadata: new Map(),
-    indexStatus: COMPLETE_INDEX_STATUS,
-    workspace: opts.workspace ?? null,
-    newDocument: vi.fn(),
-    openFile: vi.fn(),
-    openFolder: vi.fn(),
-    createWorkspace: vi.fn(),
-    openGraph: vi.fn(),
-    closeWorkspace: vi.fn(),
-    toggleExpand: vi.fn(),
-    createNote: vi.fn(),
-    createNoteInWorkspace: vi.fn(),
-    createCanvasInWorkspace: vi.fn(),
-    createCanvas: vi.fn(),
-    commitEdit: vi.fn(),
-    createFolder: vi.fn(),
-    renamePath: vi.fn(),
-    duplicatePath: vi.fn(),
-    movePath: vi.fn(),
-    collapseAll: vi.fn(),
-    expandAll: vi.fn(),
-    deletePath: vi.fn(),
-    closeTab: vi.fn(),
-    closeTabs: vi.fn(),
-    setActiveTab: vi.fn(),
-    moveTab: vi.fn(),
-    moveActiveTab: vi.fn(),
-    setTabMode: vi.fn(),
-    updateEditContent: vi.fn(),
-    saveDocument: vi.fn(),
-    flushForClose: vi.fn(),
-    toggleTask: vi.fn(),
-    saveScrollPosition: vi.fn(),
-    openFileDialog: vi.fn(),
-    undoEdit: vi.fn(),
-    redoEdit: vi.fn(),
-    displayContent: null,
-    tocEntries: opts.tocEntries ?? mockEntries,
-    backlinks: [],
-    workspaceNotice: null,
-    dismissWorkspaceNotice: vi.fn(),
-    ...opts.tabs,
-  };
-}
-
-function buildSidebarContext(opts: RenderOpts): SidebarLayoutContextValue {
-  return {
-    filesVisible: opts.filesVisible ?? true,
-    outlineVisible: opts.outlineVisible ?? true,
-    compact: opts.compact ?? false,
-    closeCompactPanels: opts.closeCompactPanels ?? vi.fn(),
-    toggleFiles: opts.toggleFiles ?? vi.fn(),
-    toggleOutline: opts.toggleOutline ?? vi.fn(),
-    resetLayout: vi.fn(),
-    sidebarLayout: opts.sidebarLayout ?? "split",
-    swapSidebarSides: opts.swapSidebarSides ?? false,
-    filesSidebarWidth: 200,
-    outlineSidebarWidth: 260,
-    backlinksHeight: opts.backlinksHeight ?? null,
-    setFilesSidebarWidth: opts.setFilesSidebarWidth ?? vi.fn(),
-    setOutlineSidebarWidth: opts.setOutlineSidebarWidth ?? vi.fn(),
-    setBacklinksHeight: opts.setBacklinksHeight ?? vi.fn(),
-  };
-}
-
-function Wrapper({ opts, children }: { opts: RenderOpts; children: ReactNode }) {
-  const tabs = buildTabsContext(opts);
-  const sidebar = buildSidebarContext(opts);
-  return (
-    <TabsContext.Provider value={tabs}>
-      <SidebarLayoutContext.Provider value={sidebar}>{children}</SidebarLayoutContext.Provider>
-    </TabsContext.Provider>
-  );
-}
-
-function renderSidebar(opts: RenderOpts = {}) {
-  const fullOpts = { activeTab: makeFileTab(), ...opts };
-  const result = render(
-    <Wrapper opts={fullOpts}>
-      <Sidebar side={fullOpts.side ?? "left"} />
-    </Wrapper>,
-  );
-  return { ...result, opts: fullOpts };
-}
-
-function renderBothSides(opts: RenderOpts = {}) {
-  const fullOpts = { activeTab: makeFileTab(), ...opts };
-  const result = render(
-    <Wrapper opts={fullOpts}>
-      <Sidebar side="left" />
-      <Sidebar side="right" />
-    </Wrapper>,
-  );
-  return { ...result, opts: fullOpts };
-}
-
-describe("Sidebar", () => {
+describe("Sidebar placement", () => {
   it("renders nothing when no active tab and no workspace", () => {
     const { container } = renderSidebar({ activeTab: null });
     expect(container.firstChild).toBeNull();
@@ -224,6 +45,18 @@ describe("Sidebar", () => {
     expect(screen.queryByText("Outline")).not.toBeInTheDocument();
   });
 
+  // Split layout, outline side, nothing to outline: the panel and its edge
+  // handle both stay away rather than leaving an empty rail.
+  it("renders nothing on the outline side of a workspace with no headings", () => {
+    const { container } = renderSidebar({
+      side: "right",
+      activeTab: null,
+      workspace: makeWorkspace(),
+      tocEntries: [],
+    });
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("shows edge expand handle on the left when files panel is hidden (workspace)", () => {
     const toggleFiles = vi.fn();
     const { container } = renderSidebar({
@@ -259,6 +92,50 @@ describe("Sidebar", () => {
     expect(screen.getByText("readme.md")).toBeInTheDocument();
     expect(screen.getByText("Outline")).toBeInTheDocument();
     expect(container.querySelectorAll("nav").length).toBe(1);
+  });
+
+  // Combined mode has one panel, so hiding both halves must leave the edge
+  // handle rather than an empty panel taking up its width.
+  it("renders only the edge handle when combined has both halves hidden", () => {
+    const { container } = renderBothSides({
+      workspace: makeWorkspace(),
+      sidebarLayout: "combined",
+      filesVisible: false,
+      outlineVisible: false,
+    });
+    expect(container.querySelector("nav")).not.toBeInTheDocument();
+    expect(container.querySelector('[data-sidebar-edge="left"]')).toBeInTheDocument();
+  });
+
+  it("renders the outline alone when combined has the files half hidden", () => {
+    const { container } = renderBothSides({
+      workspace: makeWorkspace(),
+      sidebarLayout: "combined",
+      filesVisible: false,
+    });
+    expect(screen.getByText("Outline")).toBeInTheDocument();
+    expect(screen.queryByText("readme.md")).not.toBeInTheDocument();
+    expect(container.querySelectorAll("nav").length).toBe(1);
+  });
+
+  it("keeps the outline panel beside the files edge handle when files are hidden", () => {
+    const { container } = renderBothSides({
+      workspace: makeWorkspace(),
+      sidebarLayout: "beside",
+      filesVisible: false,
+    });
+    expect(container.querySelector('[data-sidebar-edge="left"]')).toBeInTheDocument();
+    expect(screen.getByText("Outline")).toBeInTheDocument();
+  });
+
+  it("offers an outline edge handle beside the files panel when the outline is hidden", () => {
+    const { container } = renderBothSides({
+      workspace: makeWorkspace(),
+      sidebarLayout: "beside",
+      outlineVisible: false,
+    });
+    expect(screen.getByText("readme.md")).toBeInTheDocument();
+    expect(container.querySelector('[data-sidebar-edge="left"]')).toBeInTheDocument();
   });
 
   it("renders Files left + Outline right when sidebarLayout='split' (workspace)", () => {
@@ -391,276 +268,5 @@ describe("Sidebar", () => {
     const leftNav = container.querySelector('nav[data-sidebar="left"]');
     expect(rightNav?.textContent).toContain("readme.md");
     expect(leftNav?.textContent).toContain("Outline");
-  });
-
-  it("file toolbar creates at the root and collapses all when expanded", async () => {
-    const createNote = vi.fn();
-    const createFolder = vi.fn();
-    const collapseAll = vi.fn();
-    renderSidebar({
-      workspace: makeWorkspace({ expanded: new Set(["/tmp/notes/sub"]) }),
-      tabs: { createNote, createFolder, collapseAll },
-    });
-
-    fireEvent.click(screen.getByTitle("New note"));
-    await waitFor(() => expect(createNote).toHaveBeenCalledWith("/tmp/notes"));
-    fireEvent.click(screen.getByTitle("New folder"));
-    await waitFor(() => expect(createFolder).toHaveBeenCalledWith("/tmp/notes"));
-
-    fireEvent.click(screen.getByTitle("Collapse all"));
-    expect(collapseAll).toHaveBeenCalledOnce();
-  });
-
-  it("file toolbar expands all when nothing is expanded", () => {
-    const expandAll = vi.fn();
-    renderSidebar({ workspace: makeWorkspace(), tabs: { expandAll } });
-    fireEvent.click(screen.getByTitle("Expand all"));
-    expect(expandAll).toHaveBeenCalledOnce();
-  });
-
-  it("closes the workspace from the files toolbar", () => {
-    const closeWorkspace = vi.fn();
-    renderSidebar({ workspace: makeWorkspace(), tabs: { closeWorkspace } });
-    fireEvent.click(screen.getByTitle("Close workspace"));
-    expect(closeWorkspace).toHaveBeenCalledOnce();
-  });
-
-  it("file menu duplicates, reveals, and moves an entry", async () => {
-    vi.mocked(pickMoveDir).mockResolvedValue("/tmp/notes/sub");
-    const duplicatePath = vi.fn();
-    const movePath = vi.fn();
-    renderSidebar({ workspace: makeWorkspace(), tabs: { duplicatePath, movePath } });
-
-    fireEvent.contextMenu(screen.getByText("readme.md"));
-    fireEvent.click(screen.getByText("Make a copy"));
-    expect(duplicatePath).toHaveBeenCalledWith("/tmp/notes/readme.md");
-
-    fireEvent.contextMenu(screen.getByText("readme.md"));
-    fireEvent.click(screen.getByText("Show in system explorer"));
-    expect(revealItemInDir).toHaveBeenCalledWith("/tmp/notes/readme.md");
-
-    fireEvent.contextMenu(screen.getByText("readme.md"));
-    fireEvent.click(screen.getByText("Move to…"));
-    await waitFor(() =>
-      expect(movePath).toHaveBeenCalledWith("/tmp/notes/readme.md", "/tmp/notes/sub"),
-    );
-  });
-
-  it("creates a canvas in the entry's directory from the file menu", async () => {
-    const createCanvas = vi.fn(async () => null);
-    renderSidebar({ workspace: makeWorkspace(), tabs: { createCanvas } });
-
-    fireEvent.contextMenu(screen.getByText("readme.md"));
-    fireEvent.click(screen.getByText("New Canvas"));
-    await waitFor(() => expect(createCanvas).toHaveBeenCalledWith("/tmp/notes"));
-  });
-
-  it("renames an entry from the file menu", async () => {
-    const renamePath = vi.fn();
-    renderSidebar({ workspace: makeWorkspace(), tabs: { renamePath } });
-
-    fireEvent.contextMenu(screen.getByText("readme.md"));
-    fireEvent.click(screen.getByText("Rename"));
-    const input = await screen.findByRole("textbox");
-    fireEvent.change(input, { target: { value: "renamed" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    await waitFor(() => expect(renamePath).toHaveBeenCalledWith("/tmp/notes/readme.md", "renamed"));
-  });
-
-  it("deletes an entry from the file menu", async () => {
-    const deletePath = vi.fn();
-    renderSidebar({ workspace: makeWorkspace(), tabs: { deletePath } });
-
-    fireEvent.contextMenu(screen.getByText("readme.md"));
-    fireEvent.click(screen.getByText("Delete"));
-    await waitFor(() => expect(deletePath).toHaveBeenCalledWith("/tmp/notes/readme.md"));
-  });
-
-  it("Move to… does nothing when the picker is cancelled", async () => {
-    vi.mocked(pickMoveDir).mockResolvedValue(null);
-    const movePath = vi.fn();
-    renderSidebar({ workspace: makeWorkspace(), tabs: { movePath } });
-
-    fireEvent.contextMenu(screen.getByText("readme.md"));
-    fireEvent.click(screen.getByText("Move to…"));
-    await waitFor(() => expect(pickMoveDir).toHaveBeenCalled());
-    expect(movePath).not.toHaveBeenCalled();
-  });
-
-  describe("tags", () => {
-    const metadata = buildMetadataIndex([
-      {
-        path: "/tmp/notes/readme.md",
-        frontmatter: "---\ntags: [work]\n---\n",
-        tags: [],
-      },
-      { path: "/tmp/notes/deep/plan.md", frontmatter: null, tags: ["work"] },
-      { path: "/tmp/notes/diary.md", frontmatter: null, tags: ["personal"] },
-    ]);
-
-    it("lists the workspace tags with their counts", () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
-      expect(screen.getByText("Tags")).toBeInTheDocument();
-      expect(screen.getByTitle("Filter by #work")).toBeInTheDocument();
-      expect(screen.getByTitle("Filter by #personal")).toBeInTheDocument();
-    });
-
-    it("has no tags block when the workspace carries no metadata", () => {
-      renderSidebar({ workspace: makeWorkspace() });
-      expect(screen.queryByText("Tags")).not.toBeInTheDocument();
-    });
-
-    // The filtered list replaces the tree: matches can live in folders the
-    // lazily-loaded tree has never expanded.
-    it("replaces the tree with the tagged files when a tag is picked", () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-
-      expect(screen.getByText("#work (2)")).toBeInTheDocument();
-      expect(screen.getByText("deep/plan.md")).toBeInTheDocument();
-      expect(screen.queryByText("diary.md")).not.toBeInTheDocument();
-    });
-
-    it("opens a tagged file from the filtered list", () => {
-      const openFile = vi.fn();
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata, openFile } });
-      fireEvent.click(screen.getByTitle("Filter by #personal"));
-      fireEvent.click(screen.getByText("diary.md"));
-      expect(openFile).toHaveBeenCalledWith("/tmp/notes/diary.md");
-    });
-
-    it("restores the tree when the filter is cleared", () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-      fireEvent.click(screen.getByRole("button", { name: "Clear tag filter" }));
-      expect(screen.getByText("readme.md")).toBeInTheDocument();
-      expect(screen.queryByText("#work (2)")).not.toBeInTheDocument();
-    });
-
-    it("clears the filter when the active tag chip is clicked again", () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-      expect(screen.getByText("readme.md")).toBeInTheDocument();
-      expect(screen.queryByText("#work (2)")).not.toBeInTheDocument();
-    });
-
-    it("hides the tree-only toolbar actions while a tag filters the panel", () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-      expect(screen.queryByTitle("New note")).not.toBeInTheDocument();
-      expect(screen.getByTitle("Close workspace")).toBeInTheDocument();
-    });
-
-    // Same tag name, different vault: the filter belongs to the workspace it
-    // was picked in, so it must not silently re-apply to unrelated files.
-    it("drops the filter when another workspace is opened", () => {
-      const { rerender } = renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-
-      const opts = {
-        activeTab: makeFileTab(),
-        workspace: makeWorkspace({
-          root: "/tmp/other",
-          nodes: new Map([
-            [
-              "/tmp/other",
-              [{ name: "other.md", path: "/tmp/other/other.md", isDirectory: false, modified: 0 }],
-            ],
-          ]),
-        }),
-        tabs: {
-          metadata: buildMetadataIndex([
-            { path: "/tmp/other/other.md", frontmatter: null, tags: ["work"] },
-          ]),
-        },
-      };
-      rerender(
-        <Wrapper opts={opts}>
-          <Sidebar side="left" />
-        </Wrapper>,
-      );
-      expect(screen.getByText("other.md")).toBeInTheDocument();
-      expect(screen.queryByText("#work (1)")).not.toBeInTheDocument();
-    });
-
-    // A rescan can drop the filtered tag (note deleted, tag edited away).
-    it("falls back to the tree when the filtered tag leaves the index", () => {
-      const { rerender } = renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-      expect(screen.getByText("#work (2)")).toBeInTheDocument();
-
-      const opts = {
-        activeTab: makeFileTab(),
-        workspace: makeWorkspace(),
-        tabs: { metadata: buildMetadataIndex([]) },
-      };
-      rerender(
-        <Wrapper opts={opts}>
-          <Sidebar side="left" />
-        </Wrapper>,
-      );
-      expect(screen.getByText("readme.md")).toBeInTheDocument();
-      expect(screen.queryByText("#work (2)")).not.toBeInTheDocument();
-    });
-  });
-});
-
-describe("Sidebar as a compact drawer", () => {
-  it("overlays the document instead of taking a column", () => {
-    const { container } = renderSidebar({ compact: true });
-    const panel = container.querySelector("[data-sidebar]");
-    expect(panel?.className).toContain("absolute");
-  });
-
-  it("sits in the layout flow on a desktop-width viewport", () => {
-    const { container } = renderSidebar({ compact: false });
-    const panel = container.querySelector("[data-sidebar]");
-    expect(panel?.className).toContain("relative");
-    expect(panel?.className).not.toContain("absolute");
-  });
-
-  // The drawer anchors to the edge it belongs to, so a swapped layout slides in
-  // from the right instead of the left.
-  it("anchors to the side it is rendered on", () => {
-    const left = renderSidebar({ compact: true });
-    expect(left.container.querySelector("[data-sidebar]")?.className).toContain("start-0");
-    left.unmount();
-
-    const right = renderSidebar({ compact: true, swapSidebarSides: true, side: "right" });
-    expect(right.container.querySelector("[data-sidebar]")?.className).toContain("end-0");
-  });
-
-  // Opening a file has to dismiss the drawer, or the freshly opened document
-  // stays hidden behind it.
-  it("closes itself when a file is opened from the tree", () => {
-    const openFile = vi.fn();
-    const closeCompactPanels = vi.fn();
-    renderSidebar({
-      workspace: makeWorkspace(),
-      compact: true,
-      closeCompactPanels,
-      tabs: { openFile },
-    });
-
-    fireEvent.click(screen.getByText("readme.md"));
-    expect(openFile).toHaveBeenCalled();
-    expect(closeCompactPanels).toHaveBeenCalled();
-  });
-
-  it("stays open when a file is opened on a desktop-width viewport", () => {
-    const openFile = vi.fn();
-    const closeCompactPanels = vi.fn();
-    renderSidebar({
-      workspace: makeWorkspace(),
-      compact: false,
-      closeCompactPanels,
-      tabs: { openFile },
-    });
-
-    fireEvent.click(screen.getByText("readme.md"));
-    expect(openFile).toHaveBeenCalled();
-    expect(closeCompactPanels).not.toHaveBeenCalled();
   });
 });

@@ -1,29 +1,16 @@
-import {
-  type PointerEvent as ReactPointerEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FitIcon } from "@/components/icons/FitIcon";
 import { useZoomApi, type ZoomHandlers } from "@/contexts/ZoomContext";
 import { useElementSize } from "@/hooks/useElementSize";
 import { useGraphCamera } from "@/hooks/useGraphCamera";
+import { useGraphPointer } from "@/hooks/useGraphPointer";
 import { useGraphSimulation } from "@/hooks/useGraphSimulation";
 import { useIsDarkMode } from "@/hooks/useIsDarkMode";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { buildWorkspaceGraph } from "@/lib/graph";
-import {
-  type Camera,
-  drawGraph,
-  fitCameraToNodes,
-  hitTestNode,
-  readGraphTheme,
-  screenToWorld,
-} from "@/lib/graphCanvas";
-import { type LayoutNode, pinNode, releaseNode } from "@/lib/graphSimulation";
+import { type Camera, fitCameraToNodes } from "@/lib/graphCanvas";
+import { drawGraph, readGraphTheme } from "@/lib/graphDraw";
 
 interface GraphViewProps {
   workspaceFiles: readonly string[];
@@ -32,24 +19,8 @@ interface GraphViewProps {
   onOpenFile: (path: string) => void;
 }
 
-// A press that travels further than this (screen px) is a drag, not a click.
-const CLICK_SLOP_PX = 4;
-const WHEEL_ZOOM_SPEED = 0.0015;
 // Zoom factor per Zoom In / Zoom Out command (keyboard / menu).
 const HOTKEY_ZOOM_FACTOR = 1.2;
-
-interface ActivePointer {
-  id: number;
-  x: number;
-  y: number;
-  moved: boolean;
-  /** Node under the press, if any — drives node-drag vs background-pan. Held by
-   *  reference so a drag never has to re-find it (and survives a stale layout). */
-  node: LayoutNode | null;
-  /** Camera as it was when the gesture began; stable for the gesture's
-   *  hit-tests and node-drag world conversion. */
-  cam: Camera;
-}
 
 // Force-directed picture of the active workspace: every markdown file is a
 // node, every resolved wikilink an edge. Heavy lifting is delegated — model
@@ -71,7 +42,6 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
   );
   const { layout, version, reheat } = useGraphSimulation(graph);
   const camera = useGraphCamera();
-  const [hovered, setHovered] = useState<{ id: string; x: number; y: number } | null>(null);
   const isDark = useIsDarkMode();
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-read CSS variables when the theme flips
   const theme = useMemo(() => readGraphTheme(document.documentElement), [isDark]);
@@ -82,8 +52,6 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
   useEffect(() => {
     autoFitRef.current = autoFit;
   }, [autoFit]);
-
-  const pointer = useRef<ActivePointer | null>(null);
 
   // The camera actually used to draw and hit-test: a live fit while auto-fit is
   // on, the user's camera once they take over. Recomputed as the layout moves
@@ -110,6 +78,18 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
     setAutoFit(false);
   }, [camera, layout, viewport]);
 
+  const { hovered, dragging, clearHover, handlePointerDown, handlePointerMove, handlePointerUp } =
+    useGraphPointer({
+      canvasRef,
+      layout,
+      viewport,
+      camera,
+      cameraNow,
+      takeManualControl,
+      reheat,
+      onOpenFile,
+    });
+
   // Redraw on every change that affects pixels: layout motion (version),
   // camera, hover, viewport size, theme.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `version` is the redraw trigger — d3 mutates layout node positions in place, so neither the layout reference nor a manual camera changes between animation frames
@@ -129,93 +109,6 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
       neighbors: graph.neighbors,
     });
   }, [layout, version, effectiveCamera, hovered?.id, viewport, theme, graph.neighbors]);
-
-  const localPoint = useCallback((event: ReactPointerEvent | WheelEvent) => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    return { x: event.clientX - (rect?.left ?? 0), y: event.clientY - (rect?.top ?? 0) };
-  }, []);
-
-  const handlePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLCanvasElement>) => {
-      const point = localPoint(event);
-      const cam = cameraNow();
-      const hit = hitTestNode(layout.nodes, cam, viewport, point.x, point.y);
-      pointer.current = {
-        id: event.pointerId,
-        x: point.x,
-        y: point.y,
-        moved: false,
-        node: hit,
-        cam,
-      };
-      event.currentTarget.setPointerCapture(event.pointerId);
-    },
-    [cameraNow, layout.nodes, localPoint, viewport],
-  );
-
-  const handlePointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLCanvasElement>) => {
-      const point = localPoint(event);
-      const drag = pointer.current;
-      if (drag && drag.id === event.pointerId) {
-        const dx = point.x - drag.x;
-        const dy = point.y - drag.y;
-        if (!drag.moved && Math.abs(dx) <= CLICK_SLOP_PX && Math.abs(dy) <= CLICK_SLOP_PX) {
-          return;
-        }
-        if (!drag.moved) {
-          drag.moved = true;
-          takeManualControl();
-          setHovered(null);
-        }
-        if (drag.node) {
-          const world = screenToWorld(drag.cam, viewport, point.x, point.y);
-          pinNode(drag.node, world.x, world.y);
-          reheat();
-        } else {
-          camera.pan(dx, dy);
-        }
-        pointer.current = { ...drag, x: point.x, y: point.y };
-        return;
-      }
-      const hit = hitTestNode(layout.nodes, cameraNow(), viewport, point.x, point.y);
-      setHovered(hit ? { id: hit.id, x: point.x, y: point.y } : null);
-    },
-    [camera, cameraNow, layout.nodes, localPoint, reheat, takeManualControl, viewport],
-  );
-
-  const handlePointerUp = useCallback(
-    (event: ReactPointerEvent<HTMLCanvasElement>) => {
-      const drag = pointer.current;
-      pointer.current = null;
-      if (!drag || drag.id !== event.pointerId) return;
-      if (!drag.moved) {
-        // A press that never became a drag is a click: open the node's note.
-        if (drag.node) onOpenFile(drag.node.id);
-        return;
-      }
-      if (drag.node) {
-        // Release the dragged node back into the flow and let neighbours relax.
-        releaseNode(drag.node);
-        reheat(0.1);
-      }
-    },
-    [onOpenFile, reheat],
-  );
-
-  // Wheel must be a native non-passive listener to preventDefault scrolling.
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const handleWheel = (event: WheelEvent) => {
-      event.preventDefault();
-      takeManualControl();
-      const point = localPoint(event);
-      camera.zoomAt(point.x, point.y, Math.exp(-event.deltaY * WHEEL_ZOOM_SPEED), viewport);
-    };
-    canvas.addEventListener("wheel", handleWheel, { passive: false });
-    return () => canvas.removeEventListener("wheel", handleWheel);
-  }, [camera, localPoint, takeManualControl, viewport]);
 
   const refit = useCallback(() => {
     autoFitRef.current = true;
@@ -260,7 +153,6 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
     );
   }
 
-  const dragging = pointer.current?.moved ?? false;
   const cursor = dragging ? "grabbing" : hovered ? "pointer" : "grab";
 
   return (
@@ -275,7 +167,7 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        onPointerLeave={() => setHovered(null)}
+        onPointerLeave={clearHover}
       />
       <button
         type="button"

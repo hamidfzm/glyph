@@ -6,8 +6,8 @@ import { useMenuShortcuts } from "./useMenuShortcuts";
 // A registry entry nothing else knows about: no handler in menuEventActions and
 // no accelerator from resolveBindings. Registering a menu command without
 // wiring it up must skip the binding rather than throw.
-vi.mock("@/lib/keybindings", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/keybindings")>();
+vi.mock("@/lib/bindableCommands", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/bindableCommands")>();
   return {
     ...actual,
     BINDABLE_COMMANDS: [

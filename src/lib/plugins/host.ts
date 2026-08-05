@@ -1,8 +1,9 @@
 import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_COMPAT_FLOOR, PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 import { createAssetsApi } from "./assetsApi";
-import { type Disposer, DisposerBag } from "./disposer";
+import { DisposerBag } from "./disposer";
 import { importPluginModule, type ModuleImporter } from "./loader";
+import { buildPluginContext, type ContextRegistries, tracked } from "./pluginContext";
 import { createRegistry, type Registry } from "./registry";
 import { startSandbox, type WorkerSpawner } from "./sandbox/sandbox";
 import type {
@@ -113,61 +114,18 @@ export function createPluginHost(
   const exporters = createRegistry<ExporterContribution>();
   const siteThemes = createRegistry<SiteThemeContribution>();
   const loaded = new Map<string, LoadedPlugin>();
-
-  // Route a registration through the plugin's own DisposerBag so unload removes
-  // exactly its contributions.
-  const tracked =
-    <T>(register: (entry: T) => Disposer, bag: DisposerBag) =>
-    (entry: T): Disposer => {
-      const dispose = register(entry);
-      bag.add(dispose);
-      return dispose;
-    };
-
-  const buildContext = (
-    bag: DisposerBag,
-    plugin: InstalledPlugin,
-    settings: Record<string, unknown>,
-  ): GlyphPluginContext => ({
-    apiVersion: PLUGIN_API_VERSION,
-    commands: { register: tracked(commands.register, bag) },
-    ui: {
-      addStatusBarItem: tracked(statusBarItems.register, bag),
-      addSidebarPanel: tracked(sidebarPanels.register, bag),
-      addSettingsPanel(panel) {
-        return tracked(settingsPanels.register, bag)({ ...panel, pluginId: plugin.id });
-      },
-      addStyles(css) {
-        return tracked(styles.register, bag)({ css });
-      },
-    },
-    markdown: {
-      registerRemarkPlugin: tracked(remarkPlugins.register, bag),
-      registerRehypePlugin: tracked(rehypePlugins.register, bag),
-      registerFencedRenderer(language, render) {
-        return tracked(fencedRenderers.register, bag)({ language, render });
-      },
-    },
-    workspace: createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? []),
-    assets: createAssetsApi(plugin.id),
-    exporters: {
-      register: tracked(exporters.register, bag),
-      registerSiteTheme: tracked(siteThemes.register, bag),
-    },
-    // Dictionaries live in the spellcheck module's own registry (the speller
-    // and the settings UI read it directly); only the disposal is routed
-    // through the plugin's bag here.
-    spellcheck: { registerDictionary: tracked(registerDictionarySource, bag) },
-    settings: {
-      get: (key) => settings[key] as never,
-      set(key, value) {
-        settings[key] = value;
-        settingsBackend.save(plugin.id, settings);
-      },
-    },
-    notify,
-    registerTranslations,
-  });
+  const registries: ContextRegistries = {
+    commands,
+    statusBarItems,
+    remarkPlugins,
+    rehypePlugins,
+    fencedRenderers,
+    sidebarPanels,
+    settingsPanels,
+    styles,
+    exporters,
+    siteThemes,
+  };
 
   const unload = (id: string) => {
     const plugin = loaded.get(id);
@@ -260,7 +218,18 @@ export function createPluginHost(
       ]);
       const bag = new DisposerBag();
       try {
-        await module.activate(buildContext(bag, plugin, settings));
+        await module.activate(
+          buildPluginContext({
+            registries,
+            bag,
+            plugin,
+            settings,
+            notify,
+            registerTranslations,
+            getWorkspaceRoot,
+            settingsBackend,
+          }),
+        );
       } catch (err) {
         bag.dispose(); // roll back anything registered before the throw
         throw err;

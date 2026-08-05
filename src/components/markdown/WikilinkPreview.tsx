@@ -1,12 +1,8 @@
-import type { TFunction } from "i18next";
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useEmbedContext } from "@/contexts/EmbedContext";
 import { useCreateWikilinkNote } from "@/hooks/useCreateWikilinkNote";
-import { extractHeadingSection } from "@/lib/headingSection";
 import { readNoteCached } from "@/lib/noteContentCache";
-import { isNestedTarget } from "@/lib/wikilinkResolver";
-import { MarkdownContent } from "./MarkdownContent";
+import { type PreviewLoadState, WikilinkPreviewBody } from "./WikilinkPreviewBody";
 
 const WIDTH = 440;
 const MAX_HEIGHT = 400;
@@ -17,10 +13,6 @@ const ANCHOR_GAP = 6;
 // transform-origin follows the flip via the inline style below.
 const SURFACE_CLASS =
   "wikilink-preview fixed z-50 overflow-y-auto overscroll-contain rounded-[var(--glyph-radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.22)] text-[var(--color-text-primary)]";
-
-const PLACEHOLDER_CLASS = "text-sm text-[var(--color-text-secondary)]";
-
-type LoadState = { status: "loading" } | { status: "error" } | { status: "ready"; content: string };
 
 interface WikilinkPreviewProps {
   /** The hovered anchor; the popover positions itself against its rect. */
@@ -47,7 +39,6 @@ export function WikilinkPreview({
   onKeepOpen,
   onClose,
 }: WikilinkPreviewProps) {
-  const { t } = useTranslation("common");
   const { workspaceFiles } = useEmbedContext();
   const createNote = useCreateWikilinkNote();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -55,7 +46,7 @@ export function WikilinkPreview({
   // Scale-in origin: from the top when the popover sits below the anchor, from
   // the bottom when it flips above, so it grows out of the link either way.
   const [origin, setOrigin] = useState("top left");
-  const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [state, setState] = useState<PreviewLoadState>({ status: "loading" });
 
   // Only ever read a file the resolver already matched to a workspace member.
   // `data-wikilink-path` can be injected via raw HTML that survives the
@@ -143,70 +134,13 @@ export function WikilinkPreview({
         if (e.key === "Enter") handleOpen?.();
       }}
     >
-      {renderBody(
-        state,
-        canLoad ? path : undefined,
-        target,
-        heading,
-        workspaceFiles,
-        createNote,
-        t,
-      )}
-    </div>
-  );
-}
-
-function renderBody(
-  state: LoadState,
-  path: string | undefined,
-  target: string,
-  heading: string | undefined,
-  workspaceFiles: string[] | undefined,
-  createNote: ((target: string) => Promise<void>) | null,
-  t: TFunction<"common">,
-): ReactNode {
-  if (!path) {
-    // A nested target (`[[folder/note]]`) is skipped: rename_path collapses
-    // separators into a single component, so the created file wouldn't satisfy
-    // the link anyway.
-    const canCreate = createNote && !isNestedTarget(target);
-    return (
-      <div className={PLACEHOLDER_CLASS}>
-        <p>{t("wikilinkPreview.notFound", { target })}</p>
-        {canCreate && (
-          <button
-            type="button"
-            className="mt-2 rounded-[var(--glyph-radius-sm)] border border-[var(--color-border)] px-2 py-1 text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)]"
-            onClick={() => createNote(target)}
-          >
-            {t("wikilinkPreview.createNote")}
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  if (state.status === "loading") {
-    return <p className={PLACEHOLDER_CLASS}>{t("wikilinkPreview.loading")}</p>;
-  }
-  if (state.status === "error") {
-    return <p className={PLACEHOLDER_CLASS}>{t("wikilinkPreview.error", { target })}</p>;
-  }
-
-  const content = heading ? extractHeadingSection(state.content, heading) : state.content;
-  if (heading && content === "") {
-    return <p className={PLACEHOLDER_CLASS}>{t("wikilinkPreview.headingNotFound", { heading })}</p>;
-  }
-
-  // filePath=path resolves the preview's own wikilinks against the target and
-  // extends EmbedContext.chain, so an embed inside it can't recurse forever.
-  return (
-    <div className="markdown-body markdown-preview-body" dir="auto">
-      <MarkdownContent
-        content={content}
-        filePath={path}
+      <WikilinkPreviewBody
+        state={state}
+        path={canLoad ? path : undefined}
+        target={target}
+        heading={heading}
         workspaceFiles={workspaceFiles}
-        showFrontmatter={false}
+        createNote={createNote}
       />
     </div>
   );

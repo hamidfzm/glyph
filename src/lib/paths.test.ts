@@ -3,9 +3,11 @@ import {
   basename,
   displayName,
   isPathInside,
+  lastSegment,
   parentDir,
   pruneInside,
   relativeToRoot,
+  stem,
 } from "./paths";
 
 describe("basename", () => {
@@ -19,6 +21,34 @@ describe("basename", () => {
 
   it("returns the input unchanged when there is no directory", () => {
     expect(basename("c.md")).toBe("c.md");
+  });
+});
+
+describe("lastSegment", () => {
+  it("returns the final segment", () => {
+    expect(lastSegment("/a/b/c.md")).toBe("c.md");
+  });
+
+  it("ignores a trailing separator", () => {
+    expect(lastSegment("/home/me/vault/")).toBe("vault");
+  });
+
+  it("returns the input when there is no segment", () => {
+    expect(lastSegment("/")).toBe("/");
+  });
+});
+
+describe("stem", () => {
+  it("drops the extension", () => {
+    expect(stem("note.md")).toBe("note");
+  });
+
+  it("drops only the last extension", () => {
+    expect(stem("archive.tar.gz")).toBe("archive.tar");
+  });
+
+  it("returns a name without an extension unchanged", () => {
+    expect(stem("Folder")).toBe("Folder");
   });
 });
 

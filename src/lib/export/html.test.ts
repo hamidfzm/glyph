@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildHtmlDocument, siteChromeCss, siteChromeScript } from "./html";
+import { buildHtmlDocument } from "./html";
+import { siteChromeCss, siteChromeScript } from "./siteChrome";
 
 describe("buildHtmlDocument", () => {
   it("wraps body and css in a standalone document with the markdown-body class", () => {

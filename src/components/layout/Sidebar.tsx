@@ -1,83 +1,21 @@
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CollapseAllIcon } from "@/components/icons/CollapseAllIcon";
-import { ExpandAllIcon } from "@/components/icons/ExpandAllIcon";
-import { NewFolderIcon } from "@/components/icons/NewFolderIcon";
-import { NewNoteIcon } from "@/components/icons/NewNoteIcon";
-import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
-import { PluginSidebarPanels } from "@/components/plugins/PluginSidebarPanels";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
-import { useActiveHeading } from "@/hooks/useActiveHeading";
-import { usePanelResize } from "@/hooks/usePanelResize";
-import type { Workspace } from "@/hooks/useTabs";
-import { pathsWithTag, tagCounts } from "@/lib/metadata";
-import { pickMoveDir } from "@/lib/pickers";
-import { BACKLINKS_HEIGHT_MIN } from "@/lib/settings";
-import { BacklinksSection } from "./BacklinksSection";
 import { EdgeExpand } from "./EdgeExpand";
-import { FileTree, type FileTreeHandle } from "./FileTree";
-import { OutlineSection } from "./OutlineSection";
-import { PanelHeader } from "./PanelHeader";
-import { ResizeHandle } from "./ResizeHandle";
+import { FilesPanel } from "./FilesPanel";
+import { OutlinePanel } from "./OutlinePanel";
 import { SidebarPanel } from "./SidebarPanel";
-import { TagFileList } from "./TagFileList";
-import { TagsSection } from "./TagsSection";
-import { ToolbarButton } from "./ToolbarButton";
-import { WorkspaceIndexWarning } from "./WorkspaceIndexWarning";
 
 interface SidebarProps {
   side: "left" | "right";
 }
 
-// Keep at least this much of the Files panel for the tree when dragging the
-// backlinks divider up.
-const BACKLINKS_TREE_RESERVE = 120;
-
+// Which physical side each panel occupies and whether it is expanded, for the
+// three sidebar layouts. The panel bodies live in FilesPanel / OutlinePanel;
+// this component is only the placement.
 export function Sidebar({ side }: SidebarProps) {
   const { t } = useTranslation("common");
-  const {
-    activeTab,
-    activeFile,
-    workspace,
-    tocEntries,
-    backlinks,
-    metadata,
-    toggleExpand: onToggleExpand,
-    openFile: onOpenFileRaw,
-    closeWorkspace,
-    createNote,
-    createCanvas,
-    createFolder,
-    renamePath,
-    duplicatePath,
-    movePath,
-    collapseAll,
-    expandAll,
-    deletePath,
-  } = useTabsContext();
-  const fileTreeRef = useRef<FileTreeHandle>(null);
-  // The filter carries the workspace it was picked in, and applies only while
-  // that tag still exists: a switched workspace or a tag edited away falls back
-  // to the tree instead of stranding the panel on a stale list.
-  const [tagFilter, setTagFilter] = useState<{ root: string; tag: string } | null>(null);
-  const tags = useMemo(() => tagCounts(metadata), [metadata]);
-  const selectedTag = tagFilter && tagFilter.root === workspace?.root ? tagFilter.tag : null;
-  const activeTag = tags.some((t) => t.tag === selectedTag) ? selectedTag : null;
-  const taggedPaths = useMemo(
-    () => (activeTag ? pathsWithTag(metadata, activeTag) : []),
-    [metadata, activeTag],
-  );
-
-  // "Move to…": pick a destination folder (within the workspace), then relocate.
-  const handleMove = useCallback(
-    async (root: string, from: string) => {
-      const dir = await pickMoveDir(root);
-      if (typeof dir === "string") movePath(from, dir);
-    },
-    [movePath],
-  );
+  const { activeTab, workspace, tocEntries } = useTabsContext();
   const {
     filesVisible,
     outlineVisible,
@@ -85,55 +23,11 @@ export function Sidebar({ side }: SidebarProps) {
     swapSidebarSides,
     filesSidebarWidth,
     outlineSidebarWidth,
-    backlinksHeight,
-    compact,
-    closeCompactPanels,
     setFilesSidebarWidth,
     setOutlineSidebarWidth,
-    setBacklinksHeight,
     toggleFiles: onToggleFiles,
     toggleOutline: onToggleOutline,
   } = useSidebarLayoutContext();
-  const activeId = useActiveHeading(tocEntries);
-
-  // On a phone the sidebar is a drawer over the document, so opening a file
-  // dismisses it, otherwise the freshly opened doc stays hidden behind it.
-  const onOpenFile = useCallback(
-    (path: string) => {
-      onOpenFileRaw(path);
-      if (compact) closeCompactPanels();
-    },
-    [onOpenFileRaw, compact, closeCompactPanels],
-  );
-
-  // Vertical divider between the file tree and the backlinks block. The idle
-  // height is DOM-measured so a drag starts from the rendered height even when
-  // the block is auto-sized; double-click restores auto.
-  const backlinksRef = useRef<HTMLDivElement>(null);
-  const backlinksMax = useCallback(
-    () =>
-      Math.max(
-        BACKLINKS_HEIGHT_MIN,
-        (backlinksRef.current?.parentElement?.clientHeight ?? 0) - BACKLINKS_TREE_RESERVE,
-      ),
-    [],
-  );
-  // Also the idle aria value; on the first render the ref is not attached yet,
-  // so the minimum stands in until the block has a measurable height.
-  const measureBacklinks = useCallback(
-    () => backlinksRef.current?.offsetHeight ?? BACKLINKS_HEIGHT_MIN,
-    [],
-  );
-  const backlinksResize = usePanelResize({
-    size: measureBacklinks,
-    min: BACKLINKS_HEIGHT_MIN,
-    max: backlinksMax,
-    axis: "y",
-    // The block sits at the panel bottom: dragging the divider up grows it.
-    direction: -1,
-    onCommit: setBacklinksHeight,
-    onReset: () => setBacklinksHeight(null),
-  });
 
   // The files panel follows the window's workspace; the outline follows the
   // active document. With neither there is nothing to show.
@@ -148,130 +42,21 @@ export function Sidebar({ side }: SidebarProps) {
   const outlineSide: "left" | "right" = swapSidebarSides ? "left" : "right";
   const primarySide: "left" | "right" = filesSide;
 
-  // Helpers for the file-tree + outline content blocks.
-  const folderName = (root: string) => root.split(/[\\/]/).filter(Boolean).pop() ?? root;
-
-  const renderFilesBlock = (ws: Workspace, headerSide: "left" | "right") => (
-    <div className="px-3 pb-3 flex-1 flex flex-col min-h-0">
-      <PanelHeader
-        label={folderName(ws.root)}
-        side={headerSide}
-        onCollapse={onToggleFiles}
-        collapseTitle={t("sidebar.hideFiles")}
-        actions={
-          <>
-            {/* Create and expand/collapse act on the tree, which the tag
-                filter replaces, so they only show alongside it. */}
-            {!activeTag && (
-              <>
-                <ToolbarButton
-                  title={t("sidebar.newNote")}
-                  onClick={() => fileTreeRef.current?.createNote()}
-                >
-                  <NewNoteIcon />
-                </ToolbarButton>
-                <ToolbarButton
-                  title={t("sidebar.newFolder")}
-                  onClick={() => fileTreeRef.current?.createFolder()}
-                >
-                  <NewFolderIcon />
-                </ToolbarButton>
-                {ws.expanded.size > 0 ? (
-                  <ToolbarButton title={t("sidebar.collapseAll")} onClick={() => collapseAll()}>
-                    <CollapseAllIcon />
-                  </ToolbarButton>
-                ) : (
-                  <ToolbarButton title={t("sidebar.expandAll")} onClick={() => expandAll()}>
-                    <ExpandAllIcon />
-                  </ToolbarButton>
-                )}
-              </>
-            )}
-            <ToolbarButton title={t("sidebar.closeWorkspace")} onClick={closeWorkspace}>
-              <TabCloseIcon />
-            </ToolbarButton>
-          </>
-        }
-      />
-      {/* The tree scrolls inside its own region so a long file list can't spill
-          over the backlinks block pinned below it (visible when the panel is
-          short, e.g. with devtools open). */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        {activeTag ? (
-          <TagFileList
-            tag={activeTag}
-            paths={taggedPaths}
-            workspaceRoot={ws.root}
-            activeFilePath={activeFile?.path}
-            onOpen={onOpenFile}
-            onClear={() => setTagFilter(null)}
-          />
-        ) : (
-          <FileTree
-            ref={fileTreeRef}
-            root={ws.root}
-            nodes={ws.nodes}
-            expanded={ws.expanded}
-            activeFilePath={activeFile?.path}
-            onToggle={onToggleExpand}
-            onOpenFile={onOpenFile}
-            onCreateNote={createNote}
-            onCreateCanvas={createCanvas}
-            onCreateFolder={createFolder}
-            onRename={renamePath}
-            onDuplicate={duplicatePath}
-            onMove={(path) => handleMove(ws.root, path)}
-            onReveal={(path) => {
-              void revealItemInDir(path);
-            }}
-            onDelete={deletePath}
-          />
-        )}
-      </div>
-      {tags.length > 0 && (
-        <div className="pt-2 mt-2 border-t border-[var(--color-border)] shrink-0 max-h-40 overflow-y-auto">
-          <TagsSection
-            tags={tags}
-            selected={activeTag}
-            onSelect={(tag) => setTagFilter(tag ? { root: ws.root, tag } : null)}
-          />
-        </div>
-      )}
-      <WorkspaceIndexWarning />
-      {backlinks.length > 0 && (
-        <>
-          <ResizeHandle
-            axis="y"
-            label={t("sidebar.resizeBacklinks")}
-            value={backlinksResize.size ?? backlinksHeight ?? measureBacklinks()}
-            min={BACKLINKS_HEIGHT_MIN}
-            max={backlinksMax()}
-            className="mt-3 -mx-3 h-1.5 shrink-0"
-            {...backlinksResize.handleProps}
-          />
-          <div
-            ref={backlinksRef}
-            className="pt-1.5 border-t border-[var(--color-border)] shrink-0 overflow-y-auto"
-            style={{ height: backlinksResize.size ?? backlinksHeight ?? undefined }}
-          >
-            <BacklinksSection backlinks={backlinks} workspaceRoot={ws.root} onOpen={onOpenFile} />
-          </div>
-        </>
-      )}
-    </div>
+  const filesEdge = (edgeSide: "left" | "right") => (
+    <EdgeExpand
+      side={edgeSide}
+      onClick={onToggleFiles}
+      title={t("sidebar.showFiles")}
+      panel="files"
+    />
   );
-
-  const renderOutlineBlock = (headerSide: "left" | "right") => (
-    <div className="px-3 pb-3">
-      <PanelHeader
-        label={t("sidebar.outline")}
-        side={headerSide}
-        onCollapse={onToggleOutline}
-        collapseTitle={t("sidebar.hideOutline")}
-      />
-      <OutlineSection entries={tocEntries} activeId={activeId} />
-      <PluginSidebarPanels />
-    </div>
+  const outlineEdge = (edgeSide: "left" | "right") => (
+    <EdgeExpand
+      side={edgeSide}
+      onClick={onToggleOutline}
+      title={t("sidebar.showOutline")}
+      panel="outline"
+    />
   );
 
   if (workspace) {
@@ -280,30 +65,21 @@ export function Sidebar({ side }: SidebarProps) {
       // has one width, so combined mode deliberately resizes (and persists)
       // the Files width; the Outline width only applies in split/beside.
       if (side !== primarySide) return null;
-      if (filesVisible || showOutline) {
-        return (
-          <SidebarPanel
-            width={filesSidebarWidth}
-            side={primarySide}
-            onWidthCommit={setFilesSidebarWidth}
-          >
-            {filesVisible && renderFilesBlock(workspace, primarySide)}
-            {filesVisible && showOutline && (
-              <div className="border-t border-[var(--color-border)] pt-3">
-                {renderOutlineBlock(primarySide)}
-              </div>
-            )}
-            {!filesVisible && showOutline && renderOutlineBlock(primarySide)}
-          </SidebarPanel>
-        );
-      }
+      if (!filesVisible && !showOutline) return filesEdge(primarySide);
       return (
-        <EdgeExpand
+        <SidebarPanel
+          width={filesSidebarWidth}
           side={primarySide}
-          onClick={onToggleFiles}
-          title={t("sidebar.showFiles")}
-          panel="files"
-        />
+          onWidthCommit={setFilesSidebarWidth}
+        >
+          {filesVisible && <FilesPanel workspace={workspace} headerSide={primarySide} />}
+          {filesVisible && showOutline && (
+            <div className="border-t border-[var(--color-border)] pt-3">
+              <OutlinePanel headerSide={primarySide} />
+            </div>
+          )}
+          {!filesVisible && showOutline && <OutlinePanel headerSide={primarySide} />}
+        </SidebarPanel>
       );
     }
 
@@ -318,15 +94,10 @@ export function Sidebar({ side }: SidebarProps) {
           side={primarySide}
           onWidthCommit={setFilesSidebarWidth}
         >
-          {renderFilesBlock(workspace, primarySide)}
+          <FilesPanel workspace={workspace} headerSide={primarySide} />
         </SidebarPanel>
       ) : (
-        <EdgeExpand
-          side={primarySide}
-          onClick={onToggleFiles}
-          title={t("sidebar.showFiles")}
-          panel="files"
-        />
+        filesEdge(primarySide)
       );
       const outlinePanel = showOutline ? (
         <SidebarPanel
@@ -334,15 +105,10 @@ export function Sidebar({ side }: SidebarProps) {
           side={primarySide}
           onWidthCommit={setOutlineSidebarWidth}
         >
-          {renderOutlineBlock(primarySide)}
+          <OutlinePanel headerSide={primarySide} />
         </SidebarPanel>
       ) : hasOutlineContent ? (
-        <EdgeExpand
-          side={primarySide}
-          onClick={onToggleOutline}
-          title={t("sidebar.showOutline")}
-          panel="outline"
-        />
+        outlineEdge(primarySide)
       ) : null;
       // Outermost = Files; inner (toward content) = Outline.
       return (
@@ -355,24 +121,15 @@ export function Sidebar({ side }: SidebarProps) {
 
     // Split layout (default): Files on filesSide, Outline on outlineSide.
     if (side === filesSide) {
-      if (filesVisible) {
-        return (
-          <SidebarPanel
-            width={filesSidebarWidth}
-            side={filesSide}
-            onWidthCommit={setFilesSidebarWidth}
-          >
-            {renderFilesBlock(workspace, filesSide)}
-          </SidebarPanel>
-        );
-      }
+      if (!filesVisible) return filesEdge(filesSide);
       return (
-        <EdgeExpand
+        <SidebarPanel
+          width={filesSidebarWidth}
           side={filesSide}
-          onClick={onToggleFiles}
-          title={t("sidebar.showFiles")}
-          panel="files"
-        />
+          onWidthCommit={setFilesSidebarWidth}
+        >
+          <FilesPanel workspace={workspace} headerSide={filesSide} />
+        </SidebarPanel>
       );
     }
     if (showOutline) {
@@ -382,20 +139,11 @@ export function Sidebar({ side }: SidebarProps) {
           side={outlineSide}
           onWidthCommit={setOutlineSidebarWidth}
         >
-          {renderOutlineBlock(outlineSide)}
+          <OutlinePanel headerSide={outlineSide} />
         </SidebarPanel>
       );
     }
-    if (hasOutlineContent && !outlineVisible) {
-      return (
-        <EdgeExpand
-          side={outlineSide}
-          onClick={onToggleOutline}
-          title={t("sidebar.showOutline")}
-          panel="outline"
-        />
-      );
-    }
+    if (hasOutlineContent) return outlineEdge(outlineSide);
     return null;
   }
 
@@ -408,19 +156,10 @@ export function Sidebar({ side }: SidebarProps) {
         side={primarySide}
         onWidthCommit={setOutlineSidebarWidth}
       >
-        {renderOutlineBlock(primarySide)}
+        <OutlinePanel headerSide={primarySide} />
       </SidebarPanel>
     );
   }
-  if (hasOutlineContent && !outlineVisible) {
-    return (
-      <EdgeExpand
-        side={primarySide}
-        onClick={onToggleOutline}
-        title={t("sidebar.showOutline")}
-        panel="outline"
-      />
-    );
-  }
+  if (hasOutlineContent) return outlineEdge(primarySide);
   return null;
 }
