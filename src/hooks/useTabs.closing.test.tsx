@@ -370,6 +370,55 @@ describe("useTabs close coordinator", () => {
     expect(writeFile).not.toHaveBeenCalled();
   });
 
+  // A batch close prompts once, for the dirty members only, and stays
+  // all-or-nothing: cancelling keeps the clean tabs of the batch open too.
+  it("closeTabs prompts for the dirty members and keeps the batch open on cancel", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    const confirmUnsaved = vi.fn(async () => "cancel" as const);
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved })),
+    );
+    await ready(result);
+    const dirtyId = await openDirty(result, "/p/a.md", "A");
+    await act(async () => {
+      await result.current.openFile("/p/b.md");
+    });
+    const cleanId = result.current.tabs.find((t) => t.id !== dirtyId)?.id as string;
+
+    await act(async () => {
+      await result.current.closeTabs([dirtyId, cleanId]);
+    });
+
+    expect(confirmUnsaved).toHaveBeenCalledWith(["/p/a.md"]);
+    expect(hasTab(result, dirtyId)).toBe(true);
+    expect(hasTab(result, cleanId)).toBe(true);
+    expect(isDirty(result, dirtyId)).toBe(true);
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("closeTabs discards the whole batch when the user picks Don't Save", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved: async () => "discard" as const })),
+    );
+    await ready(result);
+    const dirtyId = await openDirty(result, "/p/a.md", "A");
+    await act(async () => {
+      await result.current.openFile("/p/b.md");
+    });
+    const cleanId = result.current.tabs.find((t) => t.id !== dirtyId)?.id as string;
+
+    await act(async () => {
+      await result.current.closeTabs([dirtyId, cleanId]);
+    });
+
+    expect(hasTab(result, dirtyId)).toBe(false);
+    expect(hasTab(result, cleanId)).toBe(false);
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
   it("flushes edits made while the prompt was open, not just the snapshot", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
     vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
