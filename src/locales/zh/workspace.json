@@ -14,6 +14,9 @@
     "title": "删除"
   },
   "unsavedChanges": {
+    "promptMessage": "以下文件有未保存的更改：",
+    "save": "保存",
+    "dontSave": "不保存",
     "title": "未保存的更改",
     "message": "这些更改无法保存：\n{{files}}\n\n仍要关闭并放弃它们吗？",
     "discard": "放弃并关闭",

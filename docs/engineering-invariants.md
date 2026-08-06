@@ -27,10 +27,10 @@ Older asynchronous work cannot overwrite newer state or mark it complete. Writes
 
 ### INV-4: Owners flush before they die
 
-Closing or replacing an owner (tab, workspace, window) flushes or transfers every pending operation it owns. Nothing pending is dropped on unmount, tab close, workspace switch, or app exit.
+Closing or replacing an owner (tab, workspace, window) flushes or transfers every pending operation it owns. Nothing pending is dropped on unmount, tab close, workspace switch, or app exit. The single exception is an explicit user discard: with Auto Save off, the close prompt's **Don't Save** drops the pending edits, which is the informed discard INV-1 allows.
 
 - Owners: `src/hooks/useTabs.ts` close-flush coordination, `src/hooks/useWindowClose.ts`
-- Evidence: lifecycle transition tests (edit -> switch -> close, shutdown flush)
+- Evidence: lifecycle transition tests (edit -> switch -> close, shutdown flush), `src/hooks/useTabs.test.tsx` close-prompt cases
 
 ### INV-5: All external input is untrusted
 
