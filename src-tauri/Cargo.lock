@@ -1726,6 +1726,7 @@ dependencies = [
  "git2",
  "keyring",
  "notify",
+ "regex",
  "sentry",
  "serde",
  "serde_json",

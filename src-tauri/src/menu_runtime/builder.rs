@@ -87,6 +87,12 @@ pub fn build_menu<R: Runtime>(
     let find = MenuItemBuilder::with_id(mid("find"), "Find\u{2026}")
         .accelerator("CmdOrCtrl+F")
         .build(handle)?;
+    // Gated on has_workspace in apply_menu_state: nothing to search without a
+    // folder open.
+    let search_workspace =
+        MenuItemBuilder::with_id(mid("search-workspace"), "Search in Workspace\u{2026}")
+            .accelerator("CmdOrCtrl+Shift+F")
+            .build(handle)?;
 
     // macOS routes Cmd+X/C/V/A to the WebView through these predefined items'
     // key equivalents, so a missing item silently kills the shortcut in the
@@ -99,6 +105,7 @@ pub fn build_menu<R: Runtime>(
         .select_all()
         .separator()
         .item(&find)
+        .item(&search_workspace)
         .build()?;
 
     // View menu
@@ -326,6 +333,7 @@ pub fn build_menu<R: Runtime>(
         export_website,
         workspace_settings,
         find,
+        search_workspace,
         command_palette,
         toggle_files_sidebar,
         toggle_outline_sidebar,

@@ -17,6 +17,7 @@ export interface MenuEventHandlers {
   openSettings: () => void;
   managePlugins: () => void;
   find: () => void;
+  searchWorkspace: () => void;
   toggleEdit: () => void;
   print: () => void;
   exportHtml: () => void;
@@ -56,6 +57,7 @@ export function menuEventActions(handlers: MenuEventHandlers): Record<string, ()
     "menu-open-settings": handlers.openSettings,
     "menu-manage-plugins": handlers.managePlugins,
     "menu-find": handlers.find,
+    "menu-search-workspace": handlers.searchWorkspace,
     "menu-toggle-edit": handlers.toggleEdit,
     "menu-print": handlers.print,
     "menu-export-html": handlers.exportHtml,

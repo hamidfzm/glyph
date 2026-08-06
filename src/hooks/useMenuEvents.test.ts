@@ -20,6 +20,7 @@ function noopHandlers(overrides: Partial<MenuEventHandlers> = {}): MenuEventHand
     openSettings: vi.fn(),
     managePlugins: vi.fn(),
     find: vi.fn(),
+    searchWorkspace: vi.fn(),
     toggleEdit: vi.fn(),
     print: vi.fn(),
     exportHtml: vi.fn(),

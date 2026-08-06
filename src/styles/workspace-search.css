@@ -1,0 +1,105 @@
+/* The vault-wide search overlay reuses the command palette's frame
+   (.command-palette-overlay / .command-palette); only the query row, result
+   rows, and the truncation notice are its own. */
+
+.workspace-search {
+  max-height: 70vh;
+}
+
+.workspace-search-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-inline-end: 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.workspace-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.workspace-search-toggle {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--glyph-radius-sm);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 6px;
+}
+
+.workspace-search-toggle:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-tertiary);
+}
+
+.workspace-search-toggle[aria-pressed="true"] {
+  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+
+.workspace-search-count {
+  color: var(--color-text-tertiary);
+  font-weight: 400;
+  letter-spacing: normal;
+  margin-inline-start: 6px;
+  text-transform: none;
+}
+
+.workspace-search-row {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  text-align: start;
+  font: inherit;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 16px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.workspace-search-row:hover {
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  color: var(--color-text-primary);
+}
+
+.workspace-search-line {
+  flex: 0 0 auto;
+  min-width: 2.5ch;
+  text-align: end;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* One line per match: the snippet is already clipped to a fixed amount of
+   context on each side by the backend, so it only has to not wrap. */
+.workspace-search-snippet {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-search-mark {
+  background: transparent;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.workspace-search-truncated {
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  padding: 8px 16px;
+}

@@ -25,6 +25,7 @@
   "settings": "Settings…",
   "managePlugins": "Plugins…",
   "find": "Find…",
+  "searchWorkspace": "Search in Workspace…",
   "commandPalette": "Command Palette…",
   "toggleFilesSidebar": "Toggle Files Sidebar",
   "toggleOutlineSidebar": "Toggle Outline Sidebar",

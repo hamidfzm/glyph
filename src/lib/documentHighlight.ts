@@ -45,3 +45,20 @@ export function locateInDocument(text: string): boolean {
   window.setTimeout(() => block.classList.remove(FLASH_CLASS), FLASH_DURATION_MS);
   return true;
 }
+
+const LOCATE_ATTEMPTS = 20;
+const LOCATE_INTERVAL_MS = 50;
+
+// `locateInDocument` for a document that is still opening. The viewer emits no
+// "rendered" signal, so this polls for one second and then gives up, which is
+// also the right outcome for text that only exists in the source (a link
+// target, a fence the renderer swallows).
+export function locateWhenRendered(text: string): void {
+  let attempts = 0;
+  const tick = () => {
+    attempts += 1;
+    if (locateInDocument(text) || attempts >= LOCATE_ATTEMPTS) return;
+    window.setTimeout(tick, LOCATE_INTERVAL_MS);
+  };
+  window.setTimeout(tick, LOCATE_INTERVAL_MS);
+}

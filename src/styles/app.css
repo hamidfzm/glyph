@@ -10,6 +10,7 @@
 @import "./search.css";
 @import "./editor.css";
 @import "./command-palette.css";
+@import "./workspace-search.css";
 @import "./lightbox.css";
 @import "./imageViewer.css";
 @import "./print.css";

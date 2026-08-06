@@ -92,6 +92,21 @@
     "nextMatch": "下一个匹配项",
     "close": "关闭搜索"
   },
+  "workspaceSearch": {
+    "title": "在工作区中搜索",
+    "placeholder": "搜索所有笔记...",
+    "queryLabel": "工作区搜索内容",
+    "prompt": "输入内容以搜索此工作区中的所有笔记。",
+    "searching": "搜索中...",
+    "noResults": "没有匹配项",
+    "noWorkspace": "打开文件夹后即可跨笔记搜索。",
+    "invalidPattern": "该正则表达式无效。",
+    "failed": "搜索失败。",
+    "truncated": "仅显示前若干匹配项。请缩小搜索范围以查看其余结果。",
+    "caseSensitive": "区分大小写",
+    "wholeWord": "全字匹配",
+    "regex": "使用正则表达式"
+  },
   "exportProgress": {
     "html": "HTML",
     "docx": "Word 文档",

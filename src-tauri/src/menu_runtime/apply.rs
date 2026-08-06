@@ -19,6 +19,7 @@ fn accelerator_target<'a, R: Runtime>(
         "close-tab" => &refs.close_tab,
         "close" => &refs.close,
         "find" => &refs.find,
+        "search-workspace" => &refs.search_workspace,
         "open-command-palette" => &refs.command_palette,
         "toggle-files-sidebar" => &refs.toggle_files_sidebar,
         "toggle-outline-sidebar" => &refs.toggle_outline_sidebar,
@@ -102,6 +103,9 @@ pub fn apply_menu_state<R: Runtime>(
         .set_enabled(flags.has_workspace)
         .map_err(stringify)?;
     refs.find.set_enabled(flags.has_file).map_err(stringify)?;
+    refs.search_workspace
+        .set_enabled(flags.has_workspace)
+        .map_err(stringify)?;
     refs.toggle_edit
         .set_enabled(flags.has_file)
         .map_err(stringify)?;
@@ -172,6 +176,9 @@ pub fn apply_menu_labels<R: Runtime>(refs: &MenuItemRefs<R>, l: &MenuLabels) -> 
     refs.settings.set_text(&l.settings).map_err(s)?;
     refs.manage_plugins.set_text(&l.manage_plugins).map_err(s)?;
     refs.find.set_text(&l.find).map_err(s)?;
+    refs.search_workspace
+        .set_text(&l.search_workspace)
+        .map_err(s)?;
     refs.command_palette
         .set_text(&l.command_palette)
         .map_err(s)?;
