@@ -28,11 +28,13 @@
 //! The implementation is split across sibling files: [`backend`] holds the
 //! `GitBackend` type and its `SyncBackend` impl, [`message`] the GitHub-style
 //! auto-commit subject, [`credentials`] the libgit2 credential callback, and
-//! [`repo`] the repository-lifecycle helpers (`init` / `clone` / `set_origin`).
+//! [`repo`] the repository-lifecycle helpers (`init` / `clone` / `set_origin`),
+//! and [`plumbing`] the low-level git operations `backend` orchestrates.
 
-mod backend;
+pub(super) mod backend;
 mod credentials;
 mod message;
+mod plumbing;
 mod repo;
 
 pub use backend::GitBackend;
@@ -83,5 +85,7 @@ pub(super) fn now_unix() -> i64 {
         .unwrap_or(0)
 }
 
+#[cfg(test)]
+mod test_support;
 #[cfg(test)]
 mod tests;

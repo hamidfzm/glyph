@@ -13,21 +13,23 @@ mod menu;
 mod menu_runtime;
 mod notebook;
 mod secrets;
+mod setup;
 mod sync;
 #[cfg(desktop)]
 mod telemetry;
 mod watcher;
+mod window_events;
 mod windows;
 mod windows_runtime;
 mod workspace;
 
+use setup::setup_app;
 use std::sync::{Arc, Mutex};
+use tauri::Manager;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use tauri::RunEvent;
-use tauri::{DragDropEvent, Manager, WindowEvent};
-#[cfg(desktop)]
-use tauri_plugin_cli::CliExt;
 use watcher::FileWatcherState;
+use window_events::handle_window_event;
 
 pub use canvas::is_canvas_file;
 pub use d2::is_d2_file;
@@ -43,7 +45,7 @@ pub const APP_NAME: &str = "glyph";
 /// listeners, but the frontend's mount-time `get_initial_file` /
 /// `get_initial_folder` query reads (and consumes) the stash, so the open
 /// survives either way.
-fn stash_initial_open<R: tauri::Runtime>(
+pub(crate) fn stash_initial_open<R: tauri::Runtime>(
     app_handle: &tauri::AppHandle<R>,
     kind: windows::OpenKind,
     path: &str,
@@ -222,167 +224,8 @@ pub fn run() {
         .manage(commands::CliExport(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
         .manage(grants::GrantRegistry::default())
-        .setup(|app| {
-            // Seed the registry's "main" entry so routing knows what the first
-            // window shows; a desktop folder launch overrides it below.
-            app.state::<windows::WindowRegistry>()
-                .set_workspace("main", None);
-
-            #[cfg(desktop)]
-            {
-                // Windows uses per-window menus with owner-prefixed item ids
-                // (see build_menu); other platforms share one app menu.
-                #[cfg(windows)]
-                let menu_owner = Some("main");
-                #[cfg(not(windows))]
-                let menu_owner = None;
-                let (menu, menu_refs) = menu::build_menu(app.handle(), menu_owner)?;
-                app.set_menu(menu)?;
-                // Start with everything disabled; the frontend reasserts state
-                // as soon as it mounts and learns about the active tab and settings.
-                let _ = menu::apply_menu_state(&menu_refs, &menu::MenuStateFlags::default());
-                app.manage(menu::MenuRegistry::with_main(menu_refs));
-
-                // Parse CLI arguments and store the initial file/folder. The pure
-                // selection + classification logic lives in `cli` (tested
-                // there); this block is the thin Tauri-runtime adapter that maps
-                // each variant to managed state or a warning.
-                //
-                // We pass both the `tauri-plugin-cli` value and raw `std::env::args()`
-                // into `cli::initial_open_action`; the helper prefers the plugin
-                // (so OS file-association launches still work) and falls back to
-                // argv. The fallback is what makes `pnpm tauri dev -- samples`
-                // work on Windows: pnpm's arg forwarding can land the positional
-                // arg in argv without ever populating the plugin's matches.
-                let cwd = std::env::current_dir().unwrap_or_default();
-                let cli_matches = app.cli().matches().ok();
-                let plugin_arg = |name: &str| -> Option<String> {
-                    cli_matches
-                        .as_ref()
-                        .and_then(|m| m.args.get(name))
-                        .and_then(|a| a.value.as_str().map(str::to_string))
-                };
-                let plugin_path = plugin_arg("file");
-                let plugin_export = plugin_arg("export-website");
-                let env_args: Vec<String> = std::env::args().collect();
-                // Session restore and the recent-files menu re-open paths from
-                // earlier sessions; seed their grants from the persisted settings
-                // store (AppData, with AppConfig as the Linux fallback spelling).
-                {
-                    let grant_registry = app.state::<grants::GrantRegistry>();
-                    let handle = app.handle();
-                    for base in [
-                        handle.path().app_data_dir().ok(),
-                        handle.path().app_config_dir().ok(),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    {
-                        let Ok(raw) = std::fs::read_to_string(base.join("settings.json")) else {
-                            continue;
-                        };
-                        let (workspaces, files) = grant_registry.seed_from_settings_json(&raw);
-                        for dir in &workspaces {
-                            grants::allow_asset_dir(handle, dir);
-                        }
-                        for file in &files {
-                            grants::allow_asset_file(handle, file);
-                        }
-                        break;
-                    }
-                }
-                let grant_registry = app.state::<grants::GrantRegistry>();
-                match cli::launch_plan(
-                    plugin_path.as_deref(),
-                    plugin_export.as_deref(),
-                    &env_args,
-                    &cwd,
-                ) {
-                    Err(usage) => {
-                        eprintln!("{usage}");
-                        std::process::exit(2);
-                    }
-                    Ok(cli::CliLaunch::ExportWebsite { root, out_dir }) => {
-                        // Headless: the workspace is not opened in the UI and the
-                        // window stays hidden; the frontend runs the export on
-                        // mount and exits via `finish_cli_export`.
-                        let _ = grant_registry.grant_workspace(std::path::Path::new(&root));
-                        let _ = grant_registry.grant_export_dir(std::path::Path::new(&out_dir));
-                        *app.state::<commands::CliExport>().0.lock().unwrap() =
-                            Some(commands::export::CliExportRequest { root, out_dir });
-                    }
-                    Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::Folder(p)))) => {
-                        if let Ok(canonical) =
-                            grant_registry.grant_workspace(std::path::Path::new(&p))
-                        {
-                            grants::allow_asset_dir(app.handle(), &canonical);
-                        }
-                        app.state::<windows::WindowRegistry>()
-                            .set_workspace("main", Some(p.clone()));
-                        stash_initial_open(app.handle(), windows::OpenKind::Folder, &p);
-                    }
-                    Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::File(p)))) => {
-                        if let Ok(canonical) = grant_registry.grant_file(std::path::Path::new(&p)) {
-                            grants::allow_asset_file(app.handle(), &canonical);
-                        }
-                        stash_initial_open(app.handle(), windows::OpenKind::File, &p);
-                    }
-                    Ok(cli::CliLaunch::Open(Some(
-                        cli::InitialOpenAction::RejectedUnsupported(p),
-                    ))) => {
-                        eprintln!("Refusing to open unsupported file type: {p}");
-                    }
-                    Ok(cli::CliLaunch::Open(None)) => {}
-                }
-            }
-            Ok(())
-        })
-        .on_window_event(|window, event| {
-            // A closed window leaves the routing registry so its workspace no
-            // longer counts toward "is this folder already open".
-            if matches!(event, WindowEvent::Destroyed) {
-                if let Some(registry) = window.try_state::<windows::WindowRegistry>() {
-                    registry.remove(window.label());
-                }
-                #[cfg(desktop)]
-                if let Some(menus) = window.try_state::<menu::MenuRegistry>() {
-                    menus.remove(window.label());
-                }
-            }
-            // Drag and drop of folders or markdown files, routed the same way as
-            // any other open request: a folder may spawn or focus a window, a
-            // file opens as a loose tab in this window. First match wins.
-            if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
-                let app = window.app_handle();
-                let Some(registry) = app.try_state::<windows::WindowRegistry>() else {
-                    return;
-                };
-                let label = window.label().to_string();
-                for path in paths {
-                    let path_str = path.to_string_lossy().to_string();
-                    if path.is_dir() {
-                        windows_runtime::open_in_app(
-                            app,
-                            &registry,
-                            windows::OpenKind::Folder,
-                            path_str,
-                            &label,
-                        );
-                        break;
-                    }
-                    if is_supported_file(path) {
-                        windows_runtime::open_in_app(
-                            app,
-                            &registry,
-                            windows::OpenKind::File,
-                            path_str,
-                            &label,
-                        );
-                        break;
-                    }
-                }
-            }
-        })
+        .setup(setup_app)
+        .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
             commands::file::read_file,
             commands::file::write_file,
@@ -435,11 +278,11 @@ pub fn run() {
             watcher::watch_directory,
             watcher::unwatch_directory,
             #[cfg(desktop)]
-            menu_runtime::set_menu_state,
+            menu_runtime::apply::set_menu_state,
             #[cfg(desktop)]
-            menu_runtime::apply_keybindings,
+            menu_runtime::apply::apply_keybindings,
             #[cfg(desktop)]
-            menu_runtime::set_menu_labels,
+            menu_runtime::apply::set_menu_labels,
             windows_runtime::set_window_workspace,
             windows_runtime::request_open,
             #[cfg(desktop)]
