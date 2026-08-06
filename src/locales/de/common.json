@@ -38,6 +38,7 @@
     "outline": "Gliederung",
     "resize": "Größe der Seitenleiste ändern",
     "resizeBacklinks": "Größe der Rückverweise ändern",
+    "resizeTags": "Größe der Tags ändern",
     "indexIncomplete": "Index unvollständig"
   },
   "backlinks": {

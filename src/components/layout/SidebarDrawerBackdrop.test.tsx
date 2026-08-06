@@ -4,27 +4,16 @@ import {
   SidebarLayoutContext,
   type SidebarLayoutContextValue,
 } from "@/contexts/SidebarLayoutContext";
+import { sidebarLayoutValue } from "@/test/fixtures/sidebarLayout";
 import { SidebarDrawerBackdrop } from "./SidebarDrawerBackdrop";
 
 function renderBackdrop(overrides: Partial<SidebarLayoutContextValue> = {}) {
-  const value: SidebarLayoutContextValue = {
+  const value = sidebarLayoutValue({
     filesVisible: false,
     outlineVisible: false,
     compact: true,
-    closeCompactPanels: vi.fn(),
-    toggleFiles: vi.fn(),
-    toggleOutline: vi.fn(),
-    resetLayout: vi.fn(),
-    sidebarLayout: "split",
-    swapSidebarSides: false,
-    filesSidebarWidth: 200,
-    outlineSidebarWidth: 260,
-    backlinksHeight: null,
-    setFilesSidebarWidth: vi.fn(),
-    setOutlineSidebarWidth: vi.fn(),
-    setBacklinksHeight: vi.fn(),
     ...overrides,
-  };
+  });
   const utils = render(
     <SidebarLayoutContext.Provider value={value}>
       <SidebarDrawerBackdrop />
