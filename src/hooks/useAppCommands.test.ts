@@ -145,8 +145,10 @@ describe("useAppCommands", () => {
     expect(headings.map((h) => h.subtitle)).toEqual(["H1", "H2"]);
   });
 
-  it("includes 'Cloud Sync…'", () => {
-    const { result } = renderHook(() =>
+  it("offers 'Cloud Sync…' only with a workspace open", () => {
+    // It opens Workspace Settings, which needs a folder, so it is gated the
+    // same way as the "Workspace Settings…" entry beside it.
+    const withoutWorkspace = renderHook(() =>
       useAppCommands({
         workspaceOpen: false,
         workspaceFiles: [],
@@ -154,7 +156,17 @@ describe("useAppCommands", () => {
         actions: makeActions(),
       }),
     );
-    expect(result.current.map((c) => c.title)).toContain("Cloud Sync…");
+    expect(withoutWorkspace.result.current.map((c) => c.title)).not.toContain("Cloud Sync…");
+
+    const withWorkspace = renderHook(() =>
+      useAppCommands({
+        workspaceOpen: true,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions: makeActions(),
+      }),
+    );
+    expect(withWorkspace.result.current.map((c) => c.title)).toContain("Cloud Sync…");
   });
 
   it("each app command's run invokes the matching action", () => {

@@ -4,8 +4,6 @@ import { useAppModals } from "./useAppModals";
 
 const MODALS = [
   { open: "openSettings", close: "closeSettings", flag: "settingsOpen" },
-  { open: "openSyncSettings", close: "closeSyncSettings", flag: "syncSettingsOpen" },
-  { open: "openWorkspaceSettings", close: "closeWorkspaceSettings", flag: "workspaceSettingsOpen" },
   { open: "openPlugins", close: "closePlugins", flag: "pluginsOpen" },
 ] as const;
 
@@ -15,6 +13,32 @@ describe("useAppModals", () => {
     for (const { flag } of MODALS) {
       expect(result.current[flag]).toBe(false);
     }
+    expect(result.current.workspaceSettingsTab).toBeNull();
+  });
+
+  it.each([
+    { opener: "openWorkspaceSettings", tab: "website" },
+    { opener: "openSyncSettings", tab: "sync" },
+  ] as const)("$opener opens Workspace Settings on the $tab tab", ({ opener, tab }) => {
+    // Cloud sync lives in Workspace Settings, so both menu commands open the
+    // one modal and differ only in which tab it lands on.
+    const { result } = renderHook(() => useAppModals());
+
+    act(() => result.current[opener]());
+    expect(result.current.workspaceSettingsTab).toBe(tab);
+    for (const { flag } of MODALS) {
+      expect(result.current[flag]).toBe(false);
+    }
+
+    act(() => result.current.closeWorkspaceSettings());
+    expect(result.current.workspaceSettingsTab).toBeNull();
+  });
+
+  it("moves the open modal to another tab without reopening it", () => {
+    const { result } = renderHook(() => useAppModals());
+    act(() => result.current.openWorkspaceSettings());
+    act(() => result.current.openSyncSettings());
+    expect(result.current.workspaceSettingsTab).toBe("sync");
   });
 
   it.each(MODALS)("$open opens and $close closes that modal alone", (modal) => {

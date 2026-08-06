@@ -4,7 +4,8 @@
     "close": "Close"
   },
   "tabs": {
-    "website": "Website"
+    "website": "Website",
+    "sync": "Cloud Sync"
   },
   "empty": "Open a folder workspace to edit its settings.",
   "website": {

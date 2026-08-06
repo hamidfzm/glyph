@@ -1,4 +1,4 @@
-import type { ConflictPolicy, WorkspaceSyncConfig } from "@/lib/sync";
+import { type ConflictPolicy, defaultConfigFor, type WorkspaceSyncConfig } from "@/lib/sync";
 
 // The editable shape behind the cloud-sync settings form, and the two
 // operations that cross it: turning a stored config into form values, and
@@ -20,6 +20,13 @@ export interface FormState {
    */
   commitMessage: string;
 }
+
+/**
+ * Values a workspace with no stored config starts from. Derived from
+ * `defaultConfigFor` so the defaults have one home; the workspace path it
+ * wants is irrelevant here, because form state does not carry one.
+ */
+export const EMPTY_FORM: FormState = formFromConfig(defaultConfigFor(""));
 
 export function formFromConfig(config: WorkspaceSyncConfig): FormState {
   return {

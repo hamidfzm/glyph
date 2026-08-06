@@ -138,10 +138,11 @@ export function AppShell() {
     actions: useMemo(
       () => ({
         ...menuHandlers,
+        openSyncSettings: modals.openSyncSettings,
         openWorkspaceFile: openFile,
         runPluginExporter,
       }),
-      [menuHandlers, openFile, runPluginExporter],
+      [menuHandlers, modals.openSyncSettings, openFile, runPluginExporter],
     ),
   });
 

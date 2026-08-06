@@ -1,11 +1,5 @@
 {
-  "modal": {
-    "title": "Cloud Sync settings",
-    "heading": "Cloud Sync",
-    "close": "Close cloud sync settings"
-  },
-  "empty": "Open a folder workspace to configure cloud sync for it. Single-file tabs sync as part of whichever folder they live in.",
-  "description": "Git-backed sync for this workspace. Glyph ships with its own libgit2 build — no system <kbd>git</kbd> needed.",
+  "description": "Git-backed sync for this workspace. Glyph ships with its own libgit2 build — no system <kbd>git</kbd> needed. Single-file tabs sync as part of whichever folder they live in.",
   "loading": "Loading…",
   "notRepo": "This folder isn't a git repository yet.",
   "initRepo": "Initialize repo",

@@ -4,7 +4,8 @@
     "close": "关闭"
   },
   "tabs": {
-    "website": "网站"
+    "website": "网站",
+    "sync": "云同步"
   },
   "empty": "打开一个文件夹工作区以编辑其设置。",
   "website": {

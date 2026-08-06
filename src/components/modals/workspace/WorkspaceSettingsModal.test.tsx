@@ -1,11 +1,45 @@
 import { invoke } from "@tauri-apps/api/core";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderInWorkspace } from "@/test/renderInWorkspace";
-import { WorkspaceSettingsModal } from "./WorkspaceSettingsModal";
+import { renderWithSync } from "@/test/renderWithSync";
+import { WorkspaceSettingsModal, type WorkspaceSettingsTabId } from "./WorkspaceSettingsModal";
 
-const defaultProps = { open: true, onClose: vi.fn() };
+const defaultProps = {
+  open: true,
+  onClose: vi.fn(),
+  tab: "website" as const,
+  onTabChange: vi.fn(),
+};
+
+// The tab is controlled by the opener in production (useAppModals), so the
+// tab-switch cases drive it through that same shape.
+function Controlled({ initial = "website" }: { initial?: WorkspaceSettingsTabId }) {
+  const [tab, setTab] = useState<WorkspaceSettingsTabId>(initial);
+  return (
+    <WorkspaceSettingsModal open tab={tab} onTabChange={setTab} onClose={defaultProps.onClose} />
+  );
+}
+
+// The Sync tab loads its config on mount; the Website tab reads site.json.
+function mockSyncCommands() {
+  vi.mocked(invoke).mockImplementation((cmd: string) => {
+    switch (cmd) {
+      case "sync_get_config":
+        return Promise.resolve(null);
+      case "sync_default_author":
+        return Promise.resolve({ name: null, email: null });
+      case "sync_repo_present":
+        return Promise.resolve(true);
+      case "read_file":
+        return Promise.reject(new Error("not found"));
+      default:
+        return Promise.reject(new Error(`unexpected command ${cmd}`));
+    }
+  });
+}
 
 function mockConfigFile(content: string | null): Map<string, string> {
   const writes = new Map<string, string>();
@@ -163,6 +197,27 @@ describe("WorkspaceSettingsModal", () => {
     await user.click(tab);
     expect(tab).toHaveAttribute("data-active", "true");
     expect(await screen.findByRole("combobox", { name: /theme/i })).toBeInTheDocument();
+  });
+
+  it("opens directly on the Sync tab when asked", async () => {
+    mockSyncCommands();
+    renderWithSync(<Controlled initial="sync" />);
+
+    expect(await screen.findByRole("button", { name: "Save config" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cloud Sync" })).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+  });
+
+  it("switches from Website to the Sync tab", async () => {
+    mockSyncCommands();
+    const user = userEvent.setup();
+    renderWithSync(<Controlled />);
+
+    await user.click(screen.getByRole("button", { name: "Cloud Sync" }));
+    expect(await screen.findByRole("button", { name: "Save config" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /site title/i })).not.toBeInTheDocument();
   });
 
   it("renders nothing while closed", () => {
