@@ -11,9 +11,10 @@ import { Trans, useTranslation } from "react-i18next";
 import { SyncConfigForm } from "@/components/modals/sync/SyncConfigForm";
 import { SyncStatusPanel } from "@/components/modals/sync/SyncStatusPanel";
 import { useSyncConfigContext } from "@/contexts/SyncConfigContext";
-import { defaultConfigFor, type SyncResult } from "@/lib/sync";
+import type { SyncResult } from "@/lib/sync";
 import {
   commitSaveConfig,
+  EMPTY_FORM,
   type FormState,
   formFromConfig,
   resolveSaveConfig,
@@ -40,10 +41,7 @@ export function SyncSettingsTab() {
     refreshStatus,
   } = useSyncConfigContext();
 
-  const defaultForm = useMemo(
-    () => formFromConfig(config ?? defaultConfigFor(workspacePath ?? "")),
-    [config, workspacePath],
-  );
+  const defaultForm = useMemo(() => (config ? formFromConfig(config) : EMPTY_FORM), [config]);
   const [form, setForm] = useState<FormState>(defaultForm);
   useEffect(() => {
     setForm(defaultForm);
