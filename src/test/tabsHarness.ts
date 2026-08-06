@@ -79,9 +79,13 @@ export function defaultOptions(over: Partial<Parameters<typeof useTabs>[0]> = {}
     activeTabPath: "",
     recentFiles: [],
     autoReload: false,
+    // Autosave on is the default, so close keeps flush-saving silently unless a
+    // test opts into the Save / Don't Save / Cancel prompt (#563).
+    autoSave: true,
     defaultEditorMode: "view" as const,
     onSettingsChange: vi.fn(),
     onWorkspaceNotice: vi.fn(),
+    confirmUnsaved: vi.fn(async () => "cancel" as const),
     ...over,
   };
 }
