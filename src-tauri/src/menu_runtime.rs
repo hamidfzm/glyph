@@ -246,8 +246,14 @@ pub fn build_menu<R: Runtime>(
         .accelerator("CmdOrCtrl+F")
         .build(handle)?;
 
+    // macOS routes Cmd+X/C/V/A to the WebView through these predefined items'
+    // key equivalents, so a missing item silently kills the shortcut in the
+    // editor. Undo/redo stay out: the editor owns Cmd+Z through its own
+    // history, and a native item would claim the key equivalent from it.
     let edit_menu = SubmenuBuilder::new(handle, "Edit")
+        .cut()
         .copy()
+        .paste()
         .select_all()
         .separator()
         .item(&find)

@@ -1,7 +1,14 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { editorContextMenu } from "./editorContextMenu";
+
+vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
+  readText: vi.fn(() => Promise.resolve("")),
+}));
+
+const readTextMock = vi.mocked(readText);
 
 const LABELS = {
   bold: "Bold",
@@ -136,10 +143,7 @@ describe("editorContextMenu clipboard and dismissal", () => {
   });
 
   it("pastes clipboard text over the selection", async () => {
-    Object.defineProperty(navigator, "clipboard", {
-      value: { readText: () => Promise.resolve("XY") },
-      configurable: true,
-    });
+    readTextMock.mockResolvedValue("XY");
     const { view, parent } = mount({ anchor: 0, head: 3 });
     rightClick(view);
     items()
@@ -147,6 +151,30 @@ describe("editorContextMenu clipboard and dismissal", () => {
       ?.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(view.state.doc.toString()).toBe("XY bar");
+    view.destroy();
+    parent.remove();
+  });
+
+  it("reads the clipboard natively, never through navigator.clipboard", async () => {
+    // Regression (#594): navigator.clipboard.readText() makes WebKit render a
+    // confirmation as a second native "Paste" context menu, so right-clicking
+    // to paste showed two menus. The native read has no such gate.
+    readTextMock.mockResolvedValue("XY");
+    const webkitPrompt = vi.fn(() => Promise.resolve("XY"));
+    Object.defineProperty(navigator, "clipboard", {
+      value: { readText: webkitPrompt },
+      configurable: true,
+    });
+
+    const { view, parent } = mount({ anchor: 0, head: 3 });
+    rightClick(view);
+    items()
+      .find((b) => b.textContent === "Paste")
+      ?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(readTextMock).toHaveBeenCalled();
+    expect(webkitPrompt).not.toHaveBeenCalled();
     view.destroy();
     parent.remove();
   });
@@ -212,11 +240,21 @@ describe("editorContextMenu edge branches", () => {
     parent.remove();
   });
 
+  it("leaves the document alone when the clipboard read fails", async () => {
+    readTextMock.mockRejectedValueOnce(new Error("denied"));
+    const { view, parent } = mount({ anchor: 0, head: 3 });
+    rightClick(view);
+    items()
+      .find((b) => b.textContent === "Paste")
+      ?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(view.state.doc.toString()).toBe("foo bar");
+    view.destroy();
+    parent.remove();
+  });
+
   it("leaves the document alone when the clipboard is empty", async () => {
-    Object.defineProperty(navigator, "clipboard", {
-      value: { readText: () => Promise.resolve("") },
-      configurable: true,
-    });
+    readTextMock.mockResolvedValue("");
     const { view, parent } = mount({ anchor: 0, head: 3 });
     rightClick(view);
     items()

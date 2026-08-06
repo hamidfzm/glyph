@@ -1,5 +1,6 @@
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { wrapSelectionWith } from "@/lib/editorWrapSelection";
 
 export interface EditorMenuLabels {
@@ -126,11 +127,16 @@ export function editorContextMenu(getLabels: () => EditorMenuLabels): Extension 
           enabled: true,
           run: () => {
             // execCommand("paste") is blocked in the WebView, so read the
-            // clipboard directly and replace the selection ourselves.
-            navigator.clipboard.readText().then((text) => {
-              if (text) view.dispatch(view.state.replaceSelection(text));
-              view.focus();
-            });
+            // clipboard and replace the selection ourselves. The read goes
+            // through the native clipboard, not navigator.clipboard: WebKit
+            // gates readText() behind a confirmation it renders as a second
+            // native "Paste" context menu.
+            void readText()
+              .catch(() => "")
+              .then((text) => {
+                if (text) view.dispatch(view.state.replaceSelection(text));
+                view.focus();
+              });
           },
         },
         "separator",

@@ -35,6 +35,7 @@ keyring = { version = "3", features = [
     "sync-secret-service",
     "vendored",
 ] }
+tauri-plugin-clipboard-manager = "2"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

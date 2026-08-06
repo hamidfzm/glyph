@@ -15,6 +15,7 @@
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "os:default",
+    "clipboard-manager:allow-read-text",
     "store:default",
     "opener:default",
     "opener:allow-reveal-item-in-dir"
