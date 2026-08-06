@@ -51,7 +51,6 @@ pub struct MenuItemRefs<R: Runtime = Wry> {
     zoom_out: MenuItem<R>,
     actual_size: MenuItem<R>,
     settings: MenuItem<R>,
-    sync_settings: MenuItem<R>,
     manage_plugins: MenuItem<R>,
     ai_chat: MenuItem<R>,
     ai_summarize: MenuItem<R>,
@@ -101,7 +100,6 @@ pub struct MenuLabels {
     close_workspace: String,
     close: String,
     settings: String,
-    sync_settings: String,
     manage_plugins: String,
     find: String,
     command_palette: String,
@@ -233,11 +231,6 @@ pub fn build_menu<R: Runtime>(
     let settings = MenuItemBuilder::with_id(mid("open-settings"), "Settings\u{2026}")
         .accelerator("CmdOrCtrl+,")
         .build(handle)?;
-    // Cloud Sync is per-workspace; the modal handles the no-folder
-    // case with an empty state, so the item is always enabled and a
-    // first-time click teaches the user what it needs.
-    let sync_settings =
-        MenuItemBuilder::with_id(mid("open-sync-settings"), "Cloud Sync\u{2026}").build(handle)?;
     let manage_plugins =
         MenuItemBuilder::with_id(mid("manage-plugins"), "Plugins\u{2026}").build(handle)?;
 
@@ -399,7 +392,6 @@ pub fn build_menu<R: Runtime>(
             .item(&export_menu)
             .separator()
             .item(&workspace_settings)
-            .item(&sync_settings)
             .separator()
             .item(&close_tab)
             .item(&close_workspace)
@@ -450,7 +442,6 @@ pub fn build_menu<R: Runtime>(
             .item(&settings)
             .item(&workspace_settings)
             .item(&manage_plugins)
-            .item(&sync_settings)
             .separator()
             .item(&close_tab)
             .item(&close_workspace)
@@ -495,7 +486,6 @@ pub fn build_menu<R: Runtime>(
         zoom_out,
         actual_size,
         settings,
-        sync_settings,
         manage_plugins,
         ai_chat,
         ai_summarize,
@@ -679,7 +669,6 @@ pub fn apply_menu_labels<R: Runtime>(refs: &MenuItemRefs<R>, l: &MenuLabels) -> 
         .map_err(s)?;
     refs.close.set_text(&l.close).map_err(s)?;
     refs.settings.set_text(&l.settings).map_err(s)?;
-    refs.sync_settings.set_text(&l.sync_settings).map_err(s)?;
     refs.manage_plugins.set_text(&l.manage_plugins).map_err(s)?;
     refs.find.set_text(&l.find).map_err(s)?;
     refs.command_palette

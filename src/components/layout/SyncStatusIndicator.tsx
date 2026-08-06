@@ -1,13 +1,13 @@
 // Tiny per-workspace sync status pill on the status bar.
 //
-// Renders nothing on single-file tabs or unconfigured workspaces unless
-// the user explicitly opted in to a setup hint. When sync IS configured,
-// shows a short summary of the current state ("Synced 2m ago", "Conflicts (2)",
-// "+1/-3", "dirty"). Clicking opens the Cloud Sync modal so the user can
-// inspect or trigger a sync.
+// Renders nothing on single-file tabs. With a folder workspace open it
+// summarises the current state ("Sync off" until configured, then "Synced 2m
+// ago", "Conflicts (2)", "+1/-3", "dirty"). Clicking opens Workspace Settings
+// on the Cloud Sync tab, which since the menu item went away is the only
+// pointer to sync outside the command palette.
 //
 // Config/status come from the shared `SyncConfigContext`, the same instance
-// the Cloud Sync modal writes to, so enabling sync there updates this pill
+// the Cloud Sync tab writes to, so enabling sync there updates this pill
 // immediately. We deliberately don't poll for fresh status here — the pill
 // shows whatever was last loaded or refreshed.
 

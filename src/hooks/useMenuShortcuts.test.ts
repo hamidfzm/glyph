@@ -39,7 +39,6 @@ function makeHandlers(): MenuEventHandlers {
     toggleOutlineSidebar: vi.fn(),
     resetView: vi.fn(),
     openSettings: vi.fn(),
-    openSyncSettings: vi.fn(),
     managePlugins: vi.fn(),
     find: vi.fn(),
     toggleEdit: vi.fn(),

@@ -15,7 +15,6 @@ export interface MenuEventHandlers {
   toggleOutlineSidebar: () => void;
   resetView: () => void;
   openSettings: () => void;
-  openSyncSettings: () => void;
   managePlugins: () => void;
   find: () => void;
   toggleEdit: () => void;
@@ -55,7 +54,6 @@ export function menuEventActions(handlers: MenuEventHandlers): Record<string, ()
     "menu-toggle-outline-sidebar": handlers.toggleOutlineSidebar,
     "menu-reset-view": handlers.resetView,
     "menu-open-settings": handlers.openSettings,
-    "menu-open-sync-settings": handlers.openSyncSettings,
     "menu-manage-plugins": handlers.managePlugins,
     "menu-find": handlers.find,
     "menu-toggle-edit": handlers.toggleEdit,

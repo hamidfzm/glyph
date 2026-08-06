@@ -157,11 +157,9 @@ describe("useMenuHandlers", () => {
     expect(noTab.value.closeTab).not.toHaveBeenCalled();
 
     handlers.openSettings();
-    handlers.openSyncSettings();
     handlers.managePlugins();
     handlers.workspaceSettings();
     expect(modals.openSettings).toHaveBeenCalled();
-    expect(modals.openSyncSettings).toHaveBeenCalled();
     expect(modals.openPlugins).toHaveBeenCalled();
     expect(modals.openWorkspaceSettings).toHaveBeenCalled();
   });

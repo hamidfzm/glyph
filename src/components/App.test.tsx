@@ -170,15 +170,15 @@ describe("App", () => {
     await waitFor(() => expect(queryByTestId("settings-modal")).not.toBeInTheDocument());
   });
 
-  it("opens and closes Workspace Settings in response to menu-open-sync-settings", async () => {
+  it("opens and closes Workspace Settings in response to menu-workspace-settings", async () => {
     const listeners = captureMenuListeners();
     const { wrapper } = withProviders();
     const { queryByRole, findByRole } = render(<App />, { wrapper });
-    await waitFor(() => expect(listeners["menu-open-sync-settings"]).toBeDefined());
+    await waitFor(() => expect(listeners["menu-workspace-settings"]).toBeDefined());
     expect(queryByRole("dialog")).not.toBeInTheDocument();
 
     await act(async () => {
-      listeners["menu-open-sync-settings"]?.({ payload: undefined });
+      listeners["menu-workspace-settings"]?.({ payload: undefined });
     });
     expect(await findByRole("dialog", { name: /workspace settings/i })).toBeInTheDocument();
 
@@ -186,18 +186,6 @@ describe("App", () => {
       (await findByRole("button", { name: /close/i })).click();
     });
     await waitFor(() => expect(queryByRole("dialog")).not.toBeInTheDocument());
-  });
-
-  it("opens Workspace Settings in response to menu-workspace-settings", async () => {
-    const listeners = captureMenuListeners();
-    const { wrapper } = withProviders();
-    const { findByRole } = render(<App />, { wrapper });
-    await waitFor(() => expect(listeners["menu-workspace-settings"]).toBeDefined());
-
-    await act(async () => {
-      listeners["menu-workspace-settings"]?.({ payload: undefined });
-    });
-    expect(await findByRole("dialog", { name: /workspace settings/i })).toBeInTheDocument();
   });
 
   it("opens the plugins modal in response to menu-manage-plugins", async () => {

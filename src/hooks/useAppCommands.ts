@@ -30,6 +30,9 @@ export interface AppActions extends MenuEventHandlers {
   openWorkspaceFile: (path: string) => void;
   /** Open the plugin management modal. */
   managePlugins: () => void;
+  /** Open Workspace Settings on the Cloud Sync tab. Palette-only: the status
+   *  bar's sync pill is the other entry point, and there is no menu item. */
+  openSyncSettings: () => void;
   /** Run a plugin-contributed export format through the shared pipeline. */
   runPluginExporter: (exporter: ExporterContribution) => void;
 }
