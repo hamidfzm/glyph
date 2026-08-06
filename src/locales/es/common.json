@@ -38,6 +38,7 @@
     "outline": "Esquema",
     "resize": "Cambiar tamaño de la barra lateral",
     "resizeBacklinks": "Cambiar tamaño de los enlaces entrantes",
+    "resizeTags": "Cambiar tamaño de las etiquetas",
     "indexIncomplete": "Índice incompleto"
   },
   "backlinks": {

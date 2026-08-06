@@ -38,6 +38,7 @@
     "outline": "大纲",
     "resize": "调整侧边栏大小",
     "resizeBacklinks": "调整反向链接大小",
+    "resizeTags": "调整标签大小",
     "indexIncomplete": "索引不完整"
   },
   "backlinks": {

@@ -19,6 +19,7 @@ export function SidebarLayoutProvider({ children }: { children: ReactNode }) {
       filesSidebarWidth: settings.layout.filesSidebarWidth,
       outlineSidebarWidth: settings.layout.outlineSidebarWidth,
       backlinksHeight: settings.layout.backlinksHeight,
+      tagsHeight: settings.layout.tagsHeight,
     }),
     [
       layout,
@@ -27,6 +28,7 @@ export function SidebarLayoutProvider({ children }: { children: ReactNode }) {
       settings.layout.filesSidebarWidth,
       settings.layout.outlineSidebarWidth,
       settings.layout.backlinksHeight,
+      settings.layout.tagsHeight,
     ],
   );
 

@@ -38,6 +38,7 @@
     "outline": "Outline",
     "resize": "Resize sidebar",
     "resizeBacklinks": "Resize backlinks",
+    "resizeTags": "Resize tags",
     "indexIncomplete": "Index incomplete"
   },
   "backlinks": {

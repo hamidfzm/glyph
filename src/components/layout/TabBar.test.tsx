@@ -8,28 +8,8 @@ import {
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import { activeFileOf, type FileTab, type GraphTab, type Tab } from "@/lib/tabs";
 import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
+import { sidebarLayoutValue } from "@/test/fixtures/sidebarLayout";
 import { TabBar } from "./TabBar";
-
-const buildSidebarContext = (
-  overrides: Partial<SidebarLayoutContextValue> = {},
-): SidebarLayoutContextValue => ({
-  filesVisible: true,
-  outlineVisible: true,
-  compact: false,
-  closeCompactPanels: vi.fn(),
-  toggleFiles: vi.fn(),
-  toggleOutline: vi.fn(),
-  resetLayout: vi.fn(),
-  sidebarLayout: "split",
-  swapSidebarSides: false,
-  filesSidebarWidth: 200,
-  outlineSidebarWidth: 260,
-  backlinksHeight: null,
-  setFilesSidebarWidth: vi.fn(),
-  setOutlineSidebarWidth: vi.fn(),
-  setBacklinksHeight: vi.fn(),
-  ...overrides,
-});
 
 const makeFileTab = (i: number): FileTab => ({
   id: `tab-${i}`,
@@ -145,7 +125,7 @@ function Wrapper({
 
 function renderTabBar(opts: RenderOpts = {}, onToggleAIChat: (() => void) | null = null) {
   const value = buildContext(opts);
-  const sidebar = buildSidebarContext(opts.sidebar);
+  const sidebar = sidebarLayoutValue(opts.sidebar);
   return {
     ...render(
       <Wrapper value={value} sidebar={sidebar}>
@@ -397,7 +377,7 @@ describe("TabBar", () => {
       expect(screen.getByRole("menu")).toBeInTheDocument();
 
       rerender(
-        <Wrapper value={{ ...value, tabs: [makeFileTab(0)] }} sidebar={buildSidebarContext()}>
+        <Wrapper value={{ ...value, tabs: [makeFileTab(0)] }} sidebar={sidebarLayoutValue()}>
           <TabBar onToggleAIChat={null} onOpenPalette={vi.fn()} />
         </Wrapper>,
       );

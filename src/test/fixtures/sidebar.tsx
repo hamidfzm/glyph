@@ -10,6 +10,7 @@ import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { SidebarLayout } from "@/lib/settings";
 import type { FileTab, Tab, Workspace } from "@/lib/tabs";
+import { sidebarLayoutValue } from "./sidebarLayout";
 import { tabsContextValue } from "./tabsContext";
 
 // Shared setup for the Sidebar suites: the tab/workspace fixtures plus the two
@@ -69,6 +70,8 @@ export interface RenderOpts {
   setOutlineSidebarWidth?: (width: number) => void;
   setBacklinksHeight?: (height: number | null) => void;
   backlinksHeight?: number | null;
+  setTagsHeight?: (height: number | null) => void;
+  tagsHeight?: number | null;
   tabs?: Partial<TabsContextValue>;
 }
 
@@ -85,23 +88,22 @@ function buildTabsContext(opts: RenderOpts): TabsContextValue {
 }
 
 function buildSidebarContext(opts: RenderOpts): SidebarLayoutContextValue {
-  return {
+  return sidebarLayoutValue({
     filesVisible: opts.filesVisible ?? true,
     outlineVisible: opts.outlineVisible ?? true,
     compact: opts.compact ?? false,
     closeCompactPanels: opts.closeCompactPanels ?? vi.fn(),
     toggleFiles: opts.toggleFiles ?? vi.fn(),
     toggleOutline: opts.toggleOutline ?? vi.fn(),
-    resetLayout: vi.fn(),
     sidebarLayout: opts.sidebarLayout ?? "split",
     swapSidebarSides: opts.swapSidebarSides ?? false,
-    filesSidebarWidth: 200,
-    outlineSidebarWidth: 260,
     backlinksHeight: opts.backlinksHeight ?? null,
+    tagsHeight: opts.tagsHeight ?? null,
     setFilesSidebarWidth: opts.setFilesSidebarWidth ?? vi.fn(),
     setOutlineSidebarWidth: opts.setOutlineSidebarWidth ?? vi.fn(),
     setBacklinksHeight: opts.setBacklinksHeight ?? vi.fn(),
-  };
+    setTagsHeight: opts.setTagsHeight ?? vi.fn(),
+  });
 }
 
 export function Wrapper({ opts, children }: { opts: RenderOpts; children: ReactNode }) {

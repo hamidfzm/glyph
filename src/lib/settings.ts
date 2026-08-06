@@ -30,6 +30,8 @@ export interface LayoutSettings {
   // Pixel height of the backlinks block inside the Files panel. null keeps its
   // natural height until the user drags the divider.
   backlinksHeight: number | null;
+  // Same, for the tag cloud block.
+  tagsHeight: number | null;
   sidebarLayout: SidebarLayout;
   // Mirrors the sidebar layout. Default Files-left / Outline-right; when true
   // it becomes Files-right / Outline-left. Affects all layout modes.
@@ -46,6 +48,7 @@ export const AI_PANEL_WIDTH_DEFAULT = 340;
 export const AI_PANEL_WIDTH_MIN = 280;
 export const AI_PANEL_WIDTH_MAX_FRACTION = 0.45;
 export const BACKLINKS_HEIGHT_MIN = 80;
+export const TAGS_HEIGHT_MIN = 56;
 
 // Editor modes for a document tab. Defined as a constant object so call sites
 // reference `EDITOR_MODE.view` etc. instead of bare string literals; the
@@ -232,6 +235,7 @@ export const DEFAULT_SETTINGS: Settings = {
     outlineSidebarWidth: SIDEBAR_WIDTH_DEFAULT,
     aiPanelWidth: AI_PANEL_WIDTH_DEFAULT,
     backlinksHeight: null,
+    tagsHeight: null,
     sidebarLayout: "beside",
     swapSidebarSides: false,
   },
