@@ -116,3 +116,21 @@ jobs:
           name: glyph-android-debug-apk
           path: src-tauri/gen/android/app/build/outputs/apk/universal/debug/*.apk
           retention-days: 14
+
+  build-ios:
+    name: iOS
+    # Simulator only: unsigned, so it needs no Apple Developer account. Device
+    # builds and IPAs require a paid signing identity and stay out of CI.
+    # The shared `cfg(mobile)` code is already covered by the Android job; what
+    # this catches is Xcode-project, Info.plist and Objective-C glue drift,
+    # which nothing else compiles.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: ./.github/actions/pnpm-setup
+      - uses: ./.github/actions/rust-setup
+        with:
+          targets: aarch64-apple-ios-sim
+      - run: pnpm install --frozen-lockfile
+      - name: Build iOS app (debug, simulator)
+        run: pnpm tauri ios build --debug --target aarch64-sim
