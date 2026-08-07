@@ -51,7 +51,7 @@ ignore:
   # Tauri-runtime menu wiring (build_menu, apply_menu_state, handle_menu_event):
   # every line drives the native menu manager and can't be exercised from
   # MockRuntime. The testable halves live in menu.rs with direct tests.
-  - "src-tauri/src/menu_runtime.rs"
+  - "src-tauri/src/menu_runtime/**"
   # finish_cli_export terminates the process via std::process::exit, which a
   # unit test cannot survive. The testable halves (CLI export state and the
   # stdout/stderr routing) live in commands/export.rs with direct tests.
@@ -79,6 +79,16 @@ ignore:
   # `#[cfg(test)] mod tests`; we just don't track lib.rs lines toward
   # project / patch coverage.
   - "src-tauri/src/lib.rs"
+  # setup.rs and window_events.rs are the bodies of `run()`'s setup and
+  # on_window_event closures, lifted out of lib.rs so that file stays plugin
+  # registration plus the command table. They inherit lib.rs's reason
+  # unchanged: `setup_app` takes a real `tauri::App` and `handle_window_event`
+  # a real `Window`, neither of which MockRuntime provides, and the CLI
+  # branch calls `std::process::exit`. Their decision logic is tested where
+  # it lives: `cli::launch_plan` in cli.rs, `route_open` in windows.rs,
+  # `is_supported_file` in lib.rs's own tests.
+  - "src-tauri/src/setup.rs"
+  - "src-tauri/src/window_events.rs"
   # sync/commands.rs is one-line `#[tauri::command]` wrappers around
   # `super::ops::*`. The proc-macro emits IPC marshalling shims attributed
   # to each wrapper's signature line; those macro-generated branches aren't

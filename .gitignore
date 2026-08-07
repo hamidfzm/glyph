@@ -2,7 +2,8 @@ node_modules/
 dist/
 coverage/
 src-tauri/target/
-coverage/
+# `cargo llvm-cov --output-path ../coverage-rust.lcov`, the same path CI uses.
+coverage-rust.lcov
 junit*.xml
 test-results/
 playwright-report/

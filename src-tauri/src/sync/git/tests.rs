@@ -1,65 +1,10 @@
+use super::test_support::Fixture;
 use super::*;
 use crate::sync::{BackendKind, SyncBackend, WorkspaceSyncConfig};
 use git2::Repository;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
-
-/// Build a self-contained Git test harness:
-/// - `remote/` is a bare repository acting as the cloud
-/// - `local/` clones from it, with the working tree we'll mutate
-/// - returns the [`TempDir`] (drop = cleanup), the workspace path,
-///   and a backend wired up to it
-struct Fixture {
-    _tmp: TempDir,
-    workspace: PathBuf,
-    remote: PathBuf,
-}
-
-impl Fixture {
-    fn new() -> Self {
-        let tmp = TempDir::new().unwrap();
-        let remote = tmp.path().join("remote.git");
-        // `init_bare` alone honours the runner's `init.defaultBranch`
-        // config — GitHub Actions hosts default to "master" because
-        // they don't set `init.defaultBranch`, which makes
-        // `Repository::clone` resolve HEAD to a non-existent branch
-        // and breaks the merge scenarios below. Pin via init_opts so
-        // the fixture is deterministic regardless of host config.
-        let mut opts = git2::RepositoryInitOptions::new();
-        opts.bare(true);
-        opts.initial_head(super::super::DEFAULT_REMOTE_BRANCH);
-        git2::Repository::init_opts(&remote, &opts).unwrap();
-        let workspace = tmp.path().join("local");
-        fs::create_dir_all(&workspace).unwrap();
-        init_repo(&workspace, super::super::DEFAULT_REMOTE_BRANCH).unwrap();
-        set_origin(&workspace, remote.to_str().unwrap()).unwrap();
-        // libgit2 needs *some* author identity for commits.
-        let cfg_path = workspace.join(".git/config");
-        let mut cfg = git2::Config::open(&cfg_path).unwrap();
-        cfg.set_str("user.name", "Test User").unwrap();
-        cfg.set_str("user.email", "test@example.com").unwrap();
-        Self {
-            _tmp: tmp,
-            workspace,
-            remote,
-        }
-    }
-
-    fn backend(&self) -> GitBackend {
-        let mut cfg = WorkspaceSyncConfig::new_git(self.workspace.to_string_lossy());
-        cfg.remote_url = self.remote.to_string_lossy().into();
-        cfg.author = Some(super::super::config::CommitIdentity {
-            name: "Test User".into(),
-            email: "test@example.com".into(),
-        });
-        GitBackend::new(cfg)
-    }
-
-    fn write_file(&self, name: &str, contents: &str) {
-        fs::write(self.workspace.join(name), contents).unwrap();
-    }
-}
 
 #[test]
 fn open_repo_errors_with_not_configured_when_workspace_isnt_a_repo() {
@@ -97,68 +42,6 @@ fn open_repo_errors_with_backend_when_dot_git_is_corrupt() {
 /// as `u32` on Unix but `i32` on Windows MSVC. Widen both operands to
 /// `i64` (a type neither already is, so clippy doesn't flag a redundant
 /// cast on either platform) before the bit-AND to keep the helper
-/// portable.
-fn cred_has(cred: &git2::Cred, kind: git2::CredentialType) -> bool {
-    i64::from(cred.credtype()) & i64::from(kind.bits()) != 0
-}
-
-#[test]
-fn make_credentials_callback_forwards_to_select_credentials() {
-    // The closure body is one call to `select_credentials`; we
-    // exercise it directly with synthetic args so the closure lines
-    // get coverage even without an authenticated remote handshake.
-    let mut cb = make_credentials_callback(Some("ghp_xyz".into()));
-    let cred = cb(
-        "https://example.com/repo.git",
-        None,
-        git2::CredentialType::USER_PASS_PLAINTEXT,
-    )
-    .expect("userpass cred");
-    assert!(cred_has(&cred, git2::CredentialType::USER_PASS_PLAINTEXT));
-
-    // Same callback called a second time with no token in scope —
-    // confirms the closure captures and reuses the token via the
-    // FnMut closure trait.
-    let mut cb_no_token = make_credentials_callback(None);
-    let cred = cb_no_token(
-        "https://example.com/repo.git",
-        None,
-        git2::CredentialType::USER_PASS_PLAINTEXT,
-    )
-    .expect("default cred");
-    assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
-}
-
-#[test]
-fn select_credentials_returns_userpass_when_https_basic_auth_is_allowed_and_token_present() {
-    let cred = select_credentials(
-        git2::CredentialType::USER_PASS_PLAINTEXT,
-        None,
-        Some("ghp_secret"),
-    )
-    .expect("userpass cred");
-    assert!(cred_has(&cred, git2::CredentialType::USER_PASS_PLAINTEXT));
-}
-
-#[test]
-fn select_credentials_falls_through_to_default_when_no_token_for_https() {
-    // Remote will accept userpass but we have nothing to give. With
-    // only USER_PASS_PLAINTEXT advertised, we end up at the libgit2
-    // default cred, which is what unauthenticated HTTPS uses.
-    let cred = select_credentials(git2::CredentialType::USER_PASS_PLAINTEXT, None, None)
-        .expect("default cred");
-    assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
-}
-
-#[test]
-fn select_credentials_returns_default_when_no_supported_methods_are_allowed() {
-    // Remote advertises something we don't handle (e.g. NTLM). Falls
-    // through to libgit2's default credential.
-    let cred =
-        select_credentials(git2::CredentialType::USERNAME, None, None).expect("default cred");
-    assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
-}
-
 #[test]
 fn status_is_clean_on_a_fresh_repo() {
     let f = Fixture::new();
@@ -403,7 +286,6 @@ fn sync_records_a_completed_timestamp() {
     let result = f.backend().sync(None).unwrap();
     assert!(result.completed_unix > 0);
 }
-
 #[test]
 fn map_remote_error_classifies_network_and_auth_errors() {
     // `git2::Error::new` takes (code, class, message), so we can
@@ -435,75 +317,6 @@ fn map_remote_error_classifies_network_and_auth_errors() {
     let generic = git2::Error::from_str("something else");
     assert!(matches!(map_remote_error(generic), SyncError::Backend(_)));
 }
-
-#[test]
-fn init_repo_creates_a_repository_with_the_requested_default_branch() {
-    let tmp = TempDir::new().unwrap();
-    init_repo(tmp.path(), "trunk").unwrap();
-    let repo = Repository::open(tmp.path()).unwrap();
-    // HEAD points at refs/heads/trunk on a fresh repo even before
-    // the first commit.
-    let head = repo.find_reference("HEAD").unwrap();
-    assert_eq!(head.symbolic_target(), Some("refs/heads/trunk"));
-}
-
-#[test]
-fn clone_repo_clones_an_unauthenticated_local_remote() {
-    // Seed: build a working repo, push a file, then clone the bare
-    // remote into a fresh path. The clone should contain the file.
-    let f = Fixture::new();
-    f.write_file("seed.md", "# seed\n");
-    f.backend().sync(None).unwrap();
-
-    let dest = f._tmp.path().join("cloned");
-    let resolved = clone_repo(f.remote.to_str().unwrap(), &dest, None).unwrap();
-    assert_eq!(resolved, dest);
-    assert!(dest.join("seed.md").exists());
-    assert!(dest.join(".git").exists());
-}
-
-#[test]
-fn clone_repo_errors_when_target_exists_and_is_not_empty() {
-    let f = Fixture::new();
-    f.write_file("seed.md", "# seed\n");
-    f.backend().sync(None).unwrap();
-
-    // libgit2 refuses to clone into a non-empty directory.
-    let dest = f._tmp.path().join("existing");
-    fs::create_dir_all(&dest).unwrap();
-    fs::write(dest.join("blocker.txt"), "x").unwrap();
-    let err = clone_repo(f.remote.to_str().unwrap(), &dest, None).unwrap_err();
-    // Local-path bare remotes go through libgit2 directly without
-    // hitting the network classifier; we just confirm it failed
-    // with some backend-mapped error.
-    assert!(
-        matches!(err, SyncError::Backend(_) | SyncError::Network(_)),
-        "got {err:?}"
-    );
-}
-
-#[test]
-fn set_origin_creates_then_updates_the_remote_url() {
-    let tmp = TempDir::new().unwrap();
-    init_repo(tmp.path(), super::super::DEFAULT_REMOTE_BRANCH).unwrap();
-    set_origin(tmp.path(), "https://example.com/a.git").unwrap();
-    set_origin(tmp.path(), "https://example.com/b.git").unwrap();
-    let repo = Repository::open(tmp.path()).unwrap();
-    let remote = repo.find_remote("origin").unwrap();
-    assert_eq!(remote.url(), Some("https://example.com/b.git"));
-}
-
-#[test]
-fn set_origin_errors_when_path_is_not_a_repo() {
-    // Covers the `Repository::open(...).map_err(SyncError::Backend)`
-    // arm at the top of `set_origin`: a directory that doesn't have
-    // a `.git` folder can't be opened, and the error gets surfaced
-    // as a Backend variant.
-    let tmp = TempDir::new().unwrap();
-    let err = set_origin(tmp.path(), "https://example.com/a.git").unwrap_err();
-    assert!(matches!(err, SyncError::Backend(_)), "got {err:?}");
-}
-
 #[test]
 fn signature_falls_back_to_global_config_when_no_author_in_workspace_config() {
     let f = Fixture::new();
@@ -603,118 +416,4 @@ fn sync_refuses_to_run_while_workspace_still_has_unresolved_conflicts() {
     f.backend().sync(None).unwrap(); // leaves conflict in index
     let err = f.backend().sync(None).unwrap_err();
     assert!(matches!(err, SyncError::Conflict(_)), "got {err:?}");
-}
-
-// -- auto_commit_message ------------------------------------------------
-//
-// Helpers for the GitHub-style auto-commit message generator. Each
-// test stages a known diff into a fresh repo via `stage_all` and
-// then asks `auto_commit_message` to summarise it.
-
-/// Open the workspace repo for a fixture and stage everything,
-/// returning the message `auto_commit_message` would produce.
-fn auto_message_for(f: &Fixture) -> String {
-    let repo = Repository::open(&f.workspace).unwrap();
-    GitBackend::stage_all(&repo).unwrap();
-    auto_commit_message(&repo).unwrap()
-}
-
-#[test]
-fn auto_commit_message_for_a_single_added_file_says_create() {
-    let f = Fixture::new();
-    f.write_file("notes.md", "# hi\n");
-    assert_eq!(auto_message_for(&f), "Create notes.md");
-}
-
-#[test]
-fn auto_commit_message_on_unborn_branch_treats_paths_as_added() {
-    // No HEAD yet — the diff source is `None`, so libgit2 marks
-    // every index entry as `Added`. Two new files: "Create a, b".
-    let tmp = TempDir::new().unwrap();
-    let workspace = tmp.path();
-    init_repo(workspace, super::super::DEFAULT_REMOTE_BRANCH).unwrap();
-    fs::write(workspace.join("a.md"), "a").unwrap();
-    fs::write(workspace.join("b.md"), "b").unwrap();
-    let repo = Repository::open(workspace).unwrap();
-    GitBackend::stage_all(&repo).unwrap();
-    assert_eq!(auto_commit_message(&repo).unwrap(), "Create a.md, b.md");
-}
-
-#[test]
-fn auto_commit_message_for_a_single_deleted_file_says_delete() {
-    let f = Fixture::new();
-    f.write_file("notes.md", "# hi\n");
-    f.backend().sync(None).unwrap();
-    fs::remove_file(f.workspace.join("notes.md")).unwrap();
-    assert_eq!(auto_message_for(&f), "Delete notes.md");
-}
-
-#[test]
-fn auto_commit_message_for_a_single_modified_file_says_update() {
-    let f = Fixture::new();
-    f.write_file("notes.md", "# hi\n");
-    f.backend().sync(None).unwrap();
-    f.write_file("notes.md", "# changed\n");
-    assert_eq!(auto_message_for(&f), "Update notes.md");
-}
-
-#[test]
-fn auto_commit_message_for_two_mixed_deltas_uses_update_with_a_comma() {
-    // One add + one modify on top of a clean repo. Mixed kinds, so
-    // the verb falls back to "Update".
-    let f = Fixture::new();
-    f.write_file("a.md", "a\n");
-    f.backend().sync(None).unwrap();
-    f.write_file("a.md", "changed\n");
-    f.write_file("b.md", "b\n");
-    let msg = auto_message_for(&f);
-    // Order of deltas isn't part of the API contract.
-    assert!(
-        msg == "Update a.md, b.md" || msg == "Update b.md, a.md",
-        "unexpected message: {msg}"
-    );
-}
-
-#[test]
-fn auto_commit_message_for_three_added_files_lists_each_with_create() {
-    let f = Fixture::new();
-    f.write_file("seed.md", "seed\n");
-    f.backend().sync(None).unwrap();
-    f.write_file("a.md", "a\n");
-    f.write_file("b.md", "b\n");
-    f.write_file("c.md", "c\n");
-    let msg = auto_message_for(&f);
-    assert!(msg.starts_with("Create "), "got: {msg}");
-    for name in ["a.md", "b.md", "c.md"] {
-        assert!(msg.contains(name), "missing {name} in {msg}");
-    }
-}
-
-#[test]
-fn auto_commit_message_falls_back_to_the_legacy_message_when_diff_is_empty() {
-    // Defensive fallback path: `auto_commit_message` only runs after
-    // `stage_all` flagged "something to commit", but if libgit2 ever
-    // reports zero deltas (a clean diff against HEAD) the function
-    // must still hand back a usable subject. Re-running it on a fresh
-    // post-sync repo with no edits hits that path.
-    let f = Fixture::new();
-    f.write_file("notes.md", "# hi\n");
-    f.backend().sync(None).unwrap();
-    let repo = Repository::open(&f.workspace).unwrap();
-    // No changes since the sync, so `diff_tree_to_index` is empty.
-    let msg = auto_commit_message(&repo).unwrap();
-    assert_eq!(msg, super::auto_commit_fallback_message());
-}
-
-#[test]
-fn auto_commit_message_for_four_plus_files_collapses_into_n_more() {
-    let f = Fixture::new();
-    f.write_file("seed.md", "seed\n");
-    f.backend().sync(None).unwrap();
-    for n in ["a.md", "b.md", "c.md", "d.md", "e.md"] {
-        fs::write(f.workspace.join(n), "x\n").unwrap();
-    }
-    let msg = auto_message_for(&f);
-    assert!(msg.starts_with("Create "), "got: {msg}");
-    assert!(msg.contains(" and 3 more files"), "got: {msg}");
 }
