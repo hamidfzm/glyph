@@ -76,9 +76,9 @@ jobs:
 
   build-android:
     name: Android
-    # Android APK skips PRs; desktop builds cover them. Any non-PR event
-    # (push, and future dispatch/schedule triggers) gets the full build.
-    if: github.event_name != 'pull_request'
+    # Runs on PRs too: this is the only job that compiles a `cfg(mobile)`
+    # configuration. Every other gate builds the host target, where
+    # `cfg(desktop)` is true, so mobile-only breakage is invisible to them.
     runs-on: ubuntu-latest
     env:
       NDK_VERSION: 29.0.14206865

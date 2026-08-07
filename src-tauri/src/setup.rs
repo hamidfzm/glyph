@@ -7,14 +7,15 @@
 //! selection and classification logic it calls lives in [`crate::cli`] and is
 //! tested there.
 
-#[cfg(desktop)]
+// `Manager` is not desktop-only: the registry seeding below runs on every
+// platform, and `state()` comes from that trait.
 use tauri::Manager;
 #[cfg(desktop)]
 use tauri_plugin_cli::CliExt;
 
+use crate::windows;
 #[cfg(desktop)]
-use crate::{cli, menu, stash_initial_open};
-use crate::{commands, grants, windows};
+use crate::{cli, commands, grants, menu, stash_initial_open};
 
 /// Runs inside Tauri's `setup` hook, before any window is shown.
 pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
