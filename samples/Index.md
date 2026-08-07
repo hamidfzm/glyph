@@ -19,6 +19,7 @@ To explore wikilinks live:
 The notes under `Notes/` carry frontmatter (`tags:`, `status:`), and inline `#tag` tokens count too. Glyph indexes both across the workspace, so with `samples/` open you can:
 
 - Pick a tag in the **Tags** panel at the bottom of the Files sidebar to list only the notes carrying it (`#cooking` matches three of them). Pick it again, or use the panel's clear button, to get the tree back.
+- Nested tags written with a slash hang under their parent: `#cooking/ingredient` and `#cooking/technique` sit beneath `#cooking`, and picking the parent still lists everything under it. The panel's toolbar button switches the list from alphabetical to most-used-first.
 - Search by metadata in the command palette (`Cmd/Ctrl+K`): `tag:cooking`, `status:draft`, `status:draft sear`. Filters combine, and anything left over is matched against file names as usual.
 
 ## How resolution works

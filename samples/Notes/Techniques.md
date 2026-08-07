@@ -1,6 +1,6 @@
 ---
 status: published
-tags: [cooking]
+tags: [cooking/technique]
 ---
 
 # Techniques

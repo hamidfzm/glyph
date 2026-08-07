@@ -48,7 +48,8 @@
     "heading": "برچسب‌ها",
     "filterBy": "فیلتر بر پایهٔ #{{tag}}",
     "filtered": "#{{tag}} ({{total}})",
-    "clearFilter": "پاک کردن فیلتر برچسب"
+    "clearFilter": "پاک کردن فیلتر برچسب",
+    "sortByCount": "مرتب‌سازی برچسب‌ها بر پایهٔ شمار"
   },
   "tabBar": {
     "graphLabel": "گراف: {{name}}",
