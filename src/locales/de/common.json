@@ -48,7 +48,8 @@
     "heading": "Tags",
     "filterBy": "Nach #{{tag}} filtern",
     "filtered": "#{{tag}} ({{total}})",
-    "clearFilter": "Tag-Filter aufheben"
+    "clearFilter": "Tag-Filter aufheben",
+    "sortByCount": "Tags nach Anzahl sortieren"
   },
   "tabBar": {
     "graphLabel": "Graph: {{name}}",
