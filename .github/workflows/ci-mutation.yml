@@ -25,7 +25,7 @@ jobs:
         with:
           cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
       - name: Install cargo-mutants
-        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68 # v2.85.3
+        uses: taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8 # v2.85.8
         with:
           tool: cargo-mutants,nextest
       - name: Run targeted mutation tests
