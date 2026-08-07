@@ -44,7 +44,10 @@ export function SyncSettingsTab() {
   const defaultForm = useMemo(() => (config ? formFromConfig(config) : EMPTY_FORM), [config]);
   const [form, setForm] = useState<FormState>(defaultForm);
   useEffect(() => {
-    setForm(defaultForm);
+    // The config only owns the persisted fields; the commit subject is
+    // per-sync form state, so a prefill (initial load, or the fresh config
+    // a save installs) must not wipe what the user already typed.
+    setForm((prev) => ({ ...defaultForm, commitMessage: prev.commitMessage }));
   }, [defaultForm]);
 
   const [lastSync, setLastSync] = useState<SyncResult | null>(null);

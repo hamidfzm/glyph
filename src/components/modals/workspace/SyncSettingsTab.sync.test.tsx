@@ -62,6 +62,36 @@ describe("SyncSettingsTab running a sync", () => {
     await waitFor(() => expect(msgInput.value).toBe(""));
   });
 
+  it("keeps a typed commit message when a fresh config prefills the form", async () => {
+    const stored: WorkspaceSyncConfig = {
+      workspacePath: "/w",
+      backend: "git",
+      remoteUrl: "https://example.com/r.git",
+      remoteBranch: "main",
+      conflictPolicy: "prompt",
+      author: null,
+    };
+    routeInvoke({
+      sync_get_config: () => stored,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_set_config: () => null,
+      sync_set_origin: () => null,
+      sync_commit_config: () => true,
+    });
+    renderWithSync(<SyncSettingsTab />);
+
+    const msgInput = (await screen.findByPlaceholderText("e.g. Update notes")) as HTMLInputElement;
+    fireEvent.change(msgInput, { target: { value: "fix readme" } });
+    // Saving installs a new config object, which re-runs the prefill.
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("sync_commit_config", { workspacePath: "/w" }),
+    );
+    expect(msgInput.value).toBe("fix readme");
+  });
+
   it("Sync now renders the lastSync block with pulled/committed/pushed counts", async () => {
     const stored: WorkspaceSyncConfig = {
       workspacePath: "/w",
