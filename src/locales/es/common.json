@@ -48,7 +48,8 @@
     "heading": "Etiquetas",
     "filterBy": "Filtrar por #{{tag}}",
     "filtered": "#{{tag}} ({{total}})",
-    "clearFilter": "Quitar el filtro de etiqueta"
+    "clearFilter": "Quitar el filtro de etiqueta",
+    "sortByCount": "Ordenar etiquetas por cantidad"
   },
   "tabBar": {
     "graphLabel": "Grafo: {{name}}",

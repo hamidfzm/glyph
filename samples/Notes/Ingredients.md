@@ -1,6 +1,6 @@
 ---
 status: draft
-tags: [cooking]
+tags: [cooking/ingredient]
 ---
 
 # Ingredients

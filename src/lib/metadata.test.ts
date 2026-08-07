@@ -16,6 +16,11 @@ describe("normalizeTag", () => {
   it("strips leading hashes, trims, and lowercases", () => {
     expect(normalizeTag(" #Project/Alpha ")).toBe("project/alpha");
   });
+
+  it("collapses and trims the nesting separator", () => {
+    expect(normalizeTag("#work/")).toBe("work");
+    expect(normalizeTag("#work//urgent")).toBe("work/urgent");
+  });
 });
 
 describe("buildMetadataIndex", () => {
@@ -27,6 +32,12 @@ describe("buildMetadataIndex", () => {
       }),
     ]);
     expect(index.get("/ws/a.md")?.tags).toEqual(["ideas", "urgent", "work"]);
+  });
+
+  it("drops a frontmatter tag longer than the scanner's inline cap", () => {
+    const deep = Array(50).fill("a").join("/");
+    const index = buildMetadataIndex([entry({ frontmatter: `---\ntags: [${deep}, ok]\n---\n` })]);
+    expect(index.get("/ws/a.md")?.tags).toEqual(["ok"]);
   });
 
   it("indexes known and extra frontmatter fields by lowercased name", () => {
@@ -80,6 +91,29 @@ describe("tagCounts", () => {
       { tag: "alpha", count: 1 },
       { tag: "zebra", count: 1 },
     ]);
+  });
+
+  it("counts a nested tag toward its ancestors, once per file", () => {
+    const index = buildMetadataIndex([
+      entry({ path: "/ws/a.md", tags: ["project/glyph/ui", "project/atlas"] }),
+      entry({ path: "/ws/b.md", tags: ["project/glyph"] }),
+    ]);
+    expect(tagCounts(index)).toEqual([
+      { tag: "project", count: 2 },
+      { tag: "project/glyph", count: 2 },
+      { tag: "project/atlas", count: 1 },
+      { tag: "project/glyph/ui", count: 1 },
+    ]);
+  });
+
+  it("gives a parent the same count as the files selecting it lists", () => {
+    const index = buildMetadataIndex([
+      entry({ path: "/ws/a.md", tags: ["work/urgent", "work/later"] }),
+      entry({ path: "/ws/b.md", tags: ["work"] }),
+      entry({ path: "/ws/c.md", tags: ["ideas"] }),
+    ]);
+    const work = tagCounts(index).find((t) => t.tag === "work");
+    expect(work?.count).toBe(pathsWithTag(index, "work").length);
   });
 });
 

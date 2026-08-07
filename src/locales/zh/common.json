@@ -48,7 +48,8 @@
     "heading": "标签",
     "filterBy": "按 #{{tag}} 筛选",
     "filtered": "#{{tag}}（{{total}}）",
-    "clearFilter": "清除标签筛选"
+    "clearFilter": "清除标签筛选",
+    "sortByCount": "按数量排序标签"
   },
   "tabBar": {
     "graphLabel": "图谱：{{name}}",

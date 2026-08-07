@@ -37,15 +37,28 @@ export const EMPTY_METADATA_INDEX: MetadataIndex = new Map();
 
 /** `#Project/Alpha` and `project/alpha` are the same tag. */
 export function normalizeTag(tag: string): string {
-  return tag.trim().replace(/^#+/, "").toLowerCase();
+  // The separator is collapsed and trimmed so `#work/` and `#work//urgent`
+  // can't open a blank level in the tag tree.
+  return tag
+    .trim()
+    .replace(/^#+/, "")
+    .toLowerCase()
+    .replace(/\/{2,}/g, "/")
+    .replace(/^\/+|\/+$/g, "");
 }
+
+// Mirrors SCAN_MAX_TAG_CHARS in src-tauri/src/commands/metadata.rs, which bounds
+// inline tags at the source. Frontmatter tags arrive inside the 8 KB block, so
+// they are bounded here instead: without a cap one crafted `a/a/a/…` tag would
+// expand into thousands of ancestors and nest the tag tree just as deep.
+const MAX_TAG_CHARS = 64;
 
 // A plain scalar (`tags: work, ideas`) reaches us as one string, so split it
 // the way Obsidian does instead of indexing "work, ideas" as a single tag.
 function addTags(raw: string, into: Set<string>): void {
   for (const part of raw.split(/[,\s]+/)) {
     const tag = normalizeTag(part);
-    if (tag) into.add(tag);
+    if (tag && tag.length <= MAX_TAG_CHARS) into.add(tag);
   }
 }
 
@@ -88,11 +101,25 @@ export function metadataFields(index: MetadataIndex): Set<string> {
   return fields;
 }
 
-/** Every tag in the workspace, most frequent first, ties broken by name. */
+/** `project/glyph/ui` also belongs to `project/glyph` and to `project`. */
+function withAncestors(tag: string): string[] {
+  const parts = tag.split("/");
+  return parts.map((_, i) => parts.slice(0, i + 1).join("/"));
+}
+
+/**
+ * Every tag in the workspace, most frequent first, ties broken by name.
+ * A nested tag counts toward each of its ancestors, once per file, so a
+ * parent's count matches the file list `pathsWithTag` returns for it.
+ */
 export function tagCounts(index: MetadataIndex): TagCount[] {
   const counts = new Map<string, number>();
   for (const meta of index.values()) {
+    const inFile = new Set<string>();
     for (const tag of meta.tags) {
+      for (const ancestor of withAncestors(tag)) inFile.add(ancestor);
+    }
+    for (const tag of inFile) {
       counts.set(tag, (counts.get(tag) ?? 0) + 1);
     }
   }
