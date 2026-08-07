@@ -1,11 +1,17 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { MetadataIndex } from "@/lib/metadata";
 import { SIDEBAR_WIDTH_DEFAULT } from "@/lib/settings";
 import { makeWorkspace, renderBothSides, renderSidebar } from "@/test/fixtures/sidebar";
 
 vi.mock("@/lib/pickers", () => ({
   pickMoveDir: vi.fn(),
 }));
+
+// One tagged note, enough for the Files panel to render the tag cloud.
+function taggedIndex(): MetadataIndex {
+  return new Map([["/tmp/notes/readme.md", { tags: ["notes"], fields: new Map() }]]);
+}
 
 describe("Sidebar placement", () => {
   it("renders nothing when no active tab and no workspace", () => {
@@ -250,6 +256,42 @@ describe("Sidebar placement", () => {
     });
     fireEvent.doubleClick(screen.getByRole("separator", { name: "Resize backlinks" }));
     expect(setBacklinksHeight).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it("drags the tags divider and persists the height", () => {
+    const setTagsHeight = vi.fn();
+    renderSidebar({ workspace: makeWorkspace(), setTagsHeight, tabs: { metadata: taggedIndex() } });
+    const handle = screen.getByRole("separator", { name: "Resize tags" });
+    const block = handle.nextElementSibling as HTMLElement;
+    Object.defineProperty(block, "offsetHeight", { configurable: true, value: 100 });
+    Object.defineProperty(block.parentElement as HTMLElement, "clientHeight", {
+      configurable: true,
+      value: 500,
+    });
+    fireEvent.pointerDown(handle, { button: 0, clientY: 400 });
+    // The block sits below the tree: dragging the divider up grows it.
+    fireEvent.pointerMove(handle, { clientY: 360 });
+    expect(block.style.height).toBe("140px");
+    fireEvent.pointerUp(handle);
+    expect(setTagsHeight).toHaveBeenCalledExactlyOnceWith(140);
+  });
+
+  it("applies a persisted tags height when idle", () => {
+    renderSidebar({
+      workspace: makeWorkspace(),
+      tagsHeight: 120,
+      tabs: { metadata: taggedIndex() },
+    });
+    const handle = screen.getByRole("separator", { name: "Resize tags" });
+    expect((handle.nextElementSibling as HTMLElement).style.height).toBe("120px");
+    expect(handle).toHaveAttribute("aria-valuenow", "120");
+  });
+
+  it("double-click on the tags divider restores the automatic height", () => {
+    const setTagsHeight = vi.fn();
+    renderSidebar({ workspace: makeWorkspace(), setTagsHeight, tabs: { metadata: taggedIndex() } });
+    fireEvent.doubleClick(screen.getByRole("separator", { name: "Resize tags" }));
+    expect(setTagsHeight).toHaveBeenCalledExactlyOnceWith(null);
   });
 
   it("swaps sides when swapSidebarSides=true (file tab outline goes right)", () => {

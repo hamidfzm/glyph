@@ -78,6 +78,11 @@ export function useSidebarLayout({
     [updateSettings],
   );
 
+  const setTagsHeight = useCallback(
+    (height: number | null) => updateSettings("layout.tagsHeight", height),
+    [updateSettings],
+  );
+
   const resetLayout = useCallback(() => {
     updateSettings("layout.filesSidebarVisible", true);
     updateSettings("layout.outlineSidebarVisible", true);
@@ -87,6 +92,7 @@ export function useSidebarLayout({
     updateSettings("layout.outlineSidebarWidth", SIDEBAR_WIDTH_DEFAULT);
     updateSettings("layout.aiPanelWidth", AI_PANEL_WIDTH_DEFAULT);
     updateSettings("layout.backlinksHeight", null);
+    updateSettings("layout.tagsHeight", null);
   }, [updateSettings]);
 
   return {
@@ -101,6 +107,7 @@ export function useSidebarLayout({
     setFilesSidebarWidth,
     setOutlineSidebarWidth,
     setBacklinksHeight,
+    setTagsHeight,
     resetLayout,
   };
 }

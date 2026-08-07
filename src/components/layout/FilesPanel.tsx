@@ -16,7 +16,7 @@ import { BacklinksBlock } from "./BacklinksBlock";
 import { FileTree, type FileTreeHandle } from "./FileTree";
 import { PanelHeader } from "./PanelHeader";
 import { TagFileList } from "./TagFileList";
-import { TagsSection } from "./TagsSection";
+import { TagsBlock } from "./TagsBlock";
 import { ToolbarButton } from "./ToolbarButton";
 import { WorkspaceIndexWarning } from "./WorkspaceIndexWarning";
 
@@ -157,15 +157,11 @@ export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
           />
         )}
       </div>
-      {tags.length > 0 && (
-        <div className="pt-2 mt-2 border-t border-[var(--color-border)] shrink-0 max-h-40 overflow-y-auto">
-          <TagsSection
-            tags={tags}
-            selected={activeTag}
-            onSelect={(tag) => setTagFilter(tag ? { root: workspace.root, tag } : null)}
-          />
-        </div>
-      )}
+      <TagsBlock
+        tags={tags}
+        selected={activeTag}
+        onSelect={(tag) => setTagFilter(tag ? { root: workspace.root, tag } : null)}
+      />
       <WorkspaceIndexWarning />
       <BacklinksBlock workspaceRoot={workspace.root} onOpen={handleOpenFile} />
     </div>
