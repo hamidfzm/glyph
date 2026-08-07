@@ -61,3 +61,10 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+    groups:
+      # init/autobuild/analyze are separate Dependabot dependencies but must run
+      # the same version; a lone bump fails with "Loaded a configuration file for
+      # version 'X', but running version 'Y'". Group them into one PR.
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
