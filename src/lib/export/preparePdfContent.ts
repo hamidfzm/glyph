@@ -1,26 +1,20 @@
 // The extra passes a PDF export needs that the vector walker cannot do itself:
-// diagrams re-rendered light and rasterized, block math rasterized to an image,
+// diagrams re-rendered light as inline SVG, block math rasterized to an image,
 // right-to-left blocks rasterized (pdfmake does no bidi shaping), and
 // syntax-highlight colours inlined onto code spans. Applied to the export
 // clone by prepareContent.
 
 import { renderD2 } from "@/lib/d2Render";
-import { ensureSvgXmlns } from "@/lib/svgDataUrl";
 import { containsRtlText } from "@/lib/textDirection";
-import {
-  rasterizeElement,
-  renderMermaidLightSvg,
-  restoreMermaidTheme,
-  svgToPng,
-} from "./rasterize";
-import { svgWidth } from "./svgPdfNode";
+import { rasterizeElement, renderMermaidLightSvg, restoreMermaidTheme } from "./rasterize";
 
-// For PDF export: swap each Mermaid / D2 diagram in the clone for a light-theme
-// PNG, and rasterize block math (`.katex-display`) to a PNG <img> (vector math
-// is #256). Diagrams re-render light so they don't sit as a dark box on the
-// white page. A math failure leaves the original node (the walker falls back to
-// the LaTeX source); a diagram whose light re-render fails is removed so the
-// dark on-screen SVG never leaks into the PDF.
+// For PDF export: swap each Mermaid / D2 diagram in the clone for its
+// light-theme vector `<svg>` (the walker embeds SVG natively; see htmlToPdf),
+// and rasterize block math (`.katex-display`) to a PNG <img> (vector math is
+// #256). Diagrams re-render light so they don't sit as a dark box on the white
+// page. A math failure leaves the original node (the walker falls back to the
+// LaTeX source); a diagram whose light re-render fails is removed so the dark
+// on-screen SVG never leaks into the PDF.
 export async function preparePdfRichContent(liveBody: Element, clone: Element): Promise<void> {
   const selector = ".katex-display, .mermaid-diagram, .d2-diagram";
   const live = liveBody.querySelectorAll<HTMLElement>(selector);
@@ -46,23 +40,16 @@ export async function preparePdfRichContent(liveBody: Element, clone: Element): 
       if (isMermaid) mermaidRendered = true;
       const wrap = clone.ownerDocument.createElement("div");
       // The diagram source is user-authored, and unlike D2 (sanitized in
-      // d2Render) Mermaid's output is raw, so sanitize before it reaches the
-      // rasterizer. <foreignObject> is the SVG-embedded-HTML XSS vector.
+      // d2Render) Mermaid's output is raw, so sanitize at the sink before it
+      // re-enters the DOM and later flows into pdfmake's SVG parser. DOMPurify
+      // keeps <style> blocks and style attributes, which Mermaid's colors need;
+      // <foreignObject> is forbidden as the SVG-embedded-HTML vector (and
+      // pdfmake can't draw it anyway).
       const { default: DOMPurify } = await import("dompurify");
       wrap.innerHTML = DOMPurify.sanitize(svg, { FORBID_TAGS: ["foreignObject"] });
       const svgEl = wrap.querySelector("svg");
       if (!svgEl) throw new Error("no svg in rendered diagram");
-      // Rasterized rather than embedded as a vector: pdfmake's SVG renderer
-      // only matches single-compound CSS selectors, so every descendant rule in
-      // a diagram's <style> block (`.node rect`, `.edgePath .path`) is dropped
-      // and the shapes come out as solid black boxes.
-      const img = clone.ownerDocument.createElement("img");
-      img.setAttribute("src", await svgToPng(ensureSvgXmlns(svgEl.outerHTML)));
-      // The raster is 2x for sharpness, so the PNG's pixel width would place
-      // the diagram at double size; the SVG's own width is the intended one.
-      const width = svgWidth(svgEl);
-      if (width) img.setAttribute("width", String(Math.round(width)));
-      cloned[i].replaceWith(img);
+      cloned[i].replaceWith(svgEl);
     } catch {
       if (!isMath) cloned[i].remove();
     }

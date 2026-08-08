@@ -49,6 +49,25 @@ describe("svgNode", () => {
     expect(junk.width).toBe(CONTENT_WIDTH);
   });
 
+  it("passes a mounted element through so pdfmake resolves its CSS", () => {
+    // A diagram mounted in the live document must reach pdfmake as an element:
+    // that is what switches its renderer to getComputedStyle, which is the only
+    // way Mermaid's descendant style rules survive into the PDF.
+    const host = document.createElement("div");
+    host.innerHTML = '<svg width="120"><rect/></svg>';
+    document.body.appendChild(host);
+    try {
+      const node = svgNode(host.querySelector("svg")!) as { svg: unknown; width: number };
+      expect(node.svg).toBeInstanceOf(Element);
+      expect(node.width).toBe(120);
+    } finally {
+      host.remove();
+    }
+    // The same element, once detached, has no computed style and goes as markup.
+    const detached = svgNode(svgEl('<svg width="120"><rect/></svg>')) as { svg: unknown };
+    expect(typeof detached.svg).toBe("string");
+  });
+
   it("keeps an existing xmlns untouched", () => {
     const node = svgNode(
       svgEl('<svg xmlns="http://www.w3.org/2000/svg" width="10"><g/></svg>'),

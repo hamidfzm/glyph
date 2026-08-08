@@ -33,11 +33,7 @@ function imageNode(el: Element): Content | null {
   const decoded = decodeDataUri(src);
   // pdfmake embeds PNG and JPEG; other raster formats are skipped.
   if (!decoded || (decoded.type !== "png" && decoded.type !== "jpg")) return null;
-  // A `width` attribute (set by preparePdfContent on diagrams rasterized at
-  // 2x) is the intended page width; without one the pixel width is used.
-  const attrWidth = Number.parseFloat(el.getAttribute("width") ?? "");
-  const intrinsic = Number.isFinite(attrWidth) && attrWidth > 0 ? attrWidth : decoded.width;
-  const width = Math.min(intrinsic, CONTENT_WIDTH);
+  const width = Math.min(decoded.width, CONTENT_WIDTH);
   return { image: src, width, margin: [0, 0, 0, 8] };
 }
 
@@ -204,9 +200,13 @@ function blocksForNode(node: Node): Content[] {
  * Walk a prepared HTML fragment into a pdfmake content array. Block-level SVG
  * (light-rendered diagrams, SVG images) embeds as vector `svg` nodes; inline
  * math falls back to its LaTeX source, matching the docx walker.
+ *
+ * Takes either markup or an element already mounted in the live document; a
+ * mounted root is what lets diagrams keep their own CSS (see `svgNode`).
  */
-export function convertHtmlToPdf(bodyHtml: string): Content[] {
-  const doc = new DOMParser().parseFromString(bodyHtml, "text/html");
-  const out = Array.from(doc.body.childNodes).flatMap((node) => blocksForNode(node));
+export function convertHtmlToPdf(body: string | Element): Content[] {
+  const root =
+    typeof body === "string" ? new DOMParser().parseFromString(body, "text/html").body : body;
+  const out = Array.from(root.childNodes).flatMap((node) => blocksForNode(node));
   return out.length ? out : [{ text: "" }];
 }

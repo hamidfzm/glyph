@@ -131,17 +131,6 @@ describe("convertHtmlToPdf", () => {
     expect(JSON.stringify(content)).toContain('"image"');
   });
 
-  it("honors an explicit width attribute over the pixel width", () => {
-    // Diagrams are rasterized at 2x, so their pixel width would double the size.
-    const scaled = convertHtmlToPdf(`<img src="${pngDataUri()}" width="2">`);
-    expect(JSON.stringify(scaled)).toContain('"width":2');
-    const intrinsic = convertHtmlToPdf(`<img src="${pngDataUri()}">`);
-    expect(JSON.stringify(intrinsic)).toContain('"width":4');
-    // A bogus attribute falls back to the pixel width.
-    const bogus = convertHtmlToPdf(`<img src="${pngDataUri()}" width="auto">`);
-    expect(JSON.stringify(bogus)).toContain('"width":4');
-  });
-
   it("covers inline formatting, breaks, comments, and bare anchors", () => {
     const content = convertHtmlToPdf(
       "<p><strong>b</strong><em>i</em><del>s</del><code>c</code>plain" +
