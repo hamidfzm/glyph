@@ -9,8 +9,7 @@ export interface PrepareOptions {
   doc?: Document;
   // PDF export needs extra work the vector walker can't do itself: inline the
   // rendered syntax-highlight colors onto code spans, rasterize block math to
-  // an embedded image, and re-render diagrams light as inline SVG so pdfmake
-  // embeds them as vectors.
+  // an embedded image, and re-render diagrams light before rasterizing them.
   pdf?: boolean;
 }
 

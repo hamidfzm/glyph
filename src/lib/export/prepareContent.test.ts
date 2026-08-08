@@ -6,12 +6,18 @@ import { prepareContent } from "./prepareContent";
 // orchestration is testable without them.
 const rasterizeElementMock = vi.fn(async () => "data:image/png;base64,MATH");
 const renderMermaidMock = vi.fn(async () => '<svg data-diagram="mermaid-light"></svg>');
-const renderD2Mock = vi.fn(async () => '<svg data-diagram="d2-light"></svg>');
+const renderD2Mock = vi.fn(async () => '<svg data-diagram="d2-light" width="300"></svg>');
 const restoreMermaidMock = vi.fn(async () => {});
+// The real rasterizer rejects markup that isn't an SVG (the <img> never loads).
+const svgToPngMock = vi.fn(async (svg: string) => {
+  if (!svg.includes("<svg")) throw new Error("svg load failed");
+  return "data:image/png;base64,DIAGRAM";
+});
 vi.mock("./rasterize", () => ({
   rasterizeElement: () => rasterizeElementMock(),
   renderMermaidLightSvg: () => renderMermaidMock(),
   restoreMermaidTheme: () => restoreMermaidMock(),
+  svgToPng: (svg: string) => svgToPngMock(svg),
 }));
 vi.mock("@/lib/d2Render", () => ({
   renderD2: () => renderD2Mock(),
@@ -133,7 +139,7 @@ describe("prepareContent", () => {
     expect(result?.html).toContain("rgb(40, 42, 54)");
   });
 
-  it("rasterizes block math and swaps Mermaid for its light vector SVG for PDF", async () => {
+  it("rasterizes block math and swaps Mermaid for a light-theme image for PDF", async () => {
     rasterizeElementMock.mockClear();
     renderMermaidMock.mockClear();
     restoreMermaidMock.mockClear();
@@ -146,19 +152,23 @@ describe("prepareContent", () => {
     expect(renderMermaidMock).toHaveBeenCalledTimes(1); // diagram re-rendered light
     expect(restoreMermaidMock).toHaveBeenCalledTimes(1); // app theme restored after
     expect(result?.html).toContain("data:image/png;base64,MATH");
-    expect(result?.html).toContain('data-diagram="mermaid-light"'); // inline vector SVG, not a PNG
+    // Rasterized, not embedded as a vector: pdfmake drops the diagram's CSS.
+    expect(result?.html).toContain("data:image/png;base64,DIAGRAM");
+    expect(result?.html).not.toContain('data-diagram="mermaid-light"');
     expect(result?.html).not.toContain("katex-display");
     expect(result?.html).not.toContain("mermaid-diagram");
   });
 
-  it("swaps a D2 diagram for its light vector SVG for PDF", async () => {
+  it("swaps a D2 diagram for a light-theme image for PDF", async () => {
     renderD2Mock.mockClear();
     setBody('<div class="d2-diagram" data-d2-source="a -> b"><svg></svg></div>');
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
     expect(renderD2Mock).toHaveBeenCalledTimes(1);
-    expect(result?.html).toContain('data-diagram="d2-light"');
+    expect(result?.html).toContain("data:image/png;base64,DIAGRAM");
+    // The SVG's own width, not the 2x raster's pixel width, sizes the image.
+    expect(result?.html).toContain('width="300"');
+    expect(result?.html).not.toContain('data-diagram="d2-light"');
     expect(result?.html).not.toContain("d2-diagram");
-    expect(result?.html).not.toContain("data:image/png");
   });
 
   it("leaves a D2 diagram untouched when its source is missing", async () => {

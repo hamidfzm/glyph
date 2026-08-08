@@ -11,7 +11,7 @@ export const CONTENT_WIDTH = 515;
 // Intrinsic width of an <svg>, from its width attribute (ignoring relative
 // values like "100%", which Mermaid emits) or the viewBox. Null when neither
 // yields a usable number.
-function svgWidth(el: Element): number | null {
+export function svgWidth(el: Element): number | null {
   const attr = el.getAttribute("width")?.trim();
   if (attr && !attr.endsWith("%")) {
     const w = Number.parseFloat(attr);

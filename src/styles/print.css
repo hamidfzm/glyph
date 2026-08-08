@@ -1,6 +1,8 @@
 @media print {
+  /* Zero page margins leave the webview no room for its own header and footer
+     (title, URL, date, page numbers); the margin moves onto the content. */
   @page {
-    margin: 2cm;
+    margin: 0;
   }
 
   html,
@@ -22,8 +24,7 @@
   .markdown-body {
     max-width: none !important;
     width: 100% !important;
-    padding: 0 !important;
-    padding-bottom: 0 !important;
+    padding: 2cm !important;
     overflow: visible !important;
     height: auto !important;
   }
