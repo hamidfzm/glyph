@@ -267,6 +267,33 @@
       "description": "默认关闭。开启后会发送匿名崩溃报告 (包含堆栈跟踪、操作系统和应用版本)，用于帮助修复问题。绝不会包含您的文件、文件路径和链接。仅在生产构建中生效。完整政策请参阅 SECURITY.md。"
     }
   },
+  "secrets": {
+    "title": "已保存的密钥",
+    "description": "Glyph 保存在系统钥匙串中的内容。这里从不显示密钥值，只显示每个条目是否已设置。",
+    "slots": {
+      "claude": "Claude API 密钥",
+      "openai": "OpenAI API 密钥",
+      "syncToken": "云同步令牌"
+    },
+    "status": {
+      "saved": "已保存",
+      "notSet": "未设置",
+      "unknown": "无法检查"
+    },
+    "noWorkspace": "打开一个文件夹以管理其同步令牌。",
+    "add": "添加",
+    "replace": "替换",
+    "remove": "移除",
+    "save": "保存",
+    "cancel": "取消",
+    "placeholder": "粘贴新的值",
+    "newValue": "{{slot}} 的新值",
+    "errors": {
+      "read": "无法读取钥匙串。请确认它已解锁，然后重新打开设置。",
+      "remove": "无法从钥匙串中移除该密钥。",
+      "save": "无法将该密钥保存到钥匙串。"
+    }
+  },
   "hotkeys": {
     "search": {
       "placeholder": "搜索快捷键…",

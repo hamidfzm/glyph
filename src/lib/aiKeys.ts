@@ -1,4 +1,4 @@
-import { getSecret, setSecret } from "./secrets";
+import { getSecret, hasSecret, setSecret } from "./secrets";
 
 /** Providers that authenticate with an API key. Ollama is local and keyless. */
 export const KEYED_PROVIDERS = ["claude", "openai"] as const;
@@ -17,6 +17,11 @@ export function getAiKey(provider: KeyedProvider): Promise<string> {
 /** Store one provider's key in the OS keychain; "" deletes the entry. */
 export function setAiKey(provider: KeyedProvider, value: string): Promise<void> {
   return setSecret(accountFor(provider), value);
+}
+
+/** Whether a provider's key is stored, without reading the key itself. */
+export function hasAiKey(provider: KeyedProvider): Promise<boolean> {
+  return hasSecret(accountFor(provider));
 }
 
 /**

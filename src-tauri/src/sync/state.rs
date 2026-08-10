@@ -54,6 +54,12 @@ impl SyncState {
         Some(token)
     }
 
+    /// Whether a token is stored for this workspace. Deliberately returns a
+    /// bool: the Settings audit view must never receive the token itself.
+    pub fn has_token(&self, workspace_path: &str) -> bool {
+        self.get_token(workspace_path).is_some()
+    }
+
     pub fn clear_token(&self, workspace_path: &str) {
         if let Err(e) = crate::secrets::set(&keychain_account(workspace_path), "") {
             eprintln!("sync: failed to clear the token from the keychain: {e}");
@@ -119,6 +125,24 @@ mod tests {
         state.clear_token("/a");
         assert!(state.get_token("/a").is_none());
         assert_eq!(state.get_token("/b").as_deref(), Some("token-b"));
+    }
+
+    #[test]
+    fn has_token_tracks_the_stored_token_without_returning_it() {
+        let _guard = crate::secrets::test_store::install();
+        let state = SyncState::new();
+        assert!(!state.has_token("/has"));
+
+        state.set_token("/has".into(), "tok".into());
+        assert!(state.has_token("/has"));
+        // Another workspace's token doesn't leak into this answer.
+        assert!(!state.has_token("/other"));
+
+        // A restart still reports the durable copy.
+        assert!(SyncState::new().has_token("/has"));
+
+        state.clear_token("/has");
+        assert!(!state.has_token("/has"));
     }
 
     #[test]

@@ -267,6 +267,33 @@
       "description": "Standardmäßig aus. Wenn aktiviert, werden anonyme Absturzberichte (Stack-Traces, Betriebssystem und App-Version) gesendet, um Fehler zu beheben. Deine Dateien, Dateipfade und Links werden niemals einbezogen. Nur in Produktionsversionen aktiv. Die vollständige Richtlinie findest du in SECURITY.md."
     }
   },
+  "secrets": {
+    "title": "Gespeicherte Geheimnisse",
+    "description": "Was Glyph in deinem Systemschlüsselbund gespeichert hat. Werte werden hier nie angezeigt, nur ob ein Eintrag belegt ist.",
+    "slots": {
+      "claude": "Claude-API-Schlüssel",
+      "openai": "OpenAI-API-Schlüssel",
+      "syncToken": "Cloud-Sync-Token"
+    },
+    "status": {
+      "saved": "Gespeichert",
+      "notSet": "Nicht gesetzt",
+      "unknown": "Konnte nicht geprüft werden"
+    },
+    "noWorkspace": "Öffne einen Ordner, um dessen Sync-Token zu verwalten.",
+    "add": "Hinzufügen",
+    "replace": "Ersetzen",
+    "remove": "Entfernen",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "placeholder": "Neuen Wert einfügen",
+    "newValue": "Neuer Wert für {{slot}}",
+    "errors": {
+      "read": "Der Schlüsselbund konnte nicht gelesen werden. Prüfe, ob er entsperrt ist, und öffne die Einstellungen erneut.",
+      "remove": "Das Geheimnis konnte nicht aus dem Schlüsselbund entfernt werden.",
+      "save": "Das Geheimnis konnte nicht im Schlüsselbund gespeichert werden."
+    }
+  },
   "hotkeys": {
     "search": {
       "placeholder": "Tastenkürzel suchen…",

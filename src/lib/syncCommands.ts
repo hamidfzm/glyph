@@ -27,6 +27,15 @@ export function clearSyncToken(workspacePath: string): Promise<void> {
   return invoke("sync_clear_token", { workspacePath });
 }
 
+/**
+ * Whether this workspace has a stored sync token. Sync tokens are absent from
+ * the webview's secret allowlist on purpose, so presence is all the renderer
+ * can learn about them.
+ */
+export function hasSyncToken(workspacePath: string): Promise<boolean> {
+  return invoke("sync_has_token", { workspacePath });
+}
+
 export function initSyncRepo(
   workspacePath: string,
   defaultBranch: string | null,
