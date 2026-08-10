@@ -29,8 +29,9 @@ describe("renderMermaidLightSvg", () => {
 
   it("re-renders light with SVG text labels and returns the markup", async () => {
     renderMermaid.mockResolvedValue({ svg: "<svg data-light='1'></svg>" });
+    // Re-serialized (the label-background pass parses it), so assert on content.
     const svg = await renderMermaidLightSvg("graph TD; A-->B");
-    expect(svg).toBe("<svg data-light='1'></svg>");
+    expect(svg).toContain('data-light="1"');
     // The top-level flag matters: with only the flowchart one, Mermaid v11 still
     // emits <foreignObject> node labels and they vanish from the PDF.
     expect(initialize).toHaveBeenCalledWith({
@@ -39,6 +40,21 @@ describe("renderMermaidLightSvg", () => {
       htmlLabels: false,
       flowchart: { htmlLabels: false },
     });
+  });
+
+  it("clears the filled backdrop Mermaid puts behind edge and cluster labels", async () => {
+    renderMermaid.mockResolvedValue({
+      svg: '<svg xmlns="http://www.w3.org/2000/svg"><g class="edgeLabel"><rect class="background" style="stroke: none"/></g></svg>',
+    });
+    const svg = await renderMermaidLightSvg("graph TD; A-->|x|B");
+    expect(svg).toMatch(/fill:\s*none/);
+    // The existing inline declarations survive.
+    expect(svg).toMatch(/stroke:\s*none/);
+  });
+
+  it("returns the markup untouched when it does not parse as XML", async () => {
+    renderMermaid.mockResolvedValue({ svg: "<svg><unclosed></svg>" });
+    expect(await renderMermaidLightSvg("graph TD; A-->B")).toBe("<svg><unclosed></svg>");
   });
 
   it("passes a fresh id per render (Mermaid keeps state per id)", async () => {
