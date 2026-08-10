@@ -4,8 +4,8 @@ import { presenceStatusKey } from "@/lib/secretSlots";
 
 interface SecretRowProps {
   label: string;
-  /** `null` when the check failed or the slot can't be reached right now. */
-  isSet: boolean | null;
+  /** `undefined` while the check runs, `null` when it failed. */
+  isSet: boolean | null | undefined;
   /** Why the slot can't be managed, when it can't; also disables the row. */
   unavailableHint?: string;
   busy: boolean;
@@ -29,18 +29,19 @@ export function SecretRow({
   const { t } = useTranslation("settings");
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
-  const disabled = busy || unavailableHint !== undefined;
+  const disabled = busy || isSet === undefined || unavailableHint !== undefined;
 
-  const handleSave = useCallback(() => {
-    onSave(value);
-    setValue("");
-    setEditing(false);
-  }, [onSave, value]);
-
-  const handleCancel = useCallback(() => {
+  // Closing always drops what was typed: an unsaved secret must not sit in
+  // component state waiting to reappear when the field is reopened.
+  const handleClose = useCallback(() => {
     setValue("");
     setEditing(false);
   }, []);
+
+  const handleSave = useCallback(() => {
+    onSave(value.trim());
+    handleClose();
+  }, [onSave, value, handleClose]);
 
   return (
     <>
@@ -55,8 +56,11 @@ export function SecretRow({
           <button
             type="button"
             className="settings-secondary-btn"
+            aria-label={t(isSet === false ? "secrets.addSlot" : "secrets.replaceSlot", {
+              slot: label,
+            })}
             disabled={disabled}
-            onClick={() => setEditing((prev) => !prev)}
+            onClick={() => (editing ? handleClose() : setEditing(true))}
           >
             {/* Unknown presence reads as Replace: it may well be stored. */}
             {isSet === false ? t("secrets.add") : t("secrets.replace")}
@@ -64,6 +68,7 @@ export function SecretRow({
           <button
             type="button"
             className="settings-danger-btn"
+            aria-label={t("secrets.removeSlot", { slot: label })}
             disabled={disabled || isSet === false}
             onClick={onRemove}
           >
@@ -88,12 +93,12 @@ export function SecretRow({
             <button
               type="button"
               className="settings-primary-btn"
-              disabled={disabled || value.length === 0}
+              disabled={disabled || value.trim().length === 0}
               onClick={handleSave}
             >
               {t("secrets.save")}
             </button>
-            <button type="button" className="settings-secondary-btn" onClick={handleCancel}>
+            <button type="button" className="settings-secondary-btn" onClick={handleClose}>
               {t("secrets.cancel")}
             </button>
           </div>

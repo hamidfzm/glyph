@@ -278,12 +278,16 @@
     "status": {
       "saved": "已保存",
       "notSet": "未设置",
+      "checking": "检查中…",
       "unknown": "无法检查"
     },
     "noWorkspace": "打开一个文件夹以管理其同步令牌。",
     "add": "添加",
+    "addSlot": "添加{{slot}}",
     "replace": "替换",
+    "replaceSlot": "替换{{slot}}",
     "remove": "移除",
+    "removeSlot": "移除{{slot}}",
     "save": "保存",
     "cancel": "取消",
     "placeholder": "粘贴新的值",

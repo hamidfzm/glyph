@@ -54,10 +54,15 @@ impl SyncState {
         Some(token)
     }
 
-    /// Whether a token is stored for this workspace. Deliberately returns a
-    /// bool: the Settings audit view must never receive the token itself.
-    pub fn has_token(&self, workspace_path: &str) -> bool {
-        self.get_token(workspace_path).is_some()
+    /// Whether a token is stored for this workspace, without returning it and
+    /// without caching it. Unlike [`Self::get_token`], a keychain failure is an
+    /// error rather than a miss: the Settings audit view must not report a
+    /// locked keyring as "nothing stored".
+    pub fn has_token(&self, workspace_path: &str) -> Result<bool, String> {
+        if self.tokens.lock().unwrap().contains_key(workspace_path) {
+            return Ok(true);
+        }
+        Ok(crate::secrets::get(&keychain_account(workspace_path))?.is_some())
     }
 
     pub fn clear_token(&self, workspace_path: &str) {
@@ -131,18 +136,44 @@ mod tests {
     fn has_token_tracks_the_stored_token_without_returning_it() {
         let _guard = crate::secrets::test_store::install();
         let state = SyncState::new();
-        assert!(!state.has_token("/has"));
+        assert!(!state.has_token("/has").unwrap());
 
         state.set_token("/has".into(), "tok".into());
-        assert!(state.has_token("/has"));
+        assert!(state.has_token("/has").unwrap());
         // Another workspace's token doesn't leak into this answer.
-        assert!(!state.has_token("/other"));
+        assert!(!state.has_token("/other").unwrap());
 
         // A restart still reports the durable copy.
-        assert!(SyncState::new().has_token("/has"));
+        assert!(SyncState::new().has_token("/has").unwrap());
 
         state.clear_token("/has");
-        assert!(!state.has_token("/has"));
+        assert!(!state.has_token("/has").unwrap());
+    }
+
+    #[test]
+    fn has_token_errors_rather_than_calling_a_locked_keychain_empty() {
+        let _guard = crate::secrets::test_store::install();
+        let account = keychain_account("/locked-audit");
+        crate::secrets::test_store::set_error(&account, "keyring locked");
+
+        // A fresh state models a restart: nothing in memory, keychain refusing.
+        // Reporting `false` here would tell the audit view a stored token is
+        // gone, so the failure has to propagate.
+        let err = SyncState::new().has_token("/locked-audit").unwrap_err();
+        assert!(err.starts_with("keychain read failed:"));
+
+        crate::secrets::test_store::clear_error(&account);
+    }
+
+    #[test]
+    fn has_token_does_not_cache_the_token_it_checks_for() {
+        let _guard = crate::secrets::test_store::install();
+        let state = SyncState::new();
+        crate::secrets::set(&keychain_account("/uncached"), "tok").unwrap();
+
+        assert!(state.has_token("/uncached").unwrap());
+        // Opening Settings must not pull the token into process-lifetime memory.
+        assert!(state.tokens.lock().unwrap().is_empty());
     }
 
     #[test]

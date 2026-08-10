@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { useSettings } from "@/hooks/useSettings";
-import { hasAiKey, setAiKey } from "@/lib/aiKeys";
-import { cancelAiKeyWrite } from "@/lib/aiKeyWrites";
+import { hasAiKey } from "@/lib/aiKeys";
+import { writeAiKeyNow } from "@/lib/aiKeyWrites";
 import { SECRET_SLOTS, type SecretSlot } from "@/lib/secretSlots";
 import { clearSyncToken, hasSyncToken, setSyncToken } from "@/lib/syncCommands";
 
-/** `null` is "not checked yet", "check failed", or "no workspace open": none of
- *  those may be rendered as "not set". */
-export type SlotPresence = Record<string, boolean | null>;
+/** `undefined` is "not checked yet" and `null` is "the check failed" or "no
+ *  workspace open"; neither may be rendered as "not set". */
+export type SlotPresence = Record<string, boolean | null | undefined>;
 
 export interface UseSecretSlotsReturn {
-  slots: SecretSlot[];
+  slots: readonly SecretSlot[];
   presence: SlotPresence;
   /** Sync tokens are per-workspace; `undefined` means no folder is open. */
   workspacePath: string | undefined;
@@ -35,11 +35,15 @@ export function useSecretSlots(): UseSecretSlotsReturn {
   const [presence, setPresence] = useState<SlotPresence>({});
   const [busySlotId, setBusySlotId] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  // Slots written while the in-flight lookup batch was running. Their result is
+  // fresher than the batch's, so the batch must not overwrite them.
+  const writtenSinceCheck = useRef(new Set<string>());
 
   const apiKeys = settings.ai.apiKeys;
 
   useEffect(() => {
     let cancelled = false;
+    writtenSinceCheck.current.clear();
     const check = async (slot: SecretSlot) => {
       if (slot.kind === "ai") return { id: slot.id, isSet: await hasAiKey(slot.provider) };
       if (!workspacePath) return { id: slot.id, isSet: null };
@@ -56,7 +60,11 @@ export function useSecretSlots(): UseSecretSlotsReturn {
       ),
     ).then((results) => {
       if (cancelled) return;
-      setPresence(Object.fromEntries(results.map((r) => [r.id, r.isSet])));
+      setPresence((prev) => {
+        const checked: SlotPresence = Object.fromEntries(results.map((r) => [r.id, r.isSet]));
+        for (const id of writtenSinceCheck.current) checked[id] = prev[id];
+        return checked;
+      });
       setErrorKey(results.some((r) => "failed" in r) ? "secrets.errors.read" : null);
     });
     return () => {
@@ -67,6 +75,7 @@ export function useSecretSlots(): UseSecretSlotsReturn {
   const run = useCallback(
     async (slot: SecretSlot, isSet: boolean, failureKey: string, write: () => Promise<void>) => {
       setBusySlotId(slot.id);
+      writtenSinceCheck.current.add(slot.id);
       try {
         await write();
         setPresence((prev) => ({ ...prev, [slot.id]: isSet }));
@@ -90,10 +99,9 @@ export function useSecretSlots(): UseSecretSlotsReturn {
         return run(slot, false, "secrets.errors.remove", () => clearSyncToken(workspacePath));
       }
       return run(slot, false, "secrets.errors.remove", async () => {
-        // Cancel first: a keystroke write queued on the AI tab would otherwise
-        // restore the key moments after it was removed here.
-        cancelAiKeyWrite(slot.provider);
-        await setAiKey(slot.provider, "");
+        // Goes through the shared writer so a keystroke write queued on the AI
+        // tab is cancelled, or completes first, instead of racing this delete.
+        await writeAiKeyNow(slot.provider, "");
         const remaining = { ...apiKeys };
         delete remaining[slot.provider];
         updateSettings("ai.apiKeys", remaining);
@@ -109,8 +117,7 @@ export function useSecretSlots(): UseSecretSlotsReturn {
         return run(slot, true, "secrets.errors.save", () => setSyncToken(workspacePath, value));
       }
       return run(slot, true, "secrets.errors.save", async () => {
-        cancelAiKeyWrite(slot.provider);
-        await setAiKey(slot.provider, value);
+        await writeAiKeyNow(slot.provider, value);
         updateSettings("ai.apiKeys", { ...apiKeys, [slot.provider]: value });
       });
     },

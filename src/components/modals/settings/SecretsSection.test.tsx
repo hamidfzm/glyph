@@ -44,20 +44,30 @@ describe("SecretsSection", () => {
 
   it("removes only the slot whose button was pressed", () => {
     render(<SecretsSection />);
-    fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Remove Claude API key" }));
 
     expect(remove).toHaveBeenCalledExactlyOnceWith(SECRET_SLOTS[0]);
   });
 
   it("saves a replacement against the right slot", () => {
     render(<SecretsSection />);
-    fireEvent.click(screen.getByRole("button", { name: "Replace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace Claude API key" }));
     fireEvent.change(screen.getByLabelText("New value for Claude API key"), {
       target: { value: "sk-ant-new" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(save).toHaveBeenCalledExactlyOnceWith(SECRET_SLOTS[0], "sk-ant-new");
+  });
+
+  it("says it is still checking before the first lookup answers", () => {
+    mockSlots({ presence: {} });
+    render(<SecretsSection />);
+
+    // A security audit view must not open on three "Couldn't be checked" rows.
+    expect(screen.getAllByText("Checking…")).toHaveLength(SECRET_SLOTS.length);
+    expect(screen.queryByText("Couldn't be checked")).not.toBeInTheDocument();
+    expect(screen.queryByText("Not set")).not.toBeInTheDocument();
   });
 
   it("explains that the sync token needs an open folder", () => {

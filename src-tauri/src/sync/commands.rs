@@ -84,7 +84,7 @@ pub async fn sync_has_token(
     grants: State<'_, GrantRegistry>,
 ) -> Result<bool, SyncError> {
     ensure_workspace(&grants, &workspace_path)?;
-    Ok(ops::has_token(&state, &workspace_path))
+    ops::has_token(&state, &workspace_path)
 }
 
 #[tauri::command]
@@ -353,6 +353,36 @@ mod tests {
             .await
             .expect_err("ungranted path is refused");
         assert!(matches!(err, SyncError::Io(_)), "got {err:?}");
+    }
+
+    #[tokio::test]
+    // The test-store guard serializes keychain tests, so holding it across the
+    // await below is the point, not a hazard.
+    #[allow(clippy::await_holding_lock)]
+    async fn sync_has_token_is_false_for_a_granted_workspace_that_never_had_one() {
+        let _guard = crate::secrets::test_store::install();
+        let ws = Workspace::new();
+        assert!(
+            !sync_has_token(ws.workspace_path.clone(), ws.sync_state(), ws.grants())
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn sync_has_token_reports_a_locked_keychain_as_an_error() {
+        let _guard = crate::secrets::test_store::install();
+        let ws = Workspace::new();
+        let account = format!("sync-token-{}", ws.workspace_path);
+        crate::secrets::test_store::set_error(&account, "keyring locked");
+
+        let err = sync_has_token(ws.workspace_path.clone(), ws.sync_state(), ws.grants())
+            .await
+            .expect_err("a locked keychain must not read as 'nothing stored'");
+        assert!(matches!(err, SyncError::Backend(_)), "got {err:?}");
+
+        crate::secrets::test_store::clear_error(&account);
     }
 
     #[tokio::test]

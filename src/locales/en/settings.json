@@ -278,12 +278,16 @@
     "status": {
       "saved": "Saved",
       "notSet": "Not set",
+      "checking": "Checking…",
       "unknown": "Couldn't be checked"
     },
     "noWorkspace": "Open a folder to manage its sync token.",
     "add": "Add",
+    "addSlot": "Add {{slot}}",
     "replace": "Replace",
+    "replaceSlot": "Replace {{slot}}",
     "remove": "Remove",
+    "removeSlot": "Remove {{slot}}",
     "save": "Save",
     "cancel": "Cancel",
     "placeholder": "Paste the new value",

@@ -215,6 +215,41 @@ describe("useSecretSlots", () => {
     expect(result.current.presence["sync-token"]).toBeNull();
   });
 
+  it("does not let a slow lookup overwrite a write that already landed", async () => {
+    const slow = deferred<boolean>();
+    hasSecretMock.mockImplementation((name: string) =>
+      name === "ai-api-key-claude" ? slow.promise : Promise.resolve(false),
+    );
+    const { result } = renderSlots();
+
+    // The replacement lands while the initial presence batch is still open.
+    await act(() => result.current.save(CLAUDE_SLOT, "sk-ant-new"));
+    expect(result.current.presence["ai-claude"]).toBe(true);
+
+    await act(async () => {
+      slow.resolve(false);
+      await slow.promise;
+    });
+    expect(result.current.presence["ai-claude"]).toBe(true);
+  });
+
+  it("finishes a write issued before the tab unmounted", async () => {
+    const inFlight = deferred();
+    setSecretMock.mockReturnValueOnce(inFlight.promise);
+    const { result, unmount } = renderSlots({ claude: "sk-ant" });
+    await waitFor(() => expect(result.current.presence["ai-claude"]).toBe(false));
+
+    let removal!: Promise<void>;
+    act(() => {
+      removal = result.current.remove(CLAUDE_SLOT);
+    });
+    unmount();
+    inFlight.resolve();
+    await removal;
+
+    expect(setSecretMock).toHaveBeenCalledWith("ai-api-key-claude", "");
+  });
+
   it("does not let a previous workspace's answer land on the new one", async () => {
     const slow = deferred<boolean>();
     hasSyncTokenMock.mockImplementation((path: string) =>

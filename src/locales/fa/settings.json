@@ -278,12 +278,16 @@
     "status": {
       "saved": "ذخیره شده",
       "notSet": "تنظیم نشده",
+      "checking": "در حال بررسی…",
       "unknown": "قابل بررسی نبود"
     },
     "noWorkspace": "برای مدیریت توکن همگام‌سازی، یک پوشه باز کنید.",
     "add": "افزودن",
+    "addSlot": "افزودن {{slot}}",
     "replace": "جایگزینی",
+    "replaceSlot": "جایگزینی {{slot}}",
     "remove": "حذف",
+    "removeSlot": "حذف {{slot}}",
     "save": "ذخیره",
     "cancel": "لغو",
     "placeholder": "مقدار جدید را جای‌گذاری کنید",

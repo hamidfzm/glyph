@@ -20,9 +20,9 @@ export function AIProviderSection() {
   const handleKeyChange = useCallback(
     (provider: KeyedProvider, value: string) => {
       updateSettings("ai.apiKeys", { ...ai.apiKeys, [provider]: value });
-      scheduleAiKeyWrite(provider, value, (err) => {
-        if (err) console.error("Failed to store the API key in the keychain:", err);
-        setKeychainError(err !== null);
+      scheduleAiKeyWrite(provider, value, (ok, err) => {
+        if (!ok) console.error("Failed to store the API key in the keychain:", err);
+        setKeychainError(!ok);
       });
     },
     [ai.apiKeys, updateSettings],

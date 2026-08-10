@@ -278,12 +278,16 @@
     "status": {
       "saved": "Gespeichert",
       "notSet": "Nicht gesetzt",
+      "checking": "Wird geprüft…",
       "unknown": "Konnte nicht geprüft werden"
     },
     "noWorkspace": "Öffne einen Ordner, um dessen Sync-Token zu verwalten.",
     "add": "Hinzufügen",
+    "addSlot": "{{slot}} hinzufügen",
     "replace": "Ersetzen",
+    "replaceSlot": "{{slot}} ersetzen",
     "remove": "Entfernen",
+    "removeSlot": "{{slot}} entfernen",
     "save": "Speichern",
     "cancel": "Abbrechen",
     "placeholder": "Neuen Wert einfügen",

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cancelAiKeyWrite, scheduleAiKeyWrite } from "@/lib/aiKeyWrites";
+import { scheduleAiKeyWrite, writeAiKeyNow } from "@/lib/aiKeyWrites";
+import { deferred } from "@/test/deferred";
 
 const { setAiKeyMock } = vi.hoisted(() => ({ setAiKeyMock: vi.fn() }));
 vi.mock("@/lib/aiKeys", () => ({ setAiKey: setAiKeyMock }));
@@ -22,7 +23,7 @@ describe("aiKeyWrites", () => {
 
     await vi.advanceTimersByTimeAsync(600);
     expect(setAiKeyMock).toHaveBeenCalledExactlyOnceWith("claude", "sk-ant-1");
-    expect(onSettled).toHaveBeenCalledWith(null);
+    expect(onSettled).toHaveBeenCalledWith(true);
   });
 
   it("keeps only the last queued value for a provider", async () => {
@@ -42,29 +43,51 @@ describe("aiKeyWrites", () => {
 
     scheduleAiKeyWrite("openai", "sk-x", onSettled);
     await vi.advanceTimersByTimeAsync(600);
-    expect(onSettled).toHaveBeenCalledWith(failure);
+    expect(onSettled).toHaveBeenCalledWith(false, failure);
   });
 
-  it("drops a queued write so a later removal is not undone by it", async () => {
+  it("drops a still-queued write in favour of an immediate one", async () => {
     scheduleAiKeyWrite("claude", "sk-typed", vi.fn());
-    cancelAiKeyWrite("claude");
+    await writeAiKeyNow("claude", "");
 
     await vi.advanceTimersByTimeAsync(600);
-    expect(setAiKeyMock).not.toHaveBeenCalled();
+    expect(setAiKeyMock).toHaveBeenCalledExactlyOnceWith("claude", "");
   });
 
-  it("cancels per provider, leaving another provider's write queued", async () => {
+  it("lands after a write that already left the debounce", async () => {
+    // The keychain call is held open so the removal is issued while the
+    // keystroke write is mid-flight, the window a cancel alone can't cover.
+    const inFlight = deferred();
+    setAiKeyMock.mockReturnValueOnce(inFlight.promise);
+    scheduleAiKeyWrite("claude", "sk-typed", vi.fn());
+    await vi.advanceTimersByTimeAsync(600);
+    expect(setAiKeyMock).toHaveBeenCalledExactlyOnceWith("claude", "sk-typed");
+
+    const removal = writeAiKeyNow("claude", "");
+    expect(setAiKeyMock).toHaveBeenCalledTimes(1);
+
+    inFlight.resolve();
+    await removal;
+    expect(setAiKeyMock).toHaveBeenLastCalledWith("claude", "");
+  });
+
+  it("does not wedge a provider after a failed write", async () => {
+    setAiKeyMock.mockRejectedValueOnce(new Error("keyring locked"));
+    await expect(writeAiKeyNow("claude", "sk-a")).rejects.toThrow("keyring locked");
+
+    await writeAiKeyNow("claude", "sk-b");
+    expect(setAiKeyMock).toHaveBeenLastCalledWith("claude", "sk-b");
+  });
+
+  it("serializes per provider, leaving another provider's write queued", async () => {
     scheduleAiKeyWrite("claude", "sk-ant", vi.fn());
     scheduleAiKeyWrite("openai", "sk-oai", vi.fn());
-    cancelAiKeyWrite("claude");
+    await writeAiKeyNow("claude", "");
 
     await vi.advanceTimersByTimeAsync(600);
-    expect(setAiKeyMock).toHaveBeenCalledExactlyOnceWith("openai", "sk-oai");
-  });
-
-  it("cancelling with nothing queued is a no-op", async () => {
-    cancelAiKeyWrite("claude");
-    await vi.advanceTimersByTimeAsync(600);
-    expect(setAiKeyMock).not.toHaveBeenCalled();
+    expect(setAiKeyMock.mock.calls).toEqual([
+      ["claude", ""],
+      ["openai", "sk-oai"],
+    ]);
   });
 });

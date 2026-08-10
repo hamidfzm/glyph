@@ -278,12 +278,16 @@
     "status": {
       "saved": "Guardado",
       "notSet": "Sin definir",
+      "checking": "Comprobando…",
       "unknown": "No se pudo comprobar"
     },
     "noWorkspace": "Abre una carpeta para gestionar su token de sincronización.",
     "add": "Añadir",
+    "addSlot": "Añadir {{slot}}",
     "replace": "Reemplazar",
+    "replaceSlot": "Reemplazar {{slot}}",
     "remove": "Eliminar",
+    "removeSlot": "Eliminar {{slot}}",
     "save": "Guardar",
     "cancel": "Cancelar",
     "placeholder": "Pega el nuevo valor",

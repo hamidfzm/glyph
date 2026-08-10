@@ -20,7 +20,7 @@ export function SecretsSection() {
         <SecretRow
           key={slot.id}
           label={t(slotLabelKey(slot))}
-          isSet={presence[slot.id] ?? null}
+          isSet={presence[slot.id]}
           unavailableHint={
             slot.kind === "sync" && !workspacePath ? t("secrets.noWorkspace") : undefined
           }
@@ -30,7 +30,11 @@ export function SecretsSection() {
         />
       ))}
 
-      {errorKey && <div className="settings-secret-error">{t(errorKey)}</div>}
+      {errorKey && (
+        <div className="settings-secret-error" role="alert">
+          {t(errorKey)}
+        </div>
+      )}
     </div>
   );
 }

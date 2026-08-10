@@ -17,7 +17,8 @@ describe("secretSlots", () => {
     expect(keys).toContain("secrets.slots.syncToken");
   });
 
-  it("keeps an unknown presence out of the 'not set' bucket", () => {
+  it("keeps an unchecked or unknown presence out of the 'not set' bucket", () => {
+    expect(presenceStatusKey(undefined)).toBe("secrets.status.checking");
     expect(presenceStatusKey(null)).toBe("secrets.status.unknown");
     expect(presenceStatusKey(false)).toBe("secrets.status.notSet");
     expect(presenceStatusKey(true)).toBe("secrets.status.saved");
