@@ -6,8 +6,8 @@ on:
       - "v*"
 
 # Read-only by default: the publish-* jobs only download release assets and
-# push to satellite repos with their own secrets, so only the three jobs that
-# touch this repo's release get write.
+# push to satellite repos with their own secrets, so only the four jobs that
+# write to this repo's release get write (publish-aur uploads the PKGBUILD).
 permissions:
   contents: read
 
@@ -73,6 +73,8 @@ jobs:
           sudo dnf install glyph
           ```
           Or download the `.deb` / `.rpm` / `.AppImage` below.
+
+          On Arch, when the AUR lags behind a release, download the `PKGBUILD` asset below and run `makepkg -si` next to it.
           BODY
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
             --title "Glyph $GITHUB_REF_NAME" \
@@ -464,6 +466,14 @@ jobs:
   publish-aur:
     needs: build
     runs-on: ubuntu-latest
+    # AUR's SSH endpoint drops into maintenance for days at a time and refuses
+    # every push, which used to fail the whole release. The rendered PKGBUILD
+    # is uploaded to the release before the push so Arch users can build with
+    # `makepkg -si` meanwhile, and the push itself is non-fatal: re-run this
+    # job once the AUR is back.
+    continue-on-error: true
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Get version
@@ -481,13 +491,34 @@ jobs:
             --pattern "Glyph_${VERSION}_arm64.deb"
           echo "sha256_amd64=$(shasum -a 256 "Glyph_${VERSION}_amd64.deb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "sha256_arm64=$(shasum -a 256 "Glyph_${VERSION}_arm64.deb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+      - name: Render PKGBUILD and .SRCINFO
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA_AMD64="${{ steps.sha.outputs.sha256_amd64 }}"
+          SHA_ARM64="${{ steps.sha.outputs.sha256_arm64 }}"
+          HOMEPAGE=$(jq -r .homepage package.json)
+
+          mkdir -p /tmp/pkg
+          for file in PKGBUILD .SRCINFO; do
+            sed -e "s/{{VERSION}}/$VERSION/g" \
+              -e "s/{{SHA256_AMD64}}/$SHA_AMD64/g" \
+              -e "s/{{SHA256_ARM64}}/$SHA_ARM64/g" \
+              -e "s|{{HOMEPAGE}}|$HOMEPAGE|g" \
+              "aur/$file" > "/tmp/pkg/$file"
+          done
+      # Runs before the AUR push so an AUR outage still leaves Arch users a
+      # buildable PKGBUILD on the release page.
+      - name: Upload PKGBUILD to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.ref_name }}" /tmp/pkg/PKGBUILD \
+            --repo "${{ github.repository }}" --clobber
       - name: Update AUR package
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          SHA_AMD64="${{ steps.sha.outputs.sha256_amd64 }}"
-          SHA_ARM64="${{ steps.sha.outputs.sha256_arm64 }}"
 
           # Configure SSH for AUR
           mkdir -p ~/.ssh
@@ -502,22 +533,7 @@ jobs:
 
           # Clone AUR repo
           git clone ssh://aur@aur.archlinux.org/glyph-md-bin.git /tmp/aur
-
-          HOMEPAGE=$(jq -r .homepage package.json)
-
-          # Update PKGBUILD from template
-          sed -e "s/{{VERSION}}/$VERSION/g" \
-            -e "s/{{SHA256_AMD64}}/$SHA_AMD64/g" \
-            -e "s/{{SHA256_ARM64}}/$SHA_ARM64/g" \
-            -e "s|{{HOMEPAGE}}|$HOMEPAGE|g" \
-            aur/PKGBUILD > /tmp/aur/PKGBUILD
-
-          # Update .SRCINFO from template
-          sed -e "s/{{VERSION}}/$VERSION/g" \
-            -e "s/{{SHA256_AMD64}}/$SHA_AMD64/g" \
-            -e "s/{{SHA256_ARM64}}/$SHA_ARM64/g" \
-            -e "s|{{HOMEPAGE}}|$HOMEPAGE|g" \
-            aur/.SRCINFO > /tmp/aur/.SRCINFO
+          cp /tmp/pkg/PKGBUILD /tmp/pkg/.SRCINFO /tmp/aur/
 
           # Push to AUR
           cd /tmp/aur
