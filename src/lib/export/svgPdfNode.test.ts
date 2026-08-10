@@ -57,11 +57,14 @@ describe("svgNode", () => {
     expect(node.width).toBe(64);
   });
 
-  it("ignores a degenerate viewBox (zero or non-numeric width)", () => {
+  it("ignores a degenerate viewBox (zero or non-numeric width or height)", () => {
     const zero = svgNode(svgEl('<svg viewBox="0 0 0 80"><rect/></svg>')) as { width: number };
     expect(zero.width).toBe(CONTENT_WIDTH);
     const junk = svgNode(svgEl('<svg viewBox="0 0 abc 80"><rect/></svg>')) as { width: number };
     expect(junk.width).toBe(CONTENT_WIDTH);
+    // A usable width with an unusable height is no aspect ratio at all.
+    const flat = svgNode(svgEl('<svg viewBox="0 0 240 0"><rect/></svg>')) as { width: number };
+    expect(flat.width).toBe(CONTENT_WIDTH);
   });
 
   it("passes a mounted element through so pdfmake resolves its CSS", () => {
