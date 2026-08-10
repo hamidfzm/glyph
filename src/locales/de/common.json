@@ -112,10 +112,10 @@
     "aiOnSelection": "Auswahl {{action}}",
     "aiOnDocument": "Dokument {{action}}",
     "aiVerb": {
-      "summarize": "Zusammenfassen",
-      "explain": "Erklären",
-      "translate": "Übersetzen",
-      "simplify": "Vereinfachen"
+      "summarize": "zusammenfassen",
+      "explain": "erklären",
+      "translate": "übersetzen",
+      "simplify": "vereinfachen"
     }
   },
   "fileTree": {
