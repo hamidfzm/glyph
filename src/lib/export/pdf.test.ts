@@ -24,6 +24,21 @@ describe("buildPdf", () => {
     expect(bytes.length).toBeGreaterThan(100);
   });
 
+  it("renders a diagram styled by its own <style> block and leaves no host behind", async () => {
+    // Mermaid and D2 put every fill and stroke in a <style> block with
+    // descendant selectors. The content is mounted off-screen for the render so
+    // the browser resolves them; the host must be gone once the bytes are back.
+    const before = document.body.childElementCount;
+    const html =
+      '<svg width="120" height="60" viewBox="0 0 120 60">' +
+      "<style>.node rect { fill: #ffdfb5; stroke: #0d32b2; }</style>" +
+      '<g class="node"><rect x="4" y="4" width="112" height="52"/></g>' +
+      "</svg>";
+    const bytes = await buildPdf(html, { title: "Doc" });
+    expect(Array.from(bytes.slice(0, 4))).toEqual([0x25, 0x50, 0x44, 0x46]);
+    expect(document.body.childElementCount).toBe(before);
+  });
+
   it("embeds a vector SVG diagram through the real engine", async () => {
     // Exercises pdfmake's actual svg-to-pdfkit path with a diagram-shaped SVG.
     const html =

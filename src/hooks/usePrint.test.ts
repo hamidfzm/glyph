@@ -9,6 +9,12 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
+const restoreDiagramsMock = vi.fn();
+const swapDiagramsLightMock = vi.fn(async () => restoreDiagramsMock);
+vi.mock("@/lib/export/lightDiagrams", () => ({
+  swapDiagramsLight: () => swapDiagramsLightMock(),
+}));
+
 const DEFAULT_PRINT: PrintSettings = {
   pageBreakLevel: "none",
   includeToc: false,
@@ -32,7 +38,10 @@ describe("usePrint", () => {
   afterEach(() => {
     document.documentElement.removeAttribute("data-print-breaks");
     document.documentElement.removeAttribute("data-print-bg");
+    document.documentElement.classList.remove("dark");
     document.body.innerHTML = "";
+    swapDiagramsLightMock.mockClear();
+    restoreDiagramsMock.mockClear();
   });
 
   it("no-ops when no .markdown-body is present", () => {
@@ -106,6 +115,24 @@ describe("usePrint", () => {
     result.current();
 
     await vi.waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
+  });
+
+  it("re-renders diagrams light in dark mode and restores them on afterprint", async () => {
+    document.documentElement.classList.add("dark");
+    const { result } = renderHook(() => usePrint({ entries: ENTRIES, settings: DEFAULT_PRINT }));
+    await result.current();
+
+    expect(swapDiagramsLightMock).toHaveBeenCalledTimes(1);
+    expect(restoreDiagramsMock).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new Event("afterprint"));
+    expect(restoreDiagramsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves diagrams alone in light mode", async () => {
+    const { result } = renderHook(() => usePrint({ entries: ENTRIES, settings: DEFAULT_PRINT }));
+    await result.current();
+    expect(swapDiagramsLightMock).not.toHaveBeenCalled();
   });
 
   it("cleans up attributes and toc on afterprint", () => {

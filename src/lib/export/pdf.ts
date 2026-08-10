@@ -8,16 +8,33 @@ export interface PdfMetadata {
   author?: string;
 }
 
+// Width of the off-screen host, wide enough that a diagram sized to its
+// container is laid out at its natural width rather than squeezed.
+const HOST_WIDTH = 900;
+
 async function renderPdf(bodyHtml: string, meta: PdfMetadata): Promise<Uint8Array> {
+  // The content is mounted off-screen for the whole render: pdfmake reads each
+  // diagram's computed style through the browser, which only works while the
+  // SVG is in the document (see `svgNode`). The engine draws SVGs during
+  // getBuffer(), so the host cannot be removed before that resolves.
+  const host = document.createElement("div");
+  host.style.cssText = `position:fixed;left:-10000px;top:0;width:${HOST_WIDTH}px`;
+  host.innerHTML = bodyHtml;
+  document.body.appendChild(host);
+
   const docDefinition: TDocumentDefinitions = {
     info: { title: meta.title, author: meta.author },
-    content: convertHtmlToPdf(bodyHtml),
+    content: convertHtmlToPdf(host),
     defaultStyle: { fontSize: 11, lineHeight: 1.3 },
     pageMargins: [40, 40, 40, 40],
   };
 
-  const buffer = await pdfEngine().createPdf(docDefinition).getBuffer();
-  return new Uint8Array(buffer);
+  try {
+    const buffer = await pdfEngine().createPdf(docDefinition).getBuffer();
+    return new Uint8Array(buffer);
+  } finally {
+    host.remove();
+  }
 }
 
 /**

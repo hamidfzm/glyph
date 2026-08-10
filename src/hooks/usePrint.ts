@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback } from "react";
+import { swapDiagramsLight } from "@/lib/export/lightDiagrams";
 import { buildTocElement } from "@/lib/export/toc";
 import type { PrintSettings } from "../lib/settings";
 import type { TocEntry } from "./useTableOfContents";
@@ -10,7 +11,7 @@ interface UsePrintOptions {
 }
 
 export function usePrint({ entries, settings }: UsePrintOptions) {
-  return useCallback(() => {
+  return useCallback(async () => {
     const body = document.querySelector<HTMLElement>(".markdown-body");
     // Canvas cards carry their own small markdown bodies; printing one of
     // those is never what the user wants. Export the board as PNG instead.
@@ -26,9 +27,14 @@ export function usePrint({ entries, settings }: UsePrintOptions) {
       body.insertBefore(injected, body.firstChild);
     }
 
+    const restoreDiagrams = root.classList.contains("dark")
+      ? await swapDiagramsLight(document)
+      : null;
+
     const cleanup = () => {
       root.removeAttribute("data-print-breaks");
       root.removeAttribute("data-print-bg");
+      restoreDiagrams?.();
       if (injected?.parentNode) {
         injected.parentNode.removeChild(injected);
       }
