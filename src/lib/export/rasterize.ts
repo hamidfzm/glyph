@@ -21,7 +21,14 @@ export async function rasterizeElement(el: HTMLElement, backgroundColor: string)
 // light, regardless of the app theme.
 export async function renderMermaidLightSvg(source: string): Promise<string> {
   const { default: mermaid } = await import("mermaid");
-  mermaid.initialize({ startOnLoad: false, theme: "default", flowchart: { htmlLabels: false } });
+  // Both flags are needed: with only the flowchart one, Mermaid v11 still wraps
+  // every node label in a `<foreignObject>` and the labels vanish from the PDF.
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "default",
+    htmlLabels: false,
+    flowchart: { htmlLabels: false },
+  });
   const { svg } = await mermaid.render(`glyph-export-mermaid-${mermaidId++}`, source);
   return svg;
 }
@@ -33,6 +40,7 @@ export async function restoreMermaidTheme(dark: boolean): Promise<void> {
   mermaid.initialize({
     startOnLoad: false,
     theme: dark ? "dark" : "default",
+    htmlLabels: true,
     flowchart: { htmlLabels: true },
   });
 }

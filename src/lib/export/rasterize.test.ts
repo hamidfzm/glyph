@@ -31,9 +31,12 @@ describe("renderMermaidLightSvg", () => {
     renderMermaid.mockResolvedValue({ svg: "<svg data-light='1'></svg>" });
     const svg = await renderMermaidLightSvg("graph TD; A-->B");
     expect(svg).toBe("<svg data-light='1'></svg>");
+    // The top-level flag matters: with only the flowchart one, Mermaid v11 still
+    // emits <foreignObject> node labels and they vanish from the PDF.
     expect(initialize).toHaveBeenCalledWith({
       startOnLoad: false,
       theme: "default",
+      htmlLabels: false,
       flowchart: { htmlLabels: false },
     });
   });
@@ -51,6 +54,7 @@ describe("renderMermaidLightSvg", () => {
     expect(initialize).toHaveBeenCalledWith({
       startOnLoad: false,
       theme: "dark",
+      htmlLabels: true,
       flowchart: { htmlLabels: true },
     });
   });
