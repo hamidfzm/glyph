@@ -30,21 +30,30 @@ export async function renderMermaidLightSvg(source: string): Promise<string> {
     flowchart: { htmlLabels: false },
   });
   const { svg } = await mermaid.render(`glyph-export-mermaid-${mermaidId++}`, source);
-  return clearLabelBackgrounds(svg);
+  return sanitizeDiagramSvg(svg);
 }
 
-// Mermaid backs every edge and cluster label with a filled `rect.background` so
-// labels stay readable where they cross an edge. On a printed page that reads
-// as a grey slab over the diagram, worst over a colored subgraph, so drop the
-// fill. Inline styles win over the stylesheet rule that sets it.
-function clearLabelBackgrounds(svg: string): string {
-  const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
-  const root = doc.documentElement;
-  if (root.querySelector("parsererror")) return svg;
-  for (const rect of Array.from(root.querySelectorAll("rect.background"))) {
+// Mermaid builds raw markup out of user-authored diagram source, so it is
+// sanitized here, before any consumer (PDF, print, site export) can put it in a
+// document; `<foreignObject>` is the SVG-embedded-HTML vector.
+//
+// Mermaid also backs every edge and cluster label with a filled
+// `rect.background` so labels stay readable where they cross an edge. On a
+// printed page that reads as a grey slab, worst over a colored subgraph, so the
+// fill is dropped while the sanitized DOM is in hand. Inline styles win over
+// the stylesheet rule that sets it.
+async function sanitizeDiagramSvg(svg: string): Promise<string> {
+  const { default: DOMPurify } = await import("dompurify");
+  const fragment = DOMPurify.sanitize(svg, {
+    FORBID_TAGS: ["foreignObject"],
+    RETURN_DOM_FRAGMENT: true,
+  });
+  for (const rect of Array.from(fragment.querySelectorAll("rect.background"))) {
     (rect as SVGElement).style.setProperty("fill", "none");
   }
-  return new XMLSerializer().serializeToString(root);
+  const root = fragment.querySelector("svg");
+  if (!root) throw new Error("no svg in rendered diagram");
+  return root.outerHTML;
 }
 
 // Restore Mermaid's (global) config to the app theme after export-time renders,

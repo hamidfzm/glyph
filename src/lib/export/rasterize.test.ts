@@ -21,6 +21,22 @@ vi.mock("html2canvas", () => ({
   default: (...args: unknown[]) => html2canvas(...args),
 }));
 
+// DOMPurify does not run faithfully under happy-dom (it drops the <svg>
+// wrapper), so mock it as a pass-through that still returns a real fragment,
+// and assert the sanitize wiring instead; real stripping is its job in the
+// webview.
+const sanitizeMock = vi.fn((svg: string, _opts?: Record<string, unknown>) => {
+  const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
+  const fragment = document.createDocumentFragment();
+  if (!parsed.querySelector("parsererror")) fragment.appendChild(parsed.documentElement);
+  return fragment;
+});
+vi.mock("dompurify", () => ({
+  default: {
+    sanitize: (svg: string, opts?: Record<string, unknown>) => sanitizeMock(svg, opts),
+  },
+}));
+
 describe("renderMermaidLightSvg", () => {
   beforeEach(() => {
     initialize.mockReset();
@@ -42,6 +58,12 @@ describe("renderMermaidLightSvg", () => {
     });
   });
 
+  it("sanitizes the rendered markup before any consumer sees it", async () => {
+    renderMermaid.mockResolvedValue({ svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+    await renderMermaidLightSvg("graph TD; A-->B");
+    expect(sanitizeMock.mock.calls[0][1]).toMatchObject({ FORBID_TAGS: ["foreignObject"] });
+  });
+
   it("clears the filled backdrop Mermaid puts behind edge and cluster labels", async () => {
     renderMermaid.mockResolvedValue({
       svg: '<svg xmlns="http://www.w3.org/2000/svg"><g class="edgeLabel"><rect class="background" style="stroke: none"/></g></svg>',
@@ -52,9 +74,9 @@ describe("renderMermaidLightSvg", () => {
     expect(svg).toMatch(/stroke:\s*none/);
   });
 
-  it("returns the markup untouched when it does not parse as XML", async () => {
+  it("rejects when sanitizing leaves no svg behind", async () => {
     renderMermaid.mockResolvedValue({ svg: "<svg><unclosed></svg>" });
-    expect(await renderMermaidLightSvg("graph TD; A-->B")).toBe("<svg><unclosed></svg>");
+    await expect(renderMermaidLightSvg("graph TD; A-->B")).rejects.toThrow("no svg");
   });
 
   it("passes a fresh id per render (Mermaid keeps state per id)", async () => {
