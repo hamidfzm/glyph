@@ -290,7 +290,7 @@
     },
     "math": {
       "label": "Matemáticas",
-      "description": "Ecuaciones KaTeX: $inline$ y $$bloque$$"
+      "description": "Ecuaciones KaTeX: $inline$ y $$block$$"
     },
     "alerts": {
       "label": "Avisos",
