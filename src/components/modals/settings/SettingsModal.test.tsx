@@ -5,6 +5,10 @@ import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsC
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { SettingsModal } from "./SettingsModal";
 
+// The Privacy tab's Secrets section asks the backend which keychain slots are
+// filled; nothing is stored in these tests.
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(false) }));
+
 function withSettings(overrides: Partial<SettingsContextValue> = {}) {
   const value: SettingsContextValue = {
     settings: DEFAULT_SETTINGS,
@@ -43,7 +47,7 @@ describe("SettingsModal", () => {
     expect(screen.getByText("Privacy")).toBeInTheDocument();
   });
 
-  it("renders each tab's content when selected", () => {
+  it("renders each tab's content when selected", async () => {
     const { wrapper } = withSettings();
     render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
@@ -70,6 +74,8 @@ describe("SettingsModal", () => {
 
     fireEvent.click(screen.getByText("Privacy"));
     expect(screen.getByText("Error Reporting")).toBeInTheDocument();
+    // Let the Secrets section's presence lookup settle before unmounting.
+    expect(await screen.findAllByText("Not set")).toHaveLength(2);
   });
 
   it("calls onClose when Escape is pressed", () => {
@@ -144,13 +150,14 @@ describe("SettingsModal", () => {
     expect(updateSettings).toHaveBeenCalledWith("behavior.recentFiles", []);
   });
 
-  it("toggles error reporting from the Privacy tab", () => {
+  it("toggles error reporting from the Privacy tab", async () => {
     const updateSettings = vi.fn();
     const { wrapper } = withSettings({ updateSettings });
     render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(screen.getByText("Privacy"));
     expect(screen.getByText("Send crash reports")).toBeInTheDocument();
+    await screen.findAllByText("Not set");
 
     const toggle = screen.getByRole("checkbox");
     fireEvent.click(toggle);

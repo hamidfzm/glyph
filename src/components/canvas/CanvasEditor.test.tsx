@@ -67,7 +67,7 @@ describe("CanvasEditor board operations", () => {
     const node = nodesOf(container)[0];
     fireEvent.pointerDown(node, { clientX: 0, clientY: 0, button: 0 });
     fireEvent.pointerUp(stageOf(container), { clientX: 0, clientY: 0 });
-    fireEvent.click(screen.getByLabelText("Colour 3"));
+    fireEvent.click(screen.getByLabelText("Color 3"));
     expect(lastData(onChange).nodes[0]).toMatchObject({ color: "3" });
   });
 
@@ -103,7 +103,7 @@ describe("CanvasEditor board operations", () => {
     const { container } = render(<CanvasEditor content={withEdge} onChange={onChange} />);
     fireEvent.pointerDown(container.querySelector(".glyph-canvas-edge-hit") as Element);
     // Toolbar is shown for the selected edge; clicking a swatch is a no-op.
-    fireEvent.click(screen.getByLabelText("Colour 1"));
+    fireEvent.click(screen.getByLabelText("Color 1"));
     expect(onChange).not.toHaveBeenCalled();
   });
 

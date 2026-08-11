@@ -19,7 +19,7 @@ describe("CanvasEditor context menu", () => {
     const onChange = vi.fn();
     const { container } = render(<CanvasEditor content={oneText} onChange={onChange} />);
     fireEvent.contextMenu(nodesOf(container)[0]);
-    fireEvent.click(screen.getByText("Colour"));
+    fireEvent.click(screen.getByText("Color"));
     fireEvent.click(screen.getByText("Yellow"));
     expect(lastData(onChange).nodes[0]).toMatchObject({ color: "3" });
   });

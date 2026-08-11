@@ -1,7 +1,7 @@
 {
   "title": "AI 聊天",
   "chip": {
-    "summarize": "摘要",
+    "summarize": "总结",
     "explain": "解释",
     "translate": "翻译",
     "simplify": "简化"

@@ -82,7 +82,7 @@
     "dismiss": "Descartar aviso del espacio de trabajo"
   },
   "search": {
-    "placeholder": "Buscar en el documento...",
+    "placeholder": "Buscar en el documento…",
     "label": "Buscar",
     "noResults": "Sin resultados",
     "matchCount": "{{current}} de {{total}}",
@@ -257,14 +257,14 @@
   },
   "embed": {
     "openSource": "Abrir nota insertada",
-    "loading": "Cargando inserción...",
+    "loading": "Cargando inserción…",
     "broken": "Nota insertada no encontrada: {{target}}",
     "circular": "Inserción circular: {{target}}",
     "headingNotFound": "Encabezado no encontrado: {{heading}}",
     "error": "No se pudo cargar la inserción: {{target}}"
   },
   "wikilinkPreview": {
-    "loading": "Cargando vista previa...",
+    "loading": "Cargando vista previa…",
     "notFound": "Nota no encontrada: {{target}}",
     "createNote": "Crear nota",
     "headingNotFound": "Encabezado no encontrado: {{heading}}",

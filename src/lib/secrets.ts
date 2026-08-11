@@ -17,3 +17,8 @@ export async function getSecret(name: string): Promise<string> {
 export function setSecret(name: string, value: string): Promise<void> {
   return invoke("secret_set", { name, value });
 }
+
+/** Whether a secret is stored, without pulling the value into the webview. */
+export function hasSecret(name: string): Promise<boolean> {
+  return invoke("secret_has", { name });
+}

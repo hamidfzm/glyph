@@ -64,7 +64,7 @@
     },
     "codeFont": {
       "label": "Fuente del código",
-      "placeholder": "Predeterminada (SF Mono, Fira Code...)"
+      "placeholder": "Predeterminada (SF Mono, Fira Code…)"
     },
     "codeTheme": {
       "label": "Tema del código",
@@ -267,6 +267,37 @@
       "description": "Desactivado de forma predeterminada. Cuando está activado, se envían informes de fallos anónimos (trazas de pila, sistema operativo y versión de la app) para ayudar a corregir errores. Tus archivos, rutas de archivo y enlaces nunca se incluyen. Solo se activa en compilaciones de producción. Consulta SECURITY.md para ver la política completa."
     }
   },
+  "secrets": {
+    "title": "Secretos guardados",
+    "description": "Lo que Glyph ha guardado en el llavero del sistema. Aquí nunca se muestran los valores, solo si una entrada está ocupada.",
+    "slots": {
+      "claude": "Clave de API de Claude",
+      "openai": "Clave de API de OpenAI",
+      "syncToken": "Token de Cloud Sync"
+    },
+    "status": {
+      "saved": "Guardado",
+      "notSet": "Sin definir",
+      "checking": "Comprobando…",
+      "unknown": "No se pudo comprobar"
+    },
+    "noWorkspace": "Abre una carpeta para gestionar su token de sincronización.",
+    "add": "Añadir",
+    "addSlot": "Añadir {{slot}}",
+    "replace": "Reemplazar",
+    "replaceSlot": "Reemplazar {{slot}}",
+    "remove": "Eliminar",
+    "removeSlot": "Eliminar {{slot}}",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "placeholder": "Pega el nuevo valor",
+    "newValue": "Nuevo valor para {{slot}}",
+    "errors": {
+      "read": "No se pudo leer el llavero. Comprueba que esté desbloqueado y vuelve a abrir los ajustes.",
+      "remove": "No se pudo eliminar el secreto del llavero.",
+      "save": "No se pudo guardar el secreto en el llavero."
+    }
+  },
   "hotkeys": {
     "search": {
       "placeholder": "Buscar atajos…",
@@ -290,7 +321,7 @@
     },
     "math": {
       "label": "Matemáticas",
-      "description": "Ecuaciones KaTeX: $inline$ y $$bloque$$"
+      "description": "Ecuaciones KaTeX: $inline$ y $$block$$"
     },
     "alerts": {
       "label": "Avisos",

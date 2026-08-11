@@ -277,6 +277,7 @@ pub fn run() {
             commands::default_app::set_default_markdown_app,
             commands::secrets::secret_get,
             commands::secrets::secret_set,
+            commands::secrets::secret_has,
             commands::directory::get_initial_folder,
             commands::directory::read_directory,
             commands::directory::list_markdown_files,
@@ -317,6 +318,8 @@ pub fn run() {
             sync::commands::sync_set_token,
             #[cfg(desktop)]
             sync::commands::sync_clear_token,
+            #[cfg(desktop)]
+            sync::commands::sync_has_token,
             #[cfg(desktop)]
             sync::commands::sync_init_repo,
             #[cfg(desktop)]
