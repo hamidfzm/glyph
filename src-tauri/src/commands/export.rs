@@ -2,14 +2,16 @@ use serde::Serialize;
 use std::sync::Mutex;
 use tauri::State;
 
-/// A headless website export requested on the command line
-/// (`glyph <folder> --export-website <outDir>`), stashed at startup for the
-/// frontend to pick up once it mounts.
+/// A headless export requested on the command line
+/// (`glyph <path> --export <format> [--out <path>]`), stashed at startup for
+/// the frontend to pick up once it mounts. `input` is a workspace folder for
+/// the `site` format and a document for every other one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliExportRequest {
-    pub root: String,
-    pub out_dir: String,
+    pub input: String,
+    pub format: String,
+    pub output: String,
 }
 
 pub struct CliExport(pub Mutex<Option<CliExportRequest>>);
@@ -45,14 +47,15 @@ mod tests {
 
         let app = mock_app();
         app.manage(CliExport(Mutex::new(Some(CliExportRequest {
-            root: "/ws".to_string(),
-            out_dir: "/out".to_string(),
+            input: "/ws/notes.md".to_string(),
+            format: "pdf".to_string(),
+            output: "/ws/notes.pdf".to_string(),
         }))));
         // Not consume-on-read: the reveal gate and the export runner both ask.
         let first = get_cli_export(app.state::<CliExport>());
         let second = get_cli_export(app.state::<CliExport>());
         assert_eq!(first, second);
-        assert_eq!(first.unwrap().root, "/ws");
+        assert_eq!(first.unwrap().input, "/ws/notes.md");
     }
 
     #[test]
@@ -68,12 +71,14 @@ mod tests {
     #[test]
     fn cli_export_request_serializes_camel_case() {
         let request = CliExportRequest {
-            root: "/ws".to_string(),
-            out_dir: "/out".to_string(),
+            input: "/ws".to_string(),
+            format: "site".to_string(),
+            output: "/out".to_string(),
         };
         let json = serde_json::to_string(&request).unwrap();
-        assert!(json.contains("\"outDir\":\"/out\""), "got {json}");
-        assert!(json.contains("\"root\":\"/ws\""), "got {json}");
+        assert!(json.contains("\"input\":\"/ws\""), "got {json}");
+        assert!(json.contains("\"format\":\"site\""), "got {json}");
+        assert!(json.contains("\"output\":\"/out\""), "got {json}");
     }
 
     #[test]

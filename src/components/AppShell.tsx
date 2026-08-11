@@ -54,10 +54,6 @@ export function AppShell() {
   // Keep the plugin host's workspace scope in sync with the open workspace.
   usePluginWorkspaceSync();
 
-  // Headless CLI website export: runs and exits when the process was launched
-  // with --export-website, a no-op otherwise.
-  useCliExport();
-
   const {
     tabs: openTabs,
     activeTab,
@@ -81,6 +77,10 @@ export function AppShell() {
     workspaceFiles,
     tocEntries,
   } = tabs;
+
+  // Headless CLI export: runs and exits when the process was launched with
+  // --export, a no-op otherwise.
+  useCliExport({ entries: tocEntries, content: displayContent });
 
   useDocumentUndoRedo({ activeTabId, platform, onUndo: undoEdit, onRedo: redoEdit });
   useTabReorderShortcuts({ platform, onMove: moveActiveTab });

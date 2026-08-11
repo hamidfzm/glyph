@@ -68,9 +68,15 @@
           "takesValue": true
         },
         {
-          "name": "export-website",
+          "name": "export",
           "takesValue": true,
-          "description": "Export the workspace folder as a static website into the given directory and exit"
+          "description": "Export the input and exit. Formats: pdf, docx, epub, html, site"
+        },
+        {
+          "name": "out",
+          "short": "o",
+          "takesValue": true,
+          "description": "Where to write the export. Defaults to the input path with the format's extension; required for site"
         }
       ]
     }

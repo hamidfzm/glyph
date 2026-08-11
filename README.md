@@ -167,12 +167,17 @@ Installing from a package manager puts a `glyph` command on your `PATH`:
 ```bash
 glyph README.md      # open a file
 glyph ~/notes/       # open a folder as a workspace
+glyph --help         # usage, flags, and export formats
 
-# export a workspace as a static website (headless; exits when done)
-glyph ~/notes/ --export-website ./site
+# export a document (headless; exits when done)
+glyph README.md --export pdf              # writes README.pdf beside it
+glyph notes.md --export docx --out ~/out.docx
+
+# export a workspace as a static website
+glyph ~/notes/ --export site --out ./site
 ```
 
-The website export runs without showing a window and exits nonzero on failure, so it can drive CI publishing (on Linux runners, wrap it in `xvfb-run`).
+`--export` accepts `pdf`, `docx`, `epub`, `html`, and `site`. Without `--out` a document export writes beside its input with the format's extension; `site` always needs one. Exports run without showing a window, print the path they wrote to stdout, and exit nonzero with a message on stderr if they fail, so they can drive CI publishing (on Linux runners, wrap the command in `xvfb-run`). They honor the export options from Settings > Print (table of contents, page breaks, background).
 
 The command is provided by the Homebrew cask (macOS), Chocolatey or Scoop (Windows), and the deb package or Homebrew formula (Linux). The macOS `.dmg` and Windows MSI install the app only; use a package manager for the terminal command.
 

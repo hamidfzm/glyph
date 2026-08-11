@@ -154,10 +154,21 @@ pub fn strip_flag(argv: &[String], flag: &str) -> Vec<String> {
     out
 }
 
-/// Resolve the `--export-website` output directory against `cwd`. Unlike
-/// input paths it does not need to exist yet, so there is no canonicalize.
+/// Whether a `--flag` / `--flag=value` appears in argv at all, regardless of
+/// whether it carries a value. Distinguishes "no `--export`" (a normal launch)
+/// from "`--export` with nothing after it" (a usage error).
 #[cfg(desktop)]
-pub fn resolve_out_dir(path_str: &str, cwd: &Path) -> Option<String> {
+pub fn has_flag(argv: &[String], flag: &str) -> bool {
+    let prefix = format!("{flag}=");
+    argv.iter()
+        .skip(1)
+        .any(|a| a == flag || a.starts_with(&prefix))
+}
+
+/// Resolve an output path against `cwd`. Unlike input paths it does not need
+/// to exist yet, so there is no canonicalize.
+#[cfg(desktop)]
+pub fn resolve_out_path(path_str: &str, cwd: &Path) -> Option<String> {
     if path_str.trim().is_empty() {
         return None;
     }
@@ -170,43 +181,177 @@ pub fn resolve_out_dir(path_str: &str, cwd: &Path) -> Option<String> {
     Some(absolute.to_string_lossy().to_string())
 }
 
+/// What `--export` can produce. Every variant but `Site` renders the single
+/// input document; `Site` renders a whole workspace folder.
+#[cfg(desktop)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportFormat {
+    Pdf,
+    Docx,
+    Epub,
+    Html,
+    Site,
+}
+
+#[cfg(desktop)]
+impl ExportFormat {
+    /// Every format, in the order `--help` lists them.
+    pub const ALL: [ExportFormat; 5] = [
+        ExportFormat::Pdf,
+        ExportFormat::Docx,
+        ExportFormat::Epub,
+        ExportFormat::Html,
+        ExportFormat::Site,
+    ];
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "pdf" => Some(Self::Pdf),
+            "docx" => Some(Self::Docx),
+            "epub" => Some(Self::Epub),
+            "html" => Some(Self::Html),
+            "site" => Some(Self::Site),
+            _ => None,
+        }
+    }
+
+    /// The spelling accepted on the command line, also what the frontend
+    /// export runner dispatches on.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pdf => "pdf",
+            Self::Docx => "docx",
+            Self::Epub => "epub",
+            Self::Html => "html",
+            Self::Site => "site",
+        }
+    }
+
+    /// Extension for the default output path. `Site` writes a directory, so it
+    /// has none and always needs an explicit `--out`.
+    pub fn extension(self) -> Option<&'static str> {
+        match self {
+            Self::Site => None,
+            Self::Pdf => Some("pdf"),
+            Self::Docx => Some("docx"),
+            Self::Epub => Some("epub"),
+            Self::Html => Some("html"),
+        }
+    }
+}
+
 /// What this process launch should do, decided from the CLI once at startup.
 #[cfg(desktop)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum CliLaunch {
     /// Normal interactive launch, optionally opening a path.
     Open(Option<InitialOpenAction>),
-    /// Headless website export: render `root` into `out_dir` and exit.
-    ExportWebsite { root: String, out_dir: String },
+    /// Headless export: render `input` into `output` and exit. `input` is a
+    /// workspace folder for `Site` and a document for every other format.
+    Export {
+        input: String,
+        format: ExportFormat,
+        output: String,
+    },
 }
 
-/// Combine the positional path and the `--export-website` flag into a launch
-/// plan. `Err` is a usage error the caller should print before exiting
-/// nonzero: an export was requested without a valid workspace folder.
+/// Combine the positional path with `--export` and `--out` into a launch plan.
+/// `Err` is a usage error the caller should print before exiting nonzero.
 #[cfg(desktop)]
 pub fn launch_plan(
     plugin_path: Option<&str>,
     plugin_export: Option<&str>,
+    plugin_out: Option<&str>,
     env_args: &[String],
     cwd: &Path,
 ) -> Result<CliLaunch, String> {
-    let export_out = plugin_export
+    // The flags and their values are stripped before the positional scan so
+    // `glyph --export pdf notes.md` cannot mistake "pdf" for the input path.
+    let positional = strip_flag(
+        &strip_flag(&strip_flag(env_args, "--export"), "--out"),
+        "-o",
+    );
+    let action = initial_open_action(plugin_path, &positional, cwd);
+
+    let export_value = plugin_export
         .map(str::to_string)
-        .or_else(|| pick_flag_value(env_args, "--export-website").map(str::to_string));
-    let positional_args = strip_flag(env_args, "--export-website");
-    let action = initial_open_action(plugin_path, &positional_args, cwd);
-    let Some(out) = export_out else {
+        .or_else(|| pick_flag_value(env_args, "--export").map(str::to_string));
+    let requested = plugin_export.is_some() || has_flag(env_args, "--export");
+    if !requested {
         return Ok(CliLaunch::Open(action));
-    };
-    let out_dir = resolve_out_dir(&out, cwd)
-        .ok_or("--export-website needs an output directory".to_string())?;
-    match action {
-        Some(InitialOpenAction::Folder(root)) => Ok(CliLaunch::ExportWebsite { root, out_dir }),
-        _ => Err(
-            "--export-website requires an existing workspace folder: glyph <folder> --export-website <outDir>"
+    }
+    let value = export_value.unwrap_or_default();
+    if value.trim().is_empty() {
+        return Err(format!("--export needs a format: {}", format_list()));
+    }
+    let format = ExportFormat::parse(&value)
+        .ok_or_else(|| format!("unknown export format '{value}': {}", format_list()))?;
+
+    let out_value = plugin_out
+        .map(str::to_string)
+        .or_else(|| pick_flag_value(env_args, "--out").map(str::to_string))
+        .or_else(|| pick_flag_value(env_args, "-o").map(str::to_string));
+    let output = out_value
+        .as_deref()
+        .map(|out| resolve_out_path(out, cwd).ok_or_else(|| "--out needs a path".to_string()))
+        .transpose()?;
+
+    match (format, action) {
+        (ExportFormat::Site, Some(InitialOpenAction::Folder(root))) => {
+            let output = output.ok_or_else(|| {
+                "--export site needs an output directory: glyph <folder> --export site --out <dir>"
+                    .to_string()
+            })?;
+            Ok(CliLaunch::Export {
+                input: root,
+                format,
+                output,
+            })
+        }
+        (ExportFormat::Site, _) => Err(
+            "--export site requires an existing workspace folder: glyph <folder> --export site --out <dir>"
                 .to_string(),
         ),
+        (_, Some(InitialOpenAction::File(input))) => {
+            let output = output.unwrap_or_else(|| default_output(&input, format));
+            Ok(CliLaunch::Export {
+                input,
+                format,
+                output,
+            })
+        }
+        (_, _) => Err(format!(
+            "--export {} requires an existing document: glyph <file.md> --export {} [--out <path>]",
+            format.as_str(),
+            format.as_str()
+        )),
     }
+}
+
+/// Output path for an export with no `--out`: the input with the format's
+/// extension, so `glyph notes.md --export pdf` writes `notes.pdf` beside it.
+///
+/// The input is canonicalized, which on Windows carries the `\\?\`
+/// extended-length prefix. It works for the write but reads as noise in the
+/// path the export prints, so it is dropped.
+#[cfg(desktop)]
+fn default_output(input: &str, format: ExportFormat) -> String {
+    let extension = format.extension().unwrap_or_default();
+    let trimmed = input.strip_prefix(r"\\?\").unwrap_or(input);
+    Path::new(trimmed)
+        .with_extension(extension)
+        .to_string_lossy()
+        .to_string()
+}
+
+/// The accepted `--export` values, for usage messages.
+#[cfg(desktop)]
+fn format_list() -> String {
+    ExportFormat::ALL
+        .iter()
+        .map(|f| f.as_str())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Resolve a CLI-supplied path against the working directory. Returns the
@@ -498,63 +643,90 @@ mod tests {
 
     #[test]
     fn pick_flag_value_finds_space_and_equals_forms() {
-        let argv: Vec<String> = ["glyph", "docs", "--export-website", "site"]
+        let argv: Vec<String> = ["glyph", "docs", "--export", "site"]
             .iter()
             .map(|s| s.to_string())
             .collect();
-        assert_eq!(pick_flag_value(&argv, "--export-website"), Some("site"));
+        assert_eq!(pick_flag_value(&argv, "--export"), Some("site"));
 
-        let eq_form: Vec<String> = ["glyph", "--export-website=out", "docs"]
+        let eq_form: Vec<String> = ["glyph", "--export=out", "docs"]
             .iter()
             .map(|s| s.to_string())
             .collect();
-        assert_eq!(pick_flag_value(&eq_form, "--export-website"), Some("out"));
+        assert_eq!(pick_flag_value(&eq_form, "--export"), Some("out"));
     }
 
     #[test]
     fn pick_flag_value_returns_none_when_absent_or_valueless() {
         let argv: Vec<String> = ["glyph", "docs"].iter().map(|s| s.to_string()).collect();
-        assert_eq!(pick_flag_value(&argv, "--export-website"), None);
-        let dangling: Vec<String> = ["glyph", "--export-website"]
+        assert_eq!(pick_flag_value(&argv, "--export"), None);
+        let dangling: Vec<String> = ["glyph", "--export"]
             .iter()
             .map(|s| s.to_string())
             .collect();
-        assert_eq!(pick_flag_value(&dangling, "--export-website"), None);
+        assert_eq!(pick_flag_value(&dangling, "--export"), None);
     }
 
     #[test]
     fn strip_flag_removes_flag_and_value_leaving_positionals() {
-        let argv: Vec<String> = ["glyph", "--export-website", "site", "docs"]
+        let argv: Vec<String> = ["glyph", "--export", "site", "docs"]
             .iter()
             .map(|s| s.to_string())
             .collect();
-        assert_eq!(strip_flag(&argv, "--export-website"), vec!["glyph", "docs"]);
-        let eq_form: Vec<String> = ["glyph", "--export-website=site", "docs"]
+        assert_eq!(strip_flag(&argv, "--export"), vec!["glyph", "docs"]);
+        let eq_form: Vec<String> = ["glyph", "--export=site", "docs"]
             .iter()
             .map(|s| s.to_string())
             .collect();
-        assert_eq!(
-            strip_flag(&eq_form, "--export-website"),
-            vec!["glyph", "docs"]
-        );
+        assert_eq!(strip_flag(&eq_form, "--export"), vec!["glyph", "docs"]);
     }
 
     #[test]
-    fn resolve_out_dir_makes_relative_paths_absolute_without_requiring_existence() {
+    fn resolve_out_path_makes_relative_paths_absolute_without_requiring_existence() {
         let cwd = Path::new("/work");
-        let resolved = resolve_out_dir("site", cwd).expect("resolves");
+        let resolved = resolve_out_path("site", cwd).expect("resolves");
         assert_eq!(resolved, Path::new("/work").join("site").to_string_lossy());
-        assert!(resolve_out_dir("  ", cwd).is_none());
+        assert!(resolve_out_path("  ", cwd).is_none());
     }
 
     #[test]
-    fn resolve_out_dir_keeps_absolute_paths_as_given() {
+    fn resolve_out_path_keeps_absolute_paths_as_given() {
         // temp_dir is absolute on every platform (a bare "/x" is not absolute
         // on Windows, where absolute needs a drive or UNC prefix).
         let abs = std::env::temp_dir().join("glyph-site-out");
-        let resolved = resolve_out_dir(abs.to_string_lossy().as_ref(), Path::new("/elsewhere"))
+        let resolved = resolve_out_path(abs.to_string_lossy().as_ref(), Path::new("/elsewhere"))
             .expect("resolves");
         assert_eq!(resolved, abs.to_string_lossy());
+    }
+
+    fn argv_of(args: &[&str]) -> Vec<String> {
+        std::iter::once("glyph")
+            .chain(args.iter().copied())
+            .map(String::from)
+            .collect()
+    }
+
+    #[test]
+    fn has_flag_spots_both_spellings_but_not_the_program_name() {
+        assert!(has_flag(&argv_of(&["--export", "pdf"]), "--export"));
+        assert!(has_flag(&argv_of(&["--export=pdf"]), "--export"));
+        // Valueless still counts as present, which is what turns it into a
+        // usage error rather than a silent normal launch.
+        assert!(has_flag(&argv_of(&["--export"]), "--export"));
+        assert!(!has_flag(&argv_of(&["notes.md"]), "--export"));
+    }
+
+    #[test]
+    fn export_format_parses_every_spelling_and_rejects_junk() {
+        for format in ExportFormat::ALL {
+            assert_eq!(ExportFormat::parse(format.as_str()), Some(format));
+        }
+        assert_eq!(ExportFormat::parse("  PDF "), Some(ExportFormat::Pdf));
+        assert_eq!(ExportFormat::parse("markdown"), None);
+        assert_eq!(ExportFormat::parse(""), None);
+        // Only `site` writes a directory, so only it has no default extension.
+        assert_eq!(ExportFormat::Site.extension(), None);
+        assert_eq!(ExportFormat::Pdf.extension(), Some("pdf"));
     }
 
     #[test]
@@ -562,9 +734,8 @@ mod tests {
         let cwd = unique_tmp("lp_open");
         let ws = cwd.join("docs");
         fs::create_dir_all(&ws).unwrap();
-        let argv: Vec<String> = ["glyph", "docs"].iter().map(|s| s.to_string()).collect();
 
-        let plan = launch_plan(None, None, &argv, &cwd).expect("plans");
+        let plan = launch_plan(None, None, None, &argv_of(&["docs"]), &cwd).expect("plans");
         assert!(matches!(
             plan,
             CliLaunch::Open(Some(InitialOpenAction::Folder(_)))
@@ -573,74 +744,192 @@ mod tests {
     }
 
     #[test]
-    fn launch_plan_pairs_folder_with_export_flag_even_when_flag_precedes_path() {
-        // The flag's value must not be mistaken for the positional path.
-        let cwd = unique_tmp("lp_export");
+    fn launch_plan_defaults_the_output_to_the_input_with_the_format_extension() {
+        let cwd = unique_tmp("lp_doc");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(cwd.join("note.md"), "# hi").unwrap();
+
+        for (format, extension) in [
+            ("pdf", "pdf"),
+            ("docx", "docx"),
+            ("epub", "epub"),
+            ("html", "html"),
+        ] {
+            let argv = argv_of(&["note.md", "--export", format]);
+            match launch_plan(None, None, None, &argv, &cwd).expect("plans") {
+                CliLaunch::Export {
+                    input,
+                    format: parsed,
+                    output,
+                } => {
+                    assert_eq!(parsed.as_str(), format);
+                    assert!(input.ends_with("note.md"), "got {input}");
+                    assert!(
+                        output.ends_with(&format!("note.{extension}")),
+                        "got {output}"
+                    );
+                }
+                other => panic!("expected an export plan, got {other:?}"),
+            }
+        }
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn default_output_drops_the_windows_extended_length_prefix() {
+        // Canonicalized inputs carry the extended-length prefix on Windows. It
+        // works for the write but reads as noise in the path the export prints.
+        let prefixed = format!(r"\\?\C:{sep}notes{sep}plan.md", sep = "\\");
+        assert_eq!(
+            default_output(&prefixed, ExportFormat::Pdf),
+            format!(r"C:{sep}notes{sep}plan.pdf", sep = "\\")
+        );
+        assert_eq!(
+            default_output("/notes/plan.md", ExportFormat::Epub),
+            "/notes/plan.epub"
+        );
+    }
+
+    #[test]
+    fn launch_plan_accepts_every_output_flag_spelling_and_resolves_it_against_cwd() {
+        let cwd = unique_tmp("lp_out");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(cwd.join("note.md"), "# hi").unwrap();
+        let expected = cwd.join("built.pdf").to_string_lossy().to_string();
+
+        for args in [
+            vec!["note.md", "--export", "pdf", "-o", "built.pdf"],
+            vec!["note.md", "--export", "pdf", "--out", "built.pdf"],
+            vec!["note.md", "--export=pdf", "--out=built.pdf"],
+            // The flags' values must never be mistaken for the positional path.
+            vec!["--export", "pdf", "--out", "built.pdf", "note.md"],
+        ] {
+            let plan = launch_plan(None, None, None, &argv_of(&args), &cwd).expect("plans");
+            assert!(
+                matches!(&plan, CliLaunch::Export { output, .. } if *output == expected),
+                "expected {expected}, got {plan:?}"
+            );
+        }
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_plan_pairs_a_folder_with_the_site_format() {
+        let cwd = unique_tmp("lp_site");
         let ws = cwd.join("docs");
         fs::create_dir_all(&ws).unwrap();
-        let argv: Vec<String> = ["glyph", "--export-website", "site", "docs"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
+        let argv = argv_of(&["--export", "site", "--out", "site", "docs"]);
 
-        let plan = launch_plan(None, None, &argv, &cwd).expect("plans");
+        let plan = launch_plan(None, None, None, &argv, &cwd).expect("plans");
         let expected_out = cwd.join("site").to_string_lossy().to_string();
         assert!(
             matches!(
                 &plan,
-                CliLaunch::ExportWebsite { root, out_dir }
-                    if root.ends_with("docs") && *out_dir == expected_out
+                CliLaunch::Export { input, format, output }
+                    if input.ends_with("docs")
+                        && *format == ExportFormat::Site
+                        && *output == expected_out
             ),
-            "expected ExportWebsite for docs -> site, got {plan:?}"
+            "expected a site export for docs -> site, got {plan:?}"
         );
         let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]
-    fn launch_plan_export_without_folder_is_a_usage_error() {
-        let cwd = unique_tmp("lp_err");
-        let argv: Vec<String> = ["glyph", "--export-website", "site"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        let err = launch_plan(None, None, &argv, &cwd).expect_err("usage error");
-        assert!(err.contains("--export-website"));
+    fn launch_plan_rejects_a_missing_or_unknown_format() {
+        let cwd = unique_tmp("lp_fmt");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(cwd.join("note.md"), "# hi").unwrap();
 
-        // A file (not a folder) positional is also a usage error.
-        let file = cwd.join("note.md");
-        fs::write(&file, "x").unwrap();
-        let argv: Vec<String> = ["glyph", "note.md", "--export-website", "site"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        assert!(launch_plan(None, None, &argv, &cwd).is_err());
+        let dangling = argv_of(&["note.md", "--export"]);
+        let err = launch_plan(None, None, None, &dangling, &cwd).expect_err("usage error");
+        assert!(err.contains("needs a format"), "got: {err}");
+
+        let unknown = argv_of(&["note.md", "--export", "rtf"]);
+        let err = launch_plan(None, None, None, &unknown, &cwd).expect_err("usage error");
+        assert!(err.contains("unknown export format"), "got: {err}");
+        // Every accepted spelling is named, so the message is actionable.
+        assert!(err.contains("pdf") && err.contains("site"), "got: {err}");
         let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]
-    fn launch_plan_rejects_a_blank_output_directory() {
-        let cwd = unique_tmp("lp_blank");
+    fn launch_plan_rejects_a_mismatched_input_kind() {
+        let cwd = unique_tmp("lp_kind");
         let ws = cwd.join("docs");
         fs::create_dir_all(&ws).unwrap();
-        let argv: Vec<String> = ["glyph", "docs"].iter().map(|s| s.to_string()).collect();
+        fs::write(cwd.join("note.md"), "# hi").unwrap();
 
-        let err = launch_plan(None, Some("   "), &argv, &cwd).expect_err("usage error");
+        // A document format pointed at a folder.
+        let err = launch_plan(
+            None,
+            None,
+            None,
+            &argv_of(&["docs", "--export", "pdf"]),
+            &cwd,
+        )
+        .expect_err("usage error");
+        assert!(err.contains("requires an existing document"), "got: {err}");
+
+        // `site` pointed at a file.
+        let argv = argv_of(&["note.md", "--export", "site", "-o", "out"]);
+        let err = launch_plan(None, None, None, &argv, &cwd).expect_err("usage error");
+        assert!(err.contains("workspace folder"), "got: {err}");
+
+        // Nothing to export at all.
+        let argv = argv_of(&["--export", "pdf"]);
+        assert!(launch_plan(None, None, None, &argv, &cwd).is_err());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_plan_requires_an_output_directory_for_a_site_export() {
+        let cwd = unique_tmp("lp_site_out");
+        let ws = cwd.join("docs");
+        fs::create_dir_all(&ws).unwrap();
+
+        let err = launch_plan(
+            None,
+            None,
+            None,
+            &argv_of(&["docs", "--export", "site"]),
+            &cwd,
+        )
+        .expect_err("usage error");
         assert!(err.contains("output directory"), "got: {err}");
         let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]
-    fn launch_plan_prefers_plugin_export_value() {
+    fn launch_plan_rejects_a_blank_output_path() {
+        let cwd = unique_tmp("lp_blank");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(cwd.join("note.md"), "# hi").unwrap();
+
+        let err = launch_plan(None, Some("pdf"), Some("   "), &argv_of(&["note.md"]), &cwd)
+            .expect_err("usage error");
+        assert!(err.contains("--out needs a path"), "got: {err}");
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_plan_prefers_the_plugin_values_over_argv() {
         let cwd = unique_tmp("lp_plugin");
         let ws = cwd.join("docs");
         fs::create_dir_all(&ws).unwrap();
-        let argv: Vec<String> = ["glyph", "docs"].iter().map(|s| s.to_string()).collect();
 
-        let plan = launch_plan(None, Some("from-plugin"), &argv, &cwd).expect("plans");
+        let plan = launch_plan(
+            None,
+            Some("site"),
+            Some("from-plugin"),
+            &argv_of(&["docs"]),
+            &cwd,
+        )
+        .expect("plans");
         let expected_out = cwd.join("from-plugin").to_string_lossy().to_string();
         assert!(
-            matches!(&plan, CliLaunch::ExportWebsite { out_dir, .. } if *out_dir == expected_out),
-            "expected ExportWebsite with the plugin's out dir, got {plan:?}"
+            matches!(&plan, CliLaunch::Export { output, .. } if *output == expected_out),
+            "expected the plugin's out dir, got {plan:?}"
         );
         let _ = fs::remove_dir_all(&cwd);
     }

@@ -70,7 +70,7 @@ jobs:
         env:
           WEBKIT_DISABLE_COMPOSITING_MODE: "1"
         run: |
-          xvfb-run --auto-servernum ./src-tauri/target/release/glyph "$PWD/samples" --export-website /tmp/csp-smoke
+          xvfb-run --auto-servernum ./src-tauri/target/release/glyph "$PWD/samples" --export site --out /tmp/csp-smoke
           test -f /tmp/csp-smoke/index.html
           test "$(ls /tmp/csp-smoke/*.html | wc -l)" -ge 3
 
