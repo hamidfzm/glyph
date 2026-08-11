@@ -1,13 +1,10 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOllamaModels } from "@/hooks/useOllamaModels";
 import { useSettings } from "@/hooks/useSettings";
-import { type KeyedProvider, setAiKey } from "@/lib/aiKeys";
+import type { KeyedProvider } from "@/lib/aiKeys";
+import { scheduleAiKeyWrite } from "@/lib/aiKeyWrites";
 import { AIModelField } from "./AIModelField";
-
-// Keychain writes are debounced so typing a key doesn't hit the OS credential
-// manager on every keystroke (Linux keyrings may prompt per write).
-const KEY_SAVE_DEBOUNCE = 600;
 
 /** Which AI backend to use and how to reach it: provider, credentials or
  *  server URL, and the model. */
@@ -18,22 +15,15 @@ export function AIProviderSection() {
   const ollama = useOllamaModels(ai.ollamaUrl, ai.provider === "ollama");
 
   // Keys live in memory (settings.ai.apiKeys) for the session and in the OS
-  // keychain for persistence; this writes through to the keychain. The timer
-  // deliberately survives unmount so a quickly-closed modal still saves.
+  // keychain for persistence; the scheduler writes through to the keychain.
   const [keychainError, setKeychainError] = useState(false);
-  const keySaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const handleKeyChange = useCallback(
     (provider: KeyedProvider, value: string) => {
       updateSettings("ai.apiKeys", { ...ai.apiKeys, [provider]: value });
-      if (keySaveTimer.current) clearTimeout(keySaveTimer.current);
-      keySaveTimer.current = setTimeout(() => {
-        setAiKey(provider, value)
-          .then(() => setKeychainError(false))
-          .catch((err) => {
-            console.error("Failed to store the API key in the keychain:", err);
-            setKeychainError(true);
-          });
-      }, KEY_SAVE_DEBOUNCE);
+      scheduleAiKeyWrite(provider, value, (ok, err) => {
+        if (!ok) console.error("Failed to store the API key in the keychain:", err);
+        setKeychainError(!ok);
+      });
     },
     [ai.apiKeys, updateSettings],
   );

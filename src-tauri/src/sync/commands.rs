@@ -74,6 +74,19 @@ pub async fn sync_clear_token(
     Ok(())
 }
 
+/// Whether this workspace has a stored sync token, for the Settings audit
+/// view. Sync tokens are absent from the webview secret allowlist on purpose,
+/// so presence is the only thing the renderer can learn about them.
+#[tauri::command]
+pub async fn sync_has_token(
+    workspace_path: String,
+    state: State<'_, SyncState>,
+    grants: State<'_, GrantRegistry>,
+) -> Result<bool, SyncError> {
+    ensure_workspace(&grants, &workspace_path)?;
+    ops::has_token(&state, &workspace_path)
+}
+
 #[tauri::command]
 pub async fn sync_init_repo(
     workspace_path: String,
@@ -316,10 +329,60 @@ mod tests {
             ws.sync_state().get_token(&ws.workspace_path).as_deref(),
             Some("tok")
         );
+        assert!(
+            sync_has_token(ws.workspace_path.clone(), ws.sync_state(), ws.grants())
+                .await
+                .unwrap()
+        );
         sync_clear_token(ws.workspace_path.clone(), ws.sync_state(), ws.grants())
             .await
             .unwrap();
         assert!(ws.sync_state().get_token(&ws.workspace_path).is_none());
+        assert!(
+            !sync_has_token(ws.workspace_path.clone(), ws.sync_state(), ws.grants())
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn sync_has_token_is_denied_outside_the_granted_workspace() {
+        let ws = Workspace::new();
+        let outside = ws.tmp.path().join("not-granted").to_string_lossy().into();
+        let err = sync_has_token(outside, ws.sync_state(), ws.grants())
+            .await
+            .expect_err("ungranted path is refused");
+        assert!(matches!(err, SyncError::Io(_)), "got {err:?}");
+    }
+
+    #[tokio::test]
+    // The test-store guard serializes keychain tests, so holding it across the
+    // await below is the point, not a hazard.
+    #[allow(clippy::await_holding_lock)]
+    async fn sync_has_token_is_false_for_a_granted_workspace_that_never_had_one() {
+        let _guard = crate::secrets::test_store::install();
+        let ws = Workspace::new();
+        assert!(
+            !sync_has_token(ws.workspace_path.clone(), ws.sync_state(), ws.grants())
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn sync_has_token_reports_a_locked_keychain_as_an_error() {
+        let _guard = crate::secrets::test_store::install();
+        let ws = Workspace::new();
+        let account = format!("sync-token-{}", ws.workspace_path);
+        crate::secrets::test_store::set_error(&account, "keyring locked");
+
+        let err = sync_has_token(ws.workspace_path.clone(), ws.sync_state(), ws.grants())
+            .await
+            .expect_err("a locked keychain must not read as 'nothing stored'");
+        assert!(matches!(err, SyncError::Backend(_)), "got {err:?}");
+
+        crate::secrets::test_store::clear_error(&account);
     }
 
     #[tokio::test]
@@ -532,6 +595,7 @@ mod tests {
                 sync_remove_config,
                 sync_set_token,
                 sync_clear_token,
+                sync_has_token,
                 sync_init_repo,
                 sync_clone_remote,
                 sync_set_origin,
@@ -725,12 +789,26 @@ mod tests {
         );
         assert!(dest.join("note.md").exists());
 
+        // sync_has_token, then sync_clear_token flips it back to false.
+        let has: bool = invoke_ipc(
+            &webview,
+            "sync_has_token",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        assert!(has);
+
         // sync_clear_token
         let _: () = invoke_ipc(
             &webview,
             "sync_clear_token",
             serde_json::json!({ "workspacePath": ws.workspace_path }),
         );
+        let has: bool = invoke_ipc(
+            &webview,
+            "sync_has_token",
+            serde_json::json!({ "workspacePath": ws.workspace_path }),
+        );
+        assert!(!has);
 
         // sync_remove_config, leaves the workspace unconfigured.
         let _: () = invoke_ipc(

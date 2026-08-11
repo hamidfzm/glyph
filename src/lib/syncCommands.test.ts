@@ -8,6 +8,7 @@ import {
   getDefaultSyncAuthor,
   getSyncConfig,
   getSyncStatus,
+  hasSyncToken,
   initSyncRepo,
   isSyncRepoPresent,
   removeSyncConfig,
@@ -53,6 +54,7 @@ describe("sync command wrappers", () => {
       { workspacePath: "/w", token: "tok" },
     ],
     ["clearSyncToken", () => clearSyncToken("/w"), "sync_clear_token", { workspacePath: "/w" }],
+    ["hasSyncToken", () => hasSyncToken("/w"), "sync_has_token", { workspacePath: "/w" }],
     [
       "initSyncRepo",
       () => initSyncRepo("/w", null, "https://r"),

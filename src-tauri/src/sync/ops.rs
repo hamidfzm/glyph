@@ -48,6 +48,13 @@ pub fn clear_token(state: &SyncState, workspace_path: &str) {
     state.clear_token(workspace_path);
 }
 
+/// Whether a token is stored for `workspace_path`, for the Settings audit
+/// view. Never returns the token itself, and a keychain failure surfaces as an
+/// error rather than as "nothing stored".
+pub fn has_token(state: &SyncState, workspace_path: &str) -> Result<bool, SyncError> {
+    state.has_token(workspace_path).map_err(SyncError::Backend)
+}
+
 /// Initialise a fresh repository at `workspace_path` with `default_branch`
 /// as HEAD. Sets `origin` to `remote_url` when one is supplied so the
 /// follow-up `run_sync` call can push to it.
@@ -402,10 +409,13 @@ mod tests {
     async fn token_set_clear_round_trip() {
         let _guard = crate::secrets::test_store::install();
         let state = SyncState::new();
+        assert!(!has_token(&state, "/ws").unwrap());
         set_token(&state, "/ws".into(), "tok".into());
         assert_eq!(state.get_token("/ws").as_deref(), Some("tok"));
+        assert!(has_token(&state, "/ws").unwrap());
         clear_token(&state, "/ws");
         assert!(state.get_token("/ws").is_none());
+        assert!(!has_token(&state, "/ws").unwrap());
     }
 
     #[test]

@@ -267,6 +267,37 @@
       "description": "Off by default. When on, anonymous crash reports (stack traces, OS, and app version) are sent to help fix bugs. Your files, file paths, and links are never included. Only active in production builds. See SECURITY.md for the full policy."
     }
   },
+  "secrets": {
+    "title": "Saved Secrets",
+    "description": "What Glyph has stored in your system keychain. Values are never shown here, only whether a slot is filled.",
+    "slots": {
+      "claude": "Claude API key",
+      "openai": "OpenAI API key",
+      "syncToken": "Cloud Sync token"
+    },
+    "status": {
+      "saved": "Saved",
+      "notSet": "Not set",
+      "checking": "Checking…",
+      "unknown": "Couldn't be checked"
+    },
+    "noWorkspace": "Open a folder to manage its sync token.",
+    "add": "Add",
+    "addSlot": "Add {{slot}}",
+    "replace": "Replace",
+    "replaceSlot": "Replace {{slot}}",
+    "remove": "Remove",
+    "removeSlot": "Remove {{slot}}",
+    "save": "Save",
+    "cancel": "Cancel",
+    "placeholder": "Paste the new value",
+    "newValue": "New value for {{slot}}",
+    "errors": {
+      "read": "Couldn't read the keychain. Check that it is unlocked, then reopen Settings.",
+      "remove": "Couldn't remove the secret from the keychain.",
+      "save": "Couldn't save the secret to the keychain."
+    }
+  },
   "hotkeys": {
     "search": {
       "placeholder": "Search shortcuts…",
