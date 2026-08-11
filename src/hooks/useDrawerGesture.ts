@@ -109,9 +109,13 @@ export function useDrawerGesture(options: UseDrawerGestureOptions) {
     if (!optionsRef.current.enabled || !el || !spring) return;
     if (event.button !== 0) return;
     // The resize handle owns its own drag.
-    if ((event.target as Element).closest("hr")) return;
-    // Grab: freeze wherever the drawer is; a tap resumes on release.
+    if ((event.target as Element).closest("[data-resize-handle]")) return;
+    // Grab: freeze wherever the drawer is; a tap resumes on release. The
+    // grab also disarms any pending dismissal completion, or a rescued
+    // drawer would be silently closed by the stale callback later; a real
+    // dismissal re-arms it through close().
     spring.stop();
+    doneRef.current = null;
     draggedRef.current = false;
     dragRef.current = {
       pointerId: event.pointerId,
@@ -133,6 +137,14 @@ export function useDrawerGesture(options: UseDrawerGestureOptions) {
     const drag = dragRef.current;
     const spring = springRef.current;
     if (!drag || drag.rejected || !spring || event.pointerId !== drag.pointerId) return;
+    // A mouse released outside the drawer before engage never delivers its
+    // pointerup here (capture starts at engage), so a later buttonless hover
+    // would resume the drag. Treat it as a cancel.
+    if (event.buttons === 0) {
+      dragRef.current = null;
+      spring.animateTo(1);
+      return;
+    }
     // Pointer x is mapped so positive always means "toward open".
     const sign = drawerOpenSign(optionsRef.current.edge);
     trackerRef.current.add(event.clientX * sign, event.timeStamp);

@@ -54,6 +54,7 @@ export function CommandPalette({
   if (!presence.mounted) return null;
 
   const runAtIndex = (index: number) => {
+    if (!open) return;
     const hit = ranked[index];
     if (!hit) return;
     onClose();

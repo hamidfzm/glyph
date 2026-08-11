@@ -307,6 +307,7 @@ describe("CommandPalette", () => {
       rerender(<CommandPalette {...props} open={false} />);
       const input = screen.getByLabelText("Command palette query");
       fireEvent.keyDown(input, { key: "Enter" });
+      fireEvent.click(screen.getByText("Xx"));
       expect(run).not.toHaveBeenCalled();
       fireEvent.keyDown(input, { key: "Escape" });
       expect(onClose).not.toHaveBeenCalled();

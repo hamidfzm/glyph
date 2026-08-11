@@ -21,7 +21,7 @@ function Harness({
         <button type="button" data-testid="row" onClick={rowClick}>
           row
         </button>
-        <hr data-testid="resize" />
+        <hr data-resize-handle data-testid="resize" />
       </nav>
     </div>
   );
@@ -48,8 +48,8 @@ const presence = (el: HTMLElement) => el.style.getPropertyValue("--presence");
 function drag(drawer: HTMLElement, from: number, to: number) {
   fireEvent.pointerDown(drawer, { button: 0, pointerId: 1, clientX: from, clientY: 100 });
   // First move only engages (crosses the threshold); the second one tracks.
-  fireEvent.pointerMove(drawer, { pointerId: 1, clientX: from - 20, clientY: 100 });
-  fireEvent.pointerMove(drawer, { pointerId: 1, clientX: to, clientY: 100 });
+  fireEvent.pointerMove(drawer, { pointerId: 1, buttons: 1, clientX: from - 20, clientY: 100 });
+  fireEvent.pointerMove(drawer, { pointerId: 1, buttons: 1, clientX: to, clientY: 100 });
 }
 
 afterEach(() => {
@@ -164,8 +164,8 @@ describe("useDrawerGesture", () => {
     act(() => raf.settle());
 
     fireEvent.pointerDown(drawer, { button: 0, pointerId: 1, clientX: 250, clientY: 100 });
-    fireEvent.pointerMove(drawer, { pointerId: 1, clientX: 252, clientY: 160 });
-    fireEvent.pointerMove(drawer, { pointerId: 1, clientX: 100, clientY: 300 });
+    fireEvent.pointerMove(drawer, { pointerId: 1, buttons: 1, clientX: 252, clientY: 160 });
+    fireEvent.pointerMove(drawer, { pointerId: 1, buttons: 1, clientX: 100, clientY: 300 });
     expect(presence(drawer)).toBe("1");
     fireEvent.pointerUp(drawer, { pointerId: 1, clientX: 100, clientY: 300 });
     act(() => raf.settle());
@@ -193,6 +193,49 @@ describe("useDrawerGesture", () => {
     fireEvent.pointerUp(drawer, { pointerId: 2, clientX: 100, clientY: 100 });
     act(() => raf.settle());
     expect(presence(drawer)).toBe("1");
+  });
+
+  it("a rescued drawer is not closed later by the stale dismissal", () => {
+    const { raf, drawer, close, settled, dismissals, view } = setup();
+    act(() => raf.settle());
+
+    // Backdrop-style dismissal arms the completion, spring heads to 0.
+    act(() => {
+      for (const dismiss of [...dismissals]) dismiss(settled);
+    });
+    act(() => raf.frame());
+
+    // Grab mid-close and drag it back open past the midpoint.
+    fireEvent.pointerDown(drawer, { button: 0, pointerId: 5, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(drawer, { pointerId: 5, buttons: 1, clientX: 120, clientY: 100 });
+    fireEvent.pointerMove(drawer, { pointerId: 5, buttons: 1, clientX: 280, clientY: 100 });
+    fireEvent.pointerUp(drawer, { pointerId: 5, clientX: 280, clientY: 100 });
+    act(() => raf.settle());
+    expect(presence(drawer)).toBe("1");
+    expect(settled).not.toHaveBeenCalled();
+
+    // Leaving compact mode must not fire the disarmed completion either.
+    view.rerender(<Harness enabled={false} dismissals={dismissals} close={close} />);
+    expect(settled).not.toHaveBeenCalled();
+  });
+
+  it("cancels a mouse drag that was released outside before engaging", () => {
+    const { raf, drawer, close } = setup();
+    act(() => raf.settle());
+
+    // Down, tiny move, release off-element (no pointerup reaches the nav),
+    // then a buttonless hover move: the drag must not resume.
+    fireEvent.pointerDown(drawer, { button: 0, pointerId: 6, clientX: 250, clientY: 100 });
+    fireEvent.pointerMove(drawer, { pointerId: 6, buttons: 1, clientX: 247, clientY: 100 });
+    fireEvent.pointerMove(drawer, { pointerId: 6, buttons: 0, clientX: 60, clientY: 100 });
+    act(() => raf.settle());
+    expect(presence(drawer)).toBe("1");
+
+    fireEvent.pointerMove(drawer, { pointerId: 6, buttons: 0, clientX: 40, clientY: 100 });
+    expect(presence(drawer)).toBe("1");
+    fireEvent.click(screen.getByTestId("row"));
+    expect(rowClick).toHaveBeenCalledOnce();
+    expect(close).not.toHaveBeenCalled();
   });
 
   it("pointer cancel restores the open position and does not eat the next tap", () => {

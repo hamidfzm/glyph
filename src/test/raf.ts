@@ -1,5 +1,7 @@
 import { type MockInstance, vi } from "vitest";
 
+const originalRaf = globalThis.requestAnimationFrame;
+const originalCaf = globalThis.cancelAnimationFrame;
 let nowSpy: MockInstance | null = null;
 
 /**
@@ -11,14 +13,14 @@ export function stubRaf() {
   let now = 0;
   let nextId = 1;
   const pending = new Map<number, FrameRequestCallback>();
-  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+  globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
     const id = nextId++;
     pending.set(id, cb);
     return id;
-  });
-  vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+  };
+  globalThis.cancelAnimationFrame = (id: number) => {
     pending.delete(id);
-  });
+  };
   nowSpy = vi.spyOn(performance, "now").mockImplementation(() => now);
   return {
     frame(ms = 16) {
@@ -41,7 +43,8 @@ export function stubRaf() {
 
 // Restores only what stubRaf touched, so a file's other mocks survive.
 export function restoreRaf() {
-  vi.unstubAllGlobals();
+  globalThis.requestAnimationFrame = originalRaf;
+  globalThis.cancelAnimationFrame = originalCaf;
   nowSpy?.mockRestore();
   nowSpy = null;
 }
