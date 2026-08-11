@@ -43,10 +43,10 @@ mod tests {
     fn usage_lists_every_format_and_flag() {
         let text = usage();
         for format in crate::cli::ExportFormat::ALL {
+            let name = format.as_str();
             assert!(
-                text.contains(format.as_str()),
-                "usage text is missing the '{}' format",
-                format.as_str()
+                text.contains(name),
+                "usage text is missing the '{name}' format"
             );
         }
         for flag in ["--export", "--out", "-o", "--help", "-h", "--version", "-V"] {

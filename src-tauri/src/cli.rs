@@ -788,21 +788,15 @@ mod tests {
             ("html", "html"),
         ] {
             let argv = argv_of(&["note.md", "--export", format]);
-            match launch_plan(None, None, None, &argv, &cwd).expect("plans") {
-                CliLaunch::Export {
-                    input,
-                    format: parsed,
-                    output,
-                } => {
-                    assert_eq!(parsed.as_str(), format);
-                    assert!(input.ends_with("note.md"), "got {input}");
-                    assert!(
-                        output.ends_with(&format!("note.{extension}")),
-                        "got {output}"
-                    );
-                }
-                other => panic!("expected an export plan, got {other:?}"),
-            }
+            let plan = launch_plan(None, None, None, &argv, &cwd).expect("plans");
+            let expected = format!("note.{extension}");
+            assert!(
+                matches!(&plan, CliLaunch::Export { input, format: parsed, output }
+                    if parsed.as_str() == format
+                        && input.ends_with("note.md")
+                        && output.ends_with(&expected)),
+                "expected note.md -> {expected}, got {plan:?}"
+            );
         }
         let _ = fs::remove_dir_all(&cwd);
     }
