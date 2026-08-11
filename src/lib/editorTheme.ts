@@ -38,6 +38,8 @@ export const glyphEditorTheme = EditorView.theme({
     padding: "24px 32px",
     maxWidth: "var(--glyph-content-width, 800px)",
     margin: "0 auto",
+    // Same metric `.markdown-body` uses, so split view's two panes stay aligned.
+    lineHeight: "var(--glyph-line-height, 1.7)",
     caretColor: "var(--color-text-primary)",
   },
   ".cm-gutters": {

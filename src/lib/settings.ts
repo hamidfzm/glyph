@@ -173,6 +173,9 @@ export interface EditorSettings {
   // Off falls back to the plain-text clipboard flavor, as does a conversion
   // that fails or yields nothing.
   pasteHtmlAsMarkdown: boolean;
+  // Link the two split-view panes so scrolling either moves the other to the
+  // matching relative position. Off leaves each pane scrolling on its own.
+  syncScroll: boolean;
 }
 
 export interface KeybindingSettings {
@@ -277,6 +280,7 @@ export const DEFAULT_SETTINGS: Settings = {
     spellCheck: false,
     spellCheckLanguages: ["en"],
     pasteHtmlAsMarkdown: true,
+    syncScroll: true,
   },
   markdown: {
     gfm: true,

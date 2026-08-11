@@ -157,6 +157,10 @@
       "label": "以 Markdown 形式粘贴 HTML",
       "description": "从浏览器或其他应用粘贴富文本时，将其转换为 Markdown。关闭后改为粘贴纯文本。"
     },
+    "syncScroll": {
+      "label": "同步分屏滚动",
+      "description": "在分屏模式下，滚动任一窗格时另一窗格会移动到对应位置。关闭后两个窗格各自独立滚动。"
+    },
     "help": {
       "default": {
         "title": "默认 (Glyph) 快捷键",

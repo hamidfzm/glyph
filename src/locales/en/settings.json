@@ -170,6 +170,10 @@
       "label": "Paste HTML as Markdown",
       "description": "When you paste rich text from a browser or another app, convert it to Markdown. Turn this off to paste the plain text instead."
     },
+    "syncScroll": {
+      "label": "Sync split scrolling",
+      "description": "In split mode, scrolling either pane moves the other to the matching position. Turn this off to scroll each pane on its own."
+    },
     "help": {
       "default": {
         "title": "Default (Glyph) shortcuts",

@@ -1,17 +1,57 @@
 import { act, fireEvent, render } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
 
+// The stand-ins reproduce the scroller markup the sync hook looks for, so the
+// wiring tests below exercise the same selectors the real panes expose.
 vi.mock("./MarkdownEditor", () => ({
   MarkdownEditor: ({ content, onChange }: { content: string; onChange: (v: string) => void }) => (
-    <textarea data-testid="editor" value={content} onChange={(e) => onChange(e.target.value)} />
+    <div className="cm-scroller" data-testid="editor-scroller">
+      <textarea data-testid="editor" value={content} onChange={(e) => onChange(e.target.value)} />
+    </div>
   ),
 }));
 
-vi.mock("../markdown/MarkdownViewer", () => ({
-  MarkdownViewer: ({ content }: { content: string }) => <div data-testid="preview">{content}</div>,
+vi.mock("@/components/markdown/MarkdownViewer", () => ({
+  MarkdownViewer: ({ content }: { content: string }) => (
+    <div data-scroll-container="" data-testid="preview">
+      {content}
+    </div>
+  ),
 }));
 
 import { SplitView } from "./SplitView";
+
+const VIEWPORT = 500;
+
+function sizeScroller(el: HTMLElement, range: number) {
+  Object.defineProperty(el, "clientHeight", { value: VIEWPORT, configurable: true });
+  Object.defineProperty(el, "scrollHeight", { value: VIEWPORT + range, configurable: true });
+}
+
+function renderSplit(syncScroll: boolean) {
+  const value: SettingsContextValue = {
+    settings: { ...DEFAULT_SETTINGS, editor: { ...DEFAULT_SETTINGS.editor, syncScroll } },
+    updateSettings: vi.fn(),
+    resetSettings: vi.fn(),
+    flushSettings: async () => true,
+    loaded: true,
+  };
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
+  );
+  const view = render(
+    <SplitView content="hello" onChange={() => {}} searchOpen={false} onSearchClose={() => {}} />,
+    { wrapper },
+  );
+  const editor = view.getByTestId("editor-scroller");
+  const preview = view.getByTestId("preview");
+  sizeScroller(editor, 1000);
+  sizeScroller(preview, 400);
+  return { editor, preview };
+}
 
 describe("SplitView", () => {
   beforeEach(() => {
@@ -82,5 +122,23 @@ describe("SplitView", () => {
       />,
     );
     expect(getByTestId("preview").textContent).toBe("reloaded");
+  });
+
+  it("links the panes when the setting is on", () => {
+    const { editor, preview } = renderSplit(true);
+
+    editor.scrollTop = 500;
+    editor.dispatchEvent(new Event("scroll"));
+
+    expect(preview.scrollTop).toBe(200);
+  });
+
+  it("leaves the panes independent when the setting is off", () => {
+    const { editor, preview } = renderSplit(false);
+
+    editor.scrollTop = 500;
+    editor.dispatchEvent(new Event("scroll"));
+
+    expect(preview.scrollTop).toBe(0);
   });
 });

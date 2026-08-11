@@ -157,6 +157,10 @@
       "label": "HTML als Markdown einfügen",
       "description": "Formatierten Text aus einem Browser oder einer anderen App beim Einfügen in Markdown umwandeln. Ausschalten, um stattdessen den reinen Text einzufügen."
     },
+    "syncScroll": {
+      "label": "Bildlauf im geteilten Modus synchronisieren",
+      "description": "Im geteilten Modus bewegt der Bildlauf in einem Bereich den anderen an die passende Stelle. Ausschalten, um beide Bereiche unabhängig zu scrollen."
+    },
     "help": {
       "default": {
         "title": "Standard-Tastenkürzel (Glyph)",

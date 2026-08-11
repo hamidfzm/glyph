@@ -157,6 +157,10 @@
       "label": "Pegar HTML como Markdown",
       "description": "Al pegar texto enriquecido desde un navegador u otra aplicación, convertirlo a Markdown. Desactiva esta opción para pegar el texto sin formato."
     },
+    "syncScroll": {
+      "label": "Sincronizar el desplazamiento dividido",
+      "description": "En el modo dividido, al desplazar un panel el otro se mueve a la posición equivalente. Desactiva esta opción para desplazar cada panel por separado."
+    },
     "help": {
       "default": {
         "title": "Atajos predeterminados (Glyph)",

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MarkdownViewer } from "@/components/markdown/MarkdownViewer";
+import { useSettings } from "@/hooks/useSettings";
+import { useSyncedScroll } from "@/hooks/useSyncedScroll";
 import { MarkdownEditor } from "./MarkdownEditor";
 
 interface SplitViewProps {
@@ -29,6 +31,10 @@ export function SplitView({
 }: SplitViewProps) {
   const [previewContent, setPreviewContent] = useState(content);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const { settings } = useSettings();
+
+  useSyncedScroll(rootRef, settings.editor.syncScroll);
 
   const handleChange = (newContent: string) => {
     onChange(newContent);
@@ -54,7 +60,7 @@ export function SplitView({
   // scroll layer absolutely) gets a real height. A plain block parent
   // collapses to 0px and the preview renders empty.
   return (
-    <div className="split-view flex h-full w-full">
+    <div ref={rootRef} className="split-view flex h-full w-full">
       <div
         data-testid="split-view-editor"
         className="split-view-editor flex flex-1 min-w-0 min-h-0 overflow-hidden border-e border-[var(--color-border)]"
