@@ -16,14 +16,14 @@ describe("CanvasSelectionToolbar", () => {
   it("sets a preset colour when a preset swatch is clicked", () => {
     const onSetColor = vi.fn();
     render(<CanvasSelectionToolbar count={1} onSetColor={onSetColor} onDelete={vi.fn()} />);
-    fireEvent.click(screen.getByLabelText("Colour 3"));
+    fireEvent.click(screen.getByLabelText("Color 3"));
     expect(onSetColor).toHaveBeenCalledWith("3");
   });
 
   it("commits a custom colour when the picker's change event fires", () => {
     const onSetColor = vi.fn();
     render(<CanvasSelectionToolbar count={1} onSetColor={onSetColor} onDelete={vi.fn()} />);
-    const picker = screen.getByLabelText("Custom colour") as HTMLInputElement;
+    const picker = screen.getByLabelText("Custom color") as HTMLInputElement;
     fireEvent.change(picker, { target: { value: "#123456" } });
     expect(onSetColor).toHaveBeenCalledWith("#123456");
   });
