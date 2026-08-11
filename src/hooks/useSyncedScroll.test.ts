@@ -1,21 +1,44 @@
+import type { EditorView } from "@codemirror/view";
 import { renderHook } from "@testing-library/react";
 import type { RefObject } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { sizeScroller } from "@/test/scrollMetrics";
+import { captureResizeObserver, sizeScroller, stubOffsetTop } from "@/test/scrollMetrics";
 import { useSyncedScroll } from "./useSyncedScroll";
 
-function addScroller(parent: HTMLElement, className: string, contentClass: string, range: number) {
-  const scroller = document.createElement("div");
-  scroller.className = className;
-  const content = document.createElement("div");
-  content.className = contentClass;
-  scroller.append(content);
-  parent.append(scroller);
-  sizeScroller(scroller, range);
-  return scroller;
+const LINE_HEIGHT = 20;
+const LINE_LENGTH = 10;
+const LINES = 100;
+
+/** Enough of the EditorView surface for the hook, backed by uniform lines. */
+function fakeView(scrollDOM: HTMLElement) {
+  const blockFor = (line: number) => ({
+    from: (line - 1) * LINE_LENGTH,
+    top: (line - 1) * LINE_HEIGHT,
+    height: LINE_HEIGHT,
+  });
+  const clampLine = (line: number) => Math.min(Math.max(line, 1), LINES);
+  return {
+    scrollDOM,
+    // The scroller sits at screen 0, so the document top tracks the scroll offset.
+    get documentTop() {
+      return -scrollDOM.scrollTop;
+    },
+    elementAtHeight: (h: number) => blockFor(clampLine(Math.floor(h / LINE_HEIGHT) + 1)),
+    lineBlockAt: (pos: number) => blockFor(clampLine(Math.floor(pos / LINE_LENGTH) + 1)),
+    state: {
+      doc: {
+        lines: LINES,
+        lineAt: (pos: number) => ({ number: clampLine(Math.floor(pos / LINE_LENGTH) + 1) }),
+        line: (line: number) => ({ from: (clampLine(line) - 1) * LINE_LENGTH }),
+      },
+    },
+  } as unknown as EditorView;
 }
 
-function buildSplit(editorRange: number, previewRange: number) {
+/** Anchors at line 1 -> 0px and line 11 -> 500px, so one line is 50 preview px. */
+const ANCHOR_LINES = [1, 11];
+
+function buildSplit({ anchors = ANCHOR_LINES, previewRange = 1000 } = {}) {
   const root = document.createElement("div");
   root.className = "split-view";
   const editorPane = document.createElement("div");
@@ -25,36 +48,34 @@ function buildSplit(editorRange: number, previewRange: number) {
   root.append(editorPane, previewPane);
   document.body.append(root);
 
-  const editor = addScroller(editorPane, "cm-scroller", "cm-content", editorRange);
-  const preview = addScroller(previewPane, "preview-scroller", "markdown-body", previewRange);
+  const editor = document.createElement("div");
+  editor.className = "cm-scroller";
+  editorPane.append(editor);
+  Object.defineProperty(editor, "getBoundingClientRect", { value: () => ({ top: 0 }) });
+  sizeScroller(editor, LINES * LINE_HEIGHT);
+
+  const preview = document.createElement("div");
   preview.setAttribute("data-scroll-container", "");
+  const content = document.createElement("div");
+  content.className = "markdown-body";
+  preview.append(content);
+  previewPane.append(preview);
+  sizeScroller(preview, previewRange);
+
+  for (const [index, line] of anchors.entries()) {
+    const block = document.createElement("p");
+    block.dataset.line = String(line);
+    stubOffsetTop(block, index * 500);
+    content.append(block);
+  }
 
   const rootRef: RefObject<HTMLElement | null> = { current: root };
-  return { rootRef, editorPane, editor, preview };
+  return { rootRef, editor, preview, content, view: fakeView(editor) };
 }
 
 function scroll(el: HTMLElement, top: number) {
   el.scrollTop = top;
   el.dispatchEvent(new Event("scroll"));
-}
-
-/** Replaces ResizeObserver with one whose callbacks the test fires by hand. */
-function captureResizeObserver() {
-  const observers: (() => void)[] = [];
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      constructor(callback: () => void) {
-        observers.push(callback);
-      }
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  );
-  return () => {
-    for (const callback of observers) callback();
-  };
 }
 
 afterEach(() => {
@@ -63,111 +84,103 @@ afterEach(() => {
 });
 
 describe("useSyncedScroll", () => {
-  it("maps the editor's scroll ratio onto the preview's own range", () => {
-    const { rootRef, editor, preview } = buildSplit(1000, 400);
-    renderHook(() => useSyncedScroll(rootRef, true));
+  it("scrolls the preview to the block the editor's top line belongs to", () => {
+    const { rootRef, editor, preview, view } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
 
-    scroll(editor, 500);
+    // Line 6 of 1..11, halfway between the two anchors.
+    scroll(editor, 5 * LINE_HEIGHT);
 
-    expect(preview.scrollTop).toBe(200);
+    expect(preview.scrollTop).toBe(250);
   });
 
-  it("syncs in the other direction too", () => {
-    const { rootRef, editor, preview } = buildSplit(1000, 400);
-    renderHook(() => useSyncedScroll(rootRef, true));
+  it("carries a partly scrolled line through as a fraction", () => {
+    const { rootRef, editor, preview, view } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
 
-    scroll(preview, 100);
+    scroll(editor, 5 * LINE_HEIGHT + LINE_HEIGHT / 2);
 
-    expect(editor.scrollTop).toBe(250);
+    expect(preview.scrollTop).toBe(275);
+  });
+
+  it("scrolls the editor to the line the preview is showing", () => {
+    const { rootRef, editor, preview, view } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
+
+    scroll(preview, 250);
+
+    expect(editor.scrollTop).toBe(5 * LINE_HEIGHT);
+  });
+
+  it("falls back to matching scroll ratios when the preview has no anchors", () => {
+    const { rootRef, editor, preview, view } = buildSplit({ anchors: [] });
+    renderHook(() => useSyncedScroll(rootRef, view, true));
+
+    // Half of the editor's 2000px range maps to half of the preview's 1000px.
+    scroll(editor, 1000);
+
+    expect(preview.scrollTop).toBe(500);
   });
 
   it("drops the follower's echoed scroll event instead of moving the leader back", () => {
-    const { rootRef, editor, preview } = buildSplit(1000, 400);
-    renderHook(() => useSyncedScroll(rootRef, true));
+    const { rootRef, editor, preview, view } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
 
-    scroll(editor, 500);
-    expect(preview.scrollTop).toBe(200);
+    scroll(editor, 5 * LINE_HEIGHT);
+    expect(preview.scrollTop).toBe(250);
 
-    // The browser dispatches a scroll event for the offset the hook just wrote.
-    // Park the editor somewhere the echo would visibly overwrite.
     editor.scrollTop = 0;
     preview.dispatchEvent(new Event("scroll"));
 
     expect(editor.scrollTop).toBe(0);
   });
 
-  // Real browsers store an integer scrollTop, so an echo rarely reports back the
-  // fractional offset that was written to it.
-  it("treats an echo rounded to a whole pixel as an echo", () => {
-    const { rootRef, editor, preview } = buildSplit(1000, 333);
-    renderHook(() => useSyncedScroll(rootRef, true));
-
-    scroll(editor, 500);
-    expect(preview.scrollTop).toBeCloseTo(166.5);
-
-    editor.scrollTop = 0;
-    scroll(preview, 167);
-
-    expect(editor.scrollTop).toBe(0);
-  });
-
-  it("treats a move of more than a pixel as a real scroll", () => {
-    const { rootRef, editor, preview } = buildSplit(1000, 333);
-    renderHook(() => useSyncedScroll(rootRef, true));
-
-    scroll(editor, 500);
-    editor.scrollTop = 0;
-    scroll(preview, 169);
-
-    expect(editor.scrollTop).toBeCloseTo((169 / 333) * 1000);
-  });
-
   it("still follows a real scroll on the pane that was last written to", () => {
-    const { rootRef, editor, preview } = buildSplit(1000, 400);
-    renderHook(() => useSyncedScroll(rootRef, true));
+    const { rootRef, editor, preview, view } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
 
-    scroll(editor, 500);
-    scroll(preview, 400);
+    scroll(editor, 5 * LINE_HEIGHT);
+    scroll(preview, 500);
 
-    expect(editor.scrollTop).toBe(1000);
+    expect(editor.scrollTop).toBe(10 * LINE_HEIGHT);
   });
 
   it("attaches nothing when disabled", () => {
-    const { rootRef, editor, preview } = buildSplit(1000, 400);
-    renderHook(() => useSyncedScroll(rootRef, false));
+    const { rootRef, editor, preview, view } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, view, false));
 
-    scroll(editor, 500);
+    scroll(editor, 100);
+
+    expect(preview.scrollTop).toBe(0);
+  });
+
+  it("attaches nothing before the editor view exists", () => {
+    const { rootRef, editor, preview } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, null, true));
+
+    scroll(editor, 100);
 
     expect(preview.scrollTop).toBe(0);
   });
 
   it("starts and stops syncing as the setting is toggled", () => {
-    const { rootRef, editor, preview } = buildSplit(1000, 400);
-    const { rerender } = renderHook(({ on }) => useSyncedScroll(rootRef, on), {
+    const { rootRef, editor, preview, view } = buildSplit();
+    const { rerender } = renderHook(({ on }) => useSyncedScroll(rootRef, view, on), {
       initialProps: { on: false },
     });
 
     rerender({ on: true });
-    scroll(editor, 500);
-    expect(preview.scrollTop).toBe(200);
+    scroll(editor, 5 * LINE_HEIGHT);
+    expect(preview.scrollTop).toBe(250);
 
     rerender({ on: false });
-    scroll(editor, 1000);
-    expect(preview.scrollTop).toBe(200);
-  });
-
-  it("leaves a pane with no scrollable range alone", () => {
-    const { rootRef, editor, preview } = buildSplit(1000, 0);
-    renderHook(() => useSyncedScroll(rootRef, true));
-
-    scroll(editor, 500);
-
-    expect(preview.scrollTop).toBe(0);
+    scroll(editor, 0);
+    expect(preview.scrollTop).toBe(250);
   });
 
   it("ignores scroll events from elements that are neither pane", () => {
-    const { rootRef, preview } = buildSplit(1000, 400);
-    renderHook(() => useSyncedScroll(rootRef, true));
+    const { rootRef, preview, view } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
 
     const stray = document.createElement("div");
     rootRef.current?.append(stray);
@@ -176,87 +189,51 @@ describe("useSyncedScroll", () => {
     expect(preview.scrollTop).toBe(0);
   });
 
-  // A keymap change destroys the editor view and builds a new one, so the pane
-  // is briefly absent and then a different element entirely.
-  it("ignores scroll while a pane is missing", () => {
-    const { rootRef, editor, preview } = buildSplit(1000, 400);
-    renderHook(() => useSyncedScroll(rootRef, true));
+  it("ignores scroll while the preview pane is missing", () => {
+    const { rootRef, editor, preview, view } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
 
     preview.remove();
-    scroll(editor, 500);
+    scroll(editor, 100);
 
     expect(preview.scrollTop).toBe(0);
   });
 
-  it("follows the editor's replacement scroller", () => {
-    const { rootRef, editorPane, editor, preview } = buildSplit(1000, 400);
-    renderHook(() => useSyncedScroll(rootRef, true));
-
-    editor.remove();
-    const rebuilt = addScroller(editorPane, "cm-scroller", "cm-content", 2000);
-    scroll(rebuilt, 1000);
-
-    expect(preview.scrollTop).toBe(200);
-  });
-
-  it("re-applies the last sync when the preview reflows", () => {
+  it("re-measures the anchors when the preview reflows", () => {
     const fireResize = captureResizeObserver();
-    const { rootRef, editor, preview } = buildSplit(1000, 400);
-    renderHook(() => useSyncedScroll(rootRef, true));
+    const { rootRef, editor, preview, content, view } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
 
-    scroll(editor, 500);
-    expect(preview.scrollTop).toBe(200);
+    scroll(editor, 5 * LINE_HEIGHT);
+    expect(preview.scrollTop).toBe(250);
 
-    // An image finishes loading and the preview grows.
-    sizeScroller(preview, 800);
+    // An image above line 11 finishes loading and pushes its anchor down.
+    const [, second] = [...content.querySelectorAll<HTMLElement>("[data-line]")];
+    stubOffsetTop(second, 900);
     fireResize();
 
-    expect(preview.scrollTop).toBe(400);
+    expect(preview.scrollTop).toBe(450);
   });
 
   it("re-applies from the preview when the preview is the leader", () => {
     const fireResize = captureResizeObserver();
-    const { rootRef, editor, preview } = buildSplit(1000, 400);
-    renderHook(() => useSyncedScroll(rootRef, true));
+    const { rootRef, editor, preview, content, view } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
 
-    scroll(preview, 200);
-    expect(editor.scrollTop).toBe(500);
+    scroll(preview, 250);
+    expect(editor.scrollTop).toBe(5 * LINE_HEIGHT);
 
-    sizeScroller(editor, 2000);
+    const [, second] = [...content.querySelectorAll<HTMLElement>("[data-line]")];
+    stubOffsetTop(second, 1000);
     fireResize();
 
-    expect(editor.scrollTop).toBe(1000);
-  });
-
-  it("skips the reflow re-sync while a pane is missing", () => {
-    const fireResize = captureResizeObserver();
-    const { rootRef, editor, preview } = buildSplit(1000, 400);
-    renderHook(() => useSyncedScroll(rootRef, true));
-
-    scroll(editor, 500);
-    preview.remove();
-    fireResize();
-
-    expect(preview.scrollTop).toBe(200);
-  });
-
-  it("observes only the panes that have content to watch", () => {
-    const fireResize = captureResizeObserver();
-    const { rootRef, editorPane, editor, preview } = buildSplit(1000, 400);
-    editorPane.querySelector(".cm-content")?.remove();
-    renderHook(() => useSyncedScroll(rootRef, true));
-
-    scroll(editor, 500);
-    sizeScroller(preview, 800);
-    fireResize();
-
-    expect(preview.scrollTop).toBe(400);
+    expect(editor.scrollTop).toBe(Math.round(2.5 * LINE_HEIGHT));
   });
 
   it("does not re-apply on reflow before either pane has been scrolled", () => {
     const fireResize = captureResizeObserver();
-    const { rootRef, preview } = buildSplit(1000, 400);
-    renderHook(() => useSyncedScroll(rootRef, true));
+    const { rootRef, preview, view } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
 
     fireResize();
 
@@ -264,11 +241,11 @@ describe("useSyncedScroll", () => {
   });
 
   it("stops syncing once unmounted", () => {
-    const { rootRef, editor, preview } = buildSplit(1000, 400);
-    const { unmount } = renderHook(() => useSyncedScroll(rootRef, true));
+    const { rootRef, editor, preview, view } = buildSplit();
+    const { unmount } = renderHook(() => useSyncedScroll(rootRef, view, true));
 
     unmount();
-    scroll(editor, 500);
+    scroll(editor, 100);
 
     expect(preview.scrollTop).toBe(0);
   });

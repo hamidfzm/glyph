@@ -1,25 +1,23 @@
+import type { EditorView } from "@codemirror/view";
 import { type RefObject, useEffect } from "react";
+import { offsetForEditorLine, topVisibleLine } from "@/lib/editorLineOffsets";
+import { lineForOffset, offsetForLine, type ScrollAnchor } from "@/lib/splitScrollAnchors";
 
-// Scoped to the pane wrappers and resolved at event time: CodeMirror builds a
-// fresh `.cm-scroller` whenever the keymap preset rebuilds the editor, and both
-// `.cm-scroller` and `.markdown-body` are class names a rendered document could
-// otherwise contribute from inside the preview.
-const EDITOR_SCROLLER = ".split-view-editor .cm-scroller";
-const EDITOR_CONTENT = ".split-view-editor .cm-content";
+// Scoped to the pane wrappers: `.markdown-body` is a class name a rendered
+// document could otherwise contribute from inside the preview.
 const PREVIEW_SCROLLER = ".split-view-preview [data-scroll-container]";
 const PREVIEW_CONTENT = ".split-view-preview .markdown-body";
+const ANCHORS = "[data-line]";
 
-// CodeMirror reports an estimated scrollHeight for lines it has not measured,
-// so the editor's range shifts a little as a long document is scrolled through.
-function scrollRange(el: HTMLElement) {
-  return el.scrollHeight - el.clientHeight;
-}
-
-/** Links the split view's panes so scrolling one moves the other to the matching ratio. */
-export function useSyncedScroll(rootRef: RefObject<HTMLElement | null>, enabled: boolean) {
+export function useSyncedScroll(
+  rootRef: RefObject<HTMLElement | null>,
+  view: EditorView | null,
+  enabled: boolean,
+) {
   useEffect(() => {
     const root = rootRef.current;
-    if (!enabled || !root) return;
+    if (!enabled || !root || !view) return;
+    const editor = view.scrollDOM;
 
     // Offset last written to a pane, so that pane's own scroll event can be told
     // apart from a user scroll. A frame or timer lock would race: the callback
@@ -27,50 +25,75 @@ export function useSyncedScroll(rootRef: RefObject<HTMLElement | null>, enabled:
     const written = new WeakMap<HTMLElement, number>();
     let leader: "editor" | "preview" | null = null;
 
-    const findPanes = () => ({
-      editor: root.querySelector<HTMLElement>(EDITOR_SCROLLER),
-      preview: root.querySelector<HTMLElement>(PREVIEW_SCROLLER),
-    });
-
-    const follow = (from: HTMLElement, to: HTMLElement) => {
-      const fromRange = scrollRange(from);
-      const toRange = scrollRange(to);
-      if (fromRange <= 0 || toRange <= 0) return;
-      to.scrollTop = (from.scrollTop / fromRange) * toRange;
-      // Read back rather than recording the requested offset: the browser rounds
-      // and clamps, and an elastic overscroll bounce lands well away from it.
-      written.set(to, to.scrollTop);
+    // Measuring every anchor costs a layout pass, so the list is built once and
+    // rebuilt only when the preview reflows, not on each scroll event.
+    let anchors: ScrollAnchor[] = [];
+    const measureAnchors = (preview: HTMLElement) => {
+      anchors = [...preview.querySelectorAll<HTMLElement>(ANCHORS)].map((el) => ({
+        line: Number(el.dataset.line),
+        top: el.offsetTop,
+      }));
     };
 
-    const syncFrom = (name: "editor" | "preview", from: HTMLElement, to: HTMLElement) => {
-      const expected = written.get(from);
-      written.delete(from);
-      if (expected !== undefined && Math.abs(from.scrollTop - expected) < 1) return;
+    const scrollTo = (pane: HTMLElement, top: number) => {
+      pane.scrollTop = top;
+      // Read back rather than recording the requested offset: the browser rounds
+      // and clamps, and an elastic overscroll bounce lands well away from it.
+      written.set(pane, pane.scrollTop);
+    };
+
+    // Falls back to matching each pane's scrolled fraction, which is all that is
+    // available before the preview has rendered any anchors.
+    const followByRatio = (from: HTMLElement, to: HTMLElement) => {
+      const fromRange = from.scrollHeight - from.clientHeight;
+      const toRange = to.scrollHeight - to.clientHeight;
+      if (fromRange <= 0 || toRange <= 0) return;
+      scrollTo(to, (from.scrollTop / fromRange) * toRange);
+    };
+
+    const editorToPreview = (preview: HTMLElement) => {
+      const top = offsetForLine(anchors, topVisibleLine(view));
+      if (top === null) followByRatio(editor, preview);
+      else scrollTo(preview, top);
+    };
+
+    const previewToEditor = (preview: HTMLElement) => {
+      const line = lineForOffset(anchors, preview.scrollTop);
+      if (line === null) followByRatio(preview, editor);
+      else scrollTo(editor, offsetForEditorLine(view, line));
+    };
+
+    const syncFrom = (name: "editor" | "preview", pane: HTMLElement, preview: HTMLElement) => {
+      const expected = written.get(pane);
+      written.delete(pane);
+      if (expected !== undefined && Math.abs(pane.scrollTop - expected) < 1) return;
       leader = name;
-      follow(from, to);
+      if (name === "editor") editorToPreview(preview);
+      else previewToEditor(preview);
     };
 
     // `scroll` does not bubble but does capture-propagate, so one listener on the
     // split root covers both panes however deep their scrollers sit.
     const handleScroll = (event: Event) => {
-      const { editor, preview } = findPanes();
-      if (!editor || !preview) return;
+      const preview = root.querySelector<HTMLElement>(PREVIEW_SCROLLER);
+      if (!preview) return;
       if (event.target === editor) syncFrom("editor", editor, preview);
-      if (event.target === preview) syncFrom("preview", preview, editor);
+      if (event.target === preview) syncFrom("preview", preview, preview);
     };
 
-    // Images, diagrams, math, and typing change a pane's height after the fact,
-    // which would otherwise leave the two sitting at a stale offset.
+    // The preview re-renders on a debounce and grows as images, diagrams, and
+    // math lay out, which moves every anchor below them.
     const observer = new ResizeObserver(() => {
-      if (!leader) return;
-      const { editor, preview } = findPanes();
-      if (!editor || !preview) return;
-      if (leader === "editor") follow(editor, preview);
-      else follow(preview, editor);
+      const preview = root.querySelector<HTMLElement>(PREVIEW_SCROLLER);
+      if (!preview) return;
+      measureAnchors(preview);
+      if (leader === "editor") editorToPreview(preview);
+      else if (leader === "preview") previewToEditor(preview);
     });
-    for (const selector of [EDITOR_CONTENT, PREVIEW_CONTENT]) {
-      const content = root.querySelector<HTMLElement>(selector);
-      if (content) observer.observe(content);
+    const content = root.querySelector<HTMLElement>(PREVIEW_CONTENT);
+    if (content) {
+      measureAnchors(content.closest<HTMLElement>(PREVIEW_SCROLLER) ?? content);
+      observer.observe(content);
     }
 
     root.addEventListener("scroll", handleScroll, { capture: true, passive: true });
@@ -78,5 +101,5 @@ export function useSyncedScroll(rootRef: RefObject<HTMLElement | null>, enabled:
       root.removeEventListener("scroll", handleScroll, { capture: true });
       observer.disconnect();
     };
-  }, [rootRef, enabled]);
+  }, [rootRef, view, enabled]);
 }

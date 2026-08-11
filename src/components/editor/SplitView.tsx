@@ -1,3 +1,4 @@
+import type { EditorView } from "@codemirror/view";
 import { useEffect, useRef, useState } from "react";
 import { MarkdownViewer } from "@/components/markdown/MarkdownViewer";
 import { useSettings } from "@/hooks/useSettings";
@@ -30,11 +31,13 @@ export function SplitView({
   onTaskToggle,
 }: SplitViewProps) {
   const [previewContent, setPreviewContent] = useState(content);
+  const [editorView, setEditorView] = useState<EditorView | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const rootRef = useRef<HTMLDivElement>(null);
   const { settings } = useSettings();
+  const syncScroll = settings.editor.syncScroll;
 
-  useSyncedScroll(rootRef, settings.editor.syncScroll);
+  useSyncedScroll(rootRef, editorView, syncScroll);
 
   const handleChange = (newContent: string) => {
     onChange(newContent);
@@ -65,7 +68,12 @@ export function SplitView({
         data-testid="split-view-editor"
         className="split-view-editor flex flex-1 min-w-0 min-h-0 overflow-hidden border-e border-[var(--color-border)]"
       >
-        <MarkdownEditor content={content} onChange={handleChange} workspaceFiles={workspaceFiles} />
+        <MarkdownEditor
+          content={content}
+          onChange={handleChange}
+          workspaceFiles={workspaceFiles}
+          onViewReady={setEditorView}
+        />
       </div>
       <div
         data-testid="split-view-preview"
@@ -80,6 +88,7 @@ export function SplitView({
           onOpenWikilink={onOpenWikilink}
           onOpenRelativeFile={onOpenRelativeFile}
           onTaskToggle={onTaskToggle}
+          sourceLines={syncScroll}
         />
       </div>
     </div>

@@ -15,6 +15,8 @@ interface MarkdownViewerProps {
   onOpenWikilink?: (path: string, heading?: string) => void;
   onOpenRelativeFile?: (path: string) => void;
   onTaskToggle?: (line: number) => void;
+  /** Stamp `data-line` on top-level blocks, for split view scroll sync. */
+  sourceLines?: boolean;
 }
 
 export function MarkdownViewer({
@@ -28,6 +30,7 @@ export function MarkdownViewer({
   onOpenWikilink,
   onOpenRelativeFile,
   onTaskToggle,
+  sourceLines,
 }: MarkdownViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -113,6 +116,7 @@ export function MarkdownViewer({
             onOpenWikilink={onOpenWikilink}
             onOpenRelativeFile={onOpenRelativeFile}
             onTaskToggle={onTaskToggle}
+            sourceLines={sourceLines}
           />
         </div>
       </div>

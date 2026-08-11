@@ -29,6 +29,8 @@ interface MarkdownContentProps {
   onTaskToggle?: (line: number) => void;
   /** Render a YAML frontmatter block when present. Defaults to true. */
   showFrontmatter?: boolean;
+  /** Stamp `data-line` on top-level blocks, for split view scroll sync. */
+  sourceLines?: boolean;
 }
 
 // The markdown rendering core: frontmatter block + ReactMarkdown wired up with
@@ -44,6 +46,7 @@ export function MarkdownContent({
   onOpenRelativeFile,
   onTaskToggle,
   showFrontmatter = true,
+  sourceLines = false,
 }: MarkdownContentProps) {
   const workspaceRoot = useWorkspaceRoot();
   // Extend the ancestor embed chain with this document's file so a nested
@@ -87,8 +90,8 @@ export function MarkdownContent({
   );
 
   const rehypePlugins = useMemo(
-    () => buildRehypePlugins({ highlightPlugin, katexPlugin, extra: pluginRehype }),
-    [highlightPlugin, katexPlugin, pluginRehype],
+    () => buildRehypePlugins({ highlightPlugin, katexPlugin, extra: pluginRehype, sourceLines }),
+    [highlightPlugin, katexPlugin, pluginRehype, sourceLines],
   );
 
   const remarkPlugins = useMemo(

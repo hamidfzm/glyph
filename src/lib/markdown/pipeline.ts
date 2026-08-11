@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
 import { markdownSanitizeSchema } from "@/components/markdown/sanitizeSchema";
+import { rehypeSourceLines } from "@/lib/markdown/rehypeSourceLines";
 import type { MarkdownPlugin } from "@/lib/plugins/types";
 import type { MarkdownSettings } from "@/lib/settings";
 import { remarkWikilink } from "@/lib/wikilink";
@@ -60,12 +61,15 @@ export interface RehypePipelineOptions {
   katexPlugin?: MarkdownPlugin | null;
   /** Plugin-contributed rehype plugins, appended after the built-ins. */
   extra?: readonly MarkdownPlugin[];
+  /** Stamp `data-line` on top-level blocks, for split view scroll sync. */
+  sourceLines?: boolean;
 }
 
 export function buildRehypePlugins({
   highlightPlugin,
   katexPlugin,
   extra = [],
+  sourceLines = false,
 }: RehypePipelineOptions): RehypePlugins {
   // Sanitize runs early so raw HTML in the *document* is cleaned. Plugin rehype
   // plugins are appended after it: plugin code is trusted (the user installed
@@ -73,6 +77,7 @@ export function buildRehypePlugins({
   const plugins: RehypePlugins = [rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], rehypeSlug];
   if (highlightPlugin) plugins.push(highlightPlugin);
   if (katexPlugin) plugins.push(katexPlugin);
+  if (sourceLines) plugins.push(rehypeSourceLines);
   plugins.push(...extra);
   return plugins;
 }
