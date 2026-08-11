@@ -1,8 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { Command } from "@/lib/commands";
 import { buildMetadataIndex } from "@/lib/metadata";
+import { restoreMatchMedia, stubMatchMedia } from "@/test/matchMedia";
+import { restoreRaf, stubRaf } from "@/test/raf";
 import { CommandPalette } from "./CommandPalette";
 
 function cmd(over: Partial<Command>): Command {
@@ -244,6 +246,80 @@ describe("CommandPalette", () => {
   it("focuses the input when opened", () => {
     renderPalette({});
     expect(document.activeElement).toBe(screen.getByLabelText("Command palette query"));
+  });
+
+  describe("spring presence", () => {
+    afterEach(() => {
+      restoreRaf();
+      restoreMatchMedia();
+    });
+
+    const paletteProps = {
+      query: "",
+      commands: [],
+      onQueryChange: vi.fn(),
+      onClose: vi.fn(),
+    };
+
+    it("stays mounted while the close spring runs, then unmounts", () => {
+      const raf = stubRaf();
+      const { container, rerender } = render(<CommandPalette {...paletteProps} open />);
+      act(() => raf.settle());
+
+      rerender(<CommandPalette {...paletteProps} open={false} />);
+      const overlay = container.querySelector(".command-palette-overlay");
+      expect(overlay).toBeInTheDocument();
+      // Ghost input is inert while closing.
+      expect(overlay?.hasAttribute("inert")).toBe(true);
+
+      act(() => raf.settle());
+      expect(container.querySelector(".command-palette-overlay")).not.toBeInTheDocument();
+    });
+
+    it("reopening mid-close keeps the same node and reverses", () => {
+      const raf = stubRaf();
+      const { container, rerender } = render(<CommandPalette {...paletteProps} open />);
+      act(() => raf.settle());
+
+      rerender(<CommandPalette {...paletteProps} open={false} />);
+      act(() => raf.frame());
+      const overlay = container.querySelector(".command-palette-overlay") as HTMLElement;
+
+      rerender(<CommandPalette {...paletteProps} open />);
+      expect(container.querySelector(".command-palette-overlay")).toBe(overlay);
+      expect(overlay.hasAttribute("inert")).toBe(false);
+      act(() => raf.settle());
+      expect(overlay.style.getPropertyValue("--presence")).toBe("1");
+    });
+
+    it("does not run commands from a closing palette", () => {
+      const raf = stubRaf();
+      const run = vi.fn();
+      const onClose = vi.fn();
+      const props = {
+        ...paletteProps,
+        commands: [cmd({ id: "x", title: "Xx", run })],
+        onClose,
+      };
+      const { rerender } = render(<CommandPalette {...props} open />);
+      act(() => raf.settle());
+
+      rerender(<CommandPalette {...props} open={false} />);
+      const input = screen.getByLabelText("Command palette query");
+      fireEvent.keyDown(input, { key: "Enter" });
+      fireEvent.click(screen.getByText("Xx"));
+      expect(run).not.toHaveBeenCalled();
+      fireEvent.keyDown(input, { key: "Escape" });
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it("closes instantly under reduced motion", () => {
+      stubRaf();
+      stubMatchMedia(true);
+      const { container, rerender } = render(<CommandPalette {...paletteProps} open />);
+      rerender(<CommandPalette {...paletteProps} open={false} />);
+      expect(container.querySelector(".command-palette-overlay")).not.toBeInTheDocument();
+    });
   });
 
   it("narrows Files rows to a tag query using the workspace metadata", () => {

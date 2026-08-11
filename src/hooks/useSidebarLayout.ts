@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useCanSplit } from "@/hooks/useMediaQuery";
 import { AI_PANEL_WIDTH_DEFAULT, type Settings, SIDEBAR_WIDTH_DEFAULT } from "@/lib/settings";
 
@@ -57,11 +57,25 @@ export function useSidebarLayout({
     updateSettings("layout.outlineSidebarVisible", next);
   }, [compact, outlineVisible, updateSettings]);
 
-  // Dismiss the compact drawers (backdrop tap, or after opening a file).
-  const closeCompactPanels = useCallback(() => {
+  // Mounted compact drawers register an animated dismissal here (see
+  // useDrawerGesture), so closing plays the exit spring before the state
+  // flips and unmounts them.
+  const drawerDismissals = useRef(new Set<(onDone: () => void) => void>()).current;
+
+  const settleCompactPanelsClosed = useCallback(() => {
     setCompactFilesOpen(false);
     setCompactOutlineOpen(false);
   }, []);
+
+  // Dismiss the compact drawers (backdrop tap, or after opening a file):
+  // animated when a drawer is mounted, immediate otherwise.
+  const closeCompactPanels = useCallback(() => {
+    if (drawerDismissals.size === 0) {
+      settleCompactPanelsClosed();
+      return;
+    }
+    for (const dismiss of [...drawerDismissals]) dismiss(settleCompactPanelsClosed);
+  }, [drawerDismissals, settleCompactPanelsClosed]);
 
   const setFilesSidebarWidth = useCallback(
     (width: number) => updateSettings("layout.filesSidebarWidth", width),
@@ -102,6 +116,7 @@ export function useSidebarLayout({
     // this to switch the panel to an overlay and show a dismiss backdrop.
     compact,
     closeCompactPanels,
+    drawerDismissals,
     toggleFiles,
     toggleOutline,
     setFilesSidebarWidth,

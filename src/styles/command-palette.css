@@ -1,3 +1,5 @@
+/* Open/close is a spring: useSpringPresence writes `--presence` and
+   motion.css maps it onto this overlay's opacity and the panel's transform. */
 .command-palette-overlay {
   position: fixed;
   inset: 0;
@@ -7,42 +9,19 @@
   justify-content: center;
   padding-top: 12vh;
   z-index: 100;
-  animation: command-palette-fade-in 0.12s ease-out;
-}
-
-@keyframes command-palette-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
 }
 
 .command-palette {
-  background: var(--color-surface);
+  /* Background and box-shadow come from the material rules in motion.css. */
   border: 1px solid var(--color-border);
   border-radius: var(--glyph-radius);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   width: 640px;
   max-width: 92vw;
   max-height: 60vh;
   display: flex;
   flex-direction: column;
-  animation: command-palette-slide-down 0.12s ease-out;
   font-size: 13px;
   overflow: hidden;
-}
-
-@keyframes command-palette-slide-down {
-  from {
-    transform: translateY(-10px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
 }
 
 .command-palette-input {

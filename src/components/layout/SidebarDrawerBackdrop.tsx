@@ -14,7 +14,7 @@ export function SidebarDrawerBackdrop() {
     <button
       type="button"
       aria-label={t("sidebar.closeDrawer")}
-      className="absolute inset-0 z-10 bg-black/40"
+      className="sidebar-drawer-backdrop absolute inset-0 z-10 bg-black/40"
       onClick={closeCompactPanels}
     />
   );

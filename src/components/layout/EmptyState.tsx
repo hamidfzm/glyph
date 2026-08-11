@@ -59,14 +59,14 @@ export function EmptyState({
           <button
             type="button"
             onClick={onNewNote}
-            className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] rounded-[var(--glyph-radius)] transition-colors"
+            className="pressable px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] rounded-[var(--glyph-radius)] transition-colors"
           >
             {t("emptyState.newNote")}
           </button>
           <button
             type="button"
             onClick={onNewCanvas}
-            className="px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
+            className="pressable px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
           >
             {t("emptyState.newCanvas")}
           </button>
@@ -77,14 +77,14 @@ export function EmptyState({
           <button
             type="button"
             onClick={onNewDocument}
-            className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] rounded-[var(--glyph-radius)] transition-colors"
+            className="pressable px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] rounded-[var(--glyph-radius)] transition-colors"
           >
             {t("emptyState.newDocument")}
           </button>
           <button
             type="button"
             onClick={onOpenFile}
-            className="px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
+            className="pressable px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
           >
             {t("emptyState.openFile")}
           </button>
@@ -93,14 +93,14 @@ export function EmptyState({
             <button
               type="button"
               onClick={onOpenFolder}
-              className="px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
+              className="pressable px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
             >
               {t("emptyState.openFolder")}
             </button>
             <button
               type="button"
               onClick={onNewWorkspace}
-              className="px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
+              className="pressable px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
             >
               {t("emptyState.newWorkspace")}
             </button>

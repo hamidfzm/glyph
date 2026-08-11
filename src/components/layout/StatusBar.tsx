@@ -39,7 +39,7 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
   return (
     <div
       data-print-hide="true"
-      className="status-bar flex items-center gap-4 px-4 min-h-7 border-t border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-xs text-[var(--color-text-secondary)] select-none shrink-0"
+      className="status-bar flex items-center gap-4 px-4 min-h-7 border-t border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] select-none shrink-0"
     >
       {filePath && (
         // Hidden on mobile (see platform.css): the path there is an opaque

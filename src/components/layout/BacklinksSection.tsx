@@ -38,7 +38,7 @@ export function BacklinksSection({ backlinks, workspaceRoot, onOpen }: Backlinks
               <button
                 type="button"
                 onClick={() => onOpen(b.source, b.line)}
-                className="block w-full text-start text-sm px-2 py-1 rounded-[var(--glyph-radius-sm)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
+                className="block w-full text-start text-sm px-2 py-1 rounded-[var(--glyph-radius-sm)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] active:bg-[var(--color-border)] hover:text-[var(--color-text-primary)] transition-colors"
                 title={`${b.source}:${b.line}`}
               >
                 <div className="truncate font-medium">

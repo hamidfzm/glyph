@@ -27,7 +27,7 @@ export function PanelHeader({ label, side, onCollapse, collapseTitle, actions }:
         <button
           type="button"
           onClick={onCollapse}
-          className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] p-0.5 rounded-[var(--glyph-radius-sm)] hover:bg-[var(--color-surface-tertiary)] transition-colors"
+          className="pressable text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] p-0.5 rounded-[var(--glyph-radius-sm)] hover:bg-[var(--color-surface-tertiary)] transition-colors"
           title={collapseTitle}
           aria-label={collapseTitle}
         >

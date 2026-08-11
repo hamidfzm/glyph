@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppModals as AppModalsState } from "@/hooks/useAppModals";
+import { restoreRaf, stubRaf } from "@/test/raf";
 import { AppModals } from "./AppModals";
 
 vi.mock("@/components/modals/settings/lazySettings", () => ({
@@ -49,5 +50,21 @@ describe("AppModals", () => {
     for (const other of CASES.filter((c) => c.flag !== flag)) {
       expect(screen.queryByText(other.text)).not.toBeInTheDocument();
     }
+  });
+
+  describe("settings exit spring", () => {
+    afterEach(restoreRaf);
+
+    it("keeps settings mounted while the close spring runs, then unmounts", () => {
+      const raf = stubRaf();
+      const { rerender } = render(<AppModals modals={state("settingsOpen")} />);
+      act(() => raf.settle());
+
+      rerender(<AppModals modals={state()} />);
+      expect(screen.getByText("settings modal")).toBeInTheDocument();
+
+      act(() => raf.settle());
+      expect(screen.queryByText("settings modal")).not.toBeInTheDocument();
+    });
   });
 });
