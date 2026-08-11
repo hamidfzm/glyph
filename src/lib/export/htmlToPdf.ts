@@ -200,9 +200,13 @@ function blocksForNode(node: Node): Content[] {
  * Walk a prepared HTML fragment into a pdfmake content array. Block-level SVG
  * (light-rendered diagrams, SVG images) embeds as vector `svg` nodes; inline
  * math falls back to its LaTeX source, matching the docx walker.
+ *
+ * Takes either markup or an element already mounted in the live document; a
+ * mounted root is what lets diagrams keep their own CSS (see `svgNode`).
  */
-export function convertHtmlToPdf(bodyHtml: string): Content[] {
-  const doc = new DOMParser().parseFromString(bodyHtml, "text/html");
-  const out = Array.from(doc.body.childNodes).flatMap((node) => blocksForNode(node));
+export function convertHtmlToPdf(body: string | Element): Content[] {
+  const root =
+    typeof body === "string" ? new DOMParser().parseFromString(body, "text/html").body : body;
+  const out = Array.from(root.childNodes).flatMap((node) => blocksForNode(node));
   return out.length ? out : [{ text: "" }];
 }

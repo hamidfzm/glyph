@@ -64,7 +64,7 @@
     },
     "codeFont": {
       "label": "Fuente del código",
-      "placeholder": "Predeterminada (SF Mono, Fira Code...)"
+      "placeholder": "Predeterminada (SF Mono, Fira Code…)"
     },
     "codeTheme": {
       "label": "Tema del código",
@@ -321,7 +321,7 @@
     },
     "math": {
       "label": "Matemáticas",
-      "description": "Ecuaciones KaTeX: $inline$ y $$bloque$$"
+      "description": "Ecuaciones KaTeX: $inline$ y $$block$$"
     },
     "alerts": {
       "label": "Avisos",

@@ -64,7 +64,7 @@
     },
     "codeFont": {
       "label": "فونت کد",
-      "placeholder": "پیش‌فرض (SF Mono، Fira Code...)"
+      "placeholder": "پیش‌فرض (SF Mono، Fira Code…)"
     },
     "codeTheme": {
       "label": "پوسته کد",

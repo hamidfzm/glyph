@@ -82,7 +82,7 @@
     "dismiss": "بستن اعلان فضای کاری"
   },
   "search": {
-    "placeholder": "جستجو در سند...",
+    "placeholder": "جستجو در سند…",
     "label": "جستجو",
     "noResults": "نتیجه‌ای یافت نشد",
     "matchCount": "{{current}} از {{total}}",

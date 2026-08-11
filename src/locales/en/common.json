@@ -82,7 +82,7 @@
     "dismiss": "Dismiss workspace notice"
   },
   "search": {
-    "placeholder": "Find in document...",
+    "placeholder": "Find in document…",
     "label": "Search",
     "noResults": "No results",
     "matchCount": "{{current}} of {{total}}",
@@ -140,8 +140,8 @@
     "editUrl": "Edit URL",
     "editEdgeLabel": "Edit label",
     "deleteConnection": "Delete connection",
-    "clearColor": "Clear colour",
-    "color": "Colour",
+    "clearColor": "Clear color",
+    "color": "Color",
     "delete": "Delete",
     "colorRed": "Red",
     "colorOrange": "Orange",
@@ -221,9 +221,9 @@
   },
   "canvasSelection": {
     "toolbar": "Selection",
-    "clearColor": "Clear colour",
-    "colorLabel": "Colour {{color}}",
-    "customColor": "Custom colour",
+    "clearColor": "Clear color",
+    "colorLabel": "Color {{color}}",
+    "customColor": "Custom color",
     "delete": "Delete",
     "deleteCount": "Delete ({{count}})"
   },
@@ -241,7 +241,7 @@
   },
   "graph": {
     "label": "Workspace graph",
-    "reset": "Re-centre and fit the graph",
+    "reset": "Re-center and fit the graph",
     "resetView": "Reset view",
     "emptyState": "No notes to graph yet. Add markdown files to this workspace."
   },
@@ -260,14 +260,14 @@
   },
   "embed": {
     "openSource": "Open embedded note",
-    "loading": "Loading embed...",
+    "loading": "Loading embed…",
     "broken": "Embedded note not found: {{target}}",
     "circular": "Circular embed: {{target}}",
     "headingNotFound": "Heading not found: {{heading}}",
     "error": "Could not load embed: {{target}}"
   },
   "wikilinkPreview": {
-    "loading": "Loading preview...",
+    "loading": "Loading preview…",
     "notFound": "Note not found: {{target}}",
     "createNote": "Create note",
     "headingNotFound": "Heading not found: {{heading}}",

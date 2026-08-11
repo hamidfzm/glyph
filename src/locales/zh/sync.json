@@ -21,7 +21,7 @@
     },
     "preferLocal": { "label": "保留本地", "description": "推送本地编辑以覆盖远程。" }
   },
-  "authorName": { "label": "作者姓名", "placeholder": "默认使用您的 git 配置" },
+  "authorName": { "label": "作者姓名", "placeholder": "默认使用你的 git 配置" },
   "authorEmail": { "label": "作者邮箱", "placeholder": "you@example.com" },
   "token": {
     "label": "个人访问令牌",

@@ -21,9 +21,39 @@ export async function rasterizeElement(el: HTMLElement, backgroundColor: string)
 // light, regardless of the app theme.
 export async function renderMermaidLightSvg(source: string): Promise<string> {
   const { default: mermaid } = await import("mermaid");
-  mermaid.initialize({ startOnLoad: false, theme: "default", flowchart: { htmlLabels: false } });
+  // Both flags are needed: with only the flowchart one, Mermaid v11 still wraps
+  // every node label in a `<foreignObject>` and the labels vanish from the PDF.
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "default",
+    htmlLabels: false,
+    flowchart: { htmlLabels: false },
+  });
   const { svg } = await mermaid.render(`glyph-export-mermaid-${mermaidId++}`, source);
-  return svg;
+  return sanitizeDiagramSvg(svg);
+}
+
+// Mermaid builds raw markup out of user-authored diagram source, so it is
+// sanitized here, before any consumer (PDF, print, site export) can put it in a
+// document; `<foreignObject>` is the SVG-embedded-HTML vector.
+//
+// Mermaid also backs every edge and cluster label with a filled
+// `rect.background` so labels stay readable where they cross an edge. On a
+// printed page that reads as a grey slab, worst over a colored subgraph, so the
+// fill is dropped while the sanitized DOM is in hand. Inline styles win over
+// the stylesheet rule that sets it.
+async function sanitizeDiagramSvg(svg: string): Promise<string> {
+  const { default: DOMPurify } = await import("dompurify");
+  const fragment = DOMPurify.sanitize(svg, {
+    FORBID_TAGS: ["foreignObject"],
+    RETURN_DOM_FRAGMENT: true,
+  });
+  for (const rect of Array.from(fragment.querySelectorAll("rect.background"))) {
+    (rect as SVGElement).style.setProperty("fill", "none");
+  }
+  const root = fragment.querySelector("svg");
+  if (!root) throw new Error("no svg in rendered diagram");
+  return root.outerHTML;
 }
 
 // Restore Mermaid's (global) config to the app theme after export-time renders,
@@ -33,6 +63,7 @@ export async function restoreMermaidTheme(dark: boolean): Promise<void> {
   mermaid.initialize({
     startOnLoad: false,
     theme: dark ? "dark" : "default",
+    htmlLabels: true,
     flowchart: { htmlLabels: true },
   });
 }

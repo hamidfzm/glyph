@@ -64,7 +64,7 @@
     },
     "codeFont": {
       "label": "Code Font",
-      "placeholder": "Default (SF Mono, Fira Code...)"
+      "placeholder": "Default (SF Mono, Fira Code…)"
     },
     "codeTheme": {
       "label": "Code Theme",
