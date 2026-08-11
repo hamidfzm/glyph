@@ -3,13 +3,16 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { sizeScroller } from "@/test/scrollMetrics";
 
 // The stand-ins reproduce the scroller markup the sync hook looks for, so the
 // wiring tests below exercise the same selectors the real panes expose.
 vi.mock("./MarkdownEditor", () => ({
   MarkdownEditor: ({ content, onChange }: { content: string; onChange: (v: string) => void }) => (
     <div className="cm-scroller" data-testid="editor-scroller">
-      <textarea data-testid="editor" value={content} onChange={(e) => onChange(e.target.value)} />
+      <div className="cm-content">
+        <textarea data-testid="editor" value={content} onChange={(e) => onChange(e.target.value)} />
+      </div>
     </div>
   ),
 }));
@@ -17,19 +20,12 @@ vi.mock("./MarkdownEditor", () => ({
 vi.mock("@/components/markdown/MarkdownViewer", () => ({
   MarkdownViewer: ({ content }: { content: string }) => (
     <div data-scroll-container="" data-testid="preview">
-      {content}
+      <div className="markdown-body">{content}</div>
     </div>
   ),
 }));
 
 import { SplitView } from "./SplitView";
-
-const VIEWPORT = 500;
-
-function sizeScroller(el: HTMLElement, range: number) {
-  Object.defineProperty(el, "clientHeight", { value: VIEWPORT, configurable: true });
-  Object.defineProperty(el, "scrollHeight", { value: VIEWPORT + range, configurable: true });
-}
 
 function renderSplit(syncScroll: boolean) {
   const value: SettingsContextValue = {

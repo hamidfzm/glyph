@@ -1,32 +1,36 @@
 import { renderHook } from "@testing-library/react";
 import type { RefObject } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { sizeScroller } from "@/test/scrollMetrics";
 import { useSyncedScroll } from "./useSyncedScroll";
 
-const VIEWPORT = 500;
-
-// jsdom reports every element as 0x0, so the scrollable range each pane should
-// map through has to be declared explicitly.
-function sizeScroller(el: HTMLElement, range: number) {
-  Object.defineProperty(el, "clientHeight", { value: VIEWPORT, configurable: true });
-  Object.defineProperty(el, "scrollHeight", { value: VIEWPORT + range, configurable: true });
+function addScroller(parent: HTMLElement, className: string, contentClass: string, range: number) {
+  const scroller = document.createElement("div");
+  scroller.className = className;
+  const content = document.createElement("div");
+  content.className = contentClass;
+  scroller.append(content);
+  parent.append(scroller);
+  sizeScroller(scroller, range);
+  return scroller;
 }
 
 function buildSplit(editorRange: number, previewRange: number) {
   const root = document.createElement("div");
-  const editor = document.createElement("div");
-  editor.className = "cm-scroller";
-  const preview = document.createElement("div");
-  preview.setAttribute("data-scroll-container", "");
-  const content = document.createElement("div");
-  content.className = "markdown-body";
-  preview.append(content);
-  root.append(editor, preview);
+  root.className = "split-view";
+  const editorPane = document.createElement("div");
+  editorPane.className = "split-view-editor";
+  const previewPane = document.createElement("div");
+  previewPane.className = "split-view-preview";
+  root.append(editorPane, previewPane);
   document.body.append(root);
-  sizeScroller(editor, editorRange);
-  sizeScroller(preview, previewRange);
+
+  const editor = addScroller(editorPane, "cm-scroller", "cm-content", editorRange);
+  const preview = addScroller(previewPane, "preview-scroller", "markdown-body", previewRange);
+  preview.setAttribute("data-scroll-container", "");
+
   const rootRef: RefObject<HTMLElement | null> = { current: root };
-  return { rootRef, editor, preview };
+  return { rootRef, editorPane, editor, preview };
 }
 
 function scroll(el: HTMLElement, top: number) {
@@ -34,7 +38,7 @@ function scroll(el: HTMLElement, top: number) {
   el.dispatchEvent(new Event("scroll"));
 }
 
-/** Replaces ResizeObserver with one whose callback the test fires by hand. */
+/** Replaces ResizeObserver with one whose callbacks the test fires by hand. */
 function captureResizeObserver() {
   const observers: (() => void)[] = [];
   vi.stubGlobal(
@@ -92,6 +96,32 @@ describe("useSyncedScroll", () => {
     expect(editor.scrollTop).toBe(0);
   });
 
+  // Real browsers store an integer scrollTop, so an echo rarely reports back the
+  // fractional offset that was written to it.
+  it("treats an echo rounded to a whole pixel as an echo", () => {
+    const { rootRef, editor, preview } = buildSplit(1000, 333);
+    renderHook(() => useSyncedScroll(rootRef, true));
+
+    scroll(editor, 500);
+    expect(preview.scrollTop).toBeCloseTo(166.5);
+
+    editor.scrollTop = 0;
+    scroll(preview, 167);
+
+    expect(editor.scrollTop).toBe(0);
+  });
+
+  it("treats a move of more than a pixel as a real scroll", () => {
+    const { rootRef, editor, preview } = buildSplit(1000, 333);
+    renderHook(() => useSyncedScroll(rootRef, true));
+
+    scroll(editor, 500);
+    editor.scrollTop = 0;
+    scroll(preview, 169);
+
+    expect(editor.scrollTop).toBeCloseTo((169 / 333) * 1000);
+  });
+
   it("still follows a real scroll on the pane that was last written to", () => {
     const { rootRef, editor, preview } = buildSplit(1000, 400);
     renderHook(() => useSyncedScroll(rootRef, true));
@@ -109,6 +139,21 @@ describe("useSyncedScroll", () => {
     scroll(editor, 500);
 
     expect(preview.scrollTop).toBe(0);
+  });
+
+  it("starts and stops syncing as the setting is toggled", () => {
+    const { rootRef, editor, preview } = buildSplit(1000, 400);
+    const { rerender } = renderHook(({ on }) => useSyncedScroll(rootRef, on), {
+      initialProps: { on: false },
+    });
+
+    rerender({ on: true });
+    scroll(editor, 500);
+    expect(preview.scrollTop).toBe(200);
+
+    rerender({ on: false });
+    scroll(editor, 1000);
+    expect(preview.scrollTop).toBe(200);
   });
 
   it("leaves a pane with no scrollable range alone", () => {
@@ -131,8 +176,8 @@ describe("useSyncedScroll", () => {
     expect(preview.scrollTop).toBe(0);
   });
 
-  // A keymap change tears down the editor instance and builds a new one, so a
-  // scroll can land while one of the two scrollers is briefly missing.
+  // A keymap change destroys the editor view and builds a new one, so the pane
+  // is briefly absent and then a different element entirely.
   it("ignores scroll while a pane is missing", () => {
     const { rootRef, editor, preview } = buildSplit(1000, 400);
     renderHook(() => useSyncedScroll(rootRef, true));
@@ -141,6 +186,17 @@ describe("useSyncedScroll", () => {
     scroll(editor, 500);
 
     expect(preview.scrollTop).toBe(0);
+  });
+
+  it("follows the editor's replacement scroller", () => {
+    const { rootRef, editorPane, editor, preview } = buildSplit(1000, 400);
+    renderHook(() => useSyncedScroll(rootRef, true));
+
+    editor.remove();
+    const rebuilt = addScroller(editorPane, "cm-scroller", "cm-content", 2000);
+    scroll(rebuilt, 1000);
+
+    expect(preview.scrollTop).toBe(200);
   });
 
   it("re-applies the last sync when the preview reflows", () => {

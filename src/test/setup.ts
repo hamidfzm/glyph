@@ -32,14 +32,6 @@ globalThis.fetch = vi.fn(() =>
   Promise.resolve({ ok: false, json: () => Promise.resolve({}) } as Response),
 ) as unknown as typeof fetch;
 
-// jsdom ships no ResizeObserver, so components that observe element size take
-// their real code path here. Tests that need callbacks to fire stub their own.
-globalThis.ResizeObserver = class {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-} as unknown as typeof ResizeObserver;
-
 vi.mock("@tauri-apps/plugin-os", () => ({
   platform: vi.fn(() => "macos"),
   locale: vi.fn(() => Promise.resolve("en-US")),

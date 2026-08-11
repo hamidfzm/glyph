@@ -38,11 +38,14 @@ export const glyphEditorTheme = EditorView.theme({
     padding: "24px 32px",
     maxWidth: "var(--glyph-content-width, 800px)",
     margin: "0 auto",
-    // Same metric `.markdown-body` uses, so split view's two panes stay aligned.
+    // Honour the configured line height, which the preview already reads.
     lineHeight: "var(--glyph-line-height, 1.7)",
     caretColor: "var(--color-text-primary)",
   },
   ".cm-gutters": {
+    // Must match `.cm-content`: gutters otherwise inherit CodeMirror's base 1.4
+    // and each line number floats above the line it belongs to.
+    lineHeight: "var(--glyph-line-height, 1.7)",
     backgroundColor: "var(--color-surface-secondary)",
     color: "var(--color-text-tertiary)",
     border: "none",
