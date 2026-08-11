@@ -25,11 +25,17 @@ for bad in "1.2" "v1.2.3" "1.2.3-rc1" ""; do
     fail "accepted invalid version '$bad'"
   fi
 done
-git diff --quiet || fail "rejected version still modified the working tree"
+[ -z "$(git status --porcelain)" ] || fail "rejected version still modified the working tree"
 
 # A version whose tag already exists on origin is rejected
 out=$(bash "$bump" 9.9.8 2>&1) && fail "accepted already-tagged version 9.9.8"
 echo "$out" | grep -q "already exists" || fail "wrong error for existing tag: $out"
+
+# An unreachable origin aborts the bump instead of failing open
+git remote set-url origin "$tmp/missing.git"
+out=$(bash "$bump" 9.9.7 2>&1) && fail "proceeded when origin tags could not be queried"
+echo "$out" | grep -q "Could not query" || fail "wrong error for unreachable origin: $out"
+git remote set-url origin "$tmp/origin.git"
 
 # Happy path: package.json, Cargo.toml, and Cargo.lock all agree
 bash "$bump" 9.9.9
