@@ -20,7 +20,7 @@ export function ToolbarButton({
     <button
       type="button"
       onClick={onClick}
-      className={`p-0.5 rounded-[var(--glyph-radius-sm)] hover:bg-[var(--color-surface-tertiary)] transition-colors ${tone}`}
+      className={`pressable p-0.5 rounded-[var(--glyph-radius-sm)] hover:bg-[var(--color-surface-tertiary)] transition-colors ${tone}`}
       title={title}
       aria-label={title}
       aria-pressed={pressed}

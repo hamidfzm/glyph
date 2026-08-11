@@ -12,4 +12,4 @@ export const SURFACE_CLASS =
 
 // A single menu row (action button or submenu trigger).
 export const ITEM_CLASS =
-  "flex w-full items-center justify-between gap-6 rounded-[var(--glyph-radius-sm)] px-2.5 py-1.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] focus:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] focus:outline-none";
+  "flex w-full items-center justify-between gap-6 rounded-[var(--glyph-radius-sm)] px-2.5 py-1.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] focus:bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] active:bg-[color-mix(in_srgb,var(--color-accent)_26%,transparent)] focus:outline-none";

@@ -11,6 +11,7 @@ export function sidebarLayoutValue(
     outlineVisible: true,
     compact: false,
     closeCompactPanels: vi.fn(),
+    drawerDismissals: new Set(),
     toggleFiles: vi.fn(),
     toggleOutline: vi.fn(),
     resetLayout: vi.fn(),

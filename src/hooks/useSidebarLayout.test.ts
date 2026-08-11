@@ -168,4 +168,29 @@ describe("useSidebarLayout on a compact viewport", () => {
     expect(result.current.filesVisible).toBe(false);
     expect(result.current.outlineVisible).toBe(false);
   });
+
+  it("defers the close to a registered drawer dismissal until it settles", () => {
+    const { result } = renderCompact();
+    act(() => {
+      result.current.toggleFiles();
+    });
+
+    let settle: (() => void) | undefined;
+    const dismiss = vi.fn((onDone: () => void) => {
+      settle = onDone;
+    });
+    result.current.drawerDismissals.add(dismiss);
+
+    act(() => {
+      result.current.closeCompactPanels();
+    });
+    expect(dismiss).toHaveBeenCalledOnce();
+    // The drawer stays mounted while its exit spring plays.
+    expect(result.current.filesVisible).toBe(true);
+
+    act(() => {
+      settle?.();
+    });
+    expect(result.current.filesVisible).toBe(false);
+  });
 });

@@ -14,6 +14,7 @@
 @import "./imageViewer.css";
 @import "./print.css";
 @import "./ai-chat.css";
+@import "./motion.css";
 
 :root {
   /* Native widgets (select popups, scrollbars) follow the app theme; WebKitGTK renders them unreadable otherwise. */
@@ -43,6 +44,10 @@
   --color-alert-caution: #cf222e;
   --color-error: #d70015;
   --color-error-bg: rgba(215, 0, 21, 0.08);
+  /* Translucent material for floating chrome (palette, modals, status bar).
+     Plain rgba, not color-mix, for the same html2canvas reason as above. */
+  --glyph-material-bg: rgba(245, 245, 247, 0.85);
+  --glyph-material-edge: rgba(255, 255, 255, 0.35);
 }
 
 /* Scoped to :root so a non-theme "dark" class on a subtree can't flip its native controls. */
@@ -70,6 +75,10 @@
   --color-alert-caution: #f85149;
   --color-error: #ff6961;
   --color-error-bg: rgba(255, 105, 97, 0.14);
+  /* Surface-secondary's RGB, not surface's: composited over the page it must
+     stay one step lighter, or the chrome dissolves into the document. */
+  --glyph-material-bg: rgba(44, 44, 46, 0.85);
+  --glyph-material-edge: rgba(255, 255, 255, 0.08);
 }
 
 html,
