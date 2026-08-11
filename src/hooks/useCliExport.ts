@@ -83,12 +83,16 @@ export function useCliExport({ entries, content }: UseCliExportOptions): void {
           message = `Exported ${result.pages} pages and ${result.assets} assets to ${request.output}`;
         } else {
           const { runCliDocumentExport } = await import("@/lib/export/cliDocumentExport");
-          const path = await runCliDocumentExport(request, {
+          const { path, settled } = await runCliDocumentExport(request, {
             entries: entriesRef.current,
             includeToc: includeTocRef.current,
             content: contentRef.current,
           });
-          message = `Exported ${path}`;
+          // A document that never settled still exports, but says so: silently
+          // shipping one with missing diagrams is worse than a noisy success.
+          message = settled
+            ? `Exported ${path}`
+            : `Exported ${path} (the document did not finish rendering; diagrams may be missing)`;
         }
         await invoke("finish_cli_export", { code: 0, message });
       } catch (err) {

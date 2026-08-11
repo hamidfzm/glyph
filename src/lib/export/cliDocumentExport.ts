@@ -17,15 +17,17 @@ interface CliDocumentExportOptions {
  * so CLI output matches interactive output: inlined code colors, rasterized
  * math, and light-theme vector diagrams all come from the live DOM.
  *
- * Returns the path written, for the success message.
+ * Returns the path written and whether the document had finished rendering, so
+ * a timed-out export reports itself rather than passing off a document with
+ * missing diagrams as a complete one.
  */
 export async function runCliDocumentExport(
   request: CliExportRequest,
   { entries, includeToc, content }: CliDocumentExportOptions,
-): Promise<string> {
+): Promise<{ path: string; settled: boolean }> {
   // Diagrams and math finish rendering after mount; exporting before they
   // settle writes empty slots.
-  await waitForRenderIdle();
+  const { settled } = await waitForRenderIdle();
   // `exportDocument` no-ops when there is no rendered body, which would report
   // a success that wrote no file.
   if (!document.querySelector(".markdown-body, .notebook-body")) {
@@ -36,5 +38,5 @@ export async function runCliDocumentExport(
     entries,
     includeToc,
   });
-  return request.output;
+  return { path: request.output, settled };
 }

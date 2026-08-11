@@ -27,7 +27,7 @@ function setBody(): void {
 
 beforeEach(() => {
   exportDocumentMock.mockReset().mockResolvedValue(undefined);
-  waitForRenderIdleMock.mockClear();
+  waitForRenderIdleMock.mockReset().mockResolvedValue({ settled: true });
 });
 
 afterEach(() => {
@@ -37,13 +37,13 @@ afterEach(() => {
 describe("runCliDocumentExport", () => {
   it("exports through the shared document exporter and returns the path", async () => {
     setBody();
-    const path = await runCliDocumentExport(REQUEST, {
+    const result = await runCliDocumentExport(REQUEST, {
       entries: [{ id: "intro", text: "Intro", level: 1 }],
       includeToc: true,
       content: "# Getting Started",
     });
 
-    expect(path).toBe("/out/getting-started.pdf");
+    expect(result).toEqual({ path: "/out/getting-started.pdf", settled: true });
     expect(exportDocumentMock).toHaveBeenCalledWith(
       "pdf",
       "/out/getting-started.pdf",
@@ -66,6 +66,19 @@ describe("runCliDocumentExport", () => {
 
     await runCliDocumentExport(REQUEST, { entries: [], includeToc: false, content: null });
     expect(order).toEqual(["wait", "export"]);
+  });
+
+  it("reports a render that timed out instead of passing the document off as complete", async () => {
+    setBody();
+    waitForRenderIdleMock.mockResolvedValue({ settled: false });
+    const result = await runCliDocumentExport(REQUEST, {
+      entries: [],
+      includeToc: false,
+      content: null,
+    });
+    // Still exported: a stuck diagram must not hang CI. But not silently.
+    expect(result.settled).toBe(false);
+    expect(exportDocumentMock).toHaveBeenCalled();
   });
 
   it("fails loudly when the document never rendered", async () => {

@@ -42,7 +42,7 @@ const HOOK_ARGS = { entries: [], content: "# Notes" };
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
   exportSiteMock.mockReset().mockResolvedValue({ pages: 3, assets: 1 });
-  runCliDocumentExportMock.mockReset().mockResolvedValue("/ws/notes.pdf");
+  runCliDocumentExportMock.mockReset().mockResolvedValue({ path: "/ws/notes.pdf", settled: true });
   settings.loaded = true;
   resetCliExportRequestCache();
   resetCliExportRunner();
@@ -139,6 +139,18 @@ describe("useCliExport", () => {
     expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
       code: 0,
       message: "Exported /ws/notes.pdf",
+    });
+  });
+
+  it("says so when a document exported before it finished rendering", async () => {
+    stubRequest(PDF_REQUEST);
+    runCliDocumentExportMock.mockResolvedValue({ path: "/ws/notes.pdf", settled: false });
+    renderHook(() => useCliExport(HOOK_ARGS));
+    await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
+    expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
+      code: 0,
+      message:
+        "Exported /ws/notes.pdf (the document did not finish rendering; diagrams may be missing)",
     });
   });
 
