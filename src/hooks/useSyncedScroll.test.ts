@@ -240,6 +240,19 @@ describe("useSyncedScroll", () => {
     expect(preview.scrollTop).toBe(200);
   });
 
+  it("observes only the panes that have content to watch", () => {
+    const fireResize = captureResizeObserver();
+    const { rootRef, editorPane, editor, preview } = buildSplit(1000, 400);
+    editorPane.querySelector(".cm-content")?.remove();
+    renderHook(() => useSyncedScroll(rootRef, true));
+
+    scroll(editor, 500);
+    sizeScroller(preview, 800);
+    fireResize();
+
+    expect(preview.scrollTop).toBe(400);
+  });
+
   it("does not re-apply on reflow before either pane has been scrolled", () => {
     const fireResize = captureResizeObserver();
     const { rootRef, preview } = buildSplit(1000, 400);
