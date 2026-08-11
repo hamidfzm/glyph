@@ -22,3 +22,15 @@ jobs:
       - name: Install Playwright WebKit
         run: pnpm exec playwright install --with-deps webkit
       - run: pnpm test:e2e
+
+  release-bump:
+    # Runs the create-release version-bump script against a throwaway clone:
+    # format validation, tag-exists check, and package.json / Cargo.toml /
+    # Cargo.lock agreement. Guards create-release.yml without cutting a
+    # release (see #504).
+    name: Release bump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: ./.github/actions/rust-setup
+      - run: bash scripts/bump-version.test.sh
