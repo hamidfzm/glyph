@@ -9,9 +9,8 @@ export interface ScrollAnchor {
 // marker (a Mermaid diagram, a CSV table) map through their neighbours instead
 // of snapping. Anchors arrive in document order, which is line order.
 
-function interpolate(from: number, to: number, fromSpan: number, toSpan: number, into: number) {
-  if (fromSpan <= 0) return to;
-  return to + ((into - from) / fromSpan) * toSpan;
+function lerp(fromLow: number, fromHigh: number, toLow: number, toHigh: number, at: number) {
+  return toLow + ((at - fromLow) / (fromHigh - fromLow)) * (toHigh - toLow);
 }
 
 /** The preview offset showing `line`, or null when the document has no anchors. */
@@ -22,13 +21,12 @@ export function offsetForLine(anchors: readonly ScrollAnchor[], line: number): n
   const last = anchors[anchors.length - 1];
   if (line >= last.line) return last.top;
 
-  for (let i = 0; i < anchors.length - 1; i++) {
-    const lower = anchors[i];
-    const upper = anchors[i + 1];
-    if (line < lower.line || line >= upper.line) continue;
-    return interpolate(lower.line, lower.top, upper.line - lower.line, upper.top - lower.top, line);
-  }
-  return last.top;
+  // The clamps leave the query strictly inside the range, so a bracketing pair
+  // always exists and its span is never zero.
+  const at = anchors.findIndex((anchor) => anchor.line > line);
+  const before = anchors[at - 1];
+  const after = anchors[at];
+  return lerp(before.line, after.line, before.top, after.top, line);
 }
 
 /** The source line showing at preview offset `top`, or null without anchors. */
@@ -39,11 +37,8 @@ export function lineForOffset(anchors: readonly ScrollAnchor[], top: number): nu
   const last = anchors[anchors.length - 1];
   if (top >= last.top) return last.line;
 
-  for (let i = 0; i < anchors.length - 1; i++) {
-    const lower = anchors[i];
-    const upper = anchors[i + 1];
-    if (top < lower.top || top >= upper.top) continue;
-    return interpolate(lower.top, lower.line, upper.top - lower.top, upper.line - lower.line, top);
-  }
-  return last.line;
+  const at = anchors.findIndex((anchor) => anchor.top > top);
+  const before = anchors[at - 1];
+  const after = anchors[at];
+  return lerp(before.top, after.top, before.line, after.line, top);
 }

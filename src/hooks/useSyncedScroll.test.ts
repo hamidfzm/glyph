@@ -122,6 +122,24 @@ describe("useSyncedScroll", () => {
     expect(preview.scrollTop).toBe(500);
   });
 
+  it("falls back to matching scroll ratios in the other direction too", () => {
+    const { rootRef, editor, preview, view } = buildSplit({ anchors: [] });
+    renderHook(() => useSyncedScroll(rootRef, view, true));
+
+    scroll(preview, 500);
+
+    expect(editor.scrollTop).toBe(1000);
+  });
+
+  it("leaves a pane with no scrollable range alone in the fallback", () => {
+    const { rootRef, editor, preview, view } = buildSplit({ anchors: [], previewRange: 0 });
+    renderHook(() => useSyncedScroll(rootRef, view, true));
+
+    scroll(editor, 1000);
+
+    expect(preview.scrollTop).toBe(0);
+  });
+
   it("drops the follower's echoed scroll event instead of moving the leader back", () => {
     const { rootRef, editor, preview, view } = buildSplit();
     renderHook(() => useSyncedScroll(rootRef, view, true));
@@ -189,6 +207,18 @@ describe("useSyncedScroll", () => {
     expect(preview.scrollTop).toBe(0);
   });
 
+  // Split mode mounts both panes together, but the preview is lazily loaded, so
+  // the hook can run a frame ahead of it.
+  it("mounts before the preview pane exists", () => {
+    const { rootRef, editor, preview, view } = buildSplit();
+    preview.remove();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
+
+    scroll(editor, 5 * LINE_HEIGHT);
+
+    expect(preview.scrollTop).toBe(0);
+  });
+
   it("ignores scroll while the preview pane is missing", () => {
     const { rootRef, editor, preview, view } = buildSplit();
     renderHook(() => useSyncedScroll(rootRef, view, true));
@@ -228,6 +258,30 @@ describe("useSyncedScroll", () => {
     fireResize();
 
     expect(editor.scrollTop).toBe(Math.round(2.5 * LINE_HEIGHT));
+  });
+
+  it("skips the reflow re-sync while the preview pane is missing", () => {
+    const fireResize = captureResizeObserver();
+    const { rootRef, editor, preview, view } = buildSplit();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
+
+    scroll(editor, 5 * LINE_HEIGHT);
+    preview.remove();
+    fireResize();
+
+    expect(preview.scrollTop).toBe(250);
+  });
+
+  // Nothing to observe for reflow, and no anchors either, so the panes fall back
+  // to matching ratios until the first render lands.
+  it("still syncs when the preview has rendered no content yet", () => {
+    const { rootRef, editor, preview, content, view } = buildSplit();
+    content.remove();
+    renderHook(() => useSyncedScroll(rootRef, view, true));
+
+    scroll(editor, 5 * LINE_HEIGHT);
+
+    expect(preview.scrollTop).toBe(50);
   });
 
   it("does not re-apply on reflow before either pane has been scrolled", () => {

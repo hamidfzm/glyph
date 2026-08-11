@@ -6,7 +6,7 @@ import { lineForOffset, offsetForLine, type ScrollAnchor } from "@/lib/splitScro
 // Scoped to the pane wrappers: `.markdown-body` is a class name a rendered
 // document could otherwise contribute from inside the preview.
 const PREVIEW_SCROLLER = ".split-view-preview [data-scroll-container]";
-const PREVIEW_CONTENT = ".split-view-preview .markdown-body";
+const PREVIEW_CONTENT = ".markdown-body";
 const ANCHORS = "[data-line]";
 
 export function useSyncedScroll(
@@ -90,10 +90,11 @@ export function useSyncedScroll(
       if (leader === "editor") editorToPreview(preview);
       else if (leader === "preview") previewToEditor(preview);
     });
-    const content = root.querySelector<HTMLElement>(PREVIEW_CONTENT);
-    if (content) {
-      measureAnchors(content.closest<HTMLElement>(PREVIEW_SCROLLER) ?? content);
-      observer.observe(content);
+    const preview = root.querySelector<HTMLElement>(PREVIEW_SCROLLER);
+    if (preview) {
+      measureAnchors(preview);
+      const content = preview.querySelector<HTMLElement>(PREVIEW_CONTENT);
+      if (content) observer.observe(content);
     }
 
     root.addEventListener("scroll", handleScroll, { capture: true, passive: true });
