@@ -47,7 +47,8 @@ export function useCliExport({ entries, content }: UseCliExportOptions): void {
   const { settings, loaded } = useSettings();
 
   // Held in refs so the document's own churn (a growing TOC, streaming
-  // content) doesn't re-run the effect while an export is in flight.
+  // content) doesn't re-run the effect while an export is in flight, and so
+  // the runner can read them once the document has actually rendered.
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
   const contentRef = useRef(content);
@@ -83,11 +84,11 @@ export function useCliExport({ entries, content }: UseCliExportOptions): void {
           message = `Exported ${result.pages} pages and ${result.assets} assets to ${request.output}`;
         } else {
           const { runCliDocumentExport } = await import("@/lib/export/cliDocumentExport");
-          const { path, settled } = await runCliDocumentExport(request, {
+          const { path, settled } = await runCliDocumentExport(request, () => ({
             entries: entriesRef.current,
             includeToc: includeTocRef.current,
             content: contentRef.current,
-          });
+          }));
           // A document that never settled still exports, but says so: silently
           // shipping one with missing diagrams is worse than a noisy success.
           message = settled

@@ -12,6 +12,7 @@ export interface CliExportRequest {
 }
 
 let requestPromise: Promise<CliExportRequest | null> | null = null;
+let isExportProcess = false;
 
 /**
  * The CLI export request this process was launched with, if any. Cached
@@ -21,12 +22,32 @@ let requestPromise: Promise<CliExportRequest | null> | null = null;
  */
 export function getCliExportRequest(): Promise<CliExportRequest | null> {
   if (!requestPromise) {
-    requestPromise = invoke<CliExportRequest | null>("get_cli_export").catch(() => null);
+    requestPromise = invoke<CliExportRequest | null>("get_cli_export")
+      .then((request) => {
+        isExportProcess = request !== null;
+        return request;
+      })
+      .catch(() => null);
   }
   return requestPromise;
+}
+
+/**
+ * Whether this process is a headless export, for the paths that must not
+ * write user state from one. A CLI export opens the exported document like any
+ * other tab, and persisting that would replace the user's saved session and
+ * recent files with the exported file, racing the interactive window they
+ * already have open.
+ *
+ * Answers false until the probe resolves, which happens on mount, well before
+ * a document is opened (that needs its own IPC round trips).
+ */
+export function isCliExportProcess(): boolean {
+  return isExportProcess;
 }
 
 /** Test-only: forget the cached answer so each test can stub its own. */
 export function resetCliExportRequestCache(): void {
   requestPromise = null;
+  isExportProcess = false;
 }

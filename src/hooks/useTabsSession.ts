@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { type RefObject, useEffect, useRef, useState } from "react";
 import type { OpenFolderOptions } from "@/hooks/useWorkspaceLifecycle";
+import { isCliExportProcess } from "@/lib/cliExport";
 import {
   normalizePersistedTabs,
   type PersistedTab,
@@ -55,7 +56,9 @@ export function useTabsSession({
   useEffect(() => {
     // Secondary windows are ephemeral: only the primary window owns session
     // restore, so it alone persists the open-tabs list (#295 multi-window).
-    if (initializing || !isPrimaryWindow()) return;
+    // A headless export opens the exported document as a tab; persisting that
+    // would replace the user's saved session with it.
+    if (initializing || !isPrimaryWindow() || isCliExportProcess()) return;
     const persisted: PersistedTab[] = [];
     if (workspace) {
       persisted.push({

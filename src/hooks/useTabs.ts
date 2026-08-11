@@ -14,6 +14,7 @@ import { useWorkspaceIndex } from "@/hooks/useWorkspaceIndex";
 import { useWorkspaceLifecycle } from "@/hooks/useWorkspaceLifecycle";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { useWorkspaceTree } from "@/hooks/useWorkspaceTree";
+import { isCliExportProcess } from "@/lib/cliExport";
 import { basename, isPathInside } from "@/lib/paths";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { type FileTab, type PersistedTab, removeTabs } from "@/lib/tabs";
@@ -124,6 +125,9 @@ export function useTabs(options: UseTabsOptions) {
   const { markSelfSave, isRecentSelfSave } = useSelfSaveTracker();
 
   const addToRecent = useCallback((path: string) => {
+    // A headless export must not rewrite the user's recent files with the
+    // document it was asked to render.
+    if (isCliExportProcess()) return;
     const current = optionsRef.current.recentFiles ?? [];
     const updated = [path, ...current.filter((f) => f !== path)].slice(0, MAX_RECENT_FILES);
     optionsRef.current.onSettingsChange("behavior.recentFiles", updated);

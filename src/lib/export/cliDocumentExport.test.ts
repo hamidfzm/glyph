@@ -37,11 +37,11 @@ afterEach(() => {
 describe("runCliDocumentExport", () => {
   it("exports through the shared document exporter and returns the path", async () => {
     setBody();
-    const result = await runCliDocumentExport(REQUEST, {
+    const result = await runCliDocumentExport(REQUEST, () => ({
       entries: [{ id: "intro", text: "Intro", level: 1 }],
       includeToc: true,
       content: "# Getting Started",
-    });
+    }));
 
     expect(result).toEqual({ path: "/out/getting-started.pdf", settled: true });
     expect(exportDocumentMock).toHaveBeenCalledWith(
@@ -64,18 +64,42 @@ describe("runCliDocumentExport", () => {
       order.push("export");
     });
 
-    await runCliDocumentExport(REQUEST, { entries: [], includeToc: false, content: null });
+    await runCliDocumentExport(REQUEST, () => ({ entries: [], includeToc: false, content: null }));
     expect(order).toEqual(["wait", "export"]);
+  });
+
+  it("reads the export options after the render settles, not before", async () => {
+    // On a CLI launch the document is still opening when the export starts, so
+    // options snapshotted up front carry an empty TOC and no title source.
+    setBody();
+    let tocReady = false;
+    waitForRenderIdleMock.mockImplementation(async () => {
+      tocReady = true;
+      return { settled: true };
+    });
+
+    await runCliDocumentExport(REQUEST, () => ({
+      entries: tocReady ? [{ id: "intro", text: "Intro", level: 1 }] : [],
+      includeToc: true,
+      content: tocReady ? "# Getting Started" : null,
+    }));
+
+    expect(exportDocumentMock).toHaveBeenCalledWith(
+      "pdf",
+      expect.any(String),
+      expect.objectContaining({ title: "Getting Started" }),
+      { entries: [{ id: "intro", text: "Intro", level: 1 }], includeToc: true },
+    );
   });
 
   it("reports a render that timed out instead of passing the document off as complete", async () => {
     setBody();
     waitForRenderIdleMock.mockResolvedValue({ settled: false });
-    const result = await runCliDocumentExport(REQUEST, {
+    const result = await runCliDocumentExport(REQUEST, () => ({
       entries: [],
       includeToc: false,
       content: null,
-    });
+    }));
     // Still exported: a stuck diagram must not hang CI. But not silently.
     expect(result.settled).toBe(false);
     expect(exportDocumentMock).toHaveBeenCalled();
@@ -85,7 +109,7 @@ describe("runCliDocumentExport", () => {
     // exportDocument silently no-ops without a body, which would otherwise
     // report success for an export that wrote nothing.
     await expect(
-      runCliDocumentExport(REQUEST, { entries: [], includeToc: false, content: null }),
+      runCliDocumentExport(REQUEST, () => ({ entries: [], includeToc: false, content: null })),
     ).rejects.toThrow("did not finish rendering");
     expect(exportDocumentMock).not.toHaveBeenCalled();
   });

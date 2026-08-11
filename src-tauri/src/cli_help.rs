@@ -3,15 +3,11 @@
 // inside `setup`, which needs a running app and a window. Printing here keeps
 // `glyph --help` working on a headless machine.
 
-use crate::cli::ExportFormat;
+use crate::cli::format_list;
 
 /// The full usage text, including the version banner.
 pub fn usage() -> String {
-    let formats = ExportFormat::ALL
-        .iter()
-        .map(|f| f.as_str())
-        .collect::<Vec<_>>()
-        .join(", ");
+    let formats = format_list();
     format!(
         "glyph {version}
 Markdown viewer with document and website export.
@@ -46,7 +42,7 @@ mod tests {
     #[test]
     fn usage_lists_every_format_and_flag() {
         let text = usage();
-        for format in ExportFormat::ALL {
+        for format in crate::cli::ExportFormat::ALL {
             assert!(
                 text.contains(format.as_str()),
                 "usage text is missing the '{}' format",

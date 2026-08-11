@@ -130,7 +130,10 @@ describe("useCliExport", () => {
     renderHook(() => useCliExport({ entries: [], content: "# Notes" }));
     await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
     expect(exportSiteMock).not.toHaveBeenCalled();
-    expect(runCliDocumentExportMock).toHaveBeenCalledWith(PDF_REQUEST, {
+    expect(runCliDocumentExportMock).toHaveBeenCalledWith(PDF_REQUEST, expect.any(Function));
+    // Passed as a getter so the runner reads them after the document renders.
+    const getOptions = runCliDocumentExportMock.mock.calls[0][1] as () => unknown;
+    expect(getOptions()).toEqual({
       entries: [],
       // Straight from the persisted print settings.
       includeToc: true,

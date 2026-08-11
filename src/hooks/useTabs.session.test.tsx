@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getCliExportRequest, resetCliExportRequestCache } from "@/lib/cliExport";
 import { defaultOptions, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
@@ -12,7 +13,10 @@ vi.mock("@/lib/pickers", () => ({
   pickNewWorkspace: vi.fn(),
 }));
 
-beforeEach(resetTabsMocks);
+beforeEach(() => {
+  resetTabsMocks();
+  resetCliExportRequestCache();
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -296,5 +300,34 @@ describe("useTabs multi-window", () => {
     await waitFor(() =>
       expect(onSettingsChange.mock.calls.some((c) => c[0] === "behavior.openTabs")).toBe(true),
     );
+  });
+
+  it("a headless export leaves the saved session and recent files alone", async () => {
+    // `glyph notes.md --export pdf` opens the document like any other tab, but
+    // it is a renderer, not a session: writing it back would replace the tabs
+    // the user has open in the interactive window it is racing.
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        get_cli_export: async () => ({
+          input: "/p/a.md",
+          format: "pdf",
+          output: "/p/a.pdf",
+        }),
+      }) as typeof invoke,
+    );
+    await getCliExportRequest();
+
+    const onSettingsChange = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onSettingsChange })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+    const written = onSettingsChange.mock.calls.map((c) => c[0]);
+    expect(written).not.toContain("behavior.openTabs");
+    expect(written).not.toContain("behavior.activeTabPath");
+    expect(written).not.toContain("behavior.recentFiles");
   });
 });

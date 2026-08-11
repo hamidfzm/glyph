@@ -278,6 +278,12 @@ pub fn launch_plan(
         .or_else(|| pick_flag_value(env_args, "--export").map(str::to_string));
     let requested = plugin_export.is_some() || has_flag(env_args, "--export");
     if !requested {
+        // `--out` alone would have had its value stripped from the positional
+        // scan for an export that was never asked for, quietly opening an empty
+        // window instead of the file the user named.
+        if plugin_out.is_some() || has_flag(env_args, "--out") || has_flag(env_args, "-o") {
+            return Err("--out only applies to an export: add --export <format>".to_string());
+        }
         return Ok(CliLaunch::Open(action));
     }
     let value = export_value.unwrap_or_default();
@@ -313,6 +319,16 @@ pub fn launch_plan(
                 .to_string(),
         ),
         (_, Some(InitialOpenAction::File(input))) => {
+            // A canvas board and a D2 file are "supported documents" for
+            // opening, but neither renders as one `.markdown-body`: a canvas
+            // would export a single card as if it were the whole board.
+            if !is_exportable_document(Path::new(&input)) {
+                return Err(format!(
+                    "--export {} only takes a markdown or notebook document, not {}",
+                    format.as_str(),
+                    plain_path(&input)
+                ));
+            }
             let output = output.unwrap_or_else(|| default_output(&input, format));
             Ok(CliLaunch::Export {
                 input,
@@ -328,25 +344,41 @@ pub fn launch_plan(
     }
 }
 
+/// Drop the Windows extended-length prefix a canonicalized path carries
+/// (`\\?\C:\...`, or `\\?\UNC\server\share\...` for a network
+/// path). Both work for a write but read as noise in the paths the CLI
+/// prints, and the UNC form is not even a valid path once the prefix is
+/// dropped naively.
+#[cfg(desktop)]
+fn plain_path(path: &str) -> String {
+    match path.strip_prefix(r"\\?\UNC\") {
+        Some(rest) => format!(r"\\{rest}"),
+        None => path.strip_prefix(r"\\?\").unwrap_or(path).to_string(),
+    }
+}
+
+/// Whether a document export can render this input. Canvas boards and D2
+/// files open fine but do not render as a single document body, so exporting
+/// one would silently write a fragment (a canvas exports its first card).
+#[cfg(desktop)]
+fn is_exportable_document(path: &Path) -> bool {
+    crate::is_markdown_file(path) || crate::is_notebook_file(path)
+}
+
 /// Output path for an export with no `--out`: the input with the format's
 /// extension, so `glyph notes.md --export pdf` writes `notes.pdf` beside it.
-///
-/// The input is canonicalized, which on Windows carries the `\\?\`
-/// extended-length prefix. It works for the write but reads as noise in the
-/// path the export prints, so it is dropped.
 #[cfg(desktop)]
 fn default_output(input: &str, format: ExportFormat) -> String {
     let extension = format.extension().unwrap_or_default();
-    let trimmed = input.strip_prefix(r"\\?\").unwrap_or(input);
-    Path::new(trimmed)
+    Path::new(&plain_path(input))
         .with_extension(extension)
         .to_string_lossy()
         .to_string()
 }
 
-/// The accepted `--export` values, for usage messages.
+/// The accepted `--export` values, for usage messages and `--help`.
 #[cfg(desktop)]
-fn format_list() -> String {
+pub fn format_list() -> String {
     ExportFormat::ALL
         .iter()
         .map(|f| f.as_str())
@@ -788,6 +820,13 @@ mod tests {
             default_output("/notes/plan.md", ExportFormat::Epub),
             "/notes/plan.epub"
         );
+        // A network path canonicalizes to the UNC spelling; dropping the
+        // prefix naively would leave a relative path resolved against cwd.
+        let unc = format!(r"\\?\UNC{sep}server{sep}share{sep}plan.md", sep = "\\");
+        assert_eq!(
+            default_output(&unc, ExportFormat::Html),
+            format!(r"{sep}{sep}server{sep}share{sep}plan.html", sep = "\\")
+        );
     }
 
     #[test]
@@ -879,6 +918,58 @@ mod tests {
         // Nothing to export at all.
         let argv = argv_of(&["--export", "pdf"]);
         assert!(launch_plan(None, None, None, &argv, &cwd).is_err());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_plan_rejects_an_input_that_is_not_one_document() {
+        // A canvas renders each card in its own `.markdown-body`, so exporting
+        // one would silently write the first card as the whole document.
+        let cwd = unique_tmp("lp_canvas");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(cwd.join("board.canvas"), "{}").unwrap();
+        fs::write(cwd.join("shape.d2"), "a -> b").unwrap();
+
+        for input in ["board.canvas", "shape.d2"] {
+            let err = launch_plan(
+                None,
+                None,
+                None,
+                &argv_of(&[input, "--export", "pdf"]),
+                &cwd,
+            )
+            .expect_err("usage error");
+            assert!(err.contains("markdown or notebook document"), "got: {err}");
+        }
+
+        // The same files still open normally.
+        let plan = launch_plan(None, None, None, &argv_of(&["board.canvas"]), &cwd).expect("plans");
+        assert!(matches!(
+            plan,
+            CliLaunch::Open(Some(InitialOpenAction::File(_)))
+        ));
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_plan_rejects_an_output_path_with_no_export() {
+        // `--out`'s value is stripped before the positional scan, so without
+        // this the launch would open an empty window instead of the file.
+        let cwd = unique_tmp("lp_out_only");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(cwd.join("note.md"), "# hi").unwrap();
+
+        for args in [
+            vec!["note.md", "--out", "built.pdf"],
+            vec!["note.md", "-o", "built.pdf"],
+        ] {
+            let err =
+                launch_plan(None, None, None, &argv_of(&args), &cwd).expect_err("usage error");
+            assert!(
+                err.contains("--out only applies to an export"),
+                "got: {err}"
+            );
+        }
         let _ = fs::remove_dir_all(&cwd);
     }
 

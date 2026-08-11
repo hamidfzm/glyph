@@ -110,14 +110,14 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
                 // export renders the workspace straight from disk; a document
                 // export reads the rendered DOM, so its input is also stashed
                 // as the initial file for the hidden window to open.
-                let export_dir = std::path::Path::new(&output)
-                    .parent()
-                    .unwrap_or(std::path::Path::new(&output));
-                let _ = grant_registry.grant_export_dir(export_dir);
                 if format == cli::ExportFormat::Site {
                     let _ = grant_registry.grant_workspace(std::path::Path::new(&input));
+                    // A site is a tree of files, so the whole output directory
+                    // is writable; a document gets an exact-path grant instead,
+                    // the same one the interactive save dialog mints.
                     let _ = grant_registry.grant_export_dir(std::path::Path::new(&output));
                 } else {
+                    let _ = grant_registry.grant_export_file(std::path::Path::new(&output));
                     if let Ok(canonical) = grant_registry.grant_file(std::path::Path::new(&input)) {
                         grants::allow_asset_file(app.handle(), &canonical);
                     }

@@ -23,7 +23,10 @@ interface CliDocumentExportOptions {
  */
 export async function runCliDocumentExport(
   request: CliExportRequest,
-  { entries, includeToc, content }: CliDocumentExportOptions,
+  // Read after the wait, not before: on a CLI launch the document is still
+  // being opened when the export starts, so a snapshot taken now would carry
+  // an empty table of contents and no content to derive the title from.
+  getOptions: () => CliDocumentExportOptions,
 ): Promise<{ path: string; settled: boolean }> {
   // Diagrams and math finish rendering after mount; exporting before they
   // settle writes empty slots.
@@ -33,6 +36,7 @@ export async function runCliDocumentExport(
   if (!document.querySelector(".markdown-body, .notebook-body")) {
     throw new Error(`${request.input} did not finish rendering`);
   }
+  const { entries, includeToc, content } = getOptions();
   const meta = deriveExportMeta(request.input, content);
   await exportDocument(request.format as ExportFormat, request.output, meta, {
     entries,

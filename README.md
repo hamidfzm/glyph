@@ -177,7 +177,7 @@ glyph notes.md --export docx --out ~/out.docx
 glyph ~/notes/ --export site --out ./site
 ```
 
-`--export` accepts `pdf`, `docx`, `epub`, `html`, and `site`. Without `--out` a document export writes beside its input with the format's extension; `site` always needs one. Exports run without showing a window, print the path they wrote to stdout, and exit nonzero with a message on stderr if they fail, so they can drive CI publishing (on Linux runners, wrap the command in `xvfb-run`). They honor the export options from Settings > Print (table of contents, page breaks, background).
+`--export` accepts `pdf`, `docx`, `epub`, `html`, and `site`. Without `--out` a document export writes beside its input with the format's extension; `site` always needs one. Exports run without showing a window, print the path they wrote to stdout, and exit nonzero with a message on stderr if they fail, so they can drive CI publishing (on Linux runners, wrap the command in `xvfb-run`). A document export includes the table of contents when Settings > Print has it enabled.
 
 The command is provided by the Homebrew cask (macOS), Chocolatey or Scoop (Windows), and the deb package or Homebrew formula (Linux). The macOS `.dmg` and Windows MSI install the app only; use a package manager for the terminal command.
 
