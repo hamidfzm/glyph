@@ -29,6 +29,7 @@ export function ResizeHandle({
   const cursor = axis === "x" ? "cursor-col-resize h-auto" : "cursor-row-resize";
   return (
     <hr
+      data-resize-handle
       tabIndex={0}
       aria-orientation={axis === "x" ? "vertical" : "horizontal"}
       aria-label={label}

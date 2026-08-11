@@ -1,5 +1,7 @@
 mod canvas;
 mod cli;
+#[cfg(desktop)]
+mod cli_help;
 mod commands;
 mod d2;
 mod grants;
@@ -163,13 +165,23 @@ pub fn handle_opened_paths<R: tauri::Runtime>(
 ///
 /// Extracted from `run()` so the cfg-gated branches can be unit-tested without
 /// actually starting the Tauri runtime.
-pub fn make_app_builder() -> tauri::Builder<tauri::Wry> {
+///
+/// `forward_to_running_instance` is false for a CLI export: forwarding hands
+/// the arguments to whatever Glyph the user already has open and exits 0, so
+/// the export would silently never run.
+pub fn make_app_builder(forward_to_running_instance: bool) -> tauri::Builder<tauri::Wry> {
     #[cfg(all(not(debug_assertions), any(target_os = "linux", target_os = "windows")))]
-    let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(handle_second_instance));
+    let builder = if forward_to_running_instance {
+        tauri::Builder::default().plugin(tauri_plugin_single_instance::init(handle_second_instance))
+    } else {
+        tauri::Builder::default()
+    };
 
     #[cfg(not(all(not(debug_assertions), any(target_os = "linux", target_os = "windows"))))]
-    let builder = tauri::Builder::default();
+    let builder = {
+        let _ = forward_to_running_instance;
+        tauri::Builder::default()
+    };
 
     builder
 }
@@ -179,15 +191,25 @@ pub fn run() {
     // Answered before Tauri (and therefore GTK/WebKit) starts, so packaging
     // smoke tests can verify an installed binary headlessly. `tauri-plugin-cli`
     // parses args from inside `setup`, which is far too late for that.
-    if std::env::args()
-        .skip(1)
-        .any(|a| a == "--version" || a == "-V")
-    {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().skip(1).any(|a| a == "--version" || a == "-V") {
         println!("glyph {}", env!("CARGO_PKG_VERSION"));
         return;
     }
+    #[cfg(desktop)]
+    if cli_help::wants_help(&args) {
+        println!("{}", cli_help::usage());
+        return;
+    }
 
-    let builder = make_app_builder()
+    // An export runs in this process, so it must not be forwarded to a Glyph
+    // the user already has open.
+    #[cfg(desktop)]
+    let forward_to_running_instance = !cli::has_flag(&args, "--export");
+    #[cfg(not(desktop))]
+    let forward_to_running_instance = true;
+
+    let builder = make_app_builder(forward_to_running_instance)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
@@ -580,11 +602,13 @@ mod tests {
     }
 
     #[test]
-    fn make_app_builder_constructs_a_builder() {
+    fn make_app_builder_constructs_a_builder_either_way() {
         // We can't run the resulting builder (would start a real window
         // manager), but constructing it covers the cfg-gated plugin setup.
-        let builder = make_app_builder();
-        std::mem::drop(builder);
+        // An export passes false so the launch is never forwarded to a Glyph
+        // the user already has open, which would skip the export entirely.
+        std::mem::drop(make_app_builder(true));
+        std::mem::drop(make_app_builder(false));
     }
 
     // Each (directive, source) pair backs a shipped surface: WASM for

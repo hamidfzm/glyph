@@ -59,7 +59,8 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
                 .and_then(|a| a.value.as_str().map(str::to_string))
         };
         let plugin_path = plugin_arg("file");
-        let plugin_export = plugin_arg("export-website");
+        let plugin_export = plugin_arg("export");
+        let plugin_out = plugin_arg("out");
         let env_args: Vec<String> = std::env::args().collect();
         // Session restore and the recent-files menu re-open paths from
         // earlier sessions; seed their grants from the persisted settings
@@ -91,6 +92,7 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         match cli::launch_plan(
             plugin_path.as_deref(),
             plugin_export.as_deref(),
+            plugin_out.as_deref(),
             &env_args,
             &cwd,
         ) {
@@ -98,14 +100,35 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
                 eprintln!("{usage}");
                 std::process::exit(2);
             }
-            Ok(cli::CliLaunch::ExportWebsite { root, out_dir }) => {
-                // Headless: the workspace is not opened in the UI and the
-                // window stays hidden; the frontend runs the export on
-                // mount and exits via `finish_cli_export`.
-                let _ = grant_registry.grant_workspace(std::path::Path::new(&root));
-                let _ = grant_registry.grant_export_dir(std::path::Path::new(&out_dir));
+            Ok(cli::CliLaunch::Export {
+                input,
+                format,
+                output,
+            }) => {
+                // Headless: the window stays hidden and the frontend runs the
+                // export on mount, then exits via `finish_cli_export`. A site
+                // export renders the workspace straight from disk; a document
+                // export reads the rendered DOM, so its input is also stashed
+                // as the initial file for the hidden window to open.
+                if format == cli::ExportFormat::Site {
+                    let _ = grant_registry.grant_workspace(std::path::Path::new(&input));
+                    // A site is a tree of files, so the whole output directory
+                    // is writable; a document gets an exact-path grant instead,
+                    // the same one the interactive save dialog mints.
+                    let _ = grant_registry.grant_export_dir(std::path::Path::new(&output));
+                } else {
+                    let _ = grant_registry.grant_export_file(std::path::Path::new(&output));
+                    if let Ok(canonical) = grant_registry.grant_file(std::path::Path::new(&input)) {
+                        grants::allow_asset_file(app.handle(), &canonical);
+                    }
+                    stash_initial_open(app.handle(), windows::OpenKind::File, &input);
+                }
                 *app.state::<commands::CliExport>().0.lock().unwrap() =
-                    Some(commands::export::CliExportRequest { root, out_dir });
+                    Some(commands::export::CliExportRequest {
+                        input,
+                        format: format.as_str().to_string(),
+                        output,
+                    });
             }
             Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::Folder(p)))) => {
                 if let Ok(canonical) = grant_registry.grant_workspace(std::path::Path::new(&p)) {

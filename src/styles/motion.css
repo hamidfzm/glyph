@@ -1,0 +1,137 @@
+/* Fluid-interaction foundation: translucent materials, spring-driven
+   presence mappings, and press states. Springs write `--presence` (0 closed,
+   1 open) from JS; rules here only map it onto transform/opacity, so the
+   motion itself stays compositor-friendly. Imported last on purpose: the
+   [data-spring] overrides must outrank the per-surface keyframes. */
+
+/* --- Materials ------------------------------------------------------------
+   Floating chrome sits on a translucent blurred layer; the inset highlight is
+   the light catching the material's top edge. */
+
+.command-palette,
+.settings-modal {
+  background: var(--glyph-material-bg);
+  -webkit-backdrop-filter: blur(var(--glyph-material-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glyph-material-blur)) saturate(180%);
+  /* The inset line is the light catching the material's top edge. */
+  box-shadow:
+    inset 0 1px 0 var(--glyph-material-edge),
+    0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+/* The filter is a platform var (macOS vibrancy; `none` elsewhere) so a flat
+   backdrop never pays for a compositing layer. */
+.sidebar-panel {
+  background: var(--glyph-sidebar-bg);
+  -webkit-backdrop-filter: var(--glyph-sidebar-filter);
+  backdrop-filter: var(--glyph-sidebar-filter);
+}
+
+/* Docked bar: nothing scrolls behind it, so it gets the material tint
+   without a pointless blur pass. */
+.status-bar {
+  background: var(--glyph-material-bg);
+}
+
+/* --- Spring presence mappings ---------------------------------------------
+   Enter and exit run along the same path (the spring just changes target), so
+   a surface always leaves the way it came. */
+
+.command-palette-overlay {
+  opacity: var(--presence, 1);
+}
+
+.command-palette {
+  /* Anchored to the trigger edge: it grows down from the top, not from its
+     center. */
+  transform-origin: 50% 0;
+  transform: translateY(calc((1 - var(--presence, 1)) * -12px))
+    scale(calc(0.98 + 0.02 * var(--presence, 1)));
+}
+
+[data-spring] .settings-overlay {
+  animation: none;
+  opacity: var(--presence, 1);
+}
+
+[data-spring] .settings-modal {
+  animation: none;
+  transform: translateY(calc((1 - var(--presence, 1)) * 12px))
+    scale(calc(0.98 + 0.02 * var(--presence, 1)));
+}
+
+/* --- Compact sidebar drawer (gesture sheet) -------------------------------- */
+
+.sidebar-drawer {
+  /* Vertical pans scroll the tree natively; horizontal drags reach the
+     drawer's pointer handlers. */
+  touch-action: pan-y;
+  /* Unlike the docked sidebar, the drawer overlays the document on every
+     platform, so it always gets the full material. */
+  background: var(--glyph-material-bg);
+  -webkit-backdrop-filter: blur(var(--glyph-material-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glyph-material-blur)) saturate(180%);
+}
+
+.sidebar-drawer[data-drawer-edge="left"] {
+  transform: translateX(calc((var(--presence, 1) - 1) * 100%));
+}
+
+.sidebar-drawer[data-drawer-edge="right"] {
+  transform: translateX(calc((1 - var(--presence, 1)) * 100%));
+}
+
+/* Each drawer mirrors its presence per edge on the shared parent; the one
+   backdrop dims for whichever is furthest open. */
+.sidebar-drawer-backdrop {
+  opacity: max(var(--presence-left, 0), var(--presence-right, 0));
+}
+
+/* Solid fallback for every material surface. Last so it wins the ties. */
+@media (prefers-reduced-transparency: reduce) {
+  .command-palette,
+  .settings-modal {
+    background: var(--color-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .sidebar-panel,
+  .sidebar-drawer,
+  .status-bar {
+    background: var(--color-surface-secondary);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* --- Press states -----------------------------------------------------------
+   Feedback lands on pointer-down, not on release. Buttons compress; rows and
+   list items tint. The transition only eases the press; release snaps back. */
+
+.pressable:active {
+  transform: scale(0.96);
+  transition: transform 100ms ease-out;
+}
+
+.settings-primary-btn:active,
+.settings-secondary-btn:active,
+.settings-danger-btn:active,
+.settings-reset-btn:active,
+.settings-close:active,
+.lightbox-button:active,
+.tab-close:active,
+.mode-toggle-btn:active {
+  transform: scale(0.96);
+  transition: transform 100ms ease-out;
+}
+
+.settings-tab:active,
+.settings-segmented button:active,
+.tab-activate:active {
+  background: var(--color-surface-tertiary);
+}
+
+.command-palette-item:active {
+  background: color-mix(in srgb, var(--color-accent) 26%, transparent);
+}

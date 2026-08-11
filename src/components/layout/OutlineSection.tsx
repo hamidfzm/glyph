@@ -21,7 +21,7 @@ export function OutlineSection({ entries, activeId }: { entries: TocEntry[]; act
             className={`outline-item w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors ${
               activeId === entry.id
                 ? "bg-[var(--color-accent)] text-white font-medium"
-                : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)]"
+                : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] active:bg-[var(--color-border)]"
             }`}
             style={{ paddingLeft: `${(entry.level - 1) * 12 + 8}px` }}
             title={entry.text}

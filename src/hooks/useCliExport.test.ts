@@ -12,13 +12,38 @@ vi.mock("@/lib/export/site/exportSite", () => ({
   exportSite: (...args: unknown[]) => exportSiteMock(...args),
 }));
 
+const runCliDocumentExportMock = vi.fn();
+vi.mock("@/lib/export/cliDocumentExport", () => ({
+  runCliDocumentExport: (...args: unknown[]) => runCliDocumentExportMock(...args),
+}));
+
+// No SettingsProvider in these renders, and the context default reports
+// `loaded: false`, which is the gate the runner waits on.
+const settings = { loaded: true, settings: { print: { includeToc: true } } };
+vi.mock("@/hooks/useSettings", () => ({
+  useSettings: () => settings,
+}));
+
+const SITE_REQUEST = { input: "/ws", format: "site", output: "/out" };
+const PDF_REQUEST = { input: "/ws/notes.md", format: "pdf", output: "/ws/notes.pdf" };
+
+function stubRequest(request: unknown) {
+  vi.mocked(invoke).mockImplementation((cmd: string) =>
+    cmd === "get_cli_export" ? Promise.resolve(request) : Promise.resolve(undefined),
+  );
+}
+
 function invokeCalls(command: string) {
   return vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === command);
 }
 
+const HOOK_ARGS = { entries: [], content: "# Notes" };
+
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
   exportSiteMock.mockReset().mockResolvedValue({ pages: 3, assets: 1 });
+  runCliDocumentExportMock.mockReset().mockResolvedValue({ path: "/ws/notes.pdf", settled: true });
+  settings.loaded = true;
   resetCliExportRequestCache();
   resetCliExportRunner();
 });
@@ -36,31 +61,33 @@ function providerWrapper(initialLoadDone: boolean) {
 
 describe("useCliExport", () => {
   it("waits for the plugin startup load, then exports", async () => {
-    vi.mocked(invoke).mockImplementation((cmd: string) =>
-      cmd === "get_cli_export"
-        ? Promise.resolve({ root: "/ws", outDir: "/out" })
-        : Promise.resolve(undefined),
-    );
-    const { unmount } = renderHook(() => useCliExport(), { wrapper: providerWrapper(false) });
+    stubRequest(SITE_REQUEST);
+    const { unmount } = renderHook(() => useCliExport(HOOK_ARGS), {
+      wrapper: providerWrapper(false),
+    });
     // Not ready: the export must not even probe for a request.
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(invokeCalls("get_cli_export")).toHaveLength(0);
     unmount();
 
-    renderHook(() => useCliExport(), { wrapper: providerWrapper(true) });
+    renderHook(() => useCliExport(HOOK_ARGS), { wrapper: providerWrapper(true) });
     await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
     expect(exportSiteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for persisted settings, which carry the export options", async () => {
+    settings.loaded = false;
+    stubRequest(PDF_REQUEST);
+    renderHook(() => useCliExport(HOOK_ARGS));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(invokeCalls("get_cli_export")).toHaveLength(0);
   });
 
   it("gives up waiting after the timeout so a hung plugin cannot hang CI", async () => {
     vi.useFakeTimers();
     try {
-      vi.mocked(invoke).mockImplementation((cmd: string) =>
-        cmd === "get_cli_export"
-          ? Promise.resolve({ root: "/ws", outDir: "/out" })
-          : Promise.resolve(undefined),
-      );
-      renderHook(() => useCliExport(), { wrapper: providerWrapper(false) });
+      stubRequest(SITE_REQUEST);
+      renderHook(() => useCliExport(HOOK_ARGS), { wrapper: providerWrapper(false) });
       // The expiring timer sets state, so the advance must run inside act.
       await act(async () => {
         await vi.advanceTimersByTimeAsync(CLI_PLUGIN_WAIT_MS + 1);
@@ -73,19 +100,16 @@ describe("useCliExport", () => {
 
   it("is a no-op on interactive launches", async () => {
     vi.mocked(invoke).mockResolvedValue(null);
-    renderHook(() => useCliExport());
+    renderHook(() => useCliExport(HOOK_ARGS));
     await waitFor(() => expect(invokeCalls("get_cli_export").length).toBe(1));
     expect(exportSiteMock).not.toHaveBeenCalled();
+    expect(runCliDocumentExportMock).not.toHaveBeenCalled();
     expect(invokeCalls("finish_cli_export")).toHaveLength(0);
   });
 
   it("exports the requested workspace and exits 0 with a summary", async () => {
-    vi.mocked(invoke).mockImplementation((cmd: string) =>
-      cmd === "get_cli_export"
-        ? Promise.resolve({ root: "/ws", outDir: "/out" })
-        : Promise.resolve(undefined),
-    );
-    renderHook(() => useCliExport());
+    stubRequest(SITE_REQUEST);
+    renderHook(() => useCliExport(HOOK_ARGS));
     await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
     // No provider: themes and plugin markdown contributions are all empty.
     expect(exportSiteMock).toHaveBeenCalledWith({
@@ -101,53 +125,84 @@ describe("useCliExport", () => {
     });
   });
 
+  it("exports a document format through the shared document exporter", async () => {
+    stubRequest(PDF_REQUEST);
+    renderHook(() => useCliExport({ entries: [], content: "# Notes" }));
+    await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
+    expect(exportSiteMock).not.toHaveBeenCalled();
+    expect(runCliDocumentExportMock).toHaveBeenCalledWith(PDF_REQUEST, expect.any(Function));
+    // Passed as a getter so the runner reads them after the document renders.
+    const getOptions = runCliDocumentExportMock.mock.calls[0][1] as () => unknown;
+    expect(getOptions()).toEqual({
+      entries: [],
+      // Straight from the persisted print settings.
+      includeToc: true,
+      content: "# Notes",
+    });
+    expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
+      code: 0,
+      message: "Exported /ws/notes.pdf",
+    });
+  });
+
+  it("says so when a document exported before it finished rendering", async () => {
+    stubRequest(PDF_REQUEST);
+    runCliDocumentExportMock.mockResolvedValue({ path: "/ws/notes.pdf", settled: false });
+    renderHook(() => useCliExport(HOOK_ARGS));
+    await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
+    expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
+      code: 0,
+      message:
+        "Exported /ws/notes.pdf (the document did not finish rendering; diagrams may be missing)",
+    });
+  });
+
   it("exits 1 with the failure message when the export throws", async () => {
-    vi.mocked(invoke).mockImplementation((cmd: string) =>
-      cmd === "get_cli_export"
-        ? Promise.resolve({ root: "/ws", outDir: "/out" })
-        : Promise.resolve(undefined),
-    );
+    stubRequest(SITE_REQUEST);
     exportSiteMock.mockRejectedValue(new Error("no markdown files"));
-    renderHook(() => useCliExport());
+    renderHook(() => useCliExport(HOOK_ARGS));
     await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
     expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
       code: 1,
-      message: "Website export failed: no markdown files",
+      message: "Export failed: no markdown files",
+    });
+  });
+
+  it("exits 1 when a document export throws", async () => {
+    stubRequest(PDF_REQUEST);
+    runCliDocumentExportMock.mockRejectedValue(new Error("did not finish rendering"));
+    renderHook(() => useCliExport(HOOK_ARGS));
+    await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
+    expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
+      code: 1,
+      message: "Export failed: did not finish rendering",
     });
   });
 
   it("treats a failed get_cli_export probe as an interactive launch", async () => {
     vi.mocked(invoke).mockRejectedValue(new Error("no tauri"));
-    renderHook(() => useCliExport());
+    renderHook(() => useCliExport(HOOK_ARGS));
     await waitFor(() => expect(invokeCalls("get_cli_export").length).toBe(1));
     expect(exportSiteMock).not.toHaveBeenCalled();
     expect(invokeCalls("finish_cli_export")).toHaveLength(0);
   });
 
   it("stringifies non-Error failures in the exit message", async () => {
-    vi.mocked(invoke).mockImplementation((cmd: string) =>
-      cmd === "get_cli_export"
-        ? Promise.resolve({ root: "/ws", outDir: "/out" })
-        : Promise.resolve(undefined),
-    );
+    stubRequest(SITE_REQUEST);
     exportSiteMock.mockRejectedValue("string failure");
-    renderHook(() => useCliExport());
+    renderHook(() => useCliExport(HOOK_ARGS));
     await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
     expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
       code: 1,
-      message: "Website export failed: string failure",
+      message: "Export failed: string failure",
     });
   });
 
   it("runs the export only once even if the effect re-fires", async () => {
-    vi.mocked(invoke).mockImplementation((cmd: string) =>
-      cmd === "get_cli_export"
-        ? Promise.resolve({ root: "/ws", outDir: "/out" })
-        : Promise.resolve(undefined),
-    );
-    const first = renderHook(() => useCliExport());
+    stubRequest(SITE_REQUEST);
+    const first = renderHook(() => useCliExport(HOOK_ARGS));
     first.unmount();
-    renderHook(() => useCliExport());
+    renderHook(() => useCliExport(HOOK_ARGS));
     await waitFor(() => expect(invokeCalls("finish_cli_export").length).toBeGreaterThan(0));
     expect(exportSiteMock).toHaveBeenCalledTimes(1);
   });

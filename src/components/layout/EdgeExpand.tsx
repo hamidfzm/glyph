@@ -25,7 +25,7 @@ export function EdgeExpand({ side, onClick, title, panel }: EdgeExpandProps) {
       onClick={onClick}
       title={title}
       aria-label={title}
-      className={`shrink-0 w-7 flex items-center justify-center ${borderClass} border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-tertiary)] transition-colors cursor-pointer`}
+      className={`shrink-0 w-7 flex items-center justify-center ${borderClass} border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-tertiary)] active:bg-[var(--color-border)] transition-colors cursor-pointer`}
       style={{ background: "var(--color-surface-secondary)" }}
     >
       <Icon />

@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMetadataIndex } from "@/contexts/TabsContext";
+import { useSpringPresence } from "@/hooks/useSpringPresence";
 import { type Command, type CommandSection, rankCommands } from "@/lib/commands";
 import { CommandPaletteItem } from "./CommandPaletteItem";
 
@@ -40,21 +41,31 @@ export function CommandPalette({
     setSelectedIndex(0);
   }, [ranked]);
 
-  // Focus the input whenever the palette opens.
-  useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
+  // Spring open/close: stays mounted while the exit spring runs, and
+  // reopening mid-close reverses from wherever it is.
+  const presence = useSpringPresence(open);
 
-  if (!open) return null;
+  // Focus the input whenever the palette opens (the element only exists once
+  // presence has mounted it).
+  useEffect(() => {
+    if (open && presence.mounted) inputRef.current?.focus();
+  }, [open, presence.mounted]);
+
+  if (!presence.mounted) return null;
 
   const runAtIndex = (index: number) => {
+    if (!open) return;
     const hit = ranked[index];
     if (!hit) return;
     onClose();
     hit.command.run();
   };
 
+  // While the exit spring runs the palette is still mounted; `inert` covers
+  // real browsers, but the guards keep a key repeat from re-running a command
+  // in environments that don't enforce it.
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!open) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -78,6 +89,7 @@ export function CommandPalette({
   };
 
   const handleOverlayKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!open) return;
     if (event.key === "Escape") {
       event.preventDefault();
       onClose();
@@ -94,9 +106,10 @@ export function CommandPalette({
 
   return (
     <div
+      ref={presence.ref}
       className="command-palette-overlay"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (open && e.target === e.currentTarget) onClose();
       }}
       onKeyDown={handleOverlayKeyDown}
       role="dialog"

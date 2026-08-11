@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
+import { useDrawerGesture } from "@/hooks/useDrawerGesture";
 import { usePanelResize } from "@/hooks/usePanelResize";
+import { drawerPhysicalEdge } from "@/lib/gesture";
 import { SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MAX, SIDEBAR_WIDTH_MIN } from "@/lib/settings";
 import { ResizeHandle } from "./ResizeHandle";
 
@@ -20,7 +22,7 @@ export function SidebarPanel({
   children: React.ReactNode;
 }) {
   const { t } = useTranslation("common");
-  const { compact } = useSidebarLayoutContext();
+  const { compact, closeCompactPanels, drawerDismissals } = useSidebarLayoutContext();
   const { size, handleProps } = usePanelResize({
     size: width,
     min: SIDEBAR_WIDTH_MIN,
@@ -32,19 +34,31 @@ export function SidebarPanel({
     onCommit: onWidthCommit,
     onReset: () => onWidthCommit(SIDEBAR_WIDTH_DEFAULT),
   });
+  // Same LTR/RTL resolution as `direction`, for the drawer's travel axis.
+  const physicalEdge = drawerPhysicalEdge(side, document.documentElement.dir === "rtl");
+  const drawer = useDrawerGesture({
+    enabled: compact,
+    edge: physicalEdge,
+    dismissals: drawerDismissals,
+    close: closeCompactPanels,
+  });
   const borderClass = side === "left" ? "border-e" : "border-s";
   // Compact (phone): the panel is a drawer overlaying the document, absolutely
   // positioned against its edge and capped so it never covers the whole screen,
-  // rather than a flex column that squeezes the content into a sliver.
+  // rather than a flex column that squeezes the content into a sliver. It is
+  // also a gesture sheet: springs in, drags 1:1, flicks shut.
   const layoutClass = compact
-    ? `absolute inset-y-0 ${side === "left" ? "start-0" : "end-0"} z-20 max-w-[85%] shadow-xl`
+    ? `sidebar-drawer absolute inset-y-0 ${side === "left" ? "start-0" : "end-0"} z-20 max-w-[85%] shadow-xl`
     : "relative shrink-0";
   return (
     <nav
+      ref={drawer.ref}
       data-print-hide="true"
       data-sidebar={side}
-      className={`${layoutClass} flex ${borderClass} border-[var(--color-border)] select-none`}
-      style={{ width: size, background: "var(--glyph-sidebar-bg)" }}
+      data-drawer-edge={compact ? physicalEdge : undefined}
+      className={`sidebar-panel ${layoutClass} flex ${borderClass} border-[var(--color-border)] select-none`}
+      style={{ width: size }}
+      {...(compact ? drawer.handlers : {})}
     >
       <div className="flex-1 min-w-0 flex flex-col overflow-y-auto pt-3">{children}</div>
       <ResizeHandle

@@ -69,7 +69,7 @@ export function FileTreeEntry(props: FileTreeEntryProps) {
           type="button"
           onClick={() => onToggle(entry.path)}
           onContextMenu={(e) => props.onContextMenu(e, entry)}
-          className="w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] flex items-center gap-1.5"
+          className="w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] active:bg-[var(--color-border)] flex items-center gap-1.5"
           style={indentStyle}
           title={entry.path}
         >
@@ -102,7 +102,7 @@ export function FileTreeEntry(props: FileTreeEntryProps) {
         className={`w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors flex items-center gap-1.5 ${
           isActive
             ? "bg-[var(--color-accent)] text-white font-medium"
-            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)]"
+            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] active:bg-[var(--color-border)]"
         }`}
         style={indentStyle}
         title={entry.path}
