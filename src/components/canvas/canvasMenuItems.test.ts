@@ -37,7 +37,7 @@ describe("buildCanvasMenuItems", () => {
   it("offers edit, colour, and delete for a text node", () => {
     const actions = makeActions();
     const items = buildCanvasMenuItems({ kind: "node", node: textNode }, actions, t);
-    expect(labels(items)).toEqual(["Edit text", "Colour", "—", "Delete"]);
+    expect(labels(items)).toEqual(["Edit text", "Color", "—", "Delete"]);
     (items[0] as ContextMenuActionItem).onSelect();
     expect(actions.startEdit).toHaveBeenCalledWith("a");
     (items[3] as ContextMenuActionItem).onSelect();
@@ -64,7 +64,7 @@ describe("buildCanvasMenuItems", () => {
       "Edit URL",
     );
     expect(labels(buildCanvasMenuItems({ kind: "node", node: file }, actions, t))).toEqual([
-      "Colour",
+      "Color",
       "—",
       "Delete",
     ]);
@@ -83,7 +83,7 @@ describe("buildCanvasMenuItems", () => {
       "Green",
       "Cyan",
       "Purple",
-      "Clear colour",
+      "Clear color",
     ]);
     colour.items[2].onSelect();
     expect(actions.setNodeColor).toHaveBeenCalledWith("a", "3");

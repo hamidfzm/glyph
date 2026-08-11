@@ -64,7 +64,7 @@
     },
     "codeFont": {
       "label": "代码字体",
-      "placeholder": "默认 (SF Mono, Fira Code...)"
+      "placeholder": "默认 (SF Mono, Fira Code…)"
     },
     "codeTheme": {
       "label": "代码主题",
