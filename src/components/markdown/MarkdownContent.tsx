@@ -4,6 +4,7 @@ import { EmbedContext, type EmbedContextValue, useEmbedContext } from "@/context
 import { LightboxProvider } from "@/contexts/LightboxProvider";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
+import { useGemojiPlugin } from "@/hooks/useGemojiPlugin";
 import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
 import { useKatexPlugin } from "@/hooks/useKatexPlugin";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
@@ -59,6 +60,8 @@ export function MarkdownContent({
   // With math off, skip the KaTeX lazy-load entirely (remark-math is also
   // dropped from the pipeline, so $…$ stays literal text).
   const katexPlugin = useKatexPlugin(features.math ? content : "");
+  // Same deal for emoji: with the toggle off, the gemoji table never loads.
+  const gemojiPlugin = useGemojiPlugin(features.emoji ? content : "");
   const highlightPlugin = useHighlightPlugin(content);
   // Plugin-contributed remark/rehype plugins, appended to the built-in pipeline.
   const plugins = usePluginsOptional();
@@ -92,8 +95,9 @@ export function MarkdownContent({
   );
 
   const remarkPlugins = useMemo(
-    () => buildRemarkPlugins({ workspaceFiles, filePath, features, extra: pluginRemark }),
-    [workspaceFiles, filePath, features, pluginRemark],
+    () =>
+      buildRemarkPlugins({ workspaceFiles, filePath, features, gemojiPlugin, extra: pluginRemark }),
+    [workspaceFiles, filePath, features, gemojiPlugin, pluginRemark],
   );
 
   const LinkWithWikilink = useCallback(

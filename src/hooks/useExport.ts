@@ -1,9 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { exportCanvas } from "@/lib/export/exportCanvas";
-import { exportDocument } from "@/lib/export/exportDocument";
-import { deriveExportMeta } from "@/lib/export/meta";
-import { EXPORT_EXT, type ExportFormat } from "@/lib/export/writeExport";
+import type { ExportFormat } from "@/lib/export/writeExport";
 import { pickSave } from "@/lib/pickers";
 import type { PrintSettings } from "@/lib/settings";
 import type { TocEntry } from "./useTableOfContents";
@@ -52,15 +49,26 @@ export function useExport({
       // Cheap guard so we don't pop a save dialog with nothing to export.
       if (!canvas && !document.querySelector(".markdown-body")) return;
 
-      const meta = deriveExportMeta(filePath, content);
-      const ext = EXPORT_EXT[format];
-      const path = await pickSave(`${meta.baseName}.${ext}`, t(`exportFilter.${format}`), [ext]);
-      if (!path) return; // user cancelled
-
-      // Show the indicator only for the real work — after the (blocking) native
-      // dialog, covering image inlining and the build/write.
-      setExporting(format);
       try {
+        // The export pipeline is loaded on first use so none of it (nor its
+        // docx/epub/pdf dependencies) weighs down startup; a failed chunk load
+        // lands in the same catch as a failed export.
+        const [{ exportCanvas }, { exportDocument }, { deriveExportMeta }, { EXPORT_EXT }] =
+          await Promise.all([
+            import("@/lib/export/exportCanvas"),
+            import("@/lib/export/exportDocument"),
+            import("@/lib/export/meta"),
+            import("@/lib/export/writeExport"),
+          ]);
+
+        const meta = deriveExportMeta(filePath, content);
+        const ext = EXPORT_EXT[format];
+        const path = await pickSave(`${meta.baseName}.${ext}`, t(`exportFilter.${format}`), [ext]);
+        if (!path) return; // user cancelled
+
+        // Show the indicator only for the real work, after the (blocking)
+        // native dialog: image inlining and the build/write.
+        setExporting(format);
         if (canvas) await exportCanvas(format, path, meta);
         else await exportDocument(format, path, meta, { entries, includeToc });
       } catch (err) {

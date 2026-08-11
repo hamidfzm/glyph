@@ -99,6 +99,7 @@ pnpm test                       # Run frontend tests (Vitest)
 pnpm test:watch                 # Run frontend tests in watch mode
 pnpm test:coverage              # Run frontend tests with coverage
 pnpm test:e2e                   # WebKit smoke tests (Playwright; run `pnpm exec playwright install webkit` once first)
+pnpm size:check                 # Bundle budget gate against dist/ (see docs/bundle-budgets.md)
 cd src-tauri && cargo check     # Rust type checking
 cd src-tauri && cargo clippy    # Rust linting
 cd src-tauri && cargo test      # Rust tests

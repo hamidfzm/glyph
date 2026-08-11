@@ -1,6 +1,6 @@
 import { SettingsModal } from "@/components/modals/settings/lazySettings";
-import { WorkspaceSettingsModal } from "@/components/modals/workspace/WorkspaceSettingsModal";
-import { PluginsModal } from "@/components/plugins/PluginsModal";
+import { WorkspaceSettingsModal } from "@/components/modals/workspace/lazyWorkspaceSettings";
+import { PluginsModal } from "@/components/plugins/lazyPluginsModal";
 import type { AppModals as AppModalsState } from "@/hooks/useAppModals";
 import { useSpringPresence } from "@/hooks/useSpringPresence";
 

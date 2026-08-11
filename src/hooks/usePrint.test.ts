@@ -11,9 +11,12 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 const restoreDiagramsMock = vi.fn();
 const swapDiagramsLightMock = vi.fn(async () => restoreDiagramsMock);
-vi.mock("@/lib/export/lightDiagrams", () => ({
-  swapDiagramsLight: () => swapDiagramsLightMock(),
-}));
+// The factory can be told to fail so the chunk-load error path is testable.
+let lightDiagramsLoadError: Error | null = null;
+vi.mock("@/lib/export/lightDiagrams", () => {
+  if (lightDiagramsLoadError) throw lightDiagramsLoadError;
+  return { swapDiagramsLight: () => swapDiagramsLightMock() };
+});
 
 const DEFAULT_PRINT: PrintSettings = {
   pageBreakLevel: "none",
@@ -44,14 +47,32 @@ describe("usePrint", () => {
     restoreDiagramsMock.mockClear();
   });
 
-  it("no-ops when no .markdown-body is present", () => {
+  // First in the file: the mock factory only throws on its first evaluation
+  // (a failed factory is not cached, so later tests re-evaluate it clean),
+  // which only lines up while no other test has imported the module yet.
+  it("aborts printing with a log when the helper chunk fails to load", async () => {
+    lightDiagramsLoadError = new Error("chunk load failed");
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { result } = renderHook(() => usePrint({ entries: ENTRIES, settings: DEFAULT_PRINT }));
+      await result.current();
+      expect(errorSpy).toHaveBeenCalledWith("Print helpers failed to load:", expect.any(Error));
+      expect(invokeMock).not.toHaveBeenCalled();
+      expect(document.documentElement.hasAttribute("data-print-breaks")).toBe(false);
+    } finally {
+      lightDiagramsLoadError = null;
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("no-ops when no .markdown-body is present", async () => {
     document.body.innerHTML = "";
     const { result } = renderHook(() => usePrint({ entries: ENTRIES, settings: DEFAULT_PRINT }));
-    result.current();
+    await result.current();
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it("no-ops when the only markdown body belongs to a canvas card", () => {
+  it("no-ops when the only markdown body belongs to a canvas card", async () => {
     document.body.innerHTML = "";
     const board = document.createElement("div");
     board.className = "glyph-canvas";
@@ -61,32 +82,32 @@ describe("usePrint", () => {
     document.body.appendChild(board);
 
     const { result } = renderHook(() => usePrint({ entries: ENTRIES, settings: DEFAULT_PRINT }));
-    result.current();
+    await result.current();
     expect(invokeMock).not.toHaveBeenCalled();
     expect(document.documentElement.hasAttribute("data-print-breaks")).toBe(false);
   });
 
-  it("sets html data attributes from settings before printing", () => {
+  it("sets html data attributes from settings before printing", async () => {
     const { result } = renderHook(() =>
       usePrint({
         entries: ENTRIES,
         settings: { pageBreakLevel: "h2", includeToc: false, includeBackground: true },
       }),
     );
-    result.current();
+    await result.current();
     expect(document.documentElement.getAttribute("data-print-breaks")).toBe("h2");
     expect(document.documentElement.getAttribute("data-print-bg")).toBe("true");
     expect(invokeMock).toHaveBeenCalledWith("print_document");
   });
 
-  it("injects a print-toc when includeToc is true and entries exist", () => {
+  it("injects a print-toc when includeToc is true and entries exist", async () => {
     const { result } = renderHook(() =>
       usePrint({
         entries: ENTRIES,
         settings: { ...DEFAULT_PRINT, includeToc: true },
       }),
     );
-    result.current();
+    await result.current();
     const toc = document.querySelector(".print-toc");
     expect(toc).toBeTruthy();
     const links = toc?.querySelectorAll("a") ?? [];
@@ -95,14 +116,14 @@ describe("usePrint", () => {
     expect(links[1].textContent).toBe("Details");
   });
 
-  it("does not inject a print-toc when includeToc is true but entries are empty", () => {
+  it("does not inject a print-toc when includeToc is true but entries are empty", async () => {
     const { result } = renderHook(() =>
       usePrint({
         entries: [],
         settings: { ...DEFAULT_PRINT, includeToc: true },
       }),
     );
-    result.current();
+    await result.current();
     expect(document.querySelector(".print-toc")).toBeNull();
   });
 
@@ -112,7 +133,7 @@ describe("usePrint", () => {
     window.print = printSpy;
 
     const { result } = renderHook(() => usePrint({ entries: ENTRIES, settings: DEFAULT_PRINT }));
-    result.current();
+    await result.current();
 
     await vi.waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
   });
@@ -135,14 +156,14 @@ describe("usePrint", () => {
     expect(swapDiagramsLightMock).not.toHaveBeenCalled();
   });
 
-  it("cleans up attributes and toc on afterprint", () => {
+  it("cleans up attributes and toc on afterprint", async () => {
     const { result } = renderHook(() =>
       usePrint({
         entries: ENTRIES,
         settings: { pageBreakLevel: "h1", includeToc: true, includeBackground: false },
       }),
     );
-    result.current();
+    await result.current();
     expect(document.querySelector(".print-toc")).toBeTruthy();
 
     window.dispatchEvent(new Event("afterprint"));

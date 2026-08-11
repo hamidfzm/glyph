@@ -19,7 +19,7 @@ export default defineConfig({
     environment: "happy-dom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.mjs"],
     reporters: process.env.CI
       ? ["default", ["junit", { outputFile: "junit-frontend.xml" }]]
       : ["default"],

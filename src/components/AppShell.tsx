@@ -22,7 +22,7 @@ import { useTabReorderShortcuts } from "@/hooks/useTabReorderShortcuts";
 import { useWindowClose } from "@/hooks/useWindowClose";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
 import { isImageFile } from "@/lib/imageExtensions";
-import { AIChatPanel } from "./ai/AIChatPanel";
+import { AIChatPanel } from "./ai/lazyAIChatPanel";
 import { AppBanners } from "./layout/AppBanners";
 import { AppModals } from "./layout/AppModals";
 import { EmptyState } from "./layout/EmptyState";

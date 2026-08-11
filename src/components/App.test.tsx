@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { CHUNK_LOAD_TIMEOUT_MS } from "@/test/chunkLoadTimeout";
 
 vi.mock("./editor/lazyEditor", () => ({
   MarkdownEditor: () => <div data-testid="lazy-editor" />,
@@ -180,7 +181,14 @@ describe("App", () => {
     await act(async () => {
       listeners["menu-workspace-settings"]?.({ payload: undefined });
     });
-    expect(await findByRole("dialog", { name: /workspace settings/i })).toBeInTheDocument();
+    // The modal is a lazy chunk now; give its first import the chunk timeout.
+    expect(
+      await findByRole(
+        "dialog",
+        { name: /workspace settings/i },
+        { timeout: CHUNK_LOAD_TIMEOUT_MS },
+      ),
+    ).toBeInTheDocument();
 
     await act(async () => {
       (await findByRole("button", { name: /close/i })).click();
@@ -198,7 +206,8 @@ describe("App", () => {
     await act(async () => {
       listeners["menu-manage-plugins"]?.({ payload: undefined });
     });
-    expect(await findByRole("dialog")).toBeInTheDocument();
+    // The modal is a lazy chunk now; give its first import the chunk timeout.
+    expect(await findByRole("dialog", {}, { timeout: CHUNK_LOAD_TIMEOUT_MS })).toBeInTheDocument();
   });
 
   it("renders EmptyState with a working Open Folder button (covers inline arrow)", async () => {

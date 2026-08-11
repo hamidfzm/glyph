@@ -5,7 +5,6 @@
 // self-contained and makes no network request — the diagram renders offline.
 
 import type { CompileOptions, Diagram, RenderOptions } from "@terrastruct/d2";
-import DOMPurify from "dompurify";
 
 // The shipped `D2` class types `compile`'s second argument as
 // `Omit<CompileRequest, "fs">` ({ inputPath?, options }), but the runtime treats
@@ -46,7 +45,11 @@ const cache = new Map<string, Promise<string>>();
 // <foreignObject>, the SVG-embedded-HTML XSS vector. Note: this also strips D2's
 // foreignObject-based markdown/code blocks, an accepted trade-off — the XSS
 // guard outweighs those rare embeds.
-function sanitizeSvg(svg: string): string {
+// DOMPurify is imported on demand (matching the export-path call sites) so it
+// stays out of the startup bundle; a D2 render already awaits the multi-MB
+// compiler, so the extra dynamic import is noise.
+async function sanitizeSvg(svg: string): Promise<string> {
+  const { default: DOMPurify } = await import("dompurify");
   return DOMPurify.sanitize(svg, { FORBID_TAGS: ["foreignObject"] });
 }
 

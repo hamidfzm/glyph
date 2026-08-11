@@ -11,7 +11,7 @@ export function useErrorReporting(enabled: boolean, loaded: boolean): void {
   useEffect(() => {
     if (!loaded) return;
     if (enabled) {
-      enableTelemetry();
+      void enableTelemetry();
     } else {
       disableTelemetry();
     }

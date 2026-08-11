@@ -1,8 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback } from "react";
-import { swapDiagramsLight } from "@/lib/export/lightDiagrams";
-import { buildTocElement } from "@/lib/export/toc";
-import type { PrintSettings } from "../lib/settings";
+import type { PrintSettings } from "@/lib/settings";
 import type { TocEntry } from "./useTableOfContents";
 
 interface UsePrintOptions {
@@ -16,6 +14,21 @@ export function usePrint({ entries, settings }: UsePrintOptions) {
     // Canvas cards carry their own small markdown bodies; printing one of
     // those is never what the user wants. Export the board as PNG instead.
     if (!body || body.closest(".glyph-canvas")) return;
+
+    // Loaded on first print so the diagram-relight/TOC helpers (and their
+    // rasterize dependencies) stay out of the startup bundle. A failed chunk
+    // load (corrupted install) aborts with a log, not an unhandled rejection.
+    let helpers: [typeof import("@/lib/export/lightDiagrams"), typeof import("@/lib/export/toc")];
+    try {
+      helpers = await Promise.all([
+        import("@/lib/export/lightDiagrams"),
+        import("@/lib/export/toc"),
+      ]);
+    } catch (err) {
+      console.error("Print helpers failed to load:", err);
+      return;
+    }
+    const [{ swapDiagramsLight }, { buildTocElement }] = helpers;
 
     const root = document.documentElement;
     root.setAttribute("data-print-breaks", settings.pageBreakLevel);
