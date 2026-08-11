@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { convertHtmlToPdf } from "./htmlToPdf";
+import { LINK_COLOR } from "./pdfInline";
 
 describe("convertHtmlToPdf", () => {
   it("maps headings and paragraphs to content nodes", () => {
@@ -271,7 +272,7 @@ describe("convertHtmlToPdf", () => {
     const json = JSON.stringify(content);
     expect(json).toContain('"link":"https://example.com"');
     expect(json).toContain('"site"');
-    expect(json).toContain("1a56db");
+    expect(json).toContain(LINK_COLOR);
   });
 
   it("falls back to the URL when an external link has no visible text", () => {
@@ -348,3 +349,19 @@ function pngDataUri(): string {
   for (const b of png) bin += String.fromCharCode(b);
   return `data:image/png;base64,${btoa(bin)}`;
 }
+
+describe("LINK_COLOR", () => {
+  // Both PDF paths draw on white regardless of the app theme, so the light
+  // accent is the correct half of the palette; the dark one measures 3.09:1.
+  it("stays legible on the white page", () => {
+    const channel = (hex: string, at: number) => {
+      const c = Number.parseInt(hex.slice(at, at + 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance =
+      0.2126 * channel(LINK_COLOR, 1) +
+      0.7152 * channel(LINK_COLOR, 3) +
+      0.0722 * channel(LINK_COLOR, 5);
+    expect(1.05 / (luminance + 0.05)).toBeGreaterThanOrEqual(4.5);
+  });
+});
