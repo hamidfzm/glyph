@@ -243,6 +243,10 @@ describe("useDrawerGesture", () => {
     act(() => raf.settle());
 
     drag(drawer, 250, 150);
+    // A stray pointer's cancel does not end someone else's drag.
+    fireEvent.pointerCancel(drawer, { pointerId: 99 });
+    expect(Number(presence(drawer))).toBeLessThan(1);
+
     fireEvent.pointerCancel(drawer, { pointerId: 1 });
     act(() => raf.settle());
     expect(presence(drawer)).toBe("1");
