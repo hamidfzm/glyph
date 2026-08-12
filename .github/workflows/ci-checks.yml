@@ -25,6 +25,19 @@ jobs:
       - name: Biome format check
         run: npx @biomejs/biome format --error-on-warnings --reporter=github src/
 
+  actionlint:
+    # Catches workflow syntax/expression errors per PR instead of live in a
+    # release run (see #504).
+    name: actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+        with:
+          # The action downloads the actionlint binary at runtime; pin it so
+          # the executed tool is as immutable as the SHA-pinned wrapper.
+          version: 1.7.12
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
