@@ -1,6 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PrintSettings } from "../lib/settings";
+import type { PrintSettings } from "@/lib/settings";
 import { usePrint } from "./usePrint";
 import type { TocEntry } from "./useTableOfContents";
 

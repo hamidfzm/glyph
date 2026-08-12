@@ -28,8 +28,8 @@ export interface ExportHandlers {
 /**
  * Export the active document to HTML/DOCX/EPUB/PDF. Reuses the rendered
  * `.markdown-body` DOM for fidelity, shows a native save dialog, and writes a
- * file via Rust commands (text for HTML, bytes for DOCX/EPUB/PDF) — no print
- * dialog. The separate File > Print item is the print-dialog path.
+ * file via Rust commands (text for HTML, bytes for DOCX/EPUB/PDF), with no
+ * print dialog. The separate File > Print item is the print-dialog path.
  */
 export function useExport({
   entries,
