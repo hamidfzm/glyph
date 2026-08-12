@@ -16,14 +16,23 @@ interface MarkdownEditorProps {
   content: string;
   onChange: (content: string) => void;
   workspaceFiles?: string[];
+  /** Receives the view on mount and null on teardown, for split view scroll sync. */
+  onViewReady?: (view: EditorView | null) => void;
 }
 
-export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEditorProps) {
+export function MarkdownEditor({
+  content,
+  onChange,
+  workspaceFiles,
+  onViewReady,
+}: MarkdownEditorProps) {
   const workspaceRoot = useWorkspaceRoot();
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onViewReadyRef = useRef(onViewReady);
+  onViewReadyRef.current = onViewReady;
 
   // Read workspace state through refs so the completion source — installed
   // once at mount — picks up updates without reconfiguring the editor. The
@@ -122,10 +131,12 @@ export function MarkdownEditor({ content, onChange, workspaceFiles }: MarkdownEd
     });
 
     viewRef.current = view;
+    onViewReadyRef.current?.(view);
 
     return () => {
       view.destroy();
       viewRef.current = null;
+      onViewReadyRef.current?.(null);
     };
   }, [keymapPreset]);
 

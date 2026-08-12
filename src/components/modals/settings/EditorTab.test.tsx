@@ -79,6 +79,14 @@ describe("EditorTab", () => {
     expect(updateSettings).toHaveBeenCalledWith("editor.pasteHtmlAsMarkdown", false);
   });
 
+  it("toggles synchronized split scrolling", () => {
+    const { updateSettings } = setup();
+    const toggle = toggleIn("Sync split scrolling");
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(updateSettings).toHaveBeenCalledWith("editor.syncScroll", false);
+  });
+
   it("shows the language list only when spell check is on", () => {
     setup();
     expect(screen.queryByText("Languages")).toBeNull();

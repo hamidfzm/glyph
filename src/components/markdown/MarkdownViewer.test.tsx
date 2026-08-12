@@ -232,6 +232,15 @@ describe("MarkdownViewer scrolling", () => {
     fireEvent.scroll(scroller, { target: { scrollTop: 42 } });
     expect(onScrollChange).toHaveBeenCalledWith(42);
   });
+
+  // Split view finds this pane's scroller by attribute, so the marker is part
+  // of the contract rather than a styling detail.
+  it("marks the scroll container so split view can drive it", () => {
+    const { container } = renderMd("# Title");
+    expect(container.querySelector("[data-scroll-container]")).toBe(
+      container.querySelector(".overflow-y-auto"),
+    );
+  });
 });
 
 describe("MarkdownViewer search", () => {

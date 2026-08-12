@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MarkdownPlugin } from "@/lib/plugins/types";
 import { buildRehypePlugins, buildRemarkPlugins } from "./pipeline";
+import { rehypeSourceLines } from "./rehypeSourceLines";
 
 // Plugin entries are functions or [plugin, options] tuples; compare by reference.
 const ref = (p: MarkdownPlugin) => (Array.isArray(p) ? p[0] : p);
@@ -77,5 +78,17 @@ describe("buildRehypePlugins", () => {
     // sanitize is a [plugin, schema] tuple in the first three; extra is last.
     expect(ref(plugins[plugins.length - 1])).toBe(extra);
     expect(plugins.some((p) => Array.isArray(p))).toBe(true);
+  });
+
+  it("omits the source-line markers unless asked for them", () => {
+    expect(buildRehypePlugins({}).map(ref)).not.toContain(rehypeSourceLines);
+  });
+
+  // Sanitize strips `data-*` from document content, so the markers only survive
+  // by being added after it.
+  it("adds the source-line markers after sanitize", () => {
+    const plugins = buildRehypePlugins({ sourceLines: true });
+    const sanitizeAt = plugins.findIndex((p) => Array.isArray(p));
+    expect(plugins.map(ref).indexOf(rehypeSourceLines)).toBeGreaterThan(sanitizeAt);
   });
 });

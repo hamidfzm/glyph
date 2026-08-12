@@ -38,9 +38,16 @@ export const glyphEditorTheme = EditorView.theme({
     padding: "24px 32px",
     maxWidth: "var(--glyph-content-width, 800px)",
     margin: "0 auto",
+    // A length rather than a ratio, so it inherits as a fixed box height: the
+    // enlarged heading spans then keep the same line height as everything else,
+    // and each line number lines up with its line.
+    lineHeight: "calc(var(--glyph-line-height, 1.7) * 1em)",
     caretColor: "var(--color-text-primary)",
   },
   ".cm-gutters": {
+    // Must match `.cm-content`: gutters otherwise inherit CodeMirror's base 1.4
+    // and each line number floats above the line it belongs to.
+    lineHeight: "calc(var(--glyph-line-height, 1.7) * 1em)",
     backgroundColor: "var(--color-surface-secondary)",
     color: "var(--color-text-tertiary)",
     border: "none",

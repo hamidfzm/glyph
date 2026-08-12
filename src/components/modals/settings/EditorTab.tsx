@@ -130,6 +130,17 @@ export function EditorTab() {
             ))}
           </ul>
         </div>
+
+        <div className="settings-row">
+          <div>
+            <span className="settings-label">{t("editor.syncScroll.label")}</span>
+            <div className="settings-description">{t("editor.syncScroll.description")}</div>
+          </div>
+          <Toggle
+            checked={editor.syncScroll}
+            onChange={(v) => updateSettings("editor.syncScroll", v)}
+          />
+        </div>
       </div>
 
       <div className="settings-section">
