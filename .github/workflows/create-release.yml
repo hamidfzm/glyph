@@ -30,33 +30,14 @@ jobs:
           git remote set-url --push origin "git@github.com:${{ github.repository }}.git"
           echo "GIT_SSH_COMMAND=ssh -i ~/.ssh/release_key -o IdentitiesOnly=yes" >> "$GITHUB_ENV"
 
-      - name: Validate version format
-        run: |
-          if ! echo "${{ inputs.version }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Invalid version format '${{ inputs.version }}'. Expected semver (e.g. 1.2.3)"
-            exit 1
-          fi
-
-      - name: Check tag does not already exist
-        run: |
-          if git ls-remote --tags origin | grep -q "refs/tags/v${{ inputs.version }}$"; then
-            echo "::error::Tag v${{ inputs.version }} already exists"
-            exit 1
-          fi
-
       - uses: ./.github/actions/rust-setup
 
-      - name: Bump version in package.json
-        run: |
-          jq --arg v "${{ inputs.version }}" '.version = $v' package.json > package.json.tmp
-          mv package.json.tmp package.json
-
-      - name: Bump version in Cargo.toml
-        run: |
-          sed -i 's/^version = ".*"/version = "${{ inputs.version }}"/' src-tauri/Cargo.toml
-
-      - name: Update Cargo.lock
-        run: cargo update --manifest-path src-tauri/Cargo.toml -p glyph
+      # Validation and the three-file bump live in the script so the
+      # release-bump CI job can exercise them without cutting a release.
+      - name: Bump version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: bash scripts/bump-version.sh "$VERSION"
 
       - name: Commit version bump
         run: |

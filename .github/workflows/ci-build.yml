@@ -72,7 +72,7 @@ jobs:
         run: |
           xvfb-run --auto-servernum ./src-tauri/target/release/glyph "$PWD/samples" --export site --out /tmp/csp-smoke
           test -f /tmp/csp-smoke/index.html
-          test "$(ls /tmp/csp-smoke/*.html | wc -l)" -ge 3
+          test "$(find /tmp/csp-smoke -maxdepth 1 -name '*.html' | wc -l)" -ge 3
           # A document export renders the live DOM, so it exercises the
           # render-readiness gate the site export never touches.
           xvfb-run --auto-servernum ./src-tauri/target/release/glyph "$PWD/samples/Index.md" --export html --out /tmp/doc-smoke.html
