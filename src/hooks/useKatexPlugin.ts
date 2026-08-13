@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Options } from "react-markdown";
-import { hasMath, loadKatex } from "../components/markdown/lazyKatex";
+import { hasMath, loadKatex } from "@/components/markdown/lazyKatex";
 
 type RehypePlugin = NonNullable<Options["rehypePlugins"]>[number];
 
@@ -14,13 +14,7 @@ export function useKatexPlugin(content: string): RehypePlugin | null {
 
   useEffect(() => {
     if (!contentHasMath) return;
-    let cancelled = false;
-    loadKatex().then((p) => {
-      if (!cancelled) setPlugin(() => p);
-    });
-    return () => {
-      cancelled = true;
-    };
+    loadKatex().then((p) => setPlugin(() => p));
   }, [contentHasMath]);
 
   return contentHasMath ? plugin : null;

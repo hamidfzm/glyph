@@ -14,13 +14,7 @@ export function useGemojiPlugin(content: string): RemarkPlugin | null {
 
   useEffect(() => {
     if (!contentHasShortcode) return;
-    let cancelled = false;
-    loadGemoji().then((p) => {
-      if (!cancelled) setPlugin(() => p);
-    });
-    return () => {
-      cancelled = true;
-    };
+    loadGemoji().then((p) => setPlugin(() => p));
   }, [contentHasShortcode]);
 
   return contentHasShortcode ? plugin : null;

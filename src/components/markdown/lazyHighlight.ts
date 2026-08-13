@@ -1,4 +1,5 @@
 import type { Options } from "react-markdown";
+import { trackPluginLoad } from "@/lib/markdown/pluginLoads";
 
 type RehypePlugin = NonNullable<Options["rehypePlugins"]>[number];
 
@@ -19,7 +20,9 @@ export function hasCodeBlock(content: string): boolean {
 
 export function loadHighlight(): Promise<RehypePlugin> {
   if (!highlightPromise) {
-    highlightPromise = import("rehype-highlight").then((mod) => mod.default as RehypePlugin);
+    highlightPromise = trackPluginLoad(
+      import("rehype-highlight").then((mod) => mod.default as RehypePlugin),
+    );
   }
   return highlightPromise;
 }

@@ -1,4 +1,5 @@
 import type { Options } from "react-markdown";
+import { trackPluginLoad } from "@/lib/markdown/pluginLoads";
 
 type RemarkPlugin = NonNullable<Options["remarkPlugins"]>[number];
 
@@ -17,7 +18,9 @@ export function hasEmojiShortcode(content: string): boolean {
 // it stays out of the startup chunk and loads on first sight of a shortcode.
 export function loadGemoji(): Promise<RemarkPlugin> {
   if (!gemojiPromise) {
-    gemojiPromise = import("remark-gemoji").then((mod) => mod.default as RemarkPlugin);
+    gemojiPromise = trackPluginLoad(
+      import("remark-gemoji").then((mod) => mod.default as RemarkPlugin),
+    );
   }
   return gemojiPromise;
 }

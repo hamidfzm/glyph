@@ -53,13 +53,19 @@ export function useExport({
         // The export pipeline is loaded on first use so none of it (nor its
         // docx/epub/pdf dependencies) weighs down startup; a failed chunk load
         // lands in the same catch as a failed export.
-        const [{ exportCanvas }, { exportDocument }, { deriveExportMeta }, { EXPORT_EXT }] =
-          await Promise.all([
-            import("@/lib/export/exportCanvas"),
-            import("@/lib/export/exportDocument"),
-            import("@/lib/export/meta"),
-            import("@/lib/export/writeExport"),
-          ]);
+        const [
+          { exportCanvas },
+          { exportDocument },
+          { deriveExportMeta },
+          { EXPORT_EXT },
+          { EXPORTABLE_ROOT_SELECTOR, waitForRenderIdle },
+        ] = await Promise.all([
+          import("@/lib/export/exportCanvas"),
+          import("@/lib/export/exportDocument"),
+          import("@/lib/export/meta"),
+          import("@/lib/export/writeExport"),
+          import("@/lib/export/renderReady"),
+        ]);
 
         const meta = deriveExportMeta(filePath, content);
         const ext = EXPORT_EXT[format];
@@ -69,6 +75,14 @@ export function useExport({
         // Show the indicator only for the real work, after the (blocking)
         // native dialog: image inlining and the build/write.
         setExporting(format);
+        // The document can be closed while the native dialog sits open. There
+        // is nothing to wait for then, and waiting would stall until the
+        // gate's deadline instead of aborting.
+        if (!document.querySelector(EXPORTABLE_ROOT_SELECTOR)) return;
+        // Export reads the live DOM, so a diagram still compiling or a lazy
+        // plugin chunk still in flight would be snapshotted half-rendered.
+        // Same gate the CLI export uses; normally settles in one quiet window.
+        await waitForRenderIdle();
         if (canvas) await exportCanvas(format, path, meta);
         else await exportDocument(format, path, meta, { entries, includeToc });
       } catch (err) {
