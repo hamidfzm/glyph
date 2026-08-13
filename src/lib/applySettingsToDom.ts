@@ -1,6 +1,6 @@
 import { setTheme as setNativeTheme } from "@tauri-apps/api/app";
 import type { Settings } from "@/lib/settings";
-import { CONTENT_WIDTH_MAP, FONT_FAMILY_MAP, LINE_HEIGHT_MAP } from "@/lib/settingsDisplay";
+import { CONTENT_WIDTH_MAP, LINE_HEIGHT_MAP, resolveReadingFont } from "@/lib/settingsDisplay";
 
 // Pushes appearance settings onto the document: the dark class plus the native
 // window chrome, and the `--glyph-*` custom properties the stylesheets read.
@@ -22,14 +22,13 @@ export function applyCSSVariables(settings: Settings) {
   const root = document.documentElement.style;
   const { appearance } = settings;
 
-  // Font family
-  if (appearance.fontFamily === "custom" && appearance.customFont) {
-    root.setProperty("--glyph-font", appearance.customFont);
-  } else if (appearance.fontFamily !== "system") {
-    const font = FONT_FAMILY_MAP[appearance.fontFamily];
-    if (font) root.setProperty("--glyph-font", font);
+  // Prose only: chrome stays on --glyph-font. Always written or always cleared,
+  // so no transition strands prose on a face the settings no longer name.
+  const readingFont = resolveReadingFont(appearance);
+  if (readingFont) {
+    root.setProperty("--glyph-reading-font", readingFont);
   } else {
-    root.removeProperty("--glyph-font");
+    root.removeProperty("--glyph-reading-font");
   }
 
   // Font size

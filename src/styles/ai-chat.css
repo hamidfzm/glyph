@@ -299,3 +299,9 @@
     box-shadow: none;
   }
 }
+
+/* The panel is chrome, so replies keep its UI face rather than the document's
+   reading serif, which .markdown-body would otherwise apply here. */
+.ai-msg-markdown {
+  font-family: inherit;
+}

@@ -32,8 +32,8 @@
       "title": "Tipografía"
     },
     "fontFamily": {
-      "label": "Familia de fuente",
-      "system": "Predeterminada del sistema",
+      "label": "Fuente del documento",
+      "system": "Predeterminada (serif)",
       "serif": "Serif",
       "sans": "Sans-serif",
       "mono": "Monoespaciada",

@@ -32,8 +32,8 @@
       "title": "Typografie"
     },
     "fontFamily": {
-      "label": "Schriftfamilie",
-      "system": "Systemstandard",
+      "label": "Dokumentschrift",
+      "system": "Standard (Serif)",
       "serif": "Serif",
       "sans": "Sans-Serif",
       "mono": "Monospace",
