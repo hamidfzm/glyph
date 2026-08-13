@@ -2,5 +2,5 @@
   "default": "src-tauri/icons/icon.svg",
   "bg_color": "#2f4fe0",
   "android_fg": "src-tauri/icons/icon-foreground.svg",
-  "android_fg_scale": 85
+  "android_fg_scale": 100
 }
