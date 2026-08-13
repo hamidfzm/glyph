@@ -41,6 +41,8 @@ The outline is the pilcrow from **Source Serif 4** (SIL Open Font License 1.1), 
 - Master: `src-tauri/icons/icon.svg`, with `src-tauri/icons/icon-foreground.svg` for the Android adaptive layer.
 - Regenerate every raster with `pnpm icons`, which reads `icon-manifest.json`.
 - `tauri icon` writes the desktop set and the `src-tauri/gen/` mobile projects, but **not** `src-tauri/icons/android/`, `src-tauri/icons/ios/`, or `public/favicon.png`. Those are copied from the generated output, or a mobile re-init silently restores the old mark.
+- The Android foreground is sized by `icon-foreground.svg` alone, at 59% of the canvas, inside the 66% safe zone a launcher guarantees. `android_fg_scale` stays at 100 so the scale lives in one place; setting both multiplies them and shrinks the mark.
+- iOS icons are square, full-bleed and **opaque**. Apple applies its own mask, so no rounded corners are baked in, and an alpha channel fails App Store validation even when every pixel is opaque. Flatten onto the tile colour after regenerating.
 
 ## Adding or changing a token
 
