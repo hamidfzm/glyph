@@ -18,6 +18,7 @@ import { FrontmatterBlock } from "./FrontmatterBlock";
 import { useImageComponent, useSvgImageComponent } from "./ImageComponent";
 import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
 import { MarkdownHeading } from "./MarkdownHeading";
+import { TableComponent } from "./TableComponent";
 import { TaskListItem } from "./TaskListItem";
 
 interface MarkdownContentProps {
@@ -135,6 +136,7 @@ export function MarkdownContent({
             pre: CodeBlockComponent,
             li: TaskListLi,
             div: DivComponent,
+            table: TableComponent,
             h1: MarkdownHeading,
             h2: MarkdownHeading,
             h3: MarkdownHeading,
