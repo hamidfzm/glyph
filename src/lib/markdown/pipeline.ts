@@ -3,7 +3,6 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import rehypeSlug from "rehype-slug";
 import remarkFrontmatter from "remark-frontmatter";
-import remarkGemoji from "remark-gemoji";
 import remarkGfm from "remark-gfm";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
@@ -32,6 +31,11 @@ export interface RemarkPipelineOptions {
    * block is a document property, not a syntax extension.
    */
   features?: Partial<MarkdownSettings>;
+  /**
+   * Emoji-shortcode plugin, lazily loaded only when the document contains a
+   * `:name:` code (and the emoji toggle is on; callers gate the load).
+   */
+  gemojiPlugin?: MarkdownPlugin | null;
   /** Plugin-contributed remark plugins, appended after the built-ins. */
   extra?: readonly MarkdownPlugin[];
 }
@@ -40,12 +44,13 @@ export function buildRemarkPlugins({
   workspaceFiles,
   filePath,
   features = {},
+  gemojiPlugin,
   extra = [],
 }: RemarkPipelineOptions): RemarkPlugins {
   const plugins: RemarkPlugins = [remarkFrontmatter];
   if (features.gfm !== false) plugins.push(remarkGfm);
   if (features.math !== false) plugins.push(remarkMath);
-  if (features.emoji !== false) plugins.push(remarkGemoji);
+  if (gemojiPlugin) plugins.push(gemojiPlugin);
   if (features.alerts !== false) plugins.push(remarkAlert);
   if (features.wikilinks !== false) {
     plugins.push([remarkWikilink, { workspaceFiles, currentFilePath: filePath }]);

@@ -26,6 +26,11 @@ describe("renderPageHtml", () => {
     expect(html).toContain("katex");
   });
 
+  it("renders emoji shortcodes through gemoji", async () => {
+    const html = await render("shipped :tada:");
+    expect(html).toContain("🎉");
+  });
+
   it("renders GitHub blockquote alerts", async () => {
     const html = await render("> [!NOTE]\n> Heads up");
     expect(html).toContain("markdown-alert");

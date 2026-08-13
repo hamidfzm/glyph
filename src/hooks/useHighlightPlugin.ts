@@ -18,13 +18,7 @@ export function useHighlightPlugin(content: string): RehypePlugin | null {
 
   useEffect(() => {
     if (!contentHasCode) return;
-    let cancelled = false;
-    loadHighlight().then((p) => {
-      if (!cancelled) setPlugin(() => [p, HIGHLIGHT_OPTIONS] as RehypePlugin);
-    });
-    return () => {
-      cancelled = true;
-    };
+    loadHighlight().then((p) => setPlugin(() => [p, HIGHLIGHT_OPTIONS] as RehypePlugin));
   }, [contentHasCode]);
 
   return contentHasCode ? plugin : null;

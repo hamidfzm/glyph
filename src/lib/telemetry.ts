@@ -1,5 +1,4 @@
 import type { Breadcrumb, ErrorEvent } from "@sentry/react";
-import * as Sentry from "@sentry/react";
 import { invoke } from "@tauri-apps/api/core";
 // Single source of truth for the Sentry DSN — `src-tauri/sentry.json`. The Rust
 // build script reads the same file (see build.rs) so the frontend and backend
@@ -97,27 +96,58 @@ function reportingAllowed(): boolean {
   return import.meta.env.PROD && SENTRY_DSN.length > 0;
 }
 
+type SentrySdk = typeof import("@sentry/react");
+
+// The SDK is heavy and only useful in production after the user opts in, so it
+// is imported on demand: startup never downloads it, and `captureException`
+// stays a no-op until the opt-in has loaded it (uninitialized-SDK semantics).
+let sdkPromise: Promise<SentrySdk> | null = null;
+let sdk: SentrySdk | null = null;
+// Desired state, tracked separately because loading is async: an opt-out that
+// lands while the SDK is still downloading must win over the pending init.
+let telemetryWanted = false;
+// A closed client stays bound in the SDK, so `getClient()` alone cannot tell
+// "running" from "opted out"; without this flag a re-enable would be skipped
+// and every later capture silently dropped by the closed client.
+let clientClosed = false;
+
+function loadSdk(): Promise<SentrySdk> {
+  sdkPromise ??= import("@sentry/react").then((mod) => {
+    sdk = mod;
+    return mod;
+  });
+  return sdkPromise;
+}
+
 /**
  * Turn error reporting on. Mirrors the choice into the Rust backend (which has
- * its own prod gate) and lazily initializes the JS SDK. No-op in dev or if the
- * client is already running.
+ * its own prod gate) and lazily loads + initializes the JS SDK. No-op in dev
+ * or if the client is already running. The returned promise resolves once the
+ * SDK is ready (or immediately when reporting is off); callers may ignore it.
  */
-export function enableTelemetry(): void {
+export function enableTelemetry(): Promise<void> {
+  telemetryWanted = true;
   void invoke("set_error_reporting", { enabled: true }).catch(() => {});
 
-  if (!reportingAllowed() || Sentry.getClient()) {
-    return;
+  if (!reportingAllowed()) {
+    return Promise.resolve();
   }
 
-  Sentry.init({
-    dsn: SENTRY_DSN,
-    release: `glyph@${__APP_VERSION__}`,
-    // Hard privacy posture for a local-first viewer: no PII, no performance
-    // tracing, no session replay (replay would record document contents).
-    sendDefaultPii: false,
-    tracesSampleRate: 0,
-    beforeSend: scrubEvent,
-    beforeBreadcrumb: scrubBreadcrumb,
+  return loadSdk().then((Sentry) => {
+    if (!telemetryWanted || (Sentry.getClient() && !clientClosed)) {
+      return;
+    }
+    clientClosed = false;
+    Sentry.init({
+      dsn: SENTRY_DSN,
+      release: `glyph@${__APP_VERSION__}`,
+      // Hard privacy posture for a local-first viewer: no PII, no performance
+      // tracing, no session replay (replay would record document contents).
+      sendDefaultPii: false,
+      tracesSampleRate: 0,
+      beforeSend: scrubEvent,
+      beforeBreadcrumb: scrubBreadcrumb,
+    });
   });
 }
 
@@ -126,6 +156,23 @@ export function enableTelemetry(): void {
  * tells the Rust backend to drop its Sentry guard.
  */
 export function disableTelemetry(): void {
+  telemetryWanted = false;
   void invoke("set_error_reporting", { enabled: false }).catch(() => {});
-  void Sentry.getClient()?.close();
+  const client = sdk?.getClient();
+  if (client) {
+    void client.close();
+    clientClosed = true;
+  }
+}
+
+/**
+ * Report an error to Sentry if the telemetry opt-in has loaded the SDK.
+ * Callers use this instead of importing `@sentry/react`, which would drag the
+ * SDK into the startup bundle.
+ */
+export function captureException(
+  error: unknown,
+  hint?: Parameters<SentrySdk["captureException"]>[1],
+): void {
+  sdk?.captureException(error, hint);
 }

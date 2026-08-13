@@ -62,6 +62,12 @@ jobs:
           CODECOV_TOKEN: ${{ matrix.bundle_analysis && secrets.CODECOV_TOKEN || '' }}
         with:
           args: ${{ github.event_name == 'pull_request' && matrix.args_pr || matrix.args_full }}
+      # Records raw/gzip sizes for startup and major lazy chunks and fails on
+      # budget regressions (bundle-budgets.json, docs/bundle-budgets.md). One
+      # deterministic leg is enough: every platform ships the same frontend.
+      - name: Check bundle budgets
+        if: matrix.platform == 'ubuntu-22.04'
+        run: node scripts/check-bundle-size.mjs
       # Boots the real webview under the production CSP and exercises the
       # grant-gated CLI export end to end; unit tests cannot enforce CSP.
       - name: Headless export smoke test

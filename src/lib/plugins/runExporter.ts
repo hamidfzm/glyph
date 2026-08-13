@@ -1,7 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { TocEntry } from "@/hooks/useTableOfContents";
-import { deriveExportMeta } from "@/lib/export/meta";
-import { prepareContent } from "@/lib/export/prepareContent";
 import { pickSave } from "@/lib/pickers";
 import type { ExporterContribution } from "./types";
 
@@ -24,6 +22,21 @@ export async function runExporter({
   filePath,
   content,
 }: RunExporterOptions): Promise<void> {
+  // Loaded on first use so the export pipeline stays out of the startup bundle.
+  const [
+    { prepareContent },
+    { deriveExportMeta },
+    { EXPORTABLE_ROOT_SELECTOR, waitForRenderIdle },
+  ] = await Promise.all([
+    import("@/lib/export/prepareContent"),
+    import("@/lib/export/meta"),
+    import("@/lib/export/renderReady"),
+  ]);
+
+  // The plugin gets the same fully-rendered DOM the built-in exporters do.
+  // Skipped when nothing is rendered: `prepareContent` bails just below, and
+  // waiting would stall until the gate's deadline first.
+  if (document.querySelector(EXPORTABLE_ROOT_SELECTOR)) await waitForRenderIdle();
   const prepared = await prepareContent({ entries, includeToc: false });
   if (prepared == null) return; // nothing rendered to export
 

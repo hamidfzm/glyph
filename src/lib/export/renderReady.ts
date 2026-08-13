@@ -1,14 +1,19 @@
+import { pendingPluginLoads } from "@/lib/markdown/pluginLoads";
+
 // Diagrams and math render asynchronously after the document mounts (Mermaid
-// and D2 compile in a worker, KaTeX loads lazily), so a CLI export that fired
-// on mount would write a document with empty diagram slots. Wait for the
-// rendered body to appear and then settle.
+// and D2 compile in a worker, highlighting/KaTeX/gemoji load lazily), so an
+// export that fired on mount would write a document with empty diagram slots
+// and unrendered shortcodes. Wait for the rendered body to appear and settle.
 
 // How long the body must go unchanged before it counts as settled. Long enough
 // to bridge the gap between one diagram finishing and the next starting, short
 // enough not to pad every export.
 const QUIET_MS = 250;
 
-const BODY_SELECTOR = ".markdown-body, .notebook-body";
+// Every root an export can snapshot. A canvas board is included because its
+// cards hold their own markdown bodies, so it has the same lazy content to
+// wait on; leaving it out made a board export sit here until the deadline.
+export const EXPORTABLE_ROOT_SELECTOR = ".markdown-body, .notebook-body, .glyph-canvas";
 
 /** Diagram containers still waiting for their SVG (or their error message). */
 function pendingDiagrams(root: ParentNode): number {
@@ -19,7 +24,10 @@ function pendingDiagrams(root: ParentNode): number {
 
 /**
  * Resolve once the rendered document has appeared and stopped changing with no
- * diagram left empty, or when `timeoutMs` elapses. The timeout is the CI guard:
+ * diagram left empty and no lazy plugin still loading, or when `timeoutMs`
+ * elapses. The plugin check matters on its own: a document waiting for the
+ * gemoji or KaTeX chunk mutates nothing, so quiet alone would mean "finished"
+ * while the swap is still coming. The timeout is the CI guard:
  * one diagram that never resolves must not hang the process forever, so the
  * export proceeds with whatever rendered. A diagram missing from the output is
  * visible; a hung job is not.
@@ -46,10 +54,10 @@ export function waitForRenderIdle(
     function armQuietTimer() {
       window.clearTimeout(quietTimer);
       quietTimer = window.setTimeout(() => {
-        const body = doc.querySelector(BODY_SELECTOR);
+        const body = doc.querySelector(EXPORTABLE_ROOT_SELECTOR);
         // Quiet but incomplete means the document is still loading, or a
         // diagram is between frames; keep waiting for the deadline to decide.
-        if (body && pendingDiagrams(body) === 0) finish(true);
+        if (body && pendingDiagrams(body) === 0 && pendingPluginLoads() === 0) finish(true);
         else armQuietTimer();
       }, QUIET_MS);
     }

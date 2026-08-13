@@ -1,9 +1,9 @@
-import { captureException } from "@sentry/react";
 import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { captureException } from "@/lib/telemetry";
 import { useWindowClose } from "./useWindowClose";
 
-vi.mock("@sentry/react", () => ({ captureException: vi.fn() }));
+vi.mock("@/lib/telemetry", () => ({ captureException: vi.fn() }));
 
 // Mock the Tauri window API. `onCloseRequested` captures the handler the hook
 // registers so tests can fire a synthetic close request; `close` is asserted on.

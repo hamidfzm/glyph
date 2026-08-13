@@ -7,10 +7,10 @@ import { AppModals } from "./AppModals";
 vi.mock("@/components/modals/settings/lazySettings", () => ({
   SettingsModal: () => <div>settings modal</div>,
 }));
-vi.mock("@/components/modals/workspace/WorkspaceSettingsModal", () => ({
+vi.mock("@/components/modals/workspace/lazyWorkspaceSettings", () => ({
   WorkspaceSettingsModal: () => <div>workspace modal</div>,
 }));
-vi.mock("@/components/plugins/PluginsModal", () => ({
+vi.mock("@/components/plugins/lazyPluginsModal", () => ({
   PluginsModal: () => <div>plugins modal</div>,
 }));
 

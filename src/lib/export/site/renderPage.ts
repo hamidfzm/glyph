@@ -2,6 +2,7 @@ import rehypeStringify from "rehype-stringify";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { type PluggableList, unified } from "unified";
+import { hasEmojiShortcode, loadGemoji } from "@/components/markdown/lazyGemoji";
 import {
   HIGHLIGHT_OPTIONS,
   hasCodeBlock,
@@ -40,10 +41,18 @@ export async function renderPageHtml({
     ? ([await loadHighlight(), HIGHLIGHT_OPTIONS] as MarkdownPlugin)
     : null;
   const katexPlugin = hasMath(content) ? await loadKatex() : null;
+  const gemojiPlugin = hasEmojiShortcode(content) ? await loadGemoji() : null;
 
   const file = await unified()
     .use(remarkParse)
-    .use(buildRemarkPlugins({ workspaceFiles, filePath, extra: extraRemark }) as PluggableList)
+    .use(
+      buildRemarkPlugins({
+        workspaceFiles,
+        filePath,
+        gemojiPlugin,
+        extra: extraRemark,
+      }) as PluggableList,
+    )
     // Raw HTML must survive into the hast tree so rehype-raw can parse it and
     // rehype-sanitize can clean it, exactly as react-markdown does internally.
     .use(remarkRehype, { allowDangerousHtml: true })

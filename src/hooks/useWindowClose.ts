@@ -1,6 +1,6 @@
-import * as Sentry from "@sentry/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useRef } from "react";
+import { captureException } from "@/lib/telemetry";
 
 /**
  * Intercept the native window-close request (title-bar close, Close Window
@@ -40,7 +40,7 @@ export function useWindowClose(flush: () => Promise<boolean>) {
         } catch (err) {
           // Don't trap the window closed when the flush fails (#530).
           console.error("Close flush failed; closing anyway:", err);
-          Sentry.captureException(err);
+          captureException(err);
           proceed = true;
         }
         if (proceed) {

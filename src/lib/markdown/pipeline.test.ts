@@ -24,7 +24,15 @@ describe("buildRemarkPlugins", () => {
   });
 
   it("works with no extras", () => {
-    expect(buildRemarkPlugins({}).length).toBeGreaterThanOrEqual(6);
+    expect(buildRemarkPlugins({}).length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("includes the gemoji plugin only when the caller provides it resolved", () => {
+    const gemoji = vi.fn();
+    const withGemoji = buildRemarkPlugins({ gemojiPlugin: gemoji });
+    expect(withGemoji.map(ref)).toContain(gemoji);
+    expect(withGemoji.length).toBe(buildRemarkPlugins({}).length + 1);
+    expect(buildRemarkPlugins({ gemojiPlugin: null }).map(ref)).not.toContain(gemoji);
   });
 
   it("drops a feature's plugin when its toggle is off", () => {

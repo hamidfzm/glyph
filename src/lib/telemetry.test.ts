@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/react";
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  captureException,
   disableTelemetry,
   enableTelemetry,
   redactPaths,
@@ -13,11 +14,13 @@ import {
 vi.mock("@sentry/react", () => ({
   init: vi.fn(),
   getClient: vi.fn(() => undefined),
+  captureException: vi.fn(),
 }));
 
 const mockedInvoke = vi.mocked(invoke);
 const mockedInit = vi.mocked(Sentry.init);
 const mockedGetClient = vi.mocked(Sentry.getClient);
+const mockedCapture = vi.mocked(Sentry.captureException);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -151,17 +154,35 @@ describe("scrubEvent", () => {
   });
 });
 
+describe("captureException", () => {
+  it("is a no-op before the telemetry opt-in has loaded the SDK", async () => {
+    // A fresh module instance guarantees the lazy SDK slot is still empty.
+    vi.resetModules();
+    const fresh = await import("./telemetry");
+    expect(() => fresh.captureException(new Error("boom"))).not.toThrow();
+    expect(mockedCapture).not.toHaveBeenCalled();
+  });
+
+  it("delegates to the SDK once the opt-in has loaded it", async () => {
+    vi.stubEnv("PROD", true);
+    await enableTelemetry();
+    const error = new Error("boom");
+    captureException(error);
+    expect(mockedCapture).toHaveBeenCalledWith(error, undefined);
+  });
+});
+
 describe("enableTelemetry", () => {
-  it("mirrors state to the backend but does not init Sentry in dev", () => {
+  it("mirrors state to the backend but does not init Sentry in dev", async () => {
     vi.stubEnv("PROD", false);
-    enableTelemetry();
+    await enableTelemetry();
     expect(mockedInvoke).toHaveBeenCalledWith("set_error_reporting", { enabled: true });
     expect(mockedInit).not.toHaveBeenCalled();
   });
 
-  it("initializes Sentry in production when no client exists", () => {
+  it("initializes Sentry in production when no client exists", async () => {
     vi.stubEnv("PROD", true);
-    enableTelemetry();
+    await enableTelemetry();
     expect(mockedInit).toHaveBeenCalledTimes(1);
     const options = mockedInit.mock.calls[0][0];
     expect(options).toMatchObject({ sendDefaultPii: false, tracesSampleRate: 0 });
@@ -169,16 +190,38 @@ describe("enableTelemetry", () => {
     expect(options?.beforeBreadcrumb).toBe(scrubBreadcrumb);
   });
 
-  it("does not re-init when a client already exists", () => {
+  it("does not re-init when a client already exists", async () => {
     vi.stubEnv("PROD", true);
     mockedGetClient.mockReturnValue({} as ReturnType<typeof Sentry.getClient>);
-    enableTelemetry();
+    await enableTelemetry();
     expect(mockedInit).not.toHaveBeenCalled();
+  });
+
+  it("does not init when the user opts out while the SDK is still loading", async () => {
+    vi.stubEnv("PROD", true);
+    const pending = enableTelemetry();
+    disableTelemetry();
+    await pending;
+    expect(mockedInit).not.toHaveBeenCalled();
+  });
+
+  it("re-initializes when re-enabled after an opt-out closed the client", async () => {
+    vi.stubEnv("PROD", true);
+    await enableTelemetry();
+    const close = vi.fn();
+    mockedGetClient.mockReturnValue({ close } as unknown as ReturnType<typeof Sentry.getClient>);
+    disableTelemetry();
+    mockedInit.mockClear();
+
+    await enableTelemetry();
+    expect(mockedInit).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("disableTelemetry", () => {
-  it("mirrors state to the backend and closes an existing client", () => {
+  it("mirrors state to the backend and closes an existing client", async () => {
+    vi.stubEnv("PROD", true);
+    await enableTelemetry();
     const close = vi.fn();
     mockedGetClient.mockReturnValue({ close } as unknown as ReturnType<typeof Sentry.getClient>);
     disableTelemetry();
@@ -186,7 +229,7 @@ describe("disableTelemetry", () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
-  it("is a no-op on the client when none exists", () => {
+  it("is a no-op on the client when none is bound", () => {
     mockedGetClient.mockReturnValue(undefined);
     expect(() => disableTelemetry()).not.toThrow();
   });

@@ -1,0 +1,16 @@
+{
+  "$comment": "Gzip byte budgets enforced by scripts/check-bundle-size.mjs in CI. Rationale and update process: docs/bundle-budgets.md",
+  "startup": 345000,
+  "chunks": {
+    "d2": { "prefix": "d2-", "budgetGzip": 6450000 },
+    "pdfEngine": { "prefix": "pdfEngine-", "budgetGzip": 910000 },
+    "MarkdownEditor": { "prefix": "MarkdownEditor-", "budgetGzip": 297000 },
+    "mermaid": { "prefix": "mermaid.core-", "budgetGzip": 150000 },
+    "cytoscape": { "prefix": "cytoscape.esm-", "budgetGzip": 156000 },
+    "docx": { "prefix": "docx-", "budgetGzip": 116000 },
+    "katex": { "prefix": "katex-", "budgetGzip": 93000 },
+    "epub": { "prefix": "epub-", "budgetGzip": 34000 },
+    "html2canvas": { "prefix": "html2canvas.esm-", "budgetGzip": 52000 }
+  },
+  "unbudgetedChunkGzipLimit": 200000
+}
