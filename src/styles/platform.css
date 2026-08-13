@@ -1,5 +1,9 @@
 :root {
   --glyph-font: system-ui, -apple-system, sans-serif;
+  /* Long-form reading face, per platform: whichever face that OS ships that
+     is designed for reading at body size, not the UI face. Overridden by the
+     document-font setting; see docs/brand.md. */
+  --glyph-reading-font: Georgia, serif;
   --glyph-radius: 6px;
   --glyph-radius-sm: 4px;
   --glyph-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -16,6 +20,7 @@
    the notch, home indicator, and (in landscape) the side cutout/status bar. */
 [data-platform="ios"],
 [data-platform="android"] {
+  --glyph-reading-font: "New York", ui-serif, "Noto Serif", Georgia, serif;
   --glyph-safe-top: env(safe-area-inset-top);
   --glyph-safe-bottom: env(safe-area-inset-bottom);
   --glyph-safe-left: env(safe-area-inset-left);
@@ -25,6 +30,8 @@
 [data-platform="macos"] {
   --glyph-font: "SF Pro", -apple-system, BlinkMacSystemFont, system-ui,
     sans-serif;
+  --glyph-reading-font: "New York", ui-serif, "Iowan Old Style", Charter,
+    Palatino, serif;
   --glyph-radius: 8px;
   --glyph-radius-sm: 6px;
   --glyph-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
@@ -38,6 +45,7 @@
 
 [data-platform="windows"] {
   --glyph-font: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --glyph-reading-font: Calibri, Constantia, Cambria, Georgia, sans-serif;
   --glyph-radius: 4px;
   --glyph-radius-sm: 2px;
   --glyph-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
@@ -45,6 +53,7 @@
 
 [data-platform="linux"] {
   --glyph-font: system-ui, "Ubuntu", "Cantarell", sans-serif;
+  --glyph-reading-font: "Noto Serif", "DejaVu Serif", "Liberation Serif", serif;
   --glyph-radius: 6px;
   --glyph-radius-sm: 4px;
   --glyph-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);

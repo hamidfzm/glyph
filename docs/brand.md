@@ -24,11 +24,22 @@ That figure does not cover white text *on* the accent, which is what the primary
 
 | Role | Stack |
 | --- | --- |
-| Reading (document body) | `'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, ui-serif, serif` |
+| Reading (document body) | per platform, see `src/styles/platform.css` |
 | Interface (chrome) | per platform, see `src/styles/platform.css` |
 | Code | `'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace` (`markdown.css`; `FONT_FAMILY_MAP.mono` and a few `ui-monospace` fallbacks differ, and are not kept in step) |
 
-All three are system stacks; Glyph bundles no font files. None of the reading stack covers Han or Arabic, so Persian and Chinese prose falls through to the platform's generic `serif` (Songti, SimSun) rather than the UI face it used before.
+The reading face is chosen per platform, because "best for reading" is not the same face everywhere and a single stack resolves badly somewhere:
+
+| Platform | Reading face |
+| --- | --- |
+| macOS, iOS | New York, then Iowan Old Style / Charter |
+| Windows | Calibri, then Constantia / Cambria |
+| Linux | Noto Serif, then DejaVu / Liberation |
+| Unknown | Georgia |
+
+Windows therefore reads in a humanist sans while Apple platforms read in a serif. That is deliberate: Palatino Linotype, the previous Windows outcome, is a print face that renders poorly at body size on Windows. Readers who want a different face set it in Settings, which overrides the platform default.
+
+All are system stacks; Glyph bundles no font files. None of the reading stack covers Han or Arabic, so Persian and Chinese prose falls through to the platform's generic `serif` (Songti, SimSun) rather than the UI face it used before.
 
 Two export targets cannot carry the reading face: PDF (pdfmake ships Roboto only, and other faces need embedded font files) and DOCX (no default run font is set). HTML, EPUB, the site export, and print all get it. A reader's *chosen* font reaches print, which drives the live document, but no file export: `collectStyles` serialises stylesheets and the choice is written as an inline style on `<html>`, so exported files always show the default reading face. The reading face is what separates the document from the interface: prose is set in the serif while the chrome stays on the platform UI font, so the document reads as a document rather than as part of the app.
 
@@ -50,7 +61,7 @@ Some values carry the accent as a separate literal and do **not** follow `var(--
 - `--color-banner-bg` (`src/styles/app.css`): a hand-mixed accent tint for the update bar.
 - The `read("--color-accent", …)` fallbacks in `src/lib/graphCanvas.ts`.
 - `LINK_COLOR` (`src/lib/export/htmlToPdf.ts`), used by both PDF paths: pdfmake cannot read custom properties, and pages export on white even in dark mode, so this one is the *light* accent.
-- The reading stack itself, in `src/styles/app.css` and `FONT_FAMILY_MAP.serif` (`src/lib/settings.ts`). A test in `settings.test.ts` fails if the two drift.
+- The reading stacks in `src/styles/platform.css`. A test in `settingsDisplay.test.ts` fails if a platform loses its face.
 - The pre-paint splash colours in `index.html`, which run before any stylesheet loads.
 - On the website: the `theme-color` meta in `src/layouts/Base.astro`, plus the mark in `public/favicon.svg` and its inline duplicate in `src/components/Logo.astro`.
 
