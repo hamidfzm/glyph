@@ -33,7 +33,7 @@
     },
     "fontFamily": {
       "label": "文档字体",
-      "system": "默认（衬线）",
+      "system": "默认",
       "serif": "衬线",
       "sans": "无衬线",
       "mono": "等宽",

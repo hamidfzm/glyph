@@ -78,18 +78,23 @@ describe("MODEL_SUGGESTIONS", () => {
 });
 
 describe("reading face", () => {
-  // The stack is declared twice by necessity: app.css so exports and the
-  // default path get it, FONT_FAMILY_MAP so the menu can pin it explicitly.
-  // Nothing else keeps them in step, so this does.
-  it("matches the app.css declaration", () => {
-    const css = readFileSync("src/styles/app.css", "utf8");
-    const declared = css.match(/--glyph-reading-font:\s*([^;]+);/)?.[1];
-    expect(declared).toBeDefined();
-    const normalise = (stack: string) => stack.replace(/"/g, "'").replace(/\s+/g, " ").trim();
-    expect(normalise(declared ?? "")).toBe(normalise(FONT_FAMILY_MAP.serif));
+  // The default is per platform, so the guard is coverage rather than equality:
+  // a platform without its own face silently falls back to the generic serif.
+  const css = readFileSync("src/styles/platform.css", "utf8");
+
+  it("declares a reading face for every platform the app targets", () => {
+    for (const platform of ["macos", "windows", "linux", "ios", "android"]) {
+      const block = css.slice(css.indexOf(`[data-platform="${platform}"]`));
+      const decl = block.slice(0, block.indexOf("}")).includes("--glyph-reading-font");
+      expect(decl, `${platform} has no --glyph-reading-font`).toBe(true);
+    }
+  });
+
+  it("keeps a generic fallback for an unknown platform", () => {
+    const root = css.slice(css.indexOf(":root"), css.indexOf("}"));
+    expect(root).toContain("--glyph-reading-font");
   });
 });
-
 describe("resolveReadingFont", () => {
   const base = DEFAULT_SETTINGS.appearance;
 

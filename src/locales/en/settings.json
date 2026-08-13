@@ -33,7 +33,7 @@
     },
     "fontFamily": {
       "label": "Document Font",
-      "system": "Default (Serif)",
+      "system": "Default",
       "serif": "Serif",
       "sans": "Sans-serif",
       "mono": "Monospace",
