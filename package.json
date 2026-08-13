@@ -23,7 +23,8 @@
     "test:coverage": "vitest run --coverage",
     "sync:tauri-npm": "node scripts/sync-tauri-npm-versions.mjs",
     "sync:tauri-npm:check": "node scripts/sync-tauri-npm-versions.mjs --check",
-    "prepare": "husky"
+    "prepare": "husky",
+    "icons": "tauri icon icon-manifest.json"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

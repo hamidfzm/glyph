@@ -32,6 +32,16 @@ All three are system stacks; Glyph bundles no font files. None of the reading st
 
 Two export targets cannot carry the reading face: PDF (pdfmake ships Roboto only, and other faces need embedded font files) and DOCX (no default run font is set). HTML, EPUB, the site export, and print all get it. A reader's *chosen* font reaches print, which drives the live document, but no file export: `collectStyles` serialises stylesheets and the choice is written as an inline style on `<html>`, so exported files always show the default reading face. The reading face is what separates the document from the interface: prose is set in the serif while the chrome stays on the platform UI font, so the document reads as a document rather than as part of the app.
 
+## The mark
+
+A **pilcrow** in white on a cobalt superellipse tile. The pilcrow is the printer's mark for a paragraph, so the icon is itself a glyph: the thing the app is named for and the thing it renders. It also avoids the initial-in-a-rounded-square that most editors reach for.
+
+The outline is the pilcrow from **Source Serif 4** (SIL Open Font License 1.1), which permits derived artwork. No font file ships with the app; the glyph is flattened to a path in the master.
+
+- Master: `src-tauri/icons/icon.svg`, with `src-tauri/icons/icon-foreground.svg` for the Android adaptive layer.
+- Regenerate every raster with `pnpm icons`, which reads `icon-manifest.json`.
+- `tauri icon` writes the desktop set and the `src-tauri/gen/` mobile projects, but **not** `src-tauri/icons/android/`, `src-tauri/icons/ios/`, or `public/favicon.png`. Those are copied from the generated output, or a mobile re-init silently restores the old mark.
+
 ## Adding or changing a token
 
 Some values carry the accent as a separate literal and do **not** follow `var(--color-accent)`. Change them together or the app ends up half-recoloured:
@@ -42,6 +52,6 @@ Some values carry the accent as a separate literal and do **not** follow `var(--
 - `LINK_COLOR` (`src/lib/export/htmlToPdf.ts`), used by both PDF paths: pdfmake cannot read custom properties, and pages export on white even in dark mode, so this one is the *light* accent.
 - The reading stack itself, in `src/styles/app.css` and `FONT_FAMILY_MAP.serif` (`src/lib/settings.ts`). A test in `settings.test.ts` fails if the two drift.
 - The pre-paint splash colours in `index.html`, which run before any stylesheet loads.
-- On the website: the `theme-color` meta in `src/layouts/Base.astro` and the favicon gradient in `public/favicon.svg`, neither of which can read a custom property.
+- On the website: the `theme-color` meta in `src/layouts/Base.astro`, plus the mark in `public/favicon.svg` and its inline duplicate in `src/components/Logo.astro`.
 
 Not part of the brand, and deliberately left alone: the `#0969da` values in `src/lib/export/html.ts` and `src/lib/export/site/themes.ts`. Those are the GitHub theme for documents users export, not Glyph's own chrome.
