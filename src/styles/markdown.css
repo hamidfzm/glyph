@@ -422,6 +422,26 @@
   margin-bottom: 0.5em;
 }
 
+/* The wrapper scrolls, not the page. The table sizes to its content so columns
+   keep their width instead of being crushed, but still fills the measure when
+   it is narrow enough. */
+.markdown-body .markdown-table-wrapper {
+  overflow-x: auto;
+  margin: 0 0 1em;
+  overscroll-behavior-x: contain;
+}
+
+.markdown-body .markdown-table-wrapper:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.markdown-body .markdown-table-wrapper > table {
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+}
+
 .markdown-body table {
   width: 100%;
   margin: 0 0 1em;

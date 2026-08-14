@@ -33,7 +33,9 @@
   }
 
   [class*="overflow-y-auto"],
-  [class*="overflow-hidden"] {
+  [class*="overflow-hidden"],
+  /* The table scroller would clip columns on paper, where nothing scrolls. */
+  .markdown-table-wrapper {
     overflow: visible !important;
     height: auto !important;
     max-height: none !important;
