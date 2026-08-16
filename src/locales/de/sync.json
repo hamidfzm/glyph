@@ -28,7 +28,7 @@
     "hint": "(nur HTTPS)",
     "placeholderSaved": "gespeichert, zum Behalten leer lassen",
     "placeholderNew": "ghp_…",
-    "note": "Wird vorerst nur im Arbeitsspeicher gehalten. Die nächste Version speichert es im Schlüsselbund deines Betriebssystems."
+    "note": "Wird im Schlüsselbund deines Betriebssystems gespeichert, begrenzt auf diesen Arbeitsbereich."
   },
   "commitMessage": {
     "label": "Commit-Nachricht",

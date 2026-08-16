@@ -276,8 +276,7 @@
     "description": "Was Glyph in deinem Systemschlüsselbund gespeichert hat. Werte werden hier nie angezeigt, nur ob ein Eintrag belegt ist.",
     "slots": {
       "claude": "Claude-API-Schlüssel",
-      "openai": "OpenAI-API-Schlüssel",
-      "syncToken": "Cloud-Sync-Token"
+      "openai": "OpenAI-API-Schlüssel"
     },
     "status": {
       "saved": "Gespeichert",
@@ -285,7 +284,6 @@
       "checking": "Wird geprüft…",
       "unknown": "Konnte nicht geprüft werden"
     },
-    "noWorkspace": "Öffne einen Ordner, um dessen Sync-Token zu verwalten.",
     "add": "Hinzufügen",
     "addSlot": "{{slot}} hinzufügen",
     "replace": "Ersetzen",

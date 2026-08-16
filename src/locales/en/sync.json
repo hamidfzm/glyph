@@ -28,7 +28,7 @@
     "hint": "(HTTPS only)",
     "placeholderSaved": "saved — leave blank to keep",
     "placeholderNew": "ghp_…",
-    "note": "Stored in memory only for now. The next release routes it through your OS keychain."
+    "note": "Stored in your OS keychain, scoped to this workspace."
   },
   "commitMessage": {
     "label": "Commit message",

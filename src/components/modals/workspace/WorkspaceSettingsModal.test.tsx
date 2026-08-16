@@ -33,6 +33,8 @@ function mockSyncCommands() {
         return Promise.resolve({ name: null, email: null });
       case "sync_repo_present":
         return Promise.resolve(true);
+      case "sync_has_token":
+        return Promise.resolve(false);
       case "read_file":
         return Promise.reject(new Error("not found"));
       default:

@@ -276,8 +276,7 @@
     "description": "What Glyph has stored in your system keychain. Values are never shown here, only whether a slot is filled.",
     "slots": {
       "claude": "Claude API key",
-      "openai": "OpenAI API key",
-      "syncToken": "Cloud Sync token"
+      "openai": "OpenAI API key"
     },
     "status": {
       "saved": "Saved",
@@ -285,7 +284,6 @@
       "checking": "Checking…",
       "unknown": "Couldn't be checked"
     },
-    "noWorkspace": "Open a folder to manage its sync token.",
     "add": "Add",
     "addSlot": "Add {{slot}}",
     "replace": "Replace",

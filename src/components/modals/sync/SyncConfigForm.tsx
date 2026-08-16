@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { presenceStatusKey } from "@/lib/secretSlots";
 import type { ConflictPolicy } from "@/lib/sync";
 import type { FormState } from "@/lib/syncSettingsForm";
 
@@ -23,8 +24,12 @@ const CONFLICT_POLICIES: { id: ConflictPolicy; labelKey: string; descKey: string
 interface SyncConfigFormProps {
   form: FormState;
   onChange: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
-  /** True once a config is stored, which changes the token placeholder. */
-  configured: boolean;
+  /** Whether a token is in the keychain: `undefined` while the check runs,
+   *  `null` when it failed or no folder is open. Drives the placeholder and
+   *  the Remove button. */
+  tokenStored: boolean | null | undefined;
+  onRemoveToken: () => void;
+  busy: boolean;
   defaultAuthorName?: string | null;
   defaultAuthorEmail?: string | null;
 }
@@ -33,11 +38,17 @@ interface SyncConfigFormProps {
 export function SyncConfigForm({
   form,
   onChange,
-  configured,
+  tokenStored,
+  onRemoveToken,
+  busy,
   defaultAuthorName,
   defaultAuthorEmail,
 }: SyncConfigFormProps) {
   const { t } = useTranslation("sync");
+  // The keychain status and Remove wording are shared with the app-wide Saved
+  // Secrets list, so they come from the settings bundle rather than being
+  // duplicated into every locale's sync bundle.
+  const { t: ts } = useTranslation("settings");
 
   return (
     <>
@@ -120,12 +131,27 @@ export function SyncConfigForm({
         <input
           type="password"
           className="settings-input"
-          placeholder={configured ? t("token.placeholderSaved") : t("token.placeholderNew")}
+          placeholder={tokenStored ? t("token.placeholderSaved") : t("token.placeholderNew")}
           value={form.token}
           onChange={(e) => onChange("token", e.target.value)}
           autoComplete="off"
         />
         <span className="settings-field-hint">{t("token.note")}</span>
+        {/* The token is per-workspace, so its audit row lives here rather than
+            in the app-wide Saved Secrets list. Presence only: the stored value
+            is never read back. */}
+        <div className="settings-secret-actions">
+          <span className="settings-field-hint">{ts(presenceStatusKey(tokenStored))}</span>
+          <button
+            type="button"
+            className="settings-danger-btn"
+            aria-label={ts("secrets.removeSlot", { slot: t("token.label") })}
+            disabled={busy || tokenStored === undefined || tokenStored === false}
+            onClick={onRemoveToken}
+          >
+            {ts("secrets.remove")}
+          </button>
+        </div>
       </label>
 
       <label className="settings-field">

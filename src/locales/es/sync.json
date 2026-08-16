@@ -28,7 +28,7 @@
     "hint": "(solo HTTPS)",
     "placeholderSaved": "guardado: déjalo en blanco para conservarlo",
     "placeholderNew": "ghp_…",
-    "note": "Por ahora se guarda solo en memoria. La próxima versión lo almacenará en el llavero de tu sistema operativo."
+    "note": "Se guarda en el llavero de tu sistema operativo, limitado a este espacio de trabajo."
   },
   "commitMessage": {
     "label": "Mensaje del commit",

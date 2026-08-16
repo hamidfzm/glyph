@@ -128,21 +128,6 @@ describe("SecretRow", () => {
     expect(removeButton()).toBeDisabled();
   });
 
-  it("explains why an unreachable slot cannot be managed", () => {
-    render(
-      <SecretRow
-        {...defaultProps}
-        isSet={null}
-        unavailableHint="Open a folder to manage its sync token."
-      />,
-    );
-
-    expect(screen.getByText("Open a folder to manage its sync token.")).toBeInTheDocument();
-    expect(screen.queryByText("Couldn't be checked")).not.toBeInTheDocument();
-    expect(replaceButton()).toBeDisabled();
-    expect(removeButton()).toBeDisabled();
-  });
-
   it("names the slot each button acts on", () => {
     render(<SecretRow {...defaultProps} label="Cloud Sync token" />);
 
