@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { InstalledPlugin } from "./types";
 
 // The marketplace index is generated from per-plugin registrations in the
@@ -145,7 +146,13 @@ export async function installFromRegistry(entry: RegistryEntry): Promise<Install
   if (!hasValidChecksum(entry)) {
     throw new Error(`registry entry ${entry.id} has no valid sha256; refusing to install`);
   }
-  const res = await fetch(entry.packageUrl);
+  // Not the webview's fetch: GitHub serves release assets with no CORS
+  // headers, so reading one from the renderer fails with "Failed to fetch"
+  // before the response is ever seen. This goes through Rust instead, scoped
+  // to the registry's hosts by the http capability. The registry index and
+  // README stay on the plain fetch, because raw.githubusercontent.com does
+  // send `Access-Control-Allow-Origin`.
+  const res = await tauriFetch(entry.packageUrl);
   if (!res.ok) throw new Error(`download failed: ${res.status}`);
   const buffer = await res.arrayBuffer();
   const actual = await sha256Hex(buffer);
