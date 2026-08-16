@@ -162,9 +162,17 @@ export interface CommandRegistryApi {
 }
 
 export interface UiRegistryApi {
+  /**
+   * Not available to sandboxed plugins: mounting needs a live DOM element and
+   * the sandbox is a worker. Calling it there throws, naming the method. A
+   * plugin that contributes UI must declare `"sandbox": false`, and the same
+   * applies to {@link addSidebarPanel} and {@link addSettingsPanel}.
+   */
   addStatusBarItem(item: StatusBarItemContribution): Disposer;
+  /** Not available to sandboxed plugins; see {@link addStatusBarItem}. */
   addSidebarPanel(panel: SidebarPanelContribution): Disposer;
-  /** One settings panel per plugin; the host keys it by the plugin's id. */
+  /** One settings panel per plugin; the host keys it by the plugin's id. Not
+   *  available to sandboxed plugins; see {@link addStatusBarItem}. */
   addSettingsPanel(panel: MountContribution): Disposer;
   /**
    * Inject a stylesheet after the app styles (theme plugins, custom CSS).

@@ -22,6 +22,17 @@ const exporters = new Map();   // id -> build
 const dictionaries = new Map(); // language -> load
 let settings = {};
 
+// A ctx method the sandbox cannot implement. Named explicitly so the plugin
+// author sees which API is unavailable and why, instead of a TypeError.
+function sandboxUnavailable(name) {
+  return () => {
+    throw new Error(
+      \`ctx.\${name} is not available to sandboxed plugins: it needs DOM access. \` +
+        \`Set "sandbox": false in the plugin manifest to use it.\`,
+    );
+  };
+}
+
 function hostCall(message) {
   return new Promise((resolve, reject) => {
     const callId = ++callSeq;
@@ -73,6 +84,14 @@ function buildContext(init) {
         postMessage({ type: "add-styles", css });
         return () => {};
       },
+      // The other three UiRegistryApi methods hand the plugin a live DOM
+      // element to mount into, which a worker does not have and cannot be
+      // given. So they are refused by name rather than left undefined, where
+      // they surfaced as a bare "is not a function" with nothing pointing at
+      // the sandbox. A plugin that needs them declares "sandbox": false.
+      addStatusBarItem: sandboxUnavailable("ui.addStatusBarItem"),
+      addSidebarPanel: sandboxUnavailable("ui.addSidebarPanel"),
+      addSettingsPanel: sandboxUnavailable("ui.addSettingsPanel"),
     },
     exporters: {
       register(exporter) {

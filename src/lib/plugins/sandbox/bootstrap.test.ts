@@ -336,4 +336,31 @@ describe("worker bootstrap", () => {
     const error = w.posted.find((m) => m.type === "error") as { message: string };
     expect(error.message).toContain("bad start");
   });
+
+  // The regression: these three were simply absent from the worker's ctx.ui,
+  // so a sandboxed plugin calling one died with "ctx.ui.addStatusBarItem is
+  // not a function" and nothing said the sandbox was the reason.
+  it.each(["addStatusBarItem", "addSidebarPanel", "addSettingsPanel"])(
+    "refuses ui.%s by name instead of being undefined",
+    async (method) => {
+      const w = bootWorker();
+      await w.send(init(`export default { activate(ctx) { ctx.ui.${method}({ id: "x" }); } }`));
+
+      await vi.waitFor(() => expect(w.typesPosted()).toContain("error"));
+      const error = w.posted.find((m) => m.type === "error") as { message: string };
+      expect(error.message).toContain(`ctx.ui.${method}`);
+      expect(error.message).toContain("sandboxed plugins");
+      expect(error.message).toContain('"sandbox": false');
+      expect(error.message).not.toContain("is not a function");
+    },
+  );
+
+  it("still offers the ui methods a worker can implement", async () => {
+    const w = bootWorker();
+    await w.send(init(`export default { activate(ctx) { ctx.ui.addStyles("body{}"); } }`));
+
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
+    expect(w.typesPosted()).toContain("add-styles");
+    expect(w.typesPosted()).not.toContain("error");
+  });
 });
