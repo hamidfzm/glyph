@@ -215,6 +215,9 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // Marketplace package downloads only; the URL scope lives in
+        // capabilities/default.json.
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::new().build());
 
     // CLI args, window-state restoration, the native menu bar, sync, and

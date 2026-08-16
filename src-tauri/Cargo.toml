@@ -36,6 +36,10 @@ keyring = { version = "3", features = [
     "vendored",
 ] }
 tauri-plugin-clipboard-manager = "2"
+# Marketplace downloads. GitHub release assets send no CORS headers, so the
+# webview's own fetch cannot read them; this routes the request through Rust,
+# and capabilities/default.json scopes it to the plugin registry's hosts.
+tauri-plugin-http = "2"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

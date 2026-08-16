@@ -41,6 +41,14 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   readTextFile: vi.fn(() => Promise.resolve("")),
 }));
 
+// The Rust-side fetch, used for marketplace package downloads because GitHub
+// release assets carry no CORS headers. It delegates to whatever `fetch` the
+// test stubbed, so a suite that already routes by URL covers both legs; a test
+// that cares which transport was used stubs this module directly.
+vi.mock("@tauri-apps/plugin-http", () => ({
+  fetch: vi.fn((...args: Parameters<typeof fetch>) => globalThis.fetch(...args)),
+}));
+
 // open/save moved to the backend pickers in src/lib/pickers.ts;
 // `open` remains the mobile document picker (see pickFiles).
 vi.mock("@tauri-apps/plugin-dialog", () => ({

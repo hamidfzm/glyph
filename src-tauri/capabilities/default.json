@@ -18,6 +18,15 @@
     "clipboard-manager:allow-read-text",
     "store:default",
     "opener:default",
-    "opener:allow-reveal-item-in-dir"
+    "opener:allow-reveal-item-in-dir",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://raw.githubusercontent.com/glyph-md/*" },
+        { "url": "https://github.com/glyph-md/*" },
+        { "url": "https://release-assets.githubusercontent.com/*" },
+        { "url": "https://objects.githubusercontent.com/*" }
+      ]
+    }
   ]
 }

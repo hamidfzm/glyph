@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectConsole } from "@/test/consoleGuard";
 import { PLUGIN_API_VERSION } from "./apiVersion";
@@ -29,12 +30,16 @@ function entry(over: Partial<RegistryEntry> = {}): RegistryEntry {
   };
 }
 
-/** fetch stub resolving to the given package bytes. */
+/** Package download stub resolving to the given bytes. Packages come down
+ *  through the Rust-side fetch (GitHub release assets send no CORS headers),
+ *  so this stubs that module rather than the global. */
 function fetchPackage(bytes: Uint8Array = PACKAGE_BYTES) {
-  return vi.fn().mockResolvedValue({
+  const stub = vi.fn().mockResolvedValue({
     ok: true,
     arrayBuffer: () => Promise.resolve(bytes.buffer.slice(0)),
   });
+  vi.mocked(tauriFetch).mockImplementation(stub);
+  return stub;
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -98,7 +103,7 @@ describe("findUpdates", () => {
 
 describe("installFromRegistry", () => {
   it("downloads the package, verifies it, and hands the bytes to Rust", async () => {
-    vi.stubGlobal("fetch", fetchPackage());
+    fetchPackage();
     vi.mocked(invoke).mockResolvedValue({ id: "com.x.demo" });
 
     // Uppercase digest proves the comparison is case-insensitive.
@@ -110,7 +115,7 @@ describe("installFromRegistry", () => {
   });
 
   it("uninstalls and rejects a package whose manifest id differs from the entry", async () => {
-    vi.stubGlobal("fetch", fetchPackage());
+    fetchPackage();
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockImplementation((cmd) =>
       Promise.resolve(cmd === "install_plugin_package" ? { id: "com.x.other" } : undefined),
@@ -121,8 +126,7 @@ describe("installFromRegistry", () => {
   });
 
   it("refuses to download at all without a valid sha256", async () => {
-    const fetchSpy = vi.fn();
-    vi.stubGlobal("fetch", fetchSpy);
+    const fetchSpy = fetchPackage();
     vi.mocked(invoke).mockReset();
 
     await expect(installFromRegistry(entry({ sha256: "" }))).rejects.toThrow(/no valid sha256/);
@@ -130,13 +134,29 @@ describe("installFromRegistry", () => {
     expect(vi.mocked(invoke)).not.toHaveBeenCalled();
   });
 
+  // The regression: GitHub serves release assets without CORS headers, so the
+  // webview's own fetch rejects with "Failed to fetch" and every marketplace
+  // install died before the bytes were seen. The download has to go through
+  // Rust, and this fails if it ever moves back to the global fetch.
+  it("downloads the package through Rust, not the webview fetch", async () => {
+    const webviewFetch = vi.fn();
+    vi.stubGlobal("fetch", webviewFetch);
+    const rustFetch = fetchPackage();
+    vi.mocked(invoke).mockResolvedValue({ id: "com.x.demo" } as never);
+
+    await installFromRegistry(entry());
+
+    expect(rustFetch).toHaveBeenCalledWith("https://example.test/plugin.zip");
+    expect(webviewFetch).not.toHaveBeenCalled();
+  });
+
   it("throws when the download fails", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    vi.mocked(tauriFetch).mockResolvedValue({ ok: false, status: 500 } as Response);
     await expect(installFromRegistry(entry())).rejects.toThrow(/download failed/);
   });
 
   it("refuses to install when the package does not match the declared sha256", async () => {
-    vi.stubGlobal("fetch", fetchPackage(new Uint8Array([9, 9, 9])));
+    fetchPackage(new Uint8Array([9, 9, 9]));
     vi.mocked(invoke).mockReset();
 
     await expect(installFromRegistry(entry())).rejects.toThrow(/checksum mismatch/);
