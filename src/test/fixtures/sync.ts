@@ -44,8 +44,14 @@ export function syncResult(overrides: Partial<SyncResult> = {}): SyncResult {
 // Route each Tauri command to a configurable handler, so individual tests
 // can opt in to specific responses without ordering the .mockResolvedValueOnce calls.
 export function routeInvoke(handlers: Record<string, (args: unknown) => unknown>) {
+  // The Sync tab probes token presence on every mount, so it is defaulted here
+  // rather than restubbed in the many tests that don't care about the keychain.
+  const routes: Record<string, (args: unknown) => unknown> = {
+    sync_has_token: () => false,
+    ...handlers,
+  };
   vi.mocked(invoke).mockImplementation((cmd: string, args?: unknown) => {
-    const handler = handlers[cmd];
+    const handler = routes[cmd];
     if (!handler) return Promise.reject(new Error(`no handler for ${cmd}`));
     try {
       return Promise.resolve(handler(args) as never);

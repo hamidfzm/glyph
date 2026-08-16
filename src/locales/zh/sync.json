@@ -28,7 +28,7 @@
     "hint": "(仅限 HTTPS)",
     "placeholderSaved": "已保存，留空则保持不变",
     "placeholderNew": "ghp_…",
-    "note": "目前仅存储在内存中。下一版本将改为存入系统的密钥链。"
+    "note": "保存在你的操作系统密钥链中，仅限于此工作区。"
   },
   "commitMessage": {
     "label": "提交信息",

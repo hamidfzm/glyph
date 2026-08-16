@@ -13,8 +13,7 @@ let save: ReturnType<typeof vi.fn<UseSecretSlotsReturn["save"]>>;
 function mockSlots(overrides: Partial<UseSecretSlotsReturn> = {}) {
   useSecretSlotsMock.mockReturnValue({
     slots: SECRET_SLOTS,
-    presence: { "ai-claude": true, "ai-openai": false, "sync-token": false },
-    workspacePath: "/ws",
+    presence: { "ai-claude": true, "ai-openai": false },
     busySlotId: null,
     errorKey: null,
     remove,
@@ -35,9 +34,11 @@ describe("SecretsSection", () => {
 
     expect(screen.getByText("Claude API key")).toBeInTheDocument();
     expect(screen.getByText("OpenAI API key")).toBeInTheDocument();
-    expect(screen.getByText("Cloud Sync token")).toBeInTheDocument();
+    // Per-workspace secrets are not listed here: the Cloud Sync token is
+    // managed in that workspace's own Sync settings tab.
+    expect(screen.queryByText("Cloud Sync token")).not.toBeInTheDocument();
     expect(screen.getByText("Saved")).toBeInTheDocument();
-    expect(screen.getAllByText("Not set")).toHaveLength(2);
+    expect(screen.getByText("Not set")).toBeInTheDocument();
     // The list is presence only: no field can hold a stored value.
     expect(container.querySelector("input")).toBeNull();
   });
@@ -68,13 +69,6 @@ describe("SecretsSection", () => {
     expect(screen.getAllByText("Checking…")).toHaveLength(SECRET_SLOTS.length);
     expect(screen.queryByText("Couldn't be checked")).not.toBeInTheDocument();
     expect(screen.queryByText("Not set")).not.toBeInTheDocument();
-  });
-
-  it("explains that the sync token needs an open folder", () => {
-    mockSlots({ workspacePath: undefined, presence: { "sync-token": null } });
-    render(<SecretsSection />);
-
-    expect(screen.getByText("Open a folder to manage its sync token.")).toBeInTheDocument();
   });
 
   it("locks every row while one slot is being written", () => {

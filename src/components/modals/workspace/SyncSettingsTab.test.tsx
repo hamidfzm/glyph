@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceSyncConfig } from "@/lib/sync";
+import { expectConsole } from "@/test/consoleGuard";
 import { routeInvoke } from "@/test/fixtures/sync";
 import { renderWithSync } from "@/test/renderWithSync";
 import { SyncSettingsTab } from "./SyncSettingsTab";
@@ -92,5 +93,78 @@ describe("SyncSettingsTab rendering", () => {
         }),
       ),
     );
+  });
+});
+
+// The sync token is keyed by workspace path, so its audit row lives here
+// rather than in the app-wide Saved Secrets list in global Settings.
+describe("SyncSettingsTab token management", () => {
+  const removeButton = () => screen.getByRole("button", { name: "Remove Personal access token" });
+
+  it("reports a stored token and offers to remove it", async () => {
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_has_token: () => true,
+    });
+    renderWithSync(<SyncSettingsTab />);
+
+    await waitFor(() => expect(screen.getByText("Saved")).toBeInTheDocument());
+    expect(screen.getByPlaceholderText("saved — leave blank to keep")).toBeInTheDocument();
+    expect(removeButton()).toBeEnabled();
+  });
+
+  it("clears the token and re-reads what the keychain now holds", async () => {
+    let stored = true;
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_has_token: () => stored,
+      sync_clear_token: () => {
+        stored = false;
+        return null;
+      },
+    });
+    renderWithSync(<SyncSettingsTab />);
+    await waitFor(() => expect(screen.getByText("Saved")).toBeInTheDocument());
+
+    fireEvent.click(removeButton());
+
+    await waitFor(() => expect(screen.getByText("Not set")).toBeInTheDocument());
+    expect(invoke).toHaveBeenCalledWith("sync_clear_token", { workspacePath: "/w" });
+  });
+
+  it("keeps an unreadable keychain out of the 'not set' state", async () => {
+    // A locked keyring must not report a stored token as gone.
+    expectConsole(/Failed to check the sync token/);
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_has_token: () => {
+        throw new Error("keychain locked");
+      },
+    });
+    renderWithSync(<SyncSettingsTab />);
+
+    await waitFor(() => expect(screen.getByText("Couldn't be checked")).toBeInTheDocument());
+    expect(screen.queryByText("Not set")).not.toBeInTheDocument();
+    // Unknown presence still allows a removal attempt: it may well be stored.
+    expect(removeButton()).toBeEnabled();
+  });
+
+  it("cannot remove a token the workspace does not have", async () => {
+    routeInvoke({
+      sync_get_config: () => null,
+      sync_default_author: () => ({ name: null, email: null }),
+      sync_repo_present: () => true,
+      sync_has_token: () => false,
+    });
+    renderWithSync(<SyncSettingsTab />);
+
+    await waitFor(() => expect(screen.getByText("Not set")).toBeInTheDocument());
+    expect(removeButton()).toBeDisabled();
   });
 });

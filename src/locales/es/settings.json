@@ -276,8 +276,7 @@
     "description": "Lo que Glyph ha guardado en el llavero del sistema. Aquí nunca se muestran los valores, solo si una entrada está ocupada.",
     "slots": {
       "claude": "Clave de API de Claude",
-      "openai": "Clave de API de OpenAI",
-      "syncToken": "Token de Cloud Sync"
+      "openai": "Clave de API de OpenAI"
     },
     "status": {
       "saved": "Guardado",
@@ -285,7 +284,6 @@
       "checking": "Comprobando…",
       "unknown": "No se pudo comprobar"
     },
-    "noWorkspace": "Abre una carpeta para gestionar su token de sincronización.",
     "add": "Añadir",
     "addSlot": "Añadir {{slot}}",
     "replace": "Reemplazar",

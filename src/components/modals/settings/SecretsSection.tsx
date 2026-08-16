@@ -9,7 +9,7 @@ import { SecretRow } from "./SecretRow";
  */
 export function SecretsSection() {
   const { t } = useTranslation("settings");
-  const { slots, presence, workspacePath, busySlotId, errorKey, remove, save } = useSecretSlots();
+  const { slots, presence, busySlotId, errorKey, remove, save } = useSecretSlots();
 
   return (
     <div className="settings-section">
@@ -21,9 +21,6 @@ export function SecretsSection() {
           key={slot.id}
           label={t(slotLabelKey(slot))}
           isSet={presence[slot.id]}
-          unavailableHint={
-            slot.kind === "sync" && !workspacePath ? t("secrets.noWorkspace") : undefined
-          }
           busy={busySlotId !== null}
           onRemove={() => remove(slot)}
           onSave={(value) => save(slot, value)}

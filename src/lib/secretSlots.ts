@@ -1,25 +1,27 @@
 import { KEYED_PROVIDERS, type KeyedProvider } from "@/lib/aiKeys";
 
 /**
- * The secret slots Glyph manages, for the Settings audit view. A slot names a
- * place a secret can live; whether one is stored is asked of the backend per
- * slot, and the value itself never reaches this layer.
+ * The secret slots the global Settings audit view manages. A slot names a place
+ * a secret can live; whether one is stored is asked of the backend per slot, and
+ * the value itself never reaches this layer.
+ *
+ * Only app-wide secrets belong here. The Cloud Sync token is keyed by workspace
+ * path, so it is managed in that workspace's own Sync settings tab instead.
  */
-export type SecretSlot =
-  | { id: `ai-${KeyedProvider}`; kind: "ai"; provider: KeyedProvider }
-  | { id: "sync-token"; kind: "sync" };
-
-export const SYNC_TOKEN_SLOT: SecretSlot = { id: "sync-token", kind: "sync" };
+export interface SecretSlot {
+  id: `ai-${KeyedProvider}`;
+  provider: KeyedProvider;
+}
 
 /** Every managed slot, in display order. */
-export const SECRET_SLOTS: readonly SecretSlot[] = [
-  ...KEYED_PROVIDERS.map((provider) => ({ id: `ai-${provider}`, kind: "ai", provider }) as const),
-  SYNC_TOKEN_SLOT,
-];
+export const SECRET_SLOTS: readonly SecretSlot[] = KEYED_PROVIDERS.map((provider) => ({
+  id: `ai-${provider}`,
+  provider,
+}));
 
 /** Key into the `settings` bundle's `secrets.slots` block. */
 export function slotLabelKey(slot: SecretSlot): string {
-  return slot.kind === "ai" ? `secrets.slots.${slot.provider}` : "secrets.slots.syncToken";
+  return `secrets.slots.${slot.provider}`;
 }
 
 /** Key into `secrets.status`. Neither "still checking" nor "the check failed"
