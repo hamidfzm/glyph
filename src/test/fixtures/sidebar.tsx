@@ -72,6 +72,10 @@ export interface RenderOpts {
   backlinksHeight?: number | null;
   setTagsHeight?: (height: number | null) => void;
   tagsHeight?: number | null;
+  backlinksCollapsed?: boolean;
+  tagsCollapsed?: boolean;
+  setBacklinksCollapsed?: (collapsed: boolean) => void;
+  setTagsCollapsed?: (collapsed: boolean) => void;
   tabs?: Partial<TabsContextValue>;
 }
 
@@ -103,6 +107,10 @@ function buildSidebarContext(opts: RenderOpts): SidebarLayoutContextValue {
     setOutlineSidebarWidth: opts.setOutlineSidebarWidth ?? vi.fn(),
     setBacklinksHeight: opts.setBacklinksHeight ?? vi.fn(),
     setTagsHeight: opts.setTagsHeight ?? vi.fn(),
+    backlinksCollapsed: opts.backlinksCollapsed ?? false,
+    tagsCollapsed: opts.tagsCollapsed ?? false,
+    setBacklinksCollapsed: opts.setBacklinksCollapsed ?? vi.fn(),
+    setTagsCollapsed: opts.setTagsCollapsed ?? vi.fn(),
   });
 }
 

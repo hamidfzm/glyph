@@ -32,6 +32,10 @@ export interface LayoutSettings {
   backlinksHeight: number | null;
   // Same, for the tag cloud block.
   tagsHeight: number | null;
+  // Collapsed state of the two blocks, kept workspace-wide so switching files
+  // doesn't reshuffle the panel.
+  backlinksCollapsed: boolean;
+  tagsCollapsed: boolean;
   sidebarLayout: SidebarLayout;
   // Mirrors the sidebar layout. Default Files-left / Outline-right; when true
   // it becomes Files-right / Outline-left. Affects all layout modes.
@@ -240,6 +244,8 @@ export const DEFAULT_SETTINGS: Settings = {
     aiPanelWidth: AI_PANEL_WIDTH_DEFAULT,
     backlinksHeight: null,
     tagsHeight: null,
+    backlinksCollapsed: false,
+    tagsCollapsed: false,
     sidebarLayout: "beside",
     swapSidebarSides: false,
   },

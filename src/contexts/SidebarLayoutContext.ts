@@ -16,6 +16,8 @@ export interface SidebarLayoutContextValue extends SidebarLayoutApi {
   outlineSidebarWidth: number;
   backlinksHeight: number | null;
   tagsHeight: number | null;
+  backlinksCollapsed: boolean;
+  tagsCollapsed: boolean;
 }
 
 export const SidebarLayoutContext = createContext<SidebarLayoutContextValue | null>(null);

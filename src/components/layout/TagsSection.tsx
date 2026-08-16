@@ -10,26 +10,32 @@ interface TagsSectionProps {
   tags: TagCount[];
   /** The tag currently filtering the file list, if any. */
   selected: string | null;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   onSelect: (tag: string | null) => void;
 }
 
 // Workspace tags, alphabetical until the user toggles frequency. Selecting one
 // filters the Files panel to the documents carrying it (or any tag nested under
-// it); selecting it again clears the filter.
-export function TagsSection({ tags, selected, onSelect }: TagsSectionProps) {
+// it); selecting it again clears the filter. Stays rendered while empty so the
+// panel below the tree keeps a stable height.
+export function TagsSection({
+  tags,
+  selected,
+  collapsed,
+  onToggleCollapsed,
+  onSelect,
+}: TagsSectionProps) {
   const { t } = useTranslation("common");
-  const [collapsed, setCollapsed] = useState(false);
   const [sort, setSort] = useState<TagSort>("name");
   const tree = useMemo(() => buildTagTree(tags, sort), [tags, sort]);
-
-  if (tags.length === 0) return null;
 
   return (
     <section>
       <div className="flex items-center gap-1 mb-2">
         <button
           type="button"
-          onClick={() => setCollapsed((c) => !c)}
+          onClick={onToggleCollapsed}
           className="flex items-center gap-1 flex-1 min-w-0 text-start text-xs font-semibold text-[var(--color-text-tertiary)] uppercase tracking-wider hover:text-[var(--color-text-secondary)] transition-colors"
           aria-expanded={!collapsed}
         >
@@ -41,7 +47,7 @@ export function TagsSection({ tags, selected, onSelect }: TagsSectionProps) {
             {tags.length}
           </span>
         </button>
-        {!collapsed && (
+        {!collapsed && tags.length > 0 && (
           <ToolbarButton
             title={t("tags.sortByCount")}
             pressed={sort === "count"}
@@ -51,7 +57,12 @@ export function TagsSection({ tags, selected, onSelect }: TagsSectionProps) {
           </ToolbarButton>
         )}
       </div>
-      {!collapsed && <TagTree nodes={tree} selected={selected} onSelect={onSelect} />}
+      {!collapsed && tags.length === 0 && (
+        <p className="px-2 text-xs text-[var(--color-text-tertiary)]">{t("tags.empty")}</p>
+      )}
+      {!collapsed && tags.length > 0 && (
+        <TagTree nodes={tree} selected={selected} onSelect={onSelect} />
+      )}
     </section>
   );
 }

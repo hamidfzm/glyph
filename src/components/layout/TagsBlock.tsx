@@ -17,12 +17,10 @@ interface TagsBlockProps {
 }
 
 /** The workspace tag cloud in the Files panel, resizable against the tree
- *  above. Renders nothing without tags. */
+ *  above. */
 export function TagsBlock({ tags, selected, onSelect }: TagsBlockProps) {
   const { t } = useTranslation("common");
-  const { tagsHeight, setTagsHeight } = useSidebarLayoutContext();
-
-  if (tags.length === 0) return null;
+  const { tagsHeight, setTagsHeight, tagsCollapsed, setTagsCollapsed } = useSidebarLayoutContext();
 
   return (
     <ResizableBlock
@@ -31,8 +29,15 @@ export function TagsBlock({ tags, selected, onSelect }: TagsBlockProps) {
       height={tagsHeight}
       onHeightCommit={setTagsHeight}
       naturalMax={TAGS_HEIGHT_NATURAL_MAX}
+      collapsed={tagsCollapsed}
     >
-      <TagsSection tags={tags} selected={selected} onSelect={onSelect} />
+      <TagsSection
+        tags={tags}
+        selected={selected}
+        collapsed={tagsCollapsed}
+        onToggleCollapsed={() => setTagsCollapsed(!tagsCollapsed)}
+        onSelect={onSelect}
+      />
     </ResizableBlock>
   );
 }

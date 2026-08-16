@@ -13,7 +13,13 @@ const nested: TagCount[] = [
   { tag: "project/glyph", count: 1 },
 ];
 
-const defaultProps = { tags, selected: null, onSelect: vi.fn() };
+const defaultProps = {
+  tags,
+  selected: null,
+  collapsed: false,
+  onToggleCollapsed: vi.fn(),
+  onSelect: vi.fn(),
+};
 
 /** Chip text in render order, which is what the sort toggle changes. */
 function chipLabels() {
@@ -21,9 +27,11 @@ function chipLabels() {
 }
 
 describe("TagsSection", () => {
-  it("renders nothing without tags", () => {
-    const { container } = render(<TagsSection {...defaultProps} tags={[]} />);
-    expect(container.firstChild).toBeNull();
+  it("keeps the heading and shows an empty message without tags", () => {
+    render(<TagsSection {...defaultProps} tags={[]} />);
+    expect(screen.getByText("Tags")).toBeTruthy();
+    expect(screen.getByText("No tags")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Sort tags by count" })).toBeNull();
   });
 
   it("shows one chip per tag with its count", () => {
@@ -49,9 +57,16 @@ describe("TagsSection", () => {
     expect(onSelect).toHaveBeenCalledWith(null);
   });
 
-  it("collapses on header click, hiding the chips and the sort toggle", () => {
-    render(<TagsSection {...defaultProps} />);
+  it("reports a header click instead of collapsing itself", () => {
+    const onToggleCollapsed = vi.fn();
+    render(<TagsSection {...defaultProps} onToggleCollapsed={onToggleCollapsed} />);
     fireEvent.click(screen.getByRole("button", { name: /^Tags/ }));
+    expect(onToggleCollapsed).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Filter by #work" })).toBeTruthy();
+  });
+
+  it("hides the chips and the sort toggle when collapsed", () => {
+    render(<TagsSection {...defaultProps} collapsed={true} />);
     expect(screen.queryByRole("button", { name: "Filter by #work" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Sort tags by count" })).toBeNull();
   });

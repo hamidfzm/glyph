@@ -124,9 +124,18 @@ describe("Sidebar files panel", () => {
       expect(screen.getByTitle("Filter by #personal")).toBeInTheDocument();
     });
 
-    it("has no tags block when the workspace carries no metadata", () => {
+    // The block stays put so the panel doesn't reflow as tags come and go.
+    it("keeps the tags block when the workspace carries no metadata", () => {
       renderSidebar({ workspace: makeWorkspace() });
-      expect(screen.queryByText("Tags")).not.toBeInTheDocument();
+      expect(screen.getByText("Tags")).toBeInTheDocument();
+      expect(screen.getByText("No tags")).toBeInTheDocument();
+    });
+
+    it("persists the collapsed state instead of holding it locally", () => {
+      const setTagsCollapsed = vi.fn();
+      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata }, setTagsCollapsed });
+      fireEvent.click(screen.getByRole("button", { name: /^Tags/ }));
+      expect(setTagsCollapsed).toHaveBeenCalledExactlyOnceWith(true);
     });
 
     // The filtered list replaces the tree: matches can live in folders the

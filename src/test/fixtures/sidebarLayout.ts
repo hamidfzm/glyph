@@ -21,10 +21,14 @@ export function sidebarLayoutValue(
     outlineSidebarWidth: 260,
     backlinksHeight: null,
     tagsHeight: null,
+    backlinksCollapsed: false,
+    tagsCollapsed: false,
     setFilesSidebarWidth: vi.fn(),
     setOutlineSidebarWidth: vi.fn(),
     setBacklinksHeight: vi.fn(),
     setTagsHeight: vi.fn(),
+    setBacklinksCollapsed: vi.fn(),
+    setTagsCollapsed: vi.fn(),
     ...overrides,
   };
 }

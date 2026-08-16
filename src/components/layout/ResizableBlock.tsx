@@ -14,6 +14,8 @@ interface ResizableBlockProps {
   onHeightCommit: (height: number | null) => void;
   /** Cap for the natural height, applied only while no height is persisted. */
   naturalMax?: number;
+  /** A collapsed block is only its heading, so it isn't resizable. */
+  collapsed?: boolean;
   children: ReactNode;
 }
 
@@ -25,6 +27,7 @@ export function ResizableBlock({
   height,
   onHeightCommit,
   naturalMax,
+  collapsed = false,
   children,
 }: ResizableBlockProps) {
   const blockRef = useRef<HTMLDivElement>(null);
@@ -51,19 +54,27 @@ export function ResizableBlock({
 
   return (
     <>
-      <ResizeHandle
-        axis="y"
-        label={label}
-        value={size ?? measure()}
-        min={min}
-        max={maxHeight()}
-        className="mt-3 -mx-3 h-1.5 shrink-0"
-        {...resize.handleProps}
-      />
+      {collapsed ? (
+        <div className="mt-3 h-1.5 shrink-0" />
+      ) : (
+        <ResizeHandle
+          axis="y"
+          label={label}
+          value={size ?? measure()}
+          min={min}
+          max={maxHeight()}
+          className="mt-3 -mx-3 h-1.5 shrink-0"
+          {...resize.handleProps}
+        />
+      )}
       <div
         ref={blockRef}
         className="pt-2 border-t border-[var(--color-border)] shrink-0 overflow-y-auto"
-        style={{ height: size ?? undefined, maxHeight: size === null ? naturalMax : undefined }}
+        style={
+          collapsed
+            ? undefined
+            : { height: size ?? undefined, maxHeight: size === null ? naturalMax : undefined }
+        }
       >
         {children}
       </div>
