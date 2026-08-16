@@ -4,7 +4,7 @@
 // SVG bakes in the app theme's colors). `rasterizeSvgsInHtml` is the fallback
 // for SVGs pdfmake's renderer rejects.
 
-import { decodeSvgDataUrl, ensureSvgXmlns } from "@/lib/svgDataUrl";
+import { decodeSvgDataUrl, toXmlSvg } from "@/lib/svgDataUrl";
 
 let mermaidId = 0;
 
@@ -83,7 +83,7 @@ export async function rasterizeSvgsInHtml(
   for (const el of Array.from(doc.body.querySelectorAll("svg"))) {
     try {
       const img = doc.createElement("img");
-      img.setAttribute("src", await toPng(ensureSvgXmlns(el.outerHTML)));
+      img.setAttribute("src", await toPng(toXmlSvg(el.outerHTML)));
       el.replaceWith(img);
     } catch {
       el.remove();
@@ -93,7 +93,7 @@ export async function rasterizeSvgsInHtml(
     const markup = decodeSvgDataUrl(img.getAttribute("src") ?? "");
     if (markup === null) continue;
     try {
-      img.setAttribute("src", await toPng(ensureSvgXmlns(markup)));
+      img.setAttribute("src", await toPng(toXmlSvg(markup)));
     } catch {
       img.remove();
     }

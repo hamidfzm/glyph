@@ -1,11 +1,14 @@
-const SVG_NS = "http://www.w3.org/2000/svg";
-
-// A standalone `<img>` parses SVG as XML, so the root needs an `xmlns`
-// declaration or it renders blank. Inline SVG (innerHTML) doesn't need it, and
-// renderers/sanitizers routinely drop it — D2 and Mermaid diagrams come back
-// without it — so add it back when absent.
-export function ensureSvgXmlns(svg: string): string {
-  return /<svg[^>]*\sxmlns\s*=/.test(svg) ? svg : svg.replace(/<svg\b/, `<svg xmlns="${SVG_NS}"`);
+// Serialize SVG markup as well-formed XML. Every consumer here parses it
+// strictly (an `<img>` data URL, a blob-URL image, pdfmake's SVG renderer), so
+// markup the HTML parser tolerates and XML rejects makes the whole image fail,
+// not just the offending node. Mermaid flowcharts are the case that bites: they
+// render labels as HTML inside `<foreignObject>`, and a `<br/>` in the source
+// comes out as a bare `<br>`, so the image renders blank. Parsing as HTML and
+// reserializing as XML closes those tags, and the serializer writes the `xmlns`
+// the root needs (renderers and sanitizers routinely drop it).
+export function toXmlSvg(svg: string): string {
+  const root = new DOMParser().parseFromString(svg, "text/html").body.querySelector("svg");
+  return root ? new XMLSerializer().serializeToString(root) : svg;
 }
 
 // Turn SVG markup into a `data:` URL usable as an `<img src>`. We render SVGs
@@ -14,7 +17,7 @@ export function ensureSvgXmlns(svg: string): string {
 // markup is already in hand. URL-encoding (not base64) keeps it readable and
 // handles arbitrary unicode in the SVG.
 export function svgToDataUrl(svg: string): string {
-  return `data:image/svg+xml,${encodeURIComponent(ensureSvgXmlns(svg))}`;
+  return `data:image/svg+xml,${encodeURIComponent(toXmlSvg(svg))}`;
 }
 
 // Decode a `data:image/svg+xml` URL (base64 or URI-encoded) back to its SVG
