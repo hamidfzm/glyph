@@ -140,15 +140,20 @@ jobs:
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           brew tap glyph-md/tap
 
-          # The tap ships both a formula and a cask named glyph; without
-          # --formula brew warns about the ambiguity on every invocation.
-          AVAILABLE=$(brew info --formula --json=v2 glyph-md/tap/glyph | jq -r '.formulae[0].versions.stable')
+          # `brew info --json=v2` indexes every cask in the API before it
+          # answers, and the runner's Linux Homebrew is older than that
+          # payload, so each cask using a stanza it doesn't know yet logs a
+          # warning (dozens per run). The tapped formula carries the same
+          # version stanza, and reading it skips the cask index entirely.
+          AVAILABLE=$(awk -F'"' '/^  version /{print $2; exit}' "$(brew --repo glyph-md/tap)/Formula/glyph.rb")
           if [ "$AVAILABLE" != "$VERSION" ]; then
             echo "status=pending" >> "$GITHUB_OUTPUT"
             echo "Formula serves $AVAILABLE, not $VERSION yet." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
+          # The tap ships both a formula and a cask named glyph, so --formula
+          # is what keeps brew from warning about the ambiguous name.
           brew install --formula glyph-md/tap/glyph
           sudo apt-get update && sudo apt-get install -y xvfb libwebkit2gtk-4.1-0 libgtk-3-0
           [ "$("$(brew --prefix)/bin/glyph" --version)" = "glyph $VERSION" ]
