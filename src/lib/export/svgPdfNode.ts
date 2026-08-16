@@ -3,7 +3,7 @@
 // HTML structure.
 
 import type { Content } from "pdfmake/interfaces";
-import { ensureSvgXmlns } from "@/lib/svgDataUrl";
+import { toXmlSvg } from "@/lib/svgDataUrl";
 
 // Page content box for an A4 page with default pdfmake margins (~40pt each).
 export const CONTENT_WIDTH = 515;
@@ -64,11 +64,11 @@ function intrinsicSize(el: Element): Size | null {
 // every descendant rule Mermaid and D2 emit (`.node rect`, `.edgePath .path`),
 // painting the shapes with default fills. An element parsed into a standalone
 // document (an SVG image decoded from a data: URL) is never laid out, so it has
-// no computed style to read and goes as markup; `ensureSvgXmlns` restores the
-// namespace the sanitizer strips.
+// no computed style to read and goes as markup; `toXmlSvg` restores the
+// namespace the sanitizer strips and hands the renderer well-formed XML.
 export function svgNode(el: Element): Content {
   const size = intrinsicSize(el);
   const scale = size ? Math.min(1, CONTENT_WIDTH / size.width, CONTENT_HEIGHT / size.height) : 1;
-  const svg = document.contains(el) ? (el as SVGElement) : ensureSvgXmlns(el.outerHTML);
+  const svg = document.contains(el) ? (el as SVGElement) : toXmlSvg(el.outerHTML);
   return { svg, width: (size?.width ?? CONTENT_WIDTH) * scale, margin: [0, 0, 0, 8] };
 }
