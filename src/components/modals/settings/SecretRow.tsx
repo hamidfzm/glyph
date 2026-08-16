@@ -6,8 +6,6 @@ interface SecretRowProps {
   label: string;
   /** `undefined` while the check runs, `null` when it failed. */
   isSet: boolean | null | undefined;
-  /** Why the slot can't be managed, when it can't; also disables the row. */
-  unavailableHint?: string;
   busy: boolean;
   onRemove: () => void;
   onSave: (value: string) => void;
@@ -18,18 +16,11 @@ interface SecretRowProps {
  * replace or remove it. The stored value is never read back into this row, so
  * the entry field always starts empty.
  */
-export function SecretRow({
-  label,
-  isSet,
-  unavailableHint,
-  busy,
-  onRemove,
-  onSave,
-}: SecretRowProps) {
+export function SecretRow({ label, isSet, busy, onRemove, onSave }: SecretRowProps) {
   const { t } = useTranslation("settings");
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
-  const disabled = busy || isSet === undefined || unavailableHint !== undefined;
+  const disabled = busy || isSet === undefined;
 
   // Closing always drops what was typed: an unsaved secret must not sit in
   // component state waiting to reappear when the field is reopened.
@@ -48,9 +39,7 @@ export function SecretRow({
       <div className="settings-row">
         <div>
           <span className="settings-label">{label}</span>
-          <div className="settings-description">
-            {unavailableHint ?? t(presenceStatusKey(isSet))}
-          </div>
+          <div className="settings-description">{t(presenceStatusKey(isSet))}</div>
         </div>
         <div className="settings-secret-actions">
           <button

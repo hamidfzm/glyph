@@ -11,6 +11,7 @@ import { Trans, useTranslation } from "react-i18next";
 import { SyncConfigForm } from "@/components/modals/sync/SyncConfigForm";
 import { SyncStatusPanel } from "@/components/modals/sync/SyncStatusPanel";
 import { useSyncConfigContext } from "@/contexts/SyncConfigContext";
+import { useSyncTokenPresence } from "@/hooks/useSyncTokenPresence";
 import type { SyncResult } from "@/lib/sync";
 import {
   commitSaveConfig,
@@ -34,12 +35,14 @@ export function SyncSettingsTab() {
     save,
     remove,
     setToken,
+    clearToken,
     initRepo,
     setOrigin,
     commitConfig,
     runSync,
     refreshStatus,
   } = useSyncConfigContext();
+  const { tokenStored, refresh: refreshToken } = useSyncTokenPresence(workspacePath);
 
   const defaultForm = useMemo(() => (config ? formFromConfig(config) : EMPTY_FORM), [config]);
   const [form, setForm] = useState<FormState>(defaultForm);
@@ -55,8 +58,8 @@ export function SyncSettingsTab() {
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const handleSave = () =>
-    commitSaveConfig(resolveSaveConfig(workspacePath, form), form.token, {
+  const handleSave = async () => {
+    await commitSaveConfig(resolveSaveConfig(workspacePath, form), form.token, {
       repoPresent,
       initRepo,
       save,
@@ -65,6 +68,18 @@ export function SyncSettingsTab() {
       commitConfig,
       clearTokenField: () => setForm((prev) => ({ ...prev, token: "" })),
     });
+    refreshToken();
+  };
+
+  const handleRemoveToken = async () => {
+    try {
+      await clearToken();
+    } finally {
+      // Re-read either way: a failed clear leaves the keychain state unknown,
+      // and claiming the token is gone would be a lie.
+      refreshToken();
+    }
+  };
 
   const handleSyncNow = async () => {
     try {
@@ -110,7 +125,9 @@ export function SyncSettingsTab() {
       <SyncConfigForm
         form={form}
         onChange={update}
-        configured={!!config}
+        tokenStored={tokenStored}
+        onRemoveToken={handleRemoveToken}
+        busy={busy}
         defaultAuthorName={defaultAuthor?.name}
         defaultAuthorEmail={defaultAuthor?.email}
       />

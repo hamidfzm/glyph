@@ -4,20 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
 import { useSecretSlots } from "@/hooks/useSecretSlots";
 import { scheduleAiKeyWrite } from "@/lib/aiKeyWrites";
-import { SECRET_SLOTS, type SecretSlot, SYNC_TOKEN_SLOT } from "@/lib/secretSlots";
+import { SECRET_SLOTS, type SecretSlot } from "@/lib/secretSlots";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { expectConsole } from "@/test/consoleGuard";
 import { deferred } from "@/test/deferred";
 
-const { hasSecretMock, setSecretMock, workspaceRootMock } = vi.hoisted(() => ({
+const { hasSecretMock, setSecretMock } = vi.hoisted(() => ({
   hasSecretMock: vi.fn(),
   setSecretMock: vi.fn(),
-  workspaceRootMock: vi.fn(),
-}));
-const { hasSyncTokenMock, setSyncTokenMock, clearSyncTokenMock } = vi.hoisted(() => ({
-  hasSyncTokenMock: vi.fn(),
-  setSyncTokenMock: vi.fn(),
-  clearSyncTokenMock: vi.fn(),
 }));
 
 vi.mock("@/lib/secrets", () => ({
@@ -25,12 +19,6 @@ vi.mock("@/lib/secrets", () => ({
   setSecret: setSecretMock,
   hasSecret: hasSecretMock,
 }));
-vi.mock("@/lib/syncCommands", () => ({
-  hasSyncToken: hasSyncTokenMock,
-  setSyncToken: setSyncTokenMock,
-  clearSyncToken: clearSyncTokenMock,
-}));
-vi.mock("@/contexts/TabsContext", () => ({ useWorkspaceRoot: workspaceRootMock }));
 
 const CLAUDE_SLOT = SECRET_SLOTS.find((s) => s.id === "ai-claude") as SecretSlot;
 
@@ -57,10 +45,6 @@ beforeEach(() => {
   updateSettings = vi.fn<(path: string, value: unknown) => void>();
   hasSecretMock.mockReset().mockResolvedValue(false);
   setSecretMock.mockReset().mockResolvedValue(undefined);
-  hasSyncTokenMock.mockReset().mockResolvedValue(false);
-  setSyncTokenMock.mockReset().mockResolvedValue(undefined);
-  clearSyncTokenMock.mockReset().mockResolvedValue(undefined);
-  workspaceRootMock.mockReset().mockReturnValue("/ws");
 });
 
 describe("useSecretSlots", () => {
@@ -68,28 +52,13 @@ describe("useSecretSlots", () => {
     hasSecretMock.mockImplementation((name: string) =>
       Promise.resolve(name === "ai-api-key-claude"),
     );
-    hasSyncTokenMock.mockResolvedValue(true);
-
     const { result } = renderSlots();
 
     await waitFor(() => expect(result.current.presence["ai-claude"]).toBe(true));
     expect(result.current.presence["ai-openai"]).toBe(false);
-    expect(result.current.presence["sync-token"]).toBe(true);
     expect(result.current.errorKey).toBeNull();
     // Presence is asked for, never the value.
     expect(hasSecretMock).toHaveBeenCalledWith("ai-api-key-claude");
-    expect(hasSyncTokenMock).toHaveBeenCalledWith("/ws");
-  });
-
-  it("leaves the sync slot unknown and unqueried when no folder is open", async () => {
-    workspaceRootMock.mockReturnValue(undefined);
-
-    const { result } = renderSlots();
-
-    await waitFor(() => expect(result.current.presence["ai-claude"]).toBe(false));
-    expect(result.current.presence["sync-token"]).toBeNull();
-    expect(hasSyncTokenMock).not.toHaveBeenCalled();
-    expect(result.current.errorKey).toBeNull();
   });
 
   it("surfaces a keychain read failure instead of reporting the slot as unset", async () => {
@@ -167,17 +136,6 @@ describe("useSecretSlots", () => {
     expect(updateSettings).not.toHaveBeenCalled();
   });
 
-  it("clears the sync token through the guarded sync command", async () => {
-    hasSyncTokenMock.mockResolvedValue(true);
-    const { result } = renderSlots();
-    await waitFor(() => expect(result.current.presence["sync-token"]).toBe(true));
-
-    await act(() => result.current.remove(SYNC_TOKEN_SLOT));
-
-    expect(clearSyncTokenMock).toHaveBeenCalledWith("/ws");
-    expect(result.current.presence["sync-token"]).toBe(false);
-  });
-
   it("replaces a provider key from the same place", async () => {
     const { result } = renderSlots({ openai: "sk-oai" });
     await waitFor(() => expect(result.current.presence["ai-claude"]).toBe(false));
@@ -190,29 +148,6 @@ describe("useSecretSlots", () => {
       claude: "sk-ant-new",
     });
     expect(result.current.presence["ai-claude"]).toBe(true);
-  });
-
-  it("replaces the sync token from the same place", async () => {
-    const { result } = renderSlots();
-    await waitFor(() => expect(result.current.presence["sync-token"]).toBe(false));
-
-    await act(() => result.current.save(SYNC_TOKEN_SLOT, "ghp_new"));
-
-    expect(setSyncTokenMock).toHaveBeenCalledWith("/ws", "ghp_new");
-    expect(result.current.presence["sync-token"]).toBe(true);
-  });
-
-  it("does not touch the sync slot when no folder is open", async () => {
-    workspaceRootMock.mockReturnValue(undefined);
-    const { result } = renderSlots();
-    await waitFor(() => expect(result.current.presence["ai-claude"]).toBe(false));
-
-    await act(() => result.current.remove(SYNC_TOKEN_SLOT));
-    await act(() => result.current.save(SYNC_TOKEN_SLOT, "ghp_new"));
-
-    expect(clearSyncTokenMock).not.toHaveBeenCalled();
-    expect(setSyncTokenMock).not.toHaveBeenCalled();
-    expect(result.current.presence["sync-token"]).toBeNull();
   });
 
   it("does not let a slow lookup overwrite a write that already landed", async () => {
@@ -248,25 +183,5 @@ describe("useSecretSlots", () => {
     await removal;
 
     expect(setSecretMock).toHaveBeenCalledWith("ai-api-key-claude", "");
-  });
-
-  it("does not let a previous workspace's answer land on the new one", async () => {
-    const slow = deferred<boolean>();
-    hasSyncTokenMock.mockImplementation((path: string) =>
-      path === "/old" ? slow.promise : Promise.resolve(true),
-    );
-    workspaceRootMock.mockReturnValue("/old");
-    const { result, rerender } = renderSlots();
-
-    workspaceRootMock.mockReturnValue("/new");
-    rerender();
-    await waitFor(() => expect(result.current.presence["sync-token"]).toBe(true));
-
-    // The stale lookup answers last and must be ignored.
-    await act(async () => {
-      slow.resolve(false);
-      await slow.promise;
-    });
-    expect(result.current.presence["sync-token"]).toBe(true);
   });
 });
