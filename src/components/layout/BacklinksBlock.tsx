@@ -11,13 +11,12 @@ interface BacklinksBlockProps {
 }
 
 /** Backlinks pinned to the bottom of the Files panel, resizable against the
- *  tree above. Renders nothing without backlinks. */
+ *  tree above. */
 export function BacklinksBlock({ workspaceRoot, onOpen }: BacklinksBlockProps) {
   const { t } = useTranslation("common");
   const { backlinks } = useTabsContext();
-  const { backlinksHeight, setBacklinksHeight } = useSidebarLayoutContext();
-
-  if (backlinks.length === 0) return null;
+  const { backlinksHeight, setBacklinksHeight, backlinksCollapsed, setBacklinksCollapsed } =
+    useSidebarLayoutContext();
 
   return (
     <ResizableBlock
@@ -25,8 +24,15 @@ export function BacklinksBlock({ workspaceRoot, onOpen }: BacklinksBlockProps) {
       min={BACKLINKS_HEIGHT_MIN}
       height={backlinksHeight}
       onHeightCommit={setBacklinksHeight}
+      collapsed={backlinksCollapsed}
     >
-      <BacklinksSection backlinks={backlinks} workspaceRoot={workspaceRoot} onOpen={onOpen} />
+      <BacklinksSection
+        backlinks={backlinks}
+        workspaceRoot={workspaceRoot}
+        collapsed={backlinksCollapsed}
+        onToggleCollapsed={() => setBacklinksCollapsed(!backlinksCollapsed)}
+        onOpen={onOpen}
+      />
     </ResizableBlock>
   );
 }

@@ -42,14 +42,16 @@
     "indexIncomplete": "Índice incompleto"
   },
   "backlinks": {
-    "heading": "Enlaces entrantes"
+    "heading": "Enlaces entrantes",
+    "empty": "Sin enlaces entrantes"
   },
   "tags": {
     "heading": "Etiquetas",
     "filterBy": "Filtrar por #{{tag}}",
     "filtered": "#{{tag}} ({{total}})",
     "clearFilter": "Quitar el filtro de etiqueta",
-    "sortByCount": "Ordenar etiquetas por cantidad"
+    "sortByCount": "Ordenar etiquetas por cantidad",
+    "empty": "Sin etiquetas"
   },
   "tabBar": {
     "graphLabel": "Grafo: {{name}}",

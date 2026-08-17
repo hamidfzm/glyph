@@ -33,6 +33,8 @@ describe("DEFAULT_SETTINGS", () => {
     expect(DEFAULT_SETTINGS.layout.aiPanelWidth).toBe(AI_PANEL_WIDTH_DEFAULT);
     expect(DEFAULT_SETTINGS.layout.backlinksHeight).toBeNull();
     expect(DEFAULT_SETTINGS.layout.tagsHeight).toBeNull();
+    expect(DEFAULT_SETTINGS.layout.backlinksCollapsed).toBe(false);
+    expect(DEFAULT_SETTINGS.layout.tagsCollapsed).toBe(false);
   });
 
   it("keeps resize bounds ordered around the defaults", () => {

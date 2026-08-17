@@ -42,14 +42,16 @@
     "indexIncomplete": "Index unvollständig"
   },
   "backlinks": {
-    "heading": "Rückverweise"
+    "heading": "Rückverweise",
+    "empty": "Keine Rückverweise"
   },
   "tags": {
     "heading": "Tags",
     "filterBy": "Nach #{{tag}} filtern",
     "filtered": "#{{tag}} ({{total}})",
     "clearFilter": "Tag-Filter aufheben",
-    "sortByCount": "Tags nach Anzahl sortieren"
+    "sortByCount": "Tags nach Anzahl sortieren",
+    "empty": "Keine Tags"
   },
   "tabBar": {
     "graphLabel": "Graph: {{name}}",

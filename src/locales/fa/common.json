@@ -42,14 +42,16 @@
     "indexIncomplete": "نمایه ناقص"
   },
   "backlinks": {
-    "heading": "پیوندهای ورودی"
+    "heading": "پیوندهای ورودی",
+    "empty": "پیوندی وجود ندارد"
   },
   "tags": {
     "heading": "برچسب‌ها",
     "filterBy": "فیلتر بر پایهٔ #{{tag}}",
     "filtered": "#{{tag}} ({{total}})",
     "clearFilter": "پاک کردن فیلتر برچسب",
-    "sortByCount": "مرتب‌سازی برچسب‌ها بر پایهٔ شمار"
+    "sortByCount": "مرتب‌سازی برچسب‌ها بر پایهٔ شمار",
+    "empty": "برچسبی وجود ندارد"
   },
   "tabBar": {
     "graphLabel": "گراف: {{name}}",

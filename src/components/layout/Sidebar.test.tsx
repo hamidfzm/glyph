@@ -160,7 +160,7 @@ describe("Sidebar placement", () => {
 
   it("renders resize handles on both panels", () => {
     renderBothSides({ workspace: makeWorkspace(), sidebarLayout: "split" });
-    expect(screen.getAllByRole("separator").length).toBe(2);
+    expect(screen.getAllByRole("separator", { name: "Resize sidebar" }).length).toBe(2);
   });
 
   it("commits a dragged files-panel width once on release", () => {
@@ -171,7 +171,7 @@ describe("Sidebar placement", () => {
       setFilesSidebarWidth,
     });
     const nav = container.querySelector('nav[data-sidebar="left"]') as HTMLElement;
-    const handle = within(nav).getByRole("separator");
+    const handle = within(nav).getByRole("separator", { name: "Resize sidebar" });
     fireEvent.pointerDown(handle, { button: 0, clientX: 200 });
     // Left-side panel in LTR: dragging right grows it.
     fireEvent.pointerMove(handle, { clientX: 250 });
@@ -190,7 +190,7 @@ describe("Sidebar placement", () => {
         setFilesSidebarWidth,
       });
       const nav = container.querySelector('nav[data-sidebar="left"]') as HTMLElement;
-      const handle = within(nav).getByRole("separator");
+      const handle = within(nav).getByRole("separator", { name: "Resize sidebar" });
       fireEvent.pointerDown(handle, { button: 0, clientX: 200 });
       // Mirrored layout: dragging left grows the panel.
       fireEvent.pointerMove(handle, { clientX: 150 });
@@ -209,7 +209,7 @@ describe("Sidebar placement", () => {
       setFilesSidebarWidth,
     });
     const nav = container.querySelector('nav[data-sidebar="left"]') as HTMLElement;
-    fireEvent.doubleClick(within(nav).getByRole("separator"));
+    fireEvent.doubleClick(within(nav).getByRole("separator", { name: "Resize sidebar" }));
     expect(setFilesSidebarWidth).toHaveBeenCalledExactlyOnceWith(SIDEBAR_WIDTH_DEFAULT);
   });
 
@@ -256,6 +256,27 @@ describe("Sidebar placement", () => {
     });
     fireEvent.doubleClick(screen.getByRole("separator", { name: "Resize backlinks" }));
     expect(setBacklinksHeight).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  // The block stays put so opening a note without backlinks doesn't reflow the
+  // panel around it.
+  it("keeps the backlinks block when the active note has none", () => {
+    renderSidebar({ workspace: makeWorkspace(), tabs: { backlinks: [] } });
+    expect(screen.getByText("Backlinks")).toBeInTheDocument();
+    expect(screen.getByText("No backlinks")).toBeInTheDocument();
+  });
+
+  it("persists the backlinks collapsed state instead of holding it locally", () => {
+    const setBacklinksCollapsed = vi.fn();
+    renderSidebar({ workspace: makeWorkspace(), setBacklinksCollapsed });
+    fireEvent.click(screen.getByRole("button", { name: /backlinks/i }));
+    expect(setBacklinksCollapsed).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  // Nothing left to resize once the block is just its heading.
+  it("drops the backlinks divider while the block is collapsed", () => {
+    renderSidebar({ workspace: makeWorkspace(), backlinksCollapsed: true });
+    expect(screen.queryByRole("separator", { name: "Resize backlinks" })).not.toBeInTheDocument();
   });
 
   it("drags the tags divider and persists the height", () => {
