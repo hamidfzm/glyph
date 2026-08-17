@@ -179,7 +179,9 @@ describe("SettingsProvider appearance", () => {
         ["appearance.customFont", "Comic Sans MS"],
         ["appearance.fontFamily", "custom"],
       ]);
-      expect(root().getPropertyValue("--glyph-reading-font")).toBe("Comic Sans MS");
+      expect(root().getPropertyValue("--glyph-reading-font")).toBe(
+        "Comic Sans MS, var(--glyph-arabic-font)",
+      );
     });
 
     it("clears the override for system, leaving the stylesheet reading serif", async () => {

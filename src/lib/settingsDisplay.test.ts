@@ -26,6 +26,12 @@ describe("FONT_FAMILY_MAP", () => {
   it("has mono font stack", () => {
     expect(FONT_FAMILY_MAP.mono).toContain("monospace");
   });
+
+  it("leads every stack with the Arabic face, which the Latin faces would beat", () => {
+    for (const key of ["serif", "sans", "mono"]) {
+      expect(FONT_FAMILY_MAP[key], key).toMatch(/^var\(--glyph-arabic-font\), /);
+    }
+  });
 });
 
 describe("LINE_HEIGHT_MAP", () => {
@@ -81,20 +87,53 @@ describe("reading face", () => {
   // The default is per platform, so the guard is coverage rather than equality:
   // a platform without its own face silently falls back to the generic serif.
   const css = readFileSync("src/styles/platform.css", "utf8");
+  const blockAfter = (marker: string) => {
+    const start = css.indexOf(marker);
+    return css.slice(start, css.indexOf("}", start));
+  };
+  const platforms = ["macos", "windows", "linux", "ios", "android"];
 
   it("declares a reading face for every platform the app targets", () => {
-    for (const platform of ["macos", "windows", "linux", "ios", "android"]) {
-      const block = css.slice(css.indexOf(`[data-platform="${platform}"]`));
-      const decl = block.slice(0, block.indexOf("}")).includes("--glyph-reading-font");
-      expect(decl, `${platform} has no --glyph-reading-font`).toBe(true);
+    for (const platform of platforms) {
+      const decl = blockAfter(`[data-platform="${platform}"]`);
+      expect(decl, `${platform} has no --glyph-reading-font`).toContain("--glyph-reading-font");
+    }
+  });
+
+  it("leads every reading stack with the Arabic face", () => {
+    // Trailing it does nothing: Calibri and the Noto/Apple text faces carry
+    // their own cramped Arabic, so they would claim Persian first.
+    for (const platform of platforms) {
+      const decl = blockAfter(`[data-platform="${platform}"]`);
+      expect(decl, `${platform} has no --glyph-arabic-font`).toContain("--glyph-arabic-font:");
+      expect(decl, `${platform} reading stack does not lead with Arabic`).toContain(
+        "--glyph-reading-font: var(--glyph-arabic-font)",
+      );
+    }
+  });
+
+  it("backs every named Arabic family with a unicode-ranged @font-face", () => {
+    // Without the range the face would claim Latin too, changing English prose.
+    const named = new Set(
+      [...css.matchAll(/--glyph-arabic-font:\s*([^;]+);/g)].flatMap((m) =>
+        m[1].split(",").map((name) => name.trim()),
+      ),
+    );
+    expect(named.size).toBeGreaterThan(0);
+    for (const family of named) {
+      const rule = blockAfter(`font-family: ${family};`);
+      expect(rule, `${family} has no @font-face rule`).toContain("src: local(");
+      expect(rule, `${family} has no unicode-range`).toContain("unicode-range:");
     }
   });
 
   it("keeps a generic fallback for an unknown platform", () => {
-    const root = css.slice(css.indexOf(":root"), css.indexOf("}"));
+    const root = blockAfter(":root");
     expect(root).toContain("--glyph-reading-font");
+    expect(root).toContain("--glyph-arabic-font");
   });
 });
+
 describe("resolveReadingFont", () => {
   const base = DEFAULT_SETTINGS.appearance;
 
@@ -106,9 +145,9 @@ describe("resolveReadingFont", () => {
     expect(resolveReadingFont({ ...base, fontFamily: "mono" })).toContain("monospace");
   });
 
-  it("uses the custom font when one is named", () => {
+  it("uses the custom font when one is named, with the Arabic face behind it", () => {
     expect(resolveReadingFont({ ...base, fontFamily: "custom", customFont: "Comic Sans MS" })).toBe(
-      "Comic Sans MS",
+      "Comic Sans MS, var(--glyph-arabic-font)",
     );
   });
 

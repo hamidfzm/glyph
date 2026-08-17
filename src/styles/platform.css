@@ -1,9 +1,44 @@
+/* Arabic-script faces, one @font-face family per platform. They lead every
+   stack rather than trailing it: Calibri and the Noto/Apple text faces carry
+   their own cramped Arabic, so a fallback appended at the end never runs. The
+   unicode-range keeps them off Latin, which still resolves to the platform
+   face behind them (Persian digits, Arabic-Indic digits and ZWNJ are inside
+   the ranges, so a Persian paragraph shapes in one face).
+   size-adjust is the calibration knob: Arabic body height is not the em box,
+   so an Arabic face swapped in at the same font-size reads a different size
+   than the Latin it replaced. Measured on Windows at 100px: Calibri's own
+   Arabic body is 52 against a 47 Latin x-height, Segoe UI's is 54, so 96%
+   holds Persian at the size readers see today while gaining Segoe's shaping.
+   The Apple and Noto faces are unmeasured (no macOS/Linux box here), so they
+   stay at 100%; measure and set them the same way if Persian reads off there. */
+@font-face {
+  font-family: GlyphArabic;
+  src: local("Segoe UI");
+  size-adjust: 96%;
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C;
+}
+
+@font-face {
+  font-family: GlyphArabicApple;
+  src: local("SF Arabic"), local("Geeza Pro");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C;
+}
+
+@font-face {
+  font-family: GlyphArabicNoto;
+  src: local("Vazirmatn"), local("Noto Naskh Arabic"), local("Noto Sans Arabic");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-08FF, U+FB50-FDFF, U+FE70-FEFF, U+200C;
+}
+
 :root {
-  --glyph-font: system-ui, -apple-system, sans-serif;
+  /* Which Arabic family this platform uses. Leads --glyph-font and every
+     reading stack, including the ones built in settingsDisplay.ts. */
+  --glyph-arabic-font: GlyphArabicNoto;
+  --glyph-font: var(--glyph-arabic-font), system-ui, -apple-system, sans-serif;
   /* Long-form reading face, per platform: whichever face that OS ships that
      is designed for reading at body size, not the UI face. Overridden by the
      document-font setting; see docs/brand.md. */
-  --glyph-reading-font: Georgia, serif;
+  --glyph-reading-font: var(--glyph-arabic-font), Georgia, serif;
   --glyph-radius: 6px;
   --glyph-radius-sm: 4px;
   --glyph-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -20,7 +55,9 @@
    the notch, home indicator, and (in landscape) the side cutout/status bar. */
 [data-platform="ios"],
 [data-platform="android"] {
-  --glyph-reading-font: "New York", ui-serif, "Noto Serif", Georgia, serif;
+  --glyph-arabic-font: GlyphArabicApple, GlyphArabicNoto;
+  --glyph-reading-font: var(--glyph-arabic-font), "New York", ui-serif,
+    "Noto Serif", Georgia, serif;
   --glyph-safe-top: env(safe-area-inset-top);
   --glyph-safe-bottom: env(safe-area-inset-bottom);
   --glyph-safe-left: env(safe-area-inset-left);
@@ -28,10 +65,11 @@
 }
 
 [data-platform="macos"] {
-  --glyph-font: "SF Pro", -apple-system, BlinkMacSystemFont, system-ui,
-    sans-serif;
-  --glyph-reading-font: "New York", ui-serif, "Iowan Old Style", Charter,
-    Palatino, serif;
+  --glyph-arabic-font: GlyphArabicApple;
+  --glyph-font: var(--glyph-arabic-font), "SF Pro", -apple-system,
+    BlinkMacSystemFont, system-ui, sans-serif;
+  --glyph-reading-font: var(--glyph-arabic-font), "New York", ui-serif,
+    "Iowan Old Style", Charter, Palatino, serif;
   --glyph-radius: 8px;
   --glyph-radius-sm: 6px;
   --glyph-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
@@ -44,16 +82,22 @@
 }
 
 [data-platform="windows"] {
-  --glyph-font: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  --glyph-reading-font: Calibri, Constantia, Cambria, Georgia, sans-serif;
+  --glyph-arabic-font: GlyphArabic;
+  --glyph-font: var(--glyph-arabic-font), "Segoe UI Variable", "Segoe UI",
+    system-ui, sans-serif;
+  --glyph-reading-font: var(--glyph-arabic-font), Calibri, Constantia, Cambria,
+    Georgia, sans-serif;
   --glyph-radius: 4px;
   --glyph-radius-sm: 2px;
   --glyph-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 [data-platform="linux"] {
-  --glyph-font: system-ui, "Ubuntu", "Cantarell", sans-serif;
-  --glyph-reading-font: "Noto Serif", "DejaVu Serif", "Liberation Serif", serif;
+  --glyph-arabic-font: GlyphArabicNoto;
+  --glyph-font: var(--glyph-arabic-font), system-ui, "Ubuntu", "Cantarell",
+    sans-serif;
+  --glyph-reading-font: var(--glyph-arabic-font), "Noto Serif", "DejaVu Serif",
+    "Liberation Serif", serif;
   --glyph-radius: 6px;
   --glyph-radius-sm: 4px;
   --glyph-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);

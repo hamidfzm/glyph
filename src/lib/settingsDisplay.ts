@@ -7,11 +7,17 @@ import type { AISettings } from "@/lib/settings";
 
 export const ZOOM_DEFAULT = 16;
 
+// Arabic-script face, declared per platform in platform.css and unicode-ranged
+// there so it only claims Persian/Arabic runs. It leads each stack because the
+// Latin faces below carry their own cramped Arabic, which a trailing fallback
+// would never displace.
+const ARABIC = "var(--glyph-arabic-font)";
+
 export const FONT_FAMILY_MAP: Record<string, string> = {
   system: "",
-  serif: "'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, ui-serif, serif",
-  sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-  mono: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+  serif: `${ARABIC}, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, ui-serif, serif`,
+  sans: `${ARABIC}, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`,
+  mono: `${ARABIC}, 'SF Mono', 'Fira Code', 'Cascadia Code', monospace`,
 };
 
 export const LINE_HEIGHT_MAP: Record<string, string> = {
@@ -41,6 +47,11 @@ export const MODEL_SUGGESTIONS: Record<AISettings["provider"], string[]> = {
 export function resolveReadingFont(appearance: AppearanceSettings): string {
   // Trimmed: a blank custom name would set an empty custom property, which
   // makes font-family invalid and drops prose to the interface font.
-  if (appearance.fontFamily === "custom") return appearance.customFont.trim();
+  if (appearance.fontFamily === "custom") {
+    // A named face wins over the Arabic default: someone who types a Persian
+    // font wants it used for Persian. The default only catches what it misses.
+    const custom = appearance.customFont.trim();
+    return custom ? `${custom}, ${ARABIC}` : "";
+  }
   return FONT_FAMILY_MAP[appearance.fontFamily] ?? "";
 }
