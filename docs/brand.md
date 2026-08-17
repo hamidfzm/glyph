@@ -39,7 +39,15 @@ The reading face is chosen per platform, because "best for reading" is not the s
 
 Windows therefore reads in a humanist sans while Apple platforms read in a serif. That is deliberate: Palatino Linotype, the previous Windows outcome, is a print face that renders poorly at body size on Windows. Readers who want a different face set it in Settings, which overrides the platform default.
 
-All are system stacks; Glyph bundles no font files. None of the reading stack covers Han or Arabic, so Persian and Chinese prose falls through to the platform's generic `serif` (Songti, SimSun) rather than the UI face it used before.
+All are system stacks; Glyph bundles no font files.
+
+### Arabic script
+
+The Latin reading faces are not Latin-only: Calibri, and the Noto and Apple text faces, each carry their own Arabic, cramped and designed as an afterthought. Persian therefore rendered in whatever the Latin face happened to include, and appending a better face to the end of the stack would never have been reached. So `platform.css` declares an Arabic face per platform as a `@font-face` family with a `unicode-range` (Arabic blocks, presentation forms, ZWNJ) and puts it **first**, in `--glyph-arabic-font`: SF Arabic / Geeza Pro on Apple, Segoe UI on Windows, Vazirmatn / Noto Naskh Arabic elsewhere. The range keeps it off Latin, so English prose is byte-identical to before; every stack leads with it, including the ones the font setting builds in `settingsDisplay.ts` and `--glyph-font` for the interface. A reader's own custom face still wins over it: someone who names a Persian font means it.
+
+Swapping the face changes the apparent size, because Arabic body height is not the em box. `size-adjust` on the `@font-face` is the calibration knob. Measured on Windows at 100px: Calibri's own Arabic body is 52 against its 47 Latin x-height, Segoe UI's is 54, so the Windows face carries `size-adjust: 96%` and Persian keeps the size readers already have while gaining Segoe's shaping. The Apple and Noto faces are unmeasured and sit at 100%; measure the same way and set them if Persian reads off on those platforms.
+
+Han is still uncovered: Chinese prose falls through to the platform's generic `serif` (Songti, SimSun).
 
 Two export targets cannot carry the reading face: PDF (pdfmake ships Roboto only, and other faces need embedded font files) and DOCX (no default run font is set). HTML, EPUB, the site export, and print all get it. A reader's *chosen* font reaches print, which drives the live document, but no file export: `collectStyles` serialises stylesheets and the choice is written as an inline style on `<html>`, so exported files always show the default reading face. The reading face is what separates the document from the interface: prose is set in the serif while the chrome stays on the platform UI font, so the document reads as a document rather than as part of the app.
 
