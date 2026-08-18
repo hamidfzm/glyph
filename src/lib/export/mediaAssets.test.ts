@@ -243,4 +243,14 @@ describe("packageExportMedia", () => {
     expect(el.querySelector("source")).toBeNull();
     expect(el.innerHTML).not.toContain("asset://localhost");
   });
+
+  it("removes a media element that names no file at all", async () => {
+    const el = body("<video></video>");
+
+    await packageExportMedia(el, 10 * MB);
+
+    // An empty anchor would link back at the exported document itself.
+    expect(el.querySelector("video")).toBeNull();
+    expect(el.querySelector("a")).toBeNull();
+  });
 });

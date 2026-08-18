@@ -20,6 +20,5 @@ const MEDIA_MIME_TYPES: Record<string, string> = {
 
 /** Media type for a packaged file, or undefined for one we cannot declare. */
 export function mediaMimeType(path: string): string | undefined {
-  const ext = path.split(".").pop()?.toLowerCase();
-  return ext ? MEDIA_MIME_TYPES[ext] : undefined;
+  return MEDIA_MIME_TYPES[path.slice(path.lastIndexOf(".") + 1).toLowerCase()];
 }

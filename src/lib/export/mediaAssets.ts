@@ -18,12 +18,12 @@ export interface PackagedMedia {
 
 /** The playable local source: the element's own, else its first source child. */
 function localSource(el: Element): { path: string; url: string } | null {
-  const own = el.getAttribute("data-media-path");
-  if (own) return { path: own, url: el.getAttribute("src") ?? "" };
-  const child = el.querySelector("source[data-media-path]");
-  const path = child?.getAttribute("data-media-path");
-  if (!path) return null;
-  return { path, url: child?.getAttribute("src") ?? "" };
+  const holder = el.hasAttribute("data-media-path")
+    ? el
+    : el.querySelector("source[data-media-path]");
+  const path = holder?.getAttribute("data-media-path");
+  const url = holder?.getAttribute("src");
+  return path && url ? { path, url } : null;
 }
 
 // A poster image and its link are separate paragraphs on purpose: the PDF
@@ -31,15 +31,16 @@ function localSource(el: Element): { path: string; url: string } | null {
 // image degrades to its alt text there.
 function fallbackNodes(el: Element, doc: Document): Element[] {
   const local = localSource(el)?.path;
-  const remote = el.getAttribute("src") ?? el.querySelector("source")?.getAttribute("src") ?? "";
-  const label = basename(local ?? remote) || remote;
+  const remote = el.getAttribute("src") ?? el.querySelector("source")?.getAttribute("src");
+  const source = local ?? remote ?? "";
+  const label = basename(source) || source;
   // Nothing nameable to link to: drop the element rather than emit an empty
   // anchor, which in an exported HTML file would point back at the document.
   if (!label) return [];
   // A local file is linked by name, so no absolute path leaks and the link
   // resolves for media that sat beside the document. A remote one keeps its
   // URL, the only place that copy can still be reached.
-  const href = local ? label : remote;
+  const href = local ? label : source;
   const nodes: Element[] = [];
 
   const poster = el.getAttribute("poster");
@@ -115,12 +116,10 @@ export async function packageExportMedia(
     for (const source of Array.from(el.querySelectorAll("source"))) source.remove();
   }
 
-  // An orphan <source> (one whose wrapper the sanitizer unwrapped) renders
-  // nothing but would carry its asset: URL, and with it an absolute local path,
-  // straight into the exported file.
-  for (const el of Array.from(clone.querySelectorAll("source"))) {
-    if (!el.closest("video, audio")) el.remove();
-  }
+  // Every <source> still standing is an orphan, since a packaged element had
+  // its children removed and a fallen-back one was replaced whole. It renders
+  // nothing, but its asset: URL would carry an absolute local path into output.
+  for (const el of Array.from(clone.querySelectorAll("source"))) el.remove();
   // The absolute path is an app-side detail; it never belongs in output.
   for (const el of Array.from(clone.querySelectorAll("[data-media-path]"))) {
     el.removeAttribute("data-media-path");
