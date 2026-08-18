@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { escapeXml } from "./escape";
+import type { PackagedMedia } from "./mediaAssets";
 
 export interface EpubMetadata {
   title: string;
@@ -18,6 +19,8 @@ export interface EpubInput {
   entries: TocEntry[];
   metadata: EpubMetadata;
   bodyClass?: "markdown-body" | "notebook-body";
+  // Media files the chapter references by their in-container href.
+  media?: PackagedMedia[];
 }
 
 const MIMETYPE = "application/epub+zip";
@@ -47,7 +50,14 @@ function toXhtml(bodyHtml: string): string {
     .replace(/<\/body>$/, "");
 }
 
-function buildOpf(meta: EpubMetadata): string {
+function buildOpf(meta: EpubMetadata, media: PackagedMedia[]): string {
+  const mediaItems = media
+    .map(
+      (item, i) =>
+        `
+    <item id="media-${i}" href="${escapeXml(item.href)}" media-type="${escapeXml(item.mediaType)}"/>`,
+    )
+    .join("");
   const author = meta.author
     ? `\n    <dc:creator id="author">${escapeXml(meta.author)}</dc:creator>`
     : "";
@@ -62,7 +72,7 @@ function buildOpf(meta: EpubMetadata): string {
   <manifest>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
-    <item id="style" href="style.css" media-type="text/css"/>
+    <item id="style" href="style.css" media-type="text/css"/>${mediaItems}
   </manifest>
   <spine>
     <itemref idref="chapter"/>
@@ -105,7 +115,8 @@ ${toXhtml(bodyHtml)}
  * Assemble a minimal, valid EPUB 3 from prepared body HTML. The whole document
  * is one content file (`chapter.xhtml`); the nav links to in-document anchors,
  * which every EPUB 3 reader resolves. Images are expected to already be inlined
- * as data URIs by `prepareContent`.
+ * as data URIs by `prepareContent`, which also hands over any media files small
+ * enough to package (data URIs would be far larger than the bytes themselves).
  *
  * `mimetype` must be the first entry and stored uncompressed per the EPUB spec.
  */
@@ -115,13 +126,15 @@ export async function buildEpub({
   entries,
   metadata,
   bodyClass = "markdown-body",
+  media = [],
 }: EpubInput): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file("mimetype", MIMETYPE, { compression: "STORE" });
   zip.file("META-INF/container.xml", CONTAINER_XML);
-  zip.file("OEBPS/content.opf", buildOpf(metadata));
+  zip.file("OEBPS/content.opf", buildOpf(metadata, media));
   zip.file("OEBPS/nav.xhtml", buildNav(metadata.title, entries));
   zip.file("OEBPS/style.css", css + CODE_WRAP_CSS);
   zip.file("OEBPS/chapter.xhtml", buildChapter(metadata.title, bodyHtml, bodyClass));
+  for (const item of media) zip.file(`OEBPS/${item.href}`, item.bytes);
   return zip.generateAsync({ type: "uint8array" });
 }

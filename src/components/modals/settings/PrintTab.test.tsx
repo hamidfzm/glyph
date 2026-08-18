@@ -34,4 +34,14 @@ describe("PrintTab", () => {
     fireEvent.click(background);
     expect(updateSettings).toHaveBeenCalledWith("print.includeBackground", true);
   });
+
+  it("updates the EPUB media embed limit", () => {
+    const { updateSettings } = setup();
+
+    fireEvent.click(screen.getByText("50 MB"));
+    expect(updateSettings).toHaveBeenCalledWith("print.epubMediaLimit", "50");
+
+    fireEvent.click(screen.getByText("Off"));
+    expect(updateSettings).toHaveBeenCalledWith("print.epubMediaLimit", "off");
+  });
 });

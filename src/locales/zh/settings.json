@@ -259,6 +259,12 @@
       "label": "包含目录",
       "description": "在开头插入目录页"
     },
+    "epubMedia": {
+      "label": "在 EPUB 中嵌入媒体",
+      "description": "将小于该大小的音频和视频打包进书中，较大的文件改为链接",
+      "off": "关闭",
+      "mb": "{{limit}} MB"
+    },
     "backgrounds": {
       "label": "打印背景和颜色",
       "description": "在输出中保留主题颜色"

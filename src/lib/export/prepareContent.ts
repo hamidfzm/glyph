@@ -1,4 +1,5 @@
 import type { TocEntry } from "@/hooks/useTableOfContents";
+import { type PackagedMedia, packageExportMedia } from "./mediaAssets";
 import { inlineCodeColors, preparePdfRichContent, rasterizeRtlBlocks } from "./preparePdfContent";
 import { buildTocElement } from "./toc";
 
@@ -12,6 +13,9 @@ export interface PrepareOptions {
   // an embedded image, and re-render diagrams light as inline SVG so pdfmake
   // embeds them as vectors.
   pdf?: boolean;
+  // Bytes of media a container-backed target (EPUB) may package. 0, the
+  // default, degrades every media element to its poster plus link.
+  mediaLimit?: number;
 }
 
 export interface PreparedContent {
@@ -19,6 +23,9 @@ export interface PreparedContent {
   html: string;
   // The wrapper class to reuse so bundled styles apply (markdown vs notebook).
   bodyClass: "markdown-body" | "notebook-body";
+  // Media files the caller must write into its container, keyed by the href
+  // the rewritten elements now point at. Empty unless `mediaLimit` allowed it.
+  media: PackagedMedia[];
 }
 
 // Elements that exist only for interactive use in the app and should never
@@ -68,6 +75,7 @@ export async function prepareContent({
   includeToc,
   doc = document,
   pdf = false,
+  mediaLimit = 0,
 }: PrepareOptions): Promise<PreparedContent | null> {
   const body = doc.querySelector<HTMLElement>(".markdown-body, .notebook-body");
   if (!body) return null;
@@ -101,6 +109,10 @@ export async function prepareContent({
     }
   }
 
+  // Before the image pass: a media element that cannot be packaged degrades to
+  // a poster <img>, which the pass below then inlines like any other image.
+  const media = await packageExportMedia(clone, mediaLimit);
+
   await Promise.all([
     ...Array.from(clone.querySelectorAll("img")).map((el) => embedAsset(el, "src")),
     // SVG <image> icons carry asset: URLs from the live DOM; inline them too
@@ -112,5 +124,5 @@ export async function prepareContent({
     clone.insertBefore(buildTocElement(entries), clone.firstChild);
   }
 
-  return { html: clone.innerHTML, bodyClass };
+  return { html: clone.innerHTML, bodyClass, media };
 }

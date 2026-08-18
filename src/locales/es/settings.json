@@ -259,6 +259,12 @@
       "label": "Incluir tabla de contenidos",
       "description": "Insertar una página de contenidos al principio"
     },
+    "epubMedia": {
+      "label": "Incrustar medios en EPUB",
+      "description": "Empaqueta el audio y el video por debajo de este tamano en el libro; los archivos mayores quedan como enlace",
+      "off": "Desactivado",
+      "mb": "{{limit}} MB"
+    },
     "backgrounds": {
       "label": "Imprimir fondos y colores",
       "description": "Conservar los colores del tema en la salida"

@@ -5,6 +5,7 @@ import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { useSettings } from "@/hooks/useSettings";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { getCliExportRequest } from "@/lib/cliExport";
+import { epubMediaLimitBytes } from "@/lib/settings";
 
 // How long the CLI export waits for the plugin host's startup load. A hung
 // plugin must not hang a CI job forever: past this, the export proceeds with
@@ -55,6 +56,8 @@ export function useCliExport({ entries, content }: UseCliExportOptions): void {
   contentRef.current = content;
   const includeTocRef = useRef(settings.print.includeToc);
   includeTocRef.current = settings.print.includeToc;
+  const epubMediaLimitRef = useRef(settings.print.epubMediaLimit);
+  epubMediaLimitRef.current = settings.print.epubMediaLimit;
 
   const [waitExpired, setWaitExpired] = useState(false);
   useEffect(() => {
@@ -88,6 +91,7 @@ export function useCliExport({ entries, content }: UseCliExportOptions): void {
             entries: entriesRef.current,
             includeToc: includeTocRef.current,
             content: contentRef.current,
+            epubMediaLimit: epubMediaLimitBytes(epubMediaLimitRef.current),
           }));
           // A document that never settled still exports, but says so: silently
           // shipping one with missing diagrams is worse than a noisy success.

@@ -22,6 +22,7 @@ const DEFAULT_PRINT: PrintSettings = {
   pageBreakLevel: "none",
   includeToc: false,
   includeBackground: false,
+  epubMediaLimit: "10",
 };
 
 const ENTRIES: TocEntry[] = [
@@ -91,7 +92,7 @@ describe("usePrint", () => {
     const { result } = renderHook(() =>
       usePrint({
         entries: ENTRIES,
-        settings: { pageBreakLevel: "h2", includeToc: false, includeBackground: true },
+        settings: { ...DEFAULT_PRINT, pageBreakLevel: "h2", includeBackground: true },
       }),
     );
     await result.current();
@@ -160,7 +161,7 @@ describe("usePrint", () => {
     const { result } = renderHook(() =>
       usePrint({
         entries: ENTRIES,
-        settings: { pageBreakLevel: "h1", includeToc: true, includeBackground: false },
+        settings: { ...DEFAULT_PRINT, pageBreakLevel: "h1", includeToc: true },
       }),
     );
     await result.current();

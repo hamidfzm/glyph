@@ -9,6 +9,8 @@ import { type ExportFormat, epubMetadata, writeBinary } from "@/lib/export/write
 interface ExportDocumentOptions {
   entries: TocEntry[];
   includeToc: boolean;
+  // Bytes of media EPUB may package; every other format links instead.
+  epubMediaLimit?: number;
 }
 
 /**
@@ -20,7 +22,7 @@ export async function exportDocument(
   format: ExportFormat,
   path: string,
   meta: ExportMeta,
-  { entries, includeToc }: ExportDocumentOptions,
+  { entries, includeToc, epubMediaLimit = 0 }: ExportDocumentOptions,
 ): Promise<void> {
   const prepared = await prepareContent({
     entries,
@@ -28,11 +30,12 @@ export async function exportDocument(
     // PDF needs inlined code colors, rasterized math, and diagrams re-rendered
     // light as inline SVG for vector embedding.
     pdf: format === "pdf",
+    mediaLimit: format === "epub" ? epubMediaLimit : 0,
   });
   // The body can vanish if the file is closed during the (async) save dialog,
   // even though the pre-dialog guard passed.
   if (prepared == null) return;
-  const { html: body, bodyClass } = prepared;
+  const { html: body, bodyClass, media } = prepared;
 
   if (format === "html") {
     const html = buildHtmlDocument({
@@ -55,6 +58,7 @@ export async function exportDocument(
         css: collectStyles(),
         entries,
         bodyClass,
+        media,
         metadata: epubMetadata(meta.title, meta.author),
       }),
     );

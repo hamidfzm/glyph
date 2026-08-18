@@ -145,6 +145,22 @@ export interface PrintSettings {
   pageBreakLevel: "none" | "h1" | "h2";
   includeToc: boolean;
   includeBackground: boolean;
+  /** Largest media file packaged into an EPUB, in MB; "off" links instead. */
+  epubMediaLimit: EpubMediaLimit;
+}
+
+// Only EPUB can carry media: it is a zip, so the bytes land inside the file the
+// user picked. HTML, DOCX, and PDF always link instead. Readers choke on huge
+// books, hence the ceiling.
+export type EpubMediaLimit = "off" | "10" | "50" | "100";
+
+export const EPUB_MEDIA_LIMITS: readonly EpubMediaLimit[] = ["off", "10", "50", "100"];
+
+// "off", and any value a settings file written by an older build is missing,
+// come back as 0: no embedding, so the media links instead.
+export function epubMediaLimitBytes(limit: EpubMediaLimit): number {
+  const mb = Number(limit);
+  return Number.isFinite(mb) ? mb * 1024 * 1024 : 0;
 }
 
 export interface PrivacySettings {
@@ -273,6 +289,7 @@ export const DEFAULT_SETTINGS: Settings = {
     pageBreakLevel: "none",
     includeToc: false,
     includeBackground: false,
+    epubMediaLimit: "10",
   },
   privacy: {
     errorReporting: false,

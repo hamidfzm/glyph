@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
+import { EPUB_MEDIA_LIMITS } from "@/lib/settings";
 import { Segmented } from "./Segmented";
 import { Toggle } from "./Toggle";
 
@@ -35,6 +36,21 @@ export function PrintTab() {
         <Toggle
           checked={print.includeToc}
           onChange={(v) => updateSettings("print.includeToc", v)}
+        />
+      </div>
+
+      <div className="settings-row">
+        <div>
+          <span className="settings-label">{t("print.epubMedia.label")}</span>
+          <div className="settings-description">{t("print.epubMedia.description")}</div>
+        </div>
+        <Segmented
+          value={print.epubMediaLimit}
+          options={EPUB_MEDIA_LIMITS.map((limit) => ({
+            value: limit,
+            label: limit === "off" ? t("print.epubMedia.off") : t("print.epubMedia.mb", { limit }),
+          }))}
+          onChange={(v) => updateSettings("print.epubMediaLimit", v)}
         />
       </div>
 

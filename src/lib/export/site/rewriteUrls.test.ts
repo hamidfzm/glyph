@@ -163,4 +163,34 @@ describe("rehypeSiteUrls images", () => {
     const html = await render("![s](<./my pics/a b.png>)", ctx);
     expect(html).toContain('src="my%20pics/a%20b.png"');
   });
+
+  it("redirects media and its poster into the site tree and forces playback attributes", async () => {
+    const ctx = makeCtx("/ws/guide/intro.md", "guide/intro.html");
+    const html = await render(
+      '<video src="clips/demo.mp4" poster="clips/cover.png"></video>' +
+        '<audio src="clips/memo.mp3"></audio>',
+      ctx,
+    );
+
+    expect(html).toContain('src="clips/demo.mp4"');
+    expect(html).toContain('poster="clips/cover.png"');
+    expect(ctx.assets.get("/ws/guide/clips/demo.mp4")).toBe("guide/clips/demo.mp4");
+    expect(ctx.assets.get("/ws/guide/clips/cover.png")).toBe("guide/clips/cover.png");
+    expect(ctx.assets.get("/ws/guide/clips/memo.mp3")).toBe("guide/clips/memo.mp3");
+    // The viewer forces these from its components; a static page has nowhere
+    // else to get them, and without controls the player can never be started.
+    expect(html).toContain("controls");
+    expect(html).toContain('preload="none"');
+  });
+
+  it("redirects a <source> child of a media element", async () => {
+    const ctx = makeCtx("/ws/other.md", "other.html");
+    const html = await render(
+      '<video><source src="clips/demo.webm" type="video/webm"></video>',
+      ctx,
+    );
+
+    expect(html).toContain('src="clips/demo.webm"');
+    expect(ctx.assets.get("/ws/clips/demo.webm")).toBe("clips/demo.webm");
+  });
 });

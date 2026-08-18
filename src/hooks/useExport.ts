@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ExportFormat } from "@/lib/export/writeExport";
 import { pickSave } from "@/lib/pickers";
-import type { PrintSettings } from "@/lib/settings";
+import { epubMediaLimitBytes, type PrintSettings } from "@/lib/settings";
 import type { TocEntry } from "./useTableOfContents";
 
 export type { ExportFormat };
@@ -39,6 +39,7 @@ export function useExport({
 }: UseExportOptions): ExportHandlers {
   const { t } = useTranslation("common");
   const includeToc = settings.includeToc;
+  const epubMediaLimit = epubMediaLimitBytes(settings.epubMediaLimit);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
 
   const run = useCallback(
@@ -84,14 +85,14 @@ export function useExport({
         // Same gate the CLI export uses; normally settles in one quiet window.
         await waitForRenderIdle();
         if (canvas) await exportCanvas(format, path, meta);
-        else await exportDocument(format, path, meta, { entries, includeToc });
+        else await exportDocument(format, path, meta, { entries, includeToc, epubMediaLimit });
       } catch (err) {
         console.error(`Failed to export ${format}:`, err);
       } finally {
         setExporting(null);
       }
     },
-    [entries, includeToc, filePath, content, t],
+    [entries, includeToc, epubMediaLimit, filePath, content, t],
   );
 
   // Handler identities depend only on `run`, so they stay stable while

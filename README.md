@@ -32,7 +32,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Wikilinks and backlinks with hover preview and inline note embeds (`[[note]]`, `![[note]]`)
 - Math (KaTeX), Mermaid and D2 diagrams, CSV/TSV tables, and syntax-highlighted code (6 themes)
 - YAML frontmatter, sanitised inline HTML, and bidirectional (RTL) text
-- Local and remote images with a zoomable lightbox
+- Local and remote images with a zoomable lightbox, plus inline video and audio playback
 - Per-syntax toggles in Settings → Markdown
 
 ### Editor

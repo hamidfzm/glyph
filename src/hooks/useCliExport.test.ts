@@ -19,7 +19,7 @@ vi.mock("@/lib/export/cliDocumentExport", () => ({
 
 // No SettingsProvider in these renders, and the context default reports
 // `loaded: false`, which is the gate the runner waits on.
-const settings = { loaded: true, settings: { print: { includeToc: true } } };
+const settings = { loaded: true, settings: { print: { includeToc: true, epubMediaLimit: "10" } } };
 vi.mock("@/hooks/useSettings", () => ({
   useSettings: () => settings,
 }));
@@ -138,6 +138,7 @@ describe("useCliExport", () => {
       // Straight from the persisted print settings.
       includeToc: true,
       content: "# Notes",
+      epubMediaLimit: 10 * 1024 * 1024,
     });
     expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
       code: 0,

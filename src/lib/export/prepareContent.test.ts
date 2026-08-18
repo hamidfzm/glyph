@@ -337,4 +337,49 @@ describe("prepareContent", () => {
     setBody(`<img src="https://example.com/err.png">`);
     expect(await prepareHtml()).toContain("https://example.com/err.png");
   });
+
+  it("degrades media to a link and inlines its poster frame", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        blob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }),
+      })),
+    );
+    setBody(
+      `<video src="asset://localhost/ws/clip.mp4" poster="asset://localhost/ws/cover.png"` +
+        ` data-media-path="/ws/clip.mp4"></video>`,
+    );
+
+    const html = await prepareHtml();
+
+    expect(html).not.toContain("<video");
+    expect(html).toContain('href="clip.mp4"');
+    // The fallback poster rides the image pass, so no asset: URL survives.
+    expect(html).toContain("data:image/png;base64,");
+    expect(html).not.toContain("data-media-path");
+  });
+
+  it("packages media into the returned list when a limit allows it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        headers: new Headers({ "content-length": "3" }),
+        arrayBuffer: async () => new ArrayBuffer(3),
+        blob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }),
+      })),
+    );
+    setBody(`<video src="asset://localhost/ws/clip.mp4" data-media-path="/ws/clip.mp4"></video>`);
+
+    const result = await prepareContent({
+      entries: ENTRIES,
+      includeToc: false,
+      mediaLimit: 1024,
+    });
+
+    expect(result?.media).toHaveLength(1);
+    expect(result?.html).toContain("<video");
+    expect(result?.html).toContain(`src="${result?.media[0].href}"`);
+  });
 });
