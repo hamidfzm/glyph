@@ -33,9 +33,10 @@ function fallbackNodes(el: Element, doc: Document): Element[] {
   const local = localSource(el)?.path;
   const remote = el.getAttribute("src") ?? el.querySelector("source")?.getAttribute("src");
   const source = local ?? remote ?? "";
-  const label = basename(source) || source;
-  // Nothing nameable to link to: drop the element rather than emit an empty
-  // anchor, which in an exported HTML file would point back at the document.
+  // A local file is named; a remote one keeps its URL, the only form of it that
+  // still leads anywhere once the document has left the app.
+  const label = local ? basename(source) : source;
+  // Nothing to name: drop the element rather than emit an empty paragraph.
   if (!label) return [];
   const nodes: Element[] = [];
 
@@ -50,20 +51,14 @@ function fallbackNodes(el: Element, doc: Document): Element[] {
     nodes.push(frame);
   }
 
+  // Named, never linked. The export does not carry the file, so a local name
+  // would only resolve if the reader put the media back beside the document,
+  // and a document-supplied href in a file opened outside the app is a sink
+  // worth not having at all. A remote source keeps its full URL as the label,
+  // which a reader can still copy.
   const line = doc.createElement("p");
   line.className = "markdown-media-fallback";
-  // Only a remote source gets a link, and only over http(s): an exported file
-  // is opened outside the app, where a stray scheme would be the reader's
-  // problem. A local file is named instead, since the export does not carry it
-  // and a bare file name would only resolve if the reader put it back.
-  if (!local && /^https?:\/\//i.test(source)) {
-    const link = doc.createElement("a");
-    link.setAttribute("href", source);
-    link.textContent = label;
-    line.appendChild(link);
-  } else {
-    line.textContent = label;
-  }
+  line.textContent = label;
   nodes.push(line);
   return nodes;
 }

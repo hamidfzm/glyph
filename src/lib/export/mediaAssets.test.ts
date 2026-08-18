@@ -66,10 +66,7 @@ describe("packageExportMedia", () => {
 
     expect(packaged).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
-    // The remote URL is the only place that copy can still be reached, so the
-    // link keeps it and only the label is shortened to the file name.
-    expect(el.querySelector("a")?.getAttribute("href")).toBe("https://example.com/clip.mp4");
-    expect(el.querySelector("a")?.textContent).toBe("clip.mp4");
+    expect(el.textContent).toBe("https://example.com/clip.mp4");
   });
 
   it("packages a local file under the limit and points the element at it", async () => {
@@ -251,27 +248,18 @@ describe("packageExportMedia", () => {
 
     await packageExportMedia(el, 10 * MB);
 
-    // An empty anchor would link back at the exported document itself.
     expect(el.querySelector("video")).toBeNull();
-    expect(el.querySelector("a")).toBeNull();
+    expect(el.querySelector("p")).toBeNull();
   });
 
-  it("names but does not link a source a browser should not follow", async () => {
-    const el = body('<video src="javascript:alert(1)"></video>');
-
-    await packageExportMedia(el, 0);
-
-    expect(el.querySelector("a")).toBeNull();
-    expect(el.textContent).toBe("javascript:alert(1)");
-  });
-
-  it("links a remote source, the one copy a reader can still reach", async () => {
+  it("names a remote source by its full URL, which a reader can still copy", async () => {
     const el = body('<video src="https://example.com/clips/clip.mp4"></video>');
 
     await packageExportMedia(el, 0);
 
-    const link = el.querySelector("a");
-    expect(link?.getAttribute("href")).toBe("https://example.com/clips/clip.mp4");
-    expect(link?.textContent).toBe("clip.mp4");
+    // Never a link: an exported file is opened outside the app, so it carries
+    // no href the document controls.
+    expect(el.querySelector("a")).toBeNull();
+    expect(el.textContent).toBe("https://example.com/clips/clip.mp4");
   });
 });

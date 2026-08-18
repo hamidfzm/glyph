@@ -338,7 +338,7 @@ describe("prepareContent", () => {
     expect(await prepareHtml()).toContain("https://example.com/err.png");
   });
 
-  it("degrades media to a link and inlines its poster frame", async () => {
+  it("degrades media to its name and inlines the poster frame", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -355,6 +355,7 @@ describe("prepareContent", () => {
 
     expect(html).not.toContain("<video");
     expect(html).toContain("clip.mp4");
+    expect(html).not.toContain("<a");
     // The fallback poster rides the image pass, so no asset: URL survives.
     expect(html).toContain("data:image/png;base64,");
     expect(html).not.toContain("data-media-path");

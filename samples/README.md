@@ -347,8 +347,8 @@ work too, which is how you offer the same clip in more than one format:
 Exports differ by format, because only some can carry the bytes. The website
 export copies media into the output tree and keeps the player. EPUB packages
 files below the size limit in Settings > Print (turn it off, or raise it to 50
-or 100 MB). HTML, DOCX, and PDF show the poster frame and the file name, so the
-document stays a single file; a remote clip keeps its link.
+or 100 MB). HTML, DOCX, and PDF show the poster frame and name the file, so the
+document stays a single file.
 
 ## Links
 

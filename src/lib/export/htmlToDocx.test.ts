@@ -143,13 +143,13 @@ describe("convertHtmlToDocx", () => {
     expect(blocks[0]).toBeInstanceOf(Paragraph);
   });
 
-  it("renders the media fallback as a poster paragraph and a link paragraph", () => {
+  it("renders the media fallback as a poster paragraph and a named paragraph", () => {
     const blocks = convertHtmlToDocx(
       '<p class="markdown-media-fallback"><img src="data:image/png;base64,AAAA" alt="clip.mp4"></p>' +
-        '<p class="markdown-media-fallback"><a href="https://example.com/clip.mp4">clip.mp4</a></p>',
+        '<p class="markdown-media-fallback">clip.mp4</p>',
     );
     // An undecodable poster degrades to its alt text, so both paragraphs
-    // survive with the file name a reader can act on.
+    // survive naming the file a reader can go find.
     expect(blocks).toHaveLength(2);
     expect(JSON.stringify(blocks)).toContain("clip.mp4");
   });
