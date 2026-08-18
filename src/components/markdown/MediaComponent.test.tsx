@@ -83,6 +83,24 @@ describe("useVideoComponent", () => {
     expect(container.querySelector("video")).not.toBeNull();
   });
 
+  it("looks past the whitespace between the tags to find a playable source", () => {
+    const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
+    const Video = result.current;
+    const node = {
+      children: [
+        { type: "text", value: " " },
+        { type: "element", tagName: "source", properties: { src: "clip.webm" } },
+      ],
+    };
+    const { container } = renderInWorkspace(
+      <Video node={node as never}>
+        <source src="clip.webm" />
+      </Video>,
+      "/notes",
+    );
+    expect(container.querySelector("video")).not.toBeNull();
+  });
+
   it("renders nothing when every child source escapes the workspace root too", () => {
     const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
     const Video = result.current;
