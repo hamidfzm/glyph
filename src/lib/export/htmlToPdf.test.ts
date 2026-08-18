@@ -130,7 +130,7 @@ describe("convertHtmlToPdf", () => {
   it("renders the media fallback as a poster image and a named link", () => {
     const content = convertHtmlToPdf(
       `<p class="markdown-media-fallback"><img src="${pngDataUri()}" alt="clip.mp4"></p>` +
-        '<p class="markdown-media-fallback"><a href="clip.mp4">clip.mp4</a></p>',
+        '<p class="markdown-media-fallback"><a href="https://example.com/clip.mp4">clip.mp4</a></p>',
     );
     const json = JSON.stringify(content);
     expect(json).toContain('"image"');

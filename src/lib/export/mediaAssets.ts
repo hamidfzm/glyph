@@ -1,6 +1,5 @@
 import { mediaMimeType } from "@/lib/mediaExtensions";
 import { basename } from "@/lib/paths";
-import { isRelativeLocalHref } from "@/lib/relativePath";
 
 /** A media file carried inside an export container (currently EPUB only). */
 export interface PackagedMedia {
@@ -27,15 +26,6 @@ function localSource(el: Element): { path: string; url: string } | null {
   return path && url ? { path, url } : null;
 }
 
-// An exported document is opened by a browser, so the only hrefs worth writing
-// are ones it can follow harmlessly: a relative file name, or http(s). The
-// sanitizer already confines `src` to those, and this keeps anything that got
-// into the live DOM by another route out of the file handed to the user.
-function exportableHref(value: string): string | null {
-  if (isRelativeLocalHref(value)) return value;
-  return /^https?:/i.test(value) ? value : null;
-}
-
 // A poster image and its link are separate paragraphs on purpose: the PDF
 // walker only embeds an image when it is a paragraph's sole child, and a linked
 // image degrades to its alt text there.
@@ -47,10 +37,6 @@ function fallbackNodes(el: Element, doc: Document): Element[] {
   // Nothing nameable to link to: drop the element rather than emit an empty
   // anchor, which in an exported HTML file would point back at the document.
   if (!label) return [];
-  // A local file is linked by name, so no absolute path leaks and the link
-  // resolves for media that sat beside the document. A remote one keeps its
-  // URL, the only place that copy can still be reached.
-  const href = exportableHref(local ? label : source);
   const nodes: Element[] = [];
 
   const poster = el.getAttribute("poster");
@@ -66,14 +52,17 @@ function fallbackNodes(el: Element, doc: Document): Element[] {
 
   const line = doc.createElement("p");
   line.className = "markdown-media-fallback";
-  if (href === null) {
-    // Nowhere safe to point: name the media without offering the link.
-    line.textContent = label;
-  } else {
+  // Only a remote source gets a link, and only over http(s): an exported file
+  // is opened outside the app, where a stray scheme would be the reader's
+  // problem. A local file is named instead, since the export does not carry it
+  // and a bare file name would only resolve if the reader put it back.
+  if (!local && /^https?:\/\//i.test(source)) {
     const link = doc.createElement("a");
-    link.setAttribute("href", href);
+    link.setAttribute("href", source);
     link.textContent = label;
     line.appendChild(link);
+  } else {
+    line.textContent = label;
   }
   nodes.push(line);
   return nodes;

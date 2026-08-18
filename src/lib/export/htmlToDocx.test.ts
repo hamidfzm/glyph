@@ -146,7 +146,7 @@ describe("convertHtmlToDocx", () => {
   it("renders the media fallback as a poster paragraph and a link paragraph", () => {
     const blocks = convertHtmlToDocx(
       '<p class="markdown-media-fallback"><img src="data:image/png;base64,AAAA" alt="clip.mp4"></p>' +
-        '<p class="markdown-media-fallback"><a href="clip.mp4">clip.mp4</a></p>',
+        '<p class="markdown-media-fallback"><a href="https://example.com/clip.mp4">clip.mp4</a></p>',
     );
     // An undecodable poster degrades to its alt text, so both paragraphs
     // survive with the file name a reader can act on.

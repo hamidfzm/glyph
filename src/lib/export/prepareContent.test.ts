@@ -354,7 +354,7 @@ describe("prepareContent", () => {
     const html = await prepareHtml();
 
     expect(html).not.toContain("<video");
-    expect(html).toContain('href="clip.mp4"');
+    expect(html).toContain("clip.mp4");
     // The fallback poster rides the image pass, so no asset: URL survives.
     expect(html).toContain("data:image/png;base64,");
     expect(html).not.toContain("data-media-path");

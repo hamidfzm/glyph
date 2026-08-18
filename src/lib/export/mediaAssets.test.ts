@@ -36,7 +36,9 @@ describe("packageExportMedia", () => {
 
     expect(packaged).toEqual([]);
     expect(el.querySelector("video")).toBeNull();
-    expect(el.querySelector("a")?.getAttribute("href")).toBe("clip.mp4");
+    // Named, not linked: the export does not carry the file.
+    expect(el.textContent).toBe("clip.mp4");
+    expect(el.querySelector("a")).toBeNull();
     // The poster is its own paragraph: the PDF walker only embeds an image
     // that is a paragraph's sole child.
     const frame = el.querySelector("p > img");
@@ -51,7 +53,7 @@ describe("packageExportMedia", () => {
 
     await packageExportMedia(el, 0);
 
-    expect(el.querySelector("a")?.textContent).toBe("memo.mp3");
+    expect(el.textContent).toBe("memo.mp3");
     expect(el.querySelector("img")).toBeNull();
   });
 
@@ -96,7 +98,7 @@ describe("packageExportMedia", () => {
     const packaged = await packageExportMedia(el, 10 * MB);
 
     expect(packaged).toEqual([]);
-    expect(el.querySelector("a")?.getAttribute("href")).toBe("big.mp4");
+    expect(el.textContent).toBe("big.mp4");
   });
 
   it("catches an oversized body when no length was declared", async () => {
@@ -142,7 +144,7 @@ describe("packageExportMedia", () => {
 
     await packageExportMedia(el, 0);
 
-    expect(el.querySelector("a")?.getAttribute("href")).toBe("clip.webm");
+    expect(el.textContent).toBe("clip.webm");
   });
 
   it("falls back when the asset read fails", async () => {
@@ -157,7 +159,7 @@ describe("packageExportMedia", () => {
     const packaged = await packageExportMedia(el, 10 * MB);
 
     expect(packaged).toEqual([]);
-    expect(el.querySelector("a")?.getAttribute("href")).toBe("clip.mp4");
+    expect(el.textContent).toBe("clip.mp4");
   });
 
   it("falls back for a container it cannot declare a media type for", async () => {
@@ -186,7 +188,7 @@ describe("packageExportMedia", () => {
     );
 
     await expect(packageExportMedia(el, 10 * MB)).resolves.toEqual([]);
-    expect(el.querySelector("a")?.getAttribute("href")).toBe("clip.mp4");
+    expect(el.textContent).toBe("clip.mp4");
   });
 
   it("packages a file once when two elements play it", async () => {
@@ -216,7 +218,7 @@ describe("packageExportMedia", () => {
     // The second file fits the per-file limit but not what is left of it.
     expect(packaged).toHaveLength(1);
     expect(el.querySelectorAll("video")).toHaveLength(1);
-    expect(el.querySelector("a")?.getAttribute("href")).toBe("two.mp4");
+    expect(el.textContent).toBe("two.mp4");
   });
 
   it("encodes the href while the zip entry keeps the file name", async () => {
@@ -261,5 +263,15 @@ describe("packageExportMedia", () => {
 
     expect(el.querySelector("a")).toBeNull();
     expect(el.textContent).toBe("javascript:alert(1)");
+  });
+
+  it("links a remote source, the one copy a reader can still reach", async () => {
+    const el = body('<video src="https://example.com/clips/clip.mp4"></video>');
+
+    await packageExportMedia(el, 0);
+
+    const link = el.querySelector("a");
+    expect(link?.getAttribute("href")).toBe("https://example.com/clips/clip.mp4");
+    expect(link?.textContent).toBe("clip.mp4");
   });
 });
