@@ -144,4 +144,33 @@ describe("packageExportMedia", () => {
 
     expect(el.querySelector("a")?.getAttribute("href")).toBe("clip.webm");
   });
+
+  it("falls back when the asset read fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, headers: new Headers() })),
+    );
+    const el = body(
+      '<video src="asset://localhost/notes/clip.mp4" data-media-path="/notes/clip.mp4"></video>',
+    );
+
+    const packaged = await packageExportMedia(el, 10 * MB);
+
+    expect(packaged).toEqual([]);
+    expect(el.querySelector("a")?.getAttribute("href")).toBe("clip.mp4");
+  });
+
+  it("falls back for a container it cannot declare a media type for", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const el = body(
+      '<video src="asset://localhost/notes/clip.mkv" data-media-path="/notes/clip.mkv"></video>',
+    );
+
+    const packaged = await packageExportMedia(el, 10 * MB);
+
+    expect(packaged).toEqual([]);
+    // An EPUB manifest entry needs a media type, so it is never read at all.
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });
