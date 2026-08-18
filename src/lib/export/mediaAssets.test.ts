@@ -29,7 +29,7 @@ describe("packageExportMedia", () => {
   it("degrades a local video to a poster frame and a link", async () => {
     const el = body(
       '<video src="asset://localhost/notes/clip.mp4" poster="asset://localhost/notes/cover.png"' +
-        ' data-media-path="/notes/clip.mp4" data-poster-path="/notes/cover.png"></video>',
+        ' data-media-path="/notes/clip.mp4"></video>',
     );
 
     const packaged = await packageExportMedia(el, 0);
@@ -64,7 +64,10 @@ describe("packageExportMedia", () => {
 
     expect(packaged).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(el.querySelector("a")?.getAttribute("href")).toBe("clip.mp4");
+    // The remote URL is the only place that copy can still be reached, so the
+    // link keeps it and only the label is shortened to the file name.
+    expect(el.querySelector("a")?.getAttribute("href")).toBe("https://example.com/clip.mp4");
+    expect(el.querySelector("a")?.textContent).toBe("clip.mp4");
   });
 
   it("packages a local file under the limit and points the element at it", async () => {
@@ -121,16 +124,24 @@ describe("packageExportMedia", () => {
     expect(el.querySelector("video")?.getAttribute("src")).toBe(packaged[0].href);
   });
 
-  it("strips the exporter-only path attributes from the output", async () => {
+  it("strips the exporter-only path attribute from the output", async () => {
     mockFetch(MB);
     const el = body(
-      '<video src="asset://localhost/notes/clip.mp4" data-media-path="/notes/clip.mp4"' +
-        ' data-poster-path="/notes/cover.png"></video>',
+      '<video src="asset://localhost/notes/clip.mp4" data-media-path="/notes/clip.mp4"></video>',
     );
 
     await packageExportMedia(el, 10 * MB);
 
     expect(el.innerHTML).not.toContain("data-media-path");
-    expect(el.innerHTML).not.toContain("data-poster-path");
+  });
+
+  it("names the fallback link after a source child when the element has no src", async () => {
+    const el = body(
+      '<video><source src="asset://localhost/notes/clip.webm" data-media-path="/notes/clip.webm"></video>',
+    );
+
+    await packageExportMedia(el, 0);
+
+    expect(el.querySelector("a")?.getAttribute("href")).toBe("clip.webm");
   });
 });

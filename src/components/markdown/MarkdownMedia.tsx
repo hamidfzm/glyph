@@ -1,4 +1,4 @@
-import type { ComponentPropsWithoutRef } from "react";
+import { Children, type ComponentPropsWithoutRef, isValidElement } from "react";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { resolveAssetRef } from "./resolveImageSrc";
 
@@ -22,26 +22,26 @@ export function MarkdownMedia({
   const media = resolveAssetRef(src, filePath, workspaceRoot);
   const posterFrame = resolveAssetRef(poster, filePath, workspaceRoot);
 
-  // Nothing to play: a refused src with no <source> children of its own.
-  if (!media.src && !children) return null;
+  // Nothing to play: a refused src and no <source> child that resolved either.
+  // Whitespace between the tags is a child too, hence the element filter.
+  const sources = Children.toArray(children).filter(isValidElement);
+  if (!media.src && sources.length === 0) return null;
 
   return (
     <Tag
       {...rest}
       src={media.src}
-      // Only <video> carries a poster: the sanitizer keeps the attribute off
-      // <audio>, so this resolves to undefined there and React omits it.
+      // The sanitizer keeps `poster` off <audio>, so it resolves to undefined
+      // there and React omits it.
       poster={posterFrame.src}
-      // Media decoding runs in the OS media stack, a far larger parsing surface
-      // than the image decoders, so an untrusted container stays unparsed until
-      // the user presses play.
+      // Decoding runs in the OS media stack, a far larger parsing surface than
+      // the image decoders, so an untrusted container stays unparsed until the
+      // user presses play. With `autoplay` sanitized away, controls are then
+      // the only way to start it.
       preload="none"
-      // The sanitizer drops `autoplay`, so without controls a media element
-      // could never be played at all.
       controls
       // Absolute source path for the exporters, which strip it from output.
       data-media-path={media.path}
-      data-poster-path={posterFrame.path}
     >
       {children}
     </Tag>

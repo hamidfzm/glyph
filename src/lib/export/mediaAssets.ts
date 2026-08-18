@@ -14,12 +14,27 @@ export interface PackagedMedia {
 // bytes. Everywhere else the element degrades to its poster frame plus a link
 // named after the file, which is what DOCX, PDF, and plain HTML can represent.
 
+/** The playable local source: the element's own, else its first source child. */
+function localSource(el: Element): { path: string; url: string } | null {
+  const own = el.getAttribute("data-media-path");
+  if (own) return { path: own, url: el.getAttribute("src") ?? "" };
+  const child = el.querySelector("source[data-media-path]");
+  const path = child?.getAttribute("data-media-path");
+  if (!path) return null;
+  return { path, url: child?.getAttribute("src") ?? "" };
+}
+
 // A poster image and its link are separate paragraphs on purpose: the PDF
 // walker only embeds an image when it is a paragraph's sole child, and a linked
 // image degrades to its alt text there.
 function fallbackNodes(el: Element, doc: Document): Element[] {
-  const source = el.getAttribute("data-media-path") ?? el.getAttribute("src") ?? "";
-  const label = basename(source) || source;
+  const local = localSource(el)?.path;
+  const remote = el.getAttribute("src") ?? el.querySelector("source")?.getAttribute("src") ?? "";
+  const label = basename(local ?? remote) || remote;
+  // A local file is linked by name, so no absolute path leaks and the link
+  // resolves once the reader keeps the media beside the document. A remote one
+  // keeps its URL, which is the only place that copy can still be reached.
+  const href = local ? label : remote;
   const nodes: Element[] = [];
 
   const poster = el.getAttribute("poster");
@@ -36,25 +51,11 @@ function fallbackNodes(el: Element, doc: Document): Element[] {
   const line = doc.createElement("p");
   line.className = "markdown-media-fallback";
   const link = doc.createElement("a");
-  // Relative to the exported document, so the link resolves once the reader
-  // keeps the media beside it and no absolute local path leaks into the output.
-  link.setAttribute("href", label);
+  link.setAttribute("href", href);
   link.textContent = label;
   line.appendChild(link);
   nodes.push(line);
   return nodes;
-}
-
-/** The playable source of a media element: its own src, else its first source child. */
-function localPathOf(el: Element): string | null {
-  const own = el.getAttribute("data-media-path");
-  if (own) return own;
-  return el.querySelector("source[data-media-path]")?.getAttribute("data-media-path") ?? null;
-}
-
-function assetUrlOf(el: Element): string | null {
-  if (el.getAttribute("data-media-path")) return el.getAttribute("src");
-  return el.querySelector("source[data-media-path]")?.getAttribute("src") ?? null;
 }
 
 // Read a media file through the asset protocol, refusing anything over `limit`
@@ -67,6 +68,20 @@ async function readUnderLimit(url: string, limit: number): Promise<Uint8Array | 
   if (declared > limit) return null;
   const bytes = new Uint8Array(await res.arrayBuffer());
   return bytes.byteLength > limit ? null : bytes;
+}
+
+/** The packageable payload of one element, or null when it has to fall back. */
+async function readPackageable(
+  el: Element,
+  limit: number,
+): Promise<{ bytes: Uint8Array; mediaType: string; name: string } | null> {
+  if (limit <= 0) return null;
+  const source = localSource(el);
+  if (!source) return null;
+  const mediaType = mediaMimeType(source.path);
+  if (!mediaType) return null;
+  const bytes = await readUnderLimit(source.url, limit);
+  return bytes ? { bytes, mediaType, name: basename(source.path) } : null;
 }
 
 /**
@@ -83,18 +98,14 @@ export async function packageExportMedia(
   const packaged: PackagedMedia[] = [];
 
   for (const el of Array.from(clone.querySelectorAll("video, audio"))) {
-    const path = localPathOf(el);
-    const url = assetUrlOf(el);
-    const mediaType = path ? mediaMimeType(path) : undefined;
-    const bytes = limit > 0 && path && url && mediaType ? await readUnderLimit(url, limit) : null;
-
-    if (!bytes || !path || !mediaType) {
+    const file = await readPackageable(el, limit);
+    if (!file) {
       el.replaceWith(...fallbackNodes(el, doc));
       continue;
     }
 
-    const href = `media/${packaged.length}-${basename(path)}`;
-    packaged.push({ href, bytes, mediaType });
+    const href = `media/${packaged.length}-${file.name}`;
+    packaged.push({ href, bytes: file.bytes, mediaType: file.mediaType });
     el.setAttribute("src", href);
     el.removeAttribute("poster");
     // Child sources would still point at asset: URLs the container cannot
@@ -102,10 +113,9 @@ export async function packageExportMedia(
     for (const source of Array.from(el.querySelectorAll("source"))) source.remove();
   }
 
-  // The absolute paths are an app-side detail; they never belong in output.
-  for (const el of Array.from(clone.querySelectorAll("[data-media-path], [data-poster-path]"))) {
+  // The absolute path is an app-side detail; it never belongs in output.
+  for (const el of Array.from(clone.querySelectorAll("[data-media-path]"))) {
     el.removeAttribute("data-media-path");
-    el.removeAttribute("data-poster-path");
   }
   return packaged;
 }

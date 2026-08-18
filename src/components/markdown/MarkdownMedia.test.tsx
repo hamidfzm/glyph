@@ -39,14 +39,13 @@ describe("useVideoComponent", () => {
     expect(video?.hasAttribute("controls")).toBe(true);
   });
 
-  it("resolves the poster frame and carries both source paths for exporters", () => {
+  it("resolves the poster frame and carries the source path for exporters", () => {
     const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
     const Video = result.current;
     const { container } = render(<Video src="clip.mp4" poster="cover.png" />);
     const video = container.querySelector("video");
     expect(video?.getAttribute("poster")).toContain("/notes/cover.png");
     expect(video?.getAttribute("data-media-path")).toContain("/notes/clip.mp4");
-    expect(video?.getAttribute("data-poster-path")).toContain("/notes/cover.png");
   });
 
   it("renders nothing when the src escapes the workspace root", () => {
@@ -65,6 +64,13 @@ describe("useVideoComponent", () => {
     const video = container.querySelector("video");
     expect(video).not.toBeNull();
     expect(video?.hasAttribute("poster")).toBe(false);
+  });
+
+  it("renders nothing when a refused src is left with only whitespace children", () => {
+    const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
+    const Video = result.current;
+    const { container } = renderInWorkspace(<Video src="../../secrets/clip.mp4"> </Video>);
+    expect(container.querySelector("video")).toBeNull();
   });
 
   it("keeps a video whose only sources are children", () => {
