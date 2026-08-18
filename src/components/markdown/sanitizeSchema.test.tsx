@@ -70,4 +70,18 @@ describe("markdownSanitizeSchema media", () => {
     expect(html).toContain("<source");
     expect(html).toContain("video/webm");
   });
+
+  it("drops a poster with a non-http scheme", () => {
+    const html = renderHtml(
+      '<video src="https://example.com/clip.mp4" poster="file:///c:/users/me/private.png"></video>',
+    );
+    expect(html).toContain("<video");
+    expect(html).not.toContain("file:///");
+  });
+
+  it("strips author-supplied preload, which the renderers set themselves", () => {
+    const html = renderHtml('<video src="https://example.com/clip.mp4" preload="auto"></video>');
+    expect(html).toContain('preload="none"');
+    expect(html).not.toContain('preload="auto"');
+  });
 });

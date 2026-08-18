@@ -100,6 +100,11 @@ export async function prepareContent({
     checkbox.setAttribute("disabled", "");
   }
 
+  // Ahead of the link and image passes: a media element that cannot be packaged
+  // degrades to a poster <img> plus an <a>, which those passes then treat like
+  // any other image and link.
+  const media = await packageExportMedia(clone, mediaLimit);
+
   // External links should open in a new tab/window from the exported file.
   // The `a[href]` selector guarantees the attribute is present.
   for (const anchor of Array.from(clone.querySelectorAll("a[href]"))) {
@@ -108,10 +113,6 @@ export async function prepareContent({
       anchor.setAttribute("rel", "noopener noreferrer");
     }
   }
-
-  // Before the image pass: a media element that cannot be packaged degrades to
-  // a poster <img>, which the pass below then inlines like any other image.
-  const media = await packageExportMedia(clone, mediaLimit);
 
   await Promise.all([
     ...Array.from(clone.querySelectorAll("img")).map((el) => embedAsset(el, "src")),

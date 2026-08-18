@@ -97,7 +97,7 @@ describe("epubMediaLimitBytes", () => {
     expect(epubMediaLimitBytes("100")).toBe(100 * 1024 * 1024);
   });
 
-  it("reports no budget for off, and for a settings file that predates the option", () => {
+  it("reports no budget for off, or for any value that is not a number", () => {
     expect(epubMediaLimitBytes("off")).toBe(0);
     expect(epubMediaLimitBytes(undefined as unknown as "off")).toBe(0);
   });

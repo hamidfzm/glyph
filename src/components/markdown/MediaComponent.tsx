@@ -1,6 +1,11 @@
 import { type ComponentPropsWithoutRef, useCallback } from "react";
+import type { ExtraProps } from "react-markdown";
 import { MarkdownMedia } from "./MarkdownMedia";
 import { MarkdownMediaSource } from "./MarkdownMediaSource";
+
+// ReactMarkdown passes the hast node alongside the DOM props; MarkdownMedia
+// reads it to tell a resolved <source> child from a refused one.
+type MediaProps<T extends "video" | "audio" | "source"> = ComponentPropsWithoutRef<T> & ExtraProps;
 
 // Binds the document's file path into the `video`, `audio`, and `source`
 // components ReactMarkdown renders, so relative media paths resolve against the
@@ -9,27 +14,21 @@ import { MarkdownMediaSource } from "./MarkdownMediaSource";
 
 export function useVideoComponent(filePath: string | undefined) {
   return useCallback(
-    (props: ComponentPropsWithoutRef<"video">) => (
-      <MarkdownMedia {...props} tag="video" filePath={filePath} />
-    ),
+    (props: MediaProps<"video">) => <MarkdownMedia {...props} tag="video" filePath={filePath} />,
     [filePath],
   );
 }
 
 export function useAudioComponent(filePath: string | undefined) {
   return useCallback(
-    (props: ComponentPropsWithoutRef<"audio">) => (
-      <MarkdownMedia {...props} tag="audio" filePath={filePath} />
-    ),
+    (props: MediaProps<"audio">) => <MarkdownMedia {...props} tag="audio" filePath={filePath} />,
     [filePath],
   );
 }
 
 export function useMediaSourceComponent(filePath: string | undefined) {
   return useCallback(
-    (props: ComponentPropsWithoutRef<"source">) => (
-      <MarkdownMediaSource {...props} filePath={filePath} />
-    ),
+    (props: MediaProps<"source">) => <MarkdownMediaSource {...props} filePath={filePath} />,
     [filePath],
   );
 }

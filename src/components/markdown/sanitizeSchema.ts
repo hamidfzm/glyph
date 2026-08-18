@@ -139,6 +139,10 @@ export const markdownSanitizeSchema = {
   protocols: {
     ...defaultSchema.protocols,
     xLinkHref: ["http", "https"],
+    // `poster` is not in the default protocol list, and the website export is a
+    // bare unified pipeline with no url transform of its own, so without this a
+    // `file:` poster would survive verbatim into a published page.
+    poster: ["http", "https"],
   },
   // Disable id/name namespacing. The default schema rewrites these by
   // prepending `user-content-`, but remark-gfm v4 already emits footnote
@@ -194,11 +198,11 @@ export const markdownSanitizeSchema = {
     ],
     img: [...(defaultSchema.attributes?.img ?? []), "align", "width", "height"],
     details: [...(defaultSchema.attributes?.details ?? []), "open"],
-    // No `autoplay`: opening a document must never start playback, or a remote
-    // fetch, without a user gesture. MediaComponent forces `controls` and
-    // `preload="none"` on top of whatever the author wrote.
-    video: ["src", "controls", "width", "height", "poster", "loop", "muted", "preload"],
-    audio: ["src", "controls", "loop", "muted", "preload"],
+    // Neither `autoplay` nor `preload`: opening a document must never start
+    // playback, or a remote fetch, without a user gesture. Both renderers set
+    // `preload="none"` and `controls` themselves.
+    video: ["src", "controls", "width", "height", "poster", "loop", "muted"],
+    audio: ["src", "controls", "loop", "muted"],
     source: ["src", "type"],
     ...svgAttributes,
   },

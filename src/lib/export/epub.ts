@@ -135,6 +135,10 @@ export async function buildEpub({
   zip.file("OEBPS/nav.xhtml", buildNav(metadata.title, entries));
   zip.file("OEBPS/style.css", css + CODE_WRAP_CSS);
   zip.file("OEBPS/chapter.xhtml", buildChapter(metadata.title, bodyHtml, bodyClass));
-  for (const item of media) zip.file(`OEBPS/${item.href}`, item.bytes);
+  // Media is already a compressed container; deflating it again costs time on
+  // the main thread and saves nothing.
+  for (const item of media) {
+    zip.file(`OEBPS/${item.zipPath}`, item.bytes, { compression: "STORE" });
+  }
   return zip.generateAsync({ type: "uint8array" });
 }

@@ -3,7 +3,9 @@ import { basename } from "@/lib/paths";
 
 /** A media file carried inside an export container (currently EPUB only). */
 export interface PackagedMedia {
-  /** Path inside the container, also the rewritten element `src`. */
+  /** Entry path inside the container. */
+  zipPath: string;
+  /** The same path as a URL, which is what the element and manifest reference. */
   href: string;
   bytes: Uint8Array;
   mediaType: string;
@@ -31,9 +33,12 @@ function fallbackNodes(el: Element, doc: Document): Element[] {
   const local = localSource(el)?.path;
   const remote = el.getAttribute("src") ?? el.querySelector("source")?.getAttribute("src") ?? "";
   const label = basename(local ?? remote) || remote;
+  // Nothing nameable to link to: drop the element rather than emit an empty
+  // anchor, which in an exported HTML file would point back at the document.
+  if (!label) return [];
   // A local file is linked by name, so no absolute path leaks and the link
-  // resolves once the reader keeps the media beside the document. A remote one
-  // keeps its URL, which is the only place that copy can still be reached.
+  // resolves for media that sat beside the document. A remote one keeps its
+  // URL, the only place that copy can still be reached.
   const href = local ? label : remote;
   const nodes: Element[] = [];
 
@@ -58,37 +63,30 @@ function fallbackNodes(el: Element, doc: Document): Element[] {
   return nodes;
 }
 
-// Read a media file through the asset protocol, refusing anything over `limit`
+// Read a media file through the asset protocol, refusing anything over `budget`
 // before its body is touched: a large recording must not be pulled into memory
-// only to be discarded.
-async function readUnderLimit(url: string, limit: number): Promise<Uint8Array | null> {
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const declared = Number(res.headers.get("content-length"));
-  if (declared > limit) return null;
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  return bytes.byteLength > limit ? null : bytes;
-}
-
-/** The packageable payload of one element, or null when it has to fall back. */
-async function readPackageable(
-  el: Element,
-  limit: number,
-): Promise<{ bytes: Uint8Array; mediaType: string; name: string } | null> {
-  if (limit <= 0) return null;
-  const source = localSource(el);
-  if (!source) return null;
-  const mediaType = mediaMimeType(source.path);
-  if (!mediaType) return null;
-  const bytes = await readUnderLimit(source.url, limit);
-  return bytes ? { bytes, mediaType, name: basename(source.path) } : null;
+// only to be discarded. A read that throws (an unreachable network share, a
+// scheme the CSP refuses) is a fallback, never an aborted export.
+async function readUnderBudget(url: string, budget: number): Promise<Uint8Array | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const declared = Number(res.headers.get("content-length"));
+    if (declared > budget) return null;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return bytes.byteLength > budget ? null : bytes;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Rewrite every media element in `clone` for export. With `limit` bytes of
- * embedding budget (0 disables it), a local file under the limit is packaged
- * and its element rewritten to the in-container href; everything else, remote
- * sources included, degrades to the poster plus link fallback.
+ * Rewrite every media element in `clone` for export. `limit` is both the
+ * per-file ceiling and the whole container's budget (0 disables embedding):
+ * a book of several near-limit recordings would be assembled in memory and
+ * shipped over IPC as one array, so the total has to be bounded too. Files that
+ * fit are packaged and their elements rewritten to the in-container href;
+ * everything else, remote sources included, degrades to poster plus link.
  */
 export async function packageExportMedia(
   clone: HTMLElement,
@@ -96,26 +94,66 @@ export async function packageExportMedia(
 ): Promise<PackagedMedia[]> {
   const doc = clone.ownerDocument;
   const packaged: PackagedMedia[] = [];
+  // Two elements can play the same file; package the bytes once.
+  const byPath = new Map<string, PackagedMedia>();
+  let budget = limit;
 
   for (const el of Array.from(clone.querySelectorAll("video, audio"))) {
-    const file = await readPackageable(el, limit);
+    const file = await packageOne(el, Math.min(limit, budget), byPath);
     if (!file) {
       el.replaceWith(...fallbackNodes(el, doc));
       continue;
     }
-
-    const href = `media/${packaged.length}-${file.name}`;
-    packaged.push({ href, bytes: file.bytes, mediaType: file.mediaType });
-    el.setAttribute("src", href);
+    if (!packaged.includes(file)) {
+      packaged.push(file);
+      budget -= file.bytes.byteLength;
+    }
+    el.setAttribute("src", file.href);
     el.removeAttribute("poster");
     // Child sources would still point at asset: URLs the container cannot
     // resolve, and the packaged file is the one the reader should play.
     for (const source of Array.from(el.querySelectorAll("source"))) source.remove();
   }
 
+  // An orphan <source> (one whose wrapper the sanitizer unwrapped) renders
+  // nothing but would carry its asset: URL, and with it an absolute local path,
+  // straight into the exported file.
+  for (const el of Array.from(clone.querySelectorAll("source"))) {
+    if (!el.closest("video, audio")) el.remove();
+  }
   // The absolute path is an app-side detail; it never belongs in output.
   for (const el of Array.from(clone.querySelectorAll("[data-media-path]"))) {
     el.removeAttribute("data-media-path");
   }
   return packaged;
+}
+
+/** Package one element's file, reusing an earlier copy of the same path. */
+async function packageOne(
+  el: Element,
+  budget: number,
+  byPath: Map<string, PackagedMedia>,
+): Promise<PackagedMedia | null> {
+  if (budget <= 0) return null;
+  const source = localSource(el);
+  if (!source) return null;
+  const seen = byPath.get(source.path);
+  if (seen) return seen;
+  const mediaType = mediaMimeType(source.path);
+  if (!mediaType) return null;
+  const bytes = await readUnderBudget(source.url, budget);
+  if (!bytes) return null;
+
+  const name = basename(source.path);
+  const zipPath = `media/${byPath.size}-${name}`;
+  // Spaces and `#` are ordinary in file names and would truncate or invalidate
+  // the reference, so the URL form is encoded while the entry keeps the name.
+  const file = {
+    zipPath,
+    href: `media/${byPath.size}-${encodeURIComponent(name)}`,
+    bytes,
+    mediaType,
+  };
+  byPath.set(source.path, file);
+  return file;
 }

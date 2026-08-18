@@ -130,7 +130,12 @@ describe("buildEpub", () => {
       entries: ENTRIES,
       metadata: META,
       media: [
-        { href: "media/0-clip.mp4", bytes: new Uint8Array([1, 2, 3]), mediaType: "video/mp4" },
+        {
+          zipPath: "media/0-clip.mp4",
+          href: "media/0-clip.mp4",
+          bytes: new Uint8Array([1, 2, 3]),
+          mediaType: "video/mp4",
+        },
       ],
     });
 

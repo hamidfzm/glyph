@@ -1,15 +1,9 @@
 import { render, renderHook } from "@testing-library/react";
-import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
-import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import { useAudioComponent, useMediaSourceComponent, useVideoComponent } from "./MediaComponent";
-
 // A workspace root turns on the clamp that refuses references escaping it;
-// without a provider the components run in single-file mode.
-function renderInWorkspace(ui: ReactElement, root = "/notes") {
-  const tabs = { workspace: { root } } as unknown as TabsContextValue;
-  return render(<TabsContext.Provider value={tabs}>{ui}</TabsContext.Provider>);
-}
+// without one the components run in single-file mode.
+import { renderInWorkspace } from "@/test/renderInWorkspace";
+import { useAudioComponent, useMediaSourceComponent, useVideoComponent } from "./MediaComponent";
 
 describe("useVideoComponent", () => {
   it("resolves a relative src through the asset protocol", () => {
@@ -51,7 +45,7 @@ describe("useVideoComponent", () => {
   it("renders nothing when the src escapes the workspace root", () => {
     const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
     const Video = result.current;
-    const { container } = renderInWorkspace(<Video src="../../secrets/clip.mp4" />);
+    const { container } = renderInWorkspace(<Video src="../../secrets/clip.mp4" />, "/notes");
     expect(container.querySelector("video")).toBeNull();
   });
 
@@ -60,6 +54,7 @@ describe("useVideoComponent", () => {
     const Video = result.current;
     const { container } = renderInWorkspace(
       <Video src="clip.mp4" poster="../../secrets/cover.png" />,
+      "/notes",
     );
     const video = container.querySelector("video");
     expect(video).not.toBeNull();
@@ -73,15 +68,36 @@ describe("useVideoComponent", () => {
     expect(container.querySelector("video")).toBeNull();
   });
 
-  it("keeps a video whose only sources are children", () => {
+  it("keeps a video whose only playable source is a child", () => {
     const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
     const Video = result.current;
+    const node = {
+      children: [{ type: "element", tagName: "source", properties: { src: "clip.webm" } }],
+    };
     const { container } = renderInWorkspace(
-      <Video>
+      <Video node={node as never}>
         <source src="clip.webm" />
       </Video>,
+      "/notes",
     );
     expect(container.querySelector("video")).not.toBeNull();
+  });
+
+  it("renders nothing when every child source escapes the workspace root too", () => {
+    const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
+    const Video = result.current;
+    const node = {
+      children: [
+        { type: "element", tagName: "source", properties: { src: "../../secrets/clip.webm" } },
+      ],
+    };
+    const { container } = renderInWorkspace(
+      <Video src="../../secrets/clip.mp4" node={node as never}>
+        <source src="../../secrets/clip.webm" />
+      </Video>,
+      "/notes",
+    );
+    expect(container.querySelector("video")).toBeNull();
   });
 });
 
@@ -110,7 +126,7 @@ describe("useMediaSourceComponent", () => {
   it("renders nothing when its src escapes the workspace root", () => {
     const { result } = renderHook(() => useMediaSourceComponent("/notes/doc.md"));
     const Source = result.current;
-    const { container } = renderInWorkspace(<Source src="../../secrets/clip.webm" />);
+    const { container } = renderInWorkspace(<Source src="../../secrets/clip.webm" />, "/notes");
     expect(container.querySelector("source")).toBeNull();
   });
 });

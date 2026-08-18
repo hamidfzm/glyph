@@ -261,7 +261,7 @@
     },
     "epubMedia": {
       "label": "Medien in EPUB einbetten",
-      "description": "Audio und Video unter dieser Groesse ins Buch packen; groessere Dateien werden zu einem Link",
+      "description": "Audio und Video unter dieser Größe ins Buch packen; groessere Dateien werden zu einem Link",
       "off": "Aus",
       "mb": "{{limit}} MB"
     },

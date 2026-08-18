@@ -173,4 +173,74 @@ describe("packageExportMedia", () => {
     // An EPUB manifest entry needs a media type, so it is never read at all.
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("falls back when the read throws, rather than aborting the export", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("network");
+      }),
+    );
+    const el = body(
+      '<video src="asset://localhost/notes/clip.mp4" data-media-path="/notes/clip.mp4"></video>',
+    );
+
+    await expect(packageExportMedia(el, 10 * MB)).resolves.toEqual([]);
+    expect(el.querySelector("a")?.getAttribute("href")).toBe("clip.mp4");
+  });
+
+  it("packages a file once when two elements play it", async () => {
+    mockFetch(MB);
+    const el = body(
+      '<video src="asset://localhost/notes/clip.mp4" data-media-path="/notes/clip.mp4"></video>' +
+        '<video src="asset://localhost/notes/clip.mp4" data-media-path="/notes/clip.mp4"></video>',
+    );
+
+    const packaged = await packageExportMedia(el, 10 * MB);
+
+    expect(packaged).toHaveLength(1);
+    const players = el.querySelectorAll("video");
+    expect(players[0].getAttribute("src")).toBe(packaged[0].href);
+    expect(players[1].getAttribute("src")).toBe(packaged[0].href);
+  });
+
+  it("spends the limit as a whole-container budget, not per file", async () => {
+    mockFetch(6 * MB);
+    const el = body(
+      '<video src="asset://localhost/notes/one.mp4" data-media-path="/notes/one.mp4"></video>' +
+        '<video src="asset://localhost/notes/two.mp4" data-media-path="/notes/two.mp4"></video>',
+    );
+
+    const packaged = await packageExportMedia(el, 10 * MB);
+
+    // The second file fits the per-file limit but not what is left of it.
+    expect(packaged).toHaveLength(1);
+    expect(el.querySelectorAll("video")).toHaveLength(1);
+    expect(el.querySelector("a")?.getAttribute("href")).toBe("two.mp4");
+  });
+
+  it("encodes the href while the zip entry keeps the file name", async () => {
+    mockFetch(MB);
+    const el = body(
+      '<video src="asset://localhost/notes/clip%20%232.mp4" data-media-path="/notes/clip #2.mp4"></video>',
+    );
+
+    const packaged = await packageExportMedia(el, 10 * MB);
+
+    // A raw space or # in the reference would truncate or invalidate it.
+    expect(packaged[0].zipPath).toBe("media/0-clip #2.mp4");
+    expect(packaged[0].href).toBe("media/0-clip%20%232.mp4");
+    expect(el.querySelector("video")?.getAttribute("src")).toBe(packaged[0].href);
+  });
+
+  it("drops an orphan <source> so its asset URL cannot leak the local path", async () => {
+    const el = body(
+      '<p><source src="asset://localhost/notes/clip.mp4" data-media-path="/notes/clip.mp4"></p>',
+    );
+
+    await packageExportMedia(el, 0);
+
+    expect(el.querySelector("source")).toBeNull();
+    expect(el.innerHTML).not.toContain("asset://localhost");
+  });
 });
