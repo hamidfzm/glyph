@@ -253,4 +253,13 @@ describe("packageExportMedia", () => {
     expect(el.querySelector("video")).toBeNull();
     expect(el.querySelector("a")).toBeNull();
   });
+
+  it("names but does not link a source a browser should not follow", async () => {
+    const el = body('<video src="javascript:alert(1)"></video>');
+
+    await packageExportMedia(el, 0);
+
+    expect(el.querySelector("a")).toBeNull();
+    expect(el.textContent).toBe("javascript:alert(1)");
+  });
 });
