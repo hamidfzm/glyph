@@ -161,6 +161,7 @@ export const markdownSanitizeSchema = {
     "details",
     "summary",
     "video",
+    "audio",
     "source",
     ...svgTagNames,
   ],
@@ -193,7 +194,11 @@ export const markdownSanitizeSchema = {
     ],
     img: [...(defaultSchema.attributes?.img ?? []), "align", "width", "height"],
     details: [...(defaultSchema.attributes?.details ?? []), "open"],
-    video: ["src", "controls", "width", "height", "poster", "loop", "muted", "autoplay"],
+    // No `autoplay`: opening a document must never start playback, or a remote
+    // fetch, without a user gesture. MediaComponent forces `controls` and
+    // `preload="none"` on top of whatever the author wrote.
+    video: ["src", "controls", "width", "height", "poster", "loop", "muted", "preload"],
+    audio: ["src", "controls", "loop", "muted", "preload"],
     source: ["src", "type"],
     ...svgAttributes,
   },

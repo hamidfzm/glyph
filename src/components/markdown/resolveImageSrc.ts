@@ -16,22 +16,36 @@ export function toAssetUrl(path: string): string {
   return convertFileSrc(stripVerbatimPrefix(path));
 }
 
-// Resolve a markdown image `src` to something the webview can load: remote and
-// data URLs pass through untouched, while relative paths are resolved against
-// the document's directory (with `../` support) and run through Tauri's asset
-// protocol. When `root` is given (a folder workspace is open), an image that
-// resolves outside the opened folder is refused — returns undefined so the
-// caller renders nothing rather than reaching a file outside the workspace.
+// Resolve a markdown asset reference (image `src`, media `src`/`poster`/
+// `<source src>`) to something the webview can load, alongside the absolute
+// path it came from. Remote and data URLs pass through untouched and have no
+// local path; relative paths are resolved against the document's directory
+// (with `../` support) and run through Tauri's asset protocol. When `root` is
+// given (a folder workspace is open), a reference that resolves outside the
+// opened folder is refused: `src` comes back undefined so the caller renders
+// nothing rather than reaching a file outside the workspace.
+export interface ResolvedAssetRef {
+  src: string | undefined;
+  /** Absolute filesystem path, for local references only. Exporters read it. */
+  path: string | undefined;
+}
+
+export function resolveAssetRef(
+  src: string | undefined,
+  filePath: string | undefined,
+  root?: string,
+): ResolvedAssetRef {
+  if (!src || /^(https?:|data:)/i.test(src) || !filePath) return { src, path: undefined };
+  const resolved = resolveWorkspacePath(filePath, src, root);
+  if (resolved === null) return { src: undefined, path: undefined };
+  return { src: toAssetUrl(resolved), path: resolved };
+}
+
+/** The `src` half of {@link resolveAssetRef}, for callers that render images. */
 export function resolveImageSrc(
   src: string | undefined,
   filePath: string | undefined,
   root?: string,
 ): string | undefined {
-  if (!src) return src;
-  if (/^(https?:|data:)/i.test(src)) return src;
-  if (filePath) {
-    const resolved = resolveWorkspacePath(filePath, src, root);
-    return resolved === null ? undefined : toAssetUrl(resolved);
-  }
-  return src;
+  return resolveAssetRef(src, filePath, root).src;
 }

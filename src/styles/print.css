@@ -55,6 +55,7 @@
   .markdown-body table,
   .markdown-body figure,
   .markdown-body img,
+  .markdown-body video,
   .markdown-body blockquote {
     break-inside: avoid;
     page-break-inside: avoid;

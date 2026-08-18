@@ -18,6 +18,7 @@ import { FrontmatterBlock } from "./FrontmatterBlock";
 import { useImageComponent, useSvgImageComponent } from "./ImageComponent";
 import { LinkComponent, type LinkComponentProps } from "./LinkComponent";
 import { MarkdownHeading } from "./MarkdownHeading";
+import { useAudioComponent, useMediaSourceComponent, useVideoComponent } from "./MediaComponent";
 import { TableComponent } from "./TableComponent";
 import { TaskListItem } from "./TaskListItem";
 
@@ -78,6 +79,9 @@ export function MarkdownContent({
 
   const ImageComponent = useImageComponent(filePath);
   const SvgImageComponent = useSvgImageComponent(filePath);
+  const VideoComponent = useVideoComponent(filePath);
+  const AudioComponent = useAudioComponent(filePath);
+  const MediaSourceComponent = useMediaSourceComponent(filePath);
 
   // Resolve a relative link against this document's directory and open it only
   // when it stays inside the opened workspace. Gating on workspaceRoot keeps
@@ -133,6 +137,9 @@ export function MarkdownContent({
             a: LinkWithWikilink,
             img: ImageComponent,
             image: SvgImageComponent,
+            video: VideoComponent,
+            audio: AudioComponent,
+            source: MediaSourceComponent,
             pre: CodeBlockComponent,
             li: TaskListLi,
             div: DivComponent,
