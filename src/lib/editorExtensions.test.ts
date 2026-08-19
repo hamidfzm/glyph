@@ -1,3 +1,4 @@
+import { openSearchPanel, replaceAll, SearchQuery, setSearchQuery } from "@codemirror/search";
 import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -18,6 +19,7 @@ const LABELS = {
 // extensions actually resolve; each extension has its own unit test alongside.
 function mount(doc: string) {
   const onDocChange = vi.fn();
+  const onSearchPanelClose = vi.fn();
   const parent = document.createElement("div");
   document.body.appendChild(parent);
   const view = new EditorView({
@@ -35,12 +37,15 @@ function mount(doc: string) {
         pasteHtmlRef: { current: true },
         spellcheckCompartment: new Compartment(),
         spellcheckExtension: [],
+        searchPhrasesCompartment: new Compartment(),
+        searchPhrases: EditorState.phrases.of({ Find: "Buscar", "replace all": "Reemplazar todo" }),
         onDocChange,
+        onSearchPanelClose,
       }),
     }),
     parent,
   });
-  return { view, onDocChange };
+  return { view, onDocChange, onSearchPanelClose };
 }
 
 afterEach(() => {
@@ -77,6 +82,52 @@ describe("buildEditorExtensions", () => {
     });
     view.contentDOM.dispatchEvent(event);
     expect(view.state.doc.toString()).toBe("*hi*");
+  });
+
+  it("labels the search panel from the configured phrases", () => {
+    const { view } = mount("hello");
+    openSearchPanel(view);
+    const panel = view.dom.querySelector(".cm-panel.cm-search");
+    expect(panel?.querySelector("input")?.getAttribute("placeholder")).toBe("Buscar");
+    expect(panel?.querySelector("button[name=replaceAll]")?.textContent).toBe("Reemplazar todo");
+  });
+
+  it("offers replace controls for a writable document", () => {
+    const { view } = mount("hello");
+    openSearchPanel(view);
+    expect(view.dom.querySelector(".cm-panel.cm-search button[name=replace]")).not.toBeNull();
+  });
+
+  it("replaces every match and reports the new document once", () => {
+    const { view, onDocChange } = mount("cat cat cat");
+    view.dispatch({
+      effects: setSearchQuery.of(new SearchQuery({ search: "cat", replace: "dog" })),
+    });
+    replaceAll(view);
+    expect(view.state.doc.toString()).toBe("dog dog dog");
+    expect(onDocChange).toHaveBeenCalledWith("dog dog dog");
+  });
+
+  it("undoes a replace-all in one step", () => {
+    const { view } = mount("cat cat cat");
+    view.dispatch({
+      effects: setSearchQuery.of(new SearchQuery({ search: "cat", replace: "dog" })),
+    });
+    replaceAll(view);
+    view.contentDOM.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "z", code: "KeyZ", ctrlKey: true, bubbles: true }),
+    );
+    expect(view.state.doc.toString()).toBe("cat cat cat");
+  });
+
+  it("reports back when the panel is closed from inside", () => {
+    const { view, onSearchPanelClose } = mount("hello");
+    openSearchPanel(view);
+    expect(onSearchPanelClose).not.toHaveBeenCalled();
+    view.dom
+      .querySelector<HTMLButtonElement>(".cm-panel.cm-search button[name=close]")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onSearchPanelClose).toHaveBeenCalled();
   });
 
   it("opens the editor menu on right-click", () => {

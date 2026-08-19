@@ -284,3 +284,109 @@
   margin: 4px 0;
   background: var(--color-border);
 }
+
+/* CodeMirror's find/replace panel, dressed to match the preview's .search-bar.
+   It docks across the top of the editor rather than floating, because the
+   replace row makes it too tall to overlay the text comfortably. */
+.cm-panels.cm-panels-top {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.cm-panel.cm-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding-block: 6px;
+  /* Room on the end for the absolutely positioned close button. */
+  padding-inline: 8px 32px;
+  font-size: 13px;
+  /* The editor theme sets a monospace face on `&`; the panel is chrome. */
+  font-family: var(--glyph-font, system-ui, -apple-system, sans-serif);
+}
+
+.cm-panel.cm-search br {
+  flex-basis: 100%;
+  height: 0;
+}
+
+.cm-panel.cm-search input,
+.cm-panel.cm-search button,
+.cm-panel.cm-search label {
+  margin: 0;
+}
+
+.cm-panel.cm-search .cm-textfield {
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--glyph-radius-sm);
+  padding: 4px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-text-primary);
+  width: 200px;
+  outline: none;
+}
+
+.cm-panel.cm-search .cm-textfield:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+
+.cm-panel.cm-search label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* The base theme sets `pre`, which lets a translated multi-word label
+     overflow the panel instead of wrapping with it. */
+  white-space: normal;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.cm-panel.cm-search button:not([name="close"]) {
+  appearance: none;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--glyph-radius-sm);
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.cm-panel.cm-search button:not([name="close"]):hover {
+  background: var(--color-surface-tertiary);
+}
+
+.cm-panel.cm-search [name="close"] {
+  /* The base theme pins this with `right`, which lands on the wrong side in
+     RTL. Re-anchor it on the logical edge. */
+  right: auto;
+  inset-inline-end: 6px;
+  top: 6px;
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.cm-panel.cm-search [name="close"]:hover {
+  color: var(--color-text-primary);
+}
+
+/* Match the preview's highlight colours so find looks the same in both panes. */
+.cm-editor .cm-searchMatch {
+  background: color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+
+.cm-editor .cm-searchMatch.cm-searchMatch-selected {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+

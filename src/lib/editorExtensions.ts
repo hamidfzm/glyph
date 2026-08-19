@@ -9,6 +9,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
+import { search, searchKeymap, searchPanelOpen } from "@codemirror/search";
 import type { Compartment, Extension } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import type { RefObject } from "react";
@@ -37,7 +38,12 @@ interface EditorExtensionOptions {
   /** Holds the spell-check extension so it can be reconfigured in place. */
   spellcheckCompartment: Compartment;
   spellcheckExtension: Extension;
+  /** Holds the search panel's translated labels, reconfigured on locale change. */
+  searchPhrasesCompartment: Compartment;
+  searchPhrases: Extension;
   onDocChange: (doc: string) => void;
+  /** Fires when the panel closes from inside (Escape or its close button). */
+  onSearchPanelClose: () => void;
 }
 
 /** The full extension list for a markdown editor instance, in the order the
@@ -51,7 +57,10 @@ export function buildEditorExtensions({
   pasteHtmlRef,
   spellcheckCompartment,
   spellcheckExtension,
+  searchPhrasesCompartment,
+  searchPhrases,
   onDocChange,
+  onSearchPanelClose,
 }: EditorExtensionOptions): Extension[] {
   const { leading, extraKeys } = editorKeymapExtensions(keymapPreset);
   return [
@@ -74,6 +83,9 @@ export function buildEditorExtensions({
       // VSCode preset bindings (empty for other presets) take precedence
       // over the CodeMirror defaults below.
       ...extraKeys,
+      // Ahead of defaultKeymap so Escape closes the search panel rather than
+      // collapsing the selection; the rest of searchKeymap is unclaimed.
+      ...searchKeymap,
       ...defaultKeymap,
       ...historyKeymap,
     ]),
@@ -89,6 +101,11 @@ export function buildEditorExtensions({
       // updates that re-render React siblings) — Esc still closes.
       closeOnBlur: false,
     }),
+    // The panel adds its own replace row whenever the document is writable, so
+    // find and replace need no separate UI. Phrases must precede it: they are
+    // read when the panel is built.
+    searchPhrasesCompartment.of(searchPhrases),
+    search({ top: true }),
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     pasteHtmlExtension(() => pasteHtmlRef.current),
     wrapSelectionExtension,
@@ -102,6 +119,9 @@ export function buildEditorExtensions({
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         onDocChange(update.state.doc.toString());
+      }
+      if (searchPanelOpen(update.startState) && !searchPanelOpen(update.state)) {
+        onSearchPanelClose();
       }
     }),
     glyphEditorTheme,

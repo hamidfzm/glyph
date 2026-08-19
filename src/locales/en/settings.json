@@ -206,6 +206,23 @@
       "copy": "Copy",
       "paste": "Paste",
       "selectAll": "Select all"
+    },
+    "search": {
+      "find": "Find",
+      "replace": "Replace",
+      "next": "next",
+      "previous": "previous",
+      "all": "all",
+      "matchCase": "match case",
+      "regexp": "regexp",
+      "byWord": "by word",
+      "replaceOne": "replace",
+      "replaceAll": "replace all",
+      "close": "close",
+      "currentMatch": "current match",
+      "onLine": "on line",
+      "replacedOnLine": "replaced match on line $",
+      "replacedMatches": "replaced $ matches"
     }
   },
   "ai": {
