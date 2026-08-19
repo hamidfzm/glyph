@@ -282,4 +282,13 @@ describe("packageExportMedia", () => {
 
     expect(el.querySelector("img")?.getAttribute("alt")).toBe("clip.mp4");
   });
+
+  it("falls back to the label for a poster alt when the URL has no file name", async () => {
+    const el = body('<video src="https://example.com/stream/" poster="cover.png"></video>');
+
+    await packageExportMedia(el, 0);
+
+    // An empty alt would leave the poster unannounced to a screen reader.
+    expect(el.querySelector("img")?.getAttribute("alt")).toBe("https://example.com/stream/");
+  });
 });
