@@ -15,4 +15,11 @@ describe("mediaMimeType", () => {
     expect(mediaMimeType("clip.mkv")).toBeUndefined();
     expect(mediaMimeType("notes")).toBeUndefined();
   });
+
+  it("declares nothing for an extension that only exists on Object's prototype", () => {
+    // A truthy inherited value would be packaged and then handed to the EPUB
+    // manifest, which escapes it as a string.
+    expect(mediaMimeType("/ws/clip.constructor")).toBeUndefined();
+    expect(mediaMimeType("/ws/clip.__proto__")).toBeUndefined();
+  });
 });

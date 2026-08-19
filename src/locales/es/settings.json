@@ -261,7 +261,7 @@
     },
     "epubMedia": {
       "label": "Incrustar medios en EPUB",
-      "description": "Empaqueta el audio y el video por debajo de este tamaño en el libro; los archivos mayores quedan como enlace",
+      "description": "Empaqueta el audio y el video por debajo de este tamaño en el libro; los archivos mayores solo se nombran",
       "off": "Desactivado",
       "mb": "{{limit}} MB"
     },

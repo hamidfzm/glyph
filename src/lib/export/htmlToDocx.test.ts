@@ -151,6 +151,8 @@ describe("convertHtmlToDocx", () => {
     // An undecodable poster degrades to its alt text, so both paragraphs
     // survive naming the file a reader can go find.
     expect(blocks).toHaveLength(2);
-    expect(JSON.stringify(blocks)).toContain("clip.mp4");
+    // blocks[1] specifically: the poster paragraph carries the same text as its
+    // alt when undecodable, so stringifying the lot would pass either way.
+    expect(JSON.stringify(blocks[1])).toContain("clip.mp4");
   });
 });

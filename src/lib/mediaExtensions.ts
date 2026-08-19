@@ -20,5 +20,9 @@ const MEDIA_MIME_TYPES: Record<string, string> = {
 
 /** Media type for a packaged file, or undefined for one we cannot declare. */
 export function mediaMimeType(path: string): string | undefined {
-  return MEDIA_MIME_TYPES[path.slice(path.lastIndexOf(".") + 1).toLowerCase()];
+  const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+  // Own keys only: a plain-object lookup also resolves `constructor` and
+  // `__proto__`, so a file named `clip.constructor` would hand the EPUB
+  // manifest a function to escape.
+  return Object.hasOwn(MEDIA_MIME_TYPES, ext) ? MEDIA_MIME_TYPES[ext] : undefined;
 }

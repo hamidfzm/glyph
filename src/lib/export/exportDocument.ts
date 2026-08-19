@@ -9,7 +9,7 @@ import { type ExportFormat, epubMetadata, writeBinary } from "@/lib/export/write
 interface ExportDocumentOptions {
   entries: TocEntry[];
   includeToc: boolean;
-  // Bytes of media EPUB may package; every other format links instead.
+  // Bytes of media EPUB may package; every other format names the media instead.
   epubMediaLimit?: number;
 }
 

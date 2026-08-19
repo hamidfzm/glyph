@@ -14,7 +14,7 @@ export interface PrepareOptions {
   // embeds them as vectors.
   pdf?: boolean;
   // Bytes of media a container-backed target (EPUB) may package. 0, the
-  // default, degrades every media element to its poster plus link.
+  // default, degrades every media element to its poster plus name.
   mediaLimit?: number;
 }
 
@@ -100,9 +100,8 @@ export async function prepareContent({
     checkbox.setAttribute("disabled", "");
   }
 
-  // Ahead of the link and image passes: a media element that cannot be packaged
-  // degrades to a poster <img> plus an <a>, which those passes then treat like
-  // any other image and link.
+  // Ahead of the image pass: a media element that cannot be packaged degrades
+  // to a poster <img>, which that pass then inlines like any other image.
   const media = await packageExportMedia(clone, mediaLimit);
 
   // External links should open in a new tab/window from the exported file.

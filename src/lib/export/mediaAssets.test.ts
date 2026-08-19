@@ -134,7 +134,7 @@ describe("packageExportMedia", () => {
     expect(el.innerHTML).not.toContain("data-media-path");
   });
 
-  it("names the fallback link after a source child when the element has no src", async () => {
+  it("names a source child when the element itself has no src", async () => {
     const el = body(
       '<video><source src="asset://localhost/notes/clip.webm" data-media-path="/notes/clip.webm"></video>',
     );
@@ -260,6 +260,26 @@ describe("packageExportMedia", () => {
     // Never a link: an exported file is opened outside the app, so it carries
     // no href the document controls.
     expect(el.querySelector("a")).toBeNull();
-    expect(el.textContent).toBe("https://example.com/clips/clip.mp4");
+    expect(el.querySelector("em")?.textContent).toBe("https://example.com/clips/clip.mp4");
+  });
+
+  it("emphasises the name so it does not read as prose", async () => {
+    const el = body(
+      '<video src="asset://localhost/notes/clip.mp4" data-media-path="/notes/clip.mp4"></video>',
+    );
+
+    await packageExportMedia(el, 0);
+
+    expect(el.innerHTML).toContain('<p class="markdown-media-fallback"><em>clip.mp4</em></p>');
+  });
+
+  it("names the file in the poster alt even when the label is a long URL", async () => {
+    const el = body(
+      '<video src="https://cdn.example.com/a/b/clip.mp4" poster="cover.png"></video>',
+    );
+
+    await packageExportMedia(el, 0);
+
+    expect(el.querySelector("img")?.getAttribute("alt")).toBe("clip.mp4");
   });
 });

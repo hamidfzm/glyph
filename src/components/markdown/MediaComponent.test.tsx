@@ -101,6 +101,19 @@ describe("useVideoComponent", () => {
     expect(container.querySelector("video")).not.toBeNull();
   });
 
+  it("does not treat the whitespace itself as something to play", () => {
+    const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
+    const Video = result.current;
+    const node = { children: [{ type: "text", value: "\n" }] };
+    const { container } = renderInWorkspace(
+      <Video src="../../secrets/clip.mp4" node={node as never}>
+        {" "}
+      </Video>,
+      "/notes",
+    );
+    expect(container.querySelector("video")).toBeNull();
+  });
+
   it("renders nothing when every child source escapes the workspace root too", () => {
     const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
     const Video = result.current;

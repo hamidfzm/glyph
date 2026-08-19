@@ -145,7 +145,7 @@ export interface PrintSettings {
   pageBreakLevel: "none" | "h1" | "h2";
   includeToc: boolean;
   includeBackground: boolean;
-  /** Largest media file packaged into an EPUB, in MB; "off" links instead. */
+  /** Largest media file packaged into an EPUB, in MB; "off" names the media instead. */
   epubMediaLimit: EpubMediaLimit;
 }
 
@@ -157,7 +157,7 @@ export type EpubMediaLimit = "off" | "10" | "50" | "100";
 export const EPUB_MEDIA_LIMITS: readonly EpubMediaLimit[] = ["off", "10", "50", "100"];
 
 // "off", and any value a settings file written by an older build is missing,
-// come back as 0: no embedding, so the media links instead.
+// come back as 0: no embedding, so the media is named instead.
 export function epubMediaLimitBytes(limit: EpubMediaLimit): number {
   const mb = Number(limit);
   return Number.isFinite(mb) ? mb * 1024 * 1024 : 0;

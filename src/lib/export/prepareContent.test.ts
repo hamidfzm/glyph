@@ -354,8 +354,10 @@ describe("prepareContent", () => {
     const html = await prepareHtml();
 
     expect(html).not.toContain("<video");
-    expect(html).toContain("clip.mp4");
-    expect(html).not.toContain("<a");
+    // The exact paragraph: `toContain("clip.mp4")` alone would also match the
+    // poster's alt, and `not.toContain("<a")` would match `<audio` too.
+    expect(html).toContain('<p class="markdown-media-fallback"><em>clip.mp4</em></p>');
+    expect(html).not.toContain("<a ");
     // The fallback poster rides the image pass, so no asset: URL survives.
     expect(html).toContain("data:image/png;base64,");
     expect(html).not.toContain("data-media-path");

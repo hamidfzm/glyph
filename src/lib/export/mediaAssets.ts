@@ -13,10 +13,12 @@ export interface PackagedMedia {
 
 // Exports never inline media as a data URI and never write files beside the
 // export target, so a player only survives where the container can hold the
-// bytes. Everywhere else the element degrades to its poster frame plus a link
-// named after the file, which is what DOCX, PDF, and plain HTML can represent.
+// bytes. Everywhere else the element degrades to its poster frame plus the file
+// name, which is what DOCX, PDF, and plain HTML can represent.
 
-/** The playable local source: the element's own, else its first source child. */
+/** The playable local source: the element's own, else its first source child.
+ *  A `data-media-path` always arrives with the `src` it was resolved from, so
+ *  requiring both is a guard rather than a case. */
 function localSource(el: Element): { path: string; url: string } | null {
   const holder = el.hasAttribute("data-media-path")
     ? el
@@ -26,9 +28,8 @@ function localSource(el: Element): { path: string; url: string } | null {
   return path && url ? { path, url } : null;
 }
 
-// A poster image and its link are separate paragraphs on purpose: the PDF
-// walker only embeds an image when it is a paragraph's sole child, and a linked
-// image degrades to its alt text there.
+// The poster and the name are separate paragraphs on purpose: the PDF walker
+// only embeds an image when it is a paragraph's sole child.
 function fallbackNodes(el: Element, doc: Document): Element[] {
   const local = localSource(el)?.path;
   const remote = el.getAttribute("src") ?? el.querySelector("source")?.getAttribute("src");
@@ -46,7 +47,8 @@ function fallbackNodes(el: Element, doc: Document): Element[] {
     frame.className = "markdown-media-fallback";
     const img = doc.createElement("img");
     img.setAttribute("src", poster);
-    img.setAttribute("alt", label);
+    // The alt names the file even when the label is a long remote URL.
+    img.setAttribute("alt", basename(source) || label);
     frame.appendChild(img);
     nodes.push(frame);
   }
@@ -55,10 +57,14 @@ function fallbackNodes(el: Element, doc: Document): Element[] {
   // would only resolve if the reader put the media back beside the document,
   // and a document-supplied href in a file opened outside the app is a sink
   // worth not having at all. A remote source keeps its full URL as the label,
-  // which a reader can still copy.
+  // which a reader can still copy. The name is emphasised so it reads as a
+  // stand-in rather than as prose: the DOCX and PDF walkers both carry <em>,
+  // and neither keeps the class that styles it in HTML and EPUB.
   const line = doc.createElement("p");
   line.className = "markdown-media-fallback";
-  line.textContent = label;
+  const name = doc.createElement("em");
+  name.textContent = label;
+  line.appendChild(name);
   nodes.push(line);
   return nodes;
 }
@@ -86,7 +92,7 @@ async function readUnderBudget(url: string, budget: number): Promise<Uint8Array 
  * a book of several near-limit recordings would be assembled in memory and
  * shipped over IPC as one array, so the total has to be bounded too. Files that
  * fit are packaged and their elements rewritten to the in-container href;
- * everything else, remote sources included, degrades to poster plus link.
+ * everything else, remote sources included, degrades to poster plus name.
  */
 export async function packageExportMedia(
   clone: HTMLElement,
