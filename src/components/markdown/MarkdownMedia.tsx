@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef } from "react";
 import type { ExtraProps } from "react-markdown";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
+import { mediaLabel } from "@/lib/mediaExtensions";
 import { resolveAssetRef } from "./resolveImageSrc";
 
 interface MarkdownMediaProps extends ComponentPropsWithoutRef<"video">, ExtraProps {
@@ -42,23 +43,35 @@ export function MarkdownMedia({
   // Nothing to play: a refused src and no <source> child that resolved either.
   if (!media.src && !hasPlayableSource(node, filePath, workspaceRoot)) return null;
 
+  const printName = mediaLabel(media.path, src);
+
   return (
-    <Tag
-      {...rest}
-      src={media.src}
-      // The sanitizer keeps `poster` off <audio>, so it resolves to undefined
-      // there and React omits it.
-      poster={posterFrame.src}
-      // Decoding runs in the OS media stack, a far larger parsing surface than
-      // the image decoders, so an untrusted container stays unparsed until the
-      // user presses play. With `autoplay` sanitized away, controls are then
-      // the only way to start it.
-      preload="none"
-      controls
-      // Absolute source path for the exporters, which strip it from output.
-      data-media-path={media.path}
-    >
-      {children}
-    </Tag>
+    <>
+      <Tag
+        {...rest}
+        src={media.src}
+        // The sanitizer keeps `poster` off <audio>, so it resolves to undefined
+        // there and React omits it.
+        poster={posterFrame.src}
+        // Decoding runs in the OS media stack, a far larger parsing surface than
+        // the image decoders, so an untrusted container stays unparsed until the
+        // user presses play. With `autoplay` sanitized away, controls are then
+        // the only way to start it.
+        preload="none"
+        controls
+        // Absolute source path for the exporters, which strip it from output.
+        data-media-path={media.path}
+      >
+        {children}
+      </Tag>
+      {/* Paper cannot play a file either, and a player with no poster prints as
+          an empty box. The exporters strip this and emit their own name, so the
+          document never carries it twice. */}
+      {printName && (
+        <span className="markdown-media-print" data-export-ignore>
+          {printName}
+        </span>
+      )}
+    </>
   );
 }

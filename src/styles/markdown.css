@@ -211,6 +211,11 @@
   margin: 0 0 1em;
 }
 
+/* The print stand-in for a player, revealed only by print.css. */
+.markdown-media-print {
+  display: none;
+}
+
 .markdown-body blockquote {
   margin: 0 0 1em;
   padding: 0.5em 1em;

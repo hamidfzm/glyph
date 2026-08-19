@@ -385,4 +385,16 @@ describe("prepareContent", () => {
     expect(result?.html).toContain("<video");
     expect(result?.html).toContain(`src="${result?.media[0].href}"`);
   });
+
+  it("strips the print stand-in, so an export names the media once", async () => {
+    setBody(
+      `<video src="asset://localhost/ws/clip.mp4" data-media-path="/ws/clip.mp4"></video>` +
+        `<span class="markdown-media-print" data-export-ignore>clip.mp4</span>`,
+    );
+
+    const html = (await prepareContent({ entries: [], includeToc: false }))?.html ?? "";
+
+    expect(html).not.toContain("markdown-media-print");
+    expect(html.match(/clip\.mp4/g)).toHaveLength(1);
+  });
 });

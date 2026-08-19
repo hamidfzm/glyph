@@ -1,3 +1,5 @@
+import { basename } from "@/lib/paths";
+
 // Media types for the files an EPUB export packages, the one container that can
 // carry them. `mov` and `m4v` are QuickTime containers the OS webviews play but
 // that have no registered media type of their own; readers expect video/mp4.
@@ -25,4 +27,15 @@ export function mediaMimeType(path: string): string | undefined {
   // `__proto__`, so a file named `clip.constructor` would hand the EPUB
   // manifest a function to escape.
   return Object.hasOwn(MEDIA_MIME_TYPES, ext) ? MEDIA_MIME_TYPES[ext] : undefined;
+}
+
+/**
+ * How a media file is named wherever it cannot be played: on paper, and in
+ * every export but the website one. A local file is named, since neither the
+ * page nor the exported document carries it; a remote one keeps its full URL,
+ * the only form of it that still leads anywhere.
+ */
+export function mediaLabel(localPath: string | undefined, remoteSrc: string | undefined): string {
+  if (localPath) return basename(localPath);
+  return remoteSrc ?? "";
 }

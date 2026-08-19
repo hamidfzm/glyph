@@ -348,7 +348,9 @@ Exports differ by format, because only some can carry the bytes. The website
 export copies media into the output tree and keeps the player. EPUB packages
 files below the size limit in Settings > Print (turn it off, or raise it to 50
 or 100 MB). HTML, DOCX, and PDF show the poster frame and name the file, so the
-document stays a single file; an over-limit EPUB does the same.
+document stays a single file; an over-limit EPUB does the same. Printing does
+too: a player with a poster prints its frame, one without is dropped rather
+than printed as an empty box, and either way the file is named.
 
 ## Links
 

@@ -160,4 +160,44 @@ describe("useMediaSourceComponent", () => {
     const { container } = renderInWorkspace(<Source src="../../secrets/clip.webm" />, "/notes");
     expect(container.querySelector("source")).toBeNull();
   });
+
+  it("names the media for print, where no player can run", () => {
+    const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
+    const Video = result.current;
+    const { container } = renderInWorkspace(<Video src="clips/demo.mp4" />, "/notes");
+    const name = container.querySelector(".markdown-media-print");
+
+    expect(name?.textContent).toBe("demo.mp4");
+    // The exporters strip this and emit their own name, so a document never
+    // carries the name twice.
+    expect(name?.hasAttribute("data-export-ignore")).toBe(true);
+  });
+
+  it("prints a remote source by its URL", () => {
+    const { result } = renderHook(() => useAudioComponent("/notes/doc.md"));
+    const Audio = result.current;
+    const { container } = renderInWorkspace(
+      <Audio src="https://example.com/a/memo.mp3" />,
+      "/notes",
+    );
+    expect(container.querySelector(".markdown-media-print")?.textContent).toBe(
+      "https://example.com/a/memo.mp3",
+    );
+  });
+
+  it("prints no name for an element whose only source is a child", () => {
+    const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
+    const Video = result.current;
+    const node = {
+      children: [{ type: "element", tagName: "source", properties: { src: "clip.webm" } }],
+    };
+    const { container } = renderInWorkspace(
+      <Video node={node as never}>
+        <source src="clip.webm" />
+      </Video>,
+      "/notes",
+    );
+    // An empty span would print as a stray blank line.
+    expect(container.querySelector(".markdown-media-print")).toBeNull();
+  });
 });

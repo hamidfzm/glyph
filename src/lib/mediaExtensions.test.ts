@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mediaMimeType } from "./mediaExtensions";
+import { mediaLabel, mediaMimeType } from "./mediaExtensions";
 
 describe("mediaMimeType", () => {
   it("maps packageable files to their media type", () => {
@@ -21,5 +21,21 @@ describe("mediaMimeType", () => {
     // manifest, which escapes it as a string.
     expect(mediaMimeType("/ws/clip.constructor")).toBeUndefined();
     expect(mediaMimeType("/ws/clip.__proto__")).toBeUndefined();
+  });
+});
+
+describe("mediaLabel", () => {
+  it("names a local file, since nothing carries it off the page", () => {
+    expect(mediaLabel("/ws/notes/clip.mp4", "clip.mp4")).toBe("clip.mp4");
+  });
+
+  it("keeps a remote URL whole, the only form that still leads anywhere", () => {
+    expect(mediaLabel(undefined, "https://example.com/a/b/clip.mp4")).toBe(
+      "https://example.com/a/b/clip.mp4",
+    );
+  });
+
+  it("has nothing to say about an element with no source of its own", () => {
+    expect(mediaLabel(undefined, undefined)).toBe("");
   });
 });

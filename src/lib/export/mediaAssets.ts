@@ -1,4 +1,4 @@
-import { mediaMimeType } from "@/lib/mediaExtensions";
+import { mediaLabel, mediaMimeType } from "@/lib/mediaExtensions";
 import { basename } from "@/lib/paths";
 
 /** A media file carried inside an export container (currently EPUB only). */
@@ -32,11 +32,10 @@ function localSource(el: Element): { path: string; url: string } | null {
 // only embeds an image when it is a paragraph's sole child.
 function fallbackNodes(el: Element, doc: Document): Element[] {
   const local = localSource(el)?.path;
-  const remote = el.getAttribute("src") ?? el.querySelector("source")?.getAttribute("src");
+  const remote =
+    el.getAttribute("src") ?? el.querySelector("source")?.getAttribute("src") ?? undefined;
   const source = local ?? remote ?? "";
-  // A local file is named; a remote one keeps its URL, the only form of it that
-  // still leads anywhere once the document has left the app.
-  const label = local ? basename(source) : source;
+  const label = mediaLabel(local, remote);
   // Nothing to name: drop the element rather than emit an empty paragraph.
   if (!label) return [];
   const nodes: Element[] = [];
