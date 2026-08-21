@@ -298,4 +298,17 @@ describe("packageExportMedia", () => {
     // An empty alt would leave the poster unannounced to a screen reader.
     expect(el.querySelector("img")?.getAttribute("alt")).toBe("https://example.com/stream/");
   });
+
+  it("refuses a body that outgrew the length it declared", async () => {
+    mockFetch(20 * MB, MB);
+    const el = body(
+      '<video src="asset://localhost/notes/big.mp4" data-media-path="/notes/big.mp4"></video>',
+    );
+
+    const packaged = await packageExportMedia(el, 10 * MB);
+
+    // The header is the file server talking, not a promise; the bytes decide.
+    expect(packaged).toEqual([]);
+    expect(el.textContent).toBe("big.mp4");
+  });
 });
