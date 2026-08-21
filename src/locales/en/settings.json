@@ -276,6 +276,12 @@
       "label": "Include Table of Contents",
       "description": "Insert a contents page at the start"
     },
+    "epubMedia": {
+      "label": "Embed Media in EPUB",
+      "description": "Package audio and video under this size into the book; larger files are named instead",
+      "off": "Off",
+      "mb": "{{limit}} MB"
+    },
     "backgrounds": {
       "label": "Print Backgrounds & Colors",
       "description": "Preserve theme colors in output"

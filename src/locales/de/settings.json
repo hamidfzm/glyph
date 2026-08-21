@@ -276,6 +276,12 @@
       "label": "Inhaltsverzeichnis einfügen",
       "description": "Am Anfang eine Inhaltsseite einfügen"
     },
+    "epubMedia": {
+      "label": "Medien in EPUB einbetten",
+      "description": "Audio und Video unter dieser Größe ins Buch packen; größere Dateien werden nur benannt",
+      "off": "Aus",
+      "mb": "{{limit}} MB"
+    },
     "backgrounds": {
       "label": "Hintergründe & Farben drucken",
       "description": "Theme-Farben in der Ausgabe beibehalten"

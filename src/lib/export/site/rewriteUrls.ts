@@ -6,9 +6,13 @@ import { decodeHref, encodeHref, headingSlug, relativeHref, relFromRoot } from "
 
 // Rehype plugin that makes one rendered page navigable inside the exported
 // site: wikilink anchors point at the target's generated .html, relative
-// markdown links swap .md for .html, and local images are redirected to the
-// copy the exporter will place in the output tree. Runs after sanitize, so the
-// wikilink data-* attributes it reads are already allowlisted.
+// markdown links swap .md for .html, and local images and media are redirected
+// to the copy the exporter will place in the output tree. Runs after sanitize,
+// so the wikilink data-* attributes it reads are already allowlisted.
+//
+// It also forces the playback attributes the viewer's media components apply,
+// which a static pipeline has no other place to add: without controls, and with
+// autoplay stripped by the sanitizer, an exported player could never be started.
 
 interface HastNode {
   type: string;
@@ -96,6 +100,13 @@ function rewriteImage(ctx: SiteUrlContext, props: Record<string, unknown>): void
   rewriteAssetRef(ctx, props, "src");
 }
 
+function rewriteMedia(ctx: SiteUrlContext, props: Record<string, unknown>): void {
+  rewriteAssetRef(ctx, props, "src");
+  rewriteAssetRef(ctx, props, "poster");
+  props.controls = true;
+  props.preload = "none";
+}
+
 // Inline-SVG <image> icons: rewrite both href spellings and register the
 // referenced files so the exporter copies them into the site tree.
 function rewriteSvgImage(ctx: SiteUrlContext, props: Record<string, unknown>): void {
@@ -106,7 +117,7 @@ function rewriteSvgImage(ctx: SiteUrlContext, props: Record<string, unknown>): v
 function rewriteAssetRef(
   ctx: SiteUrlContext,
   props: Record<string, unknown>,
-  key: "src" | "href" | "xLinkHref",
+  key: "src" | "href" | "xLinkHref" | "poster",
 ): void {
   const value = props[key];
   if (typeof value !== "string" || !isRelativeLocalHref(value)) return;
@@ -125,6 +136,8 @@ export function rehypeSiteUrls(ctx: SiteUrlContext) {
       if (node.tagName === "a") rewriteAnchor(ctx, props);
       else if (node.tagName === "img") rewriteImage(ctx, props);
       else if (node.tagName === "image") rewriteSvgImage(ctx, props);
+      else if (node.tagName === "video" || node.tagName === "audio") rewriteMedia(ctx, props);
+      else if (node.tagName === "source") rewriteAssetRef(ctx, props, "src");
     });
   };
 }

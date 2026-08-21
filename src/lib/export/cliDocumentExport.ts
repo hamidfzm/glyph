@@ -9,6 +9,7 @@ interface CliDocumentExportOptions {
   entries: TocEntry[];
   includeToc: boolean;
   content: string | null;
+  epubMediaLimit: number;
 }
 
 /**
@@ -36,11 +37,12 @@ export async function runCliDocumentExport(
   if (!document.querySelector(".markdown-body, .notebook-body")) {
     throw new Error(`${request.input} did not finish rendering`);
   }
-  const { entries, includeToc, content } = getOptions();
+  const { entries, includeToc, content, epubMediaLimit } = getOptions();
   const meta = deriveExportMeta(request.input, content);
   await exportDocument(request.format as ExportFormat, request.output, meta, {
     entries,
     includeToc,
+    epubMediaLimit,
   });
   return { path: request.output, settled };
 }

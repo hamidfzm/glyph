@@ -56,9 +56,23 @@
   .markdown-body table,
   .markdown-body figure,
   .markdown-body img,
+  .markdown-body video,
   .markdown-body blockquote {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  /* A player cannot be played on paper. One with a poster still prints its
+     frame, so only the blank ones are dropped, and every one is named. */
+  .markdown-body video:not([poster]),
+  .markdown-body audio {
+    display: none;
+  }
+
+  .markdown-body .markdown-media-print {
+    display: block;
+    font-style: italic;
+    margin: 0 0 1em;
   }
 
   [data-print-breaks="h1"] .markdown-body h1 {

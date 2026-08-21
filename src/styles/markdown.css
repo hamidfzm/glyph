@@ -195,6 +195,27 @@
   box-shadow: var(--glyph-shadow);
 }
 
+.markdown-body video {
+  max-width: 100%;
+  display: block;
+  margin: 0 0 1em;
+  border-radius: var(--glyph-radius);
+  box-shadow: var(--glyph-shadow);
+}
+
+/* An audio player is a fixed-height control strip: it stretches rather than
+   scaling, and carries no frame of its own. */
+.markdown-body audio {
+  width: 100%;
+  display: block;
+  margin: 0 0 1em;
+}
+
+/* The print stand-in for a player, revealed only by print.css. */
+.markdown-media-print {
+  display: none;
+}
+
 .markdown-body blockquote {
   margin: 0 0 1em;
   padding: 0.5em 1em;

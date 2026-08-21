@@ -44,3 +44,44 @@ describe("markdownSanitizeSchema inline SVG", () => {
     expect(html).not.toContain("alert(1)");
   });
 });
+
+describe("markdownSanitizeSchema media", () => {
+  it("keeps <video> and <audio> with their playback attributes", () => {
+    const html = renderHtml(
+      '<video src="https://example.com/clip.mp4" loop muted></video>' +
+        '<audio src="https://example.com/memo.mp3" loop></audio>',
+    );
+    expect(html).toContain("<video");
+    expect(html).toContain("<audio");
+    expect(html).toContain("loop");
+    expect(html).toContain('preload="none"');
+  });
+
+  it("strips autoplay so opening a document never starts playback", () => {
+    const html = renderHtml('<video src="https://example.com/clip.mp4" autoplay></video>');
+    expect(html).toContain("<video");
+    expect(html).not.toContain("autoplay");
+  });
+
+  it("keeps <source> children and their type", () => {
+    const html = renderHtml(
+      '<video><source src="https://example.com/clip.webm" type="video/webm"></video>',
+    );
+    expect(html).toContain("<source");
+    expect(html).toContain("video/webm");
+  });
+
+  it("drops a poster with a non-http scheme", () => {
+    const html = renderHtml(
+      '<video src="https://example.com/clip.mp4" poster="file:///c:/users/me/private.png"></video>',
+    );
+    expect(html).toContain("<video");
+    expect(html).not.toContain("file:///");
+  });
+
+  it("strips author-supplied preload, which the renderers set themselves", () => {
+    const html = renderHtml('<video src="https://example.com/clip.mp4" preload="auto"></video>');
+    expect(html).toContain('preload="none"');
+    expect(html).not.toContain('preload="auto"');
+  });
+});

@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   EDITOR_MODE,
   effectiveEditorMode,
+  epubMediaLimitBytes,
   nextEditorMode,
   SIDEBAR_WIDTH_DEFAULT,
   SIDEBAR_WIDTH_MAX,
@@ -87,5 +88,17 @@ describe("effectiveEditorMode", () => {
     expect(effectiveEditorMode(EDITOR_MODE.split, true)).toBe(EDITOR_MODE.split);
     expect(effectiveEditorMode(EDITOR_MODE.edit, false)).toBe(EDITOR_MODE.edit);
     expect(effectiveEditorMode(EDITOR_MODE.view, false)).toBe(EDITOR_MODE.view);
+  });
+});
+
+describe("epubMediaLimitBytes", () => {
+  it("converts the chosen size to bytes", () => {
+    expect(epubMediaLimitBytes("10")).toBe(10 * 1024 * 1024);
+    expect(epubMediaLimitBytes("100")).toBe(100 * 1024 * 1024);
+  });
+
+  it("reports no budget for off, or for any value that is not a number", () => {
+    expect(epubMediaLimitBytes("off")).toBe(0);
+    expect(epubMediaLimitBytes(undefined as unknown as "off")).toBe(0);
   });
 });

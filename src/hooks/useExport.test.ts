@@ -32,6 +32,7 @@ const PRINT: PrintSettings = {
   pageBreakLevel: "none",
   includeToc: false,
   includeBackground: false,
+  epubMediaLimit: "10" as const,
 };
 const ENTRIES: TocEntry[] = [{ id: "intro", text: "Intro", level: 1 }];
 

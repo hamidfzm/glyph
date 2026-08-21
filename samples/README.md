@@ -25,6 +25,7 @@ This document demonstrates all the rendering features supported by Glyph. The YA
 - [Blockquotes](#blockquotes)
 - [Raw HTML](#raw-html)
 - [Images](#images)
+- [Video and Audio](#video-and-audio)
 - [Links](#links)
 - [Jupyter Notebooks](#jupyter-notebooks)
 - [Canvas](#canvas)
@@ -325,6 +326,31 @@ Inline SVG can also embed raster or vector icons through `<image>`. A workspace-
   <image href="./diagram.svg" x="0" y="0" width="72" height="72" preserveAspectRatio="xMidYMid meet" />
   <image href="https://raw.githubusercontent.com/hamidfzm/glyph/main/src-tauri/icons/128x128.png" x="88" y="8" width="56" height="56" preserveAspectRatio="xMidYMid meet" />
 </svg>
+
+## Video and Audio
+
+Media plays inline through raw HTML. Relative paths resolve against this file's
+folder, the same way images do, and stay inside the opened workspace:
+
+<video src="./assets/demo.mp4" poster="./assets/demo-poster.png" width="320"></video>
+
+<audio src="./assets/tone.mp3"></audio>
+
+Controls are always shown and nothing is downloaded or decoded until you press
+play, so opening a note never starts playback on its own. `<source>` children
+work too, which is how you offer the same clip in more than one format:
+
+<video width="320">
+  <source src="./assets/demo.mp4" type="video/mp4" />
+</video>
+
+Exports differ by format, because only some can carry the bytes. The website
+export copies media into the output tree and keeps the player. EPUB packages
+files below the size limit in Settings > Print (turn it off, or raise it to 50
+or 100 MB). HTML, DOCX, and PDF show the poster frame and name the file, so the
+document stays a single file; an over-limit EPUB does the same. Printing does
+too: a player with a poster prints its frame, one without is dropped rather
+than printed as an empty box, and either way the file is named.
 
 ## Links
 

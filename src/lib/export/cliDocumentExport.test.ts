@@ -41,6 +41,7 @@ describe("runCliDocumentExport", () => {
       entries: [{ id: "intro", text: "Intro", level: 1 }],
       includeToc: true,
       content: "# Getting Started",
+      epubMediaLimit: 0,
     }));
 
     expect(result).toEqual({ path: "/out/getting-started.pdf", settled: true });
@@ -49,7 +50,7 @@ describe("runCliDocumentExport", () => {
       "/out/getting-started.pdf",
       // Title comes from the document, base name from the input path.
       expect.objectContaining({ baseName: "getting-started", title: "Getting Started" }),
-      { entries: [{ id: "intro", text: "Intro", level: 1 }], includeToc: true },
+      { entries: [{ id: "intro", text: "Intro", level: 1 }], includeToc: true, epubMediaLimit: 0 },
     );
   });
 
@@ -64,7 +65,12 @@ describe("runCliDocumentExport", () => {
       order.push("export");
     });
 
-    await runCliDocumentExport(REQUEST, () => ({ entries: [], includeToc: false, content: null }));
+    await runCliDocumentExport(REQUEST, () => ({
+      entries: [],
+      includeToc: false,
+      content: null,
+      epubMediaLimit: 0,
+    }));
     expect(order).toEqual(["wait", "export"]);
   });
 
@@ -82,13 +88,14 @@ describe("runCliDocumentExport", () => {
       entries: tocReady ? [{ id: "intro", text: "Intro", level: 1 }] : [],
       includeToc: true,
       content: tocReady ? "# Getting Started" : null,
+      epubMediaLimit: 0,
     }));
 
     expect(exportDocumentMock).toHaveBeenCalledWith(
       "pdf",
       expect.any(String),
       expect.objectContaining({ title: "Getting Started" }),
-      { entries: [{ id: "intro", text: "Intro", level: 1 }], includeToc: true },
+      { entries: [{ id: "intro", text: "Intro", level: 1 }], includeToc: true, epubMediaLimit: 0 },
     );
   });
 
@@ -99,6 +106,7 @@ describe("runCliDocumentExport", () => {
       entries: [],
       includeToc: false,
       content: null,
+      epubMediaLimit: 0,
     }));
     // Still exported: a stuck diagram must not hang CI. But not silently.
     expect(result.settled).toBe(false);
@@ -109,7 +117,12 @@ describe("runCliDocumentExport", () => {
     // exportDocument silently no-ops without a body, which would otherwise
     // report success for an export that wrote nothing.
     await expect(
-      runCliDocumentExport(REQUEST, () => ({ entries: [], includeToc: false, content: null })),
+      runCliDocumentExport(REQUEST, () => ({
+        entries: [],
+        includeToc: false,
+        content: null,
+        epubMediaLimit: 0,
+      })),
     ).rejects.toThrow("did not finish rendering");
     expect(exportDocumentMock).not.toHaveBeenCalled();
   });

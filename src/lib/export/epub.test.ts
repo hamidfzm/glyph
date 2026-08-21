@@ -122,4 +122,42 @@ describe("buildEpub", () => {
     const opf = await (await loadEpub(bytes)).file("OEBPS/content.opf")?.async("string");
     expect(opf).not.toContain("dc:creator");
   });
+
+  it("packages media files and lists them in the manifest", async () => {
+    const bytes = await buildEpub({
+      bodyHtml: '<video src="media/0-clip.mp4"></video>',
+      css: "",
+      entries: ENTRIES,
+      metadata: META,
+      media: [
+        {
+          zipPath: "media/0-clip.mp4",
+          href: "media/0-clip.mp4",
+          bytes: new Uint8Array([1, 2, 3]),
+          mediaType: "video/mp4",
+        },
+      ],
+    });
+
+    const zip = await loadEpub(bytes);
+    expect(await zip.file("OEBPS/media/0-clip.mp4")?.async("uint8array")).toEqual(
+      new Uint8Array([1, 2, 3]),
+    );
+    const opf = await zip.file("OEBPS/content.opf")?.async("string");
+    expect(opf).toContain('href="media/0-clip.mp4"');
+    expect(opf).toContain('media-type="video/mp4"');
+  });
+
+  it("writes no media items when nothing was packaged", async () => {
+    const bytes = await buildEpub({
+      bodyHtml: "<p>text</p>",
+      css: "",
+      entries: ENTRIES,
+      metadata: META,
+    });
+
+    const zip = await loadEpub(bytes);
+    const opf = await zip.file("OEBPS/content.opf")?.async("string");
+    expect(opf).not.toContain('id="media-');
+  });
 });

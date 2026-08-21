@@ -127,6 +127,16 @@ describe("convertHtmlToPdf", () => {
     expect(nested).toHaveLength(2);
   });
 
+  it("renders the media fallback as a poster image and the file name", () => {
+    const content = convertHtmlToPdf(
+      `<p class="markdown-media-fallback"><img src="${pngDataUri()}" alt="clip.mp4"></p>` +
+        '<p class="markdown-media-fallback">clip.mp4</p>',
+    );
+    const json = JSON.stringify(content);
+    expect(json).toContain('"image"');
+    expect(json).toContain("clip.mp4");
+  });
+
   it("embeds a standalone block-level image", () => {
     const content = convertHtmlToPdf(`<img src="${pngDataUri()}">`);
     expect(JSON.stringify(content)).toContain('"image"');
