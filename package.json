@@ -19,6 +19,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:app": "node --test --test-timeout=120000 src/test/app/smoke.spec.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "size:check": "node scripts/check-bundle-size.mjs",

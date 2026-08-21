@@ -1,0 +1,36 @@
+name: Built-app smoke test
+description: >-
+  Run the WebDriver smoke suite (pnpm test:app) against an already-built Glyph
+  binary on Linux, via tauri-driver under xvfb. Assumes the release binary is
+  at src-tauri/target/release/glyph and pnpm dependencies are installed.
+runs:
+  using: composite
+  steps:
+    # webkit2gtk-driver is WebKitWebDriver (the native driver tauri-driver
+    # proxies to); xvfb gives the hidden window a display; dbus provides
+    # dbus-run-session, since the single-instance plugin hands the second
+    # launch over the D-Bus session bus.
+    - name: Install WebDriver dependencies
+      shell: bash
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y webkit2gtk-driver xvfb dbus
+    # tauri-driver is a cargo binary; cache it so the ~30s build only runs when
+    # the version changes.
+    - name: Cache tauri-driver
+      id: cache-tauri-driver
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: ~/.cargo/bin/tauri-driver
+        key: tauri-driver-2.0.6-${{ runner.os }}-${{ runner.arch }}
+    - name: Install tauri-driver
+      if: steps.cache-tauri-driver.outputs.cache-hit != 'true'
+      shell: bash
+      run: cargo install tauri-driver --version 2.0.6 --locked
+    - name: Run built-app smoke
+      shell: bash
+      env:
+        WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+      run: dbus-run-session -- xvfb-run --auto-servernum pnpm test:app
