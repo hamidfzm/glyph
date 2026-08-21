@@ -252,6 +252,14 @@ Do **not** create releases manually with `gh release create` or push tags by han
 
 The **Release Smoke Test** workflow (`release-smoke-test.yml`) installs Glyph from every package channel (Homebrew cask and formula, Scoop, Chocolatey, winget, apt, PPA, dnf, Snap, AUR) on a matching runner, asserts the installed version matches the release, and on Linux verifies the app launches. It runs automatically once per release, 2 to 3 days after publish (slow channels like Chocolatey moderation and the PPA build queue need the head start), and can be dispatched manually anytime with an optional tag input. Channels that do not serve the version yet report **pending**; the run summary shows a per-channel verified/pending/failed table. Pending is informational for the first two days after publish, and stays informational indefinitely for the channels gated on third-party review (Chocolatey moderation, winget-pkgs PRs). A channel we publish to ourselves that is still pending after two days fails the run, because by then publishing is broken rather than slow.
 
+### Ecosystem health check
+
+The **Ecosystem Health** workflow (`ecosystem-health.yml`) runs weekly and probes the endpoints a release publishes to without installing anything: the apt and dnf repos (metadata reachable, signed by the release key, advertising the latest release), the website and its locale pages, and the plugin marketplace index (valid against its schema, every package URL downloadable). A failed run emails the maintainer. It can be dispatched manually, and runs on PRs that edit it. Locally, with `curl`, `gpg`, `jq`, `python3`, and [`check-jsonschema`](https://pypi.org/project/check-jsonschema/) on PATH:
+
+```bash
+bash scripts/ecosystem-health-check.sh 0.21.0   # the latest released version
+```
+
 ## Reporting Issues
 
 - **Bugs**: Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.yml)

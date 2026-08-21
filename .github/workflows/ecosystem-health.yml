@@ -1,0 +1,41 @@
+name: Ecosystem Health
+
+# Read-only probes of the endpoints a release publishes to (apt and dnf repo
+# metadata and signatures, the website, the plugin marketplace index), so rot
+# between releases surfaces here instead of on a user's machine (#506). The
+# check itself lives in scripts/ecosystem-health-check.sh. Channel installs are
+# release-smoke-test.yml's job, not this one's.
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Monday 07:00 UTC. A failed run emails the maintainer; nothing
+    # here gates PRs.
+    - cron: "0 7 * * 1"
+  # Editing the check runs it, so a PR that touches it carries its own proof.
+  pull_request:
+    paths:
+      - scripts/ecosystem-health-check.sh
+      - .github/workflows/ecosystem-health.yml
+
+permissions:
+  contents: read
+
+jobs:
+  endpoints:
+    name: Endpoints
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Install check-jsonschema
+        run: pipx install check-jsonschema
+      - name: Resolve latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq '.tagName | ltrimstr("v")')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Checking endpoints against release **$VERSION**." >> "$GITHUB_STEP_SUMMARY"
+      - name: Check endpoints
+        run: bash scripts/ecosystem-health-check.sh "${{ steps.release.outputs.version }}"
