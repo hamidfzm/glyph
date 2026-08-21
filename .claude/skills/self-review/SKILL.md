@@ -15,8 +15,10 @@ Worked bad-to-good examples and the correction history live in `references/examp
 2. **Build only the surface current callers use (YAGNI).** No props, type unions, overloads, or helpers with zero callers; an abstraction needs two real call sites, one call site gets inline code.
 3. **Sparse comments.** Only constraints the code cannot show (platform quirks, ordering, security guards), one line each; trim when comment lines rival code lines in the diff.
 4. **Reuse before writing.** Grep `src/lib/`, `src/hooks/`, and `src-tauri/src/` for an existing helper first; a new predicate joins the module that owns its siblings. Tool-owned manifests stay standard: no custom fields in `package.json` or other externally-owned files; derive from standard fields through existing seams and keep code-interpreted facts beside their checker.
-5. **Right altitude.** Fix the mechanism, not a symptom; special cases layered on shared infrastructure mean the fix is too shallow.
-6. **Tests assert the surface that exists.** Cover the branches the diff adds (Codecov patch must stay green); no tests for capabilities the code no longer has.
+5. **Right altitude.** Fix the mechanism, not a symptom; special cases layered on shared infrastructure mean the fix is too shallow. When a checker flags a sink, removing the sink beats guarding it: a guard the checker does not recognize costs another CI round trip and leaves the sink in place.
+6. **Tests assert the surface that exists.** Cover the branches the diff adds (Codecov patch must stay green); no tests for capabilities the code no longer has. For a new guard, break it and watch the test fail: an assertion that still passes was pinning something else.
+7. **A behavior change sweeps its descriptions.** Comments, docs, and user-visible strings in all five locales that describe the old behavior are part of the change, not a follow-up. Grep the removed behavior's vocabulary across `src/`, `.claude/`, and `samples/` before calling it done.
+8. **A node added to the rendered document joins every DOM consumer.** An element only one surface uses (print-only, export-only, hidden) still reaches the search walker (`useSearch`), the AI quote locator (`documentHighlight`), the export passes (`prepareContent`), print, and the website pipeline. Name which ones must ignore it, and make them.
 
 ## Procedure
 
