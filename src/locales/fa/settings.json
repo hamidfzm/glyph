@@ -206,6 +206,23 @@
       "copy": "رونوشت",
       "paste": "چسباندن",
       "selectAll": "انتخاب همه"
+    },
+    "search": {
+      "find": "جست‌وجو",
+      "replace": "جایگزینی",
+      "next": "بعدی",
+      "previous": "قبلی",
+      "all": "همه",
+      "matchCase": "حساس به بزرگی حروف",
+      "regexp": "عبارت باقاعده",
+      "byWord": "واژهٔ کامل",
+      "replaceOne": "جایگزینی",
+      "replaceAll": "جایگزینی همه",
+      "close": "بستن",
+      "currentMatch": "مورد فعلی",
+      "onLine": "در خط",
+      "replacedOnLine": "مورد خط $ جایگزین شد",
+      "replacedMatches": "$ مورد جایگزین شد"
     }
   },
   "ai": {

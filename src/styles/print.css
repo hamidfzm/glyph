@@ -15,6 +15,7 @@
   .settings-overlay,
   .command-palette-overlay,
   .search-bar,
+  .cm-panel.cm-search,
   .ai-chat-panel {
     display: none !important;
   }
