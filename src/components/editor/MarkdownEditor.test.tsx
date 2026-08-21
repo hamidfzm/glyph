@@ -1,7 +1,8 @@
 import { render } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { act, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
+import { i18n } from "@/lib/i18n";
 import { DEFAULT_SETTINGS, type Settings } from "@/lib/settings";
 
 vi.mock("@/contexts/TabsContext", () => ({ useWorkspaceRoot: () => undefined }));
@@ -16,6 +17,10 @@ function settingsWith(spellCheck: boolean, spellCheckLanguages: string[] = ["en"
     ...DEFAULT_SETTINGS,
     editor: { ...DEFAULT_SETTINGS.editor, spellCheck, spellCheckLanguages },
   };
+}
+
+function settingsWithKeymap(keymap: Settings["editor"]["keymap"]): Settings {
+  return { ...DEFAULT_SETTINGS, editor: { ...DEFAULT_SETTINGS.editor, spellCheck: false, keymap } };
 }
 
 function wrapper(settings: Settings) {
@@ -97,5 +102,101 @@ describe("MarkdownEditor spell-check wiring", () => {
     // ...but a real set change must.
     rerender(tree(settingsWith(true, ["en", "fa"])));
     expect(buildSpellcheck).toHaveBeenCalledWith(["en", "fa"], expect.any(Function));
+  });
+});
+
+describe("MarkdownEditor find and replace", () => {
+  afterEach(async () => {
+    await act(async () => {
+      await i18n.changeLanguage("en");
+    });
+  });
+
+  function renderEditor(searchOpen: boolean, onSearchClose = vi.fn()) {
+    const tree = (open: boolean) => (
+      <MarkdownEditor
+        content="cat cat"
+        onChange={() => {}}
+        searchOpen={open}
+        onSearchClose={onSearchClose}
+      />
+    );
+    const view = render(tree(searchOpen), { wrapper: wrapper(settingsWith(false)) });
+    return { ...view, setOpen: (open: boolean) => view.rerender(tree(open)) };
+  }
+
+  const panel = (container: HTMLElement) => container.querySelector(".cm-panel.cm-search");
+
+  it("keeps the panel closed until search is opened", () => {
+    const { container } = renderEditor(false);
+    expect(panel(container)).toBeNull();
+  });
+
+  it("opens the panel with find and replace fields when search opens", () => {
+    const { container, setOpen } = renderEditor(false);
+    act(() => setOpen(true));
+
+    const found = panel(container);
+    expect(found).not.toBeNull();
+    expect(found?.querySelector("input[main-field]")).not.toBeNull();
+    expect(found?.querySelector("button[name=replace]")).not.toBeNull();
+    expect(found?.querySelector("button[name=replaceAll]")).not.toBeNull();
+  });
+
+  it("closes the panel again when search closes", () => {
+    const { container, setOpen } = renderEditor(true);
+    expect(panel(container)).not.toBeNull();
+
+    act(() => setOpen(false));
+    expect(panel(container)).toBeNull();
+  });
+
+  it("reports back when the panel is dismissed from inside", () => {
+    const onSearchClose = vi.fn();
+    const { container } = renderEditor(true, onSearchClose);
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>(".cm-panel.cm-search button[name=close]")?.click();
+    });
+    expect(onSearchClose).toHaveBeenCalled();
+  });
+
+  // A keymap change rebuilds the EditorView, which drops the panel; the parent
+  // still believes search is open, so the panel has to be restored or Find
+  // becomes a permanent no-op for that tab.
+  it("restores the panel after a keymap change rebuilds the editor", () => {
+    const tree = (settings: Settings) => (
+      <SettingsContext.Provider
+        value={{
+          settings,
+          updateSettings: vi.fn(),
+          resetSettings: vi.fn(),
+          flushSettings: async () => true,
+          loaded: true,
+        }}
+      >
+        <MarkdownEditor content="cat cat" onChange={() => {}} searchOpen onSearchClose={vi.fn()} />
+      </SettingsContext.Provider>
+    );
+    const { container, rerender } = render(tree(settingsWithKeymap("default")));
+    expect(panel(container)).not.toBeNull();
+
+    act(() => rerender(tree(settingsWithKeymap("vscode"))));
+    expect(panel(container)).not.toBeNull();
+  });
+
+  it("labels the panel in the active locale", async () => {
+    const { container } = renderEditor(true);
+    expect(container.querySelector<HTMLInputElement>("input[main-field]")?.placeholder).toBe(
+      "Find",
+    );
+
+    // Reconfigured in place: the panel is relabelled without remounting.
+    await act(async () => {
+      await i18n.changeLanguage("de");
+    });
+    expect(container.querySelector<HTMLInputElement>("input[main-field]")?.placeholder).toBe(
+      "Suchen",
+    );
   });
 });

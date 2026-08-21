@@ -7,6 +7,10 @@ import { captureResizeObserver, sizeScroller, stubOffsetTop } from "@/test/scrol
 
 const LINE_HEIGHT = 20;
 
+// Whether the stand-in editor claims focus, so the focus-routed Find shortcut
+// can be tested without a real CodeMirror instance.
+let editorHasFocus = false;
+
 // The stand-ins reproduce the markup and the view handoff the sync hook needs,
 // so these tests exercise the real wiring rather than the hook's own behaviour,
 // which useSyncedScroll.test.ts covers against the same fake geometry.
@@ -15,10 +19,12 @@ vi.mock("./MarkdownEditor", () => ({
     content,
     onChange,
     onViewReady,
+    searchOpen,
   }: {
     content: string;
     onChange: (v: string) => void;
     onViewReady?: (view: unknown) => void;
+    searchOpen?: boolean;
   }) => {
     const scrollerRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
@@ -31,6 +37,9 @@ vi.mock("./MarkdownEditor", () => ({
       });
       onViewReady({
         scrollDOM,
+        get hasFocus() {
+          return editorHasFocus;
+        },
         get documentTop() {
           return -scrollDOM.scrollTop;
         },
@@ -47,7 +56,12 @@ vi.mock("./MarkdownEditor", () => ({
       return () => onViewReady(null);
     }, [onViewReady]);
     return (
-      <div ref={scrollerRef} className="cm-scroller" data-testid="editor-scroller">
+      <div
+        ref={scrollerRef}
+        className="cm-scroller"
+        data-testid="editor-scroller"
+        data-search-open={String(Boolean(searchOpen))}
+      >
         <div className="cm-content">
           <textarea
             data-testid="editor"
@@ -61,8 +75,21 @@ vi.mock("./MarkdownEditor", () => ({
 }));
 
 vi.mock("@/components/markdown/MarkdownViewer", () => ({
-  MarkdownViewer: ({ content, sourceLines }: { content: string; sourceLines?: boolean }) => (
-    <div data-scroll-container="" data-testid="preview" data-source-lines={String(sourceLines)}>
+  MarkdownViewer: ({
+    content,
+    sourceLines,
+    searchOpen,
+  }: {
+    content: string;
+    sourceLines?: boolean;
+    searchOpen?: boolean;
+  }) => (
+    <div
+      data-scroll-container=""
+      data-testid="preview"
+      data-source-lines={String(sourceLines)}
+      data-search-open={String(Boolean(searchOpen))}
+    >
       <div className="markdown-body">
         <p data-line="1">{content}</p>
         <p data-line="11" data-testid="last-anchor" />
@@ -103,6 +130,7 @@ function renderSplit(syncScroll: boolean) {
 describe("SplitView", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    editorHasFocus = false;
   });
 
   afterEach(() => {
@@ -198,5 +226,55 @@ describe("SplitView", () => {
 
   it("skips source-line markers when the panes are independent", () => {
     expect(renderSplit(false).preview.dataset.sourceLines).toBe("false");
+  });
+});
+
+// One Find shortcut, two panes: the caret decides which one answers it, so
+// editing text does not send the search to the preview and vice versa.
+describe("SplitView find routing", () => {
+  function renderWithSearch(searchOpen: boolean) {
+    const tree = (open: boolean) => (
+      <SplitView content="hello" onChange={() => {}} searchOpen={open} onSearchClose={() => {}} />
+    );
+    const view = render(tree(searchOpen));
+    return { ...view, setOpen: (open: boolean) => view.rerender(tree(open)) };
+  }
+
+  const openOn = (view: ReturnType<typeof render>) => ({
+    editor: view.getByTestId("editor-scroller").dataset.searchOpen,
+    preview: view.getByTestId("preview").dataset.searchOpen,
+  });
+
+  afterEach(() => {
+    editorHasFocus = false;
+  });
+
+  it("routes Find to the editor when the caret is there", () => {
+    editorHasFocus = true;
+    const view = renderWithSearch(false);
+    act(() => view.setOpen(true));
+    expect(openOn(view)).toEqual({ editor: "true", preview: "false" });
+  });
+
+  it("routes Find to the preview when the editor is not focused", () => {
+    const view = renderWithSearch(false);
+    act(() => view.setOpen(true));
+    expect(openOn(view)).toEqual({ editor: "false", preview: "true" });
+  });
+
+  it("re-decides the target on the next Find rather than sticking to the last pane", () => {
+    const view = renderWithSearch(false);
+    act(() => view.setOpen(true));
+    expect(openOn(view)).toEqual({ editor: "false", preview: "true" });
+
+    act(() => view.setOpen(false));
+    editorHasFocus = true;
+    act(() => view.setOpen(true));
+    expect(openOn(view)).toEqual({ editor: "true", preview: "false" });
+  });
+
+  it("leaves both panes closed while search is not open", () => {
+    const view = renderWithSearch(false);
+    expect(openOn(view)).toEqual({ editor: "false", preview: "false" });
   });
 });

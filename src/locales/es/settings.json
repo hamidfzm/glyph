@@ -206,6 +206,23 @@
       "copy": "Copiar",
       "paste": "Pegar",
       "selectAll": "Seleccionar todo"
+    },
+    "search": {
+      "find": "Buscar",
+      "replace": "Reemplazar",
+      "next": "Siguiente",
+      "previous": "Anterior",
+      "all": "Todo",
+      "matchCase": "Coincidir mayúsculas",
+      "regexp": "Regex",
+      "byWord": "Palabra completa",
+      "replaceOne": "Reemplazar",
+      "replaceAll": "Reemplazar todo",
+      "close": "Cerrar",
+      "currentMatch": "Coincidencia actual",
+      "onLine": "en la línea",
+      "replacedOnLine": "coincidencia reemplazada en la línea $",
+      "replacedMatches": "$ coincidencias reemplazadas"
     }
   },
   "ai": {

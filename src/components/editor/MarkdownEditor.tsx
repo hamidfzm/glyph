@@ -1,3 +1,4 @@
+import { closeSearchPanel, openSearchPanel, searchPanelOpen } from "@codemirror/search";
 import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { useEffect, useRef } from "react";
@@ -18,6 +19,10 @@ interface MarkdownEditorProps {
   workspaceFiles?: string[];
   /** Receives the view on mount and null on teardown, for split view scroll sync. */
   onViewReady?: (view: EditorView | null) => void;
+  /** Drives CodeMirror's find/replace panel. Closing it from inside (Escape or
+   *  its close button) reports back through `onSearchClose`. */
+  searchOpen?: boolean;
+  onSearchClose?: () => void;
 }
 
 export function MarkdownEditor({
@@ -25,6 +30,8 @@ export function MarkdownEditor({
   onChange,
   workspaceFiles,
   onViewReady,
+  searchOpen = false,
+  onSearchClose,
 }: MarkdownEditorProps) {
   const workspaceRoot = useWorkspaceRoot();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -33,6 +40,10 @@ export function MarkdownEditor({
   onChangeRef.current = onChange;
   const onViewReadyRef = useRef(onViewReady);
   onViewReadyRef.current = onViewReady;
+  const onSearchCloseRef = useRef(onSearchClose);
+  onSearchCloseRef.current = onSearchClose;
+  const searchOpenRef = useRef(searchOpen);
+  searchOpenRef.current = searchOpen;
 
   // Read workspace state through refs so the completion source — installed
   // once at mount — picks up updates without reconfiguring the editor. The
@@ -44,7 +55,7 @@ export function MarkdownEditor({
   workspaceFilesRef.current = workspaceFiles ?? [];
   workspaceRootRef.current = workspaceRoot;
 
-  const { t } = useTranslation("settings");
+  const { t, i18n } = useTranslation("settings");
   const { settings } = useSettings();
   const platform = usePlatform();
   const keymapPreset = settings.editor.keymap;
@@ -108,6 +119,28 @@ export function MarkdownEditor({
   const spellcheckExtension = (enabled: boolean, languages: readonly string[]) =>
     enabled ? buildSpellcheck(languages, () => spellLabelsRef.current) : [];
 
+  // CodeMirror builds the find/replace panel from these phrases when it opens,
+  // so they can't be read through a ref like the menus above. A Compartment
+  // lets a locale change reconfigure them without discarding undo history.
+  const searchPhrasesCompartment = useRef(new Compartment()).current;
+  const searchPhrases = EditorState.phrases.of({
+    Find: t("editor.search.find"),
+    Replace: t("editor.search.replace"),
+    next: t("editor.search.next"),
+    previous: t("editor.search.previous"),
+    all: t("editor.search.all"),
+    "match case": t("editor.search.matchCase"),
+    regexp: t("editor.search.regexp"),
+    "by word": t("editor.search.byWord"),
+    replace: t("editor.search.replaceOne"),
+    "replace all": t("editor.search.replaceAll"),
+    close: t("editor.search.close"),
+    "current match": t("editor.search.currentMatch"),
+    "on line": t("editor.search.onLine"),
+    "replaced match on line $": t("editor.search.replacedOnLine"),
+    "replaced $ matches": t("editor.search.replacedMatches"),
+  });
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: content is synced via separate effect below to avoid destroying the editor on every keystroke
   useEffect(() => {
     if (!containerRef.current) return;
@@ -124,7 +157,10 @@ export function MarkdownEditor({
           pasteHtmlRef,
           spellcheckCompartment,
           spellcheckExtension: spellcheckExtension(spellCheck, spellCheckLanguages),
+          searchPhrasesCompartment,
+          searchPhrases,
           onDocChange: (doc: string) => onChangeRef.current(doc),
+          onSearchPanelClose: () => onSearchCloseRef.current?.(),
         }),
       }),
       parent: containerRef.current,
@@ -132,6 +168,10 @@ export function MarkdownEditor({
 
     viewRef.current = view;
     onViewReadyRef.current?.(view);
+    // A keymap change rebuilds the view, dropping any open panel while the
+    // caller still believes search is open. Restore it with the rest of the
+    // state this effect owns.
+    if (searchOpenRef.current) openSearchPanel(view);
 
     return () => {
       view.destroy();
@@ -164,6 +204,26 @@ export function MarkdownEditor({
       ),
     });
   }, [spellCheck, spellCheckLanguagesKey]);
+
+  // Re-translate the panel in place when the locale changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: searchPhrasesCompartment is a stable ref, and searchPhrases is rebuilt on every render, so keying on the language is what actually marks a real change
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: searchPhrasesCompartment.reconfigure(searchPhrases),
+    });
+  }, [i18n.language]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    if (searchOpen) {
+      // Re-opening an open panel just refocuses the find field, which is what
+      // pressing the shortcut again should do.
+      openSearchPanel(view);
+    } else if (searchPanelOpen(view.state)) {
+      closeSearchPanel(view);
+    }
+  }, [searchOpen]);
 
   return <div ref={containerRef} className="editor-container" />;
 }
