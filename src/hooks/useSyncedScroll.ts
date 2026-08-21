@@ -1,11 +1,11 @@
 import type { EditorView } from "@codemirror/view";
 import { type RefObject, useEffect } from "react";
 import { offsetForEditorLine, topVisibleLine } from "@/lib/editorLineOffsets";
+import { PREVIEW_SCROLLER } from "@/lib/scrollToHeading";
 import { lineForOffset, offsetForLine, type ScrollAnchor } from "@/lib/splitScrollAnchors";
 
 // Scoped to the pane wrappers: `.markdown-body` is a class name a rendered
 // document could otherwise contribute from inside the preview.
-const PREVIEW_SCROLLER = ".split-view-preview [data-scroll-container]";
 const PREVIEW_CONTENT = ".markdown-body";
 const ANCHORS = "[data-line]";
 

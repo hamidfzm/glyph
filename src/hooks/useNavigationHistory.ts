@@ -1,29 +1,26 @@
 import { useCallback, useEffect, useRef } from "react";
 import {
   emptyHistory,
+  locationOf,
   type NavigationHistory,
-  type NavigationLocation,
   pushLocation,
+  repointPaths,
   sameTab,
   stepBack,
   stepForward,
 } from "@/lib/navigationHistory";
 import { onActiveHeadingChange, scrollDocumentTo, scrollToHeading } from "@/lib/scrollToHeading";
-import { type Tab, tabPathOf } from "@/lib/tabs";
+import type { Tab } from "@/lib/tabs";
 
 interface UseNavigationHistoryOptions {
   activeTab: Tab | null;
   /** Session restore activates every persisted tab; those are not navigation. */
   initializing: boolean;
+  /** A different workspace is a different set of places; the history resets. */
+  workspaceRoot: string | null;
   openFile: (path: string) => Promise<void>;
-  openGraph: () => void;
+  openGraph: (root: string) => void;
   getScrollPosition: (tabId: string) => number;
-}
-
-// An unsaved buffer has no disk copy to reopen, so it never enters the history.
-function locationOf(tab: Tab): NavigationLocation | null {
-  if (tab.kind === "file" && tab.file.virtual) return null;
-  return { kind: tab.kind, path: tabPathOf(tab) };
 }
 
 /**
@@ -34,6 +31,7 @@ function locationOf(tab: Tab): NavigationLocation | null {
 export function useNavigationHistory({
   activeTab,
   initializing,
+  workspaceRoot,
   openFile,
   openGraph,
   getScrollPosition,
@@ -42,11 +40,19 @@ export function useNavigationHistory({
   const historyRef = useRef<NavigationHistory>(emptyHistory());
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
+  // Reopening a closed file is async; a second move before it lands would
+  // record the late arrival as a fresh place, so moves wait their turn.
+  const moveInFlightRef = useRef(false);
+  const recordedRootRef = useRef(workspaceRoot);
 
   const activeLocation = activeTab ? locationOf(activeTab) : null;
   const activeKind = activeLocation?.kind;
   const activePath = activeLocation?.path;
   useEffect(() => {
+    if (recordedRootRef.current !== workspaceRoot) {
+      recordedRootRef.current = workspaceRoot;
+      historyRef.current = emptyHistory();
+    }
     if (initializing || !activeKind || !activePath) return;
     const location = { kind: activeKind, path: activePath };
     // Arriving on the tab the current entry already names (a Back/Forward, or a
@@ -54,7 +60,7 @@ export function useNavigationHistory({
     const current = historyRef.current.entries[historyRef.current.index];
     if (current && sameTab(current, location)) return;
     historyRef.current = pushLocation(historyRef.current, location);
-  }, [activeKind, activePath, initializing]);
+  }, [activeKind, activePath, initializing, workspaceRoot]);
 
   useEffect(
     () =>
@@ -68,6 +74,12 @@ export function useNavigationHistory({
     [getScrollPosition],
   );
 
+  // `useTabs` calls this as it re-points the open tabs after a rename or move,
+  // before the activation effect can mistake the new path for a new place.
+  const repointHistory = useCallback((oldPath: string, newPath: string) => {
+    historyRef.current = repointPaths(historyRef.current, oldPath, newPath);
+  }, []);
+
   const currentScroll = useCallback(() => {
     const tab = activeTabRef.current;
     return tab ? getScrollPosition(tab.id) : 0;
@@ -78,27 +90,35 @@ export function useNavigationHistory({
       historyRef.current = next;
       const entry = next.entries[next.index];
       const tab = activeTabRef.current;
-      const staysOnTab = tab !== null && sameTab({ kind: tab.kind, path: tabPathOf(tab) }, entry);
-      if (!staysOnTab) {
-        if (entry.kind === "graph") openGraph();
-        else void openFile(entry.path);
+      const here = tab ? locationOf(tab) : null;
+      if (here && sameTab(here, entry)) {
+        if (entry.heading) scrollToHeading(entry.heading);
+        else scrollDocumentTo(entry.scrollTop);
         return;
       }
-      if (entry.heading) scrollToHeading(entry.heading);
-      else scrollDocumentTo(entry.scrollTop);
+      if (entry.kind === "graph") {
+        openGraph(entry.path);
+        return;
+      }
+      moveInFlightRef.current = true;
+      void openFile(entry.path).finally(() => {
+        moveInFlightRef.current = false;
+      });
     },
     [openFile, openGraph],
   );
 
   const navigateBack = useCallback(() => {
+    if (moveInFlightRef.current) return;
     const next = stepBack(historyRef.current, currentScroll());
     if (next) navigate(next);
   }, [currentScroll, navigate]);
 
   const navigateForward = useCallback(() => {
+    if (moveInFlightRef.current) return;
     const next = stepForward(historyRef.current, currentScroll());
     if (next) navigate(next);
   }, [currentScroll, navigate]);
 
-  return { navigateBack, navigateForward };
+  return { navigateBack, navigateForward, repointHistory };
 }

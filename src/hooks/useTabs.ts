@@ -73,10 +73,15 @@ export function useTabs(options: UseTabsOptions) {
     withActiveTab,
   } = useTabStrip();
 
+  // The navigation history follows renames too; it is wired up further down
+  // (it needs the session and document hooks), hence the ref.
+  const repointHistoryRef = useRef<(oldPath: string, newPath: string) => void>(() => {});
+
   // Re-point every open file tab under `oldPath` to its location under
   // `newPath`, moving the file watchers along. Used by rename and move.
   const repointOpenFiles = useCallback(
     (oldPath: string, newPath: string) => {
+      repointHistoryRef.current(oldPath, newPath);
       for (const tab of stateRef.current.tabs) {
         if (tab.kind !== "file" || !isPathInside(tab.file.path, oldPath)) continue;
         const moved = newPath + tab.file.path.slice(oldPath.length);
@@ -317,13 +322,15 @@ export function useTabs(options: UseTabsOptions) {
     activateTabByPath,
   });
 
-  const { navigateBack, navigateForward } = useNavigationHistory({
+  const { navigateBack, navigateForward, repointHistory } = useNavigationHistory({
     activeTab,
     initializing,
+    workspaceRoot: workspace?.root ?? null,
     openFile,
     openGraph,
     getScrollPosition,
   });
+  repointHistoryRef.current = repointHistory;
 
   const refreshWorkspace = useCallback(
     async (root: string) => {

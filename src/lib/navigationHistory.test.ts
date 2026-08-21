@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { EDITOR_MODE } from "@/lib/settings";
+import { makeFileState } from "@/lib/tabs";
 import {
   emptyHistory,
+  locationOf,
   MAX_HISTORY,
   type NavigationHistory,
   type NavigationLocation,
   pushLocation,
+  repointPaths,
   stepBack,
   stepForward,
 } from "./navigationHistory";
@@ -93,5 +97,49 @@ describe("stepBack / stepForward", () => {
     expect(stepBack(stepBack(h, 0)!, 0)).toBeNull();
     expect(stepBack(emptyHistory(), 0)).toBeNull();
     expect(stepForward(emptyHistory(), 0)).toBeNull();
+  });
+});
+
+describe("repointPaths", () => {
+  it("moves file entries at or under the old path and leaves the rest", () => {
+    const h = build(note("/ws/a.md"), note("/ws/dir/b.md", "h1"), note("/other.md"), {
+      kind: "graph",
+      path: "/ws",
+    });
+    const moved = repointPaths(h, "/ws/dir", "/ws/renamed");
+    expect(moved.entries.map((e) => e.path)).toEqual([
+      "/ws/a.md",
+      "/ws/renamed/b.md",
+      "/other.md",
+      "/ws",
+    ]);
+    expect(moved.entries[1].heading).toBe("h1");
+    expect(moved.index).toBe(h.index);
+  });
+
+  it("renames a single file entry", () => {
+    const h = build(note("/ws/a.md"), note("/ws/b.md"));
+    const moved = repointPaths(h, "/ws/a.md", "/ws/c.md");
+    expect(moved.entries.map((e) => e.path)).toEqual(["/ws/c.md", "/ws/b.md"]);
+  });
+});
+
+describe("locationOf", () => {
+  it("maps file and graph tabs to their path", () => {
+    const file = { id: "a", kind: "file" as const, file: makeFileState("/a.md", EDITOR_MODE.view) };
+    expect(locationOf(file)).toEqual({ kind: "file", path: "/a.md" });
+    expect(locationOf({ id: "g", kind: "graph", root: "/ws", file: null })).toEqual({
+      kind: "graph",
+      path: "/ws",
+    });
+  });
+
+  it("has no location for an unsaved buffer", () => {
+    const untitled = {
+      id: "u",
+      kind: "file" as const,
+      file: { ...makeFileState("Untitled-1", EDITOR_MODE.edit), virtual: true },
+    };
+    expect(locationOf(untitled)).toBeNull();
   });
 });

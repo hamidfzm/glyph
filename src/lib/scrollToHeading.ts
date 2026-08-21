@@ -7,6 +7,11 @@ import { scrollBehavior } from "./reducedMotion";
 
 const ACTIVE_HEADING_EVENT = "glyph:active-heading";
 
+/** The viewer marks its scroll container; split layouts wrap the rendered pane
+ *  in `.split-view-preview` so it can be told apart from a source pane. */
+export const DOCUMENT_SCROLLER = "[data-scroll-container]";
+export const PREVIEW_SCROLLER = `.split-view-preview ${DOCUMENT_SCROLLER}`;
+
 // Pick `start` when the target can scroll to the top of its scroll container,
 // otherwise `end`. Prevents end-of-document targets (the last heading, footnote
 // refs) from disappearing into a half-scroll where the user can't tell whether
@@ -39,8 +44,8 @@ export function scrollToHeading(id: string): boolean {
  *  wins when present. */
 export function scrollDocumentTo(top: number): void {
   const scroller =
-    document.querySelector<HTMLElement>(".split-view-preview [data-scroll-container]") ??
-    document.querySelector<HTMLElement>("[data-scroll-container]");
+    document.querySelector<HTMLElement>(PREVIEW_SCROLLER) ??
+    document.querySelector<HTMLElement>(DOCUMENT_SCROLLER);
   if (scroller) scroller.scrollTop = top;
 }
 

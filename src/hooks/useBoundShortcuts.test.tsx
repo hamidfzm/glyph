@@ -67,6 +67,21 @@ describe("useBoundShortcuts", () => {
     expect(onNothing).not.toHaveBeenCalled();
   });
 
+  it("runs the latest handler after a re-render without re-binding", () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const hook = renderHook(
+      ({ onGraph }) => useBoundShortcuts("macos", { "open-graph": onGraph }),
+      {
+        initialProps: { onGraph: first },
+      },
+    );
+    hook.rerender({ onGraph: second });
+    keydown({ code: "KeyG", key: "g", metaKey: true });
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledOnce();
+  });
+
   it("stops listening after unmount", () => {
     const h = setup("macos");
     h.unmount();

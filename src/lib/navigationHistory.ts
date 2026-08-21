@@ -2,6 +2,9 @@
 // plus a cursor into it. Pure data; `useNavigationHistory` owns the side
 // effects (recording tab changes and heading jumps, performing the moves).
 
+import { isPathInside } from "./paths";
+import { type Tab, tabPathOf } from "./tabs";
+
 export interface NavigationLocation {
   kind: "file" | "graph";
   /** `tabPathOf` the tab: the file path, or the workspace root for the graph. */
@@ -24,6 +27,12 @@ export const MAX_HISTORY = 100;
 
 export function emptyHistory(): NavigationHistory {
   return { entries: [], index: -1 };
+}
+
+// An unsaved buffer has no disk copy to reopen, so it never enters the history.
+export function locationOf(tab: Tab): NavigationLocation | null {
+  if (tab.kind === "file" && tab.file.virtual) return null;
+  return { kind: tab.kind, path: tabPathOf(tab) };
 }
 
 export function sameTab(a: NavigationLocation, b: NavigationLocation): boolean {
@@ -64,4 +73,18 @@ export function stepBack(history: NavigationHistory, leftAt: number): Navigation
 export function stepForward(history: NavigationHistory, leftAt: number): NavigationHistory | null {
   if (history.index >= history.entries.length - 1) return null;
   return { entries: stampCurrent(history, leftAt), index: history.index + 1 };
+}
+
+/** Follow a rename or move: every file entry at or under `oldPath` now lives
+ *  under `newPath`, so Back still finds it. */
+export function repointPaths(
+  history: NavigationHistory,
+  oldPath: string,
+  newPath: string,
+): NavigationHistory {
+  const entries = history.entries.map((entry) => {
+    if (entry.kind !== "file" || !isPathInside(entry.path, oldPath)) return entry;
+    return { ...entry, path: newPath + entry.path.slice(oldPath.length) };
+  });
+  return { entries, index: history.index };
 }

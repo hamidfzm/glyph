@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { scrollToHeading } from "@/lib/scrollToHeading";
 import { EDITOR_MODE } from "@/lib/settings";
 import { type FileTab, type GraphTab, makeFileState, type Tab } from "@/lib/tabs";
+import { deferred } from "@/test/deferred";
 import { useNavigationHistory } from "./useNavigationHistory";
 
 const fileTab = (id: string, path: string): FileTab => ({
@@ -14,22 +15,47 @@ const tabA = fileTab("a", "/notes/a.md");
 const tabB = fileTab("b", "/notes/b.md");
 const tabC = fileTab("c", "/notes/c.md");
 const graphTab: GraphTab = { id: "g", kind: "graph", root: "/notes", file: null };
+const untitled: Tab = {
+  id: "u",
+  kind: "file",
+  file: { ...makeFileState("Untitled-1", EDITOR_MODE.edit), virtual: true },
+};
 
-function setup(activeTab: Tab | null, initializing = false) {
+interface Props {
+  activeTab: Tab | null;
+  initializing?: boolean;
+  workspaceRoot?: string | null;
+}
+
+function setup(activeTab: Tab | null, initial: Omit<Props, "activeTab"> = {}) {
   const openFile = vi.fn(() => Promise.resolve());
   const openGraph = vi.fn();
   const scrolls = new Map<string, number>();
   const getScrollPosition = (id: string) => scrolls.get(id) ?? 0;
   const hook = renderHook(
-    (props: { activeTab: Tab | null; initializing: boolean }) =>
-      useNavigationHistory({ ...props, openFile, openGraph, getScrollPosition }),
-    { initialProps: { activeTab, initializing } },
+    ({ activeTab, initializing = false, workspaceRoot = "/notes" }: Props) =>
+      useNavigationHistory({
+        activeTab,
+        initializing,
+        workspaceRoot,
+        openFile,
+        openGraph,
+        getScrollPosition,
+      }),
+    { initialProps: { activeTab, ...initial } },
   );
-  const activate = (tab: Tab | null, stillInitializing = false) =>
-    hook.rerender({ activeTab: tab, initializing: stillInitializing });
-  const back = () => act(() => hook.result.current.navigateBack());
-  const forward = () => act(() => hook.result.current.navigateForward());
-  return { openFile, openGraph, scrolls, activate, back, forward };
+  const activate = (tab: Tab | null, rest: Omit<Props, "activeTab"> = {}) =>
+    hook.rerender({ activeTab: tab, ...rest });
+  // Moves that reopen a file finish on a microtask; flush it before asserting.
+  const back = () =>
+    act(async () => {
+      hook.result.current.navigateBack();
+    });
+  const forward = () =>
+    act(async () => {
+      hook.result.current.navigateForward();
+    });
+  return { hook, openFile, openGraph, scrolls, activate, back, forward };
 }
 
 // A rendered document: the scroller the viewer marks plus one heading in it.
@@ -49,73 +75,119 @@ describe("useNavigationHistory", () => {
     document.body.innerHTML = "";
   });
 
-  it("goes back to the previously active tab and forward again", () => {
+  it("goes back to the previously active tab and forward again", async () => {
     const h = setup(tabA);
     h.activate(tabB);
 
-    h.back();
+    await h.back();
     expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
     h.activate(tabA);
 
-    h.forward();
+    await h.forward();
     expect(h.openFile).toHaveBeenLastCalledWith("/notes/b.md");
     expect(h.openFile).toHaveBeenCalledTimes(2);
   });
 
-  it("does nothing at either end of the history", () => {
+  it("does nothing at either end of the history", async () => {
     const h = setup(tabA);
-    h.back();
-    h.forward();
+    await h.back();
+    await h.forward();
     expect(h.openFile).not.toHaveBeenCalled();
     expect(h.openGraph).not.toHaveBeenCalled();
   });
 
-  it("ignores the activations made while the session is restoring", () => {
-    const h = setup(tabA, true);
-    h.activate(tabB, true);
+  it("ignores the activations made while the session is restoring", async () => {
+    const h = setup(tabA, { initializing: true });
+    h.activate(tabB, { initializing: true });
     h.activate(tabB);
-    h.back();
+    await h.back();
     expect(h.openFile).not.toHaveBeenCalled();
 
     h.activate(tabC);
-    h.back();
+    await h.back();
     expect(h.openFile).toHaveBeenLastCalledWith("/notes/b.md");
   });
 
-  it("drops the forward entries when navigating somewhere new after Back", () => {
+  it("drops the forward entries when navigating somewhere new after Back", async () => {
     const h = setup(tabA);
     h.activate(tabB);
-    h.back();
+    await h.back();
     h.activate(tabA);
     h.activate(tabC);
 
-    h.forward();
+    await h.forward();
     expect(h.openFile).toHaveBeenCalledTimes(1);
-    h.back();
+    await h.back();
     expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
   });
 
-  it("reopens a file whose tab has been closed", () => {
+  it("reopens a file whose tab has been closed", async () => {
     const h = setup(tabA);
     h.activate(tabB);
     h.activate(null);
 
-    h.back();
+    await h.back();
     expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
   });
 
-  it("returns to the graph through openGraph", () => {
+  it("waits for a reopen to land before taking the next move", async () => {
+    const h = setup(tabA);
+    h.activate(tabB);
+    h.activate(tabC);
+    const pending = deferred();
+    h.openFile.mockImplementationOnce(() => pending.promise);
+
+    await h.back();
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/b.md");
+    await h.back();
+    await h.forward();
+    expect(h.openFile).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      pending.resolve();
+    });
+    h.activate(tabB);
+    await h.back();
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
+  });
+
+  it("returns to the graph of its own workspace", async () => {
     const h = setup(tabA);
     h.activate(graphTab);
-    h.back();
+    await h.back();
     expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
     h.activate(tabA);
 
-    h.forward();
-    expect(h.openGraph).toHaveBeenCalledOnce();
+    await h.forward();
+    expect(h.openGraph).toHaveBeenCalledWith("/notes");
   });
 
-  it("records a heading jump and Back restores the pre-jump scroll position", () => {
+  it("starts over when the workspace changes", async () => {
+    const h = setup(tabA);
+    h.activate(tabB);
+    h.activate(tabA, { workspaceRoot: "/elsewhere" });
+
+    await h.back();
+    expect(h.openFile).not.toHaveBeenCalled();
+  });
+
+  it("follows a rename instead of treating the new path as a new place", async () => {
+    const h = setup(tabA);
+    h.activate(tabB);
+    act(() => {
+      h.hook.result.current.repointHistory("/notes/b.md", "/notes/renamed.md");
+    });
+    h.activate(fileTab("b", "/notes/renamed.md"));
+
+    await h.back();
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
+    h.activate(tabA);
+    await h.forward();
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/renamed.md");
+    expect(h.openFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("records a heading jump and Back restores the pre-jump scroll position", async () => {
     const { scroller, scrollIntoView } = mountDocument();
     const h = setup(tabA);
     h.scrolls.set("a", 320);
@@ -123,15 +195,15 @@ describe("useNavigationHistory", () => {
       scrollToHeading("intro");
     });
 
-    h.back();
+    await h.back();
     expect(h.openFile).not.toHaveBeenCalled();
     expect(scroller.scrollTop).toBe(320);
 
-    h.forward();
+    await h.forward();
     expect(scrollIntoView).toHaveBeenCalledTimes(2);
   });
 
-  it("does not record scrolling by hand", () => {
+  it("does not record scrolling by hand", async () => {
     const { scroller } = mountDocument();
     const h = setup(tabA);
     act(() => {
@@ -139,12 +211,12 @@ describe("useNavigationHistory", () => {
       scroller.dispatchEvent(new Event("scroll"));
     });
 
-    h.back();
+    await h.back();
     expect(h.openFile).not.toHaveBeenCalled();
     expect(scroller.scrollTop).toBe(900);
   });
 
-  it("keeps the heading entry when coming back from another tab", () => {
+  it("keeps the heading entry when coming back from another tab", async () => {
     const { scroller } = mountDocument();
     const h = setup(tabA);
     h.scrolls.set("a", 320);
@@ -153,35 +225,25 @@ describe("useNavigationHistory", () => {
     });
     h.activate(tabB);
 
-    h.back();
+    await h.back();
     expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
     h.activate(tabA);
-    h.back();
+    await h.back();
     expect(h.openFile).toHaveBeenCalledTimes(1);
     expect(scroller.scrollTop).toBe(320);
   });
 
-  it("never records an unsaved buffer, which has no file to reopen", () => {
-    const untitled: Tab = {
-      id: "u",
-      kind: "file",
-      file: { ...makeFileState("Untitled-1", EDITOR_MODE.edit), virtual: true },
-    };
+  it("never records an unsaved buffer, which has no file to reopen", async () => {
     const h = setup(tabA);
     h.activate(untitled);
     h.activate(tabB);
 
-    h.back();
+    await h.back();
     expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
   });
 
-  it("ignores heading jumps with no tab or an unsaved buffer active", () => {
+  it("ignores heading jumps with no tab or an unsaved buffer active", async () => {
     mountDocument();
-    const untitled: Tab = {
-      id: "u",
-      kind: "file",
-      file: { ...makeFileState("Untitled-1", EDITOR_MODE.edit), virtual: true },
-    };
     const h = setup(null);
     act(() => {
       scrollToHeading("intro");
@@ -190,17 +252,17 @@ describe("useNavigationHistory", () => {
     act(() => {
       scrollToHeading("intro");
     });
-    h.back();
+    await h.back();
     expect(h.openFile).not.toHaveBeenCalled();
   });
 
-  it("ignores heading jumps while the graph is active", () => {
+  it("ignores heading jumps while the graph is active", async () => {
     mountDocument();
     const h = setup(graphTab);
     act(() => {
       scrollToHeading("intro");
     });
-    h.back();
+    await h.back();
     expect(h.openFile).not.toHaveBeenCalled();
     expect(h.openGraph).not.toHaveBeenCalled();
   });

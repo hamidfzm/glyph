@@ -163,6 +163,35 @@ describe("useTabs renaming, moving and deleting", () => {
     expect(invoke).toHaveBeenCalledWith("watch_file", { path: "/p/ws/renamed.md" });
   });
 
+  it("renamePath keeps the navigation history pointing at the renamed note", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        rename_path: async () => "/p/ws/renamed.md",
+        read_directory: async () => [],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/ws/note.md");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/ws/other.md");
+    });
+    await act(async () => {
+      await result.current.renamePath("/p/ws/note.md", "renamed");
+    });
+
+    await act(async () => {
+      result.current.navigateBack();
+    });
+    expect(result.current.activeFile?.path).toBe("/p/ws/renamed.md");
+    expect(result.current.tabs).toHaveLength(2);
+  });
+
   it("renamePath still re-points the tab when the watcher hand-off fails", async () => {
     // Both the unwatch of the old path and the watch of the new path are
     // fire-and-forget; failures must not break the rename.

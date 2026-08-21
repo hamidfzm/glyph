@@ -24,7 +24,7 @@ export function useNavigationShortcuts({ platform }: { platform: Platform }) {
       // A click inside a modal stays with the modal; navigating the document
       // behind it would leave the dialog pointing at the wrong tab.
       if (event.target instanceof Element && event.target.closest('[role="dialog"]')) return;
-      // The webview would otherwise walk its own page history.
+      // Keeps a webview that honours it from walking its own page history.
       event.preventDefault();
       if (isBack) navigateBack();
       else navigateForward();
