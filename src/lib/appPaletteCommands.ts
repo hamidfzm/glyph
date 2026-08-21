@@ -130,6 +130,20 @@ export function appPaletteCommands(
       run: actions.openGraph,
     },
     {
+      id: "cmd:navigateBack",
+      title: t("navigateBack"),
+      section: "Commands",
+      shortcut: "Cmd/Ctrl+Alt+Left",
+      run: actions.navigateBack,
+    },
+    {
+      id: "cmd:navigateForward",
+      title: t("navigateForward"),
+      section: "Commands",
+      shortcut: "Cmd/Ctrl+Alt+Right",
+      run: actions.navigateForward,
+    },
+    {
       id: "cmd:print",
       title: t("print"),
       section: "Commands",

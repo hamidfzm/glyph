@@ -161,6 +161,22 @@ export const BINDABLE_COMMANDS: readonly BindableCommand[] = [
     defaultAccelerator: "CmdOrCtrl+Shift+PageDown",
     nativeMenu: false,
   },
+  // Obsidian's defaults. CmdOrCtrl+[ / ] would collide with the editor's indent
+  // bindings and Alt+Left / Right with word-wise cursor movement on macOS.
+  {
+    id: "navigate-back",
+    label: "Go Back",
+    category: "View",
+    defaultAccelerator: "CmdOrCtrl+Alt+Left",
+    nativeMenu: false,
+  },
+  {
+    id: "navigate-forward",
+    label: "Go Forward",
+    category: "View",
+    defaultAccelerator: "CmdOrCtrl+Alt+Right",
+    nativeMenu: false,
+  },
   {
     id: "toggle-edit",
     label: "Toggle Edit Mode",

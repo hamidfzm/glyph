@@ -91,6 +91,8 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     setTabMode: opts.setTabMode ?? vi.fn(),
     moveTab: opts.moveTab ?? vi.fn(),
     moveActiveTab: vi.fn(),
+    navigateBack: vi.fn(),
+    navigateForward: vi.fn(),
     updateEditContent: vi.fn(),
     saveDocument: vi.fn(),
     flushForClose: vi.fn(),

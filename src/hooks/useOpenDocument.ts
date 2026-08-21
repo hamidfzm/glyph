@@ -26,6 +26,8 @@ interface UseOpenDocumentOptions {
   stateRef: RefObject<TabsState>;
   setState: Dispatch<SetStateAction<TabsState>>;
   workspaceRef: RefObject<Workspace | null>;
+  /** `prev` with `id` active, the outgoing tab's scroll snapshotted. */
+  withActiveTab: (prev: TabsState, id: string) => TabsState;
   addToRecent: (path: string) => void;
   getDefaultEditorMode: () => EditorMode;
 }
@@ -35,6 +37,7 @@ export function useOpenDocument({
   stateRef,
   setState,
   workspaceRef,
+  withActiveTab,
   addToRecent,
   getDefaultEditorMode,
 }: UseOpenDocumentOptions) {
@@ -63,7 +66,7 @@ export function useOpenDocument({
         (tab) => tab.kind === "file" && tab.file.path === path,
       );
       if (existing) {
-        setState((prev) => ({ ...prev, activeTabId: existing.id }));
+        setState((prev) => withActiveTab(prev, existing.id));
         return;
       }
 
@@ -104,8 +107,8 @@ export function useOpenDocument({
         };
         setState((prev) => {
           const match = prev.tabs.find((tab) => tab.kind === "file" && tab.file.path === path);
-          if (match) return { ...prev, activeTabId: match.id };
-          return { tabs: [...prev.tabs, newTab], activeTabId: id };
+          if (match) return withActiveTab(prev, match.id);
+          return withActiveTab({ ...prev, tabs: [...prev.tabs, newTab] }, id);
         });
         addToRecent(path);
         // Remember workspace notes in `.glyph/state.json` (git-ignored) so the
@@ -119,7 +122,7 @@ export function useOpenDocument({
         console.error("Failed to open file:", err);
       }
     },
-    [addToRecent, getDefaultEditorMode, setState, stateRef, workspaceRef],
+    [addToRecent, getDefaultEditorMode, setState, stateRef, withActiveTab, workspaceRef],
   );
 
   // Open a fresh in-memory buffer (Untitled-N) in edit mode.
@@ -136,8 +139,8 @@ export function useOpenDocument({
         virtual: true,
       },
     };
-    setState((prev) => ({ tabs: [...prev.tabs, newTab], activeTabId: id }));
-  }, [setState]);
+    setState((prev) => withActiveTab({ ...prev, tabs: [...prev.tabs, newTab] }, id));
+  }, [setState, withActiveTab]);
 
   // Open (or re-activate) the graph view of the workspace. The optional root
   // must match the open workspace (used by persisted-tab restore); without a
@@ -149,12 +152,12 @@ export function useOpenDocument({
       const id = generateTabId();
       setState((prev) => {
         const existing = prev.tabs.find((tab) => tab.kind === "graph");
-        if (existing) return { ...prev, activeTabId: existing.id };
+        if (existing) return withActiveTab(prev, existing.id);
         const newTab: GraphTab = { id, kind: "graph", root: wsRoot, file: null };
-        return { tabs: [...prev.tabs, newTab], activeTabId: id };
+        return withActiveTab({ ...prev, tabs: [...prev.tabs, newTab] }, id);
       });
     },
-    [setState, workspaceRef],
+    [setState, withActiveTab, workspaceRef],
   );
 
   const openFileDialog = useCallback(async () => {

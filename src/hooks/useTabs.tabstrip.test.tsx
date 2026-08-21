@@ -169,6 +169,59 @@ describe("useTabs tab strip", () => {
       expect(second.file.scrollTop).toBe(420);
     }
   });
+
+  it("re-opening an already-open file persists scrollTop to the leaving tab", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/b.md");
+    });
+
+    act(() => {
+      result.current.saveScrollPosition(420);
+    });
+    // A wikilink or history move to an open note goes through openFile, not
+    // setActiveTab; the outgoing tab's scroll must survive that route too.
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+
+    expect(result.current.activeTab?.id).toBe(result.current.tabs[0].id);
+    const second = result.current.tabs[1];
+    if (second.kind === "file") {
+      expect(second.file.scrollTop).toBe(420);
+    }
+  });
+
+  it("navigateBack / navigateForward walk the tabs in visiting order", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/b.md");
+    });
+    act(() => {
+      result.current.saveScrollPosition(420);
+    });
+
+    await act(async () => {
+      result.current.navigateBack();
+    });
+    expect(result.current.activeFile?.path).toBe("/p/a.md");
+
+    await act(async () => {
+      result.current.navigateForward();
+    });
+    expect(result.current.activeFile?.path).toBe("/p/b.md");
+    expect(result.current.activeFile?.scrollTop).toBe(420);
+  });
 });
 
 describe("useTabs moveTab / moveActiveTab", () => {

@@ -53,6 +53,8 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     openWorkspaceFile: vi.fn(),
     managePlugins: vi.fn(),
     runPluginExporter: vi.fn(),
+    navigateBack: vi.fn(),
+    navigateForward: vi.fn(),
     ...over,
   };
 }
@@ -195,7 +197,11 @@ describe("useAppCommands", () => {
     find("Zoom Out").run();
     find("Reset Zoom").run();
     find("Read Aloud").run();
+    find("Go Back").run();
+    find("Go Forward").run();
     expect(actions.openFile).toHaveBeenCalledOnce();
+    expect(actions.navigateBack).toHaveBeenCalledOnce();
+    expect(actions.navigateForward).toHaveBeenCalledOnce();
     expect(actions.openFolder).toHaveBeenCalledOnce();
     expect(actions.closeTab).toHaveBeenCalledOnce();
     expect(actions.toggleFilesSidebar).toHaveBeenCalledOnce();

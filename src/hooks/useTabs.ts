@@ -4,6 +4,7 @@ import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useDocumentEdits } from "@/hooks/useDocumentEdits";
 import { useDocumentSave } from "@/hooks/useDocumentSave";
+import { useNavigationHistory } from "@/hooks/useNavigationHistory";
 import { useOpenDocument } from "@/hooks/useOpenDocument";
 import { useSelfSaveTracker } from "@/hooks/useSelfSaveTracker";
 import { useTabEvents } from "@/hooks/useTabEvents";
@@ -67,7 +68,9 @@ export function useTabs(options: UseTabsOptions) {
     setTabMode,
     updateEditContent,
     saveScrollPosition,
+    getScrollPosition,
     forgetScroll,
+    withActiveTab,
   } = useTabStrip();
 
   // Re-point every open file tab under `oldPath` to its location under
@@ -139,6 +142,7 @@ export function useTabs(options: UseTabsOptions) {
     stateRef,
     setState,
     workspaceRef,
+    withActiveTab,
     addToRecent,
     getDefaultEditorMode,
   });
@@ -313,6 +317,14 @@ export function useTabs(options: UseTabsOptions) {
     activateTabByPath,
   });
 
+  const { navigateBack, navigateForward } = useNavigationHistory({
+    activeTab,
+    initializing,
+    openFile,
+    openGraph,
+    getScrollPosition,
+  });
+
   const refreshWorkspace = useCallback(
     async (root: string) => {
       const isCurrent = () => workspaceRef.current?.root === root;
@@ -371,6 +383,8 @@ export function useTabs(options: UseTabsOptions) {
     setActiveTab,
     moveTab,
     moveActiveTab,
+    navigateBack,
+    navigateForward,
     setTabMode,
     updateEditContent,
     saveDocument,
