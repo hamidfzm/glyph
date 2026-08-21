@@ -31,6 +31,8 @@ export function SplitView({
   onTaskToggle,
 }: SplitViewProps) {
   const [previewContent, setPreviewContent] = useState(content);
+  // One Find shortcut, two panes: the focused one answers it.
+  const [searchTarget, setSearchTarget] = useState<"editor" | "preview">("preview");
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -38,6 +40,10 @@ export function SplitView({
   const syncScroll = settings.editor.syncScroll;
 
   useSyncedScroll(rootRef, editorView, syncScroll);
+
+  useEffect(() => {
+    if (searchOpen) setSearchTarget(editorView?.hasFocus ? "editor" : "preview");
+  }, [searchOpen, editorView]);
 
   const handleChange = (newContent: string) => {
     onChange(newContent);
@@ -73,6 +79,8 @@ export function SplitView({
           onChange={handleChange}
           workspaceFiles={workspaceFiles}
           onViewReady={setEditorView}
+          searchOpen={searchOpen && searchTarget === "editor"}
+          onSearchClose={onSearchClose}
         />
       </div>
       <div
@@ -82,7 +90,7 @@ export function SplitView({
         <MarkdownViewer
           content={previewContent}
           filePath={filePath}
-          searchOpen={searchOpen}
+          searchOpen={searchOpen && searchTarget === "preview"}
           onSearchClose={onSearchClose}
           workspaceFiles={workspaceFiles}
           onOpenWikilink={onOpenWikilink}

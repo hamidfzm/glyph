@@ -131,6 +131,8 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
             content={editorContent}
             onChange={handleEditorChange}
             workspaceFiles={workspaceFiles}
+            searchOpen={searchOpen}
+            onSearchClose={onSearchClose}
           />
         </div>
       </NoteZoomLayer>
