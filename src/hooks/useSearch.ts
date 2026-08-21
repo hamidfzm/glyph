@@ -36,7 +36,11 @@ function highlightMatches(container: HTMLElement, query: string): number {
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement;
-      if (parent?.closest("mark.search-highlight, script, style, .mermaid-diagram")) {
+      if (
+        parent?.closest(
+          "mark.search-highlight, script, style, .mermaid-diagram, .markdown-media-print",
+        )
+      ) {
         return NodeFilter.FILTER_REJECT;
       }
       return NodeFilter.FILTER_ACCEPT;

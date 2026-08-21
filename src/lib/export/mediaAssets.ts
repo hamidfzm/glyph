@@ -76,8 +76,10 @@ async function readUnderBudget(url: string, budget: number): Promise<Uint8Array 
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
-    const declared = Number(res.headers.get("content-length"));
-    if (declared > budget) return null;
+    // No declared length means no way to refuse before buffering, and the asset
+    // protocol always declares one, so treat its absence as too big to read.
+    const declared = res.headers.get("content-length");
+    if (declared === null || Number(declared) > budget) return null;
     const bytes = new Uint8Array(await res.arrayBuffer());
     return bytes.byteLength > budget ? null : bytes;
   } catch {

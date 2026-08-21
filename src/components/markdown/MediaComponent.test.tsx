@@ -200,4 +200,22 @@ describe("useMediaSourceComponent", () => {
     // An empty span would print as a stray blank line.
     expect(container.querySelector(".markdown-media-print")).toBeNull();
   });
+
+  it("prints no name for a refused src, even when a child source plays", () => {
+    const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
+    const Video = result.current;
+    const node = {
+      children: [{ type: "element", tagName: "source", properties: { src: "clip.webm" } }],
+    };
+    const { container } = renderInWorkspace(
+      <Video src="../../secrets/clip.mp4" node={node as never}>
+        <source src="clip.webm" />
+      </Video>,
+      "/notes",
+    );
+
+    // The refused path is not what plays, so naming it on paper would be a lie.
+    expect(container.querySelector("video")).not.toBeNull();
+    expect(container.querySelector(".markdown-media-print")).toBeNull();
+  });
 });

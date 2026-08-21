@@ -149,4 +149,17 @@ describe("useSearch", () => {
     });
     expect(result.current.matchCount).toBe(0);
   });
+
+  it("does not count the print-only media name, which nobody can scroll to", () => {
+    const { result } = setup('<p>clip</p><span class="markdown-media-print">clip.mp4</span>');
+
+    act(() => {
+      result.current.setQuery("clip");
+    });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(result.current.matchCount).toBe(1);
+  });
 });

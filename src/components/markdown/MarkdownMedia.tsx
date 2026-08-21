@@ -43,7 +43,10 @@ export function MarkdownMedia({
   // Nothing to play: a refused src and no <source> child that resolved either.
   if (!media.src && !hasPlayableSource(node, filePath, workspaceRoot)) return null;
 
-  const printName = mediaLabel(media.path, src);
+  // Named from what actually resolved: an element kept alive by a <source>
+  // child has no name of its own, and a refused src must not be printed as
+  // though it were the thing playing.
+  const printName = media.src ? mediaLabel(media.path, src) : "";
 
   return (
     <>

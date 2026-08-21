@@ -98,8 +98,12 @@ describe("packageExportMedia", () => {
     expect(el.textContent).toBe("big.mp4");
   });
 
-  it("catches an oversized body when no length was declared", async () => {
-    mockFetch(20 * MB, null);
+  it("refuses a body of undeclared length without reading it", async () => {
+    const arrayBuffer = vi.fn(async () => new ArrayBuffer(20 * MB));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, headers: new Headers({}), arrayBuffer })),
+    );
     const el = body(
       '<video src="asset://localhost/notes/big.mp4" data-media-path="/notes/big.mp4"></video>',
     );
@@ -107,6 +111,9 @@ describe("packageExportMedia", () => {
     const packaged = await packageExportMedia(el, 10 * MB);
 
     expect(packaged).toEqual([]);
+    // Buffering first would let a file of any size exhaust memory before the
+    // size check could refuse it.
+    expect(arrayBuffer).not.toHaveBeenCalled();
   });
 
   it("packages the first source child when the element carries no src", async () => {

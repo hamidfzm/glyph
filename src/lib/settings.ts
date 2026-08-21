@@ -150,7 +150,7 @@ export interface PrintSettings {
 }
 
 // Only EPUB can carry media: it is a zip, so the bytes land inside the file the
-// user picked. HTML, DOCX, and PDF always link instead. Readers choke on huge
+// user picked. HTML, DOCX, and PDF name the media instead. Readers choke on huge
 // books, hence the ceiling.
 export type EpubMediaLimit = "off" | "10" | "50" | "100";
 
