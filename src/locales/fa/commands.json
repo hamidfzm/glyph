@@ -24,6 +24,8 @@
   "find": "جستجو در سند",
   "toggleEdit": "تغییر حالت ویرایش",
   "openGraph": "باز کردن گراف",
+  "navigateBack": "بازگشت",
+  "navigateForward": "جلو",
   "print": "چاپ…",
   "exportHtml": "خروجی به HTML…",
   "exportDocx": "خروجی به Word (DOCX)…",

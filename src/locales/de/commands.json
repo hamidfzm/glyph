@@ -24,6 +24,8 @@
   "find": "Im Dokument suchen",
   "toggleEdit": "Bearbeitungsmodus umschalten",
   "openGraph": "Graph öffnen",
+  "navigateBack": "Zurück",
+  "navigateForward": "Vorwärts",
   "print": "Drucken…",
   "exportHtml": "Als HTML exportieren…",
   "exportDocx": "Als Word (DOCX) exportieren…",

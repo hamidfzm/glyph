@@ -44,6 +44,8 @@ export function tabsContextValue(over: Partial<TabsContextValue> = {}): TabsCont
     setActiveTab: vi.fn(),
     moveTab: vi.fn(),
     moveActiveTab: vi.fn(),
+    navigateBack: vi.fn(),
+    navigateForward: vi.fn(),
     setTabMode: vi.fn(),
     updateEditContent: vi.fn(),
     saveDocument: vi.fn(),

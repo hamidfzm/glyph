@@ -20,6 +20,13 @@ describe("BINDABLE_COMMANDS", () => {
     expect(command?.nativeMenu).toBe(true);
   });
 
+  it("binds back/forward navigation to CmdOrCtrl+Alt+Left/Right, in-app only", () => {
+    expect(getBindableCommand("navigate-back")?.defaultAccelerator).toBe("CmdOrCtrl+Alt+Left");
+    expect(getBindableCommand("navigate-forward")?.defaultAccelerator).toBe("CmdOrCtrl+Alt+Right");
+    expect(getBindableCommand("navigate-back")?.nativeMenu).toBe(false);
+    expect(getBindableCommand("navigate-forward")?.nativeMenu).toBe(false);
+  });
+
   it("includes the in-app undo/redo and Close Window commands", () => {
     expect(getBindableCommand("undo")?.defaultAccelerator).toBe("CmdOrCtrl+Z");
     expect(getBindableCommand("redo")?.defaultAccelerator).toBe("CmdOrCtrl+Shift+Z");

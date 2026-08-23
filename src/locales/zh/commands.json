@@ -24,6 +24,8 @@
   "find": "在文档中查找",
   "toggleEdit": "切换编辑模式",
   "openGraph": "打开图谱",
+  "navigateBack": "后退",
+  "navigateForward": "前进",
   "print": "打印…",
   "exportHtml": "导出为 HTML…",
   "exportDocx": "导出为 Word (DOCX)…",

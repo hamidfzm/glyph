@@ -118,6 +118,7 @@ export function NotebookViewer({
       )}
       <div
         ref={scrollRef}
+        data-scroll-container=""
         className="absolute inset-0 overflow-y-auto"
         style={{ scrollPaddingTop: "16px" }}
       >

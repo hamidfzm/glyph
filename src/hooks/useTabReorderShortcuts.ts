@@ -1,9 +1,5 @@
-import { useEffect } from "react";
+import { useBoundShortcuts } from "@/hooks/useBoundShortcuts";
 import type { Platform } from "@/hooks/usePlatform";
-import { useSettings } from "@/hooks/useSettings";
-import { matchesAccelerator } from "@/lib/accelerator";
-import { resolveBindings } from "@/lib/keybindings";
-import { KEYBOARD_EVENT } from "@/lib/keyboard";
 
 interface UseTabReorderShortcutsOptions {
   platform: Platform;
@@ -16,22 +12,8 @@ interface UseTabReorderShortcutsOptions {
 // regardless of focus: unlike undo/redo there is no editor-local equivalent to
 // defer to, so moving a tab while typing is the intended behavior.
 export function useTabReorderShortcuts({ platform, onMove }: UseTabReorderShortcutsOptions) {
-  const { settings } = useSettings();
-  const overrides = settings.keybindings.overrides;
-
-  useEffect(() => {
-    const resolved = resolveBindings(overrides);
-    const leftAccel = resolved.get("move-tab-left");
-    const rightAccel = resolved.get("move-tab-right");
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const isLeft = !!leftAccel && matchesAccelerator(event, leftAccel, platform);
-      const isRight = !isLeft && !!rightAccel && matchesAccelerator(event, rightAccel, platform);
-      if (!isLeft && !isRight) return;
-      event.preventDefault();
-      onMove(isLeft ? -1 : 1);
-    };
-    document.addEventListener(KEYBOARD_EVENT.KeyDown, handleKeyDown);
-    return () => document.removeEventListener(KEYBOARD_EVENT.KeyDown, handleKeyDown);
-  }, [platform, onMove, overrides]);
+  useBoundShortcuts(platform, {
+    "move-tab-left": () => onMove(-1),
+    "move-tab-right": () => onMove(1),
+  });
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { onActiveHeadingChange, scrollToHeading } from "./scrollToHeading";
+import { onActiveHeadingChange, scrollDocumentTo, scrollToHeading } from "./scrollToHeading";
 
 describe("scrollToHeading", () => {
   beforeEach(() => {
@@ -73,6 +73,40 @@ describe("scrollToHeading", () => {
     unsub();
 
     expect(received).toEqual(["section"]);
+  });
+});
+
+describe("scrollDocumentTo", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("sets scrollTop on the document scroller", () => {
+    const scroller = document.createElement("div");
+    scroller.setAttribute("data-scroll-container", "");
+    document.body.appendChild(scroller);
+
+    scrollDocumentTo(240);
+    expect(scroller.scrollTop).toBe(240);
+  });
+
+  it("prefers the rendered pane of a split layout over its source pane", () => {
+    const source = document.createElement("div");
+    source.setAttribute("data-scroll-container", "");
+    const preview = document.createElement("div");
+    preview.className = "split-view-preview";
+    const rendered = document.createElement("div");
+    rendered.setAttribute("data-scroll-container", "");
+    preview.appendChild(rendered);
+    document.body.append(source, preview);
+
+    scrollDocumentTo(120);
+    expect(rendered.scrollTop).toBe(120);
+    expect(source.scrollTop).toBe(0);
+  });
+
+  it("is a no-op when no document scroller is mounted", () => {
+    expect(() => scrollDocumentTo(240)).not.toThrow();
   });
 });
 

@@ -493,6 +493,7 @@ Open [AI Playground](AI%20Playground.md) for a guided set of prompts to try agai
 | `Cmd+0` | Reset this tab's zoom |
 | `Cmd+Z` / `Cmd+Shift+Z` | Undo / redo task checkbox toggles |
 | `Cmd+Shift+PageUp` / `Cmd+Shift+PageDown` | Move tab left / right |
+| `Cmd+Alt+Left` / `Cmd+Alt+Right` | Go back / forward through visited notes and headings |
 | `Cmd+B` | Toggle sidebar |
 | `Cmd+Shift+A` | AI chat |
 | `Cmd+,` | Settings |

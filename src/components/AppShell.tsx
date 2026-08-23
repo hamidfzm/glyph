@@ -14,6 +14,7 @@ import { useMenuShortcuts } from "@/hooks/useMenuShortcuts";
 import { useNativeKeybindings } from "@/hooks/useNativeKeybindings";
 import { useNativeMenuLabels } from "@/hooks/useNativeMenuLabels";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
+import { useNavigationShortcuts } from "@/hooks/useNavigationShortcuts";
 import { usePlatform } from "@/hooks/usePlatform";
 import { usePluginWorkspaceSync } from "@/hooks/usePluginWorkspaceSync";
 import { useSettings } from "@/hooks/useSettings";
@@ -74,6 +75,8 @@ export function AppShell() {
     undoEdit,
     redoEdit,
     moveActiveTab,
+    navigateBack,
+    navigateForward,
     workspaceFiles,
     tocEntries,
   } = tabs;
@@ -84,6 +87,7 @@ export function AppShell() {
 
   useDocumentUndoRedo({ activeTabId, platform, onUndo: undoEdit, onRedo: redoEdit });
   useTabReorderShortcuts({ platform, onMove: moveActiveTab });
+  useNavigationShortcuts({ platform });
 
   const [searchOpen, setSearchOpen] = useState(false);
   const openSearch = useCallback(() => setSearchOpen(true), []);
@@ -141,8 +145,17 @@ export function AppShell() {
         openSyncSettings: modals.openSyncSettings,
         openWorkspaceFile: openFile,
         runPluginExporter,
+        navigateBack,
+        navigateForward,
       }),
-      [menuHandlers, modals.openSyncSettings, openFile, runPluginExporter],
+      [
+        menuHandlers,
+        modals.openSyncSettings,
+        openFile,
+        runPluginExporter,
+        navigateBack,
+        navigateForward,
+      ],
     ),
   });
 

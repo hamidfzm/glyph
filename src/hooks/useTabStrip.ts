@@ -24,30 +24,38 @@ export function useTabStrip() {
   const activeTab: Tab | null = tabs.find((t) => t.id === activeTabId) ?? null;
   const activeFile = activeFileOf(activeTab);
 
-  const setActiveTab = useCallback((id: string) => {
-    setState((prev) => {
-      // Save scroll position of current active tab's file
-      if (prev.activeTabId) {
-        const savedScroll = scrollRefs.current.get(prev.activeTabId) ?? 0;
-        return {
-          tabs: prev.tabs.map((t) => {
-            if (t.id !== prev.activeTabId || t.kind === "graph") return t;
-            return { ...t, file: { ...t.file, scrollTop: savedScroll } };
-          }),
-          activeTabId: id,
-        };
-      }
-      return { ...prev, activeTabId: id };
-    });
+  // Switching tabs goes through here so the outgoing tab's live scroll lands in
+  // its file state before the viewer swaps; the viewer restores it on return.
+  const withActiveTab = useCallback((prev: TabsState, id: string): TabsState => {
+    if (prev.activeTabId === id) return prev;
+    if (!prev.activeTabId) return { ...prev, activeTabId: id };
+    const savedScroll = scrollRefs.current.get(prev.activeTabId) ?? 0;
+    return {
+      tabs: prev.tabs.map((t) => {
+        if (t.id !== prev.activeTabId || t.kind === "graph") return t;
+        return { ...t, file: { ...t.file, scrollTop: savedScroll } };
+      }),
+      activeTabId: id,
+    };
   }, []);
 
+  const setActiveTab = useCallback(
+    (id: string) => {
+      setState((prev) => withActiveTab(prev, id));
+    },
+    [withActiveTab],
+  );
+
   /** Activate the tab whose primary path matches; a no-op when none does. */
-  const activateTabByPath = useCallback((path: string) => {
-    setState((prev) => {
-      const match = prev.tabs.find((t) => tabPathOf(t) === path);
-      return match ? { ...prev, activeTabId: match.id } : prev;
-    });
-  }, []);
+  const activateTabByPath = useCallback(
+    (path: string) => {
+      setState((prev) => {
+        const match = prev.tabs.find((t) => tabPathOf(t) === path);
+        return match ? withActiveTab(prev, match.id) : prev;
+      });
+    },
+    [withActiveTab],
+  );
 
   // Reorder the tab strip: move tab `id` to `toIndex` (clamped to the strip).
   // Only the array order changes; the active tab and every tab's state are
@@ -118,6 +126,8 @@ export function useTabStrip() {
     [activeTabId],
   );
 
+  const getScrollPosition = useCallback((id: string) => scrollRefs.current.get(id) ?? 0, []);
+
   const forgetScroll = useCallback((id: string) => {
     scrollRefs.current.delete(id);
   }, []);
@@ -131,12 +141,14 @@ export function useTabStrip() {
     activeFile,
     setActiveTab,
     activateTabByPath,
+    withActiveTab,
     moveTab,
     moveActiveTab,
     updateActiveFile,
     setTabMode,
     updateEditContent,
     saveScrollPosition,
+    getScrollPosition,
     forgetScroll,
   };
 }

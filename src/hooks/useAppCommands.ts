@@ -35,6 +35,9 @@ export interface AppActions extends MenuEventHandlers {
   openSyncSettings: () => void;
   /** Run a plugin-contributed export format through the shared pipeline. */
   runPluginExporter: (exporter: ExporterContribution) => void;
+  /** No native menu item; the shortcuts live in `useNavigationShortcuts`. */
+  navigateBack: () => void;
+  navigateForward: () => void;
 }
 
 /**
