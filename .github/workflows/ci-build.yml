@@ -90,6 +90,16 @@ jobs:
             echo "expected a usage error for a folder given to --export pdf" >&2
             exit 1
           fi
+      # Drives the built binary over WebDriver (launch, render, edit, second
+      # instance) against the same release build the export smoke used. A
+      # release binary is required: the single-instance plugin is release-only.
+      # Flags on PRs (per-PR gating is a #502 follow-up "once stable"); hard-
+      # fails on pushes to main and on release, where a broken editor must stop.
+      - name: Built-app smoke test
+        if: matrix.platform == 'ubuntu-22.04'
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        timeout-minutes: 10
+        uses: ./.github/actions/app-smoke
 
   build-android:
     name: Android

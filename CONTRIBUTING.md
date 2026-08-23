@@ -99,11 +99,40 @@ pnpm test                       # Run frontend tests (Vitest)
 pnpm test:watch                 # Run frontend tests in watch mode
 pnpm test:coverage              # Run frontend tests with coverage
 pnpm test:e2e                   # WebKit smoke tests (Playwright; run `pnpm exec playwright install webkit` once first)
+pnpm test:app                   # Built-app smoke: drives the real binary over WebDriver (setup below)
 pnpm size:check                 # Bundle budget gate against dist/ (see docs/bundle-budgets.md)
 cd src-tauri && cargo check     # Rust type checking
 cd src-tauri && cargo clippy    # Rust linting
 cd src-tauri && cargo test      # Rust tests
 ```
+
+### Built-app smoke test (`pnpm test:app`)
+
+Launches the built binary over WebDriver (`tauri-driver`) and asserts a
+CLI-arg document renders, the editor holds it under the production CSP, and a
+second launch reuses the running window. This is the only test that exercises
+a real process launch and the production configuration; unit tests cannot.
+Supported on Linux and Windows; macOS has no WebKit WebDriver and is skipped.
+
+One-time setup:
+
+```bash
+cargo install tauri-driver --locked                 # all platforms
+sudo apt install webkit2gtk-driver dbus-x11         # Linux (WebKitWebDriver + dbus-run-session)
+# Windows: put an msedgedriver.exe matching your installed WebView2 on PATH
+```
+
+Then build a release binary and run the smoke:
+
+```bash
+pnpm tauri build --no-bundle                        # release binary; --debug omits the single-instance plugin
+pnpm test:app                                       # Linux: prefix with `dbus-run-session -- xvfb-run` for headless
+```
+
+The binary is found at `src-tauri/target/release/glyph`; set `GLYPH_BIN` to
+point at another path. CI runs this on Linux from the Build workflow: it flags
+(non-blocking) on PRs and hard-fails on pushes to `main` and at release, where
+a failure blocks channel publishing (see `.github/actions/app-smoke`).
 
 ### Mobile: Android and iOS (experimental)
 

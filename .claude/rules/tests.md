@@ -22,6 +22,12 @@ paths:
 - `src/test/e2e/*.spec.ts` runs in Playwright's WebKit only (`pnpm test:e2e`, CI job `Smoke / WebKit` in `ci-smoke.yml`); Vitest ignores it (it only collects `*.test.*`). This suite exists for behavior that differs by engine, like CSP enforcement inside blob workers (the D2 renderer); a Chromium run would pass even when the app is broken on Linux/macOS.
 - Keep it a smoke suite: a handful of engine-level checks, not app E2E coverage. It drives the bundled libraries directly, not the Tauri app.
 
+## Built-app smoke tests (tauri-driver)
+
+- `src/test/app/*.spec.ts` runs the built binary over WebDriver via `tauri-driver` (`pnpm test:app`, a plain `node --test` suite with a raw fetch client in `harness.ts`, no WebdriverIO). The `.spec.ts` suffix keeps Vitest out (it collects only `*.test.*`), and it lives in `src/test/app`, not `src/test/e2e`, so Playwright ignores it too.
+- This is the only test that launches the real process under the production CSP: it catches CSP/editor breakage (#390) and startup-race regressions (cold-launch, second-instance) that unit tests cannot. Needs a **release** binary (the single-instance plugin is release-only) and `tauri-driver` on PATH; keep it a handful of assertions.
+- CI runs it on Linux from the Build workflow via `.github/actions/app-smoke` (xvfb + `dbus-run-session`), reusing the release binary already built there; a failure flags PRs and blocks release publishing. macOS is unsupported (no WebKit WebDriver).
+
 ## Rust
 
 - Unit tests live in `#[cfg(test)]` modules in the same file as the code under test.

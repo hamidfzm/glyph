@@ -4,9 +4,10 @@ on:
   workflow_call:
 
 # CI-time smoke tests: fast checks that drive real engines or binaries, as
-# opposed to unit tests. Future smoke jobs (e.g. the built-app tauri-driver
-# smoke from #502) belong here. Post-release channel smoke tests live in
-# release-smoke-test.yml instead.
+# opposed to unit tests. The built-app tauri-driver smoke (#502) instead rides
+# the Build workflow's ubuntu-22.04 leg (.github/actions/app-smoke), reusing
+# the release binary already built there rather than building a second one.
+# Post-release channel smoke tests live in release-smoke-test.yml instead.
 jobs:
   webkit:
     # Renders a real D2 diagram and probes every CSP-dependent render surface

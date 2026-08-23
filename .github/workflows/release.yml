@@ -126,6 +126,14 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           args: ${{ matrix.args }}
+      # Gate channel publishing on the built-app smoke: a failure fails this
+      # build leg, and every publish-* job needs: build, so nothing is pushed
+      # to a package channel (the GitHub release and its assets are already
+      # uploaded by this point). One x64 Linux leg is enough (WebKitWebDriver).
+      - name: Built-app smoke test
+        if: matrix.platform == 'ubuntu-22.04'
+        timeout-minutes: 10
+        uses: ./.github/actions/app-smoke
 
   update-release-notes:
     needs: build
