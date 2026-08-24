@@ -118,16 +118,18 @@ pub fn search_workspace(
     grants: State<'_, GrantRegistry>,
 ) -> Result<SearchResults, String> {
     grants.ensure_readable(&path)?;
-    search_workspace_capped(&path, &query, &options, MAX_MATCHES)
+    search_workspace_capped(&path, &query, &options, MAX_MATCHES, WALK_MAX_FILES)
 }
 
-/// Body of [`search_workspace`] with the match cap as a parameter, so the
-/// truncation branch is testable without authoring 500 matches.
+/// Body of [`search_workspace`] with the caps as parameters, so the
+/// truncation branches are testable without authoring 500 matches or
+/// `WALK_MAX_FILES` real files.
 fn search_workspace_capped(
     path: &str,
     query: &str,
     options: &SearchOptions,
     max_matches: usize,
+    max_files: usize,
 ) -> Result<SearchResults, String> {
     let root = Path::new(path);
     if !root.is_dir() {
@@ -154,7 +156,7 @@ fn search_workspace_capped(
         if !crate::is_markdown_file(file) {
             continue;
         }
-        if scanned >= WALK_MAX_FILES {
+        if scanned >= max_files {
             truncated = true;
             break;
         }
@@ -217,7 +219,14 @@ mod tests {
     }
 
     fn search(dir: &Path, query: &str, options: &SearchOptions) -> SearchResults {
-        search_workspace_capped(&dir.to_string_lossy(), query, options, MAX_MATCHES).unwrap()
+        search_workspace_capped(
+            &dir.to_string_lossy(),
+            query,
+            options,
+            MAX_MATCHES,
+            WALK_MAX_FILES,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -306,8 +315,14 @@ mod tests {
             regex: true,
             ..Default::default()
         };
-        let err = search_workspace_capped(&dir.to_string_lossy(), "a(", &regex, MAX_MATCHES)
-            .expect_err("must reject the pattern");
+        let err = search_workspace_capped(
+            &dir.to_string_lossy(),
+            "a(",
+            &regex,
+            MAX_MATCHES,
+            WALK_MAX_FILES,
+        )
+        .expect_err("must reject the pattern");
         assert!(err.starts_with("Invalid search pattern:"));
 
         let _ = fs::remove_dir_all(&dir);
@@ -331,9 +346,41 @@ mod tests {
         fs::write(dir.join("a.md"), "hit\nhit\nhit\nhit\n").unwrap();
 
         let results =
-            search_workspace_capped(&dir.to_string_lossy(), "hit", &literal(), 2).unwrap();
+            search_workspace_capped(&dir.to_string_lossy(), "hit", &literal(), 2, WALK_MAX_FILES)
+                .unwrap();
         assert_eq!(results.total, 2);
         assert!(results.truncated);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_file_cap_truncates_the_walk() {
+        let dir = unique_tmp("file_cap");
+        fs::write(dir.join("a.md"), "hit\n").unwrap();
+        fs::write(dir.join("b.md"), "hit\n").unwrap();
+
+        let results =
+            search_workspace_capped(&dir.to_string_lossy(), "hit", &literal(), MAX_MATCHES, 1)
+                .unwrap();
+        // Sorted traversal makes the covered file deterministic.
+        assert_eq!(results.files.len(), 1);
+        assert!(results.files[0].path.ends_with("a.md"));
+        assert!(results.truncated);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn non_utf8_files_are_skipped_not_fatal() {
+        let dir = unique_tmp("non_utf8");
+        fs::write(dir.join("a.md"), b"\xff\xfe broken bytes \xff").unwrap();
+        fs::write(dir.join("b.md"), "the needle survives\n").unwrap();
+
+        let results = search(&dir, "needle", &literal());
+        assert_eq!(results.total, 1);
+        assert_eq!(results.files.len(), 1);
+        assert!(results.files[0].path.ends_with("b.md"));
 
         let _ = fs::remove_dir_all(&dir);
     }

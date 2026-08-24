@@ -124,34 +124,32 @@ export function SearchPanel({
       return <div className="command-palette-empty">{t("workspaceSearch.noResults")}</div>;
 
     // Rows are grouped by file but selected by flat index, so each file block
-    // needs its offset into the flat list.
-    const offsets = new Map<string, number>();
-    let total = 0;
-    for (const file of results.files) {
-      offsets.set(file.path, total);
-      total += file.matches.length;
-    }
-
-    return results.files.map((file) => (
-      <div key={file.path} className="command-palette-group">
-        <div className="command-palette-section" title={file.path}>
-          {relativeToRoot(file.path, workspace.root)}
-          <span className="workspace-search-count">{file.matches.length}</span>
+    // starts at the running count of the rows above it.
+    let flatIndex = 0;
+    return results.files.map((file) => {
+      const start = flatIndex;
+      flatIndex += file.matches.length;
+      return (
+        <div key={file.path} className="command-palette-group">
+          <div className="command-palette-section" title={file.path}>
+            {relativeToRoot(file.path, workspace.root)}
+            <span className="workspace-search-count">{file.matches.length}</span>
+          </div>
+          {file.matches.map((match, i) => {
+            const index = start + i;
+            return (
+              <SearchResultRow
+                key={`${match.line}:${match.column}`}
+                match={match}
+                selected={selectedIndex === index}
+                onOpen={() => handleOpenMatch(file.path, match)}
+                onHover={() => setSelectedIndex(index)}
+              />
+            );
+          })}
         </div>
-        {file.matches.map((match, i) => {
-          const index = (offsets.get(file.path) ?? 0) + i;
-          return (
-            <SearchResultRow
-              key={`${match.line}:${match.column}`}
-              match={match}
-              selected={selectedIndex === index}
-              onOpen={() => handleOpenMatch(file.path, match)}
-              onHover={() => setSelectedIndex(index)}
-            />
-          );
-        })}
-      </div>
-    ));
+      );
+    });
   };
 
   return (

@@ -38,8 +38,12 @@ const hit = {
   truncated: false,
 };
 
-function renderPanel(props: Partial<typeof defaultProps> = {}, openFile = vi.fn()) {
-  const tabs = { workspace: { root: "/ws" }, openFile } as unknown as TabsContextValue;
+function renderPanel(
+  props: Partial<typeof defaultProps> = {},
+  openFile = vi.fn(),
+  root: string | null = "/ws",
+) {
+  const tabs = { workspace: root ? { root } : null, openFile } as unknown as TabsContextValue;
   const wrapper = ({ children }: { children: ReactNode }) => (
     <TabsContext.Provider value={tabs}>{children}</TabsContext.Provider>
   );
@@ -175,6 +179,59 @@ describe("SearchPanel", () => {
   it("says when the results were capped", () => {
     renderPanel({ results: { ...hit, truncated: true } });
     expect(screen.getByText(/Narrow the search/)).toBeInTheDocument();
+  });
+
+  it("asks for a folder when no workspace is open", () => {
+    renderPanel({}, vi.fn(), null);
+    expect(screen.getByText("Open a folder to search across notes.")).toBeInTheDocument();
+  });
+
+  it("prompts while the query is empty", () => {
+    renderPanel({ query: "" });
+    expect(screen.getByText(/Type to search/)).toBeInTheDocument();
+  });
+
+  it("shows the in-flight state while a scan runs", () => {
+    renderPanel({ searching: true });
+    expect(screen.getByText("Searching...")).toBeInTheDocument();
+  });
+
+  it("forwards typed input to the query", async () => {
+    const onQueryChange = vi.fn();
+    renderPanel({ onQueryChange });
+
+    await userEvent.type(screen.getByRole("textbox"), "x");
+    expect(onQueryChange).toHaveBeenCalledWith("needlex");
+  });
+
+  it("toggles case sensitivity and regex from their buttons", async () => {
+    const onToggleOption = vi.fn();
+    renderPanel({ onToggleOption });
+
+    await userEvent.click(screen.getByRole("button", { name: "Match case" }));
+    expect(onToggleOption).toHaveBeenCalledWith("caseSensitive");
+    await userEvent.click(screen.getByRole("button", { name: "Use regular expression" }));
+    expect(onToggleOption).toHaveBeenCalledWith("regex");
+  });
+
+  it("closes on Escape bubbled from outside the input", async () => {
+    const onClose = vi.fn();
+    renderPanel({ results: hit, onClose });
+
+    const row = document.querySelectorAll(".workspace-search-row")[0] as HTMLElement;
+    row.focus();
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("closes on a backdrop click but not on a click inside the panel", async () => {
+    const onClose = vi.fn();
+    renderPanel({ onClose });
+
+    await userEvent.click(screen.getByRole("dialog"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("textbox"));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("closes on Escape", async () => {

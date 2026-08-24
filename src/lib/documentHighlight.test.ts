@@ -159,6 +159,22 @@ describe("locateWhenRendered", () => {
     expect(onFail).toHaveBeenCalledTimes(1);
   });
 
+  it("skips the re-assert when cancelled between the success and its rAF pair", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    const locate = vi.fn().mockReturnValue(true);
+    const cancel = locateWhenRendered(locate);
+    vi.advanceTimersByTime(50);
+    expect(locate).toHaveBeenCalledTimes(1);
+
+    cancel();
+    while (frames.length > 0) frames.shift()?.(0);
+    expect(locate).toHaveBeenCalledTimes(1);
+  });
+
   it("stops retrying once cancelled", () => {
     const locate = vi.fn().mockReturnValue(false);
     const onFail = vi.fn();

@@ -98,6 +98,31 @@ describe("useWorkspaceSearch", () => {
     expect(result.current.searching).toBe(false);
   });
 
+  it("ignores a slow scan that rejects after a newer query started", async () => {
+    let rejectFirst: (reason: unknown) => void = () => {};
+    invoke.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+    );
+    invoke.mockResolvedValue(results(9));
+
+    const { result } = renderSearch();
+    act(() => result.current.openPanel());
+    act(() => result.current.setQuery("slow"));
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+
+    act(() => result.current.setQuery("fast"));
+    await waitFor(() => expect(result.current.results.total).toBe(9));
+
+    await act(async () => {
+      rejectFirst("Invalid search pattern: stale");
+    });
+    expect(result.current.failed).toBe(false);
+    expect(result.current.results.total).toBe(9);
+  });
+
   it("ignores a slow scan that resolves after a newer query started", async () => {
     let resolveFirst: (value: unknown) => void = () => {};
     invoke.mockImplementationOnce(
