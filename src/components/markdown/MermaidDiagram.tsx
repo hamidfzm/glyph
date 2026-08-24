@@ -2,17 +2,8 @@ import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from "re
 import { useTranslation } from "react-i18next";
 import { useLightbox } from "@/contexts/LightboxContext";
 import { useIsDarkMode } from "@/hooks/useIsDarkMode";
+import { renderMermaid } from "@/lib/mermaidRender";
 import { svgToDataUrl } from "@/lib/svgDataUrl";
-
-let idCounter = 0;
-let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
-
-function loadMermaid() {
-  if (!mermaidPromise) {
-    mermaidPromise = import("mermaid").then((m) => m.default);
-  }
-  return mermaidPromise;
-}
 
 interface MermaidDiagramProps {
   code: string;
@@ -37,18 +28,8 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
       setError(t("mermaid.empty"));
       return;
     }
-    // Always pass a fresh id to `mermaid.render`. Mermaid v11 keeps internal
-    // state keyed by id, and calling render twice with the same id (React
-    // double-mount, theme flip, parent re-render) makes the second call
-    // return a tiny ~5KB stub SVG that paints as a blank preview.
-    const id = `mermaid-diagram-${idCounter++}`;
     try {
-      const mermaid = await loadMermaid();
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: isDark ? "dark" : "default",
-      });
-      const { svg } = await mermaid.render(id, code);
+      const svg = await renderMermaid(code, isDark);
       if (renderSeqRef.current !== mySeq) return;
       svgRef.current = svg;
       if (containerRef.current) {

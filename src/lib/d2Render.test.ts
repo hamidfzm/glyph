@@ -23,6 +23,7 @@ vi.mock("dompurify", () => ({
 }));
 
 import { renderD2 } from "./d2Render";
+import { DIAGRAM_RENDER_CACHE_LIMIT } from "./lruCache";
 
 describe("renderD2", () => {
   beforeEach(() => {
@@ -61,5 +62,20 @@ describe("renderD2", () => {
     await expect(renderD2("retry-key", false)).rejects.toThrow("boom");
     await expect(renderD2("retry-key", false)).resolves.toBe("CLEAN:<svg></svg>");
     expect(compile).toHaveBeenCalledTimes(2);
+  });
+
+  it("evicts the least recently used entry past the cache limit", async () => {
+    renderSvg.mockResolvedValue("<svg></svg>");
+    for (let i = 0; i < DIAGRAM_RENDER_CACHE_LIMIT; i++) {
+      await renderD2(`evict-${i}`, false);
+    }
+    const cold = compile.mock.calls.length;
+    // evict-0 is the oldest; one more distinct source pushes it out, so
+    // re-requesting it recompiles while a fresher entry still hits.
+    await renderD2("evict-overflow", false);
+    await renderD2("evict-overflow", false);
+    expect(compile).toHaveBeenCalledTimes(cold + 1);
+    await renderD2("evict-0", false);
+    expect(compile).toHaveBeenCalledTimes(cold + 2);
   });
 });
