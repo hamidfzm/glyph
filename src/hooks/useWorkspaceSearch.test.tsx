@@ -76,6 +76,12 @@ describe("useWorkspaceSearch", () => {
     expect(invoke).toHaveBeenCalledTimes(1);
   });
 
+  it("refuses to open without a workspace, like the menu item", () => {
+    const { result } = renderSearch(null);
+    act(() => result.current.openPanel());
+    expect(result.current.open).toBe(false);
+  });
+
   it("never scans without a workspace", async () => {
     const { result } = renderSearch(null);
     act(() => result.current.openPanel());

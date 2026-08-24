@@ -74,7 +74,11 @@ export function useWorkspaceSearch(): WorkspaceSearchController {
     return () => clearTimeout(timer);
   }, [open, query, options, root]);
 
-  const openPanel = useCallback(() => setOpen(true), []);
+  // The menu item and palette entry are already workspace-gated; the raw
+  // keyboard shortcut is not, so the guard here keeps all three consistent.
+  const openPanel = useCallback(() => {
+    if (root) setOpen(true);
+  }, [root]);
   const closePanel = useCallback(() => setOpen(false), []);
   const toggleOption = useCallback((key: keyof SearchOptions) => {
     setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
