@@ -30,6 +30,16 @@ describe("LruCache", () => {
     expect(cache.get("b")).toBeUndefined();
   });
 
+  it("peek reads without refreshing recency", () => {
+    const cache = new LruCache<string>(2);
+    cache.set("a", "1");
+    cache.set("b", "2");
+    expect(cache.peek("a")).toBe("1");
+    cache.set("c", "3");
+    expect(cache.peek("a")).toBeUndefined();
+    expect(cache.peek("b")).toBe("2");
+  });
+
   it("set on an existing key updates the value without evicting", () => {
     const cache = new LruCache<string>(2);
     cache.set("a", "1");

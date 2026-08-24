@@ -69,8 +69,12 @@ export function renderD2(source: string, dark: boolean): Promise<string> {
     const svg = await d2.render(result.diagram, { ...result.renderOptions, noXMLTag: true });
     return sanitizeSvg(svg);
   })();
-  // Don't cache a failed render, so a transient error can be retried.
-  pending.catch(() => cache.delete(key));
+  // Don't cache a failed render, so a transient error can be retried. Evict
+  // only the promise that actually failed: past the LRU bound the key may
+  // have been evicted and re-inserted with a newer, healthy promise.
+  pending.catch(() => {
+    if (cache.peek(key) === pending) cache.delete(key);
+  });
   cache.set(key, pending);
   return pending;
 }

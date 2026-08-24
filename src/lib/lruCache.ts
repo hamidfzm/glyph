@@ -24,6 +24,12 @@ export class LruCache<V> {
     return hit;
   }
 
+  /** Read without refreshing recency. For identity checks (does the cache
+   *  still hold this exact value?) that must not disturb eviction order. */
+  peek(key: string): V | undefined {
+    return this.map.get(key);
+  }
+
   set(key: string, value: V): void {
     this.map.delete(key);
     this.map.set(key, value);

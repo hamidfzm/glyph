@@ -103,6 +103,34 @@ describe("renderMermaid", () => {
     expect(renderSvg).toHaveBeenCalledTimes(2);
   });
 
+  it("a failed render evicted from the LRU does not delete a newer promise under its key", async () => {
+    let rejectFirst: (reason: unknown) => void = () => {};
+    renderSvg.mockImplementationOnce(
+      () =>
+        new Promise<{ svg: string }>((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+    );
+    const first = renderMermaid("w1-dup", false);
+    // These synchronous cache.set calls push "w1-dup" out of the LRU while its
+    // render is still queued.
+    const fillers: Promise<string>[] = [];
+    for (let i = 0; i < DIAGRAM_RENDER_CACHE_LIMIT; i++) {
+      fillers.push(renderMermaid(`w1-fill-${i}`, false));
+    }
+    // Miss (the key was evicted): a second, healthy promise is cached.
+    const second = renderMermaid("w1-dup", false);
+    await vi.waitFor(() => expect(renderSvg).toHaveBeenCalledTimes(1));
+    rejectFirst(new Error("stale failure"));
+    await expect(first).rejects.toThrow("stale failure");
+    await Promise.all(fillers);
+    await expect(second).resolves.toBe("<svg/>");
+    const settled = renderSvg.mock.calls.length;
+    // The healthy promise must have survived the failed one's eviction.
+    await renderMermaid("w1-dup", false);
+    expect(renderSvg).toHaveBeenCalledTimes(settled);
+  });
+
   it("evicts the least recently used entry past the cache limit", async () => {
     for (let i = 0; i < DIAGRAM_RENDER_CACHE_LIMIT; i++) {
       await renderMermaid(`evict-${i}`, false);

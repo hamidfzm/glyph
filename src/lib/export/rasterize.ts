@@ -4,6 +4,7 @@
 // SVG bakes in the app theme's colors). `rasterizeSvgsInHtml` is the fallback
 // for SVGs pdfmake's renderer rejects.
 
+import { enqueueMermaid } from "@/lib/mermaidRender";
 import { decodeSvgDataUrl, toXmlSvg } from "@/lib/svgDataUrl";
 
 let mermaidId = 0;
@@ -20,16 +21,22 @@ export async function rasterizeElement(el: HTMLElement, backgroundColor: string)
 // taint a canvas in the raster fallback). Returns the SVG markup. Always
 // light, regardless of the app theme.
 export async function renderMermaidLightSvg(source: string): Promise<string> {
-  const { default: mermaid } = await import("mermaid");
-  // Both flags are needed: with only the flowchart one, Mermaid v11 still wraps
-  // every node label in a `<foreignObject>` and the labels vanish from the PDF.
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: "default",
-    htmlLabels: false,
-    flowchart: { htmlLabels: false },
+  // Queued so this export-config pair cannot steal the theme from a viewer
+  // render mid-flight (which the viewer would then cache).
+  const svg = await enqueueMermaid(async () => {
+    const { default: mermaid } = await import("mermaid");
+    // Both flags are needed: with only the flowchart one, Mermaid v11 still
+    // wraps every node label in a `<foreignObject>` and the labels vanish from
+    // the PDF.
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: "default",
+      htmlLabels: false,
+      flowchart: { htmlLabels: false },
+    });
+    const { svg } = await mermaid.render(`glyph-export-mermaid-${mermaidId++}`, source);
+    return svg;
   });
-  const { svg } = await mermaid.render(`glyph-export-mermaid-${mermaidId++}`, source);
   return sanitizeDiagramSvg(svg);
 }
 
@@ -59,12 +66,14 @@ async function sanitizeDiagramSvg(svg: string): Promise<string> {
 // Restore Mermaid's (global) config to the app theme after export-time renders,
 // so on-screen diagrams keep their theme and HTML labels.
 export async function restoreMermaidTheme(dark: boolean): Promise<void> {
-  const { default: mermaid } = await import("mermaid");
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: dark ? "dark" : "default",
-    htmlLabels: true,
-    flowchart: { htmlLabels: true },
+  await enqueueMermaid(async () => {
+    const { default: mermaid } = await import("mermaid");
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: dark ? "dark" : "default",
+      htmlLabels: true,
+      flowchart: { htmlLabels: true },
+    });
   });
 }
 
