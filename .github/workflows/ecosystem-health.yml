@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Install check-jsonschema
-        run: pipx install check-jsonschema
+        run: pipx install check-jsonschema==0.38.0
       - name: Resolve latest release
         id: release
         env:
@@ -38,4 +38,6 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Checking endpoints against release **$VERSION**." >> "$GITHUB_STEP_SUMMARY"
       - name: Check endpoints
-        run: bash scripts/ecosystem-health-check.sh "${{ steps.release.outputs.version }}"
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: bash scripts/ecosystem-health-check.sh "$VERSION"
