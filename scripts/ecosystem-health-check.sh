@@ -14,6 +14,13 @@ if ! echo "$expected" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
   exit 2
 fi
 
+# A missing tool must not read as a broken endpoint. The python3 probe also
+# catches the Windows Store stub that sits on PATH but cannot run anything.
+for tool in curl gpg jq gzip sha256sum python3 check-jsonschema; do
+  command -v "$tool" >/dev/null || { echo "missing on PATH: $tool" >&2; exit 2; }
+done
+python3 -c 'import xml.etree.ElementTree' 2>/dev/null || { echo "python3 on PATH does not run" >&2; exit 2; }
+
 APT_REPO="https://glyph-md.github.io/apt-repo"
 RPM_REPO="https://glyph-md.github.io/rpm-repo"
 WEBSITE="https://glyph-md.github.io"
@@ -36,12 +43,16 @@ failed=0
 fail() { echo "::error::$*"; failed=1; }
 ok() { echo "ok: $*"; }
 
+# Bounded timeouts so one blackholed host cannot eat the job timeout and hide
+# the sections after it; https only, including across redirects.
+CURL=(curl -fsSL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 --proto =https --proto-redir =https)
+
 fetch() { # fetch <url> <out>
-  curl -fsSL --retry 3 --retry-all-errors -o "$2" "$1" || { fail "$1: download failed"; return 1; }
+  "${CURL[@]}" -o "$2" "$1" || { fail "$1: download failed"; return 1; }
 }
 
 reachable() { # reachable <url>
-  curl -fsSIL --retry 3 --retry-all-errors -o /dev/null "$1" || { fail "$1: unreachable"; return 1; }
+  "${CURL[@]}" -I -o /dev/null "$1" || { fail "$1: unreachable"; return 1; }
 }
 
 import_signing_key() { # import_signing_key <url>
@@ -107,7 +118,7 @@ root = ET.parse(sys.argv[1]).getroot()
 print(root.findtext(ns + "revision", ""))
 loc = root.find(ns + "data[@type=\"primary\"]/" + ns + "location")
 print("" if loc is None else loc.get("href", ""))
-' "$d/repomd.xml" 2>/dev/null | tr -d '\r') || true
+' "$d/repomd.xml" | tr -d '\r') || true
   if [ "$revision" = "$expected" ]; then
     ok "dnf repomd.xml revision $revision"
   else
@@ -117,7 +128,8 @@ print("" if loc is None else loc.get("href", ""))
   # sees a valid repo with nothing to install.
   [ -n "$primary" ] || { fail "dnf repomd.xml: no primary location"; return 0; }
   fetch "$RPM_REPO/$primary" "$d/primary.xml.gz" || return 0
-  if gzip -dc "$d/primary.xml.gz" | grep -q "ver=\"$expected\""; then
+  gzip -dc "$d/primary.xml.gz" > "$d/primary.xml" || { fail "dnf primary.xml.gz: not gzip"; return 0; }
+  if grep -q "ver=\"$expected\"" "$d/primary.xml"; then
     ok "dnf primary.xml lists $expected"
   else
     fail "dnf primary.xml: does not list $expected"
@@ -131,7 +143,8 @@ check_website() {
   for path in / /de/ /es/ /fa/ /zh/ /plugins/; do
     reachable "$WEBSITE$path" && ok "website $path"
   done
-  if curl -fsSL --retry 3 --retry-all-errors "$WEBSITE/" | grep -q 'id="download"'; then
+  fetch "$WEBSITE/" "$tmp/home.html" || return 0
+  if grep -q 'id="download"' "$tmp/home.html"; then
     ok "website homepage has the #download section"
   else
     fail "website homepage: no #download section"
@@ -148,11 +161,19 @@ check_marketplace() {
   else
     fail "marketplace index: schema validation failed"
   fi
-  # Every listed package must download, or the Install button is a dead end.
-  local url
-  while IFS= read -r url; do
-    reachable "$url" && ok "marketplace package $url"
-  done < <(jq -r '.plugins[].packageUrl' "$d/index.json" | tr -d '\r')
+  # Every listed package must download and match the index checksum the app
+  # verifies on install, or the Install button ends in a dead link or a
+  # checksum-mismatch error.
+  local url sha n=0
+  while read -r url sha; do
+    n=$((n + 1))
+    fetch "$url" "$d/package-$n.zip" || continue
+    if echo "$sha  $d/package-$n.zip" | sha256sum -c --quiet >/dev/null 2>&1; then
+      ok "marketplace package $url"
+    else
+      fail "marketplace package $url: sha256 does not match the index"
+    fi
+  done < <(jq -r '.plugins[] | "\(.packageUrl) \(.sha256)"' "$d/index.json" | tr -d '\r')
 }
 
 check_apt

@@ -290,7 +290,7 @@ The **Release Smoke Test** workflow (`release-smoke-test.yml`) installs Glyph fr
 
 ### Ecosystem health check
 
-The **Ecosystem Health** workflow (`ecosystem-health.yml`) runs weekly and probes the endpoints a release publishes to without installing anything: the apt and dnf repos (metadata reachable, signed by the release key, advertising the latest release), the website and its locale pages, and the plugin marketplace index (valid against its schema, every package URL downloadable). A failed run emails the maintainer. It can be dispatched manually, and runs on PRs that edit it. Locally, with `curl`, `gpg`, `jq`, `python3`, and [`check-jsonschema`](https://pypi.org/project/check-jsonschema/) on PATH:
+The **Ecosystem Health** workflow (`ecosystem-health.yml`) runs weekly and probes the endpoints a release publishes to without installing anything: the apt and dnf repos (metadata reachable, signed by the release key, advertising the latest release), the website and its locale pages, and the plugin marketplace index (valid against its schema, every package downloadable and matching its checksum). A failed run emails the maintainer. It can be dispatched manually, and runs on PRs that edit it. Locally, with `curl`, `gpg`, `jq`, `python3`, and [`check-jsonschema`](https://pypi.org/project/check-jsonschema/) on PATH:
 
 ```bash
 bash scripts/ecosystem-health-check.sh 0.21.0   # the latest released version
