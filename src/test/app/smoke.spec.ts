@@ -3,6 +3,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  APP_ENV,
   deleteSession,
   execute,
   newSession,
@@ -14,12 +15,12 @@ import {
 // Built-app smoke: launches the real binary over WebDriver (tauri-driver) and
 // checks the three things unit tests cannot see, because they need a real
 // process launch under the production CSP: a CLI-arg document renders (cold
-// start, commit 5714293 / #494), the editor holds the document under the
-// production CSP (#390), and a second launch reuses the running window
-// (#189, #494). `pnpm test:app`; CI runs it on Linux under xvfb (see
-// .github/actions/app-smoke). Needs a release binary: the single-instance
-// plugin is release-only (lib.rs), so a --debug build cannot exercise the
-// second-instance case.
+// start, commit 5714293 / #494), the editor is laid out on screen and holds
+// the document under the production CSP (#390), and a second launch reuses
+// the running window (#189, #494). `pnpm test:app`; CI runs it on Linux under
+// xvfb (see .github/actions/app-smoke). Needs a release binary: the
+// single-instance plugin is release-only (lib.rs), so a --debug build cannot
+// exercise the second-instance case.
 
 // macOS has no WebKit WebDriver, so tauri-driver cannot drive it there.
 const skip = process.platform === "darwin" ? "no WebKit WebDriver on macOS" : false;
@@ -68,13 +69,31 @@ test("edit mode shows the document in the editor", { skip }, async () => {
     );
     return text.includes("Alpha body line one.");
   });
+  // #390's failure mode: the CSP blocked CodeMirror's injected stylesheet, so
+  // the content existed in the DOM but was laid out thousands of pixels below
+  // the fold. The text check alone passes on that broken build; only layout
+  // proves the injected styles applied. Glyph's own CSS never sets display on
+  // .cm-editor, so flex can only come from CodeMirror's injected base theme.
+  const editorDisplay = await execute<string>(
+    session,
+    "return getComputedStyle(document.querySelector('.cm-editor')).display",
+  );
+  assert.equal(editorDisplay, "flex", "CodeMirror's injected stylesheet did not apply (CSP?)");
+  const [contentTop, viewportHeight] = await execute<[number, number]>(
+    session,
+    "return [document.querySelector('.cm-content').getBoundingClientRect().top, window.innerHeight]",
+  );
+  assert.ok(
+    contentTop < viewportHeight,
+    `.cm-content sits below the fold (top ${contentTop}, viewport ${viewportHeight})`,
+  );
 });
 
 test("a second instance opens its file in the running window", { skip }, async () => {
   // The single-instance plugin makes this process hand BETA to the running
   // app and exit; if it instead opened its own window, this session (attached
   // to the first window) would keep showing ALPHA with a single tab.
-  const second = spawn(resolveBinary(), [BETA], { stdio: "ignore" });
+  const second = spawn(resolveBinary(), [BETA], { stdio: "ignore", env: APP_ENV });
   const code = await new Promise<number | null>((resolve, reject) => {
     const timer = setTimeout(() => {
       second.kill();

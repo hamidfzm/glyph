@@ -25,7 +25,7 @@ paths:
 ## Built-app smoke tests (tauri-driver)
 
 - `src/test/app/*.spec.ts` runs the built binary over WebDriver via `tauri-driver` (`pnpm test:app`, a plain `node --test` suite with a raw fetch client in `harness.ts`, no WebdriverIO). The `.spec.ts` suffix keeps Vitest out (it collects only `*.test.*`), and it lives in `src/test/app`, not `src/test/e2e`, so Playwright ignores it too.
-- This is the only test that launches the real process under the production CSP: it catches CSP/editor breakage (#390) and startup-race regressions (cold-launch, second-instance) that unit tests cannot. Needs a **release** binary (the single-instance plugin is release-only) and `tauri-driver` on PATH; keep it a handful of assertions.
+- This is the only test that launches the real process under the production CSP: it catches CSP/editor breakage (#390) and startup-race regressions (cold-launch, second-instance) that unit tests cannot. Assert layout, not just DOM content: in #390 the editor text was present in the DOM but laid out far below the fold because the CSP blocked CodeMirror's injected stylesheet. Needs a **release** binary (the single-instance plugin is release-only) and `tauri-driver` on PATH; keep it a handful of assertions.
 - CI runs it on Linux from the Build workflow via `.github/actions/app-smoke` (xvfb + `dbus-run-session`), reusing the release binary already built there; a failure flags PRs and blocks release publishing. macOS is unsupported (no WebKit WebDriver).
 
 ## Rust

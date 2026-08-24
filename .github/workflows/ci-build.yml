@@ -96,10 +96,16 @@ jobs:
       # Flags on PRs (per-PR gating is a #502 follow-up "once stable"); hard-
       # fails on pushes to main and on release, where a broken editor must stop.
       - name: Built-app smoke test
+        id: app-smoke
         if: matrix.platform == 'ubuntu-22.04'
         continue-on-error: ${{ github.event_name == 'pull_request' }}
         timeout-minutes: 10
         uses: ./.github/actions/app-smoke
+      # continue-on-error keeps the required check green on PRs, which hides a
+      # failure from the checks list; surface it as an annotation instead.
+      - name: Flag built-app smoke failure
+        if: matrix.platform == 'ubuntu-22.04' && steps.app-smoke.outcome == 'failure'
+        run: echo "::warning title=Built-app smoke failed::pnpm test:app failed; it hard-fails on pushes to main and at release."
 
   build-android:
     name: Android

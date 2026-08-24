@@ -33,4 +33,6 @@ runs:
       shell: bash
       env:
         WEBKIT_DISABLE_COMPOSITING_MODE: "1"
-      run: dbus-run-session -- xvfb-run --auto-servernum pnpm test:app
+      # xvfb outside dbus-run-session, so DISPLAY is already set when the bus
+      # starts and bus-activated services (xdg-desktop-portal) inherit it.
+      run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:app

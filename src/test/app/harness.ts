@@ -1,5 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -9,6 +10,31 @@ import { fileURLToPath } from "node:url";
 // client over fetch rather than a WebDriver library.
 const DRIVER_URL = "http://127.0.0.1:4444";
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
+
+/**
+ * Environment for every process the suite launches (tauri-driver, and through
+ * it the app, plus the second instance): a throwaway profile so local runs
+ * never touch the developer's real Glyph settings or session. The XDG
+ * overrides isolate Linux; Windows resolves its dirs through known-folder
+ * APIs and ignores them. The seeded settings pin the UI language, since the
+ * "Edit mode" selector reads the aria-label and locale "system" would follow
+ * the host OS language.
+ */
+export const APP_ENV: NodeJS.ProcessEnv = (() => {
+  const profile = mkdtempSync(path.join(os.tmpdir(), "glyph-smoke-"));
+  const dataDir = path.join(profile, "data", "com.hamidfzm.glyph");
+  mkdirSync(dataDir, { recursive: true });
+  writeFileSync(
+    path.join(dataDir, "settings.json"),
+    JSON.stringify({ settings: { locale: "en" } }),
+  );
+  return {
+    ...process.env,
+    XDG_CONFIG_HOME: path.join(profile, "config"),
+    XDG_DATA_HOME: path.join(profile, "data"),
+    XDG_CACHE_HOME: path.join(profile, "cache"),
+  };
+})();
 
 /** `GLYPH_BIN`, else the release build. Release-only: the single-instance plugin is release-gated (lib.rs). */
 export function resolveBinary(): string {
@@ -51,7 +77,10 @@ export async function waitFor<T>(
 
 /** Spawn `tauri-driver` (from PATH) and wait until it accepts connections. */
 export async function startDriver(): Promise<ChildProcess> {
-  const driver = spawn("tauri-driver", [], { stdio: ["ignore", "inherit", "inherit"] });
+  const driver = spawn("tauri-driver", [], {
+    stdio: ["ignore", "inherit", "inherit"],
+    env: APP_ENV,
+  });
   // tauri-driver exits immediately when its native driver is missing or the
   // ports are busy; surface that instead of a 15s "fetch failed" timeout.
   const driverStopped = new Promise<never>((_, reject) => {
@@ -74,7 +103,8 @@ export async function startDriver(): Promise<ChildProcess> {
     driverStopped,
     waitFor(
       "tauri-driver to listen",
-      () => fetch(`${DRIVER_URL}/status`).then((res) => res.ok),
+      () =>
+        fetch(`${DRIVER_URL}/status`, { signal: AbortSignal.timeout(2_000) }).then((res) => res.ok),
       15_000,
     ),
   ]);
