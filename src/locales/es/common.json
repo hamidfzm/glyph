@@ -102,6 +102,7 @@
     "noWorkspace": "Abre una carpeta para buscar en las notas.",
     "invalidPattern": "Esa expresión regular no es válida.",
     "failed": "La búsqueda falló.",
+    "locateFailed": "Se abrió el archivo, pero no se pudo desplazar hasta esa coincidencia.",
     "truncated": "Solo se muestran las primeras coincidencias. Acota la búsqueda para ver el resto.",
     "caseSensitive": "Distinguir mayúsculas y minúsculas",
     "wholeWord": "Palabra completa",

@@ -102,6 +102,7 @@
     "noWorkspace": "Open a folder to search across notes.",
     "invalidPattern": "That regular expression is not valid.",
     "failed": "Search failed.",
+    "locateFailed": "Opened the file, but couldn't scroll to that match.",
     "truncated": "Showing the first matches only. Narrow the search to see the rest.",
     "caseSensitive": "Match case",
     "wholeWord": "Match whole word",

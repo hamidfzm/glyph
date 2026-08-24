@@ -67,7 +67,8 @@
   cursor: pointer;
 }
 
-.workspace-search-row:hover {
+.workspace-search-row:hover,
+.workspace-search-row[data-selected="true"] {
   background: color-mix(in srgb, var(--color-accent) 18%, transparent);
   color: var(--color-text-primary);
 }

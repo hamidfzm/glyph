@@ -102,6 +102,7 @@
     "noWorkspace": "打开文件夹后即可跨笔记搜索。",
     "invalidPattern": "该正则表达式无效。",
     "failed": "搜索失败。",
+    "locateFailed": "已打开文件，但无法滚动到该匹配项。",
     "truncated": "仅显示前若干匹配项。请缩小搜索范围以查看其余结果。",
     "caseSensitive": "区分大小写",
     "wholeWord": "全字匹配",

@@ -1,9 +1,9 @@
-import { type KeyboardEvent, useEffect, useRef } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTabsContext } from "@/contexts/TabsContext";
-import { locateWhenRendered } from "@/lib/documentHighlight";
+import { locateLineInDocument, locateWhenRendered } from "@/lib/documentHighlight";
 import { relativeToRoot } from "@/lib/paths";
-import type { SearchOptions, SearchResults } from "@/lib/workspaceSearch";
+import type { SearchMatch, SearchOptions, SearchResults } from "@/lib/workspaceSearch";
 import { SearchResultRow } from "./SearchResultRow";
 import { SearchToggle } from "./SearchToggle";
 
@@ -33,24 +33,80 @@ export function SearchPanel({
   const { t } = useTranslation("common");
   const { workspace, openFile } = useTabsContext();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [locateFailed, setLocateFailed] = useState(false);
+  const cancelLocateRef = useRef<(() => void) | null>(null);
+
+  // Flat view of the grouped results, in render order, for arrow-key stepping.
+  const hits = useMemo(
+    () =>
+      results.files.flatMap((file) => file.matches.map((match) => ({ path: file.path, match }))),
+    [results],
+  );
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
+    if (open) {
+      inputRef.current?.focus();
+      setLocateFailed(false);
+    }
   }, [open]);
+
+  // Reset selection when the result set changes so the top hit is primed.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset only when results change
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [results]);
+
+  // A pending jump outlives a closed panel on purpose (the user may close the
+  // overlay right after clicking a hit); only unmount abandons it.
+  useEffect(() => () => cancelLocateRef.current?.(), []);
 
   if (!open) return null;
 
-  const handleOpenMatch = (path: string, text: string) => {
-    onClose();
+  // The panel stays open so one query can answer several "where else" clicks;
+  // Escape or the backdrop dismiss it.
+  const handleOpenMatch = (path: string, match: SearchMatch) => {
+    setLocateFailed(false);
+    cancelLocateRef.current?.();
     openFile(path);
-    locateWhenRendered(text);
+    cancelLocateRef.current = locateWhenRendered(
+      () => locateLineInDocument(match.line, match.text),
+      () => setLocateFailed(true),
+    );
+    inputRef.current?.focus();
   };
 
+  // On the input only; the overlay's own handler covers Escape elsewhere so a
+  // bubbled key never runs both (Enter would open the selection twice).
   const handleKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== "Escape") return;
-    event.preventDefault();
-    event.stopPropagation();
-    onClose();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSelectedIndex((prev) => Math.min(prev + 1, hits.length - 1));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setSelectedIndex((prev) => Math.max(prev - 1, 0));
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const hit = hits[selectedIndex];
+      if (hit) handleOpenMatch(hit.path, hit.match);
+    }
+  };
+
+  const handleOverlayKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+    }
   };
 
   const renderBody = () => {
@@ -67,19 +123,33 @@ export function SearchPanel({
     if (results.total === 0)
       return <div className="command-palette-empty">{t("workspaceSearch.noResults")}</div>;
 
+    // Rows are grouped by file but selected by flat index, so each file block
+    // needs its offset into the flat list.
+    const offsets = new Map<string, number>();
+    let total = 0;
+    for (const file of results.files) {
+      offsets.set(file.path, total);
+      total += file.matches.length;
+    }
+
     return results.files.map((file) => (
       <div key={file.path} className="command-palette-group">
         <div className="command-palette-section" title={file.path}>
           {relativeToRoot(file.path, workspace.root)}
           <span className="workspace-search-count">{file.matches.length}</span>
         </div>
-        {file.matches.map((match) => (
-          <SearchResultRow
-            key={`${match.line}:${match.column}`}
-            match={match}
-            onOpen={() => handleOpenMatch(file.path, match.text)}
-          />
-        ))}
+        {file.matches.map((match, i) => {
+          const index = (offsets.get(file.path) ?? 0) + i;
+          return (
+            <SearchResultRow
+              key={`${match.line}:${match.column}`}
+              match={match}
+              selected={selectedIndex === index}
+              onOpen={() => handleOpenMatch(file.path, match)}
+              onHover={() => setSelectedIndex(index)}
+            />
+          );
+        })}
       </div>
     ));
   };
@@ -90,7 +160,7 @@ export function SearchPanel({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      onKeyDown={handleKeyDown}
+      onKeyDown={handleOverlayKeyDown}
       role="dialog"
       aria-modal="true"
       aria-label={t("workspaceSearch.title")}
@@ -105,6 +175,7 @@ export function SearchPanel({
             placeholder={t("workspaceSearch.placeholder")}
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
+            onKeyDown={handleKeyDown}
             aria-label={t("workspaceSearch.queryLabel")}
           />
           <SearchToggle
@@ -127,6 +198,9 @@ export function SearchPanel({
           />
         </div>
         <div className="command-palette-results">{renderBody()}</div>
+        {locateFailed && (
+          <div className="workspace-search-truncated">{t("workspaceSearch.locateFailed")}</div>
+        )}
         {results.truncated && (
           <div className="workspace-search-truncated">{t("workspaceSearch.truncated")}</div>
         )}

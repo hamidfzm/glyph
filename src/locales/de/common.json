@@ -102,6 +102,7 @@
     "noWorkspace": "Öffne einen Ordner, um in Notizen zu suchen.",
     "invalidPattern": "Dieser reguläre Ausdruck ist ungültig.",
     "failed": "Suche fehlgeschlagen.",
+    "locateFailed": "Datei geöffnet, aber der Treffer konnte nicht angezeigt werden.",
     "truncated": "Es werden nur die ersten Treffer angezeigt. Grenze die Suche ein, um den Rest zu sehen.",
     "caseSensitive": "Groß-/Kleinschreibung beachten",
     "wholeWord": "Nur ganze Wörter",

@@ -167,6 +167,8 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
         filePath={file.path}
         initialScrollTop={file.scrollTop}
         onScrollChange={saveScrollPosition}
+        // Workspace search jumps to a hit's source line via these markers.
+        sourceLines
         searchOpen={searchOpen}
         onSearchClose={onSearchClose}
         workspaceFiles={workspaceFiles}
