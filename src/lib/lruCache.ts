@@ -34,10 +34,10 @@ export class LruCache<V> {
     this.map.delete(key);
     this.map.set(key, value);
     if (this.map.size > this.limit) {
-      const oldest = this.map.keys().next().value;
-      if (oldest !== undefined) {
-        this.map.delete(oldest);
-      }
+      // size > limit means the map is non-empty, so a first (least recently
+      // used) key always exists.
+      const oldest = this.map.keys().next().value as string;
+      this.map.delete(oldest);
     }
   }
 
