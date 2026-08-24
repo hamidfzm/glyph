@@ -79,13 +79,17 @@ test("edit mode shows the document in the editor", { skip }, async () => {
     "return getComputedStyle(document.querySelector('.cm-editor')).display",
   );
   assert.equal(editorDisplay, "flex", "CodeMirror's injected stylesheet did not apply (CSP?)");
-  const [contentTop, viewportHeight] = await execute<[number, number]>(
+  // Bound against the configured window height (tauri.conf.json, 720):
+  // window.innerHeight reports 0 under xvfb for the hidden-then-revealed
+  // window, and a healthy build puts the editor right under the tab bar
+  // (top ~168 in CI) while the broken build measured ~6400.
+  const contentTop = await execute<number>(
     session,
-    "return [document.querySelector('.cm-content').getBoundingClientRect().top, window.innerHeight]",
+    "return document.querySelector('.cm-content').getBoundingClientRect().top",
   );
   assert.ok(
-    contentTop < viewportHeight,
-    `.cm-content sits below the fold (top ${contentTop}, viewport ${viewportHeight})`,
+    contentTop >= 0 && contentTop < 720,
+    `.cm-content is laid out off-screen (top ${contentTop})`,
   );
 });
 
