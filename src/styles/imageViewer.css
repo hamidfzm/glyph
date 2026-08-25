@@ -37,6 +37,17 @@
   transition: opacity 0.1s ease-out;
 }
 
+/* Pan affordance (set by useDragPan): open hand over a pannable image, closed
+   hand anywhere on the stage while dragging. */
+.image-viewer-stage[data-pannable] .image-viewer-img {
+  cursor: grab;
+}
+
+.image-viewer-stage[data-grabbing],
+.image-viewer-stage[data-grabbing] .image-viewer-img {
+  cursor: grabbing;
+}
+
 .image-viewer-toolbar {
   position: absolute;
   bottom: 16px;

@@ -9,6 +9,10 @@ const DRAG_THRESHOLD = 3;
  * overflows (nothing to pan otherwise). After a real drag it swallows the
  * trailing click so the gesture doesn't also trigger click-to-close /
  * click-to-zoom on the same element.
+ *
+ * Mirrors its state onto the element as `data-pannable` (content overflows,
+ * a drag would move it) and `data-grabbing` (a drag is in progress) so the
+ * stylesheet can show grab/grabbing cursors.
  */
 export function useDragPan(ref: RefObject<HTMLElement | null>): void {
   useEffect(() => {
@@ -23,6 +27,8 @@ export function useDragPan(ref: RefObject<HTMLElement | null>): void {
     let startTop = 0;
 
     const canPan = () => el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight;
+
+    const syncPannable = () => el.toggleAttribute("data-pannable", canPan());
 
     const handlePointerDown = (e: PointerEvent) => {
       if (e.button !== 0 || !canPan()) return;
@@ -41,7 +47,7 @@ export function useDragPan(ref: RefObject<HTMLElement | null>): void {
       const dy = e.clientY - startY;
       if (!moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
         moved = true;
-        el.style.cursor = "grabbing";
+        el.setAttribute("data-grabbing", "");
       }
       if (moved) {
         el.scrollLeft = startLeft - dx;
@@ -53,7 +59,8 @@ export function useDragPan(ref: RefObject<HTMLElement | null>): void {
       if (!dragging) return;
       dragging = false;
       el.releasePointerCapture?.(e.pointerId);
-      el.style.cursor = "";
+      el.removeAttribute("data-grabbing");
+      syncPannable();
       if (moved) {
         const swallow = (ev: Event) => {
           ev.stopPropagation();
@@ -63,11 +70,23 @@ export function useDragPan(ref: RefObject<HTMLElement | null>): void {
       }
     };
 
+    // Overflow changes when the content zooms or the element resizes, not on
+    // any event of its own, so watch the element and its content through a
+    // ResizeObserver (guarded: test DOMs may not implement it).
+    syncPannable();
+    let observer: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(syncPannable);
+      observer.observe(el);
+      for (const child of el.children) observer.observe(child);
+    }
+
     el.addEventListener("pointerdown", handlePointerDown);
     el.addEventListener("pointermove", handlePointerMove);
     el.addEventListener("pointerup", handlePointerUp);
     el.addEventListener("pointercancel", handlePointerUp);
     return () => {
+      observer?.disconnect();
       el.removeEventListener("pointerdown", handlePointerDown);
       el.removeEventListener("pointermove", handlePointerMove);
       el.removeEventListener("pointerup", handlePointerUp);

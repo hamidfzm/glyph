@@ -1,6 +1,7 @@
 import { render } from "@testing-library/react";
 import { useRef } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { captureResizeObserver } from "@/test/scrollMetrics";
 import { useDragPan } from "./useDragPan";
 
 function Harness() {
@@ -23,6 +24,10 @@ function fire(el: HTMLElement, type: string, x: number, y: number) {
 }
 
 describe("useDragPan", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("scrolls the element when dragging overflowing content", () => {
     const { getByTestId } = render(<Harness />);
     const stage = getByTestId("stage");
@@ -100,5 +105,37 @@ describe("useDragPan", () => {
     const next = new MouseEvent("click", { bubbles: true, cancelable: true });
     stage.dispatchEvent(next);
     expect(next.defaultPrevented).toBe(false);
+  });
+
+  it("marks the element pannable when the content overflows", () => {
+    const fireResize = captureResizeObserver();
+    const { getByTestId } = render(<Harness />);
+    const stage = getByTestId("stage");
+    expect(stage.hasAttribute("data-pannable")).toBe(false);
+
+    setSize(stage, 1000, 200);
+    fireResize();
+    expect(stage.hasAttribute("data-pannable")).toBe(true);
+
+    setSize(stage, 200, 200);
+    fireResize();
+    expect(stage.hasAttribute("data-pannable")).toBe(false);
+  });
+
+  it("marks the element grabbing during a real drag and clears it on release", () => {
+    // Without ResizeObserver the release path still refreshes the affordance.
+    vi.stubGlobal("ResizeObserver", undefined);
+    const { getByTestId } = render(<Harness />);
+    const stage = getByTestId("stage");
+    setSize(stage, 1000, 200);
+
+    fire(stage, "pointerdown", 100, 100);
+    expect(stage.hasAttribute("data-grabbing")).toBe(false);
+    fire(stage, "pointermove", 60, 70);
+    expect(stage.hasAttribute("data-grabbing")).toBe(true);
+    fire(stage, "pointerup", 60, 70);
+    expect(stage.hasAttribute("data-grabbing")).toBe(false);
+    // The release also refreshes the pannable affordance.
+    expect(stage.hasAttribute("data-pannable")).toBe(true);
   });
 });

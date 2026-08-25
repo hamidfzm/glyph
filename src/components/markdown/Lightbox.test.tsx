@@ -83,9 +83,46 @@ describe("Lightbox", () => {
     expect(img.style.opacity).toBe("1");
     expect(img.style.objectFit).toBe("contain");
     expect(img.style.transform).toBe("scale(1)");
+    // The stretched element's letterbox lets clicks through to the backdrop.
+    expect(img.style.pointerEvents).toBe("none");
 
     fireEvent.keyDown(window, { key: "+" });
     expect(img.style.transform).toBe("scale(1.25)");
+  });
+
+  it("recovers a layout size for an SVG data URL with only a viewBox", () => {
+    const src = `data:image/svg+xml,${encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"></svg>',
+    )}`;
+    render(
+      <Lightbox
+        images={[{ src, alt: "diagram" }]}
+        index={0}
+        onIndexChange={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    const img = screen.getByAltText("diagram") as HTMLImageElement;
+    fireEvent.load(img);
+
+    // Parsed from the markup: pixel layout (pannable when zoomed), not the
+    // transform-scale fallback.
+    expect(img.style.width).toBe("200px");
+    expect(img.style.objectFit).toBe("");
+
+    fireEvent.keyDown(window, { key: "+" });
+    expect(img.style.width).toBe("250px");
+  });
+
+  it("renders the overlay into document.body, escaping transformed ancestors", () => {
+    const { container } = render(
+      <div style={{ transform: "scale(0.5)" }}>
+        <Harness />
+      </div>,
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.parentElement).toBe(document.body);
+    expect(container.contains(dialog)).toBe(false);
   });
 
   it("zooms with the keyboard", () => {
