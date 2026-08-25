@@ -184,6 +184,13 @@ export function appPaletteCommands(
   if (workspaceOpen) {
     out.push(
       {
+        id: "cmd:searchWorkspace",
+        title: t("searchWorkspace"),
+        section: "Commands",
+        shortcut: "Cmd/Ctrl+Shift+F",
+        run: actions.searchWorkspace,
+      },
+      {
         id: "cmd:exportWebsite",
         title: t("exportWebsite"),
         section: "Commands",

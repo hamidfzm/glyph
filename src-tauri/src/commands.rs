@@ -8,6 +8,7 @@ pub mod metadata;
 #[cfg(desktop)]
 pub mod pick;
 pub mod plugins;
+pub mod search;
 pub mod secrets;
 mod walk;
 pub mod wikilinks;

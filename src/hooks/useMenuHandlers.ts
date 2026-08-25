@@ -14,6 +14,8 @@ interface UseMenuHandlersOptions {
   controllers: ShellControllers;
   /** Open the in-document find bar. */
   onFind: () => void;
+  /** Open the vault-wide search overlay. */
+  onSearchWorkspace: () => void;
 }
 
 /**
@@ -25,6 +27,7 @@ export function useMenuHandlers({
   modals,
   controllers,
   onFind,
+  onSearchWorkspace,
 }: UseMenuHandlersOptions): MenuEventHandlers {
   const { settings, updateSettings } = useSettings();
   const sidebar = useSidebarLayoutContext();
@@ -83,6 +86,7 @@ export function useMenuHandlers({
       openSettings: modals.openSettings,
       managePlugins: modals.openPlugins,
       find: onFind,
+      searchWorkspace: onSearchWorkspace,
       toggleEdit: handleToggleEdit,
       print: printDoc,
       exportHtml: exporters.exportHtml,
@@ -119,6 +123,7 @@ export function useMenuHandlers({
       modals.openPlugins,
       modals.openWorkspaceSettings,
       onFind,
+      onSearchWorkspace,
       handleToggleEdit,
       printDoc,
       exporters.exportHtml,

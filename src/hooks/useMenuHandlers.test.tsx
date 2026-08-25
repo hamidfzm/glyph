@@ -78,9 +78,12 @@ function renderHandlers(
       <SidebarLayoutContext.Provider value={sidebar}>{children}</SidebarLayoutContext.Provider>
     </TabsContext.Provider>
   );
-  const { result } = renderHook(() => useMenuHandlers({ modals, controllers, onFind: vi.fn() }), {
-    wrapper,
-  });
+  const { result } = renderHook(
+    () => useMenuHandlers({ modals, controllers, onFind: vi.fn(), onSearchWorkspace: vi.fn() }),
+    {
+      wrapper,
+    },
+  );
   return { handlers: result.current, value, controllers, modals };
 }
 

@@ -92,6 +92,22 @@
     "nextMatch": "Nächster Treffer",
     "close": "Suche schließen"
   },
+  "workspaceSearch": {
+    "title": "Im Arbeitsbereich suchen",
+    "placeholder": "Alle Notizen durchsuchen...",
+    "queryLabel": "Suchbegriff für den Arbeitsbereich",
+    "prompt": "Tippen, um alle Notizen in diesem Arbeitsbereich zu durchsuchen.",
+    "searching": "Wird gesucht...",
+    "noResults": "Keine Treffer",
+    "noWorkspace": "Öffne einen Ordner, um in Notizen zu suchen.",
+    "invalidPattern": "Dieser reguläre Ausdruck ist ungültig.",
+    "failed": "Suche fehlgeschlagen.",
+    "locateFailed": "Datei geöffnet, aber der Treffer konnte nicht angezeigt werden.",
+    "truncated": "Es werden nur die ersten Treffer angezeigt. Grenze die Suche ein, um den Rest zu sehen.",
+    "caseSensitive": "Groß-/Kleinschreibung beachten",
+    "wholeWord": "Nur ganze Wörter",
+    "regex": "Regulären Ausdruck verwenden"
+  },
   "exportProgress": {
     "html": "HTML",
     "docx": "Word-Dokument",

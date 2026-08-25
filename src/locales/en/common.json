@@ -92,6 +92,22 @@
     "nextMatch": "Next match",
     "close": "Close search"
   },
+  "workspaceSearch": {
+    "title": "Search in Workspace",
+    "placeholder": "Search all notes...",
+    "queryLabel": "Workspace search query",
+    "prompt": "Type to search every note in this workspace.",
+    "searching": "Searching...",
+    "noResults": "No matches",
+    "noWorkspace": "Open a folder to search across notes.",
+    "invalidPattern": "That regular expression is not valid.",
+    "failed": "Search failed.",
+    "locateFailed": "Opened the file, but couldn't scroll to that match.",
+    "truncated": "Showing the first matches only. Narrow the search to see the rest.",
+    "caseSensitive": "Match case",
+    "wholeWord": "Match whole word",
+    "regex": "Use regular expression"
+  },
   "exportProgress": {
     "html": "HTML",
     "docx": "Word document",

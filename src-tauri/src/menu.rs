@@ -93,6 +93,7 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         "zoom-out" => emit("menu-zoom-out"),
         "actual-size" => emit("menu-zoom-reset"),
         "find" => emit("menu-find"),
+        "search-workspace" => emit("menu-search-workspace"),
         "toggle-edit" => emit("menu-toggle-edit"),
         "documentation" => emit("menu-documentation"),
         "release-notes" => emit("menu-release-notes"),
@@ -282,6 +283,10 @@ mod tests {
             Some(emit("menu-zoom-reset"))
         );
         assert_eq!(menu_action_for_id("find"), Some(emit("menu-find")));
+        assert_eq!(
+            menu_action_for_id("search-workspace"),
+            Some(emit("menu-search-workspace"))
+        );
         assert_eq!(
             menu_action_for_id("toggle-edit"),
             Some(emit("menu-toggle-edit"))

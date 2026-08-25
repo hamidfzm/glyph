@@ -33,6 +33,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     openSettings: vi.fn(),
     openSyncSettings: vi.fn(),
     find: vi.fn(),
+    searchWorkspace: vi.fn(),
     toggleEdit: vi.fn(),
     print: vi.fn(),
     exportHtml: vi.fn(),
@@ -128,6 +129,27 @@ describe("useAppCommands", () => {
       }),
     );
     expect(closed.result.current.some((c) => c.id === "cmd:exportWebsite")).toBe(false);
+  });
+
+  it("offers the workspace search only when a workspace is open", () => {
+    const actions = makeActions();
+    const open = renderHook(() =>
+      useAppCommands({ workspaceOpen: true, workspaceFiles: [], tocEntries: [], actions }),
+    );
+    const cmd = open.result.current.find((c) => c.id === "cmd:searchWorkspace");
+    expect(cmd?.title).toBe("Search in Workspace");
+    cmd?.run();
+    expect(actions.searchWorkspace).toHaveBeenCalledOnce();
+
+    const closed = renderHook(() =>
+      useAppCommands({
+        workspaceOpen: false,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions: makeActions(),
+      }),
+    );
+    expect(closed.result.current.some((c) => c.id === "cmd:searchWorkspace")).toBe(false);
   });
 
   it("emits a Heading command per TOC entry", () => {

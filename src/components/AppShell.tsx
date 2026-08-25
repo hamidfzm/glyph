@@ -22,6 +22,7 @@ import { useShellControllers } from "@/hooks/useShellControllers";
 import { useTabReorderShortcuts } from "@/hooks/useTabReorderShortcuts";
 import { useWindowClose } from "@/hooks/useWindowClose";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
+import { useWorkspaceSearch } from "@/hooks/useWorkspaceSearch";
 import { isImageFile } from "@/lib/imageExtensions";
 import { AIChatPanel } from "./ai/lazyAIChatPanel";
 import { AppBanners } from "./layout/AppBanners";
@@ -34,6 +35,7 @@ import { StatusBar } from "./layout/StatusBar";
 import { TabBar } from "./layout/TabBar";
 import { ContextMenu } from "./menu/ContextMenu";
 import { CommandPalette } from "./modals/CommandPalette";
+import { SearchPanel } from "./modals/SearchPanel";
 import { TabContent } from "./TabContent";
 
 // All the wiring that used to live inside App: menu events, AI/TTS/Print
@@ -92,6 +94,7 @@ export function AppShell() {
   const [searchOpen, setSearchOpen] = useState(false);
   const openSearch = useCallback(() => setSearchOpen(true), []);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
+  const workspaceSearch = useWorkspaceSearch();
   const modals = useAppModals();
 
   // Autosave every dirty editable tab, not just the active one, so switching
@@ -129,7 +132,12 @@ export function AppShell() {
   });
   useNativeMenuLabels();
 
-  const menuHandlers = useMenuHandlers({ modals, controllers, onFind: openSearch });
+  const menuHandlers = useMenuHandlers({
+    modals,
+    controllers,
+    onFind: openSearch,
+    onSearchWorkspace: workspaceSearch.openPanel,
+  });
   useMenuEvents(menuHandlers);
   useMenuShortcuts({ platform, handlers: menuHandlers });
   useNativeKeybindings();
@@ -256,6 +264,18 @@ export function AppShell() {
         commands={palette.commands}
         onQueryChange={palette.setQuery}
         onClose={palette.close}
+      />
+
+      <SearchPanel
+        open={workspaceSearch.open}
+        query={workspaceSearch.query}
+        options={workspaceSearch.options}
+        results={workspaceSearch.results}
+        searching={workspaceSearch.searching}
+        failed={workspaceSearch.failed}
+        onQueryChange={workspaceSearch.setQuery}
+        onToggleOption={workspaceSearch.toggleOption}
+        onClose={workspaceSearch.closePanel}
       />
 
       <ContextMenu menu={contextMenu.menu} onClose={contextMenu.close} />

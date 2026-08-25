@@ -80,6 +80,14 @@ export const BINDABLE_COMMANDS: readonly BindableCommand[] = [
     nativeMenu: true,
   },
   {
+    id: "search-workspace",
+    label: "Search in Workspace",
+    category: "Edit",
+    defaultAccelerator: "CmdOrCtrl+Shift+F",
+    event: "menu-search-workspace",
+    nativeMenu: true,
+  },
+  {
     id: "undo",
     label: "Undo (document edits)",
     category: "Edit",

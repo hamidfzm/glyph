@@ -25,6 +25,7 @@
   "settings": "设置…",
   "managePlugins": "插件…",
   "find": "查找…",
+  "searchWorkspace": "在工作区中搜索…",
   "commandPalette": "命令面板…",
   "toggleFilesSidebar": "切换文件侧边栏",
   "toggleOutlineSidebar": "切换大纲侧边栏",
