@@ -43,6 +43,17 @@
   transition: opacity 0.1s ease-out;
 }
 
+/* Pan affordance (set by useDragPan): open hand over a pannable image, closed
+   hand anywhere on the stage while dragging. */
+.lightbox-overlay[data-pannable] .lightbox-image {
+  cursor: grab;
+}
+
+.lightbox-overlay[data-grabbing],
+.lightbox-overlay[data-grabbing] .lightbox-image {
+  cursor: grabbing;
+}
+
 .lightbox-button {
   display: inline-flex;
   align-items: center;

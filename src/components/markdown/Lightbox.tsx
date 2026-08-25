@@ -1,4 +1,5 @@
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronLeftIcon } from "@/components/icons/ChevronLeftIcon";
 import { ChevronRightIcon } from "@/components/icons/ChevronRightIcon";
@@ -6,6 +7,8 @@ import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { useDragPan } from "@/hooks/useDragPan";
 import { useLightboxKeys } from "@/hooks/useLightboxKeys";
 import { clampScale, fitScale, type LightboxImage } from "@/lib/lightbox";
+import { decodeSvgDataUrl } from "@/lib/svgDataUrl";
+import { svgIntrinsicSize } from "@/lib/svgIntrinsicSize";
 import { LightboxToolbar } from "./LightboxToolbar";
 
 interface LightboxProps {
@@ -30,21 +33,24 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
   const [loaded, setLoaded] = useState(false);
   // Intrinsic pixel size, or null when the image has none (SVGs with only a
   // `viewBox` report naturalWidth/Height === 0). Drives the sizing model below.
+  // `naturalRef` mirrors it for the fit math, which runs inside the load
+  // handler before the state has committed.
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  const naturalRef = useRef<{ w: number; h: number } | null>(null);
 
   const hasMultiple = images.length > 1;
 
   const computeFit = useCallback(() => {
     const stage = stageRef.current;
-    const img = imgRef.current;
-    if (!stage || !img?.naturalWidth) return 1;
+    const size = naturalRef.current;
+    if (!stage || !size) return 1;
     // Subtract the overlay padding so a fitted image clears the toolbar/edges.
     const styles = getComputedStyle(stage);
     const availWidth =
       stage.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
     const availHeight =
       stage.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom);
-    return fitScale(img.naturalWidth, img.naturalHeight, availWidth, availHeight);
+    return fitScale(size.w, size.h, availWidth, availHeight);
   }, []);
 
   const applyFit = useCallback(() => {
@@ -67,6 +73,7 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
       if (next < 0 || next >= images.length) return;
       setLoaded(false);
       setNatural(null);
+      naturalRef.current = null;
       onIndexChange(next);
     },
     [images.length, onIndexChange],
@@ -75,15 +82,22 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
   const handleLoad = useCallback(() => {
     const img = imgRef.current;
     setLoaded(true);
-    // SVGs with only a viewBox report no intrinsic pixel size; fall back to a
-    // contained layout (see `imageStyle`) so they still display and zoom.
-    setNatural(
+    // SVGs with only a viewBox report no intrinsic pixel size; recover one from
+    // the markup when the source is an SVG data URL (Mermaid/D2 diagrams) so
+    // the image still lays out at natural × scale and pans when zoomed. Only a
+    // size-less non-data-URL SVG falls back to the contained layout below.
+    let size =
       img && img.naturalWidth > 0 && img.naturalHeight > 0
         ? { w: img.naturalWidth, h: img.naturalHeight }
-        : null,
-    );
+        : null;
+    if (!size && image) {
+      const svg = decodeSvgDataUrl(image.src);
+      size = svg ? svgIntrinsicSize(svg) : null;
+    }
+    naturalRef.current = size;
+    setNatural(size);
     applyFit();
-  }, [applyFit]);
+  }, [applyFit, image]);
 
   useLightboxKeys({
     hasMultiple,
@@ -119,12 +133,18 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
         objectFit: "contain",
         transform: `scale(${scale})`,
         opacity: loaded ? 1 : 0,
+        // The stretched element owns the letterbox around the visible image;
+        // letting clicks through keeps the backdrop's click-to-close working.
+        pointerEvents: "none",
       };
 
   // The dialog is the scroll container and the backdrop: clicking it directly
   // (i.e. the empty area around the image) closes. The controls below are
   // `position: fixed`, so they stay pinned while a zoomed image scrolls.
-  return (
+  // Portaled to <body>: a transformed ancestor (canvas cards render markdown
+  // inside the pan/zoom world) would otherwise become the containing block and
+  // trap the "full-screen" overlay inside the pane.
+  return createPortal(
     <div
       ref={stageRef}
       className="lightbox-overlay"
@@ -196,6 +216,7 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
         onFit={applyFit}
         onActualSize={actualSize}
       />
-    </div>
+    </div>,
+    document.body,
   );
 }
