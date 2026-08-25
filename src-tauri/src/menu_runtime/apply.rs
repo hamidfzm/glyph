@@ -230,14 +230,13 @@ fn covers_monitor(window: &tauri::WebviewWindow) -> bool {
 }
 
 // Fullscreen for the image lightbox, with the in-window menu bar (Windows/
-// Linux) hidden while fullscreen. On Windows the fullscreen resize is applied
-// with SWP_ASYNCWINDOWPOS and silently loses races against concurrent
-// window-frame work (menu-bar updates from `set_menu_state` after any UI
-// interaction); tao then caches "fullscreen" with the window never resized
-// and early-returns every later request. Entering therefore clears the flag,
-// re-applies, and verifies the real bounds against the monitor, retrying a
-// few times; the menu bar is only touched after the transition so it cannot
-// join the race.
+// Linux) hidden while fullscreen. Entering hides the menu before the
+// transition so the bar never flashes over the fullscreen window. On Windows
+// the fullscreen resize is applied with SWP_ASYNCWINDOWPOS and can lose the
+// race against the menu change's frame recalculation; tao then caches
+// "fullscreen" with the window never resized and early-returns every later
+// request. The verify-retry below heals exactly that: it measures the real
+// bounds against the monitor and clears + re-applies until they match.
 #[tauri::command]
 pub fn set_lightbox_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]
@@ -252,6 +251,7 @@ pub fn set_lightbox_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Res
             if enter {
                 // A minimized window is iconic: resizes apply to nothing.
                 let _ = w.unminimize();
+                let _ = w.hide_menu();
                 for _ in 0..3 {
                     let _ = w.set_fullscreen(false);
                     let _ = w.set_fullscreen(true);
@@ -260,7 +260,6 @@ pub fn set_lightbox_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Res
                         break;
                     }
                 }
-                let _ = w.hide_menu();
             } else {
                 let _ = w.set_fullscreen(false);
                 std::thread::sleep(std::time::Duration::from_millis(150));
