@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTabsContext } from "@/contexts/TabsContext";
+import { useSpringPresence } from "@/hooks/useSpringPresence";
 import { locateLineInDocument, locateWhenRendered } from "@/lib/documentHighlight";
 import { relativeToRoot } from "@/lib/paths";
 import type { SearchMatch, SearchOptions, SearchResults } from "@/lib/workspaceSearch";
@@ -44,12 +45,17 @@ export function SearchPanel({
     [results],
   );
 
+  // Spring open/close like the command palette, so switching between the two
+  // overlays cross-fades instead of popping while the other one is still
+  // fading out.
+  const presence = useSpringPresence(open);
+
   useEffect(() => {
-    if (open) {
+    if (open && presence.mounted) {
       inputRef.current?.focus();
       setLocateFailed(false);
     }
-  }, [open]);
+  }, [open, presence.mounted]);
 
   // Reset selection when the result set changes so the top hit is primed.
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset only when results change
@@ -61,11 +67,12 @@ export function SearchPanel({
   // overlay right after clicking a hit); only unmount abandons it.
   useEffect(() => () => cancelLocateRef.current?.(), []);
 
-  if (!open) return null;
+  if (!presence.mounted) return null;
 
   // The panel stays open so one query can answer several "where else" clicks;
   // Escape or the backdrop dismiss it.
   const handleOpenMatch = (path: string, match: SearchMatch) => {
+    if (!open) return;
     setLocateFailed(false);
     cancelLocateRef.current?.();
     openFile(path);
@@ -154,9 +161,10 @@ export function SearchPanel({
 
   return (
     <div
+      ref={presence.ref}
       className="command-palette-overlay"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (open && e.target === e.currentTarget) onClose();
       }}
       onKeyDown={handleOverlayKeyDown}
       role="dialog"

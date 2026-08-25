@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SearchPanel } from "@/components/modals/SearchPanel";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import { DEFAULT_SEARCH_OPTIONS, EMPTY_SEARCH_RESULTS } from "@/lib/workspaceSearch";
+import { restoreRaf, stubRaf } from "@/test/raf";
 
 const locateWhenRendered = vi.hoisted(() =>
   vi.fn((_locate: () => boolean, _onFail?: () => void) => vi.fn()),
@@ -232,6 +233,22 @@ describe("SearchPanel", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     await userEvent.click(screen.getByRole("textbox"));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays mounted while the close spring runs, then unmounts", () => {
+    const raf = stubRaf();
+    const { container, rerender, unmount } = renderPanel();
+    act(() => raf.settle());
+
+    rerender(<SearchPanel {...defaultProps} open={false} />);
+    const overlay = container.querySelector(".command-palette-overlay");
+    expect(overlay).toBeInTheDocument();
+    expect(overlay?.hasAttribute("inert")).toBe(true);
+
+    act(() => raf.settle());
+    expect(container.querySelector(".command-palette-overlay")).not.toBeInTheDocument();
+    unmount();
+    restoreRaf();
   });
 
   it("closes on Escape", async () => {
