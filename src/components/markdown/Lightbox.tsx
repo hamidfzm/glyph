@@ -1,3 +1,5 @@
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -7,9 +9,10 @@ import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { useDragPan } from "@/hooks/useDragPan";
 import { useLightboxKeys } from "@/hooks/useLightboxKeys";
 import { clampScale, fitScale, type LightboxImage } from "@/lib/lightbox";
-import { decodeSvgDataUrl } from "@/lib/svgDataUrl";
-import { svgIntrinsicSize } from "@/lib/svgIntrinsicSize";
+import { svgSizeFromUrl } from "@/lib/svgSizeFromUrl";
 import { LightboxToolbar } from "./LightboxToolbar";
+
+const WHEEL_ZOOM_SPEED = 0.0015;
 
 interface LightboxProps {
   images: LightboxImage[];
@@ -79,25 +82,34 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
     [images.length, onIndexChange],
   );
 
+  const applySize = useCallback(
+    (size: { w: number; h: number } | null) => {
+      naturalRef.current = size;
+      setNatural(size);
+      applyFit();
+    },
+    [applyFit],
+  );
+
   const handleLoad = useCallback(() => {
     const img = imgRef.current;
     setLoaded(true);
     // SVGs with only a viewBox report no intrinsic pixel size; recover one from
-    // the markup when the source is an SVG data URL (Mermaid/D2 diagrams) so
+    // the markup (decoded from a data URL, or fetched for asset/remote SVGs) so
     // the image still lays out at natural × scale and pans when zoomed. Only a
-    // size-less non-data-URL SVG falls back to the contained layout below.
-    let size =
-      img && img.naturalWidth > 0 && img.naturalHeight > 0
-        ? { w: img.naturalWidth, h: img.naturalHeight }
-        : null;
-    if (!size && image) {
-      const svg = decodeSvgDataUrl(image.src);
-      size = svg ? svgIntrinsicSize(svg) : null;
+    // size-less unparseable source keeps the contained layout below.
+    if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
+      applySize({ w: img.naturalWidth, h: img.naturalHeight });
+      return;
     }
-    naturalRef.current = size;
-    setNatural(size);
-    applyFit();
-  }, [applyFit, image]);
+    applySize(null);
+    if (!image) return;
+    const src = image.src;
+    svgSizeFromUrl(src).then((size) => {
+      // Drop the result if the user has navigated to another image meanwhile.
+      if (size && imgRef.current?.src === src) applySize(size);
+    });
+  }, [applySize, image]);
 
   useLightboxKeys({
     hasMultiple,
@@ -116,6 +128,42 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [isFit, computeFit]);
+
+  // Take the OS window fullscreen while the lightbox is open (it should cover
+  // the monitor, not just the app window), restoring on close unless the
+  // window was already fullscreen before. The backend command also hides the
+  // in-window menu bar for the overlay's lifetime.
+  useEffect(() => {
+    let closed = false;
+    let entered = false;
+    getCurrentWindow()
+      .isFullscreen()
+      .then((already) => {
+        if (already || closed) return;
+        entered = true;
+        return invoke("set_lightbox_fullscreen", { enter: true });
+      })
+      .catch(() => {});
+    return () => {
+      closed = true;
+      if (entered) invoke("set_lightbox_fullscreen", { enter: false }).catch(() => {});
+    };
+  }, []);
+
+  // Ctrl/Cmd + wheel zooms; a plain wheel keeps panning a zoomed image. Native
+  // non-passive listener so preventDefault cancels the scroll.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      setScale((s) => clampScale(s * Math.exp(-event.deltaY * WHEEL_ZOOM_SPEED)));
+      setIsFit(false);
+    };
+    stage.addEventListener("wheel", handleWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", handleWheel);
+  }, []);
 
   if (!image) return null;
 

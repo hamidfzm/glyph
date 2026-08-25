@@ -214,3 +214,59 @@ pub fn set_menu_labels(
         .with_refs(window.label(), |refs| apply_menu_labels(refs, &labels))
         .unwrap_or(Ok(()))
 }
+
+/// Whether the window's outer bounds actually cover its monitor. tao's
+/// `is_fullscreen` only echoes a cached flag, which diverges when the resize
+/// itself is lost (see below), so verification must measure the real window.
+#[cfg(not(target_os = "macos"))]
+fn covers_monitor(window: &tauri::WebviewWindow) -> bool {
+    match (window.outer_size(), window.current_monitor()) {
+        (Ok(size), Ok(Some(monitor))) => {
+            size.width >= monitor.size().width && size.height >= monitor.size().height
+        }
+        // Can't measure: treat as applied rather than retry forever.
+        _ => true,
+    }
+}
+
+// Fullscreen for the image lightbox, with the in-window menu bar (Windows/
+// Linux) hidden while fullscreen. On Windows the fullscreen resize is applied
+// with SWP_ASYNCWINDOWPOS and silently loses races against concurrent
+// window-frame work (menu-bar updates from `set_menu_state` after any UI
+// interaction); tao then caches "fullscreen" with the window never resized
+// and early-returns every later request. Entering therefore clears the flag,
+// re-applies, and verifies the real bounds against the monitor, retrying a
+// few times; the menu bar is only touched after the transition so it cannot
+// join the race.
+#[tauri::command]
+pub fn set_lightbox_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        // The macOS menu lives in the system bar and fullscreen hides it.
+        window.set_fullscreen(enter).map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let w = window.clone();
+        std::thread::spawn(move || {
+            if enter {
+                // A minimized window is iconic: resizes apply to nothing.
+                let _ = w.unminimize();
+                for _ in 0..3 {
+                    let _ = w.set_fullscreen(false);
+                    let _ = w.set_fullscreen(true);
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    if covers_monitor(&w) {
+                        break;
+                    }
+                }
+                let _ = w.hide_menu();
+            } else {
+                let _ = w.set_fullscreen(false);
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                let _ = w.show_menu();
+            }
+        });
+        Ok(())
+    }
+}

@@ -107,6 +107,19 @@ describe("useDragPan", () => {
     expect(next.defaultPrevented).toBe(false);
   });
 
+  it("lets a press-and-release without movement click through on pannable content", () => {
+    const { getByTestId } = render(<Harness />);
+    const stage = getByTestId("stage");
+    setSize(stage, 1000, 200);
+
+    fire(stage, "pointerdown", 100, 100);
+    fire(stage, "pointermove", 101, 100); // under the drag threshold
+    fire(stage, "pointerup", 101, 100);
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    stage.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(false);
+  });
+
   it("marks the element pannable when the content overflows", () => {
     const fireResize = captureResizeObserver();
     const { getByTestId } = render(<Harness />);
