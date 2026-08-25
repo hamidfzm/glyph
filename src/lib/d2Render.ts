@@ -5,6 +5,7 @@
 // self-contained and makes no network request — the diagram renders offline.
 
 import type { CompileOptions, Diagram, RenderOptions } from "@terrastruct/d2";
+import { DIAGRAM_RENDER_CACHE_LIMIT, LruCache } from "@/lib/lruCache";
 
 // The shipped `D2` class types `compile`'s second argument as
 // `Omit<CompileRequest, "fs">` ({ inputPath?, options }), but the runtime treats
@@ -36,7 +37,9 @@ const DARK_THEME_ID = 200;
 // tab switch, parent re-render, reopening an unchanged doc) skip the expensive
 // WASM layout. Promises are cached (not strings) so concurrent renders of the
 // same diagram share one compile; failures are evicted so they can be retried.
-const cache = new Map<string, Promise<string>>();
+// LRU-bounded so a long session with many distinct diagrams cannot grow it
+// without limit (rationale on the shared constant).
+const cache = new LruCache<Promise<string>>(DIAGRAM_RENDER_CACHE_LIMIT);
 
 // The rendered SVG is untrusted (it derives from arbitrary D2 source) and is
 // injected via innerHTML, so sanitize before it reaches the DOM. DOMPurify's
@@ -66,8 +69,12 @@ export function renderD2(source: string, dark: boolean): Promise<string> {
     const svg = await d2.render(result.diagram, { ...result.renderOptions, noXMLTag: true });
     return sanitizeSvg(svg);
   })();
-  // Don't cache a failed render, so a transient error can be retried.
-  pending.catch(() => cache.delete(key));
+  // Don't cache a failed render, so a transient error can be retried. Evict
+  // only the promise that actually failed: past the LRU bound the key may
+  // have been evicted and re-inserted with a newer, healthy promise.
+  pending.catch(() => {
+    if (cache.peek(key) === pending) cache.delete(key);
+  });
   cache.set(key, pending);
   return pending;
 }
