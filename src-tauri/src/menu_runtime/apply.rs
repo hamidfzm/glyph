@@ -247,7 +247,17 @@ pub fn set_lightbox_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Res
         // separate window instead of an overlay.
         window
             .set_simple_fullscreen(enter)
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+        // The transition's style-mask toggle drops the webview as first
+        // responder, silencing keyboard events (Escape stopped dismissing
+        // the lightbox). Hand focus back once the mask change has settled;
+        // the exit path applies its mask asynchronously.
+        let w = window.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            let _ = AsRef::<tauri::Webview>::as_ref(&w).set_focus();
+        });
+        Ok(())
     }
     #[cfg(not(target_os = "macos"))]
     {
