@@ -68,8 +68,8 @@
   --glyph-arabic-font: GlyphArabicApple;
   --glyph-font: var(--glyph-arabic-font), "SF Pro", -apple-system,
     BlinkMacSystemFont, system-ui, sans-serif;
-  --glyph-reading-font: var(--glyph-arabic-font), "New York", ui-serif,
-    "Iowan Old Style", Charter, Palatino, serif;
+  --glyph-reading-font: var(--glyph-arabic-font), -apple-system,
+    BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --glyph-radius: 8px;
   --glyph-radius-sm: 6px;
   --glyph-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
