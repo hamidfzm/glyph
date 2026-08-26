@@ -29,7 +29,7 @@ jobs:
 
           ### macOS
           ```bash
-          brew tap glyph-md/tap && brew trust glyph-md/tap && brew install --cask glyph
+          brew tap glyph-md/tap && brew trust glyph-md/tap && brew install --cask --force glyph-md/tap/glyph
           ```
           Or download `Glyph_*_universal.dmg` below.
 
@@ -56,7 +56,7 @@ jobs:
           yay -S glyph-md-bin
 
           # Homebrew (Linuxbrew)
-          brew tap glyph-md/tap && brew install glyph
+          brew tap glyph-md/tap && brew install glyph-md/tap/glyph
 
           # Debian/Ubuntu (PPA)
           sudo add-apt-repository ppa:hamidfzm/glyph
@@ -157,7 +157,7 @@ jobs:
 
           ### macOS
           ```bash
-          brew tap glyph-md/tap && brew trust glyph-md/tap && brew install --cask glyph
+          brew tap glyph-md/tap && brew trust glyph-md/tap && brew install --cask --force glyph-md/tap/glyph
           ```
           Or download `Glyph_*_universal.dmg` below.
 
@@ -184,7 +184,7 @@ jobs:
           yay -S glyph-md-bin
 
           # Homebrew (Linuxbrew)
-          brew tap glyph-md/tap && brew install glyph
+          brew tap glyph-md/tap && brew install glyph-md/tap/glyph
 
           # Debian/Ubuntu (PPA)
           sudo add-apt-repository ppa:hamidfzm/glyph
