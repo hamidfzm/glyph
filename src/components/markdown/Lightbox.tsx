@@ -1,6 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type SyntheticEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronLeftIcon } from "@/components/icons/ChevronLeftIcon";
@@ -91,25 +98,27 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
     [applyFit],
   );
 
-  const handleLoad = useCallback(() => {
-    const img = imgRef.current;
-    setLoaded(true);
-    // SVGs with only a viewBox report no intrinsic pixel size; recover one from
-    // the markup (decoded from a data URL, or fetched for asset/remote SVGs) so
-    // the image still lays out at natural × scale and pans when zoomed. Only a
-    // size-less unparseable source keeps the contained layout below.
-    if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
-      applySize({ w: img.naturalWidth, h: img.naturalHeight });
-      return;
-    }
-    applySize(null);
-    if (!image) return;
-    const src = image.src;
-    svgSizeFromUrl(src).then((size) => {
-      // Drop the result if the user has navigated to another image meanwhile.
-      if (size && imgRef.current?.src === src) applySize(size);
-    });
-  }, [applySize, image]);
+  const handleLoad = useCallback(
+    (event: SyntheticEvent<HTMLImageElement>) => {
+      const img = event.currentTarget;
+      setLoaded(true);
+      // SVGs with only a viewBox report no intrinsic pixel size; recover one from
+      // the markup (decoded from a data URL, or fetched for asset/remote SVGs) so
+      // the image still lays out at natural × scale and pans when zoomed. Only a
+      // size-less unparseable source keeps the contained layout below.
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        applySize({ w: img.naturalWidth, h: img.naturalHeight });
+        return;
+      }
+      applySize(null);
+      const src = img.src;
+      svgSizeFromUrl(src).then((size) => {
+        // Drop the result if the user has navigated to another image meanwhile.
+        if (size && imgRef.current?.src === src) applySize(size);
+      });
+    },
+    [applySize],
+  );
 
   useLightboxKeys({
     hasMultiple,

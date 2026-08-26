@@ -11,13 +11,15 @@ vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({ isFullscreen }),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
-// The probe needs real layout; keep the data-URL path real and stub the rest.
+// The probe needs real layout; keep the data-URL path real, answer for .svg
+// URLs, and report no size for anything else (matching the real probe).
 vi.mock("@/lib/svgSizeFromUrl", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/svgSizeFromUrl")>();
   return {
-    svgSizeFromUrl: vi.fn((src: string) =>
-      src.startsWith("data:") ? actual.svgSizeFromUrl(src) : Promise.resolve({ w: 300, h: 150 }),
-    ),
+    svgSizeFromUrl: vi.fn((src: string) => {
+      if (src.startsWith("data:")) return actual.svgSizeFromUrl(src);
+      return Promise.resolve(src.endsWith(".svg") ? { w: 300, h: 150 } : null);
+    }),
   };
 });
 
