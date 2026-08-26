@@ -77,10 +77,12 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 ```bash
 brew tap glyph-md/tap
 brew trust glyph-md/tap
-brew install --cask glyph
+brew install --cask glyph-md/tap/glyph
 ```
 
 `brew trust` is required once because Glyph ships from a third-party tap; recent Homebrew refuses to load casks from untrusted taps.
+
+Use the fully qualified name: homebrew-core ships an unrelated `glyph` formula (an ASCII-art converter), so a plain `brew install glyph` installs that instead. If the `glyph` command prints `Error: input file must be specified.`, that formula is shadowing the app; remove it with `brew uninstall --formula glyph` and reinstall the cask.
 
 ### Windows (winget)
 
@@ -117,7 +119,7 @@ yay -S glyph-md-bin
 
 ```bash
 brew tap glyph-md/tap
-brew install glyph
+brew install glyph-md/tap/glyph
 ```
 
 ### Debian/Ubuntu (PPA)

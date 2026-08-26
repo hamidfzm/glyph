@@ -7,6 +7,10 @@ cask "glyph" do
   desc "Cross-platform markdown viewer"
   homepage "{{HOMEPAGE}}"
 
+  # homebrew-core ships an unrelated `glyph` formula (an ASCII-art converter)
+  # whose binary would shadow this cask's `glyph` on PATH.
+  conflicts_with formula: "glyph"
+
   livecheck do
     url :url
     strategy :github_latest
