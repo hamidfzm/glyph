@@ -32,12 +32,13 @@ The reading face is chosen per platform, because "best for reading" is not the s
 
 | Platform | Reading face |
 | --- | --- |
-| macOS, iOS | New York, then Iowan Old Style / Charter |
+| macOS | SF Pro Text (the system face) |
+| iOS | New York, then Iowan Old Style / Charter |
 | Windows | Calibri, then Constantia / Cambria |
 | Linux | Noto Serif, then DejaVu / Liberation |
 | Unknown | Georgia |
 
-Windows therefore reads in a humanist sans while Apple platforms read in a serif. That is deliberate: Palatino Linotype, the previous Windows outcome, is a print face that renders poorly at body size on Windows. Readers who want a different face set it in Settings, which overrides the platform default.
+macOS reads in the system face: next to native apps the New York serif read as foreign, so desktop Mac prose uses SF Pro Text while iOS keeps the serif. Windows likewise reads in a humanist sans. That is deliberate: Palatino Linotype, the previous Windows outcome, is a print face that renders poorly at body size on Windows. Readers who want a different face set it in Settings, which overrides the platform default.
 
 All are system stacks; Glyph bundles no font files.
 
