@@ -1721,7 +1721,7 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "glyph"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "git2",
  "keyring",
