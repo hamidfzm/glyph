@@ -241,8 +241,13 @@ fn covers_monitor(window: &tauri::WebviewWindow) -> bool {
 pub fn set_lightbox_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        // The macOS menu lives in the system bar and fullscreen hides it.
-        window.set_fullscreen(enter).map_err(|e| e.to_string())
+        // Simple (pre-Lion) fullscreen: covers the screen instantly on the
+        // current Space and hides the system menu bar. Native fullscreen
+        // would animate the window into its own Space, which reads as a
+        // separate window instead of an overlay.
+        window
+            .set_simple_fullscreen(enter)
+            .map_err(|e| e.to_string())
     }
     #[cfg(not(target_os = "macos"))]
     {
