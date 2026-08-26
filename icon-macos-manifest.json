@@ -1,0 +1,4 @@
+{
+  "default": "src-tauri/icons/icon-macos.svg",
+  "bg_color": "#2f4fe0"
+}
