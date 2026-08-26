@@ -10,6 +10,7 @@
     "core:window:allow-set-focus",
     "core:window:allow-close",
     "core:window:allow-destroy",
+    "core:window:allow-is-fullscreen",
     "dialog:default",
     "fs:default",
     "fs:allow-read-text-file",

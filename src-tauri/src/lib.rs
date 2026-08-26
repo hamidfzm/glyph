@@ -310,6 +310,8 @@ pub fn run() {
             menu_runtime::apply::apply_keybindings,
             #[cfg(desktop)]
             menu_runtime::apply::set_menu_labels,
+            #[cfg(desktop)]
+            menu_runtime::apply::set_lightbox_fullscreen,
             windows_runtime::set_window_workspace,
             windows_runtime::request_open,
             #[cfg(desktop)]

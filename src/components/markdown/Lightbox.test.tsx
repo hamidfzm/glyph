@@ -1,7 +1,27 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Lightbox } from "./Lightbox";
+
+const { isFullscreen, invoke } = vi.hoisted(() => ({
+  isFullscreen: vi.fn(() => Promise.resolve(false)),
+  invoke: vi.fn(() => Promise.resolve(undefined)),
+}));
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({ isFullscreen }),
+}));
+vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+// The probe needs real layout; keep the data-URL path real, answer for .svg
+// URLs, and report no size for anything else (matching the real probe).
+vi.mock("@/lib/svgSizeFromUrl", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/svgSizeFromUrl")>();
+  return {
+    svgSizeFromUrl: vi.fn((src: string) => {
+      if (src.startsWith("data:")) return actual.svgSizeFromUrl(src);
+      return Promise.resolve(src.endsWith(".svg") ? { w: 300, h: 150 } : null);
+    }),
+  };
+});
 
 const IMAGES = [
   { src: "a.png", alt: "first" },
@@ -16,6 +36,12 @@ function Harness({ onClose = () => {}, start = 0 }: { onClose?: () => void; star
 }
 
 describe("Lightbox", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    isFullscreen.mockClear();
+    invoke.mockClear();
+  });
+
   it("renders the current image and a counter for multiple images", () => {
     render(<Harness />);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -90,7 +116,7 @@ describe("Lightbox", () => {
     expect(img.style.transform).toBe("scale(1.25)");
   });
 
-  it("recovers a layout size for an SVG data URL with only a viewBox", () => {
+  it("recovers a layout size for an SVG data URL with only a viewBox", async () => {
     const src = `data:image/svg+xml,${encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"></svg>',
     )}`;
@@ -107,11 +133,58 @@ describe("Lightbox", () => {
 
     // Parsed from the markup: pixel layout (pannable when zoomed), not the
     // transform-scale fallback.
-    expect(img.style.width).toBe("200px");
+    await waitFor(() => expect(img.style.width).toBe("200px"));
     expect(img.style.objectFit).toBe("");
 
     fireEvent.keyDown(window, { key: "+" });
     expect(img.style.width).toBe("250px");
+  });
+
+  it("sizes a viewBox-only SVG served from a URL via the aspect probe", async () => {
+    render(
+      <Lightbox
+        images={[{ src: "http://asset.localhost/diagram.svg", alt: "asset svg" }]}
+        index={0}
+        onIndexChange={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    const img = screen.getByAltText("asset svg") as HTMLImageElement;
+    fireEvent.load(img);
+    await waitFor(() => expect(img.style.width).toBe("300px"));
+    expect(img.style.objectFit).toBe("");
+  });
+
+  it("goes window-fullscreen while open and restores on close", async () => {
+    const { unmount } = render(<Harness />);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("set_lightbox_fullscreen", { enter: true }),
+    );
+    unmount();
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("set_lightbox_fullscreen", { enter: false }),
+    );
+  });
+
+  it("leaves an already-fullscreen window alone", async () => {
+    isFullscreen.mockResolvedValueOnce(true);
+    const { unmount } = render(<Harness />);
+    await waitFor(() => expect(isFullscreen).toHaveBeenCalled());
+    unmount();
+    expect(invoke).not.toHaveBeenCalledWith("set_lightbox_fullscreen", { enter: true });
+    expect(invoke).not.toHaveBeenCalledWith("set_lightbox_fullscreen", { enter: false });
+  });
+
+  it("zooms with ctrl+wheel and ignores a plain wheel", () => {
+    render(<Harness />);
+    const dialog = screen.getByRole("dialog");
+    // happy-dom's WheelEvent drops the ctrlKey init field; set it explicitly.
+    const zoomWheel = new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true });
+    Object.defineProperty(zoomWheel, "ctrlKey", { value: true });
+    fireEvent(dialog, zoomWheel);
+    expect(screen.getByText("116%")).toBeInTheDocument();
+    fireEvent.wheel(dialog, { deltaY: -100 });
+    expect(screen.getByText("116%")).toBeInTheDocument();
   });
 
   it("renders the overlay into document.body, escaping transformed ancestors", () => {

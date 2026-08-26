@@ -38,7 +38,6 @@ export function useDragPan(ref: RefObject<HTMLElement | null>): void {
       startY = e.clientY;
       startLeft = el.scrollLeft;
       startTop = el.scrollTop;
-      el.setPointerCapture?.(e.pointerId);
     };
 
     const handlePointerMove = (e: PointerEvent) => {
@@ -47,6 +46,10 @@ export function useDragPan(ref: RefObject<HTMLElement | null>): void {
       const dy = e.clientY - startY;
       if (!moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
         moved = true;
+        // Capture only once a real drag starts: capturing on pointerdown
+        // retargets the trailing click to this element, which breaks child
+        // buttons (their click lands here and can read as a backdrop click).
+        el.setPointerCapture?.(e.pointerId);
         el.setAttribute("data-grabbing", "");
       }
       if (moved) {
@@ -58,7 +61,7 @@ export function useDragPan(ref: RefObject<HTMLElement | null>): void {
     const handlePointerUp = (e: PointerEvent) => {
       if (!dragging) return;
       dragging = false;
-      el.releasePointerCapture?.(e.pointerId);
+      if (moved) el.releasePointerCapture?.(e.pointerId);
       el.removeAttribute("data-grabbing");
       syncPannable();
       if (moved) {

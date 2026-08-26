@@ -214,3 +214,73 @@ pub fn set_menu_labels(
         .with_refs(window.label(), |refs| apply_menu_labels(refs, &labels))
         .unwrap_or(Ok(()))
 }
+
+/// Whether the window's outer bounds actually cover its monitor. tao's
+/// `is_fullscreen` only echoes a cached flag, which diverges when the resize
+/// itself is lost (see below), so verification must measure the real window.
+#[cfg(not(target_os = "macos"))]
+fn covers_monitor(window: &tauri::WebviewWindow) -> bool {
+    match (window.outer_size(), window.current_monitor()) {
+        (Ok(size), Ok(Some(monitor))) => {
+            size.width >= monitor.size().width && size.height >= monitor.size().height
+        }
+        // Can't measure: treat as applied rather than retry forever.
+        _ => true,
+    }
+}
+
+// Fullscreen for the image lightbox, with the in-window menu bar (Windows/
+// Linux) hidden while fullscreen. Entering hides the menu before the
+// transition so the bar never flashes over the fullscreen window. On Windows
+// the fullscreen resize is applied with SWP_ASYNCWINDOWPOS and can lose the
+// race against the menu change's frame recalculation; tao then caches
+// "fullscreen" with the window never resized and early-returns every later
+// request. The verify-retry below heals exactly that: it measures the real
+// bounds against the monitor and clears + re-applies until they match.
+#[tauri::command]
+pub fn set_lightbox_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        // Simple (pre-Lion) fullscreen: covers the screen instantly on the
+        // current Space and hides the system menu bar. Native fullscreen
+        // would animate the window into its own Space, which reads as a
+        // separate window instead of an overlay.
+        window
+            .set_simple_fullscreen(enter)
+            .map_err(|e| e.to_string())?;
+        // The transition's style-mask toggle drops the webview as first
+        // responder, silencing keyboard events (Escape stopped dismissing
+        // the lightbox). Hand focus back once the mask change has settled;
+        // the exit path applies its mask asynchronously.
+        let w = window.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            let _ = AsRef::<tauri::Webview>::as_ref(&w).set_focus();
+        });
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let w = window.clone();
+        std::thread::spawn(move || {
+            if enter {
+                // A minimized window is iconic: resizes apply to nothing.
+                let _ = w.unminimize();
+                let _ = w.hide_menu();
+                for _ in 0..3 {
+                    let _ = w.set_fullscreen(false);
+                    let _ = w.set_fullscreen(true);
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    if covers_monitor(&w) {
+                        break;
+                    }
+                }
+            } else {
+                let _ = w.set_fullscreen(false);
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                let _ = w.show_menu();
+            }
+        });
+        Ok(())
+    }
+}

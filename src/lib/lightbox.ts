@@ -8,7 +8,8 @@ export interface LightboxImage {
 /** Multiplier applied per zoom-in / zoom-out step. */
 export const ZOOM_STEP = 1.25;
 export const MIN_SCALE = 0.1;
-export const MAX_SCALE = 8;
+/** High ceiling on purpose: small diagrams must still fill 5K displays. */
+export const MAX_SCALE = 50;
 
 export function clampScale(scale: number): number {
   return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
