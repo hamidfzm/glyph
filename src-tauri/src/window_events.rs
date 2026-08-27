@@ -9,11 +9,14 @@ use crate::menu;
 use crate::{is_supported_file, windows, windows_runtime};
 
 pub fn handle_window_event(window: &Window, event: &WindowEvent) {
-    // A closed window leaves the routing registry so its workspace no
-    // longer counts toward "is this folder already open".
+    // A closed window leaves the routing registry so its workspace and files no
+    // longer count toward "is this already open", and releases the watches it
+    // owned on the way out.
     if matches!(event, WindowEvent::Destroyed) {
         if let Some(registry) = window.try_state::<windows::WindowRegistry>() {
-            registry.remove(window.label());
+            let label = window.label();
+            crate::watcher::drop_watches(window.app_handle(), &registry.owned_paths(label));
+            registry.remove(label);
         }
         #[cfg(desktop)]
         if let Some(menus) = window.try_state::<menu::MenuRegistry>() {

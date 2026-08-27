@@ -138,6 +138,7 @@
   },
   "fileTree": {
     "open": "打开",
+    "openInNewWindow": "在新窗口中打开",
     "newNote": "新建笔记",
     "newCanvas": "新建画布",
     "newFolder": "新建文件夹",

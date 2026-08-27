@@ -45,6 +45,12 @@ webview-supplied path:
   itself and grants the previously open tabs and recent files
 - `set_window_workspace`, when a window reports the workspace it adopted
 
+`open_in_new_window` is deliberately not on that list. It is reachable from
+ordinary UI (the file-tree menu, the tab strip) with a renderer-supplied path,
+so it checks the path against `ensure_readable` **before** routing and refuses
+otherwise. It can therefore only ever re-scope a path the session already
+holds; a second window never widens the process's filesystem reach.
+
 Workspace and file grants are also mirrored into Tauri's runtime
 asset-protocol scope so `asset://` image URLs resolve only inside granted
 locations (the static scope in `tauri.conf.json` is empty).

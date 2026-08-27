@@ -16,6 +16,7 @@ function renderFileTree(overrides: Partial<ComponentProps<typeof FileTree>> = {}
     expanded: new Set(),
     onToggle: vi.fn(),
     onOpenFile: vi.fn(),
+    onOpenInNewWindow: vi.fn(),
     onCreateNote: vi.fn(async () => null),
     onCreateCanvas: vi.fn(async () => null),
     onCreateFolder: vi.fn(async () => null),
@@ -38,6 +39,33 @@ describe("FileTree context menu", () => {
     expect(screen.getByText("Open")).toBeInTheDocument();
     expect(screen.getByText("New Note")).toBeInTheDocument();
     expect(screen.getByText("New Folder")).toBeInTheDocument();
+  });
+
+  it("offers Open in new window on file rows only", () => {
+    renderFileTree();
+    fireEvent.contextMenu(screen.getByText("post.md"));
+    expect(screen.getByText("Open in new window")).toBeInTheDocument();
+  });
+
+  it("omits Open in new window for folder rows", () => {
+    renderFileTree();
+    fireEvent.contextMenu(screen.getByText("subdir"));
+    expect(screen.queryByText("Open in new window")).not.toBeInTheDocument();
+  });
+
+  it("omits Open in new window in the empty area below the tree", () => {
+    const { container } = renderFileTree();
+    const root = container.querySelector("[data-filetree-root]");
+    if (!root) throw new Error("file tree root missing");
+    fireEvent.contextMenu(root);
+    expect(screen.queryByText("Open in new window")).not.toBeInTheDocument();
+  });
+
+  it("calls onOpenInNewWindow with the right-clicked file", () => {
+    const { props } = renderFileTree();
+    fireEvent.contextMenu(screen.getByText("post.md"));
+    fireEvent.click(screen.getByText("Open in new window"));
+    expect(props.onOpenInNewWindow).toHaveBeenCalledWith("/root/post.md");
   });
 
   it("calls onOpenFile when context menu Open is clicked", () => {

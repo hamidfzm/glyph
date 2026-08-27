@@ -69,6 +69,17 @@ export function useOpenDocument({
         setState((prev) => withActiveTab(prev, existing.id));
         return;
       }
+      // A note lives in one window. If another window already shows it, raise
+      // that window instead of loading a second buffer over the same file: two
+      // edit buffers and two autosave chains on one path means the later write
+      // silently discards the other window's edits (INV-1, INV-3). Fails open,
+      // so a backend hiccup degrades to the old behavior rather than refusing
+      // to open anything.
+      try {
+        if (await invoke<boolean>("focus_window_with_file", { path })) return;
+      } catch {
+        // ignore
+      }
 
       const id = generateTabId();
       try {

@@ -36,6 +36,16 @@ export function deepMerge(
   return result;
 }
 
+/** Read the value at a dotted path, or `undefined` when any segment is absent. */
+export function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+  let current: unknown = obj;
+  for (const key of path.split(".")) {
+    if (!isSafePlainObject(current) || !Object.hasOwn(current, key)) return undefined;
+    current = current[key];
+  }
+  return current;
+}
+
 export function setNestedValue(
   obj: Record<string, unknown>,
   path: string,

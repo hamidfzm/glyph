@@ -397,6 +397,42 @@ describe("useTabs close coordinator", () => {
     expect(writeFile).not.toHaveBeenCalled();
   });
 
+  it("closeTabs reports whether the tabs actually closed", async () => {
+    // "Open in new window" moves a note by closing its tab first, so it needs
+    // to know a cancelled prompt left the tab in place.
+    const confirmUnsaved = vi.fn(async () => "cancel" as const);
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved })),
+    );
+    await ready(result);
+    const dirtyId = await openDirty(result, "/p/a.md", "A");
+
+    let cancelled: boolean | undefined;
+    await act(async () => {
+      cancelled = await result.current.closeTabs([dirtyId]);
+    });
+    expect(cancelled).toBe(false);
+    expect(hasTab(result, dirtyId)).toBe(true);
+
+    let closed: boolean | undefined;
+    await act(async () => {
+      closed = await result.current.closeTabs([]);
+    });
+    // An empty batch is trivially "closed": nothing blocked it.
+    expect(closed).toBe(true);
+
+    await act(async () => {
+      await result.current.openFile("/p/b.md");
+    });
+    const cleanId = result.current.tabs.find((t) => t.id !== dirtyId)?.id as string;
+    let closedClean: boolean | undefined;
+    await act(async () => {
+      closedClean = await result.current.closeTabs([cleanId]);
+    });
+    expect(closedClean).toBe(true);
+    expect(hasTab(result, cleanId)).toBe(false);
+  });
+
   it("closeTabs discards the whole batch when the user picks Don't Save", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
     vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));

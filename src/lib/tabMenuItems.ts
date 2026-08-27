@@ -11,6 +11,7 @@ export function buildTabMenuItems(
   tabs: Tab[],
   targetId: string,
   closeTabs: (ids: string[]) => void,
+  openInNewWindow: (path: string) => void,
   t: TFunction<"common">,
 ): ContextMenuItem[] {
   const index = tabs.findIndex((tab) => tab.id === targetId);
@@ -59,11 +60,17 @@ export function buildTabMenuItems(
     });
   }
 
+  const newWindow: ContextMenuItem[] = [];
   const path: ContextMenuItem[] = [];
   // A virtual buffer's "path" is its Untitled title, so there is nothing to
-  // copy or reveal until it has been saved.
+  // move, copy, or reveal until it has been saved.
   if (target.kind === "file" && !target.file.virtual) {
     const filePath = target.file.path;
+    newWindow.push({
+      kind: "action",
+      label: t("fileTree.openInNewWindow"),
+      onSelect: () => openInNewWindow(filePath),
+    });
     path.push(
       {
         kind: "action",
@@ -82,5 +89,5 @@ export function buildTabMenuItems(
     );
   }
 
-  return joinGroups([close, path]);
+  return joinGroups([close, newWindow, path]);
 }

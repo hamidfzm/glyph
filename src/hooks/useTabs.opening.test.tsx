@@ -30,6 +30,44 @@ describe("useTabs opening documents", () => {
     expect(result.current.activeTab?.id).toBe(result.current.tabs[0].id);
   });
 
+  it("raises the window that already holds the note instead of opening a copy", async () => {
+    // One note, one window: a second buffer over the same path would give it a
+    // second autosave chain, and the later write would drop the other's edits.
+    const focus = vi.fn(async () => true);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ focus_window_with_file: focus }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/elsewhere.md");
+    });
+
+    expect(focus).toHaveBeenCalled();
+    expect(result.current.tabs).toHaveLength(0);
+  });
+
+  it("opens here when the elsewhere check fails", async () => {
+    // Fails open: a backend hiccup degrades to the old behavior rather than
+    // refusing to open anything.
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        focus_window_with_file: async () => {
+          throw new Error("no registry");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/new.md");
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+  });
+
   it("refuses to open a file whose extension isn't a supported type", async () => {
     // openFile gates unsupported extensions so a random `.txt` / `.html`
     // can't reach the renderer with embedded HTML / JS.

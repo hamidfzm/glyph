@@ -4,12 +4,21 @@ import { KEYED_PROVIDERS, setAiKey } from "@/lib/aiKeys";
 import { applyCSSVariables, applyTheme } from "@/lib/applySettingsToDom";
 import { DEFAULT_SETTINGS, type Settings, stripSecrets } from "@/lib/settings";
 import { migrateLegacySettings } from "@/lib/settingsMigrations";
-import { deepMerge, setNestedValue } from "@/lib/settingsObject";
+import { deepMerge, getNestedValue, setNestedValue } from "@/lib/settingsObject";
 import { loadSecrets } from "@/lib/settingsSecrets";
 import { SettingsContext } from "./SettingsContext";
 
 const STORE_KEY = "settings";
 const SAVE_DEBOUNCE = 500;
+
+/** Rebuild a full `Settings` from what is currently on disk. */
+function settingsFromStored(stored: Partial<Settings> | null | undefined): Settings {
+  if (!stored) return DEFAULT_SETTINGS;
+  return deepMerge(
+    DEFAULT_SETTINGS as unknown as Record<string, unknown>,
+    migrateLegacySettings(stored as unknown as Record<string, unknown>),
+  ) as unknown as Settings;
+}
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -18,6 +27,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<Settings | null>(null);
   const writeChainRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  // Which paths this window has changed since its last successful write. Every
+  // window writes the whole settings blob from its own snapshot, so without
+  // this a second window's write would clobber the first window's change with
+  // its own stale copy of that key. Tracking the touched paths lets a write
+  // re-read the store and apply only what this window actually changed.
+  const changedPathsRef = useRef<Set<string>>(new Set());
+  // A reset replaces every key on purpose, so it skips the merge.
+  const replaceAllRef = useRef(false);
 
   // Load settings from store on mount
   useEffect(() => {
@@ -31,12 +48,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         });
         storeRef.current = store;
         const saved = await store.get<Partial<Settings>>(STORE_KEY);
-        const base = saved
-          ? (deepMerge(
-              DEFAULT_SETTINGS as unknown as Record<string, unknown>,
-              migrateLegacySettings(saved as unknown as Record<string, unknown>),
-            ) as unknown as Settings)
-          : DEFAULT_SETTINGS;
+        const base = settingsFromStored(saved);
         // API keys live in the OS keychain, not the store: migrate any legacy
         // plaintext keys out of settings.json and load the stored ones.
         const merged = await loadSecrets(store, STORE_KEY, base);
@@ -76,18 +88,44 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // cannot contain API keys. On failure the pending value is kept so a later
   // flush can retry. Writes are serialized through writeChainRef so a flush
   // cannot overlap an in-flight debounced write and land the older value last.
+  //
+  // The write starts from what is on disk right now and re-applies only the
+  // paths this window changed, so a setting another window changed meanwhile
+  // survives instead of being clobbered by this window's stale snapshot of it.
   const writePending = useCallback(() => {
     const write = async () => {
       const store = storeRef.current;
       const pending = pendingRef.current;
       if (!store || !pending) return true;
+      // A snapshot, not the live set: an update landing mid-write must keep
+      // its path queued for the next one.
+      const changed = new Set(changedPathsRef.current);
+      const replaceAll = replaceAllRef.current;
       try {
-        await store.set(STORE_KEY, stripSecrets(pending));
+        let next = pending;
+        if (!replaceAll) {
+          const stored = await store.get<Partial<Settings>>(STORE_KEY);
+          next = Array.from(changed).reduce(
+            (merged, path) =>
+              setNestedValue(
+                merged as unknown as Record<string, unknown>,
+                path,
+                getNestedValue(pending as unknown as Record<string, unknown>, path),
+              ) as unknown as Settings,
+            settingsFromStored(stored),
+          );
+        }
+        await store.set(STORE_KEY, stripSecrets(next));
         // save() awaits the disk write; the store plugin's own autosave
         // debounce could still be pending when the process exits.
         await store.save();
-        // A newer update may have arrived while awaiting; keep it pending.
-        if (pendingRef.current === pending) pendingRef.current = null;
+        // A newer update may have arrived while awaiting; keep it pending, and
+        // keep the paths it touched so the retry still merges them.
+        if (pendingRef.current === pending) {
+          pendingRef.current = null;
+          for (const path of changed) changedPathsRef.current.delete(path);
+          if (replaceAll) replaceAllRef.current = false;
+        }
         return true;
       } catch (err) {
         console.error("Failed to save settings:", err);
@@ -133,6 +171,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const updateSettings = useCallback(
     (path: string, value: unknown) => {
+      changedPathsRef.current.add(path);
       setSettings((prev) => {
         const updated = setNestedValue(
           prev as unknown as Record<string, unknown>,
@@ -154,6 +193,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   );
 
   const resetSettings = useCallback(() => {
+    // Reset means every key, including ones this window never touched, so the
+    // write skips the merge and replaces the stored blob outright.
+    replaceAllRef.current = true;
     setSettings(DEFAULT_SETTINGS);
     applyTheme(DEFAULT_SETTINGS.appearance.theme);
     applyCSSVariables(DEFAULT_SETTINGS);
