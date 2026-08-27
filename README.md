@@ -222,7 +222,7 @@ cd src-tauri && cargo clippy    # Lint Rust
 
 ## Comparison with Other Markdown Apps
 
-Glyph is built around speed, native feel, and offline-first usage. The tables below compare its current capabilities against widely used markdown apps. Items marked "planned" track to issues on the [roadmap](https://github.com/hamidfzm/glyph/issues).
+Glyph is built around speed, native feel, and offline-first usage. The tables below compare its current capabilities against widely used markdown apps.
 
 ### Rendering
 
@@ -256,9 +256,10 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Folder / workspace (vault) sidebar | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
 | Wikilinks & backlinks | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | plugin |
 | Graph view | ✅ | ✅ | ❌ | ❌ | ❌ | plugin | plugin |
-| Tag / metadata search | planned | ✅ | ❌ | ❌ | ✅ | ✅ | plugin |
+| Tag / metadata search | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | plugin |
 | Command palette | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | In-document search | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Workspace-wide full-text search | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Table of contents | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Live reload on disk change | ✅ | ⚠️ | n/a | n/a | ⚠️ | n/a | ✅ |
 
@@ -278,7 +279,6 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Text-to-speech | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
 | Plugin / extension API | ⚠️ experimental | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
 | Cloud sync | ⚠️ Git-backed | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Graph view | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
 
 ### Platform
 
@@ -292,7 +292,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Open source | ✅ MIT | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Free | ✅ | ✅ | $14.99 | ✅ | ✅ | ✅ | ✅ |
 
-Legend: ✅ supported · ⚠️ partial / inconsistent · ❌ not supported · plugin = third-party · planned = on roadmap
+Legend: ✅ supported · ⚠️ partial / inconsistent · ❌ not supported · plugin = third-party
 
 Note on "WYSIWYG / inline preview": Glyph's editor has split-view live preview and styled markdown tokens (bold/italic render as bold/italic in source), but markdown markers remain visible. Typora-style fully inline rendering is not implemented.
 
