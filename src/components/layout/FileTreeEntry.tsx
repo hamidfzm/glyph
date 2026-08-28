@@ -5,6 +5,7 @@ import { FolderIcon } from "@/components/icons/FolderIcon";
 import { FolderOpenIcon } from "@/components/icons/FolderOpenIcon";
 import { ImageIcon } from "@/components/icons/ImageIcon";
 import { InlineRenameInput } from "@/components/layout/InlineRenameInput";
+import { blockDropHandlers, type FileTreeDragMove } from "@/hooks/useFileTreeDragMove";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isImageFile } from "@/lib/imageExtensions";
 import { stem } from "@/lib/paths";
@@ -37,12 +38,14 @@ export interface FileTreeEntryProps {
   editing: EntryEditingState | null;
   onEditCommit: (editing: EntryEditingState, value: string) => void;
   onEditCancel: (editing: EntryEditingState) => void;
+  dnd: FileTreeDragMove;
 }
 
 /** One row of the workspace tree: a file button, or a folder button plus its
  *  expanded children. Recurses into itself for subdirectories. */
 export function FileTreeEntry(props: FileTreeEntryProps) {
-  const { entry, depth, nodes, expanded, activeFilePath, onToggle, onOpenFile, editing } = props;
+  const { entry, depth, nodes, expanded, activeFilePath, onToggle, onOpenFile, editing, dnd } =
+    props;
   const indentStyle = { paddingLeft: `${depth * INDENT_PX + 8}px` };
 
   if (editing && editing.path === entry.path) {
@@ -63,13 +66,21 @@ export function FileTreeEntry(props: FileTreeEntryProps) {
   if (entry.isDirectory) {
     const isExpanded = expanded.has(entry.path);
     const children = nodes.get(entry.path);
+    const isDropTarget = dnd.dropTarget === entry.path;
     return (
       <li>
         <button
           type="button"
           onClick={() => onToggle(entry.path)}
           onContextMenu={(e) => props.onContextMenu(e, entry)}
-          className="w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] active:bg-[var(--color-border)] flex items-center gap-1.5"
+          {...dnd.dragHandlersFor(entry.path)}
+          {...dnd.dropHandlersFor(entry.path)}
+          data-drop-target={isDropTarget || undefined}
+          className={`w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] active:bg-[var(--color-border)] flex items-center gap-1.5 ${
+            isDropTarget
+              ? "bg-[var(--color-surface-tertiary)] ring-1 ring-inset ring-[var(--color-accent)]"
+              : ""
+          }`}
           style={indentStyle}
           title={entry.path}
         >
@@ -99,6 +110,8 @@ export function FileTreeEntry(props: FileTreeEntryProps) {
         type="button"
         onClick={() => onOpenFile(entry.path)}
         onContextMenu={(e) => props.onContextMenu(e, entry)}
+        {...dnd.dragHandlersFor(entry.path)}
+        {...blockDropHandlers}
         className={`w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors flex items-center gap-1.5 ${
           isActive
             ? "bg-[var(--color-accent)] text-white font-medium"

@@ -26,6 +26,7 @@ function renderFileTree(overrides: Partial<ComponentProps<typeof FileTree>> = {}
     onRename: vi.fn(async () => null),
     onDuplicate: vi.fn(async () => null),
     onMove: vi.fn(),
+    onMoveEntry: vi.fn(),
     onReveal: vi.fn(),
     onDelete: vi.fn(async () => true),
     ...overrides,

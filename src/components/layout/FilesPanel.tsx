@@ -153,6 +153,7 @@ export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
             onRename={renamePath}
             onDuplicate={duplicatePath}
             onMove={handleMove}
+            onMoveEntry={movePath}
             onReveal={(path) => {
               void revealItemInDir(path);
             }}
