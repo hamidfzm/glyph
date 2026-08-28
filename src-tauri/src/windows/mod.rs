@@ -196,11 +196,26 @@ impl WindowRegistry {
         }
     }
 
-    /// Every path a window is responsible for: its workspace root plus its
-    /// file tabs. A path is shown by at most one window, so this is also the
-    /// set of watches to release when the window closes.
-    pub fn owned_paths(&self, label: &str) -> Vec<String> {
+    /// The paths a closing window is the last holder of, and whose watches are
+    /// therefore safe to release.
+    ///
+    /// Routing keeps a path in one window, but both maps are fed by renderers,
+    /// so teardown does not assume the invariant it exists to uphold: a path
+    /// another window still claims keeps its watcher, because one `notify`
+    /// watcher serves every window showing that path and dropping it would
+    /// leave the survivor blind to external edits.
+    pub fn exclusively_owned_paths(&self, label: &str) -> Vec<String> {
         let windows = self.inner.lock().unwrap();
+        let claimed_elsewhere = |path: &String| {
+            windows
+                .files
+                .iter()
+                .any(|(other, paths)| other != label && paths.contains(path))
+                || windows
+                    .workspaces
+                    .iter()
+                    .any(|(other, root)| other != label && root.as_ref() == Some(path))
+        };
         let mut paths: Vec<String> = windows
             .files
             .get(label)
@@ -209,6 +224,7 @@ impl WindowRegistry {
         if let Some(Some(root)) = windows.workspaces.get(label) {
             paths.push(root.clone());
         }
+        paths.retain(|path| !claimed_elsewhere(path));
         paths
     }
 

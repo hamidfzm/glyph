@@ -42,7 +42,7 @@ describe("useOpenInNewWindow", () => {
     await act(() => result.current(NOTE));
 
     expect(closeTabs).not.toHaveBeenCalled();
-    expect(invoke).toHaveBeenCalledWith("open_in_new_window", { kind: "file", path: NOTE });
+    expect(invoke).toHaveBeenCalledWith("open_in_new_window", { path: NOTE });
   });
 
   it("moves a note that is open here by closing its tab first", async () => {
@@ -82,6 +82,32 @@ describe("useOpenInNewWindow", () => {
     await act(() => result.current("/etc/hosts"));
 
     expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it("reopens the source tab when the backend refuses, so the note is not lost", async () => {
+    // The close already flushed, so reopening restores the tab rather than
+    // leaving the note showing in no window at all.
+    vi.mocked(invoke).mockRejectedValue(new Error("denied"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const openFile = vi.fn(async () => true);
+    const { result } = render({ tabs: [openTab(NOTE)], closeTabs: async () => true, openFile });
+
+    await act(() => result.current(NOTE));
+
+    expect(openFile).toHaveBeenCalledWith(NOTE);
+    consoleError.mockRestore();
+  });
+
+  it("does not reopen when the note was not open here to begin with", async () => {
+    vi.mocked(invoke).mockRejectedValue(new Error("denied"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const openFile = vi.fn(async () => true);
+    const { result } = render({ tabs: [], openFile });
+
+    await act(() => result.current(NOTE));
+
+    expect(openFile).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });
 });

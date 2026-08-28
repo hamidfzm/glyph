@@ -2,7 +2,10 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileTab, GraphTab, Tab } from "@/lib/tabs";
 import type { ContextMenuActionItem } from "./contextMenuItems";
+import { isMobilePlatform } from "./platform";
 import { buildTabMenuItems } from "./tabMenuItems";
+
+vi.mock("./platform", () => ({ isMobilePlatform: vi.fn(() => false) }));
 
 // The builder only reads ids, kinds, paths, and the virtual flag, so the tab
 // fixtures stay thin.
@@ -124,6 +127,17 @@ describe("buildTabMenuItems", () => {
     );
     expect(items).not.toContain("fileTree.copyAbsolutePath");
     expect(items).not.toContain("fileTree.reveal");
+    expect(items).toContain("tabBar.contextMenu.close");
+  });
+});
+
+describe("buildTabMenuItems on mobile", () => {
+  it("omits Open in new window, which mobile cannot do", () => {
+    // Tauri cannot build a second webview window there, and the action closes
+    // the source tab before spawning, so offering it would just lose the tab.
+    vi.mocked(isMobilePlatform).mockReturnValue(true);
+    const items = labels(buildTabMenuItems(tabs(2), "tab-1", vi.fn(), vi.fn(), t));
+    expect(items).not.toContain("fileTree.openInNewWindow");
     expect(items).toContain("tabBar.contextMenu.close");
   });
 });

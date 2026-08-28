@@ -15,7 +15,10 @@ pub fn handle_window_event(window: &Window, event: &WindowEvent) {
     if matches!(event, WindowEvent::Destroyed) {
         if let Some(registry) = window.try_state::<windows::WindowRegistry>() {
             let label = window.label();
-            crate::watcher::drop_watches(window.app_handle(), &registry.owned_paths(label));
+            crate::watcher::drop_watches(
+                window.app_handle(),
+                &registry.exclusively_owned_paths(label),
+            );
             registry.remove(label);
         }
         #[cfg(desktop)]

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useWorkspaceEntries } from "@/hooks/useWorkspaceEntries";
 import { isPathInside } from "@/lib/paths";
 import type { DirEntry, Workspace } from "@/lib/tabs";
@@ -21,12 +21,6 @@ export function useWorkspaceTree({ repointOpenFiles }: UseWorkspaceTreeOptions) 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
-
-  // Report this window's workspace to the Rust window registry so open-folder
-  // routing knows which folder each window shows (focus vs new window).
-  useEffect(() => {
-    invoke("set_window_workspace", { root: workspace?.root ?? null }).catch(() => {});
-  }, [workspace?.root]);
 
   const loadDirectory = useCallback(async (path: string): Promise<DirEntry[]> => {
     try {

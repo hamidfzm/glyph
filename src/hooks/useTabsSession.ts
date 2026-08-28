@@ -25,7 +25,7 @@ interface UseTabsSessionParams {
   tabs: Tab[];
   activeTab: Tab | null;
   workspace: Workspace | null;
-  openFile: (path: string) => Promise<void>;
+  openFile: (path: string) => Promise<unknown>;
   openFolder: (root?: string, options?: OpenFolderOptions) => Promise<void>;
   openGraph: (root?: string) => void;
   activateTabByPath: (path: string) => void;

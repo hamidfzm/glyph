@@ -1,8 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { type ComponentProps, createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { isMobilePlatform } from "@/lib/platform";
 import type { DirEntry } from "@/lib/tabs";
 import { FileTree, type FileTreeHandle } from "./FileTree";
+
+vi.mock("@/lib/platform", () => ({ isMobilePlatform: vi.fn(() => false) }));
 
 const sampleEntries: DirEntry[] = [
   { name: "subdir", path: "/root/subdir", isDirectory: true, modified: 0 },
@@ -184,5 +187,15 @@ describe("FileTree context menu", () => {
     fireEvent.contextMenu(screen.getByText("post.md"));
     fireEvent.click(screen.getByText("Move to…"));
     expect(props.onMove).toHaveBeenCalledWith("/root/post.md");
+  });
+});
+
+describe("FileTree context menu on mobile", () => {
+  it("omits Open in new window, which mobile cannot do", () => {
+    vi.mocked(isMobilePlatform).mockReturnValue(true);
+    renderFileTree();
+    fireEvent.contextMenu(screen.getByText("post.md"));
+    expect(screen.getByText("Open")).toBeInTheDocument();
+    expect(screen.queryByText("Open in new window")).not.toBeInTheDocument();
   });
 });

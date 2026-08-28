@@ -407,30 +407,72 @@ fn window_with_file_finds_the_other_window_holding_a_path() {
 }
 
 #[test]
-fn owned_paths_lists_a_window_s_files_and_its_workspace_root() {
+fn exclusively_owned_paths_lists_a_window_s_files_and_its_workspace_root() {
     // This is the set of watches released when the window closes.
     let registry = WindowRegistry::new();
     registry.set_workspace("w1", Some("/a".to_string()));
     registry.set_files("w1", vec!["/a/note.md".to_string()]);
 
     assert_eq!(
-        registry.owned_paths("w1"),
+        registry.exclusively_owned_paths("w1"),
         vec!["/a/note.md".to_string(), "/a".to_string()]
     );
 }
 
 #[test]
-fn owned_paths_skips_a_window_with_no_workspace() {
+fn exclusively_owned_paths_skips_a_window_with_no_workspace() {
     let registry = WindowRegistry::new();
     registry.set_workspace("w1", None);
     registry.set_files("w1", vec!["/a/note.md".to_string()]);
 
-    assert_eq!(registry.owned_paths("w1"), vec!["/a/note.md".to_string()]);
+    assert_eq!(
+        registry.exclusively_owned_paths("w1"),
+        vec!["/a/note.md".to_string()]
+    );
 }
 
 #[test]
-fn owned_paths_is_empty_for_an_unknown_window() {
-    assert!(WindowRegistry::new().owned_paths("w9").is_empty());
+fn exclusively_owned_paths_is_empty_for_an_unknown_window() {
+    assert!(WindowRegistry::new()
+        .exclusively_owned_paths("w9")
+        .is_empty());
+}
+
+#[test]
+fn a_path_another_window_still_claims_keeps_its_watch() {
+    // One notify watcher serves every window showing a path, so releasing it
+    // on behalf of a survivor would leave that window blind to external edits.
+    // Both maps are renderer-fed, so teardown cannot assume the one-window rule.
+    let registry = WindowRegistry::new();
+    registry.set_files(
+        "w1",
+        vec!["/a/shared.md".to_string(), "/a/only-mine.md".to_string()],
+    );
+    registry.set_files("main", vec!["/a/shared.md".to_string()]);
+
+    assert_eq!(
+        registry.exclusively_owned_paths("w1"),
+        vec!["/a/only-mine.md".to_string()]
+    );
+}
+
+#[test]
+fn a_workspace_root_another_window_still_shows_keeps_its_watch() {
+    let registry = WindowRegistry::new();
+    registry.set_workspace("w1", Some("/a".to_string()));
+    registry.set_workspace("main", Some("/a".to_string()));
+
+    assert!(registry.exclusively_owned_paths("w1").is_empty());
+}
+
+#[test]
+fn a_path_another_window_holds_as_a_workspace_keeps_its_watch() {
+    // The closing window has it as a file tab; the survivor as its root.
+    let registry = WindowRegistry::new();
+    registry.set_files("w1", vec!["/a".to_string()]);
+    registry.set_workspace("main", Some("/a".to_string()));
+
+    assert!(registry.exclusively_owned_paths("w1").is_empty());
 }
 
 #[test]

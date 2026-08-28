@@ -18,23 +18,25 @@ import { captureException } from "@/lib/telemetry";
  * that window instead of spawning a second one.
  */
 export function useOpenInNewWindow() {
-  const { tabs, closeTabs } = useTabsContext();
+  const { tabs, closeTabs, openFile } = useTabsContext();
 
   return useCallback(
     async (path: string) => {
       const open = tabs.find((tab) => tab.kind === "file" && tab.file.path === path);
       if (open && !(await closeTabs([open.id]))) return;
       try {
-        await invoke("open_in_new_window", { kind: "file", path });
+        await invoke("open_in_new_window", { path });
       } catch (err) {
         // The backend refuses paths outside the session's grants. Every UI
-        // entry point offers this only for granted paths, so a rejection here
-        // means the grant state moved underneath us; the edits were already
-        // flushed by the close above, so nothing is lost.
+        // entry point offers this only for granted paths, so a rejection means
+        // the grant state moved underneath us. The close above already flushed,
+        // so reopening here restores the tab rather than leaving the note in no
+        // window at all.
         console.error(`Failed to open ${path} in a new window:`, err);
         captureException(err);
+        if (open) await openFile(path);
       }
     },
-    [tabs, closeTabs],
+    [tabs, closeTabs, openFile],
   );
 }

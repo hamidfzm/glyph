@@ -316,7 +316,7 @@ pub fn run() {
             windows_runtime::set_window_files,
             windows_runtime::request_open,
             windows_runtime::open_in_new_window,
-            windows_runtime::focus_window_with_file,
+            windows_runtime::window_showing_file,
             #[cfg(desktop)]
             sync::commands::sync_set_config,
             #[cfg(desktop)]

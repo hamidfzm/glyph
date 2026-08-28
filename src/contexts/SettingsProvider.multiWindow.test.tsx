@@ -22,11 +22,24 @@ beforeEach(() => {
  */
 function mockLiveStore(initial: Partial<Settings>) {
   let contents: Partial<Settings> = initial;
+  // Lets a test hold a write open inside `save()` so an update can land while
+  // it is still in flight, which is the only way to reach the mid-write races.
+  let releaseSave: (() => void) | null = null;
   const get = vi.fn(async () => contents);
   const set = vi.fn(async (_key: string, value: Partial<Settings>) => {
     contents = value;
   });
-  const save = vi.fn(async () => {});
+  const save = vi.fn(async () => {
+    if (!releaseSave) return;
+    const gate = new Promise<void>((resolve) => {
+      const pendingRelease = releaseSave;
+      releaseSave = () => {
+        pendingRelease?.();
+        resolve();
+      };
+    });
+    await gate;
+  });
   mockedLoad.mockResolvedValueOnce({ get, set, save } as unknown as Awaited<
     ReturnType<typeof load>
   >);
@@ -37,6 +50,15 @@ function mockLiveStore(initial: Partial<Settings>) {
     /** Stand in for another window persisting a change. */
     writeFromAnotherWindow(next: Partial<Settings>) {
       contents = next;
+    },
+    /** Hold the next `save()` open until `releaseWrite` is called. */
+    blockWrite() {
+      releaseSave = () => {};
+    },
+    releaseWrite() {
+      const release = releaseSave;
+      releaseSave = null;
+      release?.();
     },
     current: () => contents,
   };
@@ -115,6 +137,41 @@ describe("SettingsProvider across windows", () => {
     const written = store.set.mock.lastCall?.[1] as Settings;
     expect(written.appearance.theme).toBe("system");
     expect(written.appearance.fontSize).not.toBe(30);
+  });
+
+  it("stops replacing wholesale once the reset is on disk", async () => {
+    // A newer update arriving *while the reset write is in flight* used to
+    // leave the replace-all flag set, so the very next write skipped the merge
+    // and clobbered the other window.
+    const store = mockLiveStore({
+      appearance: { fontSize: 16, theme: "system" },
+    } as Partial<Settings>);
+    await renderLoaded();
+
+    store.blockWrite();
+    act(() => screen.getByTestId("reset").click());
+    // The reset has written the defaults and is now parked inside save().
+    await waitFor(() => {
+      expect(store.save).toHaveBeenCalled();
+    });
+
+    // The other window turns the sidebar off, on top of the reset's defaults.
+    store.writeFromAnotherWindow({
+      ...store.current(),
+      layout: { ...store.current().layout, filesSidebarVisible: false },
+    } as Partial<Settings>);
+
+    // A newer update lands while the reset write is still parked.
+    act(() => screen.getByTestId("change-theme").click());
+    store.releaseWrite();
+
+    // The write that follows must merge, not replace.
+    await waitFor(() => {
+      expect(store.set.mock.calls.length).toBeGreaterThan(1);
+    });
+    const written = store.set.mock.lastCall?.[1] as Settings;
+    expect(written.appearance.theme).toBe("dark");
+    expect(written.layout.filesSidebarVisible).toBe(false);
   });
 
   it("merges both windows' changes when each edits a different key", async () => {

@@ -4,6 +4,7 @@
 
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { TFunction } from "i18next";
+import { isMobilePlatform } from "@/lib/platform";
 import type { Tab } from "@/lib/tabs";
 import { type ContextMenuItem, copySelection, joinGroups } from "./contextMenuItems";
 
@@ -66,11 +67,14 @@ export function buildTabMenuItems(
   // move, copy, or reveal until it has been saved.
   if (target.kind === "file" && !target.file.virtual) {
     const filePath = target.file.path;
-    newWindow.push({
-      kind: "action",
-      label: t("fileTree.openInNewWindow"),
-      onSelect: () => openInNewWindow(filePath),
-    });
+    // Desktop only: mobile has no second window to open into.
+    if (!isMobilePlatform()) {
+      newWindow.push({
+        kind: "action",
+        label: t("fileTree.openInNewWindow"),
+        onSelect: () => openInNewWindow(filePath),
+      });
+    }
     path.push(
       {
         kind: "action",

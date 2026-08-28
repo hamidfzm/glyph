@@ -22,6 +22,16 @@ import {
 } from "@/lib/tabs";
 import { setWorkspaceLastFile } from "@/lib/workspace";
 
+/** Per-call options for `openFile`. */
+export interface OpenFileOptions {
+  /**
+   * The open was not a direct request for this note (a workspace auto-loading
+   * its remembered file, navigation history replaying an entry). A note living
+   * in another window is then reported rather than raising that window.
+   */
+  implicit?: boolean;
+}
+
 interface UseOpenDocumentOptions {
   stateRef: RefObject<TabsState>;
   setState: Dispatch<SetStateAction<TabsState>>;
@@ -44,8 +54,10 @@ export function useOpenDocument({
   const { t } = useTranslation("workspace");
 
   // Open a file as a document tab; if it's already open, activate its tab.
+  // Resolves to whether this window ends up showing the file, so an implicit
+  // caller can tell "opened" from "lives in another window".
   const openFile = useCallback(
-    async (path: string) => {
+    async (path: string, options?: OpenFileOptions): Promise<boolean> => {
       // Defensive gate: never load an unsupported file. Glyph rendering treats
       // content as markdown (HTML included via the sanitizer), so opening a
       // random `.txt` / `.html` / etc. is a code-injection vector. Notebooks
@@ -60,23 +72,32 @@ export function useOpenDocument({
       const isAndroidContentUri = path.startsWith("content://");
       if (!isAndroidContentUri && !isSupportedFile(path) && !isImageFile(path)) {
         console.warn(`Refusing to open unsupported file: ${path}`);
-        return;
+        return false;
       }
       const existing = stateRef.current.tabs.find(
         (tab) => tab.kind === "file" && tab.file.path === path,
       );
       if (existing) {
         setState((prev) => withActiveTab(prev, existing.id));
-        return;
+        return true;
       }
-      // A note lives in one window. If another window already shows it, raise
-      // that window instead of loading a second buffer over the same file: two
-      // edit buffers and two autosave chains on one path means the later write
-      // silently discards the other window's edits (INV-1, INV-3). Fails open,
-      // so a backend hiccup degrades to the old behavior rather than refusing
-      // to open anything.
+      // A note lives in one window. If another window already shows it, do not
+      // load a second buffer over the same file: two edit buffers and two
+      // autosave chains on one path means the later write silently discards the
+      // other window's edits (INV-1, INV-3).
+      //
+      // An explicit open raises the window holding it, which is what the user
+      // asked for. An implicit one (a workspace auto-loading its remembered
+      // file, history replaying a move) reports the miss instead: yanking focus
+      // to another window on a gesture the user did not make for that note is
+      // worse than showing nothing. Fails open, so a backend hiccup degrades to
+      // the previous behavior rather than refusing to open anything.
       try {
-        if (await invoke<boolean>("focus_window_with_file", { path })) return;
+        const elsewhere = await invoke<boolean>("window_showing_file", {
+          path,
+          focus: !options?.implicit,
+        });
+        if (elsewhere) return false;
       } catch {
         // ignore
       }
@@ -129,8 +150,10 @@ export function useOpenDocument({
         if (root && isPathInside(path, root)) {
           setWorkspaceLastFile(root, path).catch(() => {});
         }
+        return true;
       } catch (err) {
         console.error("Failed to open file:", err);
+        return false;
       }
     },
     [addToRecent, getDefaultEditorMode, setState, stateRef, withActiveTab, workspaceRef],

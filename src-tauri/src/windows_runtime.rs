@@ -211,59 +211,65 @@ pub fn request_open<R: Runtime>(
     open_in_app(&app, &registry, kind, path, &label);
 }
 
-/// Explicit "Open in new window" for a path the renderer names.
+/// Explicit "Open in new window" for a note the renderer names.
 ///
 /// Unlike `request_open`, whose callers all pass a native-dialog result, this
-/// path is reachable from ordinary UI (the file tree, the tab strip), so the
-/// path is checked against the existing grants *before* anything is routed. A
-/// new window can therefore only ever show what this process is already allowed
-/// to read: the action cannot widen the session's filesystem scope (INV-5,
-/// INV-6). Routing then focuses a window that already shows the path rather
-/// than opening a second live buffer over it.
+/// is reachable from ordinary UI (the file tree, the tab strip), so the path is
+/// checked against the existing grants *before* anything is routed. A new
+/// window can therefore only ever show what this process is already allowed to
+/// read: the action cannot widen the session's filesystem scope (INV-5, INV-6).
+///
+/// Files only, deliberately. A renderer-chosen `kind` would let a caller name a
+/// path granted as an exact file and have the folder branch re-grant it as a
+/// recursive workspace root. Folders already reach a new window through
+/// `request_open`, which routes a dialog-chosen root.
 #[tauri::command]
 pub fn open_in_new_window<R: Runtime>(
     window: tauri::WebviewWindow<R>,
     app: AppHandle<R>,
     registry: State<'_, WindowRegistry>,
     grants: State<'_, GrantRegistry>,
-    kind: String,
     path: String,
 ) -> Result<(), String> {
     grants.ensure_readable(&path)?;
-    let kind = if kind == "file" {
-        OpenKind::File
-    } else {
-        OpenKind::Folder
-    };
     let label = window.label().to_string();
     // The caller closed the source tab before invoking, so drop the path from
     // its entry now instead of waiting for that window's next report. The
     // spawned window checks "is this open elsewhere" as it mounts and would
     // otherwise race a stale entry and bounce straight back to the caller.
-    if kind == OpenKind::File {
-        registry.remove_file(&label, &path);
-    }
-    open_with_target(&app, &registry, kind, path, &label, OpenTarget::NewWindow);
+    registry.remove_file(&label, &path);
+    open_with_target(
+        &app,
+        &registry,
+        OpenKind::File,
+        path,
+        &label,
+        OpenTarget::NewWindow,
+    );
     Ok(())
 }
 
-/// Whether another window already shows `path`, focusing it when so.
+/// Whether another window already shows `path`, raising it when `focus` is set.
 ///
 /// A note lives in one window: two windows over one file would each hold their
 /// own edit buffer and autosave chain, and the later write would silently
 /// discard the other's edits. Every in-window open consults this before loading
-/// a second copy.
+/// a second copy. An implicit open passes `focus: false`, so a workspace
+/// auto-loading its remembered file cannot yank the user to another window.
 #[tauri::command]
-pub fn focus_window_with_file<R: Runtime>(
+pub fn window_showing_file<R: Runtime>(
     window: tauri::WebviewWindow<R>,
     app: AppHandle<R>,
     registry: State<'_, WindowRegistry>,
     path: String,
+    focus: bool,
 ) -> bool {
     let label = window.label().to_string();
     match registry.snapshot().window_with_file(&path, &label) {
         Some(other) => {
-            focus_window(&app, other);
+            if focus {
+                focus_window(&app, other);
+            }
             true
         }
         None => false,
@@ -309,7 +315,6 @@ mod tests {
             app.handle().clone(),
             app.state::<WindowRegistry>(),
             app.state::<GrantRegistry>(),
-            "file".to_string(),
             "/nowhere/secret.md".to_string(),
         );
 
@@ -324,17 +329,21 @@ mod tests {
         let dir = unique_tmp("granted");
         let file = dir.join("note.md");
         std::fs::write(&file, "hello").unwrap();
+        let path = file.to_string_lossy().to_string();
 
         let (app, window) = app_with_registries();
         app.state::<GrantRegistry>().grant_workspace(&dir).unwrap();
+        // Another window already holds it, so routing takes the Focus branch
+        // rather than starting a real window build this test never joins.
+        app.state::<WindowRegistry>()
+            .set_files("w1", vec![path.clone()]);
 
         let result = open_in_new_window(
             window,
             app.handle().clone(),
             app.state::<WindowRegistry>(),
             app.state::<GrantRegistry>(),
-            "file".to_string(),
-            file.to_string_lossy().to_string(),
+            path,
         );
         assert!(result.is_ok());
 
@@ -357,42 +366,45 @@ mod tests {
     }
 
     #[test]
-    fn focus_window_with_file_reports_a_note_held_by_another_window() {
+    fn window_showing_file_reports_a_note_held_by_another_window() {
         let (app, window) = app_with_registries();
         app.state::<WindowRegistry>()
             .set_files("w1", vec!["/a/note.md".to_string()]);
 
-        assert!(focus_window_with_file(
+        assert!(window_showing_file(
             window,
             app.handle().clone(),
             app.state::<WindowRegistry>(),
             "/a/note.md".to_string(),
+            true,
         ));
     }
 
     #[test]
-    fn focus_window_with_file_ignores_the_calling_window_s_own_tabs() {
+    fn window_showing_file_ignores_the_calling_window_s_own_tabs() {
         // Re-opening a note you already have is a tab activation, not a bounce.
         let (app, window) = app_with_registries();
         app.state::<WindowRegistry>()
             .set_files("main", vec!["/a/note.md".to_string()]);
 
-        assert!(!focus_window_with_file(
+        assert!(!window_showing_file(
             window,
             app.handle().clone(),
             app.state::<WindowRegistry>(),
             "/a/note.md".to_string(),
+            true,
         ));
     }
 
     #[test]
-    fn focus_window_with_file_is_false_for_a_note_open_nowhere() {
+    fn window_showing_file_is_false_for_a_note_open_nowhere() {
         let (app, window) = app_with_registries();
-        assert!(!focus_window_with_file(
+        assert!(!window_showing_file(
             window,
             app.handle().clone(),
             app.state::<WindowRegistry>(),
             "/a/note.md".to_string(),
+            true,
         ));
     }
 
@@ -405,23 +417,29 @@ mod tests {
 
         let (app, window) = app_with_registries();
         app.state::<GrantRegistry>().grant_workspace(&dir).unwrap();
-        app.state::<WindowRegistry>()
-            .set_files("main", vec![path.clone()]);
+        let registry = app.state::<WindowRegistry>();
+        registry.set_files("main", vec![path.clone()]);
+        // Held elsewhere too, so this routes to Focus; the release under test
+        // happens before routing either way.
+        registry.set_files("w1", vec![path.clone()]);
 
         open_in_new_window(
             window,
             app.handle().clone(),
             app.state::<WindowRegistry>(),
             app.state::<GrantRegistry>(),
-            "file".to_string(),
             path.clone(),
         )
         .unwrap();
 
         // "main" no longer claims it, so the spawned window is not bounced back.
-        let registry = app.state::<WindowRegistry>();
-        let snapshot = registry.snapshot();
-        assert_eq!(snapshot.window_with_file(&path, "w1"), None);
+        let files = registry.snapshot().files;
+        let main_files = files
+            .iter()
+            .find(|(label, _)| label == "main")
+            .map(|(_, paths)| paths.clone())
+            .unwrap_or_default();
+        assert!(!main_files.contains(&path));
 
         let _ = std::fs::remove_dir_all(&dir);
     }

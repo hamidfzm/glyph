@@ -33,9 +33,9 @@ describe("useTabs opening documents", () => {
   it("raises the window that already holds the note instead of opening a copy", async () => {
     // One note, one window: a second buffer over the same path would give it a
     // second autosave chain, and the later write would drop the other's edits.
-    const focus = vi.fn(async () => true);
+    const elsewhere = vi.fn(async () => true);
     vi.mocked(invoke).mockImplementation(
-      makeInvoker({ focus_window_with_file: focus }) as typeof invoke,
+      makeInvoker({ window_showing_file: elsewhere }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
@@ -44,7 +44,12 @@ describe("useTabs opening documents", () => {
       await result.current.openFile("/p/elsewhere.md");
     });
 
-    expect(focus).toHaveBeenCalled();
+    // An explicit open raises the holder, which is what the user asked for.
+    expect(elsewhere).toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalledWith("window_showing_file", {
+      path: "/p/elsewhere.md",
+      focus: true,
+    });
     expect(result.current.tabs).toHaveLength(0);
   });
 
@@ -53,7 +58,7 @@ describe("useTabs opening documents", () => {
     // refusing to open anything.
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        focus_window_with_file: async () => {
+        window_showing_file: async () => {
           throw new Error("no registry");
         },
       }) as typeof invoke,
@@ -65,6 +70,46 @@ describe("useTabs opening documents", () => {
       await result.current.openFile("/p/new.md");
     });
 
+    expect(result.current.tabs).toHaveLength(1);
+  });
+
+  it("does not raise another window for an implicit open", async () => {
+    // A workspace auto-loading its remembered file, or history replaying an
+    // entry, must not yank the user to a window they did not ask for.
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ window_showing_file: async () => true }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    let opened: boolean | undefined;
+    await act(async () => {
+      opened = await result.current.openFile("/p/elsewhere.md", { implicit: true });
+    });
+
+    expect(opened).toBe(false);
+    expect(invoke).toHaveBeenCalledWith("window_showing_file", {
+      path: "/p/elsewhere.md",
+      focus: false,
+    });
+    expect(result.current.tabs).toHaveLength(0);
+  });
+
+  it("reports that the file opened here", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    let opened: boolean | undefined;
+    await act(async () => {
+      opened = await result.current.openFile("/p/new.md");
+    });
+    expect(opened).toBe(true);
+
+    // Re-opening activates the existing tab, which still counts as shown here.
+    await act(async () => {
+      opened = await result.current.openFile("/p/new.md");
+    });
+    expect(opened).toBe(true);
     expect(result.current.tabs).toHaveLength(1);
   });
 
