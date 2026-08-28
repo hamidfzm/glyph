@@ -130,13 +130,15 @@ describe("FileTree drag-and-drop move", () => {
   });
 
   it("does not offer the root zone in the gaps between rows", () => {
-    renderTree();
+    const { props } = renderTree();
     const dt = dataTransfer();
     fireEvent.dragStart(row("/root/subdir/deep.md"), { dataTransfer: dt });
     // Gaps hit-test the list, not the container; the root guard ignores them.
     const list = rootArea().querySelector("ul") as HTMLElement;
     fireEvent.dragOver(list, { dataTransfer: dt });
     expect(rootArea().getAttribute("data-drop-target")).toBeNull();
+    fireEvent.drop(list, { dataTransfer: dt });
+    expect(props.onMoveEntry).not.toHaveBeenCalled();
   });
 
   it("ignores a foreign drag without the tree payload type", () => {

@@ -75,6 +75,9 @@ describe("useFileTreeDragMove", () => {
     expect(event.preventDefault).toHaveBeenCalled();
     expect(event.dataTransfer.dropEffect).toBe("move");
     expect(result.current.dropTarget).toBe("/root/sub");
+    // dragover fires on every pointer move; the target stays stable.
+    over("/root/sub");
+    expect(result.current.dropTarget).toBe("/root/sub");
   });
 
   it("rejects the dragged entry itself, its descendants, and its current parent", () => {
