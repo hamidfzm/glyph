@@ -1,6 +1,12 @@
 import type { DragEvent } from "react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isPathInside, parentDir } from "@/lib/paths";
+
+/** Payload type marking an in-tree drag, so foreign HTML5 drags (links or
+ *  images dragged out of the rendered document) can never match a drop. */
+export const TREE_DRAG_TYPE = "application/x-glyph-tree-path";
+
+const isTreeDrag = (event: DragEvent) => event.dataTransfer.types.includes(TREE_DRAG_TYPE);
 
 /** Drag-source handlers for any tree row. */
 export interface TreeDragHandlers {
@@ -12,7 +18,7 @@ export interface TreeDragHandlers {
 /** Drop-target handlers for a folder row or the root area. */
 export interface TreeDropHandlers {
   onDragOver: (event: DragEvent) => void;
-  onDragLeave: () => void;
+  onDragLeave: (event: DragEvent) => void;
   onDrop: (event: DragEvent) => void;
 }
 
@@ -42,6 +48,19 @@ export function useFileTreeDragMove(
   const dragged = useRef<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
 
+  const reset = useCallback(() => {
+    dragged.current = null;
+    setDropTarget(null);
+  }, []);
+
+  useEffect(
+    () => () => {
+      window.removeEventListener("dragend", reset);
+      window.removeEventListener("drop", reset);
+    },
+    [reset],
+  );
+
   // A drop into `dir` is rejected when it targets the dragged entry itself or
   // anywhere inside it, or the directory the entry already lives in (a no-op).
   const canDrop = useCallback(
@@ -59,15 +78,19 @@ export function useFileTreeDragMove(
       onDragStart: (event) => {
         dragged.current = path;
         event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData(TREE_DRAG_TYPE, path);
         // WebKit refuses to start a drag with an empty payload.
         event.dataTransfer.setData("text/plain", path);
+        // Chromium skips dragend when the drag source unmounts mid-drag (a
+        // watcher refresh can delete the dragged row); window-level fallbacks
+        // still reset then. Bubble phase, so row handlers run first; the
+        // stable `reset` identity dedupes repeated registration.
+        window.addEventListener("dragend", reset, { once: true });
+        window.addEventListener("drop", reset, { once: true });
       },
-      onDragEnd: () => {
-        dragged.current = null;
-        setDropTarget(null);
-      },
+      onDragEnd: reset,
     }),
-    [],
+    [reset],
   );
 
   const dropHandlersFor = useCallback(
@@ -75,7 +98,7 @@ export function useFileTreeDragMove(
       onDragOver: (event) => {
         // Rows sit inside the root drop zone; only the innermost target counts.
         event.stopPropagation();
-        if (!canDrop(dir)) return;
+        if (!isTreeDrag(event) || !canDrop(dir)) return;
         // preventDefault marks a valid target; without it drop never fires.
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
@@ -83,14 +106,17 @@ export function useFileTreeDragMove(
         // target is unchanged so React can bail out of re-rendering.
         setDropTarget((prev) => (prev === dir ? prev : dir));
       },
-      onDragLeave: () => {
+      onDragLeave: (event) => {
+        // Entering the row's own icon/label children fires dragleave too;
+        // only a genuine exit clears the highlight.
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
         setDropTarget((prev) => (prev === dir ? null : prev));
       },
       onDrop: (event) => {
         event.preventDefault();
         event.stopPropagation();
         const from = dragged.current;
-        const valid = canDrop(dir);
+        const valid = isTreeDrag(event) && canDrop(dir);
         dragged.current = null;
         setDropTarget(null);
         if (from && valid) onMoveEntry(from, dir);

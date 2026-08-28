@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { TREE_DRAG_TYPE } from "@/hooks/useFileTreeDragMove";
 import type { DirEntry } from "@/lib/tabs";
 import { FileTree } from "./FileTree";
 
@@ -44,7 +45,12 @@ function renderTree(overrides: Partial<ComponentProps<typeof FileTree>> = {}) {
   return { ...render(<FileTree {...props} />), props };
 }
 
-const dataTransfer = () => ({ setData: vi.fn(), effectAllowed: "", dropEffect: "" });
+const dataTransfer = () => ({
+  setData: vi.fn(),
+  effectAllowed: "",
+  dropEffect: "",
+  types: [TREE_DRAG_TYPE],
+});
 const row = (path: string) => screen.getByTitle(path);
 const rootArea = () => document.querySelector("[data-filetree-root]") as HTMLElement;
 
@@ -120,6 +126,25 @@ describe("FileTree drag-and-drop move", () => {
     fireEvent.dragOver(rootArea(), { dataTransfer: dt });
     expect(rootArea().getAttribute("data-drop-target")).toBeNull();
     fireEvent.drop(rootArea(), { dataTransfer: dt });
+    expect(props.onMoveEntry).not.toHaveBeenCalled();
+  });
+
+  it("does not offer the root zone in the gaps between rows", () => {
+    renderTree();
+    const dt = dataTransfer();
+    fireEvent.dragStart(row("/root/subdir/deep.md"), { dataTransfer: dt });
+    // Gaps hit-test the list, not the container; the root guard ignores them.
+    const list = rootArea().querySelector("ul") as HTMLElement;
+    fireEvent.dragOver(list, { dataTransfer: dt });
+    expect(rootArea().getAttribute("data-drop-target")).toBeNull();
+  });
+
+  it("ignores a foreign drag without the tree payload type", () => {
+    const { props } = renderTree();
+    const foreign = { setData: vi.fn(), effectAllowed: "", dropEffect: "", types: ["text/plain"] };
+    fireEvent.dragOver(row("/root/subdir"), { dataTransfer: foreign });
+    expect(row("/root/subdir").getAttribute("data-drop-target")).toBeNull();
+    fireEvent.drop(row("/root/subdir"), { dataTransfer: foreign });
     expect(props.onMoveEntry).not.toHaveBeenCalled();
   });
 

@@ -217,7 +217,16 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
   };
 
   // The empty area below the entries doubles as the drop target for the
-  // workspace root; rows stopPropagation so only genuinely empty space counts.
+  // workspace root. Rows stopPropagation, but the gaps between them still
+  // bubble up from the list; the target check confines the root affordance
+  // to genuinely empty space so the whole tree doesn't flash mid-crossing.
+  const rootDrop = dnd.dropHandlersFor(root);
+  const handleRootDragOver = (e: React.DragEvent) => {
+    if (e.target === e.currentTarget) rootDrop.onDragOver(e);
+  };
+  const handleRootDrop = (e: React.DragEvent) => {
+    if (e.target === e.currentTarget) rootDrop.onDrop(e);
+  };
   const isRootDropTarget = dnd.dropTarget === root;
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: container only suppresses the native menu for empty-area right-clicks and accepts row drops at the root; keyboard users reach both via the menu on focusable rows
@@ -228,7 +237,9 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
         isRootDropTarget ? "bg-[var(--color-surface-tertiary)]" : ""
       }`}
       onContextMenu={handleRootContextMenu}
-      {...dnd.dropHandlersFor(root)}
+      onDragOver={handleRootDragOver}
+      onDragLeave={rootDrop.onDragLeave}
+      onDrop={handleRootDrop}
     >
       <ul className="space-y-0.5">
         {entries.map((entry) => (

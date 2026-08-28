@@ -1,43 +1,60 @@
 import { act, renderHook } from "@testing-library/react";
 import type { DragEvent } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { blockDropHandlers, useFileTreeDragMove } from "./useFileTreeDragMove";
+import { blockDropHandlers, TREE_DRAG_TYPE, useFileTreeDragMove } from "./useFileTreeDragMove";
 
-const dragEvent = () =>
+interface MockDragEvent {
+  preventDefault: ReturnType<typeof vi.fn>;
+  stopPropagation: ReturnType<typeof vi.fn>;
+  currentTarget: { contains: (node: unknown) => boolean };
+  relatedTarget: unknown;
+  dataTransfer: {
+    setData: ReturnType<typeof vi.fn>;
+    effectAllowed: string;
+    dropEffect: string;
+    types: string[];
+  };
+}
+
+const dragEvent = (overrides: Partial<MockDragEvent> = {}) =>
   ({
     preventDefault: vi.fn(),
     stopPropagation: vi.fn(),
-    dataTransfer: { setData: vi.fn(), effectAllowed: "", dropEffect: "" },
-  }) as unknown as DragEvent & {
-    preventDefault: ReturnType<typeof vi.fn>;
-    stopPropagation: ReturnType<typeof vi.fn>;
-    dataTransfer: { setData: ReturnType<typeof vi.fn>; effectAllowed: string; dropEffect: string };
-  };
+    currentTarget: { contains: () => false },
+    relatedTarget: null,
+    dataTransfer: { setData: vi.fn(), effectAllowed: "", dropEffect: "", types: [TREE_DRAG_TYPE] },
+    ...overrides,
+  }) as MockDragEvent & DragEvent;
+
+/** A drag that did not start in the tree: no tree payload type. */
+const foreignEvent = () =>
+  dragEvent({
+    dataTransfer: { setData: vi.fn(), effectAllowed: "", dropEffect: "", types: ["text/plain"] },
+  });
 
 function renderDnd(onMoveEntry = vi.fn()) {
-  const { result } = renderHook(() => useFileTreeDragMove("/root", onMoveEntry));
+  const { result, unmount } = renderHook(() => useFileTreeDragMove("/root", onMoveEntry));
   const start = (path: string) => {
     act(() => {
       result.current.dragHandlersFor(path).onDragStart(dragEvent());
     });
   };
-  const over = (dir: string) => {
-    const event = dragEvent();
+  const over = (dir: string, event = dragEvent()) => {
     act(() => {
       result.current.dropHandlersFor(dir).onDragOver(event);
     });
     return event;
   };
-  const drop = (dir: string) => {
+  const drop = (dir: string, event = dragEvent()) => {
     act(() => {
-      result.current.dropHandlersFor(dir).onDrop(dragEvent());
+      result.current.dropHandlersFor(dir).onDrop(event);
     });
   };
-  return { result, onMoveEntry, start, over, drop };
+  return { result, unmount, onMoveEntry, start, over, drop };
 }
 
 describe("useFileTreeDragMove", () => {
-  it("marks rows draggable and sets a drag payload (WebKit needs one)", () => {
+  it("marks rows draggable and sets the tree and plain-text payloads", () => {
     const { result } = renderDnd();
     const handlers = result.current.dragHandlersFor("/root/a.md");
     expect(handlers.draggable).toBe(true);
@@ -46,6 +63,8 @@ describe("useFileTreeDragMove", () => {
       handlers.onDragStart(event);
     });
     expect(event.dataTransfer.effectAllowed).toBe("move");
+    expect(event.dataTransfer.setData).toHaveBeenCalledWith(TREE_DRAG_TYPE, "/root/a.md");
+    // WebKit refuses to start a drag with an empty text payload.
     expect(event.dataTransfer.setData).toHaveBeenCalledWith("text/plain", "/root/a.md");
   });
 
@@ -73,6 +92,18 @@ describe("useFileTreeDragMove", () => {
     const event = over("/root/sub");
     expect(event.preventDefault).not.toHaveBeenCalled();
     expect(result.current.dropTarget).toBeNull();
+  });
+
+  it("ignores foreign drags even when a stale tree drag is pending", () => {
+    const { result, onMoveEntry, start, over, drop } = renderDnd();
+    // A stale ref survives when dragend never fired (source row unmounted);
+    // a later link/image drag from the document must not consume it.
+    start("/root/a.md");
+    const event = over("/root/sub", foreignEvent());
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(result.current.dropTarget).toBeNull();
+    drop("/root/sub", foreignEvent());
+    expect(onMoveEntry).not.toHaveBeenCalled();
   });
 
   it("commits a valid drop through onMoveEntry exactly once and resets", () => {
@@ -107,16 +138,41 @@ describe("useFileTreeDragMove", () => {
     expect(onMoveEntry).not.toHaveBeenCalled();
   });
 
+  it("resets via the window fallback when dragend never reaches the row", () => {
+    const { result, onMoveEntry, start, over, drop } = renderDnd();
+    start("/root/a.md");
+    over("/root/sub");
+    // Chromium skips the row's dragend when the source unmounts mid-drag.
+    act(() => {
+      window.dispatchEvent(new Event("dragend"));
+    });
+    expect(result.current.dropTarget).toBeNull();
+    drop("/root/sub");
+    expect(onMoveEntry).not.toHaveBeenCalled();
+  });
+
+  it("keeps the highlight when dragleave only crosses into the row's children", () => {
+    const { result, start, over } = renderDnd();
+    start("/root/a.md");
+    over("/root/sub");
+    act(() => {
+      result.current
+        .dropHandlersFor("/root/sub")
+        .onDragLeave(dragEvent({ currentTarget: { contains: () => true } }));
+    });
+    expect(result.current.dropTarget).toBe("/root/sub");
+  });
+
   it("clears the highlight on dragleave only for the hovered target", () => {
     const { result, start, over } = renderDnd();
     start("/root/a.md");
     over("/root/sub");
     act(() => {
-      result.current.dropHandlersFor("/root/other").onDragLeave();
+      result.current.dropHandlersFor("/root/other").onDragLeave(dragEvent());
     });
     expect(result.current.dropTarget).toBe("/root/sub");
     act(() => {
-      result.current.dropHandlersFor("/root/sub").onDragLeave();
+      result.current.dropHandlersFor("/root/sub").onDragLeave(dragEvent());
     });
     expect(result.current.dropTarget).toBeNull();
   });
@@ -126,5 +182,16 @@ describe("useFileTreeDragMove", () => {
     blockDropHandlers.onDragOver(event);
     expect(event.stopPropagation).toHaveBeenCalled();
     expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("drops its window fallbacks on unmount", () => {
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    const { start, unmount } = renderDnd();
+    start("/root/a.md");
+    unmount();
+    const removed = removeSpy.mock.calls.map(([type]) => type);
+    expect(removed).toContain("dragend");
+    expect(removed).toContain("drop");
+    removeSpy.mockRestore();
   });
 });
