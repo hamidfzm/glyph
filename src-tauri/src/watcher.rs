@@ -661,6 +661,21 @@ mod tests {
     }
 
     #[test]
+    fn drop_watches_tolerates_a_poisoned_lock() {
+        // Teardown runs on a window-destroyed event with nowhere to report an
+        // error, so a poisoned lock leaves the watches in place rather than
+        // panicking the event handler.
+        let app = mock_app_with_state();
+        let watchers = Arc::clone(&app.state::<FileWatcherState>().0);
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = watchers.lock().unwrap();
+            panic!("poison");
+        }));
+
+        drop_watches(app.handle(), &["/a/note.md".to_string()]);
+    }
+
+    #[test]
     fn drop_watches_without_managed_state_is_a_no_op() {
         // A window can be destroyed during shutdown, after state teardown.
         let app = tauri::test::mock_app();
