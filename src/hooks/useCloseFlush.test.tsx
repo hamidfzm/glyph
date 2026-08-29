@@ -22,30 +22,34 @@ function settingsWrapper(flushSettings: () => Promise<boolean>) {
 }
 
 describe("useCloseFlush", () => {
-  it("flushes settings before documents and returns the document result", async () => {
+  it("flushes settings, then the session, then documents, returning the document result", async () => {
     const order: string[] = [];
     const flushSettings = vi.fn(async () => {
       order.push("settings");
       return true;
+    });
+    const flushSession = vi.fn(async () => {
+      order.push("session");
     });
     const flushDocuments = vi.fn(async () => {
       order.push("documents");
       return false;
     });
 
-    const { result } = renderHook(() => useCloseFlush(flushDocuments), {
+    const { result } = renderHook(() => useCloseFlush(flushDocuments, flushSession), {
       wrapper: settingsWrapper(flushSettings),
     });
 
     await expect(result.current()).resolves.toBe(false);
-    expect(order).toEqual(["settings", "documents"]);
+    expect(order).toEqual(["settings", "session", "documents"]);
   });
 
   it("does not block the close when the settings flush fails", async () => {
     const flushSettings = vi.fn(async () => false);
+    const flushSession = vi.fn(async () => {});
     const flushDocuments = vi.fn(async () => true);
 
-    const { result } = renderHook(() => useCloseFlush(flushDocuments), {
+    const { result } = renderHook(() => useCloseFlush(flushDocuments, flushSession), {
       wrapper: settingsWrapper(flushSettings),
     });
 

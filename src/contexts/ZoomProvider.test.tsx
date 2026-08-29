@@ -1,5 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { registerSessionZoomBridge, sessionZoomBridge } from "@/lib/sessionUiBridge";
 import { useNoteZoomMap, useZoomApi } from "./ZoomContext";
 import { ZoomProvider } from "./ZoomProvider";
 
@@ -12,6 +13,9 @@ function Harness() {
       <span data-testid="value">{map.a ?? "unset"}</span>
       <button type="button" onClick={() => api.setNoteZoom("a", (z) => z + 0.5)}>
         bump
+      </button>
+      <button type="button" onClick={() => api.setNoteZoom("a", (z) => z)}>
+        noop
       </button>
       <button
         type="button"
@@ -65,5 +69,31 @@ describe("ZoomProvider", () => {
     // Should not throw and should not change the value.
     act(() => screen.getByText("dispatch").click());
     expect(screen.getByTestId("value").textContent).toBe("unset");
+  });
+
+  it("keeps the map identity when an update returns the current value", () => {
+    renderHarness();
+    act(() => screen.getByText("bump").click());
+    act(() => screen.getByText("noop").click());
+    expect(screen.getByTestId("value").textContent).toBe("1.5");
+  });
+
+  it("exposes the live map and a seeder through the session bridge", () => {
+    const { unmount } = renderHarness();
+    act(() => screen.getByText("bump").click());
+    expect(sessionZoomBridge()?.zoomByTabId()).toEqual({ a: 1.5 });
+
+    // Seeding merges restored multipliers without dropping live ones.
+    act(() => sessionZoomBridge()?.seedZoom({ b: 2 }));
+    expect(sessionZoomBridge()?.zoomByTabId()).toEqual({ a: 1.5, b: 2 });
+    expect(screen.getByTestId("value").textContent).toBe("1.5");
+
+    // A replacement registered before this provider unmounts (a remount)
+    // must survive the old provider's cleanup.
+    const replacement = { zoomByTabId: () => ({}), seedZoom: () => {} };
+    registerSessionZoomBridge(replacement);
+    unmount();
+    expect(sessionZoomBridge()).toBe(replacement);
+    registerSessionZoomBridge(null);
   });
 });

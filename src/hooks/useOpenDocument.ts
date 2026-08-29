@@ -44,8 +44,17 @@ export function useOpenDocument({
   const { t } = useTranslation("workspace");
 
   // Open a file as a document tab; if it's already open, activate its tab.
+  // Resolves to the tab's id, or undefined when nothing opened. Session
+  // restore passes `open`: `initialScrollTop` births the tab already scrolled
+  // (the viewer only reads the position once, on mount), `stillWanted` lets a
+  // restore abandoned mid-flight drop the tab instead of adding it to
+  // whatever workspace replaced it, and `silent` keeps a restored tab out of
+  // Recent Files and the workspace's remembered last file.
   const openFile = useCallback(
-    async (path: string) => {
+    async (
+      path: string,
+      open?: { initialScrollTop?: number; stillWanted?: () => boolean; silent?: boolean },
+    ): Promise<string | undefined> => {
       // Defensive gate: never load an unsupported file. Glyph rendering treats
       // content as markdown (HTML included via the sanitizer), so opening a
       // random `.txt` / `.html` / etc. is a code-injection vector. Notebooks
@@ -67,7 +76,7 @@ export function useOpenDocument({
       );
       if (existing) {
         setState((prev) => withActiveTab(prev, existing.id));
-        return;
+        return existing.id;
       }
 
       const id = generateTabId();
@@ -92,6 +101,13 @@ export function useOpenDocument({
             await invoke("watch_file", { path });
           }
         }
+        // The caller lost interest while the content loaded (the workspace
+        // being restored was replaced): drop the tab and its fresh watch
+        // (unwatching a never-watched image is a harmless backend no-op).
+        if (open?.stillWanted && !open.stillWanted()) {
+          invoke("unwatch_file", { path }).catch(() => {});
+          return;
+        }
         // Notebooks, canvases, images, and D2 files are read-only; open straight
         // into the viewer regardless of the user's default editor mode. (`.d2`
         // content is fence-wrapped for rendering, so an editor would write the
@@ -103,24 +119,33 @@ export function useOpenDocument({
         const newTab: FileTab = {
           id,
           kind: "file",
-          file: { ...makeFileState(path, mode), content, metadata },
+          file: {
+            ...makeFileState(path, mode),
+            content,
+            metadata,
+            scrollTop: open?.initialScrollTop ?? 0,
+          },
         };
         setState((prev) => {
           const match = prev.tabs.find((tab) => tab.kind === "file" && tab.file.path === path);
           if (match) return withActiveTab(prev, match.id);
           return withActiveTab({ ...prev, tabs: [...prev.tabs, newTab] }, id);
         });
-        addToRecent(path);
-        // Remember workspace notes in `.glyph/state.json` (git-ignored) so the
-        // workspace re-opens onto them next time. Fire-and-forget: a failure
-        // here is never fatal to opening the file.
-        const root = workspaceRef.current?.root;
-        if (root && isPathInside(path, root)) {
-          setWorkspaceLastFile(root, path).catch(() => {});
+        if (!open?.silent) {
+          addToRecent(path);
+          // Remember workspace notes in `.glyph/state.json` (git-ignored) so
+          // the workspace re-opens onto them next time. Fire-and-forget: a
+          // failure here is never fatal to opening the file.
+          const root = workspaceRef.current?.root;
+          if (root && isPathInside(path, root)) {
+            setWorkspaceLastFile(root, path).catch(() => {});
+          }
         }
+        return id;
       } catch (err) {
         console.error("Failed to open file:", err);
       }
+      return undefined;
     },
     [addToRecent, getDefaultEditorMode, setState, stateRef, withActiveTab, workspaceRef],
   );

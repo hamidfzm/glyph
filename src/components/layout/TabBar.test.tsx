@@ -96,6 +96,7 @@ function buildContext(opts: RenderOpts): TabsContextValue {
     updateEditContent: vi.fn(),
     saveDocument: vi.fn(),
     flushForClose: vi.fn(),
+    flushSessionForClose: vi.fn(async () => {}),
     toggleTask: vi.fn(),
     saveScrollPosition: vi.fn(),
     openFileDialog: opts.openFileDialog ?? vi.fn(),

@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getCliExportRequest, resetCliExportRequestCache } from "@/lib/cliExport";
+import { getWorkspaceSession } from "@/lib/workspaceSession";
 import { defaultOptions, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
@@ -204,7 +205,7 @@ describe("useTabs initialization", () => {
 });
 
 describe("useTabs persistence", () => {
-  it("persists the workspace as a leading folder entry without a filePath key", async () => {
+  it("persists only the workspace pointer and loose tabs to the global key", async () => {
     const onSettingsChange = vi.fn();
     const { result } = renderHook(() => useTabs(defaultOptions({ onSettingsChange })));
     await waitFor(() => expect(result.current.initializing).toBe(false));
@@ -218,21 +219,29 @@ describe("useTabs persistence", () => {
     await act(async () => {
       await result.current.openFile("/p/ws/note.md");
     });
+    await act(async () => {
+      await result.current.openFile("/elsewhere/loose.md");
+    });
 
     await waitFor(() => {
       const calls = onSettingsChange.mock.calls.filter((c) => c[0] === "behavior.openTabs");
       const last = calls[calls.length - 1]?.[1];
-      // Exact shapes: the workspace entry carries no filePath, and document
-      // tabs follow in strip order.
+      // Exact shapes: a bare pointer for the workspace (its tabs and expanded
+      // dirs live in the per-workspace snapshot), then loose files only.
       expect(last).toEqual([
-        { kind: "folder", path: "/p/ws", expanded: ["/p/ws/sub"] },
-        { kind: "file", path: "/p/ws/note.md" },
+        { kind: "folder", path: "/p/ws" },
+        { kind: "file", path: "/elsewhere/loose.md" },
       ]);
     });
     const activeCalls = onSettingsChange.mock.calls.filter(
       (c) => c[0] === "behavior.activeTabPath",
     );
-    expect(activeCalls[activeCalls.length - 1]?.[1]).toBe("/p/ws/note.md");
+    expect(activeCalls[activeCalls.length - 1]?.[1]).toBe("/elsewhere/loose.md");
+
+    // The workspace's own snapshot holds the internal tab and expansion state.
+    const session = await getWorkspaceSession("/p/ws");
+    expect(session?.tabs).toEqual([{ kind: "file", path: "/p/ws/note.md" }]);
+    expect(session?.expanded).toEqual(["/p/ws/sub"]);
   });
 
   it("persists an empty list and an empty active path when nothing is open", async () => {

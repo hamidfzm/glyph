@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCanSplit } from "@/hooks/useMediaQuery";
+import {
+  registerSessionSidebarBridge,
+  type SessionSidebarBridge,
+  sessionSidebarBridge,
+} from "@/lib/sessionUiBridge";
 import { AI_PANEL_WIDTH_DEFAULT, type Settings, SIDEBAR_WIDTH_DEFAULT } from "@/lib/settings";
 
 interface UseSidebarLayoutOptions {
@@ -32,6 +37,36 @@ export function useSidebarLayout({
   useEffect(() => {
     setOutlineVisible(outlineVisibleSetting);
   }, [outlineVisibleSetting]);
+
+  // The workspace session snapshot captures and restores the desktop
+  // visibility through the module bridge (this hook mounts below
+  // TabsProvider). Restore writes the local mirror only, never the global
+  // setting; `null` (a snapshot with no sidebar state) resyncs the mirror to
+  // the setting so the previous workspace's visibility doesn't leak in.
+  const filesVisibleRef = useRef(filesVisible);
+  filesVisibleRef.current = filesVisible;
+  const outlineVisibleRef = useRef(outlineVisible);
+  outlineVisibleRef.current = outlineVisible;
+  const filesVisibleSettingRef = useRef(filesVisibleSetting);
+  filesVisibleSettingRef.current = filesVisibleSetting;
+  const outlineVisibleSettingRef = useRef(outlineVisibleSetting);
+  outlineVisibleSettingRef.current = outlineVisibleSetting;
+  useEffect(() => {
+    const bridge: SessionSidebarBridge = {
+      visibility: () => ({
+        filesSidebarVisible: filesVisibleRef.current,
+        outlineSidebarVisible: outlineVisibleRef.current,
+      }),
+      applyVisibility: (visibility) => {
+        setFilesVisible(visibility?.filesSidebarVisible ?? filesVisibleSettingRef.current);
+        setOutlineVisible(visibility?.outlineSidebarVisible ?? outlineVisibleSettingRef.current);
+      },
+    };
+    registerSessionSidebarBridge(bridge);
+    return () => {
+      if (sessionSidebarBridge() === bridge) registerSessionSidebarBridge(null);
+    };
+  }, []);
 
   // The settings write must stay OUT of the setState updater: React runs
   // updaters during render (and re-runs them if the render restarts), so a

@@ -31,7 +31,7 @@ function setup(activeTab: Tab | null, initial: Omit<Props, "activeTab"> = {}) {
   const openFile = vi.fn(() => Promise.resolve());
   const openGraph = vi.fn();
   const scrolls = new Map<string, number>();
-  const getScrollPosition = (id: string) => scrolls.get(id) ?? 0;
+  const getScrollPosition = (id: string) => scrolls.get(id);
   const hook = renderHook(
     ({ activeTab, initializing = false, workspaceRoot = "/notes" }: Props) =>
       useNavigationHistory({
@@ -201,6 +201,17 @@ describe("useNavigationHistory", () => {
 
     await h.forward();
     expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  });
+
+  it("a heading jump from an unscrolled document records a top-of-page origin", async () => {
+    const { scroller } = mountDocument();
+    const h = setup(tabA);
+    act(() => {
+      scrollToHeading("intro");
+    });
+
+    await h.back();
+    expect(scroller.scrollTop).toBe(0);
   });
 
   it("does not record scrolling by hand", async () => {

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getWorkspaceSession } from "@/lib/workspaceSession";
 import {
   defaultOptions,
   fileScan,
@@ -300,10 +301,12 @@ describe("useTabs graph tabs", () => {
     await waitFor(() => {
       const calls = onSettingsChange.mock.calls.filter((c) => c[0] === "behavior.openTabs");
       const last = calls[calls.length - 1]?.[1];
-      expect(last).toEqual([
-        expect.objectContaining({ kind: "folder", path: "/p/ws" }),
-        { kind: "graph", path: "/p/ws" },
-      ]);
+      // The global key keeps only the pointer; the graph tab is snapshot state.
+      expect(last).toEqual([expect.objectContaining({ kind: "folder", path: "/p/ws" })]);
+    });
+    await waitFor(async () => {
+      const session = await getWorkspaceSession("/p/ws");
+      expect(session?.tabs).toContainEqual({ kind: "graph", path: "/p/ws" });
     });
 
     // Restore from that persisted state: workspace first, then its graph tab.

@@ -2,16 +2,22 @@ import { invoke } from "@tauri-apps/api/core";
 import { type Dispatch, type RefObject, type SetStateAction, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
+import type { WorkspaceSessionApi } from "@/hooks/useWorkspaceSession";
+import { isCliExportProcess } from "@/lib/cliExport";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { isPathInside } from "@/lib/paths";
 import { pickFolder, pickNewWorkspace } from "@/lib/pickers";
 import { removeTabs, type TabsState, type Workspace } from "@/lib/tabs";
 import { getWorkspaceLastFile, resolveWorkspace, type WorkspaceResolution } from "@/lib/workspace";
+import {
+  beginSessionRestore,
+  endSessionRestore,
+  getWorkspaceSession,
+  isSessionRestoring,
+} from "@/lib/workspaceSession";
 
 export interface OpenFolderOptions {
-  expanded?: string[];
   silent?: boolean;
-  autoLoad?: boolean;
 }
 
 interface UseWorkspaceLifecycleOptions {
@@ -24,10 +30,13 @@ interface UseWorkspaceLifecycleOptions {
   clearIndexes: () => void;
   resetStatus: () => void;
   flushForClose: (ids?: Iterable<string>) => Promise<boolean>;
-  openFile: (path: string) => Promise<void>;
+  openFile: (path: string) => Promise<unknown>;
   forgetScroll: (id: string) => void;
   forgetHistory: (id: string) => void;
   onWorkspaceNotice: (notice: WorkspaceNotice, options?: { persistent?: boolean }) => void;
+  /** Session capture/restore; a ref because the session hook mounts after this
+   *  one (it needs `initializing`, which needs `openFolder`). */
+  sessionRef: RefObject<WorkspaceSessionApi | null>;
 }
 
 /**
@@ -49,6 +58,7 @@ export function useWorkspaceLifecycle({
   forgetScroll,
   forgetHistory,
   onWorkspaceNotice,
+  sessionRef,
 }: UseWorkspaceLifecycleOptions) {
   const { t } = useTranslation("workspace");
   const onWorkspaceNoticeRef = useRef(onWorkspaceNotice);
@@ -97,11 +107,29 @@ export function useWorkspaceLifecycle({
     if (!ws) return;
     // Protect every dirty document in the workspace before tearing it down.
     if (!(await flushForClose(tabIdsInside(ws.root)))) return;
-    invoke("unwatch_directory", { path: ws.root }).catch(() => {});
-    closeWorkspaceTabs(ws.root);
-    clearTree();
-    clearIndexes();
-  }, [clearIndexes, clearTree, closeWorkspaceTabs, flushForClose, tabIdsInside, workspaceRef]);
+    // Snapshot before teardown (INV-4), unless this close interrupts an
+    // in-flight restore whose stored snapshot is the good copy (INV-3). Then
+    // suppress the reactive persist while the strip churns so the emptied
+    // strip can't overwrite what was captured.
+    if (!isSessionRestoring()) sessionRef.current?.captureSession();
+    beginSessionRestore();
+    try {
+      invoke("unwatch_directory", { path: ws.root }).catch(() => {});
+      closeWorkspaceTabs(ws.root);
+      clearTree();
+      clearIndexes();
+    } finally {
+      endSessionRestore();
+    }
+  }, [
+    clearIndexes,
+    clearTree,
+    closeWorkspaceTabs,
+    flushForClose,
+    sessionRef,
+    tabIdsInside,
+    workspaceRef,
+  ]);
 
   // Create an empty folder and adopt it as a workspace, routing through the
   // same window manager as Open Folder.
@@ -165,7 +193,18 @@ export function useWorkspaceLifecycle({
       }
 
       folderOpenInFlight.current = root;
+      // Interrupting an in-flight open means the outgoing strip is itself a
+      // half-restored workspace; its stored snapshot is the good copy, so the
+      // capture below must be skipped (INV-3: stale results never win).
+      const wasRestoring = isSessionRestoring();
+      let suppressing = false;
       try {
+        // A missing snapshot means "never seen": fall through to auto-open. An
+        // empty one restores exactly no tabs (empty is not absent, INV-2). A
+        // headless export renders one document; restoring a full session there
+        // would open and watch every tab of the user's real workspace.
+        const session = isCliExportProcess() ? null : await getWorkspaceSession(root);
+
         // One workspace per window: switching folders replaces the current
         // one and closes its tabs (loose external files stay). Flush the
         // outgoing workspace's dirty tabs first; a cancelled discard aborts the
@@ -173,6 +212,17 @@ export function useWorkspaceLifecycle({
         const previous = workspaceRef.current;
         if (previous) {
           if (!(await flushForClose(tabIdsInside(previous.root)))) return;
+          // Snapshot the outgoing workspace before its tabs close (INV-4).
+          if (!wasRestoring) sessionRef.current?.captureSession();
+        }
+        // Suppress the reactive snapshot persist from here on: the strip
+        // churns through teardown and restore, and a half-restored strip must
+        // never be written over either workspace's snapshot (INV-3). Not
+        // earlier: while the flush prompt is up nothing churns, and a window
+        // close during the prompt must still capture (INV-4).
+        beginSessionRestore();
+        suppressing = true;
+        if (previous) {
           invoke("unwatch_directory", { path: previous.root }).catch(() => {});
           closeWorkspaceTabs(previous.root);
           resetStatus();
@@ -184,13 +234,20 @@ export function useWorkspaceLifecycle({
           console.error("Failed to watch directory:", err);
         }
 
-        await openTree(root, openOptions?.expanded ?? []);
+        await openTree(root, session?.expanded ?? []);
         const files = await scanWorkspace(root, () => workspaceRef.current?.root === root);
+        // Another folder was adopted while scanning; its open owns the strip now.
+        if (workspaceRef.current?.root !== root) return;
 
-        // Auto-open the workspace's remembered file (or its first note) as a
-        // document tab. Restore passes autoLoad: false because the persisted
-        // tab list re-opens explicit tabs itself.
-        if (openOptions?.autoLoad !== false && files.length > 0) {
+        if (session) {
+          await sessionRef.current?.restoreSession(root, session);
+          // Re-capture right away so entries that failed to reopen (a file
+          // deleted since last session) drop out of the stored snapshot
+          // instead of being retried on every open.
+          if (workspaceRef.current?.root === root) sessionRef.current?.captureSession();
+        } else if (files.length > 0) {
+          // First open on this machine: auto-open the workspace's remembered
+          // file (or its first note) as a document tab.
           const remembered = await getWorkspaceLastFile(root).catch(() => null);
           const target = remembered && files.includes(remembered) ? remembered : files[0];
           if (isMarkdownFile(target)) {
@@ -198,6 +255,7 @@ export function useWorkspaceLifecycle({
           }
         }
       } finally {
+        if (suppressing) endSessionRestore();
         folderOpenInFlight.current = null;
       }
     },
@@ -208,6 +266,7 @@ export function useWorkspaceLifecycle({
       openTree,
       resetStatus,
       scanWorkspace,
+      sessionRef,
       tabIdsInside,
       workspaceRef,
     ],

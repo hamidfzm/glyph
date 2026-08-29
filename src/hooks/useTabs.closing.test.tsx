@@ -116,7 +116,7 @@ describe("useTabs close coordinator", () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     await act(async () => {
-      await result.current.openFolder("/ws", { autoLoad: false });
+      await result.current.openFolder("/ws");
     });
     const id = await openDirty(result, "/ws/a.md", "WS");
 
@@ -138,7 +138,7 @@ describe("useTabs close coordinator", () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     await act(async () => {
-      await result.current.openFolder("/ws", { autoLoad: false });
+      await result.current.openFolder("/ws");
     });
     const id = await openDirty(result, "/ws/a.md");
 
@@ -158,12 +158,12 @@ describe("useTabs close coordinator", () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     await act(async () => {
-      await result.current.openFolder("/ws1", { autoLoad: false });
+      await result.current.openFolder("/ws1");
     });
     await openDirty(result, "/ws1/a.md", "R");
 
     await act(async () => {
-      await result.current.openFolder("/ws2", { autoLoad: false });
+      await result.current.openFolder("/ws2");
     });
 
     expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/ws1/a.md", content: "R" });
@@ -179,12 +179,12 @@ describe("useTabs close coordinator", () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     await act(async () => {
-      await result.current.openFolder("/ws1", { autoLoad: false });
+      await result.current.openFolder("/ws1");
     });
     await openDirty(result, "/ws1/a.md");
 
     await act(async () => {
-      await result.current.openFolder("/ws2", { autoLoad: false });
+      await result.current.openFolder("/ws2");
     });
 
     // The switch was aborted: the original workspace is still open.
@@ -462,12 +462,12 @@ describe("useTabs close coordinator", () => {
     );
     await ready(result);
     await act(async () => {
-      await result.current.openFolder("/ws1", { autoLoad: false });
+      await result.current.openFolder("/ws1");
     });
     await openDirty(result, "/ws1/a.md");
 
     await act(async () => {
-      await result.current.openFolder("/ws2", { autoLoad: false });
+      await result.current.openFolder("/ws2");
     });
 
     expect(result.current.workspace?.root).toBe("/ws1");

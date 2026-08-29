@@ -12,7 +12,7 @@ interface UseTabEventsParams {
   stateRef: RefObject<TabsState>;
   setState: Dispatch<SetStateAction<TabsState>>;
   workspaceRef: RefObject<Workspace | null>;
-  openFile: (path: string) => Promise<void>;
+  openFile: (path: string) => Promise<unknown>;
   openFolder: (root?: string) => Promise<void>;
   isAutoReloadEnabled: () => boolean;
   isRecentSelfSave: (path: string) => boolean;

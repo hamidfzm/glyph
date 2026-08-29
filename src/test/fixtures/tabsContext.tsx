@@ -50,6 +50,7 @@ export function tabsContextValue(over: Partial<TabsContextValue> = {}): TabsCont
     updateEditContent: vi.fn(),
     saveDocument: vi.fn(),
     flushForClose: vi.fn(),
+    flushSessionForClose: vi.fn(async () => {}),
     toggleTask: vi.fn(),
     saveScrollPosition: vi.fn(),
     openFileDialog: vi.fn(),
