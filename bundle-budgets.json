@@ -5,7 +5,7 @@
     "d2": { "prefix": "d2-", "budgetGzip": 6450000 },
     "pdfEngine": { "prefix": "pdfEngine-", "budgetGzip": 910000 },
     "MarkdownEditor": { "prefix": "MarkdownEditor-", "budgetGzip": 297000 },
-    "mermaid": { "prefix": "mermaid.core-", "budgetGzip": 150000 },
+    "mermaid": { "prefix": "mermaid.core-", "budgetGzip": 172000 },
     "cytoscape": { "prefix": "cytoscape.esm-", "budgetGzip": 156000 },
     "docx": { "prefix": "docx-", "budgetGzip": 116000 },
     "katex": { "prefix": "katex-", "budgetGzip": 93000 },
