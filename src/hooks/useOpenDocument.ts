@@ -103,9 +103,15 @@ export function useOpenDocument({
         }
         // The caller lost interest while the content loaded (the workspace
         // being restored was replaced): drop the tab and its fresh watch
-        // (unwatching a never-watched image is a harmless backend no-op).
+        // (unwatching a never-watched image is a harmless backend no-op). If
+        // the successor already opened the same path, the watch is now that
+        // tab's; the registry is not refcounted, so removing it would kill
+        // the live tab's auto-reload.
         if (open?.stillWanted && !open.stillWanted()) {
-          invoke("unwatch_file", { path }).catch(() => {});
+          const nowOwned = stateRef.current.tabs.some(
+            (tab) => tab.kind === "file" && tab.file.path === path,
+          );
+          if (!nowOwned) invoke("unwatch_file", { path }).catch(() => {});
           return;
         }
         // Notebooks, canvases, images, and D2 files are read-only; open straight

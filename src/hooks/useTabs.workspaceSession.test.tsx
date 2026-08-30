@@ -162,6 +162,8 @@ describe("useTabs per-workspace sessions", () => {
       visibility: () => ({ filesSidebarVisible: true, outlineSidebarVisible: true }),
       applyVisibility,
     });
+    const seedZoom = vi.fn();
+    registerSessionZoomBridge({ zoomByTabId: () => ({}), seedZoom });
     saveWorkspaceSession("/a", snapshot({ tabs: [] }));
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
@@ -171,6 +173,8 @@ describe("useTabs per-workspace sessions", () => {
     });
 
     expect(applyVisibility).toHaveBeenCalledWith(null);
+    // Nothing to seed: an empty snapshot never calls into the zoom bridge.
+    expect(seedZoom).not.toHaveBeenCalled();
   });
 
   it("a workspace closed with no tabs restores empty: empty is not absent", async () => {
@@ -192,7 +196,8 @@ describe("useTabs per-workspace sessions", () => {
 
   it("restores graph tabs and zoom through the bridges, and applies sidebar visibility", async () => {
     const seedZoom = vi.fn();
-    registerSessionZoomBridge({ zoomByTabId: () => ({}), seedZoom });
+    const liveZoom: Record<string, number> = {};
+    registerSessionZoomBridge({ zoomByTabId: () => liveZoom, seedZoom });
     const applyVisibility = vi.fn();
     registerSessionSidebarBridge({
       visibility: () => ({ filesSidebarVisible: true, outlineSidebarVisible: true }),
@@ -201,12 +206,15 @@ describe("useTabs per-workspace sessions", () => {
     saveWorkspaceSession("/a", {
       tabs: [
         { kind: "file", path: "/a/one.md" },
+        { kind: "file", path: "/a/two.md" },
         { kind: "graph", path: "/a" },
       ],
       activeTabPath: "/a",
       expanded: [],
       scroll: {},
-      zoom: { "/a/one.md": 1.5, "/a/ghost.md": 2 },
+      // 9 clamps to the max, the ghost never opens, and a tampered
+      // non-number factor is dropped rather than seeded.
+      zoom: { "/a/one.md": 9, "/a/ghost.md": 2, "/a/two.md": "nope" as unknown as number },
       sidebar: { filesSidebarVisible: false, outlineSidebarVisible: true },
       savedAt: 1,
     });
@@ -217,14 +225,91 @@ describe("useTabs per-workspace sessions", () => {
       await result.current.openFolder("/a");
     });
 
-    expect(filePaths(result)).toEqual(["/a/one.md", "graph:/a"]);
+    expect(filePaths(result)).toEqual(["/a/one.md", "/a/two.md", "graph:/a"]);
     expect(result.current.activeTab?.kind).toBe("graph");
     const one = result.current.tabs.find((t) => t.kind === "file");
-    expect(seedZoom).toHaveBeenCalledWith({ [one?.id ?? ""]: 1.5 });
+    // Stored factors are clamped (the store file is user-editable).
+    expect(seedZoom).toHaveBeenCalledWith({ [one?.id ?? ""]: 3 });
     expect(applyVisibility).toHaveBeenCalledWith({
       filesSidebarVisible: false,
       outlineSidebarVisible: true,
     });
+  });
+
+  it("a surviving tab's live zoom beats the snapshot's stored factor", async () => {
+    const seedZoom = vi.fn();
+    const liveZoom: Record<string, number> = {};
+    registerSessionZoomBridge({ zoomByTabId: () => liveZoom, seedZoom });
+    saveWorkspaceSession("/a", {
+      tabs: [
+        { kind: "file", path: "/a/one.md" },
+        { kind: "file", path: "/a/two.md" },
+      ],
+      activeTabPath: "",
+      expanded: [],
+      scroll: {},
+      zoom: { "/a/one.md": 1.5, "/a/two.md": 2 },
+      savedAt: 1,
+    });
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    // one.md is already open (loose) with its own live zoom before the
+    // workspace opens; restore must not overwrite it.
+    await act(async () => {
+      await result.current.openFile("/a/one.md");
+    });
+    const oneId = result.current.tabs.find((t) => t.kind === "file")?.id ?? "";
+    liveZoom[oneId] = 1.2;
+
+    await act(async () => {
+      await result.current.openFolder("/a");
+    });
+
+    const two = result.current.tabs.find((t) => t.kind === "file" && t.file.path === "/a/two.md");
+    expect(seedZoom).toHaveBeenCalledWith({ [two?.id ?? ""]: 2 });
+  });
+
+  it("an abandoned restore never unwatches a path its successor now owns", async () => {
+    const gate = deferred<string>();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: ((_cmd, args) =>
+          String(args?.path) === "/a/one.md" && !gateResolved
+            ? gate.promise
+            : Promise.resolve("BODY")) as Invoker,
+      }) as typeof invoke,
+    );
+    let gateResolved = false;
+    saveWorkspaceSession("/a", snapshot({ tabs: [{ kind: "file", path: "/a/one.md" }] }));
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+
+    let firstOpen: Promise<void> = Promise.resolve();
+    await act(async () => {
+      firstOpen = result.current.openFolder("/a");
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await result.current.openFolder("/b");
+    });
+    // The same file reopens as a loose tab under /b before the abandoned
+    // restore's read resolves; the fresh watch belongs to this tab now.
+    await act(async () => {
+      gateResolved = true;
+      await result.current.openFile("/a/one.md");
+    });
+    await act(async () => {
+      gate.resolve("LATE BODY");
+      await firstOpen;
+    });
+
+    expect(filePaths(result)).toEqual(["/a/one.md"]);
+    const unwatches = vi
+      .mocked(invoke)
+      .mock.calls.filter(
+        (c) => c[0] === "unwatch_file" && (c[1] as { path: string }).path === "/a/one.md",
+      );
+    expect(unwatches).toHaveLength(0);
   });
 
   it("captures zoom and sidebar visibility into the snapshot through the bridges", async () => {

@@ -193,10 +193,6 @@ export function useWorkspaceLifecycle({
       }
 
       folderOpenInFlight.current = root;
-      // Interrupting an in-flight open means the outgoing strip is itself a
-      // half-restored workspace; its stored snapshot is the good copy, so the
-      // capture below must be skipped (INV-3: stale results never win).
-      const wasRestoring = isSessionRestoring();
       let suppressing = false;
       try {
         // A missing snapshot means "never seen": fall through to auto-open. An
@@ -212,8 +208,12 @@ export function useWorkspaceLifecycle({
         const previous = workspaceRef.current;
         if (previous) {
           if (!(await flushForClose(tabIdsInside(previous.root)))) return;
-          // Snapshot the outgoing workspace before its tabs close (INV-4).
-          if (!wasRestoring) sessionRef.current?.captureSession();
+          // Snapshot the outgoing workspace before its tabs close (INV-4),
+          // unless it is itself a half-restored strip from an open this call
+          // interrupted; its stored snapshot is the good copy (INV-3). Read
+          // the flag here, live: another open may have started during the
+          // store read or the flush prompt above.
+          if (!isSessionRestoring()) sessionRef.current?.captureSession();
         }
         // Suppress the reactive snapshot persist from here on: the strip
         // churns through teardown and restore, and a half-restored strip must
@@ -241,9 +241,12 @@ export function useWorkspaceLifecycle({
 
         if (session) {
           await sessionRef.current?.restoreSession(root, session);
-          // Re-capture right away so entries that failed to reopen (a file
-          // deleted since last session) drop out of the stored snapshot
-          // instead of being retried on every open.
+          // Re-capture so entries that failed to reopen (a file deleted since
+          // last session) drop out of the stored snapshot instead of being
+          // retried on every open. stateRef may still miss the last commit
+          // here; the reactive persist and the close flush both re-capture
+          // from settled state, so at worst a crash within the debounce
+          // window keeps one extra stale entry.
           if (workspaceRef.current?.root === root) sessionRef.current?.captureSession();
         } else if (files.length > 0) {
           // First open on this machine: auto-open the workspace's remembered

@@ -80,7 +80,7 @@ export function buildSessionFromLegacy(
   const tabs: WorkspaceSessionTab[] = [];
   const folderEntry = persistedTabs.find((tab) => tab.kind === "folder");
   // Legacy folder tabs carried their single open file inline.
-  if (folderEntry?.filePath) {
+  if (folderEntry?.filePath && isPathInside(folderEntry.filePath, root)) {
     tabs.push({ kind: "file", path: folderEntry.filePath });
   }
   for (const persisted of persistedTabs) {

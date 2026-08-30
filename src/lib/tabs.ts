@@ -74,7 +74,7 @@ export interface PersistedTab {
   kind: "file" | "folder" | "graph";
   path: string; // workspace root for folder/graph entries, file path for file
   filePath?: string; // legacy: the single file once shown inside a folder tab
-  expanded?: string[]; // expanded subdirs (folder entry only)
+  expanded?: string[]; // legacy: expanded subdirs, now in the workspace snapshot
 }
 
 export function makeFileState(path: string, mode: EditorMode): FileState {

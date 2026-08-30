@@ -96,6 +96,25 @@ describe("workspaceSession store", () => {
     });
   });
 
+  it("drops malformed tab entries from a tampered or corrupted snapshot", async () => {
+    mockStore({
+      get: vi.fn(() =>
+        Promise.resolve({
+          tabs: [
+            { kind: "file" },
+            { kind: "graph", path: 42 },
+            "junk",
+            null,
+            { kind: "note", path: "/ws/a.md" },
+            { kind: "file", path: "/ws/a.md" },
+          ],
+        }),
+      ),
+    });
+    const read = await getWorkspaceSession("/ws");
+    expect(read?.tabs).toEqual([{ kind: "file", path: "/ws/a.md" }]);
+  });
+
   it("reads a queued write before it is flushed, so a rapid switch-back sees its own data", async () => {
     mockStore();
     const queued = session();

@@ -169,6 +169,13 @@ describe("buildSessionFromLegacy", () => {
     ]);
   });
 
+  it("drops a legacy inline file that lives outside the workspace", () => {
+    const withInline: PersistedTab[] = [
+      { kind: "folder", path: "/ws", filePath: "/elsewhere/x.md" },
+    ];
+    expect(buildSessionFromLegacy("/ws", withInline, "").tabs).toEqual([]);
+  });
+
   it("skips a graph entry whose root doesn't match the workspace", () => {
     const mismatched: PersistedTab[] = [
       { kind: "folder", path: "/ws" },

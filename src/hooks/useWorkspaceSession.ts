@@ -2,6 +2,7 @@ import { type RefObject, useCallback, useEffect } from "react";
 import { isCliExportProcess } from "@/lib/cliExport";
 import { sessionSidebarBridge, sessionZoomBridge } from "@/lib/sessionUiBridge";
 import type { Tab, TabsState, Workspace } from "@/lib/tabs";
+import { clampTabZoom } from "@/lib/tabZoom";
 import {
   flushWorkspaceSessions,
   isSessionRestoring,
@@ -97,13 +98,21 @@ export function useWorkspaceSession({
         if (id !== undefined) idByPath.set(entry.path, id);
       }
       if (!isCurrent()) return;
-      const zoomByTabId: Record<string, number> = {};
-      for (const [path, factor] of Object.entries(session.zoom)) {
-        const id = idByPath.get(path);
-        if (id) zoomByTabId[id] = factor;
-      }
-      if (Object.keys(zoomByTabId).length > 0) {
-        sessionZoomBridge()?.seedZoom(zoomByTabId);
+      const zoomBridge = sessionZoomBridge();
+      if (zoomBridge) {
+        // Clamp stored factors (the store is user-editable) and let a
+        // surviving tab's live zoom win over the snapshot's.
+        const liveZoom = zoomBridge.zoomByTabId();
+        const zoomByTabId: Record<string, number> = {};
+        for (const [path, factor] of Object.entries(session.zoom)) {
+          const id = idByPath.get(path);
+          if (id && typeof factor === "number" && liveZoom[id] === undefined) {
+            zoomByTabId[id] = clampTabZoom(factor);
+          }
+        }
+        if (Object.keys(zoomByTabId).length > 0) {
+          zoomBridge.seedZoom(zoomByTabId);
+        }
       }
       // A snapshot without sidebar state resyncs the panels to the global
       // setting, so the previous workspace's visibility never leaks in.

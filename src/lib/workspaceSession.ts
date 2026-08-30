@@ -63,13 +63,25 @@ function sessionStore(): Promise<Store | null> {
 }
 
 // A snapshot from disk may be partial (older build, interrupted write); fill
-// missing fields with empties rather than throwing mid-restore (INV-7).
+// missing fields with empties and drop malformed tab entries rather than
+// throwing mid-restore (INV-7); the file is also user-editable, so entries
+// are untrusted (INV-5).
+function isSessionTab(entry: unknown): entry is WorkspaceSessionTab {
+  const tab = entry as Partial<WorkspaceSessionTab> | null;
+  return (
+    typeof tab === "object" &&
+    tab !== null &&
+    (tab.kind === "file" || tab.kind === "graph") &&
+    typeof tab.path === "string"
+  );
+}
+
 function normalizeSession(
   value: Partial<WorkspaceSession> | null | undefined,
 ): WorkspaceSession | null {
   if (typeof value !== "object" || value === null || !Array.isArray(value.tabs)) return null;
   return {
-    tabs: value.tabs,
+    tabs: value.tabs.filter(isSessionTab),
     activeTabPath: typeof value.activeTabPath === "string" ? value.activeTabPath : "",
     expanded: Array.isArray(value.expanded) ? value.expanded : [],
     scroll: value.scroll ?? {},
