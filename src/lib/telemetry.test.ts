@@ -17,6 +17,12 @@ vi.mock("@sentry/react", () => ({
   captureException: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/plugin-os", () => ({
+  platform: () => "linux",
+  version: () => "6.1.0",
+  arch: () => "x86_64",
+}));
+
 const mockedInvoke = vi.mocked(invoke);
 const mockedInit = vi.mocked(Sentry.init);
 const mockedGetClient = vi.mocked(Sentry.getClient);
@@ -188,6 +194,17 @@ describe("enableTelemetry", () => {
     expect(options).toMatchObject({ sendDefaultPii: false, tracesSampleRate: 0 });
     expect(options?.beforeSend).toBe(scrubEvent);
     expect(options?.beforeBreadcrumb).toBe(scrubBreadcrumb);
+  });
+
+  it("tags the platform, since the scrubber drops the request that carries it", async () => {
+    vi.stubEnv("PROD", true);
+    await enableTelemetry();
+    const scope = mockedInit.mock.calls[0][0]?.initialScope as {
+      tags: { platform: string; arch: string };
+      contexts: { os: { name: string; version: string } };
+    };
+    expect(scope.tags).toEqual({ platform: "linux", arch: "x86_64" });
+    expect(scope.contexts.os).toEqual({ name: "linux", version: "6.1.0" });
   });
 
   it("does not re-init when a client already exists", async () => {

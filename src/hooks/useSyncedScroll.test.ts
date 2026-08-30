@@ -38,7 +38,10 @@ function fakeView(scrollDOM: HTMLElement) {
 /** Anchors at line 1 -> 0px and line 11 -> 500px, so one line is 50 preview px. */
 const ANCHOR_LINES = [1, 11];
 
-function buildSplit({ anchors = ANCHOR_LINES, previewRange = 1000 } = {}) {
+function buildSplit({
+  anchors = ANCHOR_LINES as readonly (number | string)[],
+  previewRange = 1000,
+} = {}) {
   const root = document.createElement("div");
   root.className = "split-view";
   const editorPane = document.createElement("div");
@@ -108,6 +111,19 @@ describe("useSyncedScroll", () => {
     renderHook(() => useSyncedScroll(rootRef, view, true));
 
     scroll(preview, 250);
+
+    expect(editor.scrollTop).toBe(5 * LINE_HEIGHT);
+  });
+
+  it("ignores an anchor whose data-line does not parse", () => {
+    // A plugin rehype plugin runs after the sanitizer and can stamp its own
+    // `data-line`. Kept, its NaN line would reach CodeMirror's `doc.line`.
+    const { rootRef, editor, preview, view } = buildSplit({ anchors: [1, "plugin", 11] });
+    renderHook(() => useSyncedScroll(rootRef, view, true));
+
+    // The surviving anchors are line 1 -> 0px and line 11 -> 1000px, so the
+    // midpoint is line 6.
+    scroll(preview, 500);
 
     expect(editor.scrollTop).toBe(5 * LINE_HEIGHT);
   });

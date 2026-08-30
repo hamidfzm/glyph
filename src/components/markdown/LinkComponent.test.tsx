@@ -184,6 +184,26 @@ describe("LinkComponent relative file links", () => {
     expect(openUrl).toHaveBeenCalledWith("./sibling.md");
   });
 
+  it("swallows an opener rejection instead of leaving it unhandled", async () => {
+    // The opener plugin refuses targets outside its scope (a relative link to a
+    // folder, say). React drops the handler's promise, so an escaping rejection
+    // would be reported as a crash.
+    vi.mocked(openUrl).mockRejectedValueOnce(new Error("Not allowed to open url notes/videos"));
+    const { container } = renderLink({ href: "notes/videos" }, NO_CONFIRM);
+
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
+    // Two macrotasks: one for the handler to settle, one for Node to decide the
+    // rejection went unhandled.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    process.off("unhandledRejection", unhandled);
+
+    expect(openUrl).toHaveBeenCalledWith("notes/videos");
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+
   it("does not intercept an external URL that happens to end in .md", () => {
     vi.mocked(openUrl).mockClear();
     const onOpen = vi.fn();

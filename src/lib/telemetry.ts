@@ -1,5 +1,7 @@
 import type { Breadcrumb, ErrorEvent } from "@sentry/react";
 import { invoke } from "@tauri-apps/api/core";
+import { arch, version as osVersion } from "@tauri-apps/plugin-os";
+import { currentPlatform } from "@/lib/platform";
 // Single source of truth for the Sentry DSN — `src-tauri/sentry.json`. The Rust
 // build script reads the same file (see build.rs) so the frontend and backend
 // clients always target the same project. DSNs are public client identifiers,
@@ -90,6 +92,28 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
   return event;
 }
 
+/**
+ * OS identity attached to every event. `scrubEvent` drops `event.request`, so
+ * Sentry never sees a User-Agent to infer the platform from and an issue would
+ * otherwise carry no clue which OS produced it. The version and architecture
+ * come from the OS plugin, which is absent outside a Tauri webview.
+ */
+function osScope() {
+  const name = currentPlatform();
+  let version = "";
+  let cpu = "";
+  try {
+    version = osVersion();
+    cpu = arch();
+  } catch {
+    // Plain browser or test environment: the platform tag alone still applies.
+  }
+  return {
+    tags: { platform: name, arch: cpu },
+    contexts: { os: { name, version } },
+  };
+}
+
 // Reporting only happens in production builds with a DSN present. Dev builds
 // (`pnpm tauri dev`) never initialize the SDK, so no events are sent locally.
 function reportingAllowed(): boolean {
@@ -141,6 +165,7 @@ export function enableTelemetry(): Promise<void> {
     Sentry.init({
       dsn: SENTRY_DSN,
       release: `glyph@${__APP_VERSION__}`,
+      initialScope: osScope(),
       // Hard privacy posture for a local-first viewer: no PII, no performance
       // tracing, no session replay (replay would record document contents).
       sendDefaultPii: false,
