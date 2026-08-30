@@ -6,11 +6,13 @@ import { MoveIcon } from "@/components/icons/MoveIcon";
 import { NewCanvasIcon } from "@/components/icons/NewCanvasIcon";
 import { NewFolderIcon } from "@/components/icons/NewFolderIcon";
 import { NewNoteIcon } from "@/components/icons/NewNoteIcon";
+import { NewWindowIcon } from "@/components/icons/NewWindowIcon";
 import { OpenIcon } from "@/components/icons/OpenIcon";
 import { RenameIcon } from "@/components/icons/RenameIcon";
 import { RevealIcon } from "@/components/icons/RevealIcon";
 import type { ContextMenuModel } from "@/components/menu/ContextMenu";
 import { type ContextMenuItem, joinGroups } from "@/lib/contextMenuItems";
+import { isMobilePlatform } from "@/lib/platform";
 import type { EntryEditKind } from "./FileTreeEntry";
 
 export interface FileTreeMenuTarget {
@@ -24,6 +26,7 @@ export interface FileTreeMenuTarget {
 
 interface FileTreeMenuActions {
   onOpenFile: (path: string) => void;
+  onOpenInNewWindow: (path: string) => void;
   onCreate: (kind: EntryEditKind, dir: string) => void;
   onStartRename: (path: string, isDir: boolean) => void;
   onDuplicate: (path: string) => void;
@@ -44,14 +47,24 @@ export function buildFileTreeMenu(
   const groups: ContextMenuItem[][] = [];
 
   if (filePath) {
-    groups.push([
+    const open: ContextMenuItem[] = [
       {
         kind: "action",
         label: t("fileTree.open"),
         icon: <OpenIcon />,
         onSelect: () => actions.onOpenFile(filePath),
       },
-    ]);
+    ];
+    // Desktop only: mobile has no second window to open into.
+    if (!isMobilePlatform()) {
+      open.push({
+        kind: "action",
+        label: t("fileTree.openInNewWindow"),
+        icon: <NewWindowIcon />,
+        onSelect: () => actions.onOpenInNewWindow(filePath),
+      });
+    }
+    groups.push(open);
   }
 
   groups.push([

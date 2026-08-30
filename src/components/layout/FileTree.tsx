@@ -18,6 +18,8 @@ interface FileTreeProps {
   activeFilePath?: string;
   onToggle: (path: string) => void;
   onOpenFile: (path: string) => void;
+  // Open a note in its own OS window (moving it there when it is open here).
+  onOpenInNewWindow: (path: string) => void;
   // Create an untitled note/canvas/folder inside `dir`; resolves to the new path.
   onCreateNote: (dir: string) => Promise<string | null>;
   onCreateCanvas: (dir: string) => Promise<string | null>;
@@ -48,6 +50,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
     activeFilePath,
     onToggle,
     onOpenFile,
+    onOpenInNewWindow,
     onCreateNote,
     onCreateCanvas,
     onCreateFolder,
@@ -170,6 +173,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
       contextMenu,
       {
         onOpenFile,
+        onOpenInNewWindow,
         onCreate: startCreate,
         onStartRename: startRename,
         onDuplicate,
@@ -183,6 +187,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
   }, [
     contextMenu,
     onOpenFile,
+    onOpenInNewWindow,
     onDelete,
     onDuplicate,
     onMove,

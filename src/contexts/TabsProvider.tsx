@@ -4,6 +4,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
 import { useTabs } from "@/hooks/useTabs";
 import { useUnsavedChangesPrompt } from "@/hooks/useUnsavedChangesPrompt";
+import { useWindowRegistrySync } from "@/hooks/useWindowRegistrySync";
 import { useWorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { filterBacklinks } from "@/lib/backlinks";
 import { displayContentFor, tocContentFor } from "@/lib/displayContent";
@@ -27,6 +28,10 @@ export function TabsProvider({ children }: { children: ReactNode }) {
     onWorkspaceNotice: workspaceNotice.show,
     confirmUnsaved: unsavedPrompt.confirm,
   });
+
+  // Report what this window shows so open requests route to the window already
+  // showing a workspace or a note instead of opening it twice.
+  useWindowRegistrySync(tabs.workspace, tabs.tabs, tabs.initializing);
 
   const activeMode = tabs.activeFile?.mode ?? EDITOR_MODE.view;
   const content = tabs.activeFile?.content ?? null;

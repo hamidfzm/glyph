@@ -286,11 +286,13 @@ export function useTabs(options: UseTabsOptions) {
   );
 
   // One flush for the whole batch, so a cancelled save leaves every tab of the
-  // set open instead of the ones already walked past.
+  // set open instead of the ones already walked past. Returns whether the tabs
+  // actually closed, so a caller that follows up on the close (moving a note to
+  // a new window) can abort when the user cancels the unsaved-changes prompt.
   const closeTabs = useCallback(
-    async (ids: string[]) => {
-      if (ids.length === 0) return;
-      if (!(await flushForClose(ids))) return;
+    async (ids: string[]): Promise<boolean> => {
+      if (ids.length === 0) return true;
+      if (!(await flushForClose(ids))) return false;
       setState((prev) => {
         const removedIds = new Set<string>();
         for (const id of ids) {
@@ -305,6 +307,7 @@ export function useTabs(options: UseTabsOptions) {
         }
         return removeTabs(prev, removedIds);
       });
+      return true;
     },
     [flushForClose, forgetHistory, forgetScroll, setState],
   );

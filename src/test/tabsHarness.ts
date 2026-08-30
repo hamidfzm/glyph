@@ -39,6 +39,10 @@ export function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): I
           size: 0,
           modified: 0,
         };
+      case "window_showing_file":
+        // No other window holds the note, so the open proceeds here.
+        return false;
+      case "set_window_files":
       case "watch_file":
       case "unwatch_file":
       case "watch_directory":

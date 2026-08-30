@@ -45,6 +45,22 @@ fn forward_watch_event(
     }
 }
 
+/// Release the watches a closing window owned. Nothing else unwatches them:
+/// the frontend's `unwatch_*` calls fire on tab and workspace close, not on
+/// window teardown, so without this every path a window opened keeps a live
+/// `notify` watcher for the rest of the session.
+pub fn drop_watches<R: Runtime>(app: &AppHandle<R>, paths: &[String]) {
+    let Some(state) = app.try_state::<FileWatcherState>() else {
+        return;
+    };
+    let Ok(mut watchers) = state.0.lock() else {
+        return;
+    };
+    for path in paths {
+        watchers.remove(path);
+    }
+}
+
 #[tauri::command]
 pub fn watch_file<R: Runtime>(
     path: String,
@@ -602,5 +618,67 @@ mod tests {
         let count = wait_for_event(&fired, Duration::from_secs(10));
         assert!(count > 0, "expected at least one directory-changed emit");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
+    fn drop_watches_releases_the_paths_a_closing_window_owned() {
+        // Nothing else unwatches on window teardown, so these would otherwise
+        // stay live for the rest of the session.
+        let dir = unique_tmp("drop_watches");
+        let file = dir.join("note.md");
+        std::fs::write(&file, "hello").unwrap();
+        let file_path = file.to_string_lossy().to_string();
+        let dir_path = dir.to_string_lossy().to_string();
+
+        let app = mock_app_with_state();
+        grant_dir(&app, &dir);
+        watch_file(
+            file_path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
+        watch_directory(
+            dir_path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
+        assert_eq!(watched_count(&app), 2);
+
+        drop_watches(app.handle(), &[file_path.clone(), dir_path.clone()]);
+
+        assert!(!is_watched(&app, &file_path));
+        assert!(!is_watched(&app, &dir_path));
+        assert_eq!(watched_count(&app), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn drop_watches_ignores_paths_that_were_never_watched() {
+        let app = mock_app_with_state();
+        drop_watches(app.handle(), &["/never/watched.md".to_string()]);
+        assert_eq!(watched_count(&app), 0);
+    }
+
+    #[test]
+    fn drop_watches_tolerates_a_poisoned_lock() {
+        // Teardown runs on a window-destroyed event with nowhere to report an
+        // error, so a poisoned lock leaves the watches in place rather than
+        // panicking the event handler.
+        let app = mock_app_with_state();
+        let watchers = Arc::clone(&app.state::<FileWatcherState>().0);
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = watchers.lock().unwrap();
+            panic!("poison");
+        }));
+
+        drop_watches(app.handle(), &["/a/note.md".to_string()]);
+    }
+
+    #[test]
+    fn drop_watches_without_managed_state_is_a_no_op() {
+        // A window can be destroyed during shutdown, after state teardown.
+        let app = tauri::test::mock_app();
+        drop_watches(app.handle(), &["/a/note.md".to_string()]);
     }
 }

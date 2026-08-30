@@ -8,6 +8,7 @@ import { NewNoteIcon } from "@/components/icons/NewNoteIcon";
 import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
+import { useOpenInNewWindow } from "@/hooks/useOpenInNewWindow";
 import { pathsWithTag, tagCounts } from "@/lib/metadata";
 import { lastSegment } from "@/lib/paths";
 import { pickMoveDir } from "@/lib/pickers";
@@ -47,6 +48,7 @@ export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
     deletePath,
   } = useTabsContext();
   const { compact, closeCompactPanels, toggleFiles } = useSidebarLayoutContext();
+  const openInNewWindow = useOpenInNewWindow();
   const fileTreeRef = useRef<FileTreeHandle>(null);
 
   // The filter carries the workspace it was picked in, and applies only while
@@ -144,6 +146,7 @@ export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
             activeFilePath={activeFile?.path}
             onToggle={toggleExpand}
             onOpenFile={handleOpenFile}
+            onOpenInNewWindow={openInNewWindow}
             onCreateNote={createNote}
             onCreateCanvas={createCanvas}
             onCreateFolder={createFolder}
