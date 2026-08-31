@@ -28,11 +28,14 @@ export function useSyncedScroll(
     // Measuring every anchor costs a layout pass, so the list is built once and
     // rebuilt only when the preview reflows, not on each scroll event.
     let anchors: ScrollAnchor[] = [];
+    // A plugin rehype plugin runs after the sanitizer and can stamp its own
+    // `data-line`, so the value is not guaranteed to parse. A NaN line poisons
+    // every interpolation it touches and reaches CodeMirror's `doc.line`, which
+    // walks past the end of the document rather than throwing a RangeError.
     const measureAnchors = (preview: HTMLElement) => {
-      anchors = [...preview.querySelectorAll<HTMLElement>(ANCHORS)].map((el) => ({
-        line: Number(el.dataset.line),
-        top: el.offsetTop,
-      }));
+      anchors = [...preview.querySelectorAll<HTMLElement>(ANCHORS)]
+        .map((el) => ({ line: Number(el.dataset.line), top: el.offsetTop }))
+        .filter((anchor) => Number.isFinite(anchor.line));
     };
 
     const scrollTo = (pane: HTMLElement, top: number) => {
