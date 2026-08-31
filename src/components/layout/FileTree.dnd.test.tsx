@@ -31,6 +31,7 @@ function renderTree(overrides: Partial<ComponentProps<typeof FileTree>> = {}) {
     expanded: new Set(["/root/subdir"]),
     onToggle: vi.fn(),
     onOpenFile: vi.fn(),
+    onOpenInNewWindow: vi.fn(),
     onCreateNote: vi.fn(async () => null),
     onCreateCanvas: vi.fn(async () => null),
     onCreateFolder: vi.fn(async () => null),
