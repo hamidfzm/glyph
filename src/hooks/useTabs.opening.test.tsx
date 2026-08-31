@@ -30,6 +30,89 @@ describe("useTabs opening documents", () => {
     expect(result.current.activeTab?.id).toBe(result.current.tabs[0].id);
   });
 
+  it("raises the window that already holds the note instead of opening a copy", async () => {
+    // One note, one window: a second buffer over the same path would give it a
+    // second autosave chain, and the later write would drop the other's edits.
+    const elsewhere = vi.fn(async () => true);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ window_showing_file: elsewhere }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/elsewhere.md");
+    });
+
+    // An explicit open raises the holder, which is what the user asked for.
+    expect(elsewhere).toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalledWith("window_showing_file", {
+      path: "/p/elsewhere.md",
+      focus: true,
+    });
+    expect(result.current.tabs).toHaveLength(0);
+  });
+
+  it("opens here when the elsewhere check fails", async () => {
+    // Fails open: a backend hiccup degrades to the old behavior rather than
+    // refusing to open anything.
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        window_showing_file: async () => {
+          throw new Error("no registry");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/new.md");
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+  });
+
+  it("does not raise another window for an implicit open", async () => {
+    // A workspace auto-loading its remembered file, or history replaying an
+    // entry, must not yank the user to a window they did not ask for.
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ window_showing_file: async () => true }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    let opened: string | undefined;
+    await act(async () => {
+      opened = await result.current.openFile("/p/elsewhere.md", { implicit: true });
+    });
+
+    expect(opened).toBeUndefined();
+    expect(invoke).toHaveBeenCalledWith("window_showing_file", {
+      path: "/p/elsewhere.md",
+      focus: false,
+    });
+    expect(result.current.tabs).toHaveLength(0);
+  });
+
+  it("reports that the file opened here", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    let opened: string | undefined;
+    await act(async () => {
+      opened = await result.current.openFile("/p/new.md");
+    });
+    expect(opened).toBeDefined();
+
+    // Re-opening activates the existing tab, which still counts as shown here.
+    await act(async () => {
+      opened = await result.current.openFile("/p/new.md");
+    });
+    expect(opened).toBeDefined();
+    expect(result.current.tabs).toHaveLength(1);
+  });
+
   it("refuses to open a file whose extension isn't a supported type", async () => {
     // openFile gates unsupported extensions so a random `.txt` / `.html`
     // can't reach the renderer with embedded HTML / JS.

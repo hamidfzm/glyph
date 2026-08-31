@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "./settings";
-import { deepMerge, isSafePlainObject, setNestedValue } from "./settingsObject";
+import { deepMerge, getNestedValue, isSafePlainObject, setNestedValue } from "./settingsObject";
 
 describe("isSafePlainObject", () => {
   it("accepts plain object literals", () => {
@@ -119,5 +119,34 @@ describe("setNestedValue", () => {
     // key, so the write is rejected and the original object is returned intact.
     const obj = { ...base(), ai: "broken" } as Record<string, unknown>;
     expect(setNestedValue(obj, "ai.apiKeys.foo", "v")).toBe(obj);
+  });
+});
+
+describe("getNestedValue", () => {
+  const obj = { appearance: { theme: "dark", fontSize: 16 }, ai: { apiKeys: {} } };
+
+  it("reads a nested value by dotted path", () => {
+    expect(getNestedValue(obj, "appearance.theme")).toBe("dark");
+    expect(getNestedValue(obj, "appearance.fontSize")).toBe(16);
+  });
+
+  it("reads a whole branch", () => {
+    expect(getNestedValue(obj, "appearance")).toEqual({ theme: "dark", fontSize: 16 });
+  });
+
+  it("returns undefined when a segment is missing", () => {
+    expect(getNestedValue(obj, "appearance.missing")).toBeUndefined();
+    expect(getNestedValue(obj, "missing.theme")).toBeUndefined();
+  });
+
+  it("refuses to read through a non-object", () => {
+    expect(getNestedValue(obj, "appearance.theme.length")).toBeUndefined();
+  });
+
+  it("does not read inherited properties", () => {
+    // The settings writer feeds these paths straight back into setNestedValue,
+    // so a prototype walk here would smuggle values past its allowlist.
+    expect(getNestedValue(obj, "appearance.constructor")).toBeUndefined();
+    expect(getNestedValue(obj, "__proto__")).toBeUndefined();
   });
 });

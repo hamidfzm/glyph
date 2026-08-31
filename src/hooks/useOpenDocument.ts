@@ -22,6 +22,32 @@ import {
 } from "@/lib/tabs";
 import { setWorkspaceLastFile } from "@/lib/workspace";
 
+/** Per-call options for `openFile`. */
+export interface OpenFileOptions {
+  /**
+   * The open was not a direct request for this note (a workspace auto-loading
+   * its remembered file, navigation history replaying an entry, session
+   * restore). A note living in another window is then reported rather than
+   * raising that window.
+   */
+  implicit?: boolean;
+  /**
+   * Birth the tab already scrolled to this position (the viewer only reads
+   * the position once, on mount). Session restore.
+   */
+  initialScrollTop?: number;
+  /**
+   * Lets a restore abandoned mid-flight drop the tab instead of adding it to
+   * whatever workspace replaced it.
+   */
+  stillWanted?: () => boolean;
+  /**
+   * Keeps a restored tab out of Recent Files and the workspace's remembered
+   * last file.
+   */
+  silent?: boolean;
+}
+
 interface UseOpenDocumentOptions {
   stateRef: RefObject<TabsState>;
   setState: Dispatch<SetStateAction<TabsState>>;
@@ -44,17 +70,11 @@ export function useOpenDocument({
   const { t } = useTranslation("workspace");
 
   // Open a file as a document tab; if it's already open, activate its tab.
-  // Resolves to the tab's id, or undefined when nothing opened. Session
-  // restore passes `open`: `initialScrollTop` births the tab already scrolled
-  // (the viewer only reads the position once, on mount), `stillWanted` lets a
-  // restore abandoned mid-flight drop the tab instead of adding it to
-  // whatever workspace replaced it, and `silent` keeps a restored tab out of
-  // Recent Files and the workspace's remembered last file.
+  // Resolves to the tab's id when this window ends up showing the file, or
+  // undefined when nothing opened, so an implicit caller can tell "opened"
+  // from "lives in another window".
   const openFile = useCallback(
-    async (
-      path: string,
-      open?: { initialScrollTop?: number; stillWanted?: () => boolean; silent?: boolean },
-    ): Promise<string | undefined> => {
+    async (path: string, options?: OpenFileOptions): Promise<string | undefined> => {
       // Defensive gate: never load an unsupported file. Glyph rendering treats
       // content as markdown (HTML included via the sanitizer), so opening a
       // random `.txt` / `.html` / etc. is a code-injection vector. Notebooks
@@ -69,7 +89,7 @@ export function useOpenDocument({
       const isAndroidContentUri = path.startsWith("content://");
       if (!isAndroidContentUri && !isSupportedFile(path) && !isImageFile(path)) {
         console.warn(`Refusing to open unsupported file: ${path}`);
-        return;
+        return undefined;
       }
       const existing = stateRef.current.tabs.find(
         (tab) => tab.kind === "file" && tab.file.path === path,
@@ -77,6 +97,26 @@ export function useOpenDocument({
       if (existing) {
         setState((prev) => withActiveTab(prev, existing.id));
         return existing.id;
+      }
+      // A note lives in one window. If another window already shows it, do not
+      // load a second buffer over the same file: two edit buffers and two
+      // autosave chains on one path means the later write silently discards the
+      // other window's edits (INV-1, INV-3).
+      //
+      // An explicit open raises the window holding it, which is what the user
+      // asked for. An implicit one (a workspace auto-loading its remembered
+      // file, history replaying a move) reports the miss instead: yanking focus
+      // to another window on a gesture the user did not make for that note is
+      // worse than showing nothing. Fails open, so a backend hiccup degrades to
+      // the previous behavior rather than refusing to open anything.
+      try {
+        const elsewhere = await invoke<boolean>("window_showing_file", {
+          path,
+          focus: !options?.implicit,
+        });
+        if (elsewhere) return undefined;
+      } catch {
+        // ignore
       }
 
       const id = generateTabId();
@@ -107,7 +147,7 @@ export function useOpenDocument({
         // the successor already opened the same path, the watch is now that
         // tab's; the registry is not refcounted, so removing it would kill
         // the live tab's auto-reload.
-        if (open?.stillWanted && !open.stillWanted()) {
+        if (options?.stillWanted && !options.stillWanted()) {
           const nowOwned = stateRef.current.tabs.some(
             (tab) => tab.kind === "file" && tab.file.path === path,
           );
@@ -129,7 +169,7 @@ export function useOpenDocument({
             ...makeFileState(path, mode),
             content,
             metadata,
-            scrollTop: open?.initialScrollTop ?? 0,
+            scrollTop: options?.initialScrollTop ?? 0,
           },
         };
         setState((prev) => {
@@ -137,7 +177,7 @@ export function useOpenDocument({
           if (match) return withActiveTab(prev, match.id);
           return withActiveTab({ ...prev, tabs: [...prev.tabs, newTab] }, id);
         });
-        if (!open?.silent) {
+        if (!options?.silent) {
           addToRecent(path);
           // Remember workspace notes in `.glyph/state.json` (git-ignored) so
           // the workspace re-opens onto them next time. Fire-and-forget: a

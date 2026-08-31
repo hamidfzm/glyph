@@ -138,6 +138,7 @@
   },
   "fileTree": {
     "open": "Öffnen",
+    "openInNewWindow": "In neuem Fenster öffnen",
     "newNote": "Neue Notiz",
     "newCanvas": "Neues Canvas",
     "newFolder": "Neuer Ordner",

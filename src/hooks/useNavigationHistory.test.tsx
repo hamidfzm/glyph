@@ -28,7 +28,9 @@ interface Props {
 }
 
 function setup(activeTab: Tab | null, initial: Omit<Props, "activeTab"> = {}) {
-  const openFile = vi.fn(() => Promise.resolve());
+  const openFile = vi.fn<
+    (path: string, options?: { implicit?: boolean }) => Promise<string | undefined>
+  >(async () => "tab-reopened");
   const openGraph = vi.fn();
   const scrolls = new Map<string, number>();
   const getScrollPosition = (id: string) => scrolls.get(id);
@@ -80,11 +82,11 @@ describe("useNavigationHistory", () => {
     h.activate(tabB);
 
     await h.back();
-    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md", { implicit: true });
     h.activate(tabA);
 
     await h.forward();
-    expect(h.openFile).toHaveBeenLastCalledWith("/notes/b.md");
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/b.md", { implicit: true });
     expect(h.openFile).toHaveBeenCalledTimes(2);
   });
 
@@ -105,7 +107,7 @@ describe("useNavigationHistory", () => {
 
     h.activate(tabC);
     await h.back();
-    expect(h.openFile).toHaveBeenLastCalledWith("/notes/b.md");
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/b.md", { implicit: true });
   });
 
   it("drops the forward entries when navigating somewhere new after Back", async () => {
@@ -118,7 +120,7 @@ describe("useNavigationHistory", () => {
     await h.forward();
     expect(h.openFile).toHaveBeenCalledTimes(1);
     await h.back();
-    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md", { implicit: true });
   });
 
   it("reopens a file whose tab has been closed", async () => {
@@ -127,35 +129,51 @@ describe("useNavigationHistory", () => {
     h.activate(null);
 
     await h.back();
-    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md", { implicit: true });
+  });
+
+  it("rewinds when the entry's file now lives in another window", async () => {
+    // The move never landed here, so leaving the index on it would make the
+    // next Back skip the entry the user is actually standing on.
+    const h = setup(tabA);
+    h.activate(tabB);
+    h.activate(tabC);
+    h.openFile.mockImplementationOnce(async () => undefined);
+
+    await h.back();
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/b.md", { implicit: true });
+
+    // Back again targets b, not a: the rewound index did not advance past it.
+    await h.back();
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/b.md", { implicit: true });
   });
 
   it("waits for a reopen to land before taking the next move", async () => {
     const h = setup(tabA);
     h.activate(tabB);
     h.activate(tabC);
-    const pending = deferred();
+    const pending = deferred<string | undefined>();
     h.openFile.mockImplementationOnce(() => pending.promise);
 
     await h.back();
-    expect(h.openFile).toHaveBeenLastCalledWith("/notes/b.md");
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/b.md", { implicit: true });
     await h.back();
     await h.forward();
     expect(h.openFile).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      pending.resolve();
+      pending.resolve("tab-b");
     });
     h.activate(tabB);
     await h.back();
-    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md", { implicit: true });
   });
 
   it("returns to the graph of its own workspace", async () => {
     const h = setup(tabA);
     h.activate(graphTab);
     await h.back();
-    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md", { implicit: true });
     h.activate(tabA);
 
     await h.forward();
@@ -180,10 +198,10 @@ describe("useNavigationHistory", () => {
     h.activate(fileTab("b", "/notes/renamed.md"));
 
     await h.back();
-    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md", { implicit: true });
     h.activate(tabA);
     await h.forward();
-    expect(h.openFile).toHaveBeenLastCalledWith("/notes/renamed.md");
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/renamed.md", { implicit: true });
     expect(h.openFile).toHaveBeenCalledTimes(2);
   });
 
@@ -237,7 +255,7 @@ describe("useNavigationHistory", () => {
     h.activate(tabB);
 
     await h.back();
-    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md", { implicit: true });
     h.activate(tabA);
     await h.back();
     expect(h.openFile).toHaveBeenCalledTimes(1);
@@ -250,7 +268,7 @@ describe("useNavigationHistory", () => {
     h.activate(tabB);
 
     await h.back();
-    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md");
+    expect(h.openFile).toHaveBeenLastCalledWith("/notes/a.md", { implicit: true });
   });
 
   it("ignores heading jumps with no tab or an unsaved buffer active", async () => {

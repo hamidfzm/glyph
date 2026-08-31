@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { type Dispatch, type RefObject, type SetStateAction, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import type { OpenFileOptions } from "@/hooks/useOpenDocument";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import type { WorkspaceSessionApi } from "@/hooks/useWorkspaceSession";
 import { isCliExportProcess } from "@/lib/cliExport";
@@ -30,7 +31,7 @@ interface UseWorkspaceLifecycleOptions {
   clearIndexes: () => void;
   resetStatus: () => void;
   flushForClose: (ids?: Iterable<string>) => Promise<boolean>;
-  openFile: (path: string) => Promise<unknown>;
+  openFile: (path: string, options?: OpenFileOptions) => Promise<unknown>;
   forgetScroll: (id: string) => void;
   forgetHistory: (id: string) => void;
   onWorkspaceNotice: (notice: WorkspaceNotice, options?: { persistent?: boolean }) => void;
@@ -254,7 +255,7 @@ export function useWorkspaceLifecycle({
           const remembered = await getWorkspaceLastFile(root).catch(() => null);
           const target = remembered && files.includes(remembered) ? remembered : files[0];
           if (isMarkdownFile(target)) {
-            await openFile(target);
+            await openFile(target, { implicit: true });
           }
         }
       } finally {

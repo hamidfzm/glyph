@@ -1,4 +1,5 @@
 import { type RefObject, useCallback, useEffect } from "react";
+import type { OpenFileOptions } from "@/hooks/useOpenDocument";
 import { isCliExportProcess } from "@/lib/cliExport";
 import { sessionSidebarBridge, sessionZoomBridge } from "@/lib/sessionUiBridge";
 import type { Tab, TabsState, Workspace } from "@/lib/tabs";
@@ -27,10 +28,7 @@ interface UseWorkspaceSessionOptions {
   workspace: Workspace | null;
   initializing: boolean;
   getScrollPosition: (id: string) => number | undefined;
-  openFile: (
-    path: string,
-    open?: { initialScrollTop?: number; stillWanted?: () => boolean; silent?: boolean },
-  ) => Promise<string | undefined>;
+  openFile: (path: string, options?: OpenFileOptions) => Promise<string | undefined>;
   openGraph: (root?: string) => void;
   activateTabByPath: (path: string) => void;
 }
@@ -94,6 +92,7 @@ export function useWorkspaceSession({
           initialScrollTop: session.scroll[entry.path],
           stillWanted: isCurrent,
           silent: true,
+          implicit: true,
         });
         if (id !== undefined) idByPath.set(entry.path, id);
       }

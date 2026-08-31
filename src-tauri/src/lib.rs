@@ -313,7 +313,10 @@ pub fn run() {
             #[cfg(desktop)]
             menu_runtime::apply::set_lightbox_fullscreen,
             windows_runtime::set_window_workspace,
+            windows_runtime::set_window_files,
             windows_runtime::request_open,
+            windows_runtime::open_in_new_window,
+            windows_runtime::window_showing_file,
             #[cfg(desktop)]
             sync::commands::sync_set_config,
             #[cfg(desktop)]

@@ -41,8 +41,8 @@ interface RenderOpts {
   activeTabId?: string | null;
   workspace?: TabsContextValue["workspace"];
   setActiveTab?: (id: string) => void;
-  closeTab?: (id: string) => Promise<void>;
-  closeTabs?: (ids: string[]) => Promise<void>;
+  closeTab?: (id: string) => Promise<boolean>;
+  closeTabs?: (ids: string[]) => Promise<boolean>;
   setTabMode?: TabsContextValue["setTabMode"];
   moveTab?: (id: string, toIndex: number) => void;
   tocEntries?: TabsContextValue["tocEntries"];

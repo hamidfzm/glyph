@@ -5,7 +5,7 @@ import type { CanvasNode } from "@/lib/canvas/types";
 import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { CanvasNodeView } from "./CanvasNodeView";
 
-vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   convertFileSrc: (path: string) => `asset://${path}`,

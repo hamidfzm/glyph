@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import type { OpenFileOptions } from "@/hooks/useOpenDocument";
 import {
   emptyHistory,
   locationOf,
@@ -18,7 +19,7 @@ interface UseNavigationHistoryOptions {
   initializing: boolean;
   /** A different workspace is a different set of places; the history resets. */
   workspaceRoot: string | null;
-  openFile: (path: string) => Promise<unknown>;
+  openFile: (path: string, options?: OpenFileOptions) => Promise<string | undefined>;
   openGraph: (root: string) => void;
   getScrollPosition: (tabId: string) => number | undefined;
 }
@@ -87,6 +88,7 @@ export function useNavigationHistory({
 
   const navigate = useCallback(
     (next: NavigationHistory) => {
+      const previous = historyRef.current;
       historyRef.current = next;
       const entry = next.entries[next.index];
       const tab = activeTabRef.current;
@@ -101,9 +103,15 @@ export function useNavigationHistory({
         return;
       }
       moveInFlightRef.current = true;
-      void openFile(entry.path).finally(() => {
-        moveInFlightRef.current = false;
-      });
+      void openFile(entry.path, { implicit: true })
+        .then((opened) => {
+          // The file lives in another window now, so this move never landed;
+          // rewind, or the next Back would skip the entry we stopped on.
+          if (!opened) historyRef.current = previous;
+        })
+        .finally(() => {
+          moveInFlightRef.current = false;
+        });
     },
     [openFile, openGraph],
   );

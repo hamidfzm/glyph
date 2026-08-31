@@ -138,6 +138,7 @@
   },
   "fileTree": {
     "open": "باز کردن",
+    "openInNewWindow": "باز کردن در پنجره جدید",
     "newNote": "یادداشت جدید",
     "newCanvas": "بوم جدید",
     "newFolder": "پوشه جدید",
