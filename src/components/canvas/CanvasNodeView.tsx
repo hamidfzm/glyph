@@ -84,7 +84,10 @@ export function CanvasNodeView({
         <button
           type="button"
           className="glyph-canvas-node-link"
-          onClick={() => void openUrl(node.url)}
+          // A board's link node carries whatever URL the document author wrote,
+          // so the opener plugin's scope can refuse it. Swallowed rather than
+          // left to escape as an unhandled rejection, which is reported as a crash.
+          onClick={() => void openUrl(node.url).catch(() => undefined)}
           title={node.url}
         >
           {label}

@@ -77,7 +77,15 @@ export function LinkComponent(props: LinkComponentProps) {
         if (!confirmed) return;
       }
 
-      await openUrl(href);
+      // The opener plugin rejects targets its scope refuses, which a relative
+      // link to something that is not an openable document (a bare folder, an
+      // extensionless file) hits. There is nothing to recover, and React drops
+      // this handler's promise, so the rejection would surface as a crash.
+      try {
+        await openUrl(href);
+      } catch {
+        // Nothing opened; the click is a no-op.
+      }
     },
     [href, onOpenRelativeFile, settings.behavior.confirmExternalLinks, t],
   );
