@@ -139,13 +139,6 @@ jobs:
         id: check
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
-          # The formula ships no bottle, so it stages through Mktemp, which
-          # chowns the staging dir to brew's group. On the runner that group is
-          # "docker", a supplementary group of "runner"; Homebrew's Linux bwrap
-          # sandbox maps only the primary gid, so the chown fails with EINVAL
-          # (not the EPERM Mktemp rescues) and the install dies. This is the
-          # documented opt-out and only turns off build-time isolation.
-          HOMEBREW_NO_SANDBOX_LINUX: 1
         run: |
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           brew tap glyph-md/tap
