@@ -1,200 +1,221 @@
 import { act, renderHook } from "@testing-library/react";
-import type { DragEvent } from "react";
-import { describe, expect, it, vi } from "vitest";
-import { blockDropHandlers, TREE_DRAG_TYPE, useFileTreeDragMove } from "./useFileTreeDragMove";
+import type { PointerEvent as ReactPointerEvent } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useFileTreeDragMove } from "./useFileTreeDragMove";
 
-interface MockDragEvent {
-  preventDefault: ReturnType<typeof vi.fn>;
-  stopPropagation: ReturnType<typeof vi.fn>;
-  currentTarget: { contains: (node: unknown) => boolean };
-  relatedTarget: unknown;
-  dataTransfer: {
-    setData: ReturnType<typeof vi.fn>;
-    effectAllowed: string;
-    dropEffect: string;
-    types: string[];
-  };
+function setHit(el: Element | null) {
+  document.elementFromPoint = vi.fn(() => el) as typeof document.elementFromPoint;
 }
 
-const dragEvent = (overrides: Partial<MockDragEvent> = {}) =>
-  ({
-    preventDefault: vi.fn(),
-    stopPropagation: vi.fn(),
-    currentTarget: { contains: () => false },
-    relatedTarget: null,
-    dataTransfer: { setData: vi.fn(), effectAllowed: "", dropEffect: "", types: [TREE_DRAG_TYPE] },
-    ...overrides,
-  }) as MockDragEvent & DragEvent;
+function zoneEl(attrs: Record<string, string>): HTMLElement {
+  const el = document.createElement("div");
+  for (const [name, value] of Object.entries(attrs)) el.setAttribute(name, value);
+  document.body.appendChild(el);
+  return el;
+}
 
-/** A drag that did not start in the tree: no tree payload type. */
-const foreignEvent = () =>
-  dragEvent({
-    dataTransfer: { setData: vi.fn(), effectAllowed: "", dropEffect: "", types: ["text/plain"] },
-  });
+const folderZone = (dir: string) => zoneEl({ "data-tree-drop-dir": dir });
+const fileBlock = () => zoneEl({ "data-tree-drop-block": "" });
+
+const downEvent = (overrides: Partial<ReactPointerEvent> = {}) =>
+  ({
+    button: 0,
+    pointerType: "mouse",
+    clientX: 0,
+    clientY: 0,
+    ...overrides,
+  }) as ReactPointerEvent;
+
+const clickEvent = () =>
+  ({ preventDefault: vi.fn(), stopPropagation: vi.fn() }) as unknown as ReactPointerEvent & {
+    preventDefault: ReturnType<typeof vi.fn>;
+    stopPropagation: ReturnType<typeof vi.fn>;
+  };
 
 function renderDnd(onMoveEntry = vi.fn()) {
   const { result, unmount } = renderHook(() => useFileTreeDragMove("/root", onMoveEntry));
-  const start = (path: string) => {
+  const press = (path: string, overrides: Partial<ReactPointerEvent> = {}) => {
     act(() => {
-      result.current.dragHandlersFor(path).onDragStart(dragEvent());
+      result.current.dragHandlersFor(path).onPointerDown(downEvent(overrides));
     });
   };
-  const over = (dir: string, event = dragEvent()) => {
+  const moveTo = (x = 50, y = 50) => {
     act(() => {
-      result.current.dropHandlersFor(dir).onDragOver(event);
-    });
-    return event;
-  };
-  const drop = (dir: string, event = dragEvent()) => {
-    act(() => {
-      result.current.dropHandlersFor(dir).onDrop(event);
+      window.dispatchEvent(new MouseEvent("pointermove", { clientX: x, clientY: y }));
     });
   };
-  return { result, unmount, onMoveEntry, start, over, drop };
+  const release = (x = 50, y = 50) => {
+    act(() => {
+      window.dispatchEvent(new MouseEvent("pointerup", { clientX: x, clientY: y }));
+    });
+  };
+  return { result, unmount, onMoveEntry, press, moveTo, release };
 }
 
 describe("useFileTreeDragMove", () => {
-  it("marks rows draggable and sets the tree and plain-text payloads", () => {
-    const { result } = renderDnd();
-    const handlers = result.current.dragHandlersFor("/root/a.md");
-    expect(handlers.draggable).toBe(true);
-    const event = dragEvent();
-    act(() => {
-      handlers.onDragStart(event);
-    });
-    expect(event.dataTransfer.effectAllowed).toBe("move");
-    expect(event.dataTransfer.setData).toHaveBeenCalledWith(TREE_DRAG_TYPE, "/root/a.md");
-    // WebKit refuses to start a drag with an empty text payload.
-    expect(event.dataTransfer.setData).toHaveBeenCalledWith("text/plain", "/root/a.md");
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
   });
 
-  it("accepts a valid folder target: preventDefault, move cursor, highlight", () => {
-    const { result, start, over } = renderDnd();
-    start("/root/a.md");
-    const event = over("/root/sub");
-    expect(event.preventDefault).toHaveBeenCalled();
-    expect(event.dataTransfer.dropEffect).toBe("move");
-    expect(result.current.dropTarget).toBe("/root/sub");
-    // dragover fires on every pointer move; the target stays stable.
-    over("/root/sub");
-    expect(result.current.dropTarget).toBe("/root/sub");
-  });
-
-  it("rejects the dragged entry itself, its descendants, and its current parent", () => {
-    const { result, start, over } = renderDnd();
-    start("/root/sub");
-    for (const dir of ["/root/sub", "/root/sub/nested", "/root"]) {
-      const event = over(dir);
-      expect(event.preventDefault).not.toHaveBeenCalled();
-      expect(result.current.dropTarget).toBeNull();
-    }
-  });
-
-  it("rejects every target while no drag is in progress", () => {
-    const { result, over } = renderDnd();
-    const event = over("/root/sub");
-    expect(event.preventDefault).not.toHaveBeenCalled();
+  it("ignores movement below the drag threshold, so plain clicks survive", () => {
+    const { result, onMoveEntry, press, moveTo, release } = renderDnd();
+    setHit(folderZone("/root/sub"));
+    press("/root/a.md");
+    moveTo(2, 2);
     expect(result.current.dropTarget).toBeNull();
-  });
-
-  it("ignores foreign drags even when a stale tree drag is pending", () => {
-    const { result, onMoveEntry, start, over, drop } = renderDnd();
-    // A stale ref survives when dragend never fired (source row unmounted);
-    // a later link/image drag from the document must not consume it.
-    start("/root/a.md");
-    const event = over("/root/sub", foreignEvent());
-    expect(event.preventDefault).not.toHaveBeenCalled();
-    expect(result.current.dropTarget).toBeNull();
-    drop("/root/sub", foreignEvent());
+    release(2, 2);
     expect(onMoveEntry).not.toHaveBeenCalled();
+    const click = clickEvent();
+    act(() => {
+      result.current.dragHandlersFor("/root/a.md").onClickCapture(click);
+    });
+    expect(click.preventDefault).not.toHaveBeenCalled();
   });
 
-  it("commits a valid drop through onMoveEntry exactly once and resets", () => {
-    const { result, onMoveEntry, start, over, drop } = renderDnd();
-    start("/root/a.md");
-    over("/root/sub");
-    drop("/root/sub");
+  it("highlights a valid folder target and commits the move on release", () => {
+    const { result, onMoveEntry, press, moveTo, release } = renderDnd();
+    setHit(folderZone("/root/sub"));
+    press("/root/a.md");
+    moveTo();
+    expect(result.current.dropTarget).toBe("/root/sub");
+    expect(document.body.style.userSelect).toBe("none");
+    release();
     expect(onMoveEntry).toHaveBeenCalledTimes(1);
     expect(onMoveEntry).toHaveBeenCalledWith("/root/a.md", "/root/sub");
     expect(result.current.dropTarget).toBeNull();
-    // The drag is consumed: a second drop is inert.
-    drop("/root/sub");
-    expect(onMoveEntry).toHaveBeenCalledTimes(1);
+    expect(document.body.style.userSelect).toBe("");
   });
 
-  it("re-validates on drop and refuses an invalid target", () => {
-    const { onMoveEntry, start, drop } = renderDnd();
-    start("/root/sub");
-    drop("/root/sub/nested");
+  it("suppresses exactly one click after a completed drag", () => {
+    const { result, press, moveTo, release } = renderDnd();
+    setHit(folderZone("/root/sub"));
+    press("/root/a.md");
+    moveTo();
+    release();
+    const suppressed = clickEvent();
+    act(() => {
+      result.current.dragHandlersFor("/root/a.md").onClickCapture(suppressed);
+    });
+    expect(suppressed.preventDefault).toHaveBeenCalled();
+    expect(suppressed.stopPropagation).toHaveBeenCalled();
+    const clean = clickEvent();
+    act(() => {
+      result.current.dragHandlersFor("/root/a.md").onClickCapture(clean);
+    });
+    expect(clean.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("rejects the dragged entry itself, its descendants, and its current parent", () => {
+    const { result, onMoveEntry, press, moveTo, release } = renderDnd();
+    for (const dir of ["/root/sub", "/root/sub/nested", "/root"]) {
+      setHit(folderZone(dir));
+      press("/root/sub");
+      moveTo();
+      expect(result.current.dropTarget).toBeNull();
+      expect(document.body.style.cursor).toBe("no-drop");
+      release();
+      expect(onMoveEntry).not.toHaveBeenCalled();
+      expect(document.body.style.cursor).toBe("");
+    }
+  });
+
+  it("treats file rows as dead zones via the block marker", () => {
+    const { result, onMoveEntry, press, moveTo, release } = renderDnd();
+    setHit(fileBlock());
+    press("/root/sub/deep.md");
+    moveTo();
+    expect(result.current.dropTarget).toBeNull();
+    release();
     expect(onMoveEntry).not.toHaveBeenCalled();
   });
 
-  it("clears the drag and the highlight on dragend", () => {
-    const { result, onMoveEntry, start, over, drop } = renderDnd();
-    start("/root/a.md");
-    over("/root/sub");
+  it("counts the root zone only when the pointer is over the container itself", () => {
+    const { result, onMoveEntry, press, moveTo, release } = renderDnd();
+    const container = zoneEl({ "data-filetree-root": "", "data-tree-drop-dir": "/root" });
+    const gap = document.createElement("ul");
+    container.appendChild(gap);
+
+    setHit(gap);
+    press("/root/sub/deep.md");
+    moveTo();
+    expect(result.current.dropTarget).toBeNull();
+
+    setHit(container);
+    moveTo(60, 60);
+    expect(result.current.dropTarget).toBe("/root");
+    release(60, 60);
+    expect(onMoveEntry).toHaveBeenCalledWith("/root/sub/deep.md", "/root");
+  });
+
+  it("ignores presses from touch and from non-primary buttons", () => {
+    const { result, press, moveTo } = renderDnd();
+    setHit(folderZone("/root/sub"));
+    press("/root/a.md", { pointerType: "touch" });
+    moveTo();
+    expect(result.current.dropTarget).toBeNull();
+    press("/root/a.md", { button: 2 });
+    moveTo(60, 60);
+    expect(result.current.dropTarget).toBeNull();
+  });
+
+  it("cancels on Escape without moving anything", () => {
+    const { result, onMoveEntry, press, moveTo, release } = renderDnd();
+    setHit(folderZone("/root/sub"));
+    press("/root/a.md");
+    moveTo();
     act(() => {
-      result.current.dragHandlersFor("/root/a.md").onDragEnd();
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(result.current.dropTarget).toBeNull();
-    drop("/root/sub");
+    release();
     expect(onMoveEntry).not.toHaveBeenCalled();
   });
 
-  it("resets via the window fallback when dragend never reaches the row", () => {
-    const { result, onMoveEntry, start, over, drop } = renderDnd();
-    start("/root/a.md");
-    over("/root/sub");
-    // Chromium skips the row's dragend when the source unmounts mid-drag.
+  it("ignores other keys mid-drag", () => {
+    const { result, press, moveTo } = renderDnd();
+    setHit(folderZone("/root/sub"));
+    press("/root/a.md");
+    moveTo();
     act(() => {
-      window.dispatchEvent(new Event("dragend"));
-    });
-    expect(result.current.dropTarget).toBeNull();
-    drop("/root/sub");
-    expect(onMoveEntry).not.toHaveBeenCalled();
-  });
-
-  it("keeps the highlight when dragleave only crosses into the row's children", () => {
-    const { result, start, over } = renderDnd();
-    start("/root/a.md");
-    over("/root/sub");
-    act(() => {
-      result.current
-        .dropHandlersFor("/root/sub")
-        .onDragLeave(dragEvent({ currentTarget: { contains: () => true } }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
     });
     expect(result.current.dropTarget).toBe("/root/sub");
   });
 
-  it("clears the highlight on dragleave only for the hovered target", () => {
-    const { result, start, over } = renderDnd();
-    start("/root/a.md");
-    over("/root/sub");
-    act(() => {
-      result.current.dropHandlersFor("/root/other").onDragLeave(dragEvent());
-    });
-    expect(result.current.dropTarget).toBe("/root/sub");
-    act(() => {
-      result.current.dropHandlersFor("/root/sub").onDragLeave(dragEvent());
-    });
+  it("ignores stray pointer and key events while no drag is in progress", () => {
+    const { result, onMoveEntry, moveTo, release } = renderDnd();
+    setHit(folderZone("/root/sub"));
+    moveTo();
     expect(result.current.dropTarget).toBeNull();
+    release();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(onMoveEntry).not.toHaveBeenCalled();
   });
 
-  it("blockDropHandlers swallows dragover without marking a target", () => {
-    const event = dragEvent();
-    blockDropHandlers.onDragOver(event);
-    expect(event.stopPropagation).toHaveBeenCalled();
-    expect(event.preventDefault).not.toHaveBeenCalled();
+  it("handles a hit-test miss (pointer outside any zone)", () => {
+    const { result, onMoveEntry, press, moveTo, release } = renderDnd();
+    setHit(null);
+    press("/root/a.md");
+    moveTo();
+    expect(result.current.dropTarget).toBeNull();
+    release();
+    expect(onMoveEntry).not.toHaveBeenCalled();
   });
 
-  it("drops its window fallbacks on unmount", () => {
+  it("detaches its window listeners on unmount mid-drag", () => {
     const removeSpy = vi.spyOn(window, "removeEventListener");
-    const { start, unmount } = renderDnd();
-    start("/root/a.md");
+    const { press, unmount } = renderDnd();
+    setHit(folderZone("/root/sub"));
+    press("/root/a.md");
     unmount();
     const removed = removeSpy.mock.calls.map(([type]) => type);
-    expect(removed).toContain("dragend");
-    expect(removed).toContain("drop");
+    expect(removed).toContain("pointermove");
+    expect(removed).toContain("pointerup");
+    expect(removed).toContain("keydown");
     removeSpy.mockRestore();
   });
 });

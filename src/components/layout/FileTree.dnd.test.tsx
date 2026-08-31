@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { describe, expect, it, vi } from "vitest";
-import { TREE_DRAG_TYPE } from "@/hooks/useFileTreeDragMove";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DirEntry } from "@/lib/tabs";
 import { FileTree } from "./FileTree";
 
@@ -46,126 +45,125 @@ function renderTree(overrides: Partial<ComponentProps<typeof FileTree>> = {}) {
   return { ...render(<FileTree {...props} />), props };
 }
 
-const dataTransfer = () => ({
-  setData: vi.fn(),
-  effectAllowed: "",
-  dropEffect: "",
-  types: [TREE_DRAG_TYPE],
-});
 const row = (path: string) => screen.getByTitle(path);
 const rootArea = () => document.querySelector("[data-filetree-root]") as HTMLElement;
 
-describe("FileTree drag-and-drop move", () => {
-  it("marks file and folder rows draggable", () => {
-    renderTree();
-    expect(row("/root/post.md").getAttribute("draggable")).toBe("true");
-    expect(row("/root/subdir").getAttribute("draggable")).toBe("true");
+function setHit(el: Element | null) {
+  document.elementFromPoint = vi.fn(() => el) as typeof document.elementFromPoint;
+}
+
+// Press on a row, cross the drag threshold toward `target`, and hit-test it.
+function dragFromTo(fromPath: string, target: Element | null) {
+  fireEvent.pointerDown(row(fromPath), { button: 0, clientX: 0, clientY: 0 });
+  setHit(target);
+  fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
+}
+
+const releaseAt = (x = 40, y = 40) => fireEvent.pointerUp(window, { clientX: x, clientY: y });
+
+describe("FileTree pointer drag-and-drop move", () => {
+  beforeEach(() => {
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
   });
 
   it("moves a file dropped onto a folder row", () => {
     const { props } = renderTree();
-    const dt = dataTransfer();
-    fireEvent.dragStart(row("/root/post.md"), { dataTransfer: dt });
-    fireEvent.dragOver(row("/root/subdir"), { dataTransfer: dt });
-    fireEvent.drop(row("/root/subdir"), { dataTransfer: dt });
+    dragFromTo("/root/post.md", row("/root/subdir"));
+    expect(row("/root/subdir").getAttribute("data-drop-target")).toBe("true");
+    releaseAt();
     expect(props.onMoveEntry).toHaveBeenCalledWith("/root/post.md", "/root/subdir");
+    expect(row("/root/subdir").getAttribute("data-drop-target")).toBeNull();
   });
 
   it("moves a folder (with its children) dropped onto another folder", () => {
     const { props } = renderTree();
-    const dt = dataTransfer();
-    fireEvent.dragStart(row("/root/subdir"), { dataTransfer: dt });
-    fireEvent.dragOver(row("/root/other"), { dataTransfer: dt });
-    fireEvent.drop(row("/root/other"), { dataTransfer: dt });
+    dragFromTo("/root/subdir", row("/root/other"));
+    releaseAt();
     expect(props.onMoveEntry).toHaveBeenCalledWith("/root/subdir", "/root/other");
-  });
-
-  it("highlights the hovered folder row during a valid drag", () => {
-    renderTree();
-    const dt = dataTransfer();
-    fireEvent.dragStart(row("/root/post.md"), { dataTransfer: dt });
-    fireEvent.dragOver(row("/root/subdir"), { dataTransfer: dt });
-    expect(row("/root/subdir").getAttribute("data-drop-target")).toBe("true");
-    fireEvent.dragEnd(row("/root/post.md"), { dataTransfer: dt });
-    expect(row("/root/subdir").getAttribute("data-drop-target")).toBeNull();
   });
 
   it("refuses to drop a folder onto its own descendant", () => {
     const { props } = renderTree();
-    const dt = dataTransfer();
-    fireEvent.dragStart(row("/root/subdir"), { dataTransfer: dt });
-    fireEvent.dragOver(row("/root/subdir/nested"), { dataTransfer: dt });
+    dragFromTo("/root/subdir", row("/root/subdir/nested"));
     expect(row("/root/subdir/nested").getAttribute("data-drop-target")).toBeNull();
-    fireEvent.drop(row("/root/subdir/nested"), { dataTransfer: dt });
+    expect(document.body.style.cursor).toBe("no-drop");
+    releaseAt();
     expect(props.onMoveEntry).not.toHaveBeenCalled();
   });
 
   it("refuses to drop an entry onto its current parent folder", () => {
     const { props } = renderTree();
-    const dt = dataTransfer();
-    fireEvent.dragStart(row("/root/subdir/deep.md"), { dataTransfer: dt });
-    fireEvent.dragOver(row("/root/subdir"), { dataTransfer: dt });
+    dragFromTo("/root/subdir/deep.md", row("/root/subdir"));
     expect(row("/root/subdir").getAttribute("data-drop-target")).toBeNull();
-    fireEvent.drop(row("/root/subdir"), { dataTransfer: dt });
+    releaseAt();
     expect(props.onMoveEntry).not.toHaveBeenCalled();
   });
 
   it("moves a nested entry dropped on the empty root area to the workspace root", () => {
     const { props } = renderTree();
-    const dt = dataTransfer();
-    fireEvent.dragStart(row("/root/subdir/deep.md"), { dataTransfer: dt });
-    fireEvent.dragOver(rootArea(), { dataTransfer: dt });
+    dragFromTo("/root/subdir/deep.md", rootArea());
     expect(rootArea().getAttribute("data-drop-target")).toBe("true");
-    fireEvent.drop(rootArea(), { dataTransfer: dt });
+    releaseAt();
     expect(props.onMoveEntry).toHaveBeenCalledWith("/root/subdir/deep.md", "/root");
   });
 
   it("rejects the root area for a top-level entry (already there)", () => {
     const { props } = renderTree();
-    const dt = dataTransfer();
-    fireEvent.dragStart(row("/root/post.md"), { dataTransfer: dt });
-    fireEvent.dragOver(rootArea(), { dataTransfer: dt });
+    dragFromTo("/root/post.md", rootArea());
     expect(rootArea().getAttribute("data-drop-target")).toBeNull();
-    fireEvent.drop(rootArea(), { dataTransfer: dt });
+    releaseAt();
     expect(props.onMoveEntry).not.toHaveBeenCalled();
   });
 
   it("does not offer the root zone in the gaps between rows", () => {
     const { props } = renderTree();
-    const dt = dataTransfer();
-    fireEvent.dragStart(row("/root/subdir/deep.md"), { dataTransfer: dt });
-    // Gaps hit-test the list, not the container; the root guard ignores them.
     const list = rootArea().querySelector("ul") as HTMLElement;
-    fireEvent.dragOver(list, { dataTransfer: dt });
+    dragFromTo("/root/subdir/deep.md", list);
     expect(rootArea().getAttribute("data-drop-target")).toBeNull();
-    fireEvent.drop(list, { dataTransfer: dt });
+    releaseAt();
     expect(props.onMoveEntry).not.toHaveBeenCalled();
   });
 
-  it("ignores a foreign drag without the tree payload type", () => {
+  it("treats file rows as dead drop zones", () => {
     const { props } = renderTree();
-    const foreign = { setData: vi.fn(), effectAllowed: "", dropEffect: "", types: ["text/plain"] };
-    fireEvent.dragOver(row("/root/subdir"), { dataTransfer: foreign });
-    expect(row("/root/subdir").getAttribute("data-drop-target")).toBeNull();
-    fireEvent.drop(row("/root/subdir"), { dataTransfer: foreign });
+    dragFromTo("/root/subdir/deep.md", row("/root/post.md"));
+    expect(rootArea().getAttribute("data-drop-target")).toBeNull();
+    releaseAt();
     expect(props.onMoveEntry).not.toHaveBeenCalled();
   });
 
-  it("does not light up the root area while hovering a file row", () => {
-    renderTree();
-    const dt = dataTransfer();
-    fireEvent.dragStart(row("/root/subdir/deep.md"), { dataTransfer: dt });
-    // File rows swallow dragover, so the bubbling never reaches the root zone.
-    fireEvent.dragOver(row("/root/post.md"), { dataTransfer: dt });
-    expect(rootArea().getAttribute("data-drop-target")).toBeNull();
+  it("keeps plain clicks working (open file, toggle folder)", () => {
+    const { props } = renderTree();
+    fireEvent.pointerDown(row("/root/post.md"), { button: 0, clientX: 0, clientY: 0 });
+    fireEvent.pointerUp(window, { clientX: 0, clientY: 0 });
+    fireEvent.click(row("/root/post.md"));
+    expect(props.onOpenFile).toHaveBeenCalledWith("/root/post.md");
+    fireEvent.pointerDown(row("/root/other"), { button: 0, clientX: 0, clientY: 0 });
+    fireEvent.pointerUp(window, { clientX: 0, clientY: 0 });
+    fireEvent.click(row("/root/other"));
+    expect(props.onToggle).toHaveBeenCalledWith("/root/other");
   });
 
-  it("clears the highlight when the drag leaves the hovered folder", () => {
-    renderTree();
-    const dt = dataTransfer();
-    fireEvent.dragStart(row("/root/post.md"), { dataTransfer: dt });
-    fireEvent.dragOver(row("/root/subdir"), { dataTransfer: dt });
-    fireEvent.dragLeave(row("/root/subdir"), { dataTransfer: dt });
+  it("swallows the click synthesized after a completed drag", () => {
+    const { props } = renderTree();
+    dragFromTo("/root/post.md", row("/root/subdir"));
+    releaseAt();
+    fireEvent.click(row("/root/post.md"));
+    expect(props.onOpenFile).not.toHaveBeenCalled();
+    // The suppression is one-shot: the next real click opens as usual.
+    fireEvent.pointerDown(row("/root/post.md"), { button: 0, clientX: 0, clientY: 0 });
+    fireEvent.pointerUp(window, { clientX: 0, clientY: 0 });
+    fireEvent.click(row("/root/post.md"));
+    expect(props.onOpenFile).toHaveBeenCalledWith("/root/post.md");
+  });
+
+  it("cancels on Escape and leaves the tree untouched", () => {
+    const { props } = renderTree();
+    dragFromTo("/root/post.md", row("/root/subdir"));
+    fireEvent.keyDown(window, { key: "Escape" });
     expect(row("/root/subdir").getAttribute("data-drop-target")).toBeNull();
+    releaseAt();
+    expect(props.onMoveEntry).not.toHaveBeenCalled();
   });
 });

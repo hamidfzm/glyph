@@ -5,7 +5,7 @@ import { FolderIcon } from "@/components/icons/FolderIcon";
 import { FolderOpenIcon } from "@/components/icons/FolderOpenIcon";
 import { ImageIcon } from "@/components/icons/ImageIcon";
 import { InlineRenameInput } from "@/components/layout/InlineRenameInput";
-import { blockDropHandlers, type FileTreeDragMove } from "@/hooks/useFileTreeDragMove";
+import type { FileTreeDragMove } from "@/hooks/useFileTreeDragMove";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isImageFile } from "@/lib/imageExtensions";
 import { stem } from "@/lib/paths";
@@ -74,7 +74,7 @@ export function FileTreeEntry(props: FileTreeEntryProps) {
           onClick={() => onToggle(entry.path)}
           onContextMenu={(e) => props.onContextMenu(e, entry)}
           {...dnd.dragHandlersFor(entry.path)}
-          {...dnd.dropHandlersFor(entry.path)}
+          data-tree-drop-dir={entry.path}
           data-drop-target={isDropTarget || undefined}
           className={`w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-tertiary)] active:bg-[var(--color-border)] flex items-center gap-1.5 ${
             isDropTarget
@@ -111,7 +111,7 @@ export function FileTreeEntry(props: FileTreeEntryProps) {
         onClick={() => onOpenFile(entry.path)}
         onContextMenu={(e) => props.onContextMenu(e, entry)}
         {...dnd.dragHandlersFor(entry.path)}
-        {...blockDropHandlers}
+        data-tree-drop-block=""
         className={`w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors flex items-center gap-1.5 ${
           isActive
             ? "bg-[var(--color-accent)] text-white font-medium"
