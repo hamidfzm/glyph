@@ -16,6 +16,17 @@ When a feature is worth documenting, still update in the same commit:
 
 Treat this as part of the feature's definition of done, not a follow-up.
 
+## Install instructions live in four places
+
+Install commands (Homebrew, winget, Chocolatey, Scoop, Snap, AUR, PPA, apt, dnf) are duplicated across the ecosystem. Changing any install command means updating **all four in the same delivery**, not just the one that prompted the change:
+
+1. **`README.md`** in this repo (the Install section).
+2. **`.github/workflows/release.yml`** in this repo: the generated release notes carry the install commands in **two** heredoc blocks (the initial release body and the changelog INSTALL block); patch both.
+3. **The website**: `glyph-md/glyph-md.github.io`, `src/components/Download.astro`.
+4. **The org profile**: `glyph-md/.github`, `profile/README.md`.
+
+Homebrew commands always use fully qualified names (`brew install --cask --force glyph-md/tap/glyph` on macOS, `brew install glyph-md/tap/glyph` on Linux): homebrew-core ships an unrelated `glyph` formula (an ASCII-art converter) that a plain `brew install glyph` resolves to, shadowing the app's CLI with a tool that fails with "Error: input file must be specified."
+
 ## Style
 
 - **Don't name implementation libraries in user-facing copy.** Feature bullets describe what the user gets ("Markdown editor mode: syntax highlighting, line numbers", not "Editor mode with CodeMirror 6"). Implementation details belong in `CONTRIBUTING.md`'s architecture section or PR descriptions.
