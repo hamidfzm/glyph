@@ -4,8 +4,8 @@
 #      their matching Rust tauri-plugin-* crate versions.
 #   2. `cargo check` invokes `tauri-build`, which regenerates the schemas under
 #      `src-tauri/gen/schemas/` (acl-manifests, capabilities, desktop-schema,
-#      macOS-schema). These are tracked for IDE autocomplete on capability files
-#      and drift whenever any tauri/tauri-plugin-* version changes.
+#      macOS-schema). Only capabilities.json and desktop-schema.json are
+#      tracked; they drift whenever any tauri/tauri-plugin-* version changes.
 #
 # Any changes from either step are committed and pushed back to the branch in a
 # single commit so the PR ends up green and self-contained.
