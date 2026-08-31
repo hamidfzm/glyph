@@ -28,10 +28,12 @@ interface Props {
 }
 
 function setup(activeTab: Tab | null, initial: Omit<Props, "activeTab"> = {}) {
-  const openFile = vi.fn(() => Promise.resolve(true));
+  const openFile = vi.fn<
+    (path: string, options?: { implicit?: boolean }) => Promise<string | undefined>
+  >(async () => "tab-reopened");
   const openGraph = vi.fn();
   const scrolls = new Map<string, number>();
-  const getScrollPosition = (id: string) => scrolls.get(id) ?? 0;
+  const getScrollPosition = (id: string) => scrolls.get(id);
   const hook = renderHook(
     ({ activeTab, initializing = false, workspaceRoot = "/notes" }: Props) =>
       useNavigationHistory({
@@ -136,7 +138,7 @@ describe("useNavigationHistory", () => {
     const h = setup(tabA);
     h.activate(tabB);
     h.activate(tabC);
-    h.openFile.mockImplementationOnce(async () => false);
+    h.openFile.mockImplementationOnce(async () => undefined);
 
     await h.back();
     expect(h.openFile).toHaveBeenLastCalledWith("/notes/b.md", { implicit: true });
@@ -150,7 +152,7 @@ describe("useNavigationHistory", () => {
     const h = setup(tabA);
     h.activate(tabB);
     h.activate(tabC);
-    const pending = deferred<boolean>();
+    const pending = deferred<string | undefined>();
     h.openFile.mockImplementationOnce(() => pending.promise);
 
     await h.back();
@@ -160,7 +162,7 @@ describe("useNavigationHistory", () => {
     expect(h.openFile).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      pending.resolve(true);
+      pending.resolve("tab-b");
     });
     h.activate(tabB);
     await h.back();
@@ -217,6 +219,17 @@ describe("useNavigationHistory", () => {
 
     await h.forward();
     expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  });
+
+  it("a heading jump from an unscrolled document records a top-of-page origin", async () => {
+    const { scroller } = mountDocument();
+    const h = setup(tabA);
+    act(() => {
+      scrollToHeading("intro");
+    });
+
+    await h.back();
+    expect(scroller.scrollTop).toBe(0);
   });
 
   it("does not record scrolling by hand", async () => {

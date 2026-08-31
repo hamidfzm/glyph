@@ -29,7 +29,10 @@ export function useTabStrip() {
   const withActiveTab = useCallback((prev: TabsState, id: string): TabsState => {
     if (prev.activeTabId === id) return prev;
     if (!prev.activeTabId) return { ...prev, activeTabId: id };
-    const savedScroll = scrollRefs.current.get(prev.activeTabId) ?? 0;
+    // No live memory (a restored tab that was never scrolled) keeps the
+    // position already in its state instead of being wiped to 0.
+    const savedScroll = scrollRefs.current.get(prev.activeTabId);
+    if (savedScroll === undefined) return { ...prev, activeTabId: id };
     return {
       tabs: prev.tabs.map((t) => {
         if (t.id !== prev.activeTabId || t.kind === "graph") return t;
@@ -126,7 +129,7 @@ export function useTabStrip() {
     [activeTabId],
   );
 
-  const getScrollPosition = useCallback((id: string) => scrollRefs.current.get(id) ?? 0, []);
+  const getScrollPosition = useCallback((id: string) => scrollRefs.current.get(id), []);
 
   const forgetScroll = useCallback((id: string) => {
     scrollRefs.current.delete(id);

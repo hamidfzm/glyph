@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickFiles } from "@/lib/pickers";
+import { saveWorkspaceSession } from "@/lib/workspaceSession";
 import {
   captureListener,
   defaultOptions,
@@ -182,17 +183,27 @@ describe("useTabs opening folders", () => {
     expect(result.current.tabs).toHaveLength(0);
   });
 
-  it("skips the auto-open probe when autoLoad is false", async () => {
+  it("skips the auto-open probe when the workspace has a snapshot, even an empty one", async () => {
+    // INV-2: empty is not absent. An empty snapshot means the user closed
+    // every tab; restore must not auto-open the first note over that.
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => fileScan(["/p/ws/a.md"]),
       }) as typeof invoke,
     );
+    saveWorkspaceSession("/p/ws", {
+      tabs: [],
+      activeTabPath: "",
+      expanded: [],
+      scroll: {},
+      zoom: {},
+      savedAt: 1,
+    });
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     await act(async () => {
-      await result.current.openFolder("/p/ws", { autoLoad: false });
+      await result.current.openFolder("/p/ws");
     });
 
     expect(result.current.workspace?.root).toBe("/p/ws");

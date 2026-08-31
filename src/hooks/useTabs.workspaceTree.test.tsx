@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickFolder, pickNewWorkspace } from "@/lib/pickers";
+import { saveWorkspaceSession } from "@/lib/workspaceSession";
 import { defaultOptions, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
@@ -74,7 +75,7 @@ describe("useTabs workspace interactions", () => {
     expect(result.current.workspace).toBeNull();
   });
 
-  it("openFolder restores persisted expanded directories and pre-loads their listings", async () => {
+  it("openFolder restores the snapshot's expanded directories and pre-loads their listings", async () => {
     const readDirs: string[] = [];
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
@@ -84,11 +85,19 @@ describe("useTabs workspace interactions", () => {
         },
       }) as typeof invoke,
     );
+    saveWorkspaceSession("/p/ws", {
+      tabs: [],
+      activeTabPath: "",
+      expanded: ["/p/ws/sub"],
+      scroll: {},
+      zoom: {},
+      savedAt: 1,
+    });
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
     await act(async () => {
-      await result.current.openFolder("/p/ws", { expanded: ["/p/ws/sub"] });
+      await result.current.openFolder("/p/ws");
     });
 
     expect(readDirs).toContain("/p/ws/sub");

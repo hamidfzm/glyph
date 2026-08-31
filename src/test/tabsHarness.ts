@@ -5,6 +5,7 @@ import { expect, vi } from "vitest";
 import type { useTabs } from "@/hooks/useTabs";
 import { pickFiles, pickFolder, pickNewWorkspace, pickSave } from "@/lib/pickers";
 import { COMPLETE_SCAN } from "@/lib/workspaceScan";
+import { resetWorkspaceSessions } from "@/lib/workspaceSession";
 
 // Shared harness for the useTabs suites (useTabs.*.test.tsx). Each of those
 // files mocks "@/lib/pickers" itself — vi.mock is per-module and hoisted — and
@@ -115,6 +116,7 @@ export function watchDirectoryCalls(path: string) {
 
 /** Reset every Tauri and picker mock to the defaults the suites assume. */
 export function resetTabsMocks(): void {
+  resetWorkspaceSessions();
   vi.mocked(invoke).mockReset();
   vi.mocked(invoke).mockImplementation(makeInvoker() as typeof invoke);
   vi.mocked(listen).mockReset();

@@ -90,7 +90,7 @@ describe("useOpenInNewWindow", () => {
     // leaving the note showing in no window at all.
     vi.mocked(invoke).mockRejectedValue(new Error("denied"));
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    const openFile = vi.fn(async () => true);
+    const openFile = vi.fn(async () => "tab-reopened" as string | undefined);
     const { result } = render({ tabs: [openTab(NOTE)], closeTabs: async () => true, openFile });
 
     await act(() => result.current(NOTE));
@@ -102,7 +102,7 @@ describe("useOpenInNewWindow", () => {
   it("does not reopen when the note was not open here to begin with", async () => {
     vi.mocked(invoke).mockRejectedValue(new Error("denied"));
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    const openFile = vi.fn(async () => true);
+    const openFile = vi.fn(async () => "tab-reopened" as string | undefined);
     const { result } = render({ tabs: [], openFile });
 
     await act(() => result.current(NOTE));

@@ -1,6 +1,7 @@
-// Math for the temporary, per-tab zoom (note font scale, graph camera). The
-// value is a multiplier: 1 means "the saved default", clamped to a sane range so
-// content never zooms to an unusable size. Nothing here is persisted.
+// Math for the per-tab zoom (note font scale, graph camera). The value is a
+// multiplier: 1 means "the saved default", clamped to a sane range so content
+// never zooms to an unusable size. Note zoom persists per workspace via the
+// session snapshot; the graph camera does not.
 
 export const TAB_ZOOM_DEFAULT = 1;
 export const TAB_ZOOM_MIN = 0.5;

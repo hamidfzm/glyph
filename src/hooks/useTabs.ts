@@ -14,6 +14,7 @@ import type { UnsavedChoice } from "@/hooks/useUnsavedChangesPrompt";
 import { useWorkspaceIndex } from "@/hooks/useWorkspaceIndex";
 import { useWorkspaceLifecycle } from "@/hooks/useWorkspaceLifecycle";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
+import { useWorkspaceSession, type WorkspaceSessionApi } from "@/hooks/useWorkspaceSession";
 import { useWorkspaceTree } from "@/hooks/useWorkspaceTree";
 import { isCliExportProcess } from "@/lib/cliExport";
 import { basename, isPathInside } from "@/lib/paths";
@@ -45,8 +46,8 @@ interface UseTabsOptions {
  * lifecycle that ties them together. Each concern lives in its own hook —
  * `useTabStrip`, `useWorkspaceTree`, `useWorkspaceIndex`, `useOpenDocument`,
  * `useDocumentSave`, `useDocumentEdits`, `useWorkspaceLifecycle`,
- * `useTabsSession`, `useTabEvents`. This hook wires them together and owns only
- * the operations that touch more than one.
+ * `useTabsSession`, `useWorkspaceSession`, `useTabEvents`. This hook wires
+ * them together and owns only the operations that touch more than one.
  */
 export function useTabs(options: UseTabsOptions) {
   const { t } = useTranslation("workspace");
@@ -213,6 +214,10 @@ export function useTabs(options: UseTabsOptions) {
     [saveDocument, stateRef, t],
   );
 
+  // Filled after `useWorkspaceSession` below; the lifecycle needs the capture/
+  // restore pair before the session hook (which needs `initializing`) can run.
+  const sessionRef = useRef<WorkspaceSessionApi | null>(null);
+
   const { openFolder, createWorkspace, closeWorkspace } = useWorkspaceLifecycle({
     stateRef,
     setState,
@@ -227,6 +232,7 @@ export function useTabs(options: UseTabsOptions) {
     forgetScroll,
     forgetHistory,
     onWorkspaceNotice: options.onWorkspaceNotice,
+    sessionRef,
   });
 
   const createNote = useCallback((dir: string) => createEntry(dir, "note"), [createEntry]);
@@ -319,11 +325,25 @@ export function useTabs(options: UseTabsOptions) {
     tabs,
     activeTab,
     workspace,
+    workspaceRef,
     openFile,
     openFolder,
+    activateTabByPath,
+  });
+
+  const { captureSession, restoreSession, flushSessionForClose } = useWorkspaceSession({
+    stateRef,
+    workspaceRef,
+    tabs,
+    activeTab,
+    workspace,
+    initializing,
+    getScrollPosition,
+    openFile,
     openGraph,
     activateTabByPath,
   });
+  sessionRef.current = { captureSession, restoreSession };
 
   const { navigateBack, navigateForward, repointHistory } = useNavigationHistory({
     activeTab,
@@ -390,6 +410,7 @@ export function useTabs(options: UseTabsOptions) {
     closeTab,
     closeTabs,
     flushForClose,
+    flushSessionForClose,
     setActiveTab,
     moveTab,
     moveActiveTab,

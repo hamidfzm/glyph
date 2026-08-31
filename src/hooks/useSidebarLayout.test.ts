@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { registerSessionSidebarBridge, sessionSidebarBridge } from "@/lib/sessionUiBridge";
 import { useSidebarLayout } from "./useSidebarLayout";
 
 describe("useSidebarLayout", () => {
@@ -107,6 +108,55 @@ describe("useSidebarLayout", () => {
     expect(updateSettings).toHaveBeenCalledWith("layout.tagsHeight", null);
     expect(updateSettings).toHaveBeenCalledWith("layout.backlinksCollapsed", false);
     expect(updateSettings).toHaveBeenCalledWith("layout.tagsCollapsed", false);
+  });
+
+  it("serves capture and restore through the session bridge without touching settings", () => {
+    const updateSettings = vi.fn();
+    const { result, unmount } = renderHook(() =>
+      useSidebarLayout({
+        filesVisibleSetting: true,
+        outlineVisibleSetting: true,
+        updateSettings,
+      }),
+    );
+
+    expect(sessionSidebarBridge()?.visibility()).toEqual({
+      filesSidebarVisible: true,
+      outlineSidebarVisible: true,
+    });
+
+    // Restore applies the snapshot to the local mirror only.
+    act(() => {
+      sessionSidebarBridge()?.applyVisibility({
+        filesSidebarVisible: false,
+        outlineSidebarVisible: false,
+      });
+    });
+    expect(result.current.filesVisible).toBe(false);
+    expect(result.current.outlineVisible).toBe(false);
+    expect(updateSettings).not.toHaveBeenCalled();
+    expect(sessionSidebarBridge()?.visibility()).toEqual({
+      filesSidebarVisible: false,
+      outlineSidebarVisible: false,
+    });
+
+    // A null apply resyncs the mirror to the persisted setting.
+    act(() => {
+      sessionSidebarBridge()?.applyVisibility(null);
+    });
+    expect(result.current.filesVisible).toBe(true);
+    expect(result.current.outlineVisible).toBe(true);
+
+    // A replacement registered before this hook unmounts (a remount) must
+    // survive the old instance's cleanup.
+    const replacement = {
+      visibility: () => ({ filesSidebarVisible: true, outlineSidebarVisible: true }),
+      applyVisibility: () => {},
+    };
+    registerSessionSidebarBridge(replacement);
+    unmount();
+    expect(sessionSidebarBridge()).toBe(replacement);
+    registerSessionSidebarBridge(null);
   });
 });
 

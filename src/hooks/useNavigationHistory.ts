@@ -19,9 +19,9 @@ interface UseNavigationHistoryOptions {
   initializing: boolean;
   /** A different workspace is a different set of places; the history resets. */
   workspaceRoot: string | null;
-  openFile: (path: string, options?: OpenFileOptions) => Promise<boolean>;
+  openFile: (path: string, options?: OpenFileOptions) => Promise<string | undefined>;
   openGraph: (root: string) => void;
-  getScrollPosition: (tabId: string) => number;
+  getScrollPosition: (tabId: string) => number | undefined;
 }
 
 /**
@@ -69,7 +69,7 @@ export function useNavigationHistory({
         const tab = activeTabRef.current;
         const location = tab ? locationOf(tab) : null;
         if (!tab || !location || location.kind !== "file") return;
-        const leftAt = getScrollPosition(tab.id);
+        const leftAt = getScrollPosition(tab.id) ?? 0;
         historyRef.current = pushLocation(historyRef.current, { ...location, heading }, leftAt);
       }),
     [getScrollPosition],
@@ -83,7 +83,7 @@ export function useNavigationHistory({
 
   const currentScroll = useCallback(() => {
     const tab = activeTabRef.current;
-    return tab ? getScrollPosition(tab.id) : 0;
+    return tab ? (getScrollPosition(tab.id) ?? 0) : 0;
   }, [getScrollPosition]);
 
   const navigate = useCallback(

@@ -82,12 +82,12 @@ describe("useTabs opening documents", () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
-    let opened: boolean | undefined;
+    let opened: string | undefined;
     await act(async () => {
       opened = await result.current.openFile("/p/elsewhere.md", { implicit: true });
     });
 
-    expect(opened).toBe(false);
+    expect(opened).toBeUndefined();
     expect(invoke).toHaveBeenCalledWith("window_showing_file", {
       path: "/p/elsewhere.md",
       focus: false,
@@ -99,17 +99,17 @@ describe("useTabs opening documents", () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
-    let opened: boolean | undefined;
+    let opened: string | undefined;
     await act(async () => {
       opened = await result.current.openFile("/p/new.md");
     });
-    expect(opened).toBe(true);
+    expect(opened).toBeDefined();
 
     // Re-opening activates the existing tab, which still counts as shown here.
     await act(async () => {
       opened = await result.current.openFile("/p/new.md");
     });
-    expect(opened).toBe(true);
+    expect(opened).toBeDefined();
     expect(result.current.tabs).toHaveLength(1);
   });
 

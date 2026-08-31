@@ -115,8 +115,10 @@ export interface BehaviorSettings {
   // uploaded.
   checkForUpdates: boolean;
   recentFiles: string[];
-  // Each entry is a tab to restore on launch; either a single file or a folder
-  // workspace with optional active-file + expanded subdir state.
+  // Launch restore: the workspace pointer plus loose files outside it. The
+  // workspace's own tabs live in its per-workspace session snapshot; legacy
+  // entries (inline active file, expanded dirs, workspace files) are still
+  // read once to seed that snapshot.
   openTabs: PersistedTab[];
   // Path of the previously-active tab (root for folder tabs, file path for file
   // tabs). Used to restore which tab is selected on launch.

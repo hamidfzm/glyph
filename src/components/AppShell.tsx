@@ -74,6 +74,7 @@ export function AppShell() {
     createCanvasInWorkspace,
     saveDocument,
     flushForClose,
+    flushSessionForClose,
     undoEdit,
     redoEdit,
     moveActiveTab,
@@ -113,9 +114,10 @@ export function AppShell() {
   );
   useAutoSave({ documents: dirtyDocuments, save: saveDocument });
 
-  // Intercept native window close / app exit: flush pending settings and every
-  // dirty tab (confirming on failure) before the window is allowed to close.
-  useWindowClose(useCloseFlush(flushForClose));
+  // Intercept native window close / app exit: flush pending settings, the
+  // workspace session snapshot, and every dirty tab (confirming on failure)
+  // before the window is allowed to close.
+  useWindowClose(useCloseFlush(flushForClose, flushSessionForClose));
 
   const controllers = useShellControllers();
   const { aiController, tts, exporters, siteExporter, runPluginExporter } = controllers;
