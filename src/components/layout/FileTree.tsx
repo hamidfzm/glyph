@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ContextMenu, type ContextMenuModel } from "@/components/menu/ContextMenu";
+import { useFileTreeDragMove } from "@/hooks/useFileTreeDragMove";
 import { parentDir } from "@/lib/paths";
 import type { DirEntry } from "@/lib/tabs";
 import {
@@ -30,6 +31,8 @@ interface FileTreeProps {
   onDuplicate: (path: string) => Promise<string | null>;
   // Move an entry: prompt for a destination folder, then relocate it.
   onMove: (path: string) => void;
+  // Move an entry into `toDir` directly (drag-and-drop; no picker).
+  onMoveEntry: (from: string, toDir: string) => void;
   // Reveal an entry in the OS file manager.
   onReveal: (path: string) => void;
   // Delete a note/folder (confirms first); resolves true when removed.
@@ -57,6 +60,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
     onRename,
     onDuplicate,
     onMove,
+    onMoveEntry,
     onReveal,
     onDelete,
   },
@@ -67,6 +71,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
   const [contextMenu, setContextMenu] = useState<FileTreeMenuTarget | null>(null);
   const [editing, setEditing] = useState<EntryEditingState | null>(null);
   const closeMenu = useCallback(() => setContextMenu(null), []);
+  const dnd = useFileTreeDragMove(root, onMoveEntry);
 
   // Enter inline-naming for a freshly-created entry (null = creation failed).
   const beginNaming = useCallback((path: string | null, kind: EntryEditKind) => {
@@ -208,11 +213,24 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
     editing,
     onEditCommit: handleEditCommit,
     onEditCancel: handleEditCancel,
+    dnd,
   };
 
+  // The empty area below the entries is the drop target for the workspace
+  // root; the hook's hit-testing only counts it when the pointer is over the
+  // container itself, so the gaps between rows don't flash the whole tree.
+  const isRootDropTarget = dnd.dropTarget === root;
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: container only suppresses the native menu for empty-area right-clicks; keyboard users create via the menu reached from focusable rows
-    <div data-filetree-root className="min-h-full" onContextMenu={handleRootContextMenu}>
+    // biome-ignore lint/a11y/noStaticElementInteractions: container only suppresses the native menu for empty-area right-clicks; drops land here via pointer hit-testing, and keyboard users reach both actions via the menu on focusable rows
+    <div
+      data-filetree-root
+      data-tree-drop-dir={root}
+      data-drop-target={isRootDropTarget || undefined}
+      className={`min-h-full rounded-[var(--glyph-radius-sm)] ${
+        isRootDropTarget ? "bg-[var(--color-surface-tertiary)]" : ""
+      }`}
+      onContextMenu={handleRootContextMenu}
+    >
       <ul className="space-y-0.5">
         {entries.map((entry) => (
           <FileTreeEntry key={entry.path} {...childProps} entry={entry} depth={0} />
