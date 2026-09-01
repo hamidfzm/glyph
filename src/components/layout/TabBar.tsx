@@ -107,7 +107,8 @@ export function TabBar({ onToggleAIChat, onOpenPalette }: TabBarProps) {
               data-tab-kind={tab.kind}
               data-loose={loose || undefined}
               data-drop={indicator?.index === index ? indicator.edge : undefined}
-              {...handlersFor(tab.id, index)}
+              data-tab-index={index}
+              {...handlersFor(tab.id, index, label)}
               onAuxClick={(e) => {
                 if (e.button === 1) {
                   e.preventDefault();

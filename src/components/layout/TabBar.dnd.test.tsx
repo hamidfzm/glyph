@@ -1,14 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
-import {
-  SidebarLayoutContext,
-  type SidebarLayoutContextValue,
-} from "@/contexts/SidebarLayoutContext";
-import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import { activeFileOf, type FileTab, type Tab } from "@/lib/tabs";
-import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
+import type { TabsContextValue } from "@/contexts/TabsContext";
+import type { FileTab, Tab } from "@/lib/tabs";
 import { sidebarLayoutValue } from "@/test/fixtures/sidebarLayout";
+import { TabsWrapper, tabsContextValue } from "@/test/fixtures/tabsContext";
+import { dragFromTo, ghostEl, releaseAt, setHit } from "@/test/pointerDrag";
 import { TabBar } from "./TabBar";
 
 const makeFileTab = (i: number): FileTab => ({
@@ -29,189 +26,196 @@ const makeFileTab = (i: number): FileTab => ({
 
 const makeTabs = (count: number): Tab[] => Array.from({ length: count }, (_, i) => makeFileTab(i));
 
-interface RenderOpts {
-  tabs?: Tab[];
-  activeTabId?: string | null;
-  workspace?: TabsContextValue["workspace"];
-  setActiveTab?: (id: string) => void;
-  closeTab?: (id: string) => Promise<boolean>;
-  closeTabs?: (ids: string[]) => Promise<boolean>;
-  setTabMode?: TabsContextValue["setTabMode"];
-  moveTab?: (id: string, toIndex: number) => void;
-  tocEntries?: TabsContextValue["tocEntries"];
-  openFileDialog?: TabsContextValue["openFileDialog"];
-  sidebar?: Partial<SidebarLayoutContextValue>;
-}
-
-function buildContext(opts: RenderOpts): TabsContextValue {
-  const tabs = opts.tabs ?? [];
-  const activeTabId = opts.activeTabId ?? null;
-  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
-  return {
-    tabs,
-    activeTab,
-    activeTabId,
-    activeFile: activeFileOf(activeTab),
-    initializing: false,
-    workspaceFiles: [],
-    wikilinkRefs: [],
-    metadataEntries: [],
-    metadata: new Map(),
-    indexStatus: COMPLETE_INDEX_STATUS,
-    workspace: opts.workspace ?? null,
-    newDocument: vi.fn(),
-    openFile: vi.fn(),
-    openFolder: vi.fn(),
-    createWorkspace: vi.fn(),
-    openGraph: vi.fn(),
-    closeWorkspace: vi.fn(),
-    toggleExpand: vi.fn(),
-    createNote: vi.fn(),
-    createNoteInWorkspace: vi.fn(),
-    createCanvasInWorkspace: vi.fn(),
-    createCanvas: vi.fn(),
-    commitEdit: vi.fn(),
-    createFolder: vi.fn(),
-    renamePath: vi.fn(),
-    duplicatePath: vi.fn(),
-    movePath: vi.fn(),
-    collapseAll: vi.fn(),
-    expandAll: vi.fn(),
-    deletePath: vi.fn(),
-    closeTab: opts.closeTab ?? vi.fn(),
-    closeTabs: opts.closeTabs ?? vi.fn(),
-    setActiveTab: opts.setActiveTab ?? vi.fn(),
-    setTabMode: opts.setTabMode ?? vi.fn(),
-    moveTab: opts.moveTab ?? vi.fn(),
-    moveActiveTab: vi.fn(),
-    navigateBack: vi.fn(),
-    navigateForward: vi.fn(),
-    updateEditContent: vi.fn(),
-    saveDocument: vi.fn(),
-    flushForClose: vi.fn(),
-    flushSessionForClose: vi.fn(async () => {}),
-    toggleTask: vi.fn(),
-    saveScrollPosition: vi.fn(),
-    openFileDialog: opts.openFileDialog ?? vi.fn(),
-    undoEdit: vi.fn(),
-    redoEdit: vi.fn(),
-    displayContent: null,
-    tocEntries: opts.tocEntries ?? [],
-    backlinks: [],
-    workspaceNotice: null,
-    dismissWorkspaceNotice: vi.fn(),
-  };
-}
-
-function Wrapper({
-  value,
-  sidebar,
-  children,
-}: {
-  value: TabsContextValue;
-  sidebar: SidebarLayoutContextValue;
-  children: ReactNode;
-}) {
-  return (
-    <TabsContext.Provider value={value}>
-      <SidebarLayoutContext.Provider value={sidebar}>{children}</SidebarLayoutContext.Provider>
-    </TabsContext.Provider>
+function renderTabBar(over: Partial<TabsContextValue> = {}) {
+  return render(
+    <TabsWrapper value={tabsContextValue({ tabs: makeTabs(2), activeTabId: "tab-0", ...over })}>
+      <SidebarLayoutContext.Provider value={sidebarLayoutValue()}>
+        <TabBar onToggleAIChat={null} onOpenPalette={vi.fn()} />
+      </SidebarLayoutContext.Provider>
+    </TabsWrapper>,
   );
 }
 
-function renderTabBar(opts: RenderOpts = {}, onToggleAIChat: (() => void) | null = null) {
-  const value = buildContext(opts);
-  const sidebar = sidebarLayoutValue(opts.sidebar);
-  return {
-    ...render(
-      <Wrapper value={value} sidebar={sidebar}>
-        <TabBar onToggleAIChat={onToggleAIChat} onOpenPalette={vi.fn()} />
-      </Wrapper>,
-    ),
-    value,
-    sidebar,
-  };
-}
+describe("pointer drag reordering", () => {
+  // Scoped to the strip: the drag ghost repeats the label in document.body.
+  const strip = () => document.querySelector(".tab-bar-scroll") as HTMLElement;
+  const labelEl = (name: string) => within(strip()).getByText(name);
+  const tabEl = (name: string) => labelEl(name).closest(".tab-item") as HTMLElement;
+  const activateButton = (name: string) => screen.getByRole("button", { name });
 
-describe("drag-and-drop reordering", () => {
-  const dataTransfer = () => ({ setData: vi.fn(), effectAllowed: "", dropEffect: "" });
-  const tabEl = (name: string) => screen.getByText(name).closest(".tab-item") as HTMLElement;
+  const press = (name: string, init: Record<string, unknown> = {}) =>
+    fireEvent.pointerDown(tabEl(name), { button: 0, clientX: 0, clientY: 0, ...init });
 
-  it("marks every tab as draggable", () => {
-    renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
-    expect(tabEl("file0.md").getAttribute("draggable")).toBe("true");
-    expect(tabEl("file1.md").getAttribute("draggable")).toBe("true");
+  beforeEach(() => {
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
   });
 
-  it("moves the dragged tab to the drop target's index", () => {
+  it("keeps a plain click activating the tab when movement stays below the threshold", () => {
+    const setActiveTab = vi.fn();
     const moveTab = vi.fn();
-    renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-0", moveTab });
-    const dt = dataTransfer();
-    fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
-    fireEvent.dragOver(tabEl("file2.md"), { dataTransfer: dt });
-    fireEvent.drop(tabEl("file2.md"), { dataTransfer: dt });
+    renderTabBar({ setActiveTab, moveTab });
+    press("file1.md");
+    fireEvent.pointerMove(window, { clientX: 2, clientY: 2 });
+    expect(ghostEl()).toBeNull();
+    releaseAt(2, 2);
+    fireEvent.click(activateButton("file1.md"));
+    expect(setActiveTab).toHaveBeenCalledWith("tab-1");
+    expect(moveTab).not.toHaveBeenCalled();
+  });
+
+  it("moves the dragged tab to the hovered tab's index on release", () => {
+    const moveTab = vi.fn();
+    renderTabBar({ tabs: makeTabs(3), moveTab });
+    // Hit the label span inside the tab: descendants resolve to their tab.
+    dragFromTo(tabEl("file0.md"), labelEl("file2.md"));
+    releaseAt();
+    expect(moveTab).toHaveBeenCalledWith("tab-0", 2);
+    expect(tabEl("file2.md").hasAttribute("data-drop")).toBe(false);
+    expect(ghostEl()).toBeNull();
+    expect(document.body.style.userSelect).toBe("");
+    expect(document.body.dataset.pointerDrag).toBeUndefined();
+  });
+
+  it("commits the target the indicator showed, not where the pointer was released", () => {
+    const moveTab = vi.fn();
+    renderTabBar({ tabs: makeTabs(3), moveTab });
+    dragFromTo(tabEl("file0.md"), tabEl("file2.md"));
+    // The release lands a few px further, past the last tab.
+    setHit(null);
+    releaseAt(60, 40);
     expect(moveTab).toHaveBeenCalledWith("tab-0", 2);
   });
 
-  it("shows the drop indicator on the trailing edge when dragging right", () => {
-    renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-0" });
-    const dt = dataTransfer();
-    fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
-    fireEvent.dragOver(tabEl("file2.md"), { dataTransfer: dt });
-    // dragover fires repeatedly over the same target; the indicator is stable.
-    fireEvent.dragOver(tabEl("file2.md"), { dataTransfer: dt });
-    expect(tabEl("file2.md").getAttribute("data-drop")).toBe("after");
+  it("captures the pointer on press so a release outside the window still ends the drag", () => {
+    renderTabBar();
+    const setPointerCapture = vi.fn();
+    Object.assign(tabEl("file0.md"), { setPointerCapture });
+    press("file0.md", { pointerId: 7 });
+    expect(setPointerCapture).toHaveBeenCalledWith(7);
   });
 
-  it("shows the drop indicator on the leading edge when dragging left", () => {
+  it("shows the trailing-edge indicator and the label ghost when dragging right", () => {
+    renderTabBar({ tabs: makeTabs(3) });
+    dragFromTo(tabEl("file0.md"), tabEl("file2.md"));
+    // pointermove fires continuously over the same target; the indicator is stable.
+    fireEvent.pointerMove(window, { clientX: 41, clientY: 40 });
+    expect(tabEl("file2.md").getAttribute("data-drop")).toBe("after");
+    expect(ghostEl()?.textContent).toBe("file0.md");
+    expect(document.body.style.cursor).toBe("grabbing");
+    expect(document.body.dataset.pointerDrag).toBe("");
+  });
+
+  it("shows the leading-edge indicator when dragging left", () => {
     renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-2" });
-    const dt = dataTransfer();
-    fireEvent.dragStart(tabEl("file2.md"), { dataTransfer: dt });
-    fireEvent.dragOver(tabEl("file0.md"), { dataTransfer: dt });
+    dragFromTo(tabEl("file2.md"), tabEl("file0.md"));
     expect(tabEl("file0.md").getAttribute("data-drop")).toBe("before");
   });
 
-  it("shows no indicator over the dragged tab itself and does not move on self-drop", () => {
+  it("shows no indicator over the dragged tab itself and does not commit a self-drop", () => {
     const moveTab = vi.fn();
-    renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0", moveTab });
-    const dt = dataTransfer();
-    fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
-    fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
-    fireEvent.dragOver(tabEl("file0.md"), { dataTransfer: dt });
+    renderTabBar({ moveTab });
+    dragFromTo(tabEl("file0.md"), tabEl("file1.md"));
+    expect(tabEl("file1.md").getAttribute("data-drop")).toBe("after");
+    setHit(tabEl("file0.md"));
+    fireEvent.pointerMove(window, { clientX: 10, clientY: 10 });
     expect(tabEl("file0.md").hasAttribute("data-drop")).toBe(false);
     expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
-    fireEvent.drop(tabEl("file0.md"), { dataTransfer: dt });
+    expect(document.body.style.cursor).toBe("no-drop");
+    releaseAt(10, 10);
     expect(moveTab).not.toHaveBeenCalled();
   });
 
-  it("clears the indicator when the drag ends without a drop", () => {
-    renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
-    const dt = dataTransfer();
-    fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
-    fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
-    expect(tabEl("file1.md").getAttribute("data-drop")).toBe("after");
-    fireEvent.dragEnd(tabEl("file0.md"), { dataTransfer: dt });
-    expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
-  });
-
-  it("ignores dragover and drop when no tab drag is in progress", () => {
+  it("treats space outside the tab strip as no target", () => {
     const moveTab = vi.fn();
-    renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0", moveTab });
-    const dt = dataTransfer();
-    fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
-    expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
-    fireEvent.drop(tabEl("file1.md"), { dataTransfer: dt });
+    renderTabBar({ moveTab });
+    dragFromTo(tabEl("file0.md"), document.body);
+    expect(document.body.style.cursor).toBe("no-drop");
+    releaseAt();
+    expect(moveTab).not.toHaveBeenCalled();
+    // A hit-test miss (no element at the point at all) is equally inert.
+    dragFromTo(tabEl("file0.md"), null);
+    releaseAt();
     expect(moveTab).not.toHaveBeenCalled();
   });
 
-  it("clears the indicator after a completed drop", () => {
+  it("cancels on Escape without reordering", () => {
     const moveTab = vi.fn();
-    renderTabBar({ tabs: makeTabs(3), activeTabId: "tab-0", moveTab });
-    const dt = dataTransfer();
-    fireEvent.dragStart(tabEl("file0.md"), { dataTransfer: dt });
-    fireEvent.dragOver(tabEl("file1.md"), { dataTransfer: dt });
-    fireEvent.drop(tabEl("file1.md"), { dataTransfer: dt });
+    renderTabBar({ moveTab });
+    dragFromTo(tabEl("file0.md"), tabEl("file1.md"));
+    fireEvent.keyDown(window, { key: "Escape" });
     expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
+    expect(ghostEl()).toBeNull();
+    releaseAt();
+    expect(moveTab).not.toHaveBeenCalled();
+  });
+
+  it("cancels when the browser cancels the pointer sequence", () => {
+    const moveTab = vi.fn();
+    renderTabBar({ moveTab });
+    dragFromTo(tabEl("file0.md"), tabEl("file1.md"));
+    fireEvent.pointerCancel(window);
+    expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
+    expect(ghostEl()).toBeNull();
+    expect(document.body.style.cursor).toBe("");
+    releaseAt();
+    expect(moveTab).not.toHaveBeenCalled();
+  });
+
+  it("tears down the drag feedback when the strip unmounts mid-drag", () => {
+    const { unmount } = renderTabBar();
+    dragFromTo(tabEl("file0.md"), tabEl("file1.md"));
+    expect(ghostEl()).not.toBeNull();
+    unmount();
+    expect(ghostEl()).toBeNull();
+    expect(document.body.style.userSelect).toBe("");
+    expect(document.body.style.cursor).toBe("");
+    expect(document.body.dataset.pointerDrag).toBeUndefined();
+  });
+
+  it("ignores stray pointer and key events while no drag is in progress", () => {
+    const moveTab = vi.fn();
+    renderTabBar({ moveTab });
+    setHit(tabEl("file1.md"));
+    fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
+    expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
+    fireEvent.pointerUp(window, { clientX: 40, clientY: 40 });
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(moveTab).not.toHaveBeenCalled();
+  });
+
+  it("suppresses exactly one click after a completed drag", () => {
+    const setActiveTab = vi.fn();
+    renderTabBar({ setActiveTab });
+    dragFromTo(tabEl("file0.md"), tabEl("file1.md"));
+    releaseAt();
+    fireEvent.click(activateButton("file0.md"));
+    expect(setActiveTab).not.toHaveBeenCalled();
+    fireEvent.click(activateButton("file0.md"));
+    expect(setActiveTab).toHaveBeenCalledWith("tab-0");
+  });
+
+  it("leaves middle-click presses to the aux-click close instead of the drag", () => {
+    const closeTab = vi.fn();
+    const moveTab = vi.fn();
+    renderTabBar({ closeTab, moveTab });
+    press("file1.md", { button: 1 });
+    setHit(tabEl("file0.md"));
+    fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
+    expect(ghostEl()).toBeNull();
+    releaseAt();
+    fireEvent(tabEl("file1.md"), new MouseEvent("auxclick", { bubbles: true, button: 1 }));
+    expect(closeTab).toHaveBeenCalledWith("tab-1");
+    expect(moveTab).not.toHaveBeenCalled();
+  });
+
+  it("ignores touch presses (mobile has its own interaction model)", () => {
+    renderTabBar();
+    press("file0.md", { pointerType: "touch" });
+    setHit(tabEl("file1.md"));
+    fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
+    expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
+    expect(ghostEl()).toBeNull();
   });
 });
 
@@ -219,7 +223,7 @@ describe("drag-and-drop reordering", () => {
 // spec, and React 19 logs a hydration error when it sees it. The close
 // button used to sit inside the tab activate button; now it's a sibling.
 it("does not nest a button inside another button", () => {
-  const { container } = renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-0" });
+  const { container } = renderTabBar();
   for (const button of container.querySelectorAll("button")) {
     expect(button.querySelector("button")).toBeNull();
   }

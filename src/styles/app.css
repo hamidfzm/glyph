@@ -16,6 +16,7 @@
 @import "./print.css";
 @import "./ai-chat.css";
 @import "./motion.css";
+@import "./drag.css";
 
 :root {
   /* Native widgets (select popups, scrollbars) follow the app theme; WebKitGTK renders them unreadable otherwise. */
