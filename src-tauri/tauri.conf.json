@@ -36,6 +36,12 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "hamidfzm",
+    "copyright": "Copyright (c) 2026 hamidfzm",
+    "license": "MIT",
+    "licenseFile": "../LICENSE",
+    "category": "Productivity",
+    "longDescription": "A modern markdown viewer and editor with GFM support, syntax highlighting, Mermaid and D2 diagrams, live file watching, table of contents sidebar, cloud sync, JavaScript plugins, and platform-native styling.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
