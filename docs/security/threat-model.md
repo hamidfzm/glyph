@@ -120,6 +120,18 @@ The dev CSP is identical plus the Vite dev server and HMR websocket on
 The JS dialog plugin's `open`/`save` permissions were removed from the
 capability file; only `ask`/`message` remain. All pickers run in Rust.
 
+The fs plugin is absent from the default capability for the same reason.
+`fs:default` pulls in the `scope-app-recursive` scope (`$APPCONFIG/**`,
+`$APPDATA/**`, and the other app-specific directories), and the plugin unions
+the global and per-command scopes for every command it exposes, so a scope
+granted for reads also authorizes `write_text_file`. Plugins are installed
+under `app_config_dir()`, so that would let a compromised renderer overwrite
+installed plugin code and have it loaded on the next launch, bypassing the
+grant registry entirely. The plugin now lives in `capabilities/mobile.json`,
+gated to Android and iOS, where it reads the sandboxed `content://` URIs the
+Rust commands cannot open. A unit test in `lib.rs` fails if any `fs:`
+permission returns to the default capability (#698).
+
 ## Residual risks
 
 - **Persisted-session grant staging.** The settings store (`settings.json`)

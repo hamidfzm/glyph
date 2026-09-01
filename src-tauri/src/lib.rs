@@ -674,6 +674,57 @@ mod tests {
         }
     }
 
+    /// The fs plugin's `scope-app-recursive` scope, which `fs:default` pulls
+    /// in, is unioned across every fs command, reads and writes alike. Granting
+    /// any fs permission to the default capability therefore hands the webview
+    /// write access to `$APPCONFIG`, which is where plugins are installed
+    /// (`commands/plugins/mod.rs`), so a compromised renderer could persist
+    /// code across restarts. Desktop routes every filesystem call through
+    /// `GrantRegistry` instead; the fs plugin belongs to the mobile-only
+    /// capability (#698).
+    #[test]
+    fn default_capability_grants_no_filesystem_plugin_access() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        for permission in conf["permissions"].as_array().unwrap() {
+            let identifier = permission
+                .as_str()
+                .or_else(|| permission["identifier"].as_str())
+                .expect("every permission is a string or an object with an identifier");
+            assert!(
+                !identifier.starts_with("fs:"),
+                "default capability must not grant {identifier}: the fs plugin is mobile-only"
+            );
+        }
+    }
+
+    /// Mobile keeps the fs read path because Android pickers return
+    /// `content://` URIs that the Rust commands cannot open, but it must stay
+    /// fenced off desktop and must never gain a write permission.
+    #[test]
+    fn mobile_capability_keeps_reads_only() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/mobile.json")).unwrap();
+        let platforms: Vec<&str> = conf["platforms"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p.as_str())
+            .collect();
+        assert_eq!(platforms, ["android", "iOS"]);
+        let perms: Vec<&str> = conf["permissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p.as_str())
+            .collect();
+        assert!(perms.contains(&"fs:allow-read-text-file"));
+        assert!(
+            !perms.iter().any(|p| p.contains("write")),
+            "mobile capability must not gain fs write access"
+        );
+    }
+
     #[test]
     fn csp_keeps_every_surface_the_app_depends_on() {
         let conf: serde_json::Value =
