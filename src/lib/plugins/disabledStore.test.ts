@@ -1,4 +1,4 @@
-import { load } from "@tauri-apps/plugin-store";
+import { getStore } from "@tauri-apps/plugin-store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { loadDisabled, saveDisabled } from "./disabledStore";
 
@@ -8,8 +8,8 @@ const set = vi.fn();
 beforeEach(() => {
   get.mockReset();
   set.mockReset();
-  vi.mocked(load).mockReset();
-  vi.mocked(load).mockResolvedValue({ get, set } as never);
+  vi.mocked(getStore).mockReset();
+  vi.mocked(getStore).mockResolvedValue({ get, set } as never);
 });
 
 describe("loadDisabled", () => {
@@ -24,7 +24,7 @@ describe("loadDisabled", () => {
   });
 
   it("returns [] when the store throws", async () => {
-    vi.mocked(load).mockRejectedValue(new Error("no store"));
+    vi.mocked(getStore).mockRejectedValue(new Error("no store"));
     expect(await loadDisabled()).toEqual([]);
   });
 });

@@ -19,7 +19,7 @@ const EMPTY_CANVAS: &str = "{\n\t\"nodes\": [],\n\t\"edges\": []\n}\n";
 
 /// Ensure `target_parent` resolves to a directory inside `root`. Both are
 /// canonicalized so `..` segments and symlinks can't escape the workspace.
-fn ensure_within_root(target_parent: &Path, root: &Path) -> Result<(), String> {
+fn ensure_dir_within_root(target_parent: &Path, root: &Path) -> Result<(), String> {
     let parent = target_parent
         .canonicalize()
         .map_err(|e| format!("Invalid directory: {e}"))?;
@@ -30,6 +30,23 @@ fn ensure_within_root(target_parent: &Path, root: &Path) -> Result<(), String> {
         return Err("Refusing to write outside the workspace".to_string());
     }
     Ok(())
+}
+
+/// Canonicalize an existing `target` and require it to sit strictly inside
+/// `root`. Checking only the parent is not enough: `<root>/..` has parent
+/// `<root>` and would pass, and a symlink inside the workspace can resolve to
+/// a path outside it.
+fn ensure_entry_inside_root(target: &Path, root: &Path) -> Result<PathBuf, String> {
+    let canonical = target
+        .canonicalize()
+        .map_err(|e| format!("Invalid path: {e}"))?;
+    let root = root
+        .canonicalize()
+        .map_err(|e| format!("Invalid workspace root: {e}"))?;
+    if canonical == root || !canonical.starts_with(&root) {
+        return Err("Refusing to write outside the workspace".to_string());
+    }
+    Ok(canonical)
 }
 
 /// Pick the first non-colliding name in `dir` built from `stem`/`ext`:
@@ -68,7 +85,7 @@ pub fn create_note(
 ) -> Result<String, String> {
     let root = grants.ensure_workspace(&root)?;
     let dir = Path::new(&dir);
-    ensure_within_root(dir, &root)?;
+    ensure_dir_within_root(dir, &root)?;
     let path = unique_path(dir, DEFAULT_NOTE_STEM, Some("md"));
     fs::write(&path, "").map_err(|e| format!("Failed to create note: {e}"))?;
     Ok(path.to_string_lossy().to_string())
@@ -82,7 +99,7 @@ pub fn create_canvas(
 ) -> Result<String, String> {
     let root = grants.ensure_workspace(&root)?;
     let dir = Path::new(&dir);
-    ensure_within_root(dir, &root)?;
+    ensure_dir_within_root(dir, &root)?;
     let path = unique_path(dir, DEFAULT_NOTE_STEM, Some("canvas"));
     fs::write(&path, EMPTY_CANVAS).map_err(|e| format!("Failed to create canvas: {e}"))?;
     Ok(path.to_string_lossy().to_string())
@@ -96,7 +113,7 @@ pub fn create_folder(
 ) -> Result<String, String> {
     let root = grants.ensure_workspace(&root)?;
     let dir = Path::new(&dir);
-    ensure_within_root(dir, &root)?;
+    ensure_dir_within_root(dir, &root)?;
     let path = unique_path(dir, DEFAULT_FOLDER_NAME, None);
     fs::create_dir(&path).map_err(|e| format!("Failed to create folder: {e}"))?;
     Ok(path.to_string_lossy().to_string())
@@ -115,10 +132,10 @@ pub fn rename_path(
 ) -> Result<String, String> {
     let root = grants.ensure_workspace(&root)?;
     let source = Path::new(&path);
+    ensure_entry_inside_root(source, &root)?;
     let parent = source
         .parent()
         .ok_or_else(|| "Path has no parent directory".to_string())?;
-    ensure_within_root(parent, &root)?;
 
     let sanitized = sanitize_name(&new_name);
     if sanitized.is_empty() {
@@ -161,7 +178,16 @@ fn copy_dir_recursive(from: &Path, to: &Path) -> std::io::Result<()> {
     for entry in fs::read_dir(from)? {
         let entry = entry?;
         let dest = to.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
+        let kind = entry.file_type()?;
+        // A symlink could point anywhere; refuse rather than copy its target
+        // into the workspace (and rather than skip it silently, INV-7).
+        if kind.is_symlink() {
+            return Err(std::io::Error::other(format!(
+                "{} is a symlink",
+                entry.file_name().to_string_lossy()
+            )));
+        }
+        if kind.is_dir() {
             copy_dir_recursive(&entry.path(), &dest)?;
         } else {
             fs::copy(entry.path(), &dest)?;
@@ -181,10 +207,10 @@ pub fn duplicate_path(
 ) -> Result<String, String> {
     let root = grants.ensure_workspace(&root)?;
     let source = Path::new(&path);
+    ensure_entry_inside_root(source, &root)?;
     let parent = source
         .parent()
         .ok_or_else(|| "Path has no parent directory".to_string())?;
-    ensure_within_root(parent, &root)?;
 
     let ext = source.extension().and_then(|e| e.to_str());
     let stem = if ext.is_some() {
@@ -196,8 +222,10 @@ pub fn duplicate_path(
 
     let dest = unique_path(parent, &format!("{stem} copy"), ext);
     if source.is_dir() {
-        copy_dir_recursive(source, &dest)
-            .map_err(|e| format!("Failed to duplicate folder: {e}"))?;
+        if let Err(e) = copy_dir_recursive(source, &dest) {
+            let _ = fs::remove_dir_all(&dest);
+            return Err(format!("Failed to duplicate folder: {e}"));
+        }
     } else {
         fs::copy(source, &dest).map_err(|e| format!("Failed to duplicate: {e}"))?;
     }
@@ -218,15 +246,12 @@ pub fn move_path(
     let root = grants.ensure_workspace(&root)?;
     let source = Path::new(&from);
     let dest_dir = Path::new(&to_dir);
+    let source_abs = ensure_entry_inside_root(source, &root)?;
+    ensure_dir_within_root(dest_dir, &root)?;
     let parent = source
         .parent()
         .ok_or_else(|| "Path has no parent directory".to_string())?;
-    ensure_within_root(parent, &root)?;
-    ensure_within_root(dest_dir, &root)?;
 
-    let source_abs = source
-        .canonicalize()
-        .map_err(|e| format!("Invalid source: {e}"))?;
     let dest_abs = dest_dir
         .canonicalize()
         .map_err(|e| format!("Invalid destination: {e}"))?;
@@ -264,10 +289,7 @@ pub fn delete_path(
 ) -> Result<(), String> {
     let root = grants.ensure_workspace(&root)?;
     let target = Path::new(&path);
-    let parent = target
-        .parent()
-        .ok_or_else(|| "Path has no parent directory".to_string())?;
-    ensure_within_root(parent, &root)?;
+    ensure_entry_inside_root(target, &root)?;
     if target.is_dir() {
         fs::remove_dir_all(target).map_err(|e| format!("Failed to delete folder: {e}"))
     } else {
@@ -326,6 +348,124 @@ mod tests {
     fn delete_path(path: String, root: String) -> Result<(), String> {
         let app = app_with_root(&root);
         super::delete_path(path, root, app.state::<GrantRegistry>())
+    }
+
+    #[test]
+    fn delete_path_refuses_the_workspace_parent_named_via_dot_dot() {
+        let outer = unique_tmp("delete_parent");
+        let ws = outer.join("ws");
+        fs::create_dir_all(&ws).unwrap();
+        fs::write(outer.join("sibling.txt"), "keep").unwrap();
+        let root = ws.to_string_lossy().to_string();
+        // `<ws>/..` has parent `<ws>`, so a parent-only check would let
+        // remove_dir_all run on the directory that contains the workspace.
+        let evil = ws.join("..").to_string_lossy().to_string();
+
+        let err = delete_path(evil, root.clone()).unwrap_err();
+
+        assert!(err.contains("outside the workspace"));
+        assert!(outer.join("sibling.txt").exists());
+        // The root itself is not a deletable entry either.
+        assert!(delete_path(root.clone(), root).is_err());
+        assert!(ws.exists());
+        let _ = fs::remove_dir_all(&outer);
+    }
+
+    #[test]
+    fn mutating_commands_refuse_the_workspace_parent_named_via_dot_dot() {
+        let outer = unique_tmp("mutate_parent");
+        let ws = outer.join("ws");
+        fs::create_dir_all(&ws).unwrap();
+        let root = ws.to_string_lossy().to_string();
+        let evil = ws.join("..").to_string_lossy().to_string();
+
+        assert!(rename_path(evil.clone(), "x".to_string(), root.clone()).is_err());
+        assert!(duplicate_path(evil.clone(), root.clone()).is_err());
+        assert!(move_path(evil, root.clone(), root).is_err());
+        assert!(outer.exists());
+        let _ = fs::remove_dir_all(&outer);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn mutating_commands_refuse_a_symlink_source_that_resolves_outside() {
+        let outer = unique_tmp("symlink_source");
+        let ws = outer.join("ws");
+        fs::create_dir_all(&ws).unwrap();
+        fs::write(outer.join("secret.txt"), "s").unwrap();
+        std::os::unix::fs::symlink(outer.join("secret.txt"), ws.join("link.txt")).unwrap();
+        let root = ws.to_string_lossy().to_string();
+        let link = ws.join("link.txt").to_string_lossy().to_string();
+
+        assert!(rename_path(link.clone(), "x".to_string(), root.clone()).is_err());
+        assert!(duplicate_path(link.clone(), root.clone()).is_err());
+        assert!(move_path(link.clone(), root.clone(), root.clone()).is_err());
+        assert!(delete_path(link, root).is_err());
+        assert!(!ws.join("link copy.txt").exists());
+        assert!(outer.join("secret.txt").exists());
+        let _ = fs::remove_dir_all(&outer);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn duplicate_path_refuses_a_folder_containing_a_symlink() {
+        let outer = unique_tmp("dup_folder_symlink");
+        let ws = outer.join("ws");
+        let docs = ws.join("Docs");
+        fs::create_dir_all(&docs).unwrap();
+        fs::write(outer.join("secret.txt"), "s").unwrap();
+        fs::write(docs.join("a.md"), "a").unwrap();
+        std::os::unix::fs::symlink(outer.join("secret.txt"), docs.join("link.md")).unwrap();
+        let root = ws.to_string_lossy().to_string();
+
+        let err = duplicate_path(docs.to_string_lossy().to_string(), root).unwrap_err();
+
+        assert!(err.contains("symlink"), "{err}");
+        // No half-copied folder is left behind.
+        assert!(!ws.join("Docs copy").exists());
+        let _ = fs::remove_dir_all(&outer);
+    }
+
+    #[cfg(windows)]
+    fn junction(link: &Path, target: &Path) {
+        // Junctions are the Windows escape vector symlinks are on unix, and
+        // unlike symlinks they need no privilege to create.
+        let output = std::process::Command::new("cmd")
+            .arg("/C")
+            .arg("mklink")
+            .arg("/J")
+            .arg(link)
+            .arg(target)
+            .output()
+            .expect("cmd should run");
+        assert!(output.status.success(), "mklink /J failed");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn junction_sources_and_entries_are_refused() {
+        let outer = unique_tmp("junction");
+        let ws = outer.join("ws");
+        let docs = ws.join("Docs");
+        let secret = outer.join("secret");
+        fs::create_dir_all(&docs).unwrap();
+        fs::create_dir_all(&secret).unwrap();
+        fs::write(secret.join("secret.md"), "s").unwrap();
+        junction(&ws.join("innocent"), &secret);
+        junction(&docs.join("nested"), &secret);
+        let root = ws.to_string_lossy().to_string();
+        let link = ws.join("innocent").to_string_lossy().to_string();
+
+        assert!(rename_path(link.clone(), "x".to_string(), root.clone()).is_err());
+        assert!(duplicate_path(link.clone(), root.clone()).is_err());
+        assert!(move_path(link.clone(), root.clone(), root.clone()).is_err());
+        assert!(delete_path(link, root.clone()).is_err());
+        let err = duplicate_path(docs.to_string_lossy().to_string(), root).unwrap_err();
+
+        assert!(err.contains("symlink"), "{err}");
+        assert!(!ws.join("Docs copy").exists());
+        assert!(secret.join("secret.md").exists());
+        let _ = fs::remove_dir_all(&outer);
     }
 
     fn unique_tmp(name: &str) -> PathBuf {

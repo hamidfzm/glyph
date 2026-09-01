@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { load } from "@tauri-apps/plugin-store";
+import { getStore } from "@tauri-apps/plugin-store";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
@@ -25,7 +25,7 @@ describe("PluginsProvider full-trust plugins", () => {
       get: vi.fn(() => Promise.resolve(null)),
       set: vi.fn((_key: string, _value: unknown) => Promise.resolve()),
     };
-    vi.mocked(load).mockResolvedValue(store as never);
+    vi.mocked(getStore).mockResolvedValue(store as never);
     vi.mocked(invoke).mockImplementation((cmd) =>
       Promise.resolve(cmd === "list_plugins" ? [installedPlugin()] : undefined),
     );
@@ -75,7 +75,7 @@ describe("PluginsProvider full-trust plugins", () => {
       get: vi.fn(() => Promise.resolve(null)),
       set: vi.fn((_key: string, _value: unknown) => Promise.resolve()),
     };
-    vi.mocked(load).mockResolvedValue(store as never);
+    vi.mocked(getStore).mockResolvedValue(store as never);
     vi.mocked(invoke).mockImplementation((cmd) =>
       Promise.resolve(cmd === "list_plugins" ? [installedPlugin()] : undefined),
     );
@@ -157,7 +157,7 @@ describe("PluginsProvider full-trust plugins", () => {
       get: vi.fn(() => Promise.resolve(null)),
       set: vi.fn((_key: string, _value: unknown) => Promise.resolve()),
     };
-    vi.mocked(load).mockResolvedValue(store as never);
+    vi.mocked(getStore).mockResolvedValue(store as never);
     // Sandboxed plugin: never parked at startup (jsdom has no Worker, so the
     // load itself fails, which is fine; the gate must not have blocked it).
     vi.mocked(invoke).mockImplementation((cmd) =>

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { load } from "@tauri-apps/plugin-store";
+import { getStore } from "@tauri-apps/plugin-store";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isCliExportProcess } from "@/lib/cliExport";
@@ -564,14 +564,14 @@ describe("useTabs per-workspace sessions", () => {
 
   it("flushSessionForClose captures the live scroll and writes the snapshot to the store", async () => {
     const set = vi.fn(() => Promise.resolve());
-    vi.mocked(load).mockResolvedValue({
+    vi.mocked(getStore).mockResolvedValue({
       get: vi.fn(() => Promise.resolve(null)),
       set,
       save: vi.fn(() => Promise.resolve()),
       entries: vi.fn(() => Promise.resolve([])),
       delete: vi.fn(() => Promise.resolve(true)),
       length: vi.fn(() => Promise.resolve(0)),
-    } as unknown as Awaited<ReturnType<typeof load>>);
+    } as unknown as Awaited<ReturnType<typeof getStore>>);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     await act(async () => {

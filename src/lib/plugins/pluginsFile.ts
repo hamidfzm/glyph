@@ -1,4 +1,4 @@
-import { load } from "@tauri-apps/plugin-store";
+import { openStore } from "@/lib/store";
 
 // All plugin bookkeeping (disabled ids, consent grants, per-plugin settings)
 // shares one store file next to settings.json; each module owns one key.
@@ -11,7 +11,7 @@ export async function readPluginsKey<T>(
   fallback: T,
 ): Promise<T> {
   try {
-    const store = await load(FILE, { defaults: {}, autoSave: true });
+    const store = await openStore(FILE);
     const value = await store.get<T>(key);
     return isValid(value) ? value : fallback;
   } catch {
@@ -21,6 +21,6 @@ export async function readPluginsKey<T>(
 
 /** Persist one key. */
 export async function writePluginsKey(key: string, value: unknown): Promise<void> {
-  const store = await load(FILE, { defaults: {}, autoSave: true });
+  const store = await openStore(FILE);
   await store.set(key, value);
 }

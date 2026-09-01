@@ -32,7 +32,7 @@ describe("useTabs workspace interactions", () => {
     expect(pickFolder).toHaveBeenCalled();
     // The pick is handed to Rust routing (which may focus, adopt, or spawn a
     // window); the frontend does not adopt it directly here.
-    expect(invoke).toHaveBeenCalledWith("request_open", { kind: "folder", path: "/p/picked" });
+    expect(invoke).toHaveBeenCalledWith("request_open", { path: "/p/picked" });
   });
 
   it("createWorkspace creates a folder and routes it via the window manager", async () => {
@@ -45,7 +45,7 @@ describe("useTabs workspace interactions", () => {
     });
 
     expect(pickNewWorkspace).toHaveBeenCalled();
-    expect(invoke).toHaveBeenCalledWith("request_open", { kind: "folder", path: "/p/new-ws" });
+    expect(invoke).toHaveBeenCalledWith("request_open", { path: "/p/new-ws" });
   });
 
   it("createWorkspace bails when the dialog is cancelled", async () => {
@@ -57,10 +57,7 @@ describe("useTabs workspace interactions", () => {
       await result.current.createWorkspace();
     });
 
-    expect(invoke).not.toHaveBeenCalledWith(
-      "request_open",
-      expect.objectContaining({ kind: "folder" }),
-    );
+    expect(invoke).not.toHaveBeenCalledWith("request_open", expect.anything());
   });
 
   it("openFolder bails when the directory dialog is cancelled", async () => {

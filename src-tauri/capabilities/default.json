@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/v2/crates/tauri-utils/schema/capability.json",
   "identifier": "default",
-  "description": "Default capabilities for Glyph",
+  "description": "Default capabilities for Glyph. The dialog, fs, and store plugins get the exact commands the frontend calls, never their default sets, which resolve renderer-supplied paths (see docs/security/threat-model.md).",
   "windows": ["main", "w*"],
   "permissions": [
     "core:default",
@@ -11,12 +11,17 @@
     "core:window:allow-close",
     "core:window:allow-destroy",
     "core:window:allow-is-fullscreen",
-    "dialog:default",
+    "dialog:allow-message",
     "os:default",
     "clipboard-manager:allow-read-text",
-    "store:default",
+    "store:allow-get-store",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-delete",
+    "store:allow-entries",
+    "store:allow-length",
+    "store:allow-save",
     "opener:default",
-    "opener:allow-reveal-item-in-dir",
     {
       "identifier": "http:default",
       "allow": [

@@ -1,4 +1,5 @@
-import { load, type Store } from "@tauri-apps/plugin-store";
+import type { Store } from "@tauri-apps/plugin-store";
+import { openStore } from "@/lib/store";
 
 // Per-workspace session snapshots (#226), stored in a dedicated machine-local
 // store file, one key per workspace root path. Deliberately NOT in the
@@ -54,7 +55,7 @@ let restoreDepth = 0;
 
 function sessionStore(): Promise<Store | null> {
   if (!storePromise) {
-    storePromise = load(STORE_FILE, { defaults: {}, autoSave: false }).catch((err) => {
+    storePromise = openStore(STORE_FILE).catch((err) => {
       console.error("Failed to load workspace sessions:", err);
       return null;
     });

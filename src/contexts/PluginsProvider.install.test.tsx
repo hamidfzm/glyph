@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { load } from "@tauri-apps/plugin-store";
+import { getStore } from "@tauri-apps/plugin-store";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
@@ -191,7 +191,7 @@ describe("PluginsProvider installing", () => {
       get: vi.fn(() => Promise.resolve(null)),
       set: vi.fn((_key: string, _value: unknown) => Promise.resolve()),
     };
-    vi.mocked(load).mockResolvedValue(store as never);
+    vi.mocked(getStore).mockResolvedValue(store as never);
     vi.mocked(invoke).mockImplementation((cmd) => {
       if (cmd === "list_plugins") return Promise.resolve([]);
       if (cmd === "inspect_plugin") return Promise.resolve(inspection());
@@ -229,7 +229,7 @@ describe("PluginsProvider installing", () => {
       get: vi.fn(() => Promise.resolve(null)),
       set: vi.fn((_key: string, _value: unknown) => Promise.resolve()),
     };
-    vi.mocked(load).mockResolvedValue(store as never);
+    vi.mocked(getStore).mockResolvedValue(store as never);
     vi.mocked(invoke).mockImplementation((cmd) => {
       if (cmd === "list_plugins") return Promise.resolve([]);
       if (cmd === "inspect_plugin") return Promise.reject(new Error("no plugin folder was picked"));

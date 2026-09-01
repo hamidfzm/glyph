@@ -137,7 +137,11 @@ export function useWorkspaceLifecycle({
   const createWorkspace = useCallback(async () => {
     const path = await pickNewWorkspace(t("common:fileDialog.newWorkspace"));
     if (typeof path !== "string") return;
-    await invoke("request_open", { kind: "folder", path });
+    try {
+      await invoke("request_open", { path });
+    } catch (err) {
+      onWorkspaceNoticeRef.current({ key: "error.couldntOpen", values: { error: String(err) } });
+    }
   }, [t]);
 
   // Open a folder as this window's workspace. With an explicit `root` (CLI,
@@ -155,8 +159,16 @@ export function useWorkspaceLifecycle({
         // window; an empty current window adopts it (Rust emits `open-folder`
         // back to us); a different folder in an occupied window opens a new
         // window. This is what stops a second folder silently replacing the
-        // current workspace.
-        await invoke("request_open", { kind: "folder", path: selected });
+        // current workspace. Rust refuses anything the picker did not grant
+        // (a folder removed between the pick and the request).
+        try {
+          await invoke("request_open", { path: selected });
+        } catch (err) {
+          onWorkspaceNoticeRef.current({
+            key: "error.couldntOpen",
+            values: { error: String(err) },
+          });
+        }
         return;
       }
       if (workspaceRef.current?.root === root || folderOpenInFlight.current === root) {

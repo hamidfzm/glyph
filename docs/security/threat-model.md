@@ -43,13 +43,18 @@ webview-supplied path:
   Folder, Open File(s), export Save As, website export destination
 - Session restore: at startup the backend reads the persisted settings store
   itself and grants the previously open tabs and recent files
-- `set_window_workspace`, when a window reports the workspace it adopted
 
-`open_in_new_window` is deliberately not on that list. It is reachable from
-ordinary UI (the file-tree menu, the tab strip) with a renderer-supplied path,
-so it checks the path against `ensure_readable` **before** routing and refuses
-otherwise. It can therefore only ever re-scope a path the session already
-holds; a second window never widens the process's filesystem reach.
+`request_open` and `open_in_new_window` are deliberately not on that list.
+Both take a renderer-supplied path (a picker result in the legitimate flows,
+anything at all from a compromised renderer), so both check it against the
+existing grants **before** routing and refuse otherwise: `request_open`
+routes a folder that must already be a granted workspace root (routing
+re-grants it recursively, so a subfolder or an exact-file grant may not pass),
+`open_in_new_window` a file that must be readable. They can therefore only
+ever re-scope a path the session already holds; a new window never widens
+the process's filesystem reach. `set_window_workspace`, which a window calls
+to report the workspace it shows, updates routing state only and mints
+nothing.
 
 Workspace and file grants are also mirrored into Tauri's runtime
 asset-protocol scope so `asset://` image URLs resolve only inside granted
@@ -76,7 +81,10 @@ and files: <path>`), which never echoes the grant list.
 | `write_file`, `write_binary_file`, `create_dir_all` | writable |
 | `copy_file` | source readable and destination writable |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |
-| `create_note`, `create_canvas`, `create_folder`, `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace, plus the pre-existing within-root checks |
+| `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it |
+| `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target) |
+| `request_open` | folders only; the path must already be a granted workspace root |
+| `open_in_new_window` | readable |
 | `workspace_get_last_file`, `workspace_set_last_file` | granted workspace |
 | `sync_*` | granted workspace (`sync_clone_remote` clones into the workspace path itself); `sync_init_repo`, `sync_clone_remote`, and `sync_set_origin` accept only `https://` without credentials, `ssh://`, or scp-like `user@host:path` remotes, since libgit2 would also take a local path or `file://` (pulling any local repository into a granted workspace) and cleartext `http://`/`git://` |
 | `install_plugin` | consumes the pending picked folder; no path argument |
@@ -117,20 +125,38 @@ feature:
 The dev CSP is identical plus the Vite dev server and HMR websocket on
 `localhost:1420`.
 
-The JS dialog plugin's `open`/`save` permissions were removed from the
-capability file; only `ask`/`message` remain. All pickers run in Rust.
+## Plugin permissions
 
-The fs plugin is absent from the default capability for the same reason.
-`fs:default` pulls in the `scope-app-recursive` scope (`$APPCONFIG/**`,
-`$APPDATA/**`, and the other app-specific directories), and the plugin unions
-the global and per-command scopes for every command it exposes, so a scope
-granted for reads also authorizes `write_text_file`. Plugins are installed
-under `app_config_dir()`, so that would let a compromised renderer overwrite
-installed plugin code and have it loaded on the next launch, bypassing the
-grant registry entirely. The plugin now lives in `capabilities/mobile.json`,
-gated to Android and iOS, where it reads the sandboxed `content://` URIs the
-Rust commands cannot open. A unit test in `lib.rs` fails if any `fs:`
-permission returns to the default capability (#698).
+`capabilities/default.json` grants no permission set whose members resolve
+renderer-supplied paths: the dialog, filesystem, and store plugins get the
+exact commands the frontend calls instead of their `default` sets. The
+remaining default sets (`core`, `os`, `opener`, `http`) reach no file; the
+opener's `reveal_item_in_dir` takes a path but only opens the file manager at
+it, and `http:default` is scoped to the marketplace hosts.
+
+- **Dialog.** Desktop holds `dialog:allow-message` alone (it backs `ask`).
+  The plugin's `open` command adds whatever the user picks to the fs and asset
+  scopes, so `dialog:allow-open` lives in `capabilities/mobile.json`
+  (`platforms: [android, iOS]`), where the OS document picker replaces the
+  Rust pickers. All desktop pickers run in Rust.
+- **Filesystem.** No `fs:` permission on desktop; file I/O goes through the
+  gated Rust commands. `fs:default` pulls in the `scope-app-recursive` scope
+  (`$APPCONFIG/**`, `$APPDATA/**`, and the other app-specific directories),
+  and the plugin unions the global and per-command scopes for every command
+  it exposes, so a scope granted for reads also authorizes `write_text_file`.
+  Plugins are installed under `app_config_dir()`, so that would let a
+  compromised renderer overwrite installed plugin code and have it loaded on
+  the next launch, bypassing the grant registry entirely. The plugin lives in
+  `capabilities/mobile.json`, gated to Android and iOS, where it reads the
+  sandboxed `content://` URIs the Rust commands cannot open. A unit test in
+  `lib.rs` fails if any `fs:` permission returns to the default capability
+  (#698).
+- **Store.** No `store:allow-load`: `load` resolves the requested path against
+  AppData, and an absolute path replaces the base, so it would read or
+  overwrite any JSON file the user can write. The backend opens
+  `settings.json`, `plugins.json`, and `workspace-sessions.json` in
+  `setup.rs`; the renderer attaches with `getStore` and holds the per-key
+  commands only.
 
 ## Residual risks
 
@@ -138,10 +164,8 @@ permission returns to the default capability (#698).
   is renderer-writable, and the backend seeds grants from it at the next
   launch, so a compromised renderer can stage grants for paths it names
   there. This matches the trust the file already carries (it decides what
-  reopens on launch). The same applies to `set_window_workspace`, which
-  grants the workspace a window reports adopting; both are accepted so
-  session restore keeps working, and both only matter after the renderer is
-  already compromised.
+  reopens on launch); it is accepted so session restore keeps working, and it
+  only matters after the renderer is already compromised.
 - **`glyph serve` is an inbound listener.** The one place Glyph accepts
   connections rather than making them. It binds `127.0.0.1` unless `--host`
   says otherwise, answers only to `Host` headers naming itself (so a web page
