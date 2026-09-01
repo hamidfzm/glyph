@@ -159,11 +159,20 @@ jobs:
           SERVER_URL: ${{ github.server_url }}
         run: |
           PREVIOUS_TAG=$(bash scripts/release-changelog.sh previous-tag "${{ github.ref_name }}")
+
+          # Pull request metadata for the fallback below. A release cut from
+          # main's tip never reaches it, so this is a handful of wasted calls
+          # once per release, against a decision the script owns and tests.
+          for number in $(bash scripts/release-changelog.sh pull-requests "${{ github.ref_name }}" "$PREVIOUS_TAG"); do
+            gh api "repos/${{ github.repository }}/pulls/$number" \
+              --jq '{n: .number, title: .title, author: .user.login, labels: [.labels[].name]}'
+          done | jq -s . > /tmp/pull-requests.json
+
           CHANGELOG=$(gh api repos/${{ github.repository }}/releases/generate-notes \
             -f tag_name="${{ github.ref_name }}" \
             -f previous_tag_name="$PREVIOUS_TAG" \
             --jq .body \
-            | bash scripts/release-changelog.sh body "${{ github.ref_name }}" "$PREVIOUS_TAG")
+            | bash scripts/release-changelog.sh body "${{ github.ref_name }}" "$PREVIOUS_TAG" /tmp/pull-requests.json)
 
           # Chocolatey renders the same changelog, so hand it the resolved
           # text instead of letting that job generate a second copy.
