@@ -653,7 +653,11 @@ jobs:
           sed "s|{{HOMEPAGE}}|$HOMEPAGE|g" ppa/debian/control > /tmp/glyph-${VERSION}/debian/control
           cp ppa/debian/rules ppa/debian/install /tmp/glyph-${VERSION}/debian/
 
-          # Generate debian/copyright from repo LICENSE file
+          # Generate debian/copyright from repo LICENSE file. The holder and
+          # the license id come from tauri.conf.json's bundle metadata, the
+          # same values every other bundle format is stamped with.
+          COPYRIGHT=$(jq -r '.bundle.copyright' src-tauri/tauri.conf.json | sed 's/^Copyright (c) //')
+          LICENSE_ID=$(jq -r '.bundle.license' src-tauri/tauri.conf.json)
           {
             echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/"
             echo "Upstream-Name: glyph"
@@ -661,10 +665,10 @@ jobs:
             echo "Source: https://github.com/hamidfzm/glyph"
             echo ""
             echo "Files: *"
-            echo "Copyright: 2026 hamidfzm"
-            echo "License: MIT"
+            echo "Copyright: $COPYRIGHT"
+            echo "License: $LICENSE_ID"
             echo ""
-            echo "License: MIT"
+            echo "License: $LICENSE_ID"
             awk 'NR>3{if(/^$/)print " .";else print " "$0}' LICENSE
           } > /tmp/glyph-${VERSION}/debian/copyright
 
