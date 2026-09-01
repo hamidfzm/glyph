@@ -1,11 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ghostEl, setHit } from "@/test/pointerDrag";
 import { useFileTreeDragMove } from "./useFileTreeDragMove";
-
-function setHit(el: Element | null) {
-  document.elementFromPoint = vi.fn(() => el) as typeof document.elementFromPoint;
-}
 
 function zoneEl(attrs: Record<string, string>): HTMLElement {
   const el = document.createElement("div");
@@ -20,13 +17,15 @@ const downEvent = (overrides: Partial<ReactPointerEvent> = {}) =>
   ({
     button: 0,
     pointerType: "mouse",
+    pointerId: 1,
     clientX: 0,
     clientY: 0,
+    target: { setPointerCapture: vi.fn() },
     ...overrides,
-  }) as ReactPointerEvent;
+  }) as unknown as ReactPointerEvent;
 
 const clickEvent = () =>
-  ({ preventDefault: vi.fn(), stopPropagation: vi.fn() }) as unknown as ReactPointerEvent & {
+  ({ preventDefault: vi.fn(), stopPropagation: vi.fn() }) as unknown as ReactMouseEvent & {
     preventDefault: ReturnType<typeof vi.fn>;
     stopPropagation: ReturnType<typeof vi.fn>;
   };
@@ -40,12 +39,14 @@ function renderDnd(onMoveEntry = vi.fn()) {
   };
   const moveTo = (x = 50, y = 50) => {
     act(() => {
-      window.dispatchEvent(new MouseEvent("pointermove", { clientX: x, clientY: y }));
+      window.dispatchEvent(
+        new PointerEvent("pointermove", { clientX: x, clientY: y, buttons: 1, pointerId: 1 }),
+      );
     });
   };
   const release = (x = 50, y = 50) => {
     act(() => {
-      window.dispatchEvent(new MouseEvent("pointerup", { clientX: x, clientY: y }));
+      window.dispatchEvent(new PointerEvent("pointerup", { clientX: x, clientY: y, pointerId: 1 }));
     });
   };
   return { result, unmount, onMoveEntry, press, moveTo, release };
@@ -53,6 +54,7 @@ function renderDnd(onMoveEntry = vi.fn()) {
 
 describe("useFileTreeDragMove", () => {
   beforeEach(() => {
+    setHit(null);
     document.body.innerHTML = "";
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
@@ -81,15 +83,15 @@ describe("useFileTreeDragMove", () => {
     expect(result.current.dropTarget).toBe("/root/sub");
     expect(document.body.style.userSelect).toBe("none");
     expect(document.body.style.cursor).toBe("grabbing");
-    const ghost = document.querySelector("[data-tree-drag-ghost]");
-    expect(ghost?.textContent).toBe("a.md");
-    expect((ghost as HTMLElement).style.pointerEvents).toBe("none");
+    expect(document.body.dataset.pointerDrag).toBe("");
+    expect(ghostEl()?.textContent).toBe("a.md");
     release();
+    expect(document.body.dataset.pointerDrag).toBeUndefined();
     expect(onMoveEntry).toHaveBeenCalledTimes(1);
     expect(onMoveEntry).toHaveBeenCalledWith("/root/a.md", "/root/sub");
     expect(result.current.dropTarget).toBeNull();
     expect(document.body.style.userSelect).toBe("");
-    expect(document.querySelector("[data-tree-drag-ghost]")).toBeNull();
+    expect(ghostEl()).toBeNull();
   });
 
   it("suppresses exactly one click after a completed drag", () => {
@@ -173,7 +175,7 @@ describe("useFileTreeDragMove", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(result.current.dropTarget).toBeNull();
-    expect(document.querySelector("[data-tree-drag-ghost]")).toBeNull();
+    expect(ghostEl()).toBeNull();
     release();
     expect(onMoveEntry).not.toHaveBeenCalled();
   });
@@ -217,9 +219,9 @@ describe("useFileTreeDragMove", () => {
     setHit(folderZone("/root/sub"));
     press("/root/a.md");
     moveTo();
-    expect(document.querySelector("[data-tree-drag-ghost]")).not.toBeNull();
+    expect(ghostEl()).not.toBeNull();
     unmount();
-    expect(document.querySelector("[data-tree-drag-ghost]")).toBeNull();
+    expect(ghostEl()).toBeNull();
     const removed = removeSpy.mock.calls.map(([type]) => type);
     expect(removed).toContain("pointermove");
     expect(removed).toContain("pointerup");

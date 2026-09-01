@@ -1,5 +1,5 @@
-import type { DragEvent } from "react";
-import { useCallback, useRef, useState } from "react";
+import { useState } from "react";
+import { type DragSourceHandlers, usePointerDrag } from "./usePointerDrag";
 
 /** Insertion marker while a tab drag is in progress: the hovered tab's index
  *  and which edge of it the dragged tab would land on. */
@@ -8,71 +8,59 @@ export interface TabDropIndicator {
   edge: "before" | "after";
 }
 
-export interface TabDragHandlers {
-  draggable: true;
-  onDragStart: (event: DragEvent) => void;
-  onDragOver: (event: DragEvent) => void;
-  onDrop: (event: DragEvent) => void;
-  onDragEnd: () => void;
+interface TabDragPayload {
+  id: string;
+  index: number;
+  label: string;
 }
 
 interface UseTabDragReorder {
   indicator: TabDropIndicator | null;
-  handlersFor: (id: string, index: number) => TabDragHandlers;
+  handlersFor: (id: string, index: number, label: string) => DragSourceHandlers;
 }
 
-// Native HTML5 drag-and-drop reordering for the tab strip: no dependency, works
-// in every WebView. Tracks the dragged tab in a ref (only the indicator needs
-// renders) and commits the reorder through `onMove(id, toIndex)` on drop.
-// Dropping on a tab moves the dragged tab to that tab's index, so the edge the
-// indicator shows follows the drag direction: dragging right lands after the
-// hovered tab, dragging left lands before it (splice semantics).
+/** Resolve the tab under the pointer via the `data-tab-index` markers on the
+ *  tab elements (hits inside a tab, like its close button, resolve to it). */
+function tabIndexAt(x: number, y: number): number | null {
+  const tab = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-tab-index]");
+  const index = tab?.getAttribute("data-tab-index");
+  return index == null ? null : Number(index);
+}
+
+function indicatorFor(tab: TabDragPayload, hovered: number | null): TabDropIndicator | null {
+  if (hovered === null || hovered === tab.index) return null;
+  return { index: hovered, edge: hovered > tab.index ? "after" : "before" };
+}
+
+// Reordering for the tab strip, on the shared pointer drag core (see
+// usePointerDrag for why HTML5 drag events cannot be used). Dropping on a tab
+// moves the dragged tab to that tab's index through `onMove(id, toIndex)`
+// (splice semantics), so the edge the indicator shows follows the drag
+// direction: dragging right lands after the hovered tab, dragging left lands
+// before it.
 export function useTabDragReorder(
   onMove: (id: string, toIndex: number) => void,
 ): UseTabDragReorder {
-  const drag = useRef<{ id: string; index: number } | null>(null);
   const [indicator, setIndicator] = useState<TabDropIndicator | null>(null);
 
-  const handlersFor = useCallback(
-    (id: string, index: number): TabDragHandlers => ({
-      draggable: true,
-      onDragStart: (event) => {
-        drag.current = { id, index };
-        event.dataTransfer.effectAllowed = "move";
-        // WebKit refuses to start a drag with an empty payload.
-        event.dataTransfer.setData("text/plain", id);
-      },
-      onDragOver: (event) => {
-        const dragged = drag.current;
-        if (!dragged) return;
-        // preventDefault marks the tab as a valid drop target; without it the
-        // drop event never fires.
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-        const next: TabDropIndicator | null =
-          index === dragged.index
-            ? null
-            : { index, edge: index > dragged.index ? "after" : "before" };
-        // dragover fires on every pointer move; keep the same object while the
-        // target is unchanged so React can bail out of re-rendering.
-        setIndicator((prev) =>
-          prev?.index === next?.index && prev?.edge === next?.edge ? prev : next,
-        );
-      },
-      onDrop: (event) => {
-        event.preventDefault();
-        const dragged = drag.current;
-        if (dragged && dragged.id !== id) onMove(dragged.id, index);
-        drag.current = null;
-        setIndicator(null);
-      },
-      onDragEnd: () => {
-        drag.current = null;
-        setIndicator(null);
-      },
-    }),
-    [onMove],
-  );
+  const { pressHandlersFor } = usePointerDrag<TabDragPayload, number>({
+    ghostLabel: (tab) => tab.label,
+    onDragMove: (tab, x, y) => {
+      const next = indicatorFor(tab, tabIndexAt(x, y));
+      // pointermove fires continuously; keep the same object while the target
+      // is unchanged so React can bail out of re-rendering.
+      setIndicator((prev) => {
+        const unchanged = prev?.index === next?.index && prev?.edge === next?.edge;
+        return unchanged ? prev : next;
+      });
+      return next?.index ?? null;
+    },
+    onDrop: (tab, index) => onMove(tab.id, index),
+    onReset: () => setIndicator(null),
+  });
 
-  return { indicator, handlersFor };
+  return {
+    indicator,
+    handlersFor: (id, index, label) => pressHandlersFor({ id, index, label }),
+  };
 }

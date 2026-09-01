@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DirEntry } from "@/lib/tabs";
+import { dragFromTo as dragElementTo, releaseAt, setHit } from "@/test/pointerDrag";
 import { FileTree } from "./FileTree";
 
 // /root
@@ -49,21 +50,12 @@ function renderTree(overrides: Partial<ComponentProps<typeof FileTree>> = {}) {
 const row = (path: string) => screen.getByTitle(path);
 const rootArea = () => document.querySelector("[data-filetree-root]") as HTMLElement;
 
-function setHit(el: Element | null) {
-  document.elementFromPoint = vi.fn(() => el) as typeof document.elementFromPoint;
-}
-
-// Press on a row, cross the drag threshold toward `target`, and hit-test it.
-function dragFromTo(fromPath: string, target: Element | null) {
-  fireEvent.pointerDown(row(fromPath), { button: 0, clientX: 0, clientY: 0 });
-  setHit(target);
-  fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
-}
-
-const releaseAt = (x = 40, y = 40) => fireEvent.pointerUp(window, { clientX: x, clientY: y });
+const dragFromTo = (fromPath: string, target: Element | null) =>
+  dragElementTo(row(fromPath), target);
 
 describe("FileTree pointer drag-and-drop move", () => {
   beforeEach(() => {
+    setHit(null);
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
   });
