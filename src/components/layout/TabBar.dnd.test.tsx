@@ -5,7 +5,7 @@ import type { TabsContextValue } from "@/contexts/TabsContext";
 import type { FileTab, Tab } from "@/lib/tabs";
 import { sidebarLayoutValue } from "@/test/fixtures/sidebarLayout";
 import { TabsWrapper, tabsContextValue } from "@/test/fixtures/tabsContext";
-import { dragFromTo, ghostEl, releaseAt, setHit } from "@/test/pointerDrag";
+import { dragFromTo, ghostEl, moveTo, releaseAt, setHit } from "@/test/pointerDrag";
 import { TabBar } from "./TabBar";
 
 const makeFileTab = (i: number): FileTab => ({
@@ -47,6 +47,7 @@ describe("pointer drag reordering", () => {
     fireEvent.pointerDown(tabEl(name), { button: 0, clientX: 0, clientY: 0, ...init });
 
   beforeEach(() => {
+    setHit(null);
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
   });
@@ -56,7 +57,7 @@ describe("pointer drag reordering", () => {
     const moveTab = vi.fn();
     renderTabBar({ setActiveTab, moveTab });
     press("file1.md");
-    fireEvent.pointerMove(window, { clientX: 2, clientY: 2 });
+    moveTo(2, 2);
     expect(ghostEl()).toBeNull();
     releaseAt(2, 2);
     fireEvent.click(activateButton("file1.md"));
@@ -87,19 +88,49 @@ describe("pointer drag reordering", () => {
     expect(moveTab).toHaveBeenCalledWith("tab-0", 2);
   });
 
-  it("captures the pointer on press so a release outside the window still ends the drag", () => {
+  it("captures the pointer on the pressed element, not on the wrapper carrying the handlers", () => {
     renderTabBar();
-    const setPointerCapture = vi.fn();
-    Object.assign(tabEl("file0.md"), { setPointerCapture });
-    press("file0.md", { pointerId: 7 });
-    expect(setPointerCapture).toHaveBeenCalledWith(7);
+    const onLabel = vi.fn();
+    const onWrapper = vi.fn();
+    Object.assign(labelEl("file0.md"), { setPointerCapture: onLabel });
+    Object.assign(tabEl("file0.md"), { setPointerCapture: onWrapper });
+    fireEvent.pointerDown(labelEl("file0.md"), { button: 0, pointerId: 7 });
+    // Capturing on the wrapper would retarget the click away from the inner
+    // activate / close buttons.
+    expect(onLabel).toHaveBeenCalledWith(7);
+    expect(onWrapper).not.toHaveBeenCalled();
+  });
+
+  it("ignores another pointer's release or cancel mid-drag", () => {
+    const moveTab = vi.fn();
+    renderTabBar({ moveTab });
+    dragFromTo(tabEl("file0.md"), tabEl("file1.md"));
+    // A stray touch during a mouse drag.
+    fireEvent.pointerUp(window, { clientX: 40, clientY: 40, pointerId: 9 });
+    fireEvent.pointerCancel(window, { pointerId: 9 });
+    expect(tabEl("file1.md").getAttribute("data-drop")).toBe("after");
+    expect(moveTab).not.toHaveBeenCalled();
+    releaseAt();
+    expect(moveTab).toHaveBeenCalledWith("tab-0", 1);
+  });
+
+  it("ends the drag when a move arrives with the button already released", () => {
+    const moveTab = vi.fn();
+    renderTabBar({ moveTab });
+    dragFromTo(tabEl("file0.md"), tabEl("file1.md"));
+    // Focus stolen mid-press (Alt+Tab): the release never reached the page.
+    fireEvent.pointerMove(window, { clientX: 45, clientY: 40, buttons: 0 });
+    expect(ghostEl()).toBeNull();
+    expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
+    releaseAt();
+    expect(moveTab).not.toHaveBeenCalled();
   });
 
   it("shows the trailing-edge indicator and the label ghost when dragging right", () => {
     renderTabBar({ tabs: makeTabs(3) });
     dragFromTo(tabEl("file0.md"), tabEl("file2.md"));
-    // pointermove fires continuously over the same target; the indicator is stable.
-    fireEvent.pointerMove(window, { clientX: 41, clientY: 40 });
+    // A second move over the same target keeps the same edge.
+    moveTo(41, 40);
     expect(tabEl("file2.md").getAttribute("data-drop")).toBe("after");
     expect(ghostEl()?.textContent).toBe("file0.md");
     expect(document.body.style.cursor).toBe("grabbing");
@@ -118,7 +149,7 @@ describe("pointer drag reordering", () => {
     dragFromTo(tabEl("file0.md"), tabEl("file1.md"));
     expect(tabEl("file1.md").getAttribute("data-drop")).toBe("after");
     setHit(tabEl("file0.md"));
-    fireEvent.pointerMove(window, { clientX: 10, clientY: 10 });
+    moveTo(10, 10);
     expect(tabEl("file0.md").hasAttribute("data-drop")).toBe(false);
     expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
     expect(document.body.style.cursor).toBe("no-drop");
@@ -177,7 +208,7 @@ describe("pointer drag reordering", () => {
     const moveTab = vi.fn();
     renderTabBar({ moveTab });
     setHit(tabEl("file1.md"));
-    fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
+    moveTo(40, 40);
     expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
     fireEvent.pointerUp(window, { clientX: 40, clientY: 40 });
     fireEvent.keyDown(window, { key: "Escape" });
@@ -201,7 +232,7 @@ describe("pointer drag reordering", () => {
     renderTabBar({ closeTab, moveTab });
     press("file1.md", { button: 1 });
     setHit(tabEl("file0.md"));
-    fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
+    moveTo(40, 40);
     expect(ghostEl()).toBeNull();
     releaseAt();
     fireEvent(tabEl("file1.md"), new MouseEvent("auxclick", { bubbles: true, button: 1 }));
@@ -213,7 +244,7 @@ describe("pointer drag reordering", () => {
     renderTabBar();
     press("file0.md", { pointerType: "touch" });
     setHit(tabEl("file1.md"));
-    fireEvent.pointerMove(window, { clientX: 40, clientY: 40 });
+    moveTo(40, 40);
     expect(tabEl("file1.md").hasAttribute("data-drop")).toBe(false);
     expect(ghostEl()).toBeNull();
   });

@@ -6,7 +6,7 @@ const DRAG_THRESHOLD_PX = 5;
 
 export interface DragSourceHandlers {
   onPointerDown: (event: ReactPointerEvent) => void;
-  onClickCapture: (event: ReactPointerEvent | ReactMouseEvent) => void;
+  onClickCapture: (event: ReactMouseEvent) => void;
 }
 
 interface UsePointerDragOptions<T, R> {
@@ -24,6 +24,7 @@ interface UsePointerDrag<T> {
 
 interface DragState<T, R> {
   payload: T;
+  pointerId: number;
   startX: number;
   startY: number;
   active: boolean;
@@ -70,7 +71,13 @@ export function usePointerDrag<T, R>(options: UsePointerDragOptions<T, R>): UseP
 
     const handlePointerMove = (event: PointerEvent) => {
       const dragged = drag.current;
-      if (!dragged) return;
+      if (!dragged || event.pointerId !== dragged.pointerId) return;
+      // Primary button already up means the release never reached the page
+      // (focus stolen mid-press); end the drag instead of arming a phantom one.
+      if ((event.buttons & 1) === 0) {
+        finishDrag(false);
+        return;
+      }
       if (!dragged.active) {
         const moved =
           Math.abs(event.clientX - dragged.startX) + Math.abs(event.clientY - dragged.startY);
@@ -96,8 +103,13 @@ export function usePointerDrag<T, R>(options: UsePointerDragOptions<T, R>): UseP
       );
       document.body.style.cursor = dragged.target === null ? "no-drop" : "grabbing";
     };
-    const handlePointerUp = () => finishDrag(true);
-    const handlePointerCancel = () => finishDrag(false);
+    // Other pointers (a stray touch during a mouse drag) must not end the drag.
+    const handlePointerUp = (event: PointerEvent) => {
+      if (event.pointerId === drag.current?.pointerId) finishDrag(true);
+    };
+    const handlePointerCancel = (event: PointerEvent) => {
+      if (event.pointerId === drag.current?.pointerId) finishDrag(false);
+    };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") finishDrag(false);
     };
@@ -119,14 +131,17 @@ export function usePointerDrag<T, R>(options: UsePointerDragOptions<T, R>): UseP
     onPointerDown: (event) => {
       // Touch keeps scrolling; mobile has its own interaction model.
       if (event.button !== 0 || event.pointerType === "touch") return;
-      // Capture keeps pointerup (and the click to swallow) arriving on this
-      // element even when the button is released outside the window.
-      event.currentTarget.setPointerCapture?.(event.pointerId);
+      // Capture keeps pointerup arriving even when the button is released
+      // outside the window. It goes on the pressed element, not the wrapper
+      // carrying these handlers: the click after release is dispatched to the
+      // capturing element, and inner buttons must still receive theirs.
+      (event.target as Element).setPointerCapture(event.pointerId);
       // A drag that ended off-element leaves the flag set with no click to
       // eat; a new press starts a fresh interaction.
       suppressClick.current = false;
       drag.current = {
         payload,
+        pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
         active: false,

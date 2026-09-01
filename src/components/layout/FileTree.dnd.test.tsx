@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DirEntry } from "@/lib/tabs";
-import { dragFromTo as dragElementTo, releaseAt } from "@/test/pointerDrag";
+import { dragFromTo as dragElementTo, releaseAt, setHit } from "@/test/pointerDrag";
 import { FileTree } from "./FileTree";
 
 // /root
@@ -55,6 +55,7 @@ const dragFromTo = (fromPath: string, target: Element | null) =>
 
 describe("FileTree pointer drag-and-drop move", () => {
   beforeEach(() => {
+    setHit(null);
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
   });

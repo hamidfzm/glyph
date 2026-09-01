@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ghostEl, setHit } from "@/test/pointerDrag";
 import { useFileTreeDragMove } from "./useFileTreeDragMove";
@@ -20,12 +20,12 @@ const downEvent = (overrides: Partial<ReactPointerEvent> = {}) =>
     pointerId: 1,
     clientX: 0,
     clientY: 0,
-    currentTarget: document.createElement("div"),
+    target: { setPointerCapture: vi.fn() },
     ...overrides,
   }) as unknown as ReactPointerEvent;
 
 const clickEvent = () =>
-  ({ preventDefault: vi.fn(), stopPropagation: vi.fn() }) as unknown as ReactPointerEvent & {
+  ({ preventDefault: vi.fn(), stopPropagation: vi.fn() }) as unknown as ReactMouseEvent & {
     preventDefault: ReturnType<typeof vi.fn>;
     stopPropagation: ReturnType<typeof vi.fn>;
   };
@@ -39,12 +39,14 @@ function renderDnd(onMoveEntry = vi.fn()) {
   };
   const moveTo = (x = 50, y = 50) => {
     act(() => {
-      window.dispatchEvent(new MouseEvent("pointermove", { clientX: x, clientY: y }));
+      window.dispatchEvent(
+        new PointerEvent("pointermove", { clientX: x, clientY: y, buttons: 1, pointerId: 1 }),
+      );
     });
   };
   const release = (x = 50, y = 50) => {
     act(() => {
-      window.dispatchEvent(new MouseEvent("pointerup", { clientX: x, clientY: y }));
+      window.dispatchEvent(new PointerEvent("pointerup", { clientX: x, clientY: y, pointerId: 1 }));
     });
   };
   return { result, unmount, onMoveEntry, press, moveTo, release };
@@ -52,6 +54,7 @@ function renderDnd(onMoveEntry = vi.fn()) {
 
 describe("useFileTreeDragMove", () => {
   beforeEach(() => {
+    setHit(null);
     document.body.innerHTML = "";
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
