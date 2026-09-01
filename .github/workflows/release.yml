@@ -138,18 +138,29 @@ jobs:
   update-release-notes:
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      previous_tag: ${{ steps.notes.outputs.previous_tag }}
     # Edits the release body and links the Announcements discussion.
     permissions:
       contents: write
       discussions: write
     steps:
+      # Full history and tags: the previous tag is read off this tag's own
+      # lineage, so a hotfix cut from an older tag diffs against that tag
+      # instead of against whatever happened to ship most recently.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
       - name: Generate changelog and prepend install instructions
+        id: notes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --match 'v*' "${{ github.ref_name }}^" || true)
+          echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
           CHANGELOG=$(gh api repos/${{ github.repository }}/releases/generate-notes \
             -f tag_name="${{ github.ref_name }}" \
-            -f previous_tag_name="$(gh release list --repo ${{ github.repository }} --limit 2 --json tagName --jq '.[1].tagName')" \
+            -f previous_tag_name="$PREVIOUS_TAG" \
             --jq .body)
 
           BODY=$(cat <<'INSTALL'
@@ -215,6 +226,22 @@ jobs:
           RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}" --jq .id)
           gh api -X PATCH "repos/${{ github.repository }}/releases/$RELEASE_ID" \
             -f discussion_category_name=Announcements
+
+      # A release is created as "latest" by default. A hotfix cut from an
+      # older line is not the newest version, so hand the pointer back: the
+      # ecosystem health check and the smoke test both resolve "latest".
+      - name: Keep the latest pointer on the highest version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          HIGHEST=$(gh release list --repo "${{ github.repository }}" --limit 100 \
+            --json tagName,isDraft,isPrerelease \
+            --jq '.[] | select((.isDraft or .isPrerelease) | not) | .tagName' \
+            | sort -V | tail -1)
+          if [ -n "$HIGHEST" ] && [ "$HIGHEST" != "${{ github.ref_name }}" ]; then
+            echo "$HIGHEST is newer than ${{ github.ref_name }}; leaving the latest pointer alone."
+            gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --latest=false
+          fi
 
   publish-homebrew:
     needs: build
@@ -305,7 +332,7 @@ jobs:
           fi
 
   publish-chocolatey:
-    needs: build
+    needs: [build, update-release-notes]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -338,7 +365,7 @@ jobs:
           # Generate the version-specific changelog (same source as the GitHub
           # release notes) so the Chocolatey package page shows what changed in
           # this release instead of only linking to the releases list.
-          $prevTag = gh release list --repo $repo --limit 2 --json tagName --jq '.[1].tagName'
+          $prevTag = "${{ needs.update-release-notes.outputs.previous_tag }}"
           # gh emits the body as multiple lines, which PowerShell captures as a
           # string[]. Join it back with newlines so the Markdown survives (string
           # interpolation would otherwise flatten the array with spaces and turn
