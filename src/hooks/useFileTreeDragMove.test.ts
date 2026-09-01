@@ -15,7 +15,6 @@ function zoneEl(attrs: Record<string, string>): HTMLElement {
 }
 
 const folderZone = (dir: string) => zoneEl({ "data-tree-drop-dir": dir });
-const fileBlock = () => zoneEl({ "data-tree-drop-block": "" });
 
 const downEvent = (overrides: Partial<ReactPointerEvent> = {}) =>
   ({
@@ -81,11 +80,16 @@ describe("useFileTreeDragMove", () => {
     moveTo();
     expect(result.current.dropTarget).toBe("/root/sub");
     expect(document.body.style.userSelect).toBe("none");
+    expect(document.body.style.cursor).toBe("grabbing");
+    const ghost = document.querySelector("[data-tree-drag-ghost]");
+    expect(ghost?.textContent).toBe("a.md");
+    expect((ghost as HTMLElement).style.pointerEvents).toBe("none");
     release();
     expect(onMoveEntry).toHaveBeenCalledTimes(1);
     expect(onMoveEntry).toHaveBeenCalledWith("/root/a.md", "/root/sub");
     expect(result.current.dropTarget).toBeNull();
     expect(document.body.style.userSelect).toBe("");
+    expect(document.querySelector("[data-tree-drag-ghost]")).toBeNull();
   });
 
   it("suppresses exactly one click after a completed drag", () => {
@@ -121,9 +125,9 @@ describe("useFileTreeDragMove", () => {
     }
   });
 
-  it("treats file rows as dead zones via the block marker", () => {
+  it("resolves unmarked elements (document area, panels) to no target", () => {
     const { result, onMoveEntry, press, moveTo, release } = renderDnd();
-    setHit(fileBlock());
+    setHit(zoneEl({}));
     press("/root/sub/deep.md");
     moveTo();
     expect(result.current.dropTarget).toBeNull();
@@ -169,6 +173,7 @@ describe("useFileTreeDragMove", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(result.current.dropTarget).toBeNull();
+    expect(document.querySelector("[data-tree-drag-ghost]")).toBeNull();
     release();
     expect(onMoveEntry).not.toHaveBeenCalled();
   });
@@ -206,12 +211,15 @@ describe("useFileTreeDragMove", () => {
     expect(onMoveEntry).not.toHaveBeenCalled();
   });
 
-  it("detaches its window listeners on unmount mid-drag", () => {
+  it("detaches its window listeners and drops the ghost on unmount mid-drag", () => {
     const removeSpy = vi.spyOn(window, "removeEventListener");
-    const { press, unmount } = renderDnd();
+    const { press, moveTo, unmount } = renderDnd();
     setHit(folderZone("/root/sub"));
     press("/root/a.md");
+    moveTo();
+    expect(document.querySelector("[data-tree-drag-ghost]")).not.toBeNull();
     unmount();
+    expect(document.querySelector("[data-tree-drag-ghost]")).toBeNull();
     const removed = removeSpy.mock.calls.map(([type]) => type);
     expect(removed).toContain("pointermove");
     expect(removed).toContain("pointerup");

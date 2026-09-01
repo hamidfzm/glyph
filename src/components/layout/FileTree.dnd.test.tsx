@@ -17,6 +17,7 @@ const entries: DirEntry[] = [
 ];
 const subdirEntries: DirEntry[] = [
   { name: "deep.md", path: "/root/subdir/deep.md", isDirectory: false, modified: 0 },
+  { name: "sibling.md", path: "/root/subdir/sibling.md", isDirectory: false, modified: 0 },
   { name: "nested", path: "/root/subdir/nested", isDirectory: true, modified: 0 },
 ];
 
@@ -125,10 +126,19 @@ describe("FileTree pointer drag-and-drop move", () => {
     expect(props.onMoveEntry).not.toHaveBeenCalled();
   });
 
-  it("treats file rows as dead drop zones", () => {
+  it("drops onto a file row into that file's containing folder", () => {
     const { props } = renderTree();
     dragFromTo("/root/subdir/deep.md", row("/root/post.md"));
-    expect(rootArea().getAttribute("data-drop-target")).toBeNull();
+    expect(rootArea().getAttribute("data-drop-target")).toBe("true");
+    releaseAt();
+    expect(props.onMoveEntry).toHaveBeenCalledWith("/root/subdir/deep.md", "/root");
+  });
+
+  it("refuses a drop onto a sibling file in the same folder (no-op)", () => {
+    const { props } = renderTree();
+    dragFromTo("/root/subdir/deep.md", row("/root/subdir/sibling.md"));
+    expect(row("/root/subdir").getAttribute("data-drop-target")).toBeNull();
+    expect(document.body.style.cursor).toBe("no-drop");
     releaseAt();
     expect(props.onMoveEntry).not.toHaveBeenCalled();
   });

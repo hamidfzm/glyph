@@ -95,6 +95,9 @@ export default defineConfig(async ({ mode }) => ({
         path.resolve(__dirname, "src-tauri/**"),
         path.resolve(__dirname, "samples/**"),
         path.resolve(__dirname, "dist/**"),
+        // A coverage run writes thousands of HTML reports; watching them
+        // reload-storms the dev webview mid-session.
+        path.resolve(__dirname, "coverage/**"),
         path.resolve(__dirname, ".github/**"),
         path.resolve(__dirname, ".claude/**"),
         path.resolve(__dirname, "docs/**"),

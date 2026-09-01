@@ -8,7 +8,7 @@ import { InlineRenameInput } from "@/components/layout/InlineRenameInput";
 import type { FileTreeDragMove } from "@/hooks/useFileTreeDragMove";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isImageFile } from "@/lib/imageExtensions";
-import { stem } from "@/lib/paths";
+import { parentDir, stem } from "@/lib/paths";
 import type { DirEntry } from "@/lib/tabs";
 
 const INDENT_PX = 12;
@@ -111,7 +111,7 @@ export function FileTreeEntry(props: FileTreeEntryProps) {
         onClick={() => onOpenFile(entry.path)}
         onContextMenu={(e) => props.onContextMenu(e, entry)}
         {...dnd.dragHandlersFor(entry.path)}
-        data-tree-drop-block=""
+        data-tree-drop-dir={parentDir(entry.path, entry.path)}
         className={`w-full text-start text-sm py-1 px-2 rounded-[var(--glyph-radius-sm)] truncate transition-colors flex items-center gap-1.5 ${
           isActive
             ? "bg-[var(--color-accent)] text-white font-medium"

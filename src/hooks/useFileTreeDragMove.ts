@@ -1,6 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isPathInside, parentDir } from "@/lib/paths";
+import { basename, isPathInside, parentDir } from "@/lib/paths";
 
 /** Pointer movement (px) before a press becomes a drag instead of a click. */
 const DRAG_THRESHOLD_PX = 5;
@@ -18,14 +18,15 @@ export interface FileTreeDragMove {
 }
 
 /** Resolve the drop directory under the pointer: the nearest marked ancestor
- *  of the hit element. File rows carry the block marker so hovering them never
- *  falls through to the root zone, and the root zone itself only counts when
- *  the pointer is over genuinely empty space (not the gaps between rows). */
+ *  of the hit element. Folder rows target themselves and file rows their
+ *  containing folder (so most of the tree is a live target, as in comparable
+ *  editors); the root zone only counts when the pointer is over genuinely
+ *  empty space, not the gaps between rows. */
 function dropDirAt(x: number, y: number): string | null {
   const hit = document.elementFromPoint(x, y);
   if (!hit) return null;
-  const zone = hit.closest<HTMLElement>("[data-tree-drop-dir], [data-tree-drop-block]");
-  if (!zone || zone.hasAttribute("data-tree-drop-block")) return null;
+  const zone = hit.closest<HTMLElement>("[data-tree-drop-dir]");
+  if (!zone) return null;
   if (zone.hasAttribute("data-filetree-root") && hit !== zone) return null;
   return zone.getAttribute("data-tree-drop-dir");
 }
@@ -47,6 +48,7 @@ export function useFileTreeDragMove(
     null,
   );
   const suppressClick = useRef(false);
+  const ghost = useRef<HTMLDivElement | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   // A drop into `dir` is rejected when it targets the dragged entry itself or
@@ -65,6 +67,8 @@ export function useFileTreeDragMove(
       if (!dragged) return;
       drag.current = null;
       setDropTarget(null);
+      ghost.current?.remove();
+      ghost.current = null;
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
       if (!dragged.active) return;
@@ -88,10 +92,28 @@ export function useFileTreeDragMove(
         dragged.active = true;
         // No text selection while dragging; the cursor signals the mode.
         document.body.style.userSelect = "none";
+        // The floating name pill is the drag feedback (there is no native
+        // ghost image without the HTML5 drag API). pointer-events:none keeps
+        // it invisible to the elementFromPoint hit-testing underneath it.
+        const pill = document.createElement("div");
+        pill.dataset.treeDragGhost = "";
+        pill.style.cssText =
+          "position:fixed;left:0;top:0;z-index:9999;pointer-events:none;" +
+          "padding:2px 8px;border-radius:var(--glyph-radius-sm);font-size:12px;" +
+          "background:var(--color-surface);border:1px solid var(--color-accent);" +
+          "color:var(--color-text-primary);box-shadow:0 2px 8px rgb(0 0 0 / 0.25);" +
+          "max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+        pill.textContent = basename(dragged.path);
+        document.body.appendChild(pill);
+        ghost.current = pill;
       }
       const dir = dropDirAt(event.clientX, event.clientY);
       const valid = dir !== null && canDrop(dir, dragged.path);
-      document.body.style.cursor = valid ? "" : "no-drop";
+      ghost.current?.style.setProperty(
+        "transform",
+        `translate(${event.clientX + 14}px, ${event.clientY + 10}px)`,
+      );
+      document.body.style.cursor = valid ? "grabbing" : "no-drop";
       const next = valid ? dir : null;
       setDropTarget((prev) => (prev === next ? prev : next));
     },
@@ -122,6 +144,8 @@ export function useFileTreeDragMove(
       window.removeEventListener("pointermove", handleWindowPointerMove);
       window.removeEventListener("pointerup", handleWindowPointerUp);
       window.removeEventListener("keydown", handleWindowKeyDown);
+      ghost.current?.remove();
+      ghost.current = null;
     };
   }, [handleWindowPointerMove, handleWindowPointerUp, handleWindowKeyDown]);
 
