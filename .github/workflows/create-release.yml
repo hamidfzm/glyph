@@ -39,6 +39,9 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: bash scripts/bump-version.sh "$VERSION"
 
+      # Pushes back to the dispatched ref, not a hardcoded main, so a hotfix
+      # release can be cut from a branch off a previous tag. Dispatch from a
+      # branch, never a tag ref.
       - name: Commit version bump
         run: |
           git config user.name "github-actions[bot]"
@@ -48,7 +51,7 @@ jobs:
             echo "Version already at ${{ inputs.version }}, skipping commit"
           else
             git commit -m "chore: bump version to ${{ inputs.version }}"
-            git push origin main
+            git push origin "HEAD:${{ github.ref_name }}"
           fi
 
       - name: Create and push tag
