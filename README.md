@@ -183,6 +183,26 @@ glyph ~/notes/ --export site --out ./site
 
 The command is provided by the Homebrew cask (macOS), Chocolatey or Scoop (Windows), and the deb package or Homebrew formula (Linux). The macOS `.dmg` and Windows MSI install the app only; use a package manager for the terminal command.
 
+### Docker
+
+Run the exports without installing anything, which is what a docs pipeline usually wants:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v "$PWD/docs:/docs:ro" -v "$PWD/site:/out" \
+  ghcr.io/hamidfzm/glyph
+```
+
+`/docs` is the workspace to render, `/out` is where the static site lands. Anything after the image name replaces the default command, so the document formats work the same way:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v "$PWD/docs:/docs:ro" -v "$PWD/out:/out" \
+  ghcr.io/hamidfzm/glyph /docs/README.md --export pdf --out /out/readme.pdf
+```
+
+The image ships the same `.deb` the apt repository serves, plus the WebKitGTK stack and the X server a headless export needs, so no `xvfb-run` wrapper is required. It runs as uid 1000; passing `--user` keeps exported files owned by you when your uid differs. Images are published for `linux/amd64` and `linux/arm64` on every release, tagged `X.Y.Z`, `X.Y`, and `latest`.
+
 ## Development
 
 ```bash
