@@ -31,14 +31,20 @@ const DEBOUNCE: Duration = Duration::from_millis(300);
 /// whose content cannot have changed. The workspace configuration folder is
 /// the exception: `.glyph/site.json` is hidden but the export reads it, so
 /// editing the site title has to rebuild like any other change.
-pub fn is_relevant_change(event: &Event) -> bool {
+///
+/// Hidden-ness is judged relative to `root`, exactly as the export's walker
+/// judges it by depth. Serving a folder that lives under a hidden one is
+/// ordinary (`~/.config/notes`, a dotfiles repo), and testing the absolute
+/// path would classify every event inside it as hidden and quietly stop
+/// rebuilding for the life of the process.
+pub fn is_relevant_change(event: &Event, root: &Path) -> bool {
     if !matches!(
         event.kind,
         EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_)
     ) {
         return false;
     }
-    event.paths.iter().any(|path| !is_ignored(path))
+    event.paths.iter().any(|path| !is_ignored(path, root))
 }
 
 /// The workspace configuration folder, which is hidden but is read by the
@@ -46,9 +52,12 @@ pub fn is_relevant_change(event: &Event) -> bool {
 const CONFIG_DIR: &str = ".glyph";
 
 /// Whether a path lives somewhere the export does not read: any hidden
-/// directory or file except the workspace configuration folder.
-fn is_ignored(path: &Path) -> bool {
-    path.components().any(|component| {
+/// directory or file below `root`, except the workspace configuration folder.
+fn is_ignored(path: &Path, root: &Path) -> bool {
+    // Anything at or above the root is the user's choice of folder, not
+    // content, so only the part below it is classified.
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    relative.components().any(|component| {
         component.as_os_str().to_str().is_some_and(|name| {
             name.starts_with('.') && name != "." && name != ".." && name != CONFIG_DIR
         })
@@ -78,7 +87,7 @@ fn debounce_loop<R: Runtime>(
     root: &Path,
 ) {
     while let Ok(first) = receiver.recv() {
-        if !first.is_ok_and(|event| is_relevant_change(&event)) {
+        if !first.is_ok_and(|event| is_relevant_change(&event, root)) {
             continue;
         }
         drain_burst(receiver);
@@ -114,25 +123,27 @@ mod tests {
 
     #[test]
     fn content_changes_rebuild_whatever_the_file_type() {
+        let root = Path::new("/ws");
         // Not just markdown: images and stylesheets change the output too.
         for path in ["/ws/notes.md", "/ws/assets/diagram.png", "/ws/style.css"] {
             assert!(
-                is_relevant_change(&event(EventKind::Modify(ModifyKind::Any), &[path])),
+                is_relevant_change(&event(EventKind::Modify(ModifyKind::Any), &[path]), root),
                 "{path} should rebuild"
             );
         }
-        assert!(is_relevant_change(&event(
-            EventKind::Create(CreateKind::File),
-            &["/ws/new.md"]
-        )));
-        assert!(is_relevant_change(&event(
-            EventKind::Remove(RemoveKind::File),
-            &["/ws/gone.md"]
-        )));
+        assert!(is_relevant_change(
+            &event(EventKind::Create(CreateKind::File), &["/ws/new.md"]),
+            root
+        ));
+        assert!(is_relevant_change(
+            &event(EventKind::Remove(RemoveKind::File), &["/ws/gone.md"]),
+            root
+        ));
     }
 
     #[test]
     fn hidden_paths_do_not_rebuild() {
+        let root = Path::new("/ws");
         // A commit writes constantly inside .git, and none of it can change
         // what the export produces, because the walker skips hidden paths.
         for path in [
@@ -141,7 +152,7 @@ mod tests {
             "/ws/.DS_Store",
         ] {
             assert!(
-                !is_relevant_change(&event(EventKind::Modify(ModifyKind::Any), &[path])),
+                !is_relevant_change(&event(EventKind::Modify(ModifyKind::Any), &[path]), root),
                 "{path} should be ignored"
             );
         }
@@ -149,30 +160,64 @@ mod tests {
 
     #[test]
     fn the_workspace_configuration_folder_still_rebuilds() {
+        let root = Path::new("/ws");
         // .glyph is hidden but the export reads site.json out of it, so
         // renaming the site has to reach the served pages.
-        assert!(is_relevant_change(&event(
-            EventKind::Modify(ModifyKind::Any),
-            &["/ws/.glyph/site.json"]
-        )));
+        assert!(is_relevant_change(
+            &event(
+                EventKind::Modify(ModifyKind::Any),
+                &["/ws/.glyph/site.json"]
+            ),
+            root
+        ));
+    }
+
+    #[test]
+    fn a_workspace_inside_a_hidden_folder_still_rebuilds() {
+        // Serving `~/.config/notes` or a dotfiles repo is ordinary. Judging
+        // the absolute path would call every event inside it hidden and stop
+        // rebuilding for the life of the process, with nothing said.
+        for (root, changed) in [
+            ("/home/me/.config/notes", "/home/me/.config/notes/index.md"),
+            ("/home/me/.dotfiles/docs", "/home/me/.dotfiles/docs/a/b.md"),
+        ] {
+            assert!(
+                is_relevant_change(
+                    &event(EventKind::Modify(ModifyKind::Any), &[changed]),
+                    Path::new(root)
+                ),
+                "{changed} should rebuild when serving {root}"
+            );
+        }
+
+        // Hidden folders *below* the root are still ignored.
+        assert!(!is_relevant_change(
+            &event(
+                EventKind::Modify(ModifyKind::Any),
+                &["/home/me/.config/notes/.git/index"]
+            ),
+            Path::new("/home/me/.config/notes")
+        ));
     }
 
     #[test]
     fn a_burst_touching_one_visible_file_still_rebuilds() {
+        let root = Path::new("/ws");
         let mixed = event(
             EventKind::Modify(ModifyKind::Any),
             &["/ws/.git/index", "/ws/notes.md"],
         );
-        assert!(is_relevant_change(&mixed));
+        assert!(is_relevant_change(&mixed, root));
     }
 
     #[test]
     fn access_only_events_do_not_rebuild() {
+        let root = Path::new("/ws");
         let accessed = event(
             EventKind::Access(notify::event::AccessKind::Read),
             &["/ws/notes.md"],
         );
-        assert!(!is_relevant_change(&accessed));
+        assert!(!is_relevant_change(&accessed, root));
     }
 
     #[test]

@@ -90,13 +90,30 @@ pub fn serve_ready<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), St
     Ok(())
 }
 
-/// A build failed. The previously exported site stays on disk and keeps being
-/// served, so the browser is left showing the last version that worked rather
-/// than a half-written one.
+/// A build failed. Whatever was exported last stays on disk and keeps being
+/// served, so a browser is left showing a site rather than nothing. It is not
+/// necessarily the previous site in full: the export writes pages in place,
+/// so a failure part way through leaves new and old pages mixed (see #707).
 #[tauri::command]
-pub fn serve_failed(message: String) -> Result<(), String> {
+pub fn serve_failed<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    message: String,
+) -> Result<(), String> {
+    // Guarded like `serve_ready`: without it any launch could print whatever
+    // it liked to this process's stderr.
+    app.try_state::<ServeState>()
+        .ok_or_else(|| "not serving".to_string())?;
     eprintln!("{message}");
     Ok(())
+}
+
+/// Keeps the folder watch alive for the life of the process. A named type
+/// because Tauri's state map is keyed by type: a bare `Mutex<..>` would be
+/// undiscoverable, and would collide with any other bare one added later.
+pub struct ServeWatcher {
+    /// Never read. `notify` stops watching the moment the watcher is dropped,
+    /// so owning it here is the whole point of the type.
+    pub _watcher: Mutex<notify::RecommendedWatcher>,
 }
 
 #[cfg(test)]
@@ -132,6 +149,21 @@ mod tests {
         })
         .unwrap();
         assert!(json.contains("\"outDir\":\"/out\""), "got {json}");
+    }
+
+    #[test]
+    fn the_serve_commands_refuse_a_launch_that_is_not_serving() {
+        // Any renderer can invoke a command; without the guard these would
+        // announce a URL and print to stderr on an ordinary launch.
+        let app = tauri::test::mock_app();
+        assert_eq!(
+            serve_ready(app.handle().clone()),
+            Err("not serving".to_string())
+        );
+        assert_eq!(
+            serve_failed(app.handle().clone(), "anything".to_string()),
+            Err("not serving".to_string())
+        );
     }
 
     #[test]

@@ -88,6 +88,7 @@ export function AppShell() {
   // Headless CLI export: runs and exits when the process was launched with
   // --export, a no-op otherwise.
   useCliExport({ entries: tocEntries, content: displayContent });
+  // The other headless launch: renders repeatedly and never exits.
   useCliServe();
 
   useDocumentUndoRedo({ activeTabId, platform, onUndo: undoEdit, onRedo: redoEdit });

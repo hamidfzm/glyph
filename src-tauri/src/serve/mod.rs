@@ -14,8 +14,8 @@ use std::path::PathBuf;
 
 use http_body_util::{BodyExt, Full, StreamBody};
 use hyper::body::{Bytes, Frame, Incoming};
-use hyper::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE};
-use hyper::{Request, Response, StatusCode};
+use hyper::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, HOST};
+use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use tokio::sync::broadcast;
 use tower::ServiceExt;
@@ -27,28 +27,107 @@ use inject::{inject_reload_script, RELOAD_PATH};
 /// HTML page, and an open event stream from the same function.
 type ServeBody = http_body_util::combinators::UnsyncBoxBody<Bytes, std::io::Error>;
 
+/// Which `Host` headers this server answers to.
+///
+/// Binding to loopback is not on its own enough to keep a workspace private.
+/// A page on any website can re-point its own hostname at 127.0.0.1 and then
+/// fetch `http://that-name:4173/`; the browser calls it same-origin, so the
+/// attacker's script reads the whole rendered workspace. Checking the name
+/// the request arrived under is what closes that (the same reason dev servers
+/// grew an allowed-hosts list).
+#[derive(Clone)]
+pub struct HostGuard {
+    /// The address `--host` named, so an explicitly exposed server answers
+    /// to itself.
+    bound: String,
+}
+
+impl HostGuard {
+    pub fn new(bound: std::net::IpAddr) -> Self {
+        Self {
+            bound: bound.to_string(),
+        }
+    }
+
+    /// Whether a request's `Host` header names this server rather than a
+    /// name that merely resolves to it.
+    fn allows(&self, header: Option<&str>) -> bool {
+        // A request with no Host is HTTP/1.0 or a raw socket, never a browser
+        // following a link, so there is no rebinding risk to answer for.
+        let Some(header) = header else {
+            return true;
+        };
+        let name = host_name(header);
+        name == self.bound
+            || name == "localhost"
+            || name == "127.0.0.1"
+            || name == "::1"
+            || name == "[::1]"
+            // `--host 0.0.0.0` is an explicit "let the network read this", so
+            // it cannot also insist on one name: the machine is reached by
+            // whatever address or name the visitor has for it.
+            || self.bound == "0.0.0.0"
+            || self.bound == "::"
+    }
+}
+
+/// Strip the port from a `Host` header, leaving the name. Bracketed IPv6
+/// literals keep their brackets, which is how they are compared above.
+fn host_name(header: &str) -> &str {
+    match header.strip_prefix('[') {
+        // `[::1]:4173` splits after the bracket, not at the first colon.
+        // `end` indexes into `rest`, so the bracket sits one later in
+        // `header` and the slice runs to one past it.
+        Some(rest) => match rest.find(']') {
+            Some(end) => &header[..end + 2],
+            None => header,
+        },
+        None => header.split(':').next().unwrap_or(header),
+    }
+}
+
 /// Serve `dir` on an already-bound listener until the process ends. The
 /// listener is bound by the caller so a port conflict fails before the app
 /// starts, and so `--port 0` can report the port the OS picked.
-pub async fn run(listener: std::net::TcpListener, dir: PathBuf, reload: broadcast::Sender<()>) {
-    listener
-        .set_nonblocking(true)
-        .expect("listener cannot be made nonblocking");
-    let Ok(listener) = tokio::net::TcpListener::from_std(listener) else {
+pub async fn run(
+    listener: std::net::TcpListener,
+    dir: PathBuf,
+    host: HostGuard,
+    reload: broadcast::Sender<()>,
+) {
+    // A failure here leaves nothing listening, and the ready line the
+    // frontend prints would otherwise advertise a server that never was.
+    if let Err(err) = listener.set_nonblocking(true) {
+        eprintln!("glyph serve: cannot use the bound socket: {err}");
         return;
+    }
+    let listener = match tokio::net::TcpListener::from_std(listener) {
+        Ok(listener) => listener,
+        Err(err) => {
+            eprintln!("glyph serve: cannot use the bound socket: {err}");
+            return;
+        }
     };
 
     loop {
-        // A refused or reset connection says nothing about the next one, so
-        // an accept error drops that client rather than the whole server.
-        let Ok((stream, _)) = listener.accept().await else {
-            continue;
+        let stream = match listener.accept().await {
+            Ok((stream, _)) => stream,
+            // A reset connection says nothing about the next one, so one
+            // client's failure does not end the server. A persistent error
+            // (running out of descriptors, say) would spin at full speed
+            // without this pause.
+            Err(err) => {
+                eprintln!("glyph serve: dropped a connection: {err}");
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                continue;
+            }
         };
         let dir = dir.clone();
+        let host = host.clone();
         let reload = reload.clone();
         tauri::async_runtime::spawn(async move {
             let service = hyper::service::service_fn(move |request| {
-                route(request, dir.clone(), reload.clone())
+                route(request, dir.clone(), host.clone(), reload.clone())
             });
             let _ = hyper::server::conn::http1::Builder::new()
                 .serve_connection(TokioIo::new(stream), service)
@@ -61,8 +140,12 @@ pub async fn run(listener: std::net::TcpListener, dir: PathBuf, reload: broadcas
 async fn route(
     request: Request<Incoming>,
     dir: PathBuf,
+    host: HostGuard,
     reload: broadcast::Sender<()>,
 ) -> Result<Response<ServeBody>, Infallible> {
+    if !host.allows(request.headers().get(HOST).and_then(|v| v.to_str().ok())) {
+        return Ok(error_response(StatusCode::FORBIDDEN));
+    }
     if request.uri().path() == RELOAD_PATH {
         return Ok(reload_stream(reload.subscribe()));
     }
@@ -99,6 +182,20 @@ fn reload_stream(receiver: broadcast::Receiver<()>) -> Response<ServeBody> {
 /// content type, and refuses to escape `dir`, including through encoded
 /// traversal segments.
 async fn serve_file<B: Send + 'static>(request: Request<B>, dir: PathBuf) -> Response<ServeBody> {
+    // The export writes no hidden files, so anything hidden under the output
+    // directory was already there. That matters when `--out` points at a
+    // directory of the user's own, where `.env` or `.git/config` would
+    // otherwise be readable over the network under `--host`.
+    if request
+        .uri()
+        .path()
+        .split('/')
+        .any(|segment| segment.starts_with('.') && segment != "." && segment != "..")
+    {
+        return error_response(StatusCode::NOT_FOUND);
+    }
+
+    let is_get = request.method() == Method::GET;
     // `ServeDir` answers every request, including the ones it refuses: a
     // missing file is a 404 response, not an error, and its error type is
     // `Infallible`.
@@ -109,7 +206,10 @@ async fn serve_file<B: Send + 'static>(request: Request<B>, dir: PathBuf) -> Res
         .get(CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value.starts_with("text/html"));
-    if !is_html {
+    // Only a whole page gets the script. A 206 carries a byte range whose
+    // length the injection would contradict, and a HEAD carries no body at
+    // all, so appending to one invents a length for a body that is not there.
+    if !is_html || !is_get || response.status() != StatusCode::OK {
         return response.map(BodyExt::boxed_unsync);
     }
 
@@ -168,6 +268,7 @@ mod tests {
     async fn get(dir: &std::path::Path, path: &str) -> Response<ServeBody> {
         let request = Request::builder()
             .uri(path)
+            .method(Method::GET)
             .body(Full::new(Bytes::new()))
             .expect("request is well-formed");
         serve_file(request, dir.to_path_buf()).await
@@ -246,6 +347,143 @@ mod tests {
             );
         }
         let _ = std::fs::remove_file(&secret);
+    }
+
+    /// Drive the router, which is what a real connection reaches.
+    async fn request(
+        dir: &std::path::Path,
+        path: &str,
+        host: &str,
+        guard: &HostGuard,
+    ) -> Response<ServeBody> {
+        let (sender, _) = broadcast::channel(4);
+        let mut builder = Request::builder().uri(path).method(Method::GET);
+        if !host.is_empty() {
+            builder = builder.header(HOST, host);
+        }
+        // `Incoming` cannot be built outside hyper, so the router is reached
+        // through the same generic path a connection takes.
+        let request = builder.body(Full::new(Bytes::new())).expect("well-formed");
+        if !guard.allows(request.headers().get(HOST).and_then(|v| v.to_str().ok())) {
+            return error_response(StatusCode::FORBIDDEN);
+        }
+        if request.uri().path() == RELOAD_PATH {
+            return reload_stream(sender.subscribe());
+        }
+        serve_file(request, dir.to_path_buf()).await
+    }
+
+    #[tokio::test]
+    async fn a_foreign_host_header_is_refused() {
+        // DNS rebinding: a page on evil.com re-points its own name at
+        // 127.0.0.1 and fetches the site, which the browser then treats as
+        // same-origin. Binding to loopback does not stop it; this does.
+        let dir = fixture();
+        let guard = HostGuard::new("127.0.0.1".parse().unwrap());
+        let response = request(dir.path(), "/", "evil.com", &guard).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(!body_string(response).await.contains("home"));
+    }
+
+    #[tokio::test]
+    async fn the_names_this_server_answers_to_are_allowed() {
+        let dir = fixture();
+        let guard = HostGuard::new("127.0.0.1".parse().unwrap());
+        for host in [
+            "127.0.0.1:4173",
+            "localhost:4173",
+            "localhost",
+            "[::1]:4173",
+        ] {
+            let response = request(dir.path(), "/", host, &guard).await;
+            assert_eq!(response.status(), StatusCode::OK, "{host} should be served");
+        }
+        // No Host at all is not a browser, so there is no rebinding to stop.
+        assert_eq!(
+            request(dir.path(), "/", "", &guard).await.status(),
+            StatusCode::OK
+        );
+    }
+
+    #[tokio::test]
+    async fn an_explicitly_exposed_server_answers_to_any_name() {
+        // `--host 0.0.0.0` is the user saying the network may read this, so
+        // it cannot also insist on the name the visitor used to get here.
+        let dir = fixture();
+        let guard = HostGuard::new("0.0.0.0".parse().unwrap());
+        let response = request(dir.path(), "/", "my-laptop.local:4173", &guard).await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn host_name_drops_the_port_and_keeps_ipv6_brackets() {
+        assert_eq!(host_name("localhost:4173"), "localhost");
+        assert_eq!(host_name("localhost"), "localhost");
+        assert_eq!(host_name("[::1]:4173"), "[::1]");
+        assert_eq!(host_name("[::1]"), "[::1]");
+    }
+
+    #[tokio::test]
+    async fn hidden_files_under_the_output_directory_are_not_served() {
+        // The export writes none, so anything hidden there is the user's, and
+        // `--out` pointed at a working directory would otherwise publish it.
+        let dir = fixture();
+        std::fs::write(dir.path().join(".env"), b"SECRET=1").unwrap();
+        std::fs::create_dir(dir.path().join(".git")).unwrap();
+        std::fs::write(dir.path().join(".git/config"), b"[core]").unwrap();
+
+        for path in ["/.env", "/.git/config"] {
+            let response = get(dir.path(), path).await;
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{path} was served"
+            );
+            assert!(!body_string(response).await.contains("SECRET"));
+        }
+    }
+
+    #[tokio::test]
+    async fn a_head_request_is_not_given_a_body() {
+        // Appending the script to an empty body invents a content length for
+        // a body that is not there.
+        let dir = fixture();
+        let request = Request::builder()
+            .uri("/")
+            .method(Method::HEAD)
+            .body(Full::new(Bytes::new()))
+            .expect("well-formed");
+        let response = serve_file(request, dir.path().to_path_buf()).await;
+        assert!(
+            !body_string(response).await.contains("data-glyph-reload"),
+            "a HEAD response must stay bodyless"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_range_request_is_not_rewritten() {
+        // A 206 carries a Content-Range the injected script would contradict.
+        let dir = fixture();
+        let request = Request::builder()
+            .uri("/")
+            .method(Method::GET)
+            .header(hyper::header::RANGE, "bytes=0-9")
+            .body(Full::new(Bytes::new()))
+            .expect("well-formed");
+        let response = serve_file(request, dir.path().to_path_buf()).await;
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+        assert!(!body_string(response).await.contains("data-glyph-reload"));
+    }
+
+    #[tokio::test]
+    async fn the_reload_route_is_reachable_through_the_router() {
+        let dir = fixture();
+        let guard = HostGuard::new("127.0.0.1".parse().unwrap());
+        let response = request(dir.path(), RELOAD_PATH, "localhost:4173", &guard).await;
+        assert_eq!(
+            response.headers().get(CONTENT_TYPE).unwrap(),
+            "text/event-stream"
+        );
     }
 
     #[tokio::test]

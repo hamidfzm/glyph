@@ -168,12 +168,25 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
-/// Where a `glyph serve` with no `--out` puts the site. Named after the
-/// process so two concurrent previews cannot write over each other, and so
-/// the leftovers of a killed run are identifiable rather than anonymous.
+/// Where a `glyph serve` with no `--out` puts the site.
+///
+/// Created through `tempfile` rather than at a name derived from the process
+/// id: the system temp directory is world-writable on Unix and process ids
+/// are guessable, so a predictable name can be pre-created (or pointed
+/// somewhere else by a symlink) by any local user, who would then be choosing
+/// the HTML the victim's browser is about to load from localhost. `tempfile`
+/// creates it with a random name and owner-only permissions.
+///
+/// The directory outlives the handle on purpose. Removal happens on interrupt
+/// in [`spawn_temp_dir_cleanup`], because the process ends without unwinding
+/// and `Drop` would never run.
 #[cfg(desktop)]
-fn default_serve_dir() -> std::path::PathBuf {
-    std::env::temp_dir().join(format!("glyph-serve-{}", std::process::id()))
+fn default_serve_dir() -> Result<std::path::PathBuf, String> {
+    tempfile::Builder::new()
+        .prefix("glyph-serve-")
+        .tempdir()
+        .map(tempfile::TempDir::keep)
+        .map_err(|err| format!("cannot create a temporary directory to serve from: {err}"))
 }
 
 /// Bring up everything `glyph serve` needs before the frontend renders:
@@ -192,9 +205,15 @@ fn start_serve(
     output: Option<String>,
 ) -> Result<(), String> {
     let owns_output = output.is_none();
-    let out_dir = output.map_or_else(default_serve_dir, std::path::PathBuf::from);
-    std::fs::create_dir_all(&out_dir)
-        .map_err(|err| format!("cannot create the output directory {out_dir:?}: {err}"))?;
+    let out_dir = match output {
+        Some(path) => {
+            let path = std::path::PathBuf::from(path);
+            std::fs::create_dir_all(&path)
+                .map_err(|err| format!("cannot create the output directory {path:?}: {err}"))?;
+            path
+        }
+        None => default_serve_dir()?,
+    };
 
     let grant_registry = app.state::<grants::GrantRegistry>();
     let _ = grant_registry.grant_workspace(std::path::Path::new(root));
@@ -208,7 +227,8 @@ fn start_serve(
 
     if !host.is_loopback() {
         eprintln!(
-            "Warning: serving on {host} exposes {root} to the network. Anyone who can reach this machine can read the whole folder."
+            "Warning: serving on {host} exposes {} to the network. Anyone who can reach this machine can read the whole folder.",
+            cli::plain_path(root)
         );
     }
 
@@ -227,13 +247,20 @@ fn start_serve(
     // so it lives in managed state for as long as the process does.
     match crate::serve::watch::watch(app.clone(), std::path::Path::new(root)) {
         Ok(watcher) => {
-            app.manage(std::sync::Mutex::new(watcher));
+            app.manage(commands::serve::ServeWatcher {
+                _watcher: std::sync::Mutex::new(watcher),
+            });
         }
         Err(err) => eprintln!("Warning: changes to {root} will not rebuild the site: {err}"),
     }
 
     let served = out_dir.clone();
-    tauri::async_runtime::spawn(crate::serve::run(listener, served, reload));
+    tauri::async_runtime::spawn(crate::serve::run(
+        listener,
+        served,
+        crate::serve::HostGuard::new(host),
+        reload,
+    ));
 
     if owns_output {
         spawn_temp_dir_cleanup(out_dir);
@@ -247,9 +274,19 @@ fn start_serve(
 #[cfg(desktop)]
 fn spawn_temp_dir_cleanup(dir: std::path::PathBuf) {
     tauri::async_runtime::spawn(async move {
-        if tokio::signal::ctrl_c().await.is_ok() {
-            let _ = std::fs::remove_dir_all(&dir);
+        // Only exit on an actual interrupt. Exiting when the handler cannot
+        // be registered would end a healthy server moments after startup,
+        // reporting success and explaining nothing.
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {
+                let _ = std::fs::remove_dir_all(&dir);
+                std::process::exit(0);
+            }
+            Err(err) => {
+                eprintln!(
+                    "glyph serve: cannot listen for interrupts, so {dir:?} will be left behind: {err}"
+                );
+            }
         }
-        std::process::exit(0);
     });
 }

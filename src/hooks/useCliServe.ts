@@ -24,10 +24,12 @@ export function resetCliServeRunner(): void {
  * It renders once on mount, then again on every change Rust reports, telling
  * Rust after each build so the open browsers reload.
  *
- * A failed build is reported and otherwise ignored: the previous site is
- * still on disk and still being served, which is a far better thing to show
- * than a half-written one. On every launch that is not `glyph serve` this is
- * a no-op.
+ * A failed build is reported and otherwise ignored: whatever was exported
+ * last is still on disk and still being served, so the browser keeps showing
+ * a site rather than nothing. That site is not guaranteed to be the previous
+ * one in full, because the export writes pages in place as it goes, so a
+ * failure part way through leaves a mixture (see #707). On every launch that
+ * is not `glyph serve` this is a no-op.
  */
 export function useCliServe(): void {
   const { ready, themes, remarkPlugins, rehypePlugins } = useExportReadiness();
@@ -57,6 +59,11 @@ export function useCliServe(): void {
       try {
         do {
           queued = false;
+          // Checked before each pass, not only after the export: a change
+          // queued while the last one was reporting would otherwise render a
+          // whole site for a process that has already gone.
+          if (disposed) return;
+          let built = false;
           try {
             const { exportSite } = await import("@/lib/export/site/exportSite");
             await exportSite({
@@ -66,13 +73,15 @@ export function useCliServe(): void {
               remarkPlugins: contributions.current.remarkPlugins,
               rehypePlugins: contributions.current.rehypePlugins,
             });
-            if (disposed) return;
-            await invoke("serve_ready");
+            built = true;
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             if (disposed) return;
             await invoke("serve_failed", { message: `Rebuild failed: ${message}` });
           }
+          // Reporting lives outside the try so that an IPC failure is not
+          // announced as a failed build: the site did render.
+          if (built && !disposed) await invoke("serve_ready");
         } while (queued);
       } finally {
         building = false;
@@ -85,7 +94,10 @@ export function useCliServe(): void {
       started = true;
 
       unlisten = await listen(SERVE_CHANGED_EVENT, () => {
-        void build(request.root, request.outDir);
+        // A rejection here would escape as an unhandled one and be reported
+        // as a crash; a rebuild that cannot even report its own failure is
+        // not worth ending the serve loop over.
+        void build(request.root, request.outDir).catch(() => {});
       });
       if (disposed) {
         unlisten();

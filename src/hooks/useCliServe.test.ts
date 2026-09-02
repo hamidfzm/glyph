@@ -10,8 +10,8 @@ vi.mock("@/lib/export/site/exportSite", () => ({
   exportSite: (...args: unknown[]) => exportSiteMock(...args),
 }));
 
-// The readiness gate has its own tests; here it is always open so the serve
-// loop itself is what is under test.
+// Stubbed open so the serve loop itself is what is under test; the gate has
+// its own tests in useExportReadiness.test.ts.
 vi.mock("@/hooks/useExportReadiness", () => ({
   useExportReadiness: () => ({
     ready: true,

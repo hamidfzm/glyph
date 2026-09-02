@@ -267,7 +267,7 @@ pub enum CliLaunch {
     /// Long-running preview: render `root` as a website, serve it on
     /// `host:port`, and re-render whenever the folder changes. `output` is
     /// `None` when the caller passed no `--out`, meaning the site belongs in a
-    /// temporary directory the process owns and removes on the way out.
+    /// temporary directory the process owns and removes when interrupted.
     Serve {
         root: String,
         host: std::net::IpAddr,
@@ -347,6 +347,12 @@ fn serve_plan(env_args: &[String], cwd: &Path) -> Result<CliLaunch, String> {
         }
     };
 
+    for flag in ["--host", "--port", "--out"] {
+        if has_flag(env_args, flag) && pick_flag_value(env_args, flag).is_none() {
+            return Err(format!("{flag} needs a value: {SERVE_USAGE}"));
+        }
+    }
+
     let host = match pick_flag_value(env_args, "--host") {
         Some(value) => value
             .trim()
@@ -371,6 +377,15 @@ fn serve_plan(env_args: &[String], cwd: &Path) -> Result<CliLaunch, String> {
             if is_path_inside(Path::new(&resolved), Path::new(&root)) {
                 return Err(
                     "--out cannot be inside the folder being served: the export would feed its own output back in"
+                        .to_string(),
+                );
+            }
+            // The other direction matters just as much: everything in the
+            // output directory is served, so `--out .` or `--out ~` would
+            // publish the sources, and any `.env` or `.git` beside them.
+            if is_path_inside(Path::new(&root), Path::new(&resolved)) {
+                return Err(
+                    "--out cannot contain the folder being served: everything in it would be published"
                         .to_string(),
                 );
             }
@@ -1146,6 +1161,47 @@ mod tests {
         // A sibling directory is fine.
         let (_, _, _, output) = serve_of(&argv_of(&["serve", "docs", "--out", "site"]), &cwd);
         assert_eq!(output, Some(cwd.join("site").to_string_lossy().to_string()));
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn serve_refuses_an_output_directory_that_contains_the_served_folder() {
+        // Everything in the output directory is published, so `--out .` when
+        // serving ./docs would put the sources, and any .env or .git beside
+        // them, on the server.
+        let cwd = unique_tmp("serve_out_above");
+        let docs = cwd.join("docs");
+        fs::create_dir_all(&docs).unwrap();
+
+        for out in [".", ".."] {
+            let err = launch_plan(
+                None,
+                None,
+                None,
+                &argv_of(&["serve", "docs", "--out", out]),
+                &cwd,
+            )
+            .unwrap_err();
+            assert!(
+                err.contains("cannot contain the folder being served"),
+                "--out {out} gave: {err}"
+            );
+        }
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn serve_rejects_a_flag_with_nothing_after_it() {
+        // Silently binding the default would hide the typo, and `--export`
+        // already treats a valueless flag as a usage error.
+        let cwd = unique_tmp("serve_dangling");
+        fs::create_dir_all(cwd.join("docs")).unwrap();
+
+        for flag in ["--host", "--port", "--out"] {
+            let err = launch_plan(None, None, None, &argv_of(&["serve", "docs", flag]), &cwd)
+                .unwrap_err();
+            assert!(err.contains(&format!("{flag} needs a value")), "got: {err}");
+        }
         let _ = fs::remove_dir_all(&cwd);
     }
 
