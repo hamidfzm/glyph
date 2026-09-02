@@ -59,7 +59,7 @@ mod tests {
         // HEAD points at refs/heads/trunk on a fresh repo even before
         // the first commit.
         let head = repo.find_reference("HEAD").unwrap();
-        assert_eq!(head.symbolic_target(), Some("refs/heads/trunk"));
+        assert_eq!(head.symbolic_target().unwrap(), Some("refs/heads/trunk"));
     }
 
     #[test]
@@ -105,7 +105,7 @@ mod tests {
         set_origin(tmp.path(), "https://example.com/b.git").unwrap();
         let repo = Repository::open(tmp.path()).unwrap();
         let remote = repo.find_remote("origin").unwrap();
-        assert_eq!(remote.url(), Some("https://example.com/b.git"));
+        assert_eq!(remote.url().unwrap(), "https://example.com/b.git");
     }
 
     #[test]

@@ -30,6 +30,9 @@ pub enum SyncError {
     #[error("repository is in a state we don't understand: {0}")]
     InvalidState(String),
 
+    #[error("remote URL must use https:// (without credentials), ssh://, or user@host:path")]
+    InvalidRemoteUrl,
+
     #[error("i/o error: {0}")]
     Io(String),
 

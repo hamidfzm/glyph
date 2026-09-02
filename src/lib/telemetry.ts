@@ -20,18 +20,29 @@ const URL_BEARING_CATEGORIES = new Set(["navigation", "fetch", "xhr"]);
 const SAFE_CONTEXTS = new Set(["os", "app", "device", "runtime", "browser"]);
 
 // Absolute filesystem paths and file:// URLs. We redact rather than send these
-// because they leak usernames, directory layouts, and document names.
-const FILE_URL = /file:\/\/[^\s"'<>|]+/g;
-const WINDOWS_PATH = /[A-Za-z]:\\[^\s"'<>|]+/g;
-const POSIX_PATH = /\/(?:Users|home|root|var|tmp|private|mnt|media|opt)\/[^\s"'<>|]+/g;
+// because they leak usernames, directory layouts, and document names. Paths
+// contain spaces and apostrophes, so a match runs to the next `:`, quote,
+// angle bracket, or pipe rather than to whitespace (legal in POSIX names but
+// rare, and `:` keeps "path: reason" messages readable): a trailing word is
+// over-redacted rather than a document name leaked. Windows verbatim prefixes
+// (`\\?\`, `\\?\UNC\`) are stripped first so the drive and UNC patterns see
+// the plain form.
+const VERBATIM_PREFIX = /\\\\\?\\(UNC\\)?/g;
+const FILE_URL = /file:\/\/[^"<>|\n]+/g;
+const WINDOWS_PATH = /\b[A-Za-z]:[\\/][^"<>|:?*\n]+/g;
+const UNC_PATH = /\\\\[^"<>|:?*\\\s]+\\[^"<>|:?*\n]+/g;
+const POSIX_PATH =
+  /\/(?:Users|home|root|var|tmp|private|mnt|media|opt|Volumes|srv|run|storage|sdcard|data)\/[^"<>|:\n]+/g;
 
 const REDACTED = "[redacted-path]";
 
 /** Replace any absolute path or file URL in `input` with a placeholder. */
 export function redactPaths(input: string): string {
   return input
+    .replace(VERBATIM_PREFIX, (_match, unc) => (unc ? "\\\\" : ""))
     .replace(FILE_URL, REDACTED)
     .replace(WINDOWS_PATH, REDACTED)
+    .replace(UNC_PATH, REDACTED)
     .replace(POSIX_PATH, REDACTED);
 }
 

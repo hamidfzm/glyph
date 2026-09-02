@@ -1,9 +1,11 @@
 // Source text of the sandbox worker. It runs with no DOM and no Tauri invoke;
 // everything reaches the host through the protocol messages, and network
 // access is fenced to the plugin's declared `network:<host>` permissions by
-// replacing the worker's own fetch (WebSocket/XHR/importScripts are removed
-// outright). In production builds the page CSP also blocks remote dynamic
-// import inside the worker, so the fetch fence is not the only wall.
+// replacing the worker's own fetch. Every other way to reach the network or a
+// fresh, unfenced scope (XHR, WebSocket, EventSource, WebTransport, nested
+// workers, importScripts) is removed outright. In production builds the page
+// CSP also blocks remote dynamic import inside the worker, so the fetch fence
+// is not the only wall.
 //
 // Kept as a template string rather than a bundled file so the loader can spawn
 // it from a blob URL without any build-time coordination.
@@ -52,20 +54,67 @@ function isNetworkAllowed(permissions, url) {
   });
 }
 
+// Pin a global to \`value\`, non-writable and non-configurable, so plugin code
+// can neither delete the pin nor swap the original back in. Workers expose
+// these as own properties of the global; the prototype walk covers an engine
+// that puts them on WorkerGlobalScope.prototype instead. A pin that does not
+// take throws, which fails activation rather than leaving a hole.
+function lockGlobal(name, value) {
+  for (let obj = globalThis; obj; obj = Object.getPrototypeOf(obj)) {
+    if (obj === globalThis || Object.prototype.hasOwnProperty.call(obj, name)) {
+      Object.defineProperty(obj, name, { value, writable: false, configurable: false });
+    }
+  }
+  if (globalThis[name] !== value) throw new Error("could not fence " + name);
+}
+
+// The brand-checked \`url\` getter of the real Request, looked up along the
+// prototype chain (a wrapped Request class keeps it on its parent).
+function requestUrlGetter(RealRequest) {
+  for (let proto = RealRequest.prototype; proto; proto = Object.getPrototypeOf(proto)) {
+    const descriptor = Object.getOwnPropertyDescriptor(proto, "url");
+    if (descriptor && descriptor.get) return descriptor.get;
+  }
+  throw new Error("could not fence fetch: Request.url getter not found");
+}
+
 function installNetworkFence(permissions) {
   const realFetch = globalThis.fetch.bind(globalThis);
-  globalThis.fetch = (input, init) => {
-    const url = typeof input === "string" ? input : input.url;
+  // Captured before any plugin code runs. The host is read off a normalized
+  // Request through the brand-checked getter: fetch stringifies a non-Request
+  // input, so an object whose \`url\` and \`toString\` disagree would otherwise
+  // pass the check with one host and be sent to another.
+  const RealRequest = Request;
+  const requestUrl = requestUrlGetter(RealRequest);
+  lockGlobal("fetch", (input, init) => {
+    let request;
+    try {
+      request = new RealRequest(input, init);
+    } catch (err) {
+      return Promise.reject(err);
+    }
+    const url = requestUrl.call(request);
     if (!isNetworkAllowed(permissions, url)) {
       return Promise.reject(
         new Error("network access to " + url + " is not covered by this plugin's permissions"),
       );
     }
-    return realFetch(input, init);
-  };
-  globalThis.XMLHttpRequest = undefined;
-  globalThis.WebSocket = undefined;
-  globalThis.importScripts = undefined;
+    return realFetch(request);
+  });
+  // A nested worker would start with an unfenced fetch of its own; the rest
+  // reach the network without going through fetch at all (Cache.add fetches).
+  for (const name of [
+    "XMLHttpRequest",
+    "WebSocket",
+    "EventSource",
+    "WebTransport",
+    "Worker",
+    "SharedWorker",
+    "importScripts",
+    "caches",
+  ]) {
+    lockGlobal(name, undefined);
+  }
 }
 
 function buildContext(init) {

@@ -39,21 +39,46 @@ afterEach(() => {
 });
 
 describe("redactPaths", () => {
-  it("redacts Windows absolute paths", () => {
+  it("redacts Windows absolute paths up to the next delimiter", () => {
     expect(redactPaths(String.raw`opened C:\Users\Jane\Secret\notes.md ok`)).toBe(
-      "opened [redacted-path] ok",
+      "opened [redacted-path]",
+    );
+    expect(redactPaths(String.raw`open "C:\Users\Jane\notes.md" failed`)).toBe(
+      'open "[redacted-path]" failed',
+    );
+    expect(redactPaths("open D:/Notes/secret.md failed")).toBe("open [redacted-path]");
+  });
+
+  it("keeps a path containing spaces or apostrophes whole instead of leaking its tail", () => {
+    expect(redactPaths(String.raw`open C:\Users\Jane Doe\My Notes.md: denied`)).toBe(
+      "open [redacted-path]: denied",
+    );
+    expect(redactPaths(String.raw`open C:\Users\Jane's Notes\diary.md: denied`)).toBe(
+      "open [redacted-path]: denied",
+    );
+    expect(redactPaths("read /Users/Jane Doe/Q's notes.md: denied")).toBe(
+      "read [redacted-path]: denied",
     );
   });
 
-  it("redacts POSIX home paths", () => {
-    expect(redactPaths("read /Users/jane/Documents/diary.md failed")).toBe(
-      "read [redacted-path] failed",
-    );
+  it("redacts Windows verbatim and UNC paths", () => {
+    expect(redactPaths(String.raw`at \\?\C:\Users\Jane\a.md`)).toBe("at [redacted-path]");
+    expect(redactPaths(String.raw`at \\?\UNC\nas\share\Jane\a.md`)).toBe("at [redacted-path]");
+    expect(redactPaths(String.raw`at \\nas\share\Jane Doe\a.md`)).toBe("at [redacted-path]");
+  });
+
+  it("redacts POSIX paths under user and volume roots", () => {
+    expect(redactPaths("read /Users/jane/Documents/diary.md failed")).toBe("read [redacted-path]");
     expect(redactPaths("at /home/jane/notes/todo.md")).toBe("at [redacted-path]");
+    expect(redactPaths("at /Volumes/Work/notes.md")).toBe("at [redacted-path]");
+    expect(redactPaths("at /storage/emulated/0/Documents/notes.md")).toBe("at [redacted-path]");
   });
 
   it("redacts file:// URLs", () => {
-    expect(redactPaths("file:///Users/jane/x.md broke")).toBe("[redacted-path] broke");
+    expect(redactPaths("file:///Users/jane/x.md broke")).toBe("[redacted-path]");
+    expect(redactPaths('open "file:///Users/jane/x.md" broke')).toBe(
+      'open "[redacted-path]" broke',
+    );
   });
 
   it("leaves path-free text untouched", () => {

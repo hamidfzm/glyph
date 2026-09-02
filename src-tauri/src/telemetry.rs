@@ -6,9 +6,10 @@
 //! `pnpm tauri dev` never sends events. PII (absolute file paths, the machine
 //! hostname) is stripped in [`scrub_event`] before anything leaves the process.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 
-use sentry::protocol::Event;
+use regex::{Captures, Regex};
+use sentry::protocol::{Event, Stacktrace};
 use tauri::State;
 
 // Single source of truth for the DSN — `src-tauri/sentry.json`, read at build
@@ -24,64 +25,115 @@ const SENTRY_DSN: &str = match option_env!("GLYPH_SENTRY_DSN") {
 /// guard (setting this to `None`) flushes and disables the client.
 pub struct TelemetryState(pub Mutex<Option<sentry::ClientInitGuard>>);
 
+const REDACTED: &str = "[redacted-path]";
+
+// Paths contain spaces and apostrophes, so a match runs to the next `:`,
+// quote, angle bracket, or pipe rather than to whitespace (legal in POSIX
+// names but rare, and `:` keeps "path: reason" messages readable): a trailing
+// word is over-redacted rather than a document name leaked. Windows verbatim
+// prefixes (`\\?\`, `\\?\UNC\`), which every canonicalized path carries, are
+// stripped first so the drive and UNC patterns see the plain form. Mirrors
+// src/lib/telemetry.ts.
+static VERBATIM_PREFIX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\\\\\?\\(UNC\\)?").expect("valid regex"));
+static FILE_URL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"file://[^"<>|\n]+"#).expect("valid regex"));
+static WINDOWS_PATH: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\b[A-Za-z]:[\\/][^"<>|:?*\n]+"#).expect("valid regex"));
+static UNC_PATH: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\\\\[^"<>|:?*\\\s]+\\[^"<>|:?*\n]+"#).expect("valid regex"));
+static POSIX_PATH: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"/(?:Users|home|root|var|tmp|private|mnt|media|opt|Volumes|srv|run|storage|sdcard|data)/[^"<>|:\n]+"#,
+    )
+    .expect("valid regex")
+});
+
+/// Anchors after which a source path stops being the build machine's layout
+/// and starts naming the file inside this repo or a registry crate.
+const FRAME_PATH_ANCHORS: [&str; 5] = [
+    "src-tauri/",
+    "src-tauri\\",
+    ".cargo/registry/src/",
+    ".cargo\\registry\\src\\",
+    "/rustc/",
+];
+
 /// Redact absolute filesystem paths and `file://` URLs from a string so user
 /// file locations (which encode usernames and document names) never reach
-/// Sentry. Matches Windows drive paths and common POSIX roots.
+/// Sentry.
 fn redact_paths(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    for token in input.split_inclusive(char::is_whitespace) {
-        let (word, trailing_ws) = match token.char_indices().last() {
-            Some((i, c)) if c.is_whitespace() => (&token[..i], &token[i..]),
-            _ => (token, ""),
-        };
-        if is_path_like(word) {
-            out.push_str("[redacted-path]");
+    let plain = VERBATIM_PREFIX.replace_all(input, |caps: &Captures| {
+        if caps.get(1).is_some() {
+            r"\\".to_string()
         } else {
-            out.push_str(word);
+            String::new()
         }
-        out.push_str(trailing_ws);
-    }
-    out
+    });
+    let out = FILE_URL.replace_all(&plain, REDACTED);
+    let out = WINDOWS_PATH.replace_all(&out, REDACTED);
+    let out = UNC_PATH.replace_all(&out, REDACTED);
+    POSIX_PATH.replace_all(&out, REDACTED).into_owned()
 }
 
-/// Heuristic: does this whitespace-delimited token look like an absolute path or
-/// a file URL we should redact?
-fn is_path_like(word: &str) -> bool {
-    if word.starts_with("file://") {
-        return true;
+/// Keep the tail of a frame's source path from the first known anchor so the
+/// frame still names its file; the prefix is the build machine's (or, for a
+/// local build, the user's) directory layout. Anything else is redacted like
+/// any other path; relative file names pass through untouched.
+fn redact_frame_path(path: &str) -> String {
+    FRAME_PATH_ANCHORS
+        .iter()
+        .filter_map(|anchor| path.find(anchor))
+        .min()
+        .map(|idx| path[idx..].to_string())
+        .unwrap_or_else(|| redact_paths(path))
+}
+
+fn redact_frames(stack: &mut Stacktrace) {
+    for frame in &mut stack.frames {
+        if let Some(path) = frame.abs_path.take() {
+            frame.abs_path = Some(redact_frame_path(&path));
+        }
+        if let Some(file) = frame.filename.take() {
+            frame.filename = Some(redact_frame_path(&file));
+        }
     }
-    // Windows drive path, e.g. C:\Users\...
-    let bytes = word.as_bytes();
-    if bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\' {
-        return true;
-    }
-    // POSIX absolute path under a user/data-bearing root.
-    const ROOTS: [&str; 9] = [
-        "/Users/",
-        "/home/",
-        "/root/",
-        "/var/",
-        "/tmp/",
-        "/private/",
-        "/mnt/",
-        "/media/",
-        "/opt/",
-    ];
-    ROOTS.iter().any(|root| word.starts_with(root))
 }
 
 /// Strip PII from an event before send: null the hostname and redact paths from
-/// the message and every exception value.
+/// the message, log entry, exception values, stack frames, and breadcrumbs.
 fn scrub_event(mut event: Event<'static>) -> Option<Event<'static>> {
     event.server_name = None;
 
     if let Some(message) = event.message.take() {
         event.message = Some(redact_paths(&message));
     }
+    if let Some(entry) = &mut event.logentry {
+        entry.message = redact_paths(&entry.message);
+    }
 
     for exception in &mut event.exception.values {
         if let Some(value) = exception.value.take() {
             exception.value = Some(redact_paths(&value));
+        }
+        if let Some(stack) = &mut exception.stacktrace {
+            redact_frames(stack);
+        }
+        if let Some(stack) = &mut exception.raw_stacktrace {
+            redact_frames(stack);
+        }
+    }
+    for thread in &mut event.threads.values {
+        if let Some(stack) = &mut thread.stacktrace {
+            redact_frames(stack);
+        }
+        if let Some(stack) = &mut thread.raw_stacktrace {
+            redact_frames(stack);
+        }
+    }
+    for crumb in &mut event.breadcrumbs.values {
+        if let Some(message) = crumb.message.take() {
+            crumb.message = Some(redact_paths(&message));
         }
     }
 
@@ -155,13 +207,72 @@ pub fn flush() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sentry::protocol::Exception;
+    use sentry::protocol::{Breadcrumb, Exception, Frame, LogEntry, Thread};
 
     #[test]
-    fn redacts_windows_paths() {
+    fn redacts_windows_paths_up_to_the_next_delimiter() {
         assert_eq!(
             redact_paths(r"open C:\Users\Jane\notes.md failed"),
-            "open [redacted-path] failed",
+            "open [redacted-path]",
+        );
+        assert_eq!(
+            redact_paths(r#"open "C:\Users\Jane\notes.md" failed"#),
+            r#"open "[redacted-path]" failed"#,
+        );
+        assert_eq!(
+            redact_paths("open D:/Notes/secret.md failed"),
+            "open [redacted-path]"
+        );
+    }
+
+    #[test]
+    fn keeps_a_path_containing_spaces_or_apostrophes_whole() {
+        assert_eq!(
+            redact_paths(r"open C:\Users\Jane Doe\My Notes.md: denied"),
+            "open [redacted-path]: denied",
+        );
+        assert_eq!(
+            redact_paths(r"open C:\Users\Jane's Notes\diary.md: denied"),
+            "open [redacted-path]: denied",
+        );
+        assert_eq!(
+            redact_paths("read /Users/Jane Doe/Q's notes.md: denied"),
+            "read [redacted-path]: denied",
+        );
+    }
+
+    #[test]
+    fn frame_paths_keep_their_in_repo_or_registry_tail() {
+        assert_eq!(
+            redact_frame_path(r"C:\Users\Jane\code\glyph\src-tauri\src\main.rs"),
+            r"src-tauri\src\main.rs"
+        );
+        assert_eq!(
+            redact_frame_path(
+                "/home/ci/.cargo/registry/src/index.crates.io-abc/tauri-2.0.0/src/lib.rs"
+            ),
+            ".cargo/registry/src/index.crates.io-abc/tauri-2.0.0/src/lib.rs"
+        );
+        assert_eq!(
+            redact_frame_path("/Users/jane/other/main.rs"),
+            "[redacted-path]"
+        );
+        assert_eq!(redact_frame_path("src/main.rs"), "src/main.rs");
+    }
+
+    #[test]
+    fn redacts_verbatim_and_unc_windows_paths() {
+        assert_eq!(
+            redact_paths(r"at \\?\C:\Users\Jane\a.md"),
+            "at [redacted-path]"
+        );
+        assert_eq!(
+            redact_paths(r"at \\?\UNC\nas\share\Jane\a.md"),
+            "at [redacted-path]"
+        );
+        assert_eq!(
+            redact_paths(r"at \\nas\share\Jane Doe\a.md"),
+            "at [redacted-path]"
         );
     }
 
@@ -169,9 +280,17 @@ mod tests {
     fn redacts_posix_paths() {
         assert_eq!(
             redact_paths("read /Users/jane/diary.md done"),
-            "read [redacted-path] done",
+            "read [redacted-path]"
         );
         assert_eq!(redact_paths("at /home/jane/todo.md"), "at [redacted-path]");
+        assert_eq!(
+            redact_paths("at /Volumes/Work/notes.md"),
+            "at [redacted-path]"
+        );
+        assert_eq!(
+            redact_paths("at /storage/emulated/0/Documents/notes.md"),
+            "at [redacted-path]"
+        );
     }
 
     #[test]
@@ -186,12 +305,36 @@ mod tests {
     }
 
     #[test]
-    fn scrub_event_nulls_hostname_and_redacts_paths() {
+    fn scrub_event_nulls_hostname_and_redacts_paths_everywhere() {
+        let frame = |path: &str| Frame {
+            abs_path: Some(path.to_string()),
+            filename: Some("src/main.rs".to_string()),
+            ..Default::default()
+        };
+        let stack = |path: &str| Stacktrace {
+            frames: vec![frame(path)],
+            ..Default::default()
+        };
         let event = Event {
             message: Some(r"panic at C:\Users\Jane\a.md".to_string()),
+            logentry: Some(LogEntry {
+                message: "opened /home/jane/c.md".to_string(),
+                ..Default::default()
+            }),
             server_name: Some("janes-machine".into()),
             exception: vec![Exception {
                 value: Some("missing /home/jane/b.md".to_string()),
+                stacktrace: Some(stack(r"C:\Users\Jane\code\glyph\src-tauri\src\main.rs")),
+                ..Default::default()
+            }]
+            .into(),
+            threads: vec![Thread {
+                stacktrace: Some(stack("/Users/jane/src/main.rs")),
+                ..Default::default()
+            }]
+            .into(),
+            breadcrumbs: vec![Breadcrumb {
+                message: Some("watching /home/jane/notes".to_string()),
                 ..Default::default()
             }]
             .into(),
@@ -199,14 +342,30 @@ mod tests {
         };
 
         let scrubbed = scrub_event(event).expect("event kept");
+
         assert_eq!(scrubbed.server_name, None);
         assert_eq!(
             scrubbed.message.as_deref(),
             Some("panic at [redacted-path]")
         );
         assert_eq!(
-            scrubbed.exception.values[0].value.as_deref(),
-            Some("missing [redacted-path]"),
+            scrubbed.logentry.as_ref().map(|e| e.message.as_str()),
+            Some("opened [redacted-path]")
+        );
+        let exception = &scrubbed.exception.values[0];
+        assert_eq!(exception.value.as_deref(), Some("missing [redacted-path]"));
+        let frame = &exception.stacktrace.as_ref().unwrap().frames[0];
+        assert_eq!(frame.abs_path.as_deref(), Some(r"src-tauri\src\main.rs"));
+        assert_eq!(frame.filename.as_deref(), Some("src/main.rs"));
+        let thread_frame = &scrubbed.threads.values[0]
+            .stacktrace
+            .as_ref()
+            .unwrap()
+            .frames[0];
+        assert_eq!(thread_frame.abs_path.as_deref(), Some("[redacted-path]"));
+        assert_eq!(
+            scrubbed.breadcrumbs.values[0].message.as_deref(),
+            Some("watching [redacted-path]")
         );
     }
 

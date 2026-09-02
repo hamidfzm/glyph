@@ -60,6 +60,7 @@ export type SyncErrorKind =
   | "network"
   | "conflict"
   | "invalid-state"
+  | "invalid-remote-url"
   | "io"
   | "backend";
 

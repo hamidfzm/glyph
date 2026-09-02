@@ -80,6 +80,7 @@
     "ioDetail": "Error de E/S: {{message}}",
     "backend": "Error del backend de sincronización.",
     "backendDetail": "Error del backend de sincronización: {{message}}",
+    "invalidRemoteUrl": "La URL remota debe empezar por https:// o ssh:// (o tener la forma usuario@host:ruta). Los tokens de acceso van en el campo de token, no en la URL.",
     "unknown": "Error de sincronización desconocido."
   }
 }

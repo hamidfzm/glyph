@@ -80,6 +80,7 @@
     "ioDetail": "I/O 错误：{{message}}",
     "backend": "同步后端错误。",
     "backendDetail": "同步后端错误：{{message}}",
+    "invalidRemoteUrl": "远程地址必须以 https:// 或 ssh:// 开头（或使用 user@host:path 形式）。访问令牌请填写在令牌字段中，不要放在地址里。",
     "unknown": "未知同步错误。"
   }
 }
