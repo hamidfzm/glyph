@@ -221,6 +221,50 @@ mod tests {
     }
 
     #[test]
+    fn a_real_edit_reaches_the_frontend_as_one_rebuild() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use tauri::Listener;
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        std::fs::write(dir.path().join("index.md"), "# Home").unwrap();
+
+        let app = tauri::test::mock_app();
+        let rebuilds = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&rebuilds);
+        app.listen(CHANGED_EVENT, move |_| {
+            counted.fetch_add(1, Ordering::SeqCst);
+        });
+
+        // Held for the length of the test: dropping it stops the watch.
+        let _watcher = watch(app.handle().clone(), dir.path()).expect("watches");
+        // The watch is registered asynchronously by the OS, so an edit made
+        // immediately can be missed.
+        std::thread::sleep(Duration::from_millis(300));
+
+        // A burst, the way an editor saves: several writes in quick
+        // succession that should amount to one rebuild.
+        for i in 0..3 {
+            std::fs::write(dir.path().join("index.md"), format!("# Home {i}")).unwrap();
+            std::thread::sleep(Duration::from_millis(30));
+        }
+
+        // Long enough for the debounce window to close and the event to land.
+        std::thread::sleep(DEBOUNCE + Duration::from_millis(700));
+        let seen = rebuilds.load(Ordering::SeqCst);
+        assert!(seen >= 1, "an edit should rebuild, saw {seen}");
+        assert!(seen <= 2, "a burst should coalesce, saw {seen} rebuilds");
+    }
+
+    #[test]
+    fn watching_a_folder_that_is_not_there_is_an_error_not_a_panic() {
+        let app = tauri::test::mock_app();
+        let missing = std::env::temp_dir().join("glyph-serve-no-such-folder");
+        let _ = std::fs::remove_dir_all(&missing);
+        assert!(watch(app.handle().clone(), &missing).is_err());
+    }
+
+    #[test]
     fn drain_burst_returns_once_the_channel_closes() {
         let (sender, receiver) = std::sync::mpsc::channel::<Result<Event, notify::Error>>();
         drop(sender);

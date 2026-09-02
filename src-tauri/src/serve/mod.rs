@@ -373,6 +373,91 @@ mod tests {
         serve_file(request, dir.to_path_buf()).await
     }
 
+    /// Speak HTTP/1.1 down a real socket and read the whole reply. Keeps the
+    /// end-to-end tests dependency-free: nothing in the tree is an HTTP
+    /// client, and the exchange under test is one request long.
+    fn http_get(port: u16, path: &str, host: &str) -> String {
+        use std::io::{Read, Write};
+        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).expect("connects");
+        stream
+            .write_all(
+                format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n")
+                    .as_bytes(),
+            )
+            .expect("writes");
+        let mut reply = String::new();
+        stream.read_to_string(&mut reply).expect("reads");
+        reply
+    }
+
+    /// Bind an ephemeral port and start the server on it, as `start_serve`
+    /// does, returning the port the OS chose.
+    fn start(dir: &std::path::Path, host: &str) -> (u16, broadcast::Sender<()>) {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("binds");
+        let port = listener.local_addr().expect("has an address").port();
+        let (reload, _) = broadcast::channel(4);
+        let guard = HostGuard::new(host.parse().expect("an address"));
+        tauri::async_runtime::spawn(run(listener, dir.to_path_buf(), guard, reload.clone()));
+        (port, reload)
+    }
+
+    #[tokio::test]
+    async fn serves_over_a_real_socket() {
+        // The accept loop and the connection handling only run for real over
+        // a socket; every other test here calls past them.
+        let dir = fixture();
+        let (port, _reload) = start(dir.path(), "127.0.0.1");
+
+        let reply = tokio::task::spawn_blocking(move || http_get(port, "/", "localhost"))
+            .await
+            .expect("the request thread finishes");
+
+        assert!(reply.starts_with("HTTP/1.1 200"), "got: {reply}");
+        assert!(reply.contains("home"), "page body missing: {reply}");
+        assert!(reply.contains("data-glyph-reload"), "script missing");
+    }
+
+    #[tokio::test]
+    async fn refuses_a_rebinding_host_over_a_real_socket() {
+        let dir = fixture();
+        let (port, _reload) = start(dir.path(), "127.0.0.1");
+
+        let reply = tokio::task::spawn_blocking(move || http_get(port, "/", "evil.com"))
+            .await
+            .expect("the request thread finishes");
+
+        assert!(reply.starts_with("HTTP/1.1 403"), "got: {reply}");
+        assert!(!reply.contains("home"), "the page leaked: {reply}");
+    }
+
+    #[tokio::test]
+    async fn a_rebuild_reaches_a_browser_on_a_real_socket() {
+        // The whole point of the server: an open stream is told to reload.
+        let dir = fixture();
+        let (port, reload) = start(dir.path(), "127.0.0.1");
+
+        let stream = tokio::task::spawn_blocking(move || {
+            use std::io::{Read, Write};
+            let mut socket = std::net::TcpStream::connect(("127.0.0.1", port)).expect("connects");
+            socket
+                .write_all(
+                    format!("GET {RELOAD_PATH} HTTP/1.1\r\nHost: localhost\r\n\r\n").as_bytes(),
+                )
+                .expect("writes");
+            let mut buffer = [0u8; 512];
+            let read = socket.read(&mut buffer).expect("reads the headers");
+            String::from_utf8_lossy(&buffer[..read]).into_owned()
+        });
+
+        // Give the subscription time to reach the broadcast channel, then
+        // announce a rebuild the way `serve_ready` does.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        let _ = reload.send(());
+
+        let headers = stream.await.expect("the request thread finishes");
+        assert!(headers.contains("text/event-stream"), "got: {headers}");
+    }
+
     #[tokio::test]
     async fn a_foreign_host_header_is_refused() {
         // DNS rebinding: a page on evil.com re-points its own name at
