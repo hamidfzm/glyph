@@ -1,0 +1,6 @@
+# The image installs a published release asset and needs only the entrypoint
+# from this repository. Sending the working tree (node_modules,
+# src-tauri/target) to the daemon would cost minutes for files the build never
+# reads.
+*
+!docker-entrypoint.sh

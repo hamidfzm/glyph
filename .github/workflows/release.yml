@@ -1019,3 +1019,45 @@ jobs:
             git commit -m "Update to $VERSION"
             git push
           }
+
+  publish-docker:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # ghcr.io push, authenticated with the built-in token, so this publish
+      # job needs no secret of its own.
+      packages: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Get version
+        id: version
+        uses: ./.github/actions/get-version
+      # arm64 is emulated. The image only unpacks a published package, so
+      # there is nothing to cross-compile and one buildx run covers both.
+      - uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      # `latest` tracks the semver tags on its own and stays put for a
+      # prerelease tag, so no manual gate is needed for it.
+      - name: Derive image tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - name: Build and push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          build-args: GLYPH_VERSION=${{ steps.version.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          push: true
