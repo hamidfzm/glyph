@@ -314,6 +314,19 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn html_that_is_not_valid_utf8_is_served_as_it_is_on_disk() {
+        // The content type says HTML but the bytes are not text, so there is
+        // nothing to inject into; the file still has to arrive intact.
+        let dir = fixture();
+        std::fs::write(dir.path().join("broken.html"), [0xff, 0xfe, 0x00, 0x9f]).unwrap();
+
+        let response = get(dir.path(), "/broken.html").await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body.as_ref(), &[0xff, 0xfe, 0x00, 0x9f]);
+    }
+
+    #[tokio::test]
     async fn non_html_responses_are_untouched() {
         let dir = fixture();
         let body = body_string(get(dir.path(), "/style.css").await).await;
@@ -506,6 +519,9 @@ mod tests {
         assert_eq!(host_name("localhost"), "localhost");
         assert_eq!(host_name("[::1]:4173"), "[::1]");
         assert_eq!(host_name("[::1]"), "[::1]");
+        // Malformed rather than rejected: an unterminated bracket is compared
+        // whole, and matches nothing this server answers to.
+        assert_eq!(host_name("[::1"), "[::1");
     }
 
     #[tokio::test]

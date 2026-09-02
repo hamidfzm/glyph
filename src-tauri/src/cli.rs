@@ -1237,6 +1237,15 @@ mod tests {
     }
 
     #[test]
+    fn a_root_that_cannot_be_resolved_contains_nothing() {
+        // Guards the containment checks: an unresolvable root must not be
+        // reported as containing (or contained by) anything.
+        let missing = std::env::temp_dir().join("glyph-serve-no-such-root");
+        let _ = fs::remove_dir_all(&missing);
+        assert!(!is_path_inside(Path::new("/anywhere"), &missing));
+    }
+
+    #[test]
     fn is_serve_invocation_only_matches_a_bare_first_argument() {
         assert!(is_serve_invocation(&argv_of(&["serve", "docs"])));
         assert!(!is_serve_invocation(&argv_of(&["./serve"])));

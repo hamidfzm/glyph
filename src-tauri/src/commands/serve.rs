@@ -152,6 +152,65 @@ mod tests {
     }
 
     #[test]
+    fn a_finished_build_reaches_the_open_browsers() {
+        let app = tauri::test::mock_app();
+        let (reload, mut browser) = {
+            let (sender, _) = broadcast::channel(4);
+            let receiver = sender.subscribe();
+            (sender, receiver)
+        };
+        app.manage(ServeState::new(
+            CliServeRequest {
+                root: "/ws".to_string(),
+                out_dir: "/out".to_string(),
+            },
+            "/ws".to_string(),
+            "http://127.0.0.1:4173".to_string(),
+            reload,
+        ));
+
+        assert_eq!(serve_ready(app.handle().clone()), Ok(()));
+        assert_eq!(
+            browser.try_recv(),
+            Ok(()),
+            "a page open on the site reloads"
+        );
+
+        // The second build is a rebuild: it reloads without announcing again.
+        assert_eq!(serve_ready(app.handle().clone()), Ok(()));
+        assert_eq!(browser.try_recv(), Ok(()));
+    }
+
+    #[test]
+    fn a_failed_build_reports_without_reloading() {
+        let app = tauri::test::mock_app();
+        let (reload, mut browser) = {
+            let (sender, _) = broadcast::channel(4);
+            let receiver = sender.subscribe();
+            (sender, receiver)
+        };
+        app.manage(ServeState::new(
+            CliServeRequest {
+                root: "/ws".to_string(),
+                out_dir: "/out".to_string(),
+            },
+            "/ws".to_string(),
+            "http://127.0.0.1:4173".to_string(),
+            reload,
+        ));
+
+        assert_eq!(
+            serve_failed(app.handle().clone(), "Rebuild failed: boom".to_string()),
+            Ok(())
+        );
+        // Nothing reloads: the browser keeps the version it already has.
+        assert_eq!(
+            browser.try_recv(),
+            Err(broadcast::error::TryRecvError::Empty)
+        );
+    }
+
+    #[test]
     fn the_serve_commands_refuse_a_launch_that_is_not_serving() {
         // Any renderer can invoke a command; without the guard these would
         // announce a URL and print to stderr on an ordinary launch.
