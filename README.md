@@ -179,6 +179,16 @@ glyph notes.md --export docx --out ~/out.docx
 glyph ~/notes/ --export site --out ./site
 ```
 
+```bash
+# serve a workspace as a website, rebuilding as it changes
+glyph serve ~/notes/
+glyph serve ~/notes/ --port 8080          # pick the port; 0 asks the OS
+glyph serve ~/notes/ --host 0.0.0.0       # let the local network read it
+glyph serve ~/notes/ --out ./site         # keep the build instead of a temp dir
+```
+
+`serve` renders the folder, prints the URL, and keeps running: every change to the folder rebuilds the site, and pages open in a browser reload themselves. It binds `127.0.0.1` unless `--host` says otherwise, so nothing leaves the machine by default. Without `--out` the site lives in a temporary directory that is removed on exit.
+
 `--export` accepts `pdf`, `docx`, `epub`, `html`, and `site`. Without `--out` a document export writes beside its input with the format's extension; `site` always needs one. Exports run without showing a window, print the path they wrote to stdout, and exit nonzero with a message on stderr if they fail, so they can drive CI publishing (on Linux runners, wrap the command in `xvfb-run`). A document export includes the table of contents when Settings > Print has it enabled.
 
 The command is provided by the Homebrew cask (macOS), Chocolatey or Scoop (Windows), and the deb package or Homebrew formula (Linux). The macOS `.dmg` and Windows MSI install the app only; use a package manager for the terminal command.

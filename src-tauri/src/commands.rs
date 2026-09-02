@@ -10,6 +10,8 @@ pub mod pick;
 pub mod plugins;
 pub mod search;
 pub mod secrets;
+#[cfg(desktop)]
+pub mod serve;
 mod walk;
 pub mod wikilinks;
 

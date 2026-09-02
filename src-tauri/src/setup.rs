@@ -130,6 +130,21 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
                         output,
                     });
             }
+            Ok(cli::CliLaunch::Serve {
+                root,
+                host,
+                port,
+                output,
+            }) => {
+                // Like a site export, the window stays hidden and the
+                // frontend renders on mount. Unlike one, the process then
+                // stays up: the server keeps answering and every change
+                // renders again.
+                if let Err(message) = start_serve(app.handle(), &root, host, port, output) {
+                    eprintln!("{message}");
+                    std::process::exit(1);
+                }
+            }
             Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::Folder(p)))) => {
                 if let Ok(canonical) = grant_registry.grant_workspace(std::path::Path::new(&p)) {
                     grants::allow_asset_dir(app.handle(), &canonical);
@@ -151,4 +166,90 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         }
     }
     Ok(())
+}
+
+/// Where a `glyph serve` with no `--out` puts the site. Named after the
+/// process so two concurrent previews cannot write over each other, and so
+/// the leftovers of a killed run are identifiable rather than anonymous.
+#[cfg(desktop)]
+fn default_serve_dir() -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("glyph-serve-{}", std::process::id()))
+}
+
+/// Bring up everything `glyph serve` needs before the frontend renders:
+/// the output directory, the grants the export writes through, the bound
+/// socket, the file watch, and the state the two sides share.
+///
+/// Binding happens here rather than in the server task so that a port
+/// already in use fails immediately, with the process exiting nonzero rather
+/// than sitting there having served nothing.
+#[cfg(desktop)]
+fn start_serve(
+    app: &tauri::AppHandle,
+    root: &str,
+    host: std::net::IpAddr,
+    port: u16,
+    output: Option<String>,
+) -> Result<(), String> {
+    let owns_output = output.is_none();
+    let out_dir = output.map_or_else(default_serve_dir, std::path::PathBuf::from);
+    std::fs::create_dir_all(&out_dir)
+        .map_err(|err| format!("cannot create the output directory {out_dir:?}: {err}"))?;
+
+    let grant_registry = app.state::<grants::GrantRegistry>();
+    let _ = grant_registry.grant_workspace(std::path::Path::new(root));
+    let _ = grant_registry.grant_export_dir(&out_dir);
+
+    let listener = std::net::TcpListener::bind((host, port))
+        .map_err(|err| format!("cannot serve on {host}:{port}: {err}"))?;
+    let address = listener
+        .local_addr()
+        .map_err(|err| format!("cannot read the bound address: {err}"))?;
+
+    if !host.is_loopback() {
+        eprintln!(
+            "Warning: serving on {host} exposes {root} to the network. Anyone who can reach this machine can read the whole folder."
+        );
+    }
+
+    let (reload, _) = tokio::sync::broadcast::channel(16);
+    app.manage(commands::serve::ServeState::new(
+        commands::serve::CliServeRequest {
+            root: root.to_string(),
+            out_dir: out_dir.to_string_lossy().to_string(),
+        },
+        cli::plain_path(root),
+        format!("http://{address}"),
+        reload.clone(),
+    ));
+
+    // The watcher stops the moment it is dropped, and nothing else owns it,
+    // so it lives in managed state for as long as the process does.
+    match crate::serve::watch::watch(app.clone(), std::path::Path::new(root)) {
+        Ok(watcher) => {
+            app.manage(std::sync::Mutex::new(watcher));
+        }
+        Err(err) => eprintln!("Warning: changes to {root} will not rebuild the site: {err}"),
+    }
+
+    let served = out_dir.clone();
+    tauri::async_runtime::spawn(crate::serve::run(listener, served, reload));
+
+    if owns_output {
+        spawn_temp_dir_cleanup(out_dir);
+    }
+    Ok(())
+}
+
+/// Remove the temporary site on the way out. `Drop` never runs here: the
+/// process ends either through `std::process::exit` or through the interrupt
+/// that a foreground server is normally stopped with, and neither unwinds.
+#[cfg(desktop)]
+fn spawn_temp_dir_cleanup(dir: std::path::PathBuf) {
+    tauri::async_runtime::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+        std::process::exit(0);
+    });
 }

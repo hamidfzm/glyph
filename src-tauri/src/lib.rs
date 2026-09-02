@@ -15,6 +15,10 @@ mod menu;
 mod menu_runtime;
 mod notebook;
 mod secrets;
+// The preview server behind `glyph serve`; desktop-only, like the CLI
+// surface that reaches it.
+#[cfg(desktop)]
+mod serve;
 mod setup;
 mod sync;
 #[cfg(desktop)]
@@ -202,10 +206,10 @@ pub fn run() {
         return;
     }
 
-    // An export runs in this process, so it must not be forwarded to a Glyph
-    // the user already has open.
+    // An export and a serve both run in this process, so neither may be
+    // forwarded to a Glyph the user already has open.
     #[cfg(desktop)]
-    let forward_to_running_instance = !cli::has_flag(&args, "--export");
+    let forward_to_running_instance = cli::forwards_to_running_instance(&args);
     #[cfg(not(desktop))]
     let forward_to_running_instance = true;
 
@@ -277,6 +281,12 @@ pub fn run() {
             commands::pick::pick_move_dir,
             commands::export::get_cli_export,
             commands::export_runtime::finish_cli_export,
+            #[cfg(desktop)]
+            commands::serve::get_cli_serve,
+            #[cfg(desktop)]
+            commands::serve::serve_ready,
+            #[cfg(desktop)]
+            commands::serve::serve_failed,
             commands::default_app::set_default_markdown_app,
             commands::secrets::secret_get,
             commands::secrets::secret_set,

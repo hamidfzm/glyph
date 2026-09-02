@@ -16,16 +16,29 @@ USAGE:
   glyph [<path>]                              Open a file or folder
   glyph <file> --export <format> [--out <p>]  Export a document and exit
   glyph <folder> --export site --out <dir>    Export a workspace as a website
+  glyph serve <folder>                        Serve a workspace, rebuilding
+                                              it as the folder changes
 
 OPTIONS:
       --export <format>  Export and exit. Formats: {formats}
   -o, --out <path>       Where to write. Defaults to the input path with the
-                         format's extension; required for `site`.
+                         format's extension; required for `site`. With
+                         `serve`, keeps the site instead of using a temporary
+                         directory.
   -h, --help             Print this help and exit
   -V, --version          Print the version and exit
 
+SERVE OPTIONS:
+      --host <host>      Address to bind. Defaults to {host}, which is
+                         reachable only from this machine; pass 0.0.0.0 to
+                         let the network read the folder.
+      --port <port>      Port to bind. Defaults to {port}; 0 picks a free one.
+
 An export writes nothing to stdout but the path it produced, and exits nonzero
-with a message on stderr if it fails.",
+with a message on stderr if it fails. `serve` prints the URL once the first
+build lands, then keeps running until it is interrupted.",
+        host = crate::cli::DEFAULT_SERVE_HOST,
+        port = crate::cli::DEFAULT_SERVE_PORT,
         version = env!("CARGO_PKG_VERSION"),
     )
 }

@@ -60,6 +60,19 @@ tauri-plugin-single-instance = "2"
 # git repo detection, crash reporting) are desktop-only for now (see #79).
 [target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
 tauri-plugin-cli = "2"
+# `glyph serve`: the preview server behind the CLI's one subcommand. Every
+# crate here is already in the tree through Tauri's own HTTP stack, so this
+# names what we depend on directly rather than adding a dependency graph.
+# `tower-http`'s ServeDir is the reason to reach for them at all: it owns MIME
+# guessing, index resolution, and keeping requests inside the served
+# directory, none of which is worth hand-rolling.
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["fs"] }
+futures-util = { version = "0.3", default-features = false }
+tokio = { version = "1", features = ["net", "sync", "signal"] }
 tauri-plugin-window-state = "2"
 # Statically-linked libgit2 so end users don't need a system Git install.
 # `vendored-openssl` keeps SSH/HTTPS support self-contained too.

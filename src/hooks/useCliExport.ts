@@ -1,17 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useRef, useState } from "react";
-import { usePluginsOptional } from "@/contexts/PluginsContext";
-import { useRegistryEntries } from "@/hooks/usePluginRegistry";
+import { useEffect, useRef } from "react";
+import { useExportReadiness } from "@/hooks/useExportReadiness";
 import { useSettings } from "@/hooks/useSettings";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { getCliExportRequest } from "@/lib/cliExport";
 import { epubMediaLimitBytes } from "@/lib/settings";
-
-// How long the CLI export waits for the plugin host's startup load. A hung
-// plugin must not hang a CI job forever: past this, the export proceeds with
-// whatever themes have registered (a missing plugin theme then fails loudly
-// with the available ids, which beats a silent stall).
-export const CLI_PLUGIN_WAIT_MS = 10_000;
 
 // Once-per-process latch: the effect may fire more than once (StrictMode,
 // plugin readiness flipping) but the export itself must not.
@@ -39,13 +32,8 @@ interface UseCliExportOptions {
  * by the time the config names it.
  */
 export function useCliExport({ entries, content }: UseCliExportOptions): void {
-  const plugins = usePluginsOptional();
-  const pluginThemes = useRegistryEntries(plugins?.siteThemes ?? null);
-  const remarkPlugins = useRegistryEntries(plugins?.remarkPlugins ?? null);
-  const rehypePlugins = useRegistryEntries(plugins?.rehypePlugins ?? null);
-  // Without a provider there are no plugins to wait for.
-  const pluginsReady = plugins === null || plugins.initialLoadDone;
-  const { settings, loaded } = useSettings();
+  const { ready, themes, remarkPlugins, rehypePlugins } = useExportReadiness();
+  const { settings } = useSettings();
 
   // Held in refs so the document's own churn (a growing TOC, streaming
   // content) doesn't re-run the effect while an export is in flight, and so
@@ -59,16 +47,8 @@ export function useCliExport({ entries, content }: UseCliExportOptions): void {
   const epubMediaLimitRef = useRef(settings.print.epubMediaLimit);
   epubMediaLimitRef.current = settings.print.epubMediaLimit;
 
-  const [waitExpired, setWaitExpired] = useState(false);
   useEffect(() => {
-    if (pluginsReady) return;
-    const timer = window.setTimeout(() => setWaitExpired(true), CLI_PLUGIN_WAIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [pluginsReady]);
-
-  useEffect(() => {
-    if (!loaded) return;
-    if (!pluginsReady && !waitExpired) return;
+    if (!ready) return;
     (async () => {
       const request = await getCliExportRequest();
       if (!request || started) return;
@@ -80,7 +60,7 @@ export function useCliExport({ entries, content }: UseCliExportOptions): void {
           const result = await exportSite({
             root: request.input,
             outDir: request.output,
-            themes: pluginThemes,
+            themes,
             remarkPlugins,
             rehypePlugins,
           });
@@ -107,5 +87,5 @@ export function useCliExport({ entries, content }: UseCliExportOptions): void {
         });
       }
     })();
-  }, [loaded, pluginsReady, waitExpired, pluginThemes, remarkPlugins, rehypePlugins]);
+  }, [ready, themes, remarkPlugins, rehypePlugins]);
 }

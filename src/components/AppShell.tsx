@@ -3,6 +3,7 @@ import { useTabsContext } from "@/contexts/TabsContext";
 import { useAppModals } from "@/hooks/useAppModals";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { useCliExport } from "@/hooks/useCliExport";
+import { useCliServe } from "@/hooks/useCliServe";
 import { useCloseFlush } from "@/hooks/useCloseFlush";
 import { useCommandPaletteController } from "@/hooks/useCommandPaletteController";
 import { useContextMenu } from "@/hooks/useContextMenu";
@@ -87,6 +88,7 @@ export function AppShell() {
   // Headless CLI export: runs and exits when the process was launched with
   // --export, a no-op otherwise.
   useCliExport({ entries: tocEntries, content: displayContent });
+  useCliServe();
 
   useDocumentUndoRedo({ activeTabId, platform, onUndo: undoEdit, onRedo: redoEdit });
   useTabReorderShortcuts({ platform, onMove: moveActiveTab });

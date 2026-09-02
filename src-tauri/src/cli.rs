@@ -240,6 +240,17 @@ impl ExportFormat {
     }
 }
 
+/// Address `glyph serve` binds when `--host` is absent. Loopback only: the
+/// exported site is readable by anyone who can reach the port, so exposing it
+/// to the network is opt-in rather than the default.
+#[cfg(desktop)]
+pub const DEFAULT_SERVE_HOST: std::net::IpAddr =
+    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST);
+
+/// Port `glyph serve` binds when `--port` is absent.
+#[cfg(desktop)]
+pub const DEFAULT_SERVE_PORT: u16 = 4173;
+
 /// What this process launch should do, decided from the CLI once at startup.
 #[cfg(desktop)]
 #[derive(Debug, PartialEq, Eq)]
@@ -253,7 +264,132 @@ pub enum CliLaunch {
         format: ExportFormat,
         output: String,
     },
+    /// Long-running preview: render `root` as a website, serve it on
+    /// `host:port`, and re-render whenever the folder changes. `output` is
+    /// `None` when the caller passed no `--out`, meaning the site belongs in a
+    /// temporary directory the process owns and removes on the way out.
+    Serve {
+        root: String,
+        host: std::net::IpAddr,
+        port: u16,
+        output: Option<String>,
+    },
 }
+
+/// Whether argv asks for the `serve` subcommand. Only a bare first argument
+/// counts, so a folder that happens to be named `serve` still opens normally
+/// as `glyph ./serve`.
+#[cfg(desktop)]
+pub fn is_serve_invocation(env_args: &[String]) -> bool {
+    env_args.get(1).is_some_and(|arg| arg == "serve")
+}
+
+/// Whether this launch should hand its arguments to a Glyph the user already
+/// has open, rather than doing the work itself.
+///
+/// Opening a document should reuse the running window. An export and a serve
+/// must not: both do their work in this process, so forwarding would exit 0
+/// having exported nothing, or having served nothing while the running app
+/// quietly opened the folder in a tab instead.
+#[cfg(desktop)]
+pub fn forwards_to_running_instance(env_args: &[String]) -> bool {
+    !has_flag(env_args, "--export") && !is_serve_invocation(env_args)
+}
+
+/// Whether `candidate` sits inside `root`, comparing the deepest existing
+/// ancestor of a path that does not exist yet. Serving a site from inside the
+/// folder being watched would feed the export's own output back into it, so
+/// the CLI rejects it the same way the in-app website export does.
+#[cfg(desktop)]
+fn is_path_inside(candidate: &Path, root: &Path) -> bool {
+    let Ok(root) = root.canonicalize() else {
+        return false;
+    };
+    let mut probe = candidate.to_path_buf();
+    loop {
+        if let Ok(resolved) = probe.canonicalize() {
+            return resolved.starts_with(&root);
+        }
+        // Not created yet: ask the same question of its parent.
+        if !probe.pop() {
+            return false;
+        }
+    }
+}
+
+/// Parse a `glyph serve <dir> [--host <h>] [--port <n>] [--out <dir>]` launch.
+/// `Err` is a usage message the caller prints before exiting nonzero.
+#[cfg(desktop)]
+fn serve_plan(env_args: &[String], cwd: &Path) -> Result<CliLaunch, String> {
+    // Flag values are stripped before the positional scan so `glyph serve
+    // --out build docs` cannot mistake "build" for the folder to serve.
+    let positional = strip_flag(
+        &strip_flag(
+            &strip_flag(&strip_flag(env_args, "--host"), "--port"),
+            "--out",
+        ),
+        "-o",
+    );
+    // Skip the program name and the `serve` token itself.
+    let path_arg = positional
+        .iter()
+        .skip(2)
+        .find(|arg| !arg.is_empty() && !arg.starts_with('-'))
+        .ok_or_else(|| format!("glyph serve needs a folder: {SERVE_USAGE}"))?;
+
+    let root = match classify_initial_arg(path_arg, cwd) {
+        Some(InitialOpenAction::Folder(root)) => root,
+        _ => {
+            return Err(format!(
+                "glyph serve requires an existing folder, not {}: {SERVE_USAGE}",
+                plain_path(path_arg)
+            ))
+        }
+    };
+
+    let host = match pick_flag_value(env_args, "--host") {
+        Some(value) => value
+            .trim()
+            .parse::<std::net::IpAddr>()
+            .map_err(|_| format!("--host is not a valid address: '{value}'"))?,
+        None => DEFAULT_SERVE_HOST,
+    };
+
+    let port = match pick_flag_value(env_args, "--port") {
+        Some(value) => value
+            .trim()
+            .parse::<u16>()
+            .map_err(|_| format!("--port must be a number between 0 and 65535: '{value}'"))?,
+        None => DEFAULT_SERVE_PORT,
+    };
+
+    let out_value = pick_flag_value(env_args, "--out").or_else(|| pick_flag_value(env_args, "-o"));
+    let output = match out_value {
+        Some(value) => {
+            let resolved =
+                resolve_out_path(value, cwd).ok_or_else(|| "--out needs a path".to_string())?;
+            if is_path_inside(Path::new(&resolved), Path::new(&root)) {
+                return Err(
+                    "--out cannot be inside the folder being served: the export would feed its own output back in"
+                        .to_string(),
+                );
+            }
+            Some(resolved)
+        }
+        None => None,
+    };
+
+    Ok(CliLaunch::Serve {
+        root,
+        host,
+        port,
+        output,
+    })
+}
+
+/// The `serve` usage line, repeated by every one of its error messages.
+#[cfg(desktop)]
+const SERVE_USAGE: &str = "glyph serve <folder> [--host <host>] [--port <port>] [--out <dir>]";
 
 /// Combine the positional path with `--export` and `--out` into a launch plan.
 /// `Err` is a usage error the caller should print before exiting nonzero.
@@ -265,6 +401,12 @@ pub fn launch_plan(
     env_args: &[String],
     cwd: &Path,
 ) -> Result<CliLaunch, String> {
+    // `serve` is the one subcommand, so it is decided before any of the
+    // flag parsing below, which is shaped around a single positional path.
+    if is_serve_invocation(env_args) {
+        return serve_plan(env_args, cwd);
+    }
+
     // The flags and their values are stripped before the positional scan so
     // `glyph --export pdf notes.md` cannot mistake "pdf" for the input path.
     let positional = strip_flag(
@@ -350,7 +492,7 @@ pub fn launch_plan(
 /// prints, and the UNC form is not even a valid path once the prefix is
 /// dropped naively.
 #[cfg(desktop)]
-fn plain_path(path: &str) -> String {
+pub fn plain_path(path: &str) -> String {
     match path.strip_prefix(r"\\?\UNC\") {
         Some(rest) => format!(r"\\{rest}"),
         None => path.strip_prefix(r"\\?\").unwrap_or(path).to_string(),
@@ -844,6 +986,206 @@ mod tests {
             );
         }
         let _ = fs::remove_dir_all(&cwd);
+    }
+
+    /// Unwrap a plan that is expected to be a serve, so the assertions below
+    /// read as one line each.
+    fn serve_of(argv: &[String], cwd: &Path) -> (String, std::net::IpAddr, u16, Option<String>) {
+        match launch_plan(None, None, None, argv, cwd).expect("plans") {
+            CliLaunch::Serve {
+                root,
+                host,
+                port,
+                output,
+            } => (root, host, port, output),
+            other => panic!("expected a serve plan, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn serve_defaults_to_loopback_a_fixed_port_and_a_temporary_directory() {
+        let cwd = unique_tmp("serve_defaults");
+        fs::create_dir_all(cwd.join("docs")).unwrap();
+
+        let (root, host, port, output) = serve_of(&argv_of(&["serve", "docs"]), &cwd);
+        assert!(root.ends_with("docs"), "got {root}");
+        assert_eq!(host, DEFAULT_SERVE_HOST);
+        assert_eq!(port, DEFAULT_SERVE_PORT);
+        assert!(host.is_loopback(), "the default must not face the network");
+        assert_eq!(output, None, "no --out means a temporary directory");
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn serve_reads_host_port_and_out_in_both_flag_spellings() {
+        let cwd = unique_tmp("serve_flags");
+        fs::create_dir_all(cwd.join("docs")).unwrap();
+
+        for argv in [
+            argv_of(&[
+                "serve", "docs", "--host", "0.0.0.0", "--port", "8080", "--out", "build",
+            ]),
+            argv_of(&[
+                "serve",
+                "--host=0.0.0.0",
+                "--port=8080",
+                "--out=build",
+                "docs",
+            ]),
+        ] {
+            let (root, host, port, output) = serve_of(&argv, &cwd);
+            assert!(root.ends_with("docs"), "got {root}");
+            assert_eq!(host.to_string(), "0.0.0.0");
+            assert_eq!(port, 8080);
+            assert_eq!(
+                output,
+                Some(cwd.join("build").to_string_lossy().to_string())
+            );
+        }
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn serve_does_not_mistake_a_flag_value_for_the_folder() {
+        // `build` is the value of --out, not the folder to serve, and the
+        // folder argument comes after it.
+        let cwd = unique_tmp("serve_order");
+        fs::create_dir_all(cwd.join("docs")).unwrap();
+
+        let argv = argv_of(&["serve", "--out", "build", "docs"]);
+        let (root, _, _, output) = serve_of(&argv, &cwd);
+        assert!(root.ends_with("docs"), "got {root}");
+        assert_eq!(
+            output,
+            Some(cwd.join("build").to_string_lossy().to_string())
+        );
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn serve_accepts_port_zero_for_an_os_assigned_port() {
+        let cwd = unique_tmp("serve_port0");
+        fs::create_dir_all(cwd.join("docs")).unwrap();
+        let (_, _, port, _) = serve_of(&argv_of(&["serve", "docs", "--port", "0"]), &cwd);
+        assert_eq!(port, 0);
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn serve_rejects_a_missing_a_nonexistent_and_a_file_target() {
+        let cwd = unique_tmp("serve_bad_target");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(cwd.join("note.md"), "hi").unwrap();
+
+        let missing = launch_plan(None, None, None, &argv_of(&["serve"]), &cwd).unwrap_err();
+        assert!(missing.contains("needs a folder"), "got: {missing}");
+
+        for target in ["nope", "note.md"] {
+            let err =
+                launch_plan(None, None, None, &argv_of(&["serve", target]), &cwd).unwrap_err();
+            assert!(
+                err.contains("requires an existing folder"),
+                "{target} gave: {err}"
+            );
+        }
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn serve_rejects_a_host_or_port_it_cannot_parse() {
+        let cwd = unique_tmp("serve_bad_flags");
+        fs::create_dir_all(cwd.join("docs")).unwrap();
+
+        let host = launch_plan(
+            None,
+            None,
+            None,
+            &argv_of(&["serve", "docs", "--host", "not-an-address"]),
+            &cwd,
+        )
+        .unwrap_err();
+        assert!(host.contains("not a valid address"), "got: {host}");
+
+        for bad in ["99999", "-1", "http"] {
+            let err = launch_plan(
+                None,
+                None,
+                None,
+                &argv_of(&["serve", "docs", "--port", bad]),
+                &cwd,
+            )
+            .unwrap_err();
+            assert!(err.contains("--port must be a number"), "{bad} gave: {err}");
+        }
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn serve_refuses_to_write_its_output_inside_the_folder_it_watches() {
+        // Exporting into the watched folder would feed the site back into the
+        // next rebuild, the same trap the in-app website export guards.
+        let cwd = unique_tmp("serve_nested_out");
+        let docs = cwd.join("docs");
+        fs::create_dir_all(&docs).unwrap();
+
+        for out in ["docs/site", "docs"] {
+            let err = launch_plan(
+                None,
+                None,
+                None,
+                &argv_of(&["serve", "docs", "--out", out]),
+                &cwd,
+            )
+            .unwrap_err();
+            assert!(
+                err.contains("cannot be inside the folder being served"),
+                "--out {out} gave: {err}"
+            );
+        }
+
+        // A sibling directory is fine.
+        let (_, _, _, output) = serve_of(&argv_of(&["serve", "docs", "--out", "site"]), &cwd);
+        assert_eq!(output, Some(cwd.join("site").to_string_lossy().to_string()));
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn a_folder_named_serve_still_opens_normally() {
+        // `serve` is only a subcommand as a bare first argument, so the
+        // documented `./serve` spelling keeps working as a path.
+        let cwd = unique_tmp("serve_named_folder");
+        fs::create_dir_all(cwd.join("serve")).unwrap();
+
+        let plan = launch_plan(None, None, None, &argv_of(&["./serve"]), &cwd).expect("plans");
+        assert!(
+            matches!(&plan, CliLaunch::Open(Some(InitialOpenAction::Folder(p))) if p.ends_with("serve")),
+            "expected a normal folder open, got {plan:?}"
+        );
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn only_launches_that_do_their_own_work_keep_the_running_instance_out_of_it() {
+        // Opening a document should reuse the open window.
+        assert!(forwards_to_running_instance(&argv_of(&["notes.md"])));
+        assert!(forwards_to_running_instance(&argv_of(&[])));
+        // An export and a serve do their work here; handing the arguments to
+        // another process would exit 0 having done none of it.
+        assert!(!forwards_to_running_instance(&argv_of(&[
+            "notes.md", "--export", "pdf"
+        ])));
+        assert!(!forwards_to_running_instance(&argv_of(&["--export=site"])));
+        assert!(!forwards_to_running_instance(&argv_of(&["serve", "docs"])));
+        // A folder named `serve` is an ordinary open, and forwards.
+        assert!(forwards_to_running_instance(&argv_of(&["./serve"])));
+    }
+
+    #[test]
+    fn is_serve_invocation_only_matches_a_bare_first_argument() {
+        assert!(is_serve_invocation(&argv_of(&["serve", "docs"])));
+        assert!(!is_serve_invocation(&argv_of(&["./serve"])));
+        assert!(!is_serve_invocation(&argv_of(&["docs", "serve"])));
+        assert!(!is_serve_invocation(&argv_of(&[])));
     }
 
     #[test]
