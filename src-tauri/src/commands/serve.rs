@@ -142,6 +142,28 @@ mod tests {
     }
 
     #[test]
+    fn a_poisoned_latch_does_not_re_announce() {
+        // A panic while the latch was held must not turn every later rebuild
+        // back into a startup that reprints the URL.
+        let state = std::sync::Arc::new(state());
+        let poisoner = std::sync::Arc::clone(&state);
+        let _ = std::thread::spawn(move || {
+            let _held = poisoner.announced.lock().unwrap();
+            panic!("while holding the latch");
+        })
+        .join();
+
+        assert!(
+            state.announced.is_poisoned(),
+            "the latch should be poisoned"
+        );
+        assert!(
+            !state.take_first_build(),
+            "a poisoned latch announces nothing"
+        );
+    }
+
+    #[test]
     fn serve_request_serializes_camel_case() {
         let json = serde_json::to_string(&CliServeRequest {
             root: "/ws".to_string(),

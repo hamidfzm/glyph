@@ -95,30 +95,46 @@ pub async fn run(
     host: HostGuard,
     reload: broadcast::Sender<()>,
 ) {
-    // A failure here leaves nothing listening, and the ready line the
-    // frontend prints would otherwise advertise a server that never was.
-    if let Err(err) = listener.set_nonblocking(true) {
-        eprintln!("glyph serve: cannot use the bound socket: {err}");
-        return;
+    match into_async(listener) {
+        Ok(listener) => accept_loop(listener, dir, host, reload).await,
+        // Nothing is listening now, and the ready line the frontend prints
+        // would otherwise advertise a server that never was.
+        Err(err) => eprintln!("glyph serve: cannot use the bound socket: {err}"),
     }
-    let listener = match tokio::net::TcpListener::from_std(listener) {
-        Ok(listener) => listener,
-        Err(err) => {
-            eprintln!("glyph serve: cannot use the bound socket: {err}");
-            return;
-        }
-    };
+}
 
+/// Hand the bound socket to tokio. Binding happens synchronously in the
+/// caller so a port conflict fails before the app starts; this is the step
+/// that has to happen once there is a reactor to register it with.
+fn into_async(listener: std::net::TcpListener) -> std::io::Result<tokio::net::TcpListener> {
+    listener.set_nonblocking(true)?;
+    tokio::net::TcpListener::from_std(listener)
+}
+
+/// How long to wait after a failed accept. A reset connection says nothing
+/// about the next one, so one client's failure must not end the server; a
+/// persistent error (running out of descriptors, say) would otherwise spin
+/// the loop at full speed.
+const ACCEPT_BACKOFF: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Report a failed accept and pause before trying again.
+async fn back_off_after(err: &std::io::Error) {
+    eprintln!("glyph serve: dropped a connection: {err}");
+    tokio::time::sleep(ACCEPT_BACKOFF).await;
+}
+
+/// Answer connections until the process ends.
+async fn accept_loop(
+    listener: tokio::net::TcpListener,
+    dir: PathBuf,
+    host: HostGuard,
+    reload: broadcast::Sender<()>,
+) {
     loop {
         let stream = match listener.accept().await {
             Ok((stream, _)) => stream,
-            // A reset connection says nothing about the next one, so one
-            // client's failure does not end the server. A persistent error
-            // (running out of descriptors, say) would spin at full speed
-            // without this pause.
             Err(err) => {
-                eprintln!("glyph serve: dropped a connection: {err}");
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                back_off_after(&err).await;
                 continue;
             }
         };
@@ -213,7 +229,17 @@ async fn serve_file<B: Send + 'static>(request: Request<B>, dir: PathBuf) -> Res
         return response.map(BodyExt::boxed_unsync);
     }
 
-    let (mut parts, body) = response.into_parts();
+    let (parts, body) = response.into_parts();
+    injected_page(parts, body).await
+}
+
+/// Rebuild an HTML response with the reload script in it. Split from the
+/// routing so the read-failure and non-text arms can be driven directly: by
+/// the time a real `ServeDir` body fails, the file is already open.
+async fn injected_page<B>(mut parts: hyper::http::response::Parts, body: B) -> Response<ServeBody>
+where
+    B: hyper::body::Body<Data = Bytes, Error = std::io::Error>,
+{
     let Ok(collected) = body.collect().await else {
         return error_response(StatusCode::INTERNAL_SERVER_ERROR);
     };
@@ -412,6 +438,40 @@ mod tests {
         let guard = HostGuard::new(host.parse().expect("an address"));
         tauri::async_runtime::spawn(run(listener, dir.to_path_buf(), guard, reload.clone()));
         (port, reload)
+    }
+
+    #[tokio::test]
+    async fn a_page_that_cannot_be_read_is_a_server_error() {
+        // `ServeDir` has already opened the file by the time its body is
+        // streamed, so a read that fails part way through arrives here as a
+        // body error rather than a 404.
+        let failing = StreamBody::new(futures_util::stream::once(async {
+            Err(std::io::Error::other("the disk went away"))
+        }));
+        let parts = Response::new(()).into_parts().0;
+
+        let response = injected_page(parts, failing).await;
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn a_failed_accept_backs_off_before_trying_again() {
+        // Without the pause, a persistent error (no file descriptors left)
+        // spins the accept loop at full speed.
+        let started = std::time::Instant::now();
+        back_off_after(&std::io::Error::other("connection reset")).await;
+        assert!(started.elapsed() >= ACCEPT_BACKOFF, "returned immediately");
+    }
+
+    #[test]
+    fn a_bound_socket_becomes_an_async_one() {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("binds");
+        let expected = listener.local_addr().expect("has an address");
+        // `from_std` needs a reactor to register with, which is why this is
+        // the step that happens inside the server task rather than at bind.
+        let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+        let converted = runtime.block_on(async { into_async(listener) });
+        assert_eq!(converted.expect("converts").local_addr().unwrap(), expected);
     }
 
     #[tokio::test]

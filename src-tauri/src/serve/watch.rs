@@ -254,6 +254,20 @@ mod tests {
         let seen = rebuilds.load(Ordering::SeqCst);
         assert!(seen >= 1, "an edit should rebuild, saw {seen}");
         assert!(seen <= 2, "a burst should coalesce, saw {seen} rebuilds");
+
+        // Now the noise a real workspace generates: a commit writes inside
+        // .git constantly, and none of it can change what the export reads.
+        std::fs::create_dir_all(dir.path().join(".git/objects")).unwrap();
+        for i in 0..3 {
+            std::fs::write(dir.path().join(format!(".git/objects/{i}")), "x").unwrap();
+            std::thread::sleep(Duration::from_millis(30));
+        }
+        std::thread::sleep(DEBOUNCE + Duration::from_millis(700));
+        assert_eq!(
+            rebuilds.load(Ordering::SeqCst),
+            seen,
+            "writes under .git must not rebuild the site"
+        );
     }
 
     #[test]

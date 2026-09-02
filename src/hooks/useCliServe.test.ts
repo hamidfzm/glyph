@@ -143,6 +143,50 @@ describe("useCliServe", () => {
     await waitFor(() => expect(invokeCalls("serve_ready")).toHaveLength(1));
   });
 
+  it("does not report a build that finished after unmount", async () => {
+    // The export is derived output, so finishing is harmless, but telling
+    // Rust to reload browsers for a process that is going away is not.
+    stubServe(REQUEST);
+    let releaseBuild: (() => void) | undefined;
+    exportSiteMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseBuild = () => resolve({ pages: 1, assets: 0 });
+        }),
+    );
+
+    const { unmount } = renderHook(() => useCliServe());
+    await waitFor(() => expect(exportSiteMock).toHaveBeenCalledTimes(1));
+    // A change lands mid-build and queues a rebuild, then the shell goes
+    // away: the queued pass must not start either.
+    emitChange?.();
+    unmount();
+    releaseBuild?.();
+
+    await waitFor(() => expect(unlistenMock).toHaveBeenCalled());
+    expect(invokeCalls("serve_ready")).toHaveLength(0);
+    expect(exportSiteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not report a failure that landed after unmount", async () => {
+    stubServe(REQUEST);
+    let rejectBuild: ((err: Error) => void) | undefined;
+    exportSiteMock.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectBuild = reject;
+        }),
+    );
+
+    const { unmount } = renderHook(() => useCliServe());
+    await waitFor(() => expect(exportSiteMock).toHaveBeenCalledTimes(1));
+    unmount();
+    rejectBuild?.(new Error("too late"));
+
+    await waitFor(() => expect(unlistenMock).toHaveBeenCalled());
+    expect(invokeCalls("serve_failed")).toHaveLength(0);
+  });
+
   it("does not build or leak a listener when unmounted mid-setup", async () => {
     // Unmounting between `listen` resolving and the first build would
     // otherwise leave a live listener rebuilding a site nobody serves.

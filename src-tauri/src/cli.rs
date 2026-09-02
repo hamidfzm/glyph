@@ -1003,18 +1003,24 @@ mod tests {
         let _ = fs::remove_dir_all(&cwd);
     }
 
-    /// Unwrap a plan that is expected to be a serve, so the assertions below
-    /// read as one line each.
-    fn serve_of(argv: &[String], cwd: &Path) -> (String, std::net::IpAddr, u16, Option<String>) {
-        match launch_plan(None, None, None, argv, cwd).expect("plans") {
+    /// The fields of a serve plan, or `None` for any other kind of launch.
+    /// Doubles as the discriminator the "folder named serve" test uses.
+    fn serve_fields(plan: CliLaunch) -> Option<(String, std::net::IpAddr, u16, Option<String>)> {
+        match plan {
             CliLaunch::Serve {
                 root,
                 host,
                 port,
                 output,
-            } => (root, host, port, output),
-            other => panic!("expected a serve plan, got {other:?}"),
+            } => Some((root, host, port, output)),
+            _ => None,
         }
+    }
+
+    /// Plan a serve, so the assertions below read as one line each.
+    fn serve_of(argv: &[String], cwd: &Path) -> (String, std::net::IpAddr, u16, Option<String>) {
+        let plan = launch_plan(None, None, None, argv, cwd).expect("plans");
+        serve_fields(plan).expect("expected a serve plan")
     }
 
     #[test]
@@ -1217,6 +1223,7 @@ mod tests {
             matches!(&plan, CliLaunch::Open(Some(InitialOpenAction::Folder(p))) if p.ends_with("serve")),
             "expected a normal folder open, got {plan:?}"
         );
+        assert!(serve_fields(plan).is_none(), "it must not plan a serve");
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -1234,6 +1241,18 @@ mod tests {
         assert!(!forwards_to_running_instance(&argv_of(&["serve", "docs"])));
         // A folder named `serve` is an ordinary open, and forwards.
         assert!(forwards_to_running_instance(&argv_of(&["./serve"])));
+    }
+
+    #[test]
+    fn a_candidate_with_no_resolvable_ancestor_is_outside() {
+        // `--out` may name a directory that does not exist yet, so the walk
+        // climbs to the deepest ancestor that does. A path with none at all
+        // (a bare relative name against a root it shares nothing with) has to
+        // end the walk rather than loop.
+        let cwd = unique_tmp("outside_walk");
+        fs::create_dir_all(&cwd).unwrap();
+        assert!(!is_path_inside(Path::new("no-such-relative/deeper"), &cwd));
+        let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]
