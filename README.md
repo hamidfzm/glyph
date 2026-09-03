@@ -208,10 +208,10 @@ docker run --rm --user "$(id -u):$(id -g)" \
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" \
   -v "$PWD/docs:/docs:ro" -v "$PWD/out:/out" \
-  ghcr.io/hamidfzm/glyph export /docs/README.md --format pdf --out /out/readme.pdf
+  ghcr.io/hamidfzm/glyph /docs/README.md --export pdf --out /out/readme.pdf
 ```
 
-The image ships the same `.deb` the apt repository serves, plus the WebKitGTK stack and the X server a headless export needs, so no `xvfb-run` wrapper is required. It runs as uid 1000; passing `--user` keeps exported files owned by you when your uid differs. Images are published for `linux/amd64` and `linux/arm64` on every release, tagged `X.Y.Z`, `X.Y`, and `latest`.
+The image ships the same `.deb` the apt repository serves, plus the WebKitGTK stack and the X server a headless export needs, so no `xvfb-run` wrapper is required. Its arguments are the released CLI's, which is why the example above still spells the export as a flag: the image tracks the published release, not this repository's tip. It runs as uid 1000; passing `--user` keeps exported files owned by you when your uid differs. Images are published for `linux/amd64` and `linux/arm64` on every release, tagged `X.Y.Z`, `X.Y`, and `latest`.
 
 ## Development
 

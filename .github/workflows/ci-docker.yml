@@ -100,7 +100,7 @@ jobs:
           docker run --rm --user "$(id -u):$(id -g)" \
             -v "$PWD/samples:/docs:ro" \
             -v "$RUNNER_TEMP/doc:/out" \
-            glyph:ci export /docs/Index.md --format html --out /out/index.html
+            glyph:ci /docs/Index.md --export html --out /out/index.html
           test -s "$RUNNER_TEMP/doc/index.html"
 
       - name: A rejected export fails the step
@@ -110,7 +110,7 @@ jobs:
           if docker run --rm --user "$(id -u):$(id -g)" \
             -v "$PWD/samples:/docs:ro" \
             -v "$RUNNER_TEMP/doc:/out" \
-            glyph:ci export /docs --format pdf --out /out/nope.pdf; then
+            glyph:ci /docs --export pdf --out /out/nope.pdf; then
             echo "::error::exporting a folder as pdf should have failed"
             exit 1
           fi
