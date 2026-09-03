@@ -224,6 +224,12 @@ fn start_serve(
     let address = listener
         .local_addr()
         .map_err(|err| format!("cannot read the bound address: {err}"))?;
+    // tokio requires a nonblocking socket. Doing it here, rather than inside
+    // the server task, keeps an unusable socket a startup failure with a
+    // nonzero exit instead of a log line under a ready message.
+    listener
+        .set_nonblocking(true)
+        .map_err(|err| format!("cannot serve on {address}: {err}"))?;
 
     if !host.is_loopback() {
         eprintln!(
@@ -255,12 +261,15 @@ fn start_serve(
     }
 
     let served = out_dir.clone();
-    tauri::async_runtime::spawn(crate::serve::run(
-        listener,
-        served,
-        crate::serve::HostGuard::new(host),
-        reload,
-    ));
+    let guard = crate::serve::HostGuard::new(host);
+    tauri::async_runtime::spawn(async move {
+        // Registering with the reactor needs a runtime, so it happens here
+        // rather than beside the bind above.
+        match tokio::net::TcpListener::from_std(listener) {
+            Ok(listener) => crate::serve::run(listener, served, guard, reload).await,
+            Err(err) => eprintln!("glyph serve: cannot use the bound socket: {err}"),
+        }
+    });
 
     if owns_output {
         spawn_temp_dir_cleanup(out_dir);

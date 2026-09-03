@@ -86,31 +86,6 @@ fn host_name(header: &str) -> &str {
     }
 }
 
-/// Serve `dir` on an already-bound listener until the process ends. The
-/// listener is bound by the caller so a port conflict fails before the app
-/// starts, and so `--port 0` can report the port the OS picked.
-pub async fn run(
-    listener: std::net::TcpListener,
-    dir: PathBuf,
-    host: HostGuard,
-    reload: broadcast::Sender<()>,
-) {
-    match into_async(listener) {
-        Ok(listener) => accept_loop(listener, dir, host, reload).await,
-        // Nothing is listening now, and the ready line the frontend prints
-        // would otherwise advertise a server that never was.
-        Err(err) => eprintln!("glyph serve: cannot use the bound socket: {err}"),
-    }
-}
-
-/// Hand the bound socket to tokio. Binding happens synchronously in the
-/// caller so a port conflict fails before the app starts; this is the step
-/// that has to happen once there is a reactor to register it with.
-fn into_async(listener: std::net::TcpListener) -> std::io::Result<tokio::net::TcpListener> {
-    listener.set_nonblocking(true)?;
-    tokio::net::TcpListener::from_std(listener)
-}
-
 /// How long to wait after a failed accept. A reset connection says nothing
 /// about the next one, so one client's failure must not end the server; a
 /// persistent error (running out of descriptors, say) would otherwise spin
@@ -123,8 +98,13 @@ async fn back_off_after(err: &std::io::Error) {
     tokio::time::sleep(ACCEPT_BACKOFF).await;
 }
 
-/// Answer connections until the process ends.
-async fn accept_loop(
+/// Serve `dir` on an already-bound listener until the process ends.
+///
+/// The socket is bound and handed to tokio by the caller, so a port conflict
+/// and an unusable socket both fail at startup with a nonzero exit rather
+/// than becoming a log line under a ready message that already promised a
+/// server.
+pub async fn run(
     listener: tokio::net::TcpListener,
     dir: PathBuf,
     host: HostGuard,
@@ -434,6 +414,8 @@ mod tests {
     fn start(dir: &std::path::Path, host: &str) -> (u16, broadcast::Sender<()>) {
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("binds");
         let port = listener.local_addr().expect("has an address").port();
+        listener.set_nonblocking(true).expect("goes nonblocking");
+        let listener = tokio::net::TcpListener::from_std(listener).expect("registers");
         let (reload, _) = broadcast::channel(4);
         let guard = HostGuard::new(host.parse().expect("an address"));
         tauri::async_runtime::spawn(run(listener, dir.to_path_buf(), guard, reload.clone()));
@@ -454,6 +436,47 @@ mod tests {
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
+    /// A "listener" that is really a connected socket, so `accept` fails on
+    /// it the way one that has gone bad in service would. Nothing portable
+    /// can break a real listener, and this is the failure the accept loop
+    /// exists to survive.
+    fn broken_listener() -> std::net::TcpListener {
+        let real = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("binds");
+        let connected = std::net::TcpStream::connect(real.local_addr().expect("has an address"))
+            .expect("connects");
+        #[cfg(unix)]
+        {
+            std::net::TcpListener::from(std::os::fd::OwnedFd::from(connected))
+        }
+        #[cfg(windows)]
+        {
+            std::net::TcpListener::from(std::os::windows::io::OwnedSocket::from(connected))
+        }
+    }
+
+    #[tokio::test]
+    async fn a_failing_accept_does_not_end_the_server() {
+        // One client's failure, or a socket that goes bad, must not take the
+        // server down: it reports, pauses, and keeps accepting.
+        let dir = fixture();
+        let broken = broken_listener();
+        broken.set_nonblocking(true).expect("goes nonblocking");
+        let listener = tokio::net::TcpListener::from_std(broken).expect("registers");
+        let (reload, _) = broadcast::channel(4);
+        let guard = HostGuard::new("127.0.0.1".parse().unwrap());
+
+        let still_running = tokio::time::timeout(
+            ACCEPT_BACKOFF * 4,
+            run(listener, dir.path().to_path_buf(), guard, reload),
+        )
+        .await;
+
+        assert!(
+            still_running.is_err(),
+            "the loop returned instead of carrying on after failed accepts"
+        );
+    }
+
     #[tokio::test]
     async fn a_failed_accept_backs_off_before_trying_again() {
         // Without the pause, a persistent error (no file descriptors left)
@@ -461,17 +484,6 @@ mod tests {
         let started = std::time::Instant::now();
         back_off_after(&std::io::Error::other("connection reset")).await;
         assert!(started.elapsed() >= ACCEPT_BACKOFF, "returned immediately");
-    }
-
-    #[test]
-    fn a_bound_socket_becomes_an_async_one() {
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("binds");
-        let expected = listener.local_addr().expect("has an address");
-        // `from_std` needs a reactor to register with, which is why this is
-        // the step that happens inside the server task rather than at bind.
-        let runtime = tokio::runtime::Runtime::new().expect("a runtime");
-        let converted = runtime.block_on(async { into_async(listener) });
-        assert_eq!(converted.expect("converts").local_addr().unwrap(), expected);
     }
 
     #[tokio::test]
