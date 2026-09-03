@@ -325,11 +325,13 @@ mod tests {
             exception: vec![Exception {
                 value: Some("missing /home/jane/b.md".to_string()),
                 stacktrace: Some(stack(r"C:\Users\Jane\code\glyph\src-tauri\src\main.rs")),
+                raw_stacktrace: Some(stack(r"C:\Users\Jane\other\raw.rs")),
                 ..Default::default()
             }]
             .into(),
             threads: vec![Thread {
                 stacktrace: Some(stack("/Users/jane/src/main.rs")),
+                raw_stacktrace: Some(stack("/Users/jane/raw.rs")),
                 ..Default::default()
             }]
             .into(),
@@ -363,6 +365,16 @@ mod tests {
             .unwrap()
             .frames[0];
         assert_eq!(thread_frame.abs_path.as_deref(), Some("[redacted-path]"));
+        let raw_path =
+            |stack: &Option<Stacktrace>| stack.as_ref().unwrap().frames[0].abs_path.clone();
+        assert_eq!(
+            raw_path(&exception.raw_stacktrace).as_deref(),
+            Some("[redacted-path]")
+        );
+        assert_eq!(
+            raw_path(&scrubbed.threads.values[0].raw_stacktrace).as_deref(),
+            Some("[redacted-path]")
+        );
         assert_eq!(
             scrubbed.breadcrumbs.values[0].message.as_deref(),
             Some("watching [redacted-path]")
