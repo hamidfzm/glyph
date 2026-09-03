@@ -122,7 +122,7 @@ describe("useWindowRegistrySync", () => {
   });
 
   it("stays silent in a headless export process", () => {
-    // --export skips single-instance forwarding, so that process has its own
+    // A subcommand skips single-instance forwarding, so that process has its own
     // registry and nothing worth reporting into it.
     vi.mocked(isCliExportProcess).mockReturnValue(true);
     renderHook(() => useWindowRegistrySync(workspace("/ws"), [fileTab("a", "/ws/one.md")], false));

@@ -2,6 +2,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import { getCliExportRequest } from "@/lib/cliExport";
+import { getCliServeRequest } from "@/lib/cliServe";
 
 /**
  * Reveals the main window once the app is ready to be seen.
@@ -40,14 +41,17 @@ export function useWindowReveal() {
       }
     };
 
-    // A headless CLI export must never surface the window: the process is a
-    // renderer, not an app the user opened. Everyone else reveals after a
-    // painted frame, with a timeout safety net in case rAF never fires.
-    void getCliExportRequest().then((cliExport) => {
-      if (cliExport || cancelled) return;
-      raf = requestAnimationFrame(() => requestAnimationFrame(reveal));
-      timer = window.setTimeout(reveal, 1000);
-    });
+    // A headless CLI export and a `glyph serve` process must never surface
+    // the window: both are renderers, not an app the user opened. Everyone
+    // else reveals after a painted frame, with a timeout safety net in case
+    // rAF never fires.
+    void Promise.all([getCliExportRequest(), getCliServeRequest()]).then(
+      ([cliExport, cliServe]) => {
+        if (cliExport || cliServe || cancelled) return;
+        raf = requestAnimationFrame(() => requestAnimationFrame(reveal));
+        timer = window.setTimeout(reveal, 1000);
+      },
+    );
 
     return () => {
       cancelled = true;

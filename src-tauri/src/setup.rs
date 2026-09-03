@@ -59,8 +59,6 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
                 .and_then(|a| a.value.as_str().map(str::to_string))
         };
         let plugin_path = plugin_arg("file");
-        let plugin_export = plugin_arg("export");
-        let plugin_out = plugin_arg("out");
         let env_args: Vec<String> = std::env::args().collect();
         // Session restore and the recent-files menu re-open paths from
         // earlier sessions; seed their grants from the persisted settings
@@ -89,13 +87,7 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
             }
         }
         let grant_registry = app.state::<grants::GrantRegistry>();
-        match cli::launch_plan(
-            plugin_path.as_deref(),
-            plugin_export.as_deref(),
-            plugin_out.as_deref(),
-            &env_args,
-            &cwd,
-        ) {
+        match cli::launch_plan(plugin_path.as_deref(), &env_args, &cwd) {
             Err(usage) => {
                 eprintln!("{usage}");
                 std::process::exit(2);
@@ -130,6 +122,21 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
                         output,
                     });
             }
+            Ok(cli::CliLaunch::Serve {
+                root,
+                host,
+                port,
+                output,
+            }) => {
+                // Like a site export, the window stays hidden and the
+                // frontend renders on mount. Unlike one, the process then
+                // stays up: the server keeps answering and every change
+                // renders again.
+                if let Err(message) = start_serve(app.handle(), &root, host, port, output) {
+                    eprintln!("{message}");
+                    std::process::exit(1);
+                }
+            }
             Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::Folder(p)))) => {
                 if let Ok(canonical) = grant_registry.grant_workspace(std::path::Path::new(&p)) {
                     grants::allow_asset_dir(app.handle(), &canonical);
@@ -151,4 +158,136 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         }
     }
     Ok(())
+}
+
+/// Where a `glyph serve` with no `--out` puts the site.
+///
+/// Created through `tempfile` rather than at a name derived from the process
+/// id: the system temp directory is world-writable on Unix and process ids
+/// are guessable, so a predictable name can be pre-created (or pointed
+/// somewhere else by a symlink) by any local user, who would then be choosing
+/// the HTML the victim's browser is about to load from localhost. `tempfile`
+/// creates it with a random name and owner-only permissions.
+///
+/// The directory outlives the handle on purpose. Removal happens on interrupt
+/// in [`spawn_temp_dir_cleanup`], because the process ends without unwinding
+/// and `Drop` would never run.
+#[cfg(desktop)]
+fn default_serve_dir() -> Result<std::path::PathBuf, String> {
+    tempfile::Builder::new()
+        .prefix("glyph-serve-")
+        .tempdir()
+        .map(tempfile::TempDir::keep)
+        .map_err(|err| format!("cannot create a temporary directory to serve from: {err}"))
+}
+
+/// Bring up everything `glyph serve` needs before the frontend renders:
+/// the output directory, the grants the export writes through, the bound
+/// socket, the file watch, and the state the two sides share.
+///
+/// Binding happens here rather than in the server task so that a port
+/// already in use fails immediately, with the process exiting nonzero rather
+/// than sitting there having served nothing.
+#[cfg(desktop)]
+fn start_serve(
+    app: &tauri::AppHandle,
+    root: &str,
+    host: std::net::IpAddr,
+    port: u16,
+    output: Option<String>,
+) -> Result<(), String> {
+    let owns_output = output.is_none();
+    let out_dir = match output {
+        Some(path) => {
+            let path = std::path::PathBuf::from(path);
+            std::fs::create_dir_all(&path)
+                .map_err(|err| format!("cannot create the output directory {path:?}: {err}"))?;
+            path
+        }
+        None => default_serve_dir()?,
+    };
+
+    let grant_registry = app.state::<grants::GrantRegistry>();
+    let _ = grant_registry.grant_workspace(std::path::Path::new(root));
+    let _ = grant_registry.grant_export_dir(&out_dir);
+
+    let listener = std::net::TcpListener::bind((host, port))
+        .map_err(|err| format!("cannot serve on {host}:{port}: {err}"))?;
+    let address = listener
+        .local_addr()
+        .map_err(|err| format!("cannot read the bound address: {err}"))?;
+    // tokio requires a nonblocking socket. Doing it here, rather than inside
+    // the server task, keeps an unusable socket a startup failure with a
+    // nonzero exit instead of a log line under a ready message.
+    listener
+        .set_nonblocking(true)
+        .map_err(|err| format!("cannot serve on {address}: {err}"))?;
+
+    if !host.is_loopback() {
+        eprintln!(
+            "Warning: serving on {host} exposes {} to the network. Anyone who can reach this machine can read the whole folder.",
+            cli::plain_path(root)
+        );
+    }
+
+    let (reload, _) = tokio::sync::broadcast::channel(16);
+    app.manage(commands::serve::ServeState::new(
+        commands::serve::CliServeRequest {
+            root: root.to_string(),
+            out_dir: out_dir.to_string_lossy().to_string(),
+        },
+        cli::plain_path(root),
+        format!("http://{address}"),
+        reload.clone(),
+    ));
+
+    // The watcher stops the moment it is dropped, and nothing else owns it,
+    // so it lives in managed state for as long as the process does.
+    match crate::serve::watch::watch(app.clone(), std::path::Path::new(root)) {
+        Ok(watcher) => {
+            app.manage(commands::serve::ServeWatcher {
+                _watcher: std::sync::Mutex::new(watcher),
+            });
+        }
+        Err(err) => eprintln!("Warning: changes to {root} will not rebuild the site: {err}"),
+    }
+
+    let served = out_dir.clone();
+    let guard = crate::serve::HostGuard::new(host);
+    tauri::async_runtime::spawn(async move {
+        // Registering with the reactor needs a runtime, so it happens here
+        // rather than beside the bind above.
+        match tokio::net::TcpListener::from_std(listener) {
+            Ok(listener) => crate::serve::run(listener, served, guard, reload).await,
+            Err(err) => eprintln!("glyph serve: cannot use the bound socket: {err}"),
+        }
+    });
+
+    if owns_output {
+        spawn_temp_dir_cleanup(out_dir);
+    }
+    Ok(())
+}
+
+/// Remove the temporary site on the way out. `Drop` never runs here: the
+/// process ends either through `std::process::exit` or through the interrupt
+/// that a foreground server is normally stopped with, and neither unwinds.
+#[cfg(desktop)]
+fn spawn_temp_dir_cleanup(dir: std::path::PathBuf) {
+    tauri::async_runtime::spawn(async move {
+        // Only exit on an actual interrupt. Exiting when the handler cannot
+        // be registered would end a healthy server moments after startup,
+        // reporting success and explaining nothing.
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {
+                let _ = std::fs::remove_dir_all(&dir);
+                std::process::exit(0);
+            }
+            Err(err) => {
+                eprintln!(
+                    "glyph serve: cannot listen for interrupts, so {dir:?} will be left behind: {err}"
+                );
+            }
+        }
+    });
 }

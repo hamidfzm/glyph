@@ -36,7 +36,7 @@ the missing remainder is rejected.
 Grants are minted only from backend-observed events, never from a bare
 webview-supplied path:
 
-- CLI launch arguments (folder, file, `--export` format and `--out` output path)
+- CLI launch arguments (folder, file, the `export` subcommand's `--format` and `--out`, the `serve` subcommand's `--host` and `--port`)
 - Drag-and-drop onto a window (the OS event carries the path)
 - macOS `RunEvent::Opened` and second-instance launches
 - Native pick dialogs run in Rust (`src-tauri/src/commands/pick.rs`): Open
@@ -142,6 +142,17 @@ permission returns to the default capability (#698).
   grants the workspace a window reports adopting; both are accepted so
   session restore keeps working, and both only matter after the renderer is
   already compromised.
+- **`glyph serve` is an inbound listener.** The one place Glyph accepts
+  connections rather than making them. It binds `127.0.0.1` unless `--host`
+  says otherwise, answers only to `Host` headers naming itself (so a web page
+  cannot reach it by re-pointing its own domain at loopback), refuses hidden
+  paths, and relies on `tower-http`'s `ServeDir` to keep requests inside the
+  output directory. What it serves is still unauthenticated: anyone who can
+  reach the port reads the whole exported site, and `--host 0.0.0.0` extends
+  that to the network, which is why it is opt-in and warns. Everything in the
+  output directory is published, so the CLI refuses an `--out` that contains,
+  or is contained by, the folder being served. The site is derived output, not
+  the workspace: serving grants no filesystem access back to the renderer.
 - **`connect-src` breadth.** Arbitrary `http:`/`https:` hosts are reachable
   for the Ollama integration, so a compromised renderer can exfiltrate what
   it can read. The grants bound what that is.

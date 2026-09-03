@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use tauri::State;
 
 /// A headless export requested on the command line
-/// (`glyph <path> --export <format> [--out <path>]`), stashed at startup for
+/// (`glyph export <path> --format <format> [--out <path>]`), stashed at startup for
 /// the frontend to pick up once it mounts. `input` is a workspace folder for
 /// the `site` format and a document for every other one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

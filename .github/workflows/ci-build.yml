@@ -76,18 +76,18 @@ jobs:
         env:
           WEBKIT_DISABLE_COMPOSITING_MODE: "1"
         run: |
-          xvfb-run --auto-servernum ./src-tauri/target/release/glyph "$PWD/samples" --export site --out /tmp/csp-smoke
+          xvfb-run --auto-servernum ./src-tauri/target/release/glyph export "$PWD/samples" --format site --out /tmp/csp-smoke
           test -f /tmp/csp-smoke/index.html
           test "$(find /tmp/csp-smoke -maxdepth 1 -name '*.html' | wc -l)" -ge 3
           # A document export renders the live DOM, so it exercises the
           # render-readiness gate the site export never touches.
-          xvfb-run --auto-servernum ./src-tauri/target/release/glyph "$PWD/samples/Index.md" --export html --out /tmp/doc-smoke.html
+          xvfb-run --auto-servernum ./src-tauri/target/release/glyph export "$PWD/samples/Index.md" --format html --out /tmp/doc-smoke.html
           grep -q "<h1" /tmp/doc-smoke.html
-          xvfb-run --auto-servernum ./src-tauri/target/release/glyph "$PWD/samples/Index.md" --export pdf --out /tmp/doc-smoke.pdf
+          xvfb-run --auto-servernum ./src-tauri/target/release/glyph export "$PWD/samples/Index.md" --format pdf --out /tmp/doc-smoke.pdf
           test "$(stat -c%s /tmp/doc-smoke.pdf)" -gt 5000
           # A wrong input kind is a usage error, not a silent empty export.
-          if xvfb-run --auto-servernum ./src-tauri/target/release/glyph "$PWD/samples" --export pdf --out /tmp/nope.pdf; then
-            echo "expected a usage error for a folder given to --export pdf" >&2
+          if xvfb-run --auto-servernum ./src-tauri/target/release/glyph export "$PWD/samples" --format pdf --out /tmp/nope.pdf; then
+            echo "expected a usage error for a folder given to --format pdf" >&2
             exit 1
           fi
       # Drives the built binary over WebDriver (launch, render, edit, second

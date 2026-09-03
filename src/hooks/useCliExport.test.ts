@@ -3,9 +3,10 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
+import { CLI_PLUGIN_WAIT_MS } from "@/hooks/useExportReadiness";
 import { resetCliExportRequestCache } from "@/lib/cliExport";
 import { createRegistry } from "@/lib/plugins/registry";
-import { CLI_PLUGIN_WAIT_MS, resetCliExportRunner, useCliExport } from "./useCliExport";
+import { resetCliExportRunner, useCliExport } from "./useCliExport";
 
 const exportSiteMock = vi.fn();
 vi.mock("@/lib/export/site/exportSite", () => ({

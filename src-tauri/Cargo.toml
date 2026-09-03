@@ -60,6 +60,24 @@ tauri-plugin-single-instance = "2"
 # git repo detection, crash reporting) are desktop-only for now (see #79).
 [target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
 tauri-plugin-cli = "2"
+# `glyph serve`: the preview server behind the CLI's one subcommand. These are
+# already in the tree through Tauri's own HTTP stack, so declaring them adds
+# no new dependency graph; enabling `tower-http`'s `fs` feature does pull in a
+# few small crates of its own (mime_guess, http-range-header). That feature is
+# the reason to reach for these at all: ServeDir owns MIME guessing, index
+# resolution, and keeping requests inside the served directory, none of which
+# is worth hand-rolling.
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["fs"] }
+futures-util = { version = "0.3", default-features = false }
+tokio = { version = "1", features = ["net", "sync", "signal", "time"] }
+# The site a `glyph serve` without `--out` writes to. Not just a name under
+# the system temp directory: that is world-writable on Unix, so a predictable
+# name is a local attacker's choice of what the victim's browser loads.
+tempfile = "3"
 tauri-plugin-window-state = "2"
 # Statically-linked libgit2 so end users don't need a system Git install.
 # `vendored-openssl` keeps SSH/HTTPS support self-contained too.

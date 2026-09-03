@@ -20,6 +20,10 @@ vi.mock("@/hooks/useSettings", () => ({ useSettings: useSettingsMock }));
 const { getCliExportRequestMock } = vi.hoisted(() => ({ getCliExportRequestMock: vi.fn() }));
 vi.mock("@/lib/cliExport", () => ({ getCliExportRequest: getCliExportRequestMock }));
 
+// Same for the serve probe: a serve process is a renderer, not a window.
+const { getCliServeRequestMock } = vi.hoisted(() => ({ getCliServeRequestMock: vi.fn() }));
+vi.mock("@/lib/cliServe", () => ({ getCliServeRequest: getCliServeRequestMock }));
+
 function setLoaded(loaded: boolean) {
   useSettingsMock.mockReturnValue({ loaded });
 }
@@ -31,6 +35,7 @@ describe("useWindowReveal", () => {
     setFocus.mockClear();
     setLoaded(false);
     getCliExportRequestMock.mockResolvedValue(null);
+    getCliServeRequestMock.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -98,6 +103,18 @@ describe("useWindowReveal", () => {
 
   it("keeps the window hidden for a headless CLI export", async () => {
     getCliExportRequestMock.mockResolvedValue({ root: "/ws", outDir: "/out" });
+    setLoaded(true);
+    renderHook(() => useWindowReveal());
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  it("keeps the window hidden for a serve process", async () => {
+    // `glyph serve` renders the site over and over for the browsers reading
+    // it; showing a window would put a stray app on the user's screen.
+    getCliServeRequestMock.mockResolvedValue({ root: "/ws", outDir: "/tmp/glyph-serve-1" });
     setLoaded(true);
     renderHook(() => useWindowReveal());
 

@@ -3,6 +3,7 @@ import { useTabsContext } from "@/contexts/TabsContext";
 import { useAppModals } from "@/hooks/useAppModals";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { useCliExport } from "@/hooks/useCliExport";
+import { useCliServe } from "@/hooks/useCliServe";
 import { useCloseFlush } from "@/hooks/useCloseFlush";
 import { useCommandPaletteController } from "@/hooks/useCommandPaletteController";
 import { useContextMenu } from "@/hooks/useContextMenu";
@@ -85,8 +86,10 @@ export function AppShell() {
   } = tabs;
 
   // Headless CLI export: runs and exits when the process was launched with
-  // --export, a no-op otherwise.
+  // `glyph export`, a no-op otherwise.
   useCliExport({ entries: tocEntries, content: displayContent });
+  // The other headless launch: renders repeatedly and never exits.
+  useCliServe();
 
   useDocumentUndoRedo({ activeTabId, platform, onUndo: undoEdit, onRedo: redoEdit });
   useTabReorderShortcuts({ platform, onMove: moveActiveTab });
