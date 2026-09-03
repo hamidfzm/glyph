@@ -48,6 +48,50 @@ describe("useTabs workspace interactions", () => {
     expect(invoke).toHaveBeenCalledWith("request_open", { path: "/p/new-ws" });
   });
 
+  // Rust refuses a request_open for anything the picker did not grant (a
+  // folder removed between the pick and the request); both callers surface it.
+  function refuseRequestOpen() {
+    const routing = makeInvoker() as typeof invoke;
+    vi.mocked(invoke).mockImplementation(((cmd: string, args?: unknown) =>
+      cmd === "request_open"
+        ? Promise.reject("path is outside the allowed workspaces")
+        : routing(cmd, args as never)) as typeof invoke);
+  }
+
+  it("openFolder surfaces a refused routing request as a workspace notice", async () => {
+    vi.mocked(pickFolder).mockResolvedValue("/p/picked");
+    refuseRequestOpen();
+    const onWorkspaceNotice = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFolder();
+    });
+
+    expect(onWorkspaceNotice).toHaveBeenCalledWith({
+      key: "error.couldntOpen",
+      values: { error: "path is outside the allowed workspaces" },
+    });
+  });
+
+  it("createWorkspace surfaces a refused routing request as a workspace notice", async () => {
+    vi.mocked(pickNewWorkspace).mockResolvedValue("/p/new-ws");
+    refuseRequestOpen();
+    const onWorkspaceNotice = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.createWorkspace();
+    });
+
+    expect(onWorkspaceNotice).toHaveBeenCalledWith({
+      key: "error.couldntOpen",
+      values: { error: "path is outside the allowed workspaces" },
+    });
+  });
+
   it("createWorkspace bails when the dialog is cancelled", async () => {
     vi.mocked(pickNewWorkspace).mockResolvedValue(null);
     const { result } = renderHook(() => useTabs(defaultOptions()));
