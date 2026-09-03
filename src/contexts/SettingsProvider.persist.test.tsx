@@ -1,4 +1,4 @@
-import type { load } from "@tauri-apps/plugin-store";
+import type { getStore } from "@tauri-apps/plugin-store";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsProvider } from "@/contexts/SettingsProvider";
@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { expectConsole } from "@/test/consoleGuard";
 import {
   FlushConsumer,
-  mockedLoad,
+  mockedGetStore,
   mockStore,
   resetSettingsDom,
   TestConsumer,
@@ -225,8 +225,8 @@ describe("SettingsProvider persistence", () => {
       );
       const save = vi.fn(() => Promise.resolve());
       const get = vi.fn(() => Promise.resolve(null));
-      mockedLoad.mockResolvedValueOnce({ get, set, save } as unknown as Awaited<
-        ReturnType<typeof load>
+      mockedGetStore.mockResolvedValueOnce({ get, set, save } as unknown as Awaited<
+        ReturnType<typeof getStore>
       >);
       await renderFlushConsumer();
 

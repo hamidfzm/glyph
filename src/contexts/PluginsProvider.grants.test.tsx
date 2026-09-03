@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { load } from "@tauri-apps/plugin-store";
+import { getStore } from "@tauri-apps/plugin-store";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
@@ -31,7 +31,7 @@ describe("PluginsProvider grants and updates", () => {
       ),
       set: vi.fn((_key: string, _value: unknown) => Promise.resolve()),
     };
-    vi.mocked(load).mockResolvedValue(store as never);
+    vi.mocked(getStore).mockResolvedValue(store as never);
     vi.mocked(invoke).mockImplementation((cmd) =>
       Promise.resolve(cmd === "list_plugins" ? [] : undefined),
     );
@@ -80,7 +80,7 @@ describe("PluginsProvider grants and updates", () => {
       get: vi.fn(() => Promise.resolve(null)),
       set: vi.fn((_key: string, _value: unknown) => Promise.resolve()),
     };
-    vi.mocked(load).mockResolvedValue(store as never);
+    vi.mocked(getStore).mockResolvedValue(store as never);
     const entry = {
       id: "com.x.market",
       name: "Market",
@@ -143,7 +143,7 @@ describe("PluginsProvider grants and updates", () => {
       ),
       set: vi.fn((_key: string, _value: unknown) => Promise.resolve()),
     };
-    vi.mocked(load).mockResolvedValue(store as never);
+    vi.mocked(getStore).mockResolvedValue(store as never);
     const entry = {
       id: "com.x.demo",
       name: "Demo",
@@ -229,7 +229,7 @@ describe("PluginsProvider grants and updates", () => {
       ),
       set: vi.fn((_key: string, _value: unknown) => Promise.resolve()),
     };
-    vi.mocked(load).mockResolvedValue(store as never);
+    vi.mocked(getStore).mockResolvedValue(store as never);
     // Now sandboxed: the covered grant means no prompt, but the stale
     // fullTrust flag must not survive to silently allow a later flip back.
     vi.mocked(invoke).mockImplementation((cmd) =>

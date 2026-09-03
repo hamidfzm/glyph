@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { load } from "@tauri-apps/plugin-store";
+import { getStore } from "@tauri-apps/plugin-store";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
@@ -42,8 +42,8 @@ describe("PluginsProvider startup", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockResolvedValue(undefined);
-    vi.mocked(load).mockReset();
-    vi.mocked(load).mockResolvedValue(grantedStore() as never);
+    vi.mocked(getStore).mockReset();
+    vi.mocked(getStore).mockResolvedValue(grantedStore() as never);
     // The provider fetches the marketplace index on every mount; the global
     // setup stub answers ok: false, which would log a fetch failure in every
     // test. Serve an empty index instead; fetch-driven tests restub per case.
@@ -163,7 +163,7 @@ describe("PluginsProvider startup", () => {
   it("skips disabled plugins at startup and re-enables one on reinstall", async () => {
     // Once: only the startup loadDisabled sees the pre-disabled store; later
     // calls (saveDisabled, other tests) fall through to the setup default.
-    vi.mocked(load).mockResolvedValueOnce({
+    vi.mocked(getStore).mockResolvedValueOnce({
       get: vi.fn().mockResolvedValue(["com.x.demo"]),
       set: vi.fn(),
     } as never);

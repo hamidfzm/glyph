@@ -1,9 +1,9 @@
-import type { load } from "@tauri-apps/plugin-store";
+import type { getStore } from "@tauri-apps/plugin-store";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsProvider } from "@/contexts/SettingsProvider";
 import type { Settings } from "@/lib/settings";
-import { mockedLoad, resetSettingsDom, TestConsumer } from "@/test/settingsHarness";
+import { mockedGetStore, resetSettingsDom, TestConsumer } from "@/test/settingsHarness";
 
 // Every window loads and writes the same settings.json. A window writes the
 // whole blob from its own React snapshot, so without a merge its stale copy of
@@ -40,8 +40,8 @@ function mockLiveStore(initial: Partial<Settings>) {
     });
     await gate;
   });
-  mockedLoad.mockResolvedValueOnce({ get, set, save } as unknown as Awaited<
-    ReturnType<typeof load>
+  mockedGetStore.mockResolvedValueOnce({ get, set, save } as unknown as Awaited<
+    ReturnType<typeof getStore>
   >);
   return {
     get,

@@ -1,4 +1,4 @@
-import { load, type Store } from "@tauri-apps/plugin-store";
+import type { Store } from "@tauri-apps/plugin-store";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { KEYED_PROVIDERS, setAiKey } from "@/lib/aiKeys";
 import { applyCSSVariables, applyTheme } from "@/lib/applySettingsToDom";
@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS, type Settings, stripSecrets } from "@/lib/settings";
 import { setNestedValue } from "@/lib/settingsObject";
 import { loadSecrets } from "@/lib/settingsSecrets";
 import { mergeChangedPaths, settingsFromStored } from "@/lib/settingsWrite";
+import { openStore } from "@/lib/store";
 import { SettingsContext } from "./SettingsContext";
 
 const STORE_KEY = "settings";
@@ -33,10 +34,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     async function init() {
       try {
-        const store = await load("settings.json", {
-          defaults: {},
-          autoSave: true,
-        });
+        const store = await openStore("settings.json");
         storeRef.current = store;
         const saved = await store.get<Partial<Settings>>(STORE_KEY);
         const base = settingsFromStored(saved);

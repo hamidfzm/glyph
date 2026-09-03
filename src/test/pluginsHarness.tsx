@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { load } from "@tauri-apps/plugin-store";
+import { getStore } from "@tauri-apps/plugin-store";
 import { vi } from "vitest";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
@@ -76,8 +76,8 @@ export function Probe() {
 export function resetPluginsMocks(): void {
   vi.mocked(invoke).mockReset();
   vi.mocked(invoke).mockResolvedValue(undefined);
-  vi.mocked(load).mockReset();
-  vi.mocked(load).mockResolvedValue(grantedStore() as never);
+  vi.mocked(getStore).mockReset();
+  vi.mocked(getStore).mockResolvedValue(grantedStore() as never);
   // The provider fetches the marketplace index on every mount; the global
   // setup stub answers ok: false, which would log a fetch failure in every
   // test. Serve an empty index instead; fetch-driven tests restub per case.

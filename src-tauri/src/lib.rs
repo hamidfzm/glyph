@@ -645,6 +645,7 @@ mod tests {
         for capability in [
             include_str!("../capabilities/default.json"),
             include_str!("../capabilities/desktop.json"),
+            include_str!("../capabilities/mobile.json"),
         ] {
             let conf: serde_json::Value = serde_json::from_str(capability).unwrap();
             let windows: Vec<&str> = conf["windows"]

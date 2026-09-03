@@ -12,13 +12,36 @@
 use tauri::Manager;
 #[cfg(desktop)]
 use tauri_plugin_cli::CliExt;
+use tauri_plugin_store::StoreExt;
 
 use crate::windows;
 #[cfg(desktop)]
 use crate::{cli, commands, grants, menu, stash_initial_open};
 
+/// Renderer-facing stores, opened here because the renderer holds no
+/// `store:allow-load` (see docs/security/threat-model.md). The session store
+/// batches its writes and saves explicitly, so it opts out of the builder's
+/// default debounced auto-save.
+const STORES: [(&str, bool); 3] = [
+    ("settings.json", true),
+    ("plugins.json", true),
+    ("workspace-sessions.json", false),
+];
+
 /// Runs inside Tauri's `setup` hook, before any window is shown.
 pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    for (file, auto_save) in STORES {
+        let mut builder = app.store_builder(file);
+        if !auto_save {
+            builder = builder.disable_auto_save();
+        }
+        // A corrupt file leaves that store unopened; the renderer then falls
+        // back to defaults, exactly as it did when its own `load` failed.
+        if let Err(err) = builder.build() {
+            eprintln!("failed to open {file}: {err}");
+        }
+    }
+
     // Seed the registry's "main" entry so routing knows what the first
     // window shows; a desktop folder launch overrides it below.
     app.state::<windows::WindowRegistry>()

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsProvider } from "@/contexts/SettingsProvider";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import {
-  mockedLoad,
+  mockedGetStore,
   mockStore,
   realMatchMedia,
   resetSettingsDom,
@@ -49,7 +49,7 @@ describe("loading persisted settings", () => {
   });
 
   it("falls back to defaults and logs when loading fails", async () => {
-    mockedLoad.mockRejectedValueOnce(new Error("store unavailable"));
+    mockedGetStore.mockRejectedValueOnce(new Error("store unavailable"));
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     render(

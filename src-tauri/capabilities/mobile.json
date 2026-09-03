@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/v2/crates/tauri-utils/schema/capability.json",
   "identifier": "mobile",
-  "description": "Mobile-only capabilities for Glyph. Android and iOS pickers hand back sandboxed content:// URIs that the Rust fs commands cannot open, so the fs plugin reads those instead (src/lib/documentContent.ts). Desktop is deliberately excluded: there the grant registry is the only filesystem gate.",
+  "description": "Mobile-only capabilities for Glyph. Android and iOS pickers hand back sandboxed content:// URIs that the Rust fs commands cannot open, so the OS document picker (dialog open) and the fs plugin read those instead (src/lib/pickers.ts, src/lib/documentContent.ts). Desktop is deliberately excluded: there the Rust pickers and the grant registry are the only filesystem gate.",
   "platforms": ["android", "iOS"],
   "windows": ["main", "w*"],
-  "permissions": ["fs:default", "fs:allow-read-text-file"]
+  "permissions": ["dialog:allow-open", "fs:default", "fs:allow-read-text-file"]
 }

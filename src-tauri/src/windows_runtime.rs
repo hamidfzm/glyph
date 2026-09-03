@@ -3,8 +3,8 @@
 // effects can't be observed from `MockRuntime`; the testable decision logic
 // lives in [`crate::windows`] and this file is excluded from codecov (see
 // codecov.yml), mirroring `menu_runtime`. The command wrappers are still
-// exercised below for the parts a mock app can see: the grant check that gates
-// `open_in_new_window`, and the registry writes.
+// exercised below for the parts a mock app can see: the grant checks that gate
+// `request_open` and `open_in_new_window`, and the registry writes.
 
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder};
 
@@ -166,18 +166,16 @@ fn spawn_window<R: Runtime>(app: &AppHandle<R>, registry: &WindowRegistry, pendi
 }
 
 /// Frontend reports the workspace its window now shows (or `None` when cleared),
-/// keeping the routing registry current.
+/// keeping the routing registry current. Routing state only: the root is a
+/// renderer-supplied path, so no grant is minted here. Every way a window
+/// comes to show a workspace (pickers, CLI, drag-and-drop, second instance,
+/// session restore seeded in setup) already granted it.
 #[tauri::command]
 pub fn set_window_workspace<R: Runtime>(
     window: tauri::WebviewWindow<R>,
     registry: State<'_, WindowRegistry>,
     root: Option<String>,
 ) {
-    // Restore-flow re-opens skip open_in_app, so mint the grant here too.
-    // Clearing (None) does not revoke: grants are session-scoped.
-    if let Some(root) = &root {
-        grant_open(window.app_handle(), OpenKind::Folder, root);
-    }
     registry.set_workspace(window.label(), root);
 }
 
@@ -192,32 +190,34 @@ pub fn set_window_files<R: Runtime>(
     registry.set_files(window.label(), paths);
 }
 
-/// In-app open request (the Open Folder dialog, or opening a loose file),
-/// routed the same way as OS-level launches with the calling window as current.
+/// In-app Open Folder request (the Rust folder picker's result), routed the
+/// same way as OS-level launches with the calling window as current.
+///
+/// The path arrives from the renderer, so it is checked before anything is
+/// routed: it must already be a granted workspace root, which a picker result
+/// is. Routing re-grants the path recursively via `grant_open`, so a subfolder
+/// of a granted root, or an exact-file grant, is refused too (INV-5, INV-6).
 #[tauri::command]
 pub fn request_open<R: Runtime>(
     window: tauri::WebviewWindow<R>,
     app: AppHandle<R>,
     registry: State<'_, WindowRegistry>,
-    kind: String,
+    grants: State<'_, GrantRegistry>,
     path: String,
-) {
-    let kind = if kind == "file" {
-        OpenKind::File
-    } else {
-        OpenKind::Folder
-    };
+) -> Result<(), String> {
+    grants.ensure_workspace(&path)?;
     let label = window.label().to_string();
-    open_in_app(&app, &registry, kind, path, &label);
+    open_in_app(&app, &registry, OpenKind::Folder, path, &label);
+    Ok(())
 }
 
 /// Explicit "Open in new window" for a note the renderer names.
 ///
-/// Unlike `request_open`, whose callers all pass a native-dialog result, this
-/// is reachable from ordinary UI (the file tree, the tab strip), so the path is
-/// checked against the existing grants *before* anything is routed. A new
-/// window can therefore only ever show what this process is already allowed to
-/// read: the action cannot widen the session's filesystem scope (INV-5, INV-6).
+/// Reachable from ordinary UI (the file tree, the tab strip), so like
+/// `request_open` the path is checked against the existing grants *before*
+/// anything is routed. A new window can therefore only ever show what this
+/// process is already allowed to read: the action cannot widen the session's
+/// filesystem scope (INV-5, INV-6).
 ///
 /// Files only, deliberately. A renderer-chosen `kind` would let a caller name a
 /// path granted as an exact file and have the folder branch re-grant it as a
@@ -363,6 +363,92 @@ mod tests {
             app.state::<WindowRegistry>().snapshot().files,
             vec![("main".to_string(), vec!["/a/note.md".to_string()])]
         );
+    }
+
+    #[test]
+    fn set_window_workspace_records_routing_state_without_minting_a_grant() {
+        let dir = unique_tmp("report_workspace");
+        let root = dir.to_string_lossy().to_string();
+        let (app, window) = app_with_registries();
+
+        set_window_workspace(window, app.state::<WindowRegistry>(), Some(root.clone()));
+
+        assert!(app
+            .state::<WindowRegistry>()
+            .snapshot()
+            .workspaces
+            .contains(&("main".to_string(), Some(root.clone()))));
+        // The report is a renderer-supplied path: it must not become readable.
+        assert!(app
+            .state::<GrantRegistry>()
+            .ensure_workspace(&root)
+            .is_err());
+        assert!(app.state::<GrantRegistry>().ensure_readable(&root).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn request_open_denies_an_ungranted_folder_and_mints_nothing() {
+        let dir = unique_tmp("request_ungranted");
+        let root = dir.to_string_lossy().to_string();
+        let (app, window) = app_with_registries();
+
+        let result = request_open(
+            window,
+            app.handle().clone(),
+            app.state::<WindowRegistry>(),
+            app.state::<GrantRegistry>(),
+            root.clone(),
+        );
+
+        assert!(result.unwrap_err().contains("outside the allowed"));
+        assert!(app.state::<GrantRegistry>().ensure_readable(&root).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn request_open_denies_a_subfolder_of_a_granted_workspace() {
+        // A folder open re-grants recursively, so only an exact workspace root
+        // may pass; a subfolder (or an exact-file grant) must not widen.
+        let dir = unique_tmp("request_subfolder");
+        let sub = dir.join("sub");
+        std::fs::create_dir_all(&sub).unwrap();
+        let (app, window) = app_with_registries();
+        app.state::<GrantRegistry>().grant_workspace(&dir).unwrap();
+
+        let result = request_open(
+            window,
+            app.handle().clone(),
+            app.state::<WindowRegistry>(),
+            app.state::<GrantRegistry>(),
+            sub.to_string_lossy().to_string(),
+        );
+
+        assert!(result.is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn request_open_accepts_a_granted_workspace_root() {
+        let dir = unique_tmp("request_granted");
+        let root = dir.to_string_lossy().to_string();
+        let (app, window) = app_with_registries();
+        app.state::<GrantRegistry>().grant_workspace(&dir).unwrap();
+        // Another window already shows it, so routing takes the Focus branch
+        // rather than starting a real window build this test never joins.
+        app.state::<WindowRegistry>()
+            .set_workspace("w1", Some(root.clone()));
+
+        let result = request_open(
+            window,
+            app.handle().clone(),
+            app.state::<WindowRegistry>(),
+            app.state::<GrantRegistry>(),
+            root,
+        );
+
+        assert!(result.is_ok());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

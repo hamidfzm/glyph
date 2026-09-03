@@ -1,4 +1,4 @@
-import { load } from "@tauri-apps/plugin-store";
+import { getStore } from "@tauri-apps/plugin-store";
 import { useContext, useState } from "react";
 import { vi } from "vitest";
 import { SettingsContext } from "@/contexts/SettingsContext";
@@ -6,14 +6,14 @@ import { SettingsContext } from "@/contexts/SettingsContext";
 // Shared fixtures for the SettingsProvider suites: a fake persistence store and
 // the consumers that drive updateSettings / flushSettings / resetSettings.
 
-/** The mocked plugin-store loader, for tests that stub it directly. */
-export const mockedLoad = vi.mocked(load);
+/** The mocked plugin-store `getStore`, for tests that stub it directly. */
+export const mockedGetStore = vi.mocked(getStore);
 /** The jsdom matchMedia, so theme tests can restore it after stubbing. */
 export const realMatchMedia = window.matchMedia;
 
 // Builds a fake store whose `get` resolves the given saved value, registered as
-// the next `load()` result. Returns the `set` and `save` spies so tests can
-// assert persisted writes. With `deferLoad`, `load()` stays pending until the
+// the next `getStore()` result. Returns the `set` and `save` spies so tests can
+// assert persisted writes. With `deferLoad`, `getStore()` stays pending until the
 // returned `resolveLoad` is called.
 export function mockStore(saved: unknown, { setRejects = false, deferLoad = false } = {}) {
   const set = vi.fn(() =>
@@ -21,19 +21,19 @@ export function mockStore(saved: unknown, { setRejects = false, deferLoad = fals
   );
   const save = vi.fn(() => Promise.resolve());
   const get = vi.fn(() => Promise.resolve(saved));
-  const store = { get, set, save } as unknown as Awaited<ReturnType<typeof load>>;
-  // Captured when the provider calls load(), so resolveLoad must stay a stable
+  const store = { get, set, save } as unknown as Awaited<ReturnType<typeof getStore>>;
+  // Captured when the provider calls getStore(), so resolveLoad must stay a stable
   // wrapper that reads the latest resolver.
-  let resolve: ((store: Awaited<ReturnType<typeof load>>) => void) | undefined;
+  let resolve: ((store: Awaited<ReturnType<typeof getStore>>) => void) | undefined;
   if (deferLoad) {
-    mockedLoad.mockImplementationOnce(
+    mockedGetStore.mockImplementationOnce(
       () =>
         new Promise((r) => {
           resolve = r;
         }),
     );
   } else {
-    mockedLoad.mockResolvedValueOnce(store);
+    mockedGetStore.mockResolvedValueOnce(store);
   }
   return { get, set, save, resolveLoad: () => resolve?.(store) };
 }

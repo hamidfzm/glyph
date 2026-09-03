@@ -1,4 +1,4 @@
-import { load } from "@tauri-apps/plugin-store";
+import { getStore } from "@tauri-apps/plugin-store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   beginSessionRestore,
@@ -47,7 +47,7 @@ function storeMock(over: Partial<StoreMock> = {}): StoreMock {
 
 function mockStore(over: Partial<StoreMock> = {}): StoreMock {
   const store = storeMock(over);
-  vi.mocked(load).mockResolvedValue(store as unknown as Awaited<ReturnType<typeof load>>);
+  vi.mocked(getStore).mockResolvedValue(store as unknown as Awaited<ReturnType<typeof getStore>>);
   return store;
 }
 
@@ -239,7 +239,7 @@ describe("workspaceSession store", () => {
 
   it("degrades to null snapshots with a logged error when the store cannot load", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(load).mockRejectedValue(new Error("disk broke"));
+    vi.mocked(getStore).mockRejectedValue(new Error("disk broke"));
 
     await expect(getWorkspaceSession("/ws")).resolves.toBeNull();
     saveWorkspaceSession("/ws", session());
