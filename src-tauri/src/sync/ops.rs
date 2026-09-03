@@ -109,6 +109,40 @@ pub async fn set_origin(workspace_path: String, remote_url: String) -> Result<()
     .map_err(|e| SyncError::Backend(format!("task join error: {e}")))?
 }
 
+/// Remote URLs the renderer may hand to libgit2: `https://`, `ssh://`, or the
+/// scp-like `user@host:path`. libgit2 would also accept a local path or
+/// `file://`, which would let a compromised renderer pull any local repository
+/// into a granted workspace, and `http://`/`git://`, which would send the token
+/// or the notes in the clear. Credentials in the URL itself are refused too:
+/// the URL is committed to `.glyph/config.json`, the token has its own field.
+pub fn validate_remote_url(url: &str) -> Result<(), SyncError> {
+    if let Some(rest) = url.strip_prefix("https://") {
+        let authority = rest.split('/').next().unwrap_or("");
+        if authority.is_empty() || authority.contains('@') {
+            return Err(SyncError::InvalidRemoteUrl);
+        }
+        return Ok(());
+    }
+    let ssh = url
+        .strip_prefix("ssh://")
+        .is_some_and(|rest| !rest.is_empty() && !rest.starts_with('-'));
+    let scp_like = url
+        .split_once('@')
+        .and_then(|(user, rest)| rest.split_once(':').map(|(host, path)| (user, host, path)))
+        .is_some_and(|(user, host, path)| {
+            !user.is_empty()
+                && !user.starts_with('-')
+                && !host.is_empty()
+                && !host.starts_with('-')
+                && !host.contains('/')
+                && !path.is_empty()
+        });
+    if ssh || scp_like {
+        return Ok(());
+    }
+    Err(SyncError::InvalidRemoteUrl)
+}
+
 /// Inspect git's config for a default `user.name` and `user.email` to
 /// suggest in the Cloud Sync setup form. Tries the workspace-level
 /// `<path>/.git/config` first (so a per-repo identity wins over the
@@ -200,6 +234,40 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
+    #[test]
+    fn validate_remote_url_accepts_https_ssh_and_scp_forms() {
+        for url in [
+            "https://github.com/o/r.git",
+            "ssh://git@host.example/o/r.git",
+            "git@github.com:o/r.git",
+        ] {
+            assert!(validate_remote_url(url).is_ok(), "{url}");
+        }
+    }
+
+    #[test]
+    fn validate_remote_url_rejects_local_cleartext_credentialed_and_dashed_forms() {
+        for url in [
+            "/home/me/repo",
+            r"C:\repos\notes",
+            "file:///home/me/repo",
+            "http://host.example/r.git",
+            "git://host.example/r.git",
+            "https://",
+            "https://user:token@host.example/r.git",
+            "ssh://-oProxyCommand=id/x",
+            "-oProxyCommand=id@host.example:x",
+            "git@-host.example:o/r.git",
+            "git@host.example",
+            "",
+        ] {
+            assert!(
+                matches!(validate_remote_url(url), Err(SyncError::InvalidRemoteUrl)),
+                "{url}"
+            );
+        }
+    }
+
     /// Mirror of `sync::git::tests::Fixture` so the ops tests have a
     /// real bare-repo backend to drive without depending on internals.
     pub(super) struct Workspace {
@@ -251,10 +319,10 @@ mod tests {
 
         let repo = git2::Repository::open(&ws.workspace_path).unwrap();
         let remote = repo.find_remote("origin").unwrap();
-        assert_eq!(remote.url(), Some(ws.remote_path.as_str()));
+        assert_eq!(remote.url().unwrap(), ws.remote_path.as_str());
         let head = repo.find_reference("HEAD").unwrap();
         assert_eq!(
-            head.symbolic_target(),
+            head.symbolic_target().unwrap(),
             Some(format!("refs/heads/{DEFAULT_REMOTE_BRANCH}").as_str())
         );
     }
@@ -267,7 +335,7 @@ mod tests {
             .unwrap();
         let repo = git2::Repository::open(&ws.workspace_path).unwrap();
         let head = repo.find_reference("HEAD").unwrap();
-        assert_eq!(head.symbolic_target(), Some("refs/heads/trunk"));
+        assert_eq!(head.symbolic_target().unwrap(), Some("refs/heads/trunk"));
     }
 
     #[tokio::test]
@@ -474,7 +542,7 @@ mod tests {
             .unwrap();
         let repo = git2::Repository::open(tmp.path()).unwrap();
         let remote = repo.find_remote("origin").unwrap();
-        assert_eq!(remote.url(), Some("https://example.com/a.git"));
+        assert_eq!(remote.url().unwrap(), "https://example.com/a.git");
 
         // A second call updates the URL in place rather than erroring on
         // a duplicate remote (covers the `Ok(_) -> remote_set_url` arm).
@@ -483,7 +551,7 @@ mod tests {
             .unwrap();
         let repo = git2::Repository::open(tmp.path()).unwrap();
         let remote = repo.find_remote("origin").unwrap();
-        assert_eq!(remote.url(), Some("https://example.com/b.git"));
+        assert_eq!(remote.url().unwrap(), "https://example.com/b.git");
     }
 
     #[test]

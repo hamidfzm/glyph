@@ -80,6 +80,7 @@
     "ioDetail": "E/A-Fehler: {{message}}",
     "backend": "Fehler im Synchronisierungs-Backend.",
     "backendDetail": "Fehler im Synchronisierungs-Backend: {{message}}",
+    "invalidRemoteUrl": "Die Remote-URL muss mit https:// oder ssh:// beginnen (oder die Form user@host:pfad haben). Zugriffstoken gehören in das Token-Feld, nicht in die URL.",
     "unknown": "Unbekannter Synchronisierungsfehler."
   }
 }

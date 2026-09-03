@@ -2,8 +2,13 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { LinkComponent } from "@/components/markdown/LinkComponent";
 import type { ChatTurn } from "@/hooks/useAIChat";
 import { AIQuoteBlock } from "./AIQuoteBlock";
+
+// A model-chosen href must open in the system browser behind the external-link
+// prompt, never navigate the app webview; LinkComponent owns that.
+const components = { blockquote: AIQuoteBlock, a: LinkComponent };
 
 interface AIChatMessageProps {
   turn: ChatTurn;
@@ -51,7 +56,7 @@ export function AIChatMessage({
   return (
     <div className="ai-msg ai-msg-assistant">
       <div className="markdown-body ai-msg-markdown" dir="auto">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ blockquote: AIQuoteBlock }}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
           {turn.content}
         </ReactMarkdown>
       </div>

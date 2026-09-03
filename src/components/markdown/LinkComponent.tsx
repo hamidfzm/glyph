@@ -48,7 +48,12 @@ export function LinkComponent(props: LinkComponentProps) {
 
   const handleClick = useCallback(
     async (e: React.MouseEvent<HTMLAnchorElement>) => {
-      if (!href) return;
+      // react-markdown empties javascript:/data:/file: hrefs; following the
+      // resulting href="" would reload the app and drop unsaved edits.
+      if (!href) {
+        e.preventDefault();
+        return;
+      }
 
       if (href.startsWith("#")) {
         e.preventDefault();

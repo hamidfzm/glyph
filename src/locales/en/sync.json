@@ -80,6 +80,7 @@
     "ioDetail": "I/O error: {{message}}",
     "backend": "Sync backend error.",
     "backendDetail": "Sync backend error: {{message}}",
+    "invalidRemoteUrl": "Remote URL must start with https:// or ssh:// (or use user@host:path). Put access tokens in the token field, not in the URL.",
     "unknown": "Unknown sync error."
   }
 }

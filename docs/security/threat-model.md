@@ -78,7 +78,7 @@ and files: <path>`), which never echoes the grant list.
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |
 | `create_note`, `create_canvas`, `create_folder`, `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace, plus the pre-existing within-root checks |
 | `workspace_get_last_file`, `workspace_set_last_file` | granted workspace |
-| `sync_*` | granted workspace (`sync_clone_remote` clones into the workspace path itself) |
+| `sync_*` | granted workspace (`sync_clone_remote` clones into the workspace path itself); `sync_init_repo`, `sync_clone_remote`, and `sync_set_origin` accept only `https://` without credentials, `ssh://`, or scp-like `user@host:path` remotes, since libgit2 would also take a local path or `file://` (pulling any local repository into a granted workspace) and cleartext `http://`/`git://` |
 | `install_plugin` | consumes the pending picked folder; no path argument |
 
 `workspace_resolve` is deliberately not gated: it is the pre-open probe that

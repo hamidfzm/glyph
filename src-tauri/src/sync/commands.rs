@@ -95,6 +95,9 @@ pub async fn sync_init_repo(
     grants: State<'_, GrantRegistry>,
 ) -> Result<(), SyncError> {
     ensure_workspace(&grants, &workspace_path)?;
+    if let Some(url) = &remote_url {
+        ops::validate_remote_url(url)?;
+    }
     ops::init_repo(workspace_path, default_branch, remote_url).await
 }
 
@@ -107,6 +110,7 @@ pub async fn sync_clone_remote(
 ) -> Result<(), SyncError> {
     // The clone lands INSIDE the workspace path, so the same grant applies.
     ensure_workspace(&grants, &workspace_path)?;
+    ops::validate_remote_url(&remote_url)?;
     ops::clone_remote(workspace_path, remote_url, token).await
 }
 
@@ -121,6 +125,7 @@ pub async fn sync_set_origin(
     grants: State<'_, GrantRegistry>,
 ) -> Result<(), SyncError> {
     ensure_workspace(&grants, &workspace_path)?;
+    ops::validate_remote_url(&remote_url)?;
     ops::set_origin(workspace_path, remote_url).await
 }
 
@@ -234,6 +239,17 @@ mod tests {
                 .state::<GrantRegistry>()
                 .grant_workspace(dir)
                 .unwrap();
+        }
+
+        // Local-path remotes are refused at the IPC boundary, so the test
+        // remote is wired at the git layer, where a user's ssh/https origin
+        // ends up too.
+        fn set_local_origin(&self) {
+            crate::sync::git::set_origin(
+                std::path::Path::new(&self.workspace_path),
+                &self.remote_path,
+            )
+            .unwrap();
         }
 
         fn config(&self) -> WorkspaceSyncConfig {
@@ -397,55 +413,63 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sync_clone_remote_wrapper_populates_a_workspace() {
+    async fn sync_clone_remote_wrapper_refuses_a_local_path_remote() {
+        // libgit2 clones local paths happily; the wrapper is where a renderer
+        // naming an arbitrary local repository is stopped. The clone itself is
+        // covered at the ops layer against the same local fixture.
         let ws = Workspace::new();
-        sync_init_repo(
-            ws.workspace_path.clone(),
-            None,
-            Some(ws.remote_path.clone()),
-            ws.grants(),
-        )
-        .await
-        .unwrap();
-        fs::write(
-            std::path::Path::new(&ws.workspace_path).join("seed.md"),
-            "# seed\n",
-        )
-        .unwrap();
-        crate::workspace::store_sync_config(&ws.config()).unwrap();
-        sync_run(
-            ws.workspace_path.clone(),
-            None,
-            ws.sync_state(),
-            ws.grants(),
-        )
-        .await
-        .unwrap();
-
         let dest = ws.tmp.path().join("clone-via-wrapper");
         ws.grant_dir(&dest);
-        sync_clone_remote(
+
+        let result = sync_clone_remote(
             dest.to_string_lossy().into(),
             ws.remote_path.clone(),
             None,
             ws.grants(),
         )
-        .await
-        .unwrap();
-        assert!(dest.join("seed.md").exists());
+        .await;
+
+        assert!(matches!(result, Err(SyncError::InvalidRemoteUrl)));
+        assert!(!dest.join(".git").exists());
     }
 
     #[tokio::test]
-    async fn sync_status_wrapper_returns_a_status_report() {
+    async fn sync_init_repo_and_set_origin_wrappers_refuse_a_local_path_remote() {
         let ws = Workspace::new();
-        sync_init_repo(
+
+        let init = sync_init_repo(
             ws.workspace_path.clone(),
             None,
             Some(ws.remote_path.clone()),
             ws.grants(),
         )
-        .await
-        .unwrap();
+        .await;
+        assert!(matches!(init, Err(SyncError::InvalidRemoteUrl)));
+        assert!(!std::path::Path::new(&ws.workspace_path)
+            .join(".git")
+            .exists());
+
+        sync_init_repo(ws.workspace_path.clone(), None, None, ws.grants())
+            .await
+            .unwrap();
+        let set = sync_set_origin(
+            ws.workspace_path.clone(),
+            "file:///tmp/evil".into(),
+            ws.grants(),
+        )
+        .await;
+        assert!(matches!(set, Err(SyncError::InvalidRemoteUrl)));
+        let repo = git2::Repository::open(&ws.workspace_path).unwrap();
+        assert!(repo.find_remote("origin").is_err());
+    }
+
+    #[tokio::test]
+    async fn sync_status_wrapper_returns_a_status_report() {
+        let ws = Workspace::new();
+        sync_init_repo(ws.workspace_path.clone(), None, None, ws.grants())
+            .await
+            .unwrap();
+        ws.set_local_origin();
         crate::workspace::store_sync_config(&ws.config()).unwrap();
         let status = sync_status(ws.workspace_path.clone(), ws.sync_state(), ws.grants())
             .await
@@ -459,14 +483,10 @@ mod tests {
     #[tokio::test]
     async fn sync_run_wrapper_pushes_local_changes() {
         let ws = Workspace::new();
-        sync_init_repo(
-            ws.workspace_path.clone(),
-            None,
-            Some(ws.remote_path.clone()),
-            ws.grants(),
-        )
-        .await
-        .unwrap();
+        sync_init_repo(ws.workspace_path.clone(), None, None, ws.grants())
+            .await
+            .unwrap();
+        ws.set_local_origin();
         fs::write(
             std::path::Path::new(&ws.workspace_path).join("a.md"),
             "# a\n",
@@ -530,7 +550,7 @@ mod tests {
         .unwrap();
         let repo = git2::Repository::open(&ws.workspace_path).unwrap();
         let remote = repo.find_remote("origin").unwrap();
-        assert_eq!(remote.url(), Some("https://example.com/x.git"));
+        assert_eq!(remote.url().unwrap(), "https://example.com/x.git");
     }
 
     #[tokio::test]
@@ -615,6 +635,25 @@ mod tests {
         (app, webview)
     }
 
+    fn ipc_request(cmd: &str, args: serde_json::Value) -> InvokeRequest {
+        let url = if cfg!(any(windows, target_os = "android")) {
+            "http://tauri.localhost"
+        } else {
+            "tauri://localhost"
+        }
+        .parse()
+        .unwrap();
+        InvokeRequest {
+            cmd: cmd.into(),
+            callback: tauri::ipc::CallbackFn(0),
+            error: tauri::ipc::CallbackFn(1),
+            url,
+            body: tauri::ipc::InvokeBody::Json(args),
+            headers: Default::default(),
+            invoke_key: INVOKE_KEY.to_string(),
+        }
+    }
+
     /// Send `cmd` with `args` over IPC and return the deserialized
     /// `Ok` body. Panics on `Err` so the test fails with the libgit2 /
     /// serde message inline.
@@ -623,27 +662,22 @@ mod tests {
         cmd: &str,
         args: serde_json::Value,
     ) -> T {
-        let url = if cfg!(any(windows, target_os = "android")) {
-            "http://tauri.localhost"
-        } else {
-            "tauri://localhost"
-        }
-        .parse()
-        .unwrap();
-        let response = get_ipc_response(
-            webview,
-            InvokeRequest {
-                cmd: cmd.into(),
-                callback: tauri::ipc::CallbackFn(0),
-                error: tauri::ipc::CallbackFn(1),
-                url,
-                body: tauri::ipc::InvokeBody::Json(args),
-                headers: Default::default(),
-                invoke_key: INVOKE_KEY.to_string(),
-            },
-        )
-        .unwrap_or_else(|e| panic!("ipc call `{cmd}` failed: {e}"));
+        let response = get_ipc_response(webview, ipc_request(cmd, args))
+            .unwrap_or_else(|e| panic!("ipc call `{cmd}` failed: {e}"));
         response.deserialize().expect("response deserialises")
+    }
+
+    /// Send `cmd` over IPC and return the rendered error payload; panics on
+    /// `Ok` so a gate that stopped refusing shows up as a test failure.
+    fn invoke_ipc_err(
+        webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: serde_json::Value,
+    ) -> String {
+        match get_ipc_response(webview, ipc_request(cmd, args)) {
+            Ok(_) => panic!("ipc call `{cmd}` unexpectedly succeeded"),
+            Err(e) => e.to_string(),
+        }
     }
 
     #[test]
@@ -659,19 +693,21 @@ mod tests {
             .grant_workspace(std::path::Path::new(&ws.workspace_path))
             .unwrap();
 
-        // sync_init_repo
+        // sync_init_repo; the local fixture remote is wired at the git layer
+        // afterwards, since the IPC boundary refuses local-path URLs.
         let _: () = invoke_ipc(
             &webview,
             "sync_init_repo",
             serde_json::json!({
                 "workspacePath": ws.workspace_path,
                 "defaultBranch": null,
-                "remoteUrl": ws.remote_path,
+                "remoteUrl": null,
             }),
         );
         assert!(std::path::Path::new(&ws.workspace_path)
             .join(".git")
             .exists());
+        ws.set_local_origin();
 
         // sync_set_config
         let _: () = invoke_ipc(
@@ -772,13 +808,14 @@ mod tests {
         );
         let repo = git2::Repository::open(&ws.workspace_path).unwrap();
         let remote = repo.find_remote("origin").unwrap();
-        assert_eq!(remote.url(), Some("https://example.com/ipc-set.git"));
+        assert_eq!(remote.url().unwrap(), "https://example.com/ipc-set.git");
 
-        // sync_clone_remote into a fresh (granted) path.
+        // sync_clone_remote refuses the local fixture path at the IPC boundary
+        // (a successful clone is covered at the ops layer).
         let dest = ws.tmp.path().join("ipc-clone");
         std::fs::create_dir_all(&dest).unwrap();
         app.state::<GrantRegistry>().grant_workspace(&dest).unwrap();
-        let _: () = invoke_ipc(
+        let err = invoke_ipc_err(
             &webview,
             "sync_clone_remote",
             serde_json::json!({
@@ -787,7 +824,8 @@ mod tests {
                 "token": null,
             }),
         );
-        assert!(dest.join("note.md").exists());
+        assert!(err.contains("invalid-remote-url"), "{err}");
+        assert!(!dest.join(".git").exists());
 
         // sync_has_token, then sync_clear_token flips it back to false.
         let has: bool = invoke_ipc(

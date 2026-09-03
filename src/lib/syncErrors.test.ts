@@ -29,6 +29,9 @@ describe("describeSyncError", () => {
       /backend error: libgit2 boom/,
     );
     expect(describeSyncError({ kind: "backend" }, t)).toMatch(/backend error\./);
+    expect(describeSyncError({ kind: "invalid-remote-url" }, t)).toMatch(
+      /must start with https:\/\/ or ssh:\/\//,
+    );
   });
 
   it("handles unknown or non-object inputs", () => {

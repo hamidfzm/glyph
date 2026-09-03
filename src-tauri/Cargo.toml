@@ -80,8 +80,9 @@ tokio = { version = "1", features = ["net", "sync", "signal", "time"] }
 tempfile = "3"
 tauri-plugin-window-state = "2"
 # Statically-linked libgit2 so end users don't need a system Git install.
-# `vendored-openssl` keeps SSH/HTTPS support self-contained too.
-git2 = { version = "0.20", default-features = false, features = ["vendored-libgit2", "vendored-openssl"] }
+# `https` and `ssh` are the transports (git2 0.21 enables none by default);
+# `vendored-openssl` keeps them self-contained.
+git2 = { version = "0.21", default-features = false, features = ["https", "ssh", "vendored-libgit2", "vendored-openssl"] }
 # rustls (not native-tls) so release builds don't need OpenSSL system libs on
 # Linux. Default integrations include the panic handler we rely on.
 sentry = { version = "0.42", default-features = false, features = [
