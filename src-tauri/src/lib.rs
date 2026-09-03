@@ -206,7 +206,7 @@ pub fn run() {
         return;
     }
 
-    // An export and a serve both run in this process, so neither may be
+    // A subcommand does its work in this process, so it must not be
     // forwarded to a Glyph the user already has open.
     #[cfg(desktop)]
     let forward_to_running_instance = cli::forwards_to_running_instance(&args);

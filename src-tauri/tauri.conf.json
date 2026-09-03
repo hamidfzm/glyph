@@ -23,7 +23,9 @@
     "security": {
       "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https: http:; img-src 'self' asset: http://asset.localhost https://asset.localhost https: http: data: blob:; media-src 'self' asset: http://asset.localhost https://asset.localhost https: http:; script-src 'self' data: blob: 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'",
       "devCsp": "default-src 'self' http://localhost:1420; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420 https: http:; img-src 'self' asset: http://asset.localhost https://asset.localhost https: http: data: blob:; media-src 'self' asset: http://asset.localhost https://asset.localhost https: http:; script-src 'self' data: blob: 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'",
-      "dangerousDisableAssetCspModification": ["style-src"],
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ],
       "assetProtocol": {
         "enable": true,
         "scope": {
@@ -54,12 +56,24 @@
     },
     "fileAssociations": [
       {
-        "ext": ["md", "markdown", "mdown", "mkd", "mkdn", "mdx", "mmd", "mdtext", "mdtxt"],
+        "ext": [
+          "md",
+          "markdown",
+          "mdown",
+          "mkd",
+          "mkdn",
+          "mdx",
+          "mmd",
+          "mdtext",
+          "mdtxt"
+        ],
         "mimeType": "text/markdown",
         "description": "Markdown Document"
       },
       {
-        "ext": ["d2"],
+        "ext": [
+          "d2"
+        ],
         "mimeType": "text/plain",
         "description": "D2 Diagram"
       }
@@ -72,17 +86,6 @@
           "name": "file",
           "index": 1,
           "takesValue": true
-        },
-        {
-          "name": "export",
-          "takesValue": true,
-          "description": "Export the input and exit. Formats: pdf, docx, epub, html, site"
-        },
-        {
-          "name": "out",
-          "short": "o",
-          "takesValue": true,
-          "description": "Where to write the export. Defaults to the input path with the format's extension; required for site"
         }
       ]
     }

@@ -59,8 +59,6 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
                 .and_then(|a| a.value.as_str().map(str::to_string))
         };
         let plugin_path = plugin_arg("file");
-        let plugin_export = plugin_arg("export");
-        let plugin_out = plugin_arg("out");
         let env_args: Vec<String> = std::env::args().collect();
         // Session restore and the recent-files menu re-open paths from
         // earlier sessions; seed their grants from the persisted settings
@@ -89,13 +87,7 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
             }
         }
         let grant_registry = app.state::<grants::GrantRegistry>();
-        match cli::launch_plan(
-            plugin_path.as_deref(),
-            plugin_export.as_deref(),
-            plugin_out.as_deref(),
-            &env_args,
-            &cwd,
-        ) {
+        match cli::launch_plan(plugin_path.as_deref(), &env_args, &cwd) {
             Err(usage) => {
                 eprintln!("{usage}");
                 std::process::exit(2);

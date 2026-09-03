@@ -172,11 +172,11 @@ glyph ~/notes/       # open a folder as a workspace
 glyph --help         # usage, flags, and export formats
 
 # export a document (headless; exits when done)
-glyph README.md --export pdf              # writes README.pdf beside it
-glyph notes.md --export docx --out ~/out.docx
+glyph export README.md --format pdf              # writes README.pdf beside it
+glyph export notes.md --format docx --out ~/out.docx
 
 # export a workspace as a static website
-glyph ~/notes/ --export site --out ./site
+glyph export ~/notes/ --format site --out ./site
 ```
 
 ```bash
@@ -187,9 +187,9 @@ glyph serve ~/notes/ --host 0.0.0.0       # let the local network read it
 glyph serve ~/notes/ --out ./site         # keep the build instead of a temp dir
 ```
 
-`serve` renders the folder, prints the URL, and keeps running: every change to the folder rebuilds the site, and pages open in a browser reload themselves. It binds `127.0.0.1` unless `--host` says otherwise, so nothing leaves the machine by default, and it answers only to its own hostnames so a web page cannot reach it through your browser. Everything in the output directory is served, so point `--out` at a directory of its own; without one, the site lives in a temporary directory removed when you interrupt the command. Like the exports below, it renders through a webview, so a Linux server without a display needs `xvfb-run`.
+`serve` renders the folder, prints the URL, and keeps running: every change to the folder rebuilds the site, and pages open in a browser reload themselves. It binds `127.0.0.1` unless `--host` says otherwise, so nothing leaves the machine by default, and it answers only to its own hostnames so a web page cannot reach it through your browser. Everything in the output directory is served, so point `--out` at a directory of its own; without one, the site lives in a temporary directory removed when you interrupt the command. Like the exports above, it renders through a webview, so a Linux server without a display needs `xvfb-run`.
 
-`--export` accepts `pdf`, `docx`, `epub`, `html`, and `site`. Without `--out` a document export writes beside its input with the format's extension; `site` always needs one. Exports run without showing a window, print the path they wrote to stdout, and exit nonzero with a message on stderr if they fail, so they can drive CI publishing (on Linux runners, wrap the command in `xvfb-run`). A document export includes the table of contents when Settings > Print has it enabled.
+`--format` accepts `pdf`, `docx`, `epub`, `html`, and `site`. Without `--out` a document export writes beside its input with the format's extension; `site` always needs one. Exports run without showing a window, print the path they wrote to stdout, and exit nonzero with a message on stderr if they fail, so they can drive CI publishing (on Linux runners, wrap the command in `xvfb-run`). A document export includes the table of contents when Settings > Print has it enabled.
 
 The command is provided by the Homebrew cask (macOS), Chocolatey or Scoop (Windows), and the deb package or Homebrew formula (Linux). The macOS `.dmg` and Windows MSI install the app only; use a package manager for the terminal command.
 
@@ -208,7 +208,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" \
   -v "$PWD/docs:/docs:ro" -v "$PWD/out:/out" \
-  ghcr.io/hamidfzm/glyph /docs/README.md --export pdf --out /out/readme.pdf
+  ghcr.io/hamidfzm/glyph export /docs/README.md --format pdf --out /out/readme.pdf
 ```
 
 The image ships the same `.deb` the apt repository serves, plus the WebKitGTK stack and the X server a headless export needs, so no `xvfb-run` wrapper is required. It runs as uid 1000; passing `--user` keeps exported files owned by you when your uid differs. Images are published for `linux/amd64` and `linux/arm64` on every release, tagged `X.Y.Z`, `X.Y`, and `latest`.

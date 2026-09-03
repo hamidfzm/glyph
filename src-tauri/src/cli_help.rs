@@ -13,18 +13,17 @@ pub fn usage() -> String {
 Markdown viewer with document and website export.
 
 USAGE:
-  glyph [<path>]                              Open a file or folder
-  glyph <file> --export <format> [--out <p>]  Export a document and exit
-  glyph <folder> --export site --out <dir>    Export a workspace as a website
-  glyph serve <folder> [serve options]        Serve a workspace, rebuilding
-                                              it as the folder changes
+  glyph [<path>]                      Open a file or folder
+  glyph export <path> --format <f>    Render a document or workspace and exit
+  glyph serve <folder>                Serve a workspace, rebuilding it as the
+                                      folder changes
 
-OPTIONS:
-      --export <format>  Export and exit. Formats: {formats}
+EXPORT OPTIONS:
+      --format <format>  What to produce: {formats}
+                         Every format but `site` takes one markdown or
+                         notebook document; `site` takes a folder.
   -o, --out <path>       Where to write. Defaults to the input path with the
-                         format's extension; required for `site`.
-  -h, --help             Print this help and exit
-  -V, --version          Print the version and exit
+                         format's extension; `site` always needs one.
 
 SERVE OPTIONS:
       --host <host>      Address to bind. Defaults to {host}, reachable only
@@ -38,7 +37,16 @@ SERVE OPTIONS:
                          of its own: one that contains, or sits inside, the
                          folder being served is refused.
 
-An export writes nothing to stdout but the path it produced, and exits nonzero
+OPTIONS:
+  -h, --help             Print this help and exit
+  -V, --version          Print the version and exit
+
+EXAMPLES:
+  glyph export notes.md --format pdf
+  glyph export ~/notes --format site --out ./site
+  glyph serve ~/notes --port 8080
+
+`export` writes nothing to stdout but the path it produced, and exits nonzero
 with a message on stderr if it fails.
 
 `serve` prints its URL once the first build lands, then keeps running until it
@@ -70,7 +78,7 @@ mod tests {
                 "usage text is missing the '{name}' format"
             );
         }
-        for flag in ["--export", "--out", "-o", "--help", "-h", "--version", "-V"] {
+        for flag in ["--format", "--out", "-o", "--help", "-h", "--version", "-V"] {
             assert!(text.contains(flag), "usage text is missing '{flag}'");
         }
         assert!(text.contains(env!("CARGO_PKG_VERSION")));
@@ -85,6 +93,12 @@ mod tests {
             text.contains("glyph serve <folder>"),
             "serve is undocumented"
         );
+        assert!(
+            text.contains("glyph export <path>"),
+            "export is undocumented"
+        );
+        // The old flag spelling is gone, so the help must not teach it.
+        assert!(!text.contains("--export"), "the help still shows --export");
         for flag in ["--host", "--port"] {
             assert!(text.contains(flag), "usage text is missing '{flag}'");
         }

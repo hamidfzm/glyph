@@ -76,4 +76,4 @@ WORKDIR /docs
 # works here without a second CLI to learn. The default renders the folder
 # mounted at /docs into /out.
 ENTRYPOINT ["/usr/local/bin/glyph-entrypoint"]
-CMD ["/docs", "--export", "site", "--out", "/out"]
+CMD ["export", "/docs", "--format", "site", "--out", "/out"]
