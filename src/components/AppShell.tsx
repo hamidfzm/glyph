@@ -86,7 +86,7 @@ export function AppShell() {
   } = tabs;
 
   // Headless CLI export: runs and exits when the process was launched with
-  // --export, a no-op otherwise.
+  // `glyph export`, a no-op otherwise.
   useCliExport({ entries: tocEntries, content: displayContent });
   // The other headless launch: renders repeatedly and never exits.
   useCliServe();

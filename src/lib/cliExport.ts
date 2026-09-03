@@ -4,7 +4,7 @@ import type { ExportFormat } from "@/lib/export/writeExport";
 /** The export formats the CLI accepts: the document ones plus the website. */
 export type CliExportFormat = ExportFormat | "site";
 
-/** A `glyph <path> --export <format> [--out <path>]` launch, as stashed by Rust. */
+/** A `glyph export <path> --format <format> [--out <path>]` launch, as stashed by Rust. */
 export interface CliExportRequest {
   input: string;
   format: CliExportFormat;

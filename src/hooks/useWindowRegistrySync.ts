@@ -35,7 +35,7 @@ export function useWindowRegistrySync(
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `paths` is derived from `key`, which is the real dependency
   useEffect(() => {
-    // A headless export drives a throwaway window in its own process (--export
+    // A headless export drives a throwaway window in its own process (a
     // skips single-instance forwarding), so its registry is private and there
     // is nothing worth reporting into it.
     if (initializing || isCliExportProcess()) return;

@@ -13,7 +13,7 @@ interface CliDocumentExportOptions {
 }
 
 /**
- * Run a `glyph <file> --export <format>` request against the document the
+ * Run a `glyph export <file> --format <format>` request against the document the
  * hidden window has open. Goes through the same `exportDocument` the menu uses,
  * so CLI output matches interactive output: inlined code colors, rasterized
  * math, and light-theme vector diagrams all come from the live DOM.

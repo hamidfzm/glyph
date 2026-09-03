@@ -36,7 +36,7 @@ the missing remainder is rejected.
 Grants are minted only from backend-observed events, never from a bare
 webview-supplied path:
 
-- CLI launch arguments (folder, file, `--export` format and `--out` output path)
+- CLI launch arguments (folder, file, the `export` subcommand's `--format` and `--out`, the `serve` subcommand's `--host` and `--port`)
 - Drag-and-drop onto a window (the OS event carries the path)
 - macOS `RunEvent::Opened` and second-instance launches
 - Native pick dialogs run in Rust (`src-tauri/src/commands/pick.rs`): Open

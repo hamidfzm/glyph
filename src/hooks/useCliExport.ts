@@ -21,7 +21,7 @@ interface UseCliExportOptions {
 }
 
 /**
- * Runs the headless CLI export (`glyph <path> --export <format>`). When the
+ * Runs the headless CLI export (`glyph export <path> --format <format>`). When the
  * process was launched with an export request, the window stays hidden (see
  * useWindowReveal), the document or workspace renders straight to disk, and the
  * process exits: 0 on success, 1 with a stderr message on failure. On
