@@ -56,6 +56,21 @@ export function useDocumentSave({
         getWorkspaceRoot() ?? undefined,
       );
       if (!target) return false;
+      // `openFile` activates the existing tab when a path is already open, so
+      // Save As is the only way two tabs could land on one file. Refuse before
+      // writing: the open tab may hold unsaved edits, and once the write has
+      // happened there is no way to fold the two buffers into one without
+      // discarding somebody's work (#721).
+      const alreadyOpen = stateRef.current.tabs.some(
+        (tab) => tab.kind === "file" && tab.file.path === target,
+      );
+      if (alreadyOpen) {
+        onWorkspaceNoticeRef.current(
+          { key: "notice.saveTargetOpen", values: { name: basename(target) } },
+          { persistent: true },
+        );
+        return false;
+      }
       try {
         await invoke("write_file", { path: target, content });
       } catch (err) {
@@ -90,7 +105,7 @@ export function useDocumentSave({
       }
       return true;
     },
-    [addToRecent, getWorkspaceRoot, markSelfSave, setState, t],
+    [addToRecent, getWorkspaceRoot, markSelfSave, setState, stateRef, t],
   );
 
   // Persist one dirty editable tab. Safe to call for any tab id: skips graph,
