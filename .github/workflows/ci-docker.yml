@@ -1,58 +1,26 @@
 name: Docker
 
-# Path-filtered rather than part of the main CI fan-out: the image pulls a
-# ~150 MB package and installs the whole WebKitGTK stack, which is not worth
-# paying for on pull requests that cannot affect it.
+# Called by ci.yml, so the contexts read "Docker / Build" and "Docker / Smoke"
+# alongside "Build / ubuntu-22.04" and "Smoke / WebKit", and both can be
+# required on main.
+#
+# This used to be a standalone, path-filtered workflow that built against the
+# newest published release. That made it unrequirable (a path-filtered check
+# never reports on most pull requests, so requiring it blocks every merge) and
+# it tested the wrong binary: a change to the CLI could not land in the app and
+# in the image's default command at the same time, because the released binary
+# did not understand the new command yet. It now installs the package the Build
+# workflow just produced, so it tests this checkout.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "Dockerfile"
-      - ".dockerignore"
-      - ".github/workflows/ci-docker.yml"
-  pull_request:
-    paths:
-      - "Dockerfile"
-      - ".dockerignore"
-      - ".github/workflows/ci-docker.yml"
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
+  workflow_call:
 
 jobs:
   build:
-    name: Build and smoke-test
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-
-      # The Dockerfile installs a published release asset, and a pull request
-      # has no release of its own, so the check builds against the newest one.
-      - name: Resolve the latest published release
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-
-      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
-
-      # Native amd64 only, and loaded into the local daemon instead of pushed:
-      # the release workflow owns the multi-arch build and the registry.
-      - name: Build the image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: .
-          build-args: GLYPH_VERSION=${{ steps.release.outputs.version }}
-          tags: glyph:ci
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - uses: ./.github/actions/docker-image
 
       # A ceiling, not a target. WebKitGTK and its Mesa/LLVM stack put the
       # floor around 600 MB, so this only catches an accidental doubling, such
@@ -66,6 +34,19 @@ jobs:
             echo "::error::image is $((BYTES / 1000 / 1000)) MB, over the $((CEILING / 1000 / 1000)) MB ceiling"
             exit 1
           fi
+
+  smoke:
+    name: Smoke
+    # Split from the build so a broken image and a broken export are different
+    # red checks. The rebuild below is a full cache hit from the job above, so
+    # the split costs seconds rather than a second build.
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: ./.github/actions/docker-image
+        with:
+          write-cache: "false"
 
       - name: The default command exports the mounted folder as a website
         run: |

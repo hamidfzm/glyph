@@ -5,15 +5,28 @@
 # WebKitGTK stack the `.deb` pulls in plus an X server to render into. That is
 # the same shape as the Linux CI and release smoke tests, which run the CLI
 # against a virtual display.
-FROM debian:bookworm-slim
 
+# The Debian package to install, as a stage of its own so it can be swapped.
+#
+# A release build downloads the published package, which is the point of the
+# image: it then contains byte-for-byte what the apt repository serves for the
+# same version. CI instead points this stage at the package the build job just
+# produced, with `--build-context package=<dir holding glyph.deb>`, so the
+# check exercises the pull request's own binary. Without that, the image could
+# only ever be tested against whatever release happened to be newest, and a
+# CLI change could not land in the app and here in the same commit.
+FROM scratch AS package
 # The release to install, without the leading "v" (e.g. 0.22.1). Pinned at
 # build time so an image always maps to one published release, never to
-# whatever "latest" happens to mean when it is rebuilt.
+# whatever "latest" happens to mean when it is rebuilt. Unused when this stage
+# is overridden, since then the package is already on disk.
 ARG GLYPH_VERSION
 # Set per platform by buildx. `amd64` / `arm64` is exactly how the release
 # names its Debian packages, so one Dockerfile covers both architectures.
 ARG TARGETARCH
+ADD https://github.com/hamidfzm/glyph/releases/download/v${GLYPH_VERSION}/Glyph_${GLYPH_VERSION}_${TARGETARCH}.deb glyph.deb
+
+FROM debian:bookworm-slim
 
 # WebKit's compositing path has no GPU under Xvfb and crashes without this.
 # The release smoke tests set the same variable on every Linux distro.
@@ -23,9 +36,7 @@ ENV WEBKIT_DISABLE_COMPOSITING_MODE=1
 # bind-mounted output directory will run it.
 ENV HOME=/tmp
 
-# The published Debian package, not a source build: the image then contains
-# byte-for-byte what the apt repository serves for the same version.
-ADD https://github.com/hamidfzm/glyph/releases/download/v${GLYPH_VERSION}/Glyph_${GLYPH_VERSION}_${TARGETARCH}.deb /tmp/glyph.deb
+COPY --from=package glyph.deb /tmp/glyph.deb
 
 # Installing the .deb through apt (rather than dpkg) resolves its own GTK and
 # WebKitGTK dependencies; only the X server is extra.
@@ -75,10 +86,5 @@ WORKDIR /docs
 # The container's arguments are Glyph's arguments, so every documented
 # subcommand works here without a second CLI to learn. The default renders the
 # folder mounted at /docs into /out.
-#
-# This spelling tracks the *released* CLI, not this checkout's: the image
-# installs a published .deb, so the default command may only use syntax that
-# release already has. The Docker CI job is what enforces that, by building
-# against the latest release and running this command.
 ENTRYPOINT ["/usr/local/bin/glyph-entrypoint"]
 CMD ["export", "/docs", "--format", "site", "--out", "/out"]

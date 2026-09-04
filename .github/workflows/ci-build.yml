@@ -29,7 +29,10 @@ jobs:
             # Bundle analysis is the codecov Vite plugin, which runs during
             # the frontend build; it does not need installer packaging.
             args_full: ""
-            args_pr: "--no-bundle"
+            # The Docker check installs this leg's .deb, so a pull request has
+            # to produce one. Only the .deb: AppImage bundling downloads
+            # linuxdeploy and is minutes of work nothing here consumes.
+            args_pr: "--bundles deb"
             bundle_analysis: true
           # No include entry for ubuntu-22.04-arm: include is processed
           # AFTER exclude, so an entry here would resurrect the excluded
@@ -68,6 +71,16 @@ jobs:
       - name: Check bundle budgets
         if: matrix.platform == 'ubuntu-22.04'
         run: node scripts/check-bundle-size.mjs
+      # Handed to the Docker jobs, which install it instead of a published
+      # release so the image is tested against this checkout.
+      - name: Upload the Debian package
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: glyph-deb
+          path: src-tauri/target/release/bundle/deb/*.deb
+          retention-days: 1
+          if-no-files-found: error
       # Boots the real webview under the production CSP and exercises the
       # grant-gated CLI export end to end; unit tests cannot enforce CSP.
       - name: Headless export smoke test
