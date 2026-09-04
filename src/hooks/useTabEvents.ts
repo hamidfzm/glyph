@@ -79,7 +79,20 @@ export function useTabEvents({
               // External reload invalidates our edit history — replaying old
               // diffs against changed content is unsafe.
               forgetHistory(t.id);
-              return { ...t, file: { ...t.file, content, metadata } };
+              // Edit/split panes render `editContent ?? content`, so a seeded
+              // buffer would shadow the reload. Only one tab can hold a path
+              // (Save As refuses a collision, rename and move route through
+              // `unique_path`), so the dirty check above covers this tab too and
+              // refreshing its buffer discards no user work.
+              return {
+                ...t,
+                file: {
+                  ...t.file,
+                  content,
+                  metadata,
+                  ...(t.file.editContent != null ? { editContent: content } : {}),
+                },
+              };
             }),
           }));
         } catch {
