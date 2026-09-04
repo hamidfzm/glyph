@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickSave } from "@/lib/pickers";
+import { EDITOR_MODE } from "@/lib/settings";
 import { expectConsole } from "@/test/consoleGuard";
 import { defaultOptions, type Invoker, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
@@ -181,6 +182,73 @@ describe("useTabs in-memory documents", () => {
     );
     const tab = result.current.tabs[0];
     if (tab.kind === "file") expect(tab.file.virtual).toBe(true);
+  });
+
+  it("saveDocument refuses a Save As onto a path another tab already holds", async () => {
+    // Two tabs on one path is a state nothing else can produce: openFile
+    // activates the existing tab instead of opening a second one. Refusing
+    // before the write keeps the open tab's unsaved edits out of harm's way
+    // (#721).
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => "ON DISK",
+        write_file: writeFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+    vi.mocked(pickSave).mockResolvedValue("/p/a.md");
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ onWorkspaceNotice, autoSave: false })),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    // Tab 1 holds /p/a.md with unsaved edits of its own.
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    const openId = result.current.tabs[0].id;
+    act(() => {
+      result.current.setTabMode(openId, EDITOR_MODE.edit);
+      result.current.updateEditContent(openId, "THEIR UNSAVED WORK");
+    });
+
+    // Tab 2 is an untitled buffer saved onto that same path.
+    act(() => {
+      result.current.newDocument();
+    });
+    const virtualId = result.current.tabs[1].id;
+    act(() => {
+      result.current.updateEditContent(virtualId, "MY DRAFT");
+    });
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(virtualId);
+    });
+
+    expect(ok).toBe(false);
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "notice.saveTargetOpen", values: { name: "a.md" } }),
+      { persistent: true },
+    );
+    // Still two tabs, and neither one lost anything: the draft stays virtual and
+    // unsaved, the open tab keeps its own buffer and its path.
+    expect(result.current.tabs).toHaveLength(2);
+    const open = result.current.tabs[0];
+    const draft = result.current.tabs[1];
+    if (open.kind === "file") {
+      expect(open.file.path).toBe("/p/a.md");
+      expect(open.file.editContent).toBe("THEIR UNSAVED WORK");
+      expect(open.file.dirty).toBe(true);
+    }
+    if (draft.kind === "file") {
+      expect(draft.file.virtual).toBe(true);
+      expect(draft.file.dirty).toBe(true);
+      expect(draft.file.editContent).toBe("MY DRAFT");
+      expect(draft.file.path).toMatch(/^Untitled-\d+$/);
+    }
   });
 
   it("saveDocument adopts the path outside the workspace even when metadata is declined", async () => {

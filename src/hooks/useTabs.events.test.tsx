@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { EDITOR_MODE } from "@/lib/settings";
 import {
   captureListener,
   defaultOptions,
@@ -151,6 +152,65 @@ describe("useTabs file-changed events", () => {
     const fileTab = result.current.tabs.find((t) => t.kind === "file");
     expect(fileTab?.kind === "file" ? fileTab.file.content : null).toBe("v2");
     expect(result.current.tabs.some((t) => t.kind === "graph")).toBe(true);
+  });
+
+  it("refreshes the edit buffer of a clean edit-mode tab so the reload renders", async () => {
+    let body = "v1";
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ read_file: async () => body }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    // Entering edit mode seeds editContent from content; the tab stays clean.
+    act(() => {
+      result.current.setTabMode(result.current.tabs[0].id, EDITOR_MODE.edit);
+    });
+
+    body = "v2";
+    await act(async () => {
+      fileChanged.handler?.({ payload: "/p/a.md" });
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    const tab = result.current.tabs[0];
+    expect(tab.kind === "file" ? tab.file.content : null).toBe("v2");
+    // TabContent renders `editContent ?? content`, so a stale buffer would keep
+    // showing v1 in both the editor and the split preview.
+    expect(tab.kind === "file" ? tab.file.editContent : null).toBe("v2");
+  });
+
+  it("keeps the unsaved buffer of a dirty edit-mode tab", async () => {
+    let body = "v1";
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ read_file: async () => body }) as typeof invoke,
+    );
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoReload: true, autoSave: false })),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    const tabId = result.current.tabs[0].id;
+    act(() => {
+      result.current.setTabMode(tabId, EDITOR_MODE.edit);
+      result.current.updateEditContent(tabId, "my unsaved work");
+    });
+
+    body = "v2";
+    await act(async () => {
+      fileChanged.handler?.({ payload: "/p/a.md" });
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    const tab = result.current.tabs[0];
+    expect(tab.kind === "file" ? tab.file.editContent : null).toBe("my unsaved work");
+    expect(tab.kind === "file" ? tab.file.content : null).toBe("v1");
   });
 });
 
