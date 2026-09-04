@@ -1,0 +1,41 @@
+name: Build the Glyph container image
+description: >-
+  Build Dockerfile against the Debian package produced by the Build workflow
+  and load it into the local daemon as glyph:ci. Shared by the Docker build and
+  smoke jobs; the second call is a cache hit, so it costs seconds.
+inputs:
+  write-cache:
+    description: >-
+      Export the layer cache. Only the first caller needs to: a second export
+      of the same layers is a minute of upload for no benefit.
+    default: "true"
+runs:
+  using: composite
+  steps:
+    # The package the ubuntu-22.04 build leg just bundled, not a published
+    # release: this is what makes the check test the pull request rather than
+    # whatever release happens to be newest.
+    - name: Download the Debian package
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+      with:
+        name: glyph-deb
+        path: ${{ runner.temp }}/package
+    # The Dockerfile's package stage expects exactly `glyph.deb`; the bundle
+    # names it after the version and architecture.
+    - name: Normalise the package name
+      shell: bash
+      run: mv "$RUNNER_TEMP"/package/*.deb "$RUNNER_TEMP/package/glyph.deb"
+
+    - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+    # Native amd64 only, and loaded into the local daemon instead of pushed:
+    # the release workflow owns the multi-arch build and the registry.
+    - name: Build the image
+      uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+      with:
+        context: .
+        build-contexts: package=${{ runner.temp }}/package
+        tags: glyph:ci
+        load: true
+        cache-from: type=gha
+        cache-to: ${{ inputs.write-cache == 'true' && 'type=gha,mode=max' || '' }}
