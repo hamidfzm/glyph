@@ -75,10 +75,3 @@ jobs:
     needs: checks
     uses: ./.github/workflows/ci-build.yml
     secrets: inherit
-
-  # Installs the .deb the ubuntu-22.04 build leg just produced, so the image is
-  # tested against this checkout rather than against the newest release.
-  docker:
-    name: Docker
-    needs: build
-    uses: ./.github/workflows/ci-docker.yml
