@@ -72,15 +72,13 @@ RUN chmod +x /usr/local/bin/glyph-entrypoint
 USER glyph
 WORKDIR /docs
 
-# The container's arguments are Glyph's arguments, so every documented flag
-# works here without a second CLI to learn. The default renders the folder
-# mounted at /docs into /out.
+# The container's arguments are Glyph's arguments, so every documented
+# subcommand works here without a second CLI to learn. The default renders the
+# folder mounted at /docs into /out.
 #
 # This spelling tracks the *released* CLI, not this checkout's: the image
 # installs a published .deb, so the default command may only use syntax that
-# release already has. `glyph export <path> --format site` replaces it, and
-# flipping it here has to wait for the release that carries the subcommand.
-# The Docker CI job is what enforces that, by building against the latest
-# release and running this command.
+# release already has. The Docker CI job is what enforces that, by building
+# against the latest release and running this command.
 ENTRYPOINT ["/usr/local/bin/glyph-entrypoint"]
-CMD ["/docs", "--export", "site", "--out", "/out"]
+CMD ["export", "/docs", "--format", "site", "--out", "/out"]
