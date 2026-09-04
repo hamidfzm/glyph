@@ -2,7 +2,7 @@ import { openSearchPanel, replaceAll, SearchQuery, setSearchQuery } from "@codem
 import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildEditorExtensions } from "./editorExtensions";
+import { buildEditorExtensions, externalContentSync } from "./editorExtensions";
 
 const LABELS = {
   bold: "Bold",
@@ -58,6 +58,18 @@ describe("buildEditorExtensions", () => {
     const { view, onDocChange } = mount("start");
     view.dispatch({ changes: { from: 5, insert: "!" } });
     expect(onDocChange).toHaveBeenCalledWith("start!");
+  });
+
+  it("leaves the host alone for an external content sync", () => {
+    // The host just handed this text over; echoing it back would have the two
+    // sides overwrite each other until React aborts the update loop.
+    const { view, onDocChange } = mount("start");
+    view.dispatch({
+      changes: { from: 0, to: 5, insert: "reloaded" },
+      annotations: externalContentSync.of(true),
+    });
+    expect(view.state.doc.toString()).toBe("reloaded");
+    expect(onDocChange).not.toHaveBeenCalled();
   });
 
   it("leaves the host alone for a selection-only transaction", () => {

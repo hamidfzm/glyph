@@ -7,7 +7,7 @@ import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { usePlatform } from "@/hooks/usePlatform";
 import { useSettings } from "@/hooks/useSettings";
 import type { EditorMenuLabels } from "@/lib/editorContextMenu";
-import { buildEditorExtensions } from "@/lib/editorExtensions";
+import { buildEditorExtensions, externalContentSync } from "@/lib/editorExtensions";
 import type { FormatBindings } from "@/lib/editorWrapSelection";
 import { resolveBindings } from "@/lib/keybindings";
 import { buildSpellcheck } from "@/lib/spellcheck/spellcheckExtension";
@@ -180,7 +180,11 @@ export function MarkdownEditor({
     };
   }, [keymapPreset]);
 
-  // Sync content from outside (e.g., file reload) without losing cursor
+  // Sync content from outside (e.g., file reload) without losing cursor. The
+  // annotation keeps the update listener from reporting the text straight back
+  // as an edit: the caller already holds it, and echoing it lets a divergent
+  // reading of the document (an IME or autocorrect flush landing mid-dispatch)
+  // bounce between the editor and React state until React aborts the loop.
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
@@ -188,6 +192,7 @@ export function MarkdownEditor({
     if (currentDoc !== content) {
       view.dispatch({
         changes: { from: 0, to: currentDoc.length, insert: content },
+        annotations: externalContentSync.of(true),
       });
     }
   }, [content]);

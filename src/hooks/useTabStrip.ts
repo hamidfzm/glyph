@@ -82,14 +82,22 @@ export function useTabStrip() {
     [moveTab],
   );
 
+  // A mutator that hands back the file it was given means nothing changed, so
+  // the state object is returned untouched and React bails out of the render.
+  // That keeps a no-op edit from churning identities (and rescheduling
+  // autosave) on every keystroke round-trip through the editor.
   const updateActiveFile = useCallback((id: string, mutator: (f: FileState) => FileState) => {
-    setState((prev) => ({
-      ...prev,
-      tabs: prev.tabs.map((t) => {
+    setState((prev) => {
+      let changed = false;
+      const tabs = prev.tabs.map((t) => {
         if (t.id !== id || t.kind === "graph") return t;
-        return { ...t, file: mutator(t.file) };
-      }),
-    }));
+        const file = mutator(t.file);
+        if (file === t.file) return t;
+        changed = true;
+        return { ...t, file };
+      });
+      return changed ? { ...prev, tabs } : prev;
+    });
   }, []);
 
   const setTabMode = useCallback(
@@ -107,15 +115,18 @@ export function useTabStrip() {
 
   const updateEditContent = useCallback(
     (id: string, editContent: string) => {
-      updateActiveFile(id, (f) => ({
-        ...f,
-        editContent,
-        // A virtual buffer has no disk copy, so its edits are its content;
-        // without this the view/preview pane would render an empty document.
-        ...(f.virtual ? { content: editContent } : {}),
-        dirty: true,
-        revision: f.revision + 1,
-      }));
+      updateActiveFile(id, (f) => {
+        if (f.editContent === editContent) return f;
+        return {
+          ...f,
+          editContent,
+          // A virtual buffer has no disk copy, so its edits are its content;
+          // without this the view/preview pane would render an empty document.
+          ...(f.virtual ? { content: editContent } : {}),
+          dirty: true,
+          revision: f.revision + 1,
+        };
+      });
     },
     [updateActiveFile],
   );

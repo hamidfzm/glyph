@@ -145,6 +145,33 @@ describe("useTabs tab strip", () => {
       expect(result.current.tabs[0].file.editContent).toBe("TYPED");
     }
   });
+  it("updateEditContent ignores a buffer identical to the one already held", async () => {
+    // The editor echoes its document back on every change, including ones it was
+    // just handed. Re-storing the same text would bump the revision (and so
+    // reschedule autosave) and hand React a fresh state object each round.
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    act(() => {
+      result.current.setTabMode(tabId, "edit");
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "TYPED");
+    });
+    const afterEdit = result.current.tabs[0];
+
+    act(() => {
+      result.current.updateEditContent(tabId, "TYPED");
+    });
+
+    expect(result.current.tabs[0]).toBe(afterEdit);
+  });
+
   it("saveScrollPosition + setActiveTab persists scrollTop to the leaving tab", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
