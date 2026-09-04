@@ -10,7 +10,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { search, searchKeymap, searchPanelOpen } from "@codemirror/search";
-import type { Compartment, Extension } from "@codemirror/state";
+import { Annotation, type Compartment, type Extension } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import type { RefObject } from "react";
 import { type EditorMenuLabels, editorContextMenu } from "@/lib/editorContextMenu";
@@ -25,6 +25,14 @@ import {
 } from "@/lib/editorWrapSelection";
 import type { EditorKeymap } from "@/lib/settings";
 import { wikilinkCompletionSource } from "@/lib/wikilinkCompletion";
+
+/**
+ * Marks a transaction that pushes externally-owned text into the editor (a file
+ * reload, or the initial buffer). Such a change is already what the caller
+ * holds, so reporting it back through `onDocChange` would have the editor and
+ * React state overwrite each other until React aborts the update loop.
+ */
+export const externalContentSync = Annotation.define<boolean>();
 
 interface EditorExtensionOptions {
   keymapPreset: EditorKeymap;
@@ -117,7 +125,8 @@ export function buildEditorExtensions({
     editorContextMenu(() => formatLabelsRef.current),
     EditorView.lineWrapping,
     EditorView.updateListener.of((update) => {
-      if (update.docChanged) {
+      const external = update.transactions.some((tr) => tr.annotation(externalContentSync));
+      if (update.docChanged && !external) {
         onDocChange(update.state.doc.toString());
       }
       if (searchPanelOpen(update.startState) && !searchPanelOpen(update.state)) {
