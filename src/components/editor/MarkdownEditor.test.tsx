@@ -105,6 +105,26 @@ describe("MarkdownEditor spell-check wiring", () => {
   });
 });
 
+describe("MarkdownEditor external content sync", () => {
+  const doc = (container: HTMLElement) => container.querySelector(".cm-content")?.textContent;
+
+  it("pushes a new content prop into the document without reporting it back", () => {
+    // The prop is the caller's own text, so echoing it through onChange makes
+    // the editor and the caller's state chase each other: React counts the
+    // nested updates and throws "Maximum update depth exceeded".
+    const onChange = vi.fn();
+    const tree = (content: string) => <MarkdownEditor content={content} onChange={onChange} />;
+    const { container, rerender } = render(tree("first"), {
+      wrapper: wrapper(settingsWith(false)),
+    });
+
+    act(() => rerender(tree("second")));
+
+    expect(doc(container)).toBe("second");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
 describe("MarkdownEditor find and replace", () => {
   afterEach(async () => {
     await act(async () => {
