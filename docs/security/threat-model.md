@@ -78,6 +78,7 @@ and files: <path>`), which never echoes the grant list.
 | Command | Check |
 | ------- | ----- |
 | `read_file`, `get_file_metadata`, `read_directory`, `list_markdown_files`, `scan_wikilinks`, `scan_metadata` | readable |
+| `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_neighbors`, `vault_query`, `vault_paths_with_tag`, `vault_canvas` | root readable (the second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content) |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable |
 | `copy_file` | source readable and destination writable |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |
@@ -88,6 +89,10 @@ and files: <path>`), which never echoes the grant list.
 | `workspace_get_last_file`, `workspace_set_last_file` | granted workspace |
 | `sync_*` | granted workspace (`sync_clone_remote` clones into the workspace path itself); `sync_init_repo`, `sync_clone_remote`, and `sync_set_origin` accept only `https://` without credentials, `ssh://`, or scp-like `user@host:path` remotes, since libgit2 would also take a local path or `file://` (pulling any local repository into a granted workspace) and cleartext `http://`/`git://` |
 | `install_plugin` | consumes the pending picked folder; no path argument |
+
+`vault_forget` takes no readable check: it only drops an index the process
+already built, so the worst a renderer can do with it is make the next
+snapshot rebuild from disk.
 
 `workspace_resolve` is deliberately not gated: it is the pre-open probe that
 inspects a folder before it becomes a workspace (the grant is minted when the

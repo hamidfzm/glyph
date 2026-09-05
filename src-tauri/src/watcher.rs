@@ -4,14 +4,15 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 use crate::grants::GrantRegistry;
+use crate::vault::commands::VaultStore;
 
 pub struct FileWatcherState(pub Arc<Mutex<HashMap<String, RecommendedWatcher>>>);
 
-/// A directory watch should fire when a markdown file or a sub-directory is
+/// A directory watch should fire when an indexed file or a sub-directory is
 /// added, removed, renamed, or modified. Everything else (e.g. attribute-only
-/// changes, non-markdown sibling files) is filtered out so the frontend isn't
-/// flooded with refreshes. Extracted as a pure helper so we can test the
-/// filter without booting a Tauri app.
+/// changes, sibling attachments) is filtered out so the frontend isn't flooded
+/// with refreshes. Extracted as a pure helper so we can test the filter
+/// without booting a Tauri app.
 pub fn is_relevant_directory_change(event: &Event) -> bool {
     matches!(
         event.kind,
@@ -19,7 +20,7 @@ pub fn is_relevant_directory_change(event: &Event) -> bool {
     ) && event
         .paths
         .iter()
-        .any(|p| crate::is_markdown_file(p) || p.is_dir())
+        .any(|p| crate::is_markdown_file(p) || crate::is_canvas_file(p) || p.is_dir())
 }
 
 /// A file watch should fire when the watched file's content changes. Editors
@@ -36,11 +37,11 @@ pub fn is_relevant_file_change(event: &Event) -> bool {
 fn forward_watch_event(
     res: Result<Event, notify::Error>,
     is_relevant: fn(&Event) -> bool,
-    emit: impl FnOnce(),
+    emit: impl FnOnce(&Event),
 ) {
     if let Ok(event) = res {
         if is_relevant(&event) {
-            emit();
+            emit(&event);
         }
     }
 }
@@ -81,7 +82,7 @@ pub fn watch_file<R: Runtime>(
     let app_handle = app.clone();
     let watched_path = path.clone();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-        forward_watch_event(res, is_relevant_file_change, || {
+        forward_watch_event(res, is_relevant_file_change, |_| {
             let _ = app_handle.emit("file-changed", &watched_path);
         });
     })
@@ -120,7 +121,12 @@ pub fn watch_directory<R: Runtime>(
     let app_handle = app.clone();
     let watched_path = path.clone();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-        forward_watch_event(res, is_relevant_directory_change, || {
+        forward_watch_event(res, is_relevant_directory_change, |event| {
+            // Re-index before the frontend hears about the change, so the
+            // snapshot it asks for next is already current.
+            if let Some(store) = app_handle.try_state::<VaultStore>() {
+                crate::vault::commands::apply_changes(&store, &watched_path, &event.paths);
+            }
             let _ = app_handle.emit("directory-changed", &watched_path);
         });
     })
@@ -252,7 +258,7 @@ mod tests {
                 vec![PathBuf::from("/watch/note.md")],
             )),
             is_relevant_file_change,
-            || fired = true,
+            |_| fired = true,
         );
         assert!(fired);
     }
@@ -266,7 +272,7 @@ mod tests {
                 vec![PathBuf::from("/watch/note.md")],
             )),
             is_relevant_file_change,
-            || fired = true,
+            |_| fired = true,
         );
         assert!(!fired);
     }
@@ -277,7 +283,7 @@ mod tests {
         forward_watch_event(
             Err(notify::Error::generic("backend failure")),
             is_relevant_file_change,
-            || fired = true,
+            |_| fired = true,
         );
         assert!(!fired);
     }
@@ -305,6 +311,16 @@ mod tests {
         let e = event(
             EventKind::Modify(ModifyKind::Any),
             vec![PathBuf::from("/p/notes.md")],
+        );
+        assert!(is_relevant_directory_change(&e));
+    }
+
+    #[test]
+    fn relevant_when_a_canvas_board_changes() {
+        // Boards are in the index too, so an edit to one has to reach it.
+        let e = event(
+            EventKind::Modify(ModifyKind::Any),
+            vec![PathBuf::from("/p/board.canvas")],
         );
         assert!(is_relevant_directory_change(&e));
     }
