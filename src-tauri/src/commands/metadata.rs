@@ -3,12 +3,7 @@ use std::path::Path;
 
 use super::walk::{scan_files, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
 use crate::grants::GrantRegistry;
-use crate::vault::inline_tags;
-
-// Note content is untrusted, and the index ships every block to the frontend
-// for YAML parsing, so the block is bounded here rather than at the far end.
-// A file whose frontmatter exceeds the cap is indexed for its inline tags only.
-const SCAN_MAX_FRONTMATTER_BYTES: usize = 8 * 1024;
+use crate::vault::{inline_tags, split_frontmatter};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,7 +48,10 @@ fn scan_metadata_capped(
         max_files,
         max_depth,
         |p, content| {
-            let (frontmatter, body_start) = split_frontmatter(content);
+            // Rebuilt with newline endings so the frontend parser sees one
+            // shape regardless of the file's own line endings.
+            let (inner, body_start) = split_frontmatter(content);
+            let frontmatter = inner.map(|inner| format!("---\n{inner}---\n"));
             let tags = inline_tags(content.lines().skip(body_start));
             if frontmatter.is_none() && tags.is_empty() {
                 return;
@@ -67,30 +65,6 @@ fn scan_metadata_capped(
     )?;
 
     Ok(MetadataScan { files, status })
-}
-
-/// The leading `---` fenced block (rebuilt with `\n` endings so the frontend
-/// parser sees one shape regardless of the file's line endings) plus the line
-/// index the body starts at. The block is `None` unless the file opens with
-/// the fence and closes it.
-fn split_frontmatter(content: &str) -> (Option<String>, usize) {
-    let mut lines = content.lines();
-    if lines.next().map(str::trim_end) != Some("---") {
-        return (None, 0);
-    }
-    let mut block = String::from("---\n");
-    for (idx, line) in lines.enumerate() {
-        if line.trim_end() == "---" {
-            block.push_str("---\n");
-            return (Some(block), idx + 2);
-        }
-        if block.len() + line.len() > SCAN_MAX_FRONTMATTER_BYTES {
-            return (None, 0);
-        }
-        block.push_str(line);
-        block.push('\n');
-    }
-    (None, 0)
 }
 
 #[cfg(test)]
@@ -211,7 +185,7 @@ mod tests {
     #[test]
     fn scan_metadata_drops_oversized_frontmatter_but_keeps_inline_tags() {
         let dir = unique_tmp("meta_big_frontmatter");
-        let filler = "x".repeat(SCAN_MAX_FRONTMATTER_BYTES + 1);
+        let filler = "x".repeat(9000);
         fs::write(
             dir.join("a.md"),
             format!("---\nnote: {filler}\n---\nBody #alpha\n"),

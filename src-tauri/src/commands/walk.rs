@@ -10,7 +10,7 @@ pub(crate) const SCAN_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 
 /// Whether a workspace scan covered every file, returned alongside the items
 /// so the UI can warn instead of presenting a truncated index as complete.
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanStatus {
     pub truncated: bool,

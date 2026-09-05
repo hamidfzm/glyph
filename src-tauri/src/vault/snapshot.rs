@@ -48,7 +48,7 @@ pub struct VaultSnapshot<'a> {
     pub field_names: Vec<&'a str>,
     pub unresolved: &'a [UnresolvedLink],
     pub dead_ends: &'a [String],
-    pub status: &'a ScanStatus,
+    pub status: ScanStatus,
 }
 
 impl Vault {
@@ -74,7 +74,7 @@ impl Vault {
             field_names: self.field_names.iter().map(String::as_str).collect(),
             unresolved: &self.graph.unresolved,
             dead_ends: &self.graph.dead_ends,
-            status: &self.status,
+            status: self.status(),
         }
     }
 

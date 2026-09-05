@@ -11,13 +11,22 @@ use serde_json::Value;
 use super::Vault;
 use crate::grants::GrantRegistry;
 
-/// One index per open workspace root, keyed by the root exactly as the caller
-/// spells it, so indexed paths keep matching the frontend's tab paths.
+/// One index per open workspace root, keyed by the root's canonical path. The
+/// key cannot be the caller's spelling: `<ws>`, `<ws>/`, and `<ws>/./.` are one
+/// workspace, and a renderer that cached an index under each would grow this
+/// map without bound. `Vault.root` keeps the caller's spelling instead, so
+/// indexed paths still match the frontend's tab paths.
 #[derive(Default)]
-pub struct VaultStore(pub Mutex<HashMap<String, Vault>>);
+pub struct VaultStore(pub Mutex<HashMap<PathBuf, Vault>>);
 
-fn lock(store: &VaultStore) -> Result<std::sync::MutexGuard<'_, HashMap<String, Vault>>, String> {
+fn lock(store: &VaultStore) -> Result<std::sync::MutexGuard<'_, HashMap<PathBuf, Vault>>, String> {
     store.0.lock().map_err(|e| format!("Lock error: {e}"))
+}
+
+/// The store key for a root that has not been through a grant check.
+fn key_for(root: &str) -> PathBuf {
+    let path = Path::new(root);
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// Run `read` against the index for `root`, building it first if this is the
@@ -28,17 +37,19 @@ fn with_vault<T>(
     store: &VaultStore,
     read: impl FnOnce(&Vault) -> Result<T, String>,
 ) -> Result<T, String> {
-    grants.ensure_readable(root)?;
-    if !lock(store)?.contains_key(root) {
+    // `ensure_workspace`, not `ensure_readable`: the index is per workspace,
+    // and a readable check would also accept every directory inside one.
+    let key = grants.ensure_workspace(root)?;
+    if !lock(store)?.contains_key(&key) {
         // Built outside the lock: the walk reads the whole workspace, and
         // holding the store through it would stall every other root's queries
-        // and block the watcher thread behind them. A concurrent build of the
-        // same root loses the race and is discarded rather than replacing an
-        // index that has since taken watcher updates.
+        // and block the watcher thread behind them. A build that loses the race
+        // is discarded rather than replacing an index that has since taken
+        // watcher updates.
         let vault = Vault::build(Path::new(root))?;
-        lock(store)?.entry(root.to_string()).or_insert(vault);
+        lock(store)?.entry(key.clone()).or_insert(vault);
     }
-    read(lock(store)?.get(root).ok_or("index was released")?)
+    read(lock(store)?.get(&key).ok_or("index was released")?)
 }
 
 fn to_value<T: serde::Serialize>(value: T) -> Result<Value, String> {
@@ -48,11 +59,16 @@ fn to_value<T: serde::Serialize>(value: T) -> Result<Value, String> {
 /// Re-index the changed paths under `root`. Called from the directory watcher
 /// before it tells the frontend to refresh, so the snapshot the frontend then
 /// asks for is already current.
+///
+/// The store lock is held across the re-read and the rebuild. That is the
+/// opposite trade to the initial build, and deliberate: an update touches the
+/// paths that changed rather than the whole workspace, and letting a snapshot
+/// interleave with it would serve a half-applied index.
 pub fn apply_changes(store: &VaultStore, root: &str, paths: &[PathBuf]) {
     let Ok(mut vaults) = store.0.lock() else {
         return;
     };
-    if let Some(vault) = vaults.get_mut(root) {
+    if let Some(vault) = vaults.get_mut(&key_for(root)) {
         vault.apply_changes(paths);
     }
 }
@@ -61,7 +77,7 @@ pub fn apply_changes(store: &VaultStore, root: &str, paths: &[PathBuf]) {
 /// holds every note's tags, fields and links for the rest of the session.
 pub fn forget(store: &VaultStore, root: &str) {
     if let Ok(mut vaults) = store.0.lock() {
-        vaults.remove(root);
+        vaults.remove(&key_for(root));
     }
 }
 
@@ -81,14 +97,14 @@ pub fn vault_refresh(
     grants: tauri::State<'_, GrantRegistry>,
     store: tauri::State<'_, VaultStore>,
 ) -> Result<Value, String> {
-    grants.ensure_readable(&path)?;
+    let key = grants.ensure_workspace(&path)?;
+    // A refresh is the frontend saying it wants the disk's answer, so unlike
+    // `with_vault` this one replaces whatever is cached, including an index
+    // that took watcher updates while the walk ran.
     let vault = Vault::build(Path::new(&path))?;
-    // Stored first, then read back under the same lock: a watcher update that
-    // landed while the walk ran would otherwise be reported as absent by a
-    // snapshot taken from the copy that predates it.
     let mut vaults = lock(&store)?;
-    vaults.insert(path.clone(), vault);
-    to_value(vaults[&path].snapshot())
+    vaults.insert(key.clone(), vault);
+    to_value(vaults[&key].snapshot())
 }
 
 #[tauri::command]

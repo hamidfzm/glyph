@@ -34,7 +34,9 @@ pub struct Vault {
     /// Every frontmatter field name in the workspace, derived with the graph
     /// so the palette does not recompute it per keystroke.
     pub(super) field_names: BTreeSet<String>,
-    pub(super) status: ScanStatus,
+    pub(super) walk_status: ScanStatus,
+    /// Set when an update was turned away at the file cap.
+    refused_at_cap: bool,
     max_files: usize,
     max_depth: usize,
 }
@@ -64,7 +66,8 @@ impl Vault {
             resolver: Resolver::default(),
             graph: Graph::default(),
             field_names: BTreeSet::new(),
-            status,
+            walk_status: status,
+            refused_at_cap: false,
             max_files,
             max_depth,
         };
@@ -103,10 +106,10 @@ impl Vault {
             match existing {
                 Some(index) => self.notes[index] = note,
                 None => {
+                    // Growing past the cap the walk enforces would leave the
+                    // index reporting a complete scan it no longer has.
                     if self.notes.len() >= self.max_files {
-                        // Growing past the cap the walk enforces would leave the
-                        // index reporting a complete scan it no longer has.
-                        self.status = ScanStatus::file_limit(self.max_files);
+                        self.refused_at_cap = true;
                         continue;
                     }
                     let at = self
@@ -154,8 +157,21 @@ impl Vault {
                 return false;
             }
         }
-        std::fs::symlink_metadata(path)
-            .is_ok_and(|meta| meta.is_file() && meta.len() <= SCAN_MAX_FILE_BYTES)
+        // `symlink_metadata` reports the link itself, so `is_file` already
+        // refuses a symlinked note the way the walk does.
+        let Ok(meta) = std::fs::symlink_metadata(path) else {
+            return false;
+        };
+        if !meta.is_file() || meta.len() > SCAN_MAX_FILE_BYTES {
+            return false;
+        }
+        // A symlink further up the path is invisible to that check, and the
+        // watcher follows links, so a linked directory would otherwise deliver
+        // events for files outside the workspace entirely.
+        let Some(root) = &self.canonical_root else {
+            return false;
+        };
+        std::fs::canonicalize(path).is_ok_and(|resolved| resolved.starts_with(root))
     }
 
     /// Rebuild the resolver and the derived views from the notes already in
@@ -170,6 +186,17 @@ impl Vault {
             .iter()
             .flat_map(|note| note.fields.keys().cloned())
             .collect();
+    }
+
+    /// What the walk reported, unless a later file was turned away at the cap.
+    /// That stays reported until a rebuild, because the index cannot know
+    /// whether a subsequent deletion made room for the file it refused; a
+    /// `vault_refresh` is what answers that.
+    pub(super) fn status(&self) -> ScanStatus {
+        if self.refused_at_cap {
+            return ScanStatus::file_limit(self.max_files);
+        }
+        self.walk_status.clone()
     }
 
     pub(super) fn id_of(&self, path: &str) -> Option<usize> {

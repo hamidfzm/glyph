@@ -432,6 +432,56 @@ fn an_incremental_update_refuses_a_symlinked_note() {
     fs::remove_dir_all(&outside).unwrap();
 }
 
+// The walk refuses a symlink structurally: it never descends into a linked
+// directory. `walkable` stats only the leaf, which a link further up the path
+// is invisible to, and the watcher follows links, so events for a linked
+// directory arrive spelled as if they were inside the workspace.
+#[cfg(unix)]
+#[test]
+fn an_incremental_update_refuses_a_note_under_a_symlinked_directory() {
+    let root = fixture_vault("incremental_symlink_dir");
+    let outside = unique_tmp("incremental_symlink_dir_target");
+    fs::write(outside.join("secret.md"), "top secret #classified\n").unwrap();
+
+    let mut vault = build(&root);
+    let linked = root.join("archive");
+    std::os::unix::fs::symlink(&outside, &linked).unwrap();
+    vault.apply_changes(&[linked.join("secret.md")]);
+
+    assert!(vault.paths_with_tag("classified").is_empty());
+    assert_eq!(vault.snapshot().files.len(), 8);
+    assert_matches_rebuild(&vault, &root);
+
+    fs::remove_dir_all(&root).unwrap();
+    fs::remove_dir_all(&outside).unwrap();
+}
+
+#[test]
+fn one_workspace_caches_one_index_however_the_root_is_spelled() {
+    // The store key cannot be the caller's string: a renderer that asked for
+    // `<ws>`, `<ws>/.` and `<ws>/./.` would otherwise cache a full index under
+    // each and grow the map without bound.
+    let root = fixture_vault("cmd_root_spellings");
+    let app = app_with_workspace(&root);
+    let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+    let base = root.to_string_lossy().to_string();
+
+    for spelling in [base.clone(), format!("{base}/."), format!("{base}/./.")] {
+        vault_snapshot(spelling, grants.clone(), store.clone()).unwrap();
+    }
+    assert_eq!(store.0.lock().unwrap().len(), 1);
+
+    // A directory inside the workspace is readable but is not a workspace, so
+    // it gets no index of its own.
+    let inside = vault_snapshot(in_vault(&root, "Notes"), grants.clone(), store.clone());
+    assert!(inside.is_err());
+    assert_eq!(store.0.lock().unwrap().len(), 1);
+
+    vault_forget(base, store.clone()).unwrap();
+    assert!(store.0.lock().unwrap().is_empty());
+    fs::remove_dir_all(&root).unwrap();
+}
+
 #[test]
 fn growing_past_the_file_cap_is_reported_rather_than_indexed() {
     let root = fixture_vault("incremental_cap");

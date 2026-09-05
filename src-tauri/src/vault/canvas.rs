@@ -140,12 +140,6 @@ pub(crate) fn extract_canvas(path: &str, content: &str) -> (Note, Canvas) {
             Some(Link {
                 snippet: target.clone(),
                 target,
-                heading: node
-                    .subpath
-                    .as_ref()
-                    .map(|s| s.trim_start_matches('#').to_string()),
-                alias: node.label.clone(),
-                embed: true,
                 line: 0,
             })
         })
@@ -278,8 +272,6 @@ mod tests {
         assert_eq!(note.path, "/w/board.canvas");
         assert_eq!(note.links.len(), 1);
         assert_eq!(note.links[0].target, "Notes/A.md");
-        assert_eq!(note.links[0].heading.as_deref(), Some("Top"));
-        assert!(note.links[0].embed);
     }
 
     #[test]

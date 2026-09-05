@@ -10,9 +10,10 @@
 //! explicit type tag such as `!!int` (which makes js-yaml's FAILSAFE schema
 //! throw and this parser keep the scalar), the ordering of an integer-like
 //! extra key (which `Object.entries` hoists on the JavaScript side), and an
-//! anchor pointing at a sequence or mapping rather than a scalar.
+//! anchor pointing at a sequence or mapping rather than a scalar. An alias in
+//! key position is refused outright here and resolved by js-yaml.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use yaml_rust2::parser::{Event, EventReceiver, Parser};
 
@@ -20,10 +21,8 @@ use yaml_rust2::parser::{Event, EventReceiver, Parser};
 /// so it is bounded here rather than at the far end. A file whose frontmatter
 /// exceeds the cap is indexed for its inline tags only.
 const MAX_FRONTMATTER_BYTES: usize = 8 * 1024;
-/// How deeply a block may nest. The parser recurses once per level and a
-/// stack overflow aborts the process rather than unwinding, so this is checked
-/// against the source text before the parser sees it. Frontmatter that nests
-/// past this is pathological; real notes sit in single digits.
+/// How deeply a block may nest. Frontmatter past this is pathological; real
+/// notes sit in single digits.
 const MAX_NESTING_DEPTH: usize = 64;
 
 #[derive(Debug, PartialEq)]
@@ -59,7 +58,7 @@ impl Frontmatter {
 /// The leading `---` fenced block's inner text plus the line index the body
 /// starts at. `None` unless the file opens with the fence and closes it within
 /// the byte cap.
-pub(crate) fn split_frontmatter(content: &str) -> (Option<String>, usize) {
+pub fn split_frontmatter(content: &str) -> (Option<String>, usize) {
     // `lines` has already taken the `\r` of a CRLF ending, and the renderer's
     // pattern allows nothing else around the delimiter, so `---   ` opens no
     // block there and must open none here.
@@ -243,44 +242,26 @@ impl EventReceiver for Builder {
     }
 }
 
-/// Whether `inner` nests past [`MAX_NESTING_DEPTH`] anywhere. Counted from the
-/// source text because the parser recurses one frame per level as it reads,
-/// so a block that is too deep has already overflowed the stack by the time
-/// any event arrives. The three ways to open a level are an unclosed flow
-/// bracket, a repeated `- ` on one line, and indentation.
-fn too_deep(inner: &str) -> bool {
-    let mut flow = 0usize;
-    for line in inner.lines() {
-        let indent = line.len() - line.trim_start_matches([' ', '\t']).len();
-        let dashes = line
-            .trim_start_matches([' ', '\t'])
-            .split("- ")
-            .count()
-            .saturating_sub(1);
-        if indent > MAX_NESTING_DEPTH || dashes > MAX_NESTING_DEPTH {
-            return true;
-        }
-        for c in line.chars() {
-            match c {
-                '[' | '{' => flow += 1,
-                ']' | '}' => flow = flow.saturating_sub(1),
-                _ => {}
-            }
-            if flow > MAX_NESTING_DEPTH {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 fn parse_mapping(inner: &str) -> Option<Value> {
-    if too_deep(inner) {
-        return None;
-    }
+    // Events are pulled one at a time rather than through `Parser::load`,
+    // which recurses once per nesting level as it reads: a block deep enough
+    // overflows the stack, and that aborts the process instead of unwinding.
+    // The parser's own state machine is iterative, so driving it flat bounds
+    // the depth exactly, against the tree being built rather than a guess at
+    // what the source text will open.
+    let mut parser = Parser::new_from_str(inner);
     let mut builder = Builder::default();
-    Parser::new_from_str(inner).load(&mut builder, false).ok()?;
-    if builder.rejected || !builder.stack.is_empty() {
+    loop {
+        let (event, _) = parser.next_token().ok()?;
+        if event == Event::StreamEnd {
+            break;
+        }
+        builder.on_event(event);
+        if builder.rejected || builder.stack.len() > MAX_NESTING_DEPTH {
+            return None;
+        }
+    }
+    if !builder.stack.is_empty() {
         return None;
     }
     let root = builder.root?;
@@ -297,14 +278,8 @@ fn parse_mapping(inner: &str) -> Option<Value> {
 /// nothing in the renderer and must index as nothing here too. Nested mappings
 /// are checked as they close; this covers the root, which never does.
 fn has_duplicate_key(entries: &[(String, Value)]) -> bool {
-    let mut seen: Vec<&str> = Vec::with_capacity(entries.len());
-    for (key, _) in entries {
-        if seen.contains(&key.as_str()) {
-            return true;
-        }
-        seen.push(key);
-    }
-    false
+    let mut seen: HashSet<&str> = HashSet::with_capacity(entries.len());
+    !entries.iter().all(|(key, _)| seen.insert(key))
 }
 
 #[cfg(test)]
@@ -429,24 +404,35 @@ mod tests {
     }
 
     #[test]
-    fn deeply_nested_values_are_refused_before_the_parser_recurses() {
-        // Each of these opens one parser frame per level, and the parser
-        // recurses as it reads: reaching it at all overflows the stack, which
-        // aborts the process rather than unwinding. The block cap allows
-        // thousands of levels, so the depth check has to come first.
+    fn deeply_nested_values_are_refused_without_overflowing_the_stack() {
+        // Every one of these opens a level per token, and the block cap allows
+        // thousands of them. Reaching a recursive parse at that depth overflows
+        // the stack, which aborts the process rather than unwinding, so the
+        // depth is bounded against the tree as it is built. Counting the source
+        // text instead cannot work: YAML opens a level with `- `, with `? `,
+        // with `: `, with a flow bracket and with indentation, and a guess that
+        // misses one of them is a guess that crashes.
         let depth = MAX_NESTING_DEPTH + 5;
-        let flow = format!("key: {}{}", "[".repeat(depth), "]".repeat(depth));
-        assert_eq!(parse_frontmatter(&flow), None);
+        for block in [
+            format!("key: {}{}", "[".repeat(depth), "]".repeat(depth)),
+            format!("{}x\n", "- ".repeat(1_000)),
+            format!("{}x\n", "? ".repeat(4_000)),
+            format!("{}x\n", "? : ".repeat(2_000)),
+            format!("{}x\n", ": ".repeat(4_000)),
+        ] {
+            assert_eq!(parse_frontmatter(&block), None, "{}", &block[..12]);
+        }
 
-        let block_sequence = format!("{}x\n", "- ".repeat(1_000));
-        assert_eq!(parse_frontmatter(&block_sequence), None);
-
+        // Bounding the tree rather than the text is also what keeps ordinary
+        // blocks out of the refusal: nesting a note might really use, deep
+        // indentation, and a block scalar holding indented content all open
+        // far fewer levels than they have columns.
+        assert!(parse_frontmatter("outer:\n  middle:\n    inner: value\ntitle: Note\n").is_some());
         let indented = format!("{}deep: value\n", " ".repeat(depth + 1));
-        assert_eq!(parse_frontmatter(&indented), None);
-
-        // A block that nests normally still parses.
-        let shallow = "outer:\n  middle:\n    inner: value\ntitle: Note\n";
-        assert!(parse_frontmatter(shallow).is_some());
+        assert!(parse_frontmatter(&indented).is_some());
+        let scalar = format!("snippet: |\n{}code\ntitle: T\n", " ".repeat(70));
+        let parsed = parse_frontmatter(&scalar).expect("a block scalar is one level deep");
+        assert_eq!(parsed.title.as_deref(), Some("T"));
     }
 
     #[test]

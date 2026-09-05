@@ -11,9 +11,6 @@ pub const MAX_SNIPPET_CHARS: usize = 200;
 pub(crate) struct Link {
     /// Target as written, with `|alias` and `#heading` removed.
     pub target: String,
-    pub heading: Option<String>,
-    pub alias: Option<String>,
-    pub embed: bool,
     /// 1-based, as the backlinks panel shows it.
     pub line: u32,
     pub snippet: String,
@@ -72,16 +69,18 @@ pub(crate) fn extract_note(path: &str, content: &str) -> Note {
         tags,
         fields,
         aliases,
-        links: parse_links(content),
+        links: parse_links(content, body_start),
     }
 }
 
 /// Every `[[target]]` and `![[embed]]` outside fenced code, in source order.
-fn parse_links(content: &str) -> Vec<Link> {
+/// The frontmatter block is skipped the way the tag scan skips it: the
+/// renderer shows those lines as a table, never as links.
+fn parse_links(content: &str, body_start: usize) -> Vec<Link> {
     let mut links = Vec::new();
     let mut in_fence = false;
 
-    for (idx, line) in content.lines().enumerate() {
+    for (idx, line) in content.lines().enumerate().skip(body_start) {
         let trimmed_start = line.trim_start();
         if trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~") {
             in_fence = !in_fence;
@@ -116,39 +115,31 @@ fn push_line_links(line: &str, line_number: u32, out: &mut Vec<Link>) {
         }
 
         let inner: String = chars[start..close].iter().collect();
-        if let Some(link) = parse_link_inner(&inner) {
+        if let Some(target) = link_target(&inner) {
             out.push(Link {
-                embed: i > 0 && chars[i - 1] == '!',
+                target,
                 line: line_number,
                 snippet: snippet_for(line),
-                ..link
             });
         }
         i = close + 2;
     }
 }
 
-/// Split `name#heading|alias` into its parts. `None` when no target survives.
-fn parse_link_inner(inner: &str) -> Option<Link> {
-    let (target_with_heading, alias) = match inner.split_once('|') {
-        Some((target, alias)) => (target.trim(), alias.trim()),
-        None => (inner.trim(), ""),
+/// The note `name#heading|alias` points at. The heading and the alias are
+/// display concerns the renderer splits out for itself; the index only needs
+/// to know which file the link reaches.
+fn link_target(inner: &str) -> Option<String> {
+    let target_with_heading = match inner.split_once('|') {
+        Some((target, _)) => target,
+        None => inner,
     };
-    let (target, heading) = match target_with_heading.split_once('#') {
-        Some((target, heading)) => (target.trim(), heading.trim()),
-        None => (target_with_heading, ""),
+    let target = match target_with_heading.split_once('#') {
+        Some((target, _)) => target,
+        None => target_with_heading,
     };
-    if target.is_empty() {
-        return None;
-    }
-    Some(Link {
-        target: target.to_string(),
-        heading: (!heading.is_empty()).then(|| heading.to_string()),
-        alias: (!alias.is_empty()).then(|| alias.to_string()),
-        embed: false,
-        line: 0,
-        snippet: String::new(),
-    })
+    let target = target.trim();
+    (!target.is_empty()).then(|| target.to_string())
 }
 
 pub fn snippet_for(line: &str) -> String {
@@ -165,31 +156,31 @@ pub fn snippet_for(line: &str) -> String {
 mod tests {
     use super::*;
 
+    fn parse_links_from_start(content: &str) -> Vec<Link> {
+        parse_links(content, 0)
+    }
+
     fn targets(content: &str) -> Vec<String> {
-        parse_links(content)
+        parse_links_from_start(content)
             .into_iter()
             .map(|link| link.target)
             .collect()
     }
 
     #[test]
-    fn links_carry_target_heading_alias_and_line() {
-        let links = parse_links("intro\nsee [[Target#Section|the alias]] here\n");
+    fn a_link_carries_its_target_line_and_snippet() {
+        let links = parse_links_from_start("intro\nsee [[Target#Section|the alias]] here\n");
         assert_eq!(links.len(), 1);
+        // The heading and the alias are display concerns the renderer splits
+        // out for itself, so the index keeps only the file the link reaches.
         assert_eq!(links[0].target, "Target");
-        assert_eq!(links[0].heading.as_deref(), Some("Section"));
-        assert_eq!(links[0].alias.as_deref(), Some("the alias"));
         assert_eq!(links[0].line, 2);
-        assert!(!links[0].embed);
         assert!(links[0].snippet.starts_with("see [[Target"));
     }
 
     #[test]
-    fn an_exclamation_marks_an_embed() {
-        let links = parse_links("![[Board]] and [[Plain]]\n");
-        assert_eq!(links.len(), 2);
-        assert!(links[0].embed);
-        assert!(!links[1].embed);
+    fn an_embed_reaches_the_same_target_as_a_plain_link() {
+        assert_eq!(targets("![[Board]] and [[Board]]\n"), ["Board", "Board"]);
     }
 
     #[test]
@@ -225,9 +216,19 @@ mod tests {
     }
 
     #[test]
+    fn a_link_written_in_frontmatter_is_not_an_edge() {
+        // Those lines render as a table, so the renderer makes no link there
+        // and neither does the index.
+        let note = extract_note("/w/a.md", "---\nsee: \"[[Elsewhere]]\"\n---\n\n[[Real]]\n");
+        assert_eq!(note.links.len(), 1);
+        assert_eq!(note.links[0].target, "Real");
+        assert_eq!(note.links[0].line, 5);
+    }
+
+    #[test]
     fn long_lines_are_truncated_in_the_snippet() {
         let line = format!("{}[[Target]]{}", "x".repeat(150), "y".repeat(150));
-        let links = parse_links(&line);
+        let links = parse_links_from_start(&line);
         assert!(links[0].snippet.ends_with('…'));
         assert!(links[0].snippet.chars().count() <= MAX_SNIPPET_CHARS + 1);
     }
