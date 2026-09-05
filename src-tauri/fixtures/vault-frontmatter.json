@@ -1,0 +1,53 @@
+{
+  "Index.md": {
+    "title": "Index",
+    "author": "Ada Lovelace",
+    "tags": [
+      "home",
+      "reference"
+    ],
+    "extra": [
+      [
+        "status",
+        "published"
+      ]
+    ]
+  },
+  "Notes/Cooking.md": {
+    "title": "Cooking",
+    "tags": [
+      "food",
+      "food/baking"
+    ],
+    "extra": []
+  },
+  "Notes/Travel.md": null,
+  "Archive/Travel.md": null,
+  "Archive/Old Note.md": {
+    "date": "2026-04-15",
+    "extra": [
+      [
+        "draft",
+        "true"
+      ],
+      [
+        "version",
+        "1.0"
+      ],
+      [
+        "project",
+        "Glyph Docs"
+      ]
+    ]
+  },
+  "Aliased.md": {
+    "title": "Aliased",
+    "extra": [
+      [
+        "aliases",
+        "Second Name, Third Name"
+      ]
+    ]
+  },
+  "Broken.md": null
+}

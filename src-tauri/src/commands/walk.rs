@@ -3,14 +3,14 @@ use std::fs;
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 
-pub(super) const WALK_MAX_DEPTH: usize = 32;
-pub(super) const WALK_MAX_FILES: usize = 10_000;
-pub(super) const WALK_SKIP_DIRS: &[&str] = &[".git", "node_modules", "target", ".svn", ".hg"];
-pub(super) const SCAN_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
+pub(crate) const WALK_MAX_DEPTH: usize = 32;
+pub(crate) const WALK_MAX_FILES: usize = 10_000;
+pub(crate) const WALK_SKIP_DIRS: &[&str] = &[".git", "node_modules", "target", ".svn", ".hg"];
+pub(crate) const SCAN_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 
 /// Whether a workspace scan covered every file, returned alongside the items
 /// so the UI can warn instead of presenting a truncated index as complete.
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanStatus {
     pub truncated: bool,
@@ -49,7 +49,7 @@ impl ScanStatus {
 /// Shared workspace walker: bounded depth, no symlinks, hidden and noisy
 /// directories skipped. Sorted by file name so traversal order (and therefore
 /// which files a capped scan covers) is deterministic across platforms.
-pub(super) fn workspace_walker(root: &Path, max_depth: usize) -> impl Iterator<Item = DirEntry> {
+pub(crate) fn workspace_walker(root: &Path, max_depth: usize) -> impl Iterator<Item = DirEntry> {
     WalkDir::new(root)
         .max_depth(max_depth)
         .follow_links(false)
@@ -68,11 +68,12 @@ pub(super) fn workspace_walker(root: &Path, max_depth: usize) -> impl Iterator<I
         .flatten()
 }
 
-/// Read every markdown file under `root` within the scan caps and hand its
-/// path and contents to `visit`. Oversized and non-UTF-8 files are skipped so
-/// one unreadable note can't fail a whole workspace index.
-pub(super) fn scan_markdown_files(
+/// Read every file under `root` that `accept` selects, within the scan caps,
+/// and hand its path and contents to `visit`. Oversized and non-UTF-8 files are
+/// skipped so one unreadable note can't fail a whole workspace index.
+pub(crate) fn scan_files(
     root: &Path,
+    accept: fn(&Path) -> bool,
     max_files: usize,
     max_depth: usize,
     mut visit: impl FnMut(&Path, &str),
@@ -96,7 +97,7 @@ pub(super) fn scan_markdown_files(
             continue;
         }
         let path = entry.path();
-        if !crate::is_markdown_file(path) {
+        if !accept(path) {
             continue;
         }
         if files_scanned >= max_files {
@@ -139,9 +140,15 @@ mod tests {
         let _ = std::os::unix::fs::symlink(dir.join("real.md"), dir.join("link.md"));
 
         let mut seen: Vec<String> = Vec::new();
-        let status = scan_markdown_files(&dir, WALK_MAX_FILES, WALK_MAX_DEPTH, |path, _| {
-            seen.push(path.file_name().unwrap().to_string_lossy().to_string());
-        })
+        let status = scan_files(
+            &dir,
+            crate::is_markdown_file,
+            WALK_MAX_FILES,
+            WALK_MAX_DEPTH,
+            |path, _| {
+                seen.push(path.file_name().unwrap().to_string_lossy().to_string());
+            },
+        )
         .unwrap();
 
         assert_eq!(seen, vec!["real.md"]);

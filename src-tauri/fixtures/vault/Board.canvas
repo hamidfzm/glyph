@@ -1,0 +1,59 @@
+{
+  "nodes": [
+    {
+      "id": "n1",
+      "type": "file",
+      "file": "Notes/Cooking.md",
+      "subpath": "#Recipes",
+      "x": 0,
+      "y": 0,
+      "width": 400,
+      "height": 300
+    },
+    {
+      "id": "n2",
+      "type": "text",
+      "text": "A card about [[Index]]",
+      "x": 500,
+      "y": 0,
+      "width": 400,
+      "height": 300
+    },
+    {
+      "id": "n3",
+      "type": "link",
+      "url": "https://glyph-md.github.io",
+      "x": 0,
+      "y": 400,
+      "width": 400,
+      "height": 300
+    },
+    {
+      "id": "n4",
+      "type": "group",
+      "label": "Kitchen",
+      "x": -50,
+      "y": -50,
+      "width": 1000,
+      "height": 800
+    },
+    {
+      "id": "bad",
+      "type": "text",
+      "text": "no geometry"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "fromNode": "n1",
+      "toNode": "n2",
+      "label": "explains"
+    },
+    {
+      "id": "e2",
+      "fromNode": "n1",
+      "toNode": "ghost"
+    }
+  ]
+}
