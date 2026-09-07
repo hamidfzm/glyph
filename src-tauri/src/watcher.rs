@@ -172,6 +172,8 @@ mod tests {
         let app = mock_app();
         app.manage(FileWatcherState(Arc::new(Mutex::new(HashMap::new()))));
         app.manage(GrantRegistry::default());
+        // The directory watcher re-indexes through the store before it emits.
+        app.manage(VaultStore::default());
         app
     }
 
@@ -633,6 +635,50 @@ mod tests {
 
         let count = wait_for_event(&fired, Duration::from_secs(10));
         assert!(count > 0, "expected at least one directory-changed emit");
+        // The index for this root is built lazily by the command surface, so
+        // an event arriving before that has nothing to update and must not
+        // panic the watcher thread.
+        assert!(app.state::<VaultStore>().0.lock().unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_watched_directory_re_indexes_before_it_emits() {
+        let dir = unique_tmp("watch_dir_reindex");
+        let path = dir.to_string_lossy().to_string();
+        std::fs::write(
+            dir.join("first.md"),
+            "links [[second]]
+",
+        )
+        .unwrap();
+
+        let app = mock_app_with_state();
+        grant_dir(&app, &dir);
+        let fired = count_event(&app, "directory-changed");
+        let store = app.state::<VaultStore>();
+        store.0.lock().unwrap().insert(
+            std::fs::canonicalize(&dir).unwrap(),
+            crate::vault::Vault::build(&dir).unwrap(),
+        );
+        watch_directory(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
+
+        std::fs::write(dir.join("second.md"), "# second").unwrap();
+        assert!(wait_for_event(&fired, Duration::from_secs(10)) > 0);
+
+        // Asserted without waiting: the re-index runs before the emit, so the
+        // event the frontend just saw already implies a current index. Polling
+        // here would pass even if that order were reversed.
+        let indexed = store.0.lock().unwrap()[&std::fs::canonicalize(&dir).unwrap()]
+            .snapshot()
+            .files
+            .len();
+        assert_eq!(indexed, 2);
         let _ = std::fs::remove_dir_all(&dir);
     }
     #[test]

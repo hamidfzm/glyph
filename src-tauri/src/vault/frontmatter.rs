@@ -83,10 +83,7 @@ pub fn split_frontmatter(content: &str) -> (Option<String>, usize) {
 /// Parse the inner text of a frontmatter block. `None` when the YAML is
 /// malformed, is not a mapping, or carries nothing worth showing.
 pub(crate) fn parse_frontmatter(inner: &str) -> Option<Frontmatter> {
-    let entries = match parse_mapping(inner)? {
-        Value::Mapping(entries) => entries,
-        _ => return None,
-    };
+    let entries = parse_mapping(inner)?;
 
     let mut out = Frontmatter::default();
     for (key, value) in &entries {
@@ -242,7 +239,7 @@ impl EventReceiver for Builder {
     }
 }
 
-fn parse_mapping(inner: &str) -> Option<Value> {
+fn parse_mapping(inner: &str) -> Option<Vec<(String, Value)>> {
     // Events are pulled one at a time rather than through `Parser::load`,
     // which recurses once per nesting level as it reads: a block deep enough
     // overflows the stack, and that aborts the process instead of unwinding.
@@ -261,17 +258,13 @@ fn parse_mapping(inner: &str) -> Option<Value> {
             return None;
         }
     }
-    if !builder.stack.is_empty() {
-        return None;
+    // A collection left open would have errored above rather than reaching
+    // `StreamEnd`, and the root mapping's duplicate keys were checked as it
+    // closed, so the only thing left to ask is whether the root is a mapping.
+    match builder.root? {
+        Value::Mapping(entries) => Some(entries),
+        _ => None,
     }
-    let root = builder.root?;
-    let Value::Mapping(entries) = &root else {
-        return None;
-    };
-    if has_duplicate_key(entries) {
-        return None;
-    }
-    Some(root)
 }
 
 /// js-yaml throws on a duplicate mapping key, so a block carrying one shows
@@ -448,6 +441,40 @@ mod tests {
             parse("---\ntitle: Note\nnested:\n  a: 1\n  a: 2\n---\n"),
             None
         );
+    }
+
+    #[test]
+    fn a_field_whose_value_is_a_collection_of_collections_is_dropped() {
+        // Neither a mapping nor a nested sequence has a string to show, so
+        // `tags` yields nothing and `links` is not a displayable field.
+        let fm = parse("---\ntags:\n  nested: value\nlinks: [[a], [b]]\ntitle: T\n---\n").unwrap();
+        assert!(fm.tags.is_empty());
+        assert_eq!(fm.extra, vec![]);
+        assert_eq!(fm.title.as_deref(), Some("T"));
+
+        // A sequence mixing the two keeps only the parts that render.
+        let mixed = parse("---\nlinks: [a, [b], c]\n---\n").unwrap();
+        assert_eq!(mixed.extra, vec![("links".to_string(), "a, c".to_string())]);
+    }
+
+    #[test]
+    fn a_collection_in_key_position_yields_nothing() {
+        assert_eq!(parse("---\n? [a, b]\n: value\n---\n"), None);
+    }
+
+    #[test]
+    fn a_second_document_in_the_block_yields_nothing() {
+        assert_eq!(parse("---\ntitle: One\n...\ntitle: Two\n---\n"), None);
+    }
+
+    #[test]
+    fn an_unbalanced_event_stream_is_refused() {
+        // The parser cannot emit one, so this drives the receiver directly:
+        // the contract is that a close without a matching open rejects the
+        // document rather than being read as an empty collection.
+        let mut builder = Builder::default();
+        builder.on_event(Event::MappingEnd);
+        assert!(builder.rejected);
     }
 
     #[test]

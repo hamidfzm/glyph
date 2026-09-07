@@ -483,6 +483,56 @@ fn one_workspace_caches_one_index_however_the_root_is_spelled() {
 }
 
 #[test]
+fn queries_about_a_path_the_index_does_not_hold_answer_empty() {
+    let root = fixture_vault("unknown_path_queries");
+    let vault = build(&root);
+    let stranger = "/elsewhere/secret.md";
+
+    assert!(vault.neighbors(stranger).is_empty());
+    assert!(vault.backlinks(stranger).is_empty());
+    assert!(vault.canvas(stranger).is_none());
+    // A tag that normalizes to nothing selects nothing rather than everything.
+    assert!(vault.paths_with_tag("#").is_empty());
+    assert!(vault.paths_with_tag("///").is_empty());
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn an_incremental_update_respects_the_depth_cap() {
+    let root = fixture_vault("incremental_depth");
+    let mut vault = Vault::build_capped(&root, 10_000, 1).unwrap();
+    let before = serde_json::to_value(vault.snapshot()).unwrap();
+
+    // The walk stopped at the top level, so a note one directory down is not
+    // one the walk would have offered.
+    let deep = root.join("Notes").join("Deep.md");
+    fs::write(&deep, "body #deep\n").unwrap();
+    vault.apply_changes(&[deep]);
+
+    assert_eq!(serde_json::to_value(vault.snapshot()).unwrap(), before);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn watcher_changes_tolerate_a_poisoned_store() {
+    // The watcher thread has nowhere to report an error, so a poisoned lock
+    // leaves the index as it was rather than panicking the callback.
+    let root = fixture_vault("cmd_poisoned");
+    let app = app_with_workspace(&root);
+    let store = app.state::<VaultStore>();
+    let path = root.to_string_lossy().to_string();
+
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _guard = store.0.lock().unwrap();
+        panic!("poison");
+    }));
+
+    apply_changes(&store, &path, &[root.join("Index.md")]);
+    forget(&store, &path);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
 fn growing_past_the_file_cap_is_reported_rather_than_indexed() {
     let root = fixture_vault("incremental_cap");
     let mut vault = Vault::build_capped(&root, 8, 32).unwrap();

@@ -322,6 +322,23 @@ mod tests {
     }
 
     #[test]
+    fn a_blank_alias_is_not_a_key() {
+        // `aliases: ["", "  "]` would otherwise make every empty target
+        // resolve to that note.
+        let paths = files();
+        let mut aliases = vec![Vec::new(); paths.len()];
+        aliases[0] = vec![String::new(), "   ".to_string(), "Home".to_string()];
+        let resolver = Resolver::build(&paths, &aliases);
+
+        assert_eq!(resolver.resolve("", None), None);
+        assert_eq!(resolver.resolve("   ", None), None);
+        assert_eq!(
+            resolver.resolve("home", None).map(|id| resolver.path(id)),
+            Some("/workspace/Index.md")
+        );
+    }
+
+    #[test]
     fn aliases_resolve_only_when_no_file_is_named_that() {
         let paths = files();
         let mut aliases = vec![Vec::new(); paths.len()];

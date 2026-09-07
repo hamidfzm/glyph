@@ -24,7 +24,7 @@ pub struct Vault {
     /// The root as the filesystem reports it. Watcher events arrive resolved
     /// (a verbatim `\\?\C:\…` prefix on Windows, symlinks followed on macOS),
     /// so without this an incremental update would match nothing.
-    canonical_root: Option<PathBuf>,
+    canonical_root: PathBuf,
     /// Sorted by path, so an incremental update inserts in place instead of
     /// replaying the walk.
     pub(super) notes: Vec<Note>,
@@ -59,7 +59,7 @@ impl Vault {
         })?;
 
         let mut vault = Vault {
-            canonical_root: std::fs::canonicalize(root).ok(),
+            canonical_root: std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()),
             root: root.to_path_buf(),
             notes,
             canvases,
@@ -81,7 +81,7 @@ impl Vault {
     pub fn apply_changes(&mut self, paths: &[PathBuf]) {
         let mut touched = false;
         for path in paths {
-            let Some(path) = self.inside_root(path) else {
+            let Some((path, relative)) = self.inside_root(path) else {
                 continue;
             };
             let existing = self.id_of(&path.to_string_lossy());
@@ -90,7 +90,9 @@ impl Vault {
                 None => path.to_string_lossy().to_string(),
             };
 
-            let content = self.walkable(&path).then(|| std::fs::read_to_string(&path));
+            let content = self
+                .walkable(&path, &relative)
+                .then(|| std::fs::read_to_string(&path));
             let Some(Ok(content)) = content else {
                 // A path the walker would have skipped, a deletion, or a file
                 // that went away mid-update: none of them belong in the index.
@@ -129,26 +131,21 @@ impl Vault {
     /// `path` respelled the way the index spells it, or `None` when it lies
     /// outside the root. Watcher events arrive against the canonical root, and
     /// two spellings of one file must not index twice.
-    fn inside_root(&self, path: &Path) -> Option<PathBuf> {
+    fn inside_root(&self, path: &Path) -> Option<(PathBuf, PathBuf)> {
         let relative = path
             .strip_prefix(&self.root)
-            .ok()
-            .or_else(|| path.strip_prefix(self.canonical_root.as_ref()?).ok())?;
-        Some(self.root.join(relative).components().collect())
+            .or_else(|_| path.strip_prefix(&self.canonical_root))
+            .ok()?;
+        let relative: PathBuf = relative.components().collect();
+        Some((self.root.join(&relative), relative))
     }
 
     /// Whether the walk would have visited `path`. `apply_changes` reads files
     /// the walk never offered it, so the same gates have to hold here: no
     /// hidden or noisy directories, no symlinks out of the workspace, and no
     /// file past the size cap.
-    fn walkable(&self, path: &Path) -> bool {
-        if !is_indexable(path) {
-            return false;
-        }
-        let Ok(relative) = path.strip_prefix(&self.root) else {
-            return false;
-        };
-        if relative.components().count() > self.max_depth {
+    fn walkable(&self, path: &Path, relative: &Path) -> bool {
+        if !is_indexable(path) || relative.components().count() > self.max_depth {
             return false;
         }
         for component in relative.components() {
@@ -168,10 +165,7 @@ impl Vault {
         // A symlink further up the path is invisible to that check, and the
         // watcher follows links, so a linked directory would otherwise deliver
         // events for files outside the workspace entirely.
-        let Some(root) = &self.canonical_root else {
-            return false;
-        };
-        std::fs::canonicalize(path).is_ok_and(|resolved| resolved.starts_with(root))
+        std::fs::canonicalize(path).is_ok_and(|resolved| resolved.starts_with(&self.canonical_root))
     }
 
     /// Rebuild the resolver and the derived views from the notes already in
