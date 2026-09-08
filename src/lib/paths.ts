@@ -19,9 +19,10 @@ export function lastSegment(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
-/** File name with its extension removed; a name without one is unchanged. */
+/** File name with its extension removed; a name without one is unchanged. A
+ *  leading dot is part of the name, so `.gitignore` has no extension to drop. */
 export function stem(name: string): string {
-  return name.replace(/\.[^.]+$/, "");
+  return name.replace(/(?!^)\.[^.]+$/, "");
 }
 
 /** Human-readable file name from a plain path or a mobile picker URI

@@ -50,6 +50,14 @@ describe("stem", () => {
   it("returns a name without an extension unchanged", () => {
     expect(stem("Folder")).toBe("Folder");
   });
+
+  it("keeps a dotfile whole, since its leading dot is not an extension", () => {
+    expect(stem(".gitignore")).toBe(".gitignore");
+  });
+
+  it("drops a real extension from a dotfile", () => {
+    expect(stem(".env.local")).toBe(".env");
+  });
 });
 
 describe("displayName", () => {
