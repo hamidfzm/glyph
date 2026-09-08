@@ -37,13 +37,16 @@ interface UseGraphPointerOptions {
   /** Switch the view from auto-fit to the user's own camera. */
   takeManualControl: () => void;
   reheat: (alpha?: number) => void;
-  onOpenFile: (path: string) => void;
+  /** A click on a node, with the native click count (1 = single, 2 = double). */
+  onNodeClick: (node: LayoutNode, clickCount: number) => void;
+  onBackgroundClick: () => void;
 }
 
 /**
  * The graph canvas gesture state machine: hover, background pan, node drag (pin
- * plus reheat), click-to-open, and wheel zoom. A press only becomes a drag once
- * it travels past the click slop, so a click never nudges the camera.
+ * plus reheat), click reporting, and wheel zoom. A press only becomes a drag
+ * once it travels past the click slop, so a click never nudges the camera. What
+ * a click means (focus versus open) is the caller's decision, not this hook's.
  */
 export function useGraphPointer({
   canvasRef,
@@ -53,7 +56,8 @@ export function useGraphPointer({
   cameraNow,
   takeManualControl,
   reheat,
-  onOpenFile,
+  onNodeClick,
+  onBackgroundClick,
 }: UseGraphPointerOptions) {
   const [hovered, setHovered] = useState<{ id: string; x: number; y: number } | null>(null);
   const pointer = useRef<ActivePointer | null>(null);
@@ -121,8 +125,10 @@ export function useGraphPointer({
       pointer.current = null;
       if (!drag || drag.id !== event.pointerId) return;
       if (!drag.moved) {
-        // A press that never became a drag is a click: open the node's note.
-        if (drag.node) onOpenFile(drag.node.id);
+        // A press that never became a drag is a click; `detail` is the native
+        // click count, which separates a double click's second press.
+        if (drag.node) onNodeClick(drag.node, event.detail);
+        else onBackgroundClick();
         return;
       }
       if (drag.node) {
@@ -131,7 +137,7 @@ export function useGraphPointer({
         reheat(0.1);
       }
     },
-    [onOpenFile, reheat],
+    [onBackgroundClick, onNodeClick, reheat],
   );
 
   // Wheel must be a native non-passive listener to preventDefault scrolling.

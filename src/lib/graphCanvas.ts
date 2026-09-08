@@ -124,6 +124,24 @@ export function fitCameraToNodes(
   return { scale, dx: -centreX * scale, dy: -centreY * scale };
 }
 
+/** Scale a focused node is framed at, close enough for its labels to read. */
+export const FOCUS_SCALE = 1.6;
+
+/** Camera that puts the world point (x, y) at the centre of the viewport. */
+export function centerCameraOn(x: number, y: number, scale: number): Camera {
+  const clamped = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+  return { scale: clamped, dx: -x * clamped, dy: -y * clamped };
+}
+
+/** Camera `t` of the way from `from` to `to`, driving the focus tween. */
+export function lerpCamera(from: Camera, to: Camera, t: number): Camera {
+  return {
+    dx: from.dx + (to.dx - from.dx) * t,
+    dy: from.dy + (to.dy - from.dy) * t,
+    scale: from.scale + (to.scale - from.scale) * t,
+  };
+}
+
 /**
  * Topmost node under the screen point (nodes drawn later win), or null.
  * `slop` widens the target in screen px so small nodes stay clickable when

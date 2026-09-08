@@ -2,16 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FitIcon } from "@/components/icons/FitIcon";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
-import { useZoomApi, type ZoomHandlers } from "@/contexts/ZoomContext";
 import { useElementSize } from "@/hooks/useElementSize";
 import { useGraphCamera } from "@/hooks/useGraphCamera";
+import { useGraphFocus } from "@/hooks/useGraphFocus";
 import { useGraphPointer } from "@/hooks/useGraphPointer";
 import { useGraphSimulation } from "@/hooks/useGraphSimulation";
+import { useGraphZoomCommands } from "@/hooks/useGraphZoomCommands";
 import { useIsDarkMode } from "@/hooks/useIsDarkMode";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { buildWorkspaceGraph } from "@/lib/graph";
 import { type Camera, fitCameraToNodes } from "@/lib/graphCanvas";
 import { drawGraph, readGraphTheme } from "@/lib/graphDraw";
+import type { LayoutNode } from "@/lib/graphSimulation";
 import { loadGraphView, saveGraphView } from "@/lib/graphViewStore";
 
 interface GraphViewProps {
@@ -20,9 +22,6 @@ interface GraphViewProps {
   /** Open the clicked note inside its workspace. */
   onOpenFile: (path: string) => void;
 }
-
-// Zoom factor per Zoom In / Zoom Out command (keyboard / menu).
-const HOTKEY_ZOOM_FACTOR = 1.2;
 
 // Force-directed picture of the active workspace: every markdown file is a
 // node, every resolved wikilink an edge. Heavy lifting is delegated — model
@@ -37,7 +36,6 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
   const { t } = useTranslation("common");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { ref: containerRef, size: viewport } = useElementSize<HTMLDivElement>();
-  const registerZoomTarget = useZoomApi()?.registerTarget;
   const graph = useMemo(
     () => buildWorkspaceGraph(workspaceFiles, wikilinkRefs),
     [workspaceFiles, wikilinkRefs],
@@ -89,6 +87,26 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
     setAutoFit(false);
   }, [camera, layout, viewport]);
 
+  const { focusedId, focusNode, clearFocus } = useGraphFocus({
+    camera,
+    cameraNow,
+    takeManualControl,
+  });
+
+  // Clearing beats the deferred camera move to the punch, so the first press of
+  // a double click never animates on its way to the note.
+  const handleNodeClick = useCallback(
+    (node: LayoutNode, clickCount: number) => {
+      if (clickCount < 2) {
+        focusNode(node);
+        return;
+      }
+      clearFocus();
+      onOpenFile(node.id);
+    },
+    [clearFocus, focusNode, onOpenFile],
+  );
+
   const { hovered, dragging, clearHover, handlePointerDown, handlePointerMove, handlePointerUp } =
     useGraphPointer({
       canvasRef,
@@ -98,11 +116,16 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
       cameraNow,
       takeManualControl,
       reheat,
-      onOpenFile,
+      onNodeClick: handleNodeClick,
+      onBackgroundClick: clearFocus,
     });
 
+  // Hover previews on top of the focus and falls back to it on leave; both ride
+  // the single highlight input `drawGraph` already dims around.
+  const highlightId = hovered?.id ?? focusedId;
+
   // Redraw on every change that affects pixels: layout motion (version),
-  // camera, hover, viewport size, theme.
+  // camera, highlight, viewport size, theme.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `version` is the redraw trigger — d3 mutates layout node positions in place, so neither the layout reference nor a manual camera changes between animation frames
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -116,45 +139,18 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
       dpr,
       camera: effectiveCamera,
       theme,
-      hoveredId: hovered?.id ?? null,
+      hoveredId: highlightId,
       neighbors: graph.neighbors,
     });
-  }, [layout, version, effectiveCamera, hovered?.id, viewport, theme, graph.neighbors]);
+  }, [layout, version, effectiveCamera, highlightId, viewport, theme, graph.neighbors]);
 
   const refit = useCallback(() => {
+    clearFocus();
     autoFitRef.current = true;
     setAutoFit(true);
-  }, []);
+  }, [clearFocus]);
 
-  // Route the Zoom In/Out/Actual-Size commands to the camera while the graph is
-  // the active surface, anchored on the viewport centre. Wheel zoom is wired
-  // separately above. The handlers read the latest camera/viewport through a
-  // ref so registration happens once per mount, not on every camera frame.
-  const zoomImplRef = useRef<() => ZoomHandlers>(() => ({
-    zoomIn: () => {},
-    zoomOut: () => {},
-    zoomReset: () => {},
-  }));
-  zoomImplRef.current = () => {
-    const zoomCenter = (factor: number) => {
-      takeManualControl();
-      camera.zoomAt(viewport.width / 2, viewport.height / 2, factor, viewport);
-    };
-    return {
-      zoomIn: () => zoomCenter(HOTKEY_ZOOM_FACTOR),
-      zoomOut: () => zoomCenter(1 / HOTKEY_ZOOM_FACTOR),
-      zoomReset: refit,
-    };
-  };
-  useEffect(() => {
-    if (!registerZoomTarget) return;
-    registerZoomTarget({
-      zoomIn: () => zoomImplRef.current().zoomIn(),
-      zoomOut: () => zoomImplRef.current().zoomOut(),
-      zoomReset: () => zoomImplRef.current().zoomReset(),
-    });
-    return () => registerZoomTarget(null);
-  }, [registerZoomTarget]);
+  useGraphZoomCommands({ camera, viewport, takeManualControl, refit });
 
   if (graph.nodes.length === 0) {
     return (
