@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import { EMPTY_SNAPSHOT } from "@/lib/vault";
+import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 
 // The full TabsContext surface as inert defaults, so a test only spells out the
 // fields it asserts on. Every component that reads the context needs the whole
@@ -16,6 +17,7 @@ export function tabsContextValue(over: Partial<TabsContextValue> = {}): TabsCont
     initializing: false,
     workspaceFiles: [],
     snapshot: EMPTY_SNAPSHOT,
+    indexStatus: COMPLETE_INDEX_STATUS,
     workspace: null,
     newDocument: vi.fn(),
     openFile: vi.fn(),

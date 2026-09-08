@@ -42,6 +42,8 @@ function mockFs(files: Record<string, string>, removed = 0): FakeFs {
       case "prune_export_dir":
         fs.pruned.push((a as unknown as { written: string[] }).written);
         return Promise.resolve(removed);
+      case "vault_refresh":
+        return Promise.resolve(undefined);
       case "vault_resolve": {
         // Stands in for the index: a target names a file by its stem.
         const { targets } = args as { targets: string[] };

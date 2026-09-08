@@ -28,7 +28,7 @@ export function CommandPalette({
 
   // `tag:foo` / `status:draft` terms are lifted out by the index, which also
   // says which files they select; the rest of the query is fuzzy-matched here.
-  const { filters, text, paths } = useVaultQuery(query);
+  const { filters, text, paths } = useVaultQuery(query, open);
   const ranked = useMemo(
     () => rankCommands(text, commands, { paths: filters.length > 0 ? new Set(paths) : null }),
     [text, commands, filters, paths],

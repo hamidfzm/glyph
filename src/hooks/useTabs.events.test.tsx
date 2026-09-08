@@ -6,6 +6,7 @@ import type { NoteSummary } from "@/lib/vault";
 import {
   captureListener,
   defaultOptions,
+  fileScan,
   makeInvoker,
   resetTabsMocks,
   vaultSnapshot,
@@ -234,6 +235,7 @@ describe("useTabs directory-changed events", () => {
       makeInvoker({
         read_directory: async (_cmd, args) =>
           String(args?.path ?? "") === "/p/ws" ? rootEntries : [],
+        list_markdown_files: async () => fileScan(files),
         vault_refresh: async () => vaultSnapshot(files, { notes }),
         vault_snapshot: async () => vaultSnapshot(files, { notes }),
       }) as typeof invoke,
@@ -276,6 +278,8 @@ describe("useTabs directory-changed events", () => {
     const dirChanged = captureListener("directory-changed");
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
+        list_markdown_files: async (_cmd, args) =>
+          fileScan(String(args?.path ?? "") === "/p/ws" ? ["/p/ws/a.md"] : []),
         vault_refresh: async (_cmd, args) => forRoot(String(args?.path ?? "")),
         vault_snapshot: async (_cmd, args) => forRoot(String(args?.path ?? "")),
       }) as typeof invoke,

@@ -24,6 +24,26 @@ describe("useBacklinks", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  // Switching notes must empty the panel rather than leave the previous note's
+  // inbound links under the new note's heading (INV-3).
+  it("shows nothing for the new note until its own rows arrive", async () => {
+    const answers: Record<string, typeof rows> = {
+      "/ws/Note.md": rows,
+      "/ws/Other.md": [{ source: "/ws/Deep.md", line: 9, snippet: "see [[Other]]" }],
+    };
+    vi.mocked(invoke).mockImplementation(((_cmd: string, args: { path: string }) =>
+      Promise.resolve(answers[args.path] ?? [])) as unknown as typeof invoke);
+    const { result, rerender } = renderHook(
+      ({ path }) => useBacklinks("/ws", path, EMPTY_SNAPSHOT),
+      { initialProps: { path: "/ws/Note.md" } },
+    );
+    await waitFor(() => expect(result.current).toEqual(rows));
+
+    rerender({ path: "/ws/Other.md" });
+    expect(result.current).toEqual([]);
+    await waitFor(() => expect(result.current).toEqual(answers["/ws/Other.md"]));
+  });
+
   it("degrades to no backlinks when the index call fails", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(invoke).mockRejectedValue(new Error("denied"));

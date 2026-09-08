@@ -1,14 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import { EMPTY_SNAPSHOT } from "@/lib/vault";
-import { COMPLETE_SCAN, type ScanStatus } from "@/lib/workspaceScan";
+import { COMPLETE_INDEX_STATUS, COMPLETE_SCAN, type ScanStatus } from "@/lib/workspaceScan";
 import { WorkspaceIndexWarning } from "./WorkspaceIndexWarning";
 
-function renderWith(status: ScanStatus) {
-  const snapshot = { ...EMPTY_SNAPSHOT, status };
+function renderWith(status: ScanStatus, which: "files" | "vault" = "files") {
+  const indexStatus = { ...COMPLETE_INDEX_STATUS, [which]: status };
   return render(
-    <TabsContext.Provider value={{ snapshot } as unknown as TabsContextValue}>
+    <TabsContext.Provider value={{ indexStatus } as unknown as TabsContextValue}>
       <WorkspaceIndexWarning />
     </TabsContext.Provider>,
   );
@@ -20,7 +19,7 @@ describe("WorkspaceIndexWarning", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders nothing while the index is complete", () => {
+  it("renders nothing while both walks are complete", () => {
     const { container } = renderWith(COMPLETE_SCAN);
     expect(container.firstChild).toBeNull();
   });
@@ -37,8 +36,8 @@ describe("WorkspaceIndexWarning", () => {
     expect(screen.getByRole("status").getAttribute("title")).toContain("first 0 documents");
   });
 
-  it("uses the depth message when the walk hit the depth cap", () => {
-    renderWith({ truncated: true, reason: "depthLimit", limit: 32 });
+  it("uses the depth message when the note index hit the depth cap", () => {
+    renderWith({ truncated: true, reason: "depthLimit", limit: 32 }, "vault");
     expect(screen.getByRole("status").getAttribute("title")).toContain("32 levels");
   });
 });

@@ -66,7 +66,7 @@ export interface VaultQueryResult {
   filters: Array<{ field: string; value: string }>;
   /** The query minus its filters. */
   text: string;
-  /** Paths satisfying every filter, or every indexed path when there are none. */
+  /** Paths satisfying every filter, empty when the query carried none. */
   paths: string[];
 }
 

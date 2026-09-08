@@ -28,6 +28,34 @@ afterEach(() => {
 });
 
 describe("useTabs workspace lifecycle", () => {
+  // The backend keeps one index per root for the life of the process, holding
+  // every note's tags, fields and links. Nothing else releases it, so a window
+  // that opens folder after folder would accumulate all of them (INV-4).
+  it("releases the backend index when the workspace closes", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await act(async () => {
+      await result.current.closeWorkspace();
+    });
+    expect(invoke).toHaveBeenCalledWith("vault_forget", { path: "/p/ws" });
+  });
+
+  it("releases the outgoing index when another folder replaces it", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/a");
+    });
+    await act(async () => {
+      await result.current.openFolder("/p/b");
+    });
+    expect(invoke).toHaveBeenCalledWith("vault_forget", { path: "/p/a" });
+    expect(invoke).not.toHaveBeenCalledWith("vault_forget", { path: "/p/b" });
+  });
+
   it("opening another folder replaces the workspace and closes its tabs", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
@@ -89,6 +117,7 @@ describe("useTabs workspace lifecycle", () => {
   it("closeWorkspace closes member tabs and the graph but keeps loose tabs", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
+        list_markdown_files: async () => fileScan(["/p/ws/note.md"]),
         vault_refresh: async () => vaultSnapshot(["/p/ws/note.md"]),
       }) as typeof invoke,
     );

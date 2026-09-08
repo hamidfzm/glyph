@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearGraphView, loadGraphView, saveGraphView } from "@/lib/graphViewStore";
 import type { ScanStatus } from "@/lib/workspaceScan";
 import { getWorkspaceSession } from "@/lib/workspaceSession";
-import { defaultOptions, makeInvoker, resetTabsMocks, vaultSnapshot } from "@/test/tabsHarness";
+import {
+  defaultOptions,
+  fileScan,
+  makeInvoker,
+  resetTabsMocks,
+  vaultSnapshot,
+} from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
 vi.mock("@/lib/pickers", () => ({
@@ -87,7 +93,10 @@ describe("useTabs graph tabs", () => {
       },
     });
     vi.mocked(invoke).mockImplementation(
-      makeInvoker({ vault_refresh: async () => snapshot }) as typeof invoke,
+      makeInvoker({
+        list_markdown_files: async () => fileScan(["/p/ws/a.md", "/p/ws/b.md"]),
+        vault_refresh: async () => snapshot,
+      }) as typeof invoke,
     );
     const result = await openWorkspace();
     await waitFor(() => expect(result.current.workspaceFiles).toHaveLength(2));
@@ -138,7 +147,7 @@ describe("useTabs graph tabs", () => {
       await result.current.openFolder("/p/ws");
     });
 
-    await waitFor(() => expect(result.current.snapshot.status).toEqual(status));
+    await waitFor(() => expect(result.current.indexStatus.vault).toEqual(status));
     expect(onWorkspaceNotice).toHaveBeenCalledWith(
       { key: "notice.indexIncompleteDepth", values: { limit: "32" } },
       { persistent: true },
@@ -159,7 +168,7 @@ describe("useTabs graph tabs", () => {
       await result.current.openFolder("/p/ws");
     });
 
-    await waitFor(() => expect(result.current.snapshot.status).toEqual(status));
+    await waitFor(() => expect(result.current.indexStatus.vault).toEqual(status));
     expect(onWorkspaceNotice).toHaveBeenCalledTimes(1);
     expect(onWorkspaceNotice).toHaveBeenCalledWith(
       { key: "notice.indexIncompleteFiles", values: { limit: "2" } },
@@ -224,12 +233,12 @@ describe("useTabs graph tabs", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    await waitFor(() => expect(result.current.snapshot.status.truncated).toBe(true));
+    await waitFor(() => expect(result.current.indexStatus.vault.truncated).toBe(true));
 
     await act(async () => {
       await result.current.closeWorkspace();
     });
-    expect(result.current.snapshot.status.truncated).toBe(false);
+    expect(result.current.indexStatus.vault.truncated).toBe(false);
   });
 
   it("closeWorkspace closes the graph tab and drops its view state", async () => {

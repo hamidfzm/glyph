@@ -15,7 +15,9 @@ pub struct QueryResult {
     pub filters: Vec<Filter>,
     /// The query minus its filters.
     pub text: String,
-    /// Paths satisfying every filter, or every indexed path when there are none.
+    /// Paths satisfying every filter. Empty when the query carried none: the
+    /// caller has nothing to narrow by, and a workspace's whole path list is
+    /// not worth sending on every keystroke.
     pub paths: Vec<String>,
 }
 
@@ -55,12 +57,15 @@ impl Vault {
     /// Parse a palette query and return the notes it selects.
     pub fn query(&self, raw: &str) -> QueryResult {
         let parsed = query::parse_query(raw, &self.field_names);
-        let paths = self
-            .notes
-            .iter()
-            .filter(|note| query::matches_filters(note, &parsed.filters))
-            .map(|note| note.path.clone())
-            .collect();
+        let paths = if parsed.filters.is_empty() {
+            Vec::new()
+        } else {
+            self.notes
+                .iter()
+                .filter(|note| query::matches_filters(note, &parsed.filters))
+                .map(|note| note.path.clone())
+                .collect()
+        };
         QueryResult {
             filters: parsed.filters,
             text: parsed.text,

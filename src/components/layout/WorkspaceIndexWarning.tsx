@@ -2,7 +2,7 @@ import { useContext } from "react";
 import { useTranslation } from "react-i18next";
 import { WarningIcon } from "@/components/icons/WarningIcon";
 import { TabsContext } from "@/contexts/TabsContext";
-import { indexIncompleteKey } from "@/lib/workspaceScan";
+import { indexIncompleteKey, truncatedScan } from "@/lib/workspaceScan";
 
 /**
  * Persistent incomplete-index indicator pinned under the file tree (#436).
@@ -12,8 +12,9 @@ import { indexIncompleteKey } from "@/lib/workspaceScan";
  */
 export function WorkspaceIndexWarning() {
   const { t } = useTranslation(["common", "workspace"]);
-  const status = useContext(TabsContext)?.snapshot.status;
-  if (!status?.truncated) return null;
+  const indexStatus = useContext(TabsContext)?.indexStatus;
+  const status = indexStatus ? truncatedScan(indexStatus) : null;
+  if (!status) return null;
 
   return (
     <div

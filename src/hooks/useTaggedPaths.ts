@@ -16,27 +16,33 @@ export function useTaggedPaths(
   tag: string | null,
   snapshot: VaultSnapshot,
 ): string[] {
-  const [paths, setPaths] = useState<string[]>(NONE);
+  const [answered, setAnswered] = useState<{ key: string; rows: string[] }>({
+    key: "",
+    rows: NONE,
+  });
+  const key = `${root ?? ""}\u0000${tag ?? ""}`;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot` is the re-ask trigger, not a value read; a new index is exactly when the answer can differ
   useEffect(() => {
     if (!root || !tag) {
-      setPaths(NONE);
+      setAnswered({ key, rows: NONE });
       return;
     }
     let current = true;
     invoke<string[]>("vault_paths_with_tag", { root, tag })
       .then((rows) => {
-        if (current) setPaths(rows);
+        if (current) setAnswered({ key, rows });
       })
       .catch((err) => {
         console.error(`Failed to list files tagged ${tag}:`, err);
-        if (current) setPaths(NONE);
+        if (current) setAnswered({ key, rows: NONE });
       });
     return () => {
       current = false;
     };
-  }, [root, tag, snapshot]);
+  }, [root, tag, key, snapshot]);
 
-  return paths;
+  // Stamped with the tag they answer, so picking another chip empties the list
+  // for one round trip rather than showing the previous tag's files under it.
+  return answered.key === key ? answered.rows : NONE;
 }

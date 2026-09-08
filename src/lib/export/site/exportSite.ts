@@ -88,6 +88,13 @@ export async function exportSite({
     throw new Error("The workspace contains no markdown files to export.");
   }
 
+  // Rebuild the index from disk before resolving any link. `glyph serve`
+  // re-runs this on every change but never touches the index, and a plain
+  // export may run against a backend that built one at some earlier point, so
+  // without this a note created since would be a permanently broken link and a
+  // renamed one would keep pointing at its old page.
+  await invoke("vault_refresh", { path: root });
+
   // Site-wide metadata: optional .glyph/site.json at the root; absence is
   // fine, a present-but-invalid file fails the export loudly. The read error
   // string doesn't distinguish "missing" from "unreadable" portably, so any

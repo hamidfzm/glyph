@@ -118,7 +118,15 @@ export function useTabs(options: UseTabsOptions) {
     deleteEntry,
   } = useWorkspaceTree({ repointOpenFiles });
 
-  const { snapshot, scanWorkspace, refreshIndexes, clearIndexes, resetStatus } = useWorkspaceIndex({
+  const {
+    workspaceFiles,
+    snapshot,
+    indexStatus,
+    scanWorkspace,
+    refreshIndexes,
+    clearIndexes,
+    resetStatus,
+  } = useWorkspaceIndex({
     workspaceRoot: workspace?.root ?? null,
     onWorkspaceNotice: options.onWorkspaceNotice,
   });
@@ -389,7 +397,8 @@ export function useTabs(options: UseTabsOptions) {
     initializing,
     workspace,
     snapshot,
-    workspaceFiles: snapshot.files,
+    workspaceFiles,
+    indexStatus,
     openFile,
     newDocument,
     openFolder,

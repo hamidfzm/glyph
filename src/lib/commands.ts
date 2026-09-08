@@ -65,8 +65,9 @@ export function rankCommands(
   const candidates =
     paths === null ? commands : commands.filter((c) => c.path !== undefined && paths.has(c.path));
 
-  // A query that was nothing but filters arrives as the whitespace between
-  // them, which is not something to fuzzy-match against.
+  // The index collapses the leftover whitespace itself, so this only catches
+  // the raw query the palette shows while the first answer is still in
+  // flight.
   const query = text.trim();
   if (query.length === 0) {
     return candidates

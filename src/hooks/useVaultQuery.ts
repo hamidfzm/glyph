@@ -16,15 +16,18 @@ function plain(query: string): VaultQueryResult {
  * `tag:foo` means. That makes it asynchronous, so the previous answer stays on
  * screen while the next one loads: the alternative is the list emptying for a
  * frame on every keystroke.
+ *
+ * `enabled` is false while the palette is closed. Without it a hidden palette
+ * would ask on mount and again on every re-index, for the life of the window.
  */
-export function useVaultQuery(query: string): VaultQueryResult {
+export function useVaultQuery(query: string, enabled = true): VaultQueryResult {
   const root = useWorkspaceRoot();
   const snapshot = useVaultSnapshot();
   const [result, setResult] = useState<VaultQueryResult>(() => plain(query));
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot` is the re-ask trigger, not a value read; a new index is exactly when the answer can differ
   useEffect(() => {
-    if (!root) {
+    if (!root || !enabled) {
       setResult(plain(query));
       return;
     }
@@ -40,7 +43,7 @@ export function useVaultQuery(query: string): VaultQueryResult {
     return () => {
       current = false;
     };
-  }, [root, query, snapshot]);
+  }, [root, query, enabled, snapshot]);
 
   return result;
 }

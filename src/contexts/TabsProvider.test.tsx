@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useTabs } from "@/hooks/useTabs";
 import type { UnsavedChoice } from "@/hooks/useUnsavedChangesPrompt";
+import { EMPTY_SNAPSHOT } from "@/lib/vault";
 import { TabsProvider } from "./TabsProvider";
 
 vi.mock("@/hooks/useTabs", () => ({ useTabs: vi.fn() }));
@@ -10,9 +11,9 @@ vi.mock("@/hooks/useTabs", () => ({ useTabs: vi.fn() }));
 const tabsStub = {
   tabs: [],
   activeFile: null,
-  wikilinkRefs: [],
+  workspace: null,
   workspaceFiles: [],
-  metadataEntries: [],
+  snapshot: EMPTY_SNAPSHOT,
 };
 
 /** Render the provider and hand back the `confirmUnsaved` it wired into useTabs. */

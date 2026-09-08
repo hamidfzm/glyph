@@ -270,11 +270,13 @@ fn queries_filter_on_tags_and_fields() {
         vec!["Archive/Old Note.md"]
     );
 
-    // `section` is not, so it stays plain text and nothing is filtered out.
+    // `section` is not, so it stays plain text. With no filter there is
+    // nothing to narrow by, and the caller is told so rather than handed the
+    // whole workspace.
     let plain = vault.query("Section:Overview");
     assert!(plain.filters.is_empty());
     assert_eq!(plain.text, "Section:Overview");
-    assert_eq!(plain.paths.len(), 8);
+    assert!(plain.paths.is_empty());
     fs::remove_dir_all(&root).unwrap();
 }
 
