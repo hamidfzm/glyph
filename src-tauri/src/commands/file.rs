@@ -1,6 +1,7 @@
 use serde::Serialize;
+use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 use tauri::State;
@@ -84,6 +85,102 @@ pub fn copy_file(
     fs::copy(&src, &dest)
         .map(|_| ())
         .map_err(|e| format!("Failed to copy file: {e}"))
+}
+
+/// Where an exported site records what it wrote, so the next export into the
+/// same directory knows which of its own files to remove. Site-relative, POSIX
+/// style, matching the paths the exporter hands us.
+const SITE_MANIFEST_REL: &str = ".glyph/site-manifest.json";
+
+/// Resolve a manifest entry inside `out_dir`, refusing anything that could
+/// escape it. The manifest lives in the output directory, so a hand-edited one
+/// is untrusted input (INV-5): every segment must be a plain name, and the
+/// resolved parent must still be inside the output tree after symlinks.
+fn manifest_entry_path(out_dir: &Path, rel: &str) -> Option<PathBuf> {
+    let mut path = out_dir.to_path_buf();
+    for segment in rel.split(['/', '\\']) {
+        let mut components = Path::new(segment).components();
+        match (components.next(), components.next()) {
+            (Some(Component::Normal(name)), None) => path.push(name),
+            _ => return None,
+        }
+    }
+    // Delete through the canonicalized parent, not the path as joined: an
+    // intermediate component swapped for a symlink between the check and the
+    // unlink would otherwise escape the directory that was checked.
+    let parent = path.parent()?.canonicalize().ok()?;
+    let name = path.file_name()?;
+    parent.starts_with(out_dir).then(|| parent.join(name))
+}
+
+/// Fold a manifest entry for comparison: separators unified, case ignored. A
+/// rename that only changes case writes the same file on Windows and macOS, so
+/// comparing verbatim would prune the page the current export just wrote.
+fn manifest_entry_key(rel: &str) -> String {
+    rel.replace('\\', "/").to_lowercase()
+}
+
+/// Remove `from` and each parent up to (but never including) `out_dir`, for as
+/// long as they are empty. `remove_dir` refuses a non-empty directory, which is
+/// exactly the stopping condition.
+fn prune_empty_dirs(from: &Path, out_dir: &Path) {
+    let mut dir = from.to_path_buf();
+    while dir != out_dir && fs::remove_dir(&dir).is_ok() {
+        dir.pop();
+    }
+}
+
+/// Delete the files a previous website export left in `out_dir` that this one
+/// did not write, then record what the output directory now holds of Glyph's.
+/// Returns how many files were removed.
+///
+/// Pruning is against the previous export's own manifest, never against the
+/// whole directory, so anything the user keeps beside the generated site (a
+/// `CNAME`, a `.nojekyll`) is untouched. The manifest is trusted only to name
+/// Glyph's output: every entry it claims is confined to `out_dir`, and that
+/// confinement, not the manifest's contents, is the boundary.
+#[tauri::command]
+pub fn prune_export_dir(
+    out_dir: String,
+    written: Vec<String>,
+    grants: State<'_, GrantRegistry>,
+) -> Result<usize, String> {
+    let out_dir = grants.ensure_writable(&out_dir)?;
+    let manifest = out_dir.join(SITE_MANIFEST_REL);
+    let previous: Vec<String> = fs::read_to_string(&manifest)
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default();
+
+    let keep: HashSet<String> = written.iter().map(|rel| manifest_entry_key(rel)).collect();
+    let mut claimed = written;
+    let mut removed = 0;
+    for rel in previous
+        .iter()
+        .filter(|rel| !keep.contains(&manifest_entry_key(rel)))
+    {
+        let Some(path) = manifest_entry_path(&out_dir, rel) else {
+            continue;
+        };
+        if fs::remove_file(&path).is_ok() {
+            removed += 1;
+            if let Some(parent) = path.parent() {
+                prune_empty_dirs(parent, &out_dir);
+            }
+        } else if path.exists() {
+            // Read-only, locked by another process, or a directory: keep
+            // claiming it so a later export prunes it. Dropping it here would
+            // orphan the file in the output for good.
+            claimed.push(rel.clone());
+        }
+    }
+
+    if let Some(parent) = manifest.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
+    }
+    let json = serde_json::to_string(&claimed).map_err(|e| format!("Failed to serialize: {e}"))?;
+    fs::write(&manifest, json).map_err(|e| format!("Failed to write file: {e}"))?;
+    Ok(removed)
 }
 
 #[tauri::command]
@@ -665,6 +762,267 @@ mod tests {
         assert!(result.unwrap_err().contains("Failed to copy file"));
 
         let _ = fs::remove_dir_all(&root);
+    }
+
+    fn app_with_export_dir(dir: &Path) -> tauri::App<MockRuntime> {
+        let app = app_with_grants();
+        app.state::<GrantRegistry>().grant_export_dir(dir).unwrap();
+        app
+    }
+
+    /// An output directory with a previous export's manifest already in place.
+    fn out_dir_with_manifest(name: &str, previous: &[&str]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("glyph_test_{name}_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join(".glyph")).unwrap();
+        fs::write(
+            dir.join(SITE_MANIFEST_REL),
+            serde_json::to_string(previous).unwrap(),
+        )
+        .unwrap();
+        dir
+    }
+
+    fn prune(dir: &Path, written: &[&str]) -> Result<usize, String> {
+        let app = app_with_export_dir(dir);
+        prune_export_dir(
+            dir.to_string_lossy().to_string(),
+            written.iter().map(|s| s.to_string()).collect(),
+            app.state::<GrantRegistry>(),
+        )
+    }
+
+    #[test]
+    fn prune_export_dir_removes_only_files_the_previous_export_wrote() {
+        let dir = out_dir_with_manifest("prune_stale", &["index.html", "guide.html"]);
+        fs::write(dir.join("index.html"), "home").unwrap();
+        fs::write(dir.join("guide.html"), "stale").unwrap();
+        // Not Glyph's file: a static host's marker the user keeps beside the site.
+        fs::write(dir.join("CNAME"), "example.com").unwrap();
+
+        let removed = prune(&dir, &["index.html"]).unwrap();
+
+        assert_eq!(removed, 1);
+        assert!(!dir.join("guide.html").exists());
+        assert!(dir.join("index.html").exists());
+        assert!(dir.join("CNAME").exists());
+        // The manifest now describes this export, so the next one prunes against it.
+        let manifest = fs::read_to_string(dir.join(SITE_MANIFEST_REL)).unwrap();
+        assert_eq!(manifest, r#"["index.html"]"#);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_removes_directories_a_pruned_page_leaves_empty() {
+        let dir = out_dir_with_manifest("prune_dirs", &["guide/intro.html"]);
+        fs::create_dir_all(dir.join("guide")).unwrap();
+        fs::write(dir.join("guide/intro.html"), "gone").unwrap();
+
+        assert_eq!(prune(&dir, &[]).unwrap(), 1);
+
+        assert!(!dir.join("guide").exists());
+        assert!(dir.exists(), "the output directory itself is never removed");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_deletes_nothing_without_a_previous_manifest() {
+        let dir =
+            std::env::temp_dir().join(format!("glyph_test_prune_first_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("keep.txt"), "not ours").unwrap();
+
+        assert_eq!(prune(&dir, &["index.html"]).unwrap(), 0);
+
+        assert!(dir.join("keep.txt").exists());
+        assert!(dir.join(SITE_MANIFEST_REL).exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_ignores_a_malformed_manifest() {
+        let dir = std::env::temp_dir().join(format!("glyph_test_prune_bad_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join(".glyph")).unwrap();
+        fs::write(dir.join(SITE_MANIFEST_REL), "{ not json").unwrap();
+        fs::write(dir.join("index.html"), "home").unwrap();
+
+        assert_eq!(prune(&dir, &["index.html"]).unwrap(), 0);
+
+        assert!(dir.join("index.html").exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_refuses_manifest_entries_that_escape_the_output_directory() {
+        let outer =
+            std::env::temp_dir().join(format!("glyph_test_prune_escape_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&outer);
+        let dir = outer.join("site");
+        fs::create_dir_all(dir.join(".glyph")).unwrap();
+        let victim = outer.join("secret.txt");
+        fs::write(&victim, "keep").unwrap();
+        // A hand-edited manifest is untrusted input, whatever shape it takes.
+        let escapes = vec![
+            "../secret.txt".to_string(),
+            "..\\secret.txt".to_string(),
+            victim.to_string_lossy().to_string(),
+            "./index.html".to_string(),
+            "".to_string(),
+        ];
+        fs::write(
+            dir.join(SITE_MANIFEST_REL),
+            serde_json::to_string(&escapes).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(prune(&dir, &[]).unwrap(), 0);
+
+        assert!(victim.exists());
+
+        let _ = fs::remove_dir_all(&outer);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn prune_export_dir_refuses_an_entry_reached_through_a_junction() {
+        let outer =
+            std::env::temp_dir().join(format!("glyph_test_prune_junc_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&outer);
+        let dir = outer.join("site");
+        let elsewhere = outer.join("elsewhere");
+        fs::create_dir_all(dir.join(".glyph")).unwrap();
+        fs::create_dir_all(&elsewhere).unwrap();
+        let victim = elsewhere.join("secret.txt");
+        fs::write(&victim, "keep").unwrap();
+        // Junctions are the Windows escape vector symlinks are on unix, and
+        // unlike symlinks they need no privilege to create.
+        let output = std::process::Command::new("cmd")
+            .arg("/C")
+            .arg("mklink")
+            .arg("/J")
+            .arg(dir.join("out"))
+            .arg(&elsewhere)
+            .output()
+            .expect("cmd should run");
+        assert!(output.status.success(), "mklink /J failed");
+        fs::write(
+            dir.join(SITE_MANIFEST_REL),
+            serde_json::to_string(&["out/secret.txt"]).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(prune(&dir, &[]).unwrap(), 0);
+
+        assert!(victim.exists());
+
+        let _ = fs::remove_dir_all(&outer);
+    }
+
+    #[test]
+    fn prune_export_dir_keeps_the_page_a_case_only_rename_rewrote() {
+        // Windows and macOS write `Guide.html` and `guide.html` to one file,
+        // so pruning the old spelling would delete the page just written.
+        let dir = out_dir_with_manifest("prune_case", &["Guide.html"]);
+        fs::write(dir.join("guide.html"), "the current page").unwrap();
+
+        assert_eq!(prune(&dir, &["guide.html"]).unwrap(), 0);
+
+        assert_eq!(
+            fs::read_to_string(dir.join("guide.html")).unwrap(),
+            "the current page"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_keeps_claiming_a_file_it_could_not_remove() {
+        // A directory stands in for the read-only or locked file the removal
+        // fails on: dropping the claim would orphan it in the output for good.
+        let dir = out_dir_with_manifest("prune_stuck", &["stuck"]);
+        fs::create_dir_all(dir.join("stuck")).unwrap();
+        fs::write(dir.join("stuck/inside.txt"), "blocks the removal").unwrap();
+
+        assert_eq!(prune(&dir, &[]).unwrap(), 0);
+
+        assert!(dir.join("stuck").exists());
+        let manifest = fs::read_to_string(dir.join(SITE_MANIFEST_REL)).unwrap();
+        assert_eq!(manifest, r#"["stuck"]"#);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_hands_its_manifest_to_the_next_export() {
+        let dir =
+            std::env::temp_dir().join(format!("glyph_test_prune_chain_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("index.html"), "home").unwrap();
+        fs::write(dir.join("guide.html"), "guide").unwrap();
+
+        assert_eq!(prune(&dir, &["index.html", "guide.html"]).unwrap(), 0);
+        // Second export: guide.md is gone, so its page is no longer written.
+        assert_eq!(prune(&dir, &["index.html"]).unwrap(), 1);
+
+        assert!(!dir.join("guide.html").exists());
+        assert!(dir.join("index.html").exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prune_export_dir_refuses_an_entry_reached_through_a_symlinked_directory() {
+        let outer =
+            std::env::temp_dir().join(format!("glyph_test_prune_link_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&outer);
+        let dir = outer.join("site");
+        let elsewhere = outer.join("elsewhere");
+        fs::create_dir_all(dir.join(".glyph")).unwrap();
+        fs::create_dir_all(&elsewhere).unwrap();
+        let victim = elsewhere.join("secret.txt");
+        fs::write(&victim, "keep").unwrap();
+        std::os::unix::fs::symlink(&elsewhere, dir.join("out")).unwrap();
+        fs::write(
+            dir.join(SITE_MANIFEST_REL),
+            serde_json::to_string(&["out/secret.txt"]).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(prune(&dir, &[]).unwrap(), 0);
+
+        assert!(victim.exists());
+
+        let _ = fs::remove_dir_all(&outer);
+    }
+
+    #[test]
+    fn prune_export_dir_denied_without_a_grant() {
+        let dir =
+            std::env::temp_dir().join(format!("glyph_test_prune_denied_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join(".glyph")).unwrap();
+        fs::write(dir.join(SITE_MANIFEST_REL), r#"["index.html"]"#).unwrap();
+        fs::write(dir.join("index.html"), "home").unwrap();
+
+        let app = app_with_grants();
+        let result = prune_export_dir(
+            dir.to_string_lossy().to_string(),
+            vec![],
+            app.state::<GrantRegistry>(),
+        );
+
+        assert!(result.is_err());
+        assert!(dir.join("index.html").exists());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -40,6 +40,8 @@ export interface ExportSiteOptions {
 export interface ExportSiteResult {
   pages: number;
   assets: number;
+  /** Files a previous export into the same directory wrote and this one did not. */
+  removed: number;
 }
 
 const MERMAID_FENCE = /^(```|~~~)mermaid\b/m;
@@ -62,6 +64,11 @@ function siteDir(rel: string): string {
  * nav and outline, rewritten wikilinks/relative links, copied image assets,
  * and inline Mermaid SVGs. Rendering is headless (no React mount), so every
  * file exports with the same fidelity regardless of what is open in the app.
+ *
+ * Exporting again into the same directory prunes what the previous export
+ * wrote and this one did not, so a deleted or renamed note leaves no page
+ * behind. Only Glyph's own output is pruned; anything else in the directory
+ * (a CNAME, a .nojekyll) is left alone.
  */
 export async function exportSite({
   root,
@@ -113,6 +120,10 @@ export async function exportSite({
   if (socialImageAbs !== null && socialImageRel !== null) {
     assets.set(socialImageAbs, socialImageRel);
   }
+  // Every site-relative path this export puts on disk, in write order. Handed
+  // to the pruner at the end so the files a previous export left behind for
+  // content that no longer exists are removed.
+  const written: string[] = [];
   const madeDirs = new Set<string>();
   const ensureDir = async (rel: string) => {
     const dir = siteDir(rel);
@@ -159,10 +170,12 @@ export async function exportSite({
     });
     await ensureDir(rel);
     await invoke("write_file", { path: outPath(outDir, rel), content: html });
+    written.push(rel);
   };
 
   let done = 0;
   let copied = 0;
+  let removed = 0;
   let usedMermaid = false;
   try {
     for (const { file, content, rel: pageRel } of jobs) {
@@ -208,6 +221,7 @@ export async function exportSite({
       try {
         await invoke("copy_file", { src, dest: outPath(outDir, destRel) });
         copied++;
+        written.push(destRel);
       } catch (err) {
         // A referenced image that is missing on disk renders nothing in the
         // app; the exported page gets the same broken reference instead of
@@ -224,16 +238,30 @@ export async function exportSite({
       path: outPath(outDir, "style.css"),
       content: `${collectStyles()}\n${siteChromeCss()}\n${theme.css}`,
     });
+    written.push("style.css");
     await invoke("write_file", { path: outPath(outDir, "site.js"), content: siteChromeScript() });
+    written.push("site.js");
     if (config.robots !== null) {
       await invoke("write_file", {
         path: outPath(outDir, "robots.txt"),
         content: robotsTxt(config.robots),
       });
+      written.push("robots.txt");
+    }
+
+    // Last, so a failed export leaves the previous build's files (and its
+    // manifest) alone rather than pruning against a half-written site.
+    try {
+      removed = await invoke<number>("prune_export_dir", { outDir, written });
+    } catch (err) {
+      // Cleanup, not part of producing the site: the pages and assets are all
+      // on disk, so a failure here leaves stale files behind rather than
+      // failing an export that succeeded.
+      console.error("Failed to prune stale files from the export:", err);
     }
   } finally {
     if (usedMermaid) await restoreMermaidTheme(dark);
   }
 
-  return { pages: done, assets: copied };
+  return { pages: done, assets: copied, removed };
 }

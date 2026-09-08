@@ -30,7 +30,7 @@ the missing remainder is rejected.
 | ----- | ----- | ------ |
 | workspace | folder, recursive | read, write, watch |
 | file | exact path | read, write (autosave), watch |
-| export dir | folder, recursive | write only |
+| export dir | folder, recursive | write, and delete what a previous export into that folder recorded |
 | export file | exact path | write only |
 
 Grants are minted only from backend-observed events, never from a bare
@@ -80,6 +80,7 @@ and files: <path>`), which never echoes the grant list.
 | `read_file`, `get_file_metadata`, `read_directory`, `list_markdown_files`, `scan_wikilinks`, `scan_metadata` | readable |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable |
 | `copy_file` | source readable and destination writable |
+| `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export) |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |
 | `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it |
 | `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target) |

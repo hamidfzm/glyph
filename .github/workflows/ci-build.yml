@@ -92,6 +92,18 @@ jobs:
           xvfb-run --auto-servernum ./src-tauri/target/release/glyph export "$PWD/samples" --format site --out /tmp/csp-smoke
           test -f /tmp/csp-smoke/index.html
           test "$(find /tmp/csp-smoke -maxdepth 1 -name '*.html' | wc -l)" -ge 3
+          # A repeat export prunes what it no longer produces, and only that.
+          # This is the only place the prune runs over real IPC and a real
+          # export-dir grant.
+          cp -r "$PWD/samples" /tmp/prune-ws
+          xvfb-run --auto-servernum ./src-tauri/target/release/glyph export /tmp/prune-ws --format site --out /tmp/prune-out
+          test -f /tmp/prune-out/Scratchpad.html
+          test -f /tmp/prune-out/.glyph/site-manifest.json
+          touch /tmp/prune-out/CNAME
+          rm /tmp/prune-ws/Scratchpad.md
+          xvfb-run --auto-servernum ./src-tauri/target/release/glyph export /tmp/prune-ws --format site --out /tmp/prune-out
+          test ! -f /tmp/prune-out/Scratchpad.html
+          test -f /tmp/prune-out/CNAME
           # A document export renders the live DOM, so it exercises the
           # render-readiness gate the site export never touches.
           xvfb-run --auto-servernum ./src-tauri/target/release/glyph export "$PWD/samples/Index.md" --format html --out /tmp/doc-smoke.html

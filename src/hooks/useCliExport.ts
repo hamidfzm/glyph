@@ -64,7 +64,10 @@ export function useCliExport({ entries, content }: UseCliExportOptions): void {
             remarkPlugins,
             rehypePlugins,
           });
-          message = `Exported ${result.pages} pages and ${result.assets} assets to ${request.output}`;
+          // Deletions are named, never silent: the export removes files a
+          // previous run into the same directory left behind.
+          const pruned = result.removed > 0 ? `, removing ${result.removed} stale files` : "";
+          message = `Exported ${result.pages} pages and ${result.assets} assets to ${request.output}${pruned}`;
         } else {
           const { runCliDocumentExport } = await import("@/lib/export/cliDocumentExport");
           const { path, settled } = await runCliDocumentExport(request, () => ({

@@ -261,6 +261,7 @@ pub fn run() {
             commands::file::write_binary_file,
             commands::file::create_dir_all,
             commands::file::copy_file,
+            commands::file::prune_export_dir,
             commands::file::get_file_metadata,
             commands::file::get_initial_file,
             #[cfg(desktop)]

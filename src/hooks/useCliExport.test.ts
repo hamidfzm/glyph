@@ -42,7 +42,7 @@ const HOOK_ARGS = { entries: [], content: "# Notes" };
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
-  exportSiteMock.mockReset().mockResolvedValue({ pages: 3, assets: 1 });
+  exportSiteMock.mockReset().mockResolvedValue({ pages: 3, assets: 1, removed: 0 });
   runCliDocumentExportMock.mockReset().mockResolvedValue({ path: "/ws/notes.pdf", settled: true });
   settings.loaded = true;
   resetCliExportRequestCache();
@@ -123,6 +123,17 @@ describe("useCliExport", () => {
     expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
       code: 0,
       message: "Exported 3 pages and 1 assets to /out",
+    });
+  });
+
+  it("names the stale files a repeat export removed", async () => {
+    exportSiteMock.mockResolvedValue({ pages: 3, assets: 1, removed: 2 });
+    stubRequest(SITE_REQUEST);
+    renderHook(() => useCliExport(HOOK_ARGS));
+    await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
+    expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
+      code: 0,
+      message: "Exported 3 pages and 1 assets to /out, removing 2 stale files",
     });
   });
 
