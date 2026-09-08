@@ -59,8 +59,8 @@ function siteDir(rel: string): string {
  * Export a folder workspace as a browsable static site: one page per markdown
  * file (structure preserved; the root index.*, else the root README.*, owns
  * index.html), a shared style.css collected from the live document, per-page
- * nav and outline, rewritten wikilinks/relative links, copied image assets,
- * and inline Mermaid SVGs. Rendering is headless (no React mount), so every
+ * nav and outline, rewritten wikilinks/relative links, copied images, media
+ * and linked files, and inline Mermaid SVGs. Rendering is headless (no React mount), so every
  * file exports with the same fidelity regardless of what is open in the app.
  */
 export async function exportSite({
@@ -209,8 +209,8 @@ export async function exportSite({
         await invoke("copy_file", { src, dest: outPath(outDir, destRel) });
         copied++;
       } catch (err) {
-        // A referenced image that is missing on disk renders nothing in the
-        // app; the exported page gets the same broken reference instead of
+        // A reference to something missing on disk is already broken in the
+        // app; the exported page carries a broken reference too, rather than
         // the whole export failing on it.
         console.error(`Failed to copy asset ${src}:`, err);
       }

@@ -6,9 +6,10 @@ import { decodeHref, encodeHref, headingSlug, relativeHref, relFromRoot } from "
 
 // Rehype plugin that makes one rendered page navigable inside the exported
 // site: wikilink anchors point at the target's generated .html, relative
-// markdown links swap .md for .html, and local images and media are redirected
-// to the copy the exporter will place in the output tree. Runs after sanitize,
-// so the wikilink data-* attributes it reads are already allowlisted.
+// markdown links swap .md for .html, and local images, media and linked files
+// are redirected to the copy the exporter will place in the output tree. Runs
+// after sanitize, so the wikilink data-* attributes it reads are already
+// allowlisted.
 //
 // It also forces the playback attributes the viewer's media components apply,
 // which a static pipeline has no other place to add: without controls, and with
@@ -32,7 +33,7 @@ export interface SiteUrlContext {
   pages: Map<string, string>;
   /**
    * Absolute asset path -> site-relative copy destination. Shared across the
-   * whole export so every page referencing the same image agrees on one copy.
+   * whole export so every page referencing the same file agrees on one copy.
    */
   assets: Map<string, string>;
 }
@@ -48,24 +49,44 @@ function lookupPage(pages: Map<string, string>, abs: string): string | undefined
   return undefined;
 }
 
+/** Site files the exporter writes itself, beyond the generated pages. */
+const SITE_FILES = ["index.html", "style.css", "site.js", "robots.txt"];
+
+/**
+ * Whether the exporter writes `dest` itself. Page paths are compared
+ * case-insensitively, matching how sitePagePlan dedupes them.
+ */
+function isGeneratedPath(ctx: SiteUrlContext, dest: string): boolean {
+  const lower = dest.toLowerCase();
+  if (SITE_FILES.includes(lower)) return true;
+  for (const page of ctx.pages.values()) {
+    if (page.toLowerCase() === lower) return true;
+  }
+  return false;
+}
+
 /**
  * Reserve a site-relative destination for `abs`. Assets inside the workspace
- * keep their relative location; anything outside lands in assets/ with a
- * numeric suffix on basename collisions.
+ * keep their relative location; anything outside, or anything that would land
+ * on a file the exporter generates, goes to assets/ with a numeric suffix on
+ * basename collisions.
  */
 function assetDestination(ctx: SiteUrlContext, abs: string): string {
   const existing = ctx.assets.get(abs);
   if (existing) return existing;
-  let dest: string;
-  if (isPathInside(abs, ctx.root)) {
-    dest = relFromRoot(ctx.root, abs);
-  } else {
-    const name = basename(abs);
-    dest = `assets/${name}`;
-    const taken = new Set(ctx.assets.values());
-    for (let n = 1; taken.has(dest); n++) {
-      dest = `assets/${name.replace(/(\.[^.]*)?$/, `-${n}$1`)}`;
-    }
+  const mirrored = isPathInside(abs, ctx.root) ? relFromRoot(ctx.root, abs) : null;
+  // Assets are copied after the pages are written, so mirroring a workspace
+  // file onto a path the exporter generates (a stray index.html, a workspace
+  // style.css) would silently overwrite it. Those go to assets/ instead.
+  if (mirrored !== null && !isGeneratedPath(ctx, mirrored)) {
+    ctx.assets.set(abs, mirrored);
+    return mirrored;
+  }
+  const name = basename(abs);
+  let dest = `assets/${name}`;
+  const taken = new Set(ctx.assets.values());
+  for (let n = 1; taken.has(dest) || isGeneratedPath(ctx, dest); n++) {
+    dest = `assets/${name.replace(/(\.[^.]*)?$/, `-${n}$1`)}`;
   }
   ctx.assets.set(abs, dest);
   return dest;
@@ -87,13 +108,24 @@ function rewriteAnchor(ctx: SiteUrlContext, props: Record<string, unknown>): voi
 
   const href = props.href;
   if (typeof href !== "string" || !isRelativeLocalHref(href)) return;
-  const [target, fragment] = href.split("#");
-  if (!isMarkdownFile(target)) return;
+  // The query and fragment ride along untouched; only the path resolves.
+  const [, target, suffix] = href.match(/^([^?#]*)(.*)$/) as RegExpMatchArray;
+  const lastSegment = target.split("/").pop();
+  // A folder, not a file: nothing to copy, and the href already points at
+  // whatever the site serves there.
+  if (lastSegment === "" || lastSegment === "." || lastSegment === "..") return;
   // micromark percent-encodes destinations; decode to get the on-disk path.
   const abs = normalizeRelativePath(ctx.filePath, decodeHref(target));
+  if (!isMarkdownFile(target)) {
+    // Anything above the root keeps its original href: a link is easier to
+    // write carelessly than an embed, so it does not publish what it names.
+    if (!isPathInside(abs, ctx.root)) return;
+    props.href = encodeHref(relativeHref(ctx.pageRel, assetDestination(ctx, abs))) + suffix;
+    return;
+  }
   const page = lookupPage(ctx.pages, abs);
   if (!page) return; // outside the workspace; leave the original link alone
-  props.href = encodeHref(relativeHref(ctx.pageRel, page)) + (fragment ? `#${fragment}` : "");
+  props.href = encodeHref(relativeHref(ctx.pageRel, page)) + suffix;
 }
 
 function rewriteImage(ctx: SiteUrlContext, props: Record<string, unknown>): void {

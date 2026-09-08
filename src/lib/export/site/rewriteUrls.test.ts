@@ -95,10 +95,68 @@ describe("rehypeSiteUrls links", () => {
     expect(html).toContain('href="../index.html"');
   });
 
-  it("leaves relative links to non-markdown files untouched", async () => {
+  it("copies a linked non-markdown file and points the link at the copy", async () => {
+    const ctx = makeCtx("/ws/guide/intro.md", "guide/intro.html");
+    const html = await render("[the report](./report.pdf)", ctx);
+    expect(html).toContain('href="report.pdf"');
+    expect(ctx.assets.get("/ws/guide/report.pdf")).toBe("guide/report.pdf");
+  });
+
+  it("keeps the fragment on a linked non-markdown file", async () => {
     const ctx = makeCtx("/ws/other.md", "other.html");
-    const html = await render("[raw data](./data.csv)", ctx);
-    expect(html).toContain('href="./data.csv"');
+    const html = await render("[page 3](./report.pdf#page=3)", ctx);
+    expect(html).toContain('href="report.pdf#page=3"');
+  });
+
+  it("leaves a linked file above the workspace alone rather than publishing it", async () => {
+    const ctx = makeCtx("/ws/other.md", "other.html");
+    const html = await render("[secret](../private/notes.pdf)", ctx);
+    expect(html).toContain('href="../private/notes.pdf"');
+    expect(ctx.assets.size).toBe(0);
+  });
+
+  it("shares one copy between a link and an image pointing at the same file", async () => {
+    const ctx = makeCtx("/ws/other.md", "other.html");
+    const html = await render("![p](./pic.png) and [p](./pic.png)", ctx);
+    expect(html).toContain('href="pic.png"');
+    expect(html).toContain('src="pic.png"');
+    expect(ctx.assets.size).toBe(1);
+  });
+
+  it("keeps a query string on a linked file out of the resolved path", async () => {
+    const ctx = makeCtx("/ws/other.md", "other.html");
+    const html = await render("[cache-busted](./file.zip?v=2)", ctx);
+    expect(html).toContain('href="file.zip?v=2"');
+    expect(ctx.assets.get("/ws/file.zip")).toBe("file.zip");
+  });
+
+  it("leaves links to folders alone", async () => {
+    const ctx = makeCtx("/ws/guide/intro.md", "guide/intro.html");
+    const html = await render("[trailing](./downloads/) [up](..) [here](.)", ctx);
+    expect(html).toContain('href="./downloads/"');
+    expect(html).toContain('href=".."');
+    expect(html).toContain('href="."');
+    expect(ctx.assets.size).toBe(0);
+  });
+
+  it("sends a linked file that would overwrite a generated file to assets/", async () => {
+    // Assets are copied after the pages are written, so mirroring a workspace
+    // index.html, page, or style.css onto its own path would overwrite it.
+    const ctx = makeCtx("/ws/README.md", "index.html");
+    const html = await render(
+      "[old home](./index.html) [old page](./other.html) [css](./style.css)",
+      ctx,
+    );
+    expect(html).toContain('href="assets/index.html"');
+    expect(html).toContain('href="assets/other.html"');
+    expect(html).toContain('href="assets/style.css"');
+  });
+
+  it("percent-encodes spaces in a rewritten link", async () => {
+    const ctx = makeCtx("/ws/other.md", "other.html");
+    const html = await render("[the report](<./my docs/q1 report.pdf>)", ctx);
+    expect(html).toContain('href="my%20docs/q1%20report.pdf"');
+    expect(ctx.assets.get("/ws/my docs/q1 report.pdf")).toBe("my docs/q1 report.pdf");
   });
 
   it("ignores anchors without an href", async () => {
