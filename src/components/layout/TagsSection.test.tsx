@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { TagCount } from "@/lib/metadata";
+import type { TagCount } from "@/lib/vault";
 import { TagsSection } from "./TagsSection";
 
 const tags: TagCount[] = [

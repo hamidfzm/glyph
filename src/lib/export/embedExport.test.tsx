@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MarkdownContent } from "@/components/markdown/MarkdownContent";
+import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { convertHtmlToPdf } from "./htmlToPdf";
 import { prepareContent } from "./prepareContent";
 
@@ -17,9 +18,10 @@ async function renderEmbedded(
 ) {
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {
     if (cmd === "read_file") return body;
+    if (cmd === "vault_resolve") return ["/ws/Note.md"];
     return undefined as unknown as string;
   });
-  render(
+  renderInWorkspace(
     // MarkdownViewer wraps rendered markdown in `.markdown-body`; mirror it so
     // prepareContent's `document.querySelector(".markdown-body")` finds it.
     <div className="markdown-body">
@@ -31,6 +33,7 @@ async function renderEmbedded(
         showFrontmatter={false}
       />
     </div>,
+    "/ws",
   );
   await waitFor(() => expect(screen.getByText(waitText)).toBeInTheDocument());
 }

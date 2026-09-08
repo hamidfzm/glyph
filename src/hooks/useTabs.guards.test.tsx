@@ -19,11 +19,10 @@ afterEach(() => {
 });
 
 describe("useTabs command failures", () => {
-  it("falls back to empty listings when directory reads and workspace scans fail", async () => {
-    // Covers the catch arms of loadDirectory, loadWorkspaceFiles,
-    // loadWikilinkRefs, and loadMetadata: each logs and degrades to an empty
-    // result so a permission error on one Rust command never breaks the
-    // workspace.
+  it("falls back to empty listings when directory reads and the index fail", async () => {
+    // Covers the catch arms of loadDirectory and the index load: each logs and
+    // degrades to an empty result so a permission error on one Rust command
+    // never breaks the workspace.
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const boom = async () => {
       throw new Error("denied");
@@ -31,9 +30,7 @@ describe("useTabs command failures", () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         read_directory: boom,
-        list_markdown_files: boom,
-        scan_wikilinks: boom,
-        scan_metadata: boom,
+        vault_refresh: boom,
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -46,8 +43,8 @@ describe("useTabs command failures", () => {
     expect(result.current.workspace?.nodes.get("/p/ws")).toEqual([]);
     expect(result.current.tabs).toHaveLength(0);
     expect(result.current.workspaceFiles).toEqual([]);
-    expect(result.current.wikilinkRefs).toEqual([]);
-    expect(result.current.metadataEntries).toEqual([]);
+    expect(result.current.snapshot.graph.edges).toEqual([]);
+    expect(result.current.snapshot.notes).toEqual([]);
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
   });

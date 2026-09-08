@@ -888,8 +888,8 @@ fn watcher_changes_for_an_unopened_root_are_a_no_op() {
 
 // ------------------------------------------------------------------ timing
 
-/// Reports how long indexing a thousand notes takes against the scans it
-/// replaces. Ignored by default; run with
+/// Reports how long indexing a thousand notes takes. Ignored by default; run
+/// with
 /// `cargo test -p glyph --lib vault::tests::index_1k_notes_timing -- --ignored --nocapture`.
 #[test]
 #[ignore = "timing, not a pass/fail assertion"]
@@ -911,20 +911,6 @@ fn index_1k_notes_timing() {
         .unwrap();
     }
 
-    let app = app_with_workspace(&root);
-    let path = root.to_string_lossy().to_string();
-
-    let started = Instant::now();
-    let old_links = crate::commands::wikilinks::scan_wikilinks(
-        path.clone(),
-        app.state::<crate::grants::GrantRegistry>(),
-    )
-    .unwrap();
-    let old_meta =
-        crate::commands::metadata::scan_metadata(path.clone(), app.state::<GrantRegistry>())
-            .unwrap();
-    let old = started.elapsed();
-
     let started = Instant::now();
     let vault = build(&root);
     let new = started.elapsed();
@@ -934,16 +920,11 @@ fn index_1k_notes_timing() {
     let serialized = started.elapsed();
 
     println!(
-        "scan_wikilinks + scan_metadata: {old:?} ({} refs, {} files)",
-        old_links.refs.len(),
-        old_meta.files.len()
-    );
-    println!(
-        "vault build:                    {new:?} ({} notes)",
+        "vault build:        {new:?} ({} notes)",
         vault.snapshot().files.len()
     );
     println!(
-        "snapshot serialize:             {serialized:?} ({} bytes)",
+        "snapshot serialize: {serialized:?} ({} bytes)",
         snapshot.len()
     );
 

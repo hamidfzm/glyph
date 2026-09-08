@@ -7,8 +7,8 @@ import {
 } from "@/contexts/SidebarLayoutContext";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import { activeFileOf, type FileTab, type Tab } from "@/lib/tabs";
-import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 import { sidebarLayoutValue } from "@/test/fixtures/sidebarLayout";
+import { tabsContextValue } from "@/test/fixtures/tabsContext";
 import { TabBar } from "./TabBar";
 
 const makeFileTab = (i: number): FileTab => ({
@@ -47,60 +47,20 @@ function buildContext(opts: RenderOpts): TabsContextValue {
   const tabs = opts.tabs ?? [];
   const activeTabId = opts.activeTabId ?? null;
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
-  return {
+  return tabsContextValue({
     tabs,
     activeTab,
     activeTabId,
     activeFile: activeFileOf(activeTab),
-    initializing: false,
-    workspaceFiles: [],
-    wikilinkRefs: [],
-    metadataEntries: [],
-    metadata: new Map(),
-    indexStatus: COMPLETE_INDEX_STATUS,
     workspace: opts.workspace ?? null,
-    newDocument: vi.fn(),
-    openFile: vi.fn(),
-    openFolder: vi.fn(),
-    createWorkspace: vi.fn(),
-    openGraph: vi.fn(),
-    closeWorkspace: vi.fn(),
-    toggleExpand: vi.fn(),
-    createNote: vi.fn(),
-    createNoteInWorkspace: vi.fn(),
-    createCanvasInWorkspace: vi.fn(),
-    createCanvas: vi.fn(),
-    commitEdit: vi.fn(),
-    createFolder: vi.fn(),
-    renamePath: vi.fn(),
-    duplicatePath: vi.fn(),
-    movePath: vi.fn(),
-    collapseAll: vi.fn(),
-    expandAll: vi.fn(),
-    deletePath: vi.fn(),
     closeTab: opts.closeTab ?? vi.fn(),
     closeTabs: opts.closeTabs ?? vi.fn(),
     setActiveTab: opts.setActiveTab ?? vi.fn(),
     setTabMode: opts.setTabMode ?? vi.fn(),
     moveTab: opts.moveTab ?? vi.fn(),
-    moveActiveTab: vi.fn(),
-    navigateBack: vi.fn(),
-    navigateForward: vi.fn(),
-    updateEditContent: vi.fn(),
-    saveDocument: vi.fn(),
-    flushForClose: vi.fn(),
-    flushSessionForClose: vi.fn(async () => {}),
-    toggleTask: vi.fn(),
-    saveScrollPosition: vi.fn(),
-    openFileDialog: opts.openFileDialog ?? vi.fn(),
-    undoEdit: vi.fn(),
-    redoEdit: vi.fn(),
-    displayContent: null,
     tocEntries: opts.tocEntries ?? [],
-    backlinks: [],
-    workspaceNotice: null,
-    dismissWorkspaceNotice: vi.fn(),
-  };
+    openFileDialog: opts.openFileDialog ?? vi.fn(),
+  });
 }
 
 function Wrapper({

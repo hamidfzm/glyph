@@ -8,6 +8,7 @@ import { siteChromeCss, siteChromeScript } from "@/lib/export/siteChrome";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { basename } from "@/lib/paths";
 import type { MarkdownPlugin, SiteThemeContribution } from "@/lib/plugins/types";
+import { resolveTargets } from "@/lib/wikilinkResolutions";
 import type { FileScan } from "@/lib/workspaceScan";
 import { buildIndexBodyHtml } from "./indexPage";
 import { inlineMermaidSvgs } from "./mermaidInline";
@@ -181,8 +182,9 @@ export async function exportSite({
     for (const { file, content, rel: pageRel } of jobs) {
       let body = await renderPageHtml({
         content,
-        filePath: file,
-        workspaceFiles: files,
+        // Resolved per page: the exported site links notes to each other the
+        // same way the viewer does, through the one index.
+        resolutions: await resolveTargets(root, file, content),
         extraRemark: remarkPlugins,
         // The URL rewriter runs last so links emitted by plugin rehype plugins
         // are relativized like every other in-document link.

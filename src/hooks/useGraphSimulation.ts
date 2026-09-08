@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { WorkspaceGraph } from "@/lib/graph";
 import {
   capturePositions,
   createGraphLayout,
@@ -9,7 +8,10 @@ import {
   tickLayout,
 } from "@/lib/graphSimulation";
 import { loadGraphView, saveGraphView } from "@/lib/graphViewStore";
+import type { VaultSnapshot } from "@/lib/vault";
 import { useReducedMotion } from "./useReducedMotion";
+
+type WorkspaceGraph = VaultSnapshot["graph"];
 
 export interface UseGraphSimulationOptions {
   /** Simulation steps per animation frame. Tuned for 60fps; tests raise it. */

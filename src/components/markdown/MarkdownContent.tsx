@@ -9,6 +9,7 @@ import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
 import { useKatexPlugin } from "@/hooks/useKatexPlugin";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { useSettings } from "@/hooks/useSettings";
+import { useWikilinkResolutions } from "@/hooks/useWikilinkResolutions";
 import { parseFrontmatter } from "@/lib/frontmatter";
 import { buildRehypePlugins, buildRemarkPlugins } from "@/lib/markdown/pipeline";
 import { resolveWorkspacePath } from "@/lib/relativePath";
@@ -97,15 +98,18 @@ export function MarkdownContent({
     [filePath, workspaceRoot, onOpenRelativeFile],
   );
 
+  // Resolved up front because the pipeline below is synchronous; the file list
+  // stays for the embed and preview gates, which ask about membership only.
+  const resolutions = useWikilinkResolutions(content, filePath);
+
   const rehypePlugins = useMemo(
     () => buildRehypePlugins({ highlightPlugin, katexPlugin, extra: pluginRehype, sourceLines }),
     [highlightPlugin, katexPlugin, pluginRehype, sourceLines],
   );
 
   const remarkPlugins = useMemo(
-    () =>
-      buildRemarkPlugins({ workspaceFiles, filePath, features, gemojiPlugin, extra: pluginRemark }),
-    [workspaceFiles, filePath, features, gemojiPlugin, pluginRemark],
+    () => buildRemarkPlugins({ resolutions, features, gemojiPlugin, extra: pluginRemark }),
+    [resolutions, features, gemojiPlugin, pluginRemark],
   );
 
   const LinkWithWikilink = useCallback(

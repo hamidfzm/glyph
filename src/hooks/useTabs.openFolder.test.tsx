@@ -6,9 +6,9 @@ import { saveWorkspaceSession } from "@/lib/workspaceSession";
 import {
   captureListener,
   defaultOptions,
-  fileScan,
   makeInvoker,
   resetTabsMocks,
+  vaultSnapshot,
   watchDirectoryCalls,
 } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
@@ -96,7 +96,7 @@ describe("useTabs opening folders", () => {
   it("auto-opens the first markdown file when opening a folder with no remembered file", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => fileScan(["/p/ws/a.md", "/p/ws/b.md"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/a.md", "/p/ws/b.md"]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -114,7 +114,7 @@ describe("useTabs opening folders", () => {
   it("auto-opens the remembered file when it still exists in the workspace", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => fileScan(["/p/ws/a.md", "/p/ws/b.md"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/a.md", "/p/ws/b.md"]),
         workspace_get_last_file: async () => "/p/ws/b.md",
       }) as typeof invoke,
     );
@@ -133,7 +133,7 @@ describe("useTabs opening folders", () => {
   it("falls back to the first file when the remembered file no longer exists", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => fileScan(["/p/ws/a.md", "/p/ws/b.md"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/a.md", "/p/ws/b.md"]),
         workspace_get_last_file: async () => "/p/ws/gone.md",
       }) as typeof invoke,
     );
@@ -151,7 +151,7 @@ describe("useTabs opening folders", () => {
   it("falls back to the first file when the remembered-file lookup fails", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => fileScan(["/p/ws/a.md"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/a.md"]),
         workspace_get_last_file: async () => {
           throw new Error("state.json unreadable");
         },
@@ -171,7 +171,7 @@ describe("useTabs opening folders", () => {
   it("does not auto-open anything when the workspace has no markdown files", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => fileScan([]),
+        vault_refresh: async () => vaultSnapshot([]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -188,7 +188,7 @@ describe("useTabs opening folders", () => {
     // every tab; restore must not auto-open the first note over that.
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => fileScan(["/p/ws/a.md"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/a.md"]),
       }) as typeof invoke,
     );
     saveWorkspaceSession("/p/ws", {
@@ -211,13 +211,13 @@ describe("useTabs opening folders", () => {
     expect(invoke).not.toHaveBeenCalledWith("workspace_get_last_file", expect.anything());
   });
 
-  it("skips auto-open when list_markdown_files returns a non-markdown target", async () => {
+  it("skips auto-open when the index's first file is not markdown", async () => {
     // Covers the false arm of `isMarkdownFile(target)` inside the auto-open
-    // branch. list_markdown_files in real life never returns non-md paths,
-    // but the guard exists for defence in depth.
+    // branch: the index lists canvases alongside notes, so the first file is
+    // not always something the document viewer can open.
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => fileScan(["/p/ws/notes.txt"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/notes.txt"]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -235,7 +235,7 @@ describe("useTabs opening folders", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        list_markdown_files: async () => fileScan(["/p/ws/a.md"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/a.md"]),
         read_file: async () => {
           throw new Error("vanished");
         },

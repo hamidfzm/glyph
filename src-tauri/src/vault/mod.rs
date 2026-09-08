@@ -33,14 +33,3 @@ mod test_support;
 mod tests;
 
 pub use index::Vault;
-// Borrowed by `commands/metadata.rs` and `commands/wikilinks.rs` so the tag
-// rules and the snippet cap have one definition while both still ship.
-pub use frontmatter::split_frontmatter;
-pub use note::snippet_for;
-pub use tags::inline_tags;
-// Their tests name the caps; the code paths only reach them through the
-// functions above.
-#[cfg(test)]
-pub use note::MAX_SNIPPET_CHARS;
-#[cfg(test)]
-pub use tags::{MAX_INLINE_TAGS_PER_FILE, MAX_TAG_CHARS};

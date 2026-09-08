@@ -118,16 +118,7 @@ export function useTabs(options: UseTabsOptions) {
     deleteEntry,
   } = useWorkspaceTree({ repointOpenFiles });
 
-  const {
-    workspaceFiles,
-    wikilinkRefs,
-    metadataEntries,
-    indexStatus,
-    scanWorkspace,
-    refreshIndexes,
-    clearIndexes,
-    resetStatus,
-  } = useWorkspaceIndex({
+  const { snapshot, scanWorkspace, refreshIndexes, clearIndexes, resetStatus } = useWorkspaceIndex({
     workspaceRoot: workspace?.root ?? null,
     onWorkspaceNotice: options.onWorkspaceNotice,
   });
@@ -397,10 +388,8 @@ export function useTabs(options: UseTabsOptions) {
     activeFile,
     initializing,
     workspace,
-    workspaceFiles,
-    wikilinkRefs,
-    metadataEntries,
-    indexStatus,
+    snapshot,
+    workspaceFiles: snapshot.files,
     openFile,
     newDocument,
     openFolder,

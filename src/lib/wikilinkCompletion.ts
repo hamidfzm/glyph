@@ -4,8 +4,7 @@
 // inserts `[[<stem>]]` (or just `<stem>]]` if the brackets exist already).
 import type { Completion, CompletionContext, CompletionResult } from "@codemirror/autocomplete";
 import type { EditorState } from "@codemirror/state";
-import { basename } from "./paths";
-import { stemOf } from "./wikilinkResolver";
+import { basename, pathStem } from "./paths";
 
 interface WikilinkOpening {
   /** Document offset of the first `[` in the opening `[[`. */
@@ -49,7 +48,7 @@ export function buildWikilinkCompletions(
   const seen = new Set<string>();
 
   for (const file of workspaceFiles) {
-    const stem = stemOf(file);
+    const stem = pathStem(file);
     const stemLower = stem.toLowerCase();
     const rel = relativeName(file, workspaceRoot);
 

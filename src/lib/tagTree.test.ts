@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TagCount } from "./metadata";
+import type { TagCount } from "@/lib/vault";
 import { buildTagTree } from "./tagTree";
 
 // The shape `tagCounts` produces: every ancestor present, parents counting

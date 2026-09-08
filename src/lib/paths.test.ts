@@ -5,6 +5,7 @@ import {
   isPathInside,
   lastSegment,
   parentDir,
+  pathStem,
   pruneInside,
   relativeToRoot,
   stem,
@@ -57,6 +58,16 @@ describe("stem", () => {
 
   it("drops a real extension from a dotfile", () => {
     expect(stem(".env.local")).toBe(".env");
+  });
+});
+
+describe("pathStem", () => {
+  it("drops the extension from the file name", () => {
+    expect(pathStem("/ws/notes/Cooking.md")).toBe("Cooking");
+  });
+
+  it("keeps a dotfile whole, since the leading dot is part of the name", () => {
+    expect(pathStem("/ws/.gitignore")).toBe(".gitignore");
   });
 });
 

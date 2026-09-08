@@ -48,10 +48,18 @@ function rawValueAt(md: string, options: WikilinkPluginOptions = {}, type: strin
 }
 
 describe("remarkWikilink", () => {
-  const files = ["/workspace/Index.md", "/workspace/Notes/Cooking.md"];
+  // What the index answered for this document's targets, keyed as written: the
+  // heading is part of the key, the alias is not. Matching a target to a file
+  // is the index's job and is tested there.
+  const resolutions = new Map([
+    ["Index", "/workspace/Index.md"],
+    ["Cooking", "/workspace/Notes/Cooking.md"],
+    ["Cooking.md", "/workspace/Notes/Cooking.md"],
+    ["Cooking#Recipes", "/workspace/Notes/Cooking.md"],
+  ]);
 
   it("decorates a resolved wikilink with data attributes", () => {
-    const [node] = findWikilinks("See [[Cooking]] now.", { workspaceFiles: files });
+    const [node] = findWikilinks("See [[Cooking]] now.", { resolutions });
     expect(node).toBeDefined();
     expect(node.data?.hProperties).toMatchObject({
       dataWikilink: "Cooking",
@@ -64,7 +72,7 @@ describe("remarkWikilink", () => {
   });
 
   it("flags a missing target as broken", () => {
-    const [node] = findWikilinks("See [[Missing]].", { workspaceFiles: files });
+    const [node] = findWikilinks("See [[Missing]].", { resolutions });
     expect(node.data?.hProperties).toMatchObject({
       dataWikilink: "Missing",
       dataWikilinkBroken: "",
@@ -74,13 +82,13 @@ describe("remarkWikilink", () => {
   });
 
   it("uses the alias as display text", () => {
-    const [node] = findWikilinks("[[Cooking|kitchen notes]]", { workspaceFiles: files });
+    const [node] = findWikilinks("[[Cooking|kitchen notes]]", { resolutions });
     expect(node.children[0].value).toBe("kitchen notes");
     expect(node.data?.hProperties?.dataWikilink).toBe("Cooking");
   });
 
   it("captures the heading", () => {
-    const [node] = findWikilinks("[[Cooking#Recipes]]", { workspaceFiles: files });
+    const [node] = findWikilinks("[[Cooking#Recipes]]", { resolutions });
     expect(node.data?.hProperties).toMatchObject({
       dataWikilink: "Cooking",
       dataWikilinkHeading: "Recipes",
@@ -88,8 +96,8 @@ describe("remarkWikilink", () => {
     });
   });
 
-  it("strips a `.md` extension from the target during resolution", () => {
-    const [node] = findWikilinks("[[Cooking.md]]", { workspaceFiles: files });
+  it("keys the lookup on the target as written, extension included", () => {
+    const [node] = findWikilinks("[[Cooking.md]]", { resolutions });
     expect(node.data?.hProperties?.dataWikilinkPath).toBe("/workspace/Notes/Cooking.md");
   });
 
@@ -100,22 +108,22 @@ describe("remarkWikilink", () => {
   });
 
   it("ignores wikilinks inside fenced code blocks", () => {
-    const nodes = findWikilinks("```\n[[Cooking]]\n```", { workspaceFiles: files });
+    const nodes = findWikilinks("```\n[[Cooking]]\n```", { resolutions });
     expect(nodes).toHaveLength(0);
   });
 
   it("ignores wikilinks inside inline code", () => {
-    const nodes = findWikilinks("Use `[[Cooking]]` to link.", { workspaceFiles: files });
+    const nodes = findWikilinks("Use `[[Cooking]]` to link.", { resolutions });
     expect(nodes).toHaveLength(0);
   });
 
   it("decorates multiple wikilinks in the same paragraph", () => {
-    const nodes = findWikilinks("[[Index]] and [[Cooking]]", { workspaceFiles: files });
+    const nodes = findWikilinks("[[Index]] and [[Cooking]]", { resolutions });
     expect(nodes.map((n) => n.data?.hProperties?.dataWikilink)).toEqual(["Index", "Cooking"]);
   });
 
   it("preserves surrounding text", () => {
-    expect(rawValueAt("before [[Index]] after", { workspaceFiles: files }, "text")).toEqual([
+    expect(rawValueAt("before [[Index]] after", { resolutions }, "text")).toEqual([
       "before ",
       "Index",
       " after",
@@ -123,12 +131,14 @@ describe("remarkWikilink", () => {
   });
 
   it("never produces a non-anchor href", () => {
-    const [node] = findWikilinks("[[Cooking]]", { workspaceFiles: files });
+    const [node] = findWikilinks("[[Cooking]]", { resolutions });
     expect(node.url).toBe("#");
   });
 });
 
 describe("remarkWikilink with rehype-sanitize", () => {
+  const resolutions = new Map([["Cooking", "/workspace/Cooking.md"]]);
+
   async function html(md: string, options: WikilinkPluginOptions) {
     const file = await unified()
       .use(remarkParse)
@@ -142,14 +152,14 @@ describe("remarkWikilink with rehype-sanitize", () => {
   }
 
   it("preserves className and data attributes through sanitize", async () => {
-    const out = await html("[[Cooking]]", { workspaceFiles: ["/workspace/Cooking.md"] });
+    const out = await html("[[Cooking]]", { resolutions });
     expect(out).toContain('class="wikilink"');
     expect(out).toContain('data-wikilink="Cooking"');
     expect(out).toContain('data-wikilink-path="/workspace/Cooking.md"');
   });
 
   it("preserves the broken modifier and marker", async () => {
-    const out = await html("[[Missing]]", { workspaceFiles: ["/workspace/Cooking.md"] });
+    const out = await html("[[Missing]]", { resolutions });
     expect(out).toContain("wikilink--broken");
     expect(out).toContain("data-wikilink-broken");
     expect(out).not.toContain("data-wikilink-path");
@@ -157,7 +167,10 @@ describe("remarkWikilink with rehype-sanitize", () => {
 });
 
 describe("remarkWikilink embeds", () => {
-  const files = ["/workspace/Notes/Cooking.md"];
+  const resolutions = new Map([
+    ["Cooking", "/workspace/Notes/Cooking.md"],
+    ["Cooking#Recipes", "/workspace/Notes/Cooking.md"],
+  ]);
 
   async function html(md: string, options: WikilinkPluginOptions) {
     const file = await unified()
@@ -172,7 +185,7 @@ describe("remarkWikilink embeds", () => {
   }
 
   it("renders a standalone embed as a block div with the resolved path", async () => {
-    const out = await html("![[Cooking]]", { workspaceFiles: files });
+    const out = await html("![[Cooking]]", { resolutions });
     expect(out).toContain('class="markdown-embed"');
     expect(out).toContain('data-embed-path="/workspace/Notes/Cooking.md"');
     // Hoisted out of the paragraph, so the embed is not wrapped in a <p>.
@@ -180,46 +193,46 @@ describe("remarkWikilink embeds", () => {
   });
 
   it("carries the heading on an embed", async () => {
-    const out = await html("![[Cooking#Recipes]]", { workspaceFiles: files });
+    const out = await html("![[Cooking#Recipes]]", { resolutions });
     expect(out).toContain('data-embed-heading="Recipes"');
   });
 
   it("marks an unresolved embed as broken", async () => {
-    const out = await html("![[Missing]]", { workspaceFiles: files });
+    const out = await html("![[Missing]]", { resolutions });
     expect(out).toContain('class="markdown-embed"');
     expect(out).toContain("data-embed-broken");
     expect(out).not.toContain("data-embed-path");
   });
 
   it("marks an embed as broken when no workspace is open", async () => {
-    // Exercises the `workspaceFiles ?? []` default in the embed builder.
+    // Exercises the missing-resolutions default in the embed builder.
     const out = await html("![[Cooking]]", {});
     expect(out).toContain('class="markdown-embed"');
     expect(out).toContain("data-embed-broken");
   });
 
   it("leaves image embeds as a literal ! plus wikilink", async () => {
-    const out = await html("![[photo.png]]", { workspaceFiles: files });
+    const out = await html("![[photo.png]]", { resolutions });
     expect(out).not.toContain("markdown-embed");
     expect(out).toContain("!");
     expect(out).toContain('class="wikilink');
   });
 
   it("downgrades a mid-sentence embed to a plain wikilink", async () => {
-    const out = await html("see ![[Cooking]] now", { workspaceFiles: files });
+    const out = await html("see ![[Cooking]] now", { resolutions });
     expect(out).not.toContain("markdown-embed");
     expect(out).toContain('data-wikilink-path="/workspace/Notes/Cooking.md"');
   });
 
   it("hoists several stacked embeds to sibling blocks", async () => {
-    const out = await html("![[Cooking]]\n![[Missing]]", { workspaceFiles: files });
+    const out = await html("![[Cooking]]\n![[Missing]]", { resolutions });
     expect(out.match(/class="markdown-embed"/g) ?? []).toHaveLength(2);
   });
 
   it("downgrades an embed nested in inline markup to a wikilink", async () => {
     // An embed inside bold can't be hoisted to a block, so it stays a wikilink
     // instead of producing mangled block-in-inline markup.
-    const out = await html("**![[Cooking]]**", { workspaceFiles: files });
+    const out = await html("**![[Cooking]]**", { resolutions });
     expect(out).not.toContain("markdown-embed");
     expect(out).toContain("<strong>");
     expect(out).toContain('data-wikilink-path="/workspace/Notes/Cooking.md"');

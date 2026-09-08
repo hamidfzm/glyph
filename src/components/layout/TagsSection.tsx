@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SortByCountIcon } from "@/components/icons/SortByCountIcon";
-import type { TagCount } from "@/lib/metadata";
 import { buildTagTree, type TagSort } from "@/lib/tagTree";
+import type { TagCount } from "@/lib/vault";
 import { TagTree } from "./TagTree";
 import { ToolbarButton } from "./ToolbarButton";
 

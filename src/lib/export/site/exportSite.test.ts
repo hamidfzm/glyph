@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { restoreMermaidTheme } from "@/lib/export/rasterize";
+import { pathStem } from "@/lib/paths";
 import type { MarkdownPlugin } from "@/lib/plugins/types";
 import { exportSite } from "./exportSite";
 
@@ -41,6 +42,14 @@ function mockFs(files: Record<string, string>, removed = 0): FakeFs {
       case "prune_export_dir":
         fs.pruned.push((a as unknown as { written: string[] }).written);
         return Promise.resolve(removed);
+      case "vault_resolve": {
+        // Stands in for the index: a target names a file by its stem.
+        const { targets } = args as { targets: string[] };
+        const paths = Object.keys(files);
+        return Promise.resolve(
+          targets.map((t) => paths.find((p) => pathStem(p) === t.split("#")[0]) ?? null),
+        );
+      }
       case "get_file_metadata":
         return a.path in files
           ? Promise.resolve({ name: "", path: a.path, size: 1, modified: 0 })

@@ -17,10 +17,11 @@ describe("buildRemarkPlugins", () => {
     expect(plugins.length).toBeGreaterThanOrEqual(7);
   });
 
-  it("threads workspace context into the wikilink plugin", () => {
-    const plugins = buildRemarkPlugins({ workspaceFiles: ["a.md"], filePath: "/w/b.md" });
+  it("threads the index's link resolutions into the wikilink plugin", () => {
+    const resolutions = new Map([["a", "/w/a.md"]]);
+    const plugins = buildRemarkPlugins({ resolutions });
     const wikilink = plugins.find((p) => Array.isArray(p)) as [unknown, Record<string, unknown>];
-    expect(wikilink[1]).toEqual({ workspaceFiles: ["a.md"], currentFilePath: "/w/b.md" });
+    expect(wikilink[1]).toEqual({ resolutions });
   });
 
   it("works with no extras", () => {

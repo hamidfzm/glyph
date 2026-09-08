@@ -1,18 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
-import type { WikilinkRef } from "@/lib/backlinks";
-import type { MetadataEntry, MetadataScan } from "@/lib/metadata";
-import {
-  COMPLETE_INDEX_STATUS,
-  COMPLETE_SCAN,
-  type FileScan,
-  indexIncompleteKey,
-  sameScanStatus,
-  truncatedScan,
-  type WikilinkScan,
-  type WorkspaceIndexStatus,
-} from "@/lib/workspaceScan";
+import { EMPTY_SNAPSHOT, type VaultSnapshot } from "@/lib/vault";
+import { indexIncompleteKey, sameScanStatus } from "@/lib/workspaceScan";
 
 interface UseWorkspaceIndexOptions {
   /** Root of the currently open workspace, or null when none is open. */
@@ -21,148 +11,96 @@ interface UseWorkspaceIndexOptions {
 }
 
 /**
- * The workspace's three indexes: the recursive markdown file list, outbound
- * wikilink refs, and per-file tags and frontmatter. All are ephemeral (rebuilt
- * on open and on directory changes) and each reports whether a configured cap
- * cut the scan short.
+ * The workspace index, owned by Rust and read here as one snapshot per root:
+ * the file set, per-note tags and frontmatter, the link graph, and whether a
+ * configured cap cut the scan short.
  */
 export function useWorkspaceIndex({ workspaceRoot, onWorkspaceNotice }: UseWorkspaceIndexOptions) {
-  const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
-  const [wikilinkRefs, setWikilinkRefs] = useState<WikilinkRef[]>([]);
-  const [metadataEntries, setMetadataEntries] = useState<MetadataEntry[]>([]);
-  const [indexStatus, setIndexStatus] = useState<WorkspaceIndexStatus>(COMPLETE_INDEX_STATUS);
+  const [snapshot, setSnapshot] = useState<VaultSnapshot>(EMPTY_SNAPSHOT);
   const onWorkspaceNoticeRef = useRef(onWorkspaceNotice);
   onWorkspaceNoticeRef.current = onWorkspaceNotice;
 
-  const loadWorkspaceFiles = useCallback(async (root: string): Promise<FileScan> => {
+  const load = useCallback(async (command: string, root: string): Promise<VaultSnapshot> => {
     try {
-      return await invoke<FileScan>("list_markdown_files", { path: root });
+      return await invoke<VaultSnapshot>(command, { path: root });
     } catch (err) {
-      console.error(`Failed to list markdown files for ${root}:`, err);
-      return { files: [], status: COMPLETE_SCAN };
+      console.error(`Failed to index ${root}:`, err);
+      return EMPTY_SNAPSHOT;
     }
   }, []);
 
-  const loadWikilinkRefs = useCallback(async (root: string): Promise<WikilinkScan> => {
-    try {
-      return await invoke<WikilinkScan>("scan_wikilinks", { path: root });
-    } catch (err) {
-      console.error(`Failed to scan wikilinks for ${root}:`, err);
-      return { refs: [], status: COMPLETE_SCAN };
-    }
-  }, []);
-
-  const loadMetadata = useCallback(async (root: string): Promise<MetadataScan> => {
-    try {
-      return await invoke<MetadataScan>("scan_metadata", { path: root });
-    } catch (err) {
-      console.error(`Failed to scan metadata for ${root}:`, err);
-      return { files: [], status: COMPLETE_SCAN };
-    }
-  }, []);
-
-  // Merge new scan statuses, keeping the previous object identity while the
-  // values are unchanged so the incomplete-index banner effect below doesn't
-  // refire on every directory refresh.
-  const updateIndexStatus = useCallback((part: Partial<WorkspaceIndexStatus>) => {
-    setIndexStatus((prev) => {
-      const next = { ...prev, ...part };
-      const unchanged =
-        sameScanStatus(next.files, prev.files) &&
-        sameScanStatus(next.wikilinks, prev.wikilinks) &&
-        sameScanStatus(next.metadata, prev.metadata);
-      return unchanged ? prev : next;
-    });
+  // Keep the previous object identity while the status is unchanged, so the
+  // incomplete-index banner effect below doesn't refire on every refresh.
+  const apply = useCallback((next: VaultSnapshot) => {
+    setSnapshot((prev) =>
+      sameScanStatus(prev.status, next.status) ? { ...next, status: prev.status } : next,
+    );
   }, []);
 
   /**
-   * Build every index for a freshly opened workspace. The file scan is awaited
-   * (its result decides which note auto-opens); the wikilink and metadata scans
-   * land later and are dropped when `isCurrent` reports the workspace was
-   * replaced meanwhile.
+   * Index a freshly opened workspace, rebuilding from disk rather than reading
+   * whatever the backend already holds: a watcher only starts once the folder
+   * is open, so anything that changed before then is not in an existing index.
+   * Returns the file list, which decides which note auto-opens.
    */
   const scanWorkspace = useCallback(
     async (root: string, isCurrent: () => boolean): Promise<string[]> => {
-      const { files, status } = await loadWorkspaceFiles(root);
-      setWorkspaceFiles(files);
-      updateIndexStatus({ files: status });
-      loadWikilinkRefs(root).then((scan) => {
-        if (!isCurrent()) return;
-        setWikilinkRefs(scan.refs);
-        updateIndexStatus({ wikilinks: scan.status });
-      });
-      loadMetadata(root).then((scan) => {
-        if (!isCurrent()) return;
-        setMetadataEntries(scan.files);
-        updateIndexStatus({ metadata: scan.status });
-      });
-      return files;
+      const next = await load("vault_refresh", root);
+      if (!isCurrent()) return next.files;
+      apply(next);
+      return next.files;
     },
-    [loadMetadata, loadWikilinkRefs, loadWorkspaceFiles, updateIndexStatus],
+    [apply, load],
   );
 
   /**
-   * Rebuild every index after the workspace directory changed. The workspace
-   * can be replaced while the scans run; the indexes are window-wide, so
-   * writing this root's results into another root's workspace would leave the
-   * sidebar and palette pointing at files that are no longer open.
+   * Re-read the index after the workspace directory changed. The backend has
+   * already applied the change that triggered this, so this reads rather than
+   * rebuilds. The workspace can be replaced while the read runs; the index is
+   * window-wide, so writing this root's result into another root's workspace
+   * would leave the sidebar and palette pointing at files that are not open.
    */
   const refreshIndexes = useCallback(
     async (root: string, isCurrent: () => boolean) => {
-      const [files, refs, metadata] = await Promise.all([
-        loadWorkspaceFiles(root),
-        loadWikilinkRefs(root),
-        loadMetadata(root),
-      ]);
+      const next = await load("vault_snapshot", root);
       if (!isCurrent()) return;
-      setWorkspaceFiles(files.files);
-      setWikilinkRefs(refs.refs);
-      setMetadataEntries(metadata.files);
-      updateIndexStatus({
-        files: files.status,
-        wikilinks: refs.status,
-        metadata: metadata.status,
-      });
+      apply(next);
     },
-    [loadMetadata, loadWikilinkRefs, loadWorkspaceFiles, updateIndexStatus],
+    [apply, load],
   );
 
   const clearIndexes = useCallback(() => {
-    setWorkspaceFiles([]);
-    setWikilinkRefs([]);
-    setMetadataEntries([]);
-    setIndexStatus(COMPLETE_INDEX_STATUS);
-  }, []);
+    setSnapshot(EMPTY_SNAPSHOT);
+    if (workspaceRoot) {
+      // Nothing else releases the backend's copy, and it holds every note's
+      // tags, fields and links for the rest of the session.
+      invoke("vault_forget", { path: workspaceRoot }).catch(() => {});
+    }
+  }, [workspaceRoot]);
 
   /** Drop the outgoing workspace's scan state so an incoming one's truncation
    *  (even an identical one) notifies afresh. */
-  const resetStatus = useCallback(() => setIndexStatus(COMPLETE_INDEX_STATUS), []);
+  const resetStatus = useCallback(
+    () => setSnapshot((prev) => ({ ...prev, status: EMPTY_SNAPSHOT.status })),
+    [],
+  );
 
-  // Surface a persistent banner when a workspace index is incomplete (#436).
-  // The user can dismiss it; the sidebar keeps its own indicator. Keyed on the
-  // workspace root plus the effective reason + limit: a dismissed banner
-  // re-shows only when the surfaced truncation actually changes (a rescan or
-  // the second index reporting the same one refires nothing), while switching
-  // workspaces notifies afresh even for an identical truncation.
-  const truncation = truncatedScan(indexStatus);
-  const truncationReason = truncation?.reason ?? null;
-  const truncationLimit = truncation?.limit ?? null;
+  // Surface a persistent banner when the index is incomplete (#436). The user
+  // can dismiss it; the sidebar keeps its own indicator. Keyed on the workspace
+  // root plus the reason and limit: a dismissed banner re-shows only when the
+  // truncation actually changes, while switching workspaces notifies afresh
+  // even for an identical one.
+  const { reason, limit } = snapshot.status;
   useEffect(() => {
-    if (!truncationReason || !workspaceRoot) return;
+    if (!reason || !workspaceRoot) return;
     onWorkspaceNoticeRef.current(
-      {
-        key: indexIncompleteKey(truncationReason),
-        values: { limit: String(truncationLimit ?? 0) },
-      },
+      { key: indexIncompleteKey(reason), values: { limit: String(limit ?? 0) } },
       { persistent: true },
     );
-  }, [workspaceRoot, truncationReason, truncationLimit]);
+  }, [workspaceRoot, reason, limit]);
 
   return {
-    workspaceFiles,
-    wikilinkRefs,
-    metadataEntries,
-    indexStatus,
+    snapshot,
     scanWorkspace,
     refreshIndexes,
     clearIndexes,

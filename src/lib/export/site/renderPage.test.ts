@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { MarkdownPlugin } from "@/lib/plugins/types";
 import { renderPageHtml } from "./renderPage";
 
-const FILE = "/ws/notes.md";
-const FILES = ["/ws/notes.md", "/ws/other.md"];
+// What the index answered for this page's wikilink targets; `missing` is absent
+// on purpose, which is how a broken link reaches the renderer.
+const RESOLUTIONS = new Map([["other", "/ws/other.md"]]);
 
 function render(content: string) {
-  return renderPageHtml({ content, filePath: FILE, workspaceFiles: FILES });
+  return renderPageHtml({ content, resolutions: RESOLUTIONS });
 }
 
 describe("renderPageHtml", () => {
@@ -81,8 +82,7 @@ describe("renderPageHtml", () => {
     };
     const html = await renderPageHtml({
       content: "quiet words",
-      filePath: FILE,
-      workspaceFiles: FILES,
+      resolutions: RESOLUTIONS,
       extraRemark: [shout as MarkdownPlugin],
     });
     expect(html).toContain("QUIET WORDS");

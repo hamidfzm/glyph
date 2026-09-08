@@ -1,14 +1,13 @@
 import { type ReactNode, useMemo } from "react";
 import { UnsavedChangesModal } from "@/components/modals/UnsavedChangesModal";
+import { useBacklinks } from "@/hooks/useBacklinks";
 import { useSettings } from "@/hooks/useSettings";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
 import { useTabs } from "@/hooks/useTabs";
 import { useUnsavedChangesPrompt } from "@/hooks/useUnsavedChangesPrompt";
 import { useWindowRegistrySync } from "@/hooks/useWindowRegistrySync";
 import { useWorkspaceNotice } from "@/hooks/useWorkspaceNotice";
-import { filterBacklinks } from "@/lib/backlinks";
 import { displayContentFor, tocContentFor } from "@/lib/displayContent";
-import { buildMetadataIndex } from "@/lib/metadata";
 import { EDITOR_MODE } from "@/lib/settings";
 import { TabsContext, type TabsContextValue } from "./TabsContext";
 
@@ -51,15 +50,7 @@ export function TabsProvider({ children }: { children: ReactNode }) {
     [activePath, liveContent],
   );
   const tocEntries = useTableOfContents(tocContentFor(activePath, displayContent));
-  const backlinks = useMemo(
-    () =>
-      tabs.activeFile?.path
-        ? filterBacklinks(tabs.wikilinkRefs, tabs.workspaceFiles, tabs.activeFile.path)
-        : [],
-    [tabs.wikilinkRefs, tabs.workspaceFiles, tabs.activeFile?.path],
-  );
-
-  const metadata = useMemo(() => buildMetadataIndex(tabs.metadataEntries), [tabs.metadataEntries]);
+  const backlinks = useBacklinks(tabs.workspace?.root, tabs.activeFile?.path, tabs.snapshot);
 
   const value = useMemo<TabsContextValue>(
     () => ({
@@ -67,19 +58,10 @@ export function TabsProvider({ children }: { children: ReactNode }) {
       displayContent,
       tocEntries,
       backlinks,
-      metadata,
       workspaceNotice: workspaceNotice.notice,
       dismissWorkspaceNotice: workspaceNotice.dismiss,
     }),
-    [
-      tabs,
-      displayContent,
-      tocEntries,
-      backlinks,
-      metadata,
-      workspaceNotice.notice,
-      workspaceNotice.dismiss,
-    ],
+    [tabs, displayContent, tocEntries, backlinks, workspaceNotice.notice, workspaceNotice.dismiss],
   );
 
   return (

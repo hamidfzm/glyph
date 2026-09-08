@@ -2,19 +2,18 @@ import { useContext } from "react";
 import { useTranslation } from "react-i18next";
 import { WarningIcon } from "@/components/icons/WarningIcon";
 import { TabsContext } from "@/contexts/TabsContext";
-import { indexIncompleteKey, truncatedScan } from "@/lib/workspaceScan";
+import { indexIncompleteKey } from "@/lib/workspaceScan";
 
 /**
  * Persistent incomplete-index indicator pinned under the file tree (#436).
  * Unlike the dismissible workspace-notice banner, it stays visible for as long
- * as any workspace index is truncated; the tooltip carries the full message.
+ * as the workspace index is truncated; the tooltip carries the full message.
  * Reads the context optionally so isolated tests can render without a provider.
  */
 export function WorkspaceIndexWarning() {
   const { t } = useTranslation(["common", "workspace"]);
-  const indexStatus = useContext(TabsContext)?.indexStatus;
-  const status = indexStatus ? truncatedScan(indexStatus) : null;
-  if (!status) return null;
+  const status = useContext(TabsContext)?.snapshot.status;
+  if (!status?.truncated) return null;
 
   return (
     <div

@@ -2,8 +2,7 @@ import { createContext, useCallback, useContext } from "react";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { useTabs } from "@/hooks/useTabs";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
-import type { Backlink } from "@/lib/backlinks";
-import { EMPTY_METADATA_INDEX, type MetadataIndex } from "@/lib/metadata";
+import { type Backlink, EMPTY_SNAPSHOT, type VaultSnapshot } from "@/lib/vault";
 
 // Context + hooks for the tabs/workspace state. Kept in a component-free module
 // so the provider file stays Fast-Refresh-eligible (a file that exports a
@@ -18,8 +17,6 @@ export interface TabsContextValue extends TabsApi {
   displayContent: string | null;
   tocEntries: TocEntry[];
   backlinks: Backlink[];
-  // Tags + frontmatter fields of every workspace file, keyed by path.
-  metadata: MetadataIndex;
   // Notice shown for a workspace event (#262): a refusal, or a persistent
   // warning when a folder is opened inside a parent git repo. A translation
   // key + values so the banner re-localizes live (see WorkspaceNoticeBanner).
@@ -44,10 +41,10 @@ export function useWorkspaceRoot(): string | undefined {
   return useContext(TabsContext)?.workspace?.root;
 }
 
-// The workspace metadata index, empty when there is no provider (the command
-// palette renders in isolated tests too).
-export function useMetadataIndex(): MetadataIndex {
-  return useContext(TabsContext)?.metadata ?? EMPTY_METADATA_INDEX;
+// The workspace index, empty when there is no provider (the command palette
+// and the shared renderers appear in isolated tests too).
+export function useVaultSnapshot(): VaultSnapshot {
+  return useContext(TabsContext)?.snapshot ?? EMPTY_SNAPSHOT;
 }
 
 // `openGraph` bound to no arguments, for menu handlers and click handlers.

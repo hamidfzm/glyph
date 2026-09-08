@@ -8,7 +8,7 @@ import { useZoomApi } from "@/contexts/ZoomContext";
 import { ZoomProvider } from "@/contexts/ZoomProvider";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import type { FileTab, Workspace } from "@/lib/tabs";
-import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
+import { tabsContextValue } from "@/test/fixtures/tabsContext";
 import { StatusBar } from "./StatusBar";
 
 // useSettings is read for the zoom indicator. Mock it so a test can drive a
@@ -47,60 +47,13 @@ function buildFileTab(path: string): FileTab {
 
 function buildContext(opts: Opts): TabsContextValue {
   const activeTab = opts.filePath ? buildFileTab(opts.filePath) : null;
-  return {
+  return tabsContextValue({
     tabs: activeTab ? [activeTab] : [],
     activeTab,
     activeTabId: activeTab?.id ?? null,
     activeFile: activeTab?.file ?? null,
-    initializing: false,
-    workspaceFiles: [],
-    wikilinkRefs: [],
-    metadataEntries: [],
-    metadata: new Map(),
-    indexStatus: COMPLETE_INDEX_STATUS,
-    workspace: null,
-    newDocument: vi.fn(),
-    openFile: vi.fn(),
-    openFolder: vi.fn(),
-    createWorkspace: vi.fn(),
-    openGraph: vi.fn(),
-    closeWorkspace: vi.fn(),
-    toggleExpand: vi.fn(),
-    createNote: vi.fn(),
-    createNoteInWorkspace: vi.fn(),
-    createCanvasInWorkspace: vi.fn(),
-    createCanvas: vi.fn(),
-    commitEdit: vi.fn(),
-    createFolder: vi.fn(),
-    renamePath: vi.fn(),
-    duplicatePath: vi.fn(),
-    movePath: vi.fn(),
-    collapseAll: vi.fn(),
-    expandAll: vi.fn(),
-    deletePath: vi.fn(),
-    closeTab: vi.fn(),
-    closeTabs: vi.fn(),
-    setActiveTab: vi.fn(),
-    moveTab: vi.fn(),
-    moveActiveTab: vi.fn(),
-    navigateBack: vi.fn(),
-    navigateForward: vi.fn(),
-    setTabMode: vi.fn(),
-    updateEditContent: vi.fn(),
-    saveDocument: vi.fn(),
-    flushForClose: vi.fn(),
-    flushSessionForClose: vi.fn(async () => {}),
-    toggleTask: vi.fn(),
-    saveScrollPosition: vi.fn(),
-    openFileDialog: vi.fn(),
-    undoEdit: vi.fn(),
-    redoEdit: vi.fn(),
     displayContent: opts.displayContent ?? null,
-    tocEntries: [],
-    backlinks: [],
-    workspaceNotice: null,
-    dismissWorkspaceNotice: vi.fn(),
-  };
+  });
 }
 
 function Wrapper({ value, children }: { value: TabsContextValue; children: ReactNode }) {
@@ -201,60 +154,7 @@ function makeWorkspace(root = "/ws"): Workspace {
 }
 
 function buildWorkspaceContext(): TabsContextValue {
-  return {
-    tabs: [],
-    activeTab: null,
-    activeTabId: null,
-    activeFile: null,
-    initializing: false,
-    workspaceFiles: [],
-    wikilinkRefs: [],
-    metadataEntries: [],
-    metadata: new Map(),
-    indexStatus: COMPLETE_INDEX_STATUS,
-    workspace: makeWorkspace(),
-    newDocument: vi.fn(),
-    openFile: vi.fn(),
-    openFolder: vi.fn(),
-    createWorkspace: vi.fn(),
-    openGraph: vi.fn(),
-    closeWorkspace: vi.fn(),
-    toggleExpand: vi.fn(),
-    createNote: vi.fn(),
-    createNoteInWorkspace: vi.fn(),
-    createCanvasInWorkspace: vi.fn(),
-    createCanvas: vi.fn(),
-    commitEdit: vi.fn(),
-    createFolder: vi.fn(),
-    renamePath: vi.fn(),
-    duplicatePath: vi.fn(),
-    movePath: vi.fn(),
-    collapseAll: vi.fn(),
-    expandAll: vi.fn(),
-    deletePath: vi.fn(),
-    closeTab: vi.fn(),
-    closeTabs: vi.fn(),
-    setActiveTab: vi.fn(),
-    moveTab: vi.fn(),
-    moveActiveTab: vi.fn(),
-    navigateBack: vi.fn(),
-    navigateForward: vi.fn(),
-    setTabMode: vi.fn(),
-    updateEditContent: vi.fn(),
-    saveDocument: vi.fn(),
-    flushForClose: vi.fn(),
-    flushSessionForClose: vi.fn(async () => {}),
-    toggleTask: vi.fn(),
-    saveScrollPosition: vi.fn(),
-    openFileDialog: vi.fn(),
-    undoEdit: vi.fn(),
-    redoEdit: vi.fn(),
-    displayContent: "some content",
-    tocEntries: [],
-    backlinks: [],
-    workspaceNotice: null,
-    dismissWorkspaceNotice: vi.fn(),
-  };
+  return tabsContextValue({ workspace: makeWorkspace(), displayContent: "some content" });
 }
 
 describe("StatusBar sync indicator gating", () => {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { WikilinkRef } from "./backlinks";
-import { buildWorkspaceGraph } from "./graph";
+import { graphOf } from "@/test/fixtures/graph";
 import {
   capturePositions,
   createGraphLayout,
@@ -11,13 +10,13 @@ import {
 } from "./graphSimulation";
 
 const FILES = ["/v/a.md", "/v/b.md", "/v/c.md"];
-const REFS: WikilinkRef[] = [
-  { source: "/v/a.md", target: "b", line: 1, snippet: "[[b]]" },
-  { source: "/v/b.md", target: "c", line: 1, snippet: "[[c]]" },
+const EDGES: Array<[string, string]> = [
+  ["/v/a.md", "/v/b.md"],
+  ["/v/b.md", "/v/c.md"],
 ];
 
 function makeGraph() {
-  return buildWorkspaceGraph(FILES, REFS);
+  return graphOf(FILES, EDGES);
 }
 
 describe("createGraphLayout", () => {
@@ -83,7 +82,7 @@ describe("createGraphLayout", () => {
   });
 
   it("handles an empty graph", () => {
-    const layout = createGraphLayout(buildWorkspaceGraph([], []));
+    const layout = createGraphLayout(graphOf([]));
     expect(layout.nodes).toEqual([]);
     expect(layout.links).toEqual([]);
   });

@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useMetadataIndex } from "@/contexts/TabsContext";
 import { useSpringPresence } from "@/hooks/useSpringPresence";
+import { useVaultQuery } from "@/hooks/useVaultQuery";
 import { type Command, type CommandSection, rankCommands } from "@/lib/commands";
 import { CommandPaletteItem } from "./CommandPaletteItem";
 
@@ -26,12 +26,12 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // `tag:foo` / `status:draft` terms in the query filter Files rows against
-  // the workspace metadata index; the rest of the query is fuzzy-matched.
-  const metadata = useMetadataIndex();
+  // `tag:foo` / `status:draft` terms are lifted out by the index, which also
+  // says which files they select; the rest of the query is fuzzy-matched here.
+  const { filters, text, paths } = useVaultQuery(query);
   const ranked = useMemo(
-    () => rankCommands(query, commands, { metadata }),
-    [query, commands, metadata],
+    () => rankCommands(text, commands, { paths: filters.length > 0 ? new Set(paths) : null }),
+    [text, commands, filters, paths],
   );
 
   // Reset selection when the result set changes so the top match is primed

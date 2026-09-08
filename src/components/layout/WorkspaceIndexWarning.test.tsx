@@ -1,16 +1,14 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import {
-  COMPLETE_INDEX_STATUS,
-  COMPLETE_SCAN,
-  type WorkspaceIndexStatus,
-} from "@/lib/workspaceScan";
+import { EMPTY_SNAPSHOT } from "@/lib/vault";
+import { COMPLETE_SCAN, type ScanStatus } from "@/lib/workspaceScan";
 import { WorkspaceIndexWarning } from "./WorkspaceIndexWarning";
 
-function renderWith(indexStatus: WorkspaceIndexStatus) {
+function renderWith(status: ScanStatus) {
+  const snapshot = { ...EMPTY_SNAPSHOT, status };
   return render(
-    <TabsContext.Provider value={{ indexStatus } as unknown as TabsContextValue}>
+    <TabsContext.Provider value={{ snapshot } as unknown as TabsContextValue}>
       <WorkspaceIndexWarning />
     </TabsContext.Provider>,
   );
@@ -22,37 +20,25 @@ describe("WorkspaceIndexWarning", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders nothing while both indexes are complete", () => {
-    const { container } = renderWith(COMPLETE_INDEX_STATUS);
+  it("renders nothing while the index is complete", () => {
+    const { container } = renderWith(COMPLETE_SCAN);
     expect(container.firstChild).toBeNull();
   });
 
-  it("shows the indicator with the file-limit message when the file scan truncated", () => {
-    renderWith({
-      files: { truncated: true, reason: "fileLimit", limit: 10000 },
-      wikilinks: COMPLETE_SCAN,
-      metadata: COMPLETE_SCAN,
-    });
+  it("shows the indicator with the file-limit message when the scan truncated", () => {
+    renderWith({ truncated: true, reason: "fileLimit", limit: 10000 });
     const status = screen.getByRole("status");
     expect(status).toHaveTextContent("Index incomplete");
     expect(status.getAttribute("title")).toContain("10000");
   });
 
   it("falls back to a zero limit when the scan status carries none", () => {
-    renderWith({
-      files: { truncated: true, reason: "fileLimit", limit: null },
-      wikilinks: COMPLETE_SCAN,
-      metadata: COMPLETE_SCAN,
-    });
+    renderWith({ truncated: true, reason: "fileLimit", limit: null });
     expect(screen.getByRole("status").getAttribute("title")).toContain("first 0 documents");
   });
 
-  it("falls back to the wikilink scan's depth message", () => {
-    renderWith({
-      files: COMPLETE_SCAN,
-      wikilinks: { truncated: true, reason: "depthLimit", limit: 32 },
-      metadata: COMPLETE_SCAN,
-    });
+  it("uses the depth message when the walk hit the depth cap", () => {
+    renderWith({ truncated: true, reason: "depthLimit", limit: 32 });
     expect(screen.getByRole("status").getAttribute("title")).toContain("32 levels");
   });
 });

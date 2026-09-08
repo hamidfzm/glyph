@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { type Command, rankCommands } from "./commands";
-import { buildMetadataIndex } from "./metadata";
 
 function cmd(over: Partial<Command>): Command {
   return {
@@ -73,34 +72,33 @@ describe("rankCommands", () => {
     expect(result.map((r) => r.command.id)).toEqual(["b", "a"]);
   });
 
-  describe("metadata queries", () => {
-    const metadata = buildMetadataIndex([
-      { path: "/ws/spec.md", frontmatter: "---\nstatus: draft\n---\n", tags: ["work"] },
-      { path: "/ws/diary.md", frontmatter: null, tags: ["personal"] },
-    ]);
+  describe("metadata-filtered queries", () => {
+    // The index lifts `tag:` / `field:` out of the query and answers with the
+    // paths they select; ranking only narrows the rows to those.
     const files = [
       cmd({ id: "spec", title: "spec.md", section: "Files", path: "/ws/spec.md" }),
       cmd({ id: "diary", title: "diary.md", section: "Files", path: "/ws/diary.md" }),
       cmd({ id: "settings", title: "Settings" }),
     ];
 
-    it("keeps only the files matching a tag filter", () => {
-      const result = rankCommands("tag:work", files, { metadata });
+    it("keeps only the files the filters selected", () => {
+      const result = rankCommands("", files, { paths: new Set(["/ws/spec.md"]) });
       expect(result.map((r) => r.command.id)).toEqual(["spec"]);
     });
 
-    it("combines a field filter with fuzzy text", () => {
-      expect(rankCommands("status:draft spec", files, { metadata })[0].command.id).toBe("spec");
-      expect(rankCommands("status:draft diary", files, { metadata })).toEqual([]);
+    it("ranks the leftover text within the selection", () => {
+      const paths = new Set(["/ws/spec.md", "/ws/diary.md"]);
+      expect(rankCommands("spec", files, { paths })[0].command.id).toBe("spec");
+      expect(rankCommands("zzz", files, { paths })).toEqual([]);
     });
 
-    it("drops non-file commands from a metadata query", () => {
-      const result = rankCommands("tag:personal", files, { metadata });
+    it("drops non-file commands from a filtered query", () => {
+      const result = rankCommands("", files, { paths: new Set(["/ws/diary.md"]) });
       expect(result.map((r) => r.command.id)).toEqual(["diary"]);
     });
 
-    it("returns nothing when the index is unavailable", () => {
-      expect(rankCommands("tag:work", files)).toEqual([]);
+    it("returns nothing when the filters selected no paths", () => {
+      expect(rankCommands("", files, { paths: new Set() })).toEqual([]);
     });
   });
 });

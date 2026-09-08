@@ -9,37 +9,36 @@ import { useGraphPointer } from "@/hooks/useGraphPointer";
 import { useGraphSimulation } from "@/hooks/useGraphSimulation";
 import { useGraphZoomCommands } from "@/hooks/useGraphZoomCommands";
 import { useIsDarkMode } from "@/hooks/useIsDarkMode";
-import type { WikilinkRef } from "@/lib/backlinks";
-import { buildWorkspaceGraph } from "@/lib/graph";
 import { type Camera, fitCameraToNodes } from "@/lib/graphCanvas";
 import { drawGraph, readGraphTheme } from "@/lib/graphDraw";
+import { neighborIndex } from "@/lib/graphNeighbors";
 import type { LayoutNode } from "@/lib/graphSimulation";
 import { loadGraphView, saveGraphView } from "@/lib/graphViewStore";
+import type { VaultSnapshot } from "@/lib/vault";
 
 interface GraphViewProps {
-  workspaceFiles: readonly string[];
-  wikilinkRefs: readonly WikilinkRef[];
+  /** Nodes and edges as the Rust index derived them. */
+  graph: VaultSnapshot["graph"];
   /** Open a note from the graph, inside its workspace. */
   onOpenFile: (path: string) => void;
 }
 
 // Force-directed picture of the active workspace: every markdown file is a
-// node, every resolved wikilink an edge. Heavy lifting is delegated — model
-// building to lib/graph, physics to useGraphSimulation, camera math and
-// drawing to lib/graphCanvas — so this component only wires canvas events.
+// node, every resolved wikilink an edge. Heavy lifting is delegated: the model
+// to the Rust index, physics to useGraphSimulation, camera math and drawing to
+// lib/graphCanvas, so this component only wires canvas events.
 //
 // The view auto-frames the graph (centres + fits it) and keeps re-framing as
 // the layout settles, until the first time the user pans, zooms, or drags a
 // node; from then the camera is theirs until they hit "Reset view". Dragging a
 // node pins it under the cursor and reheats the simulation, like Obsidian.
-export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphViewProps) {
+export function GraphView({ graph, onOpenFile }: GraphViewProps) {
   const { t } = useTranslation("common");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { ref: containerRef, size: viewport } = useElementSize<HTMLDivElement>();
-  const graph = useMemo(
-    () => buildWorkspaceGraph(workspaceFiles, wikilinkRefs),
-    [workspaceFiles, wikilinkRefs],
-  );
+  // Undirected adjacency for hover dimming. The edges are the index's answer;
+  // this only indexes them for lookup.
+  const neighbors = useMemo(() => neighborIndex(graph.edges), [graph.edges]);
   // The graph tab unmounts whenever another tab is active, so its camera,
   // auto-fit flag and layout live in a store keyed by workspace root.
   const persistKey = useWorkspaceRoot();
@@ -153,9 +152,9 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
       camera: effectiveCamera,
       theme,
       hoveredId: highlightId,
-      neighbors: graph.neighbors,
+      neighbors,
     });
-  }, [layout, version, effectiveCamera, highlightId, viewport, theme, graph.neighbors]);
+  }, [layout, version, effectiveCamera, highlightId, viewport, theme, neighbors]);
 
   const refit = useCallback(() => {
     clearFocus();

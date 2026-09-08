@@ -1,5 +1,5 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CollapseAllIcon } from "@/components/icons/CollapseAllIcon";
 import { ExpandAllIcon } from "@/components/icons/ExpandAllIcon";
@@ -9,7 +9,7 @@ import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { useOpenInNewWindow } from "@/hooks/useOpenInNewWindow";
-import { pathsWithTag, tagCounts } from "@/lib/metadata";
+import { useTaggedPaths } from "@/hooks/useTaggedPaths";
 import { lastSegment } from "@/lib/paths";
 import { pickMoveDir } from "@/lib/pickers";
 import type { Workspace } from "@/lib/tabs";
@@ -33,7 +33,7 @@ export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
   const { t } = useTranslation("common");
   const {
     activeFile,
-    metadata,
+    snapshot,
     toggleExpand,
     openFile,
     closeWorkspace,
@@ -55,13 +55,10 @@ export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
   // that tag still exists: a switched workspace or a tag edited away falls back
   // to the tree instead of stranding the panel on a stale list.
   const [tagFilter, setTagFilter] = useState<{ root: string; tag: string } | null>(null);
-  const tags = useMemo(() => tagCounts(metadata), [metadata]);
+  const tags = snapshot.tagCounts;
   const selectedTag = tagFilter && tagFilter.root === workspace.root ? tagFilter.tag : null;
   const activeTag = tags.some((tag) => tag.tag === selectedTag) ? selectedTag : null;
-  const taggedPaths = useMemo(
-    () => (activeTag ? pathsWithTag(metadata, activeTag) : []),
-    [metadata, activeTag],
-  );
+  const taggedPaths = useTaggedPaths(workspace.root, activeTag, snapshot);
 
   // On a phone the sidebar is a drawer over the document, so opening a file
   // dismisses it, otherwise the freshly opened doc stays hidden behind it.

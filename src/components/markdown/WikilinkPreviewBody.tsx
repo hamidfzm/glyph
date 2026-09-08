@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { extractHeadingSection } from "@/lib/headingSection";
-import { isNestedTarget } from "@/lib/wikilinkResolver";
+import { isNestedTarget } from "@/lib/wikilinkNodes";
 import { MarkdownContent } from "./MarkdownContent";
 
 const PLACEHOLDER_CLASS = "text-sm text-[var(--color-text-secondary)]";
