@@ -125,6 +125,20 @@ describe("FileTree context menu", () => {
     expect(onOpenFile).not.toHaveBeenCalled();
   });
 
+  it("preselects the whole name when renaming a dotfile", async () => {
+    const dotfile: DirEntry = {
+      name: ".gitignore",
+      path: "/root/.gitignore",
+      isDirectory: false,
+      modified: 0,
+    };
+    renderFileTree({ nodes: new Map([["/root", [dotfile]]]) });
+
+    fireEvent.contextMenu(screen.getByText(".gitignore"));
+    fireEvent.click(screen.getByText("Rename"));
+    expect(await screen.findByRole("textbox")).toHaveValue(".gitignore");
+  });
+
   it("duplicates an entry via 'Make a copy'", () => {
     const { props } = renderFileTree();
     fireEvent.contextMenu(screen.getByText("post.md"));
