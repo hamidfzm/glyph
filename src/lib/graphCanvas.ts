@@ -27,8 +27,6 @@ const FIT_MAX_SCALE = 1.6;
 // Breathing room (screen px) left around the graph when fitting.
 const FIT_PADDING = 48;
 
-/** Labels are unreadable clutter when zoomed far out; hide them below this. */
-
 export function panCamera(camera: Camera, dx: number, dy: number): Camera {
   return { ...camera, dx: camera.dx + dx, dy: camera.dy + dy };
 }

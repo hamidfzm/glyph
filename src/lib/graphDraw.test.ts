@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { WikilinkRef } from "./backlinks";
 import { buildWorkspaceGraph } from "./graph";
 import { DEFAULT_CAMERA } from "./graphCanvas";
-import { drawGraph, readGraphTheme } from "./graphDraw";
+import { ALPHA_DIMMED, drawGraph, readGraphTheme } from "./graphDraw";
 import { createGraphLayout, type GraphLayout, type LayoutNode } from "./graphSimulation";
 
 const VIEWPORT = { width: 800, height: 600 };
@@ -239,6 +239,6 @@ describe("drawGraph", () => {
     expect(fills).toContain("node");
     expect(fills).not.toContain("orphan");
     // The c–d edge doesn't touch the hovered node, so it draws at the dimmed alpha.
-    expect(alphas).toContain(0.18);
+    expect(alphas).toContain(ALPHA_DIMMED);
   });
 });

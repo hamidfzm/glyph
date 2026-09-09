@@ -36,8 +36,8 @@ the `samples/` folder and try it on this very workspace.
 
 | Action | How |
 | --- | --- |
-| Focus a note | Click its node (the view centres on it and its neighbours stay lit) |
-| Open a note | Double-click its node |
+| Focus a note | Click or tap its node (the view centres on it and its neighbours stay lit) |
+| Open a note | Click or tap the focused node again, or double-click it |
 | Highlight a note's neighbours | Hover it (the rest dim, arrows show link direction) |
 | Clear the focus | Click the background |
 | Pan | Drag the background |

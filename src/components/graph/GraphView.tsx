@@ -19,7 +19,7 @@ import { loadGraphView, saveGraphView } from "@/lib/graphViewStore";
 interface GraphViewProps {
   workspaceFiles: readonly string[];
   wikilinkRefs: readonly WikilinkRef[];
-  /** Open the clicked note inside its workspace. */
+  /** Open a note from the graph, inside its workspace. */
   onOpenFile: (path: string) => void;
 }
 
@@ -87,38 +87,51 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
     setAutoFit(false);
   }, [camera, layout, viewport]);
 
-  const { focusedId, focusNode, clearFocus } = useGraphFocus({
+  const { focusedId, focusNode, clearFocus, cancelMove } = useGraphFocus({
     camera,
     cameraNow,
     takeManualControl,
+    layout,
   });
 
-  // Clearing beats the deferred camera move to the punch, so the first press of
-  // a double click never animates on its way to the note.
+  // A second press on the node already in focus is what opens it. Chromium
+  // follows the Pointer Events spec and reports no click count on pointerup, and
+  // touch reports none anywhere, so `clickCount` alone would never reach 2 on
+  // Windows or Android. Clearing first beats the deferred camera move to the
+  // punch, so opening never animates.
   const handleNodeClick = useCallback(
     (node: LayoutNode, clickCount: number) => {
-      if (clickCount < 2) {
+      const opening = clickCount >= 2 || focusedId === node.id;
+      if (!opening) {
         focusNode(node);
         return;
       }
       clearFocus();
       onOpenFile(node.id);
     },
-    [clearFocus, focusNode, onOpenFile],
+    [clearFocus, focusNode, focusedId, onOpenFile],
   );
 
-  const { hovered, dragging, clearHover, handlePointerDown, handlePointerMove, handlePointerUp } =
-    useGraphPointer({
-      canvasRef,
-      layout,
-      viewport,
-      camera,
-      cameraNow,
-      takeManualControl,
-      reheat,
-      onNodeClick: handleNodeClick,
-      onBackgroundClick: clearFocus,
-    });
+  const {
+    hovered,
+    dragging,
+    clearHover,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+    handlePointerCancel,
+  } = useGraphPointer({
+    canvasRef,
+    layout,
+    viewport,
+    camera,
+    cameraNow,
+    takeManualControl,
+    reheat,
+    onNodeClick: handleNodeClick,
+    onBackgroundClick: clearFocus,
+    onCameraInterrupt: cancelMove,
+  });
 
   // Hover previews on top of the focus and falls back to it on leave; both ride
   // the single highlight input `drawGraph` already dims around.
@@ -173,7 +186,7 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onPointerLeave={clearHover}
       />
       <button

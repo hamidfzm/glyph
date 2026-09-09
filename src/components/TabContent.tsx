@@ -69,7 +69,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   if (!activeTab) return null;
 
   // Graph tabs have no document; they render the workspace graph and open
-  // clicked notes as document tabs.
+  // its notes as document tabs.
   if (activeTab.kind === "graph") {
     return (
       // Keyed by root so a workspace change remounts rather than swapping the

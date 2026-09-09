@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GraphCameraApi } from "@/hooks/useGraphCamera";
 import { type Camera, centerCameraOn, FOCUS_SCALE, lerpCamera } from "@/lib/graphCanvas";
-import type { LayoutNode } from "@/lib/graphSimulation";
+import type { GraphLayout, LayoutNode } from "@/lib/graphSimulation";
 import { createSpringAnimation, type SpringAnimation } from "@/lib/spring";
 
-// The camera move waits out this window, so the first press of a double click
-// never starts an animation on its way to opening the note.
-export const DOUBLE_CLICK_MS = 280;
+// Windows' default double-click time, and the longest of the platform defaults.
+// The camera move waits it out so a double click never starts an animation on
+// its way to opening the note; the highlight still lands on the first press.
+export const DOUBLE_CLICK_MS = 500;
 
 interface UseGraphFocusOptions {
   camera: GraphCameraApi;
@@ -14,6 +15,7 @@ interface UseGraphFocusOptions {
   cameraNow: () => Camera;
   /** Switch the view from auto-fit to the user's own camera. */
   takeManualControl: () => void;
+  layout: GraphLayout;
 }
 
 export interface GraphFocusApi {
@@ -21,6 +23,8 @@ export interface GraphFocusApi {
   focusedId: string | null;
   focusNode: (node: LayoutNode) => void;
   clearFocus: () => void;
+  /** Drop a pending or running camera move, keeping the highlight. */
+  cancelMove: () => void;
 }
 
 /**
@@ -32,16 +36,20 @@ export function useGraphFocus({
   camera,
   cameraNow,
   takeManualControl,
+  layout,
 }: UseGraphFocusOptions): GraphFocusApi {
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const timerRef = useRef(0);
   const animationRef = useRef<SpringAnimation | null>(null);
-  // The deferred move reads the camera when it fires, not when it was scheduled:
-  // a wheel zoom inside the double-click window would otherwise make it jump.
+  // The deferred move reads the camera and the layout when it fires, not when it
+  // was scheduled, so a zoom or a re-index inside the window cannot strand it.
   const cameraNowRef = useRef(cameraNow);
   cameraNowRef.current = cameraNow;
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  const setCamera = camera.set;
 
-  const cancelPending = useCallback(() => {
+  const cancelMove = useCallback(() => {
     window.clearTimeout(timerRef.current);
     timerRef.current = 0;
     animationRef.current?.stop();
@@ -50,32 +58,40 @@ export function useGraphFocus({
 
   const focusNode = useCallback(
     (node: LayoutNode) => {
-      cancelPending();
+      cancelMove();
       takeManualControl();
       setFocusedId(node.id);
       timerRef.current = window.setTimeout(() => {
         timerRef.current = 0;
-        // d3 mutates node positions in place, so read them here: a layout still
-        // settling would have moved the node on since the press.
+        // Re-resolve by id: a re-index swaps every node object, and d3 moves the
+        // survivors on as the layout keeps settling.
+        const target = layoutRef.current.nodes.find((n) => n.id === node.id);
+        if (!target) return;
         const from = cameraNowRef.current();
-        const to = centerCameraOn(node.x ?? 0, node.y ?? 0, Math.max(from.scale, FOCUS_SCALE));
+        const to = centerCameraOn(target.x ?? 0, target.y ?? 0, Math.max(from.scale, FOCUS_SCALE));
         const animation = createSpringAnimation({
           initial: 0,
-          onFrame: (progress) => camera.set(lerpCamera(from, to, progress)),
+          onFrame: (progress) => setCamera(lerpCamera(from, to, progress)),
         });
         animationRef.current = animation;
         animation.animateTo(1);
       }, DOUBLE_CLICK_MS);
     },
-    [camera, cancelPending, takeManualControl],
+    [cancelMove, setCamera, takeManualControl],
   );
 
   const clearFocus = useCallback(() => {
-    cancelPending();
+    cancelMove();
     setFocusedId(null);
-  }, [cancelPending]);
+  }, [cancelMove]);
 
-  useEffect(() => cancelPending, [cancelPending]);
+  // A focused note can leave the graph (deleted, renamed, unindexed). Its id
+  // would then dim the whole graph with nothing lit, so drop it.
+  useEffect(() => {
+    setFocusedId((id) => (id !== null && !layout.nodes.some((n) => n.id === id) ? null : id));
+  }, [layout]);
 
-  return { focusedId, focusNode, clearFocus };
+  useEffect(() => cancelMove, [cancelMove]);
+
+  return { focusedId, focusNode, clearFocus, cancelMove };
 }

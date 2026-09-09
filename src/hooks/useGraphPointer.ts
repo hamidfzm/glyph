@@ -37,9 +37,11 @@ interface UseGraphPointerOptions {
   /** Switch the view from auto-fit to the user's own camera. */
   takeManualControl: () => void;
   reheat: (alpha?: number) => void;
-  /** A click on a node, with the native click count (1 = single, 2 = double). */
+  /** A click on a node, with the native click count (0 where the engine omits it). */
   onNodeClick: (node: LayoutNode, clickCount: number) => void;
   onBackgroundClick: () => void;
+  /** A new gesture is taking the camera, so any animation on it must stop. */
+  onCameraInterrupt: () => void;
 }
 
 /**
@@ -58,6 +60,7 @@ export function useGraphPointer({
   reheat,
   onNodeClick,
   onBackgroundClick,
+  onCameraInterrupt,
 }: UseGraphPointerOptions) {
   const [hovered, setHovered] = useState<{ id: string; x: number; y: number } | null>(null);
   const pointer = useRef<ActivePointer | null>(null);
@@ -72,6 +75,7 @@ export function useGraphPointer({
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
+      onCameraInterrupt();
       const point = localPoint(event);
       const cam = cameraNow();
       const hit = hitTestNode(layout.nodes, cam, viewport, point.x, point.y);
@@ -85,7 +89,7 @@ export function useGraphPointer({
       };
       event.currentTarget.setPointerCapture(event.pointerId);
     },
-    [cameraNow, layout.nodes, localPoint, viewport],
+    [cameraNow, layout.nodes, localPoint, onCameraInterrupt, viewport],
   );
 
   const handlePointerMove = useCallback(
@@ -119,25 +123,45 @@ export function useGraphPointer({
     [camera, cameraNow, layout.nodes, localPoint, reheat, takeManualControl, viewport],
   );
 
+  // Release a dragged node back into the flow and let its neighbours relax.
+  const releaseDraggedNode = useCallback(
+    (drag: ActivePointer) => {
+      if (!drag.moved || !drag.node) return;
+      releaseNode(drag.node);
+      reheat(0.1);
+    },
+    [reheat],
+  );
+
   const handlePointerUp = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
       const drag = pointer.current;
       pointer.current = null;
       if (!drag || drag.id !== event.pointerId) return;
       if (!drag.moved) {
-        // A press that never became a drag is a click; `detail` is the native
-        // click count, which separates a double click's second press.
+        // A press that never became a drag is a click. `detail` is the native
+        // click count where the engine supplies one; Chromium follows the
+        // Pointer Events spec and leaves it 0 here, so the caller cannot lean
+        // on it alone.
         if (drag.node) onNodeClick(drag.node, event.detail);
         else onBackgroundClick();
         return;
       }
-      if (drag.node) {
-        // Release the dragged node back into the flow and let neighbours relax.
-        releaseNode(drag.node);
-        reheat(0.1);
-      }
+      releaseDraggedNode(drag);
     },
-    [onBackgroundClick, onNodeClick, reheat],
+    [onBackgroundClick, onNodeClick, releaseDraggedNode],
+  );
+
+  // A cancelled gesture (the browser taking over a touch, a lost capture) is
+  // never a click: it only has to put a dragged node back.
+  const handlePointerCancel = useCallback(
+    (event: ReactPointerEvent<HTMLCanvasElement>) => {
+      const drag = pointer.current;
+      pointer.current = null;
+      if (!drag || drag.id !== event.pointerId) return;
+      releaseDraggedNode(drag);
+    },
+    [releaseDraggedNode],
   );
 
   // Wheel must be a native non-passive listener to preventDefault scrolling.
@@ -146,13 +170,14 @@ export function useGraphPointer({
     if (!canvas) return;
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault();
+      onCameraInterrupt();
       takeManualControl();
       const point = localPoint(event);
       camera.zoomAt(point.x, point.y, Math.exp(-event.deltaY * WHEEL_ZOOM_SPEED), viewport);
     };
     canvas.addEventListener("wheel", handleWheel, { passive: false });
     return () => canvas.removeEventListener("wheel", handleWheel);
-  }, [camera, canvasRef, localPoint, takeManualControl, viewport]);
+  }, [camera, canvasRef, localPoint, onCameraInterrupt, takeManualControl, viewport]);
 
   return {
     hovered,
@@ -162,6 +187,7 @@ export function useGraphPointer({
     handlePointerDown,
     handlePointerMove,
     handlePointerUp,
+    handlePointerCancel,
     /** Clear hover when the cursor leaves the canvas. */
     clearHover: () => setHovered(null),
   };

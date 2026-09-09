@@ -6,7 +6,8 @@ import { type Camera, nodeRadius, type Viewport } from "./graphCanvas";
 import type { GraphLayout, LayoutNode } from "./graphSimulation";
 
 const LABEL_MIN_SCALE = 0.7;
-const ALPHA_DIMMED = 0.18;
+/** Alpha everything outside the highlighted neighbourhood draws at. */
+export const ALPHA_DIMMED = 0.18;
 const ALPHA_EDGE = 0.55;
 
 export interface GraphTheme {
