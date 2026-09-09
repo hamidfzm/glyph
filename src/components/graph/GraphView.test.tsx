@@ -14,6 +14,9 @@ import { GraphView } from "./GraphView";
 const hoisted = vi.hoisted(() => ({
   reheat: vi.fn(),
   layoutRef: { current: null as GraphLayout | null },
+  // Whether the mock layout resumed the stored shape. False means d3 replayed
+  // it, which is when a restored camera would frame the wrong coordinates.
+  reseeded: { value: true },
 }));
 
 // Deterministic stand-in for the d3 layout: node i sits at world (i * 100, 0).
@@ -36,6 +39,7 @@ vi.mock("@/hooks/useGraphSimulation", () => {
         layout = { nodes, links, simulation: null } as unknown as GraphLayout;
         cache.set(graph, layout);
       }
+      layout.reseeded = hoisted.reseeded.value;
       hoisted.layoutRef.current = layout;
       return { layout, version: 1, settled: true, reheat: hoisted.reheat };
     },
@@ -84,6 +88,7 @@ let ctx: ReturnType<typeof stubContext>;
 beforeEach(() => {
   hoisted.reheat.mockClear();
   hoisted.layoutRef.current = null;
+  hoisted.reseeded.value = true;
   ctx = stubContext();
   HTMLCanvasElement.prototype.getContext = vi.fn(
     () => ctx,
@@ -345,7 +350,10 @@ describe("GraphView", () => {
 describe("GraphView view state across a tab switch", () => {
   const ROOT = "/ws";
 
-  afterEach(() => clearGraphView(ROOT));
+  afterEach(() => {
+    clearGraphView(ROOT);
+    clearGraphView("/other");
+  });
 
   // Built here rather than via `renderInWorkspace` so a re-index can rerender
   // the same tree: rerendering without the provider would remount the view.
@@ -403,6 +411,20 @@ describe("GraphView view state across a tab switch", () => {
     expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + FIT.dx);
   });
 
+  it("re-fits instead of restoring the camera when the layout replayed", () => {
+    const first = renderInRoot();
+    pan(first.canvas, 60);
+    first.unmount();
+
+    // Too few nodes came back seeded (a large re-index while the tab was in the
+    // background), so d3 replayed the layout around the origin. Restoring the
+    // manual camera would frame empty space.
+    hoisted.reseeded.value = false;
+    renderInRoot();
+    expect(screen.getByRole("button", { name: "Reset view" })).toBeDisabled();
+    expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + FIT.dx);
+  });
+
   it("starts fresh once the graph tab's state is cleared", () => {
     const first = renderInRoot();
     pan(first.canvas, 60);
@@ -432,6 +454,5 @@ describe("GraphView view state across a tab switch", () => {
 
     renderInRoot("/other");
     expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + FIT.dx);
-    clearGraphView("/other");
   });
 });

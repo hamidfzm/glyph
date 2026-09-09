@@ -72,7 +72,10 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
   // clicked notes as document tabs.
   if (activeTab.kind === "graph") {
     return (
+      // Keyed by root so a workspace change remounts rather than swapping the
+      // key underneath hooks that seed from it once.
       <GraphView
+        key={activeTab.root}
         workspaceFiles={workspaceFiles}
         wikilinkRefs={wikilinkRefs}
         onOpenFile={handleOpenWikilink}

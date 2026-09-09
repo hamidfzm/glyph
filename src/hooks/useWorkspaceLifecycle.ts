@@ -5,7 +5,6 @@ import type { OpenFileOptions } from "@/hooks/useOpenDocument";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import type { WorkspaceSessionApi } from "@/hooks/useWorkspaceSession";
 import { isCliExportProcess } from "@/lib/cliExport";
-import { clearGraphView } from "@/lib/graphViewStore";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { isPathInside } from "@/lib/paths";
 import { pickFolder, pickNewWorkspace } from "@/lib/pickers";
@@ -77,7 +76,6 @@ export function useWorkspaceLifecycle({
         const removedIds = new Set<string>();
         for (const tab of prev.tabs) {
           if (tab.kind === "graph") {
-            clearGraphView(tab.root);
             removedIds.add(tab.id);
           } else if (isPathInside(tab.file.path, root)) {
             invoke("unwatch_file", { path: tab.file.path }).catch(() => {});

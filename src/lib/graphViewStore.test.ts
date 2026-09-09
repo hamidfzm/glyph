@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_CAMERA } from "./graphCanvas";
-import { clearGraphView, loadGraphView, saveGraphView } from "./graphViewStore";
+import { clearGraphView, loadGraphView, pruneGraphViews, saveGraphView } from "./graphViewStore";
 
 const ROOT = "/vault";
 
-afterEach(() => clearGraphView(ROOT));
+afterEach(() => {
+  clearGraphView(ROOT);
+  clearGraphView("/other");
+});
 
 describe("graphViewStore", () => {
   it("has nothing for a key that was never written", () => {
@@ -33,6 +36,21 @@ describe("graphViewStore", () => {
   it("forgets a cleared key", () => {
     saveGraphView(ROOT, { autoFit: false });
     clearGraphView(ROOT);
+    expect(loadGraphView(ROOT)).toBeUndefined();
+  });
+
+  it("prunes the entries whose graph tab is gone and keeps the rest", () => {
+    saveGraphView(ROOT, { autoFit: false });
+    saveGraphView("/other", { autoFit: false });
+
+    pruneGraphViews(new Set([ROOT]));
+    expect(loadGraphView(ROOT)).toEqual({ autoFit: false });
+    expect(loadGraphView("/other")).toBeUndefined();
+  });
+
+  it("empties the store when no graph tab is left", () => {
+    saveGraphView(ROOT, { autoFit: false });
+    pruneGraphViews(new Set());
     expect(loadGraphView(ROOT)).toBeUndefined();
   });
 });

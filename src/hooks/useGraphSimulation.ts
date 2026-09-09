@@ -55,11 +55,12 @@ export function useGraphSimulation(
   const reducedMotion = useReducedMotion();
   const persistKey = options?.persistKey;
   // A restored snapshot makes a return to the tab reheat gently, the way a
-  // watcher-driven re-index already does.
-  const previousPositions = useRef<ReadonlyMap<string, NodePosition> | null>(
-    persistKey ? (loadGraphView(persistKey)?.positions ?? null) : null,
-  );
-  // Read through a ref so the rAF loop is not rebuilt when the key changes.
+  // watcher-driven re-index already does. `undefined` means "not seeded yet",
+  // so the store is read once rather than on every render.
+  const previousPositions = useRef<ReadonlyMap<string, NodePosition> | null | undefined>(undefined);
+  if (previousPositions.current === undefined) {
+    previousPositions.current = persistKey ? (loadGraphView(persistKey)?.positions ?? null) : null;
+  }
   const persistKeyRef = useRef(persistKey);
   persistKeyRef.current = persistKey;
   const [version, setVersion] = useState(0);
@@ -92,7 +93,7 @@ export function useGraphSimulation(
       budgetRef.current -= ticksPerFrame;
       const positions = capturePositions(layout);
       previousPositions.current = positions;
-      // Written through here, not on unmount, so no cleanup ordering matters.
+      // Written through as it changes rather than queued for unmount.
       if (persistKeyRef.current) saveGraphView(persistKeyRef.current, { positions });
       const finished = done || budgetRef.current <= 0;
       if (paintEveryFrameRef.current || finished) setVersion((v) => v + 1);

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useDocumentEdits } from "@/hooks/useDocumentEdits";
 import { useDocumentSave } from "@/hooks/useDocumentSave";
@@ -17,7 +17,7 @@ import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { useWorkspaceSession, type WorkspaceSessionApi } from "@/hooks/useWorkspaceSession";
 import { useWorkspaceTree } from "@/hooks/useWorkspaceTree";
 import { isCliExportProcess } from "@/lib/cliExport";
-import { clearGraphView } from "@/lib/graphViewStore";
+import { pruneGraphViews } from "@/lib/graphViewStore";
 import { basename, isPathInside } from "@/lib/paths";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { type FileTab, type PersistedTab, removeTabs } from "@/lib/tabs";
@@ -307,10 +307,6 @@ export function useTabs(options: UseTabsOptions) {
           if (!tab) continue;
           if (tab.kind === "file") {
             invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
-          } else {
-            // Closing the graph drops its remembered view, so reopening it from
-            // the menu starts auto-fit rather than restoring a stale camera.
-            clearGraphView(tab.root);
           }
           forgetScroll(id);
           forgetHistory(id);
@@ -381,6 +377,18 @@ export function useTabs(options: UseTabsOptions) {
     forgetHistory,
     refreshWorkspace,
   });
+
+  // Reconciled after the commit, not at the close call sites: a close runs while
+  // the graph is still mounted and its animation loop is still writing
+  // positions, so a clear issued there would be undone by the next frame. This
+  // covers every removal path, including a workspace switch.
+  useEffect(() => {
+    const roots = new Set<string>();
+    for (const tab of tabs) {
+      if (tab.kind === "graph") roots.add(tab.root);
+    }
+    pruneGraphViews(roots);
+  }, [tabs]);
 
   return {
     tabs,

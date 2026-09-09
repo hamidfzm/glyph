@@ -52,8 +52,11 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
   const theme = useMemo(() => readGraphTheme(document.documentElement), [isDark]);
 
   // Auto-fit follows the live layout until the user takes manual control.
+  // Only honour a stored auto-fit when the layout actually resumed the shape it
+  // was saved against; a layout that replayed from scratch would leave a manual
+  // camera framing empty space.
   const [autoFit, setAutoFit] = useState(
-    () => (persistKey ? loadGraphView(persistKey)?.autoFit : undefined) ?? true,
+    () => (persistKey && layout.reseeded ? loadGraphView(persistKey)?.autoFit : undefined) ?? true,
   );
   const autoFitRef = useRef(autoFit);
   useEffect(() => {
