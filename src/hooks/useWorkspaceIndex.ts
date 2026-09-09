@@ -39,10 +39,13 @@ export function useWorkspaceIndex({ workspaceRoot, onWorkspaceNotice }: UseWorks
   // one to return: a burst of directory changes must not leave the window on
   // an older picture of the workspace.
   const latestWalk = useRef(0);
-  // A watcher change during the opening walk must not race it: `vault_refresh`
-  // replaces whatever the backend holds, so a snapshot built meanwhile would
-  // be thrown away and its file never re-read.
+  // The opening walk owns the backend's copy: `vault_refresh` replaces it
+  // wholesale, so a watcher-driven read landing mid-open would be discarded.
+  // Such a change is remembered and the walk is repeated, because the copy the
+  // open built predates the write that triggered it.
   const openingRoot = useRef<string | null>(null);
+  const openings = useRef(0);
+  const missedChange = useRef(false);
 
   const loadFiles = useCallback(async (root: string): Promise<FileScan> => {
     try {
@@ -76,6 +79,18 @@ export function useWorkspaceIndex({ workspaceRoot, onWorkspaceNotice }: UseWorks
     });
   }, []);
 
+  /** Run both walks and keep the result only if it is still the newest. */
+  const walk = useCallback(
+    async (command: string, root: string, isCurrent: () => boolean): Promise<string[]> => {
+      const id = ++latestWalk.current;
+      const [files, vault] = await Promise.all([loadFiles(root), loadVault(command, root)]);
+      if (!isCurrent() || id !== latestWalk.current) return files.files;
+      apply(files, vault);
+      return files.files;
+    },
+    [apply, loadFiles, loadVault],
+  );
+
   /**
    * Walk a freshly opened workspace, rebuilding the index from disk rather
    * than reading whatever the backend already holds: a watcher only starts
@@ -85,21 +100,24 @@ export function useWorkspaceIndex({ workspaceRoot, onWorkspaceNotice }: UseWorks
    */
   const scanWorkspace = useCallback(
     async (root: string, isCurrent: () => boolean): Promise<string[]> => {
-      const walk = ++latestWalk.current;
+      const opening = ++openings.current;
       openingRoot.current = root;
+      missedChange.current = false;
       try {
-        const [files, vault] = await Promise.all([
-          loadFiles(root),
-          loadVault("vault_refresh", root),
-        ]);
-        if (!isCurrent() || walk !== latestWalk.current) return files.files;
-        apply(files, vault);
-        return files.files;
+        return await walk("vault_refresh", root, isCurrent);
       } finally {
-        if (openingRoot.current === root) openingRoot.current = null;
+        // Only the newest open releases the claim: the same root can be opened
+        // twice with another workspace in between.
+        if (openings.current === opening) {
+          openingRoot.current = null;
+          if (missedChange.current) {
+            missedChange.current = false;
+            void walk("vault_refresh", root, isCurrent);
+          }
+        }
       }
     },
-    [apply, loadFiles, loadVault],
+    [walk],
   );
 
   /**
@@ -111,16 +129,13 @@ export function useWorkspaceIndex({ workspaceRoot, onWorkspaceNotice }: UseWorks
    */
   const refreshIndexes = useCallback(
     async (root: string, isCurrent: () => boolean) => {
-      if (openingRoot.current === root) return;
-      const walk = ++latestWalk.current;
-      const [files, vault] = await Promise.all([
-        loadFiles(root),
-        loadVault("vault_snapshot", root),
-      ]);
-      if (!isCurrent() || walk !== latestWalk.current) return;
-      apply(files, vault);
+      if (openingRoot.current === root) {
+        missedChange.current = true;
+        return;
+      }
+      await walk("vault_snapshot", root, isCurrent);
     },
-    [apply, loadFiles, loadVault],
+    [walk],
   );
 
   /** Drop this window's copy and release the backend's. */

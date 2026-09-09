@@ -28,9 +28,11 @@ export function useBacklinks(
   });
   const key = `${root ?? ""}\u0000${path ?? ""}`;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot` is the re-ask trigger, not a value read; a new index is exactly when the answer can differ
   useEffect(() => {
-    if (!root || !path) {
+    // An empty index has nothing pointing anywhere. Reading the snapshot
+    // here is also what makes it a dependency: the answer can differ every
+    // time the index changes.
+    if (!root || !path || snapshot.files.length === 0) {
       setAnswered({ key, rows: NONE });
       return;
     }

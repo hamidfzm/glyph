@@ -8,9 +8,12 @@ import { useWikilinkResolutions } from "./useWikilinkResolutions";
 
 // Mutable so a test can move the workspace or the index under the hook the way
 // the provider does, then rerender.
+/** An index holding notes; an empty one resolves nothing. */
+const indexed: VaultSnapshot = { ...EMPTY_SNAPSHOT, files: ["/ws/One.md"] };
+
 const context: { root: string | null; snapshot: VaultSnapshot } = {
   root: "/ws",
-  snapshot: EMPTY_SNAPSHOT,
+  snapshot: indexed,
 };
 
 function Wrapper({ children }: { children: ReactNode }) {
@@ -34,7 +37,7 @@ function resolveInOwnFolder() {
 
 beforeEach(() => {
   context.root = "/ws";
-  context.snapshot = EMPTY_SNAPSHOT;
+  context.snapshot = indexed;
   vi.mocked(invoke).mockReset();
 });
 
@@ -45,8 +48,8 @@ describe("useWikilinkResolutions", () => {
       () => useWikilinkResolutions("[[One]] and [[Two]] and [[One]]", "/ws/a/Doc.md"),
       { wrapper: Wrapper },
     );
-    await waitFor(() => expect(result.current.size).toBe(2));
-    expect(result.current.get("One")).toBe("/ws/a/One.md");
+    await waitFor(() => expect(result.current.resolutions.size).toBe(2));
+    expect(result.current.resolutions.get("One")).toBe("/ws/a/One.md");
     expect(invoke).toHaveBeenCalledExactlyOnceWith("vault_resolve", {
       root: "/ws",
       from: "/ws/a/Doc.md",
@@ -55,8 +58,31 @@ describe("useWikilinkResolutions", () => {
   });
 
   it("asks nothing for a document with no wikilinks", () => {
-    renderHook(() => useWikilinkResolutions("plain prose", "/ws/Doc.md"), { wrapper: Wrapper });
+    const { result } = renderHook(() => useWikilinkResolutions("plain prose", "/ws/Doc.md"), {
+      wrapper: Wrapper,
+    });
     expect(invoke).not.toHaveBeenCalled();
+    expect(result.current.pending).toBe(false);
+  });
+
+  // Rendering every link broken until the index answers reads as breakage, not
+  // as loading, so the first frame says "pending" instead.
+  it("reports pending until the first answer lands", async () => {
+    resolveInOwnFolder();
+    const { result } = renderHook(() => useWikilinkResolutions("[[One]]", "/ws/Doc.md"), {
+      wrapper: Wrapper,
+    });
+    expect(result.current.pending).toBe(true);
+    await waitFor(() => expect(result.current.pending).toBe(false));
+    expect(result.current.resolutions.get("One")).toBe("/ws/One.md");
+  });
+
+  it("is not pending outside a workspace, where links are simply broken", () => {
+    context.root = null;
+    const { result } = renderHook(() => useWikilinkResolutions("[[One]]", "/loose/Doc.md"), {
+      wrapper: Wrapper,
+    });
+    expect(result.current.pending).toBe(false);
   });
 
   it("resolves nothing outside a workspace", () => {
@@ -64,7 +90,7 @@ describe("useWikilinkResolutions", () => {
     const { result } = renderHook(() => useWikilinkResolutions("[[One]]", "/loose/Doc.md"), {
       wrapper: Wrapper,
     });
-    expect(result.current.size).toBe(0);
+    expect(result.current.resolutions.size).toBe(0);
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -77,11 +103,11 @@ describe("useWikilinkResolutions", () => {
       ({ path }) => useWikilinkResolutions("[[Shared]]", path),
       { wrapper: Wrapper, initialProps: { path: "/ws/a/One.md" } },
     );
-    await waitFor(() => expect(result.current.get("Shared")).toBe("/ws/a/Shared.md"));
+    await waitFor(() => expect(result.current.resolutions.get("Shared")).toBe("/ws/a/Shared.md"));
 
     rerender({ path: "/ws/b/Two.md" });
-    expect(result.current.size).toBe(0);
-    await waitFor(() => expect(result.current.get("Shared")).toBe("/ws/b/Shared.md"));
+    expect(result.current.resolutions.size).toBe(0);
+    await waitFor(() => expect(result.current.resolutions.get("Shared")).toBe("/ws/b/Shared.md"));
   });
 
   it("resolves nothing once the workspace closes under an open document", async () => {
@@ -89,11 +115,11 @@ describe("useWikilinkResolutions", () => {
     const { result, rerender } = renderHook(() => useWikilinkResolutions("[[One]]", "/ws/Doc.md"), {
       wrapper: Wrapper,
     });
-    await waitFor(() => expect(result.current.get("One")).toBe("/ws/One.md"));
+    await waitFor(() => expect(result.current.resolutions.get("One")).toBe("/ws/One.md"));
 
     context.root = null;
     rerender();
-    expect(result.current.size).toBe(0);
+    expect(result.current.resolutions.size).toBe(0);
   });
 
   // Editing prose keeps the links resolved, so they don't blink to broken
@@ -104,10 +130,10 @@ describe("useWikilinkResolutions", () => {
       ({ content }) => useWikilinkResolutions(content, "/ws/Doc.md"),
       { wrapper: Wrapper, initialProps: { content: "[[One]]" } },
     );
-    await waitFor(() => expect(result.current.get("One")).toBe("/ws/One.md"));
+    await waitFor(() => expect(result.current.resolutions.get("One")).toBe("/ws/One.md"));
 
     rerender({ content: "typing [[One]] more" });
-    expect(result.current.get("One")).toBe("/ws/One.md");
+    expect(result.current.resolutions.get("One")).toBe("/ws/One.md");
     expect(invoke).toHaveBeenCalledOnce();
   });
 
@@ -116,11 +142,11 @@ describe("useWikilinkResolutions", () => {
     const { result, rerender } = renderHook(() => useWikilinkResolutions("[[One]]", "/ws/Doc.md"), {
       wrapper: Wrapper,
     });
-    await waitFor(() => expect(result.current.get("One")).toBeNull());
+    await waitFor(() => expect(result.current.resolutions.get("One")).toBeNull());
 
-    context.snapshot = { ...EMPTY_SNAPSHOT, files: ["/ws/One.md"] };
+    context.snapshot = { ...indexed, files: ["/ws/One.md", "/ws/Two.md"] };
     rerender();
-    await waitFor(() => expect(result.current.get("One")).toBe("/ws/One.md"));
+    await waitFor(() => expect(result.current.resolutions.get("One")).toBe("/ws/One.md"));
   });
 
   it("resolves nothing when the index call fails", async () => {
@@ -130,7 +156,7 @@ describe("useWikilinkResolutions", () => {
       wrapper: Wrapper,
     });
     await waitFor(() => expect(errorSpy).toHaveBeenCalled());
-    expect(result.current.size).toBe(0);
+    expect(result.current.resolutions.size).toBe(0);
     errorSpy.mockRestore();
   });
 });

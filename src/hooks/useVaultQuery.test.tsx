@@ -3,18 +3,19 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import { EMPTY_SNAPSHOT } from "@/lib/vault";
+import { EMPTY_SNAPSHOT, type VaultSnapshot } from "@/lib/vault";
 import { useVaultQuery } from "./useVaultQuery";
 
+// Mutable so a test can re-index under the hook the way the provider does.
+let snapshot: VaultSnapshot = EMPTY_SNAPSHOT;
+
 function inWorkspace({ children }: { children: ReactNode }) {
-  const value = {
-    workspace: { root: "/ws" },
-    snapshot: EMPTY_SNAPSHOT,
-  } as unknown as TabsContextValue;
+  const value = { workspace: { root: "/ws" }, snapshot } as unknown as TabsContextValue;
   return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;
 }
 
 beforeEach(() => {
+  snapshot = EMPTY_SNAPSHOT;
   vi.mocked(invoke).mockReset();
 });
 
@@ -35,6 +36,33 @@ describe("useVaultQuery", () => {
     const { result } = renderHook(() => useVaultQuery("tag:work"));
     expect(result.current).toEqual({ filters: [], text: "tag:work", paths: [] });
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  // Unlike the other hooks this one is deliberately not stamped: emptying the
+  // palette between keystrokes is worse than one frame of the previous answer.
+  it("keeps the previous answer while the next query is in flight", async () => {
+    const first = { filters: [{ field: "tag", value: "work" }], text: "", paths: ["/ws/spec.md"] };
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(first)
+      .mockImplementation(() => new Promise(() => {}));
+    const { result, rerender } = renderHook(({ q }) => useVaultQuery(q), {
+      wrapper: inWorkspace,
+      initialProps: { q: "tag:work" },
+    });
+    await waitFor(() => expect(result.current).toEqual(first));
+
+    rerender({ q: "tag:work spec" });
+    expect(result.current).toEqual(first);
+  });
+
+  it("re-asks when the index changes, since a new field can change the parse", async () => {
+    vi.mocked(invoke).mockResolvedValue({ filters: [], text: "status:draft", paths: [] });
+    const { rerender } = renderHook(() => useVaultQuery("status:draft"), { wrapper: inWorkspace });
+    await waitFor(() => expect(invoke).toHaveBeenCalledOnce());
+
+    snapshot = { ...EMPTY_SNAPSHOT, fieldNames: ["status"] };
+    rerender();
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
   });
 
   it("falls back to plain search text when the index call fails", async () => {

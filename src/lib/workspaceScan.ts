@@ -17,8 +17,8 @@ export interface FileScan {
  *
  * `files` lists every openable document (markdown, notebooks, canvases, D2);
  * `vault` is the note index, which covers markdown and canvases only. They
- * share a walker and its caps, so in practice they truncate together, but a
- * workspace can be short of one and not the other.
+ * share a walker and its caps but count different files against them, so a
+ * workspace full of notebooks can truncate one walk and not the other.
  */
 export interface WorkspaceIndexStatus {
   files: ScanStatus;

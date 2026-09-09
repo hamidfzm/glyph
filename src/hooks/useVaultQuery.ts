@@ -25,7 +25,7 @@ export function useVaultQuery(query: string, enabled = true): VaultQueryResult {
   const snapshot = useVaultSnapshot();
   const [result, setResult] = useState<VaultQueryResult>(() => plain(query));
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot` is the re-ask trigger, not a value read; a new index is exactly when the answer can differ
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot` is the re-ask trigger, not a value read: the grammar recognises `field:` only for fields the index knows, so a re-index can change how the same query parses
   useEffect(() => {
     if (!root || !enabled) {
       setResult(plain(query));

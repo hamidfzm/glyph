@@ -65,10 +65,10 @@ export function rankCommands(
   const candidates =
     paths === null ? commands : commands.filter((c) => c.path !== undefined && paths.has(c.path));
 
-  // The index collapses the leftover whitespace itself, so this only catches
-  // the raw query the palette shows while the first answer is still in
-  // flight.
-  const query = text.trim();
+  // The index normalises the text it hands back; the raw query the palette
+  // shows while the first answer is in flight has to be normalised here, or a
+  // double space becomes a character the fuzzy matcher cannot match.
+  const query = text.trim().replace(/\s+/g, " ");
   if (query.length === 0) {
     return candidates
       .slice()

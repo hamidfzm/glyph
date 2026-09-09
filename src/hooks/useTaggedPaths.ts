@@ -22,9 +22,11 @@ export function useTaggedPaths(
   });
   const key = `${root ?? ""}\u0000${tag ?? ""}`;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot` is the re-ask trigger, not a value read; a new index is exactly when the answer can differ
   useEffect(() => {
-    if (!root || !tag) {
+    // An empty index carries no tags, so there is nothing to ask about.
+    // Reading the snapshot here is also what makes it a dependency: which
+    // files carry a tag changes every time the index does.
+    if (!root || !tag || snapshot.files.length === 0) {
       setAnswered({ key, rows: NONE });
       return;
     }

@@ -28,22 +28,30 @@ const NOTHING: Answered = { key: "", map: NO_RESOLUTIONS };
 export function useWikilinkResolutions(
   content: string | null | undefined,
   filePath: string | undefined,
-): ReadonlyMap<string, string | null> {
+  enabled = true,
+): { resolutions: ReadonlyMap<string, string | null>; pending: boolean } {
   const root = useWorkspaceRoot();
   const snapshot = useVaultSnapshot();
   const [answered, setAnswered] = useState<Answered>(NOTHING);
 
-  const targets = useMemo(() => (content ? wikilinkTargets(content) : []), [content]);
   // Typing prose between two links changes `content` but not the question, so
-  // the ask is keyed on the targets rather than the document body.
-  const targetKey = targets.join("\n");
+  // the ask is keyed on the targets rather than the document body. A target
+  // cannot contain a newline (the pattern stops at one), so the joined form
+  // is a faithful key to rebuild the list from.
+  const targetKey = useMemo(
+    () => (content && enabled ? wikilinkTargets(content).join("\n") : ""),
+    [content, enabled],
+  );
+  const targets = useMemo(() => (targetKey ? targetKey.split("\n") : []), [targetKey]);
   // Null-separated: no path segment can contain it, so two different pairs
   // cannot produce the same key.
   const key = `${root ?? ""}\u0000${filePath ?? ""}`;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `targetKey` stands in for `targets`, whose identity changes on every keystroke; `snapshot` is the re-ask trigger, since a created or renamed note changes where a link points
   useEffect(() => {
-    if (!root || targets.length === 0) {
+    // Nothing is indexed, so nothing resolves. Reading the snapshot here is
+    // also what makes it a dependency: creating or renaming a note changes
+    // where a link points, and the open document has to be told.
+    if (!root || targets.length === 0 || snapshot.files.length === 0) {
       setAnswered((prev) =>
         prev.key === key && prev.map === NO_RESOLUTIONS ? prev : { key, map: NO_RESOLUTIONS },
       );
@@ -61,7 +69,13 @@ export function useWikilinkResolutions(
     return () => {
       current = false;
     };
-  }, [root, filePath, key, targetKey, snapshot]);
+  }, [root, filePath, key, targets, snapshot]);
 
-  return answered.key === key ? answered.map : NO_RESOLUTIONS;
+  const answeredHere = answered.key === key;
+  return {
+    resolutions: answeredHere ? answered.map : NO_RESOLUTIONS,
+    // Nothing to wait for outside a workspace, or in a document with no links:
+    // those render broken (or render nothing) immediately, as before.
+    pending: !answeredHere && !!root && targets.length > 0,
+  };
 }

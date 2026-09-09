@@ -24,6 +24,9 @@ export function EmbedComponent(props: ComponentPropsWithoutRef<"div">) {
   const path = attrs["data-embed-path"] as string | undefined;
   const heading = attrs["data-embed-heading"] as string | undefined;
   const target = (attrs["data-embed-target"] as string | undefined) ?? "";
+  // The index has not answered for this document yet, so the target is not
+  // known to be missing; showing "not found" here would flash on every open.
+  const pending = attrs["data-embed-pending"] !== undefined;
 
   // Only ever read a file the resolver already matched to a workspace member.
   // `data-embed-path` can be injected via raw HTML that survives the sanitizer,
@@ -51,6 +54,13 @@ export function EmbedComponent(props: ComponentPropsWithoutRef<"div">) {
     };
   }, [canLoad, path]);
 
+  if (pending) {
+    return (
+      <div className="markdown-embed">
+        <p className="markdown-embed__status">{t("embed.loading")}</p>
+      </div>
+    );
+  }
   if (!inWorkspace) {
     return (
       <div className="markdown-embed markdown-embed--broken">{t("embed.broken", { target })}</div>

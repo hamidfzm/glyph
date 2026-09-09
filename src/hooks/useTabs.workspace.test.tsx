@@ -54,6 +54,16 @@ describe("useTabs workspace lifecycle", () => {
     });
     expect(invoke).toHaveBeenCalledWith("vault_forget", { path: "/p/a" });
     expect(invoke).not.toHaveBeenCalledWith("vault_forget", { path: "/p/b" });
+
+    // Asking about /p/a after forgetting it would rebuild and re-cache the
+    // index that was just released.
+    const asked = vi.mocked(invoke).mock.calls.filter(([cmd]) => String(cmd).startsWith("vault_"));
+    const afterForget = asked.slice(asked.findIndex(([cmd]) => cmd === "vault_forget") + 1);
+    const aboutA = afterForget.filter(([, args]) => {
+      const target = args as { path?: string; root?: string } | undefined;
+      return target?.path === "/p/a" || target?.root === "/p/a";
+    });
+    expect(aboutA).toEqual([]);
   });
 
   it("opening another folder replaces the workspace and closes its tabs", async () => {

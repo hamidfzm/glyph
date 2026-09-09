@@ -100,7 +100,11 @@ export function MarkdownContent({
 
   // Resolved up front because the pipeline below is synchronous; the file list
   // stays for the embed and preview gates, which ask about membership only.
-  const resolutions = useWikilinkResolutions(content, filePath);
+  const { resolutions, pending: resolutionsPending } = useWikilinkResolutions(
+    content,
+    filePath,
+    features.wikilinks !== false,
+  );
 
   const rehypePlugins = useMemo(
     () => buildRehypePlugins({ highlightPlugin, katexPlugin, extra: pluginRehype, sourceLines }),
@@ -108,8 +112,15 @@ export function MarkdownContent({
   );
 
   const remarkPlugins = useMemo(
-    () => buildRemarkPlugins({ resolutions, features, gemojiPlugin, extra: pluginRemark }),
-    [resolutions, features, gemojiPlugin, pluginRemark],
+    () =>
+      buildRemarkPlugins({
+        resolutions,
+        resolutionsPending,
+        features,
+        gemojiPlugin,
+        extra: pluginRemark,
+      }),
+    [resolutions, resolutionsPending, features, gemojiPlugin, pluginRemark],
   );
 
   const LinkWithWikilink = useCallback(

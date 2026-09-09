@@ -72,31 +72,54 @@ describe("useWorkspaceIndex", () => {
     expect(result.current.snapshot.files).toEqual(["/ws/newest.md"]);
   });
 
-  // `vault_refresh` replaces whatever the backend holds, so a snapshot built
-  // from a watcher event mid-open would be discarded and its file never
-  // re-read.
-  it("ignores a watcher refresh while the opening walk is in flight", async () => {
-    let releaseOpen: ((snapshot: VaultSnapshot) => void) | null = null;
+  // `vault_refresh` replaces whatever the backend holds, so a snapshot read
+  // mid-open would be thrown away by the walk that is still running. The
+  // change is remembered and the walk repeated instead: the copy the open
+  // built predates the write that triggered the event.
+  it("repeats the opening walk when a change lands while it runs", async () => {
+    const opened: Array<(snapshot: VaultSnapshot) => void> = [];
     vi.mocked(invoke).mockImplementation(((cmd: string) => {
       if (cmd === "vault_refresh") {
         return new Promise((resolve) => {
-          releaseOpen = resolve;
+          opened.push(resolve);
         });
       }
-      if (cmd === "list_markdown_files") return Promise.resolve(files([]));
+      if (cmd === "list_markdown_files") return Promise.resolve(files(["/ws/listed.md"]));
       return Promise.resolve(vault(["/ws/watcher.md"]));
     }) as unknown as typeof invoke);
     const { result } = render();
 
     await act(async () => {
       const opening = result.current.scanWorkspace("/ws", () => true);
+      await waitFor(() => expect(opened).toHaveLength(1));
+      // A file lands after the walker passed its folder.
       await result.current.refreshIndexes("/ws", () => true);
-      releaseOpen?.(vault(["/ws/opened.md"]));
+      opened[0](vault(["/ws/opened.md"]));
       await opening;
+      await waitFor(() => expect(opened).toHaveLength(2));
+      opened[1](vault(["/ws/opened.md", "/ws/late.md"]));
     });
 
+    // The re-read goes back to disk, not to the copy the first walk just left.
     expect(invoke).not.toHaveBeenCalledWith("vault_snapshot", { path: "/ws" });
-    expect(result.current.snapshot.files).toEqual(["/ws/opened.md"]);
+    await waitFor(() =>
+      expect(result.current.snapshot.files).toEqual(["/ws/opened.md", "/ws/late.md"]),
+    );
+  });
+
+  it("drops an in-flight walk when the indexes are cleared under it", async () => {
+    const pending = parkSnapshots();
+    const { result } = render();
+
+    await act(async () => {
+      const refresh = result.current.refreshIndexes("/ws", () => true);
+      await waitFor(() => expect(pending).toHaveLength(1));
+      result.current.clearIndexes();
+      pending[0](vault(["/ws/late.md"]));
+      await refresh;
+    });
+
+    expect(result.current.snapshot.files).toEqual([]);
   });
 
   it("drops a walk whose workspace was replaced while it ran", async () => {

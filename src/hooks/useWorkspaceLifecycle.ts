@@ -239,9 +239,11 @@ export function useWorkspaceLifecycle({
           invoke("unwatch_directory", { path: previous.root }).catch(() => {});
           closeWorkspaceTabs(previous.root);
           // Release the outgoing workspace's index rather than leaving it in
-          // the backend for the rest of the session (INV-4). resetStatus is
-          // redundant with the clear, but it also runs when there is no
-          // previous root.
+          // the backend for the rest of the session (INV-4). The tree drops in
+          // the same batch: a surviving consumer (a loose tab, an open
+          // palette) reads the root from there, and would otherwise re-ask
+          // about the workspace just forgotten, rebuilding and re-caching it.
+          clearTree();
           clearIndexes(previous.root);
         }
         resetStatus();
@@ -282,6 +284,7 @@ export function useWorkspaceLifecycle({
     },
     [
       clearIndexes,
+      clearTree,
       closeWorkspaceTabs,
       flushForClose,
       openFile,

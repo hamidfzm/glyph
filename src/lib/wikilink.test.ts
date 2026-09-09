@@ -101,6 +101,15 @@ describe("remarkWikilink", () => {
     expect(node.data?.hProperties?.dataWikilinkPath).toBe("/workspace/Notes/Cooking.md");
   });
 
+  // Flashing every link broken on each open reads as breakage rather than as
+  // loading, so an unanswered document renders plain links instead.
+  it("renders a link plain while the index has not answered", () => {
+    const [node] = findWikilinks("[[Cooking]]", { pending: true });
+    expect(node.data?.hProperties?.className).toEqual(["wikilink"]);
+    expect(node.data?.hProperties).not.toHaveProperty("dataWikilinkBroken");
+    expect(node.data?.hProperties).not.toHaveProperty("dataWikilinkPath");
+  });
+
   it("treats every link as broken without a workspace", () => {
     const [node] = findWikilinks("[[Cooking]]");
     expect(node.data?.hProperties).toHaveProperty("dataWikilinkBroken");
@@ -202,6 +211,12 @@ describe("remarkWikilink embeds", () => {
     expect(out).toContain('class="markdown-embed"');
     expect(out).toContain("data-embed-broken");
     expect(out).not.toContain("data-embed-path");
+  });
+
+  it("marks an embed as pending, not broken, before the index answers", async () => {
+    const out = await html("![[Cooking]]", { pending: true });
+    expect(out).toContain("data-embed-pending");
+    expect(out).not.toContain("data-embed-broken");
   });
 
   it("marks an embed as broken when no workspace is open", async () => {

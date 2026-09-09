@@ -24,6 +24,9 @@ type RehypePlugins = NonNullable<Options["rehypePlugins"]>;
 export interface RemarkPipelineOptions {
   /** Where each wikilink target resolves; see `WikilinkPluginOptions`. */
   resolutions?: ReadonlyMap<string, string | null>;
+  /** The index has not answered for this document yet; see
+   *  `WikilinkPluginOptions`. */
+  resolutionsPending?: boolean;
   /**
    * Which optional syntax extensions are on (Settings → Markdown). Omitted
    * features default to on, so callers without settings (tests, notebook
@@ -42,6 +45,7 @@ export interface RemarkPipelineOptions {
 
 export function buildRemarkPlugins({
   resolutions,
+  resolutionsPending,
   features = {},
   gemojiPlugin,
   extra = [],
@@ -52,7 +56,7 @@ export function buildRemarkPlugins({
   if (gemojiPlugin) plugins.push(gemojiPlugin);
   if (features.alerts !== false) plugins.push(remarkAlert);
   if (features.wikilinks !== false) {
-    plugins.push([remarkWikilink, { resolutions }]);
+    plugins.push([remarkWikilink, { resolutions, pending: resolutionsPending }]);
   }
   plugins.push(...extra);
   return plugins;
