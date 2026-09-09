@@ -184,6 +184,7 @@ committed; regenerate them only when the Tauri CLI requires it.
 ## Conventions
 
 - **Commits**: [Conventional commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`)
+- **Breaking changes**: mark the commit `feat(scope)!:` **and** label the PR `breaking`. The `!` on its own changes nothing in the release notes: GitHub groups them by label, and `.github/release.yml` keys the "💥 Breaking Changes" section off that label. A PR carrying both `breaking` and `enhancement` appears only under Breaking Changes, because the first matching category wins.
 - **No co-authored-by** lines in commits
 - **Package manager**: pnpm only (not npm/yarn)
 - **Linting (TS)**: Biome (configured in `biome.json`); run `pnpm lint`
@@ -281,6 +282,8 @@ Run the **Create Release** workflow from GitHub Actions (`create-release.yml`) w
 The release workflow builds all platforms and publishes to Homebrew, Chocolatey, Scoop, AUR, PPA, the Debian apt repo, and the Fedora/RHEL dnf repo.
 
 Do **not** create releases manually with `gh release create` or push tags by hand. Use the workflow.
+
+**A release with a Breaking Changes section needs an upgrade note written by hand.** The generated bullet is only the PR title, which tells nobody what to change. Prepend a short before/after block to the published notes with `gh release edit vX.Y.Z --notes-file <file>`; [v0.23.0](https://github.com/hamidfzm/glyph/releases/tag/v0.23.0) is the worked example.
 
 **Wait for CI to pass on `main` before triggering Create Release.** The release workflow assumes the latest commit is green; running it on a red `main` produces broken artifacts that get published to every package manager simultaneously. Check the CI badge or `gh run list --branch main --limit 1` first.
 
