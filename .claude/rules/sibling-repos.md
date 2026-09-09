@@ -6,7 +6,9 @@ The main repo is `hamidfzm/glyph`. Every satellite (Homebrew tap, Scoop bucket, 
 
 - **Clone all satellites into `../glyph-md/<repo>`**, a `glyph-md/` directory **adjacent to this repo** (i.e. next to the `glyph` checkout), not inside a worktree or a temp dir. Make cross-repo changes there so the working copies persist between sessions instead of re-cloning each time.
 
-- **Clone over HTTPS with the gh token, push over SSH.** SSH auth isn't loaded in the Bash tool, so clone with `$(gh auth token)`, then reset `origin` to the SSH URL for pushing (SSH works from PowerShell). Never commit a remote URL with the token baked in.
+- **Clone over HTTPS with the gh token, push over SSH.** Clone with `$(gh auth token)`, then reset `origin` to the SSH URL for pushing. Never commit a remote URL with the token baked in.
+
+  On Windows, also point the clone at the OpenSSH that owns the agent. Git for Windows ships its own `ssh.exe`, which cannot reach the Windows `ssh-agent` service, so a push fails `Permission denied (publickey)` even while `ssh -T git@github.com` authenticates fine from the same shell. The `glyph` checkout already sets this; a fresh satellite clone does not inherit it.
 
   ```bash
   mkdir -p ../glyph-md && cd ../glyph-md
@@ -15,6 +17,7 @@ The main repo is `hamidfzm/glyph`. Every satellite (Homebrew tap, Scoop bucket, 
     [ -d "$r/.git" ] && (cd "$r" && git pull --ff-only) && continue
     git clone "https://x-access-token:${TOKEN}@github.com/glyph-md/$r.git" "$r"
     git -C "$r" remote set-url origin "git@github.com:glyph-md/$r.git"  # scrub token; push over SSH
+    git -C "$r" config core.sshCommand "C:/Windows/System32/OpenSSH/ssh.exe"  # Windows only
   done
   ```
 

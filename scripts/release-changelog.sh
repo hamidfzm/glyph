@@ -26,6 +26,7 @@ usage() {
 # The test fails if the two drift apart. "*" is the catch-all, matching that
 # file's own last category.
 CATEGORIES=(
+  '💥 Breaking Changes|breaking'
   '🚀 Features|enhancement'
   '🐛 Bug Fixes|bug'
   '🔒 Security|security'
