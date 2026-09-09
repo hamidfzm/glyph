@@ -5,10 +5,9 @@ import { resolveImageSrc } from "@/components/markdown/resolveImageSrc";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { canvasColorToCss } from "@/lib/canvas/color";
 import type { CanvasNode } from "@/lib/canvas/types";
+import { isImageFile } from "@/lib/imageExtensions";
 import { basename, isPathInside } from "@/lib/paths";
 import { normalizeRelativePath } from "@/lib/relativePath";
-
-const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i;
 
 interface CanvasNodeViewProps {
   node: CanvasNode;
@@ -98,7 +97,7 @@ export function CanvasNodeView({
     case "file": {
       // Images resolve and root-clamp inside resolveImageSrc, so this branch
       // returns before the button-only resolution below runs.
-      if (IMAGE_EXT.test(node.file)) {
+      if (isImageFile(node.file)) {
         const src = resolveImageSrc(node.file, canvasPath, workspaceRoot);
         if (!src) {
           return (

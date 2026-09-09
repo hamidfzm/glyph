@@ -1,15 +1,12 @@
 use std::path::Path;
 
-// Single source of truth shared with the frontend
-// (src/lib/markdownExtensions.ts imports the same JSON).
-// build.rs reads markdown-extensions.json at compile time and emits this const.
-include!(concat!(env!("OUT_DIR"), "/md_extensions.rs"));
+use crate::extensions::{has_extension, MD_EXTENSIONS};
 
+// Single source of truth shared with the frontend
+// (src/lib/extensionConfig.ts reads the same JSON). build.rs generates
+// MD_EXTENSIONS from tauri.conf.json at compile time.
 pub fn is_markdown_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| MD_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
-        .unwrap_or(false)
+    has_extension(path, MD_EXTENSIONS)
 }
 
 #[cfg(test)]

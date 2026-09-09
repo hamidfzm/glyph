@@ -27,17 +27,26 @@ pub struct TelemetryState(pub Mutex<Option<sentry::ClientInitGuard>>);
 
 const REDACTED: &str = "[redacted-path]";
 
-// Paths contain spaces and apostrophes, so a match runs to the next `:`,
-// quote, angle bracket, or pipe rather than to whitespace (legal in POSIX
-// names but rare, and `:` keeps "path: reason" messages readable): a trailing
-// word is over-redacted rather than a document name leaked. Windows verbatim
-// prefixes (`\\?\`, `\\?\UNC\`), which every canonicalized path carries, are
-// stripped first so the drive and UNC patterns see the plain form. Mirrors
-// src/lib/telemetry.ts.
+// Each pattern here starts from a literal anchor (a drive letter, a UNC prefix,
+// a POSIX root, a scheme), so it knows where the path begins and can run to the
+// next `:`, quote, angle bracket, or pipe rather than to whitespace (legal in
+// POSIX names but rare, and `:` keeps "path: reason" messages readable): a
+// trailing word is over-redacted rather than a document name leaked. The
+// relative-name pattern further down has no such anchor and cannot make that
+// trade.
+//
+// Windows verbatim prefixes (`\\?\`, `\\?\UNC\`), which every canonicalized path
+// carries, are stripped first so the drive and UNC patterns see the plain form.
+// Mirrors src/lib/telemetry.ts.
 static VERBATIM_PREFIX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\\\\\?\\(UNC\\)?").expect("valid regex"));
 static FILE_URL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"file://[^"<>|\n]+"#).expect("valid regex"));
+// Remote URLs go the same way as local paths. Running before the document-name
+// pattern also keeps a `.md` host (glyph.md) from being mistaken for a file and
+// leaving a dangling `https:`.
+static HTTP_URL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"https?://[^\s"'<>|\n]+"#).expect("valid regex"));
 static WINDOWS_PATH: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"\b[A-Za-z]:[\\/][^"<>|:?*\n]+"#).expect("valid regex"));
 static UNC_PATH: LazyLock<Regex> =
@@ -46,6 +55,35 @@ static POSIX_PATH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r#"/(?:Users|home|root|var|tmp|private|mnt|media|opt|Volumes|srv|run|storage|sdcard|data)/[^"<>|:\n]+"#,
     )
+    .expect("valid regex")
+});
+
+// A *relative* path names the user's document just as plainly as an absolute
+// one, and matches none of the patterns above: "Not allowed to open url
+// workflows/routing.md" reached Sentry verbatim, and because events are grouped
+// by message the document name became the issue title too. Anything ending in
+// an extension Glyph opens is therefore redacted, with or without a directory
+// prefix.
+//
+// Unlike the patterns above this one has no literal anchor, so the leading run
+// is bounded. This crate's regex engine is linear and does not need it, but the
+// JS mirror does (an unbounded run rescans a long non-matching token from every
+// start position), and the two must agree on what they redact. 200 is far beyond
+// any real file name.
+//
+// The trailing `\b` is what makes `mdx` win over `md`: without it the shorter
+// alternative would match first and leave a dangling "x". At least one leading
+// character is required, so prose like "the .md format" is left alone. A name
+// containing spaces keeps its leading words, since the pattern cannot tell them
+// from the surrounding sentence, but the extension-bearing part that identifies
+// the file still goes. The extension set holds no source-code extension, which
+// is what keeps stack-frame names (`main.rs`, `index.js`) readable; a test
+// enforces that. Mirrors src/lib/telemetry.ts.
+static USER_FILE_NAME: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(&format!(
+        r#"(?i)[^\s"'<>|:*?]{{1,200}}\.(?:{})\b"#,
+        crate::extensions::USER_FILE_EXTENSIONS.join("|")
+    ))
     .expect("valid regex")
 });
 
@@ -59,8 +97,8 @@ const FRAME_PATH_ANCHORS: [&str; 5] = [
     "/rustc/",
 ];
 
-/// Redact absolute filesystem paths and `file://` URLs from a string so user
-/// file locations (which encode usernames and document names) never reach
+/// Redact filesystem paths, `file://` URLs, and document names from a string so
+/// user file locations (which encode usernames and document names) never reach
 /// Sentry.
 fn redact_paths(input: &str) -> String {
     let plain = VERBATIM_PREFIX.replace_all(input, |caps: &Captures| {
@@ -71,9 +109,11 @@ fn redact_paths(input: &str) -> String {
         }
     });
     let out = FILE_URL.replace_all(&plain, REDACTED);
+    let out = HTTP_URL.replace_all(&out, "[redacted-url]");
     let out = WINDOWS_PATH.replace_all(&out, REDACTED);
     let out = UNC_PATH.replace_all(&out, REDACTED);
-    POSIX_PATH.replace_all(&out, REDACTED).into_owned()
+    let out = POSIX_PATH.replace_all(&out, REDACTED);
+    USER_FILE_NAME.replace_all(&out, REDACTED).into_owned()
 }
 
 /// Keep the tail of a frame's source path from the first known anchor so the
@@ -299,6 +339,78 @@ mod tests {
     }
 
     #[test]
+    fn redacts_relative_document_names() {
+        // The shape that reached Sentry verbatim: a workspace-relative link the
+        // opener refused.
+        assert_eq!(
+            redact_paths("Not allowed to open url workflows/routing.md"),
+            "Not allowed to open url [redacted-path]"
+        );
+        // A bare file name, as produced by the symlink refusal in commands/create.rs.
+        assert_eq!(
+            redact_paths("diary.md is a symlink"),
+            "[redacted-path] is a symlink"
+        );
+        // A name containing spaces keeps its leading words: the pattern cannot
+        // tell them from the surrounding sentence. The extension-bearing part,
+        // which is what identifies the file, still goes.
+        assert_eq!(
+            redact_paths("Tax Return 2025.md is a symlink"),
+            "Tax Return [redacted-path] is a symlink"
+        );
+        // Every category in the union, not just markdown.
+        for name in [
+            "notes/diary.markdown",
+            "boards/plan.canvas",
+            "analysis.ipynb",
+            "diagrams/flow.d2",
+            "assets/holiday.PNG",
+        ] {
+            assert_eq!(
+                redact_paths(&format!("failed to open {name}")),
+                "failed to open [redacted-path]",
+                "{name} should be redacted"
+            );
+        }
+    }
+
+    #[test]
+    fn consumes_the_whole_extension_rather_than_a_shorter_prefix() {
+        // Without the trailing word boundary, `md` would match first and leave "x".
+        assert_eq!(redact_paths("open notes.mdx"), "open [redacted-path]");
+        assert_eq!(redact_paths("open notes.mdtext"), "open [redacted-path]");
+    }
+
+    #[test]
+    fn redacts_remote_urls_whole() {
+        // glyph.md is the project's own domain: without the URL pass the host
+        // would be mistaken for a file and leave a dangling "https:".
+        assert_eq!(
+            redact_paths("GET https://glyph.md/download failed"),
+            "GET [redacted-url] failed"
+        );
+        assert_eq!(
+            redact_paths("Failed to fetch https://glyph-md.github.io/assets/logo.svg"),
+            "Failed to fetch [redacted-url]"
+        );
+    }
+
+    #[test]
+    fn leaves_source_frames_and_bare_extensions_readable() {
+        // No source extension is redactable, so frame paths survive.
+        assert_eq!(redact_paths("at src/main.rs:42"), "at src/main.rs:42");
+        assert_eq!(
+            redact_paths("at src/lib/telemetry.ts"),
+            "at src/lib/telemetry.ts"
+        );
+        // An extension named on its own is prose, not a file name.
+        assert_eq!(
+            redact_paths("only the .md format is supported"),
+            "only the .md format is supported"
+        );
+    }
+
+    #[test]
     fn leaves_path_free_text_untouched() {
         let msg = "called `Option::unwrap()` on a `None` value";
         assert_eq!(redact_paths(msg), msg);
@@ -335,10 +447,16 @@ mod tests {
                 ..Default::default()
             }]
             .into(),
-            breadcrumbs: vec![Breadcrumb {
-                message: Some("watching /home/jane/notes".to_string()),
-                ..Default::default()
-            }]
+            breadcrumbs: vec![
+                Breadcrumb {
+                    message: Some("watching /home/jane/notes".to_string()),
+                    ..Default::default()
+                },
+                Breadcrumb {
+                    message: Some("opened workflows/routing.md".to_string()),
+                    ..Default::default()
+                },
+            ]
             .into(),
             ..Default::default()
         };
@@ -378,6 +496,10 @@ mod tests {
         assert_eq!(
             scrubbed.breadcrumbs.values[0].message.as_deref(),
             Some("watching [redacted-path]")
+        );
+        assert_eq!(
+            scrubbed.breadcrumbs.values[1].message.as_deref(),
+            Some("opened [redacted-path]")
         );
     }
 

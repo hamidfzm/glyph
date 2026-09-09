@@ -81,6 +81,59 @@ describe("redactPaths", () => {
     );
   });
 
+  it("redacts relative document paths", () => {
+    // The shape that reached Sentry verbatim: a workspace-relative link the
+    // opener refused.
+    expect(redactPaths("Not allowed to open url workflows/routing.md")).toBe(
+      "Not allowed to open url [redacted-path]",
+    );
+    expect(redactPaths("diary.md is a symlink")).toBe("[redacted-path] is a symlink");
+  });
+
+  it("redacts every document type, not just markdown", () => {
+    for (const name of [
+      "notes/diary.markdown",
+      "boards/plan.canvas",
+      "analysis.ipynb",
+      "diagrams/flow.d2",
+      "assets/holiday.PNG",
+    ]) {
+      expect(redactPaths(`failed to open ${name}`)).toBe("failed to open [redacted-path]");
+    }
+  });
+
+  it("consumes the whole extension rather than a shorter prefix of it", () => {
+    // Without the trailing word boundary, `md` would match first and leave "x".
+    expect(redactPaths("open notes.mdx")).toBe("open [redacted-path]");
+    expect(redactPaths("open notes.mdtext")).toBe("open [redacted-path]");
+  });
+
+  it("redacts remote URLs whole, including hosts that end in a document extension", () => {
+    // glyph.md is the project's own domain: without the URL pass the host would
+    // be mistaken for a file and leave a dangling "https:".
+    expect(redactPaths("GET https://glyph.md/download failed")).toBe("GET [redacted-url] failed");
+    expect(redactPaths("Failed to fetch https://glyph-md.github.io/assets/logo.svg")).toBe(
+      "Failed to fetch [redacted-url]",
+    );
+  });
+
+  it("stays linear on a long non-matching token", () => {
+    // An unbounded leading run rescans from every start position, which turned a
+    // single large console breadcrumb into a multi-second main-thread hang.
+    const huge = `data:image/png;base64,${"A".repeat(200_000)}`;
+    const started = performance.now();
+    redactPaths(huge);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it("leaves source file names and bare extensions readable", () => {
+    expect(redactPaths("at src/main.rs:42")).toBe("at src/main.rs:42");
+    expect(redactPaths("at src/lib/telemetry.ts")).toBe("at src/lib/telemetry.ts");
+    expect(redactPaths("only the .md format is supported")).toBe(
+      "only the .md format is supported",
+    );
+  });
+
   it("leaves path-free text untouched", () => {
     expect(redactPaths("Cannot read property of undefined")).toBe(
       "Cannot read property of undefined",
@@ -104,6 +157,14 @@ describe("scrubBreadcrumb", () => {
     expect(result).not.toBeNull();
     expect(result?.message).toBe("opened [redacted-path]");
     expect(result?.data?.url).toBe("[redacted-url]");
+  });
+
+  it("redacts a relative document name in the message", () => {
+    const result = scrubBreadcrumb({
+      category: "ui.click",
+      message: "opened workflows/routing.md",
+    });
+    expect(result?.message).toBe("opened [redacted-path]");
   });
 
   it("keeps a plain breadcrumb as-is", () => {

@@ -1,0 +1,5 @@
+{
+  "canvas": ["canvas"],
+  "notebook": ["ipynb"],
+  "image": ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "ico"]
+}

@@ -1,24 +1,18 @@
 use std::path::Path;
 
-/// Image and SVG extensions the file tree surfaces. These are not documents
-/// Glyph can edit, so they are deliberately kept out of `is_supported_file`
-/// (the document index that feeds the graph and wikilink autocomplete). The
-/// directory listing adds them on top of that gate so assets appear in the
-/// sidebar and open in the read-only image viewer. The frontend mirror is
-/// `src/lib/imageExtensions.ts`.
-const IMAGE_EXTENSIONS: &[&str] = &[
-    "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "ico",
-];
+use crate::extensions::{has_extension, IMAGE_EXTENSIONS};
 
 /// Whether `path` is an image/SVG asset Glyph can display in the image viewer.
+///
+/// Images are not documents Glyph can edit, so they are deliberately kept out
+/// of `is_supported_file` (the document index that feeds the graph and wikilink
+/// autocomplete); the directory listing adds them on top of that gate so assets
+/// appear in the sidebar. They are not an OS file association either, so the
+/// list is declared in `extensions.json` and generated into `IMAGE_EXTENSIONS`
+/// by build.rs. The frontend reads the same file through
+/// `src/lib/extensionConfig.ts`.
 pub fn is_image_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| {
-            let ext = ext.to_ascii_lowercase();
-            IMAGE_EXTENSIONS.contains(&ext.as_str())
-        })
-        .unwrap_or(false)
+    has_extension(path, IMAGE_EXTENSIONS)
 }
 
 #[cfg(test)]

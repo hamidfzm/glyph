@@ -1,6 +1,7 @@
 import type { Breadcrumb, ErrorEvent } from "@sentry/react";
 import { invoke } from "@tauri-apps/api/core";
 import { arch, version as osVersion } from "@tauri-apps/plugin-os";
+import { USER_FILE_EXTENSIONS } from "@/lib/extensionConfig";
 import { currentPlatform } from "@/lib/platform";
 // Single source of truth for the Sentry DSN — `src-tauri/sentry.json`. The Rust
 // build script reads the same file (see build.rs) so the frontend and backend
@@ -20,30 +21,68 @@ const URL_BEARING_CATEGORIES = new Set(["navigation", "fetch", "xhr"]);
 const SAFE_CONTEXTS = new Set(["os", "app", "device", "runtime", "browser"]);
 
 // Absolute filesystem paths and file:// URLs. We redact rather than send these
-// because they leak usernames, directory layouts, and document names. Paths
-// contain spaces and apostrophes, so a match runs to the next `:`, quote,
-// angle bracket, or pipe rather than to whitespace (legal in POSIX names but
-// rare, and `:` keeps "path: reason" messages readable): a trailing word is
-// over-redacted rather than a document name leaked. Windows verbatim prefixes
-// (`\\?\`, `\\?\UNC\`) are stripped first so the drive and UNC patterns see
-// the plain form.
+// because they leak usernames, directory layouts, and document names. Each
+// pattern here starts from a literal anchor (a drive letter, a UNC prefix, a
+// POSIX root, a scheme), so it knows where the path begins and can run to the
+// next `:`, quote, angle bracket, or pipe rather than to whitespace (legal in
+// POSIX names but rare, and `:` keeps "path: reason" messages readable): a
+// trailing word is over-redacted rather than a document name leaked. The
+// relative-name pattern further down has no such anchor and cannot make that
+// trade.
+//
+// Windows verbatim prefixes (`\\?\`, `\\?\UNC\`) are stripped first so the drive
+// and UNC patterns see the plain form.
 const VERBATIM_PREFIX = /\\\\\?\\(UNC\\)?/g;
 const FILE_URL = /file:\/\/[^"<>|\n]+/g;
+// Remote URLs go the same way as local paths: a document can name any host, and
+// the URL-bearing breadcrumb categories are already dropped wholesale. Running
+// before the document-name pattern also keeps a `.md` host (glyph.md) from being
+// mistaken for a file and leaving a dangling `https:`.
+const HTTP_URL = /https?:\/\/[^\s"'<>|\n]+/g;
 const WINDOWS_PATH = /\b[A-Za-z]:[\\/][^"<>|:?*\n]+/g;
 const UNC_PATH = /\\\\[^"<>|:?*\\\s]+\\[^"<>|:?*\n]+/g;
 const POSIX_PATH =
   /\/(?:Users|home|root|var|tmp|private|mnt|media|opt|Volumes|srv|run|storage|sdcard|data)\/[^"<>|:\n]+/g;
 
+// A *relative* path names the user's document just as plainly as an absolute
+// one, and matches none of the patterns above: "Not allowed to open url
+// workflows/routing.md" reached the reporter verbatim, and because events are
+// grouped by message the document name became the issue title too. Anything
+// ending in an extension Glyph opens is therefore redacted, with or without a
+// directory prefix.
+//
+// Unlike the patterns above this one has no literal anchor, so the leading run
+// is bounded: `+` would rescan a long non-matching token from every start
+// position, and a single multi-hundred-KB console breadcrumb (a `data:` URI, a
+// logged response body) then blocks the renderer for tens of seconds. 200 is far
+// beyond any real file name.
+//
+// At least one leading character is required, so prose like "the .md format" is
+// left alone. A name containing spaces keeps its leading words, since the
+// pattern cannot tell them from the surrounding sentence, but the
+// extension-bearing part that identifies the file still goes. The extension set
+// holds no source-code extension, which is what keeps stack-frame names
+// (`main.rs`, `index.js`) readable; a test enforces that.
+const USER_FILE_NAME = new RegExp(
+  String.raw`[^\s"'<>|:*?]{1,200}\.(?:${USER_FILE_EXTENSIONS.join("|")})\b`,
+  "gi",
+);
+
 const REDACTED = "[redacted-path]";
 
-/** Replace any absolute path or file URL in `input` with a placeholder. */
+/**
+ * Replace any file URL, absolute path, or document name in `input` with a
+ * placeholder.
+ */
 export function redactPaths(input: string): string {
   return input
     .replace(VERBATIM_PREFIX, (_match, unc) => (unc ? "\\\\" : ""))
     .replace(FILE_URL, REDACTED)
+    .replace(HTTP_URL, "[redacted-url]")
     .replace(WINDOWS_PATH, REDACTED)
     .replace(UNC_PATH, REDACTED)
-    .replace(POSIX_PATH, REDACTED);
+    .replace(POSIX_PATH, REDACTED)
+    .replace(USER_FILE_NAME, REDACTED);
 }
 
 /**

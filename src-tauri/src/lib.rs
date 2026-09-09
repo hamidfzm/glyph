@@ -4,6 +4,7 @@ mod cli;
 mod cli_help;
 mod commands;
 mod d2;
+mod extensions;
 mod grants;
 mod image;
 mod markdown;
