@@ -1,10 +1,9 @@
 use serde::Serialize;
 use std::path::Path;
 
-use super::walk::{scan_markdown_files, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
+use super::walk::{scan_files, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
 use crate::grants::GrantRegistry;
-
-const SCAN_MAX_SNIPPET: usize = 200;
+use crate::vault::snippet_for;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,9 +43,15 @@ fn scan_wikilinks_capped(
     max_depth: usize,
 ) -> Result<WikilinkScan, String> {
     let mut refs: Vec<WikilinkRef> = Vec::new();
-    let status = scan_markdown_files(Path::new(path), max_files, max_depth, |p, content| {
-        scan_wikilinks_in_file(content, &p.to_string_lossy(), &mut refs);
-    })?;
+    let status = scan_files(
+        Path::new(path),
+        crate::is_markdown_file,
+        max_files,
+        max_depth,
+        |p, content| {
+            scan_wikilinks_in_file(content, &p.to_string_lossy(), &mut refs);
+        },
+    )?;
 
     Ok(WikilinkScan { refs, status })
 }
@@ -99,20 +104,11 @@ fn scan_wikilinks_in_file(content: &str, source: &str, out: &mut Vec<WikilinkRef
     }
 }
 
-fn snippet_for(line: &str) -> String {
-    let trimmed = line.trim();
-    if trimmed.chars().count() <= SCAN_MAX_SNIPPET {
-        return trimmed.to_string();
-    }
-    let mut out: String = trimmed.chars().take(SCAN_MAX_SNIPPET).collect();
-    out.push('…');
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::commands::walk::{SCAN_MAX_FILE_BYTES, WALK_SKIP_DIRS};
+    use crate::vault::MAX_SNIPPET_CHARS;
     use std::fs;
     use std::time::UNIX_EPOCH;
     use tauri::test::{mock_app, MockRuntime};
@@ -247,7 +243,7 @@ mod tests {
         .refs;
         assert_eq!(refs.len(), 1);
         assert!(refs[0].snippet.ends_with('…'));
-        assert!(refs[0].snippet.chars().count() <= SCAN_MAX_SNIPPET + 1);
+        assert!(refs[0].snippet.chars().count() <= MAX_SNIPPET_CHARS + 1);
 
         let _ = fs::remove_dir_all(&dir);
     }

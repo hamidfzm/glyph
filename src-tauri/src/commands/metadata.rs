@@ -1,16 +1,9 @@
 use serde::Serialize;
 use std::path::Path;
 
-use super::walk::{scan_markdown_files, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
+use super::walk::{scan_files, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
 use crate::grants::GrantRegistry;
-
-// Note content is untrusted, and the index ships every block to the frontend
-// for YAML parsing, so both the block and each tag are bounded here rather than
-// at the far end. A file whose frontmatter exceeds the cap is indexed for its
-// inline tags only.
-const SCAN_MAX_FRONTMATTER_BYTES: usize = 8 * 1024;
-const SCAN_MAX_TAG_CHARS: usize = 64;
-const SCAN_MAX_TAGS_PER_FILE: usize = 100;
+use crate::vault::{inline_tags, split_frontmatter};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,99 +42,36 @@ fn scan_metadata_capped(
     max_depth: usize,
 ) -> Result<MetadataScan, String> {
     let mut files: Vec<MetadataEntry> = Vec::new();
-    let status = scan_markdown_files(Path::new(path), max_files, max_depth, |p, content| {
-        let (frontmatter, body_start) = split_frontmatter(content);
-        let tags = inline_tags(content.lines().skip(body_start));
-        if frontmatter.is_none() && tags.is_empty() {
-            return;
-        }
-        files.push(MetadataEntry {
-            path: p.to_string_lossy().to_string(),
-            frontmatter,
-            tags,
-        });
-    })?;
+    let status = scan_files(
+        Path::new(path),
+        crate::is_markdown_file,
+        max_files,
+        max_depth,
+        |p, content| {
+            // Rebuilt with newline endings so the frontend parser sees one
+            // shape regardless of the file's own line endings.
+            let (inner, body_start) = split_frontmatter(content);
+            let frontmatter = inner.map(|inner| format!("---\n{inner}---\n"));
+            let tags = inline_tags(content.lines().skip(body_start));
+            if frontmatter.is_none() && tags.is_empty() {
+                return;
+            }
+            files.push(MetadataEntry {
+                path: p.to_string_lossy().to_string(),
+                frontmatter,
+                tags,
+            });
+        },
+    )?;
 
     Ok(MetadataScan { files, status })
-}
-
-/// The leading `---` fenced block (rebuilt with `\n` endings so the frontend
-/// parser sees one shape regardless of the file's line endings) plus the line
-/// index the body starts at. The block is `None` unless the file opens with
-/// the fence and closes it.
-fn split_frontmatter(content: &str) -> (Option<String>, usize) {
-    let mut lines = content.lines();
-    if lines.next().map(str::trim_end) != Some("---") {
-        return (None, 0);
-    }
-    let mut block = String::from("---\n");
-    for (idx, line) in lines.enumerate() {
-        if line.trim_end() == "---" {
-            block.push_str("---\n");
-            return (Some(block), idx + 2);
-        }
-        if block.len() + line.len() > SCAN_MAX_FRONTMATTER_BYTES {
-            return (None, 0);
-        }
-        block.push_str(line);
-        block.push('\n');
-    }
-    (None, 0)
-}
-
-fn inline_tags<'a>(body: impl Iterator<Item = &'a str>) -> Vec<String> {
-    let mut tags: Vec<String> = Vec::new();
-    let mut in_fence = false;
-    for line in body {
-        let trimmed_start = line.trim_start();
-        if trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~") {
-            in_fence = !in_fence;
-            continue;
-        }
-        if in_fence {
-            continue;
-        }
-        push_line_tags(line, &mut tags);
-    }
-    tags.sort();
-    tags.dedup();
-    tags.truncate(SCAN_MAX_TAGS_PER_FILE);
-    tags
-}
-
-fn push_line_tags(line: &str, out: &mut Vec<String>) {
-    let chars: Vec<char> = line.chars().collect();
-    let mut i = 0;
-    while i < chars.len() {
-        if chars[i] != '#' || (i > 0 && !chars[i - 1].is_whitespace()) {
-            i += 1;
-            continue;
-        }
-        let start = i + 1;
-        let mut end = start;
-        while end < chars.len() && is_tag_char(chars[end]) {
-            end += 1;
-        }
-        let tag: String = chars[start..end].iter().collect();
-        // A digits-only run is an issue reference (`#42`), not a tag.
-        let usable = !tag.is_empty()
-            && tag.chars().count() <= SCAN_MAX_TAG_CHARS
-            && tag.chars().any(|c| !c.is_ascii_digit());
-        if usable {
-            out.push(tag.to_lowercase());
-        }
-        i = end.max(start);
-    }
-}
-
-fn is_tag_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '_' || c == '-' || c == '/'
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::commands::walk::WALK_MAX_DEPTH;
+    use crate::vault::{MAX_INLINE_TAGS_PER_FILE, MAX_TAG_CHARS};
     use std::fs;
     use std::time::UNIX_EPOCH;
     use tauri::test::{mock_app, MockRuntime};
@@ -255,7 +185,7 @@ mod tests {
     #[test]
     fn scan_metadata_drops_oversized_frontmatter_but_keeps_inline_tags() {
         let dir = unique_tmp("meta_big_frontmatter");
-        let filler = "x".repeat(SCAN_MAX_FRONTMATTER_BYTES + 1);
+        let filler = "x".repeat(9000);
         fs::write(
             dir.join("a.md"),
             format!("---\nnote: {filler}\n---\nBody #alpha\n"),
@@ -273,15 +203,15 @@ mod tests {
     #[test]
     fn scan_metadata_caps_tag_length_and_count() {
         let dir = unique_tmp("meta_tag_caps");
-        let long = "y".repeat(SCAN_MAX_TAG_CHARS + 1);
-        let many: String = (0..SCAN_MAX_TAGS_PER_FILE + 10)
+        let long = "y".repeat(MAX_TAG_CHARS + 1);
+        let many: String = (0..MAX_INLINE_TAGS_PER_FILE + 10)
             .map(|i| format!("#tag{i} "))
             .collect();
         fs::write(dir.join("a.md"), format!("#{long} #ok\n{many}\n")).unwrap();
 
         let files = scan(&dir);
-        assert_eq!(files[0].tags.len(), SCAN_MAX_TAGS_PER_FILE);
-        assert!(!files[0].tags.iter().any(|t| t.len() > SCAN_MAX_TAG_CHARS));
+        assert_eq!(files[0].tags.len(), MAX_INLINE_TAGS_PER_FILE);
+        assert!(!files[0].tags.iter().any(|t| t.len() > MAX_TAG_CHARS));
 
         let _ = fs::remove_dir_all(&dir);
     }

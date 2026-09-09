@@ -12,7 +12,7 @@ pub mod search;
 pub mod secrets;
 #[cfg(desktop)]
 pub mod serve;
-mod walk;
+pub(crate) mod walk;
 pub mod wikilinks;
 
 pub use directory::InitialFolder;
