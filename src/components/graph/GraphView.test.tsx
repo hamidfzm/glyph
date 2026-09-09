@@ -597,6 +597,38 @@ describe("GraphView node focus", () => {
     expect(lastWorldTransform()).toEqual(framing);
   });
 
+  it("focuses from a camera restored across a tab switch, not from the fit", () => {
+    stubMatchMedia(true);
+    vi.useFakeTimers();
+    // Pan, leave the tab, come back: the camera is restored and manual.
+    const tabs = { workspace: { root: "/ws" } } as unknown as TabsContextValue;
+    const graph = (
+      <TabsContext.Provider value={tabs}>
+        <GraphView workspaceFiles={FILES} wikilinkRefs={REFS} onOpenFile={vi.fn()} />
+      </TabsContext.Provider>
+    );
+    const first = render(graph);
+    const canvas = screen.getByRole("img", { name: "Workspace graph" });
+    fireEvent.pointerDown(canvas, { pointerId: 1, clientX: EMPTY.x, clientY: EMPTY.y });
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: EMPTY.x + 60, clientY: EMPTY.y });
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: EMPTY.x + 60, clientY: EMPTY.y });
+    first.unmount();
+    render(graph);
+
+    // The node sits 60px right of where it was, because the camera came back panned.
+    const restored = screen.getByRole("img", { name: "Workspace graph" });
+    click(restored, { x: NODE_A.x + 60, y: NODE_A.y });
+    act(() => {
+      vi.advanceTimersByTime(DOUBLE_CLICK_MS);
+    });
+    // The click only lands on the node if the camera really came back panned,
+    // and the zoom only reaches FOCUS_SCALE if the focus ran.
+    const target = centerCameraOn(0, 0, FOCUS_SCALE);
+    expect(lastWorldTransform().scale).toBeCloseTo(target.scale);
+    expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + target.dx);
+    clearGraphView("/ws");
+  });
+
   it("keeps the focused neighbourhood highlighted after the cursor moves away", () => {
     const { canvas } = renderGraph(vi.fn(), TRIO_FILES);
     click(canvas, TRIO_NODE_A, 1);
