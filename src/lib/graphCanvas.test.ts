@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   type Camera,
+  centerCameraOn,
   DEFAULT_CAMERA,
   fitCameraToNodes,
   hitTestNode,
+  lerpCamera,
   MAX_SCALE,
   MIN_SCALE,
   nodeRadius,
@@ -160,5 +162,36 @@ describe("hitTestNode", () => {
     const n: LayoutNode = { id: "a", label: "a", degree: 0, orphan: true };
     // Origin maps to the viewport centre (400, 300) under the default camera.
     expect(hitTestNode([n], DEFAULT_CAMERA, VIEWPORT, 400, 300)?.id).toBe("a");
+  });
+});
+
+describe("centerCameraOn", () => {
+  it("puts the world point at the viewport centre", () => {
+    const screen = worldToScreen(centerCameraOn(120, -45, 2), VIEWPORT, 120, -45);
+    expect(screen).toEqual({ x: 400, y: 300 });
+  });
+
+  it("clamps the scale to the zoom limits", () => {
+    expect(centerCameraOn(0, 0, MAX_SCALE * 4).scale).toBe(MAX_SCALE);
+    expect(centerCameraOn(0, 0, MIN_SCALE / 4).scale).toBe(MIN_SCALE);
+  });
+
+  it("keeps the point centred at a clamped scale", () => {
+    const camera = centerCameraOn(50, 50, MAX_SCALE * 4);
+    expect(worldToScreen(camera, VIEWPORT, 50, 50)).toEqual({ x: 400, y: 300 });
+  });
+});
+
+describe("lerpCamera", () => {
+  const from: Camera = { dx: 0, dy: 0, scale: 1 };
+  const to: Camera = { dx: 100, dy: -40, scale: 2 };
+
+  it("returns the endpoints at t = 0 and t = 1", () => {
+    expect(lerpCamera(from, to, 0)).toEqual(from);
+    expect(lerpCamera(from, to, 1)).toEqual(to);
+  });
+
+  it("interpolates every field", () => {
+    expect(lerpCamera(from, to, 0.5)).toEqual({ dx: 50, dy: -20, scale: 1.5 });
   });
 });

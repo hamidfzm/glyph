@@ -1,13 +1,25 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import { useZoomApi } from "@/contexts/ZoomContext";
 import { ZoomProvider } from "@/contexts/ZoomProvider";
+import { DOUBLE_CLICK_MS } from "@/hooks/useGraphFocus";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { buildWorkspaceGraph, type WorkspaceGraph } from "@/lib/graph";
-import { fitCameraToNodes, worldToScreen } from "@/lib/graphCanvas";
+import {
+  type Camera,
+  centerCameraOn,
+  FOCUS_SCALE,
+  fitCameraToNodes,
+  MAX_SCALE,
+  worldToScreen,
+  zoomCameraAt,
+} from "@/lib/graphCanvas";
+import { ALPHA_DIMMED } from "@/lib/graphDraw";
 import type { GraphLayout, LayoutNode } from "@/lib/graphSimulation";
 import { clearGraphView, loadGraphView } from "@/lib/graphViewStore";
+import { restoreMatchMedia, stubMatchMedia } from "@/test/matchMedia";
+import { restoreRaf, stubRaf } from "@/test/raf";
 import { GraphView } from "./GraphView";
 
 // Shared spies/captures between the test and the hoisted mock factory.
@@ -61,6 +73,19 @@ const FIT = fitCameraToNodes(FIT_NODES, VIEWPORT);
 const NODE_A = worldToScreen(FIT, VIEWPORT, 0, 0);
 const EMPTY = { x: 40, y: 40 };
 
+// A third, unlinked note, so focusing "a" leaves something outside its
+// neighbourhood to dim. The two-file fixture above cannot show dimming: a and b
+// are neighbours, so focusing either highlights the whole graph.
+const TRIO_FILES = [...FILES, "/v/c.md"];
+const TRIO_FIT_NODES: LayoutNode[] = buildWorkspaceGraph(TRIO_FILES, REFS).nodes.map((n, i) => ({
+  ...n,
+  x: i * 100,
+  y: 0,
+}));
+const TRIO_FIT = fitCameraToNodes(TRIO_FIT_NODES, VIEWPORT);
+const TRIO_NODE_A = worldToScreen(TRIO_FIT, VIEWPORT, 0, 0);
+const TRIO_NODE_C = worldToScreen(TRIO_FIT, VIEWPORT, 200, 0);
+
 function stubContext() {
   return {
     setTransform: vi.fn(),
@@ -84,12 +109,19 @@ function stubContext() {
 }
 
 let ctx: ReturnType<typeof stubContext>;
+/** Every alpha written during the draws since it was last emptied. */
+let alphas: number[];
 
 beforeEach(() => {
   hoisted.reheat.mockClear();
   hoisted.layoutRef.current = null;
   hoisted.reseeded.value = true;
   ctx = stubContext();
+  alphas = [];
+  Object.defineProperty(ctx, "globalAlpha", {
+    set: (value: number) => alphas.push(value),
+    get: () => 1,
+  });
   HTMLCanvasElement.prototype.getContext = vi.fn(
     () => ctx,
   ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
@@ -111,13 +143,28 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
+  restoreRaf();
+  restoreMatchMedia();
 });
 
-function renderGraph(onOpenFile = vi.fn()) {
+function renderGraph(onOpenFile = vi.fn(), files = FILES) {
   const utils = render(
-    <GraphView workspaceFiles={FILES} wikilinkRefs={REFS} onOpenFile={onOpenFile} />,
+    <GraphView workspaceFiles={files} wikilinkRefs={REFS} onOpenFile={onOpenFile} />,
   );
   return { ...utils, onOpenFile, canvas: screen.getByRole("img", { name: "Workspace graph" }) };
+}
+
+// Chromium reports no click count on pointerup (the Pointer Events spec leaves
+// `detail` 0 there), so 0 is the realistic default for Windows and Android.
+function click(canvas: HTMLElement, point: { x: number; y: number }, clickCount = 0) {
+  fireEvent.pointerDown(canvas, { pointerId: 1, clientX: point.x, clientY: point.y });
+  fireEvent.pointerUp(canvas, {
+    pointerId: 1,
+    clientX: point.x,
+    clientY: point.y,
+    detail: clickCount,
+  });
 }
 
 /** Scale + x-translation of the most recent world-transform draw call. */
@@ -153,17 +200,25 @@ describe("GraphView", () => {
     expect(tx).toBeCloseTo(VIEWPORT.width / 2 + FIT.dx);
   });
 
-  it("opens the clicked node's file", () => {
+  it("opens the clicked node's file on a second press, with no click count", () => {
     const { canvas, onOpenFile } = renderGraph();
-    fireEvent.pointerDown(canvas, { pointerId: 1, clientX: NODE_A.x, clientY: NODE_A.y });
-    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: NODE_A.x, clientY: NODE_A.y });
+    click(canvas, NODE_A);
+    expect(onOpenFile).not.toHaveBeenCalled();
+    click(canvas, NODE_A);
+    expect(onOpenFile).toHaveBeenCalledWith("/v/a.md");
+  });
+
+  it("opens the clicked node's file on a reported double click", () => {
+    const { canvas, onOpenFile } = renderGraph();
+    click(canvas, NODE_A, 1);
+    click(canvas, NODE_A, 2);
     expect(onOpenFile).toHaveBeenCalledWith("/v/a.md");
   });
 
   it("does not open a file when clicking empty space", () => {
     const { canvas, onOpenFile } = renderGraph();
-    fireEvent.pointerDown(canvas, { pointerId: 1, clientX: EMPTY.x, clientY: EMPTY.y });
-    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: EMPTY.x, clientY: EMPTY.y });
+    click(canvas, EMPTY);
+    click(canvas, EMPTY);
     expect(onOpenFile).not.toHaveBeenCalled();
   });
 
@@ -236,8 +291,14 @@ describe("GraphView", () => {
     const { canvas, onOpenFile } = renderGraph();
     fireEvent.pointerDown(canvas, { pointerId: 1, clientX: NODE_A.x, clientY: NODE_A.y });
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: NODE_A.x + 2, clientY: NODE_A.y + 1 });
-    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: NODE_A.x + 2, clientY: NODE_A.y + 1 });
+    fireEvent.pointerUp(canvas, {
+      pointerId: 1,
+      clientX: NODE_A.x + 2,
+      clientY: NODE_A.y + 1,
+      detail: 2,
+    });
     expect(onOpenFile).toHaveBeenCalledWith("/v/a.md");
+    expect(hoisted.reheat).not.toHaveBeenCalled();
   });
 
   it("keeps panning on a continued background drag", () => {
@@ -262,7 +323,12 @@ describe("GraphView", () => {
     expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + FIT.dx + 80);
     // Clicking the now-shifted node still resolves it (press uses the manual camera).
     fireEvent.pointerDown(canvas, { pointerId: 3, clientX: NODE_A.x + 80, clientY: NODE_A.y });
-    fireEvent.pointerUp(canvas, { pointerId: 3, clientX: NODE_A.x + 80, clientY: NODE_A.y });
+    fireEvent.pointerUp(canvas, {
+      pointerId: 3,
+      clientX: NODE_A.x + 80,
+      clientY: NODE_A.y,
+      detail: 2,
+    });
     expect(onOpenFile).toHaveBeenCalledWith("/v/a.md");
   });
 
@@ -454,5 +520,207 @@ describe("GraphView view state across a tab switch", () => {
 
     renderInRoot("/other");
     expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + FIT.dx);
+  });
+});
+
+describe("GraphView node focus", () => {
+  it("focuses a node on a single click instead of opening it", () => {
+    const { canvas, onOpenFile } = renderGraph();
+    click(canvas, NODE_A, 1);
+    expect(onOpenFile).not.toHaveBeenCalled();
+    // Focusing takes manual control, so auto-fit stops re-framing over the node.
+    expect(screen.getByRole("button", { name: "Reset view" })).toBeEnabled();
+  });
+
+  it("centres the camera on the focused node, instantly under reduced motion", () => {
+    stubMatchMedia(true);
+    vi.useFakeTimers();
+    const { canvas } = renderGraph();
+    click(canvas, NODE_A, 1);
+    act(() => {
+      vi.advanceTimersByTime(DOUBLE_CLICK_MS);
+    });
+    const target = centerCameraOn(0, 0, FOCUS_SCALE);
+    expect(lastWorldTransform().scale).toBeCloseTo(target.scale);
+    expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + target.dx);
+  });
+
+  it("animates the focus camera over frames when motion is allowed", () => {
+    stubMatchMedia(false);
+    vi.useFakeTimers();
+    const raf = stubRaf();
+    const { canvas } = renderGraph();
+    click(canvas, NODE_A, 1);
+    act(() => {
+      vi.advanceTimersByTime(DOUBLE_CLICK_MS);
+    });
+    // The tween is scheduled but no frame has run, so the framing has not moved.
+    expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + FIT.dx);
+    act(() => {
+      raf.settle();
+    });
+    const target = centerCameraOn(0, 0, FOCUS_SCALE);
+    expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + target.dx);
+  });
+
+  it("keeps the focus camera within the maximum zoom", () => {
+    stubMatchMedia(true);
+    vi.useFakeTimers();
+    const { canvas } = renderGraph();
+    // Wheel all the way in; the camera clamps at MAX_SCALE well before the last step.
+    let zoomed: Camera = FIT;
+    for (let i = 0; i < 4; i += 1) {
+      fireEvent.wheel(canvas, { deltaY: -800, clientX: 400, clientY: 300 });
+      zoomed = zoomCameraAt(zoomed, 400, 300, Math.exp(1.2), VIEWPORT);
+    }
+    expect(zoomed.scale).toBe(MAX_SCALE);
+
+    click(canvas, worldToScreen(zoomed, VIEWPORT, 0, 0), 1);
+    act(() => {
+      vi.advanceTimersByTime(DOUBLE_CLICK_MS);
+    });
+    expect(lastWorldTransform().scale).toBeCloseTo(MAX_SCALE);
+  });
+
+  it("opens on a double click without ever animating a focus", () => {
+    stubMatchMedia(true);
+    vi.useFakeTimers();
+    const { canvas, onOpenFile } = renderGraph();
+    click(canvas, NODE_A, 1);
+    click(canvas, NODE_A, 2);
+    expect(onOpenFile).toHaveBeenCalledWith("/v/a.md");
+
+    const framing = lastWorldTransform();
+    act(() => {
+      vi.advanceTimersByTime(DOUBLE_CLICK_MS * 4);
+    });
+    expect(lastWorldTransform()).toEqual(framing);
+  });
+
+  it("focuses from a camera restored across a tab switch, not from the fit", () => {
+    stubMatchMedia(true);
+    vi.useFakeTimers();
+    // Pan, leave the tab, come back: the camera is restored and manual.
+    const tabs = { workspace: { root: "/ws" } } as unknown as TabsContextValue;
+    const graph = (
+      <TabsContext.Provider value={tabs}>
+        <GraphView workspaceFiles={FILES} wikilinkRefs={REFS} onOpenFile={vi.fn()} />
+      </TabsContext.Provider>
+    );
+    const first = render(graph);
+    const canvas = screen.getByRole("img", { name: "Workspace graph" });
+    fireEvent.pointerDown(canvas, { pointerId: 1, clientX: EMPTY.x, clientY: EMPTY.y });
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: EMPTY.x + 60, clientY: EMPTY.y });
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: EMPTY.x + 60, clientY: EMPTY.y });
+    first.unmount();
+    render(graph);
+
+    // The node sits 60px right of where it was, because the camera came back panned.
+    const restored = screen.getByRole("img", { name: "Workspace graph" });
+    click(restored, { x: NODE_A.x + 60, y: NODE_A.y });
+    act(() => {
+      vi.advanceTimersByTime(DOUBLE_CLICK_MS);
+    });
+    // The click only lands on the node if the camera really came back panned,
+    // and the zoom only reaches FOCUS_SCALE if the focus ran.
+    const target = centerCameraOn(0, 0, FOCUS_SCALE);
+    expect(lastWorldTransform().scale).toBeCloseTo(target.scale);
+    expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + target.dx);
+    clearGraphView("/ws");
+  });
+
+  it("keeps the focused neighbourhood highlighted after the cursor moves away", () => {
+    const { canvas } = renderGraph(vi.fn(), TRIO_FILES);
+    click(canvas, TRIO_NODE_A, 1);
+    // Hovering the unlinked note previews its own neighbourhood on top.
+    fireEvent.pointerMove(canvas, { pointerId: 2, clientX: TRIO_NODE_C.x, clientY: TRIO_NODE_C.y });
+    alphas.length = 0;
+    fireEvent.pointerLeave(canvas);
+    expect(alphas).toContain(ALPHA_DIMMED);
+  });
+
+  it("clears the focus when the background is clicked", () => {
+    const { canvas } = renderGraph(vi.fn(), TRIO_FILES);
+    click(canvas, TRIO_NODE_A, 1);
+    expect(alphas).toContain(ALPHA_DIMMED);
+
+    alphas.length = 0;
+    click(canvas, EMPTY, 1);
+    expect(alphas).not.toContain(ALPHA_DIMMED);
+  });
+
+  it("never treats a cancelled gesture as a click", () => {
+    const { canvas, onOpenFile } = renderGraph();
+    click(canvas, NODE_A);
+
+    // A cancel on the focused node would otherwise read as the opening press.
+    fireEvent.pointerDown(canvas, { pointerId: 2, clientX: NODE_A.x, clientY: NODE_A.y });
+    fireEvent.pointerCancel(canvas, { pointerId: 2, clientX: NODE_A.x, clientY: NODE_A.y });
+    expect(onOpenFile).not.toHaveBeenCalled();
+  });
+
+  it("ignores a cancel that has no matching press", () => {
+    const { canvas, onOpenFile } = renderGraph();
+    click(canvas, NODE_A);
+    // A cancel for a pointer that never pressed must not touch the focus state.
+    fireEvent.pointerCancel(canvas, { pointerId: 99, clientX: NODE_A.x, clientY: NODE_A.y });
+    expect(onOpenFile).not.toHaveBeenCalled();
+    expect(hoisted.reheat).not.toHaveBeenCalled();
+  });
+
+  it("releases a node whose drag is cancelled", () => {
+    const { canvas } = renderGraph();
+    fireEvent.pointerDown(canvas, { pointerId: 1, clientX: NODE_A.x, clientY: NODE_A.y });
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: NODE_A.x + 60, clientY: NODE_A.y });
+    const dragged = hoisted.layoutRef.current?.nodes.find((n) => n.id === "/v/a.md");
+    expect(Number.isFinite(dragged?.fx)).toBe(true);
+
+    fireEvent.pointerCancel(canvas, { pointerId: 1, clientX: NODE_A.x + 60, clientY: NODE_A.y });
+    expect(dragged?.fx).toBeNull();
+  });
+
+  it("stops a running focus move when the next gesture takes the camera", () => {
+    stubMatchMedia(true);
+    vi.useFakeTimers();
+    const { canvas } = renderGraph();
+    click(canvas, NODE_A);
+
+    // Panning inside the window must win: the deferred move never lands.
+    fireEvent.pointerDown(canvas, { pointerId: 2, clientX: EMPTY.x, clientY: EMPTY.y });
+    fireEvent.pointerMove(canvas, { pointerId: 2, clientX: EMPTY.x + 50, clientY: EMPTY.y });
+    fireEvent.pointerUp(canvas, { pointerId: 2, clientX: EMPTY.x + 50, clientY: EMPTY.y });
+    const panned = lastWorldTransform();
+    act(() => {
+      vi.advanceTimersByTime(DOUBLE_CLICK_MS * 4);
+    });
+    expect(lastWorldTransform()).toEqual(panned);
+  });
+
+  it("stops a running focus move when the wheel takes the camera", () => {
+    stubMatchMedia(true);
+    vi.useFakeTimers();
+    const { canvas } = renderGraph();
+    click(canvas, NODE_A);
+
+    fireEvent.wheel(canvas, { deltaY: -200, clientX: 400, clientY: 300 });
+    const zoomed = lastWorldTransform();
+    act(() => {
+      vi.advanceTimersByTime(DOUBLE_CLICK_MS * 4);
+    });
+    expect(lastWorldTransform()).toEqual(zoomed);
+  });
+
+  it("clears the focus and returns to auto-fit on Reset view", () => {
+    const { canvas } = renderGraph(vi.fn(), TRIO_FILES);
+    click(canvas, TRIO_NODE_A, 1);
+    const reset = screen.getByRole("button", { name: "Reset view" });
+    expect(reset).toBeEnabled();
+    expect(alphas).toContain(ALPHA_DIMMED);
+
+    alphas.length = 0;
+    fireEvent.click(reset);
+    expect(alphas).not.toContain(ALPHA_DIMMED);
+    expect(reset).toBeDisabled();
+    expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + TRIO_FIT.dx);
   });
 });
