@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use crate::extensions::{has_extension, CANVAS_EXTENSIONS};
+
 /// JSON Canvas files use the `.canvas` extension (https://jsoncanvas.org).
 ///
 /// Canvas files are intentionally NOT registered as an OS file association
@@ -10,7 +12,7 @@ use std::path::Path;
 /// `is_supported_file`. The frontend reads the same file through
 /// `src/lib/extensionConfig.ts`.
 pub fn is_canvas_file(path: &Path) -> bool {
-    crate::extensions::has_extension(path, crate::extensions::CANVAS_EXTENSIONS)
+    has_extension(path, CANVAS_EXTENSIONS)
 }
 
 #[cfg(test)]

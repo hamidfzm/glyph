@@ -61,6 +61,18 @@ mod tests {
     }
 
     #[test]
+    fn has_extension_matches_the_frontend_helper() {
+        assert!(has_extension(Path::new("notes.MD"), &["md"]));
+        assert!(has_extension(Path::new("a.b.c.md"), &["md"]));
+        assert!(!has_extension(Path::new("README.md.bak"), &["md"]));
+        assert!(!has_extension(Path::new("Makefile"), &["md"]));
+        // A leading dot is a dotfile, not an extension. `hasExtension` in
+        // src/lib/extensionConfig.ts agrees, and a test there pins it.
+        assert!(!has_extension(Path::new(".md"), &["md"]));
+        assert!(has_extension(Path::new(".hidden.md"), &["md"]));
+    }
+
+    #[test]
     fn no_source_code_extension_is_redactable() {
         // The telemetry redaction matches any file name ending in one of these,
         // and `redact_frame_path` falls back to it. A source extension here

@@ -16,14 +16,22 @@ import tauriConfig from "../../src-tauri/tauri.conf.json";
 
 type FileAssociation = { ext?: unknown; mimeType?: unknown };
 
+// Lowercase ASCII alphanumerics only, matching the check in build.rs so both
+// sides reject the same config. Two reasons beyond tidiness: `hasExtension`
+// lowercases the path's extension before comparing, so an uppercase entry would
+// silently match nothing; and the list is interpolated into a `RegExp` in
+// telemetry.ts, where a character like `|` or `.` would quietly widen the
+// redaction pattern and `+` would throw at module load.
+const VALID_EXTENSION = /^[a-z0-9]+$/;
+
 function validate(extensions: unknown, source: string): readonly string[] {
   if (
     !Array.isArray(extensions) ||
     extensions.length === 0 ||
-    extensions.some((ext) => typeof ext !== "string" || ext.length === 0)
+    extensions.some((ext) => typeof ext !== "string" || !VALID_EXTENSION.test(ext))
   ) {
     throw new Error(
-      `${source} is missing or malformed; it is the single source of truth for these file extensions.`,
+      `${source} is missing or malformed; it must be a non-empty array of lowercase alphanumeric extensions, and it is the single source of truth for these file extensions.`,
     );
   }
   return extensions as readonly string[];
@@ -54,10 +62,16 @@ export function declaredExtensions(config: unknown, key: string): readonly strin
   return validate((config as Record<string, unknown>)[key], `extensions.json "${key}"`);
 }
 
-/** Whether `path` ends in one of `extensions`, ignoring case. */
+/**
+ * Whether `path` ends in one of `extensions`, ignoring case. A leading dot is
+ * a dotfile, not an extension (`.md` is a file named ".md"), which is what
+ * Rust's `Path::extension` reports and therefore what the backend gate uses.
+ */
 export function hasExtension(path: string, extensions: readonly string[]): boolean {
-  const ext = path.split(".").pop()?.toLowerCase();
-  return ext ? extensions.includes(ext) : false;
+  const name = path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return false;
+  return extensions.includes(name.slice(dot + 1).toLowerCase());
 }
 
 // Associations are keyed by mime type, not position, so reordering
@@ -74,10 +88,15 @@ export const IMAGE_EXTENSIONS = declaredExtensions(declaredConfig, "image");
  * document as plainly as an absolute one does. Images are included: an asset
  * name is as personal as a document name.
  */
+// Deduplicated, matching the Rust union: nothing stops two categories from
+// claiming the same extension, and a repeat would be a redundant alternation
+// branch in the telemetry pattern.
 export const USER_FILE_EXTENSIONS: readonly string[] = [
-  ...MARKDOWN_EXTENSIONS,
-  ...D2_EXTENSIONS,
-  ...CANVAS_EXTENSIONS,
-  ...NOTEBOOK_EXTENSIONS,
-  ...IMAGE_EXTENSIONS,
+  ...new Set([
+    ...MARKDOWN_EXTENSIONS,
+    ...D2_EXTENSIONS,
+    ...CANVAS_EXTENSIONS,
+    ...NOTEBOOK_EXTENSIONS,
+    ...IMAGE_EXTENSIONS,
+  ]),
 ];

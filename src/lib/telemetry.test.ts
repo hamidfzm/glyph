@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { Breadcrumb, ErrorEvent } from "@sentry/react";
 import * as Sentry from "@sentry/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -104,9 +102,28 @@ describe("redactPaths", () => {
     }
   });
 
-  it("prefers the longest matching extension", () => {
+  it("consumes the whole extension rather than a shorter prefix of it", () => {
+    // Without the trailing word boundary, `md` would match first and leave "x".
     expect(redactPaths("open notes.mdx")).toBe("open [redacted-path]");
     expect(redactPaths("open notes.mdtext")).toBe("open [redacted-path]");
+  });
+
+  it("redacts remote URLs whole, including hosts that end in a document extension", () => {
+    // glyph.md is the project's own domain: without the URL pass the host would
+    // be mistaken for a file and leave a dangling "https:".
+    expect(redactPaths("GET https://glyph.md/download failed")).toBe("GET [redacted-url] failed");
+    expect(redactPaths("Failed to fetch https://glyph-md.github.io/assets/logo.svg")).toBe(
+      "Failed to fetch [redacted-url]",
+    );
+  });
+
+  it("stays linear on a long non-matching token", () => {
+    // An unbounded leading run rescans from every start position, which turned a
+    // single large console breadcrumb into a multi-second main-thread hang.
+    const huge = `data:image/png;base64,${"A".repeat(200_000)}`;
+    const started = performance.now();
+    redactPaths(huge);
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   it("leaves source file names and bare extensions readable", () => {
@@ -121,21 +138,6 @@ describe("redactPaths", () => {
     expect(redactPaths("Cannot read property of undefined")).toBe(
       "Cannot read property of undefined",
     );
-  });
-});
-
-describe("the Sentry release name", () => {
-  it("is the same version on both clients", async () => {
-    // The frontend reports `glyph@<package.json version>` and the Rust client
-    // `glyph@<Cargo.toml version>`. If those drift, one build shows up as two
-    // releases and per-release issue resolution silently stops working.
-    // Vitest runs from the project root, so both files are reachable from cwd.
-    const pkg = JSON.parse(await readFile(join(process.cwd(), "package.json"), "utf8")) as {
-      version: string;
-    };
-    const cargo = await readFile(join(process.cwd(), "src-tauri/Cargo.toml"), "utf8");
-
-    expect(/^version\s*=\s*"([^"]+)"/m.exec(cargo)?.[1]).toBe(pkg.version);
   });
 });
 

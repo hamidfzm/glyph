@@ -184,11 +184,17 @@ fn validate(value: Option<&serde_json::Value>, source: &str) -> Vec<String> {
             let ext = entry
                 .as_str()
                 .unwrap_or_else(|| panic!("non-string entry in {source}"));
+            // Lowercase only: `has_extension` lowercases the path's extension
+            // before comparing, so an uppercase entry would silently match
+            // nothing. Mirrors VALID_EXTENSION in src/lib/extensionConfig.ts.
             let valid = !ext.is_empty()
-                && !ext.starts_with('.')
-                && ext.chars().all(|c| c.is_ascii_alphanumeric());
+                && ext
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
             if !valid {
-                panic!("invalid extension {ext:?} in {source}");
+                panic!(
+                    "invalid extension {ext:?} in {source}; expected lowercase ASCII alphanumerics with no leading dot"
+                );
             }
             ext.to_string()
         })
@@ -197,11 +203,17 @@ fn validate(value: Option<&serde_json::Value>, source: &str) -> Vec<String> {
 
 fn render_const(name: &str, extensions: &[String]) -> String {
     let entries: Vec<String> = extensions.iter().map(|e| format!("    {e:?}")).collect();
-    // Not every list has a reader on every target: `USER_FILE_EXTENSIONS` is
-    // only used by the desktop-gated telemetry module, so a mobile build would
-    // otherwise trip `dead_code` under `-D warnings`.
+    // Every per-category list has an ungated reader, so only the union needs the
+    // exemption: its sole caller is the `#[cfg(desktop)]` telemetry module, and a
+    // mobile build would otherwise trip `dead_code` under `-D warnings`. Scoping
+    // the attribute keeps a category that later loses its last reader warning.
+    let exemption = if name == "USER_FILE_EXTENSIONS" {
+        "#[cfg_attr(not(desktop), allow(dead_code))]\n"
+    } else {
+        ""
+    };
     format!(
-        "#[allow(dead_code)]\npub static {name}: &[&str] = &[\n{}\n];\n",
+        "{exemption}pub static {name}: &[&str] = &[\n{}\n];\n",
         entries.join(",\n")
     )
 }

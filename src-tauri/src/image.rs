@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use crate::extensions::{has_extension, IMAGE_EXTENSIONS};
+
 /// Whether `path` is an image/SVG asset Glyph can display in the image viewer.
 ///
 /// Images are not documents Glyph can edit, so they are deliberately kept out
@@ -10,7 +12,7 @@ use std::path::Path;
 /// by build.rs. The frontend reads the same file through
 /// `src/lib/extensionConfig.ts`.
 pub fn is_image_file(path: &Path) -> bool {
-    crate::extensions::has_extension(path, crate::extensions::IMAGE_EXTENSIONS)
+    has_extension(path, IMAGE_EXTENSIONS)
 }
 
 #[cfg(test)]

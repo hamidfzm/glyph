@@ -87,6 +87,19 @@ describe("hasExtension", () => {
     expect(hasExtension("Makefile", ["md"])).toBe(false);
     expect(hasExtension("", ["md"])).toBe(false);
   });
+
+  it("treats a leading dot as a dotfile, not an extension", () => {
+    // Matches Rust's Path::extension, which the backend gate uses. A file named
+    // ".md" is a dotfile; the frontend must not call it markdown when the
+    // backend will not.
+    expect(hasExtension(".md", ["md"])).toBe(false);
+    expect(hasExtension("/a/b/.md", ["md"])).toBe(false);
+    expect(hasExtension(".hidden.md", ["md"])).toBe(true);
+  });
+
+  it("ignores dots in parent directories", () => {
+    expect(hasExtension("a.md/notes", ["md"])).toBe(false);
+  });
 });
 
 describe("the configured lists", () => {

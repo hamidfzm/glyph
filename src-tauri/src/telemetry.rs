@@ -27,17 +27,26 @@ pub struct TelemetryState(pub Mutex<Option<sentry::ClientInitGuard>>);
 
 const REDACTED: &str = "[redacted-path]";
 
-// Paths contain spaces and apostrophes, so a match runs to the next `:`,
-// quote, angle bracket, or pipe rather than to whitespace (legal in POSIX
-// names but rare, and `:` keeps "path: reason" messages readable): a trailing
-// word is over-redacted rather than a document name leaked. Windows verbatim
-// prefixes (`\\?\`, `\\?\UNC\`), which every canonicalized path carries, are
-// stripped first so the drive and UNC patterns see the plain form. Mirrors
-// src/lib/telemetry.ts.
+// Each pattern here starts from a literal anchor (a drive letter, a UNC prefix,
+// a POSIX root, a scheme), so it knows where the path begins and can run to the
+// next `:`, quote, angle bracket, or pipe rather than to whitespace (legal in
+// POSIX names but rare, and `:` keeps "path: reason" messages readable): a
+// trailing word is over-redacted rather than a document name leaked. The
+// relative-name pattern further down has no such anchor and cannot make that
+// trade.
+//
+// Windows verbatim prefixes (`\\?\`, `\\?\UNC\`), which every canonicalized path
+// carries, are stripped first so the drive and UNC patterns see the plain form.
+// Mirrors src/lib/telemetry.ts.
 static VERBATIM_PREFIX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\\\\\?\\(UNC\\)?").expect("valid regex"));
 static FILE_URL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"file://[^"<>|\n]+"#).expect("valid regex"));
+// Remote URLs go the same way as local paths. Running before the document-name
+// pattern also keeps a `.md` host (glyph.md) from being mistaken for a file and
+// leaving a dangling `https:`.
+static HTTP_URL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"https?://[^\s"'<>|\n]+"#).expect("valid regex"));
 static WINDOWS_PATH: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"\b[A-Za-z]:[\\/][^"<>|:?*\n]+"#).expect("valid regex"));
 static UNC_PATH: LazyLock<Regex> =
@@ -56,19 +65,24 @@ static POSIX_PATH: LazyLock<Regex> = LazyLock::new(|| {
 // an extension Glyph opens is therefore redacted, with or without a directory
 // prefix.
 //
-// Longest extension first so `md` cannot win over `mdx`. At least one leading
+// Unlike the patterns above this one has no literal anchor, so the leading run
+// is bounded. This crate's regex engine is linear and does not need it, but the
+// JS mirror does (an unbounded run rescans a long non-matching token from every
+// start position), and the two must agree on what they redact. 200 is far beyond
+// any real file name.
+//
+// The trailing `\b` is what makes `mdx` win over `md`: without it the shorter
+// alternative would match first and leave a dangling "x". At least one leading
 // character is required, so prose like "the .md format" is left alone. A name
 // containing spaces keeps its leading words, since the pattern cannot tell them
 // from the surrounding sentence, but the extension-bearing part that identifies
-// the file still goes. The extension set holds no source-code extensions, which
-// is what keeps stack-frame names (`main.rs`, `index.js`) readable. Mirrors
-// src/lib/telemetry.ts.
+// the file still goes. The extension set holds no source-code extension, which
+// is what keeps stack-frame names (`main.rs`, `index.js`) readable; a test
+// enforces that. Mirrors src/lib/telemetry.ts.
 static USER_FILE_NAME: LazyLock<Regex> = LazyLock::new(|| {
-    let mut extensions = crate::extensions::USER_FILE_EXTENSIONS.to_vec();
-    extensions.sort_by_key(|ext| std::cmp::Reverse(ext.len()));
     Regex::new(&format!(
-        r#"(?i)[^\s"'<>|:*?]+\.(?:{})\b"#,
-        extensions.join("|")
+        r#"(?i)[^\s"'<>|:*?]{{1,200}}\.(?:{})\b"#,
+        crate::extensions::USER_FILE_EXTENSIONS.join("|")
     ))
     .expect("valid regex")
 });
@@ -95,6 +109,7 @@ fn redact_paths(input: &str) -> String {
         }
     });
     let out = FILE_URL.replace_all(&plain, REDACTED);
+    let out = HTTP_URL.replace_all(&out, "[redacted-url]");
     let out = WINDOWS_PATH.replace_all(&out, REDACTED);
     let out = UNC_PATH.replace_all(&out, REDACTED);
     let out = POSIX_PATH.replace_all(&out, REDACTED);
@@ -360,10 +375,24 @@ mod tests {
     }
 
     #[test]
-    fn prefers_the_longest_matching_extension() {
-        // `md` must not win over `mdx` and leave a dangling "x".
+    fn consumes_the_whole_extension_rather_than_a_shorter_prefix() {
+        // Without the trailing word boundary, `md` would match first and leave "x".
         assert_eq!(redact_paths("open notes.mdx"), "open [redacted-path]");
         assert_eq!(redact_paths("open notes.mdtext"), "open [redacted-path]");
+    }
+
+    #[test]
+    fn redacts_remote_urls_whole() {
+        // glyph.md is the project's own domain: without the URL pass the host
+        // would be mistaken for a file and leave a dangling "https:".
+        assert_eq!(
+            redact_paths("GET https://glyph.md/download failed"),
+            "GET [redacted-url] failed"
+        );
+        assert_eq!(
+            redact_paths("Failed to fetch https://glyph-md.github.io/assets/logo.svg"),
+            "Failed to fetch [redacted-url]"
+        );
     }
 
     #[test]

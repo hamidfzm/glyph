@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use crate::extensions::{has_extension, D2_EXTENSIONS};
+
 /// D2 (https://d2lang.com) is a declarative diagram language whose file body is
 /// entirely diagram source.
 ///
@@ -11,7 +13,7 @@ use std::path::Path;
 /// `is_supported_file`. The frontend reads the same entry through
 /// `src/lib/extensionConfig.ts`.
 pub fn is_d2_file(path: &Path) -> bool {
-    crate::extensions::has_extension(path, crate::extensions::D2_EXTENSIONS)
+    has_extension(path, D2_EXTENSIONS)
 }
 
 #[cfg(test)]

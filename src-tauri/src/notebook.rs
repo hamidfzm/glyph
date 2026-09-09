@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use crate::extensions::{has_extension, NOTEBOOK_EXTENSIONS};
+
 /// Jupyter notebooks use the `.ipynb` extension.
 ///
 /// Notebooks are intentionally NOT registered as an OS file association (only
@@ -10,7 +12,7 @@ use std::path::Path;
 /// function. The frontend reads the same file through
 /// `src/lib/extensionConfig.ts`.
 pub fn is_notebook_file(path: &Path) -> bool {
-    crate::extensions::has_extension(path, crate::extensions::NOTEBOOK_EXTENSIONS)
+    has_extension(path, NOTEBOOK_EXTENSIONS)
 }
 
 /// Any document Glyph can open: a markdown file, a Jupyter notebook, a JSON
