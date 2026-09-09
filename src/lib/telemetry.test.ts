@@ -157,6 +157,14 @@ describe("scrubBreadcrumb", () => {
     expect(result?.data?.url).toBe("[redacted-url]");
   });
 
+  it("redacts a relative document name in the message", () => {
+    const result = scrubBreadcrumb({
+      category: "ui.click",
+      message: "opened workflows/routing.md",
+    });
+    expect(result?.message).toBe("opened [redacted-path]");
+  });
+
   it("keeps a plain breadcrumb as-is", () => {
     const crumb: Breadcrumb = { category: "ui.click", message: "clicked button" };
     expect(scrubBreadcrumb(crumb)).toEqual(crumb);

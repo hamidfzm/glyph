@@ -418,10 +418,16 @@ mod tests {
                 ..Default::default()
             }]
             .into(),
-            breadcrumbs: vec![Breadcrumb {
-                message: Some("watching /home/jane/notes".to_string()),
-                ..Default::default()
-            }]
+            breadcrumbs: vec![
+                Breadcrumb {
+                    message: Some("watching /home/jane/notes".to_string()),
+                    ..Default::default()
+                },
+                Breadcrumb {
+                    message: Some("opened workflows/routing.md".to_string()),
+                    ..Default::default()
+                },
+            ]
             .into(),
             ..Default::default()
         };
@@ -461,6 +467,10 @@ mod tests {
         assert_eq!(
             scrubbed.breadcrumbs.values[0].message.as_deref(),
             Some("watching [redacted-path]")
+        );
+        assert_eq!(
+            scrubbed.breadcrumbs.values[1].message.as_deref(),
+            Some("opened [redacted-path]")
         );
     }
 
