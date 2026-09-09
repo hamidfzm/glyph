@@ -1,19 +1,17 @@
 use std::path::Path;
 
-/// D2 (https://d2lang.com) is a declarative diagram language. A `.d2` file's
-/// whole body is diagram source, so — like notebooks and canvas — this is a
-/// fixed extension check rather than the config-driven markdown list.
+/// D2 (https://d2lang.com) is a declarative diagram language whose file body is
+/// entirely diagram source.
 ///
 /// Unlike notebooks and canvas, `.d2` IS registered as an OS file association
-/// (a second `tauri.conf.json` → `bundle.fileAssociations` entry), so the OS
-/// can hand `.d2` files to Glyph. It also opens via the CLI, the open dialog,
-/// drag-and-drop, and the workspace file tree — all of which gate on
-/// `is_supported_file`. The frontend mirror is `src/lib/d2Extensions.ts`.
+/// (the `text/plain` `tauri.conf.json` -> `bundle.fileAssociations` entry), so
+/// that entry is where the extension is declared and build.rs generates
+/// `D2_EXTENSIONS` from it. D2 files also open via the CLI, the open dialog,
+/// drag-and-drop, and the workspace file tree, all of which gate on
+/// `is_supported_file`. The frontend reads the same entry through
+/// `src/lib/extensionConfig.ts`.
 pub fn is_d2_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.eq_ignore_ascii_case("d2"))
-        .unwrap_or(false)
+    crate::extensions::has_extension(path, crate::extensions::D2_EXTENSIONS)
 }
 
 #[cfg(test)]

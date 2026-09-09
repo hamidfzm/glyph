@@ -1,6 +1,7 @@
 import type { Breadcrumb, ErrorEvent } from "@sentry/react";
 import { invoke } from "@tauri-apps/api/core";
 import { arch, version as osVersion } from "@tauri-apps/plugin-os";
+import { USER_FILE_EXTENSIONS } from "@/lib/extensionConfig";
 import { currentPlatform } from "@/lib/platform";
 // Single source of truth for the Sentry DSN — `src-tauri/sentry.json`. The Rust
 // build script reads the same file (see build.rs) so the frontend and backend
@@ -34,16 +35,40 @@ const UNC_PATH = /\\\\[^"<>|:?*\\\s]+\\[^"<>|:?*\n]+/g;
 const POSIX_PATH =
   /\/(?:Users|home|root|var|tmp|private|mnt|media|opt|Volumes|srv|run|storage|sdcard|data)\/[^"<>|:\n]+/g;
 
+// A *relative* path names the user's document just as plainly as an absolute
+// one, and matches none of the patterns above: "Not allowed to open url
+// workflows/routing.md" reached Sentry verbatim, and because events are grouped
+// by message the document name became the issue title too. Anything ending in
+// an extension Glyph opens is therefore redacted, with or without a directory
+// prefix.
+//
+// Longest extension first so `md` cannot win over `mdx`. At least one leading
+// character is required, so prose like "the .md format" is left alone. A name
+// containing spaces keeps its leading words, since the pattern cannot tell them
+// from the surrounding sentence, but the extension-bearing part that identifies
+// the file still goes. The extension set holds no source-code extensions, which
+// is what keeps stack-frame names (`main.rs`, `index.js`) readable.
+const USER_FILE_NAME = new RegExp(
+  String.raw`[^\s"'<>|:*?]+\.(?:${[...USER_FILE_EXTENSIONS]
+    .sort((a, b) => b.length - a.length)
+    .join("|")})\b`,
+  "gi",
+);
+
 const REDACTED = "[redacted-path]";
 
-/** Replace any absolute path or file URL in `input` with a placeholder. */
+/**
+ * Replace any file URL, absolute path, or document name in `input` with a
+ * placeholder.
+ */
 export function redactPaths(input: string): string {
   return input
     .replace(VERBATIM_PREFIX, (_match, unc) => (unc ? "\\\\" : ""))
     .replace(FILE_URL, REDACTED)
     .replace(WINDOWS_PATH, REDACTED)
     .replace(UNC_PATH, REDACTED)
-    .replace(POSIX_PATH, REDACTED);
+    .replace(POSIX_PATH, REDACTED)
+    .replace(USER_FILE_NAME, REDACTED);
 }
 
 /**

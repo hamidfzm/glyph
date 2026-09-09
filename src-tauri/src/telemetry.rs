@@ -49,6 +49,30 @@ static POSIX_PATH: LazyLock<Regex> = LazyLock::new(|| {
     .expect("valid regex")
 });
 
+// A *relative* path names the user's document just as plainly as an absolute
+// one, and matches none of the patterns above: "Not allowed to open url
+// workflows/routing.md" reached Sentry verbatim, and because events are grouped
+// by message the document name became the issue title too. Anything ending in
+// an extension Glyph opens is therefore redacted, with or without a directory
+// prefix.
+//
+// Longest extension first so `md` cannot win over `mdx`. At least one leading
+// character is required, so prose like "the .md format" is left alone. A name
+// containing spaces keeps its leading words, since the pattern cannot tell them
+// from the surrounding sentence, but the extension-bearing part that identifies
+// the file still goes. The extension set holds no source-code extensions, which
+// is what keeps stack-frame names (`main.rs`, `index.js`) readable. Mirrors
+// src/lib/telemetry.ts.
+static USER_FILE_NAME: LazyLock<Regex> = LazyLock::new(|| {
+    let mut extensions = crate::extensions::USER_FILE_EXTENSIONS.to_vec();
+    extensions.sort_by_key(|ext| std::cmp::Reverse(ext.len()));
+    Regex::new(&format!(
+        r#"(?i)[^\s"'<>|:*?]+\.(?:{})\b"#,
+        extensions.join("|")
+    ))
+    .expect("valid regex")
+});
+
 /// Anchors after which a source path stops being the build machine's layout
 /// and starts naming the file inside this repo or a registry crate.
 const FRAME_PATH_ANCHORS: [&str; 5] = [
@@ -59,8 +83,8 @@ const FRAME_PATH_ANCHORS: [&str; 5] = [
     "/rustc/",
 ];
 
-/// Redact absolute filesystem paths and `file://` URLs from a string so user
-/// file locations (which encode usernames and document names) never reach
+/// Redact filesystem paths, `file://` URLs, and document names from a string so
+/// user file locations (which encode usernames and document names) never reach
 /// Sentry.
 fn redact_paths(input: &str) -> String {
     let plain = VERBATIM_PREFIX.replace_all(input, |caps: &Captures| {
@@ -73,7 +97,8 @@ fn redact_paths(input: &str) -> String {
     let out = FILE_URL.replace_all(&plain, REDACTED);
     let out = WINDOWS_PATH.replace_all(&out, REDACTED);
     let out = UNC_PATH.replace_all(&out, REDACTED);
-    POSIX_PATH.replace_all(&out, REDACTED).into_owned()
+    let out = POSIX_PATH.replace_all(&out, REDACTED);
+    USER_FILE_NAME.replace_all(&out, REDACTED).into_owned()
 }
 
 /// Keep the tail of a frame's source path from the first known anchor so the
@@ -296,6 +321,64 @@ mod tests {
     #[test]
     fn redacts_file_urls() {
         assert_eq!(redact_paths("file:///Users/jane/x.md"), "[redacted-path]");
+    }
+
+    #[test]
+    fn redacts_relative_document_names() {
+        // The shape that reached Sentry verbatim: a workspace-relative link the
+        // opener refused.
+        assert_eq!(
+            redact_paths("Not allowed to open url workflows/routing.md"),
+            "Not allowed to open url [redacted-path]"
+        );
+        // A bare file name, as produced by the symlink refusal in commands/create.rs.
+        assert_eq!(
+            redact_paths("diary.md is a symlink"),
+            "[redacted-path] is a symlink"
+        );
+        // A name containing spaces keeps its leading words: the pattern cannot
+        // tell them from the surrounding sentence. The extension-bearing part,
+        // which is what identifies the file, still goes.
+        assert_eq!(
+            redact_paths("Tax Return 2025.md is a symlink"),
+            "Tax Return [redacted-path] is a symlink"
+        );
+        // Every category in the union, not just markdown.
+        for name in [
+            "notes/diary.markdown",
+            "boards/plan.canvas",
+            "analysis.ipynb",
+            "diagrams/flow.d2",
+            "assets/holiday.PNG",
+        ] {
+            assert_eq!(
+                redact_paths(&format!("failed to open {name}")),
+                "failed to open [redacted-path]",
+                "{name} should be redacted"
+            );
+        }
+    }
+
+    #[test]
+    fn prefers_the_longest_matching_extension() {
+        // `md` must not win over `mdx` and leave a dangling "x".
+        assert_eq!(redact_paths("open notes.mdx"), "open [redacted-path]");
+        assert_eq!(redact_paths("open notes.mdtext"), "open [redacted-path]");
+    }
+
+    #[test]
+    fn leaves_source_frames_and_bare_extensions_readable() {
+        // No source extension is redactable, so frame paths survive.
+        assert_eq!(redact_paths("at src/main.rs:42"), "at src/main.rs:42");
+        assert_eq!(
+            redact_paths("at src/lib/telemetry.ts"),
+            "at src/lib/telemetry.ts"
+        );
+        // An extension named on its own is prose, not a file name.
+        assert_eq!(
+            redact_paths("only the .md format is supported"),
+            "only the .md format is supported"
+        );
     }
 
     #[test]

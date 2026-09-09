@@ -1,19 +1,16 @@
 use std::path::Path;
 
-/// JSON Canvas files always use the `.canvas` extension (https://jsoncanvas.org),
-/// so — like notebooks — this is a fixed check rather than the config-driven
-/// markdown list.
+/// JSON Canvas files use the `.canvas` extension (https://jsoncanvas.org).
 ///
 /// Canvas files are intentionally NOT registered as an OS file association
-/// (only markdown is, via `tauri.conf.json` → `bundle.fileAssociations`). They
-/// open via the CLI, the open dialog, drag-and-drop, and the workspace file
-/// tree — all of which gate on `is_supported_file`. The frontend mirror is
-/// `src/lib/canvasExtensions.ts`.
+/// (only markdown and D2 are, via `tauri.conf.json` -> `bundle.fileAssociations`),
+/// so the extension is declared in `extensions.json` and generated into
+/// `CANVAS_EXTENSIONS` by build.rs. They open via the CLI, the open dialog,
+/// drag-and-drop, and the workspace file tree, all of which gate on
+/// `is_supported_file`. The frontend reads the same file through
+/// `src/lib/extensionConfig.ts`.
 pub fn is_canvas_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.eq_ignore_ascii_case("canvas"))
-        .unwrap_or(false)
+    crate::extensions::has_extension(path, crate::extensions::CANVAS_EXTENSIONS)
 }
 
 #[cfg(test)]

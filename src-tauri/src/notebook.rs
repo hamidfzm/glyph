@@ -1,18 +1,16 @@
 use std::path::Path;
 
-/// Jupyter notebooks always use the `.ipynb` extension, so — unlike the
-/// markdown list generated from `tauri.conf.json` — this is a fixed check.
+/// Jupyter notebooks use the `.ipynb` extension.
 ///
 /// Notebooks are intentionally NOT registered as an OS file association (only
-/// markdown is, via `tauri.conf.json` → `bundle.fileAssociations`). They open
-/// via the CLI, the open dialog, drag-and-drop, and the workspace file tree —
-/// all of which gate on this function. The frontend mirror is
-/// `src/lib/notebookExtensions.ts`.
+/// markdown and D2 are, via `tauri.conf.json` -> `bundle.fileAssociations`), so
+/// the extension is declared in `extensions.json` and generated into
+/// `NOTEBOOK_EXTENSIONS` by build.rs. They open via the CLI, the open dialog,
+/// drag-and-drop, and the workspace file tree, all of which gate on this
+/// function. The frontend reads the same file through
+/// `src/lib/extensionConfig.ts`.
 pub fn is_notebook_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.eq_ignore_ascii_case("ipynb"))
-        .unwrap_or(false)
+    crate::extensions::has_extension(path, crate::extensions::NOTEBOOK_EXTENSIONS)
 }
 
 /// Any document Glyph can open: a markdown file, a Jupyter notebook, a JSON

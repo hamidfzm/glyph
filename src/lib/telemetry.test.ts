@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { Breadcrumb, ErrorEvent } from "@sentry/react";
 import * as Sentry from "@sentry/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -81,10 +83,59 @@ describe("redactPaths", () => {
     );
   });
 
+  it("redacts relative document paths", () => {
+    // The shape that reached Sentry verbatim: a workspace-relative link the
+    // opener refused.
+    expect(redactPaths("Not allowed to open url workflows/routing.md")).toBe(
+      "Not allowed to open url [redacted-path]",
+    );
+    expect(redactPaths("diary.md is a symlink")).toBe("[redacted-path] is a symlink");
+  });
+
+  it("redacts every document type, not just markdown", () => {
+    for (const name of [
+      "notes/diary.markdown",
+      "boards/plan.canvas",
+      "analysis.ipynb",
+      "diagrams/flow.d2",
+      "assets/holiday.PNG",
+    ]) {
+      expect(redactPaths(`failed to open ${name}`)).toBe("failed to open [redacted-path]");
+    }
+  });
+
+  it("prefers the longest matching extension", () => {
+    expect(redactPaths("open notes.mdx")).toBe("open [redacted-path]");
+    expect(redactPaths("open notes.mdtext")).toBe("open [redacted-path]");
+  });
+
+  it("leaves source file names and bare extensions readable", () => {
+    expect(redactPaths("at src/main.rs:42")).toBe("at src/main.rs:42");
+    expect(redactPaths("at src/lib/telemetry.ts")).toBe("at src/lib/telemetry.ts");
+    expect(redactPaths("only the .md format is supported")).toBe(
+      "only the .md format is supported",
+    );
+  });
+
   it("leaves path-free text untouched", () => {
     expect(redactPaths("Cannot read property of undefined")).toBe(
       "Cannot read property of undefined",
     );
+  });
+});
+
+describe("the Sentry release name", () => {
+  it("is the same version on both clients", async () => {
+    // The frontend reports `glyph@<package.json version>` and the Rust client
+    // `glyph@<Cargo.toml version>`. If those drift, one build shows up as two
+    // releases and per-release issue resolution silently stops working.
+    // Vitest runs from the project root, so both files are reachable from cwd.
+    const pkg = JSON.parse(await readFile(join(process.cwd(), "package.json"), "utf8")) as {
+      version: string;
+    };
+    const cargo = await readFile(join(process.cwd(), "src-tauri/Cargo.toml"), "utf8");
+
+    expect(/^version\s*=\s*"([^"]+)"/m.exec(cargo)?.[1]).toBe(pkg.version);
   });
 });
 

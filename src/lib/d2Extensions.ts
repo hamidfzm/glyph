@@ -1,20 +1,14 @@
-// D2 (https://d2lang.com) is a declarative diagram language. Like notebooks and
-// canvas, a `.d2` file is a separate document type from markdown, so its
-// extension lives here as a fixed constant rather than in tauri.conf.json's
-// markdown `fileAssociations[0]` list. Unlike notebooks/canvas it IS registered
-// as its own OS file association (a second `fileAssociations` entry) so the OS
-// can open `.d2` files with Glyph.
-//
 // A `.d2` file's whole body is diagram source. We fence-wrap it as a ```d2
-// block so it flows through the existing markdown render path — mirroring the
-// `.mmd` → Mermaid adapter in `mmd.ts` — where `CodeBlockComponent` turns it
+// block so it flows through the existing markdown render path, mirroring the
+// `.mmd` to Mermaid adapter in `mmd.ts`, where `CodeBlockComponent` turns it
 // into a `D2Diagram`.
 
-export const D2_EXTENSIONS: readonly string[] = ["d2"];
+import { D2_EXTENSIONS, hasExtension } from "./extensionConfig";
+
+export { D2_EXTENSIONS };
 
 export function isD2File(path: string): boolean {
-  const ext = path.split(".").pop()?.toLowerCase();
-  return ext ? D2_EXTENSIONS.includes(ext) : false;
+  return hasExtension(path, D2_EXTENSIONS);
 }
 
 /**
