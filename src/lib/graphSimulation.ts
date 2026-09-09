@@ -34,6 +34,10 @@ export interface GraphLayout {
   nodes: LayoutNode[];
   links: LayoutLink[];
   simulation: Simulation<LayoutNode, SimulationLinkDatum<LayoutNode>>;
+  /** True when enough nodes arrived pre-placed to resume the previous shape
+   *  rather than replay the layout. A camera saved against that shape is only
+   *  meaningful when this holds. */
+  reseeded: boolean;
 }
 
 export interface NodePosition {
@@ -84,12 +88,13 @@ export function createGraphLayout(
     .force("collide", forceCollide(16))
     .stop();
 
-  if (nodes.length > 0 && seeded >= nodes.length / 2) {
+  const reseeded = nodes.length > 0 && seeded >= nodes.length / 2;
+  if (reseeded) {
     simulation.alpha(RESEED_ALPHA);
   }
 
   // forceLink swapped each link's string endpoints for node references.
-  return { nodes, links: links as unknown as LayoutLink[], simulation };
+  return { nodes, links: links as unknown as LayoutLink[], simulation, reseeded };
 }
 
 /**

@@ -2,6 +2,12 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { buildWorkspaceGraph } from "@/lib/graph";
+import {
+  clearGraphView,
+  loadGraphView,
+  pruneGraphViews,
+  saveGraphView,
+} from "@/lib/graphViewStore";
 import { useGraphSimulation } from "./useGraphSimulation";
 
 const { reducedMotion } = vi.hoisted(() => ({ reducedMotion: { value: false } }));
@@ -176,6 +182,78 @@ describe("useGraphSimulation", () => {
     // Reheat un-settles the simulation and runs at least one more frame.
     await waitFor(() => expect(result.current.settled).toBe(true), { timeout: 5000 });
     expect(result.current.version).toBeGreaterThan(versionWhenSettled);
+    unmount();
+  });
+});
+
+describe("useGraphSimulation persistence", () => {
+  const ROOT = "/ws";
+  afterEach(() => clearGraphView(ROOT));
+
+  it("seeds a fresh mount from the stored positions and reheats gently", () => {
+    const graph = buildWorkspaceGraph(FILES, REFS);
+    const positions = new Map(FILES.map((id, i) => [id, { x: i * 40, y: i * -20 }]));
+    saveGraphView(ROOT, { positions });
+
+    const { result, unmount } = renderHook(() =>
+      useGraphSimulation(graph, { ...FAST, persistKey: ROOT }),
+    );
+    // Every node arrives pre-placed, so the layout resumes instead of replaying.
+    expect(result.current.layout.nodes.map((n) => ({ x: n.x, y: n.y }))).toEqual(
+      FILES.map((_, i) => ({ x: i * 40, y: i * -20 })),
+    );
+    expect(result.current.layout.reseeded).toBe(true);
+    expect(result.current.layout.simulation.alpha()).toBeLessThan(1);
+    unmount();
+  });
+
+  it("writes the ticked positions through to the store", async () => {
+    const graph = buildWorkspaceGraph(FILES, REFS);
+    const { result, unmount } = renderHook(() =>
+      useGraphSimulation(graph, { ...FAST, persistKey: ROOT }),
+    );
+    await waitFor(() => expect(result.current.settled).toBe(true), { timeout: 5000 });
+
+    const stored = loadGraphView(ROOT)?.positions;
+    expect([...(stored?.keys() ?? [])]).toEqual(FILES);
+    for (const node of result.current.layout.nodes) {
+      expect(stored?.get(node.id)).toEqual({ x: node.x, y: node.y });
+    }
+    unmount();
+  });
+
+  it("keeps positions out of the store without a key", async () => {
+    const graph = buildWorkspaceGraph(FILES, REFS);
+    const { result, unmount } = renderHook(() => useGraphSimulation(graph, FAST));
+    await waitFor(() => expect(result.current.settled).toBe(true), { timeout: 5000 });
+    expect(loadGraphView(ROOT)).toBeUndefined();
+    unmount();
+  });
+
+  it("stops writing once unmounted, so a prune after a close stays clean", async () => {
+    const graph = buildWorkspaceGraph(FILES, REFS);
+    const { unmount } = renderHook(() =>
+      useGraphSimulation(graph, { ticksPerFrame: 1, persistKey: ROOT }),
+    );
+    // The close path prunes from an effect, which runs after the commit that
+    // unmounted the view. Nothing may write after that, or the entry returns.
+    unmount();
+    pruneGraphViews(new Set());
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    expect(loadGraphView(ROOT)).toBeUndefined();
+  });
+
+  it("reports no reseed when too few nodes carry a stored position", () => {
+    // One seeded node out of three is below the half-coverage rule, so d3
+    // replays the layout and the stored camera must not be trusted.
+    saveGraphView(ROOT, { positions: new Map([[FILES[0], { x: 10, y: 10 }]]) });
+    const graph = buildWorkspaceGraph(FILES, REFS);
+    const { result, unmount } = renderHook(() =>
+      useGraphSimulation(graph, { ...FAST, persistKey: ROOT }),
+    );
+    expect(result.current.layout.reseeded).toBe(false);
+    expect(result.current.layout.simulation.alpha()).toBe(1);
     unmount();
   });
 });

@@ -45,6 +45,10 @@ the `samples/` folder and try it on this very workspace.
 The graph stays live: create or delete a note, or edit a wikilink, and the map
 re-shapes on the next save, with no manual refresh.
 
+Where you left the view is remembered for the session, so switching to a note
+and back returns to the same framing and layout instead of re-settling from
+scratch. Closing the graph tab forgets it, and so does restarting Glyph.
+
 ## Related
 
 - [[Index]] is the workspace entry point.
