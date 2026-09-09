@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseFrontmatter } from "./frontmatter";
 
@@ -81,5 +83,40 @@ describe("parseFrontmatter", () => {
     expect(result?.author).toBeUndefined();
     expect(result?.date).toBeUndefined();
     expect(result?.extra).toEqual([["slug", "x"]]);
+  });
+});
+
+// The Rust index parses the same blocks in `src-tauri/src/vault/frontmatter.rs`.
+// Both sides are held to `vault-frontmatter.json`, so a change to either parser
+// fails here and in `vault::tests::frontmatter_matches_the_shared_expectation`
+// together instead of drifting apart unnoticed.
+describe("the shared fixture vault", () => {
+  // Vitest runs from the package root, where its config lives.
+  const fixtures = path.join(process.cwd(), "src-tauri", "fixtures");
+  const expected: Record<
+    string,
+    {
+      title?: string;
+      author?: string;
+      date?: string;
+      tags?: string[];
+      extra: [string, string][];
+    } | null
+  > = JSON.parse(readFileSync(path.join(fixtures, "vault-frontmatter.json"), "utf-8"));
+
+  it.each(Object.keys(expected))("parses %s the way the Rust index does", (name) => {
+    const content = readFileSync(path.join(fixtures, "vault", name), "utf-8");
+    const parsed = parseFrontmatter(content);
+    const want = expected[name];
+
+    if (want === null) {
+      expect(parsed).toBeNull();
+      return;
+    }
+    expect(parsed?.title).toBe(want.title);
+    expect(parsed?.author).toBe(want.author);
+    expect(parsed?.date).toBe(want.date);
+    expect(parsed?.tags ?? []).toEqual(want.tags ?? []);
+    expect(parsed?.extra).toEqual(want.extra);
   });
 });

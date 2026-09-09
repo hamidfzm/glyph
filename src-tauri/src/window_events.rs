@@ -15,10 +15,15 @@ pub fn handle_window_event(window: &Window, event: &WindowEvent) {
     if matches!(event, WindowEvent::Destroyed) {
         if let Some(registry) = window.try_state::<windows::WindowRegistry>() {
             let label = window.label();
-            crate::watcher::drop_watches(
-                window.app_handle(),
-                &registry.exclusively_owned_paths(label),
-            );
+            let owned = registry.exclusively_owned_paths(label);
+            crate::watcher::drop_watches(window.app_handle(), &owned);
+            // The index outlives its watches otherwise, holding every note's
+            // tags, fields and links for the rest of the session.
+            if let Some(store) = window.try_state::<crate::vault::commands::VaultStore>() {
+                for path in &owned {
+                    crate::vault::commands::forget(&store, path);
+                }
+            }
             registry.remove(label);
         }
         #[cfg(desktop)]

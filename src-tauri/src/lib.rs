@@ -23,6 +23,7 @@ mod setup;
 mod sync;
 #[cfg(desktop)]
 mod telemetry;
+mod vault;
 mod watcher;
 mod window_events;
 mod windows;
@@ -253,6 +254,7 @@ pub fn run() {
         .manage(commands::CliExport(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
         .manage(grants::GrantRegistry::default())
+        .manage(vault::commands::VaultStore::default())
         .setup(setup_app)
         .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
@@ -303,6 +305,15 @@ pub fn run() {
             commands::create::delete_path,
             commands::wikilinks::scan_wikilinks,
             commands::metadata::scan_metadata,
+            vault::commands::vault_snapshot,
+            vault::commands::vault_refresh,
+            vault::commands::vault_forget,
+            vault::commands::vault_backlinks,
+            vault::commands::vault_resolve,
+            vault::commands::vault_neighbors,
+            vault::commands::vault_query,
+            vault::commands::vault_paths_with_tag,
+            vault::commands::vault_canvas,
             commands::search::search_workspace,
             commands::plugins::list_plugins,
             commands::plugins::inspect_plugin,
