@@ -30,7 +30,7 @@ the missing remainder is rejected.
 | ----- | ----- | ------ |
 | workspace | folder, recursive | read, write, watch |
 | file | exact path | read, write (autosave), watch |
-| export dir | folder, recursive | write only |
+| export dir | folder, recursive | write, and delete what a previous export into that folder recorded |
 | export file | exact path | write only |
 
 Grants are minted only from backend-observed events, never from a bare
@@ -81,6 +81,7 @@ and files: <path>`), which never echoes the grant list.
 | `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_neighbors`, `vault_query`, `vault_paths_with_tag`, `vault_canvas` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable |
 | `copy_file` | source readable and destination writable |
+| `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export) |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |
 | `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it |
 | `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target) |

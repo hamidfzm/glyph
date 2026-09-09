@@ -13,10 +13,12 @@ interface FakeFs {
   writes: Map<string, string>;
   dirs: string[];
   copies: Array<{ src: string; dest: string }>;
+  /** Site-relative paths handed to the pruner, one entry per export. */
+  pruned: string[][];
 }
 
-function mockFs(files: Record<string, string>): FakeFs {
-  const fs: FakeFs = { writes: new Map(), dirs: [], copies: [] };
+function mockFs(files: Record<string, string>, removed = 0): FakeFs {
+  const fs: FakeFs = { writes: new Map(), dirs: [], copies: [], pruned: [] };
   vi.mocked(invoke).mockImplementation((cmd: string, args?: unknown) => {
     const a = (args ?? {}) as Record<string, string>;
     switch (cmd) {
@@ -36,6 +38,9 @@ function mockFs(files: Record<string, string>): FakeFs {
       case "copy_file":
         fs.copies.push({ src: a.src, dest: a.dest });
         return Promise.resolve(undefined);
+      case "prune_export_dir":
+        fs.pruned.push((a as unknown as { written: string[] }).written);
+        return Promise.resolve(removed);
       case "get_file_metadata":
         return a.path in files
           ? Promise.resolve({ name: "", path: a.path, size: 1, modified: 0 })
@@ -99,7 +104,7 @@ describe("exportSite", () => {
       onProgress: (done, total) => progress.push([done, total]),
     });
 
-    expect(result).toEqual({ pages: 2, assets: 0 });
+    expect(result).toEqual({ pages: 2, assets: 0, removed: 0 });
     expect([...fs.writes.keys()].sort()).toEqual([
       "/out/guide/intro.html",
       "/out/index.html",
@@ -393,6 +398,84 @@ describe("exportSite", () => {
     expect(fs.copies).toEqual([{ src: "/ws/ok.png", dest: "/out/ok.png" }]);
     expect(error).toHaveBeenCalled();
     error.mockRestore();
+  });
+
+  it("hands the pruner every file it wrote, and reports what was removed", async () => {
+    const fs = mockFs(
+      {
+        "/ws/README.md": "# Home",
+        "/ws/guide/intro.md": "# Intro\n\n![shot](./shot.png)",
+        "/ws/.glyph/site.json": JSON.stringify({ robots: "none" }),
+        "/ws/guide/shot.png": "<binary>",
+      },
+      2,
+    );
+
+    const result = await exportSite({ root: "/ws", outDir: "/out" });
+
+    expect(result.removed).toBe(2);
+    expect(fs.pruned).toHaveLength(1);
+    expect([...fs.pruned[0]].sort()).toEqual([
+      "guide/intro.html",
+      "guide/shot.png",
+      "index.html",
+      "robots.txt",
+      "site.js",
+      "style.css",
+    ]);
+  });
+
+  it("keeps an asset that failed to copy out of the pruner's list", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fs = mockFs({ "/ws/notes.md": "![gone](./missing.png)" });
+    const base = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation((cmd, args) => {
+      if (cmd === "copy_file") return Promise.reject(new Error("os error 2"));
+      return base(cmd, args);
+    });
+
+    await exportSite({ root: "/ws", outDir: "/out" });
+
+    // Claiming it would make the next export believe it owns a file that is
+    // not there, and a later real copy of the same name would go unpruned.
+    expect(fs.pruned[0]).not.toContain("missing.png");
+    error.mockRestore();
+  });
+
+  it("still reports a successful export when the prune fails", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fs = mockFs({ "/ws/README.md": "# A" });
+    const base = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation((cmd, args) => {
+      if (cmd === "prune_export_dir") return Promise.reject(new Error("locked"));
+      return base(cmd, args);
+    });
+
+    // Every page and asset is on disk; only the cleanup failed.
+    const result = await exportSite({ root: "/ws", outDir: "/out" });
+
+    expect(result).toEqual({ pages: 1, assets: 0, removed: 0 });
+    expect(fs.writes.has("/out/index.html")).toBe(true);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it("does not prune when the export fails part way through", async () => {
+    const fs = mockFs({ "/ws/a.md": "# A" });
+    const base = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation((cmd, args) => {
+      const a = (args ?? {}) as Record<string, string>;
+      if (cmd === "write_file" && a.path === "/out/style.css") {
+        return Promise.reject(new Error("disk full"));
+      }
+      return base(cmd, args);
+    });
+
+    await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow(/disk full/);
+
+    // Pruning a half-written site against its own list would delete the pages
+    // the previous, complete export left serving.
+    expect(fs.pruned).toEqual([]);
   });
 
   it("rejects when the workspace has no markdown files", async () => {

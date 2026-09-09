@@ -19,7 +19,8 @@ struct Grants {
     workspaces: HashSet<PathBuf>,
     /// Explicitly opened loose files: exact-path read, write (autosave), watch.
     files: HashSet<PathBuf>,
-    /// Approved export destination folders: recursive write only.
+    /// Approved export destination folders: recursive write, plus the prune
+    /// a repeat website export performs over its own previous output.
     export_dirs: HashSet<PathBuf>,
     /// Approved single-file export targets: exact-path write only.
     export_files: HashSet<PathBuf>,
@@ -93,7 +94,9 @@ impl GrantRegistry {
         Ok(canonical)
     }
 
-    /// Export grants are write-only and deliberately do not count as readable.
+    /// Export grants deliberately do not count as readable: a compromised
+    /// renderer cannot read back what an export wrote. (`prune_export_dir`
+    /// reads its own manifest in Rust, never through this check.)
     pub fn ensure_readable(&self, path: &str) -> Result<PathBuf, String> {
         let requested = Path::new(path);
         let canonical = canonicalize_lenient(requested)?;

@@ -93,7 +93,7 @@ pub fn serve_ready<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), St
 /// A build failed. Whatever was exported last stays on disk and keeps being
 /// served, so a browser is left showing a site rather than nothing. It is not
 /// necessarily the previous site in full: the export writes pages in place,
-/// so a failure part way through leaves new and old pages mixed (see #707).
+/// so a failure part way through leaves new and old pages mixed.
 #[tauri::command]
 pub fn serve_failed<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,

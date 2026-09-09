@@ -28,8 +28,8 @@ export function resetCliServeRunner(): void {
  * last is still on disk and still being served, so the browser keeps showing
  * a site rather than nothing. That site is not guaranteed to be the previous
  * one in full, because the export writes pages in place as it goes, so a
- * failure part way through leaves a mixture (see #707). On every launch that
- * is not `glyph serve` this is a no-op.
+ * failure part way through leaves a mixture. On every launch that is not
+ * `glyph serve` this is a no-op.
  */
 export function useCliServe(): void {
   const { ready, themes, remarkPlugins, rehypePlugins } = useExportReadiness();

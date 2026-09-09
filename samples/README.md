@@ -432,6 +432,8 @@ With the `samples/` folder open, `File → Export → Website…` turns this who
 glyph export samples/ --format site --out ./site
 ```
 
+Exporting into the same folder twice keeps it in step with the workspace: a page whose note was deleted or renamed is removed, so the old URL stops resolving. Only the previous export's own files are pruned, tracked in a `.glyph/site-manifest.json` the export writes into the output folder, so anything else you keep there (a `CNAME`, a `.nojekyll`) survives. Keep that manifest with the published site: delete or ignore it and the next export starts fresh and prunes nothing.
+
 ### Wikilink autocomplete
 
 In the editor or split view, typing `[[` opens a popup with workspace files. Keep typing to filter, press **Tab** or **Enter** to insert; the closing `]]` is added for you. Open this file in split view (`Cmd+E` cycles modes) and try typing `[[Co` to see it.
