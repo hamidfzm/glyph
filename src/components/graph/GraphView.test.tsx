@@ -627,6 +627,15 @@ describe("GraphView node focus", () => {
     expect(onOpenFile).not.toHaveBeenCalled();
   });
 
+  it("ignores a cancel that has no matching press", () => {
+    const { canvas, onOpenFile } = renderGraph();
+    click(canvas, NODE_A);
+    // A cancel for a pointer that never pressed must not touch the focus state.
+    fireEvent.pointerCancel(canvas, { pointerId: 99, clientX: NODE_A.x, clientY: NODE_A.y });
+    expect(onOpenFile).not.toHaveBeenCalled();
+    expect(hoisted.reheat).not.toHaveBeenCalled();
+  });
+
   it("releases a node whose drag is cancelled", () => {
     const { canvas } = renderGraph();
     fireEvent.pointerDown(canvas, { pointerId: 1, clientX: NODE_A.x, clientY: NODE_A.y });
