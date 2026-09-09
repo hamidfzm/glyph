@@ -23,9 +23,7 @@ export function useTaggedPaths(
   const key = `${root ?? ""}\u0000${tag ?? ""}`;
 
   useEffect(() => {
-    // An empty index carries no tags, so there is nothing to ask about.
-    // Reading the snapshot here is also what makes it a dependency: which
-    // files carry a tag changes every time the index does.
+    // An empty index carries no tags to ask about.
     if (!root || !tag || snapshot.files.length === 0) {
       setAnswered({ key, rows: NONE });
       return;
@@ -45,6 +43,6 @@ export function useTaggedPaths(
   }, [root, tag, key, snapshot]);
 
   // Stamped with the tag they answer, so picking another chip empties the list
-  // for one round trip rather than showing the previous tag's files under it.
+  // rather than showing the previous tag's files under it.
   return answered.key === key ? answered.rows : NONE;
 }

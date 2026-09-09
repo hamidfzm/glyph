@@ -5,17 +5,9 @@ import type { Backlink, VaultSnapshot } from "@/lib/vault";
 const NONE: Backlink[] = [];
 
 /**
- * Inbound links to `path`, with the snippet of the line each came from.
- *
- * Asked per note rather than shipped with the snapshot: a snippet is up to 200
- * characters and a workspace has far more links than files, so carrying them
- * all would make the payload scale with the link count.
- *
- * `snapshot` is a dependency rather than a source: it changes whenever the
- * index does, which is exactly when the answer might differ. The rows are
- * stamped with the note they were asked for, so switching notes shows an empty
- * panel for one round trip rather than the previous note's links under the new
- * note's heading; a re-index keeps the rows in place instead of blinking.
+ * Inbound links to `path`. Asked per note rather than shipped with the
+ * snapshot: a workspace has far more links than files, and each carries a
+ * snippet of up to 200 characters.
  */
 export function useBacklinks(
   root: string | undefined,
@@ -29,9 +21,7 @@ export function useBacklinks(
   const key = `${root ?? ""}\u0000${path ?? ""}`;
 
   useEffect(() => {
-    // An empty index has nothing pointing anywhere. Reading the snapshot
-    // here is also what makes it a dependency: the answer can differ every
-    // time the index changes.
+    // An empty index has nothing pointing anywhere.
     if (!root || !path || snapshot.files.length === 0) {
       setAnswered({ key, rows: NONE });
       return;
@@ -45,11 +35,12 @@ export function useBacklinks(
         console.error(`Failed to read backlinks for ${path}:`, err);
         if (current) setAnswered({ key, rows: NONE });
       });
-    // A later note's rows must not land after the tab moved on.
     return () => {
       current = false;
     };
   }, [root, path, key, snapshot]);
 
+  // Stamped with the note they answer: switching notes empties the panel for
+  // one round trip rather than showing the last note's links under the new one.
   return answered.key === key ? answered.rows : NONE;
 }

@@ -9,16 +9,14 @@ function plain(query: string): VaultQueryResult {
 }
 
 /**
- * A palette query split into its metadata filters and the leftover search
- * text, with the paths the filters select.
+ * A palette query split into its filters and the leftover search text, with
+ * the paths the filters select. The grammar lives in Rust so the palette and
+ * the index agree on what `tag:foo` means.
  *
- * The grammar lives in Rust so the palette and the index agree on what
- * `tag:foo` means. That makes it asynchronous, so the previous answer stays on
- * screen while the next one loads: the alternative is the list emptying for a
- * frame on every keystroke.
- *
- * `enabled` is false while the palette is closed. Without it a hidden palette
- * would ask on mount and again on every re-index, for the life of the window.
+ * Unlike the other index hooks the answer is not stamped: emptying the list
+ * for a frame on every keystroke is worse than one stale frame. `enabled` is
+ * false while the palette is closed, or a hidden one would ask on every
+ * re-index for the life of the window.
  */
 export function useVaultQuery(query: string, enabled = true): VaultQueryResult {
   const root = useWorkspaceRoot();

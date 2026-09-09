@@ -19,14 +19,11 @@ interface UseWorkspaceIndexOptions {
 }
 
 /**
- * What the window knows about the open workspace: the list of openable
- * documents, and the note index Rust owns.
- *
- * These are two different sets and both are needed. `files` covers every
- * document a tab can show (markdown, notebooks, canvases, D2), which is what
- * the palette, autocomplete and the auto-open probe mean by "a file here". The
- * snapshot covers the notes the index parses (markdown and canvases), which is
- * what links, tags and the graph are about.
+ * What the window knows about the open workspace, as two different sets.
+ * `files` is every document a tab can show (markdown, notebooks, canvases,
+ * D2), which is what the palette, autocomplete and the auto-open probe mean by
+ * "a file here". The snapshot is the notes the index parses (markdown and
+ * canvases), which is what links, tags and the graph are about.
  */
 export function useWorkspaceIndex({ workspaceRoot, onWorkspaceNotice }: UseWorkspaceIndexOptions) {
   const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
@@ -92,11 +89,10 @@ export function useWorkspaceIndex({ workspaceRoot, onWorkspaceNotice }: UseWorks
   );
 
   /**
-   * Walk a freshly opened workspace, rebuilding the index from disk rather
-   * than reading whatever the backend already holds: a watcher only starts
-   * once the folder is open, so anything that changed before then is not in an
-   * existing index. Returns the document list, which decides which note
-   * auto-opens.
+   * Walk a freshly opened workspace, rebuilding from disk rather than reading
+   * whatever the backend holds: a watcher only starts once the folder is open,
+   * so anything that changed before then is missing from an existing index.
+   * Returns the document list, which decides which note auto-opens.
    */
   const scanWorkspace = useCallback(
     async (root: string, isCurrent: () => boolean): Promise<string[]> => {
@@ -122,10 +118,9 @@ export function useWorkspaceIndex({ workspaceRoot, onWorkspaceNotice }: UseWorks
 
   /**
    * Re-read after the workspace directory changed. The backend has already
-   * applied the change that triggered this, so this reads rather than
-   * rebuilds. The workspace can be replaced while the read runs; the index is
-   * window-wide, so writing this root's result into another root's workspace
-   * would leave the sidebar and palette pointing at files that are not open.
+   * applied that change, so this reads rather than rebuilds. The workspace can
+   * be replaced mid-read, and the index is window-wide: writing this root's
+   * result into another's would leave the sidebar pointing at closed files.
    */
   const refreshIndexes = useCallback(
     async (root: string, isCurrent: () => boolean) => {

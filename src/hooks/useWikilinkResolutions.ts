@@ -12,18 +12,13 @@ interface Answered {
 const NOTHING: Answered = { key: "", map: NO_RESOLUTIONS };
 
 /**
- * Where every wikilink in `content` points, resolved by the index.
+ * Where every wikilink in `content` points. The markdown pipeline is
+ * synchronous, so the whole document is resolved in one call up front and the
+ * pipeline reads the answers.
  *
- * The markdown pipeline is synchronous, so resolution cannot happen inside it
- * once the resolver lives in Rust. Instead every target in the document is
- * resolved in one call up front and the pipeline reads the answers.
- *
- * The answers are stamped with the document they were asked for. The previous
- * map stays in place while a new one loads for the same document, so editing
- * does not blink every link to broken between keystrokes; a different document
- * (a split pane switching tabs, an embed retargeted, the workspace closing)
- * gets nothing rather than the last document's paths, which would point a
- * click or an embed at the wrong note.
+ * Answers are stamped with the document they belong to: a split pane is not
+ * keyed by tab, so without the stamp the next document's first render would
+ * use the previous one's paths and a click could open the wrong note.
  */
 export function useWikilinkResolutions(
   content: string | null | undefined,
@@ -48,9 +43,7 @@ export function useWikilinkResolutions(
   const key = `${root ?? ""}\u0000${filePath ?? ""}`;
 
   useEffect(() => {
-    // Nothing is indexed, so nothing resolves. Reading the snapshot here is
-    // also what makes it a dependency: creating or renaming a note changes
-    // where a link points, and the open document has to be told.
+    // Nothing is indexed, so nothing resolves.
     if (!root || targets.length === 0 || snapshot.files.length === 0) {
       setAnswered((prev) =>
         prev.key === key && prev.map === NO_RESOLUTIONS ? prev : { key, map: NO_RESOLUTIONS },

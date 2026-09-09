@@ -1,12 +1,10 @@
 import type { GraphEdge } from "@/lib/vault";
 
 /**
- * Undirected adjacency over edges the index already resolved, so hovering a
- * node can dim everything it does not touch.
- *
- * This decides nothing about the graph: which links exist, which resolve, and
- * which collapse into one edge are all settled in Rust. It only turns the edge
- * list into a lookup, which would otherwise be a scan per node per frame.
+ * Undirected adjacency over the edges the index resolved, so hovering a node
+ * can dim everything it does not touch without scanning every edge per frame.
+ * Decides nothing: which links exist and which collapse into one edge are
+ * settled in Rust.
  */
 export function neighborIndex(edges: readonly GraphEdge[]): Map<string, ReadonlySet<string>> {
   const neighbors = new Map<string, Set<string>>();
