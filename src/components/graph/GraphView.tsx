@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FitIcon } from "@/components/icons/FitIcon";
+import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { useZoomApi, type ZoomHandlers } from "@/contexts/ZoomContext";
 import { useElementSize } from "@/hooks/useElementSize";
 import { useGraphCamera } from "@/hooks/useGraphCamera";
@@ -11,6 +12,7 @@ import type { WikilinkRef } from "@/lib/backlinks";
 import { buildWorkspaceGraph } from "@/lib/graph";
 import { type Camera, fitCameraToNodes } from "@/lib/graphCanvas";
 import { drawGraph, readGraphTheme } from "@/lib/graphDraw";
+import { loadGraphView, saveGraphView } from "@/lib/graphViewStore";
 
 interface GraphViewProps {
   workspaceFiles: readonly string[];
@@ -40,18 +42,24 @@ export function GraphView({ workspaceFiles, wikilinkRefs, onOpenFile }: GraphVie
     () => buildWorkspaceGraph(workspaceFiles, wikilinkRefs),
     [workspaceFiles, wikilinkRefs],
   );
-  const { layout, version, reheat } = useGraphSimulation(graph);
-  const camera = useGraphCamera();
+  // The graph tab unmounts whenever another tab is active, so its camera,
+  // auto-fit flag and layout live in a store keyed by workspace root.
+  const persistKey = useWorkspaceRoot();
+  const { layout, version, reheat } = useGraphSimulation(graph, { persistKey });
+  const camera = useGraphCamera(persistKey);
   const isDark = useIsDarkMode();
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-read CSS variables when the theme flips
   const theme = useMemo(() => readGraphTheme(document.documentElement), [isDark]);
 
   // Auto-fit follows the live layout until the user takes manual control.
-  const [autoFit, setAutoFit] = useState(true);
-  const autoFitRef = useRef(true);
+  const [autoFit, setAutoFit] = useState(
+    () => (persistKey ? loadGraphView(persistKey)?.autoFit : undefined) ?? true,
+  );
+  const autoFitRef = useRef(autoFit);
   useEffect(() => {
     autoFitRef.current = autoFit;
-  }, [autoFit]);
+    if (persistKey) saveGraphView(persistKey, { autoFit });
+  }, [autoFit, persistKey]);
 
   // The camera actually used to draw and hit-test: a live fit while auto-fit is
   // on, the user's camera once they take over. Recomputed as the layout moves

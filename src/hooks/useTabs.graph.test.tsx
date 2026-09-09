@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clearGraphView, loadGraphView, saveGraphView } from "@/lib/graphViewStore";
 import { getWorkspaceSession } from "@/lib/workspaceSession";
 import {
   defaultOptions,
@@ -23,6 +24,7 @@ beforeEach(resetTabsMocks);
 
 afterEach(() => {
   vi.restoreAllMocks();
+  clearGraphView("/p/ws");
 });
 
 describe("useTabs graph tabs", () => {
@@ -273,25 +275,30 @@ describe("useTabs graph tabs", () => {
     expect(result.current.indexStatus.wikilinks.truncated).toBe(false);
   });
 
-  it("closeWorkspace closes the graph tab", async () => {
+  it("closeWorkspace closes the graph tab and drops its view state", async () => {
     const result = await openWorkspace();
     act(() => result.current.openGraph());
+    saveGraphView("/p/ws", { autoFit: false });
     await act(async () => {
       await result.current.closeWorkspace();
     });
     expect(result.current.tabs).toHaveLength(0);
     expect(result.current.activeTabId).toBeNull();
+    expect(loadGraphView("/p/ws")).toBeUndefined();
   });
 
-  it("closing the graph tab keeps the workspace open", async () => {
+  it("closing the graph tab keeps the workspace open and forgets the view", async () => {
     const result = await openWorkspace();
     act(() => result.current.openGraph());
     const graphId = result.current.activeTabId as string;
+    saveGraphView("/p/ws", { autoFit: false });
     await act(async () => {
       await result.current.closeTab(graphId);
     });
     expect(result.current.tabs).toHaveLength(0);
     expect(result.current.workspace?.root).toBe("/p/ws");
+    // Reopening from the menu must start auto-fit, not a stale camera.
+    expect(loadGraphView("/p/ws")).toBeUndefined();
   });
 
   it("persists graph tabs after the workspace entry and restores them", async () => {

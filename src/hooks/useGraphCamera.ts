@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   type Camera,
   DEFAULT_CAMERA,
@@ -6,6 +6,7 @@ import {
   type Viewport,
   zoomCameraAt,
 } from "@/lib/graphCanvas";
+import { loadGraphView, saveGraphView } from "@/lib/graphViewStore";
 
 export interface GraphCameraApi {
   camera: Camera;
@@ -17,9 +18,18 @@ export interface GraphCameraApi {
   set: (camera: Camera) => void;
 }
 
-/** Pan/zoom camera state for the graph view; the math lives in lib/graphCanvas. */
-export function useGraphCamera(): GraphCameraApi {
-  const [camera, setCamera] = useState<Camera>(DEFAULT_CAMERA);
+/**
+ * Pan/zoom camera state for the graph view; the math lives in lib/graphCanvas.
+ * `persistKey` (the workspace root) keeps the camera alive across the graph
+ * tab's unmount, so switching away and back does not snap the view around.
+ */
+export function useGraphCamera(persistKey?: string): GraphCameraApi {
+  const [camera, setCamera] = useState<Camera>(
+    () => (persistKey ? loadGraphView(persistKey)?.camera : undefined) ?? DEFAULT_CAMERA,
+  );
+  useEffect(() => {
+    if (persistKey) saveGraphView(persistKey, { camera });
+  }, [persistKey, camera]);
   const pan = useCallback((dx: number, dy: number) => {
     setCamera((c) => panCamera(c, dx, dy));
   }, []);

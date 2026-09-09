@@ -48,7 +48,7 @@ export const LAYOUT_MAX_TICKS = 300;
 // When most nodes carry a seeded position (an incremental update from the
 // folder watcher, not a fresh open), reheat gently instead of replaying the
 // whole layout, so the existing shape stays put.
-const RESEED_ALPHA = 0.3;
+export const RESEED_ALPHA = 0.3;
 
 export function createGraphLayout(
   graph: WorkspaceGraph,

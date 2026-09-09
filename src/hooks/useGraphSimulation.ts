@@ -8,6 +8,7 @@ import {
   type NodePosition,
   tickLayout,
 } from "@/lib/graphSimulation";
+import { loadGraphView, saveGraphView } from "@/lib/graphViewStore";
 import { useReducedMotion } from "./useReducedMotion";
 
 export interface UseGraphSimulationOptions {
@@ -15,6 +16,9 @@ export interface UseGraphSimulationOptions {
   ticksPerFrame?: number;
   /** Hard cap on total steps per layout pass. */
   maxTicks?: number;
+  /** Workspace root to seed positions from and write them back to, so a layout
+   *  outlives the graph tab's mount. Omitted, positions live for this mount. */
+  persistKey?: string;
 }
 
 export interface GraphSimulationState {
@@ -49,7 +53,15 @@ export function useGraphSimulation(
   const ticksPerFrame = options?.ticksPerFrame ?? DEFAULT_TICKS_PER_FRAME;
   const maxTicks = options?.maxTicks ?? LAYOUT_MAX_TICKS;
   const reducedMotion = useReducedMotion();
-  const previousPositions = useRef<Map<string, NodePosition> | null>(null);
+  const persistKey = options?.persistKey;
+  // A restored snapshot makes a return to the tab reheat gently, the way a
+  // watcher-driven re-index already does.
+  const previousPositions = useRef<ReadonlyMap<string, NodePosition> | null>(
+    persistKey ? (loadGraphView(persistKey)?.positions ?? null) : null,
+  );
+  // Read through a ref so the rAF loop is not rebuilt when the key changes.
+  const persistKeyRef = useRef(persistKey);
+  persistKeyRef.current = persistKey;
   const [version, setVersion] = useState(0);
   const [settled, setSettled] = useState(false);
   // rAF handle + whether a loop is in flight, so reheat can resume a settled
@@ -78,7 +90,10 @@ export function useGraphSimulation(
     const step = () => {
       const done = tickLayout(layout, ticksPerFrame);
       budgetRef.current -= ticksPerFrame;
-      previousPositions.current = capturePositions(layout);
+      const positions = capturePositions(layout);
+      previousPositions.current = positions;
+      // Written through here, not on unmount, so no cleanup ordering matters.
+      if (persistKeyRef.current) saveGraphView(persistKeyRef.current, { positions });
       const finished = done || budgetRef.current <= 0;
       if (paintEveryFrameRef.current || finished) setVersion((v) => v + 1);
       if (finished) {

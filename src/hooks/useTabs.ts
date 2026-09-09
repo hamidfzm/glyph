@@ -17,6 +17,7 @@ import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { useWorkspaceSession, type WorkspaceSessionApi } from "@/hooks/useWorkspaceSession";
 import { useWorkspaceTree } from "@/hooks/useWorkspaceTree";
 import { isCliExportProcess } from "@/lib/cliExport";
+import { clearGraphView } from "@/lib/graphViewStore";
 import { basename, isPathInside } from "@/lib/paths";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { type FileTab, type PersistedTab, removeTabs } from "@/lib/tabs";
@@ -306,6 +307,10 @@ export function useTabs(options: UseTabsOptions) {
           if (!tab) continue;
           if (tab.kind === "file") {
             invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
+          } else {
+            // Closing the graph drops its remembered view, so reopening it from
+            // the menu starts auto-fit rather than restoring a stale camera.
+            clearGraphView(tab.root);
           }
           forgetScroll(id);
           forgetHistory(id);

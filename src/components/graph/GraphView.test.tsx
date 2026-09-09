@@ -1,11 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import { useZoomApi } from "@/contexts/ZoomContext";
 import { ZoomProvider } from "@/contexts/ZoomProvider";
 import type { WikilinkRef } from "@/lib/backlinks";
 import { buildWorkspaceGraph, type WorkspaceGraph } from "@/lib/graph";
 import { fitCameraToNodes, worldToScreen } from "@/lib/graphCanvas";
 import type { GraphLayout, LayoutNode } from "@/lib/graphSimulation";
+import { clearGraphView, loadGraphView } from "@/lib/graphViewStore";
 import { GraphView } from "./GraphView";
 
 // Shared spies/captures between the test and the hoisted mock factory.
@@ -296,6 +298,9 @@ describe("GraphView", () => {
           <button type="button" onClick={() => api?.actions.zoomIn()}>
             cmd-zoom-in
           </button>
+          <button type="button" onClick={() => api?.actions.zoomOut()}>
+            cmd-zoom-out
+          </button>
           <button type="button" onClick={() => api?.actions.zoomReset()}>
             cmd-zoom-reset
           </button>
@@ -316,6 +321,9 @@ describe("GraphView", () => {
     expect(reset).toBeEnabled();
     expect(lastWorldTransform().scale).toBeGreaterThan(FIT.scale);
 
+    fireEvent.click(screen.getByText("cmd-zoom-out"));
+    expect(lastWorldTransform().scale).toBeCloseTo(FIT.scale);
+
     fireEvent.click(screen.getByText("cmd-zoom-reset"));
     expect(reset).toBeDisabled();
     expect(lastWorldTransform().scale).toBeCloseTo(FIT.scale);
@@ -329,5 +337,101 @@ describe("GraphView", () => {
     expect(() =>
       fireEvent.pointerMove(canvas, { pointerId: 1, clientX: NODE_A.x, clientY: NODE_A.y }),
     ).not.toThrow();
+  });
+});
+
+// The graph tab unmounts whenever another tab is active, so these render inside
+// a workspace: the root is the key its view state is stored under.
+describe("GraphView view state across a tab switch", () => {
+  const ROOT = "/ws";
+
+  afterEach(() => clearGraphView(ROOT));
+
+  // Built here rather than via `renderInWorkspace` so a re-index can rerender
+  // the same tree: rerendering without the provider would remount the view.
+  function graphIn(root: string, files: readonly string[] = FILES) {
+    const tabs = { workspace: { root } } as unknown as TabsContextValue;
+    return (
+      <TabsContext.Provider value={tabs}>
+        <GraphView workspaceFiles={files} wikilinkRefs={REFS} onOpenFile={vi.fn()} />
+      </TabsContext.Provider>
+    );
+  }
+
+  function renderInRoot(root = ROOT) {
+    const utils = render(graphIn(root));
+    return { ...utils, canvas: screen.getByRole("img", { name: "Workspace graph" }) };
+  }
+
+  function pan(canvas: HTMLElement, dx: number) {
+    fireEvent.pointerDown(canvas, { pointerId: 1, clientX: EMPTY.x, clientY: EMPTY.y });
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: EMPTY.x + dx, clientY: EMPTY.y });
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: EMPTY.x + dx, clientY: EMPTY.y });
+  }
+
+  it("comes back to the same camera, with no re-fit in between", () => {
+    const first = renderInRoot();
+    pan(first.canvas, 60);
+    const panned = lastWorldTransform();
+    expect(panned.tx).toBeCloseTo(VIEWPORT.width / 2 + FIT.dx + 60);
+    first.unmount();
+
+    renderInRoot();
+    expect(lastWorldTransform().tx).toBeCloseTo(panned.tx);
+    expect(screen.getByRole("button", { name: "Reset view" })).toBeEnabled();
+  });
+
+  it("comes back still auto-fitting when the camera was never touched", () => {
+    const first = renderInRoot();
+    expect(screen.getByRole("button", { name: "Reset view" })).toBeDisabled();
+    first.unmount();
+
+    renderInRoot();
+    expect(screen.getByRole("button", { name: "Reset view" })).toBeDisabled();
+    expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + FIT.dx);
+  });
+
+  it("stays auto-fit across a switch that follows a reset", () => {
+    const first = renderInRoot();
+    pan(first.canvas, 60);
+    fireEvent.click(screen.getByRole("button", { name: "Reset view" }));
+    expect(loadGraphView(ROOT)?.autoFit).toBe(true);
+    first.unmount();
+
+    renderInRoot();
+    expect(screen.getByRole("button", { name: "Reset view" })).toBeDisabled();
+    expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + FIT.dx);
+  });
+
+  it("starts fresh once the graph tab's state is cleared", () => {
+    const first = renderInRoot();
+    pan(first.canvas, 60);
+    first.unmount();
+
+    // What closing the graph tab does.
+    clearGraphView(ROOT);
+    renderInRoot();
+    expect(screen.getByRole("button", { name: "Reset view" })).toBeDisabled();
+    expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + FIT.dx);
+  });
+
+  it("keeps the camera through a re-index", () => {
+    const { canvas, rerender } = renderInRoot();
+    pan(canvas, 60);
+    const panned = lastWorldTransform();
+
+    // The watcher re-indexes the workspace, so the graph and layout are rebuilt.
+    rerender(graphIn(ROOT, [...FILES, "/v/c.md"]));
+    expect(lastWorldTransform().tx).toBeCloseTo(panned.tx);
+  });
+
+  it("keeps one workspace's camera out of another's", () => {
+    const first = renderInRoot();
+    pan(first.canvas, 60);
+    first.unmount();
+
+    renderInRoot("/other");
+    expect(lastWorldTransform().tx).toBeCloseTo(VIEWPORT.width / 2 + FIT.dx);
+    clearGraphView("/other");
   });
 });
