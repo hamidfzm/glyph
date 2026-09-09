@@ -138,6 +138,14 @@ describe("exportSite", () => {
     expect(fs.copies).toEqual([{ src: "/ws/img/shot.png", dest: "/out/img/shot.png" }]);
   });
 
+  it("copies a linked file into the output tree so the link resolves", async () => {
+    const fs = mockFs({ "/ws/notes.md": "[the report](./docs/report.pdf)" });
+    const result = await exportSite({ root: "/ws", outDir: "/out" });
+    expect(result.assets).toBe(1);
+    expect(fs.copies).toEqual([{ src: "/ws/docs/report.pdf", dest: "/out/docs/report.pdf" }]);
+    expect(fs.writes.get("/out/notes.html")).toContain('href="docs/report.pdf"');
+  });
+
   it("inlines mermaid diagrams and restores the app theme afterwards", async () => {
     const fs = mockFs({ "/ws/d.md": "```mermaid\ngraph TD; A-->B;\n```" });
     await exportSite({ root: "/ws", outDir: "/out" });
