@@ -20,9 +20,16 @@ export function lastSegment(path: string): string {
 }
 
 /** File name with its extension removed; a name without one is unchanged. A
- *  leading dot is part of the name, so `.gitignore` has no extension to drop. */
+ *  leading dot is part of the name, so `.gitignore` has no extension to drop.
+ *  Mirrors `stem_of` in the Rust resolver, down to a trailing dot counting as
+ *  an empty extension: a completion inserts what the index can resolve. */
 export function stem(name: string): string {
-  return name.replace(/(?!^)\.[^.]+$/, "");
+  return name.replace(/(?!^)\.[^.]*$/, "");
+}
+
+/** `stem` of the file name in `path`, for callers holding a whole path. */
+export function pathStem(path: string): string {
+  return stem(basename(path));
 }
 
 /** Human-readable file name from a plain path or a mobile picker URI

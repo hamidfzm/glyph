@@ -305,8 +305,6 @@ pub fn run() {
             commands::create::duplicate_path,
             commands::create::move_path,
             commands::create::delete_path,
-            commands::wikilinks::scan_wikilinks,
-            commands::metadata::scan_metadata,
             vault::commands::vault_snapshot,
             vault::commands::vault_refresh,
             vault::commands::vault_forget,

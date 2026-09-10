@@ -6,7 +6,12 @@ import { rehypeSiteUrls, type SiteUrlContext } from "./rewriteUrls";
 // same hast shapes it sees in production.
 
 const ROOT = "/ws";
-const FILES = ["/ws/guide/intro.md", "/ws/other.md", "/ws/README.md"];
+// The index's answers for the targets these cases link to; `nope` is absent.
+const RESOLUTIONS = new Map([
+  ["intro", "/ws/guide/intro.md"],
+  ["intro#Getting Started", "/ws/guide/intro.md"],
+  ["other", "/ws/other.md"],
+]);
 const PAGES = new Map([
   ["/ws/guide/intro.md", "guide/intro.html"],
   ["/ws/other.md", "other.html"],
@@ -20,8 +25,7 @@ function makeCtx(filePath: string, pageRel: string): SiteUrlContext {
 function render(content: string, ctx: SiteUrlContext) {
   return renderPageHtml({
     content,
-    filePath: ctx.filePath,
-    workspaceFiles: FILES,
+    resolutions: RESOLUTIONS,
     extraRehype: [[rehypeSiteUrls, ctx]],
   });
 }

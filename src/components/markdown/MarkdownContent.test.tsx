@@ -75,14 +75,18 @@ describe("MarkdownContent", () => {
   });
 
   it("dispatches a standalone note embed to the embed renderer", async () => {
-    vi.mocked(invoke).mockResolvedValueOnce("embedded body");
-    const { container } = render(
+    vi.mocked(invoke).mockImplementation(((cmd: string) =>
+      Promise.resolve(
+        cmd === "vault_resolve" ? ["/ws/Note.md"] : "embedded body",
+      )) as unknown as typeof invoke);
+    const { container } = renderInWorkspace(
       <MarkdownContent
         content={"![[Note]]"}
         filePath="/ws/doc.md"
         workspaceFiles={["/ws/Note.md"]}
         showFrontmatter={false}
       />,
+      "/ws",
     );
     // The `<div class="markdown-embed">` placeholder routes through DivComponent
     // to EmbedComponent, which reads the target and renders it inline.

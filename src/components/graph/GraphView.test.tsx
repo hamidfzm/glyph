@@ -4,8 +4,6 @@ import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import { useZoomApi } from "@/contexts/ZoomContext";
 import { ZoomProvider } from "@/contexts/ZoomProvider";
 import { DOUBLE_CLICK_MS } from "@/hooks/useGraphFocus";
-import type { WikilinkRef } from "@/lib/backlinks";
-import { buildWorkspaceGraph, type WorkspaceGraph } from "@/lib/graph";
 import {
   type Camera,
   centerCameraOn,
@@ -18,6 +16,8 @@ import {
 import { ALPHA_DIMMED } from "@/lib/graphDraw";
 import type { GraphLayout, LayoutNode } from "@/lib/graphSimulation";
 import { clearGraphView, loadGraphView } from "@/lib/graphViewStore";
+import type { VaultSnapshot } from "@/lib/vault";
+import { graphOf } from "@/test/fixtures/graph";
 import { restoreMatchMedia, stubMatchMedia } from "@/test/matchMedia";
 import { restoreRaf, stubRaf } from "@/test/raf";
 import { GraphView } from "./GraphView";
@@ -37,9 +37,9 @@ const hoisted = vi.hoisted(() => ({
 // screen coordinates from the same fit camera the component computes rather
 // than assuming a 1:1 mapping.
 vi.mock("@/hooks/useGraphSimulation", () => {
-  const cache = new WeakMap<WorkspaceGraph, GraphLayout>();
+  const cache = new WeakMap<VaultSnapshot["graph"], GraphLayout>();
   return {
-    useGraphSimulation: (graph: WorkspaceGraph) => {
+    useGraphSimulation: (graph: VaultSnapshot["graph"]) => {
       let layout = cache.get(graph);
       if (!layout) {
         const nodes: LayoutNode[] = graph.nodes.map((n, i) => ({ ...n, x: i * 100, y: 0 }));
@@ -58,13 +58,13 @@ vi.mock("@/hooks/useGraphSimulation", () => {
   };
 });
 
-const FILES = ["/v/a.md", "/v/b.md"];
-const REFS: WikilinkRef[] = [{ source: "/v/a.md", target: "b", line: 1, snippet: "[[b]]" }];
+const GRAPH = graphOf(["/v/a.md", "/v/b.md"], [["/v/a.md", "/v/b.md"]]);
+const EMPTY_GRAPH = graphOf([]);
 const VIEWPORT = { width: 800, height: 600 };
 
 // The fit camera the component lands on for the mock layout, and where each
 // node ends up on screen under it.
-const FIT_NODES: LayoutNode[] = buildWorkspaceGraph(FILES, REFS).nodes.map((n, i) => ({
+const FIT_NODES: LayoutNode[] = GRAPH.nodes.map((n, i) => ({
   ...n,
   x: i * 100,
   y: 0,
@@ -76,8 +76,8 @@ const EMPTY = { x: 40, y: 40 };
 // A third, unlinked note, so focusing "a" leaves something outside its
 // neighbourhood to dim. The two-file fixture above cannot show dimming: a and b
 // are neighbours, so focusing either highlights the whole graph.
-const TRIO_FILES = [...FILES, "/v/c.md"];
-const TRIO_FIT_NODES: LayoutNode[] = buildWorkspaceGraph(TRIO_FILES, REFS).nodes.map((n, i) => ({
+const TRIO_GRAPH = graphOf(["/v/a.md", "/v/b.md", "/v/c.md"], [["/v/a.md", "/v/b.md"]]);
+const TRIO_FIT_NODES: LayoutNode[] = TRIO_GRAPH.nodes.map((n, i) => ({
   ...n,
   x: i * 100,
   y: 0,
@@ -148,10 +148,8 @@ afterEach(() => {
   restoreMatchMedia();
 });
 
-function renderGraph(onOpenFile = vi.fn(), files = FILES) {
-  const utils = render(
-    <GraphView workspaceFiles={files} wikilinkRefs={REFS} onOpenFile={onOpenFile} />,
-  );
+function renderGraph(onOpenFile = vi.fn(), graph = GRAPH) {
+  const utils = render(<GraphView graph={graph} onOpenFile={onOpenFile} />);
   return { ...utils, onOpenFile, canvas: screen.getByRole("img", { name: "Workspace graph" }) };
 }
 
@@ -176,7 +174,7 @@ function lastWorldTransform() {
 
 describe("GraphView", () => {
   it("shows an empty state when the workspace has no notes", () => {
-    render(<GraphView workspaceFiles={[]} wikilinkRefs={[]} onOpenFile={vi.fn()} />);
+    render(<GraphView graph={EMPTY_GRAPH} onOpenFile={vi.fn()} />);
     expect(screen.getByText(/No notes to graph yet/)).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
@@ -380,7 +378,7 @@ describe("GraphView", () => {
     };
     render(
       <ZoomProvider>
-        <GraphView workspaceFiles={FILES} wikilinkRefs={REFS} onOpenFile={vi.fn()} />
+        <GraphView graph={GRAPH} onOpenFile={vi.fn()} />
         <ZoomButtons />
       </ZoomProvider>,
     );
@@ -423,11 +421,11 @@ describe("GraphView view state across a tab switch", () => {
 
   // Built here rather than via `renderInWorkspace` so a re-index can rerender
   // the same tree: rerendering without the provider would remount the view.
-  function graphIn(root: string, files: readonly string[] = FILES) {
+  function graphIn(root: string, graph = GRAPH) {
     const tabs = { workspace: { root } } as unknown as TabsContextValue;
     return (
       <TabsContext.Provider value={tabs}>
-        <GraphView workspaceFiles={files} wikilinkRefs={REFS} onOpenFile={vi.fn()} />
+        <GraphView graph={graph} onOpenFile={vi.fn()} />
       </TabsContext.Provider>
     );
   }
@@ -509,7 +507,7 @@ describe("GraphView view state across a tab switch", () => {
     const panned = lastWorldTransform();
 
     // The watcher re-indexes the workspace, so the graph and layout are rebuilt.
-    rerender(graphIn(ROOT, [...FILES, "/v/c.md"]));
+    rerender(graphIn(ROOT, TRIO_GRAPH));
     expect(lastWorldTransform().tx).toBeCloseTo(panned.tx);
   });
 
@@ -604,7 +602,7 @@ describe("GraphView node focus", () => {
     const tabs = { workspace: { root: "/ws" } } as unknown as TabsContextValue;
     const graph = (
       <TabsContext.Provider value={tabs}>
-        <GraphView workspaceFiles={FILES} wikilinkRefs={REFS} onOpenFile={vi.fn()} />
+        <GraphView graph={GRAPH} onOpenFile={vi.fn()} />
       </TabsContext.Provider>
     );
     const first = render(graph);
@@ -630,7 +628,7 @@ describe("GraphView node focus", () => {
   });
 
   it("keeps the focused neighbourhood highlighted after the cursor moves away", () => {
-    const { canvas } = renderGraph(vi.fn(), TRIO_FILES);
+    const { canvas } = renderGraph(vi.fn(), TRIO_GRAPH);
     click(canvas, TRIO_NODE_A, 1);
     // Hovering the unlinked note previews its own neighbourhood on top.
     fireEvent.pointerMove(canvas, { pointerId: 2, clientX: TRIO_NODE_C.x, clientY: TRIO_NODE_C.y });
@@ -640,7 +638,7 @@ describe("GraphView node focus", () => {
   });
 
   it("clears the focus when the background is clicked", () => {
-    const { canvas } = renderGraph(vi.fn(), TRIO_FILES);
+    const { canvas } = renderGraph(vi.fn(), TRIO_GRAPH);
     click(canvas, TRIO_NODE_A, 1);
     expect(alphas).toContain(ALPHA_DIMMED);
 
@@ -711,7 +709,7 @@ describe("GraphView node focus", () => {
   });
 
   it("clears the focus and returns to auto-fit on Reset view", () => {
-    const { canvas } = renderGraph(vi.fn(), TRIO_FILES);
+    const { canvas } = renderGraph(vi.fn(), TRIO_GRAPH);
     click(canvas, TRIO_NODE_A, 1);
     const reset = screen.getByRole("button", { name: "Reset view" });
     expect(reset).toBeEnabled();

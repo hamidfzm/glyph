@@ -14,9 +14,8 @@ import type { MarkdownPlugin } from "@/lib/plugins/types";
 
 export interface RenderPageOptions {
   content: string;
-  /** Absolute path of the markdown file, for wikilink resolution. */
-  filePath: string;
-  workspaceFiles: string[];
+  /** Where each wikilink target in `content` resolves, from the index. */
+  resolutions: ReadonlyMap<string, string | null>;
   /** Extra remark plugins appended after the built-ins (plugin-contributed syntax). */
   extraRemark?: readonly MarkdownPlugin[];
   /** Extra rehype plugins appended after the built-ins (plugin-contributed, then site URL rewriting). */
@@ -32,8 +31,7 @@ export interface RenderPageOptions {
  */
 export async function renderPageHtml({
   content,
-  filePath,
-  workspaceFiles,
+  resolutions,
   extraRemark = [],
   extraRehype = [],
 }: RenderPageOptions): Promise<string> {
@@ -47,8 +45,7 @@ export async function renderPageHtml({
     .use(remarkParse)
     .use(
       buildRemarkPlugins({
-        workspaceFiles,
-        filePath,
+        resolutions,
         gemojiPlugin,
         extra: extraRemark,
       }) as PluggableList,

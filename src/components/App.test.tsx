@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { CHUNK_LOAD_TIMEOUT_MS } from "@/test/chunkLoadTimeout";
+import { fileScan, vaultSnapshot } from "@/test/tabsHarness";
 
 vi.mock("./editor/lazyEditor", () => ({
   MarkdownEditor: () => <div data-testid="lazy-editor" />,
@@ -309,20 +310,10 @@ describe("App", () => {
         case "read_directory":
           return Promise.resolve([{ name: "a.md", path: "/workspace/a.md", isDirectory: false }]);
         case "list_markdown_files":
-          return Promise.resolve({
-            files: ["/workspace/a.md"],
-            status: { truncated: false, reason: null, limit: null },
-          });
-        case "scan_wikilinks":
-          return Promise.resolve({
-            refs: [],
-            status: { truncated: false, reason: null, limit: null },
-          });
-        case "scan_metadata":
-          return Promise.resolve({
-            files: [],
-            status: { truncated: false, reason: null, limit: null },
-          });
+          return Promise.resolve(fileScan(["/workspace/a.md"]));
+        case "vault_refresh":
+        case "vault_snapshot":
+          return Promise.resolve(vaultSnapshot(["/workspace/a.md"]));
         case "workspace_resolve":
           return Promise.resolve({
             selected: String(args?.selected ?? ""),

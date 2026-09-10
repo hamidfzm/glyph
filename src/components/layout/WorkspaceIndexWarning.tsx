@@ -7,7 +7,7 @@ import { indexIncompleteKey, truncatedScan } from "@/lib/workspaceScan";
 /**
  * Persistent incomplete-index indicator pinned under the file tree (#436).
  * Unlike the dismissible workspace-notice banner, it stays visible for as long
- * as any workspace index is truncated; the tooltip carries the full message.
+ * as the workspace index is truncated; the tooltip carries the full message.
  * Reads the context optionally so isolated tests can render without a provider.
  */
 export function WorkspaceIndexWarning() {

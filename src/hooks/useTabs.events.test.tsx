@@ -2,13 +2,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EDITOR_MODE } from "@/lib/settings";
+import type { NoteSummary } from "@/lib/vault";
 import {
   captureListener,
   defaultOptions,
   fileScan,
   makeInvoker,
-  metadataScan,
   resetTabsMocks,
+  vaultSnapshot,
 } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
@@ -214,18 +215,29 @@ describe("useTabs file-changed events", () => {
   });
 });
 
+// Only /p/ws is indexed; any other root answers empty, which is what proves a
+// late refresh never lands on the workspace that replaced it.
+function forRoot(root: string) {
+  return root === "/p/ws"
+    ? vaultSnapshot(["/p/ws/a.md"], {
+        notes: [{ path: "/p/ws/a.md", title: null, tags: ["work"], fields: {} }],
+      })
+    : vaultSnapshot([]);
+}
+
 describe("useTabs directory-changed events", () => {
   it("refreshes the workspace tree and rebuilds the workspace indices", async () => {
     const dirChanged = captureListener("directory-changed");
     let files: string[] = [];
-    let tagged: unknown[] = [];
+    let notes: NoteSummary[] = [];
     let rootEntries = [{ name: "sub", path: "/p/ws/sub", isDirectory: true, modified: 0 }];
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         read_directory: async (_cmd, args) =>
           String(args?.path ?? "") === "/p/ws" ? rootEntries : [],
         list_markdown_files: async () => fileScan(files),
-        scan_metadata: async () => metadataScan(tagged),
+        vault_refresh: async () => vaultSnapshot(files, { notes }),
+        vault_snapshot: async () => vaultSnapshot(files, { notes }),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -240,7 +252,7 @@ describe("useTabs directory-changed events", () => {
 
     // Something outside the app adds a file.
     files = ["/p/ws/new.md"];
-    tagged = [{ path: "/p/ws/new.md", frontmatter: null, tags: ["work"] }];
+    notes = [{ path: "/p/ws/new.md", title: null, tags: ["work"], fields: {} }];
     rootEntries = [
       ...rootEntries,
       { name: "new.md", path: "/p/ws/new.md", isDirectory: false, modified: 0 },
@@ -259,7 +271,7 @@ describe("useTabs directory-changed events", () => {
     await waitFor(() => {
       expect(result.current.workspaceFiles).toEqual(["/p/ws/new.md"]);
     });
-    expect(result.current.metadataEntries).toEqual(tagged);
+    expect(result.current.snapshot.notes).toEqual(notes);
   });
 
   it("drops a refresh that lands after the workspace was replaced", async () => {
@@ -268,12 +280,8 @@ describe("useTabs directory-changed events", () => {
       makeInvoker({
         list_markdown_files: async (_cmd, args) =>
           fileScan(String(args?.path ?? "") === "/p/ws" ? ["/p/ws/a.md"] : []),
-        scan_metadata: async (_cmd, args) =>
-          metadataScan(
-            String(args?.path ?? "") === "/p/ws"
-              ? [{ path: "/p/ws/a.md", frontmatter: null, tags: ["work"] }]
-              : [],
-          ),
+        vault_refresh: async (_cmd, args) => forRoot(String(args?.path ?? "")),
+        vault_snapshot: async (_cmd, args) => forRoot(String(args?.path ?? "")),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -281,7 +289,7 @@ describe("useTabs directory-changed events", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    await waitFor(() => expect(result.current.metadataEntries).toHaveLength(1));
+    await waitFor(() => expect(result.current.snapshot.notes).toHaveLength(1));
 
     // The rescan of /p/ws is still in flight when the window switches to
     // /p/other; its results must not land on the new workspace.
@@ -293,7 +301,7 @@ describe("useTabs directory-changed events", () => {
 
     expect(result.current.workspace?.root).toBe("/p/other");
     expect(result.current.workspaceFiles).toEqual([]);
-    expect(result.current.metadataEntries).toEqual([]);
+    expect(result.current.snapshot.notes).toEqual([]);
   });
 
   it("ignores directory-changed for a root that isn't open", async () => {

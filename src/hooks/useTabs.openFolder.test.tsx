@@ -9,6 +9,7 @@ import {
   fileScan,
   makeInvoker,
   resetTabsMocks,
+  vaultSnapshot,
   watchDirectoryCalls,
 } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
@@ -97,6 +98,7 @@ describe("useTabs opening folders", () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => fileScan(["/p/ws/a.md", "/p/ws/b.md"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/a.md", "/p/ws/b.md"]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -115,6 +117,7 @@ describe("useTabs opening folders", () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => fileScan(["/p/ws/a.md", "/p/ws/b.md"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/a.md", "/p/ws/b.md"]),
         workspace_get_last_file: async () => "/p/ws/b.md",
       }) as typeof invoke,
     );
@@ -134,6 +137,7 @@ describe("useTabs opening folders", () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => fileScan(["/p/ws/a.md", "/p/ws/b.md"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/a.md", "/p/ws/b.md"]),
         workspace_get_last_file: async () => "/p/ws/gone.md",
       }) as typeof invoke,
     );
@@ -152,6 +156,7 @@ describe("useTabs opening folders", () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => fileScan(["/p/ws/a.md"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/a.md"]),
         workspace_get_last_file: async () => {
           throw new Error("state.json unreadable");
         },
@@ -172,6 +177,7 @@ describe("useTabs opening folders", () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => fileScan([]),
+        vault_refresh: async () => vaultSnapshot([]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -189,6 +195,7 @@ describe("useTabs opening folders", () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => fileScan(["/p/ws/a.md"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/a.md"]),
       }) as typeof invoke,
     );
     saveWorkspaceSession("/p/ws", {
@@ -211,13 +218,14 @@ describe("useTabs opening folders", () => {
     expect(invoke).not.toHaveBeenCalledWith("workspace_get_last_file", expect.anything());
   });
 
-  it("skips auto-open when list_markdown_files returns a non-markdown target", async () => {
+  it("skips auto-open when the index's first file is not markdown", async () => {
     // Covers the false arm of `isMarkdownFile(target)` inside the auto-open
-    // branch. list_markdown_files in real life never returns non-md paths,
-    // but the guard exists for defence in depth.
+    // branch: the index lists canvases alongside notes, so the first file is
+    // not always something the document viewer can open.
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => fileScan(["/p/ws/notes.txt"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/notes.txt"]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -236,6 +244,7 @@ describe("useTabs opening folders", () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => fileScan(["/p/ws/a.md"]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/a.md"]),
         read_file: async () => {
           throw new Error("vanished");
         },

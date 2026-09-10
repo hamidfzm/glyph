@@ -4,7 +4,6 @@ pub mod directory;
 pub mod export;
 pub mod export_runtime;
 pub mod file;
-pub mod metadata;
 #[cfg(desktop)]
 pub mod pick;
 pub mod plugins;
@@ -13,7 +12,6 @@ pub mod secrets;
 #[cfg(desktop)]
 pub mod serve;
 pub(crate) mod walk;
-pub mod wikilinks;
 
 pub use directory::InitialFolder;
 pub use export::CliExport;

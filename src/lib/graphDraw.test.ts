@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { WikilinkRef } from "./backlinks";
-import { buildWorkspaceGraph } from "./graph";
+import { neighborIndex } from "@/lib/graphNeighbors";
+import { graphOf } from "@/test/fixtures/graph";
 import { DEFAULT_CAMERA } from "./graphCanvas";
 import { ALPHA_DIMMED, drawGraph, readGraphTheme } from "./graphDraw";
 import { createGraphLayout, type GraphLayout, type LayoutNode } from "./graphSimulation";
@@ -61,23 +61,22 @@ const THEME = {
   label: "label",
 };
 
+const FILES = ["/v/a.md", "/v/b.md", "/v/lone.md"];
+const EDGES: Array<[string, string]> = [["/v/a.md", "/v/b.md"]];
+
 function makeLayout(): GraphLayout {
-  const refs: WikilinkRef[] = [{ source: "/v/a.md", target: "b", line: 1, snippet: "[[b]]" }];
-  return createGraphLayout(buildWorkspaceGraph(["/v/a.md", "/v/b.md", "/v/lone.md"], refs));
+  return createGraphLayout(graphOf(FILES, EDGES));
 }
 
 function drawOptions(hoveredId: string | null = null) {
-  const graph = buildWorkspaceGraph(
-    ["/v/a.md", "/v/b.md", "/v/lone.md"],
-    [{ source: "/v/a.md", target: "b", line: 1, snippet: "[[b]]" }],
-  );
+  const graph = graphOf(FILES, EDGES);
   return {
     viewport: VIEWPORT,
     dpr: 2,
     camera: DEFAULT_CAMERA,
     theme: THEME,
     hoveredId,
-    neighbors: graph.neighbors,
+    neighbors: neighborIndex(graph.edges),
   };
 }
 

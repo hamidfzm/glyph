@@ -4,6 +4,7 @@ import type { TabsContextValue } from "@/contexts/TabsContext";
 import type { EditorMode } from "@/lib/settings";
 import type { FileTab, GraphTab } from "@/lib/tabs";
 import { TabsWrapper, tabsContextValue } from "@/test/fixtures/tabsContext";
+import { vaultSnapshot } from "@/test/tabsHarness";
 import { TabContent } from "./TabContent";
 
 vi.mock("./editor/lazyEditor", () => ({
@@ -36,14 +37,14 @@ vi.mock("./editor/lazyEditor", () => ({
 
 vi.mock("./graph/lazyGraph", () => ({
   GraphView: ({
-    workspaceFiles,
+    graph,
     onOpenFile,
   }: {
-    workspaceFiles: readonly string[];
+    graph: { nodes: unknown[] };
     onOpenFile: (path: string) => void;
   }) => (
     <div data-testid="graph-view">
-      <span data-testid="graph-file-count">{workspaceFiles.length}</span>
+      <span data-testid="graph-node-count">{graph.nodes.length}</span>
       <button type="button" data-testid="graph-node" onClick={() => onOpenFile("/workspace/b.md")}>
         node
       </button>
@@ -218,10 +219,10 @@ describe("TabContent", () => {
       tabs: [graph],
       activeTab: graph,
       activeTabId: graph.id,
-      workspaceFiles: ["/workspace/a.md", "/workspace/b.md"],
+      snapshot: vaultSnapshot(["/workspace/a.md", "/workspace/b.md"]),
     });
     expect(screen.getByTestId("graph-view")).toBeInTheDocument();
-    expect(screen.getByTestId("graph-file-count")).toHaveTextContent("2");
+    expect(screen.getByTestId("graph-node-count")).toHaveTextContent("2");
   });
 
   it("opens a clicked graph node as a document tab", () => {

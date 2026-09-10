@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
+import { EMPTY_SNAPSHOT } from "@/lib/vault";
 import { COMPLETE_INDEX_STATUS } from "@/lib/workspaceScan";
 
 // The full TabsContext surface as inert defaults, so a test only spells out the
@@ -15,9 +16,7 @@ export function tabsContextValue(over: Partial<TabsContextValue> = {}): TabsCont
     activeFile: null,
     initializing: false,
     workspaceFiles: [],
-    wikilinkRefs: [],
-    metadataEntries: [],
-    metadata: new Map(),
+    snapshot: EMPTY_SNAPSHOT,
     indexStatus: COMPLETE_INDEX_STATUS,
     workspace: null,
     newDocument: vi.fn(),

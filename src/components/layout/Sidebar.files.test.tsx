@@ -1,10 +1,11 @@
+import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { buildMetadataIndex } from "@/lib/metadata";
 import { pickMoveDir } from "@/lib/pickers";
 import { makeFileTab, makeWorkspace, renderSidebar, Wrapper } from "@/test/fixtures/sidebar";
+import { vaultSnapshot } from "@/test/tabsHarness";
 
 vi.mock("@/lib/pickers", () => ({
   pickMoveDir: vi.fn(),
@@ -107,18 +108,31 @@ describe("Sidebar files panel", () => {
   });
 
   describe("tags", () => {
-    const metadata = buildMetadataIndex([
+    // What the index answers for this workspace. Which files carry a tag,
+    // nested children included, is decided in Rust and tested there.
+    const tagged: Record<string, string[]> = {
+      work: ["/tmp/notes/readme.md", "/tmp/notes/deep/plan.md"],
+      personal: ["/tmp/notes/diary.md"],
+    };
+    const snapshot = vaultSnapshot(
+      ["/tmp/notes/readme.md", "/tmp/notes/deep/plan.md", "/tmp/notes/diary.md"],
       {
-        path: "/tmp/notes/readme.md",
-        frontmatter: "---\ntags: [work]\n---\n",
-        tags: [],
+        tagCounts: [
+          { tag: "work", count: 2 },
+          { tag: "personal", count: 1 },
+        ],
       },
-      { path: "/tmp/notes/deep/plan.md", frontmatter: null, tags: ["work"] },
-      { path: "/tmp/notes/diary.md", frontmatter: null, tags: ["personal"] },
-    ]);
+    );
+
+    beforeEach(() => {
+      vi.mocked(invoke).mockImplementation(((cmd: string, args: { tag?: string }) =>
+        Promise.resolve(
+          cmd === "vault_paths_with_tag" ? (tagged[args?.tag ?? ""] ?? []) : undefined,
+        )) as unknown as typeof invoke);
+    });
 
     it("lists the workspace tags with their counts", () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
+      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
       expect(screen.getByText("Tags")).toBeInTheDocument();
       expect(screen.getByTitle("Filter by #work")).toBeInTheDocument();
       expect(screen.getByTitle("Filter by #personal")).toBeInTheDocument();
@@ -133,58 +147,61 @@ describe("Sidebar files panel", () => {
 
     it("persists the collapsed state instead of holding it locally", () => {
       const setTagsCollapsed = vi.fn();
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata }, setTagsCollapsed });
+      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot }, setTagsCollapsed });
       fireEvent.click(screen.getByRole("button", { name: /^Tags/ }));
       expect(setTagsCollapsed).toHaveBeenCalledExactlyOnceWith(true);
     });
 
     // The filtered list replaces the tree: matches can live in folders the
     // lazily-loaded tree has never expanded.
-    it("replaces the tree with the tagged files when a tag is picked", () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
+    it("replaces the tree with the tagged files when a tag is picked", async () => {
+      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
       fireEvent.click(screen.getByTitle("Filter by #work"));
 
-      expect(screen.getByText("#work (2)")).toBeInTheDocument();
+      expect(await screen.findByText("#work (2)")).toBeInTheDocument();
       expect(screen.getByText("deep/plan.md")).toBeInTheDocument();
       expect(screen.queryByText("diary.md")).not.toBeInTheDocument();
     });
 
-    it("opens a tagged file from the filtered list", () => {
+    it("opens a tagged file from the filtered list", async () => {
       const openFile = vi.fn();
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata, openFile } });
+      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot, openFile } });
       fireEvent.click(screen.getByTitle("Filter by #personal"));
-      fireEvent.click(screen.getByText("diary.md"));
+      fireEvent.click(await screen.findByText("diary.md"));
       expect(openFile).toHaveBeenCalledWith("/tmp/notes/diary.md");
     });
 
-    it("restores the tree when the filter is cleared", () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
+    it("restores the tree when the filter is cleared", async () => {
+      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
       fireEvent.click(screen.getByTitle("Filter by #work"));
-      fireEvent.click(screen.getByRole("button", { name: "Clear tag filter" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Clear tag filter" }));
       expect(screen.getByText("readme.md")).toBeInTheDocument();
       expect(screen.queryByText("#work (2)")).not.toBeInTheDocument();
     });
 
-    it("clears the filter when the active tag chip is clicked again", () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
+    it("clears the filter when the active tag chip is clicked again", async () => {
+      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
       fireEvent.click(screen.getByTitle("Filter by #work"));
+      expect(await screen.findByText("#work (2)")).toBeInTheDocument();
       fireEvent.click(screen.getByTitle("Filter by #work"));
       expect(screen.getByText("readme.md")).toBeInTheDocument();
       expect(screen.queryByText("#work (2)")).not.toBeInTheDocument();
     });
 
-    it("hides the tree-only toolbar actions while a tag filters the panel", () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
+    it("hides the tree-only toolbar actions while a tag filters the panel", async () => {
+      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
       fireEvent.click(screen.getByTitle("Filter by #work"));
+      expect(await screen.findByText("#work (2)")).toBeInTheDocument();
       expect(screen.queryByTitle("New note")).not.toBeInTheDocument();
       expect(screen.getByTitle("Close workspace")).toBeInTheDocument();
     });
 
     // Same tag name, different vault: the filter belongs to the workspace it
     // was picked in, so it must not silently re-apply to unrelated files.
-    it("drops the filter when another workspace is opened", () => {
-      const { rerender } = renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
+    it("drops the filter when another workspace is opened", async () => {
+      const { rerender } = renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
       fireEvent.click(screen.getByTitle("Filter by #work"));
+      expect(await screen.findByText("#work (2)")).toBeInTheDocument();
 
       const opts = {
         activeTab: makeFileTab(),
@@ -198,9 +215,9 @@ describe("Sidebar files panel", () => {
           ]),
         }),
         tabs: {
-          metadata: buildMetadataIndex([
-            { path: "/tmp/other/other.md", frontmatter: null, tags: ["work"] },
-          ]),
+          snapshot: vaultSnapshot(["/tmp/other/other.md"], {
+            tagCounts: [{ tag: "work", count: 1 }],
+          }),
         },
       };
       rerender(
@@ -213,15 +230,15 @@ describe("Sidebar files panel", () => {
     });
 
     // A rescan can drop the filtered tag (note deleted, tag edited away).
-    it("falls back to the tree when the filtered tag leaves the index", () => {
-      const { rerender } = renderSidebar({ workspace: makeWorkspace(), tabs: { metadata } });
+    it("falls back to the tree when the filtered tag leaves the index", async () => {
+      const { rerender } = renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
       fireEvent.click(screen.getByTitle("Filter by #work"));
-      expect(screen.getByText("#work (2)")).toBeInTheDocument();
+      expect(await screen.findByText("#work (2)")).toBeInTheDocument();
 
       const opts = {
         activeTab: makeFileTab(),
         workspace: makeWorkspace(),
-        tabs: { metadata: buildMetadataIndex([]) },
+        tabs: { snapshot: vaultSnapshot([]) },
       };
       rerender(
         <Wrapper opts={opts}>

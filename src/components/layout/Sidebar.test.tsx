@@ -1,16 +1,16 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { MetadataIndex } from "@/lib/metadata";
 import { SIDEBAR_WIDTH_DEFAULT } from "@/lib/settings";
 import { makeWorkspace, renderBothSides, renderSidebar } from "@/test/fixtures/sidebar";
+import { vaultSnapshot } from "@/test/tabsHarness";
 
 vi.mock("@/lib/pickers", () => ({
   pickMoveDir: vi.fn(),
 }));
 
 // One tagged note, enough for the Files panel to render the tag cloud.
-function taggedIndex(): MetadataIndex {
-  return new Map([["/tmp/notes/readme.md", { tags: ["notes"], fields: new Map() }]]);
+function taggedIndex() {
+  return vaultSnapshot(["/tmp/notes/readme.md"], { tagCounts: [{ tag: "notes", count: 1 }] });
 }
 
 describe("Sidebar placement", () => {
@@ -281,7 +281,7 @@ describe("Sidebar placement", () => {
 
   it("drags the tags divider and persists the height", () => {
     const setTagsHeight = vi.fn();
-    renderSidebar({ workspace: makeWorkspace(), setTagsHeight, tabs: { metadata: taggedIndex() } });
+    renderSidebar({ workspace: makeWorkspace(), setTagsHeight, tabs: { snapshot: taggedIndex() } });
     const handle = screen.getByRole("separator", { name: "Resize tags" });
     const block = handle.nextElementSibling as HTMLElement;
     Object.defineProperty(block, "offsetHeight", { configurable: true, value: 100 });
@@ -301,7 +301,7 @@ describe("Sidebar placement", () => {
     renderSidebar({
       workspace: makeWorkspace(),
       tagsHeight: 120,
-      tabs: { metadata: taggedIndex() },
+      tabs: { snapshot: taggedIndex() },
     });
     const handle = screen.getByRole("separator", { name: "Resize tags" });
     expect((handle.nextElementSibling as HTMLElement).style.height).toBe("120px");
@@ -310,7 +310,7 @@ describe("Sidebar placement", () => {
 
   it("double-click on the tags divider restores the automatic height", () => {
     const setTagsHeight = vi.fn();
-    renderSidebar({ workspace: makeWorkspace(), setTagsHeight, tabs: { metadata: taggedIndex() } });
+    renderSidebar({ workspace: makeWorkspace(), setTagsHeight, tabs: { snapshot: taggedIndex() } });
     fireEvent.doubleClick(screen.getByRole("separator", { name: "Resize tags" }));
     expect(setTagsHeight).toHaveBeenCalledExactlyOnceWith(null);
   });

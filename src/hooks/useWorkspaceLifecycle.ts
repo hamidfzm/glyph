@@ -28,7 +28,7 @@ interface UseWorkspaceLifecycleOptions {
   openTree: (root: string, expanded?: string[]) => Promise<void>;
   clearTree: () => void;
   scanWorkspace: (root: string, isCurrent: () => boolean) => Promise<string[]>;
-  clearIndexes: () => void;
+  clearIndexes: (root?: string | null) => void;
   resetStatus: () => void;
   flushForClose: (ids?: Iterable<string>) => Promise<boolean>;
   openFile: (path: string, options?: OpenFileOptions) => Promise<unknown>;
@@ -238,8 +238,15 @@ export function useWorkspaceLifecycle({
         if (previous) {
           invoke("unwatch_directory", { path: previous.root }).catch(() => {});
           closeWorkspaceTabs(previous.root);
-          resetStatus();
+          // Release the outgoing workspace's index rather than leaving it in
+          // the backend for the rest of the session (INV-4). The tree drops in
+          // the same batch: a surviving consumer (a loose tab, an open
+          // palette) reads the root from there, and would otherwise re-ask
+          // about the workspace just forgotten, rebuilding and re-caching it.
+          clearTree();
+          clearIndexes(previous.root);
         }
+        resetStatus();
 
         try {
           await invoke("watch_directory", { path: root });
@@ -276,6 +283,8 @@ export function useWorkspaceLifecycle({
       }
     },
     [
+      clearIndexes,
+      clearTree,
       closeWorkspaceTabs,
       flushForClose,
       openFile,

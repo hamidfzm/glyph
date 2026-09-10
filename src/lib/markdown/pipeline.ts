@@ -22,8 +22,11 @@ type RemarkPlugins = NonNullable<Options["remarkPlugins"]>;
 type RehypePlugins = NonNullable<Options["rehypePlugins"]>;
 
 export interface RemarkPipelineOptions {
-  workspaceFiles?: string[];
-  filePath?: string;
+  /** Where each wikilink target resolves; see `WikilinkPluginOptions`. */
+  resolutions?: ReadonlyMap<string, string | null>;
+  /** The index has not answered for this document yet; see
+   *  `WikilinkPluginOptions`. */
+  resolutionsPending?: boolean;
   /**
    * Which optional syntax extensions are on (Settings → Markdown). Omitted
    * features default to on, so callers without settings (tests, notebook
@@ -41,8 +44,8 @@ export interface RemarkPipelineOptions {
 }
 
 export function buildRemarkPlugins({
-  workspaceFiles,
-  filePath,
+  resolutions,
+  resolutionsPending,
   features = {},
   gemojiPlugin,
   extra = [],
@@ -53,7 +56,7 @@ export function buildRemarkPlugins({
   if (gemojiPlugin) plugins.push(gemojiPlugin);
   if (features.alerts !== false) plugins.push(remarkAlert);
   if (features.wikilinks !== false) {
-    plugins.push([remarkWikilink, { workspaceFiles, currentFilePath: filePath }]);
+    plugins.push([remarkWikilink, { resolutions, pending: resolutionsPending }]);
   }
   plugins.push(...extra);
   return plugins;

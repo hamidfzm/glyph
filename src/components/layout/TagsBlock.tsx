@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
-import type { TagCount } from "@/lib/metadata";
 import { TAGS_HEIGHT_MIN } from "@/lib/settings";
+import type { TagCount } from "@/lib/vault";
 import { ResizableBlock } from "./ResizableBlock";
 import { TagsSection } from "./TagsSection";
 

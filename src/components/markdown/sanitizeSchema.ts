@@ -195,6 +195,7 @@ export const markdownSanitizeSchema = {
       "dataEmbedPath",
       "dataEmbedHeading",
       "dataEmbedBroken",
+      "dataEmbedPending",
     ],
     img: [...(defaultSchema.attributes?.img ?? []), "align", "width", "height"],
     details: [...(defaultSchema.attributes?.details ?? []), "open"],

@@ -1,13 +1,12 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { WikilinkRef } from "@/lib/backlinks";
-import { buildWorkspaceGraph } from "@/lib/graph";
 import {
   clearGraphView,
   loadGraphView,
   pruneGraphViews,
   saveGraphView,
 } from "@/lib/graphViewStore";
+import { graphOf } from "@/test/fixtures/graph";
 import { useGraphSimulation } from "./useGraphSimulation";
 
 const { reducedMotion } = vi.hoisted(() => ({ reducedMotion: { value: false } }));
@@ -20,9 +19,9 @@ afterEach(() => {
 });
 
 const FILES = ["/v/a.md", "/v/b.md", "/v/c.md"];
-const REFS: WikilinkRef[] = [
-  { source: "/v/a.md", target: "b", line: 1, snippet: "[[b]]" },
-  { source: "/v/b.md", target: "c", line: 1, snippet: "[[c]]" },
+const EDGES: Array<[string, string]> = [
+  ["/v/a.md", "/v/b.md"],
+  ["/v/b.md", "/v/c.md"],
 ];
 
 // High ticksPerFrame keeps the rAF count low so tests settle in a few frames.
@@ -32,7 +31,7 @@ const SLOW = { ticksPerFrame: 10 };
 
 describe("useGraphSimulation", () => {
   it("exposes a layout for the given graph immediately", () => {
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { result, unmount } = renderHook(() => useGraphSimulation(graph, FAST));
     expect(result.current.layout.nodes.map((n) => n.id)).toEqual(FILES);
     expect(result.current.settled).toBe(false);
@@ -40,7 +39,7 @@ describe("useGraphSimulation", () => {
   });
 
   it("ticks the simulation until it settles and bumps version each frame", async () => {
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { result, unmount } = renderHook(() => useGraphSimulation(graph, FAST));
     await waitFor(() => expect(result.current.settled).toBe(true), { timeout: 5000 });
     // Every frame paints, so the layout is seen moving rather than jumping.
@@ -53,7 +52,7 @@ describe("useGraphSimulation", () => {
   });
 
   it("stops at the maxTicks cap even when not converged", async () => {
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { result, unmount } = renderHook(() =>
       useGraphSimulation(graph, { ticksPerFrame: 5, maxTicks: 5 }),
     );
@@ -64,7 +63,7 @@ describe("useGraphSimulation", () => {
   });
 
   it("seeds the next layout from the previous run when the graph changes", async () => {
-    const graphA = buildWorkspaceGraph(FILES, REFS);
+    const graphA = graphOf(FILES, EDGES);
     const { result, rerender, unmount } = renderHook(
       ({ graph }) => useGraphSimulation(graph, FAST),
       { initialProps: { graph: graphA } },
@@ -75,10 +74,7 @@ describe("useGraphSimulation", () => {
     );
 
     // Same files, one new ref — simulates a watcher-driven re-index.
-    const graphB = buildWorkspaceGraph(FILES, [
-      ...REFS,
-      { source: "/v/c.md", target: "a", line: 1, snippet: "[[a]]" },
-    ]);
+    const graphB = graphOf(FILES, [...EDGES, ["/v/c.md", "/v/a.md"]]);
     rerender({ graph: graphB });
     // The new layout must start from the captured positions, not from scratch.
     for (const node of result.current.layout.nodes) {
@@ -90,7 +86,7 @@ describe("useGraphSimulation", () => {
   });
 
   it("handles an empty graph without spinning", async () => {
-    const graph = buildWorkspaceGraph([], []);
+    const graph = graphOf([]);
     const { result, unmount } = renderHook(() => useGraphSimulation(graph, FAST));
     await waitFor(() => expect(result.current.settled).toBe(true), { timeout: 5000 });
     expect(result.current.layout.nodes).toEqual([]);
@@ -98,7 +94,7 @@ describe("useGraphSimulation", () => {
   });
 
   it("falls back to default tick pacing when no options are passed", async () => {
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { result, unmount } = renderHook(() => useGraphSimulation(graph));
     await waitFor(() => expect(result.current.settled).toBe(true), { timeout: 5000 });
     for (const node of result.current.layout.nodes) {
@@ -109,7 +105,7 @@ describe("useGraphSimulation", () => {
 
   it("paints once at the end when reduced motion is on", async () => {
     reducedMotion.value = true;
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { result, unmount } = renderHook(() => useGraphSimulation(graph, FAST));
     await waitFor(() => expect(result.current.settled).toBe(true), { timeout: 5000 });
 
@@ -125,7 +121,7 @@ describe("useGraphSimulation", () => {
 
   it("keeps painting every frame during a reheat under reduced motion", async () => {
     reducedMotion.value = true;
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { result, unmount } = renderHook(() => useGraphSimulation(graph, FAST));
     await waitFor(() => expect(result.current.settled).toBe(true), { timeout: 5000 });
     const versionWhenSettled = result.current.version;
@@ -141,7 +137,7 @@ describe("useGraphSimulation", () => {
 
   it("starts painting when a reheat lands on a pass that is still in flight", async () => {
     reducedMotion.value = true;
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { result, unmount } = renderHook(() => useGraphSimulation(graph, SLOW));
     // Grabbing a node before the first pass settles must upgrade that pass,
     // otherwise the canvas stays frozen for the whole drag.
@@ -157,7 +153,7 @@ describe("useGraphSimulation", () => {
 
   it("switches to animating when the preference is turned off mid-layout", async () => {
     reducedMotion.value = true;
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { result, rerender, unmount } = renderHook(() => useGraphSimulation(graph, SLOW));
     expect(result.current.settled).toBe(false);
 
@@ -169,7 +165,7 @@ describe("useGraphSimulation", () => {
   });
 
   it("resumes animating when reheated after settling", async () => {
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { result, unmount } = renderHook(() => useGraphSimulation(graph, FAST));
     await waitFor(() => expect(result.current.settled).toBe(true), { timeout: 5000 });
     const versionWhenSettled = result.current.version;
@@ -191,7 +187,7 @@ describe("useGraphSimulation persistence", () => {
   afterEach(() => clearGraphView(ROOT));
 
   it("seeds a fresh mount from the stored positions and reheats gently", () => {
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const positions = new Map(FILES.map((id, i) => [id, { x: i * 40, y: i * -20 }]));
     saveGraphView(ROOT, { positions });
 
@@ -208,7 +204,7 @@ describe("useGraphSimulation persistence", () => {
   });
 
   it("writes the ticked positions through to the store", async () => {
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { result, unmount } = renderHook(() =>
       useGraphSimulation(graph, { ...FAST, persistKey: ROOT }),
     );
@@ -223,7 +219,7 @@ describe("useGraphSimulation persistence", () => {
   });
 
   it("keeps positions out of the store without a key", async () => {
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { result, unmount } = renderHook(() => useGraphSimulation(graph, FAST));
     await waitFor(() => expect(result.current.settled).toBe(true), { timeout: 5000 });
     expect(loadGraphView(ROOT)).toBeUndefined();
@@ -231,7 +227,7 @@ describe("useGraphSimulation persistence", () => {
   });
 
   it("stops writing once unmounted, so a prune after a close stays clean", async () => {
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { unmount } = renderHook(() =>
       useGraphSimulation(graph, { ticksPerFrame: 1, persistKey: ROOT }),
     );
@@ -248,7 +244,7 @@ describe("useGraphSimulation persistence", () => {
     // One seeded node out of three is below the half-coverage rule, so d3
     // replays the layout and the stored camera must not be trusted.
     saveGraphView(ROOT, { positions: new Map([[FILES[0], { x: 10, y: 10 }]]) });
-    const graph = buildWorkspaceGraph(FILES, REFS);
+    const graph = graphOf(FILES, EDGES);
     const { result, unmount } = renderHook(() =>
       useGraphSimulation(graph, { ...FAST, persistKey: ROOT }),
     );

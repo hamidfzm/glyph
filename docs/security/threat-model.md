@@ -77,7 +77,7 @@ and files: <path>`), which never echoes the grant list.
 
 | Command | Check |
 | ------- | ----- |
-| `read_file`, `get_file_metadata`, `read_directory`, `list_markdown_files`, `scan_wikilinks`, `scan_metadata` | readable |
+| `read_file`, `get_file_metadata`, `read_directory`, `list_markdown_files` | readable |
 | `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_neighbors`, `vault_query`, `vault_paths_with_tag`, `vault_canvas` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable |
 | `copy_file` | source readable and destination writable |

@@ -4,8 +4,6 @@
 // EmbedComponent read. The remark pass that swaps them into the tree lives in
 // wikilink.ts.
 
-import { resolveWikilink } from "./wikilinkResolver";
-
 export interface Node {
   type: string;
   data?: { embed?: boolean; embedParsed?: ParsedWikilink; [key: string]: unknown };
@@ -19,8 +17,19 @@ export interface Parent extends Node {
 export const WIKILINK_RE = /(!?)\[\[([^\]\n]+?)\]\]/g;
 
 export interface WikilinkPluginOptions {
-  workspaceFiles?: string[];
-  currentFilePath?: string;
+  /**
+   * Where each raw target resolves, keyed as written (heading kept, alias
+   * stripped). Absent or missing means the link renders as broken, which is
+   * also what a document rendered outside a workspace gets.
+   */
+  resolutions?: ReadonlyMap<string, string | null>;
+  /**
+   * The index has not answered for this document yet. Links render plain
+   * rather than broken for that one frame: resolution is a round trip now, and
+   * flashing every link broken on each open and tab switch reads as breakage
+   * rather than as loading.
+   */
+  pending?: boolean;
 }
 
 export interface ParsedWikilink {
@@ -73,12 +82,8 @@ export function parseInner(raw: string): ParsedWikilink {
 }
 
 export function buildLinkNode(parsed: ParsedWikilink, options: WikilinkPluginOptions): LinkNode {
-  const resolved = resolveWikilink(
-    parsed.rawTarget,
-    options.workspaceFiles ?? [],
-    options.currentFilePath,
-  );
-  const broken = resolved.path === null;
+  const path = options.resolutions?.get(parsed.rawTarget) ?? null;
+  const broken = path === null && !options.pending;
   const display = parsed.alias ?? parsed.baseTarget;
 
   // hProperties uses camelCased keys (the hast/React convention). className is
@@ -87,7 +92,7 @@ export function buildLinkNode(parsed: ParsedWikilink, options: WikilinkPluginOpt
     className: broken ? ["wikilink", "wikilink--broken"] : ["wikilink"],
     dataWikilink: parsed.baseTarget,
   };
-  if (!broken && resolved.path) hProperties.dataWikilinkPath = resolved.path;
+  if (path) hProperties.dataWikilinkPath = path;
   if (broken) hProperties.dataWikilinkBroken = "";
   if (parsed.heading) hProperties.dataWikilinkHeading = parsed.heading;
 
@@ -101,19 +106,18 @@ export function buildLinkNode(parsed: ParsedWikilink, options: WikilinkPluginOpt
 }
 
 export function buildEmbedNode(parsed: ParsedWikilink, options: WikilinkPluginOptions): EmbedNode {
-  const resolved = resolveWikilink(
-    parsed.rawTarget,
-    options.workspaceFiles ?? [],
-    options.currentFilePath,
-  );
-  const broken = resolved.path === null;
+  const path = options.resolutions?.get(parsed.rawTarget) ?? null;
+  const broken = path === null && !options.pending;
 
   const hProperties: Record<string, string | string[]> = {
     className: ["markdown-embed"],
     dataEmbedTarget: parsed.baseTarget,
   };
-  if (!broken && resolved.path) hProperties.dataEmbedPath = resolved.path;
+  if (path) hProperties.dataEmbedPath = path;
   if (broken) hProperties.dataEmbedBroken = "";
+  // An embed has a body to fill, so unlike a link it needs to say which of the
+  // two pathless states it is in.
+  if (path === null && options.pending) hProperties.dataEmbedPending = "";
   if (parsed.heading) hProperties.dataEmbedHeading = parsed.heading;
 
   return {
@@ -121,4 +125,24 @@ export function buildEmbedNode(parsed: ParsedWikilink, options: WikilinkPluginOp
     children: [],
     data: { embed: true, embedParsed: parsed, hName: "div", hProperties },
   };
+}
+
+/** A target that names a location ("folder/note") rather than a bare note name. */
+export function isNestedTarget(target: string): boolean {
+  return target.includes("/") || target.includes("\\");
+}
+
+/**
+ * Every wikilink target in `content`, as written and deduplicated: what the
+ * index is asked to resolve before the document renders.
+ */
+export function wikilinkTargets(content: string): string[] {
+  const targets = new Set<string>();
+  WIKILINK_RE.lastIndex = 0;
+  let match: RegExpExecArray | null = WIKILINK_RE.exec(content);
+  while (match) {
+    targets.add(parseInner(match[2]).rawTarget);
+    match = WIKILINK_RE.exec(content);
+  }
+  return [...targets];
 }

@@ -1,8 +1,8 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import type { Command } from "@/lib/commands";
-import { buildMetadataIndex } from "@/lib/metadata";
 import { restoreMatchMedia, stubMatchMedia } from "@/test/matchMedia";
 import { restoreRaf, stubRaf } from "@/test/raf";
 import { CommandPalette } from "./CommandPalette";
@@ -322,13 +322,16 @@ describe("CommandPalette", () => {
     });
   });
 
-  it("narrows Files rows to a tag query using the workspace metadata", () => {
-    const metadata = buildMetadataIndex([
-      { path: "/ws/spec.md", frontmatter: null, tags: ["work"] },
-      { path: "/ws/diary.md", frontmatter: null, tags: ["personal"] },
-    ]);
+  it("narrows Files rows to the paths a tag query selected", async () => {
+    // The palette sends the raw query to the index and ranks what comes back.
+    vi.mocked(invoke).mockResolvedValue({
+      filters: [{ field: "tag", value: "work" }],
+      text: "",
+      paths: ["/ws/spec.md"],
+    });
+    const workspace = { root: "/ws", expanded: new Set<string>(), nodes: new Map() };
     render(
-      <TabsContext.Provider value={{ metadata } as unknown as TabsContextValue}>
+      <TabsContext.Provider value={{ workspace } as unknown as TabsContextValue}>
         <CommandPalette
           open
           query="tag:work"
@@ -343,8 +346,8 @@ describe("CommandPalette", () => {
       </TabsContext.Provider>,
     );
 
+    await waitFor(() => expect(screen.queryByText("diary.md")).not.toBeInTheDocument());
     expect(screen.getByText("spec.md")).toBeInTheDocument();
-    expect(screen.queryByText("diary.md")).not.toBeInTheDocument();
     expect(screen.queryByText("Settings")).not.toBeInTheDocument();
   });
 });

@@ -15,7 +15,9 @@ import {
   type SimulationLinkDatum,
   type SimulationNodeDatum,
 } from "d3-force";
-import type { WorkspaceGraph } from "./graph";
+import type { VaultSnapshot } from "@/lib/vault";
+
+type WorkspaceGraph = VaultSnapshot["graph"];
 
 export interface LayoutNode extends SimulationNodeDatum {
   id: string;

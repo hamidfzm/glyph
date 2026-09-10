@@ -1,8 +1,6 @@
-import type { WikilinkRef } from "@/lib/backlinks";
-
-// Mirrors the Rust `ScanStatus` returned by the `list_markdown_files` and
-// `scan_wikilinks` commands: whether a workspace scan covered every file, and
-// which configured cap cut it short.
+// Mirrors the Rust `ScanStatus` that rides on `list_markdown_files` and on the
+// vault snapshot: whether a scan covered every file, and which configured cap
+// cut it short.
 export interface ScanStatus {
   truncated: boolean;
   reason: "fileLimit" | "depthLimit" | null;
@@ -14,35 +12,34 @@ export interface FileScan {
   status: ScanStatus;
 }
 
-export interface WikilinkScan {
-  refs: WikilinkRef[];
-  status: ScanStatus;
-}
-
-/** Scan statuses of the workspace indexes, as tracked by `useTabs`. */
+/**
+ * The two walks a workspace runs, and how far each got.
+ *
+ * `files` lists every openable document (markdown, notebooks, canvases, D2);
+ * `vault` is the note index, which covers markdown and canvases only. They
+ * share a walker and its caps but count different files against them, so a
+ * workspace full of notebooks can truncate one walk and not the other.
+ */
 export interface WorkspaceIndexStatus {
   files: ScanStatus;
-  wikilinks: ScanStatus;
-  metadata: ScanStatus;
+  vault: ScanStatus;
 }
 
 export const COMPLETE_SCAN: ScanStatus = { truncated: false, reason: null, limit: null };
 
 export const COMPLETE_INDEX_STATUS: WorkspaceIndexStatus = {
   files: COMPLETE_SCAN,
-  wikilinks: COMPLETE_SCAN,
-  metadata: COMPLETE_SCAN,
+  vault: COMPLETE_SCAN,
 };
 
 export function sameScanStatus(a: ScanStatus, b: ScanStatus): boolean {
   return a.truncated === b.truncated && a.reason === b.reason && a.limit === b.limit;
 }
 
-/** The status to surface when any index is incomplete (the file scan wins). */
+/** The status to surface when either walk is incomplete (the file scan wins). */
 export function truncatedScan(status: WorkspaceIndexStatus): ScanStatus | null {
   if (status.files.truncated) return status.files;
-  if (status.wikilinks.truncated) return status.wikilinks;
-  if (status.metadata.truncated) return status.metadata;
+  if (status.vault.truncated) return status.vault;
   return null;
 }
 

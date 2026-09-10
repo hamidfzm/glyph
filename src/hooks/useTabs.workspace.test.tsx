@@ -8,10 +8,9 @@ import {
   fileScan,
   type Invoker,
   makeInvoker,
-  metadataScan,
   resetTabsMocks,
+  vaultSnapshot,
   watchDirectoryCalls,
-  wikilinkScan,
 } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
@@ -29,6 +28,44 @@ afterEach(() => {
 });
 
 describe("useTabs workspace lifecycle", () => {
+  // The backend keeps one index per root for the life of the process, holding
+  // every note's tags, fields and links. Nothing else releases it, so a window
+  // that opens folder after folder would accumulate all of them (INV-4).
+  it("releases the backend index when the workspace closes", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await act(async () => {
+      await result.current.closeWorkspace();
+    });
+    expect(invoke).toHaveBeenCalledWith("vault_forget", { path: "/p/ws" });
+  });
+
+  it("releases the outgoing index when another folder replaces it", async () => {
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/a");
+    });
+    await act(async () => {
+      await result.current.openFolder("/p/b");
+    });
+    expect(invoke).toHaveBeenCalledWith("vault_forget", { path: "/p/a" });
+    expect(invoke).not.toHaveBeenCalledWith("vault_forget", { path: "/p/b" });
+
+    // Asking about /p/a after forgetting it would rebuild and re-cache the
+    // index that was just released.
+    const asked = vi.mocked(invoke).mock.calls.filter(([cmd]) => String(cmd).startsWith("vault_"));
+    const afterForget = asked.slice(asked.findIndex(([cmd]) => cmd === "vault_forget") + 1);
+    const aboutA = afterForget.filter(([, args]) => {
+      const target = args as { path?: string; root?: string } | undefined;
+      return target?.path === "/p/a" || target?.root === "/p/a";
+    });
+    expect(aboutA).toEqual([]);
+  });
+
   it("opening another folder replaces the workspace and closes its tabs", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
@@ -91,8 +128,7 @@ describe("useTabs workspace lifecycle", () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         list_markdown_files: async () => fileScan(["/p/ws/note.md"]),
-        scan_wikilinks: async () =>
-          wikilinkScan([{ source: "/p/ws/note.md", target: "x", line: 1, snippet: "[[x]]" }]),
+        vault_refresh: async () => vaultSnapshot(["/p/ws/note.md"]),
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -101,7 +137,7 @@ describe("useTabs workspace lifecycle", () => {
     await act(async () => {
       await result.current.openFolder("/p/ws");
     });
-    await waitFor(() => expect(result.current.wikilinkRefs).toHaveLength(1));
+    await waitFor(() => expect(result.current.workspaceFiles).toHaveLength(1));
     await act(async () => {
       await result.current.openFile("/q/loose.md");
     });
@@ -116,7 +152,6 @@ describe("useTabs workspace lifecycle", () => {
 
     expect(result.current.workspace).toBeNull();
     expect(result.current.workspaceFiles).toEqual([]);
-    expect(result.current.wikilinkRefs).toEqual([]);
     expect(invoke).toHaveBeenCalledWith("unwatch_directory", { path: "/p/ws" });
     expect(invoke).toHaveBeenCalledWith("unwatch_file", { path: "/p/ws/note.md" });
     const paths = result.current.tabs.map((t) => (t.kind === "file" ? t.file.path : "(graph)"));
@@ -159,72 +194,40 @@ describe("useTabs workspace lifecycle", () => {
     expect(result.current.tabs).toHaveLength(0);
   });
 
-  it("drops a stale metadata scan that lands after the workspace was replaced", async () => {
-    let releaseStale: ((scan: unknown) => void) | null = null;
+  it("drops a stale index scan that lands after the workspace was replaced", async () => {
+    let releaseStale: ((snapshot: unknown) => void) | null = null;
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        scan_metadata: (_cmd, args) => {
+        vault_refresh: (_cmd, args) => {
           if (String(args?.path ?? "") === "/p/a") {
             return new Promise((resolve) => {
               releaseStale = resolve;
             });
           }
-          return Promise.resolve(metadataScan([]));
+          return Promise.resolve(vaultSnapshot([]));
         },
       }) as typeof invoke,
     );
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
+    // /p/a's scan is still in flight when /p/b is adopted, so its answer
+    // arrives for a workspace that is no longer open.
     await act(async () => {
-      await result.current.openFolder("/p/a");
-    });
-    await act(async () => {
+      const pending = result.current.openFolder("/p/a");
+      await new Promise((r) => setTimeout(r, 0));
       await result.current.openFolder("/p/b");
-    });
-
-    await act(async () => {
-      releaseStale?.(metadataScan([{ path: "/p/a/x.md", frontmatter: null, tags: ["work"] }]));
-      await Promise.resolve();
-    });
-
-    // The slow scan for the replaced workspace must not clobber /p/b's index.
-    expect(result.current.metadataEntries).toEqual([]);
-  });
-
-  it("drops a stale wikilink scan that lands after the workspace was replaced", async () => {
-    let releaseStale: ((scan: unknown) => void) | null = null;
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        scan_wikilinks: (_cmd, args) => {
-          if (String(args?.path ?? "") === "/p/a") {
-            return new Promise((resolve) => {
-              releaseStale = resolve;
-            });
-          }
-          return Promise.resolve(wikilinkScan([]));
-        },
-      }) as typeof invoke,
-    );
-    const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-
-    await act(async () => {
-      await result.current.openFolder("/p/a");
-    });
-    await act(async () => {
-      await result.current.openFolder("/p/b");
-    });
-
-    await act(async () => {
       releaseStale?.(
-        wikilinkScan([{ source: "/p/a/x.md", target: "y", line: 1, snippet: "[[y]]" }]),
+        vaultSnapshot(["/p/a/x.md"], {
+          notes: [{ path: "/p/a/x.md", title: null, tags: ["work"], fields: {} }],
+        }),
       );
-      await Promise.resolve();
+      await pending;
     });
 
-    // The slow scan for the replaced workspace must not clobber /p/b's refs.
-    expect(result.current.wikilinkRefs).toEqual([]);
+    expect(result.current.workspace?.root).toBe("/p/b");
+    expect(result.current.workspaceFiles).toEqual([]);
+    expect(result.current.snapshot.notes).toEqual([]);
   });
 });
 

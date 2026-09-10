@@ -92,9 +92,12 @@ pub(crate) fn build(notes: &[Note], resolver: &Resolver) -> Graph {
 
             // A line can hold several links to the same note, which would
             // otherwise surface as duplicate backlink rows sharing a snippet.
+            // Links arrive in source then line order, so a duplicate can only
+            // be the row just pushed; checking every row made a note with
+            // thousands of inbound links quadratic.
             let already = backlinks[target]
-                .iter()
-                .any(|back| back.source == note.path && back.line == link.line);
+                .last()
+                .is_some_and(|back| back.source == note.path && back.line == link.line);
             if !already {
                 backlinks[target].push(Backlink {
                     source: note.path.clone(),

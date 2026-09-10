@@ -8,8 +8,6 @@
 
 import type { ComponentType } from "react";
 import { fuzzyMatch } from "./fuzzyMatch";
-import { EMPTY_METADATA_INDEX, type MetadataIndex, metadataFields } from "./metadata";
-import { matchesFilters, parseMetadataQuery } from "./metadataQuery";
 
 export type CommandSection = "Files" | "Headings" | "Commands";
 
@@ -45,30 +43,33 @@ const SECTION_PRIORITY: Record<CommandSection, number> = {
 };
 
 export interface RankOptions {
-  /** Workspace metadata, so `tag:`/`field:` terms in the query can filter. */
-  metadata?: MetadataIndex;
+  /**
+   * Paths the query's metadata filters selected, or `null` when it carried no
+   * filters. A filtered query is about documents, so non-file rows drop out.
+   */
+  paths?: ReadonlySet<string> | null;
   limit?: number;
 }
 
 /**
- * Filter and rank `commands` against `query`. Metadata terms (`tag:foo`,
- * `status:draft`) narrow the list to matching workspace files first; the rest
- * of the query is fuzzy-matched. When nothing is left to match, returns the
- * candidates ordered by section priority then input order.
+ * Filter and rank `commands` against `text`, the query with its metadata
+ * filters already lifted out by the index. `paths` is what those filters
+ * selected. When nothing is left to match, returns the candidates ordered by
+ * section priority then input order.
  */
 export function rankCommands(
-  query: string,
+  text: string,
   commands: readonly Command[],
-  { metadata = EMPTY_METADATA_INDEX, limit = 50 }: RankOptions = {},
+  { paths = null, limit = 50 }: RankOptions = {},
 ): RankedCommand[] {
-  const { filters, text } = parseMetadataQuery(query, metadataFields(metadata));
-  // A metadata query is about documents, so non-file rows drop out entirely.
   const candidates =
-    filters.length === 0
-      ? commands
-      : commands.filter((c) => c.path !== undefined && matchesFilters(metadata, c.path, filters));
+    paths === null ? commands : commands.filter((c) => c.path !== undefined && paths.has(c.path));
 
-  if (text.length === 0) {
+  // The index normalises the text it hands back; the raw query the palette
+  // shows while the first answer is in flight has to be normalised here, or a
+  // double space becomes a character the fuzzy matcher cannot match.
+  const query = text.trim().replace(/\s+/g, " ");
+  if (query.length === 0) {
     return candidates
       .slice()
       .sort((a, b) => SECTION_PRIORITY[a.section] - SECTION_PRIORITY[b.section])
@@ -78,7 +79,7 @@ export function rankCommands(
 
   const scored: Array<RankedCommand & { score: number }> = [];
   for (const command of candidates) {
-    const result = fuzzyMatch(text, command.title);
+    const result = fuzzyMatch(query, command.title);
     if (!result) continue;
     scored.push({ command, matches: result.indices, score: result.score });
   }

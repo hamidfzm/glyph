@@ -1,7 +1,7 @@
 // Turns the flat tag list into the nesting `/` implies, so `project/glyph`
 // hangs under `project` instead of sitting beside it as a long chip.
 
-import type { TagCount } from "@/lib/metadata";
+import type { TagCount } from "@/lib/vault";
 
 export type TagSort = "name" | "count";
 

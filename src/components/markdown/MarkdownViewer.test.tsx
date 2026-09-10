@@ -1,5 +1,7 @@
-import { fireEvent, render } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { MarkdownViewer } from "./MarkdownViewer";
 
 vi.mock("./MermaidDiagram", () => ({
@@ -181,33 +183,56 @@ describe("MarkdownViewer footnotes", () => {
 });
 
 describe("MarkdownViewer wikilinks", () => {
-  it("renders a resolved wikilink with the workspace path", () => {
-    const { container } = renderMd("Open [[Cooking]] now.", {
-      workspaceFiles: ["/workspace/Cooking.md", "/workspace/Other.md"],
+  // Resolution is an index call now, so a link is decorated a tick after the
+  // first render; `resolved` is what the index answers for this document.
+  function renderWikilinks(
+    content: string,
+    resolved: Record<string, string | null>,
+    extra: Partial<React.ComponentProps<typeof MarkdownViewer>> = {},
+  ) {
+    vi.mocked(invoke).mockImplementation(((cmd: string, args: { targets?: string[] }) =>
+      Promise.resolve(
+        cmd === "vault_resolve" ? (args?.targets ?? []).map((t) => resolved[t] ?? null) : undefined,
+      )) as unknown as typeof invoke);
+    return renderInWorkspace(
+      <MarkdownViewer content={content} searchOpen={false} onSearchClose={() => {}} {...extra} />,
+      "/workspace",
+    );
+  }
+
+  it("renders a resolved wikilink with the workspace path", async () => {
+    const { container } = renderWikilinks("Open [[Cooking]] now.", {
+      Cooking: "/workspace/Cooking.md",
     });
-    const link = container.querySelector('a[data-wikilink="Cooking"]');
-    expect(link).not.toBeNull();
-    expect(link?.getAttribute("data-wikilink-path")).toBe("/workspace/Cooking.md");
-    expect(link?.classList.contains("wikilink")).toBe(true);
-    expect(link?.classList.contains("wikilink--broken")).toBe(false);
+    const link = () => container.querySelector('a[data-wikilink="Cooking"]');
+    await waitFor(() =>
+      expect(link()?.getAttribute("data-wikilink-path")).toBe("/workspace/Cooking.md"),
+    );
+    expect(link()?.classList.contains("wikilink")).toBe(true);
+    expect(link()?.classList.contains("wikilink--broken")).toBe(false);
   });
 
-  it("renders a missing wikilink with the broken modifier", () => {
-    const { container } = renderMd("[[Missing]]", { workspaceFiles: ["/workspace/Other.md"] });
+  it("renders a missing wikilink with the broken modifier", async () => {
+    const { container } = renderWikilinks("[[Missing]]", {});
+    // The index answers "nowhere", which leaves the link exactly as it renders
+    // before any answer arrives.
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("vault_resolve", expect.anything()));
     const link = container.querySelector('a[data-wikilink="Missing"]');
     expect(link).not.toBeNull();
     expect(link?.classList.contains("wikilink--broken")).toBe(true);
     expect(link?.getAttribute("aria-disabled")).toBe("true");
   });
 
-  it("calls onOpenWikilink with the resolved path on click", () => {
+  it("calls onOpenWikilink with the resolved path on click", async () => {
     const onOpen = vi.fn();
-    const { container } = renderMd("[[Cooking]]", {
-      workspaceFiles: ["/workspace/Cooking.md"],
-      onOpenWikilink: onOpen,
-    });
-    const link = container.querySelector('a[data-wikilink="Cooking"]') as HTMLAnchorElement;
-    fireEvent.click(link);
+    const { container } = renderWikilinks(
+      "[[Cooking]]",
+      { Cooking: "/workspace/Cooking.md" },
+      { onOpenWikilink: onOpen },
+    );
+    const link = () => container.querySelector('a[data-wikilink="Cooking"]') as HTMLAnchorElement;
+    await waitFor(() => expect(link().getAttribute("data-wikilink-path")).not.toBeNull());
+    fireEvent.click(link());
     expect(onOpen).toHaveBeenCalledWith("/workspace/Cooking.md", undefined);
   });
 });

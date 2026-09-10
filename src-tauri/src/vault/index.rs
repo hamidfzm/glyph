@@ -9,7 +9,7 @@ use super::graph::{self, Graph};
 use super::note::{self, Note};
 use super::resolve::{compare_paths, Resolver};
 use crate::commands::walk::{
-    scan_files, ScanStatus, SCAN_MAX_FILE_BYTES, WALK_MAX_DEPTH, WALK_MAX_FILES, WALK_SKIP_DIRS,
+    collect_files, ScanStatus, SCAN_MAX_FILE_BYTES, WALK_MAX_DEPTH, WALK_MAX_FILES, WALK_SKIP_DIRS,
 };
 
 /// Markdown and canvas files both belong to the index; everything else is an
@@ -51,12 +51,15 @@ impl Vault {
     /// Body of [`Vault::build`] with the caps as parameters, so the truncation
     /// branches are testable without creating `WALK_MAX_FILES` real files.
     pub fn build_capped(root: &Path, max_files: usize, max_depth: usize) -> Result<Self, String> {
-        let mut notes = Vec::new();
+        let (paths, status) = collect_files(root, is_indexable, max_files, max_depth)?;
+        let mut notes = Vec::with_capacity(paths.len());
         let mut canvases = HashMap::new();
-        let status = scan_files(root, is_indexable, max_files, max_depth, |path, content| {
-            let path = path.to_string_lossy().to_string();
-            notes.push(index_file(&path, content, &mut canvases));
-        })?;
+        for (note, canvas) in index_files(&paths) {
+            if let Some(canvas) = canvas {
+                canvases.insert(note.path.clone(), canvas);
+            }
+            notes.push(note);
+        }
 
         let mut vault = Vault {
             canonical_root: std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()),
@@ -104,7 +107,15 @@ impl Vault {
                 continue;
             };
 
-            let note = index_file(&key, &content, &mut self.canvases);
+            let (note, canvas) = index_file(&key, &content);
+            match canvas {
+                Some(canvas) => {
+                    self.canvases.insert(key.clone(), canvas);
+                }
+                None => {
+                    self.canvases.remove(&key);
+                }
+            }
             match existing {
                 Some(index) => self.notes[index] = note,
                 None => {
@@ -201,12 +212,49 @@ impl Vault {
     }
 }
 
-fn index_file(path: &str, content: &str, canvases: &mut HashMap<String, Canvas>) -> Note {
+fn index_file(path: &str, content: &str) -> (Note, Option<Canvas>) {
     if crate::is_canvas_file(Path::new(path)) {
         let (note, canvas) = canvas::extract_canvas(path, content);
-        canvases.insert(path.to_string(), canvas);
-        return note;
+        return (note, Some(canvas));
     }
-    canvases.remove(path);
-    note::extract_note(path, content)
+    (note::extract_note(path, content), None)
+}
+
+/// Read and index `paths` across the available cores. Reading is most of a
+/// build, every file being an open, a read and a close, and each file stands
+/// alone until resolution. Unreadable and non-UTF-8 files are skipped.
+fn index_files(paths: &[PathBuf]) -> Vec<(Note, Option<Canvas>)> {
+    let workers = std::thread::available_parallelism()
+        .map_or(1, |cores| cores.get())
+        .min(paths.len())
+        .max(1);
+    let chunk = paths.len().div_ceil(workers).max(1);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = paths
+            .chunks(chunk)
+            .map(|chunk| {
+                scope.spawn(move || {
+                    chunk
+                        .iter()
+                        .filter_map(|path| read_and_index(path))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        // A worker's panic is re-raised here, as it would have been had the
+        // file been indexed on this thread.
+        handles
+            .into_iter()
+            .flat_map(|handle| {
+                handle
+                    .join()
+                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+            })
+            .collect()
+    })
+}
+
+fn read_and_index(path: &Path) -> Option<(Note, Option<Canvas>)> {
+    let content = std::fs::read_to_string(path).ok()?;
+    Some(index_file(&path.to_string_lossy(), &content))
 }

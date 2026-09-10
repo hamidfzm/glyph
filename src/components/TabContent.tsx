@@ -27,7 +27,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     activeTab,
     activeTabId,
     workspaceFiles,
-    wikilinkRefs,
+    snapshot,
     openFile,
     saveScrollPosition,
     updateEditContent,
@@ -74,12 +74,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     return (
       // Keyed by root so a workspace change remounts rather than swapping the
       // key underneath hooks that seed from it once.
-      <GraphView
-        key={activeTab.root}
-        workspaceFiles={workspaceFiles}
-        wikilinkRefs={wikilinkRefs}
-        onOpenFile={handleOpenWikilink}
-      />
+      <GraphView key={activeTab.root} graph={snapshot.graph} onOpenFile={handleOpenWikilink} />
     );
   }
 

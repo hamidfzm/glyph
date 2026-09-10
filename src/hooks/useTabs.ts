@@ -120,8 +120,7 @@ export function useTabs(options: UseTabsOptions) {
 
   const {
     workspaceFiles,
-    wikilinkRefs,
-    metadataEntries,
+    snapshot,
     indexStatus,
     scanWorkspace,
     refreshIndexes,
@@ -397,9 +396,8 @@ export function useTabs(options: UseTabsOptions) {
     activeFile,
     initializing,
     workspace,
+    snapshot,
     workspaceFiles,
-    wikilinkRefs,
-    metadataEntries,
     indexStatus,
     openFile,
     newDocument,

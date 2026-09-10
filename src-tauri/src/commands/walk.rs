@@ -1,6 +1,5 @@
 use serde::Serialize;
-use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
 pub(crate) const WALK_MAX_DEPTH: usize = 32;
@@ -68,22 +67,23 @@ pub(crate) fn workspace_walker(root: &Path, max_depth: usize) -> impl Iterator<I
         .flatten()
 }
 
-/// Read every file under `root` that `accept` selects, within the scan caps,
-/// and hand its path and contents to `visit`. Oversized and non-UTF-8 files are
-/// skipped so one unreadable note can't fail a whole workspace index.
-pub(crate) fn scan_files(
+/// Walk `root` for the files `accept` selects, within the scan caps, without
+/// reading them: the read is most of the cost, and handing back paths lets the
+/// caller spread it across threads. An oversized file still counts toward the
+/// file cap but is left out, since the walk already holds its metadata.
+pub(crate) fn collect_files(
     root: &Path,
     accept: fn(&Path) -> bool,
     max_files: usize,
     max_depth: usize,
-    mut visit: impl FnMut(&Path, &str),
-) -> Result<ScanStatus, String> {
+) -> Result<(Vec<PathBuf>, ScanStatus), String> {
     if !root.is_dir() {
         return Err(format!("Not a directory: {}", root.display()));
     }
 
     let mut status = ScanStatus::complete();
-    let mut files_scanned = 0usize;
+    let mut files = Vec::new();
+    let mut counted = 0usize;
     for entry in workspace_walker(root, max_depth) {
         if entry.file_type().is_dir() {
             // A directory yielded at the depth cap is not descended into, so
@@ -93,34 +93,27 @@ pub(crate) fn scan_files(
             }
             continue;
         }
-        if !entry.file_type().is_file() {
+        if !entry.file_type().is_file() || !accept(entry.path()) {
             continue;
         }
-        let path = entry.path();
-        if !accept(path) {
-            continue;
-        }
-        if files_scanned >= max_files {
+        if counted >= max_files {
             status = ScanStatus::file_limit(max_files);
             break;
         }
-        files_scanned += 1;
+        counted += 1;
 
-        // An unreadable stat leaves the file in: `read_to_string` below is the
-        // real gate, and the size check is only there to skip the huge ones.
+        // An unreadable stat leaves the file in: the read is the real gate,
+        // and the size check is only there to skip the huge ones.
         if entry
             .metadata()
             .is_ok_and(|m| m.len() > SCAN_MAX_FILE_BYTES)
         {
             continue;
         }
-        let Ok(content) = fs::read_to_string(path) else {
-            continue;
-        };
-        visit(path, &content);
+        files.push(entry.into_path());
     }
 
-    Ok(status)
+    Ok((files, status))
 }
 
 #[cfg(test)]
@@ -135,26 +128,26 @@ mod tests {
     #[test]
     fn scan_markdown_files_skips_symlinked_entries() {
         let dir = std::env::temp_dir().join(format!("glyph_walk_symlink_{}", std::process::id()));
-        let _ = fs::create_dir_all(&dir);
-        fs::write(dir.join("real.md"), "body").unwrap();
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(dir.join("real.md"), "body").unwrap();
         let _ = std::os::unix::fs::symlink(dir.join("real.md"), dir.join("link.md"));
 
-        let mut seen: Vec<String> = Vec::new();
-        let status = scan_files(
+        let (files, status) = collect_files(
             &dir,
             crate::is_markdown_file,
             WALK_MAX_FILES,
             WALK_MAX_DEPTH,
-            |path, _| {
-                seen.push(path.file_name().unwrap().to_string_lossy().to_string());
-            },
         )
         .unwrap();
+        let seen: Vec<String> = files
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
 
         assert_eq!(seen, vec!["real.md"]);
         assert_eq!(status, ScanStatus::complete());
 
-        let _ = fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

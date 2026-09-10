@@ -4,6 +4,7 @@ import { act, waitFor } from "@testing-library/react";
 import { expect, vi } from "vitest";
 import type { useTabs } from "@/hooks/useTabs";
 import { pickFiles, pickFolder, pickNewWorkspace, pickSave } from "@/lib/pickers";
+import { EMPTY_SNAPSHOT, type VaultSnapshot } from "@/lib/vault";
 import { COMPLETE_SCAN } from "@/lib/workspaceScan";
 import { resetWorkspaceSessions } from "@/lib/workspaceSession";
 
@@ -15,10 +16,19 @@ export type TabsHook = { current: ReturnType<typeof useTabs> };
 
 export type Invoker = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 
-// The workspace scan commands return items plus a truncation status (#436).
+// `list_markdown_files` returns items plus a truncation status (#436).
 export const fileScan = (files: string[]) => ({ files, status: COMPLETE_SCAN });
-export const wikilinkScan = (refs: unknown[]) => ({ refs, status: COMPLETE_SCAN });
-export const metadataScan = (files: unknown[]) => ({ files, status: COMPLETE_SCAN });
+
+/** A vault snapshot holding `files` and nothing else derived. */
+export const vaultSnapshot = (
+  files: string[] = [],
+  over: Partial<VaultSnapshot> = {},
+): VaultSnapshot => ({
+  ...EMPTY_SNAPSHOT,
+  files,
+  graph: { nodes: files.map((id) => ({ id, label: id, degree: 0, orphan: true })), edges: [] },
+  ...over,
+});
 
 export function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): Invoker {
   return async (cmd, args) => {
@@ -54,10 +64,17 @@ export function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): I
         return [];
       case "list_markdown_files":
         return fileScan([]);
-      case "scan_wikilinks":
-        return wikilinkScan([]);
-      case "scan_metadata":
-        return metadataScan([]);
+      case "vault_snapshot":
+      case "vault_refresh":
+        return vaultSnapshot();
+      case "vault_forget":
+        return undefined;
+      case "vault_backlinks":
+      case "vault_paths_with_tag":
+      case "vault_resolve":
+        return [];
+      case "vault_query":
+        return { filters: [], text: String(args?.query ?? ""), paths: [] };
       case "workspace_resolve":
         // Default: a plain, non-nested folder that's always adoptable.
         return {

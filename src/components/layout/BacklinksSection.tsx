@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import type { Backlink } from "@/lib/backlinks";
 import { relativeToRoot } from "@/lib/paths";
+import type { Backlink } from "@/lib/vault";
 
 interface BacklinksSectionProps {
   backlinks: Backlink[];

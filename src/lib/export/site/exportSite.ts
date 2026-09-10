@@ -8,6 +8,7 @@ import { siteChromeCss, siteChromeScript } from "@/lib/export/siteChrome";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { basename } from "@/lib/paths";
 import type { MarkdownPlugin, SiteThemeContribution } from "@/lib/plugins/types";
+import { resolveTargets } from "@/lib/wikilinkResolutions";
 import type { FileScan } from "@/lib/workspaceScan";
 import { buildIndexBodyHtml } from "./indexPage";
 import { inlineMermaidSvgs } from "./mermaidInline";
@@ -86,6 +87,13 @@ export async function exportSite({
   if (unordered.length === 0) {
     throw new Error("The workspace contains no markdown files to export.");
   }
+
+  // Rebuild the index from disk before resolving any link. `glyph serve`
+  // re-runs this on every change but never touches the index, and a plain
+  // export may run against a backend that built one at some earlier point, so
+  // without this a note created since would be a permanently broken link and a
+  // renamed one would keep pointing at its old page.
+  await invoke("vault_refresh", { path: root });
 
   // Site-wide metadata: optional .glyph/site.json at the root; absence is
   // fine, a present-but-invalid file fails the export loudly. The read error
@@ -181,8 +189,9 @@ export async function exportSite({
     for (const { file, content, rel: pageRel } of jobs) {
       let body = await renderPageHtml({
         content,
-        filePath: file,
-        workspaceFiles: files,
+        // Resolved per page: the exported site links notes to each other the
+        // same way the viewer does, through the one index.
+        resolutions: await resolveTargets(root, file, content),
         extraRemark: remarkPlugins,
         // The URL rewriter runs last so links emitted by plugin rehype plugins
         // are relativized like every other in-document link.
