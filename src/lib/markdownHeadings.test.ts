@@ -28,8 +28,8 @@ describe("parseHeadings", () => {
     expect(parseHeadings("# Title #").map((h) => h.text)).toEqual(["Title"]);
   });
 
-  it("parses CRLF line endings with the same line numbers as LF", () => {
-    expect(parseHeadings("# One\r\ntext\r\n## Two ##\r\n")).toEqual([
+  it.each(["\r\n", "\r"])("numbers lines the same for %j endings as for LF", (eol) => {
+    expect(parseHeadings(["# One", "text", "## Two ##", ""].join(eol))).toEqual([
       { level: 1, text: "One", line: 0 },
       { level: 2, text: "Two", line: 2 },
     ]);
