@@ -20,8 +20,8 @@ function firstHeadingTitle(content: string): string | null {
   for (const heading of parseHeadings(body)) {
     if (heading.level !== 1) continue;
     const text = heading.text
-      // `[` and `(` stay out of the runs so unclosed brackets cannot backtrack quadratically.
-      .replace(/\[([^[\]]*)\]\([^()]*\)/g, "$1")
+      // One level of URL parens (`Foo_(bar)`); runs exclude `[` and `(` so unclosed ones stay linear.
+      .replace(/\[([^[\]]*)\]\([^()]*(?:\([^()]*\)[^()]*)*\)/g, "$1")
       .replace(/[*_`]/g, "")
       .trim();
     if (text) return text;

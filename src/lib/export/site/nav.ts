@@ -5,7 +5,7 @@ import { encodeHref, relativeHref } from "./sitePaths";
 export interface SitePage {
   /** Site-relative path of the generated page ("guide/intro.html"). */
   rel: string;
-  /** Human title (frontmatter title or file basename). */
+  /** Human title (frontmatter title, first h1, or file basename). */
   title: string;
 }
 

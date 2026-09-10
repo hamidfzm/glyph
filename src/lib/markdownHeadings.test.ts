@@ -31,8 +31,13 @@ describe("parseHeadings", () => {
     ["# C#", "C#"],
     ["# #", ""],
     ["# Title #  ", "Title"],
+    ["# Title #\r", "Title"],
   ])("reads %j as %j", (md, text) => {
     expect(parseHeadings(md)[0].text).toBe(text);
+  });
+
+  it("skips a line whose text holds a line terminator", () => {
+    expect(parseHeadings("# a\u2028b\n# c\u2029d")).toEqual([]);
   });
 
   it.each([

@@ -32,13 +32,15 @@ export function parseHeadings(md: string): MarkdownHeading[] {
 
     const m = ATX.exec(lines[i]);
     if (!m) continue;
-    // Drop a CommonMark closing sequence: a trailing `#` run alone or after whitespace (`# C#` keeps
-    // it). Scanned by hand because a `$`-anchored regex backtracks quadratically on long whitespace.
-    const rest = lines[i].slice(m[0].length).trimEnd();
-    let runStart = rest.length;
-    while (runStart > 0 && rest[runStart - 1] === "#") runStart--;
-    const isClosing = runStart === 0 || /\s/.test(rest[runStart - 1]);
-    const text = (isClosing ? rest.slice(0, runStart) : rest).trim();
+    const content = lines[i].slice(m[0].length).trimEnd();
+    // A terminator inside the text (a lone-CR file) is not a heading; it would swallow later lines.
+    if (/[\r\u2028\u2029]/.test(content)) continue;
+    // CommonMark closing sequence: a trailing `#` run alone or after whitespace (`# C#` keeps it).
+    // Scanned by hand: a `$`-anchored regex backtracks quadratically on long whitespace.
+    let runStart = content.length;
+    while (runStart > 0 && content[runStart - 1] === "#") runStart--;
+    const isClosing = runStart === 0 || /\s/.test(content[runStart - 1]);
+    const text = (isClosing ? content.slice(0, runStart) : content).trim();
     headings.push({ level: m[1].length, text, line: i });
   }
 
