@@ -1,9 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import { EMPTY_SNAPSHOT, type VaultSnapshot } from "@/lib/vault";
+import { parkInvoke } from "@/test/parkInvoke";
 import { useVaultQuery } from "./useVaultQuery";
 
 // Mutable so a test can re-index under the hook the way the provider does.
@@ -71,6 +72,27 @@ describe("useVaultQuery", () => {
     const { result } = renderHook(() => useVaultQuery("tag:work"), { wrapper: inWorkspace });
     await waitFor(() => expect(errorSpy).toHaveBeenCalled());
     expect(result.current).toEqual({ filters: [], text: "tag:work", paths: [] });
+    errorSpy.mockRestore();
+  });
+
+  it("keeps the current query's answer when older ones land late", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const calls = parkInvoke();
+    const { result, rerender } = renderHook(({ q }) => useVaultQuery(q), {
+      wrapper: inWorkspace,
+      initialProps: { q: "tag:a" },
+    });
+    rerender({ q: "tag:b" });
+    rerender({ q: "tag:c" });
+    expect(calls).toHaveLength(3);
+
+    const latest = { filters: [{ field: "tag", value: "c" }], text: "", paths: ["/ws/c.md"] };
+    await act(async () => calls[2].resolve(latest));
+    await act(async () => {
+      calls[0].resolve({ filters: [], text: "stale", paths: [] });
+      calls[1].reject(new Error("denied"));
+    });
+    expect(result.current).toEqual(latest);
     errorSpy.mockRestore();
   });
 });

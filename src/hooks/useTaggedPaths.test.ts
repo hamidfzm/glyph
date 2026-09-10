@@ -1,11 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EMPTY_SNAPSHOT } from "@/lib/vault";
 
 /** An index holding notes; an empty one carries no tags to ask about. */
 const indexed = { ...EMPTY_SNAPSHOT, files: ["/ws/spec.md", "/ws/deep/plan.md"] };
 
+import { parkInvoke } from "@/test/parkInvoke";
 import { useTaggedPaths } from "./useTaggedPaths";
 
 const paths = ["/ws/spec.md", "/ws/deep/plan.md"];
@@ -50,6 +51,31 @@ describe("useTaggedPaths", () => {
     const { result } = renderHook(() => useTaggedPaths("/ws", "work", indexed));
     await waitFor(() => expect(errorSpy).toHaveBeenCalled());
     expect(result.current).toEqual([]);
+    errorSpy.mockRestore();
+  });
+
+  it("asks nothing outside a workspace", () => {
+    const { result } = renderHook(() => useTaggedPaths(undefined, "work", indexed));
+    expect(result.current).toEqual([]);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("keeps the current tag's files when older answers land late", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const calls = parkInvoke();
+    const { result, rerender } = renderHook(({ tag }) => useTaggedPaths("/ws", tag, indexed), {
+      initialProps: { tag: "work" },
+    });
+    rerender({ tag: "home" });
+    rerender({ tag: "ideas" });
+    expect(calls).toHaveLength(3);
+
+    await act(async () => calls[2].resolve(["/ws/idea.md"]));
+    await act(async () => {
+      calls[0].resolve(paths);
+      calls[1].reject(new Error("denied"));
+    });
+    expect(result.current).toEqual(["/ws/idea.md"]);
     errorSpy.mockRestore();
   });
 });

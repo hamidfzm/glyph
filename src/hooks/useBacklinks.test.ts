@@ -1,11 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EMPTY_SNAPSHOT } from "@/lib/vault";
 
 /** An index holding notes; an empty one is nothing to ask about. */
 const indexed = { ...EMPTY_SNAPSHOT, files: ["/ws/Note.md", "/ws/Other.md"] };
 
+import { parkInvoke } from "@/test/parkInvoke";
 import { useBacklinks } from "./useBacklinks";
 
 const rows = [{ source: "/ws/Index.md", line: 3, snippet: "see [[Note]]" }];
@@ -53,6 +54,27 @@ describe("useBacklinks", () => {
     const { result } = renderHook(() => useBacklinks("/ws", "/ws/Note.md", indexed));
     await waitFor(() => expect(errorSpy).toHaveBeenCalled());
     expect(result.current).toEqual([]);
+    errorSpy.mockRestore();
+  });
+
+  // The current note's rows land first; a slower answer for a note the panel
+  // already left, rows or failure, must not replace them (INV-3).
+  it("keeps the current note's rows when older answers land late", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const calls = parkInvoke();
+    const { result, rerender } = renderHook(({ path }) => useBacklinks("/ws", path, indexed), {
+      initialProps: { path: "/ws/Note.md" },
+    });
+    rerender({ path: "/ws/Other.md" });
+    rerender({ path: "/ws/Third.md" });
+    expect(calls).toHaveLength(3);
+
+    await act(async () => calls[2].resolve(rows));
+    await act(async () => {
+      calls[0].resolve([{ source: "/ws/Stale.md", line: 1, snippet: "stale" }]);
+      calls[1].reject(new Error("denied"));
+    });
+    expect(result.current).toEqual(rows);
     errorSpy.mockRestore();
   });
 });

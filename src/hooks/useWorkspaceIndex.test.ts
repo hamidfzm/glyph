@@ -26,7 +26,7 @@ function parkSnapshots() {
   return pending;
 }
 
-function render(root = "/ws") {
+function render(root: string | null = "/ws") {
   return renderHook(() => useWorkspaceIndex({ workspaceRoot: root, onWorkspaceNotice: vi.fn() }));
 }
 
@@ -149,5 +149,28 @@ describe("useWorkspaceIndex", () => {
     const { result } = render("/ws/incoming");
     act(() => result.current.clearIndexes("/ws/outgoing"));
     expect(invoke).toHaveBeenCalledWith("vault_forget", { path: "/ws/outgoing" });
+  });
+
+  it("lists no documents when the file walk fails, and says why", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation(((cmd: string) =>
+      cmd === "list_markdown_files"
+        ? Promise.reject(new Error("denied"))
+        : Promise.resolve(vault(["/ws/a.md"]))) as unknown as typeof invoke);
+    const { result } = render();
+
+    await act(async () => {
+      await result.current.scanWorkspace("/ws", () => true);
+    });
+    expect(result.current.workspaceFiles).toEqual([]);
+    expect(result.current.snapshot.files).toEqual(["/ws/a.md"]);
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it("releases nothing when no workspace was open", () => {
+    const { result } = render(null);
+    act(() => result.current.clearIndexes());
+    expect(invoke).not.toHaveBeenCalledWith("vault_forget", expect.anything());
   });
 });
