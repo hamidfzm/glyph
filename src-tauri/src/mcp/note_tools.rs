@@ -62,10 +62,18 @@ fn resolve_link(session: &Session, args: Value) -> Result<Value, String> {
             None => None,
         };
         let target = link_target(&args.target);
+        let resolution = vault.resolve_link(target, from.as_deref()).map(|found| {
+            json!({
+                "path": found.path,
+                "matchedBy": found.matched_by,
+                "tieBreak": found.tie_break,
+                "candidates": capped(found.candidates.into_iter()),
+            })
+        });
         Ok(json!({
             "target": target,
             "heading": split_heading(target).1,
-            "resolution": vault.resolve_link(target, from.as_deref()),
+            "resolution": resolution,
         }))
     })
 }
@@ -156,7 +164,7 @@ fn missing_section(content: &str, body_start: usize, heading: &str, path: &str) 
     let known: Vec<String> = parse_headings(content, body_start)
         .into_iter()
         .take(50)
-        .map(|found| found.text)
+        .map(|found| found.text.chars().take(100).collect::<String>())
         .collect();
     format!("no heading in {path} matches {heading:?}; its headings are: {known:?}")
 }

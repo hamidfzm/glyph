@@ -53,7 +53,11 @@ fn vault_context(session: &Session, args: Value) -> Result<Value, String> {
         "vaults": vaults,
         "activeNote": open.active_note,
         "openTabs": capped(open.tabs.iter()),
-        "expandedFolders": open.expanded,
+        "expandedFolders": open
+            .expanded
+            .iter()
+            .map(|(root, folders)| (root.clone(), capped(folders.iter())))
+            .collect::<serde_json::Map<_, _>>(),
     });
     if open.roots.is_empty() {
         context["note"] =

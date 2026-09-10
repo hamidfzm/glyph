@@ -2,7 +2,9 @@
 //! ported rule for rule from `src/lib/markdownHeadings.ts` and
 //! `src/lib/headingSection.ts`. The renderer keeps those for embeds, which
 //! slice content it has already loaded; `fixtures/vault-headings.json` holds
-//! both sides to the same answers.
+//! both sides to the same answers. One difference is deliberate: lines lose a
+//! CRLF's `\r` here, so a Windows-saved note has headings, where the
+//! TypeScript split on `\n` leaves the `\r` and its pattern refuses the line.
 
 use std::cmp::Ordering;
 
@@ -264,5 +266,12 @@ mod tests {
         let md = "## Real\ntext\n```\n## Fake\n```\nmore";
         assert_eq!(section(md, 0, "Fake"), None);
         assert_eq!(section(md, 0, "Real").as_deref(), Some(md));
+    }
+
+    #[test]
+    fn a_crlf_note_has_its_headings() {
+        let md = "# One\r\ntext\r\n## Two\r\nbody\r\n";
+        assert_eq!(texts(md), ["One", "Two"]);
+        assert_eq!(section(md, 0, "Two").as_deref(), Some("## Two\nbody"));
     }
 }

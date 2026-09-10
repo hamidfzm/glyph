@@ -2,6 +2,7 @@
 //! stdio adapter drives it today, and an in-app caller can drive it the same
 //! way. Handlers never read stdin, write stdout, or exit.
 
+use std::panic::AssertUnwindSafe;
 use std::path::Path;
 
 use serde::de::DeserializeOwned;
@@ -73,13 +74,34 @@ pub fn list() -> impl Iterator<Item = &'static ToolDef> {
     TOOLS.iter().filter(|tool| tool.enabled)
 }
 
+/// The most one result may carry, serialized. Listings and text are cut far
+/// below this; it bounds whatever a note's own content could still inflate.
+const MAX_RESULT_BYTES: usize = 1024 * 1024;
+
 pub fn dispatch(name: &str, args: Value, session: &Session) -> Result<Value, ToolError> {
     let tool = list()
         .find(|tool| tool.name == name)
         .ok_or_else(|| ToolError::Unknown(name.to_string()))?;
     // A client may leave out the arguments of a tool that takes none.
     let args = if args.is_null() { json!({}) } else { args };
-    (tool.handler)(session, args).map_err(ToolError::Failed)
+    run_tool(tool, session, args)
+}
+
+/// One handler, run so that neither a bug that panics nor an outsized answer
+/// ends the session.
+fn run_tool(tool: &ToolDef, session: &Session, args: Value) -> Result<Value, ToolError> {
+    let ran = std::panic::catch_unwind(AssertUnwindSafe(|| (tool.handler)(session, args)));
+    let result = ran
+        .unwrap_or_else(|_| Err(format!("{} failed unexpectedly", tool.name)))
+        .map_err(ToolError::Failed)?;
+    let size = serde_json::to_string(&result).map_or(0, |text| text.len());
+    if size > MAX_RESULT_BYTES {
+        return Err(ToolError::Failed(format!(
+            "the answer is over {} KB; ask for less, such as one section",
+            MAX_RESULT_BYTES / 1024
+        )));
+    }
+    Ok(result)
 }
 
 impl ToolDef {
@@ -102,4 +124,50 @@ impl ToolDef {
 /// A call's arguments, or a message the model can correct them from.
 pub(super) fn arguments<T: DeserializeOwned>(args: Value) -> Result<T, String> {
     serde_json::from_value(args).map_err(|err| format!("invalid arguments: {err}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tool(handler: fn(&Session, Value) -> Result<Value, String>) -> ToolDef {
+        ToolDef {
+            name: "probe",
+            title: "Probe",
+            description: "",
+            input_schema: || json!({}),
+            effect: Effect::ReadOnly,
+            enabled: true,
+            handler,
+        }
+    }
+
+    #[test]
+    fn a_panic_or_an_outsized_answer_is_a_refusal_not_the_end() {
+        let (grants, vaults, open) = (
+            GrantRegistry::default(),
+            VaultStore::default(),
+            OpenState::default(),
+        );
+        let session = Session {
+            grants: &grants,
+            vaults: &vaults,
+            open: &open,
+            exe: Path::new("glyph"),
+        };
+        let panics = tool(|_, _| panic!("a handler bug"));
+        let floods = tool(|_, _| Ok(json!("x".repeat(MAX_RESULT_BYTES))));
+        let answers = tool(|_, args| Ok(args));
+
+        let refused = |tool: &ToolDef| match run_tool(tool, &session, json!({})) {
+            Err(ToolError::Failed(message)) => message,
+            other => panic!("expected a refusal, got {other:?}"),
+        };
+        assert!(refused(&panics).contains("failed unexpectedly"));
+        assert!(refused(&floods).contains("ask for less"));
+        assert_eq!(
+            run_tool(&answers, &session, json!({ "a": 1 })),
+            Ok(json!({ "a": 1 }))
+        );
+    }
 }

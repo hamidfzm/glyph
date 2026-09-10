@@ -1,7 +1,7 @@
 //! The [`Vault`] itself: building the note set from a workspace root and
 //! keeping it current as files change.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use super::canvas::{self, Canvas};
@@ -36,8 +36,8 @@ pub struct Vault {
     /// so the palette does not recompute it per keystroke.
     pub(super) field_names: BTreeSet<String>,
     pub(super) walk_status: ScanStatus,
-    /// Modified time and size of every file the last walk or update saw, so
-    /// a sync re-reads only what changed.
+    /// Modified time and size of every file the last walk saw, so a sync
+    /// re-reads only what changed.
     stamps: HashMap<String, Stamp>,
     /// Set when an update was turned away at the file cap.
     refused_at_cap: bool,
@@ -103,16 +103,10 @@ impl Vault {
                 None => path.to_string_lossy().to_string(),
             };
 
-            let stamp = self.walkable(&path, &relative);
-            // Kept for a file that will not read as UTF-8 too, so a sync does
-            // not retry it on every call until it changes.
-            if let Some(stamp) = stamp {
-                self.stamps.insert(key.clone(), stamp);
-            } else {
-                self.stamps.remove(&key);
-            }
-            let content = stamp.and_then(|_| std::fs::read_to_string(&path).ok());
-            let Some(content) = content else {
+            let content = self
+                .walkable(&path, &relative)
+                .then(|| std::fs::read_to_string(&path));
+            let Some(Ok(content)) = content else {
                 // A path the walker would have skipped, a deletion, or a file
                 // that went away mid-update: none of them belong in the index.
                 if let Some(index) = existing {
@@ -162,27 +156,30 @@ impl Vault {
     pub fn sync(&mut self) -> Result<(), String> {
         let (files, status) =
             collect_files(&self.root, is_indexable, self.max_files, self.max_depth)?;
-        let walked: HashSet<String> = files
-            .iter()
-            .map(|(path, _)| path.to_string_lossy().to_string())
+        let walked: HashMap<String, Stamp> = files
+            .into_iter()
+            .map(|(path, stamp)| (path.to_string_lossy().to_string(), stamp))
             .collect();
         // Removals first, so a file that took a deleted one's place under the
         // cap is not turned away.
         let mut changed: Vec<PathBuf> = self
             .stamps
             .keys()
-            .filter(|path| !walked.contains(*path))
+            .filter(|path| !walked.contains_key(*path))
             .map(PathBuf::from)
             .collect();
         changed.extend(
-            files
-                .into_iter()
-                .filter(|(path, stamp)| self.stamps.get(&*path.to_string_lossy()) != Some(stamp))
-                .map(|(path, _)| path),
+            walked
+                .iter()
+                .filter(|(path, stamp)| self.stamps.get(*path) != Some(*stamp))
+                .map(|(path, _)| PathBuf::from(path)),
         );
         if !changed.is_empty() {
             self.apply_changes(&changed);
         }
+        // Stamps come from the walk alone, so two walks compare like with like:
+        // on Windows a directory listing and a file's own metadata can differ.
+        self.stamps = walked;
         self.walk_status = status;
         self.refused_at_cap = false;
         Ok(())
@@ -200,32 +197,32 @@ impl Vault {
         Some((self.root.join(&relative), relative))
     }
 
-    /// The file's stamp when the walk would have visited `path`, `None` when
-    /// it would not. `apply_changes` reads files the walk never offered it, so
-    /// the same gates have to hold here: no hidden or noisy directories, no
-    /// symlinks out of the workspace, and no file past the size cap.
-    fn walkable(&self, path: &Path, relative: &Path) -> Option<Stamp> {
+    /// Whether the walk would have visited `path`. `apply_changes` reads files
+    /// the walk never offered it, so the same gates have to hold here: no
+    /// hidden or noisy directories, no symlinks out of the workspace, and no
+    /// file past the size cap.
+    fn walkable(&self, path: &Path, relative: &Path) -> bool {
         if !is_indexable(path) || relative.components().count() > self.max_depth {
-            return None;
+            return false;
         }
         for component in relative.components() {
             let name = component.as_os_str().to_string_lossy();
             if name.starts_with('.') || WALK_SKIP_DIRS.contains(&name.as_ref()) {
-                return None;
+                return false;
             }
         }
         // `symlink_metadata` reports the link itself, so `is_file` already
         // refuses a symlinked note the way the walk does.
-        let meta = std::fs::symlink_metadata(path).ok()?;
+        let Ok(meta) = std::fs::symlink_metadata(path) else {
+            return false;
+        };
         if !meta.is_file() || meta.len() > SCAN_MAX_FILE_BYTES {
-            return None;
+            return false;
         }
         // A symlink further up the path is invisible to that check, and the
         // watcher follows links, so a linked directory would otherwise deliver
         // events for files outside the workspace entirely.
-        let inside = std::fs::canonicalize(path)
-            .is_ok_and(|resolved| resolved.starts_with(&self.canonical_root));
-        inside.then(|| Stamp::of(&meta))
+        std::fs::canonicalize(path).is_ok_and(|resolved| resolved.starts_with(&self.canonical_root))
     }
 
     /// Rebuild the resolver and the derived views from the notes already in
@@ -243,9 +240,9 @@ impl Vault {
     }
 
     /// What the walk reported, unless a later file was turned away at the cap.
-    /// That stays reported until a rebuild, because the index cannot know
-    /// whether a subsequent deletion made room for the file it refused; a
-    /// `vault_refresh` is what answers that.
+    /// That stays reported until the next walk, a rebuild or a sync, because
+    /// the index cannot know whether a later deletion made room for the file
+    /// it refused.
     pub(crate) fn status(&self) -> ScanStatus {
         if self.refused_at_cap {
             return ScanStatus::file_limit(self.max_files);

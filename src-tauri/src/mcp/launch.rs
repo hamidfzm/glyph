@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use super::refs::{note_schema, read_vault, ref_property, resolve_note, vault_property, NoteArgs};
 use super::registry::{arguments, Effect, Session, ToolDef};
 use crate::cli::{default_output, ExportFormat};
+use crate::vault::Vault;
 
 pub(super) const OPEN_IN_GLYPH: ToolDef = ToolDef {
     name: "open_in_glyph",
@@ -146,16 +147,20 @@ fn export(session: &Session, args: Value) -> Result<Value, String> {
             Some(out) => out.clone(),
             None => default_output(&found.path, format),
         };
-        Ok((found.path, export_target(session, root, &out, format)?))
+        Ok((
+            found.path,
+            export_target(session, vault, root, &out, format)?,
+        ))
     })?;
     run_export(session.exe, &input, format, &out)?;
     Ok(json!({ "path": out }))
 }
 
-/// `out` inside an open vault and named for the format, so an export cannot
-/// leave the vault or land on a note: `out: "Plan.md"` would replace the note.
+/// `out` inside the vault being read and named for the format, so an export
+/// cannot leave the vault or land on a note: `out: "Plan.md"` would replace it.
 fn export_target(
     session: &Session,
+    vault: &Vault,
     root: &str,
     out: &str,
     format: ExportFormat,
@@ -175,7 +180,12 @@ fn export_target(
             format.as_str()
         ));
     }
-    session.grants.ensure_writable(&path.to_string_lossy())?;
+    let canonical = session.grants.ensure_writable(&path.to_string_lossy())?;
+    // Grants outlive the vaults a session serves, so they alone do not keep an
+    // export inside this one.
+    if vault.inside_root(&canonical).is_none() {
+        return Err(format!("out must be inside the vault {root}"));
+    }
     Ok(path.to_string_lossy().to_string())
 }
 

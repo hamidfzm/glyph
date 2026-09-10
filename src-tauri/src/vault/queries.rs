@@ -33,8 +33,7 @@ pub enum Direction {
 }
 
 /// Where a target leads, and the other notes it names when it is ambiguous.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug)]
 pub struct LinkResolution<'a> {
     pub path: &'a str,
     pub matched_by: MatchedBy,

@@ -1048,6 +1048,18 @@ fn a_sync_catches_the_index_up_with_the_disk() {
     let before = serde_json::to_value(vault.snapshot()).unwrap();
     vault.sync().unwrap();
     assert_eq!(serde_json::to_value(vault.snapshot()).unwrap(), before);
+
+    // A rename is a path that vanished and one that appeared.
+    fs::rename(root.join("Aliased.md"), root.join("Renamed.md")).unwrap();
+    vault.sync().unwrap();
+    assert!(vault.note(&in_vault(&root, "Aliased.md")).is_none());
+    assert_eq!(
+        resolve_one(&vault, None, "Second Name")
+            .map(|path| relative(&root, &path))
+            .as_deref(),
+        Some("Renamed.md")
+    );
+    assert_matches_rebuild(&vault, &root);
     fs::remove_dir_all(&root).unwrap();
 }
 

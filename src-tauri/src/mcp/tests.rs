@@ -187,7 +187,7 @@ fn resolve_link_matches_the_resolver() {
     assert_eq!(result["heading"], "Day one");
     assert_eq!(result["resolution"]["tieBreak"], "shortestPath");
     assert_eq!(result["resolution"]["matchedBy"], "name");
-    let candidates: Vec<String> = result["resolution"]["candidates"]
+    let candidates: Vec<String> = result["resolution"]["candidates"]["items"]
         .as_array()
         .unwrap()
         .iter()
@@ -938,4 +938,21 @@ fn a_folder_is_not_a_note() {
     assert!(h
         .refused("read_note", json!({ "ref": folder }))
         .contains("is not a file"));
+}
+
+#[test]
+fn export_stays_inside_the_vault_it_reads_whatever_else_is_granted() {
+    let h = Harness::new("mcp_export_scope");
+    // Granted, the way a workspace closed in the app stays granted, but not
+    // one this session serves.
+    let other = unique_tmp("mcp_export_other");
+    h.grants.grant_workspace(&other).unwrap();
+    let out = other.join("index.html");
+    let refusal = h.refused(
+        "export",
+        json!({ "ref": "Index", "format": "html", "out": out.to_string_lossy() }),
+    );
+    assert!(refusal.contains("inside the vault"), "{refusal}");
+    assert!(!out.exists());
+    fs::remove_dir_all(&other).unwrap();
 }

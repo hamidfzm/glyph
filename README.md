@@ -207,7 +207,7 @@ glyph mcp --vault ~/notes/
 }
 ```
 
-The agent then gets what the raw files cannot tell it: wikilinks resolved the way Glyph resolves them, with the other candidates when a name is ambiguous; backlinks; the link graph some hops out; broken links, orphans and dead ends; tags by Glyph's rules; parsed frontmatter; headings and the section under one; canvas boards; and, while Glyph is open, the note in front of you. It can also open a note in Glyph and run the document exports above. It needs no display and no running app, and it follows edits on disk between calls. `--vault` can repeat; without it the server reads the vaults open in Glyph. Every tool is read-only except `export` and `open_in_glyph`, and none reaches outside the vaults it serves.
+The agent then gets what the raw files cannot tell it: wikilinks resolved the way Glyph resolves them, with the other candidates when a name is ambiguous; backlinks; the link graph some hops out; broken links, orphans and dead ends; tags by Glyph's rules; parsed frontmatter; headings and the section under one; canvas boards; and, while Glyph is open, the note in front of you. It can also open a note in Glyph and run the document exports above. Apart from `export`, it needs no display, no tool needs the app running, and it follows edits on disk between calls. `--vault` can repeat; without it the server reads the vaults open in Glyph. Every tool is read-only except `export` and `open_in_glyph`, and none reaches outside the vaults it serves.
 
 The command is provided by the Homebrew cask (macOS), Chocolatey or Scoop (Windows), and the deb package or Homebrew formula (Linux). The macOS `.dmg` and Windows MSI install the app only; use a package manager for the terminal command.
 

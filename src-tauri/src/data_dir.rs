@@ -54,9 +54,15 @@ fn lock_in(dir: &Path) -> Option<InstanceLock> {
         .write(true)
         .open(dir.join(INSTANCE_LOCK))
         .ok()?;
-    // Another window of the app already holds it, which is all the lock says.
-    file.try_lock().ok()?;
-    Some(InstanceLock { _file: file })
+    // A `glyph mcp` probe holds a shared lock for an instant, so only a lock
+    // still taken after a few tries belongs to another window.
+    for _ in 0..5 {
+        if file.try_lock().is_ok() {
+            return Some(InstanceLock { _file: file });
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    None
 }
 
 /// Whether an interactive Glyph is running on this machine.
@@ -106,5 +112,18 @@ mod tests {
             !running_in(dir.path()),
             "the lock file stays, the lock does not"
         );
+    }
+
+    #[test]
+    fn a_probe_in_flight_does_not_cost_the_app_its_lock() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let probe = File::create(dir.path().join(INSTANCE_LOCK)).unwrap();
+        probe.try_lock_shared().unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            drop(probe);
+        });
+        assert!(lock_in(dir.path()).is_some(), "the app waits the probe out");
+        release.join().unwrap();
     }
 }

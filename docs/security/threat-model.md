@@ -185,7 +185,7 @@ the way a renderer-supplied path is.
   and the index keeps its walk rules: no symlink out of the vault, no hidden
   folder, nothing over 5 MB.
 - **Effects.** Every tool is read-only except two. `export` writes only
-  inside a granted vault, to a name carrying the format's extension, so it
+  inside the vault it reads, to a name carrying the format's extension, so it
   cannot replace a note. `open_in_glyph` hands the app a path the server can
   already read, the way a file manager would.
 - **Stdout** carries JSON-RPC messages and nothing else. The processes the
