@@ -1,0 +1,18 @@
+# Commit-msg gate: reject AI attribution in commit messages. Glyph credits
+# the humans who ship the change; agent tooling must not sign commits, and a
+# trailer that slips into a branch commit is harvested by GitHub's squash
+# merge straight onto main. See CLAUDE.md ("no co-authored-by lines").
+#
+# Strips the comment block and any `--verbose` diff first, so a commit that
+# legitimately edits documentation mentioning these strings still passes.
+
+msg=$(sed -e '/^# -\{1,\} >8 -\{1,\}$/,$d' -e '/^#/d' "$1")
+
+pattern='co-authored-by:.*(claude|anthropic|codex|copilot|chatgpt)|noreply@anthropic\.com|generated with .{0,4}claude'
+
+if printf '%s\n' "$msg" | grep -qiE "$pattern"; then
+  echo "commit-msg: AI attribution found in the commit message." >&2
+  printf '%s\n' "$msg" | grep -inE "$pattern" >&2
+  echo "Remove those lines and commit again. Glyph commits carry no AI attribution." >&2
+  exit 1
+fi

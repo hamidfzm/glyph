@@ -185,7 +185,7 @@ committed; regenerate them only when the Tauri CLI requires it.
 
 - **Commits**: [Conventional commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`)
 - **Breaking changes**: mark the commit `feat(scope)!:` **and** label the PR `breaking`. The `!` on its own changes nothing in the release notes: GitHub groups them by label, and `.github/release.yml` keys the "💥 Breaking Changes" section off that label. A PR carrying both `breaking` and `enhancement` appears only under Breaking Changes, because the first matching category wins.
-- **No co-authored-by** lines in commits
+- **No co-authored-by** lines in commits, and no other AI attribution (`Generated with ...`). The `.husky/commit-msg` hook rejects both.
 - **Package manager**: pnpm only (not npm/yarn)
 - **Linting (TS)**: Biome (configured in `biome.json`); run `pnpm lint`
 - **Linting (Rust)**: Clippy; run `cargo clippy` in `src-tauri/`
