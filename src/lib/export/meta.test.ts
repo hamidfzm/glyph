@@ -49,4 +49,18 @@ describe("deriveExportMeta", () => {
     const meta = deriveExportMeta(undefined, "---\ntitle: Only Title\n---\n");
     expect(meta.baseName).toBe("Only Title");
   });
+
+  it("keeps a `#` that belongs to the h1 text", () => {
+    expect(deriveExportMeta("/x/a.md", "# C#").title).toBe("C#");
+  });
+
+  it.each([
+    ["a long space run", `# a${" ".repeat(200_000)}b`, `a${" ".repeat(200_000)}b`],
+    ["unclosed link text brackets", `# ${"[".repeat(200_000)}`, "[".repeat(200_000)],
+    ["unclosed link target parens", `# ${"[](".repeat(70_000)}`, "[](".repeat(70_000)],
+  ])("titles an h1 with %s in linear time", (_, content, title) => {
+    const started = performance.now();
+    expect(deriveExportMeta("/x/a.md", content).title).toBe(title);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
 });
