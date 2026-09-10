@@ -5,6 +5,8 @@
 
 use std::collections::HashMap;
 
+use serde::Serialize;
+
 /// A leading dot is part of the name, so `.hidden` keeps it.
 pub(crate) fn stem_of(path: &str) -> &str {
     let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
@@ -105,6 +107,16 @@ impl Resolver {
 
     /// The note `raw_target` names, resolved as if linked from `from`.
     pub(crate) fn resolve(&self, raw_target: &str, from: Option<&str>) -> Option<usize> {
+        self.resolve_detail(raw_target, from)
+            .map(|found| found.target)
+    }
+
+    /// [`Resolver::resolve`], plus the notes that lost and why.
+    pub(crate) fn resolve_detail(
+        &self,
+        raw_target: &str,
+        from: Option<&str>,
+    ) -> Option<Resolution> {
         let (target, _) = split_heading(raw_target);
         let cleaned = normalize_target(target);
         if cleaned.is_empty() || self.paths.is_empty() {
@@ -112,46 +124,60 @@ impl Resolver {
         }
         let lower = cleaned.to_lowercase();
 
-        let candidates = if lower.contains('/') || lower.contains('\\') {
+        let (candidates, matched_by) = if lower.contains('/') || lower.contains('\\') {
             let suffix = format!("/{}", lower.replace('\\', "/"));
-            self.suffix_keys
+            let ids = self
+                .suffix_keys
                 .iter()
                 .enumerate()
                 .filter(|(_, key)| key.ends_with(&suffix))
                 .map(|(id, _)| id)
-                .collect()
+                .collect();
+            (ids, MatchedBy::Path)
         } else {
             // A bare name matches a filename, never a directory.
-            self.by_stem.get(&lower).cloned().unwrap_or_default()
+            let ids = self.by_stem.get(&lower).cloned().unwrap_or_default();
+            (ids, MatchedBy::Name)
         };
 
         // Aliases are the last resort, so a file actually named `target` still
         // wins over another file that merely lists it under `aliases:`.
-        let candidates = if candidates.is_empty() {
-            self.by_alias.get(&lower).cloned().unwrap_or_default()
+        let (candidates, matched_by) = if candidates.is_empty() {
+            let ids = self.by_alias.get(&lower).cloned().unwrap_or_default();
+            (ids, MatchedBy::Alias)
         } else {
-            candidates
+            (candidates, matched_by)
         };
 
-        self.pick(candidates, from)
+        let (mut ranked, tie_break) = self.rank(candidates, from)?;
+        let target = ranked.remove(0);
+        Some(Resolution {
+            target,
+            others: ranked,
+            matched_by,
+            tie_break,
+        })
     }
 
-    fn pick(&self, mut candidates: Vec<usize>, from: Option<&str>) -> Option<usize> {
+    /// Candidates best first, with the rule that decided when there was more
+    /// than one.
+    fn rank(
+        &self,
+        mut candidates: Vec<usize>,
+        from: Option<&str>,
+    ) -> Option<(Vec<usize>, Option<TieBreak>)> {
         match candidates.len() {
             0 => return None,
-            1 => return Some(candidates[0]),
+            1 => return Some((candidates, None)),
             _ => {}
         }
 
-        if let Some(from) = from {
-            let current_dir = dir_of(from);
-            if let Some(&same_dir) = candidates
+        let same_dir = from.and_then(|from| {
+            candidates
                 .iter()
-                .find(|&&id| dir_of(&self.paths[id]) == current_dir)
-            {
-                return Some(same_dir);
-            }
-        }
+                .position(|&id| dir_of(&self.paths[id]) == dir_of(from))
+        });
+        let winner = same_dir.map(|index| candidates.remove(index));
 
         // Stable fallback: shortest path, then by name. Counted in chars
         // and compared case-first, so the answer does not move with the host's
@@ -164,8 +190,45 @@ impl Resolver {
                 .then_with(|| a.to_lowercase().cmp(&b.to_lowercase()))
                 .then_with(|| a.cmp(b))
         });
-        Some(candidates[0])
+        match winner {
+            Some(winner) => {
+                candidates.insert(0, winner);
+                Some((candidates, Some(TieBreak::SameDirectory)))
+            }
+            None => Some((candidates, Some(TieBreak::ShortestPath))),
+        }
     }
+}
+
+/// How a target reached the note it resolved to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MatchedBy {
+    /// The filename stem.
+    Name,
+    /// A path suffix, because the target carried a separator.
+    Path,
+    /// An `aliases:` entry, because no filename matched.
+    Alias,
+}
+
+/// Which rule chose among several notes the target named.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TieBreak {
+    /// One candidate shares the linking note's directory.
+    SameDirectory,
+    /// None does, so the shortest path wins, then the name.
+    ShortestPath,
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) struct Resolution {
+    pub target: usize,
+    /// The other notes the target names, in the order the tie-break ranks them.
+    pub others: Vec<usize>,
+    pub matched_by: MatchedBy,
+    pub tie_break: Option<TieBreak>,
 }
 
 #[cfg(test)]
@@ -281,6 +344,53 @@ mod tests {
     }
 
     #[test]
+    fn an_ambiguous_target_reports_the_losers_and_the_rule() {
+        let paths = files();
+        let resolver = resolver(&paths);
+        let path = |id: usize| resolver.path(id).to_string();
+
+        let found = resolver
+            .resolve_detail("Travel", Some("/workspace/Archive/today.md"))
+            .unwrap();
+        assert_eq!(path(found.target), "/workspace/Archive/Travel.md");
+        assert_eq!(found.tie_break, Some(TieBreak::SameDirectory));
+        assert_eq!(
+            found.others.iter().map(|&id| path(id)).collect::<Vec<_>>(),
+            ["/workspace/Notes/Travel.md"]
+        );
+
+        let found = resolver.resolve_detail("Travel", None).unwrap();
+        assert_eq!(path(found.target), "/workspace/Notes/Travel.md");
+        assert_eq!(found.tie_break, Some(TieBreak::ShortestPath));
+        assert_eq!(found.matched_by, MatchedBy::Name);
+
+        let found = resolver.resolve_detail("Notes/Cooking", None).unwrap();
+        assert_eq!(found.matched_by, MatchedBy::Path);
+        assert_eq!(found.tie_break, None);
+        assert!(found.others.is_empty());
+    }
+
+    #[test]
+    fn a_same_directory_winner_is_the_first_in_path_order() {
+        // Two stems in one directory: the walk's order decides, as it always
+        // has, not the shortest-path fallback that ranks the rest.
+        let paths = ["/w/Note.markdown", "/w/Note.md", "/w/deeper/Note.md"].map(String::from);
+        let resolver = resolver(&paths);
+        let found = resolver
+            .resolve_detail("Note", Some("/w/today.md"))
+            .unwrap();
+        assert_eq!(resolver.path(found.target), "/w/Note.markdown");
+        assert_eq!(
+            found
+                .others
+                .iter()
+                .map(|&id| resolver.path(id))
+                .collect::<Vec<_>>(),
+            ["/w/Note.md", "/w/deeper/Note.md"]
+        );
+    }
+
+    #[test]
     fn a_target_with_a_separator_matches_a_path_suffix() {
         assert_eq!(
             resolved("Notes/Travel", None).as_deref(),
@@ -351,6 +461,12 @@ mod tests {
         assert_eq!(
             resolver.resolve("home", None).map(|id| resolver.path(id)),
             Some("/workspace/Index.md")
+        );
+        assert_eq!(
+            resolver
+                .resolve_detail("home", None)
+                .map(|found| found.matched_by),
+            Some(MatchedBy::Alias)
         );
         assert_eq!(
             resolver

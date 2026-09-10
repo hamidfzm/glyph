@@ -63,6 +63,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 ### AI (optional)
 - Chat sidebar, quick actions (summarize, explain, translate, simplify), and text-to-speech
 - Providers: Claude, OpenAI, and Ollama (local)
+- An MCP server (`glyph mcp`) that gives AI agents a vault's resolved links, backlinks, tags, and graph, with or without the app open
 
 ### Platform
 - macOS, Windows, and Linux; native menu bar with remappable shortcuts and update notifications
@@ -191,6 +192,23 @@ glyph serve ~/notes/ --out ./site         # keep the build instead of a temp dir
 
 `--format` accepts `pdf`, `docx`, `epub`, `html`, and `site`. Without `--out` a document export writes beside its input with the format's extension; `site` always needs one. Exports run without showing a window, print the path they wrote to stdout, and exit nonzero with a message on stderr if they fail, so they can drive CI publishing (on Linux runners, wrap the command in `xvfb-run`). A document export includes the table of contents when Settings > Print has it enabled.
 
+```bash
+# give an AI agent Glyph's view of a vault, over the Model Context Protocol
+glyph mcp --vault ~/notes/
+```
+
+`mcp` is a Model Context Protocol server on stdin and stdout, started by an MCP client rather than by hand. Add it to the client's server list, for example:
+
+```json
+{
+  "mcpServers": {
+    "glyph": { "command": "glyph", "args": ["mcp", "--vault", "/path/to/notes"] }
+  }
+}
+```
+
+The agent then gets what the raw files cannot tell it: wikilinks resolved the way Glyph resolves them, with the other candidates when a name is ambiguous; backlinks; the link graph some hops out; broken links, orphans and dead ends; tags by Glyph's rules; parsed frontmatter; headings and the section under one; canvas boards; and, while Glyph is open, the note in front of you. It can also open a note in Glyph and run the document exports above. It needs no display and no running app, and it follows edits on disk between calls. `--vault` can repeat; without it the server reads the vaults open in Glyph. Every tool is read-only except `export` and `open_in_glyph`, and none reaches outside the vaults it serves.
+
 The command is provided by the Homebrew cask (macOS), Chocolatey or Scoop (Windows), and the deb package or Homebrew formula (Linux). The macOS `.dmg` and Windows MSI install the app only; use a package manager for the terminal command.
 
 ### Docker
@@ -310,6 +328,20 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Plugin / extension API | ⚠️ experimental | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
 | Cloud sync | ⚠️ Git-backed | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
 
+### Automation & agents
+
+| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+|---|---|---|---|---|---|---|---|
+| Headless export (CLI) | ✅ | ❌ | ❌ | ❌ | ❌ | ⚠️ | ❌ |
+| Preview server | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
+| CLI control | ⚠️ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| MCP server | ✅ | plugin | ❌ | ❌ | ❌ | ✅ | plugin |
+| Agent tools with the app closed | ✅ | ❌ | ❌ | ❌ | ❌ | ⚠️ | ❌ |
+| Link graph for agents | ✅ | ✅ | ❌ | ❌ | ❌ | plugin | ⚠️ |
+| Semantic search | ❌ | plugin | ❌ | ❌ | ❌ | ✅ | ⚠️ |
+
+Note on agents: Obsidian's CLI drives the running app and starts it when it is closed, and Joplin's MCP server lives inside the desktop app; Glyph's server reads the vault itself, with no window.
+
 ### Platform
 
 | Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
@@ -318,7 +350,7 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 | Native bundle (non-Electron) | ✅ Tauri (~3 MB core) | ❌ | ✅ Qt | ❌ | ❌ | ❌ | ❌ |
 | macOS / Windows / Linux | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Mobile (iOS / Android) | ⚠️ experimental (viewing) | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| File associations + CLI | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ❌ | ✅ |
+| File associations + CLI | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ❌ | ✅ |
 | Open source | ✅ MIT | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Free | ✅ | ✅ | $14.99 | ✅ | ✅ | ✅ | ✅ |
 

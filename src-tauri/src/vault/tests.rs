@@ -9,19 +9,14 @@ use tauri::Manager;
 
 use super::commands::*;
 use super::frontmatter::{parse_frontmatter, split_frontmatter};
+use super::headings::{parse_headings, section, slug};
+use super::resolve::{MatchedBy, TieBreak};
 use super::test_support::*;
-use super::Vault;
+use super::{apply_changes, forget, Direction, Vault, VaultStore};
 use crate::grants::GrantRegistry;
 
 fn build(root: &Path) -> Vault {
     Vault::build(root).unwrap()
-}
-
-fn relative(root: &Path, path: &str) -> String {
-    path.strip_prefix(&root.to_string_lossy().to_string())
-        .unwrap_or(path)
-        .trim_start_matches(['/', '\\'])
-        .replace('\\', "/")
 }
 
 fn resolve_one(vault: &Vault, from: Option<&str>, target: &str) -> Option<String> {
@@ -51,6 +46,7 @@ fn the_fixture_vault_indexes_markdown_and_canvas() {
             "Broken.md",
             "Index.md",
             "Notes/Cooking.md",
+            "Notes/Sections.md",
             "Notes/Travel.md",
         ]
     );
@@ -170,6 +166,36 @@ fn frontmatter_matches_the_shared_expectation() {
 }
 
 #[test]
+fn headings_match_the_shared_expectation() {
+    // The same file drives `markdownHeadings.test.ts` and
+    // `headingSection.test.ts`, so the section rule cannot drift between the
+    // renderer's embeds and `read_note`.
+    let expected: Value = serde_json::from_str(
+        &fs::read_to_string(fixtures_dir().join("vault-headings.json")).unwrap(),
+    )
+    .unwrap();
+    let note = expected["note"].as_str().unwrap();
+    let content = fs::read_to_string(fixtures_dir().join("vault").join(note)).unwrap();
+
+    let headings = serde_json::to_value(parse_headings(&content, 0)).unwrap();
+    assert_eq!(headings, expected["headings"]);
+
+    for case in expected["sections"].as_array().unwrap() {
+        let heading = case["heading"].as_str().unwrap();
+        let got = section(&content, 0, heading).unwrap_or_default();
+        assert_eq!(
+            got,
+            case["section"].as_str().unwrap(),
+            "section {heading:?}"
+        );
+    }
+    for case in expected["slugs"].as_array().unwrap() {
+        let text = case["text"].as_str().unwrap();
+        assert_eq!(slug(text), case["slug"].as_str().unwrap(), "slug {text:?}");
+    }
+}
+
+#[test]
 fn the_graph_and_backlinks_read_from_resolved_links() {
     let root = fixture_vault("graph");
     let vault = build(&root);
@@ -235,9 +261,9 @@ fn a_canvas_board_is_indexed_and_links_its_file_cards() {
     assert_eq!(canvas.edges.len(), 1);
 
     let neighbors: Vec<String> = vault
-        .neighbors(&board)
+        .neighbors(&board, 1, Direction::Both)
         .into_iter()
-        .map(|p| relative(&root, p))
+        .map(|(p, _)| relative(&root, p))
         .collect();
     assert_eq!(neighbors, vec!["Index.md", "Notes/Cooking.md"]);
     fs::remove_dir_all(&root).unwrap();
@@ -261,9 +287,9 @@ fn editing_a_canvas_updates_its_board_and_links() {
     assert_eq!(canvas.nodes.len(), 1);
     assert!(canvas.edges.is_empty());
     let neighbors: Vec<String> = vault
-        .neighbors(&board)
+        .neighbors(&board, 1, Direction::Both)
         .into_iter()
-        .map(|p| relative(&root, p))
+        .map(|(p, _)| relative(&root, p))
         .collect();
     assert_eq!(neighbors, vec!["Index.md"]);
     assert_matches_rebuild(&vault, &root);
@@ -395,7 +421,7 @@ fn a_watcher_event_against_the_canonical_root_still_lands() {
     fs::write(&added, "body #watched\n").unwrap();
     vault.apply_changes(&[added]);
 
-    assert_eq!(vault.snapshot().files.len(), 9);
+    assert_eq!(vault.snapshot().files.len(), 10);
     assert_eq!(vault.paths_with_tag("watched").len(), 1);
     // Spelled the way the rest of the index spells it, so tab paths match.
     assert!(vault
@@ -454,7 +480,7 @@ fn an_incremental_update_refuses_a_symlinked_note() {
     vault.apply_changes(&[planted]);
 
     assert!(vault.paths_with_tag("classified").is_empty());
-    assert_eq!(vault.snapshot().files.len(), 8);
+    assert_eq!(vault.snapshot().files.len(), 9);
     assert_matches_rebuild(&vault, &root);
 
     fs::remove_dir_all(&root).unwrap();
@@ -478,7 +504,7 @@ fn an_incremental_update_refuses_a_note_under_a_symlinked_directory() {
     vault.apply_changes(&[linked.join("secret.md")]);
 
     assert!(vault.paths_with_tag("classified").is_empty());
-    assert_eq!(vault.snapshot().files.len(), 8);
+    assert_eq!(vault.snapshot().files.len(), 9);
     assert_matches_rebuild(&vault, &root);
 
     fs::remove_dir_all(&root).unwrap();
@@ -517,7 +543,7 @@ fn queries_about_a_path_the_index_does_not_hold_answer_empty() {
     let vault = build(&root);
     let stranger = "/elsewhere/secret.md";
 
-    assert!(vault.neighbors(stranger).is_empty());
+    assert!(vault.neighbors(stranger, 1, Direction::Both).is_empty());
     assert!(vault.backlinks(stranger).is_empty());
     assert!(vault.canvas(stranger).is_none());
     // A tag that normalizes to nothing selects nothing rather than everything.
@@ -564,7 +590,7 @@ fn watcher_changes_tolerate_a_poisoned_store() {
 #[test]
 fn growing_past_the_file_cap_is_reported_rather_than_indexed() {
     let root = fixture_vault("incremental_cap");
-    let mut vault = Vault::build_capped(&root, 8, 32).unwrap();
+    let mut vault = Vault::build_capped(&root, 9, 32).unwrap();
     assert!(!vault.snapshot().status.truncated);
 
     let added = root.join("Ninth.md");
@@ -572,7 +598,7 @@ fn growing_past_the_file_cap_is_reported_rather_than_indexed() {
     vault.apply_changes(&[added]);
 
     let snapshot = vault.snapshot();
-    assert_eq!(snapshot.files.len(), 8);
+    assert_eq!(snapshot.files.len(), 9);
     assert!(snapshot.status.truncated);
     assert_eq!(snapshot.status.reason, Some("fileLimit"));
     fs::remove_dir_all(&root).unwrap();
@@ -588,7 +614,7 @@ fn a_file_that_vanishes_between_the_event_and_the_read_is_dropped() {
     vault.apply_changes(&[gone]);
 
     assert_eq!(resolve_one(&vault, None, "Cooking"), None);
-    assert_eq!(vault.snapshot().files.len(), 7);
+    assert_eq!(vault.snapshot().files.len(), 8);
     fs::remove_dir_all(&root).unwrap();
 }
 
@@ -722,7 +748,7 @@ fn the_snapshot_command_returns_the_index_for_a_granted_root() {
     )
     .unwrap();
 
-    assert_eq!(snapshot["files"].as_array().unwrap().len(), 8);
+    assert_eq!(snapshot["files"].as_array().unwrap().len(), 9);
     assert!(snapshot["graph"]["nodes"].is_array());
     assert_eq!(snapshot["status"]["truncated"], json!(false));
     // camelCase keys reach the frontend, not Rust's snake_case.
@@ -744,10 +770,8 @@ fn every_path_command_is_denied_without_a_grant() {
         vault_refresh(path.clone(), grants.clone(), store.clone()).unwrap_err(),
         vault_backlinks(path.clone(), path.clone(), grants.clone(), store.clone()).unwrap_err(),
         vault_resolve(path.clone(), None, vec![], grants.clone(), store.clone()).unwrap_err(),
-        vault_neighbors(path.clone(), path.clone(), grants.clone(), store.clone()).unwrap_err(),
         vault_query(path.clone(), "tag:x".into(), grants.clone(), store.clone()).unwrap_err(),
         vault_paths_with_tag(path.clone(), "x".into(), grants.clone(), store.clone()).unwrap_err(),
-        vault_canvas(path.clone(), path.clone(), grants.clone(), store.clone()).unwrap_err(),
     ];
 
     for error in &errors {
@@ -792,24 +816,6 @@ fn the_targeted_commands_answer_from_the_cached_index() {
         vault_paths_with_tag(path.clone(), "food".into(), grants.clone(), store.clone()).unwrap();
     assert_eq!(tagged.len(), 1);
 
-    let canvas = vault_canvas(
-        path.clone(),
-        in_vault(&root, "Board.canvas"),
-        grants.clone(),
-        store.clone(),
-    )
-    .unwrap();
-    assert_eq!(canvas.unwrap()["nodes"].as_array().unwrap().len(), 4);
-
-    let neighbors = vault_neighbors(
-        path.clone(),
-        in_vault(&root, "Board.canvas"),
-        grants.clone(),
-        store.clone(),
-    )
-    .unwrap();
-    assert_eq!(neighbors.len(), 2);
-
     let query = vault_query(
         path.clone(),
         "tag:food recipes".into(),
@@ -852,7 +858,7 @@ fn two_open_roots_keep_separate_indexes() {
     )
     .unwrap();
 
-    assert_eq!(a["files"].as_array().unwrap().len(), 8);
+    assert_eq!(a["files"].as_array().unwrap().len(), 9);
     assert_eq!(b["files"].as_array().unwrap().len(), 1);
     assert_eq!(store.0.lock().unwrap().len(), 2);
 
@@ -876,11 +882,11 @@ fn refresh_rebuilds_a_cached_index_from_disk() {
 
     // The cached index has not seen the new file; a refresh has.
     let cached = vault_snapshot(path.clone(), grants.clone(), store.clone()).unwrap();
-    assert_eq!(cached["files"].as_array().unwrap().len(), 8);
+    assert_eq!(cached["files"].as_array().unwrap().len(), 9);
     let refreshed = vault_refresh(path.clone(), grants.clone(), store.clone()).unwrap();
-    assert_eq!(refreshed["files"].as_array().unwrap().len(), 9);
+    assert_eq!(refreshed["files"].as_array().unwrap().len(), 10);
     let after = vault_snapshot(path, grants, store).unwrap();
-    assert_eq!(after["files"].as_array().unwrap().len(), 9);
+    assert_eq!(after["files"].as_array().unwrap().len(), 10);
 
     fs::remove_dir_all(&root).unwrap();
 }
@@ -898,7 +904,7 @@ fn watcher_changes_reach_the_stored_index() {
     apply_changes(&store, &path, &[added]);
 
     let snapshot = vault_snapshot(path, grants, store).unwrap();
-    assert_eq!(snapshot["files"].as_array().unwrap().len(), 9);
+    assert_eq!(snapshot["files"].as_array().unwrap().len(), 10);
     fs::remove_dir_all(&root).unwrap();
 }
 
@@ -1011,5 +1017,202 @@ fn a_parallel_build_indexes_every_file_once() {
     let vault = build(&root);
     assert_eq!(vault.snapshot().files.len(), 37);
     assert_eq!(vault.graph.edges.len(), 37);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+// ------------------------------------------------------------ sync from disk
+
+#[test]
+fn a_sync_catches_the_index_up_with_the_disk() {
+    let root = fixture_vault("sync");
+    let mut vault = build(&root);
+
+    fs::write(
+        root.join("Notes").join("Added.md"),
+        "Links [[Index]] #fresh\n",
+    )
+    .unwrap();
+    fs::write(root.join("Index.md"), "# Index\n\nNow only [[Travel]].\n").unwrap();
+    fs::remove_file(root.join("Broken.md")).unwrap();
+    vault.sync().unwrap();
+
+    assert_eq!(vault.paths_with_tag("fresh").len(), 1);
+    assert!(vault
+        .backlinks(&in_vault(&root, "Notes/Cooking.md"))
+        .iter()
+        .all(|b| !b.source.ends_with("Index.md")));
+    assert!(vault.note(&in_vault(&root, "Broken.md")).is_none());
+    assert_matches_rebuild(&vault, &root);
+
+    // Nothing changed since, so a second sync is a walk and nothing more.
+    let before = serde_json::to_value(vault.snapshot()).unwrap();
+    vault.sync().unwrap();
+    assert_eq!(serde_json::to_value(vault.snapshot()).unwrap(), before);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_sync_reports_the_cap_the_walk_hit_and_lifts_it_when_room_returns() {
+    let root = fixture_vault("sync_cap");
+    let mut vault = Vault::build_capped(&root, 9, 32).unwrap();
+
+    // The walk sorts by name, so the new file is the one past the cap.
+    fs::write(root.join("Zed.md"), "one too many\n").unwrap();
+    vault.sync().unwrap();
+    let snapshot = vault.snapshot();
+    assert!(snapshot.status.truncated);
+    assert_eq!(snapshot.files.len(), 9);
+
+    fs::remove_file(root.join("Broken.md")).unwrap();
+    vault.sync().unwrap();
+    let snapshot = vault.snapshot();
+    assert!(!snapshot.status.truncated);
+    assert!(snapshot.files.iter().any(|path| path.ends_with("Zed.md")));
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_sync_over_a_deleted_root_is_an_error_not_an_empty_vault() {
+    let root = fixture_vault("sync_gone");
+    let mut vault = build(&root);
+    fs::remove_dir_all(&root).unwrap();
+    assert!(vault.sync().is_err());
+}
+
+// ------------------------------------------------------ neighbours and links
+
+#[test]
+fn depth_one_in_both_directions_is_the_graph_view() {
+    let root = fixture_vault("neighbors_graph_view");
+    let vault = build(&root);
+    let snapshot = vault.snapshot();
+
+    for node in snapshot.graph.nodes {
+        let mut from_edges: Vec<&str> = snapshot
+            .graph
+            .edges
+            .iter()
+            .filter_map(|edge| {
+                if edge.source == node.id {
+                    Some(edge.target.as_str())
+                } else if edge.target == node.id {
+                    Some(edge.source.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        from_edges.sort_unstable();
+        from_edges.dedup();
+        let mut around: Vec<&str> = vault
+            .neighbors(&node.id, 1, Direction::Both)
+            .into_iter()
+            .map(|(path, _)| path)
+            .collect();
+        around.sort_unstable();
+        assert_eq!(around, from_edges, "{}", node.id);
+        assert_eq!(around.len(), node.degree, "{}", node.id);
+    }
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn neighbors_honour_depth_and_direction() {
+    let root = fixture_vault("neighbors_depth");
+    let vault = build(&root);
+    let around = |path: &str, depth: u32, direction: Direction| -> Vec<(String, u32)> {
+        vault
+            .neighbors(&in_vault(&root, path), depth, direction)
+            .into_iter()
+            .map(|(p, hops)| (relative(&root, p), hops))
+            .collect()
+    };
+    let hops = |pairs: &[(&str, u32)]| -> Vec<(String, u32)> {
+        pairs.iter().map(|&(p, h)| (p.to_string(), h)).collect()
+    };
+
+    // Only Index links Aliased, and Aliased links nothing.
+    assert!(around("Aliased.md", 1, Direction::Out).is_empty());
+    assert_eq!(
+        around("Aliased.md", 1, Direction::In),
+        hops(&[("Index.md", 1)])
+    );
+    assert_eq!(
+        around("Aliased.md", 2, Direction::In),
+        hops(&[
+            ("Index.md", 1),
+            ("Notes/Cooking.md", 2),
+            ("Notes/Travel.md", 2)
+        ])
+    );
+    assert_eq!(
+        around("Aliased.md", 2, Direction::Both),
+        hops(&[
+            ("Index.md", 1),
+            ("Board.canvas", 2),
+            ("Notes/Cooking.md", 2),
+            ("Notes/Travel.md", 2)
+        ])
+    );
+    // Cycles do not repeat a note, and depth past the graph's reach is fine.
+    let far = around("Index.md", 50, Direction::Both);
+    let mut names: Vec<&str> = far.iter().map(|(p, _)| p.as_str()).collect();
+    names.dedup();
+    assert_eq!(names.len(), far.len());
+    assert!(around("Index.md", 0, Direction::Both).is_empty());
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn resolve_link_explains_ambiguity_across_the_fixture_vault() {
+    let root = fixture_vault("resolve_link");
+    let vault = build(&root);
+    let index = in_vault(&root, "Index.md");
+    let archive = in_vault(&root, "Archive/Travel.md");
+
+    let found = vault.resolve_link("Travel", Some(&index)).unwrap();
+    assert_eq!(relative(&root, found.path), "Notes/Travel.md");
+    assert_eq!(found.tie_break, Some(TieBreak::ShortestPath));
+    assert_eq!(
+        found
+            .candidates
+            .iter()
+            .map(|p| relative(&root, p))
+            .collect::<Vec<_>>(),
+        ["Archive/Travel.md"]
+    );
+
+    let found = vault.resolve_link("travel#Top", Some(&archive)).unwrap();
+    assert_eq!(relative(&root, found.path), "Archive/Travel.md");
+    assert_eq!(found.tie_break, Some(TieBreak::SameDirectory));
+    assert_eq!(found.matched_by, MatchedBy::Name);
+
+    let found = vault.resolve_link("Third Name", None).unwrap();
+    assert_eq!(relative(&root, found.path), "Aliased.md");
+    assert_eq!(found.matched_by, MatchedBy::Alias);
+    assert!(vault.resolve_link("Missing Note", None).is_none());
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn link_detail_survives_indexing() {
+    let root = fixture_vault("link_detail");
+    let vault = build(&root);
+    let index = vault.note(&in_vault(&root, "Index.md")).unwrap();
+
+    let embed = index.links.iter().find(|l| l.target == "Board").unwrap();
+    assert!(embed.embed);
+    let aliased = index.links.iter().find(|l| l.alias.is_some()).unwrap();
+    assert_eq!(aliased.target, "Cooking");
+    assert_eq!(aliased.heading.as_deref(), Some("Recipes"));
+    assert_eq!(aliased.alias.as_deref(), Some("the recipe section"));
+    assert!(!aliased.embed);
+
+    // Cooking's fenced `[[NotALink]]` is code, not a link.
+    let cooking = vault.note(&in_vault(&root, "Notes/Cooking.md")).unwrap();
+    assert!(cooking.links.iter().all(|l| l.target != "NotALink"));
+    // A board's file card carries its subpath as the heading.
+    let board = vault.note(&in_vault(&root, "Board.canvas")).unwrap();
+    assert_eq!(board.links[0].heading.as_deref(), Some("Recipes"));
     fs::remove_dir_all(&root).unwrap();
 }

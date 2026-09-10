@@ -1,7 +1,7 @@
 //! The [`Vault`] itself: building the note set from a workspace root and
 //! keeping it current as files change.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::canvas::{self, Canvas};
@@ -9,7 +9,8 @@ use super::graph::{self, Graph};
 use super::note::{self, Note};
 use super::resolve::{compare_paths, Resolver};
 use crate::commands::walk::{
-    collect_files, ScanStatus, SCAN_MAX_FILE_BYTES, WALK_MAX_DEPTH, WALK_MAX_FILES, WALK_SKIP_DIRS,
+    collect_files, ScanStatus, Stamp, SCAN_MAX_FILE_BYTES, WALK_MAX_DEPTH, WALK_MAX_FILES,
+    WALK_SKIP_DIRS,
 };
 
 /// Markdown and canvas files both belong to the index; everything else is an
@@ -35,6 +36,9 @@ pub struct Vault {
     /// so the palette does not recompute it per keystroke.
     pub(super) field_names: BTreeSet<String>,
     pub(super) walk_status: ScanStatus,
+    /// Modified time and size of every file the last walk or update saw, so
+    /// a sync re-reads only what changed.
+    stamps: HashMap<String, Stamp>,
     /// Set when an update was turned away at the file cap.
     refused_at_cap: bool,
     max_files: usize,
@@ -51,7 +55,12 @@ impl Vault {
     /// Body of [`Vault::build`] with the caps as parameters, so the truncation
     /// branches are testable without creating `WALK_MAX_FILES` real files.
     pub fn build_capped(root: &Path, max_files: usize, max_depth: usize) -> Result<Self, String> {
-        let (paths, status) = collect_files(root, is_indexable, max_files, max_depth)?;
+        let (files, status) = collect_files(root, is_indexable, max_files, max_depth)?;
+        let paths: Vec<PathBuf> = files.iter().map(|(path, _)| path.clone()).collect();
+        let stamps = files
+            .into_iter()
+            .map(|(path, stamp)| (path.to_string_lossy().to_string(), stamp))
+            .collect();
         let mut notes = Vec::with_capacity(paths.len());
         let mut canvases = HashMap::new();
         for (note, canvas) in index_files(&paths) {
@@ -70,6 +79,7 @@ impl Vault {
             graph: Graph::default(),
             field_names: BTreeSet::new(),
             walk_status: status,
+            stamps,
             refused_at_cap: false,
             max_files,
             max_depth,
@@ -93,10 +103,16 @@ impl Vault {
                 None => path.to_string_lossy().to_string(),
             };
 
-            let content = self
-                .walkable(&path, &relative)
-                .then(|| std::fs::read_to_string(&path));
-            let Some(Ok(content)) = content else {
+            let stamp = self.walkable(&path, &relative);
+            // Kept for a file that will not read as UTF-8 too, so a sync does
+            // not retry it on every call until it changes.
+            if let Some(stamp) = stamp {
+                self.stamps.insert(key.clone(), stamp);
+            } else {
+                self.stamps.remove(&key);
+            }
+            let content = stamp.and_then(|_| std::fs::read_to_string(&path).ok());
+            let Some(content) = content else {
                 // A path the walker would have skipped, a deletion, or a file
                 // that went away mid-update: none of them belong in the index.
                 if let Some(index) = existing {
@@ -139,10 +155,43 @@ impl Vault {
         }
     }
 
+    /// Catch up with the disk without a watcher: walk again, and re-read only
+    /// the files that appeared, vanished, or carry a new modified time or
+    /// size. The fresh walk's status replaces the stored one, cap refusals
+    /// included, because it has just looked.
+    pub fn sync(&mut self) -> Result<(), String> {
+        let (files, status) =
+            collect_files(&self.root, is_indexable, self.max_files, self.max_depth)?;
+        let walked: HashSet<String> = files
+            .iter()
+            .map(|(path, _)| path.to_string_lossy().to_string())
+            .collect();
+        // Removals first, so a file that took a deleted one's place under the
+        // cap is not turned away.
+        let mut changed: Vec<PathBuf> = self
+            .stamps
+            .keys()
+            .filter(|path| !walked.contains(*path))
+            .map(PathBuf::from)
+            .collect();
+        changed.extend(
+            files
+                .into_iter()
+                .filter(|(path, stamp)| self.stamps.get(&*path.to_string_lossy()) != Some(stamp))
+                .map(|(path, _)| path),
+        );
+        if !changed.is_empty() {
+            self.apply_changes(&changed);
+        }
+        self.walk_status = status;
+        self.refused_at_cap = false;
+        Ok(())
+    }
+
     /// `path` respelled the way the index spells it, or `None` when it lies
     /// outside the root. Watcher events arrive against the canonical root, and
     /// two spellings of one file must not index twice.
-    fn inside_root(&self, path: &Path) -> Option<(PathBuf, PathBuf)> {
+    pub(crate) fn inside_root(&self, path: &Path) -> Option<(PathBuf, PathBuf)> {
         let relative = path
             .strip_prefix(&self.root)
             .or_else(|_| path.strip_prefix(&self.canonical_root))
@@ -151,32 +200,32 @@ impl Vault {
         Some((self.root.join(&relative), relative))
     }
 
-    /// Whether the walk would have visited `path`. `apply_changes` reads files
-    /// the walk never offered it, so the same gates have to hold here: no
-    /// hidden or noisy directories, no symlinks out of the workspace, and no
-    /// file past the size cap.
-    fn walkable(&self, path: &Path, relative: &Path) -> bool {
+    /// The file's stamp when the walk would have visited `path`, `None` when
+    /// it would not. `apply_changes` reads files the walk never offered it, so
+    /// the same gates have to hold here: no hidden or noisy directories, no
+    /// symlinks out of the workspace, and no file past the size cap.
+    fn walkable(&self, path: &Path, relative: &Path) -> Option<Stamp> {
         if !is_indexable(path) || relative.components().count() > self.max_depth {
-            return false;
+            return None;
         }
         for component in relative.components() {
             let name = component.as_os_str().to_string_lossy();
             if name.starts_with('.') || WALK_SKIP_DIRS.contains(&name.as_ref()) {
-                return false;
+                return None;
             }
         }
         // `symlink_metadata` reports the link itself, so `is_file` already
         // refuses a symlinked note the way the walk does.
-        let Ok(meta) = std::fs::symlink_metadata(path) else {
-            return false;
-        };
+        let meta = std::fs::symlink_metadata(path).ok()?;
         if !meta.is_file() || meta.len() > SCAN_MAX_FILE_BYTES {
-            return false;
+            return None;
         }
         // A symlink further up the path is invisible to that check, and the
         // watcher follows links, so a linked directory would otherwise deliver
         // events for files outside the workspace entirely.
-        std::fs::canonicalize(path).is_ok_and(|resolved| resolved.starts_with(&self.canonical_root))
+        let inside = std::fs::canonicalize(path)
+            .is_ok_and(|resolved| resolved.starts_with(&self.canonical_root));
+        inside.then(|| Stamp::of(&meta))
     }
 
     /// Rebuild the resolver and the derived views from the notes already in
@@ -197,7 +246,7 @@ impl Vault {
     /// That stays reported until a rebuild, because the index cannot know
     /// whether a subsequent deletion made room for the file it refused; a
     /// `vault_refresh` is what answers that.
-    pub(super) fn status(&self) -> ScanStatus {
+    pub(crate) fn status(&self) -> ScanStatus {
         if self.refused_at_cap {
             return ScanStatus::file_limit(self.max_files);
         }

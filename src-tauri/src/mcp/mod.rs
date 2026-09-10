@@ -1,0 +1,97 @@
+//! `glyph mcp`: the vault index served to an MCP client over stdio.
+//!
+//! [`registry`] is the transport-agnostic half, a tool list and a dispatch any
+//! caller can drive in-process. [`stdio`] is the adapter that exists today,
+//! and the only code on this path that writes to stdout.
+
+mod launch;
+mod link_tools;
+mod note_tools;
+mod refs;
+mod registry;
+mod session;
+mod stdio;
+mod vault_tools;
+
+#[cfg(test)]
+mod tests;
+
+use std::io::{self, BufRead, Write};
+use std::path::{Path, PathBuf};
+
+use crate::grants::GrantRegistry;
+use crate::vault::VaultStore;
+use registry::Session;
+
+/// Serve until the client closes stdin, and return the exit code. `vaults`
+/// are the `--vault` roots, already checked to be folders; with none, the
+/// vaults open in the app are served.
+pub fn run(vaults: Vec<String>) -> i32 {
+    #[cfg(windows)]
+    keep_stdio_from_children();
+    serve_with(vaults, io::stdin().lock(), io::stdout().lock())
+}
+
+fn serve_with(vaults: Vec<String>, input: impl BufRead, output: impl Write) -> i32 {
+    let grants = GrantRegistry::default();
+    for root in &vaults {
+        let _ = grants.grant_workspace(Path::new(root));
+    }
+    let store = VaultStore::default();
+    let exe = launcher(std::env::var_os("APPIMAGE"));
+
+    let served = stdio::serve(input, output, |name, args| {
+        let open = session::open_state(&vaults, &grants);
+        let session = Session {
+            grants: &grants,
+            vaults: &store,
+            open: &open,
+            exe: &exe,
+        };
+        registry::dispatch(name, args, &session)
+    });
+    match served {
+        Ok(()) => 0,
+        // A client that exits mid-reply is how a session usually ends.
+        Err(err) if err.kind() == io::ErrorKind::BrokenPipe => 0,
+        Err(err) => {
+            eprintln!("glyph mcp: {err}");
+            1
+        }
+    }
+}
+
+/// The binary `open_in_glyph` and `export` start. Run from an AppImage, that is
+/// the AppImage itself: the binary inside it lives in a mount that goes away
+/// when this process ends, taking a Glyph started from it along.
+fn launcher(appimage: Option<std::ffi::OsString>) -> PathBuf {
+    match appimage {
+        Some(appimage) => PathBuf::from(appimage),
+        None => std::env::current_exe().unwrap_or_else(|_| PathBuf::from(crate::APP_NAME)),
+    }
+}
+
+/// Windows gives a child every inheritable handle its parent holds, not only
+/// the ones set as its stdio. The pipes a client hands this process are
+/// inheritable, so a Glyph that `open_in_glyph` starts would keep the client's
+/// stdout open after this process exits, and the client would wait forever for
+/// the end of the stream.
+#[cfg(windows)]
+fn keep_stdio_from_children() {
+    use std::os::windows::io::AsRawHandle;
+    use std::os::windows::raw::HANDLE;
+
+    const HANDLE_FLAG_INHERIT: u32 = 0x0000_0001;
+    extern "system" {
+        fn SetHandleInformation(handle: HANDLE, mask: u32, flags: u32) -> i32;
+    }
+    for handle in [
+        io::stdin().as_raw_handle(),
+        io::stdout().as_raw_handle(),
+        io::stderr().as_raw_handle(),
+    ] {
+        // SAFETY: these are this process's own standard handles, and clearing
+        // the flag on a null or closed one fails without effect.
+        unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT, 0) };
+    }
+}

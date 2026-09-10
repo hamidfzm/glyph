@@ -1,12 +1,14 @@
 //! The per-note lookups the snapshot deliberately leaves out, so its payload
 //! stays proportional to the file count rather than the link count.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::canvas::Canvas;
 use super::graph::Backlink;
 use super::index::Vault;
+use super::note::Note;
 use super::query::{self, Filter};
+use super::resolve::{compare_paths, MatchedBy, TieBreak};
 use super::tags;
 
 #[derive(Debug, Serialize)]
@@ -19,6 +21,26 @@ pub struct QueryResult {
     /// caller has nothing to narrow by, and a workspace's whole path list is
     /// not worth sending on every keystroke.
     pub paths: Vec<String>,
+}
+
+/// Which links a walk through the graph follows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Direction {
+    Out,
+    In,
+    Both,
+}
+
+/// Where a target leads, and the other notes it names when it is ambiguous.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkResolution<'a> {
+    pub path: &'a str,
+    pub matched_by: MatchedBy,
+    pub tie_break: Option<TieBreak>,
+    /// The notes that lost, best first.
+    pub candidates: Vec<&'a str>,
 }
 
 impl Vault {
@@ -43,15 +65,57 @@ impl Vault {
             .collect()
     }
 
-    /// Directly connected notes, in either direction.
-    pub fn neighbors(&self, path: &str) -> Vec<&str> {
-        let Some(id) = self.id_of(path) else {
+    /// Resolve one target as linked from `from`, with the reasoning.
+    pub fn resolve_link(&self, target: &str, from: Option<&str>) -> Option<LinkResolution<'_>> {
+        let found = self.resolver.resolve_detail(target, from)?;
+        Some(LinkResolution {
+            path: self.resolver.path(found.target),
+            matched_by: found.matched_by,
+            tie_break: found.tie_break,
+            candidates: found
+                .others
+                .iter()
+                .map(|&id| self.resolver.path(id))
+                .collect(),
+        })
+    }
+
+    /// Notes within `depth` link hops of `path`, nearest first, each with its
+    /// hop count. Depth 1 in both directions is the graph view's neighbourhood.
+    pub fn neighbors(&self, path: &str, depth: u32, direction: Direction) -> Vec<(&str, u32)> {
+        let Some(start) = self.id_of(path) else {
             return Vec::new();
         };
-        self.graph.neighbors[id]
-            .iter()
-            .map(|&other| self.notes[other].path.as_str())
-            .collect()
+        let mut seen = vec![false; self.notes.len()];
+        seen[start] = true;
+        let mut frontier = vec![start];
+        let mut found = Vec::new();
+        for hop in 1..=depth {
+            let mut next = Vec::new();
+            for id in frontier {
+                for other in self.linked(id, direction) {
+                    if !seen[other] {
+                        seen[other] = true;
+                        next.push(other);
+                        found.push((self.notes[other].path.as_str(), hop));
+                    }
+                }
+            }
+            if next.is_empty() {
+                break;
+            }
+            frontier = next;
+        }
+        found.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| compare_paths(a.0, b.0)));
+        found
+    }
+
+    fn linked(&self, id: usize, direction: Direction) -> impl Iterator<Item = usize> + '_ {
+        let follow_out = matches!(direction, Direction::Out | Direction::Both);
+        let follow_in = matches!(direction, Direction::In | Direction::Both);
+        let outgoing = follow_out.then(|| &self.graph.outgoing[id]);
+        let incoming = follow_in.then(|| &self.graph.incoming[id]);
+        outgoing.into_iter().chain(incoming).flatten().copied()
     }
 
     /// Parse a palette query and return the notes it selects.
@@ -95,5 +159,10 @@ impl Vault {
     pub fn canvas(&self, path: &str) -> Option<&Canvas> {
         let id = self.id_of(path)?;
         self.canvases.get(&self.notes[id].path)
+    }
+
+    /// What the index holds for the note at `path`.
+    pub(crate) fn note(&self, path: &str) -> Option<&Note> {
+        self.id_of(path).map(|id| &self.notes[id])
     }
 }

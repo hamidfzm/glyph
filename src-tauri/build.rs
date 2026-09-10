@@ -4,9 +4,21 @@ use std::path::PathBuf;
 
 fn main() {
     generate_extensions();
+    emit_identifier();
     emit_sentry_dsn();
     embed_comctl32_v6_in_test_binaries();
     tauri_build::build();
+}
+
+/// The bundle identifier from `tauri.conf.json`, as `GLYPH_IDENTIFIER`, for
+/// code that finds the app's data directory without Tauri's path resolver
+/// (`glyph mcp`, which never builds the app).
+fn emit_identifier() {
+    let conf = read_json("tauri.conf.json");
+    let identifier = conf["identifier"]
+        .as_str()
+        .expect("tauri.conf.json must name an identifier");
+    println!("cargo:rustc-env=GLYPH_IDENTIFIER={identifier}");
 }
 
 /// Single source of truth for the Sentry DSN: `src-tauri/sentry.json` → `dsn`.

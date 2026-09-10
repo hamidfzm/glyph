@@ -19,9 +19,9 @@ pub fn handle_window_event(window: &Window, event: &WindowEvent) {
             crate::watcher::drop_watches(window.app_handle(), &owned);
             // The index outlives its watches otherwise, holding every note's
             // tags, fields and links for the rest of the session.
-            if let Some(store) = window.try_state::<crate::vault::commands::VaultStore>() {
+            if let Some(store) = window.try_state::<crate::vault::VaultStore>() {
                 for path in &owned {
-                    crate::vault::commands::forget(&store, path);
+                    crate::vault::forget(&store, path);
                 }
             }
             registry.remove(label);

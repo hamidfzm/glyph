@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 use crate::grants::GrantRegistry;
-use crate::vault::commands::VaultStore;
+use crate::vault::VaultStore;
 
 pub struct FileWatcherState(pub Arc<Mutex<HashMap<String, RecommendedWatcher>>>);
 
@@ -125,7 +125,7 @@ pub fn watch_directory<R: Runtime>(
             // Re-index before the frontend hears about the change, so the
             // snapshot it asks for next is already current.
             if let Some(store) = app_handle.try_state::<VaultStore>() {
-                crate::vault::commands::apply_changes(&store, &watched_path, &event.paths);
+                crate::vault::apply_changes(&store, &watched_path, &event.paths);
             }
             let _ = app_handle.emit("directory-changed", &watched_path);
         });
