@@ -18,6 +18,11 @@ describe("deriveExportMeta", () => {
     expect(deriveExportMeta("/x/raw.md", content).title).toBe("Real Title");
   });
 
+  it("skips a frontmatter block that follows a BOM", () => {
+    const content = "\uFEFF---\n# a yaml comment\nauthor: Ada\n---\n# Real Title\n";
+    expect(deriveExportMeta("/x/bom.md", content).title).toBe("Real Title");
+  });
+
   it("strips simple inline markup from the h1 and skips deeper headings", () => {
     expect(deriveExportMeta("/x/a.md", "# The `ctx` *guide*").title).toBe("The ctx guide");
     expect(deriveExportMeta("/x/b.md", "# [API Reference](api.md)").title).toBe("API Reference");

@@ -131,6 +131,9 @@ fn frontmatter_matches_the_shared_expectation() {
     )
     .unwrap();
     let vault_dir = fixtures_dir().join("vault");
+    // The BOM case: an editor that drops the invisible mark drops the coverage.
+    let aliased = fs::read_to_string(vault_dir.join("Aliased.md")).unwrap();
+    assert!(aliased.starts_with('\u{feff}'), "Aliased.md lost its BOM");
 
     for (name, want) in expected.as_object().unwrap() {
         let content = fs::read_to_string(vault_dir.join(name)).unwrap();

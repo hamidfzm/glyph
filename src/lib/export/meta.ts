@@ -1,4 +1,4 @@
-import { parseFrontmatter } from "@/lib/frontmatter";
+import { FRONTMATTER_RE, parseFrontmatter } from "@/lib/frontmatter";
 import { parseHeadings } from "@/lib/markdownHeadings";
 
 export interface ExportMeta {
@@ -16,7 +16,7 @@ function basename(path: string): string {
 
 /** First `# heading` outside code fences, stripped of simple inline markup. */
 function firstHeadingTitle(content: string): string | null {
-  const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+  const body = content.replace(FRONTMATTER_RE, "");
   for (const heading of parseHeadings(body)) {
     if (heading.level !== 1) continue;
     const text = heading.text

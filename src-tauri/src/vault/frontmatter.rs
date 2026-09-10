@@ -59,6 +59,8 @@ impl Frontmatter {
 /// starts at. `None` unless the file opens with the fence and closes it within
 /// the byte cap.
 pub fn split_frontmatter(content: &str) -> (Option<String>, usize) {
+    // One leading BOM, as the renderer's pattern allows; it moves no line index.
+    let content = content.strip_prefix('\u{feff}').unwrap_or(content);
     // `lines` has already taken the `\r` of a CRLF ending, and the renderer's
     // pattern allows nothing else around the delimiter, so `---   ` opens no
     // block there and must open none here.
@@ -385,6 +387,13 @@ mod tests {
         let fm = parse("---\r\ntitle: Note\r\ntags: [a]\r\n---\r\n").unwrap();
         assert_eq!(fm.title.as_deref(), Some("Note"));
         assert_eq!(fm.tags, vec!["a"]);
+    }
+
+    #[test]
+    fn a_leading_bom_does_not_hide_the_block() {
+        let (inner, body_start) = split_frontmatter("\u{feff}---\r\ntitle: Note\r\n---\r\n");
+        assert_eq!(inner.as_deref(), Some("title: Note\n"));
+        assert_eq!(body_start, 3);
     }
 
     #[test]
