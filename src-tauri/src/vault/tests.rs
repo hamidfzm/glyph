@@ -243,6 +243,33 @@ fn a_canvas_board_is_indexed_and_links_its_file_cards() {
     fs::remove_dir_all(&root).unwrap();
 }
 
+/// Editing a board re-reads it in place, the way a note edit does.
+#[test]
+fn editing_a_canvas_updates_its_board_and_links() {
+    let root = fixture_vault("canvas-edit");
+    let mut vault = build(&root);
+    let board = in_vault(&root, "Board.canvas");
+
+    fs::write(
+        &board,
+        r#"{"nodes":[{"id":"a","type":"file","file":"Index.md","x":0,"y":0,"width":100,"height":100}],"edges":[]}"#,
+    )
+    .unwrap();
+    vault.apply_changes(&[std::path::PathBuf::from(&board)]);
+
+    let canvas = vault.canvas(&board).expect("the board stays indexed");
+    assert_eq!(canvas.nodes.len(), 1);
+    assert!(canvas.edges.is_empty());
+    let neighbors: Vec<String> = vault
+        .neighbors(&board)
+        .into_iter()
+        .map(|p| relative(&root, p))
+        .collect();
+    assert_eq!(neighbors, vec!["Index.md"]);
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
 #[test]
 fn queries_filter_on_tags_and_fields() {
     let root = fixture_vault("query");
@@ -921,6 +948,41 @@ fn index_1k_notes_timing() {
     let snapshot = serde_json::to_string(&vault.snapshot()).unwrap();
     let serialized = started.elapsed();
 
+    // The same work split into its phases, to see which one to attack.
+    let started = Instant::now();
+    let paths: Vec<std::path::PathBuf> =
+        crate::commands::walk::workspace_walker(&root, crate::commands::walk::WALK_MAX_DEPTH)
+            .filter(|entry| entry.file_type().is_file())
+            .map(|entry| entry.into_path())
+            .collect();
+    let walked = started.elapsed();
+
+    let started = Instant::now();
+    let contents: Vec<String> = paths
+        .iter()
+        .map(|path| fs::read_to_string(path).unwrap())
+        .collect();
+    let read = started.elapsed();
+
+    let started = Instant::now();
+    let notes: Vec<_> = paths
+        .iter()
+        .zip(&contents)
+        .map(|(path, content)| super::note::extract_note(&path.to_string_lossy(), content))
+        .collect();
+    let extracted = started.elapsed();
+
+    let started = Instant::now();
+    let names: Vec<String> = notes.iter().map(|note| note.path.clone()).collect();
+    let aliases: Vec<Vec<String>> = notes.iter().map(|note| note.aliases.clone()).collect();
+    let resolver = super::resolve::Resolver::build(&names, &aliases);
+    let graph = super::graph::build(&notes, &resolver);
+    let derived = started.elapsed();
+    println!(
+        "  walk {walked:?}, read on one thread {read:?}, extract {extracted:?}, resolve+graph {derived:?} ({} edges)",
+        graph.edges.len()
+    );
+
     println!(
         "vault build:        {new:?} ({} notes)",
         vault.snapshot().files.len()
@@ -930,5 +992,24 @@ fn index_1k_notes_timing() {
         snapshot.len()
     );
 
+    fs::remove_dir_all(&root).unwrap();
+}
+
+/// The build divides the files between threads; however they split, every file
+/// must land exactly once. A prime count leaves a short last chunk.
+#[test]
+fn a_parallel_build_indexes_every_file_once() {
+    let root = unique_tmp("parallel");
+    for i in 0..37 {
+        fs::write(
+            root.join(format!("n{i:02}.md")),
+            format!("[[n{:02}]]", (i + 1) % 37),
+        )
+        .unwrap();
+    }
+
+    let vault = build(&root);
+    assert_eq!(vault.snapshot().files.len(), 37);
+    assert_eq!(vault.graph.edges.len(), 37);
     fs::remove_dir_all(&root).unwrap();
 }
