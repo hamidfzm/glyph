@@ -44,4 +44,10 @@ describe("extractHeadingSection", () => {
     expect(extractHeadingSection(doc, "Fake")).toBe("");
     expect(extractHeadingSection(doc, "Real")).toBe("## Real\ntext\n```\n## Fake\n```\nmore");
   });
+
+  it("slices CRLF documents without leaking carriage returns", () => {
+    const crlf = DOC.replaceAll("\n", "\r\n");
+    expect(extractHeadingSection(crlf, "Recipes")).toBe("## Recipes\npasta\n\n### Sauce\ntomato");
+    expect(extractHeadingSection(crlf, "Sauce")).toBe("### Sauce\ntomato");
+  });
 });
