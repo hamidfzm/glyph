@@ -135,7 +135,7 @@ mod tests {
             name: "probe",
             title: "Probe",
             description: "",
-            input_schema: || json!({}),
+            input_schema: TOOLS[0].input_schema,
             effect: Effect::ReadOnly,
             enabled: true,
             handler,
@@ -159,12 +159,12 @@ mod tests {
         let floods = tool(|_, _| Ok(json!("x".repeat(MAX_RESULT_BYTES))));
         let answers = tool(|_, args| Ok(args));
 
-        let refused = |tool: &ToolDef| match run_tool(tool, &session, json!({})) {
-            Err(ToolError::Failed(message)) => message,
-            other => panic!("expected a refusal, got {other:?}"),
+        let refused = |tool: &ToolDef, reason: &str| {
+            matches!(run_tool(tool, &session, json!({})),
+                Err(ToolError::Failed(message)) if message.contains(reason))
         };
-        assert!(refused(&panics).contains("failed unexpectedly"));
-        assert!(refused(&floods).contains("ask for less"));
+        assert!(refused(&panics, "failed unexpectedly"));
+        assert!(refused(&floods, "ask for less"));
         assert_eq!(
             run_tool(&answers, &session, json!({ "a": 1 })),
             Ok(json!({ "a": 1 }))

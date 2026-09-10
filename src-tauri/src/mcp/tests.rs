@@ -48,14 +48,17 @@ impl Harness {
         in_vault(&self.root, relative)
     }
 
-    fn call(&self, tool: &str, args: Value) -> Result<Value, ToolError> {
-        let session = Session {
+    fn session(&self) -> Session<'_> {
+        Session {
             grants: &self.grants,
             vaults: &self.store,
             open: &self.open,
             exe: &self.exe,
-        };
-        dispatch(tool, args, &session)
+        }
+    }
+
+    fn call(&self, tool: &str, args: Value) -> Result<Value, ToolError> {
+        dispatch(tool, args, &self.session())
     }
 
     fn ok(&self, tool: &str, args: Value) -> Value {
@@ -955,4 +958,40 @@ fn export_stays_inside_the_vault_it_reads_whatever_else_is_granted() {
     assert!(refusal.contains("inside the vault"), "{refusal}");
     assert!(!out.exists());
     fs::remove_dir_all(&other).unwrap();
+}
+
+#[test]
+fn a_vault_is_found_however_it_is_spelled() {
+    let h = Harness::new("mcp_vault_spelling");
+    let spelled = h.root.join(".").to_string_lossy().to_string();
+    let tags = h.ok("list_tags", json!({ "vault": spelled }));
+    assert_eq!(tags["vault"], json!(h.root.to_string_lossy()));
+}
+
+#[test]
+fn an_active_note_outside_every_vault_leaves_the_only_one_as_the_default() {
+    let mut h = Harness::new("mcp_loose_active");
+    let loose = unique_tmp("mcp_loose_note").join("Loose.md");
+    fs::write(&loose, "outside").unwrap();
+    h.grants.grant_file(&loose).unwrap();
+    h.open.active_note = Some(loose.to_string_lossy().to_string());
+
+    let tags = h.ok("list_tags", json!({}));
+    assert_eq!(tags["vault"], json!(h.root.to_string_lossy()));
+    fs::remove_dir_all(loose.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn a_note_that_grew_past_the_cap_is_not_read() {
+    // Resolution only hands out indexed notes, so this is the file growing
+    // between the sync and the read; the read checks again.
+    let h = Harness::new("mcp_grown_note");
+    let grown = h.root.join("Grown.md");
+    fs::write(
+        &grown,
+        "x".repeat(crate::commands::walk::SCAN_MAX_FILE_BYTES as usize + 1),
+    )
+    .unwrap();
+    let refusal = super::refs::read_text(&h.session(), &grown.to_string_lossy()).unwrap_err();
+    assert!(refusal.contains("5 MB"), "{refusal}");
 }

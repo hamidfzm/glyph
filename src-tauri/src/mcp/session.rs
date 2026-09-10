@@ -247,13 +247,16 @@ mod tests {
     #[test]
     fn a_loose_file_can_be_the_active_note() {
         let settings = json!({ "settings": { "behavior": {
-            "openTabs": [{ "kind": "file", "path": "/n.md" }],
+            "openTabs": [
+                { "kind": "folder", "path": "/ws" },
+                { "kind": "file", "path": "/n.md" },
+            ],
             "activeTabPath": "/n.md",
         } } })
         .to_string();
         let state = parse(Some(&settings), None);
         assert_eq!(state.active_note.as_deref(), Some("/n.md"));
-        assert!(state.roots.is_empty());
+        assert_eq!(state.roots, ["/ws"]);
     }
 
     #[test]
