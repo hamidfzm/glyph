@@ -8,13 +8,18 @@ const FENCE = /^\s{0,3}(```+|~~~+)/;
 export interface MarkdownHeading {
   level: number;
   text: string;
-  /** 0-based index into `md.split("\n")`. */
+  /** 0-based index into `splitLines(md)`. */
   line: number;
+}
+
+// Every CommonMark line ending (CRLF, CR, LF); a leftover `\r` defeats ATX's `.*$`.
+export function splitLines(md: string): string[] {
+  return md.split(/\r\n|\r|\n/);
 }
 
 export function parseHeadings(md: string): MarkdownHeading[] {
   const headings: MarkdownHeading[] = [];
-  const lines = md.split("\n");
+  const lines = splitLines(md);
   let fence: string | null = null;
 
   for (let i = 0; i < lines.length; i++) {

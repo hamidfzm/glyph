@@ -27,4 +27,11 @@ describe("parseHeadings", () => {
   it("strips trailing hashes from closed ATX headings", () => {
     expect(parseHeadings("# Title #").map((h) => h.text)).toEqual(["Title"]);
   });
+
+  it.each(["\r\n", "\r"])("numbers lines the same for %j endings as for LF", (eol) => {
+    expect(parseHeadings(["# One", "text", "## Two ##", ""].join(eol))).toEqual([
+      { level: 1, text: "One", line: 0 },
+      { level: 2, text: "Two", line: 2 },
+    ]);
+  });
 });
