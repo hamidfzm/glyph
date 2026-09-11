@@ -176,17 +176,11 @@ pub(super) fn how_to_add_a_vault(session: &Session) -> &'static str {
 /// screen: a control character, a line or paragraph separator, or a
 /// bidirectional mark or override.
 fn disguises(c: char) -> bool {
+    const MARKS: [char; 5] = ['\u{061c}', '\u{200e}', '\u{200f}', '\u{2028}', '\u{2029}'];
     c.is_control()
-        || matches!(
-            c,
-            '\u{061c}'
-                | '\u{200e}'
-                | '\u{200f}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202a}'..='\u{202e}'
-                | '\u{2066}'..='\u{2069}'
-        )
+        || MARKS.contains(&c)
+        || ('\u{202a}'..='\u{202e}').contains(&c)
+        || ('\u{2066}'..='\u{2069}').contains(&c)
 }
 
 /// Refuse a path naming a network share or a device. Resolving one connects
