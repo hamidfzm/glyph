@@ -266,11 +266,17 @@ jobs:
       - name: Arguments after the image override the default command
         run: |
           mkdir -p "$RUNNER_TEMP/doc"
-          docker run --rm --user "$(id -u):$(id -g)" \
+          # Scripts capture stdout, so it must hold the path and nothing else.
+          # Checked here, not in the build job: xvfb-run merges stderr in.
+          out=$(docker run --rm --user "$(id -u):$(id -g)" \
             -v "$PWD/samples:/docs:ro" \
             -v "$RUNNER_TEMP/doc:/out" \
-            glyph:ci export /docs/Index.md --format html --out /out/index.html
+            glyph:ci export /docs/Index.md --format html --out /out/index.html)
           test -s "$RUNNER_TEMP/doc/index.html"
+          if [ "$out" != /out/index.html ]; then
+            echo "::error::export printed '$out' to stdout, expected only the output path"
+            exit 1
+          fi
 
       - name: A rejected export fails the step
         run: |

@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::io::{self, Write};
 use std::sync::Mutex;
 use tauri::State;
 
@@ -24,16 +25,24 @@ pub fn get_cli_export(state: State<'_, CliExport>) -> Option<CliExportRequest> {
     state.0.lock().ok()?.clone()
 }
 
-/// Route the outcome message: stdout for success, stderr for failure (so CI
-/// logs read naturally and `2>/dev/null` keeps only the summary). Split from
-/// the `finish_cli_export` command (in [`super::export_runtime`]) so the
-/// branch is unit-testable; the command itself never returns.
-pub(crate) fn print_cli_export_outcome(code: i32, message: &str) {
-    if code == 0 {
-        println!("{message}");
-    } else {
-        eprintln!("{message}");
+/// Split from `finish_cli_export` (in [`super::export_runtime`]) so the stream
+/// routing is unit-testable; the command itself never returns.
+pub(crate) fn write_cli_export_outcome(
+    code: i32,
+    output: Option<&str>,
+    message: &str,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+) -> io::Result<()> {
+    // Nobody is left to tell about a failed stderr write; a lost path is an error.
+    let _ = writeln!(stderr, "{message}");
+    if code != 0 {
+        return Ok(());
     }
+    if let Some(output) = output {
+        writeln!(stdout, "{output}")?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -87,12 +96,47 @@ mod tests {
         assert!(state.0.lock().unwrap().is_none());
     }
 
+    fn outcome(code: i32, output: Option<&str>, message: &str) -> (String, String) {
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        write_cli_export_outcome(code, output, message, &mut stdout, &mut stderr).unwrap();
+        (
+            String::from_utf8(stdout).unwrap(),
+            String::from_utf8(stderr).unwrap(),
+        )
+    }
+
     #[test]
-    fn print_cli_export_outcome_takes_both_streams() {
-        // Routing is by code: 0 -> stdout, nonzero -> stderr. The output
-        // itself is not captured here; this exercises both branches so a
-        // future panic or format regression is caught.
-        print_cli_export_outcome(0, "exported fine");
-        print_cli_export_outcome(1, "export failed");
+    fn a_successful_export_prints_only_its_path_to_stdout() {
+        // `out=$(glyph export ...)` must capture a path, not the summary.
+        let (stdout, stderr) = outcome(0, Some("/ws/notes.pdf"), "Exported /ws/notes.pdf");
+        assert_eq!(stdout, "/ws/notes.pdf\n");
+        assert_eq!(stderr, "Exported /ws/notes.pdf\n");
+    }
+
+    #[test]
+    fn a_failed_export_prints_nothing_to_stdout() {
+        let (stdout, stderr) = outcome(1, Some("/ws/notes.pdf"), "Export failed: boom");
+        assert_eq!(stdout, "");
+        assert_eq!(stderr, "Export failed: boom\n");
+    }
+
+    #[test]
+    fn a_path_that_cannot_reach_stdout_is_an_error() {
+        // An empty slice refuses every byte, like `> file` on a full disk.
+        let mut full: &mut [u8] = &mut [];
+        let result = write_cli_export_outcome(
+            0,
+            Some("/ws/notes.pdf"),
+            "Exported /ws/notes.pdf",
+            &mut full,
+            &mut Vec::new(),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn a_launch_without_an_export_request_prints_no_path() {
+        let (stdout, _) = outcome(0, None, "Exported 3 pages and 1 assets to /out");
+        assert_eq!(stdout, "");
     }
 }
