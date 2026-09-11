@@ -8,8 +8,9 @@ export interface ParsedFrontmatter {
   extra: Array<[key: string, value: string]>;
 }
 
-// One leading BOM may precede the fence: micromark, and so the renderer, drops it.
-export const FRONTMATTER_RE = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
+// Fences as remark-frontmatter reads them: after one leading BOM (micromark drops
+// it), `---` with optional trailing spaces or tabs.
+export const FRONTMATTER_RE = /^\uFEFF?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
 const KNOWN_KEYS = new Set(["title", "author", "date", "tags"]);
 
 // FAILSAFE_SCHEMA keeps every scalar as a string so a date like `2026-04-15`

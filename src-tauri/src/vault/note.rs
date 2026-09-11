@@ -29,8 +29,6 @@ pub(crate) struct Note {
 }
 
 pub(crate) fn extract_note(path: &str, content: &str) -> Note {
-    // The renderer drops a leading BOM; kept, it would sit before a line-0 `#tag`.
-    let content = content.strip_prefix('\u{feff}').unwrap_or(content);
     let (block, body_start) = split_frontmatter(content);
     let parsed = block.as_deref().and_then(parse_frontmatter);
 
@@ -262,13 +260,6 @@ mod tests {
         assert!(note.title.is_none());
         assert!(note.fields.is_empty());
         assert_eq!(note.links.len(), 1);
-    }
-
-    #[test]
-    fn a_leading_bom_is_not_part_of_the_first_line() {
-        let note = extract_note("/w/a.md", "\u{feff}#first and [[Other]]\n");
-        assert_eq!(note.tags, vec!["first"]);
-        assert_eq!(note.links[0].snippet, "#first and [[Other]]");
     }
 
     #[test]

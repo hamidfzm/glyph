@@ -52,8 +52,12 @@ describe("scanWords", () => {
     expect(wordsOf("---\ntitel: xyz\n---\nreal wrods")).toEqual(["real", "wrods"]);
   });
 
-  it("excludes frontmatter closed with a ... fence", () => {
-    expect(wordsOf("---\ntitel: xyz\n...\nreal wrods")).toEqual(["real", "wrods"]);
+  it("excludes frontmatter behind a leading BOM", () => {
+    expect(wordsOf("\uFEFF---\ntitel: xyz\n---\nreal wrods")).toEqual(["real", "wrods"]);
+  });
+
+  it("checks a block closed with ..., which the renderer does not read as frontmatter", () => {
+    expect(wordsOf("---\ntitel: xyz\n...\nreal wrods")).toEqual(["titel", "xyz", "real", "wrods"]);
   });
 
   it("treats an unterminated frontmatter block as prose", () => {
