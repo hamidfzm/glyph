@@ -9,6 +9,7 @@ export default defineConfig({
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __SENTRY_RELEASE__: JSON.stringify(`${pkg.name}@${pkg.version}`),
   },
   resolve: {
     alias: {

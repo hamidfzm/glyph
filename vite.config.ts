@@ -14,13 +14,17 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 // plugin is skipped entirely so local/dev builds are unaffected.
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
 
+// The one Sentry release name: the SDK reports it (via `define`) and the plugin
+// attaches the build's commits to it. The plugin's default name is the git SHA.
+const sentryRelease = `${pkg.name}@${pkg.version}`;
+
 export default defineConfig(async ({ mode }) => ({
   plugins: [
     react(),
     tailwindcss(),
     codecovVitePlugin({
       enableBundleAnalysis: Boolean(process.env.CODECOV_TOKEN),
-      bundleName: "glyph-frontend",
+      bundleName: `${pkg.name}-frontend`,
       uploadToken: process.env.CODECOV_TOKEN,
       gitService: "github",
     }),
@@ -31,20 +35,19 @@ export default defineConfig(async ({ mode }) => ({
       ? [
           sentryVitePlugin({
             org: "glyph-md",
-            project: "glyph",
+            project: pkg.name,
             authToken: sentryAuthToken,
             telemetry: false,
-            // Match the release the SDK reports (telemetry.ts) so the commits the
-            // plugin attaches land on it. The default name is the git SHA.
-            release: { name: `glyph@${pkg.version}` },
+            release: { name: sentryRelease },
             sourcemaps: { filesToDeleteAfterUpload: ["./dist/**/*.map"] },
           }),
         ]
       : []),
   ],
-  // Expose package.json version to the app (Sentry release id, plugin API ceiling).
+  // Expose package.json facts to the app: the plugin API ceiling and the Sentry release.
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __SENTRY_RELEASE__: JSON.stringify(sentryRelease),
   },
   // Source maps are only emitted when we're going to upload + delete them.
   build: {

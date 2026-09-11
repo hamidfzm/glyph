@@ -180,12 +180,16 @@ fn scrub_event(mut event: Event<'static>) -> Option<Event<'static>> {
     Some(event)
 }
 
+/// Matches the frontend's `__SENTRY_RELEASE__`; `releaseVersion.test.ts` keeps
+/// Cargo.toml's name and version equal to package.json's.
+const RELEASE: &str = concat!(env!("CARGO_PKG_NAME"), "@", env!("CARGO_PKG_VERSION"));
+
 /// The privacy-hardened client options: tagged release, no PII, no hostname,
 /// and the path-scrubbing `before_send`. Extracted from [`init_guard`] so the
 /// configuration can be asserted in tests without initializing a real client.
 fn client_options() -> sentry::ClientOptions {
     sentry::ClientOptions {
-        release: Some(format!("glyph@{}", env!("CARGO_PKG_VERSION")).into()),
+        release: Some(RELEASE.into()),
         send_default_pii: false,
         server_name: None,
         before_send: Some(Arc::new(scrub_event)),
@@ -526,10 +530,7 @@ mod tests {
         assert!(!opts.send_default_pii, "PII must never be sent");
         assert!(opts.server_name.is_none(), "hostname must not be set");
         assert!(opts.before_send.is_some(), "scrubber must be installed");
-        assert_eq!(
-            opts.release.as_deref(),
-            Some(concat!("glyph@", env!("CARGO_PKG_VERSION"))),
-        );
+        assert_eq!(opts.release.as_deref(), Some(RELEASE));
     }
 
     #[test]

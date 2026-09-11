@@ -214,7 +214,7 @@ export function enableTelemetry(): Promise<void> {
     clientClosed = false;
     Sentry.init({
       dsn: SENTRY_DSN,
-      release: `glyph@${__APP_VERSION__}`,
+      release: __SENTRY_RELEASE__,
       initialScope: osScope(),
       // Hard privacy posture for a local-first viewer: no PII, no performance
       // tracing, no session replay (replay would record document contents).
