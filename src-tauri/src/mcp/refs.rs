@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use super::registry::Session;
 use crate::cli::plain_path;
 use crate::commands::walk::SCAN_MAX_FILE_BYTES;
-use crate::vault::{split_heading, with_synced_vault, Vault};
+use crate::vault::{split_heading, strip_bom, with_synced_vault, Vault};
 
 /// Most rows one listing returns. A listing that had more says so.
 pub(super) const MAX_ITEMS: usize = 200;
@@ -294,8 +294,8 @@ pub(super) fn note_path(
     Ok(Some(indexed))
 }
 
-/// A note's text, read through the grant check and refused past the size the
-/// index refuses.
+/// A note's text, read through the grant check, refused past the size the
+/// index refuses, and without the leading BOM the index skips.
 pub(super) fn read_text(session: &Session, path: &str) -> Result<String, String> {
     let canonical = session.grants.ensure_readable(path)?;
     let size = std::fs::metadata(&canonical)
@@ -304,5 +304,7 @@ pub(super) fn read_text(session: &Session, path: &str) -> Result<String, String>
     if size > SCAN_MAX_FILE_BYTES {
         return Err(format!("{path} is larger than the 5 MB Glyph indexes"));
     }
-    std::fs::read_to_string(&canonical).map_err(|err| format!("cannot read {path}: {err}"))
+    let text =
+        std::fs::read_to_string(&canonical).map_err(|err| format!("cannot read {path}: {err}"))?;
+    Ok(strip_bom(&text).to_string())
 }

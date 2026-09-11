@@ -56,13 +56,16 @@ EXAMPLES:
   glyph serve ~/notes --port 8080
   glyph mcp --vault ~/notes
 
-`export` writes nothing to stdout but the path it produced, and exits nonzero
-with a message on stderr if it fails.
+`export` writes nothing to stdout but the path it produced, so a script can
+capture it; the summary and any warning go to stderr. It exits nonzero with a
+message on stderr if it fails.
 
 `serve` prints its URL once the first build lands, then keeps running until it
 is interrupted. Every change to the folder rebuilds the site, and pages open
 in a browser reload themselves. Both render through a webview, so on a Linux
-machine with no display, run them under `xvfb-run`.
+machine with no display, run them under `xvfb-run`. It merges stderr into
+stdout, so a script capturing the export's path should start `Xvfb` itself
+and set `DISPLAY` instead.
 
 `mcp` speaks the Model Context Protocol on stdin and stdout until its client
 closes them, and needs no display. Register `glyph mcp` with an MCP client to

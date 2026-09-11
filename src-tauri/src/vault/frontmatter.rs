@@ -57,18 +57,15 @@ impl Frontmatter {
 
 /// The leading `---` fenced block's inner text plus the line index the body
 /// starts at. `None` unless the file opens with the fence and closes it within
-/// the byte cap.
+/// the byte cap. A leading BOM is dropped by the caller (`index::strip_bom`).
 pub fn split_frontmatter(content: &str) -> (Option<String>, usize) {
-    // `lines` has already taken the `\r` of a CRLF ending, and the renderer's
-    // pattern allows nothing else around the delimiter, so `---   ` opens no
-    // block there and must open none here.
     let mut lines = content.lines();
-    if lines.next() != Some("---") {
+    if !lines.next().is_some_and(is_fence) {
         return (None, 0);
     }
     let mut inner = String::new();
     for (idx, line) in lines.enumerate() {
-        if line == "---" {
+        if is_fence(line) {
             return (Some(inner), idx + 2);
         }
         if inner.len() + line.len() > MAX_FRONTMATTER_BYTES {
@@ -78,6 +75,12 @@ pub fn split_frontmatter(content: &str) -> (Option<String>, usize) {
         inner.push('\n');
     }
     (None, 0)
+}
+
+/// `---` plus any trailing spaces or tabs, as remark-frontmatter reads a fence.
+/// `lines` has already taken the `\r` of a CRLF ending.
+fn is_fence(line: &str) -> bool {
+    line.trim_end_matches([' ', '\t']) == "---"
 }
 
 /// Parse the inner text of a frontmatter block. `None` when the YAML is
@@ -478,10 +481,11 @@ mod tests {
     }
 
     #[test]
-    fn a_delimiter_with_trailing_space_is_not_a_fence() {
-        // The renderer's pattern does not accept it, so neither does the index.
-        assert_eq!(parse("---   \ntitle: Note\n---\n"), None);
-        assert_eq!(parse("---\ntitle: Note\n---   \n"), None);
+    fn spaces_or_tabs_after_a_fence_still_close_it() {
+        // The renderer's parser accepts them, so the index does too.
+        let fm = parse("---   \ntitle: Note\n---\t\r\n").unwrap();
+        assert_eq!(fm.title.as_deref(), Some("Note"));
+        assert_eq!(parse("---\ntitle: Note\n--- x\n"), None);
     }
 
     #[test]

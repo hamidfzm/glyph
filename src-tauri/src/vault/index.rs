@@ -258,7 +258,14 @@ impl Vault {
     }
 }
 
+/// micromark drops one leading BOM, so the index drops one here, for every file
+/// kind, before any parser runs; a second BOM is text to both.
+pub(crate) fn strip_bom(content: &str) -> &str {
+    content.strip_prefix('\u{feff}').unwrap_or(content)
+}
+
 fn index_file(path: &str, content: &str) -> (Note, Option<Canvas>) {
+    let content = strip_bom(content);
     if crate::is_canvas_file(Path::new(path)) {
         let (note, canvas) = canvas::extract_canvas(path, content);
         return (note, Some(canvas));
@@ -303,4 +310,33 @@ fn index_files(paths: &[PathBuf]) -> Vec<(Note, Option<Canvas>)> {
 fn read_and_index(path: &Path) -> Option<(Note, Option<Canvas>)> {
     let content = std::fs::read_to_string(path).ok()?;
     Some(index_file(&path.to_string_lossy(), &content))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_leading_bom_is_dropped_before_any_parser_sees_the_note() {
+        let (note, _) = index_file("/w/a.md", "\u{feff}#first and [[Other]]\n");
+        assert_eq!(note.tags, vec!["first"]);
+        assert_eq!(note.links[0].snippet, "#first and [[Other]]");
+
+        let (note, _) = index_file("/w/b.md", "\u{feff}---\ntitle: T\n---\n");
+        assert_eq!(note.title.as_deref(), Some("T"));
+    }
+
+    #[test]
+    fn only_one_bom_is_dropped() {
+        let (note, _) = index_file("/w/a.md", "\u{feff}\u{feff}---\ntitle: T\n---\n");
+        assert!(note.title.is_none());
+    }
+
+    #[test]
+    fn a_canvas_saved_with_a_bom_keeps_its_cards() {
+        let board = r#"{"nodes":[{"id":"a","type":"file","file":"Notes/A.md","x":0,"y":0,"width":1,"height":1}]}"#;
+        let (note, canvas) = index_file("/w/Board.canvas", &format!("\u{feff}{board}"));
+        assert_eq!(canvas.unwrap().nodes.len(), 1);
+        assert_eq!(note.links.len(), 1);
+    }
 }

@@ -5,7 +5,7 @@
 // and `note#my-heading` resolve to the same section (the slug is what
 // rehype-slug puts on the rendered anchor).
 import { slug } from "github-slugger";
-import { parseHeadings } from "@/lib/markdownHeadings";
+import { parseHeadings, splitLines } from "@/lib/markdownHeadings";
 
 function matches(heading: string, target: string): boolean {
   const a = heading.trim();
@@ -26,7 +26,7 @@ export function extractHeadingSection(md: string, heading: string): string {
   // Section runs to the next heading of the same or higher level.
   const end = headings.slice(startIdx + 1).find((h) => h.level <= start.level);
 
-  const lines = md.split("\n");
+  const lines = splitLines(md);
   const section = lines.slice(start.line, end?.line);
   return section.join("\n").trimEnd();
 }

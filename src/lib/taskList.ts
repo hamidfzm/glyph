@@ -1,6 +1,8 @@
 // Toggle a single GFM task-list item in markdown source by line number.
 // We rewrite source rather than the rendered AST so the user's existing
 // formatting (indent, bullet style, line endings) is preserved exactly.
+import { splitLines } from "@/lib/markdownHeadings";
+
 const TASK_LINE = /^(\s*[-*+]\s+)\[([ xX])\](\s)/;
 
 export function toggleTaskAtLine(source: string, line: number): string {
@@ -8,7 +10,7 @@ export function toggleTaskAtLine(source: string, line: number): string {
   // Track line endings so we don't normalise CRLF → LF on a save.
   const eolMatch = source.match(/\r\n|\r|\n/);
   const eol = eolMatch ? eolMatch[0] : "\n";
-  const lines = source.split(/\r\n|\r|\n/);
+  const lines = splitLines(source);
   if (line > lines.length) return source;
 
   const idx = line - 1;
