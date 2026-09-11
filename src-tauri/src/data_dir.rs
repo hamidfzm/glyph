@@ -42,11 +42,12 @@ pub struct InstanceLock {
     _file: File,
 }
 
-pub fn hold_instance_lock() -> Option<InstanceLock> {
-    lock_in(store_dirs().first()?)
+/// The app data directory, where the instance lock lives.
+pub fn app_dir() -> Option<PathBuf> {
+    store_dirs().into_iter().next()
 }
 
-fn lock_in(dir: &Path) -> Option<InstanceLock> {
+pub fn hold_instance_lock(dir: &Path) -> Option<InstanceLock> {
     std::fs::create_dir_all(dir).ok()?;
     let file = OpenOptions::new()
         .create(true)
@@ -67,7 +68,7 @@ fn lock_in(dir: &Path) -> Option<InstanceLock> {
 
 /// Whether an interactive Glyph is running on this machine.
 pub fn app_running() -> bool {
-    store_dirs().first().is_some_and(|dir| running_in(dir))
+    app_dir().is_some_and(|dir| running_in(&dir))
 }
 
 fn running_in(dir: &Path) -> bool {
@@ -102,10 +103,10 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         assert!(!running_in(dir.path()), "no lock file yet");
 
-        let held = lock_in(dir.path()).expect("the first launch takes the lock");
+        let held = hold_instance_lock(dir.path()).expect("the first launch takes the lock");
         assert!(running_in(dir.path()));
         // A second window does not get it, and does not need it.
-        assert!(lock_in(dir.path()).is_none());
+        assert!(hold_instance_lock(dir.path()).is_none());
 
         drop(held);
         assert!(
@@ -123,7 +124,10 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(30));
             drop(probe);
         });
-        assert!(lock_in(dir.path()).is_some(), "the app waits the probe out");
+        assert!(
+            hold_instance_lock(dir.path()).is_some(),
+            "the app waits the probe out"
+        );
         release.join().unwrap();
     }
 }

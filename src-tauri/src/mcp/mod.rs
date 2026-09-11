@@ -23,16 +23,10 @@ use crate::grants::GrantRegistry;
 use crate::vault::VaultStore;
 use registry::Session;
 
-/// Serve until the client closes stdin, and return the exit code. `vaults`
+/// Serve until the client closes `input`, and return the exit code. `vaults`
 /// are the `--vault` roots, already checked to be folders; with none, the
 /// vaults open in the app are served.
-pub fn run(vaults: Vec<String>) -> i32 {
-    #[cfg(windows)]
-    keep_stdio_from_children();
-    serve_with(vaults, io::stdin().lock(), io::stdout().lock())
-}
-
-fn serve_with(vaults: Vec<String>, input: impl BufRead, output: impl Write) -> i32 {
+pub fn run(vaults: Vec<String>, input: impl BufRead, output: impl Write) -> i32 {
     let grants = GrantRegistry::default();
     for root in &vaults {
         let _ = grants.grant_workspace(Path::new(root));
@@ -77,7 +71,7 @@ fn launcher(appimage: Option<std::ffi::OsString>) -> PathBuf {
 /// stdout open after this process exits, and the client would wait forever for
 /// the end of the stream.
 #[cfg(windows)]
-fn keep_stdio_from_children() {
+pub fn keep_stdio_from_children() {
     use std::os::windows::io::AsRawHandle;
     use std::os::windows::raw::HANDLE;
 

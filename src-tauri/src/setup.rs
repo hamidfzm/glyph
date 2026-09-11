@@ -102,7 +102,8 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         // What tells `glyph mcp` the app is open. An export or a serve is not
         // a window anyone is looking at, so neither takes it.
         if matches!(plan, Ok(cli::CliLaunch::Open(_))) {
-            if let Some(lock) = data_dir::hold_instance_lock() {
+            let lock = data_dir::app_dir().and_then(|dir| data_dir::hold_instance_lock(&dir));
+            if let Some(lock) = lock {
                 app.manage(lock);
             }
         }

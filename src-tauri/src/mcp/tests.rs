@@ -864,7 +864,7 @@ fn the_whole_server_answers_over_any_stream() {
     );
     let mut output = Vec::new();
     let vaults = vec![root.to_string_lossy().to_string()];
-    assert_eq!(super::serve_with(vaults, input.as_bytes(), &mut output), 0);
+    assert_eq!(super::run(vaults, input.as_bytes(), &mut output), 0);
 
     let replies: Vec<Value> = String::from_utf8(output)
         .unwrap()
@@ -905,9 +905,9 @@ fn an_appimage_launches_itself_rather_than_its_mounted_binary() {
 fn a_client_that_goes_away_ends_the_session_cleanly() {
     let ping = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n";
     let gone = Refusing(std::io::ErrorKind::BrokenPipe);
-    assert_eq!(super::serve_with(Vec::new(), ping.as_bytes(), gone), 0);
+    assert_eq!(super::run(Vec::new(), ping.as_bytes(), gone), 0);
     let broken = Refusing(std::io::ErrorKind::PermissionDenied);
-    assert_eq!(super::serve_with(Vec::new(), ping.as_bytes(), broken), 1);
+    assert_eq!(super::run(Vec::new(), ping.as_bytes(), broken), 1);
 }
 
 #[test]

@@ -220,7 +220,11 @@ pub fn run() {
     if cli::subcommand(&args) == Some(cli::Subcommand::Mcp) {
         let cwd = std::env::current_dir().unwrap_or_default();
         let code = match cli::mcp_plan(&args, &cwd) {
-            Ok(vaults) => mcp::run(vaults),
+            Ok(vaults) => {
+                #[cfg(windows)]
+                mcp::keep_stdio_from_children();
+                mcp::run(vaults, std::io::stdin().lock(), std::io::stdout().lock())
+            }
             Err(usage) => {
                 eprintln!("{usage}");
                 2
