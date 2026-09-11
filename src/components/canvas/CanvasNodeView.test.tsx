@@ -77,7 +77,8 @@ describe("CanvasNodeView", () => {
     render(<CanvasNodeView node={node} />);
     const label = screen.getByText("Backlog");
     expect(label).toBeInTheDocument();
-    expect(label).toHaveStyle({ color: "var(--glyph-canvas-color-1, #fb464c)" });
+    // happy-dom resolves var() in computed style, so check the declared inline value
+    expect(label.style.color).toBe("var(--glyph-canvas-color-1, #fb464c)");
   });
 
   it("renders a group node label without a color style when color is unset", () => {
