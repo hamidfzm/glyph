@@ -34,6 +34,9 @@ export default defineConfig(async ({ mode }) => ({
             project: "glyph",
             authToken: sentryAuthToken,
             telemetry: false,
+            // Match the release the SDK reports (telemetry.ts) so the commits the
+            // plugin attaches land on it. The default name is the git SHA.
+            release: { name: `glyph@${pkg.version}` },
             sourcemaps: { filesToDeleteAfterUpload: ["./dist/**/*.map"] },
           }),
         ]
