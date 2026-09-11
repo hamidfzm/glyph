@@ -1,9 +1,13 @@
 // Starts a built `glyph mcp` the way an MCP client does, with piped stdin and
-// stdout and no terminal, then checks the handshake, the tool list and one
-// tool call, and that nothing but JSON-RPC reached stdout.
+// stdout, no terminal and no --vault, then checks the handshake, the tool
+// list, a report on the vault, a folder the server has to ask the user for,
+// and that nothing but JSON-RPC reached stdout.
 //
 // Usage: node scripts/mcp-smoke.mjs <glyph binary> <vault folder>
 import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join, resolve } from "node:path";
 
 const [binary, vault] = process.argv.slice(2);
 if (!binary || !vault) {
@@ -11,8 +15,9 @@ if (!binary || !vault) {
   process.exit(2);
 }
 
-const child = spawn(binary, ["mcp", "--vault", vault], { stdio: ["pipe", "pipe", "inherit"] });
+const child = spawn(binary, ["mcp"], { stdio: ["pipe", "pipe", "inherit"] });
 const waiting = new Map();
+const questions = [];
 let pending = "";
 
 function fail(reason) {
@@ -36,7 +41,12 @@ child.stdout.on("data", (chunk) => {
       fail(`stdout carried a line that is not JSON: ${line}`);
     }
     if (message.jsonrpc !== "2.0") fail(`stdout carried a non-JSON-RPC message: ${line}`);
-    waiting.get(message.id)?.(message);
+    if (message.method === "elicitation/create") {
+      questions.push(message.params.message);
+      send({ id: message.id, result: { action: "accept" } });
+    } else {
+      waiting.get(message.id)?.(message);
+    }
   }
 });
 
@@ -53,7 +63,7 @@ function request(id, method, params) {
 
 const init = await request(1, "initialize", {
   protocolVersion: "2025-11-25",
-  capabilities: {},
+  capabilities: { elicitation: {} },
   clientInfo: { name: "mcp-smoke", version: "1" },
 });
 if (init.result?.protocolVersion !== "2025-11-25") fail(`initialize: ${JSON.stringify(init)}`);
@@ -63,10 +73,26 @@ const listed = await request(2, "tools/list", {});
 const names = listed.result?.tools?.map((tool) => tool.name) ?? [];
 if (!names.includes("vault_report")) fail(`tools/list: ${JSON.stringify(listed)}`);
 
-const called = await request(3, "tools/call", { name: "vault_report", arguments: {} });
+// The vault is served once allowed, unless the app here already has it open.
+const called = await request(3, "tools/call", {
+  name: "vault_report",
+  arguments: { vault: resolve(vault) },
+});
 const text = called.result?.content?.[0]?.text;
 if (called.result?.isError || !text) fail(`tools/call: ${JSON.stringify(called)}`);
 const report = JSON.parse(text);
+
+// A folder no app has open: the server must ask, then read it once allowed.
+const extra = mkdtempSync(join(tmpdir(), "glyph-mcp-smoke-"));
+writeFileSync(join(extra, "Note.md"), "[[Nowhere]]\n");
+const asked = await request(4, "tools/call", { name: "vault_report", arguments: { vault: extra } });
+rmSync(extra, { recursive: true, force: true });
+const extraText = asked.result?.content?.[0]?.text;
+const askedAboutExtra = questions.filter((question) => question.includes(basename(extra)));
+if (asked.result?.isError || !extraText || askedAboutExtra.length !== 1) {
+  fail(`asking for a folder: ${JSON.stringify(asked)}, questions: ${JSON.stringify(questions)}`);
+}
+if (JSON.parse(extraText).unresolved.total !== 1) fail(`the allowed folder: ${extraText}`);
 
 child.stdin.end();
 const code = await new Promise((resolve) => child.on("close", resolve));
@@ -75,5 +101,6 @@ if (pending !== "") fail(`stdout ended mid-line: ${pending}`);
 if (code !== 0) fail(`exited with ${code}`);
 console.log(
   `mcp smoke: ${names.length} tools over ${init.result.protocolVersion}, ` +
-    `${report.unresolved.total} unresolved links in ${vault}, clean exit`,
+    `${report.unresolved.total} unresolved links in ${vault}, ` +
+    `${questions.length} folders allowed on request, clean exit`,
 );

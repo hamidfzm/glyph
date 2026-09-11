@@ -4,7 +4,7 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use super::refs::{capped, read_vault, vault_property};
+use super::refs::{capped, how_to_add_a_vault, read_vault, vault_property};
 use super::registry::{arguments, Effect, Session, ToolDef};
 
 #[derive(Deserialize)]
@@ -24,7 +24,7 @@ fn vault_schema() -> Value {
 pub(super) const VAULT_CONTEXT: ToolDef = ToolDef {
     name: "vault_context",
     title: "What is open",
-    description: "The vaults this server reads and whether each index is complete, and, when Glyph is running, the note in front of the user, the open tabs and the expanded folders. None of this is in any file an agent would read. Call it first.",
+    description: "The vaults this server reads, whether each index is complete and whether the server can ask the user for another folder, and, when Glyph is running, the note in front of the user, the open tabs and the expanded folders. None of this is in any file an agent would read. Call it first.",
     input_schema: || json!({ "type": "object", "properties": {}, "additionalProperties": false }),
     effect: Effect::ReadOnly,
     enabled: true,
@@ -51,6 +51,7 @@ fn vault_context(session: &Session, args: Value) -> Result<Value, String> {
     let mut context = json!({
         "appRunning": open.app_running,
         "vaults": vaults,
+        "canAskForVaults": session.allow_vault.is_some(),
         "activeNote": open.active_note,
         "openTabs": capped(open.tabs.iter()),
         "expandedFolders": open
@@ -60,8 +61,7 @@ fn vault_context(session: &Session, args: Value) -> Result<Value, String> {
             .collect::<serde_json::Map<_, _>>(),
     });
     if open.roots.is_empty() {
-        context["note"] =
-            json!("No vault: start the server with --vault <folder>, or open a folder in Glyph.");
+        context["note"] = json!(format!("No vault yet: {}.", how_to_add_a_vault(session)));
     } else if !open.app_running {
         context["note"] = json!(
             "Glyph is not running, so nothing is open in it. The vault tools still read the vaults listed."

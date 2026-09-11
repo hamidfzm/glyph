@@ -41,8 +41,10 @@ SERVE OPTIONS:
 
 MCP OPTIONS:
       --vault <folder>   A vault the server may read; repeat it for several.
-                         Without one, it reads the vaults open in Glyph and
-                         follows them as they change.
+                         Only these are read. Without one, it reads the vaults
+                         open in Glyph and follows them as they change, and an
+                         agent can ask for another folder, which the user
+                         allows or refuses through the client.
 
 OPTIONS:
   -h, --help             Print this help and exit

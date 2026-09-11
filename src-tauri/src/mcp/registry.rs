@@ -22,7 +22,14 @@ pub struct Session<'a> {
     pub open: &'a OpenState,
     /// The Glyph binary that `open_in_glyph` and `export` start.
     pub exe: &'a Path,
+    /// Asks the user to let the session serve a folder it was not given;
+    /// `None` when nothing can ask them.
+    pub allow_vault: Option<&'a AllowVault<'a>>,
 }
+
+/// Asks the user to let the session serve `root`: Ok once they have, and
+/// later calls list it too, else why not.
+pub type AllowVault<'a> = dyn Fn(&str) -> Result<(), String> + 'a;
 
 /// What a tool does beyond answering, which a client uses to decide what
 /// needs the user's approval.
@@ -154,6 +161,7 @@ mod tests {
             vaults: &vaults,
             open: &open,
             exe: Path::new("glyph"),
+            allow_vault: None,
         };
         let panics = tool(|_, _| panic!("a handler bug"));
         let floods = tool(|_, _| Ok(json!("x".repeat(MAX_RESULT_BYTES))));

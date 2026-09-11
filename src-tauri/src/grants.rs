@@ -1,7 +1,8 @@
 //! Backend-managed filesystem grants: every filesystem command validates its
 //! path against this registry. Grants are minted only from backend-observed
-//! events (CLI args, drag-and-drop, native dialogs), never from a bare
-//! webview-supplied path. See docs/security/threat-model.md.
+//! events (CLI args, drag-and-drop, native dialogs, a folder the user allows
+//! in an MCP client's prompt), never from a bare webview- or model-supplied
+//! path. See docs/security/threat-model.md.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -57,6 +58,15 @@ impl GrantRegistry {
         let canonical = root.canonicalize().map_err(|_| denied(root))?;
         self.lock()?.workspaces.insert(canonical.clone());
         Ok(canonical)
+    }
+
+    /// Grant a root already resolved and shown to the user, as it stands:
+    /// resolving it again could follow a link swapped in since, to a folder
+    /// they never saw.
+    #[cfg(desktop)]
+    pub fn grant_resolved_workspace(&self, resolved: PathBuf) -> Result<(), String> {
+        self.lock()?.workspaces.insert(resolved);
+        Ok(())
     }
 
     /// Not wired to any command yet: grants stay session-scoped; kept as the

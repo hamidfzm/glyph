@@ -2,12 +2,14 @@
 //! fixture vault: parity with the index the app reads, freshness, the grant
 //! boundary, and hostile input.
 
+use std::cell::RefCell;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use serde_json::{json, Value};
 
-use super::registry::{dispatch, list, Session, ToolError};
+use super::registry::{dispatch, list, AllowVault, Session, ToolError};
 use super::session::{OpenState, OpenTab};
 use crate::grants::GrantRegistry;
 use crate::vault::test_support::{fixture_vault, fixtures_dir, in_vault, relative, unique_tmp};
@@ -19,6 +21,9 @@ struct Harness {
     store: VaultStore,
     open: OpenState,
     exe: PathBuf,
+    /// The user's answer when a call asks for a folder; `None` for a client
+    /// that cannot ask.
+    allow: Option<Box<AllowVault<'static>>>,
 }
 
 impl Harness {
@@ -41,6 +46,7 @@ impl Harness {
             // Nothing by this name exists, so a launch fails instead of
             // starting anything.
             exe: PathBuf::from("glyph-tests-start-nothing"),
+            allow: None,
         }
     }
 
@@ -54,6 +60,7 @@ impl Harness {
             vaults: &self.store,
             open: &self.open,
             exe: &self.exe,
+            allow_vault: self.allow.as_deref(),
         }
     }
 
@@ -622,8 +629,284 @@ fn a_path_outside_the_vault_is_refused_by_every_tool() {
         assert!(!refusal.is_empty());
     }
     assert!(refusals[0].starts_with("path is outside the allowed workspaces and files"));
-    assert!(refusals[8].contains("not an open vault"));
+    assert!(refusals[8].contains("this session cannot ask the user for another"));
     fs::remove_dir_all(&outside).unwrap();
+}
+
+// ------------------------------------------------------ folders on request
+
+/// A folder the server was not given, with one tagged note, and its path as
+/// the user is shown it.
+fn other_folder(name: &str) -> (PathBuf, String) {
+    let folder = unique_tmp(name);
+    fs::write(folder.join("Elsewhere.md"), "#far [[Nowhere]]\n").unwrap();
+    let shown = crate::cli::plain_path(&folder.canonicalize().unwrap().to_string_lossy());
+    (folder, shown)
+}
+
+/// Answer every question with `answer`, and log the folders asked about.
+fn answering(h: &mut Harness, answer: Result<(), &'static str>) -> Rc<RefCell<Vec<String>>> {
+    let asked = Rc::new(RefCell::new(Vec::new()));
+    let log = asked.clone();
+    h.allow = Some(Box::new(move |root| {
+        log.borrow_mut().push(root.to_string());
+        answer.map_err(str::to_string)
+    }));
+    asked
+}
+
+#[test]
+fn a_folder_the_user_allows_is_served_by_its_real_path() {
+    let mut h = Harness::over(unique_tmp("mcp_allowed_none"));
+    h.open.roots.clear();
+    let (folder, shown) = other_folder("mcp_allowed");
+    let asked = answering(&mut h, Ok(()));
+    let context = h.ok("vault_context", json!({}));
+    assert_eq!(context["canAskForVaults"], true);
+    assert!(context["note"].as_str().unwrap().contains("absolute path"));
+
+    // Spelled the long way round; the user sees where it really leads.
+    let spelled = folder.join("..").join(folder.file_name().unwrap());
+    let tags = h.ok("list_tags", json!({ "vault": spelled.to_string_lossy() }));
+    assert_eq!(tags["vault"], json!(shown));
+    assert_eq!(*asked.borrow(), std::slice::from_ref(&shown));
+    let far = h.ok("notes_by_tag", json!({ "tag": "far", "vault": shown }));
+    assert_eq!(items(&far["notes"]).len(), 1);
+    fs::remove_dir_all(&folder).unwrap();
+}
+
+#[test]
+fn a_folder_the_user_refuses_stays_closed() {
+    let mut h = Harness::new("mcp_refused");
+    let (folder, shown) = other_folder("mcp_refused_folder");
+    answering(&mut h, Err("the user declined"));
+
+    let refusal = h.refused("list_tags", json!({ "vault": folder.to_string_lossy() }));
+    assert_eq!(
+        refusal,
+        format!("{shown} was not opened: the user declined")
+    );
+    assert!(h.grants.ensure_workspace(&shown).is_err());
+    fs::remove_dir_all(&folder).unwrap();
+}
+
+#[test]
+fn a_client_that_cannot_ask_learns_nothing_of_the_disk() {
+    let h = Harness::new("mcp_cannot_ask");
+    let (folder, _) = other_folder("mcp_cannot_ask_folder");
+    assert_eq!(h.ok("vault_context", json!({}))["canAskForVaults"], false);
+
+    // A folder and a path that is not there get the same answer.
+    for path in [folder.clone(), folder.join("missing")] {
+        let path = path.to_string_lossy().to_string();
+        assert_eq!(
+            h.refused("list_tags", json!({ "vault": path })),
+            format!("{path} is not an open vault (vault_context lists them), and this session cannot ask the user for another")
+        );
+    }
+    fs::remove_dir_all(&folder).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn network_and_device_paths_are_never_looked_up() {
+    let mut h = Harness::new("mcp_remote");
+    let asked = answering(&mut h, Ok(()));
+    for place in [
+        r"\\glyph-test-host\share",
+        r"\\?\UNC\glyph-test-host\share",
+        r"\\.\pipe\glyph",
+    ] {
+        let refusals = [
+            h.refused("list_tags", json!({ "vault": place })),
+            h.refused("read_note", json!({ "ref": format!(r"{place}\Note.md") })),
+            h.refused(
+                "export",
+                json!({ "ref": "Index", "format": "pdf", "out": format!(r"{place}\out.pdf") }),
+            ),
+        ];
+        for refusal in refusals {
+            assert!(refusal.contains("never looked up"), "{refusal}");
+        }
+    }
+    assert!(asked.borrow().is_empty());
+}
+
+#[test]
+fn only_an_existing_folder_named_absolutely_is_put_to_the_user() {
+    let mut h = Harness::new("mcp_offered");
+    let (folder, _) = other_folder("mcp_offered_folder");
+    let asked = answering(&mut h, Ok(()));
+
+    let vault = |path: &std::path::Path| json!({ "vault": path.to_string_lossy() });
+    assert!(h
+        .refused("list_tags", json!({ "vault": "Notes" }))
+        .contains("absolute path"));
+    for path in [folder.join("missing"), folder.join("Elsewhere.md")] {
+        assert!(h
+            .refused("list_tags", vault(&path))
+            .ends_with("is not a folder"));
+    }
+    assert!(asked.borrow().is_empty());
+    fs::remove_dir_all(&folder).unwrap();
+}
+
+/// Point `link` at the folder `target`: a symlink on unix, a junction on
+/// Windows, which needs no privilege to create.
+fn link_folder(target: &Path, link: &Path) {
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(target, link).unwrap();
+    #[cfg(windows)]
+    {
+        let made = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .output()
+            .unwrap();
+        assert!(made.status.success(), "mklink /J failed");
+    }
+}
+
+#[test]
+fn a_folder_swapped_while_the_user_decides_is_not_served() {
+    let mut h = Harness::new("mcp_swapped");
+    let (folder, _) = other_folder("mcp_swapped_folder");
+    let (decoy, _) = other_folder("mcp_swapped_decoy");
+    fs::write(decoy.join("Secret.md"), "#far classified\n").unwrap();
+    let moved = folder.with_extension("moved");
+    let (from, to, target) = (folder.clone(), moved.clone(), decoy.clone());
+    h.allow = Some(Box::new(move |_| {
+        fs::rename(&from, &to).unwrap();
+        link_folder(&target, &from);
+        Ok(())
+    }));
+
+    let refusal = h.refused(
+        "notes_by_tag",
+        json!({ "tag": "far", "vault": folder.to_string_lossy() }),
+    );
+    let swapped = fs::symlink_metadata(&folder)
+        .unwrap()
+        .file_type()
+        .is_symlink();
+    assert!(swapped, "the folder became a link while the user decided");
+    assert!(
+        refusal.starts_with("path is outside the allowed"),
+        "{refusal}"
+    );
+    fs::remove_dir(&folder)
+        .or_else(|_| fs::remove_file(&folder))
+        .unwrap();
+    fs::remove_dir_all(&moved).unwrap();
+    fs::remove_dir_all(&decoy).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn a_path_that_could_disguise_itself_is_never_put_to_the_user() {
+    let mut h = Harness::new("mcp_disguised");
+    let asked = answering(&mut h, Ok(()));
+    let parent = unique_tmp("mcp_disguised_parent");
+    for name in ["notes\nAllow everything", "notes\u{202e}dm.txt"] {
+        let odd = parent.join(name);
+        fs::create_dir(&odd).unwrap();
+        let refusal = h.refused("list_tags", json!({ "vault": odd.to_string_lossy() }));
+        assert!(refusal.contains("could disguise it"), "{refusal}");
+    }
+    assert!(asked.borrow().is_empty());
+    fs::remove_dir_all(&parent).unwrap();
+}
+
+/// Drive the whole server over streams, one message per line, with the
+/// `--vault` roots given; what it writes comes back parsed.
+fn serve_lines(vaults: Vec<String>, lines: &[String]) -> Vec<Value> {
+    let mut output = Vec::new();
+    let input = lines.join("\n");
+    assert_eq!(super::run(vaults, input.as_bytes(), &mut output), 0);
+    String::from_utf8(output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+fn init_able_to_ask() -> String {
+    json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-11-25", "capabilities": { "elicitation": {} } } })
+        .to_string()
+}
+
+fn tool_call(id: u64, name: &str, arguments: Value) -> String {
+    json!({ "jsonrpc": "2.0", "id": id, "method": "tools/call", "params": { "name": name, "arguments": arguments } })
+        .to_string()
+}
+
+fn questions(messages: &[Value]) -> Vec<&Value> {
+    messages
+        .iter()
+        .filter(|message| message["method"] == "elicitation/create")
+        .collect()
+}
+
+/// The parsed result the call `id` got.
+fn result_of(messages: &[Value], id: u64) -> Value {
+    let reply = messages.iter().find(|message| message["id"] == id).unwrap();
+    serde_json::from_str(reply["result"]["content"][0]["text"].as_str().unwrap()).unwrap()
+}
+
+#[test]
+fn a_folder_allowed_once_is_served_for_the_rest_of_the_session() {
+    let (folder, shown) = other_folder("mcp_serve_allowed_folder");
+    let accept = json!({ "jsonrpc": "2.0", "id": "glyph-ask-1", "result": { "action": "accept" } });
+    let messages = serve_lines(
+        Vec::new(),
+        &[
+            init_able_to_ask(),
+            tool_call(2, "list_tags", json!({ "vault": folder.to_string_lossy() })),
+            accept.to_string(),
+            tool_call(3, "vault_context", json!({})),
+            tool_call(4, "list_tags", json!({ "vault": shown })),
+        ],
+    );
+
+    let asked = questions(&messages);
+    assert_eq!(asked.len(), 1, "asked once, then remembered");
+    let question = asked[0]["params"]["message"].as_str().unwrap();
+    assert!(question.contains(&format!("\"{shown}\"")), "{question}");
+    assert_eq!(result_of(&messages, 2)["vault"], json!(shown));
+    let context = result_of(&messages, 3);
+    assert_eq!(context["canAskForVaults"], true);
+    // Listed after whatever vaults the app on this machine has open.
+    let roots: Vec<&str> = context["vaults"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|vault| vault["root"].as_str())
+        .collect();
+    assert!(roots.contains(&shown.as_str()), "{roots:?}");
+    assert_eq!(result_of(&messages, 4)["vault"], json!(shown));
+    fs::remove_dir_all(&folder).unwrap();
+}
+
+#[test]
+fn a_vault_flag_turns_asking_off() {
+    let root = fixture_vault("mcp_serve_pinned");
+    let (folder, _) = other_folder("mcp_serve_pinned_folder");
+    let messages = serve_lines(
+        vec![root.to_string_lossy().to_string()],
+        &[
+            init_able_to_ask(),
+            tool_call(2, "list_tags", json!({ "vault": folder.to_string_lossy() })),
+            tool_call(3, "vault_context", json!({})),
+        ],
+    );
+
+    assert!(questions(&messages).is_empty());
+    let refused = messages.iter().find(|message| message["id"] == 2).unwrap();
+    assert_eq!(refused["result"]["isError"], true);
+    assert_eq!(result_of(&messages, 3)["canAskForVaults"], false);
+    fs::remove_dir_all(&root).unwrap();
+    fs::remove_dir_all(&folder).unwrap();
 }
 
 #[cfg(unix)]

@@ -7,7 +7,9 @@ use std::process::{Command, Stdio};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use super::refs::{note_schema, read_vault, ref_property, resolve_note, vault_property, NoteArgs};
+use super::refs::{
+    note_schema, read_vault, ref_property, refuse_remote, resolve_note, vault_property, NoteArgs,
+};
 use super::registry::{arguments, Effect, Session, ToolDef};
 use crate::cli::{default_output, ExportFormat};
 use crate::vault::Vault;
@@ -165,6 +167,7 @@ fn export_target(
     out: &str,
     format: ExportFormat,
 ) -> Result<String, String> {
+    refuse_remote(out)?;
     let path = if Path::new(out).is_absolute() {
         PathBuf::from(out)
     } else {

@@ -16,6 +16,7 @@ mod vault_tools;
 #[cfg(test)]
 mod tests;
 
+use std::cell::RefCell;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
@@ -24,8 +25,9 @@ use crate::vault::VaultStore;
 use registry::Session;
 
 /// Serve until the client closes `input`, and return the exit code. `vaults`
-/// are the `--vault` roots, already checked to be folders; with none, the
-/// vaults open in the app are served.
+/// are the `--vault` roots, already checked to be folders, and all the server
+/// reads. With none, it serves the vaults open in the app, and an agent can ask
+/// the user for more.
 pub fn run(vaults: Vec<String>, input: impl BufRead, output: impl Write) -> i32 {
     let grants = GrantRegistry::default();
     for root in &vaults {
@@ -33,16 +35,37 @@ pub fn run(vaults: Vec<String>, input: impl BufRead, output: impl Write) -> i32 
     }
     let store = VaultStore::default();
     let exe = launcher(std::env::var_os("APPIMAGE"));
+    // Folders the user let the agent add, served until the session ends.
+    let mut allowed: Vec<String> = Vec::new();
 
-    let served = stdio::serve(input, output, |name, args| {
-        let open = session::open_state(&vaults, &grants);
+    let served = stdio::serve(input, output, |name, args, ask| {
+        let mut open = session::open_state(&vaults, &grants);
+        for root in &allowed {
+            if !open.roots.contains(root) {
+                open.roots.push(root.clone());
+            }
+        }
+        // `--vault` names every folder the session may read.
+        let can_ask = vaults.is_empty() && ask.can_ask();
+        let ask = RefCell::new(ask);
+        let added = RefCell::new(Vec::new());
+        let allow_vault = |root: &str| -> Result<(), String> {
+            ask.borrow_mut().confirm(&format!(
+                "An agent asks to read the folder \"{root}\". Allow it until this session ends? It could then read every note in that folder, and save exported documents there, replacing files of the same name."
+            ))?;
+            added.borrow_mut().push(root.to_string());
+            Ok(())
+        };
         let session = Session {
             grants: &grants,
             vaults: &store,
             open: &open,
             exe: &exe,
+            allow_vault: can_ask.then_some(&allow_vault),
         };
-        registry::dispatch(name, args, &session)
+        let result = registry::dispatch(name, args, &session);
+        allowed.extend(added.take());
+        result
     });
     match served {
         Ok(()) => 0,

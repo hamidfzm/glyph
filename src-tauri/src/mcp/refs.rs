@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use super::registry::Session;
+use crate::cli::plain_path;
 use crate::commands::walk::SCAN_MAX_FILE_BYTES;
 use crate::vault::{split_heading, with_synced_vault, Vault};
 
@@ -26,7 +27,7 @@ pub(super) struct NoteArgs {
 pub(super) fn vault_property() -> Value {
     json!({
         "type": "string",
-        "description": "Root folder of the vault to read. Defaults to the vault of the note open in Glyph, or to the only vault; vault_context lists them."
+        "description": "Root folder of the vault to read. Defaults to the vault of the note open in Glyph, or to the only vault; vault_context lists them. Any other folder, given as an absolute path, is served once the user allows it."
     })
 }
 
@@ -78,16 +79,10 @@ pub(super) fn read_vault<T>(
 }
 
 /// The root a call reads: the one it names, else the vault holding the note
-/// open in Glyph, else the only vault. Only roots from `--vault` or the app's
-/// session qualify; an argument can pick one but never add one.
+/// open in Glyph, else the only vault. A named folder the session does not
+/// serve yet is served only once the user allows it.
 fn pick_vault(session: &Session, requested: Option<&str>) -> Result<String, String> {
     let roots = &session.open.roots;
-    if roots.is_empty() {
-        return Err(
-            "no vault is open: start the server with --vault <folder>, or open a folder in Glyph"
-                .to_string(),
-        );
-    }
     let grants = session.grants;
     if let Some(requested) = requested {
         // Spelled as listed: picked without touching the disk, so a vault
@@ -95,22 +90,21 @@ fn pick_vault(session: &Session, requested: Option<&str>) -> Result<String, Stri
         if let Some(root) = roots.iter().find(|root| root.as_str() == requested) {
             return Ok(root.clone());
         }
-        let not_open = || {
-            format!(
-                "{requested} is not an open vault; the vaults are: {}",
-                roots.join(", ")
-            )
-        };
-        let wanted = grants.ensure_workspace(requested).map_err(|_| not_open())?;
-        return roots
-            .iter()
-            .find(|root| {
+        refuse_remote(requested)?;
+        if let Ok(wanted) = grants.ensure_workspace(requested) {
+            let listed = roots.iter().find(|root| {
                 grants
                     .ensure_workspace(root)
                     .is_ok_and(|root| root == wanted)
-            })
-            .cloned()
-            .ok_or_else(not_open);
+            });
+            if let Some(root) = listed {
+                return Ok(root.clone());
+            }
+        }
+        return add_vault(session, requested);
+    }
+    if roots.is_empty() {
+        return Err(format!("no vault is open: {}", how_to_add_a_vault(session)));
     }
     let active = session
         .open
@@ -134,6 +128,92 @@ fn pick_vault(session: &Session, requested: Option<&str>) -> Result<String, Stri
             roots.join(", ")
         )),
     }
+}
+
+/// `requested`, a folder the session does not serve, served from now on if
+/// the user allows it.
+fn add_vault(session: &Session, requested: &str) -> Result<String, String> {
+    // Nothing is looked up on disk until someone can be asked.
+    let Some(allow_vault) = session.allow_vault else {
+        return Err(format!(
+            "{requested} is not an open vault (vault_context lists them), and this session cannot ask the user for another"
+        ));
+    };
+    if !Path::new(requested).is_absolute() {
+        return Err(format!(
+            "{requested} is not an open vault (vault_context lists them); to ask the user for another folder, give its absolute path"
+        ));
+    }
+    let resolved = Path::new(requested)
+        .canonicalize()
+        .ok()
+        .filter(|path| path.is_dir())
+        .ok_or_else(|| format!("{requested} is not a folder"))?;
+    let root = plain_path(&resolved.to_string_lossy());
+    // The path is all the user sees of the request.
+    if root.chars().any(disguises) {
+        return Err(format!(
+            "{requested} cannot be put to the user: its path holds a character that could disguise it"
+        ));
+    }
+    allow_vault(&root).map_err(|reason| format!("{root} was not opened: {reason}"))?;
+    // Exactly what the user saw: resolving it again could follow a link
+    // swapped in while they decided.
+    session.grants.grant_resolved_workspace(resolved)?;
+    Ok(root)
+}
+
+/// What the agent can do about a vault this session does not serve.
+pub(super) fn how_to_add_a_vault(session: &Session) -> &'static str {
+    if session.allow_vault.is_some() {
+        "give a folder's absolute path as `vault` and the user is asked to allow it, or open a folder in Glyph"
+    } else {
+        "open a folder in Glyph, or start the server with --vault <folder>"
+    }
+}
+
+/// A character that would let a path read as something else on the user's
+/// screen: a control character, a line or paragraph separator, or a
+/// bidirectional mark or override.
+fn disguises(c: char) -> bool {
+    c.is_control()
+        || matches!(
+            c,
+            '\u{061c}'
+                | '\u{200e}'
+                | '\u{200f}'
+                | '\u{2028}'
+                | '\u{2029}'
+                | '\u{202a}'..='\u{202e}'
+                | '\u{2066}'..='\u{2069}'
+        )
+}
+
+/// Refuse a path naming a network share or a device. Resolving one connects
+/// to the host, which can hand it the user's credentials, and a model can name
+/// any host it likes.
+#[cfg(windows)]
+pub(super) fn refuse_remote(raw: &str) -> Result<(), String> {
+    use std::path::{Component, Prefix};
+    let local = match Path::new(raw).components().next() {
+        Some(Component::Prefix(prefix)) => {
+            matches!(prefix.kind(), Prefix::Disk(_) | Prefix::VerbatimDisk(_))
+        }
+        _ => true,
+    };
+    if local {
+        Ok(())
+    } else {
+        Err(format!(
+            "{raw} is a network or device path, which is never looked up"
+        ))
+    }
+}
+
+/// Only Windows resolves a path by connecting to the host it names.
+#[cfg(not(windows))]
+pub(super) fn refuse_remote(_: &str) -> Result<(), String> {
+    Ok(())
 }
 
 /// A note a call named, and the heading its reference carried.
@@ -191,6 +271,7 @@ pub(super) fn note_path(
 ) -> Result<Option<String>, String> {
     let absolute = Path::new(raw).is_absolute();
     let candidate = if absolute {
+        refuse_remote(raw)?;
         PathBuf::from(raw)
     } else {
         Path::new(root).join(raw)

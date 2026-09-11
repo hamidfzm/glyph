@@ -3,6 +3,7 @@
 //! stdout; diagnostics go to stderr, because one stray line corrupts the
 //! stream.
 
+use std::collections::VecDeque;
 use std::io::{self, BufRead, Read, Write};
 
 use serde_json::{json, Value};
@@ -16,41 +17,101 @@ const PROTOCOL_VERSIONS: [&str; 2] = ["2025-11-25", "2025-06-18"];
 /// Far beyond any tool call; bounds what a client can make this process hold.
 const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 
+/// Messages kept while a question is out. A client that sends more is not
+/// waiting on the answer.
+const MAX_HELD: usize = 64;
+
 const PARSE_ERROR: i64 = -32700;
 const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_FOUND: i64 = -32601;
 const INVALID_PARAMS: i64 = -32602;
 
-const INSTRUCTIONS: &str = "Glyph's index of markdown vaults: wikilinks resolved the way the app resolves them, backlinks, tags, headings, the link graph and canvas boards. A note reference (`ref`) is a wikilink target such as `Note`, `Folder/Note` or `Note#Heading`, a path relative to the vault, or an absolute path. Call vault_context first to see which vaults are open.";
+const INSTRUCTIONS: &str = "Glyph's index of markdown vaults: wikilinks resolved the way the app resolves them, backlinks, tags, headings, the link graph and canvas boards. A note reference (`ref`) is a wikilink target such as `Note`, `Folder/Note` or `Note#Heading`, a path relative to the vault, or an absolute path. Call vault_context first to see which vaults are open. When it reports canAskForVaults, a folder that is not listed can be passed by its absolute path as `vault`, and the user is asked to allow it.";
+
+/// Puts a question to the user in the middle of a call.
+pub(super) trait Ask {
+    /// Whether the client declared it can put a question to the user.
+    fn can_ask(&self) -> bool;
+    /// Ask `message` as a yes-or-no question: Ok when the user accepts, else
+    /// why not, in words for the model.
+    fn confirm(&mut self, message: &str) -> Result<(), String>;
+}
+
+enum Incoming {
+    Text(String),
+    /// A line past the limit, already skipped.
+    Oversized,
+}
+
+struct Client<R, W> {
+    input: R,
+    output: W,
+    /// Whether the client declared it can show the user a form.
+    can_ask: bool,
+    /// The `tools/call` in progress, which a cancellation may name.
+    call_id: Value,
+    /// Whether the client gave up the call in progress.
+    cancelled: bool,
+    asked: u64,
+    /// What arrived while a question was out, handled once the call returns.
+    held: VecDeque<Incoming>,
+}
 
 /// Answer requests from `input` until it ends. `call` runs one tool; this loop
 /// owns everything else about the protocol.
 pub(super) fn serve(
-    mut input: impl BufRead,
-    mut output: impl Write,
-    mut call: impl FnMut(&str, Value) -> Result<Value, ToolError>,
+    input: impl BufRead,
+    output: impl Write,
+    mut call: impl FnMut(&str, Value, &mut dyn Ask) -> Result<Value, ToolError>,
 ) -> io::Result<()> {
+    let mut client = Client {
+        input,
+        output,
+        can_ask: false,
+        call_id: Value::Null,
+        cancelled: false,
+        asked: 0,
+        held: VecDeque::new(),
+    };
+    loop {
+        let next = match client.held.pop_front() {
+            Some(held) => Some(held),
+            None => read(&mut client.input)?,
+        };
+        let reply = match next {
+            None => return Ok(()),
+            Some(Incoming::Oversized) => Some(error(
+                Value::Null,
+                INVALID_REQUEST,
+                "message is larger than 1 MiB",
+            )),
+            Some(Incoming::Text(text)) => respond(&text, &mut client, &mut call),
+        };
+        if let Some(reply) = reply {
+            send(&mut client.output, &reply)?;
+        }
+    }
+}
+
+/// The next line that is not blank, or `None` once the input ends.
+fn read(input: &mut impl BufRead) -> io::Result<Option<Incoming>> {
     let mut line = Vec::new();
     loop {
         line.clear();
-        let read = (&mut input)
+        let read = input
+            .by_ref()
             .take(MAX_MESSAGE_BYTES as u64 + 1)
             .read_until(b'\n', &mut line)?;
         if read == 0 {
-            return Ok(());
+            return Ok(None);
         }
         if line.len() > MAX_MESSAGE_BYTES && line.last() != Some(&b'\n') {
-            skip_line(&mut input)?;
-            let reply = error(Value::Null, INVALID_REQUEST, "message is larger than 1 MiB");
-            send(&mut output, &reply)?;
-            continue;
+            skip_line(input)?;
+            return Ok(Some(Incoming::Oversized));
         }
         let text = String::from_utf8_lossy(&line);
-        if text.trim().is_empty() {
-            continue;
-        }
-        if let Some(reply) = respond(text.trim(), &mut call) {
-            send(&mut output, &reply)?;
+        if !text.trim().is_empty() {
+            return Ok(Some(Incoming::Text(text.trim().to_string())));
         }
     }
 }
@@ -85,9 +146,10 @@ fn error(id: Value, code: i64, message: &str) -> Value {
 
 /// The reply to one message, or `None` for a notification or a response,
 /// which never get one.
-fn respond(
+fn respond<R: BufRead, W: Write>(
     text: &str,
-    call: &mut impl FnMut(&str, Value) -> Result<Value, ToolError>,
+    client: &mut Client<R, W>,
+    call: &mut impl FnMut(&str, Value, &mut dyn Ask) -> Result<Value, ToolError>,
 ) -> Option<Value> {
     let Ok(message) = serde_json::from_str::<Value>(text) else {
         return Some(error(Value::Null, PARSE_ERROR, "Parse error"));
@@ -120,12 +182,23 @@ fn respond(
     };
     let params = object.get("params").cloned().unwrap_or(Value::Null);
     let result = match method {
-        "initialize" => Ok(initialize(&params)),
+        "initialize" => {
+            client.can_ask = can_ask(&params);
+            Ok(initialize(&params))
+        }
         "ping" => Ok(json!({})),
         "tools/list" => Ok(json!({
             "tools": registry::list().map(|tool| tool.describe()).collect::<Vec<_>>()
         })),
-        "tools/call" => call_tool(&params, call),
+        "tools/call" => {
+            client.call_id = id.clone();
+            let result = call_tool(&params, client, call);
+            // The client gave the call up, so it gets no answer.
+            if std::mem::take(&mut client.cancelled) {
+                return None;
+            }
+            result
+        }
         _ => Err((METHOD_NOT_FOUND, format!("Method not found: {method}"))),
     };
     Some(match result {
@@ -150,15 +223,16 @@ fn initialize(params: &Value) -> Value {
 
 /// A tool that refuses is a result the model reads, marked `isError`, so it
 /// can correct the call. Only a tool that does not exist is a protocol error.
-fn call_tool(
+fn call_tool<R: BufRead, W: Write>(
     params: &Value,
-    call: &mut impl FnMut(&str, Value) -> Result<Value, ToolError>,
+    client: &mut Client<R, W>,
+    call: &mut impl FnMut(&str, Value, &mut dyn Ask) -> Result<Value, ToolError>,
 ) -> Result<Value, (i64, String)> {
     let Some(name) = params.get("name").and_then(Value::as_str) else {
         return Err((INVALID_PARAMS, "tools/call needs a tool name".to_string()));
     };
     let arguments = params.get("arguments").cloned().unwrap_or(Value::Null);
-    match call(name, arguments) {
+    match call(name, arguments, client) {
         Ok(value) => Ok(json!({ "content": [{ "type": "text", "text": value.to_string() }] })),
         Err(ToolError::Unknown(name)) => Err((INVALID_PARAMS, format!("Unknown tool: {name}"))),
         Err(ToolError::Failed(message)) => Ok(json!({
@@ -168,20 +242,118 @@ fn call_tool(
     }
 }
 
+/// Whether the client can show the user a form: it declared `elicitation`
+/// empty, as 2025-06-18 does, or with `form`.
+fn can_ask(params: &Value) -> bool {
+    params["capabilities"]["elicitation"]
+        .as_object()
+        .is_some_and(|modes| modes.is_empty() || modes.contains_key("form"))
+}
+
+impl<R: BufRead, W: Write> Ask for Client<R, W> {
+    fn can_ask(&self) -> bool {
+        self.can_ask
+    }
+
+    fn confirm(&mut self, message: &str) -> Result<(), String> {
+        if !self.can_ask {
+            return Err("this client cannot ask the user".to_string());
+        }
+        // A call replayed from behind another may have been cancelled already.
+        if self.held.iter().any(|held| cancels(held, &self.call_id)) {
+            self.cancelled = true;
+            return Err("the call was cancelled".to_string());
+        }
+        self.asked += 1;
+        let id = json!(format!("glyph-ask-{}", self.asked));
+        let question = json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "elicitation/create",
+            // Nothing to fill in: accepting is the answer.
+            "params": { "message": message, "requestedSchema": { "type": "object", "properties": {} } },
+        });
+        let lost = |err: io::Error| format!("the client cannot be reached: {err}");
+        send(&mut self.output, &question).map_err(lost)?;
+        loop {
+            let Some(incoming) = read(&mut self.input).map_err(lost)? else {
+                return Err("the client closed the session".to_string());
+            };
+            if let Incoming::Text(text) = &incoming {
+                let message: Value = serde_json::from_str(text).unwrap_or_default();
+                let is_answer = message.get("id") == Some(&id) && message.get("method").is_none();
+                if is_answer {
+                    return answer(&message);
+                }
+            }
+            if cancels(&incoming, &self.call_id) {
+                self.cancelled = true;
+                self.withdraw(&id);
+                return Err("the call was cancelled".to_string());
+            }
+            self.held.push_back(incoming);
+            if self.held.len() > MAX_HELD {
+                self.withdraw(&id);
+                return Err("the client sent too much while the user decided".to_string());
+            }
+        }
+    }
+}
+
+impl<R, W: Write> Client<R, W> {
+    /// Tell the client a question no longer needs an answer, so it can take
+    /// the prompt down.
+    fn withdraw(&mut self, id: &Value) {
+        let notice = json!({ "jsonrpc": "2.0", "method": "notifications/cancelled", "params": { "requestId": id } });
+        let _ = send(&mut self.output, &notice);
+    }
+}
+
+/// Whether `incoming` cancels the call `call_id`.
+fn cancels(incoming: &Incoming, call_id: &Value) -> bool {
+    let Incoming::Text(text) = incoming else {
+        return false;
+    };
+    let message: Value = serde_json::from_str(text).unwrap_or_default();
+    message["method"] == "notifications/cancelled" && message["params"]["requestId"] == *call_id
+}
+
+/// The user's answer, from the client's reply to a question.
+fn answer(reply: &Value) -> Result<(), String> {
+    if let Some(error) = reply.get("error") {
+        let reason = error["message"].as_str().unwrap_or("no reason given");
+        return Err(format!("the client could not ask the user: {reason}"));
+    }
+    match reply["result"]["action"].as_str() {
+        Some("accept") => Ok(()),
+        Some("decline") => Err("the user declined".to_string()),
+        _ => Err("the user dismissed the question".to_string()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// Feed `input` through the loop with a tool that echoes its arguments
-    /// for `echo`, fails for `fail`, and does not exist otherwise. Every line
-    /// written must parse as a JSON-RPC message; they come back parsed.
+    /// for `echo`, asks the user for `ask`, fails for `fail`, and does not
+    /// exist otherwise. Every line written must parse as a JSON-RPC message;
+    /// they come back parsed.
     fn exchange(input: &str) -> Vec<Value> {
         let mut output = Vec::new();
-        serve(input.as_bytes(), &mut output, |name, args| match name {
-            "echo" => Ok(args),
-            "fail" => Err(ToolError::Failed("refused".to_string())),
-            _ => Err(ToolError::Unknown(name.to_string())),
-        })
+        serve(
+            input.as_bytes(),
+            &mut output,
+            |name, args, ask| match name {
+                "echo" => Ok(args),
+                "ask" => ask
+                    .confirm("May I?")
+                    .map(|()| json!("allowed"))
+                    .map_err(ToolError::Failed),
+                "fail" => Err(ToolError::Failed("refused".to_string())),
+                _ => Err(ToolError::Unknown(name.to_string())),
+            },
+        )
         .unwrap();
         let text = String::from_utf8(output).unwrap();
         text.lines()
@@ -351,8 +523,200 @@ mod tests {
         let huge = format!("{{\"pad\":\"{}\"", "z".repeat(MAX_MESSAGE_BYTES + 100));
         let input = std::io::BufReader::with_capacity(64, huge.as_bytes());
         let mut output = Vec::new();
-        serve(input, &mut output, |_, _| Ok(Value::Null)).unwrap();
+        serve(input, &mut output, |_, _, _| Ok(Value::Null)).unwrap();
         let text = String::from_utf8(output).unwrap();
         assert_eq!(text.lines().count(), 1, "one refusal, then the end: {text}");
+    }
+
+    fn init_able_to_ask() -> String {
+        request(
+            1,
+            "initialize",
+            json!({ "protocolVersion": "2025-11-25", "capabilities": { "elicitation": {} } }),
+        )
+    }
+
+    fn answer_to(asked: u64, result: Value) -> String {
+        format!(
+            "{}\n",
+            json!({ "jsonrpc": "2.0", "id": format!("glyph-ask-{asked}"), "result": result })
+        )
+    }
+
+    fn text_of(reply: &Value) -> &str {
+        reply["result"]["content"][0]["text"].as_str().unwrap()
+    }
+
+    #[test]
+    fn only_a_client_that_declares_forms_can_be_asked() {
+        let declared = |elicitation: Value| {
+            can_ask(&json!({ "capabilities": { "elicitation": elicitation } }))
+        };
+        assert!(declared(json!({})));
+        assert!(declared(json!({ "form": {} })));
+        assert!(declared(json!({ "form": {}, "url": {} })));
+        assert!(!declared(json!({ "url": {} })));
+        assert!(!declared(Value::Null));
+        assert!(!can_ask(&Value::Null));
+    }
+
+    #[test]
+    fn a_client_that_cannot_ask_is_never_asked() {
+        let replies = exchange(&format!(
+            "{}{}",
+            request(1, "initialize", json!({})),
+            request(2, "tools/call", json!({ "name": "ask" })),
+        ));
+        assert_eq!(replies.len(), 2, "no question went out");
+        assert_eq!(replies[1]["result"]["isError"], true);
+        assert!(text_of(&replies[1]).contains("cannot ask"));
+    }
+
+    #[test]
+    fn the_users_answer_decides_the_call() {
+        let refused = json!({ "jsonrpc": "2.0", "id": "glyph-ask-4", "error": { "code": -32601, "message": "no forms here" } });
+        let replies = exchange(&format!(
+            "{}{}{}{}{}{}{}{}{}\n",
+            init_able_to_ask(),
+            request(2, "tools/call", json!({ "name": "ask" })),
+            answer_to(1, json!({ "action": "accept", "content": {} })),
+            request(3, "tools/call", json!({ "name": "ask" })),
+            answer_to(2, json!({ "action": "decline" })),
+            request(4, "tools/call", json!({ "name": "ask" })),
+            answer_to(3, json!({ "action": "cancel" })),
+            request(5, "tools/call", json!({ "name": "ask" })),
+            refused,
+        ));
+        assert_eq!(replies.len(), 9, "four questions and four answers");
+        let question = &replies[1];
+        assert_eq!(question["method"], "elicitation/create");
+        assert_eq!(question["id"], "glyph-ask-1");
+        assert_eq!(question["params"]["message"], "May I?");
+        assert_eq!(question["params"]["requestedSchema"]["type"], "object");
+        assert_eq!(text_of(&replies[2]), "\"allowed\"");
+        assert!(text_of(&replies[4]).contains("declined"));
+        assert!(text_of(&replies[6]).contains("dismissed"));
+        assert!(text_of(&replies[8]).contains("no forms here"));
+    }
+
+    #[test]
+    fn what_arrives_while_the_user_decides_waits_its_turn() {
+        let oversized = format!("{{\"pad\":\"{}\"}}\n", "x".repeat(MAX_MESSAGE_BYTES + 10));
+        let replies = exchange(&format!(
+            "{}{}{}{}{}{}{}{}",
+            init_able_to_ask(),
+            request(2, "tools/call", json!({ "name": "ask" })),
+            request(3, "ping", Value::Null),
+            oversized,
+            "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":99}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":\"glyph-ask-7\",\"result\":{}}\n",
+            request(4, "tools/call", json!({ "name": "echo", "arguments": { "n": 4 } })),
+            answer_to(1, json!({ "action": "accept" })),
+        ));
+        let ids: Vec<&Value> = replies.iter().map(|reply| &reply["id"]).collect();
+        assert_eq!(
+            ids,
+            [
+                &json!(1),
+                &json!("glyph-ask-1"),
+                &json!(2),
+                &json!(3),
+                &Value::Null,
+                &json!(4)
+            ]
+        );
+        assert_eq!(replies[4]["error"]["code"], INVALID_REQUEST);
+        assert_eq!(text_of(&replies[2]), "\"allowed\"");
+    }
+
+    #[test]
+    fn a_cancelled_call_stops_waiting_for_the_answer() {
+        let replies = exchange(&format!(
+            "{}{}{}{}",
+            init_able_to_ask(),
+            request(7, "tools/call", json!({ "name": "ask" })),
+            "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":7}}\n",
+            answer_to(1, json!({ "action": "accept" })),
+        ));
+        assert_eq!(
+            replies.len(),
+            3,
+            "neither the call nor the late answer gets a reply"
+        );
+        assert_eq!(replies[2]["method"], "notifications/cancelled");
+        assert_eq!(replies[2]["params"]["requestId"], "glyph-ask-1");
+    }
+
+    #[test]
+    fn a_call_cancelled_while_another_waits_never_asks() {
+        let replies = exchange(&format!(
+            "{}{}{}{}{}",
+            init_able_to_ask(),
+            request(2, "tools/call", json!({ "name": "ask" })),
+            request(3, "tools/call", json!({ "name": "ask" })),
+            "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":3}}\n",
+            answer_to(1, json!({ "action": "accept" })),
+        ));
+        let ids: Vec<&Value> = replies.iter().map(|reply| &reply["id"]).collect();
+        assert_eq!(ids, [&json!(1), &json!("glyph-ask-1"), &json!(2)]);
+    }
+
+    #[test]
+    fn a_client_that_floods_a_question_gets_it_withdrawn() {
+        let pings: String = (0..=MAX_HELD as u64)
+            .map(|n| request(10 + n, "ping", Value::Null))
+            .collect();
+        let replies = exchange(&format!(
+            "{}{}{pings}",
+            init_able_to_ask(),
+            request(2, "tools/call", json!({ "name": "ask" })),
+        ));
+        assert_eq!(replies[2]["method"], "notifications/cancelled");
+        assert!(text_of(&replies[3]).contains("too much"));
+        assert_eq!(replies.len(), 4 + MAX_HELD + 1, "every ping still answered");
+    }
+
+    #[test]
+    fn a_client_that_leaves_mid_question_ends_the_session() {
+        let replies = exchange(&format!(
+            "{}{}",
+            init_able_to_ask(),
+            request(2, "tools/call", json!({ "name": "ask" })),
+        ));
+        assert_eq!(replies.len(), 3);
+        assert!(text_of(&replies[2]).contains("closed the session"));
+    }
+
+    /// Takes `left` messages, then refuses every write.
+    struct Closing(usize);
+
+    impl Write for Closing {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            if self.0 == 0 {
+                return Err(io::ErrorKind::BrokenPipe.into());
+            }
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            self.0 = self.0.saturating_sub(1);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_question_the_client_cannot_take_is_a_refusal() {
+        let input = format!(
+            "{}{}",
+            init_able_to_ask(),
+            request(2, "tools/call", json!({ "name": "ask" })),
+        );
+        let mut refusal = None;
+        let served = serve(input.as_bytes(), Closing(1), |_, _, ask| {
+            refusal = ask.confirm("May I?").err();
+            Ok(Value::Null)
+        });
+        assert_eq!(served.unwrap_err().kind(), io::ErrorKind::BrokenPipe);
+        assert!(refusal.unwrap().contains("cannot be reached"));
     }
 }

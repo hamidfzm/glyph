@@ -193,8 +193,8 @@ glyph serve ~/notes/ --out ./site         # keep the build instead of a temp dir
 `--format` accepts `pdf`, `docx`, `epub`, `html`, and `site`. Without `--out` a document export writes beside its input with the format's extension; `site` always needs one. Exports run without showing a window, print the path they wrote to stdout, and exit nonzero with a message on stderr if they fail, so they can drive CI publishing (on Linux runners, wrap the command in `xvfb-run`). A document export includes the table of contents when Settings > Print has it enabled.
 
 ```bash
-# give an AI agent Glyph's view of a vault, over the Model Context Protocol
-glyph mcp --vault ~/notes/
+# give an AI agent Glyph's view of your vaults, over the Model Context Protocol
+glyph mcp
 ```
 
 `mcp` is a Model Context Protocol server on stdin and stdout, started by an MCP client rather than by hand. Add it to the client's server list, for example:
@@ -202,12 +202,12 @@ glyph mcp --vault ~/notes/
 ```json
 {
   "mcpServers": {
-    "glyph": { "command": "glyph", "args": ["mcp", "--vault", "/path/to/notes"] }
+    "glyph": { "command": "glyph", "args": ["mcp"] }
   }
 }
 ```
 
-The agent then gets what the raw files cannot tell it: wikilinks resolved the way Glyph resolves them, with the other candidates when a name is ambiguous; backlinks; the link graph some hops out; broken links, orphans and dead ends; tags by Glyph's rules; parsed frontmatter; headings and the section under one; canvas boards; and, while Glyph is open, the note in front of you. It can also open a note in Glyph and run the document exports above. Apart from `export`, it needs no display, no tool needs the app running, and it follows edits on disk between calls. `--vault` can repeat; without it the server reads the vaults open in Glyph. Every tool is read-only except `export` and `open_in_glyph`, and none reaches outside the vaults it serves.
+The agent then gets what the raw files cannot tell it: wikilinks resolved the way Glyph resolves them, with the other candidates when a name is ambiguous; backlinks; the link graph some hops out; broken links, orphans and dead ends; tags by Glyph's rules; parsed frontmatter; headings and the section under one; canvas boards; and, while Glyph is open, the note in front of you. It can also open a note in Glyph and run the document exports above. Apart from `export`, it needs no display, no tool needs the app running, and it follows edits on disk between calls. It serves the vaults open in Glyph, and the agent can ask for any other folder: your MCP client asks you first, and a folder you allow stays served until the session ends. A client without MCP elicitation cannot ask, so it gets only the open vaults. `--vault <folder>`, which can repeat, serves exactly those folders instead, and turns asking off. Every tool is read-only except `export` and `open_in_glyph`, and none reaches outside the vaults it serves.
 
 The command is provided by the Homebrew cask (macOS), Chocolatey or Scoop (Windows), and the deb package or Homebrew formula (Linux). The macOS `.dmg` and Windows MSI install the app only; use a package manager for the terminal command.
 
