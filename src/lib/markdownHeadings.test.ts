@@ -59,4 +59,12 @@ describe("parseHeadings", () => {
       { level: 2, text: "Two", line: 2 },
     ]);
   });
+
+  it("drops one leading BOM, as the renderer does", () => {
+    expect(parseHeadings("\uFEFF# A\r\ntext\r\n# B")).toEqual([
+      { level: 1, text: "A", line: 0 },
+      { level: 1, text: "B", line: 2 },
+    ]);
+    expect(parseHeadings("\uFEFF\uFEFF# A")).toEqual([]);
+  });
 });
