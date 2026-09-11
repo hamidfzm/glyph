@@ -1,8 +1,9 @@
 // Parse ATX headings from markdown, skipping fenced code blocks so that `#`
 // comment lines inside ``` / ~~~ snippets are not mistaken for headings. Shared
-// by the Outline sidebar (`useTableOfContents`) and note-embed section slicing
-// (`extractHeadingSection`).
-const ATX = /^(#{1,6})\s+(.*)$/;
+// by the Outline sidebar (`useTableOfContents`), note-embed section slicing
+// (`extractHeadingSection`), and export titles (`deriveExportMeta`).
+// Opening sequence only: a `(.*)$` tail backtracks quadratically when `.` stops at `\r` or U+2028.
+const ATX = /^(#{1,6})\s+/;
 const FENCE = /^\s{0,3}(```+|~~~+)/;
 
 export interface MarkdownHeading {
@@ -36,8 +37,15 @@ export function parseHeadings(md: string): MarkdownHeading[] {
 
     const m = ATX.exec(lines[i]);
     if (!m) continue;
-    // Drop a trailing run of `#` (closed ATX headings) and surrounding space.
-    const text = m[2].replace(/\s+#+\s*$/, "").trim();
+    const content = lines[i].slice(m[0].length).trimEnd();
+    // A terminator inside the text (a lone-CR file) is not a heading; it would swallow later lines.
+    if (/[\r\u2028\u2029]/.test(content)) continue;
+    // CommonMark closing sequence: a trailing `#` run alone or after whitespace (`# C#` keeps it).
+    // Scanned by hand: a `$`-anchored regex backtracks quadratically on long whitespace.
+    let runStart = content.length;
+    while (runStart > 0 && content[runStart - 1] === "#") runStart--;
+    const isClosing = runStart === 0 || /\s/.test(content[runStart - 1]);
+    const text = (isClosing ? content.slice(0, runStart) : content).trim();
     headings.push({ level: m[1].length, text, line: i });
   }
 

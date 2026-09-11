@@ -1,4 +1,5 @@
 import { parseFrontmatter } from "@/lib/frontmatter";
+import { parseHeadings } from "@/lib/markdownHeadings";
 
 export interface ExportMeta {
   // Default file name (no extension) for the save dialog.
@@ -16,17 +17,11 @@ function basename(path: string): string {
 /** First `# heading` outside code fences, stripped of simple inline markup. */
 function firstHeadingTitle(content: string): string | null {
   const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
-  let inFence = false;
-  for (const line of body.split("\n")) {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
-    const match = line.match(/^#\s+(.*?)\s*#*\s*$/);
-    if (!match) continue;
-    const text = match[1]
-      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+  for (const heading of parseHeadings(body)) {
+    if (heading.level !== 1) continue;
+    const text = heading.text
+      // One level of URL parens (`Foo_(bar)`); runs exclude `[` and `(` so unclosed ones stay linear.
+      .replace(/\[([^[\]]*)\]\([^()]*(?:\([^()]*\)[^()]*)*\)/g, "$1")
       .replace(/[*_`]/g, "")
       .trim();
     if (text) return text;

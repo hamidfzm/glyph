@@ -88,4 +88,9 @@ describe("useTableOfContents", () => {
     const { result } = renderHook(() => useTableOfContents(content));
     expect(result.current.map((e) => e.id)).toEqual(["setup", "setup-1", "setup-2"]);
   });
+
+  it("counts an empty heading's slug so later ids match the renderer", () => {
+    const { result } = renderHook(() => useTableOfContents("# #\n# ???"));
+    expect(result.current).toEqual([{ id: "-1", text: "???", level: 1 }]);
+  });
 });
