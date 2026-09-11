@@ -14,8 +14,9 @@ export interface MarkdownHeading {
 }
 
 // Every CommonMark line ending (CRLF, CR, LF); a leftover `\r` defeats ATX's `.*$`.
+// One leading BOM goes too, as micromark drops it; kept, it would sit before a line-1 `#`.
 export function splitLines(md: string): string[] {
-  return md.split(/\r\n|\r|\n/);
+  return md.replace(/^\uFEFF/, "").split(/\r\n|\r|\n/);
 }
 
 export function parseHeadings(md: string): MarkdownHeading[] {

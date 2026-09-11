@@ -10,6 +10,8 @@ export function toggleTaskAtLine(source: string, line: number): string {
   // Track line endings so we don't normalise CRLF → LF on a save.
   const eolMatch = source.match(/\r\n|\r|\n/);
   const eol = eolMatch ? eolMatch[0] : "\n";
+  // splitLines drops a leading BOM; put it back so the save keeps it.
+  const bom = source.startsWith("\uFEFF") ? "\uFEFF" : "";
   const lines = splitLines(source);
   if (line > lines.length) return source;
 
@@ -24,5 +26,5 @@ export function toggleTaskAtLine(source: string, line: number): string {
   );
   if (replaced === original) return source;
   lines[idx] = replaced;
-  return lines.join(eol);
+  return bom + lines.join(eol);
 }
