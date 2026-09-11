@@ -84,6 +84,15 @@ describe("parseFrontmatter", () => {
     expect(result?.date).toBeUndefined();
     expect(result?.extra).toEqual([["slug", "x"]]);
   });
+
+  it("parses a block after a leading BOM", () => {
+    expect(parseFrontmatter("\uFEFF---\r\ntitle: Win\r\n---\r\n")?.title).toBe("Win");
+  });
+
+  it("allows spaces or tabs after either fence, as the renderer does", () => {
+    expect(parseFrontmatter("---  \ntitle: T\n---\t\nbody")?.title).toBe("T");
+    expect(parseFrontmatter("---\ntitle: T\n--- x\n")).toBeNull();
+  });
 });
 
 // The Rust index parses the same blocks in `src-tauri/src/vault/frontmatter.rs`.
