@@ -18,6 +18,23 @@ describe("deriveExportMeta", () => {
     expect(deriveExportMeta("/x/raw.md", content).title).toBe("Real Title");
   });
 
+  it("skips a frontmatter block that follows a BOM", () => {
+    const content = "\uFEFF---\n# a yaml comment\nauthor: Ada\n---\n# Real Title\n";
+    expect(deriveExportMeta("/x/bom.md", content).title).toBe("Real Title");
+  });
+
+  it("finds a first-line h1 behind a BOM", () => {
+    const meta = deriveExportMeta("/x/getting-started.md", "\uFEFF# Getting Started\n\nbody");
+    expect(meta.title).toBe("Getting Started");
+  });
+
+  it("skips a block whose fences carry trailing spaces or tabs", () => {
+    const comment = "---\n# a yaml comment\nauthor: Ada\n---  \n# Real Title\n";
+    expect(deriveExportMeta("/x/a.md", comment).title).toBe("Real Title");
+    const laterBreak = "---\t\nauthor: Ada\n---  \n# Getting Started\n\n---\n\n# Appendix\n";
+    expect(deriveExportMeta("/x/b.md", laterBreak).title).toBe("Getting Started");
+  });
+
   it("strips simple inline markup from the h1 and skips deeper headings", () => {
     expect(deriveExportMeta("/x/a.md", "# The `ctx` *guide*").title).toBe("The ctx guide");
     expect(deriveExportMeta("/x/b.md", "# [API Reference](api.md)").title).toBe("API Reference");

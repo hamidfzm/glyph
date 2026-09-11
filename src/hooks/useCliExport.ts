@@ -24,8 +24,9 @@ interface UseCliExportOptions {
  * Runs the headless CLI export (`glyph export <path> --format <format>`). When the
  * process was launched with an export request, the window stays hidden (see
  * useWindowReveal), the document or workspace renders straight to disk, and the
- * process exits: 0 on success, 1 with a stderr message on failure. On
- * interactive launches this resolves to a no-op.
+ * process exits: 0 with the output path on stdout and the summary below on
+ * stderr, 1 with a stderr message on failure. On interactive launches this
+ * resolves to a no-op.
  *
  * Waits for persisted settings (the print options an export honors) and for the
  * plugin host's startup load, so a theme contributed by a plugin is registered

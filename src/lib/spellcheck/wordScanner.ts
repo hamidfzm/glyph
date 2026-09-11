@@ -1,5 +1,6 @@
 import { syntaxTree } from "@codemirror/language";
 import type { EditorState } from "@codemirror/state";
+import { FRONTMATTER_RE } from "@/lib/frontmatter";
 
 export interface WordToken {
   from: number;
@@ -37,16 +38,14 @@ function overlapsAny(from: number, to: number, ranges: [number, number][]): bool
   return ranges.some(([start, end]) => from < end && to > start);
 }
 
-// YAML frontmatter (a leading `---` fence) is not modelled by the base markdown
-// parser, so detect it directly and exclude the whole block.
+// YAML frontmatter is not modelled by the base markdown parser, so exclude the block
+// the renderer's pattern finds. ponytail: head only, so a block past 64K chars is checked.
+const FRONTMATTER_SCAN_CHARS = 64 * 1024;
+
 function frontmatterRange(state: EditorState): [number, number] | null {
-  const doc = state.doc;
-  if (doc.lines < 2 || doc.line(1).text !== "---") return null;
-  for (let n = 2; n <= doc.lines; n++) {
-    const line = doc.line(n);
-    if (line.text === "---" || line.text === "...") return [0, line.to];
-  }
-  return null;
+  const head = state.doc.sliceString(0, Math.min(state.doc.length, FRONTMATTER_SCAN_CHARS));
+  const match = FRONTMATTER_RE.exec(head);
+  return match ? [0, match[0].length] : null;
 }
 
 // Collect prose word tokens in [from, to], skipping code/links/HTML/frontmatter,
