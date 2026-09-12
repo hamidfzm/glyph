@@ -35,6 +35,12 @@ describe("toggleTaskAtLine", () => {
     expect(toggleTaskAtLine(src, 2)).toBe("- [ ] a\r\n- [ ] b");
   });
 
+  it("keeps a leading BOM", () => {
+    const src = "\uFEFF- [ ] a\n- [ ] b";
+    expect(toggleTaskAtLine(src, 1)).toBe("\uFEFF- [x] a\n- [ ] b");
+    expect(toggleTaskAtLine(src, 2)).toBe("\uFEFF- [ ] a\n- [x] b");
+  });
+
   it("returns input unchanged when the line has no checkbox", () => {
     const src = "regular paragraph";
     expect(toggleTaskAtLine(src, 1)).toBe(src);

@@ -16,8 +16,7 @@ function basename(path: string): string {
 
 /** First `# heading` outside code fences, stripped of simple inline markup. */
 function firstHeadingTitle(content: string): string | null {
-  // FRONTMATTER_RE takes a BOM only along with a block; a bare one would hide a line-1 h1.
-  const body = content.replace(FRONTMATTER_RE, "").replace(/^\uFEFF/, "");
+  const body = content.replace(FRONTMATTER_RE, "");
   for (const heading of parseHeadings(body)) {
     if (heading.level !== 1) continue;
     const text = heading.text

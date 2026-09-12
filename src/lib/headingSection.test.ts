@@ -53,6 +53,10 @@ describe("extractHeadingSection", () => {
     expect(extractHeadingSection(crlf, "Recipes")).toBe("## Recipes\npasta\n\n### Sauce\ntomato");
     expect(extractHeadingSection(crlf, "Sauce")).toBe("### Sauce\ntomato");
   });
+
+  it("finds a first-line heading behind a BOM", () => {
+    expect(extractHeadingSection("\uFEFF# A\ntext\n# B\nmore", "A")).toBe("# A\ntext");
+  });
 });
 
 // `read_note(ref, section)` slices in Rust (`src-tauri/src/vault/headings.rs`), so
