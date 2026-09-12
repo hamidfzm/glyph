@@ -243,12 +243,12 @@ impl GrantRegistry {
         let behavior = &value["settings"]["behavior"];
         if let Some(tabs) = behavior["openTabs"].as_array() {
             for tab in tabs {
-                let Some(path) = tab["path"].as_str() else {
+                let path = tab["path"]
+                    .as_str()
+                    .filter(|path| self.refuse_remote(path).is_ok());
+                let Some(path) = path else {
                     continue;
                 };
-                if self.refuse_remote(path).is_err() {
-                    continue;
-                }
                 match tab["kind"].as_str() {
                     // Graph tabs carry the workspace root as their path.
                     Some("folder") | Some("graph") => {
