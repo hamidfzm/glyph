@@ -3,6 +3,7 @@ import { PluginStatusBarItems } from "@/components/plugins/PluginStatusBarItems"
 import { useTabsContext } from "@/contexts/TabsContext";
 import { useNoteZoomMap } from "@/contexts/ZoomContext";
 import { useSettings } from "@/hooks/useSettings";
+import { isCanvasFile } from "@/lib/canvasExtensions";
 import { countWords, readingMinutes } from "@/lib/markdown";
 import { isNotebookFile } from "@/lib/notebookExtensions";
 import { ZOOM_DEFAULT } from "@/lib/settingsDisplay";
@@ -31,6 +32,8 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
   // so the word count / reading time don't apply — show a document-type label
   // instead.
   const isNotebook = !!filePath && isNotebookFile(filePath);
+  // A canvas board has no linear reading order, so it gets a word count only.
+  const isCanvas = !!filePath && isCanvasFile(filePath);
 
   if (!displayContent && !isNotebook) return null;
 
@@ -56,7 +59,7 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
           <span className="ms-auto">
             {t("statusBar.words", { count: words, formatted: words.toLocaleString() })}
           </span>
-          <span>{t("statusBar.readingTime", { count: readingMinutes(words) })}</span>
+          {!isCanvas && <span>{t("statusBar.readingTime", { count: readingMinutes(words) })}</span>}
         </>
       )}
       {zoomPercent !== 100 && <span>{zoomPercent}%</span>}

@@ -147,6 +147,18 @@ describe("StatusBar", () => {
     expect(screen.queryByText(/words$/)).toBeNull();
     expect(screen.getByText("/path/to/analysis.ipynb")).toBeInTheDocument();
   });
+
+  it("shows word count but no reading time for a canvas", () => {
+    renderStatusBar({ filePath: "/path/to/board.canvas", displayContent: "hello world test" });
+    expect(screen.getByText("3 words")).toBeInTheDocument();
+    expect(screen.queryByText(/min read$/)).toBeNull();
+    expect(screen.getByText("/path/to/board.canvas")).toBeInTheDocument();
+  });
+
+  it("shows reading time for a markdown file", () => {
+    renderStatusBar({ filePath: "/path/to/note.md", displayContent: "hello world test" });
+    expect(screen.getByText("1 min read")).toBeInTheDocument();
+  });
 });
 
 function makeWorkspace(root = "/ws"): Workspace {
