@@ -90,7 +90,7 @@ fn pick_vault(session: &Session, requested: Option<&str>) -> Result<String, Stri
         if let Some(root) = roots.iter().find(|root| root.as_str() == requested) {
             return Ok(root.clone());
         }
-        refuse_remote(requested)?;
+        grants.refuse_remote(requested)?;
         if let Ok(wanted) = grants.ensure_workspace(requested) {
             let listed = roots.iter().find(|root| {
                 grants
@@ -183,33 +183,6 @@ fn disguises(c: char) -> bool {
         || ('\u{2066}'..='\u{2069}').contains(&c)
 }
 
-/// Refuse a path naming a network share or a device. Resolving one connects
-/// to the host, which can hand it the user's credentials, and a model can name
-/// any host it likes.
-#[cfg(windows)]
-pub(super) fn refuse_remote(raw: &str) -> Result<(), String> {
-    use std::path::{Component, Prefix};
-    let local = match Path::new(raw).components().next() {
-        Some(Component::Prefix(prefix)) => {
-            matches!(prefix.kind(), Prefix::Disk(_) | Prefix::VerbatimDisk(_))
-        }
-        _ => true,
-    };
-    if local {
-        Ok(())
-    } else {
-        Err(format!(
-            "{raw} is a network or device path, which is never looked up"
-        ))
-    }
-}
-
-/// Only Windows resolves a path by connecting to the host it names.
-#[cfg(not(windows))]
-pub(super) fn refuse_remote(_: &str) -> Result<(), String> {
-    Ok(())
-}
-
 /// A note a call named, and the heading its reference carried.
 pub(super) struct NoteRef {
     pub path: String,
@@ -265,7 +238,6 @@ pub(super) fn note_path(
 ) -> Result<Option<String>, String> {
     let absolute = Path::new(raw).is_absolute();
     let candidate = if absolute {
-        refuse_remote(raw)?;
         PathBuf::from(raw)
     } else {
         Path::new(root).join(raw)

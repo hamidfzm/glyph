@@ -223,7 +223,12 @@ pub fn run() {
             Ok(vaults) => {
                 #[cfg(windows)]
                 mcp::keep_stdio_from_children();
-                mcp::run(vaults, std::io::stdin().lock(), std::io::stdout().lock())
+                mcp::run(
+                    vaults,
+                    None,
+                    std::io::stdin().lock(),
+                    std::io::stdout().lock(),
+                )
             }
             Err(usage) => {
                 eprintln!("{usage}");

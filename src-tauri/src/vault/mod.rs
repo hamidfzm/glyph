@@ -36,7 +36,7 @@ pub(crate) mod test_support;
 mod tests;
 
 pub(crate) use frontmatter::{parse_frontmatter, split_frontmatter, Frontmatter};
-pub(crate) use headings::{parse_headings, section, slug};
+pub(crate) use headings::{js_lines, parse_headings, section, slug};
 pub(crate) use index::strip_bom;
 pub use index::Vault;
 pub use queries::Direction;

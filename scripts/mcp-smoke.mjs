@@ -20,6 +20,14 @@ const waiting = new Map();
 const questions = [];
 let pending = "";
 
+// A server that dies with a request pending is reported by its exit code, not
+// by the timer.
+child.on("error", (err) => fail(`could not start ${binary}: ${err.message}`));
+child.on("exit", (code, signal) => {
+  if (waiting.size > 0) fail(`exited with ${code ?? signal} while a request was pending`);
+});
+child.stdin.on("error", (err) => fail(`the server closed its stdin: ${err.message}`));
+
 function fail(reason) {
   console.error(`mcp smoke: ${reason}`);
   child.kill();
@@ -45,7 +53,11 @@ child.stdout.on("data", (chunk) => {
       questions.push(message.params.message);
       send({ id: message.id, result: { action: "accept" } });
     } else {
-      waiting.get(message.id)?.(message);
+      const resolve = waiting.get(message.id);
+      if (resolve) {
+        waiting.delete(message.id);
+        resolve(message);
+      }
     }
   }
 });

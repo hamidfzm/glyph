@@ -483,15 +483,20 @@ pub fn mcp_plan(env_args: &[String], cwd: &Path) -> Result<Vec<String>, String> 
                 ))
             }
         };
-        let root = match classify_initial_arg(value, cwd) {
-            Some(InitialOpenAction::Folder(root)) => plain_path(&root),
-            _ => {
-                return Err(format!(
-                    "--vault needs an existing folder, not {}: {MCP_USAGE}",
-                    plain_path(value)
-                ))
-            }
+        // Only the folder named: the parent-directory fallback that lets
+        // `cargo tauri dev` run from src-tauri/ would grant a folder the flag
+        // never pointed at.
+        let named = cwd.join(value);
+        let folder = (!value.trim().is_empty() && named.is_dir())
+            .then(|| named.canonicalize().ok())
+            .flatten();
+        let Some(folder) = folder else {
+            return Err(format!(
+                "--vault needs an existing folder, not {}: {MCP_USAGE}",
+                plain_path(value)
+            ));
         };
+        let root = plain_path(&folder.to_string_lossy());
         if !vaults.contains(&root) {
             vaults.push(root);
         }
@@ -1433,6 +1438,17 @@ mod tests {
         // No --vault means the vaults open in the app.
         assert!(mcp_plan(&argv_of(&["mcp"]), &cwd).unwrap().is_empty());
         let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn mcp_does_not_look_for_a_vault_in_the_parent_directory() {
+        let parent = unique_tmp("mcp_parent");
+        let cwd = parent.join("proj");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::create_dir_all(parent.join("notes")).unwrap();
+        let err = mcp_plan(&argv_of(&["mcp", "--vault", "notes"]), &cwd).expect_err("usage error");
+        assert!(err.contains("needs an existing folder"), "{err}");
+        let _ = fs::remove_dir_all(&parent);
     }
 
     #[test]

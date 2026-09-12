@@ -20,7 +20,14 @@ pub struct VaultStore(pub Mutex<HashMap<PathBuf, Vault>>);
 type Vaults<'a> = MutexGuard<'a, HashMap<PathBuf, Vault>>;
 
 pub(super) fn lock(store: &VaultStore) -> Result<Vaults<'_>, String> {
-    store.0.lock().map_err(|e| format!("Lock error: {e}"))
+    Ok(store.0.lock().unwrap_or_else(|poisoned| {
+        // A panic mid-update leaves an index half applied; every root is
+        // rebuilt from disk on its next call.
+        store.0.clear_poison();
+        let mut vaults = poisoned.into_inner();
+        vaults.clear();
+        vaults
+    }))
 }
 
 /// The store key for a root that has not been through a grant check.

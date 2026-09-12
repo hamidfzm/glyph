@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use super::frontmatter::{parse_frontmatter, split_frontmatter};
+use super::headings::{js_lines, Fences};
 use super::tags::{add_tags, inline_tags};
 
 pub const MAX_SNIPPET_CHARS: usize = 200;
@@ -39,7 +40,7 @@ pub(crate) fn extract_note(path: &str, content: &str) -> Note {
     let parsed = block.as_deref().and_then(parse_frontmatter);
 
     let mut tags: Vec<String> = Vec::new();
-    for tag in inline_tags(content.lines().skip(body_start)) {
+    for tag in inline_tags(js_lines(content).skip(body_start)) {
         add_tags(&tag, &mut tags);
     }
 
@@ -84,15 +85,10 @@ pub(crate) fn extract_note(path: &str, content: &str) -> Note {
 /// renderer shows those lines as a table, never as links.
 fn parse_links(content: &str, body_start: usize) -> Vec<Link> {
     let mut links = Vec::new();
-    let mut in_fence = false;
+    let mut fences = Fences::new();
 
-    for (idx, line) in content.lines().enumerate().skip(body_start) {
-        let trimmed_start = line.trim_start();
-        if trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~") {
-            in_fence = !in_fence;
-            continue;
-        }
-        if in_fence {
+    for (idx, line) in js_lines(content).enumerate().skip(body_start) {
+        if fences.skip(line) {
             continue;
         }
         push_line_links(line, (idx + 1) as u32, &mut links);
@@ -163,6 +159,13 @@ pub fn snippet_for(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_fence_closes_only_on_its_own_marker() {
+        let links = parse_links("```\n~~~\n[[Hidden]]\n```\n[[Seen]]", 0);
+        let targets: Vec<&str> = links.iter().map(|link| link.target.as_str()).collect();
+        assert_eq!(targets, ["Seen"]);
+    }
 
     fn parse_links_from_start(content: &str) -> Vec<Link> {
         parse_links(content, 0)

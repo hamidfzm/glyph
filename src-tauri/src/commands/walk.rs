@@ -54,6 +54,10 @@ pub(crate) struct Stamp {
 }
 
 impl Stamp {
+    pub(crate) fn written_after(&self, instant: std::time::SystemTime) -> bool {
+        self.modified.is_some_and(|modified| modified > instant)
+    }
+
     pub(crate) fn of(meta: &std::fs::Metadata) -> Self {
         Self {
             modified: meta.modified().ok(),

@@ -281,7 +281,7 @@ fn note_info_reports_headings_tags_and_link_detail() {
     let info = h.ok("note_info", json!({ "ref": "Index" }));
     assert_eq!(info["title"], "Index");
     assert_eq!(info["tags"], json!(["home", "reference"]));
-    assert_eq!(info["fields"]["status"], "published");
+    assert_eq!(info["frontmatter"]["fields"]["status"], "published");
     assert_eq!(
         items(&info["headings"]),
         &vec![json!({ "level": 1, "slug": "index", "text": "Index", "line": 8 })]
@@ -823,7 +823,10 @@ fn a_path_that_could_disguise_itself_is_never_put_to_the_user() {
 fn serve_lines(vaults: Vec<String>, lines: &[String]) -> Vec<Value> {
     let mut output = Vec::new();
     let input = lines.join("\n");
-    assert_eq!(super::run(vaults, input.as_bytes(), &mut output), 0);
+    // An empty data directory, so nothing this machine has open leaks in.
+    let stores = tempfile::TempDir::new().unwrap();
+    let stores = Some(stores.path().to_path_buf());
+    assert_eq!(super::run(vaults, stores, input.as_bytes(), &mut output), 0);
     String::from_utf8(output)
         .unwrap()
         .lines()
@@ -876,14 +879,14 @@ fn a_folder_allowed_once_is_served_for_the_rest_of_the_session() {
     assert_eq!(result_of(&messages, 2)["vault"], json!(shown));
     let context = result_of(&messages, 3);
     assert_eq!(context["canAskForVaults"], true);
-    // Listed after whatever vaults the app on this machine has open.
     let roots: Vec<&str> = context["vaults"]
         .as_array()
         .unwrap()
         .iter()
         .filter_map(|vault| vault["root"].as_str())
         .collect();
-    assert!(roots.contains(&shown.as_str()), "{roots:?}");
+    assert_eq!(roots, [shown.as_str()]);
+    assert_eq!(context["appRunning"], false);
     assert_eq!(result_of(&messages, 4)["vault"], json!(shown));
     fs::remove_dir_all(&folder).unwrap();
 }
@@ -1147,7 +1150,7 @@ fn the_whole_server_answers_over_any_stream() {
     );
     let mut output = Vec::new();
     let vaults = vec![root.to_string_lossy().to_string()];
-    assert_eq!(super::run(vaults, input.as_bytes(), &mut output), 0);
+    assert_eq!(super::run(vaults, None, input.as_bytes(), &mut output), 0);
 
     let replies: Vec<Value> = String::from_utf8(output)
         .unwrap()
@@ -1188,9 +1191,9 @@ fn an_appimage_launches_itself_rather_than_its_mounted_binary() {
 fn a_client_that_goes_away_ends_the_session_cleanly() {
     let ping = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n";
     let gone = Refusing(std::io::ErrorKind::BrokenPipe);
-    assert_eq!(super::run(Vec::new(), ping.as_bytes(), gone), 0);
+    assert_eq!(super::run(Vec::new(), None, ping.as_bytes(), gone), 0);
     let broken = Refusing(std::io::ErrorKind::PermissionDenied);
-    assert_eq!(super::run(Vec::new(), ping.as_bytes(), broken), 1);
+    assert_eq!(super::run(Vec::new(), None, ping.as_bytes(), broken), 1);
 }
 
 #[test]
@@ -1277,4 +1280,42 @@ fn a_note_that_grew_past_the_cap_is_not_read() {
     .unwrap();
     let refusal = super::refs::read_text(&h.session(), &grown.to_string_lossy()).unwrap_err();
     assert!(refusal.contains("5 MB"), "{refusal}");
+}
+
+#[test]
+fn a_folder_allowed_first_is_listed_once_when_the_app_opens_it_by_another_name() {
+    let root = fixture_vault("mcp_allowed_alias");
+    let links = unique_tmp("mcp_allowed_alias_links");
+    let link = links.join("linked");
+    link_folder(&root, &link);
+    let grants = GrantRegistry::default();
+    grants.grant_workspace(&root).unwrap();
+    let allowed = vec![crate::cli::plain_path(
+        &root.canonicalize().unwrap().to_string_lossy(),
+    )];
+
+    let mut open = OpenState {
+        roots: vec![link.to_string_lossy().to_string()],
+        ..OpenState::default()
+    };
+    super::with_allowed(&mut open, &allowed, &grants);
+    assert_eq!(open.roots.len(), 1, "{:?}", open.roots);
+
+    let mut empty = OpenState::default();
+    super::with_allowed(&mut empty, &allowed, &grants);
+    assert_eq!(empty.roots, allowed);
+    let _ = fs::remove_dir_all(&links);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_poisoned_store_recovers_on_the_next_call() {
+    let h = Harness::new("mcp_poisoned");
+    h.ok("list_tags", json!({}));
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _held = h.store.0.lock().unwrap();
+        panic!("a handler bug under the lock");
+    }));
+    let tags = h.ok("list_tags", json!({}));
+    assert_eq!(tags["vault"], json!(h.root.to_string_lossy()));
 }

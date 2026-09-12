@@ -12,7 +12,8 @@ use super::refs::{
 };
 use super::registry::{arguments, Effect, Session, ToolDef};
 use crate::vault::{
-    parse_frontmatter, parse_headings, section, slug, split_frontmatter, split_heading, Frontmatter,
+    js_lines, parse_frontmatter, parse_headings, section, slug, split_frontmatter, split_heading,
+    Frontmatter,
 };
 
 pub(super) const RESOLVE_LINK: ToolDef = ToolDef {
@@ -125,8 +126,7 @@ fn read_note(session: &Session, args: Value) -> Result<Value, String> {
         let body = match &wanted {
             Some(heading) => section(&content, body_start, heading)
                 .ok_or_else(|| missing_section(&content, body_start, heading, &found.path))?,
-            None => content
-                .lines()
+            None => js_lines(&content)
                 .skip(body_start)
                 .collect::<Vec<_>>()
                 .join("\n"),
@@ -172,7 +172,7 @@ fn missing_section(content: &str, body_start: usize, heading: &str, path: &str) 
 pub(super) const NOTE_INFO: ToolDef = ToolDef {
     name: "note_info",
     title: "Describe a note",
-    description: "A note's structure as Glyph indexes it: title, tags (fence-aware, nested tags normalized), frontmatter fields, headings with their slugs, and every outgoing link with its heading, alias, whether it embeds, and the note it resolves to or null when it is broken.",
+    description: "A note's structure as Glyph indexes it: title, tags (fence-aware, nested tags normalized), its frontmatter as read_note gives it, headings with their slugs, and every outgoing link with its heading, alias, whether it embeds, and the note it resolves to or null when it is broken.",
     input_schema: note_schema,
     effect: Effect::ReadOnly,
     enabled: true,
@@ -186,13 +186,17 @@ fn note_info(session: &Session, args: Value) -> Result<Value, String> {
         let note = vault
             .note(&found.path)
             .ok_or_else(|| format!("{} is not indexed", found.path))?;
-        // A board is JSON, so it has no headings to parse.
-        let headings = if crate::is_canvas_file(Path::new(&found.path)) {
-            Vec::new()
+        // A board is JSON, so it has no frontmatter or headings to parse.
+        let (frontmatter, headings) = if crate::is_canvas_file(Path::new(&found.path)) {
+            (Value::Null, Vec::new())
         } else {
             let content = read_text(session, &found.path)?;
-            let (_, body_start) = split_frontmatter(&content);
-            parse_headings(&content, body_start)
+            let (block, body_start) = split_frontmatter(&content);
+            let frontmatter = block
+                .as_deref()
+                .and_then(parse_frontmatter)
+                .map_or(Value::Null, frontmatter_json);
+            (frontmatter, parse_headings(&content, body_start))
         };
         let headings = headings.into_iter().map(|heading| {
             json!({
@@ -217,7 +221,7 @@ fn note_info(session: &Session, args: Value) -> Result<Value, String> {
             "title": note.title,
             "tags": note.tags,
             "aliases": note.aliases,
-            "fields": note.fields,
+            "frontmatter": frontmatter,
             "headings": capped(headings),
             "links": capped(links),
             "status": vault.status(),

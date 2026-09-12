@@ -27,8 +27,14 @@ use registry::Session;
 /// Serve until the client closes `input`, and return the exit code. `vaults`
 /// are the `--vault` roots, already checked to be folders, and all the server
 /// reads. With none, it serves the vaults open in the app, and an agent can ask
-/// the user for more.
-pub fn run(vaults: Vec<String>, input: impl BufRead, output: impl Write) -> i32 {
+/// the user for more. `stores` is where the app keeps its session; `None` is
+/// its own data directory.
+pub fn run(
+    vaults: Vec<String>,
+    stores: Option<PathBuf>,
+    input: impl BufRead,
+    output: impl Write,
+) -> i32 {
     let grants = GrantRegistry::default();
     for root in &vaults {
         let _ = grants.grant_workspace(Path::new(root));
@@ -39,12 +45,8 @@ pub fn run(vaults: Vec<String>, input: impl BufRead, output: impl Write) -> i32 
     let mut allowed: Vec<String> = Vec::new();
 
     let served = stdio::serve(input, output, |name, args, ask| {
-        let mut open = session::open_state(&vaults, &grants);
-        for root in &allowed {
-            if !open.roots.contains(root) {
-                open.roots.push(root.clone());
-            }
-        }
+        let mut open = session::open_state(&vaults, &grants, stores.as_deref());
+        with_allowed(&mut open, &allowed, &grants);
         // `--vault` names every folder the session may read.
         let can_ask = vaults.is_empty() && ask.can_ask();
         let ask = RefCell::new(ask);
@@ -74,6 +76,22 @@ pub fn run(vaults: Vec<String>, input: impl BufRead, output: impl Write) -> i32 
         Err(err) => {
             eprintln!("glyph mcp: {err}");
             1
+        }
+    }
+}
+
+/// List the folders the user allowed this session, each once however the app
+/// spells it.
+fn with_allowed(open: &mut session::OpenState, allowed: &[String], grants: &GrantRegistry) {
+    for root in allowed {
+        let wanted = grants.ensure_workspace(root).ok();
+        let listed = wanted.is_some()
+            && open
+                .roots
+                .iter()
+                .any(|listed| grants.ensure_workspace(listed).ok() == wanted);
+        if !listed {
+            open.roots.push(root.clone());
         }
     }
 }

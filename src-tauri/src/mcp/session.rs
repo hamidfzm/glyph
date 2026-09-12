@@ -4,6 +4,7 @@
 //! both, so every field is optional and anything malformed is skipped.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -31,16 +32,31 @@ pub struct OpenTab {
 
 /// The state a stdio call sees. Roots come from `--vault` when it was given,
 /// otherwise from the app's session, re-read every call so a vault opened
-/// mid-conversation appears.
-pub(super) fn open_state(cli_vaults: &[String], grants: &GrantRegistry) -> OpenState {
-    let settings = data_dir::read_store("settings.json");
-    let sessions = data_dir::read_store("workspace-sessions.json");
+/// mid-conversation appears. `stores` is where the app keeps that session;
+/// `None` is its own data directory.
+pub(super) fn open_state(
+    cli_vaults: &[String],
+    grants: &GrantRegistry,
+    stores: Option<&Path>,
+) -> OpenState {
+    let (settings, sessions, app_running) = match stores {
+        Some(dir) => (
+            data_dir::read_store_in(dir, "settings.json"),
+            data_dir::read_store_in(dir, "workspace-sessions.json"),
+            data_dir::running_in(dir),
+        ),
+        None => (
+            data_dir::read_store("settings.json"),
+            data_dir::read_store("workspace-sessions.json"),
+            data_dir::app_running(),
+        ),
+    };
     observed(
         cli_vaults,
         grants,
         settings.as_deref(),
         sessions.as_deref(),
-        data_dir::app_running(),
+        app_running,
     )
 }
 
@@ -110,10 +126,12 @@ fn parse(settings: Option<&str>, sessions: Option<&str>) -> OpenState {
             .map(str::to_string)
             .collect();
         state.expanded.insert(root.clone(), expanded);
+        // The graph tab's path is the root itself: no note is in front of
+        // the user then.
         if root == active {
             state.active_note = session["activeTabPath"]
                 .as_str()
-                .filter(|path| !path.is_empty())
+                .filter(|path| !path.is_empty() && *path != root)
                 .map(str::to_string);
         }
     }
@@ -257,6 +275,25 @@ mod tests {
         let state = parse(Some(&settings), None);
         assert_eq!(state.active_note.as_deref(), Some("/n.md"));
         assert_eq!(state.roots, ["/ws"]);
+    }
+
+    #[test]
+    fn an_active_graph_tab_is_no_active_note() {
+        let settings = json!({ "settings": { "behavior": {
+            "openTabs": [
+                { "kind": "folder", "path": "/ws" },
+                { "kind": "graph", "path": "/ws" },
+            ],
+            "activeTabPath": "/ws",
+        } } })
+        .to_string();
+        let sessions = json!({ "/ws": {
+            "tabs": [{ "kind": "graph", "path": "/ws" }],
+            "activeTabPath": "/ws",
+        } })
+        .to_string();
+        let state = parse(Some(&settings), Some(&sessions));
+        assert_eq!(state.active_note, None);
     }
 
     #[test]

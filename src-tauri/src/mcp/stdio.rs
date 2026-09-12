@@ -275,6 +275,8 @@ impl<R: BufRead, W: Write> Ask for Client<R, W> {
         });
         let lost = |err: io::Error| format!("the client cannot be reached: {err}");
         send(&mut self.output, &question).map_err(lost)?;
+        // Messages held for an earlier question are not this one's doing.
+        let already_held = self.held.len();
         loop {
             let Some(incoming) = read(&mut self.input).map_err(lost)? else {
                 return Err("the client closed the session".to_string());
@@ -292,7 +294,7 @@ impl<R: BufRead, W: Write> Ask for Client<R, W> {
                 return Err("the call was cancelled".to_string());
             }
             self.held.push_back(incoming);
-            if self.held.len() > MAX_HELD {
+            if self.held.len() - already_held > MAX_HELD {
                 self.withdraw(&id);
                 return Err("the client sent too much while the user decided".to_string());
             }
@@ -627,6 +629,25 @@ mod tests {
         );
         assert_eq!(replies[4]["error"]["code"], INVALID_REQUEST);
         assert_eq!(text_of(&replies[2]), "\"allowed\"");
+    }
+
+    #[test]
+    fn messages_held_for_an_earlier_question_do_not_count_against_the_next() {
+        let pings: String = (100..100 + MAX_HELD as u64)
+            .map(|id| request(id, "ping", Value::Null))
+            .collect();
+        let replies = exchange(&format!(
+            "{}{}{}{}{}{}{}",
+            init_able_to_ask(),
+            request(2, "tools/call", json!({ "name": "ask" })),
+            request(3, "tools/call", json!({ "name": "ask" })),
+            pings,
+            answer_to(1, json!({ "action": "accept" })),
+            request(4, "ping", Value::Null),
+            answer_to(2, json!({ "action": "accept" })),
+        ));
+        let third = replies.iter().find(|reply| reply["id"] == 3).unwrap();
+        assert_eq!(text_of(third), "\"allowed\"");
     }
 
     #[test]

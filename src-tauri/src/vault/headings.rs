@@ -2,9 +2,7 @@
 //! ported rule for rule from `src/lib/markdownHeadings.ts` and
 //! `src/lib/headingSection.ts`. The renderer keeps those for embeds, which
 //! slice content it has already loaded; `fixtures/vault-headings.json` holds
-//! both sides to the same answers. One difference is deliberate: lines lose a
-//! CRLF's `\r` here, so a Windows-saved note has headings, where the
-//! TypeScript split on `\n` leaves the `\r` and its pattern refuses the line.
+//! both sides to the same answers, and both split lines on CRLF, CR and LF.
 
 use std::cmp::Ordering;
 
@@ -44,6 +42,47 @@ fn fence_marker(line: &str) -> Option<char> {
         .and_then(|run| run.chars().next())
 }
 
+/// Fenced code across lines: whether `line` opens, closes or sits inside a
+/// fence, which closes only on the character that opened it.
+pub(super) struct Fences(Option<char>);
+
+impl Fences {
+    pub(super) fn new() -> Self {
+        Fences(None)
+    }
+
+    pub(super) fn skip(&mut self, line: &str) -> bool {
+        if let Some(marker) = fence_marker(line) {
+            match self.0 {
+                None => self.0 = Some(marker),
+                Some(open) if open == marker => self.0 = None,
+                Some(_) => {}
+            }
+            return true;
+        }
+        self.0.is_some()
+    }
+}
+
+/// The lines of `text` as `split(/\r\n|\r|\n/)` yields them, without the empty
+/// piece a final terminator leaves, as `str::lines` does.
+pub(crate) fn js_lines(text: &str) -> impl Iterator<Item = &str> {
+    let mut rest = text;
+    std::iter::from_fn(move || {
+        if rest.is_empty() {
+            return None;
+        }
+        let end = rest.find(['\r', '\n']).unwrap_or(rest.len());
+        let line = &rest[..end];
+        let after = &rest[end..];
+        rest = after
+            .strip_prefix("\r\n")
+            .or_else(|| after.get(1..))
+            .unwrap_or("");
+        Some(line)
+    })
+}
+
 /// `^(#{1,6})\s+(.*)$`. The whitespace run may hold a line terminator, but the
 /// text may not, because `.` stops there and `$` only matches at the end.
 fn atx(line: &str) -> Option<(u8, String)> {
@@ -59,12 +98,13 @@ fn atx(line: &str) -> Option<(u8, String)> {
     Some((level as u8, heading_text(rest)))
 }
 
-/// `.replace(/\s+#+\s*$/, "").trim()`: a closing run of `#` goes only when
-/// whitespace separates it from the text, so `C#` keeps its hash.
+/// A closing run of `#` goes when it is the whole text or whitespace separates
+/// it from the text, so `C#` keeps its hash.
 fn heading_text(raw: &str) -> String {
     let body = raw.trim_end_matches(is_js_space);
     let before_run = body.trim_end_matches('#');
-    let closed = before_run.len() < body.len() && before_run.ends_with(is_js_space);
+    let closed = before_run.len() < body.len()
+        && (before_run.is_empty() || before_run.ends_with(is_js_space));
     let text = if closed { before_run } else { raw };
     text.trim_matches(is_js_space).to_string()
 }
@@ -73,17 +113,9 @@ fn heading_text(raw: &str) -> String {
 /// closes only on the character that opened it.
 pub(crate) fn parse_headings(content: &str, body_start: usize) -> Vec<Heading> {
     let mut headings = Vec::new();
-    let mut fence: Option<char> = None;
-    for (idx, line) in content.lines().enumerate().skip(body_start) {
-        if let Some(marker) = fence_marker(line) {
-            match fence {
-                None => fence = Some(marker),
-                Some(open) if open == marker => fence = None,
-                Some(_) => {}
-            }
-            continue;
-        }
-        if fence.is_some() {
+    let mut fences = Fences::new();
+    for (idx, line) in js_lines(content).enumerate().skip(body_start) {
+        if fences.skip(line) {
             continue;
         }
         if let Some((level, text)) = atx(line) {
@@ -144,7 +176,7 @@ pub(crate) fn section(content: &str, body_start: usize, wanted: &str) -> Option<
         .iter()
         .find(|h| h.level <= headings[start].level)
         .map_or(usize::MAX, |h| h.line as usize - 1);
-    let lines: Vec<&str> = content.lines().skip(first).take(end - first).collect();
+    let lines: Vec<&str> = js_lines(content).skip(first).take(end - first).collect();
     Some(lines.join("\n").trim_end_matches(is_js_space).to_string())
 }
 
@@ -197,7 +229,7 @@ mod tests {
         assert_eq!(texts("# Title #"), ["Title"]);
         assert_eq!(texts("## Closed  ##  "), ["Closed"]);
         assert_eq!(texts("## Language C#"), ["Language C#"]);
-        assert_eq!(texts("# #"), ["#"]);
+        assert_eq!(texts("# #"), [""]);
     }
 
     #[test]
@@ -266,6 +298,13 @@ mod tests {
         let md = "## Real\ntext\n```\n## Fake\n```\nmore";
         assert_eq!(section(md, 0, "Fake"), None);
         assert_eq!(section(md, 0, "Real").as_deref(), Some(md));
+    }
+
+    #[test]
+    fn a_cr_only_note_has_its_headings() {
+        let md = "# One\rtext\r## Two\rbody";
+        assert_eq!(texts(md), ["One", "Two"]);
+        assert_eq!(section(md, 0, "Two").as_deref(), Some("## Two\nbody"));
     }
 
     #[test]

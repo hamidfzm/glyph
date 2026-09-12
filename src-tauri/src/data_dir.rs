@@ -30,9 +30,11 @@ fn dirs_for(identifier: &str) -> Vec<PathBuf> {
 
 /// The first readable copy of the store file `name`.
 pub fn read_store(name: &str) -> Option<String> {
-    store_dirs()
-        .iter()
-        .find_map(|dir| std::fs::read_to_string(dir.join(name)).ok())
+    store_dirs().iter().find_map(|dir| read_store_in(dir, name))
+}
+
+pub fn read_store_in(dir: &Path, name: &str) -> Option<String> {
+    std::fs::read_to_string(dir.join(name)).ok()
 }
 
 /// Held for the life of an interactive launch, so another process can tell
@@ -48,20 +50,38 @@ pub fn app_dir() -> Option<PathBuf> {
 }
 
 pub fn hold_instance_lock(dir: &Path) -> Option<InstanceLock> {
-    std::fs::create_dir_all(dir).ok()?;
-    let file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open(dir.join(INSTANCE_LOCK))
+    let file = std::fs::create_dir_all(dir)
+        .and_then(|()| {
+            OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .write(true)
+                .open(dir.join(INSTANCE_LOCK))
+        })
+        .map_err(|err| eprintln!("glyph: cannot open {INSTANCE_LOCK}: {err}"))
         .ok()?;
+    acquire(|| file.try_lock())?;
+    Some(InstanceLock { _file: file })
+}
+
+/// The lock once a probe in flight has let go; `None` for another window, or
+/// for a filesystem that cannot lock at all.
+fn acquire(mut try_lock: impl FnMut() -> Result<(), TryLockError>) -> Option<()> {
     // A `glyph mcp` probe holds a shared lock for an instant, so only a lock
     // still taken after a few tries belongs to another window.
     for _ in 0..5 {
-        if file.try_lock().is_ok() {
-            return Some(InstanceLock { _file: file });
+        match try_lock() {
+            Ok(()) => return Some(()),
+            Err(TryLockError::WouldBlock) => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(TryLockError::Error(err)) => {
+                eprintln!(
+                    "glyph: cannot lock {INSTANCE_LOCK}, so `glyph mcp` will see the app as closed: {err}"
+                );
+                return None;
+            }
         }
-        std::thread::sleep(std::time::Duration::from_millis(20));
     }
     None
 }
@@ -71,7 +91,7 @@ pub fn app_running() -> bool {
     app_dir().is_some_and(|dir| running_in(&dir))
 }
 
-fn running_in(dir: &Path) -> bool {
+pub(crate) fn running_in(dir: &Path) -> bool {
     let Ok(file) = File::open(dir.join(INSTANCE_LOCK)) else {
         return false;
     };
@@ -113,6 +133,25 @@ mod tests {
             !running_in(dir.path()),
             "the lock file stays, the lock does not"
         );
+    }
+
+    #[test]
+    fn a_filesystem_that_cannot_lock_is_not_retried() {
+        let started = std::time::Instant::now();
+        let unsupported = || Err(TryLockError::Error(std::io::ErrorKind::Unsupported.into()));
+        assert!(acquire(unsupported).is_none());
+        assert!(started.elapsed() < std::time::Duration::from_millis(20));
+
+        let mut probes = 2;
+        let held_briefly = || {
+            probes -= 1;
+            if probes > 0 {
+                Err(TryLockError::WouldBlock)
+            } else {
+                Ok(())
+            }
+        };
+        assert!(acquire(held_briefly).is_some());
     }
 
     #[test]

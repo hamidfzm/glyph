@@ -1088,6 +1088,70 @@ fn a_sync_reports_the_cap_the_walk_hit_and_lifts_it_when_room_returns() {
 }
 
 #[test]
+fn a_file_that_displaces_the_last_walked_note_is_not_mistaken_for_it() {
+    let root = fixture_vault("sync_cap_displaced");
+    let mut vault = Vault::build_capped(&root, 9, 32).unwrap();
+    let last = root.join("Notes").join("Travel.md");
+    let last_key = last.to_string_lossy().to_string();
+
+    // Sorts first, so the capped walk no longer reaches the last note.
+    fs::write(
+        root.join("A0.md"),
+        "first
+",
+    )
+    .unwrap();
+    vault.sync().unwrap();
+    assert!(vault.snapshot().status.truncated);
+    assert!(
+        vault.note(&last_key).is_some(),
+        "still on disk, still indexed"
+    );
+
+    fs::remove_file(&last).unwrap();
+    vault.sync().unwrap();
+    let snapshot = vault.snapshot();
+    assert!(!snapshot.status.truncated);
+    assert!(snapshot.files.iter().any(|path| path.ends_with("A0.md")));
+    assert!(
+        vault.note(&last_key).is_none(),
+        "gone from disk, gone from the index"
+    );
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_same_length_edit_the_clock_cannot_tell_apart_is_still_read() {
+    let root = fixture_vault("sync_same_stamp");
+    let path = root.join("Same.md");
+    fs::write(
+        &path, "#todo
+",
+    )
+    .unwrap();
+    let mut vault = build(&root);
+    let saved_at = fs::metadata(&path).unwrap().modified().unwrap();
+
+    // Same length, same modified time: only the bytes differ.
+    fs::write(
+        &path, "#done
+",
+    )
+    .unwrap();
+    fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(saved_at)
+        .unwrap();
+    vault.sync().unwrap();
+    assert_eq!(vault.paths_with_tag("done").len(), 1);
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
 fn a_sync_over_a_deleted_root_is_an_error_not_an_empty_vault() {
     let root = fixture_vault("sync_gone");
     let mut vault = build(&root);

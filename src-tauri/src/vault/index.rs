@@ -1,7 +1,7 @@
 //! The [`Vault`] itself: building the note set from a workspace root and
 //! keeping it current as files change.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::canvas::{self, Canvas};
@@ -168,10 +168,17 @@ impl Vault {
             .filter(|path| !walked.contains_key(*path))
             .map(PathBuf::from)
             .collect();
+        // A stamp inside the filesystem's clock resolution cannot tell two
+        // saves apart, so a file written in the last two seconds is re-read.
+        let recent = std::time::SystemTime::now()
+            .checked_sub(std::time::Duration::from_secs(2))
+            .unwrap_or(std::time::UNIX_EPOCH);
         changed.extend(
             walked
                 .iter()
-                .filter(|(path, stamp)| self.stamps.get(*path) != Some(*stamp))
+                .filter(|(path, stamp)| {
+                    self.stamps.get(*path) != Some(*stamp) || stamp.written_after(recent)
+                })
                 .map(|(path, _)| PathBuf::from(path)),
         );
         if !changed.is_empty() {
@@ -179,7 +186,19 @@ impl Vault {
         }
         // Stamps come from the walk alone, so two walks compare like with like:
         // on Windows a directory listing and a file's own metadata can differ.
-        self.stamps = walked;
+        // Only indexed files keep one: a file refused at the cap is tried
+        // again, and a note a capped walk no longer reaches stays known until
+        // it is gone.
+        let kept: Vec<(String, Stamp)> = std::mem::take(&mut self.stamps)
+            .into_iter()
+            .filter(|(path, _)| !walked.contains_key(path))
+            .collect();
+        let indexed: HashSet<&str> = self.notes.iter().map(|note| note.path.as_str()).collect();
+        self.stamps = walked
+            .into_iter()
+            .chain(kept)
+            .filter(|(path, _)| indexed.contains(path.as_str()))
+            .collect();
         self.walk_status = status;
         self.refused_at_cap = false;
         Ok(())

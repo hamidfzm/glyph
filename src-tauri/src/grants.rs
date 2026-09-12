@@ -48,6 +48,55 @@ fn canonicalize_lenient(path: &Path) -> Result<PathBuf, String> {
     Ok(canonicalize_lenient(parent)?.join(name))
 }
 
+/// Refuse a path that names a network share or a device, unless a grant
+/// already sits on that share. Resolving one connects to the host, which can
+/// hand it the user's credentials, and a renderer or a model can name any host
+/// it likes.
+#[cfg(windows)]
+fn refuse_remote(grants: &Grants, path: &Path) -> Result<(), String> {
+    use std::path::{Component, Prefix};
+    let Some(Component::Prefix(prefix)) = path.components().next() else {
+        return Ok(());
+    };
+    let share = match prefix.kind() {
+        Prefix::Disk(_) | Prefix::VerbatimDisk(_) => return Ok(()),
+        Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => (server, share),
+        Prefix::Verbatim(_) | Prefix::DeviceNS(_) => return Err(remote(path)),
+    };
+    let on_share = |root: &PathBuf| match root.components().next() {
+        Some(Component::Prefix(known)) => matches!(
+            known.kind(),
+            Prefix::UNC(server, name) | Prefix::VerbatimUNC(server, name) if (server, name) == share
+        ),
+        _ => false,
+    };
+    let mut granted = grants
+        .workspaces
+        .iter()
+        .chain(&grants.files)
+        .chain(&grants.export_dirs)
+        .chain(&grants.export_files);
+    if granted.any(on_share) {
+        Ok(())
+    } else {
+        Err(remote(path))
+    }
+}
+
+#[cfg(windows)]
+fn remote(path: &Path) -> String {
+    format!(
+        "{} is a network or device path, which is never looked up",
+        path.display()
+    )
+}
+
+/// Only Windows resolves a path by connecting to the host it names.
+#[cfg(not(windows))]
+fn refuse_remote(_: &Grants, _: &Path) -> Result<(), String> {
+    Ok(())
+}
+
 impl GrantRegistry {
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, Grants>, String> {
         self.inner.lock().map_err(|e| format!("Lock error: {e}"))
@@ -109,6 +158,7 @@ impl GrantRegistry {
     /// reads its own manifest in Rust, never through this check.)
     pub fn ensure_readable(&self, path: &str) -> Result<PathBuf, String> {
         let requested = Path::new(path);
+        refuse_remote(&*self.lock()?, requested)?;
         let canonical = canonicalize_lenient(requested)?;
         let grants = self.lock()?;
         if grants.files.contains(&canonical)
@@ -122,6 +172,7 @@ impl GrantRegistry {
 
     pub fn ensure_writable(&self, path: &str) -> Result<PathBuf, String> {
         let requested = Path::new(path);
+        refuse_remote(&*self.lock()?, requested)?;
         let canonical = canonicalize_lenient(requested)?;
         let grants = self.lock()?;
         if grants.files.contains(&canonical)
@@ -135,6 +186,11 @@ impl GrantRegistry {
         }
     }
 
+    /// See [`refuse_remote`]: for a path a caller resolves itself.
+    pub fn refuse_remote(&self, path: &str) -> Result<(), String> {
+        refuse_remote(&*self.lock()?, Path::new(path))
+    }
+
     /// Watching follows the read rule.
     pub fn ensure_watchable(&self, path: &str) -> Result<PathBuf, String> {
         self.ensure_readable(path)
@@ -143,6 +199,7 @@ impl GrantRegistry {
     /// Require `root` to be exactly a granted workspace root, not a path inside one.
     pub fn ensure_workspace(&self, root: &str) -> Result<PathBuf, String> {
         let requested = Path::new(root);
+        refuse_remote(&*self.lock()?, requested)?;
         let canonical = requested.canonicalize().map_err(|_| denied(requested))?;
         if self.lock()?.workspaces.contains(&canonical) {
             Ok(canonical)
@@ -189,6 +246,9 @@ impl GrantRegistry {
                 let Some(path) = tab["path"].as_str() else {
                     continue;
                 };
+                if self.refuse_remote(path).is_err() {
+                    continue;
+                }
                 match tab["kind"].as_str() {
                     // Graph tabs carry the workspace root as their path.
                     Some("folder") | Some("graph") => {
@@ -207,7 +267,10 @@ impl GrantRegistry {
         }
         if let Some(recent) = behavior["recentFiles"].as_array() {
             for entry in recent {
-                if let Some(path) = entry.as_str() {
+                if let Some(path) = entry
+                    .as_str()
+                    .filter(|path| self.refuse_remote(path).is_ok())
+                {
                     if let Ok(canonical) = self.grant_file(Path::new(path)) {
                         files.push(canonical);
                     }
@@ -234,6 +297,37 @@ pub fn allow_asset_file<R: tauri::Runtime>(app: &tauri::AppHandle<R>, file: &Pat
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn a_network_or_device_path_is_refused_before_it_resolves() {
+        let grants = GrantRegistry::default();
+        for path in [
+            r"\\attacker\share\x.md",
+            r"\\?\UNC\attacker\share\x.md",
+            r"\\.\pipe\glyph",
+        ] {
+            let refusal = grants.ensure_readable(path).unwrap_err();
+            assert!(refusal.contains("never looked up"), "{refusal}");
+            assert!(grants.ensure_writable(path).is_err());
+            assert!(grants.ensure_workspace(path).is_err());
+        }
+        let (workspaces, files) = grants.seed_from_settings_json(
+            r#"{"settings":{"behavior":{"openTabs":[{"kind":"folder","path":"\\\\attacker\\share"}],"recentFiles":["\\\\attacker\\share\\x.md"]}}}"#,
+        );
+        assert!(workspaces.is_empty() && files.is_empty());
+
+        // A share the user already opened stays reachable, and only that one.
+        grants
+            .grant_resolved_workspace(PathBuf::from("//trusted/notes/vault"))
+            .unwrap();
+        grants
+            .grant_resolved_workspace(PathBuf::from("relative"))
+            .unwrap();
+        assert!(grants.refuse_remote("//trusted/notes/vault/x.md").is_ok());
+        assert!(grants.refuse_remote("//trusted/other/x.md").is_err());
+        assert!(grants.refuse_remote("relative/x.md").is_ok());
+    }
     use std::fs;
     use tempfile::TempDir;
 

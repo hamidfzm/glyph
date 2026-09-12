@@ -187,9 +187,11 @@ the way a renderer-supplied path is.
   again, so a link swapped in while they decide leads nowhere. Nothing is
   looked up on disk until the server knows it can ask, and a path holding a
   character that could disguise it is never put to the user.
-- **Network paths.** On Windows, a path from a tool argument that names a
-  network share or a device is refused before any lookup: resolving one
-  connects to the host, which can hand it the user's credentials.
+- **Network paths.** On Windows, the grant registry refuses a path that names
+  a network share or a device before it resolves anything, whether a tool
+  argument, a renderer command, or the settings seed handed it over, unless a
+  grant already sits on that share: resolving one connects to the host, which
+  can hand it the user's credentials.
 - **Every path goes through the registry.** A note reference that names a
   path, `resolve_link`'s `from`, `read_canvas`'s `path`, and `export`'s `out`
   pass `ensure_readable` or `ensure_writable` before anything is read or
