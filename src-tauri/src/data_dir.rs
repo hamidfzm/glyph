@@ -19,13 +19,31 @@ fn store_dirs() -> Vec<PathBuf> {
 }
 
 fn dirs_for(identifier: &str) -> Vec<PathBuf> {
-    let mut found: Vec<PathBuf> = [dirs::data_dir(), dirs::config_dir()]
+    let candidates = [dirs::data_dir(), dirs::config_dir()]
         .into_iter()
         .flatten()
-        .map(|dir| dir.join(identifier))
-        .collect();
-    found.dedup();
+        .chain(default_dirs());
+    let mut found: Vec<PathBuf> = Vec::new();
+    for dir in candidates.map(|dir| dir.join(identifier)) {
+        if !found.contains(&dir) {
+            found.push(dir);
+        }
+    }
     found
+}
+
+/// Where the directories are when no XDG variable moves them. An MCP client
+/// may start the server with other variables than the app was started with.
+#[cfg(target_os = "linux")]
+fn default_dirs() -> Vec<PathBuf> {
+    dirs::home_dir()
+        .map(|home| vec![home.join(".local/share"), home.join(".config")])
+        .unwrap_or_default()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn default_dirs() -> Vec<PathBuf> {
+    Vec::new()
 }
 
 /// The first readable copy of the store file `name`.

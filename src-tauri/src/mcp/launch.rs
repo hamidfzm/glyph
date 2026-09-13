@@ -1,7 +1,7 @@
 //! The two tools that start another Glyph process. A child never shares this
 //! process's stdout, which carries the protocol.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 use serde::Deserialize;
@@ -18,7 +18,6 @@ pub(super) const OPEN_IN_GLYPH: ToolDef = ToolDef {
     description: "Show a note to the user in Glyph: in the running app, or in one started for it.",
     input_schema: note_schema,
     effect: Effect::Launches,
-    enabled: true,
     handler: open_in_glyph,
 };
 
@@ -111,7 +110,6 @@ pub(super) const EXPORT: ToolDef = ToolDef {
         })
     },
     effect: Effect::Writes,
-    enabled: true,
     handler: export,
 };
 
@@ -165,11 +163,8 @@ fn export_target(
     out: &str,
     format: ExportFormat,
 ) -> Result<String, String> {
-    let path = if Path::new(out).is_absolute() {
-        PathBuf::from(out)
-    } else {
-        Path::new(root).join(out)
-    };
+    // An absolute `out` replaces the root it is joined to.
+    let path = Path::new(root).join(out);
     let extension = format.extension().unwrap_or_default();
     let named_for_format = path
         .extension()

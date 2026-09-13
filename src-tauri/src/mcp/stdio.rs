@@ -38,7 +38,9 @@ pub(super) trait Ask {
 }
 
 enum Incoming {
-    Text(String),
+    Message(Value),
+    /// A line that is not JSON.
+    Malformed,
     /// A line past the limit, already skipped.
     Oversized,
 }
@@ -62,7 +64,7 @@ struct Client<R, W> {
 pub(super) fn serve(
     input: impl BufRead,
     output: impl Write,
-    mut call: impl FnMut(&str, Value, &mut dyn Ask) -> Result<Value, ToolError>,
+    mut call: impl FnMut(&str, Value, &mut dyn Ask) -> Result<String, ToolError>,
 ) -> io::Result<()> {
     let mut client = Client {
         input,
@@ -85,7 +87,8 @@ pub(super) fn serve(
                 INVALID_REQUEST,
                 "message is larger than 1 MiB",
             )),
-            Some(Incoming::Text(text)) => respond(&text, &mut client, &mut call),
+            Some(Incoming::Malformed) => Some(error(Value::Null, PARSE_ERROR, "Parse error")),
+            Some(Incoming::Message(message)) => respond(&message, &mut client, &mut call),
         };
         if let Some(reply) = reply {
             send(&mut client.output, &reply)?;
@@ -93,7 +96,7 @@ pub(super) fn serve(
     }
 }
 
-/// The next line that is not blank, or `None` once the input ends.
+/// The next line that is not blank, parsed, or `None` once the input ends.
 fn read(input: &mut impl BufRead) -> io::Result<Option<Incoming>> {
     let mut line = Vec::new();
     loop {
@@ -110,9 +113,14 @@ fn read(input: &mut impl BufRead) -> io::Result<Option<Incoming>> {
             return Ok(Some(Incoming::Oversized));
         }
         let text = String::from_utf8_lossy(&line);
-        if !text.trim().is_empty() {
-            return Ok(Some(Incoming::Text(text.trim().to_string())));
+        let text = text.trim();
+        if text.is_empty() {
+            continue;
         }
+        return Ok(Some(match serde_json::from_str(text) {
+            Ok(message) => Incoming::Message(message),
+            Err(_) => Incoming::Malformed,
+        }));
     }
 }
 
@@ -147,13 +155,10 @@ fn error(id: Value, code: i64, message: &str) -> Value {
 /// The reply to one message, or `None` for a notification or a response,
 /// which never get one.
 fn respond<R: BufRead, W: Write>(
-    text: &str,
+    message: &Value,
     client: &mut Client<R, W>,
-    call: &mut impl FnMut(&str, Value, &mut dyn Ask) -> Result<Value, ToolError>,
+    call: &mut impl FnMut(&str, Value, &mut dyn Ask) -> Result<String, ToolError>,
 ) -> Option<Value> {
-    let Ok(message) = serde_json::from_str::<Value>(text) else {
-        return Some(error(Value::Null, PARSE_ERROR, "Parse error"));
-    };
     let Some(object) = message.as_object() else {
         let reason = if message.is_array() {
             "batches are not supported"
@@ -226,14 +231,14 @@ fn initialize(params: &Value) -> Value {
 fn call_tool<R: BufRead, W: Write>(
     params: &Value,
     client: &mut Client<R, W>,
-    call: &mut impl FnMut(&str, Value, &mut dyn Ask) -> Result<Value, ToolError>,
+    call: &mut impl FnMut(&str, Value, &mut dyn Ask) -> Result<String, ToolError>,
 ) -> Result<Value, (i64, String)> {
     let Some(name) = params.get("name").and_then(Value::as_str) else {
         return Err((INVALID_PARAMS, "tools/call needs a tool name".to_string()));
     };
     let arguments = params.get("arguments").cloned().unwrap_or(Value::Null);
     match call(name, arguments, client) {
-        Ok(value) => Ok(json!({ "content": [{ "type": "text", "text": value.to_string() }] })),
+        Ok(text) => Ok(json!({ "content": [{ "type": "text", "text": text }] })),
         Err(ToolError::Unknown(name)) => Err((INVALID_PARAMS, format!("Unknown tool: {name}"))),
         Err(ToolError::Failed(message)) => Ok(json!({
             "content": [{ "type": "text", "text": message }],
@@ -281,11 +286,10 @@ impl<R: BufRead, W: Write> Ask for Client<R, W> {
             let Some(incoming) = read(&mut self.input).map_err(lost)? else {
                 return Err("the client closed the session".to_string());
             };
-            if let Incoming::Text(text) = &incoming {
-                let message: Value = serde_json::from_str(text).unwrap_or_default();
+            if let Incoming::Message(message) = &incoming {
                 let is_answer = message.get("id") == Some(&id) && message.get("method").is_none();
                 if is_answer {
-                    return answer(&message);
+                    return answer(message);
                 }
             }
             if cancels(&incoming, &self.call_id) {
@@ -313,10 +317,9 @@ impl<R, W: Write> Client<R, W> {
 
 /// Whether `incoming` cancels the call `call_id`.
 fn cancels(incoming: &Incoming, call_id: &Value) -> bool {
-    let Incoming::Text(text) = incoming else {
+    let Incoming::Message(message) = incoming else {
         return false;
     };
-    let message: Value = serde_json::from_str(text).unwrap_or_default();
     message["method"] == "notifications/cancelled" && message["params"]["requestId"] == *call_id
 }
 
@@ -347,10 +350,10 @@ mod tests {
             input.as_bytes(),
             &mut output,
             |name, args, ask| match name {
-                "echo" => Ok(args),
+                "echo" => Ok(args.to_string()),
                 "ask" => ask
                     .confirm("May I?")
-                    .map(|()| json!("allowed"))
+                    .map(|()| "\"allowed\"".to_string())
                     .map_err(ToolError::Failed),
                 "fail" => Err(ToolError::Failed("refused".to_string())),
                 _ => Err(ToolError::Unknown(name.to_string())),
@@ -525,7 +528,7 @@ mod tests {
         let huge = format!("{{\"pad\":\"{}\"", "z".repeat(MAX_MESSAGE_BYTES + 100));
         let input = std::io::BufReader::with_capacity(64, huge.as_bytes());
         let mut output = Vec::new();
-        serve(input, &mut output, |_, _, _| Ok(Value::Null)).unwrap();
+        serve(input, &mut output, |_, _, _| Ok(String::new())).unwrap();
         let text = String::from_utf8(output).unwrap();
         assert_eq!(text.lines().count(), 1, "one refusal, then the end: {text}");
     }
@@ -735,7 +738,7 @@ mod tests {
         let mut refusal = None;
         let served = serve(input.as_bytes(), Closing(1), |_, _, ask| {
             refusal = ask.confirm("May I?").err();
-            Ok(Value::Null)
+            Ok(String::new())
         });
         assert_eq!(served.unwrap_err().kind(), io::ErrorKind::BrokenPipe);
         assert!(refusal.unwrap().contains("cannot be reached"));

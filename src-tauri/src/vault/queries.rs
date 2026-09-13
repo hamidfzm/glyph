@@ -8,7 +8,7 @@ use super::graph::Backlink;
 use super::index::Vault;
 use super::note::Note;
 use super::query::{self, Filter};
-use super::resolve::{compare_paths, MatchedBy, TieBreak};
+use super::resolve::{MatchedBy, TieBreak};
 use super::tags;
 
 #[derive(Debug, Serialize)]
@@ -96,7 +96,7 @@ impl Vault {
                     if !seen[other] {
                         seen[other] = true;
                         next.push(other);
-                        found.push((self.notes[other].path.as_str(), hop));
+                        found.push((hop, other));
                     }
                 }
             }
@@ -105,8 +105,12 @@ impl Vault {
             }
             frontier = next;
         }
-        found.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| compare_paths(a.0, b.0)));
+        // Notes are sorted by path, so ids order as paths do.
+        found.sort_unstable();
         found
+            .into_iter()
+            .map(|(hop, id)| (self.notes[id].path.as_str(), hop))
+            .collect()
     }
 
     fn linked(&self, id: usize, direction: Direction) -> impl Iterator<Item = usize> + '_ {

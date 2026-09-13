@@ -27,7 +27,6 @@ pub(super) const VAULT_CONTEXT: ToolDef = ToolDef {
     description: "The vaults this server reads, whether each index is complete and whether the server can ask the user for another folder, and, when Glyph is running, the note in front of the user, the open tabs and the expanded folders. None of this is in any file an agent would read. Call it first.",
     input_schema: || json!({ "type": "object", "properties": {}, "additionalProperties": false }),
     effect: Effect::ReadOnly,
-    enabled: true,
     handler: vault_context,
 };
 
@@ -76,7 +75,6 @@ pub(super) const VAULT_REPORT: ToolDef = ToolDef {
     description: "What the resolved link graph says is wrong or loose: links that resolve to nothing (source, target, line), orphans that nothing links to and that link nowhere, and dead ends that link nowhere.",
     input_schema: vault_schema,
     effect: Effect::ReadOnly,
-    enabled: true,
     handler: vault_report,
 };
 
@@ -107,7 +105,6 @@ pub(super) const LIST_TAGS: ToolDef = ToolDef {
     description: "Every tag with the number of notes carrying it, most used first. A nested tag counts toward its parents (`work/urgent` counts for `work`). Tags follow Glyph's rules: none inside fenced code, `issue #42` and `mid#word` are not tags, and `tags: a, b` is two.",
     input_schema: vault_schema,
     effect: Effect::ReadOnly,
-    enabled: true,
     handler: list_tags,
 };
 
@@ -139,7 +136,6 @@ pub(super) const NOTES_BY_TAG: ToolDef = ToolDef {
         })
     },
     effect: Effect::ReadOnly,
-    enabled: true,
     handler: notes_by_tag,
 };
 

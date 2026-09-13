@@ -484,20 +484,9 @@ mod tests {
         fs::create_dir_all(&secret_dir).unwrap();
         fs::write(secret_dir.join("secret.md"), "classified").unwrap();
 
-        // Junctions are the Windows escape vector symlinks are on unix, and
-        // unlike symlinks they need no privilege to create.
+        // Junctions are the Windows escape vector symlinks are on unix.
         let link = root.join("innocent");
-        // .output() captures the child's console chatter that .status() would
-        // leak past libtest's output capture.
-        let output = std::process::Command::new("cmd")
-            .arg("/C")
-            .arg("mklink")
-            .arg("/J")
-            .arg(&link)
-            .arg(&secret_dir)
-            .output()
-            .expect("cmd should run");
-        assert!(output.status.success(), "mklink /J failed");
+        crate::vault::test_support::link_folder(&secret_dir, &link);
 
         let grants = GrantRegistry::default();
         grants.grant_workspace(&root).unwrap();

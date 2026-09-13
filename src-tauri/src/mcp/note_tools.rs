@@ -39,7 +39,6 @@ pub(super) const RESOLVE_LINK: ToolDef = ToolDef {
         })
     },
     effect: Effect::ReadOnly,
-    enabled: true,
     handler: resolve_link,
 };
 
@@ -99,7 +98,6 @@ pub(super) const READ_NOTE: ToolDef = ToolDef {
         })
     },
     effect: Effect::ReadOnly,
-    enabled: true,
     handler: read_note,
 };
 
@@ -175,7 +173,6 @@ pub(super) const NOTE_INFO: ToolDef = ToolDef {
     description: "A note's structure as Glyph indexes it: title, tags (fence-aware, nested tags normalized), its frontmatter as read_note gives it, headings with their slugs, and every outgoing link with its heading, alias, whether it embeds, and the note it resolves to or null when it is broken.",
     input_schema: note_schema,
     effect: Effect::ReadOnly,
-    enabled: true,
     handler: note_info,
 };
 

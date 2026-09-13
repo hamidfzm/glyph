@@ -5,11 +5,11 @@
 // code points. Run `node scripts/gen-slug-table.mjs` after upgrading the package.
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { regex } from "github-slugger/regex.js";
 
-// Run from the repository root, as Vitest and the command above both are.
-export const TABLE_PATH = path.join(process.cwd(), "src-tauri", "src", "vault", "slug_table.rs");
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+export const TABLE_PATH = path.join(HERE, "..", "src-tauri", "src", "vault", "slug_table.rs");
 
 const PER_LINE = 5;
 

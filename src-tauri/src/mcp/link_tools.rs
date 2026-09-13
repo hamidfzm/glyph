@@ -16,7 +16,6 @@ pub(super) const BACKLINKS: ToolDef = ToolDef {
     description: "Every note linking to this one, found by resolving every link in the vault the way Glyph does, so case, alias and heading variants count and prose mentions and fenced code do not. One row per linking line, with a snippet.",
     input_schema: note_schema,
     effect: Effect::ReadOnly,
-    enabled: true,
     handler: backlinks,
 };
 
@@ -55,7 +54,6 @@ pub(super) const GRAPH_NEIGHBORS: ToolDef = ToolDef {
         })
     },
     effect: Effect::ReadOnly,
-    enabled: true,
     handler: graph_neighbors,
 };
 
@@ -109,7 +107,6 @@ pub(super) const READ_CANVAS: ToolDef = ToolDef {
         })
     },
     effect: Effect::ReadOnly,
-    enabled: true,
     handler: read_canvas,
 };
 

@@ -83,8 +83,9 @@ pub(crate) fn js_lines(text: &str) -> impl Iterator<Item = &str> {
     })
 }
 
-/// `^(#{1,6})\s+(.*)$`. The whitespace run may hold a line terminator, but the
-/// text may not, because `.` stops there and `$` only matches at the end.
+/// `^(#{1,6})\s+`, then the text trimmed at the end before it is checked for
+/// a line terminator, which `.` stops at: a trailing U+2028 is whitespace, one
+/// inside the text is no heading.
 fn atx(line: &str) -> Option<(u8, String)> {
     let level = line.chars().take_while(|&c| c == '#').count();
     if !(1..=6).contains(&level) {
@@ -92,20 +93,23 @@ fn atx(line: &str) -> Option<(u8, String)> {
     }
     let after = &line[level..];
     let rest = after.trim_start_matches(is_js_space);
-    if rest.len() == after.len() || rest.contains(is_js_line_terminator) {
+    if rest.len() == after.len() {
         return None;
     }
-    Some((level as u8, heading_text(rest)))
+    let content = rest.trim_end_matches(is_js_space);
+    if content.contains(is_js_line_terminator) {
+        return None;
+    }
+    Some((level as u8, heading_text(content)))
 }
 
 /// A closing run of `#` goes when it is the whole text or whitespace separates
 /// it from the text, so `C#` keeps its hash.
-fn heading_text(raw: &str) -> String {
-    let body = raw.trim_end_matches(is_js_space);
-    let before_run = body.trim_end_matches('#');
-    let closed = before_run.len() < body.len()
+fn heading_text(content: &str) -> String {
+    let before_run = content.trim_end_matches('#');
+    let closed = before_run.len() < content.len()
         && (before_run.is_empty() || before_run.ends_with(is_js_space));
-    let text = if closed { before_run } else { raw };
+    let text = if closed { before_run } else { content };
     text.trim_matches(is_js_space).to_string()
 }
 
@@ -241,8 +245,10 @@ mod tests {
         // U+FEFF is JavaScript whitespace and U+0085 is not.
         assert_eq!(texts("#\u{feff}Bom"), ["Bom"]);
         assert!(texts("#\u{85}Nel").is_empty());
-        // `.` stops at a line separator, so the whole line fails.
+        // `.` stops at a line separator, so the whole line fails; one at the
+        // end is whitespace, trimmed before the check.
         assert!(texts("# a\u{2028}b").is_empty());
+        assert_eq!(texts("# a\u{2028}"), ["a"]);
         // Leading indentation is not allowed.
         assert!(texts(" # indented").is_empty());
     }

@@ -26,8 +26,7 @@ pub struct Vault {
     /// (a verbatim `\\?\C:\…` prefix on Windows, symlinks followed on macOS),
     /// so without this an incremental update would match nothing.
     canonical_root: PathBuf,
-    /// Sorted by path, so an incremental update inserts in place instead of
-    /// replaying the walk.
+    /// Sorted by path, which is how a note is found.
     pub(super) notes: Vec<Note>,
     pub(super) canvases: HashMap<String, Canvas>,
     pub(super) resolver: Resolver,
@@ -90,8 +89,11 @@ impl Vault {
     }
 
     /// Re-index only the paths that changed. Files that vanished are dropped,
-    /// new ones are inserted in place; nothing else is read from disk.
+    /// new ones are inserted; nothing else is read from disk.
     pub fn apply_changes(&mut self, paths: &[PathBuf]) {
+        let mut seen = HashSet::new();
+        let mut removed = HashSet::new();
+        let mut added = Vec::new();
         let mut touched = false;
         for path in paths {
             let Some((path, relative)) = self.inside_root(path) else {
@@ -102,6 +104,9 @@ impl Vault {
                 Some(index) => self.notes[index].path.clone(),
                 None => path.to_string_lossy().to_string(),
             };
+            if !seen.insert(key.clone()) {
+                continue;
+            }
 
             let content = self
                 .walkable(&path, &relative)
@@ -110,7 +115,7 @@ impl Vault {
                 // A path the walker would have skipped, a deletion, or a file
                 // that went away mid-update: none of them belong in the index.
                 if let Some(index) = existing {
-                    self.notes.remove(index);
+                    removed.insert(index);
                     self.canvases.remove(&key);
                     touched = true;
                 }
@@ -131,19 +136,30 @@ impl Vault {
                 None => {
                     // Growing past the cap the walk enforces would leave the
                     // index reporting a complete scan it no longer has.
-                    if self.notes.len() >= self.max_files {
+                    if self.notes.len() - removed.len() + added.len() >= self.max_files {
                         self.refused_at_cap = true;
                         continue;
                     }
-                    let at = self
-                        .notes
-                        .partition_point(|other| compare_paths(&other.path, &key).is_lt());
-                    self.notes.insert(at, note);
+                    added.push(note);
                 }
             }
             touched = true;
         }
 
+        // Splicing notes one at a time is quadratic over a large batch; one
+        // pass for the removals and one sort for the insertions are not.
+        if !removed.is_empty() {
+            let mut index = 0;
+            self.notes.retain(|_| {
+                let keep = !removed.contains(&index);
+                index += 1;
+                keep
+            });
+        }
+        if !added.is_empty() {
+            self.notes.extend(added);
+            self.notes.sort_by(|a, b| compare_paths(&a.path, &b.path));
+        }
         if touched {
             self.rebuild_derived();
         }
@@ -269,11 +285,11 @@ impl Vault {
         self.walk_status.clone()
     }
 
+    /// The note at `path`, spelled the way the index spells it.
     pub(super) fn id_of(&self, path: &str) -> Option<usize> {
-        let wanted = Path::new(path);
         self.notes
-            .iter()
-            .position(|note| Path::new(&note.path) == wanted)
+            .binary_search_by(|note| compare_paths(&note.path, path))
+            .ok()
     }
 }
 

@@ -4,7 +4,7 @@
 
 use std::cell::RefCell;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use serde_json::{json, Value};
@@ -12,11 +12,13 @@ use serde_json::{json, Value};
 use super::registry::{dispatch, list, AllowVault, Session, ToolError};
 use super::session::{OpenState, OpenTab};
 use crate::grants::GrantRegistry;
-use crate::vault::test_support::{fixture_vault, fixtures_dir, in_vault, relative, unique_tmp};
+use crate::vault::test_support::{
+    fixture_vault, fixtures_dir, in_vault, link_folder, relative, unique_tmp,
+};
 use crate::vault::{Direction, Vault, VaultStore};
 
-struct Harness {
-    root: PathBuf,
+pub(super) struct Harness {
+    pub(super) root: PathBuf,
     grants: GrantRegistry,
     store: VaultStore,
     open: OpenState,
@@ -27,7 +29,7 @@ struct Harness {
 }
 
 impl Harness {
-    fn new(name: &str) -> Self {
+    pub(super) fn new(name: &str) -> Self {
         Self::over(fixture_vault(name))
     }
 
@@ -54,7 +56,7 @@ impl Harness {
         in_vault(&self.root, relative)
     }
 
-    fn session(&self) -> Session<'_> {
+    pub(super) fn session(&self) -> Session<'_> {
         Session {
             grants: &self.grants,
             vaults: &self.store,
@@ -65,7 +67,8 @@ impl Harness {
     }
 
     fn call(&self, tool: &str, args: Value) -> Result<Value, ToolError> {
-        dispatch(tool, args, &self.session())
+        let text = dispatch(tool, args, &self.session())?;
+        Ok(serde_json::from_str(&text).expect("a tool answers in JSON"))
     }
 
     fn ok(&self, tool: &str, args: Value) -> Value {
@@ -751,23 +754,6 @@ fn only_an_existing_folder_named_absolutely_is_put_to_the_user() {
     fs::remove_dir_all(&folder).unwrap();
 }
 
-/// Point `link` at the folder `target`: a symlink on unix, a junction on
-/// Windows, which needs no privilege to create.
-fn link_folder(target: &Path, link: &Path) {
-    #[cfg(unix)]
-    std::os::unix::fs::symlink(target, link).unwrap();
-    #[cfg(windows)]
-    {
-        let made = std::process::Command::new("cmd")
-            .args(["/C", "mklink", "/J"])
-            .arg(link)
-            .arg(target)
-            .output()
-            .unwrap();
-        assert!(made.status.success(), "mklink /J failed");
-    }
-}
-
 #[test]
 fn a_folder_swapped_while_the_user_decides_is_not_served() {
     let mut h = Harness::new("mcp_swapped");
@@ -934,15 +920,7 @@ fn a_junction_out_of_the_vault_is_refused() {
     let h = Harness::new("mcp_junction");
     let outside = unique_tmp("mcp_junction_target");
     fs::write(outside.join("Secret.md"), "classified\n").unwrap();
-    let output = std::process::Command::new("cmd")
-        .arg("/C")
-        .arg("mklink")
-        .arg("/J")
-        .arg(h.root.join("linked"))
-        .arg(&outside)
-        .output()
-        .unwrap();
-    assert!(output.status.success(), "mklink /J failed");
+    link_folder(&outside, &h.root.join("linked"));
 
     for reference in ["linked/Secret.md", "linked\\Secret.md", "Secret"] {
         let refusal = h.refused("read_note", json!({ "ref": reference }));
@@ -1265,21 +1243,6 @@ fn an_active_note_outside_every_vault_leaves_the_only_one_as_the_default() {
     let tags = h.ok("list_tags", json!({}));
     assert_eq!(tags["vault"], json!(h.root.to_string_lossy()));
     fs::remove_dir_all(loose.parent().unwrap()).unwrap();
-}
-
-#[test]
-fn a_note_that_grew_past_the_cap_is_not_read() {
-    // Resolution only hands out indexed notes, so this is the file growing
-    // between the sync and the read; the read checks again.
-    let h = Harness::new("mcp_grown_note");
-    let grown = h.root.join("Grown.md");
-    fs::write(
-        &grown,
-        "x".repeat(crate::commands::walk::SCAN_MAX_FILE_BYTES as usize + 1),
-    )
-    .unwrap();
-    let refusal = super::refs::read_text(&h.session(), &grown.to_string_lossy()).unwrap_err();
-    assert!(refusal.contains("5 MB"), "{refusal}");
 }
 
 #[test]

@@ -355,10 +355,10 @@ fn creating_editing_deleting_and_renaming_update_the_index_in_place() {
     let root = fixture_vault("incremental");
     let mut vault = build(&root);
 
-    // Create.
+    // Create, reported twice, as a watcher batch may.
     let added = root.join("Notes").join("Added.md");
     fs::write(&added, "---\ntags: [fresh]\n---\n\nLinks [[Index]].\n").unwrap();
-    vault.apply_changes(std::slice::from_ref(&added));
+    vault.apply_changes(&[added.clone(), added.clone()]);
     assert_eq!(
         resolve_one(&vault, None, "Added").map(|p| relative(&root, &p)),
         Some("Notes/Added.md".to_string())

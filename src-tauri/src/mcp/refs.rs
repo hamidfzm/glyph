@@ -1,7 +1,7 @@
 //! What every vault tool shares: choosing the vault, resolving a note
 //! reference, reading a note through the grant check, and bounding results.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -15,6 +15,8 @@ use crate::vault::{split_heading, strip_bom, with_synced_vault, Vault};
 pub(super) const MAX_ITEMS: usize = 200;
 /// Most characters of note text one result carries.
 pub(super) const MAX_TEXT_CHARS: usize = 50_000;
+/// The size past which the index refuses a note, as the refusals put it.
+const MAX_NOTE_MB: u64 = SCAN_MAX_FILE_BYTES / (1024 * 1024);
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -92,13 +94,8 @@ fn pick_vault(session: &Session, requested: Option<&str>) -> Result<String, Stri
         }
         grants.refuse_remote(requested)?;
         if let Ok(wanted) = grants.ensure_workspace(requested) {
-            let listed = roots.iter().find(|root| {
-                grants
-                    .ensure_workspace(root)
-                    .is_ok_and(|root| root == wanted)
-            });
-            if let Some(root) = listed {
-                return Ok(root.clone());
+            if let Some(root) = listed_root(session, |root| root == wanted) {
+                return Ok(root);
             }
         }
         return add_vault(session, requested);
@@ -112,13 +109,8 @@ fn pick_vault(session: &Session, requested: Option<&str>) -> Result<String, Stri
         .as_deref()
         .and_then(|note| grants.ensure_readable(note).ok());
     if let Some(active) = active {
-        let holding = roots.iter().find(|root| {
-            grants
-                .ensure_workspace(root)
-                .is_ok_and(|root| active.starts_with(root))
-        });
-        if let Some(root) = holding {
-            return Ok(root.clone());
+        if let Some(root) = listed_root(session, |root| active.starts_with(root)) {
+            return Ok(root);
         }
     }
     match roots.as_slice() {
@@ -128,6 +120,21 @@ fn pick_vault(session: &Session, requested: Option<&str>) -> Result<String, Stri
             roots.join(", ")
         )),
     }
+}
+
+/// The listed root whose resolved path `is_it`.
+fn listed_root(session: &Session, is_it: impl Fn(&Path) -> bool) -> Option<String> {
+    session
+        .open
+        .roots
+        .iter()
+        .find(|root| {
+            session
+                .grants
+                .ensure_workspace(root)
+                .is_ok_and(|resolved| is_it(&resolved))
+        })
+        .cloned()
 }
 
 /// `requested`, a folder the session does not serve, served from now on if
@@ -237,11 +244,8 @@ pub(super) fn note_path(
     raw: &str,
 ) -> Result<Option<String>, String> {
     let absolute = Path::new(raw).is_absolute();
-    let candidate = if absolute {
-        PathBuf::from(raw)
-    } else {
-        Path::new(root).join(raw)
-    };
+    // An absolute `raw` replaces the root it is joined to.
+    let candidate = Path::new(root).join(raw);
     let checked = session.grants.ensure_readable(&candidate.to_string_lossy());
     let readable_file = checked.as_ref().is_ok_and(|path| path.is_file());
     // Nothing to read here, so perhaps a wikilink target instead.
@@ -260,7 +264,7 @@ pub(super) fn note_path(
     let indexed = indexed.to_string_lossy().to_string();
     if vault.note(&indexed).is_none() {
         return Err(format!(
-            "{raw} is not a note Glyph indexes: markdown or a canvas, outside hidden folders, under 5 MB"
+            "{raw} is not a note Glyph indexes: markdown or a canvas, outside hidden folders, under {MAX_NOTE_MB} MB"
         ));
     }
     Ok(Some(indexed))
@@ -274,9 +278,28 @@ pub(super) fn read_text(session: &Session, path: &str) -> Result<String, String>
         .map_err(|err| format!("cannot read {path}: {err}"))?
         .len();
     if size > SCAN_MAX_FILE_BYTES {
-        return Err(format!("{path} is larger than the 5 MB Glyph indexes"));
+        return Err(format!(
+            "{path} is larger than the {MAX_NOTE_MB} MB Glyph indexes"
+        ));
     }
     let text =
         std::fs::read_to_string(&canonical).map_err(|err| format!("cannot read {path}: {err}"))?;
     Ok(strip_bom(&text).to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::Harness;
+    use super::*;
+
+    #[test]
+    fn a_note_that_grew_past_the_cap_is_not_read() {
+        // Resolution only hands out indexed notes, so this is the file growing
+        // between the sync and the read; the read checks again.
+        let h = Harness::new("mcp_grown_note");
+        let grown = h.root.join("Grown.md");
+        std::fs::write(&grown, "x".repeat(SCAN_MAX_FILE_BYTES as usize + 1)).unwrap();
+        let refusal = read_text(&h.session(), &grown.to_string_lossy()).unwrap_err();
+        assert!(refusal.contains("5 MB"), "{refusal}");
+    }
 }

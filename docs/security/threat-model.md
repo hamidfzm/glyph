@@ -184,9 +184,10 @@ the way a renderer-supplied path is.
   question showing the folder's resolved path, and serves the folder for the
   rest of the session only on `accept`. The answer comes from the client,
   never from the model. The grant is the path the user saw, not resolved
-  again, so a link swapped in while they decide leads nowhere. Nothing is
-  looked up on disk until the server knows it can ask, and a path holding a
-  character that could disguise it is never put to the user.
+  again, so a link swapped in while they decide leads nowhere. The folder is
+  resolved once, to match it against the vaults already open; past that,
+  nothing is looked up on disk until the server knows it can ask, and a path
+  holding a character that could disguise it is never put to the user.
 - **Network paths.** On Windows, the grant registry refuses a path that names
   a network share or a device before it resolves anything, whether a tool
   argument, a renderer command, or the settings seed handed it over, unless a
