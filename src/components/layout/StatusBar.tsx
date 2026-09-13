@@ -5,7 +5,6 @@ import { useNoteZoomMap } from "@/contexts/ZoomContext";
 import { useSettings } from "@/hooks/useSettings";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { countWords, readingMinutes } from "@/lib/markdown";
-import { isNotebookFile } from "@/lib/notebookExtensions";
 import { ZOOM_DEFAULT } from "@/lib/settingsDisplay";
 import { SyncStatusIndicator } from "./SyncStatusIndicator";
 
@@ -27,17 +26,14 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
     (settings.appearance.fontSize / ZOOM_DEFAULT) * noteMultiplier * 100,
   );
 
+  if (!activeTabId) return null;
+
   const filePath = activeFile?.path;
-  // Notebooks suppress `displayContent` (it would be raw JSON) in every mode,
-  // so the word count / reading time don't apply — show a document-type label
-  // instead.
-  const isNotebook = !!filePath && isNotebookFile(filePath);
-  // A canvas board has no linear reading order, so it gets a word count only.
+  // Text stats and font zoom are for notes only. A canvas has displayContent
+  // (its projected card text) but no reading order, and zooms on its own.
   const isCanvas = !!filePath && isCanvasFile(filePath);
-
-  if (!displayContent && !isNotebook) return null;
-
-  const words = displayContent ? countWords(displayContent) : 0;
+  const isNote = !!displayContent && !isCanvas;
+  const words = isNote ? countWords(displayContent) : 0;
 
   return (
     <div
@@ -52,19 +48,17 @@ export function StatusBar({ onOpenSync }: StatusBarProps) {
           {filePath}
         </span>
       )}
-      {isNotebook ? (
-        <span className="ms-auto">{t("statusBar.jupyter")}</span>
-      ) : (
-        <>
-          <span className="ms-auto">
-            {t("statusBar.words", { count: words, formatted: words.toLocaleString() })}
-          </span>
-          {!isCanvas && <span>{t("statusBar.readingTime", { count: readingMinutes(words) })}</span>}
-        </>
-      )}
-      {zoomPercent !== 100 && <span>{zoomPercent}%</span>}
-      <PluginStatusBarItems />
-      {onOpenSync && <SyncStatusIndicator onOpenSync={onOpenSync} />}
+      <div className="ms-auto flex flex-wrap items-center gap-4">
+        {isNote && (
+          <>
+            <span>{t("statusBar.words", { count: words, formatted: words.toLocaleString() })}</span>
+            <span>{t("statusBar.readingTime", { count: readingMinutes(words) })}</span>
+            {zoomPercent !== 100 && <span>{zoomPercent}%</span>}
+          </>
+        )}
+        <PluginStatusBarItems />
+        {onOpenSync && <SyncStatusIndicator onOpenSync={onOpenSync} />}
+      </div>
     </div>
   );
 }

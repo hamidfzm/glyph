@@ -74,44 +74,34 @@ function renderStatusBar(opts: Opts = {}) {
   );
 }
 
-describe("StatusBar", () => {
-  it("renders nothing when displayContent is null", () => {
-    const { container } = renderStatusBar({ displayContent: null });
-    expect(container.firstChild).toBeNull();
-  });
+function zoomFontSizeTo(fontSize: number) {
+  settingsRef.current = {
+    ...DEFAULT_SETTINGS,
+    appearance: { ...DEFAULT_SETTINGS.appearance, fontSize },
+  };
+}
 
-  it("renders nothing when displayContent is undefined", () => {
+describe("StatusBar", () => {
+  it("renders nothing when no tab is active", () => {
     const { container } = renderStatusBar();
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders word count and reading time", () => {
-    renderStatusBar({ displayContent: "hello world test" });
+  it("renders the file path, word count, and reading time for a note", () => {
+    renderStatusBar({ filePath: "/path/to/note.md", displayContent: "hello world test" });
+    expect(screen.getByText("/path/to/note.md")).toBeInTheDocument();
     expect(screen.getByText("3 words")).toBeInTheDocument();
     expect(screen.getByText("1 min read")).toBeInTheDocument();
   });
 
-  it("displays file path when an active file is present", () => {
-    renderStatusBar({ filePath: "/path/to/file.md", displayContent: "some content" });
-    expect(screen.getByText("/path/to/file.md")).toBeInTheDocument();
-  });
-
-  it("does not display a file path when no active file", () => {
-    renderStatusBar({ displayContent: "some content" });
-    expect(screen.queryByText(/^\//)).toBeNull();
-  });
-
   it("does not show zoom percentage at default zoom (100%)", () => {
-    renderStatusBar({ displayContent: "some content" });
+    renderStatusBar({ filePath: "/a.md", displayContent: "some content" });
     expect(screen.queryByText("100%")).toBeNull();
   });
 
   it("shows the zoom percentage when font size differs from default", () => {
-    settingsRef.current = {
-      ...DEFAULT_SETTINGS,
-      appearance: { ...DEFAULT_SETTINGS.appearance, fontSize: 20 },
-    };
-    renderStatusBar({ displayContent: "some content" });
+    zoomFontSizeTo(20);
+    renderStatusBar({ filePath: "/a.md", displayContent: "some content" });
     // 20 / 16 = 125%
     expect(screen.getByText("125%")).toBeInTheDocument();
   });
@@ -139,25 +129,32 @@ describe("StatusBar", () => {
     expect(screen.getByText("150%")).toBeInTheDocument();
   });
 
-  it("shows a Jupyter Notebook label (not word count) for an .ipynb file", () => {
-    // Notebooks suppress displayContent, so the bar still renders via the
-    // isNotebook path and shows the document-type label instead of word count.
-    renderStatusBar({ filePath: "/path/to/analysis.ipynb", displayContent: null });
-    expect(screen.getByText("Jupyter Notebook")).toBeInTheDocument();
-    expect(screen.queryByText(/words$/)).toBeNull();
-    expect(screen.getByText("/path/to/analysis.ipynb")).toBeInTheDocument();
-  });
-
-  it("shows word count but no reading time for a canvas", () => {
+  it("keeps the bar for a canvas without text stats or font zoom", () => {
+    // A canvas has displayContent (its projected card text), unlike notebooks.
+    zoomFontSizeTo(20);
     renderStatusBar({ filePath: "/path/to/board.canvas", displayContent: "hello world test" });
-    expect(screen.getByText("3 words")).toBeInTheDocument();
-    expect(screen.queryByText(/min read$/)).toBeNull();
     expect(screen.getByText("/path/to/board.canvas")).toBeInTheDocument();
+    expect(screen.queryByText(/words?$/)).toBeNull();
+    expect(screen.queryByText(/min read$/)).toBeNull();
+    expect(screen.queryByText("125%")).toBeNull();
   });
 
-  it("shows reading time for a markdown file", () => {
-    renderStatusBar({ filePath: "/path/to/note.md", displayContent: "hello world test" });
-    expect(screen.getByText("1 min read")).toBeInTheDocument();
+  it("keeps the bar for a notebook without text stats", () => {
+    renderStatusBar({ filePath: "/path/to/analysis.ipynb", displayContent: null });
+    expect(screen.getByText("/path/to/analysis.ipynb")).toBeInTheDocument();
+    expect(screen.queryByText(/words?$/)).toBeNull();
+    expect(screen.queryByText("Jupyter Notebook")).toBeNull();
+  });
+
+  it("keeps the bar on a graph tab, which has no file", () => {
+    const { container } = render(
+      <Wrapper value={tabsContextValue({ activeTabId: "graph-1" })}>
+        <StatusBar onOpenSync={null} />
+      </Wrapper>,
+    );
+    expect(container.querySelector(".status-bar")).not.toBeNull();
+    expect(container.querySelector(".status-bar-path")).toBeNull();
+    expect(screen.queryByText(/min read$/)).toBeNull();
   });
 });
 
@@ -166,7 +163,11 @@ function makeWorkspace(root = "/ws"): Workspace {
 }
 
 function buildWorkspaceContext(): TabsContextValue {
-  return tabsContextValue({ workspace: makeWorkspace(), displayContent: "some content" });
+  return tabsContextValue({
+    workspace: makeWorkspace(),
+    activeTabId: "tab-1",
+    displayContent: "some content",
+  });
 }
 
 describe("StatusBar sync indicator gating", () => {

@@ -18,7 +18,6 @@
     "newWorkspace": "New Workspace"
   },
   "statusBar": {
-    "jupyter": "Jupyter Notebook",
     "words_one": "{{formatted}} word",
     "words_other": "{{formatted}} words",
     "readingTime_one": "{{count}} min read",

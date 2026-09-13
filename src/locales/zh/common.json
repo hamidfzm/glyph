@@ -18,7 +18,6 @@
     "newWorkspace": "新建工作区"
   },
   "statusBar": {
-    "jupyter": "Jupyter Notebook",
     "words_one": "{{formatted}} 个词",
     "words_other": "{{formatted}} 个词",
     "readingTime_one": "阅读时长 {{count}} 分钟",
