@@ -10,7 +10,7 @@ function stripVerbatimPrefix(path: string): string {
 }
 
 // Turn an absolute filesystem path into a webview-loadable asset-protocol URL,
-// stripping the Windows verbatim prefix first. Shared by markdown image
+// stripping the Windows verbatim prefix first. Shared by markdown asset
 // resolution and the standalone image viewer (image file tabs).
 export function toAssetUrl(path: string): string {
   return convertFileSrc(stripVerbatimPrefix(path));
@@ -39,13 +39,4 @@ export function resolveAssetRef(
   const resolved = resolveWorkspacePath(filePath, src, root);
   if (resolved === null) return { src: undefined, path: undefined };
   return { src: toAssetUrl(resolved), path: resolved };
-}
-
-/** The `src` half of {@link resolveAssetRef}, for callers that render images. */
-export function resolveImageSrc(
-  src: string | undefined,
-  filePath: string | undefined,
-  root?: string,
-): string | undefined {
-  return resolveAssetRef(src, filePath, root).src;
 }
