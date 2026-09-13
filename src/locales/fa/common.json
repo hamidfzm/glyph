@@ -18,7 +18,6 @@
     "newWorkspace": "فضای کاری جدید"
   },
   "statusBar": {
-    "jupyter": "نوت‌بوک Jupyter",
     "words_one": "{{formatted}} واژه",
     "words_other": "{{formatted}} واژه",
     "readingTime_one": "{{count}} دقیقه مطالعه",
