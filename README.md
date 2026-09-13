@@ -72,95 +72,9 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 
 ## Install
 
-### macOS (Homebrew)
+Install commands for every package manager are on the [website](https://glyph-md.github.io/#download). Each [release](https://github.com/hamidfzm/glyph/releases/latest) lists them too, next to the `.dmg`, `.msi`, `.deb`, `.rpm`, and `.AppImage` downloads.
 
-```bash
-brew tap glyph-md/tap
-brew trust glyph-md/tap
-brew install --cask --force glyph-md/tap/glyph
-```
-
-`brew trust` is required once because Glyph ships from a third-party tap; recent Homebrew refuses to load casks from untrusted taps.
-
-Use the fully qualified name: homebrew-core ships an unrelated `glyph` formula (an ASCII-art converter), so a plain `brew install glyph` installs that instead. If the `glyph` command prints `Error: input file must be specified.`, that formula is shadowing the app; remove it with `brew uninstall --formula glyph` and reinstall the cask. `--force` also replaces an existing `/Applications/Glyph.app` left by a DMG install or an interrupted upgrade.
-
-### Windows (winget)
-
-```powershell
-winget install hamidfzm.Glyph
-```
-
-### Windows (Chocolatey)
-
-```powershell
-choco install glyph
-```
-
-### Windows (Scoop)
-
-```powershell
-scoop bucket add glyph-md https://github.com/glyph-md/scoop-bucket
-scoop install glyph
-```
-
-### Linux (Snap)
-
-```bash
-sudo snap install glyph
-```
-
-### Arch Linux (AUR)
-
-```bash
-yay -S glyph-md-bin
-```
-
-### Linux (Homebrew)
-
-```bash
-brew tap glyph-md/tap
-brew install glyph-md/tap/glyph
-```
-
-### Debian/Ubuntu (PPA)
-
-```bash
-sudo add-apt-repository ppa:hamidfzm/glyph
-sudo apt update
-sudo apt install glyph
-```
-
-### Debian
-
-```bash
-curl -fsSL https://glyph-md.github.io/apt-repo/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/glyph.gpg
-echo "deb [signed-by=/usr/share/keyrings/glyph.gpg] https://glyph-md.github.io/apt-repo stable main" | sudo tee /etc/apt/sources.list.d/glyph.list
-sudo apt update
-sudo apt install glyph
-```
-
-### Fedora / RHEL (DNF)
-
-```bash
-sudo tee /etc/yum.repos.d/glyph.repo < <(curl -fsSL https://glyph-md.github.io/rpm-repo/glyph.repo)
-sudo dnf install glyph
-```
-
-### Linux (manual)
-
-Download the `.deb`, `.rpm`, or `.AppImage` from [Releases](https://github.com/hamidfzm/glyph/releases).
-
-```bash
-# Debian/Ubuntu
-sudo dpkg -i glyph_*.deb
-
-# Fedora/RHEL
-sudo dnf install ./Glyph-*.rpm
-
-# AppImage
-chmod +x Glyph_*.AppImage
-./Glyph_*.AppImage
-```
+If `glyph` prints `Error: input file must be specified.` after a Homebrew install, homebrew-core's unrelated `glyph` formula (an ASCII-art converter) is shadowing the app: remove it with `brew uninstall --formula glyph` and reinstall the cask.
 
 ### Command-line usage
 
