@@ -1,13 +1,13 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useRef } from "react";
 import { MarkdownContent } from "@/components/markdown/MarkdownContent";
-import { resolveImageSrc } from "@/components/markdown/resolveImageSrc";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { canvasColorToCss } from "@/lib/canvas/color";
 import type { CanvasNode } from "@/lib/canvas/types";
 import { isImageFile } from "@/lib/imageExtensions";
 import { basename, isPathInside } from "@/lib/paths";
 import { normalizeRelativePath } from "@/lib/relativePath";
+import { CanvasImageNode } from "./CanvasImageNode";
 
 interface CanvasNodeViewProps {
   node: CanvasNode;
@@ -95,18 +95,10 @@ export function CanvasNodeView({
     }
 
     case "file": {
-      // Images resolve and root-clamp inside resolveImageSrc, so this branch
-      // returns before the button-only resolution below runs.
+      // Images resolve and root-clamp in CanvasImageNode; the resolution below
+      // serves the open button only.
       if (isImageFile(node.file)) {
-        const src = resolveImageSrc(node.file, canvasPath, workspaceRoot);
-        if (!src) {
-          return (
-            <div className="glyph-canvas-node-file" title={node.file}>
-              <span className="glyph-canvas-node-file-name">{basename(node.file)}</span>
-            </div>
-          );
-        }
-        return <img className="glyph-canvas-node-image" src={src} alt={basename(node.file)} />;
+        return <CanvasImageNode file={node.file} canvasPath={canvasPath} />;
       }
       const resolved = resolveRelative(node.file, canvasPath);
       // A file ref that resolves outside the opened workspace is refused: the

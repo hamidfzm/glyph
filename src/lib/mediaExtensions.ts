@@ -3,7 +3,8 @@ import { basename } from "@/lib/paths";
 // Media types for the files an EPUB export packages, the one container that can
 // carry them. `mov` and `m4v` are QuickTime containers the OS webviews play but
 // that have no registered media type of their own; readers expect video/mp4.
-// The viewer itself needs no extension list: it plays whatever the webview can.
+// Keys match the `media` list in src-tauri/extensions.json, which decides what
+// loads beside a loose file.
 const MEDIA_MIME_TYPES: Record<string, string> = {
   mp4: "video/mp4",
   m4v: "video/mp4",

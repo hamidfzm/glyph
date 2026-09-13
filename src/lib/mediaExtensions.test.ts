@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { MEDIA_EXTENSIONS } from "./extensionConfig";
 import { mediaLabel, mediaMimeType } from "./mediaExtensions";
 
 describe("mediaMimeType", () => {
+  it("declares a type for every media extension the viewer loads", () => {
+    const undeclared = MEDIA_EXTENSIONS.filter((ext) => !mediaMimeType(`clip.${ext}`));
+    expect(undeclared).toEqual([]);
+  });
+
   it("maps packageable files to their media type", () => {
     expect(mediaMimeType("clip.mp4")).toBe("video/mp4");
     expect(mediaMimeType("CLIP.WEBM")).toBe("video/webm");

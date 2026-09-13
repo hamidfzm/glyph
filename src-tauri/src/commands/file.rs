@@ -4,9 +4,9 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
-use tauri::State;
+use tauri::{AppHandle, Manager, Runtime, State};
 
-use crate::grants::GrantRegistry;
+use crate::grants::{self, GrantRegistry};
 
 pub struct InitialFile(pub Mutex<Option<String>>);
 
@@ -33,6 +33,17 @@ pub fn get_initial_file(state: State<'_, InitialFile>) -> Option<String> {
 pub fn read_file(path: String, grants: State<'_, GrantRegistry>) -> Result<String, String> {
     let path = grants.ensure_readable(&path)?;
     fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {e}"))
+}
+
+/// Let the asset protocol serve an image, audio, or video file beside an opened
+/// loose file. Tauri's scope matches escaped paths only, so the registry's
+/// extension rule is applied here, one file at a time. Async, so resolving a
+/// path on a slow share stalls a worker rather than the main thread.
+#[tauri::command(async)]
+pub fn allow_document_asset<R: Runtime>(app: AppHandle<R>, path: String) -> Result<(), String> {
+    let canonical = app.state::<GrantRegistry>().ensure_document_asset(&path)?;
+    grants::allow_asset_file(&app, &canonical);
+    Ok(())
 }
 
 #[cfg(desktop)]
@@ -356,6 +367,30 @@ mod tests {
         assert_eq!(result.unwrap(), "# loose");
 
         let _ = fs::remove_file(&file_path);
+    }
+
+    #[test]
+    fn allow_document_asset_mirrors_media_beside_a_loose_file_only() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let doc = dir.path().join("doc.md");
+        let image = dir.path().join("diagram.png");
+        let text = dir.path().join("notes.txt");
+        for path in [&doc, &image, &text] {
+            fs::write(path, "x").unwrap();
+        }
+        let arg = |path: &Path| path.to_string_lossy().to_string();
+
+        let app = app_with_grants();
+        let scope = app.asset_protocol_scope();
+        assert!(allow_document_asset(app.handle().clone(), arg(&image)).is_err());
+        assert!(!scope.is_allowed(&image));
+
+        app.state::<GrantRegistry>().grant_file(&doc).unwrap();
+        allow_document_asset(app.handle().clone(), arg(&image)).unwrap();
+        assert!(scope.is_allowed(&image));
+
+        assert!(allow_document_asset(app.handle().clone(), arg(&text)).is_err());
+        assert!(!scope.is_allowed(&text));
     }
 
     #[test]

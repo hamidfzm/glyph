@@ -45,12 +45,15 @@ describe("MarkdownViewer raw HTML", () => {
     expect(container.querySelector("svg image")?.getAttribute("href")).toBe("https://x.test/i.png");
   });
 
-  it("resolves workspace-relative svg <image> hrefs through the asset protocol", () => {
+  it("resolves relative svg <image> hrefs through the asset protocol", async () => {
     const { container } = renderMd('<svg><image href="assets/icon.png" width="24"/></svg>', {
       filePath: "/ws/doc.md",
     });
-    const image = container.querySelector("svg image");
-    expect(image?.getAttribute("href")).toBe("asset://localhost//ws/assets/icon.png");
+    await waitFor(() =>
+      expect(container.querySelector("svg image")?.getAttribute("href")).toBe(
+        "asset://localhost//ws/assets/icon.png",
+      ),
+    );
   });
 
   it("strips non-http(s) hrefs from svg <image> but keeps the element", () => {

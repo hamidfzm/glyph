@@ -81,12 +81,13 @@ export const D2_EXTENSIONS = associationExtensions(tauriConfig, "text/plain");
 export const CANVAS_EXTENSIONS = declaredExtensions(declaredConfig, "canvas");
 export const NOTEBOOK_EXTENSIONS = declaredExtensions(declaredConfig, "notebook");
 export const IMAGE_EXTENSIONS = declaredExtensions(declaredConfig, "image");
+export const MEDIA_EXTENSIONS = declaredExtensions(declaredConfig, "media");
 
 /**
  * Every extension that names a file the user opened. Telemetry redacts these
  * from error text, where a relative path like `workflows/routing.md` names a
- * document as plainly as an absolute one does. Images are included: an asset
- * name is as personal as a document name.
+ * document as plainly as an absolute one does. Images and audio/video are
+ * included: an asset name is as personal as a document name.
  */
 // Deduplicated, matching the Rust union: nothing stops two categories from
 // claiming the same extension, and a repeat would be a redundant alternation
@@ -98,5 +99,6 @@ export const USER_FILE_EXTENSIONS: readonly string[] = [
     ...CANVAS_EXTENSIONS,
     ...NOTEBOOK_EXTENSIONS,
     ...IMAGE_EXTENSIONS,
+    ...MEDIA_EXTENSIONS,
   ]),
 ];

@@ -42,7 +42,7 @@ describe("CanvasViewer", () => {
     expect(container.querySelector(".glyph-canvas-stage")).toBeTruthy();
   });
 
-  it("renders a group node and an image file node", () => {
+  it("renders a group node and an image file node", async () => {
     const content = canvas({
       nodes: [
         {
@@ -61,7 +61,10 @@ describe("CanvasViewer", () => {
     const { container } = render(<CanvasViewer content={content} filePath="/ws/board.canvas" />);
     expect(screen.getByText("Area")).toBeInTheDocument();
     expect(container.querySelector(".glyph-canvas-group")).toBeTruthy();
-    expect(container.querySelector("img.glyph-canvas-node-image")).toBeTruthy();
+    // Beside a loose canvas the image waits for the backend to mirror its path.
+    expect(await screen.findByRole("img", { name: "pic.png" })).toHaveClass(
+      "glyph-canvas-node-image",
+    );
   });
 
   it("opens a non-image file node via onOpenFile", () => {

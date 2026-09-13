@@ -1,3 +1,4 @@
+import { pendingDocumentAssets } from "@/lib/documentAssets";
 import { pendingPluginLoads } from "@/lib/markdown/pluginLoads";
 
 // Diagrams and math render asynchronously after the document mounts (Mermaid
@@ -24,7 +25,8 @@ function pendingDiagrams(root: ParentNode): number {
 
 /**
  * Resolve once the rendered document has appeared and stopped changing with no
- * diagram left empty and no lazy plugin still loading, or when `timeoutMs`
+ * diagram left empty, no lazy plugin still loading, and no loose-file asset
+ * still waiting on the backend (its image has no src yet), or when `timeoutMs`
  * elapses. The plugin check matters on its own: a document waiting for the
  * gemoji or KaTeX chunk mutates nothing, so quiet alone would mean "finished"
  * while the swap is still coming. The timeout is the CI guard:
@@ -57,7 +59,12 @@ export function waitForRenderIdle(
         const body = doc.querySelector(EXPORTABLE_ROOT_SELECTOR);
         // Quiet but incomplete means the document is still loading, or a
         // diagram is between frames; keep waiting for the deadline to decide.
-        if (body && pendingDiagrams(body) === 0 && pendingPluginLoads() === 0) finish(true);
+        const isComplete =
+          body !== null &&
+          pendingDiagrams(body) === 0 &&
+          pendingPluginLoads() === 0 &&
+          pendingDocumentAssets() === 0;
+        if (isComplete) finish(true);
         else armQuietTimer();
       }, QUIET_MS);
     }
