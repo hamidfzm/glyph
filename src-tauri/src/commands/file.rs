@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Manager, Runtime, State};
 
-use crate::grants::GrantRegistry;
+use crate::grants::{self, GrantRegistry};
 
 pub struct InitialFile(pub Mutex<Option<String>>);
 
@@ -42,10 +42,8 @@ pub fn read_file(path: String, grants: State<'_, GrantRegistry>) -> Result<Strin
 #[tauri::command(async)]
 pub fn allow_document_asset<R: Runtime>(app: AppHandle<R>, path: String) -> Result<(), String> {
     let canonical = app.state::<GrantRegistry>().ensure_document_asset(&path)?;
-    // Surfaced, not ignored: the frontend remembers a success for the session.
-    app.asset_protocol_scope()
-        .allow_file(&canonical)
-        .map_err(|e| e.to_string())
+    grants::allow_asset_file(&app, &canonical);
+    Ok(())
 }
 
 #[cfg(desktop)]
