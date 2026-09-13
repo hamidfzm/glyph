@@ -269,10 +269,4 @@ Glyph is free and open source. These sponsors help keep it that way.
 
 ### Support Glyph
 
-If Glyph is useful to you, donations are welcome via crypto:
-
-| Network | Asset | Address |
-|---|---|---|
-| Solana | SOL | `<pending>` |
-| BNB Smart Chain (BEP-20) | USDT | `<pending>` |
-| Tron (TRC-20) | USDT | `<pending>` |
+If Glyph is useful to you, donations are welcome via crypto: see [DONATE.md](DONATE.md) for the addresses.
