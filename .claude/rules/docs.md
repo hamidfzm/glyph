@@ -16,14 +16,15 @@ When a feature is worth documenting, still update in the same commit:
 
 Treat this as part of the feature's definition of done, not a follow-up.
 
-## Install instructions live in four places
+## Install instructions live in three places
 
-Install commands (Homebrew, winget, Chocolatey, Scoop, Snap, AUR, PPA, apt, dnf) are duplicated across the ecosystem. Changing any install command means updating **all four in the same delivery**, not just the one that prompted the change:
+Install commands (Homebrew, winget, Chocolatey, Scoop, Snap, AUR, PPA, apt, dnf) are duplicated across the ecosystem. Changing any install command means updating **all three in the same delivery**, not just the one that prompted the change:
 
-1. **`README.md`** in this repo (the Install section).
-2. **`.github/workflows/release.yml`** in this repo: the generated release notes carry the install commands in **two** heredoc blocks (the initial release body and the changelog INSTALL block); patch both.
-3. **The website**: `glyph-md/glyph-md.github.io`, `src/components/Download.astro`.
-4. **The org profile**: `glyph-md/.github`, `profile/README.md`.
+1. **`.github/release-install.md`** in this repo: `release.yml` puts it at the top of every release's notes, both when it creates the release and when it adds the changelog.
+2. **The website**: `glyph-md/glyph-md.github.io`, `src/components/Download.astro`.
+3. **The org profile**: `glyph-md/.github`, `profile/README.md`.
+
+`README.md` carries no install commands: its Install section links to the website's download section and the latest release. Don't copy the commands back into it.
 
 Homebrew commands always use fully qualified names (`brew install --cask --force glyph-md/tap/glyph` on macOS, `brew install glyph-md/tap/glyph` on Linux): homebrew-core ships an unrelated `glyph` formula (an ASCII-art converter) that a plain `brew install glyph` resolves to, shadowing the app's CLI with a tool that fails with "Error: input file must be specified."
 

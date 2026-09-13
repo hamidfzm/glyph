@@ -9,6 +9,7 @@ vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resol
 
 vi.mock("@tauri-apps/api/core", () => ({
   convertFileSrc: (path: string) => `asset://${path}`,
+  invoke: vi.fn(() => Promise.resolve()),
 }));
 
 const base = { id: "n", x: 0, y: 0, width: 200, height: 80 };
@@ -41,11 +42,11 @@ describe("CanvasNodeView", () => {
     expect(openUrl).toHaveBeenCalledWith("https://glyph.dev");
   });
 
-  it("renders an image for an image file node", () => {
+  it("renders an image for an image file node", async () => {
     const node: CanvasNode = { ...base, type: "file", file: "diagram.png" };
     render(<CanvasNodeView node={node} canvasPath="/docs/board.canvas" />);
-    const img = screen.getByRole("img", { name: "diagram.png" });
-    expect(img).toBeInTheDocument();
+    // Beside a loose canvas the image waits for the backend to mirror its path.
+    const img = await screen.findByRole("img", { name: "diagram.png" });
     expect(img).toHaveAttribute("src", "asset:///docs/diagram.png");
   });
 

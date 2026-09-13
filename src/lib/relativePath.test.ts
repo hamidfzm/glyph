@@ -1,10 +1,52 @@
 import { describe, expect, it } from "vitest";
 import {
+  clampRootFor,
   isOpenableRelativeHref,
   isRelativeLocalHref,
   normalizeRelativePath,
   resolveWorkspacePath,
 } from "./relativePath";
+
+describe("normalizeRelativePath at the volume root", () => {
+  // Climbing past `\\?\C:` or a share would name another host, which Windows
+  // contacts with the user's credentials.
+  it("stops ../ at a verbatim drive prefix", () => {
+    expect(
+      normalizeRelativePath("\\\\?\\C:\\notes\\doc.md", "../../../evil.example/share/x.png"),
+    ).toBe("\\\\?\\C:\\evil.example\\share\\x.png");
+  });
+
+  it("stops ../ at a plain drive rather than going relative", () => {
+    expect(normalizeRelativePath("C:\\notes\\doc.md", "../../x.png")).toBe("C:\\x.png");
+  });
+
+  it("stops ../ at a UNC share", () => {
+    expect(normalizeRelativePath("\\\\server\\share\\doc.md", "../../other/x.png")).toBe(
+      "\\\\server\\share\\other\\x.png",
+    );
+  });
+
+  it("stops ../ at a verbatim UNC share", () => {
+    expect(normalizeRelativePath("\\\\?\\UNC\\server\\share\\doc.md", "../../../../x.png")).toBe(
+      "\\\\?\\UNC\\server\\share\\x.png",
+    );
+  });
+});
+
+describe("clampRootFor", () => {
+  it("clamps a document inside the workspace to its root", () => {
+    expect(clampRootFor("/ws/notes/doc.md", "/ws")).toBe("/ws");
+  });
+
+  it("leaves a document opened from outside the workspace unclamped", () => {
+    expect(clampRootFor("/elsewhere/doc.md", "/ws")).toBeUndefined();
+  });
+
+  it("has nothing to clamp without a document or a workspace", () => {
+    expect(clampRootFor(undefined, "/ws")).toBeUndefined();
+    expect(clampRootFor("/ws/doc.md", undefined)).toBeUndefined();
+  });
+});
 
 describe("normalizeRelativePath", () => {
   it("joins a bare relative path onto the document's directory", () => {

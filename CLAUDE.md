@@ -94,7 +94,7 @@ Releases are not always cut from main's tip: hotfixes may build on a previous ta
 ## Key Files
 
 - `src-tauri/tauri.conf.json`: App window config, CLI plugin config, bundle settings, and (via `bundle.fileAssociations`) the markdown and D2 extension lists
-- `src-tauri/extensions.json`: Extension lists for the types that are not OS file associations (canvas, notebook, image). Together with `tauri.conf.json` this is the single source of truth for every extension: `build.rs` generates the Rust consts and `src/lib/extensionConfig.ts` reads the same files
+- `src-tauri/extensions.json`: Extension lists for the types that are not OS file associations (canvas, notebook, image, media). Together with `tauri.conf.json` this is the single source of truth for every extension: `build.rs` generates the Rust consts and `src/lib/extensionConfig.ts` reads the same files
 - `src-tauri/capabilities/default.json`: Tauri permission grants
 - `src-tauri/src/menu.rs`: Native menu items and keyboard shortcut accelerators
 - `src/hooks/useTabs.ts`: Core file/workspace loading and tab state (CLI args + dialog)

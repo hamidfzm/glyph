@@ -13,8 +13,8 @@ import { isPathInside } from "@/lib/paths";
 // its separator style (Windows backslash vs. POSIX forward slash) and any
 // leading prefix (drive, `\\?\` verbatim prefix, or UNC root), so it round-trips
 // with the paths the backend hands us. A trailing `#heading` on the target is
-// dropped. `..` never climbs above the filesystem root; escapes past the
-// workspace are caught separately by isWithinRoot.
+// dropped. `..` never climbs above the volume (see volumeSegments); escapes
+// past the workspace are caught separately by isWithinRoot.
 export function normalizeRelativePath(docPath: string, target: string): string {
   const cleanTarget = target.split("#")[0];
   const sep = docPath.includes("\\") ? "\\" : "/";
@@ -23,16 +23,27 @@ export function normalizeRelativePath(docPath: string, target: string): string {
   // Preserve the leading separator run verbatim (POSIX `/`, UNC/verbatim `\\`)
   // so it isn't collapsed away when we rejoin the segments.
   const lead = combined.match(/^[/\\]+/)?.[0] ?? "";
+  const segments = combined
+    .slice(lead.length)
+    .split(/[/\\]+/)
+    .filter((seg) => seg !== "" && seg !== ".");
+  const floor = volumeSegments(lead, segments);
   const out: string[] = [];
-  for (const seg of combined.slice(lead.length).split(/[/\\]+/)) {
-    if (seg === "" || seg === ".") continue;
-    if (seg === "..") {
-      if (out.length > 0) out.pop();
-      continue;
-    }
-    out.push(seg);
+  for (const seg of segments) {
+    if (seg !== "..") out.push(seg);
+    else if (out.length > floor) out.pop();
   }
   return lead + out.join(sep);
+}
+
+// How many leading segments name the volume: a drive (`C:`), a verbatim prefix
+// (`?\C:` or `?\UNC\server\share`), or a UNC server and share. `..` stops there:
+// climbing past `\\?\C:` would turn a relative image into a request to a network
+// host, which Windows answers with the user's credentials.
+function volumeSegments(lead: string, segments: string[]): number {
+  if (lead.length < 2) return /^[a-zA-Z]:$/.test(segments[0]) ? 1 : 0;
+  if (segments[0] !== "?") return 2;
+  return segments[1]?.toUpperCase() === "UNC" ? 4 : 2;
 }
 
 // Resolve a relative `target` against `docPath`'s directory and clamp it to the
@@ -48,6 +59,16 @@ export function resolveWorkspacePath(
   const resolved = normalizeRelativePath(docPath, target);
   if (root && !isPathInside(resolved, root)) return null;
   return resolved;
+}
+
+// The workspace root that clamps `docPath`'s references. A document opened from
+// outside the workspace (a loose file in a workspace window) is not clamped to it.
+export function clampRootFor(
+  docPath: string | undefined,
+  root: string | undefined,
+): string | undefined {
+  if (!docPath || !root || !isPathInside(docPath, root)) return undefined;
+  return root;
 }
 
 // Whether an `href` is a relative local path (and therefore a candidate for

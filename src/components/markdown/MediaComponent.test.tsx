@@ -1,18 +1,24 @@
-import { render, renderHook } from "@testing-library/react";
+import { render, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 // A workspace root turns on the clamp that refuses references escaping it;
-// without one the components run in single-file mode.
+// without one the components run in single-file mode, where a local src
+// arrives once the backend has mirrored its path.
 import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { useAudioComponent, useMediaSourceComponent, useVideoComponent } from "./MediaComponent";
 
 describe("useVideoComponent", () => {
-  it("resolves a relative src through the asset protocol", () => {
+  it("resolves a relative src through the asset protocol", async () => {
     const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
     const Video = result.current;
     const { container } = render(<Video src="media/clip.mp4" />);
-    const src = container.querySelector("video")?.getAttribute("src") ?? "";
-    expect(src).toMatch(/^asset:\/\/localhost\//);
-    expect(src).toContain("/notes/media/clip.mp4");
+    await waitFor(() =>
+      expect(container.querySelector("video")?.getAttribute("src")).toMatch(
+        /^asset:\/\/localhost\//,
+      ),
+    );
+    expect(container.querySelector("video")?.getAttribute("src")).toContain(
+      "/notes/media/clip.mp4",
+    );
   });
 
   it("keeps a remote src unchanged", () => {
@@ -24,22 +30,28 @@ describe("useVideoComponent", () => {
     );
   });
 
-  it("renders with controls and preload=none", () => {
+  it("renders with controls and preload=none", async () => {
     const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
     const Video = result.current;
     const { container } = render(<Video src="clip.mp4" />);
+    await waitFor(() => expect(container.querySelector("video")).not.toBeNull());
     const video = container.querySelector("video");
     expect(video?.getAttribute("preload")).toBe("none");
     expect(video?.hasAttribute("controls")).toBe(true);
   });
 
-  it("resolves the poster frame and carries the source path for exporters", () => {
+  it("resolves the poster frame and carries the source path for exporters", async () => {
     const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
     const Video = result.current;
     const { container } = render(<Video src="clip.mp4" poster="cover.png" />);
-    const video = container.querySelector("video");
-    expect(video?.getAttribute("poster")).toContain("/notes/cover.png");
-    expect(video?.getAttribute("data-media-path")).toContain("/notes/clip.mp4");
+    await waitFor(() =>
+      expect(container.querySelector("video")?.getAttribute("poster")).toContain(
+        "/notes/cover.png",
+      ),
+    );
+    expect(container.querySelector("video")?.getAttribute("data-media-path")).toContain(
+      "/notes/clip.mp4",
+    );
   });
 
   it("renders nothing when the src escapes the workspace root", () => {
@@ -64,7 +76,10 @@ describe("useVideoComponent", () => {
   it("renders nothing when a refused src is left with only whitespace children", () => {
     const { result } = renderHook(() => useVideoComponent("/notes/doc.md"));
     const Video = result.current;
-    const { container } = renderInWorkspace(<Video src="../../secrets/clip.mp4"> </Video>);
+    const { container } = renderInWorkspace(
+      <Video src="../../secrets/clip.mp4"> </Video>,
+      "/notes",
+    );
     expect(container.querySelector("video")).toBeNull();
   });
 
@@ -133,25 +148,32 @@ describe("useVideoComponent", () => {
 });
 
 describe("useAudioComponent", () => {
-  it("resolves a relative src and carries no poster", () => {
+  it("resolves a relative src and carries no poster", async () => {
     const { result } = renderHook(() => useAudioComponent("/notes/doc.md"));
     const Audio = result.current;
     const { container } = render(<Audio src="memo.mp3" />);
+    await waitFor(() =>
+      expect(container.querySelector("audio")?.getAttribute("src")).toContain("/notes/memo.mp3"),
+    );
     const audio = container.querySelector("audio");
-    expect(audio?.getAttribute("src")).toContain("/notes/memo.mp3");
     expect(audio?.hasAttribute("poster")).toBe(false);
     expect(audio?.getAttribute("preload")).toBe("none");
   });
 });
 
 describe("useMediaSourceComponent", () => {
-  it("resolves its own src", () => {
+  it("resolves its own src", async () => {
     const { result } = renderHook(() => useMediaSourceComponent("/notes/doc.md"));
     const Source = result.current;
     const { container } = render(<Source src="media/clip.webm" type="video/webm" />);
-    const source = container.querySelector("source");
-    expect(source?.getAttribute("src")).toContain("/notes/media/clip.webm");
-    expect(source?.getAttribute("data-media-path")).toContain("/notes/media/clip.webm");
+    await waitFor(() =>
+      expect(container.querySelector("source")?.getAttribute("src")).toContain(
+        "/notes/media/clip.webm",
+      ),
+    );
+    expect(container.querySelector("source")?.getAttribute("data-media-path")).toContain(
+      "/notes/media/clip.webm",
+    );
   });
 
   it("renders nothing when its src escapes the workspace root", () => {
