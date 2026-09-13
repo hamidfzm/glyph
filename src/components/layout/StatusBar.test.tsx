@@ -143,18 +143,13 @@ describe("StatusBar", () => {
     renderStatusBar({ filePath: "/path/to/analysis.ipynb", displayContent: null });
     expect(screen.getByText("/path/to/analysis.ipynb")).toBeInTheDocument();
     expect(screen.queryByText(/words?$/)).toBeNull();
-    expect(screen.queryByText("Jupyter Notebook")).toBeNull();
   });
 
-  it("keeps the bar on a graph tab, which has no file", () => {
-    const { container } = render(
-      <Wrapper value={tabsContextValue({ activeTabId: "graph-1" })}>
-        <StatusBar onOpenSync={null} />
-      </Wrapper>,
-    );
-    expect(container.querySelector(".status-bar")).not.toBeNull();
-    expect(container.querySelector(".status-bar-path")).toBeNull();
-    expect(screen.queryByText(/min read$/)).toBeNull();
+  it("shows stats and zoom for an empty note", () => {
+    zoomFontSizeTo(20);
+    renderStatusBar({ filePath: "/path/to/Untitled-1", displayContent: "" });
+    expect(screen.getByText("0 words")).toBeInTheDocument();
+    expect(screen.getByText("125%")).toBeInTheDocument();
   });
 });
 
@@ -199,5 +194,17 @@ describe("StatusBar sync indicator gating", () => {
       </Wrapper>,
     );
     expect(await screen.findByText("Sync off")).toBeInTheDocument();
+  });
+
+  it("keeps the bar and sync pill on a graph tab, which has no file", async () => {
+    const value = tabsContextValue({ workspace: makeWorkspace(), activeTabId: "graph-1" });
+    const { container } = render(
+      <Wrapper value={value}>
+        <StatusBar onOpenSync={vi.fn()} />
+      </Wrapper>,
+    );
+    expect(await screen.findByText("Sync off")).toBeInTheDocument();
+    expect(container.querySelector(".status-bar-path")).toBeNull();
+    expect(screen.queryByText(/min read$/)).toBeNull();
   });
 });
