@@ -91,7 +91,7 @@ describe("TabsProvider", () => {
     await act(async () => {
       await result.current.openFile("/work/board.canvas");
     });
-    // Word count / AI / read-aloud see the card prose, not the raw JSON.
+    // AI / read-aloud see the card prose, not the raw JSON.
     expect(result.current.displayContent).toBe("# Hi from card");
     // The board has no heading scroll targets, so the heading above must not
     // produce a TOC entry.
