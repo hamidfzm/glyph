@@ -37,9 +37,8 @@ pub fn read_file(path: String, grants: State<'_, GrantRegistry>) -> Result<Strin
 
 /// Let the asset protocol serve an image, audio, or video file beside an opened
 /// loose file. Tauri's scope matches escaped paths only, so the registry's
-/// extension rule is applied here, one file at a time. Async, so resolving a
-/// path on a slow share stalls a worker rather than the main thread.
-#[tauri::command(async)]
+/// extension rule is applied here, one file at a time.
+#[tauri::command]
 pub fn allow_document_asset<R: Runtime>(app: AppHandle<R>, path: String) -> Result<(), String> {
     let canonical = app.state::<GrantRegistry>().ensure_document_asset(&path)?;
     grants::allow_asset_file(&app, &canonical);
