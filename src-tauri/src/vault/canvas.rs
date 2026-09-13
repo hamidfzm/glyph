@@ -140,6 +140,13 @@ pub(crate) fn extract_canvas(path: &str, content: &str) -> (Note, Canvas) {
             Some(Link {
                 snippet: target.clone(),
                 target,
+                heading: node
+                    .subpath
+                    .as_deref()
+                    .map(|subpath| subpath.trim_start_matches('#').to_string()),
+                alias: None,
+                // A file card shows the note itself, the way an embed does.
+                embed: true,
                 line: 0,
             })
         })

@@ -1,7 +1,8 @@
 //! Backend-managed filesystem grants: every filesystem command validates its
 //! path against this registry. Grants are minted only from backend-observed
-//! events (CLI args, drag-and-drop, native dialogs), never from a bare
-//! webview-supplied path. See docs/security/threat-model.md.
+//! events (CLI args, drag-and-drop, native dialogs, a folder the user allows
+//! in an MCP client's prompt), never from a bare webview- or model-supplied
+//! path. See docs/security/threat-model.md.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -47,6 +48,55 @@ fn canonicalize_lenient(path: &Path) -> Result<PathBuf, String> {
     Ok(canonicalize_lenient(parent)?.join(name))
 }
 
+/// Refuse a path that names a network share or a device, unless a grant
+/// already sits on that share. Resolving one connects to the host, which can
+/// hand it the user's credentials, and a renderer or a model can name any host
+/// it likes.
+#[cfg(windows)]
+fn refuse_remote(grants: &Grants, path: &Path) -> Result<(), String> {
+    use std::path::{Component, Prefix};
+    let Some(Component::Prefix(prefix)) = path.components().next() else {
+        return Ok(());
+    };
+    let share = match prefix.kind() {
+        Prefix::Disk(_) | Prefix::VerbatimDisk(_) => return Ok(()),
+        Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => (server, share),
+        Prefix::Verbatim(_) | Prefix::DeviceNS(_) => return Err(remote(path)),
+    };
+    let on_share = |root: &PathBuf| match root.components().next() {
+        Some(Component::Prefix(known)) => matches!(
+            known.kind(),
+            Prefix::UNC(server, name) | Prefix::VerbatimUNC(server, name) if (server, name) == share
+        ),
+        _ => false,
+    };
+    let mut granted = grants
+        .workspaces
+        .iter()
+        .chain(&grants.files)
+        .chain(&grants.export_dirs)
+        .chain(&grants.export_files);
+    if granted.any(on_share) {
+        Ok(())
+    } else {
+        Err(remote(path))
+    }
+}
+
+#[cfg(windows)]
+fn remote(path: &Path) -> String {
+    format!(
+        "{} is a network or device path, which is never looked up",
+        path.display()
+    )
+}
+
+/// Only Windows resolves a path by connecting to the host it names.
+#[cfg(not(windows))]
+fn refuse_remote(_: &Grants, _: &Path) -> Result<(), String> {
+    Ok(())
+}
+
 impl GrantRegistry {
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, Grants>, String> {
         self.inner.lock().map_err(|e| format!("Lock error: {e}"))
@@ -57,6 +107,15 @@ impl GrantRegistry {
         let canonical = root.canonicalize().map_err(|_| denied(root))?;
         self.lock()?.workspaces.insert(canonical.clone());
         Ok(canonical)
+    }
+
+    /// Grant a root already resolved and shown to the user, as it stands:
+    /// resolving it again could follow a link swapped in since, to a folder
+    /// they never saw.
+    #[cfg(desktop)]
+    pub fn grant_resolved_workspace(&self, resolved: PathBuf) -> Result<(), String> {
+        self.lock()?.workspaces.insert(resolved);
+        Ok(())
     }
 
     /// Not wired to any command yet: grants stay session-scoped; kept as the
@@ -99,6 +158,7 @@ impl GrantRegistry {
     /// reads its own manifest in Rust, never through this check.)
     pub fn ensure_readable(&self, path: &str) -> Result<PathBuf, String> {
         let requested = Path::new(path);
+        refuse_remote(&*self.lock()?, requested)?;
         let canonical = canonicalize_lenient(requested)?;
         let grants = self.lock()?;
         if grants.files.contains(&canonical)
@@ -112,6 +172,7 @@ impl GrantRegistry {
 
     pub fn ensure_writable(&self, path: &str) -> Result<PathBuf, String> {
         let requested = Path::new(path);
+        refuse_remote(&*self.lock()?, requested)?;
         let canonical = canonicalize_lenient(requested)?;
         let grants = self.lock()?;
         if grants.files.contains(&canonical)
@@ -125,6 +186,11 @@ impl GrantRegistry {
         }
     }
 
+    /// See [`refuse_remote`]: for a path a caller resolves itself.
+    pub fn refuse_remote(&self, path: &str) -> Result<(), String> {
+        refuse_remote(&*self.lock()?, Path::new(path))
+    }
+
     /// Watching follows the read rule.
     pub fn ensure_watchable(&self, path: &str) -> Result<PathBuf, String> {
         self.ensure_readable(path)
@@ -133,6 +199,7 @@ impl GrantRegistry {
     /// Require `root` to be exactly a granted workspace root, not a path inside one.
     pub fn ensure_workspace(&self, root: &str) -> Result<PathBuf, String> {
         let requested = Path::new(root);
+        refuse_remote(&*self.lock()?, requested)?;
         let canonical = requested.canonicalize().map_err(|_| denied(requested))?;
         if self.lock()?.workspaces.contains(&canonical) {
             Ok(canonical)
@@ -176,7 +243,10 @@ impl GrantRegistry {
         let behavior = &value["settings"]["behavior"];
         if let Some(tabs) = behavior["openTabs"].as_array() {
             for tab in tabs {
-                let Some(path) = tab["path"].as_str() else {
+                let path = tab["path"]
+                    .as_str()
+                    .filter(|path| self.refuse_remote(path).is_ok());
+                let Some(path) = path else {
                     continue;
                 };
                 match tab["kind"].as_str() {
@@ -197,7 +267,10 @@ impl GrantRegistry {
         }
         if let Some(recent) = behavior["recentFiles"].as_array() {
             for entry in recent {
-                if let Some(path) = entry.as_str() {
+                if let Some(path) = entry
+                    .as_str()
+                    .filter(|path| self.refuse_remote(path).is_ok())
+                {
                     if let Ok(canonical) = self.grant_file(Path::new(path)) {
                         files.push(canonical);
                     }
@@ -224,6 +297,37 @@ pub fn allow_asset_file<R: tauri::Runtime>(app: &tauri::AppHandle<R>, file: &Pat
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn a_network_or_device_path_is_refused_before_it_resolves() {
+        let grants = GrantRegistry::default();
+        for path in [
+            r"\\attacker\share\x.md",
+            r"\\?\UNC\attacker\share\x.md",
+            r"\\.\pipe\glyph",
+        ] {
+            let refusal = grants.ensure_readable(path).unwrap_err();
+            assert!(refusal.contains("never looked up"), "{refusal}");
+            assert!(grants.ensure_writable(path).is_err());
+            assert!(grants.ensure_workspace(path).is_err());
+        }
+        let (workspaces, files) = grants.seed_from_settings_json(
+            r#"{"settings":{"behavior":{"openTabs":[{"kind":"folder","path":"\\\\attacker\\share"}],"recentFiles":["\\\\attacker\\share\\x.md"]}}}"#,
+        );
+        assert!(workspaces.is_empty() && files.is_empty());
+
+        // A share the user already opened stays reachable, and only that one.
+        grants
+            .grant_resolved_workspace(PathBuf::from("//trusted/notes/vault"))
+            .unwrap();
+        grants
+            .grant_resolved_workspace(PathBuf::from("relative"))
+            .unwrap();
+        assert!(grants.refuse_remote("//trusted/notes/vault/x.md").is_ok());
+        assert!(grants.refuse_remote("//trusted/other/x.md").is_err());
+        assert!(grants.refuse_remote("relative/x.md").is_ok());
+    }
     use std::fs;
     use tempfile::TempDir;
 
@@ -380,20 +484,9 @@ mod tests {
         fs::create_dir_all(&secret_dir).unwrap();
         fs::write(secret_dir.join("secret.md"), "classified").unwrap();
 
-        // Junctions are the Windows escape vector symlinks are on unix, and
-        // unlike symlinks they need no privilege to create.
+        // Junctions are the Windows escape vector symlinks are on unix.
         let link = root.join("innocent");
-        // .output() captures the child's console chatter that .status() would
-        // leak past libtest's output capture.
-        let output = std::process::Command::new("cmd")
-            .arg("/C")
-            .arg("mklink")
-            .arg("/J")
-            .arg(&link)
-            .arg(&secret_dir)
-            .output()
-            .expect("cmd should run");
-        assert!(output.status.success(), "mklink /J failed");
+        crate::vault::test_support::link_folder(&secret_dir, &link);
 
         let grants = GrantRegistry::default();
         grants.grant_workspace(&root).unwrap();

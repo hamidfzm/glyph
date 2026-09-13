@@ -15,7 +15,7 @@ The renderer is untrusted after compromise: assume it can call every registered 
 - **Every command that takes a path checks the `GrantRegistry` first** (`ensure_readable`, `ensure_writable`, `ensure_workspace`), before any filesystem call and before routing. "Callers always pass a picker result" is a description of the UI, not a control; a doc comment saying so is a bug.
 - **Canonicalize the target itself, not just its parent.** `<root>/..` has parent `<root>` and passes a parent-only check. Existing targets canonicalize and must sit strictly inside the root (never equal to it); targets that do not exist yet canonicalize the nearest existing ancestor and reject `..` in the remainder (`canonicalize_lenient`).
 - **Canonicalize symlink sources and refuse those resolving outside the root; refuse symlink entries when copying a tree.** A link inside a workspace can resolve outside it, and copying it materializes the target where `read_file` then serves it. Refuse loudly rather than skip silently (INV-7).
-- **Grants are minted only from backend-observed events** (CLI args, OS open events, drag-and-drop, Rust pickers, the settings seed at startup). A command that receives a renderer path checks it; it never grants it.
+- **Grants are minted only from backend-observed events** (CLI args, OS open events, drag-and-drop, Rust pickers, the settings seed at startup, a folder the user allows in an MCP client's elicitation prompt). A command that receives a renderer path checks it; it never grants it.
 - **Every new gated command gets a denial test** driving the command with an ungranted path, plus the applicable rows of the adversarial scenario matrix.
 - Commands return `Result<T, String>`; a gate that cannot fail is not a gate.
 

@@ -84,6 +84,10 @@ tokio = { version = "1", features = ["net", "sync", "signal", "time"] }
 # name is a local attacker's choice of what the victim's browser loads.
 tempfile = "3"
 tauri-plugin-window-state = "2"
+# `glyph mcp` finds the app's stores without Tauri's path resolver. Tauri
+# resolves its own app directories through this crate, so it is already in
+# the tree at the version those paths have to match.
+dirs = "6"
 # Statically-linked libgit2 so end users don't need a system Git install.
 # `https` and `ssh` are the transports (git2 0.21 enables none by default);
 # `vendored-openssl` keeps them self-contained.

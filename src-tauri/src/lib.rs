@@ -4,10 +4,15 @@ mod cli;
 mod cli_help;
 mod commands;
 mod d2;
+#[cfg(desktop)]
+mod data_dir;
 mod extensions;
 mod grants;
 mod image;
 mod markdown;
+// `glyph mcp`, served before any Tauri builder exists.
+#[cfg(desktop)]
+mod mcp;
 // Menus (tauri::menu), sync (git2), and telemetry (sentry) don't exist on
 // mobile; their `generate_handler!` entries and managed state are gated too.
 #[cfg(desktop)]
@@ -208,6 +213,31 @@ pub fn run() {
         return;
     }
 
+    // `glyph mcp` answers on stdio for as long as its client keeps it open.
+    // It never builds the app, so no window, webview or plugin exists, and
+    // nothing but protocol messages reaches stdout.
+    #[cfg(desktop)]
+    if cli::subcommand(&args) == Some(cli::Subcommand::Mcp) {
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let code = match cli::mcp_plan(&args, &cwd) {
+            Ok(vaults) => {
+                #[cfg(windows)]
+                mcp::keep_stdio_from_children();
+                mcp::run(
+                    vaults,
+                    None,
+                    std::io::stdin().lock(),
+                    std::io::stdout().lock(),
+                )
+            }
+            Err(usage) => {
+                eprintln!("{usage}");
+                2
+            }
+        };
+        std::process::exit(code);
+    }
+
     // A subcommand does its work in this process, so it must not be
     // forwarded to a Glyph the user already has open.
     #[cfg(desktop)]
@@ -255,7 +285,7 @@ pub fn run() {
         .manage(commands::CliExport(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
         .manage(grants::GrantRegistry::default())
-        .manage(vault::commands::VaultStore::default())
+        .manage(vault::VaultStore::default())
         .setup(setup_app)
         .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
@@ -310,10 +340,8 @@ pub fn run() {
             vault::commands::vault_forget,
             vault::commands::vault_backlinks,
             vault::commands::vault_resolve,
-            vault::commands::vault_neighbors,
             vault::commands::vault_query,
             vault::commands::vault_paths_with_tag,
-            vault::commands::vault_canvas,
             commands::search::search_workspace,
             commands::plugins::list_plugins,
             commands::plugins::inspect_plugin,

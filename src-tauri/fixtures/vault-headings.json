@@ -1,0 +1,256 @@
+{
+  "note": "Notes/Sections.md",
+  "headings": [
+    {
+      "level": 1,
+      "text": "Sections",
+      "line": 1
+    },
+    {
+      "level": 2,
+      "text": "Recipes & Tips!",
+      "line": 5
+    },
+    {
+      "level": 3,
+      "text": "Café au lait",
+      "line": 9
+    },
+    {
+      "level": 2,
+      "text": "日本語の見出し",
+      "line": 13
+    },
+    {
+      "level": 2,
+      "text": "یادداشت‌های فارسی",
+      "line": 17
+    },
+    {
+      "level": 2,
+      "text": "Launch 🚀 Plan",
+      "line": 21
+    },
+    {
+      "level": 2,
+      "text": "Two  spaces   here",
+      "line": 25
+    },
+    {
+      "level": 2,
+      "text": "Language C# and F#",
+      "line": 29
+    },
+    {
+      "level": 2,
+      "text": "Closed heading",
+      "line": 33
+    },
+    {
+      "level": 4,
+      "text": "Deep enough",
+      "line": 41
+    },
+    {
+      "level": 2,
+      "text": "Last",
+      "line": 45
+    }
+  ],
+  "sections": [
+    {
+      "heading": "Sections",
+      "section": "# Sections\n\nIntro before any subheading, pointing at [[Sections#Recipes & Tips!|the tips]].\n\n## Recipes & Tips!\n\nPasta first.\n\n### Café au lait\n\nHot milk, see ![[Sections#Café au lait]].\n\n## 日本語の見出し\n\nJapanese heading.\n\n## یادداشت‌های فارسی\n\nA Persian heading with a zero-width non-joiner.\n\n## Launch 🚀 Plan\n\nAn emoji heading.\n\n## Two  spaces   here\n\nRepeated spaces.\n\n## Language C# and F#\n\nA hash with no space before it stays in the text.\n\n## Closed heading ##\n\nClosed ATX.\n\n```js\n## Not a heading\n```\n\n#### Deep enough\n\nUnder the closed heading.\n\n## Last\n\n~~~\n```\n## Still fenced\n~~~\n\nThe end."
+    },
+    {
+      "heading": "sections",
+      "section": "# Sections\n\nIntro before any subheading, pointing at [[Sections#Recipes & Tips!|the tips]].\n\n## Recipes & Tips!\n\nPasta first.\n\n### Café au lait\n\nHot milk, see ![[Sections#Café au lait]].\n\n## 日本語の見出し\n\nJapanese heading.\n\n## یادداشت‌های فارسی\n\nA Persian heading with a zero-width non-joiner.\n\n## Launch 🚀 Plan\n\nAn emoji heading.\n\n## Two  spaces   here\n\nRepeated spaces.\n\n## Language C# and F#\n\nA hash with no space before it stays in the text.\n\n## Closed heading ##\n\nClosed ATX.\n\n```js\n## Not a heading\n```\n\n#### Deep enough\n\nUnder the closed heading.\n\n## Last\n\n~~~\n```\n## Still fenced\n~~~\n\nThe end."
+    },
+    {
+      "heading": "Recipes & Tips!",
+      "section": "## Recipes & Tips!\n\nPasta first.\n\n### Café au lait\n\nHot milk, see ![[Sections#Café au lait]]."
+    },
+    {
+      "heading": "recipes--tips",
+      "section": "## Recipes & Tips!\n\nPasta first.\n\n### Café au lait\n\nHot milk, see ![[Sections#Café au lait]]."
+    },
+    {
+      "heading": "Café au lait",
+      "section": "### Café au lait\n\nHot milk, see ![[Sections#Café au lait]]."
+    },
+    {
+      "heading": "café-au-lait",
+      "section": "### Café au lait\n\nHot milk, see ![[Sections#Café au lait]]."
+    },
+    {
+      "heading": "日本語の見出し",
+      "section": "## 日本語の見出し\n\nJapanese heading."
+    },
+    {
+      "heading": "یادداشت‌های فارسی",
+      "section": "## یادداشت‌های فارسی\n\nA Persian heading with a zero-width non-joiner."
+    },
+    {
+      "heading": "یادداشتهای-فارسی",
+      "section": "## یادداشت‌های فارسی\n\nA Persian heading with a zero-width non-joiner."
+    },
+    {
+      "heading": "Launch 🚀 Plan",
+      "section": "## Launch 🚀 Plan\n\nAn emoji heading."
+    },
+    {
+      "heading": "launch--plan",
+      "section": "## Launch 🚀 Plan\n\nAn emoji heading."
+    },
+    {
+      "heading": "Two  spaces   here",
+      "section": "## Two  spaces   here\n\nRepeated spaces."
+    },
+    {
+      "heading": "two--spaces---here",
+      "section": "## Two  spaces   here\n\nRepeated spaces."
+    },
+    {
+      "heading": "Language C# and F#",
+      "section": "## Language C# and F#\n\nA hash with no space before it stays in the text."
+    },
+    {
+      "heading": "language-c-and-f",
+      "section": "## Language C# and F#\n\nA hash with no space before it stays in the text."
+    },
+    {
+      "heading": "Closed heading",
+      "section": "## Closed heading ##\n\nClosed ATX.\n\n```js\n## Not a heading\n```\n\n#### Deep enough\n\nUnder the closed heading."
+    },
+    {
+      "heading": "closed-heading",
+      "section": "## Closed heading ##\n\nClosed ATX.\n\n```js\n## Not a heading\n```\n\n#### Deep enough\n\nUnder the closed heading."
+    },
+    {
+      "heading": "Deep enough",
+      "section": "#### Deep enough\n\nUnder the closed heading."
+    },
+    {
+      "heading": "deep-enough",
+      "section": "#### Deep enough\n\nUnder the closed heading."
+    },
+    {
+      "heading": "Last",
+      "section": "## Last\n\n~~~\n```\n## Still fenced\n~~~\n\nThe end."
+    },
+    {
+      "heading": "last",
+      "section": "## Last\n\n~~~\n```\n## Still fenced\n~~~\n\nThe end."
+    },
+    {
+      "heading": "RECIPES & TIPS!",
+      "section": "## Recipes & Tips!\n\nPasta first.\n\n### Café au lait\n\nHot milk, see ![[Sections#Café au lait]]."
+    },
+    {
+      "heading": "  recipes & tips!  ",
+      "section": "## Recipes & Tips!\n\nPasta first.\n\n### Café au lait\n\nHot milk, see ![[Sections#Café au lait]]."
+    },
+    {
+      "heading": "Not a heading",
+      "section": ""
+    },
+    {
+      "heading": "Still fenced",
+      "section": ""
+    },
+    {
+      "heading": "Missing",
+      "section": ""
+    }
+  ],
+  "slugs": [
+    {
+      "text": "Sections",
+      "slug": "sections"
+    },
+    {
+      "text": "Recipes & Tips!",
+      "slug": "recipes--tips"
+    },
+    {
+      "text": "Café au lait",
+      "slug": "café-au-lait"
+    },
+    {
+      "text": "日本語の見出し",
+      "slug": "日本語の見出し"
+    },
+    {
+      "text": "یادداشت‌های فارسی",
+      "slug": "یادداشتهای-فارسی"
+    },
+    {
+      "text": "Launch 🚀 Plan",
+      "slug": "launch--plan"
+    },
+    {
+      "text": "Two  spaces   here",
+      "slug": "two--spaces---here"
+    },
+    {
+      "text": "Language C# and F#",
+      "slug": "language-c-and-f"
+    },
+    {
+      "text": "Closed heading",
+      "slug": "closed-heading"
+    },
+    {
+      "text": "Deep enough",
+      "slug": "deep-enough"
+    },
+    {
+      "text": "Last",
+      "slug": "last"
+    },
+    {
+      "text": "Hello, World!",
+      "slug": "hello-world"
+    },
+    {
+      "text": "İstanbul",
+      "slug": "i̇stanbul"
+    },
+    {
+      "text": "ΣΊΣΥΦΟΣ",
+      "slug": "σίσυφος"
+    },
+    {
+      "text": "xࡰy",
+      "slug": "xy"
+    },
+    {
+      "text": "snake_case-and-dash",
+      "slug": "snake_case-and-dash"
+    },
+    {
+      "text": "x² and ½",
+      "slug": "x-and-"
+    },
+    {
+      "text": "١٢٣ digits",
+      "slug": "١٢٣-digits"
+    },
+    {
+      "text": "👩‍💻 dev",
+      "slug": "-dev"
+    },
+    {
+      "text": "Ⅻ roman",
+      "slug": "ⅻ-roman"
+    },
+    {
+      "text": "tab\there",
+      "slug": "tabhere"
+    },
+    {
+      "text": "nbsp here",
+      "slug": "nbsphere"
+    }
+  ]
+}

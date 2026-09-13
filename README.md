@@ -63,6 +63,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 ### AI (optional)
 - Chat sidebar, quick actions (summarize, explain, translate, simplify), and text-to-speech
 - Providers: Claude, OpenAI, and Ollama (local)
+- An MCP server (`glyph mcp`) that gives AI agents a vault's resolved links, backlinks, tags, and graph, with or without the app open
 
 ### Platform
 - macOS, Windows, and Linux; native menu bar with remappable shortcuts and update notifications
@@ -191,6 +192,23 @@ glyph serve ~/notes/ --out ./site         # keep the build instead of a temp dir
 
 `--format` accepts `pdf`, `docx`, `epub`, `html`, and `site`. Without `--out` a document export writes beside its input with the format's extension; `site` always needs one. Exports run without showing a window, print only the path they wrote to stdout (the summary and any warning go to stderr), and exit nonzero with a message on stderr if they fail, so they can drive CI publishing (on Linux runners, wrap the command in `xvfb-run`, which merges stderr into stdout, so a script that captures the path should use the Docker image below). A document export includes the table of contents when Settings > Print has it enabled.
 
+```bash
+# give an AI agent Glyph's view of your vaults, over the Model Context Protocol
+glyph mcp
+```
+
+`mcp` is a Model Context Protocol server on stdin and stdout, started by an MCP client rather than by hand. Add it to the client's server list, for example:
+
+```json
+{
+  "mcpServers": {
+    "glyph": { "command": "glyph", "args": ["mcp"] }
+  }
+}
+```
+
+The agent then gets what the raw files cannot tell it: wikilinks resolved the way Glyph resolves them, with the other candidates when a name is ambiguous; backlinks; the link graph some hops out; broken links, orphans and dead ends; tags by Glyph's rules; parsed frontmatter; headings and the section under one; canvas boards; and, while Glyph is open, the note in front of you. It can also open a note in Glyph and run the document exports above. Apart from `export`, it needs no display, no tool needs the app running, and it follows edits on disk between calls. It serves the vaults open in Glyph, and the agent can ask for any other folder: your MCP client asks you first, and a folder you allow stays served until the session ends. A client without MCP elicitation cannot ask, so it gets only the open vaults. `--vault <folder>`, which can repeat, serves exactly those folders instead, and turns asking off. Every tool is read-only except `export` and `open_in_glyph`, and none reaches outside the vaults it serves.
+
 The command is provided by the Homebrew cask (macOS), Chocolatey or Scoop (Windows), and the deb package or Homebrew formula (Linux). The macOS `.dmg` and Windows MSI install the app only; use a package manager for the terminal command.
 
 ### Docker
@@ -256,71 +274,85 @@ Glyph is built around speed, native feel, and offline-first usage. The tables be
 
 ### Rendering
 
-| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
-|---|---|---|---|---|---|---|---|
-| GitHub Flavored Markdown | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Math (KaTeX/MathJax) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | plugin |
-| Mermaid diagrams | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | plugin |
-| D2 diagrams | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
-| Syntax-highlighted code | ✅ (6 themes) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| GitHub-style alerts | ✅ | ✅ | ⚠️ | ❌ | ❌ | ⚠️ | ✅ |
-| YAML frontmatter | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
-| Emoji shortcodes | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | plugin |
-| Jupyter notebooks (`.ipynb`) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | ✅ |
-| JSON Canvas (`.canvas`) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | plugin |
+| Feature                      | Glyph         | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+| ---------------------------- | ------------- | -------- | ------ | -------- | ------ | ------ | ------- |
+| GitHub Flavored Markdown     | ✅            | ✅       | ✅     | ✅       | ✅     | ✅     | ✅      |
+| Math (KaTeX/MathJax)         | ✅            | ✅       | ✅     | ✅       | ✅     | ✅     | plugin  |
+| Mermaid diagrams             | ✅            | ✅       | ✅     | ✅       | ⚠️     | ✅     | plugin  |
+| D2 diagrams                  | ✅            | plugin   | ❌     | ❌       | ❌     | ❌     | plugin  |
+| Syntax-highlighted code      | ✅ (6 themes) | ✅       | ✅     | ✅       | ✅     | ✅     | ✅      |
+| GitHub-style alerts          | ✅            | ✅       | ⚠️     | ❌       | ❌     | ⚠️     | ✅      |
+| YAML frontmatter             | ✅            | ✅       | ✅     | ✅       | ✅     | ⚠️     | ✅      |
+| Emoji shortcodes             | ✅            | ✅       | ✅     | ✅       | ❌     | ✅     | plugin  |
+| Jupyter notebooks (`.ipynb`) | ✅            | plugin   | ❌     | ❌       | ❌     | ❌     | ✅      |
+| JSON Canvas (`.canvas`)      | ✅            | ✅       | ❌     | ❌       | ❌     | ❌     | plugin  |
 
 ### Editing
 
-| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
-|---|---|---|---|---|---|---|---|
-| Source editor | ✅ | ✅ | n/a | ✅ | ✅ | ✅ | ✅ |
-| WYSIWYG / inline preview | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ❌ |
-| Split view | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Spell check | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Feature                  | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+| ------------------------ | ----- | -------- | ------ | -------- | ------ | ------ | ------- |
+| Source editor            | ✅    | ✅       | n/a    | ✅       | ✅     | ✅     | ✅      |
+| WYSIWYG / inline preview | ⚠️    | ✅       | ✅     | ✅       | ⚠️     | ⚠️     | ❌      |
+| Split view               | ✅    | ✅       | ❌     | ✅       | ✅     | ✅     | ✅      |
+| Spell check              | ✅    | ✅       | ✅     | ✅       | ✅     | ✅     | ✅      |
 
 ### Navigation
 
-| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
-|---|---|---|---|---|---|---|---|
-| Tabs | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ |
-| Folder / workspace (vault) sidebar | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
-| Wikilinks & backlinks | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | plugin |
-| Graph view | ✅ | ✅ | ❌ | ❌ | ❌ | plugin | plugin |
-| Tag / metadata search | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | plugin |
-| Command palette | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| In-document search | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Workspace-wide full-text search | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Table of contents | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Live reload on disk change | ✅ | ⚠️ | n/a | n/a | ⚠️ | n/a | ✅ |
+| Feature                            | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+| ---------------------------------- | ----- | -------- | ------ | -------- | ------ | ------ | ------- |
+| Tabs                               | ✅    | ✅       | ❌     | ✅       | ✅     | ❌     | ✅      |
+| Folder / workspace (vault) sidebar | ✅    | ✅       | ⚠️     | ✅       | ✅     | ✅     | ✅      |
+| Wikilinks & backlinks              | ✅    | ✅       | ❌     | ❌       | ✅     | ❌     | plugin  |
+| Graph view                         | ✅    | ✅       | ❌     | ❌       | ❌     | plugin | plugin  |
+| Tag / metadata search              | ✅    | ✅       | ❌     | ❌       | ✅     | ✅     | plugin  |
+| Command palette                    | ✅    | ✅       | ❌     | ❌       | ❌     | ❌     | ✅      |
+| In-document search                 | ✅    | ✅       | ✅     | ✅       | ✅     | ✅     | ✅      |
+| Workspace-wide full-text search    | ✅    | ✅       | ✅     | ✅       | ✅     | ✅     | ✅      |
+| Table of contents                  | ✅    | ✅       | ✅     | ✅       | ✅     | ✅     | ✅      |
+| Live reload on disk change         | ✅    | ⚠️       | n/a    | n/a      | ⚠️     | n/a    | ✅      |
 
 ### Output
 
-| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
-|---|---|---|---|---|---|---|---|
-| Print | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Export PDF | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | plugin |
-| Export HTML / DOCX / EPUB | ✅ | plugin | ✅ (Pandoc) | ⚠️ | ✅ (Pandoc) | ⚠️ | plugin |
+| Feature                   | Glyph | Obsidian | Typora      | MarkText | Zettlr      | Joplin | VS Code |
+| ------------------------- | ----- | -------- | ----------- | -------- | ----------- | ------ | ------- |
+| Print                     | ✅    | ✅       | ✅          | ✅       | ✅          | ✅     | ✅      |
+| Export PDF                | ✅    | ✅       | ✅          | ✅       | ✅          | ✅     | plugin  |
+| Export HTML / DOCX / EPUB | ✅    | plugin   | ✅ (Pandoc) | ⚠️       | ✅ (Pandoc) | ⚠️     | plugin  |
 
 ### Power features
 
-| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
-|---|---|---|---|---|---|---|---|
-| AI (multi-provider, local) | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
-| Text-to-speech | ✅ | plugin | ❌ | ❌ | ❌ | ❌ | plugin |
-| Plugin / extension API | ⚠️ experimental | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ |
-| Cloud sync | ⚠️ Git-backed | paid | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Feature                    | Glyph           | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+| -------------------------- | --------------- | -------- | ------ | -------- | ------ | ------ | ------- |
+| AI (multi-provider, local) | ✅              | plugin   | ❌     | ❌       | ❌     | ❌     | plugin  |
+| Text-to-speech             | ✅              | plugin   | ❌     | ❌       | ❌     | ❌     | plugin  |
+| Plugin / extension API     | ⚠️ experimental | ✅       | ❌     | ❌       | ⚠️     | ✅     | ✅      |
+| Cloud sync                 | ⚠️ Git-backed   | paid     | ❌     | ❌       | ❌     | ✅     | ✅      |
+
+### Automation & agents
+
+| Feature                         | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+| ------------------------------- | ----- | -------- | ------ | -------- | ------ | ------ | ------- |
+| Headless export (CLI)           | ✅    | ❌       | ❌     | ❌       | ❌     | ⚠️     | ❌      |
+| Preview server                  | ✅    | plugin   | ❌     | ❌       | ❌     | ❌     | plugin  |
+| CLI control                     | ⚠️    | ✅       | ❌     | ❌       | ❌     | ✅     | ✅      |
+| MCP server                      | ✅    | plugin   | ❌     | ❌       | ❌     | ✅     | plugin  |
+| Agent tools with the app closed | ✅    | ❌       | ❌     | ❌       | ❌     | ⚠️     | ❌      |
+| Link graph for agents           | ✅    | ✅       | ❌     | ❌       | ❌     | plugin | ⚠️      |
+| Semantic search                 | ❌    | plugin   | ❌     | ❌       | ❌     | ✅     | ⚠️      |
+
+Note on agents: Obsidian's CLI drives the running app and starts it when it is closed, and Joplin's MCP server lives inside the desktop app; Glyph's server reads the vault itself, with no window.
 
 ### Platform
 
-| Feature | Glyph | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
-|---|---|---|---|---|---|---|---|
-| Native window styling | ✅ (vibrancy/Mica) | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
-| Native bundle (non-Electron) | ✅ Tauri (~3 MB core) | ❌ | ✅ Qt | ❌ | ❌ | ❌ | ❌ |
-| macOS / Windows / Linux | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Mobile (iOS / Android) | ⚠️ experimental (viewing) | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| File associations + CLI | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ❌ | ✅ |
-| Open source | ✅ MIT | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Free | ✅ | ✅ | $14.99 | ✅ | ✅ | ✅ | ✅ |
+| Feature                      | Glyph                     | Obsidian | Typora | MarkText | Zettlr | Joplin | VS Code |
+| ---------------------------- | ------------------------- | -------- | ------ | -------- | ------ | ------ | ------- |
+| Native window styling        | ✅ (vibrancy/Mica)        | ⚠️       | ⚠️     | ⚠️       | ⚠️     | ⚠️     | ⚠️      |
+| Native bundle (non-Electron) | ✅ Tauri (~3 MB core)     | ❌       | ✅ Qt  | ❌       | ❌     | ❌     | ❌      |
+| macOS / Windows / Linux      | ✅                        | ✅       | ✅     | ✅       | ✅     | ✅     | ✅      |
+| Mobile (iOS / Android)       | ⚠️ experimental (viewing) | ✅       | ❌     | ❌       | ❌     | ✅     | ❌      |
+| File associations + CLI      | ✅                        | ✅       | ✅     | ⚠️       | ⚠️     | ❌     | ✅      |
+| Open source                  | ✅ MIT                    | ❌       | ❌     | ✅       | ✅     | ✅     | ✅      |
+| Free                         | ✅                        | ✅       | $14.99 | ✅       | ✅     | ✅     | ✅      |
 
 Legend: ✅ supported · ⚠️ partial / inconsistent · ❌ not supported · plugin = third-party
 
@@ -357,8 +389,8 @@ Glyph is free and open source. These sponsors help keep it that way.
 
 If Glyph is useful to you, donations are welcome via crypto:
 
-| Network | Asset | Address |
-|---|---|---|
-| Solana | SOL | `<pending>` |
-| BNB Smart Chain (BEP-20) | USDT | `<pending>` |
-| Tron (TRC-20) | USDT | `<pending>` |
+| Network                  | Asset | Address     |
+| ------------------------ | ----- | ----------- |
+| Solana                   | SOL   | `<pending>` |
+| BNB Smart Chain (BEP-20) | USDT  | `<pending>` |
+| Tron (TRC-20)            | USDT  | `<pending>` |

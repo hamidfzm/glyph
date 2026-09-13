@@ -43,6 +43,10 @@ webview-supplied path:
   Folder, Open File(s), export Save As, website export destination
 - Session restore: at startup the backend reads the persisted settings store
   itself and grants the previously open tabs and recent files
+- `glyph mcp`'s `--vault` roots, or without them the same settings seed,
+  re-read before each tool call, and, without `--vault`, any folder a tool
+  names that the user then allows in the MCP client (see
+  [MCP server](#mcp-server-glyph-mcp))
 
 `request_open` and `open_in_new_window` are deliberately not on that list.
 Both take a renderer-supplied path (a picker result in the legitimate flows,
@@ -78,7 +82,7 @@ and files: <path>`), which never echoes the grant list.
 | Command | Check |
 | ------- | ----- |
 | `read_file`, `get_file_metadata`, `read_directory`, `list_markdown_files` | readable |
-| `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_neighbors`, `vault_query`, `vault_paths_with_tag`, `vault_canvas` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
+| `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_query`, `vault_paths_with_tag` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable |
 | `copy_file` | source readable and destination writable |
 | `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export) |
@@ -164,7 +168,60 @@ it, and `http:default` is scoped to the marketplace hosts.
   `setup.rs`; the renderer attaches with `getStore` and holds the per-key
   commands only.
 
+## MCP server (`glyph mcp`)
+
+`glyph mcp` serves the vault index to an MCP client over stdin and stdout. It
+is its own process and never builds the app: no webview, plugin, or Tauri
+command exists in it. Its caller is the client, and through the client a
+model that reads untrusted note content, so every tool argument is treated
+the way a renderer-supplied path is.
+
+- **Roots.** The vaults come from `--vault` or, without it, from the persisted
+  settings, which the server re-reads before each call with the trust the
+  app's startup seed already gives that file. A tool's `vault` argument picks
+  among those roots. Without `--vault`, it can also name another folder by
+  absolute path. The server then sends the client an `elicitation/create`
+  question showing the folder's resolved path, and serves the folder for the
+  rest of the session only on `accept`. The answer comes from the client,
+  never from the model. The grant is the path the user saw, not resolved
+  again, so a link swapped in while they decide leads nowhere. The folder is
+  resolved once, to match it against the vaults already open; past that,
+  nothing is looked up on disk until the server knows it can ask, and a path
+  holding a character that could disguise it is never put to the user.
+- **Network paths.** On Windows, the grant registry refuses a path that names
+  a network share or a device before it resolves anything, whether a tool
+  argument, a renderer command, or the settings seed handed it over, unless a
+  grant already sits on that share: resolving one connects to the host, which
+  can hand it the user's credentials.
+- **Every path goes through the registry.** A note reference that names a
+  path, `resolve_link`'s `from`, `read_canvas`'s `path`, and `export`'s `out`
+  pass `ensure_readable` or `ensure_writable` before anything is read or
+  written. A wikilink target resolves only to a note the index already holds,
+  and the index keeps its walk rules: no symlink out of the vault, no hidden
+  folder, nothing over 5 MB.
+- **Effects.** Every tool is read-only except two. `export` writes only
+  inside the vault it reads, to a name carrying the format's extension, so it
+  cannot replace a note. `open_in_glyph` hands the app a path the server can
+  already read, the way a file manager would.
+- **Stdout** carries JSON-RPC messages and nothing else. The processes the
+  server starts get null or captured stdio, never its own.
+- **Bounds.** A message over 1 MiB is refused; a listing stops at 200 rows and
+  note text at 50,000 characters, and says so.
+- **What is open.** `vault_context` reports only tabs and notes the grants
+  admit, and nothing at all while the app is closed, which it learns from an
+  OS lock the interactive app holds on `instance.lock` in its data directory.
+
 ## Residual risks
+
+- **An MCP client reads everything in the vaults it is given.** Whatever a
+  served vault holds can reach the model; `--vault` narrows it. Without
+  `--vault` the server follows the vaults the app has open, including one
+  opened after the conversation started.
+- **The folder prompt is only as good as the client's.** The model can make
+  the server ask for any folder on disk. A client that accepts elicitation
+  without showing it to the user, or a user who approves by reflex, gives the
+  model that folder until the session ends. Starting the server with
+  `--vault` turns asking off.
 
 - **Persisted-session grant staging.** The settings store (`settings.json`)
   is renderer-writable, and the backend seeds grants from it at the next

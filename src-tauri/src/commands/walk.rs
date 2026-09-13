@@ -45,6 +45,27 @@ impl ScanStatus {
     }
 }
 
+/// A file's modified time and size: what tells a second walk that the file
+/// changed since the first.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Stamp {
+    modified: Option<std::time::SystemTime>,
+    len: u64,
+}
+
+impl Stamp {
+    pub(crate) fn written_after(&self, instant: std::time::SystemTime) -> bool {
+        self.modified.is_some_and(|modified| modified > instant)
+    }
+
+    pub(crate) fn of(meta: &std::fs::Metadata) -> Self {
+        Self {
+            modified: meta.modified().ok(),
+            len: meta.len(),
+        }
+    }
+}
+
 /// Shared workspace walker: bounded depth, no symlinks, hidden and noisy
 /// directories skipped. Sorted by file name so traversal order (and therefore
 /// which files a capped scan covers) is deterministic across platforms.
@@ -76,7 +97,7 @@ pub(crate) fn collect_files(
     accept: fn(&Path) -> bool,
     max_files: usize,
     max_depth: usize,
-) -> Result<(Vec<PathBuf>, ScanStatus), String> {
+) -> Result<(Vec<(PathBuf, Stamp)>, ScanStatus), String> {
     if !root.is_dir() {
         return Err(format!("Not a directory: {}", root.display()));
     }
@@ -104,13 +125,12 @@ pub(crate) fn collect_files(
 
         // An unreadable stat leaves the file in: the read is the real gate,
         // and the size check is only there to skip the huge ones.
-        if entry
-            .metadata()
-            .is_ok_and(|m| m.len() > SCAN_MAX_FILE_BYTES)
-        {
+        let meta = entry.metadata().ok();
+        if meta.as_ref().is_some_and(|m| m.len() > SCAN_MAX_FILE_BYTES) {
             continue;
         }
-        files.push(entry.into_path());
+        let stamp = meta.as_ref().map(Stamp::of).unwrap_or_default();
+        files.push((entry.into_path(), stamp));
     }
 
     Ok((files, status))
@@ -141,7 +161,7 @@ mod tests {
         .unwrap();
         let seen: Vec<String> = files
             .iter()
-            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
+            .map(|(path, _)| path.file_name().unwrap().to_string_lossy().to_string())
             .collect();
 
         assert_eq!(seen, vec!["real.md"]);
