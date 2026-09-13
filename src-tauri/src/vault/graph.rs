@@ -49,8 +49,10 @@ pub struct UnresolvedLink {
 pub(crate) struct Graph {
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphEdge>,
-    /// Undirected adjacency, indexed by note id.
-    pub neighbors: Vec<BTreeSet<usize>>,
+    /// Resolved links out of and into each note, indexed by note id. A note's
+    /// neighbours in the graph view are their union.
+    pub outgoing: Vec<BTreeSet<usize>>,
+    pub incoming: Vec<BTreeSet<usize>>,
     /// Inbound links, indexed by note id.
     pub backlinks: Vec<Vec<Backlink>>,
     pub unresolved: Vec<UnresolvedLink>,
@@ -59,7 +61,8 @@ pub(crate) struct Graph {
 }
 
 pub(crate) fn build(notes: &[Note], resolver: &Resolver) -> Graph {
-    let mut neighbors: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); notes.len()];
+    let mut outgoing: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); notes.len()];
+    let mut incoming: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); notes.len()];
     let mut backlinks: Vec<Vec<Backlink>> = (0..notes.len()).map(|_| Vec::new()).collect();
     let mut edges: Vec<GraphEdge> = Vec::new();
     let mut unresolved: Vec<UnresolvedLink> = Vec::new();
@@ -106,8 +109,8 @@ pub(crate) fn build(notes: &[Note], resolver: &Resolver) -> Graph {
                 });
             }
 
-            neighbors[source].insert(target);
-            neighbors[target].insert(source);
+            outgoing[source].insert(target);
+            incoming[target].insert(source);
             if seen_edges.insert((source, target)) {
                 edges.push(GraphEdge {
                     source: note.path.clone(),
@@ -125,7 +128,7 @@ pub(crate) fn build(notes: &[Note], resolver: &Resolver) -> Graph {
         .iter()
         .enumerate()
         .map(|(id, note)| {
-            let degree = neighbors[id].len();
+            let degree = outgoing[id].union(&incoming[id]).count();
             GraphNode {
                 id: note.path.clone(),
                 label: stem_of(&note.path).to_string(),
@@ -145,7 +148,8 @@ pub(crate) fn build(notes: &[Note], resolver: &Resolver) -> Graph {
     Graph {
         nodes,
         edges,
-        neighbors,
+        outgoing,
+        incoming,
         backlinks,
         unresolved,
         dead_ends,

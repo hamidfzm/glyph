@@ -282,17 +282,19 @@ pub enum CliLaunch {
 pub enum Subcommand {
     Export,
     Serve,
+    Mcp,
 }
 
 /// Which subcommand argv asks for, if any.
 ///
-/// Only a bare first argument counts, so a folder named `export` or `serve`
-/// still opens normally as `glyph ./export`.
+/// Only a bare first argument counts, so a folder named `export`, `serve` or
+/// `mcp` still opens normally as `glyph ./export`.
 #[cfg(desktop)]
 pub fn subcommand(env_args: &[String]) -> Option<Subcommand> {
     match env_args.get(1)?.as_str() {
         "export" => Some(Subcommand::Export),
         "serve" => Some(Subcommand::Serve),
+        "mcp" => Some(Subcommand::Mcp),
         _ => None,
     }
 }
@@ -316,9 +318,8 @@ fn subcommand_path(env_args: &[String], value_flags: &[&str]) -> Option<String> 
 /// has open, rather than doing the work itself.
 ///
 /// Opening a document should reuse the running window. A subcommand must not:
-/// both do their work in this process, so forwarding would exit 0 having
-/// exported nothing, or having served nothing while the running app quietly
-/// opened the folder in a tab instead.
+/// each does its work in this process, and forwarding would exit 0 having done
+/// none of it while the running app quietly opened a tab instead.
 #[cfg(desktop)]
 pub fn forwards_to_running_instance(env_args: &[String]) -> bool {
     subcommand(env_args).is_none()
@@ -428,9 +429,13 @@ const EXPORT_USAGE: &str = "glyph export <path> --format <format> [--out <path>]
 #[cfg(desktop)]
 const EXPORT_SITE_USAGE: &str = "glyph export <folder> --format site --out <dir>";
 
-/// What a launch that is neither subcommand can look like.
+/// The `mcp` usage line, repeated by every one of its error messages.
 #[cfg(desktop)]
-const USAGE_SUMMARY: &str = "glyph [<path>] | glyph export ... | glyph serve ...";
+const MCP_USAGE: &str = "glyph mcp [--vault <folder>]...";
+
+/// What a launch that is no subcommand can look like.
+#[cfg(desktop)]
+const USAGE_SUMMARY: &str = "glyph [<path>] | glyph export ... | glyph serve ... | glyph mcp ...";
 
 /// Decide what this launch should do from argv.
 ///
@@ -449,8 +454,54 @@ pub fn launch_plan(
     match subcommand(env_args) {
         Some(Subcommand::Export) => export_plan(env_args, cwd),
         Some(Subcommand::Serve) => serve_plan(env_args, cwd),
+        // `run()` serves this one before any app is built, so it only lands
+        // here if that ever stops being true.
+        Some(Subcommand::Mcp) => Err(format!(
+            "glyph mcp cannot start inside the app: {MCP_USAGE}"
+        )),
         None => open_plan(plugin_path, env_args, cwd),
     }
+}
+
+/// Parse `glyph mcp [--vault <folder>]...` into the vault roots, each an
+/// existing folder. No roots means the vaults open in the app. `Err` is a
+/// usage message the caller prints before exiting nonzero.
+#[cfg(desktop)]
+pub fn mcp_plan(env_args: &[String], cwd: &Path) -> Result<Vec<String>, String> {
+    let mut vaults = Vec::new();
+    let mut args = env_args.iter().skip(2);
+    while let Some(arg) = args.next() {
+        let value = match arg.strip_prefix("--vault=") {
+            Some(value) => value,
+            None if arg == "--vault" => args
+                .next()
+                .map(String::as_str)
+                .ok_or_else(|| format!("--vault needs a value: {MCP_USAGE}"))?,
+            None => {
+                return Err(format!(
+                    "glyph mcp takes only --vault, not '{arg}': {MCP_USAGE}"
+                ))
+            }
+        };
+        // Only the folder named: the parent-directory fallback that lets
+        // `cargo tauri dev` run from src-tauri/ would grant a folder the flag
+        // never pointed at.
+        let named = cwd.join(value);
+        let folder = (!value.trim().is_empty() && named.is_dir())
+            .then(|| named.canonicalize().ok())
+            .flatten();
+        let Some(folder) = folder else {
+            return Err(format!(
+                "--vault needs an existing folder, not {}: {MCP_USAGE}",
+                plain_path(value)
+            ));
+        };
+        let root = plain_path(&folder.to_string_lossy());
+        if !vaults.contains(&root) {
+            vaults.push(root);
+        }
+    }
+    Ok(vaults)
 }
 
 /// An ordinary launch: open the path, if one was given.
@@ -470,7 +521,7 @@ fn open_plan(
     }
     // Any other flag here is a half-remembered subcommand, not an option this
     // shape takes, and silently opening an empty window would hide the typo.
-    for flag in ["--format", "--out", "-o", "--host", "--port"] {
+    for flag in ["--format", "--out", "-o", "--host", "--port", "--vault"] {
         if has_flag(env_args, flag) {
             return Err(format!("{flag} belongs to a subcommand: {USAGE_SUMMARY}"));
         }
@@ -569,7 +620,7 @@ fn is_exportable_document(path: &Path) -> bool {
 /// extension, so `glyph export notes.md --format pdf` writes `notes.pdf`
 /// beside it.
 #[cfg(desktop)]
-fn default_output(input: &str, format: ExportFormat) -> String {
+pub(crate) fn default_output(input: &str, format: ExportFormat) -> String {
     let extension = format.extension().unwrap_or_default();
     Path::new(&plain_path(input))
         .with_extension(extension)
@@ -1339,7 +1390,7 @@ mod tests {
         fs::create_dir_all(&cwd).unwrap();
         fs::write(cwd.join("note.md"), "# hi").unwrap();
 
-        for flag in ["--format", "--out", "-o", "--host", "--port"] {
+        for flag in ["--format", "--out", "-o", "--host", "--port", "--vault"] {
             let err = launch_plan(None, &argv_of(&["note.md", flag, "x"]), &cwd)
                 .expect_err("usage error");
             assert!(
@@ -1366,6 +1417,82 @@ mod tests {
         // Only the first argument counts.
         assert_eq!(subcommand(&argv_of(&["docs", "serve"])), None);
         assert_eq!(subcommand(&argv_of(&[])), None);
+    }
+
+    #[test]
+    fn mcp_collects_every_vault_in_both_spellings() {
+        let cwd = unique_tmp("mcp_vaults");
+        fs::create_dir_all(cwd.join("a")).unwrap();
+        fs::create_dir_all(cwd.join("b")).unwrap();
+
+        let argv = argv_of(&["mcp", "--vault", "a", "--vault=b", "--vault", "a"]);
+        let vaults = mcp_plan(&argv, &cwd).expect("plans");
+        assert_eq!(
+            vaults.len(),
+            2,
+            "a repeated folder is one vault: {vaults:?}"
+        );
+        assert!(vaults[0].ends_with('a') && vaults[1].ends_with('b'));
+        // The extended-length prefix never reaches the paths an agent sees.
+        assert!(vaults.iter().all(|vault| !vault.starts_with(r"\\?\")));
+        // No --vault means the vaults open in the app.
+        assert!(mcp_plan(&argv_of(&["mcp"]), &cwd).unwrap().is_empty());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn mcp_does_not_look_for_a_vault_in_the_parent_directory() {
+        let parent = unique_tmp("mcp_parent");
+        let cwd = parent.join("proj");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::create_dir_all(parent.join("notes")).unwrap();
+        let err = mcp_plan(&argv_of(&["mcp", "--vault", "notes"]), &cwd).expect_err("usage error");
+        assert!(err.contains("needs an existing folder"), "{err}");
+        let _ = fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn mcp_refuses_anything_but_existing_folders() {
+        let cwd = unique_tmp("mcp_bad");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(cwd.join("note.md"), "# hi").unwrap();
+
+        for (args, expected) in [
+            (
+                vec!["mcp", "--vault", "note.md"],
+                "needs an existing folder",
+            ),
+            (
+                vec!["mcp", "--vault", "missing"],
+                "needs an existing folder",
+            ),
+            (vec!["mcp", "--vault="], "needs an existing folder"),
+            (vec!["mcp", "--vault"], "--vault needs a value"),
+            (vec!["mcp", "notes"], "takes only --vault"),
+            (vec!["mcp", "--port", "1"], "takes only --vault"),
+        ] {
+            let err = mcp_plan(&argv_of(&args), &cwd).expect_err("usage error");
+            assert!(err.contains(expected), "{args:?} gave: {err}");
+        }
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn a_folder_named_mcp_still_opens_and_mcp_itself_never_forwards() {
+        let cwd = unique_tmp("mcp_named_folder");
+        fs::create_dir_all(cwd.join("mcp")).unwrap();
+
+        let plan = launch_plan(None, &argv_of(&["./mcp"]), &cwd).expect("plans");
+        assert!(
+            matches!(&plan, CliLaunch::Open(Some(InitialOpenAction::Folder(p))) if p.ends_with("mcp")),
+            "expected a normal folder open, got {plan:?}"
+        );
+        assert_eq!(subcommand(&argv_of(&["mcp"])), Some(Subcommand::Mcp));
+        assert!(!forwards_to_running_instance(&argv_of(&["mcp"])));
+        assert!(forwards_to_running_instance(&argv_of(&["./mcp"])));
+        // Asked of the app's own planner, it is refused, never opened.
+        assert!(launch_plan(None, &argv_of(&["mcp"]), &cwd).is_err());
+        let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]

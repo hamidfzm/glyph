@@ -1730,6 +1730,7 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 name = "glyph"
 version = "0.23.0"
 dependencies = [
+ "dirs",
  "futures-util",
  "git2",
  "http-body-util",

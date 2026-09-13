@@ -3,6 +3,8 @@
 
 /// Note content is untrusted and every tag reaches the frontend, so a single
 /// crafted `a/a/a/…` tag can't expand into thousands of tree levels.
+use super::headings::Fences;
+
 pub const MAX_TAG_CHARS: usize = 64;
 /// Bounds the inline scan only. Frontmatter tags arrive inside the 8 KB block,
 /// which bounds them already.
@@ -78,14 +80,9 @@ fn push_line_tags(line: &str, out: &mut Vec<String>) {
 /// the note's lines with any frontmatter block already skipped.
 pub fn inline_tags<'a>(body: impl Iterator<Item = &'a str>) -> Vec<String> {
     let mut tags: Vec<String> = Vec::new();
-    let mut in_fence = false;
+    let mut fences = Fences::new();
     for line in body {
-        let trimmed_start = line.trim_start();
-        if trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~") {
-            in_fence = !in_fence;
-            continue;
-        }
-        if in_fence {
+        if fences.skip(line) {
             continue;
         }
         push_line_tags(line, &mut tags);
@@ -105,6 +102,12 @@ pub(crate) fn with_ancestors(tag: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_fence_closes_only_on_its_own_marker() {
+        let body = "```\n~~~\n#hidden\n```\n#seen";
+        assert_eq!(inline_tags(body.lines()), vec!["seen"]);
+    }
 
     #[test]
     fn normalize_strips_hashes_and_lowercases() {

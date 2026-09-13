@@ -12,7 +12,7 @@ use tauri::test::{mock_app, MockRuntime};
 use tauri::Manager;
 
 use crate::grants::GrantRegistry;
-use crate::vault::commands::VaultStore;
+use crate::vault::VaultStore;
 
 pub(crate) fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures")
@@ -68,6 +68,33 @@ pub(crate) fn app_without_grants() -> tauri::App<MockRuntime> {
     app.manage(GrantRegistry::default());
     app.manage(VaultStore::default());
     app
+}
+
+/// Point `link` at the folder `target`: a symlink on unix, a junction on
+/// Windows, which needs no privilege to create.
+pub(crate) fn link_folder(target: &Path, link: &Path) {
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(target, link).unwrap();
+    #[cfg(windows)]
+    {
+        // `.output()` captures the console chatter `.status()` would leak
+        // past libtest's capture.
+        let made = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .output()
+            .unwrap();
+        assert!(made.status.success(), "mklink /J failed");
+    }
+}
+
+/// `path` relative to `root`, forward-slashed, to compare across platforms.
+pub(crate) fn relative(root: &Path, path: &str) -> String {
+    path.strip_prefix(&root.to_string_lossy().to_string())
+        .unwrap_or(path)
+        .trim_start_matches(['/', '\\'])
+        .replace('\\', "/")
 }
 
 /// Fixture paths as the index spells them, relative to `root`.

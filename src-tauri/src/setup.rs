@@ -16,7 +16,7 @@ use tauri_plugin_store::StoreExt;
 
 use crate::windows;
 #[cfg(desktop)]
-use crate::{cli, commands, grants, menu, stash_initial_open};
+use crate::{cli, commands, data_dir, grants, menu, stash_initial_open};
 
 /// Renderer-facing stores, opened here because the renderer holds no
 /// `store:allow-load` (see docs/security/threat-model.md). The session store
@@ -85,32 +85,30 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         let env_args: Vec<String> = std::env::args().collect();
         // Session restore and the recent-files menu re-open paths from
         // earlier sessions; seed their grants from the persisted settings
-        // store (AppData, with AppConfig as the Linux fallback spelling).
-        {
-            let grant_registry = app.state::<grants::GrantRegistry>();
+        // store.
+        if let Some(raw) = data_dir::read_store("settings.json") {
             let handle = app.handle();
-            for base in [
-                handle.path().app_data_dir().ok(),
-                handle.path().app_config_dir().ok(),
-            ]
-            .into_iter()
-            .flatten()
-            {
-                let Ok(raw) = std::fs::read_to_string(base.join("settings.json")) else {
-                    continue;
-                };
-                let (workspaces, files) = grant_registry.seed_from_settings_json(&raw);
-                for dir in &workspaces {
-                    grants::allow_asset_dir(handle, dir);
-                }
-                for file in &files {
-                    grants::allow_asset_file(handle, file);
-                }
-                break;
+            let (workspaces, files) = app
+                .state::<grants::GrantRegistry>()
+                .seed_from_settings_json(&raw);
+            for dir in &workspaces {
+                grants::allow_asset_dir(handle, dir);
+            }
+            for file in &files {
+                grants::allow_asset_file(handle, file);
+            }
+        }
+        let plan = cli::launch_plan(plugin_path.as_deref(), &env_args, &cwd);
+        // What tells `glyph mcp` the app is open. An export or a serve is not
+        // a window anyone is looking at, so neither takes it.
+        if matches!(plan, Ok(cli::CliLaunch::Open(_))) {
+            let lock = data_dir::app_dir().and_then(|dir| data_dir::hold_instance_lock(&dir));
+            if let Some(lock) = lock {
+                app.manage(lock);
             }
         }
         let grant_registry = app.state::<grants::GrantRegistry>();
-        match cli::launch_plan(plugin_path.as_deref(), &env_args, &cwd) {
+        match plan {
             Err(usage) => {
                 eprintln!("{usage}");
                 std::process::exit(2);

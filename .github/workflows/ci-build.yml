@@ -65,6 +65,14 @@ jobs:
           CODECOV_TOKEN: ${{ matrix.bundle_analysis && secrets.CODECOV_TOKEN || '' }}
         with:
           args: ${{ github.event_name == 'pull_request' && matrix.args_pr || matrix.args_full }}
+      # Starts `glyph mcp` the way an MCP client does, on every platform and
+      # with no xvfb: the server must answer without a display, and on Windows
+      # the release binary is a GUI-subsystem program talking over pipes. A
+      # universal macOS build leaves an x86_64 binary too; sorting picks the
+      # aarch64 one the runner can execute.
+      - name: MCP handshake smoke test
+        shell: bash
+        run: node scripts/mcp-smoke.mjs "$(find src-tauri/target -path '*/release/glyph' -o -path '*/release/glyph.exe' | sort | head -n 1)" samples
       # Records raw/gzip sizes for startup and major lazy chunks and fails on
       # budget regressions (bundle-budgets.json, docs/bundle-budgets.md). One
       # deterministic leg is enough: every platform ships the same frontend.

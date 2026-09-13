@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseHeadings } from "./markdownHeadings";
+import { type MarkdownHeading, parseHeadings } from "./markdownHeadings";
 
 const spaces = " ".repeat(200_000);
 
@@ -66,5 +68,22 @@ describe("parseHeadings", () => {
       { level: 1, text: "B", line: 2 },
     ]);
     expect(parseHeadings("\uFEFF\uFEFF# A")).toEqual([]);
+  });
+});
+
+// The MCP server's Rust index ports this parser (`src-tauri/src/vault/headings.rs`).
+// Both are held to `vault-headings.json`, so a change to either fails here and in
+// `vault::tests::headings_match_the_shared_expectation` together.
+describe("the shared fixture vault", () => {
+  const fixtures = path.join(process.cwd(), "src-tauri", "fixtures");
+  const expected: { note: string; headings: MarkdownHeading[] } = JSON.parse(
+    readFileSync(path.join(fixtures, "vault-headings.json"), "utf-8"),
+  );
+
+  it("parses the headings the Rust index does", () => {
+    const content = readFileSync(path.join(fixtures, "vault", expected.note), "utf-8");
+    // The Rust side numbers lines from 1, as link lines are.
+    const oneBased = parseHeadings(content).map((h) => ({ ...h, line: h.line + 1 }));
+    expect(oneBased).toEqual(expected.headings);
   });
 });

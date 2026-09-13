@@ -17,6 +17,8 @@ USAGE:
   glyph export <path> --format <f>    Render a document or workspace and exit
   glyph serve <folder>                Serve a workspace, rebuilding it as the
                                       folder changes
+  glyph mcp [--vault <folder>]...     Serve the vault index to an MCP client
+                                      over stdio
 
 EXPORT OPTIONS:
       --format <format>  What to produce: {formats}
@@ -37,6 +39,13 @@ SERVE OPTIONS:
                          of its own: one that contains, or sits inside, the
                          folder being served is refused.
 
+MCP OPTIONS:
+      --vault <folder>   A vault the server may read; repeat it for several.
+                         Only these are read. Without one, it reads the vaults
+                         open in Glyph and follows them as they change, and an
+                         agent can ask for another folder, which the user
+                         allows or refuses through the client.
+
 OPTIONS:
   -h, --help             Print this help and exit
   -V, --version          Print the version and exit
@@ -45,6 +54,7 @@ EXAMPLES:
   glyph export notes.md --format pdf
   glyph export ~/notes --format site --out ./site
   glyph serve ~/notes --port 8080
+  glyph mcp --vault ~/notes
 
 `export` writes nothing to stdout but the path it produced, so a script can
 capture it; the summary and any warning go to stderr. It exits nonzero with a
@@ -55,7 +65,12 @@ is interrupted. Every change to the folder rebuilds the site, and pages open
 in a browser reload themselves. Both render through a webview, so on a Linux
 machine with no display, run them under `xvfb-run`. It merges stderr into
 stdout, so a script capturing the export's path should start `Xvfb` itself
-and set `DISPLAY` instead.",
+and set `DISPLAY` instead.
+
+`mcp` speaks the Model Context Protocol on stdin and stdout until its client
+closes them, and needs no display. Register `glyph mcp` with an MCP client to
+give an agent Glyph's view of a vault: resolved links, backlinks, tags,
+headings, the graph and canvases, instead of raw files.",
         host = crate::cli::DEFAULT_SERVE_HOST,
         port = crate::cli::DEFAULT_SERVE_PORT,
         version = env!("CARGO_PKG_VERSION"),
@@ -81,7 +96,16 @@ mod tests {
                 "usage text is missing the '{name}' format"
             );
         }
-        for flag in ["--format", "--out", "-o", "--help", "-h", "--version", "-V"] {
+        for flag in [
+            "--format",
+            "--out",
+            "-o",
+            "--vault",
+            "--help",
+            "-h",
+            "--version",
+            "-V",
+        ] {
             assert!(text.contains(flag), "usage text is missing '{flag}'");
         }
         assert!(text.contains(env!("CARGO_PKG_VERSION")));
@@ -99,6 +123,10 @@ mod tests {
         assert!(
             text.contains("glyph export <path>"),
             "export is undocumented"
+        );
+        assert!(
+            text.contains("glyph mcp [--vault <folder>]"),
+            "mcp is undocumented"
         );
         // The old flag spelling is gone, so the help must not teach it.
         assert!(!text.contains("--export"), "the help still shows --export");

@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use super::frontmatter::{parse_frontmatter, split_frontmatter};
+use super::headings::{js_lines, Fences};
 use super::tags::{add_tags, inline_tags};
 
 pub const MAX_SNIPPET_CHARS: usize = 200;
@@ -11,6 +12,12 @@ pub const MAX_SNIPPET_CHARS: usize = 200;
 pub(crate) struct Link {
     /// Target as written, with `|alias` and `#heading` removed.
     pub target: String,
+    /// The `#heading` and `|alias` parts exactly as written, untrimmed, so a
+    /// rename can rewrite the target and keep the rest of the link intact.
+    pub heading: Option<String>,
+    pub alias: Option<String>,
+    /// `![[...]]` rather than `[[...]]`.
+    pub embed: bool,
     /// 1-based, as the backlinks panel shows it.
     pub line: u32,
     pub snippet: String,
@@ -33,7 +40,7 @@ pub(crate) fn extract_note(path: &str, content: &str) -> Note {
     let parsed = block.as_deref().and_then(parse_frontmatter);
 
     let mut tags: Vec<String> = Vec::new();
-    for tag in inline_tags(content.lines().skip(body_start)) {
+    for tag in inline_tags(js_lines(content).skip(body_start)) {
         add_tags(&tag, &mut tags);
     }
 
@@ -78,15 +85,10 @@ pub(crate) fn extract_note(path: &str, content: &str) -> Note {
 /// renderer shows those lines as a table, never as links.
 fn parse_links(content: &str, body_start: usize) -> Vec<Link> {
     let mut links = Vec::new();
-    let mut in_fence = false;
+    let mut fences = Fences::new();
 
-    for (idx, line) in content.lines().enumerate().skip(body_start) {
-        let trimmed_start = line.trim_start();
-        if trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~") {
-            in_fence = !in_fence;
-            continue;
-        }
-        if in_fence {
+    for (idx, line) in js_lines(content).enumerate().skip(body_start) {
+        if fences.skip(line) {
             continue;
         }
         push_line_links(line, (idx + 1) as u32, &mut links);
@@ -115,9 +117,12 @@ fn push_line_links(line: &str, line_number: u32, out: &mut Vec<Link>) {
         }
 
         let inner: String = chars[start..close].iter().collect();
-        if let Some(target) = link_target(&inner) {
+        if let Some((target, heading, alias)) = split_link(&inner) {
             out.push(Link {
                 target,
+                heading,
+                alias,
+                embed: i > 0 && chars[i - 1] == '!',
                 line: line_number,
                 snippet: snippet_for(line),
             });
@@ -126,20 +131,19 @@ fn push_line_links(line: &str, line_number: u32, out: &mut Vec<Link>) {
     }
 }
 
-/// The note `name#heading|alias` points at. The heading and the alias are
-/// display concerns the renderer splits out for itself; the index only needs
-/// to know which file the link reaches.
-fn link_target(inner: &str) -> Option<String> {
-    let target_with_heading = match inner.split_once('|') {
-        Some((target, _)) => target,
-        None => inner,
+/// Split `name#heading|alias` the way the renderer does: the alias at the
+/// first `|`, then the heading at the first `#` before it. No target, no link.
+fn split_link(inner: &str) -> Option<(String, Option<String>, Option<String>)> {
+    let (target_with_heading, alias) = match inner.split_once('|') {
+        Some((target, alias)) => (target, Some(alias.to_string())),
+        None => (inner, None),
     };
-    let target = match target_with_heading.split_once('#') {
-        Some((target, _)) => target,
-        None => target_with_heading,
+    let (target, heading) = match target_with_heading.split_once('#') {
+        Some((target, heading)) => (target, Some(heading.to_string())),
+        None => (target_with_heading, None),
     };
     let target = target.trim();
-    (!target.is_empty()).then(|| target.to_string())
+    (!target.is_empty()).then(|| (target.to_string(), heading, alias))
 }
 
 pub fn snippet_for(line: &str) -> String {
@@ -156,6 +160,13 @@ pub fn snippet_for(line: &str) -> String {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_fence_closes_only_on_its_own_marker() {
+        let links = parse_links("```\n~~~\n[[Hidden]]\n```\n[[Seen]]", 0);
+        let targets: Vec<&str> = links.iter().map(|link| link.target.as_str()).collect();
+        assert_eq!(targets, ["Seen"]);
+    }
+
     fn parse_links_from_start(content: &str) -> Vec<Link> {
         parse_links(content, 0)
     }
@@ -171,9 +182,10 @@ mod tests {
     fn a_link_carries_its_target_line_and_snippet() {
         let links = parse_links_from_start("intro\nsee [[Target#Section|the alias]] here\n");
         assert_eq!(links.len(), 1);
-        // The heading and the alias are display concerns the renderer splits
-        // out for itself, so the index keeps only the file the link reaches.
         assert_eq!(links[0].target, "Target");
+        assert_eq!(links[0].heading.as_deref(), Some("Section"));
+        assert_eq!(links[0].alias.as_deref(), Some("the alias"));
+        assert!(!links[0].embed);
         assert_eq!(links[0].line, 2);
         assert!(links[0].snippet.starts_with("see [[Target"));
     }
@@ -181,6 +193,25 @@ mod tests {
     #[test]
     fn an_embed_reaches_the_same_target_as_a_plain_link() {
         assert_eq!(targets("![[Board]] and [[Board]]\n"), ["Board", "Board"]);
+        let embeds: Vec<bool> = parse_links_from_start("![[Board]] [[Board]]a![[Board]]\n")
+            .iter()
+            .map(|link| link.embed)
+            .collect();
+        assert_eq!(embeds, [true, false, true]);
+    }
+
+    #[test]
+    fn heading_and_alias_keep_what_was_written() {
+        let links = parse_links_from_start("[[a|b#c]] ![[x# h |y ]] [[n#]]\n");
+        // The alias splits first, so a `#` inside it is part of the alias.
+        assert_eq!(links[0].heading, None);
+        assert_eq!(links[0].alias.as_deref(), Some("b#c"));
+        // Untrimmed, so rewriting the target leaves the rest byte for byte.
+        assert_eq!(links[1].heading.as_deref(), Some(" h "));
+        assert_eq!(links[1].alias.as_deref(), Some("y "));
+        assert!(links[1].embed);
+        assert_eq!(links[2].heading.as_deref(), Some(""));
+        assert_eq!(links[2].alias, None);
     }
 
     #[test]
