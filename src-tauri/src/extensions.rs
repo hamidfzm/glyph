@@ -34,6 +34,7 @@ mod tests {
         assert!(CANVAS_EXTENSIONS.contains(&"canvas"));
         assert!(NOTEBOOK_EXTENSIONS.contains(&"ipynb"));
         assert!(IMAGE_EXTENSIONS.contains(&"png"));
+        assert!(MEDIA_EXTENSIONS.contains(&"mp4"));
     }
 
     #[test]
@@ -44,6 +45,7 @@ mod tests {
             CANVAS_EXTENSIONS,
             NOTEBOOK_EXTENSIONS,
             IMAGE_EXTENSIONS,
+            MEDIA_EXTENSIONS,
         ] {
             for ext in list {
                 assert!(

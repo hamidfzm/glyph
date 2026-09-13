@@ -1,5 +1,6 @@
 {
   "canvas": ["canvas"],
   "notebook": ["ipynb"],
-  "image": ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "ico"]
+  "image": ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "ico"],
+  "media": ["mp4", "m4v", "mov", "webm", "ogv", "mp3", "m4a", "aac", "wav", "ogg", "oga", "opus", "flac"]
 }

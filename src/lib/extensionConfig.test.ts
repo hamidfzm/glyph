@@ -7,6 +7,7 @@ import {
   hasExtension,
   IMAGE_EXTENSIONS,
   MARKDOWN_EXTENSIONS,
+  MEDIA_EXTENSIONS,
   NOTEBOOK_EXTENSIONS,
   USER_FILE_EXTENSIONS,
 } from "./extensionConfig";
@@ -109,6 +110,7 @@ describe("the configured lists", () => {
     expect(CANVAS_EXTENSIONS).toEqual(["canvas"]);
     expect(NOTEBOOK_EXTENSIONS).toEqual(["ipynb"]);
     expect(IMAGE_EXTENSIONS).toContain("png");
+    expect(MEDIA_EXTENSIONS).toContain("mp4");
   });
 
   it("are all present in USER_FILE_EXTENSIONS", () => {
@@ -118,6 +120,7 @@ describe("the configured lists", () => {
       CANVAS_EXTENSIONS,
       NOTEBOOK_EXTENSIONS,
       IMAGE_EXTENSIONS,
+      MEDIA_EXTENSIONS,
     ]) {
       for (const ext of list) {
         expect(USER_FILE_EXTENSIONS).toContain(ext);

@@ -1,7 +1,9 @@
-import { render, renderHook } from "@testing-library/react";
+import { render, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { useImageComponent } from "./ImageComponent";
 
+// Without a workspace these render in single-file mode, where a local image's
+// src arrives once the backend has mirrored its path.
 describe("useImageComponent", () => {
   it("passes through absolute URLs unchanged", () => {
     const { result } = renderHook(() => useImageComponent("/notes/doc.md"));
@@ -17,32 +19,35 @@ describe("useImageComponent", () => {
     expect(container.querySelector("img")?.getAttribute("src")).toMatch(/^data:image\/png/);
   });
 
-  it("resolves relative paths via convertFileSrc (asset:// in tests)", () => {
+  it("resolves relative paths via convertFileSrc (asset:// in tests)", async () => {
     const { result } = renderHook(() => useImageComponent("/notes/doc.md"));
     const Img = result.current;
     const { container } = render(<Img src="img/cover.png" alt="c" />);
-    const src = container.querySelector("img")?.getAttribute("src") ?? "";
-    expect(src).toMatch(/^asset:\/\/localhost\//);
-    expect(src).toContain("/notes/img/cover.png");
+    await waitFor(() =>
+      expect(container.querySelector("img")?.getAttribute("src")).toMatch(/^asset:\/\/localhost\//),
+    );
+    expect(container.querySelector("img")?.getAttribute("src")).toContain("/notes/img/cover.png");
   });
 
-  it("normalizes ./ segments out of the resolved path", () => {
+  it("normalizes ./ segments out of the resolved path", async () => {
     const { result } = renderHook(() => useImageComponent("/notes/doc.md"));
     const Img = result.current;
     const { container } = render(<Img src="./img/cover.png" alt="c" />);
-    const src = container.querySelector("img")?.getAttribute("src") ?? "";
-    expect(src).not.toContain("/./");
-    expect(src).toContain("/notes/img/cover.png");
+    await waitFor(() =>
+      expect(container.querySelector("img")?.getAttribute("src")).toContain("/notes/img/cover.png"),
+    );
+    expect(container.querySelector("img")?.getAttribute("src")).not.toContain("/./");
   });
 
-  it("strips a Windows verbatim prefix and normalizes separators", () => {
+  it("strips a Windows verbatim prefix and normalizes separators", async () => {
     const { result } = renderHook(() => useImageComponent("\\\\?\\C:\\Users\\me\\notes\\doc.md"));
     const Img = result.current;
     const { container } = render(<Img src="./diagram.svg" alt="d" />);
-    const decoded = decodeURIComponent(container.querySelector("img")?.getAttribute("src") ?? "");
+    const decoded = () =>
+      decodeURIComponent(container.querySelector("img")?.getAttribute("src") ?? "");
     // The unreadable "\\?\" prefix and the stray forward slash from the join are gone.
-    expect(decoded).not.toContain("\\\\?\\");
-    expect(decoded).toContain("C:\\Users\\me\\notes\\diagram.svg");
+    await waitFor(() => expect(decoded()).toContain("C:\\Users\\me\\notes\\diagram.svg"));
+    expect(decoded()).not.toContain("\\\\?\\");
   });
 
   it("leaves the src alone when no file path is known", () => {

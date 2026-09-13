@@ -1,8 +1,10 @@
 import type { ComponentPropsWithoutRef } from "react";
 import type { ExtraProps } from "react-markdown";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
+import { useAssetRef } from "@/hooks/useAssetRef";
 import { mediaLabel } from "@/lib/mediaExtensions";
-import { resolveAssetRef } from "./resolveImageSrc";
+import { clampRootFor } from "@/lib/relativePath";
+import { resolveAssetRef } from "./resolveAssetRef";
 
 interface MarkdownMediaProps extends ComponentPropsWithoutRef<"video">, ExtraProps {
   filePath: string | undefined;
@@ -25,8 +27,8 @@ function hasPlayableSource(
 }
 
 // A markdown <video>/<audio> with its src and poster resolved for the webview.
-// Both are constrained to the workspace by resolveAssetRef, so a reference that
-// escapes the opened folder renders nothing at all.
+// Inside a workspace both are clamped to its root, so a reference that escapes
+// the folder renders nothing at all; beside a loose file the backend decides.
 export function MarkdownMedia({
   filePath,
   tag: Tag,
@@ -36,12 +38,12 @@ export function MarkdownMedia({
   node,
   ...rest
 }: MarkdownMediaProps) {
-  const workspaceRoot = useWorkspaceRoot();
-  const media = resolveAssetRef(src, filePath, workspaceRoot);
-  const posterFrame = resolveAssetRef(poster, filePath, workspaceRoot);
+  const root = clampRootFor(filePath, useWorkspaceRoot());
+  const media = useAssetRef(src, filePath);
+  const posterFrame = useAssetRef(poster, filePath);
 
   // Nothing to play: a refused src and no <source> child that resolved either.
-  if (!media.src && !hasPlayableSource(node, filePath, workspaceRoot)) return null;
+  if (!media.src && !hasPlayableSource(node, filePath, root)) return null;
 
   // Named from what actually resolved: an element kept alive by a <source>
   // child has no name of its own, and a refused src must not be printed as

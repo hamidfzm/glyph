@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { mirrorDocumentAsset } from "@/lib/documentAssets";
 import { trackPluginLoad } from "@/lib/markdown/pluginLoads";
 import { waitForRenderIdle } from "./renderReady";
 
@@ -60,6 +62,31 @@ describe("waitForRenderIdle", () => {
     expect(done).toBe(false);
 
     settle();
+    await expect(pending).resolves.toEqual({ settled: true });
+  });
+
+  // An image beside a loose file has no src until the backend answers, and
+  // setting one changes no child list, so quiet alone would snapshot it empty.
+  it("waits for a loose-file asset still waiting on the backend", async () => {
+    setBody('<p><img alt="cover"></p>');
+    let answer = () => {};
+    vi.mocked(invoke).mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        answer = resolve;
+      }),
+    );
+    void mirrorDocumentAsset("/notes/cover.png");
+    const pending = waitForRenderIdle(document, 3000);
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    let done = false;
+    void pending.then(() => {
+      done = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(done).toBe(false);
+
+    answer();
     await expect(pending).resolves.toEqual({ settled: true });
   });
 

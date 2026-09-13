@@ -267,6 +267,7 @@ pub fn run() {
             commands::file::prune_export_dir,
             commands::file::get_file_metadata,
             commands::file::get_initial_file,
+            commands::file::allow_document_asset,
             #[cfg(desktop)]
             commands::file::print_document,
             #[cfg(desktop)]

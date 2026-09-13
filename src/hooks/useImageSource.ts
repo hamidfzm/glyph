@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
-import { toAssetUrl } from "@/components/markdown/resolveImageSrc";
+import { toAssetUrl } from "@/components/markdown/resolveAssetRef";
 import { isSvgFile } from "@/lib/imageExtensions";
 import { svgToDataUrl } from "@/lib/svgDataUrl";
 import { svgIntrinsicSize } from "@/lib/svgIntrinsicSize";

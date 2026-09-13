@@ -7,6 +7,8 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use crate::extensions::{has_extension, IMAGE_EXTENSIONS, MEDIA_EXTENSIONS};
+
 /// Managed state holding every path the webview may touch this session.
 #[derive(Default)]
 pub struct GrantRegistry {
@@ -19,6 +21,9 @@ struct Grants {
     workspaces: HashSet<PathBuf>,
     /// Explicitly opened loose files: exact-path read, write (autosave), watch.
     files: HashSet<PathBuf>,
+    /// Folders holding an opened loose file: the image, audio, and video files
+    /// in them load as that document's assets, through the asset protocol only.
+    document_dirs: HashSet<PathBuf>,
     /// Approved export destination folders: recursive write, plus the prune
     /// a repeat website export performs over its own previous output.
     export_dirs: HashSet<PathBuf>,
@@ -70,11 +75,39 @@ impl GrantRegistry {
         }
     }
 
-    /// Grant exact-path read + write + watch on an existing loose file.
+    /// Grant exact-path read + write + watch on an existing loose file, and
+    /// asset loading for the media in its folder (`ensure_document_asset`).
     pub fn grant_file(&self, path: &Path) -> Result<PathBuf, String> {
         let canonical = path.canonicalize().map_err(|_| denied(path))?;
-        self.lock()?.files.insert(canonical.clone());
+        // A folder passed as a file (a hand-edited settings entry) records nothing.
+        let document_dir = canonical
+            .parent()
+            .filter(|_| canonical.is_file())
+            .map(Path::to_path_buf);
+        let mut grants = self.lock()?;
+        grants.files.insert(canonical.clone());
+        grants.document_dirs.extend(document_dir);
         Ok(canonical)
+    }
+
+    /// Allow an existing image, audio, or video file inside the folder of an
+    /// opened loose file, judged after symlinks resolve. Serves the asset
+    /// protocol only: `ensure_readable` keeps the exact-path rule.
+    pub fn ensure_document_asset(&self, path: &str) -> Result<PathBuf, String> {
+        let requested = Path::new(path);
+        let canonical = requested.canonicalize().map_err(|_| denied(requested))?;
+        let is_media = has_extension(&canonical, IMAGE_EXTENSIONS)
+            || has_extension(&canonical, MEDIA_EXTENSIONS);
+        let beside_document = self
+            .lock()?
+            .document_dirs
+            .iter()
+            .any(|dir| canonical.starts_with(dir));
+        if is_media && beside_document && canonical.is_file() {
+            Ok(canonical)
+        } else {
+            Err(denied(requested))
+        }
     }
 
     /// Grant recursive write on an export destination folder (may not exist yet).
@@ -442,6 +475,152 @@ mod tests {
         assert!(grants.ensure_watchable(&as_str(&file)).is_ok());
         assert!(grants.ensure_readable(&as_str(&sibling)).is_err());
         assert!(grants.ensure_writable(&as_str(&sibling)).is_err());
+    }
+
+    #[test]
+    fn loose_file_grant_admits_the_media_in_its_folder_as_assets_only() {
+        let tmp = TempDir::new().unwrap();
+        let file = tmp.path().join("open.md");
+        let image = tmp.path().join("diagram.SVG");
+        let nested = tmp.path().join("media");
+        fs::create_dir_all(&nested).unwrap();
+        let clip = nested.join("clip.mp4");
+        for path in [&file, &image, &clip] {
+            fs::write(path, "x").unwrap();
+        }
+
+        let grants = GrantRegistry::default();
+        assert!(grants.ensure_document_asset(&as_str(&image)).is_err());
+        grants.grant_file(&file).unwrap();
+
+        assert!(grants.ensure_document_asset(&as_str(&image)).is_ok());
+        assert!(grants.ensure_document_asset(&as_str(&clip)).is_ok());
+        // Loadable as an asset, never readable or writable through the commands.
+        assert!(grants.ensure_readable(&as_str(&image)).is_err());
+        assert!(grants.ensure_writable(&as_str(&clip)).is_err());
+    }
+
+    #[test]
+    fn document_assets_refuse_all_but_existing_media_inside_the_folder() {
+        let tmp = TempDir::new().unwrap();
+        let notes = tmp.path().join("notes");
+        let elsewhere = tmp.path().join("elsewhere");
+        let album = notes.join("album.png");
+        fs::create_dir_all(&album).unwrap();
+        fs::create_dir_all(&elsewhere).unwrap();
+        let file = notes.join("open.md");
+        let text = notes.join("secret.txt");
+        let other_doc = notes.join("other.md");
+        let outside = elsewhere.join("photo.png");
+        for path in [&file, &text, &other_doc, &outside] {
+            fs::write(path, "x").unwrap();
+        }
+
+        let grants = GrantRegistry::default();
+        grants.grant_file(&file).unwrap();
+
+        for refused in [
+            text,
+            other_doc,
+            outside,
+            notes.join("..").join("elsewhere").join("photo.png"),
+            album,
+            notes.join("missing.png"),
+        ] {
+            let err = grants
+                .ensure_document_asset(&as_str(&refused))
+                .expect_err("must be refused");
+            assert!(
+                err.starts_with("path is outside the allowed workspaces and files:"),
+                "unexpected message for {refused:?}: {err}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn document_assets_judge_a_symlink_by_its_target() {
+        let tmp = TempDir::new().unwrap();
+        let notes = tmp.path().join("notes");
+        fs::create_dir_all(&notes).unwrap();
+        let file = notes.join("open.md");
+        let outside = tmp.path().join("photo.png");
+        let secret = notes.join("secret.txt");
+        for path in [&file, &outside, &secret] {
+            fs::write(path, "x").unwrap();
+        }
+        let escape = notes.join("escape.png");
+        let disguise = notes.join("disguise.png");
+        std::os::unix::fs::symlink(&outside, &escape).unwrap();
+        std::os::unix::fs::symlink(&secret, &disguise).unwrap();
+
+        let grants = GrantRegistry::default();
+        grants.grant_file(&file).unwrap();
+
+        assert!(grants.ensure_document_asset(&as_str(&escape)).is_err());
+        assert!(grants.ensure_document_asset(&as_str(&disguise)).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn document_assets_refuse_media_behind_a_junction_out_of_the_folder() {
+        let tmp = TempDir::new().unwrap();
+        let notes = tmp.path().join("notes");
+        let elsewhere = tmp.path().join("elsewhere");
+        fs::create_dir_all(&notes).unwrap();
+        fs::create_dir_all(&elsewhere).unwrap();
+        let file = notes.join("open.md");
+        fs::write(&file, "x").unwrap();
+        fs::write(elsewhere.join("photo.png"), "x").unwrap();
+        let link = notes.join("pictures");
+        let output = std::process::Command::new("cmd")
+            .arg("/C")
+            .arg("mklink")
+            .arg("/J")
+            .arg(&link)
+            .arg(&elsewhere)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "mklink /J failed: {output:?}");
+
+        let grants = GrantRegistry::default();
+        grants.grant_file(&file).unwrap();
+
+        assert!(grants
+            .ensure_document_asset(&as_str(&link.join("photo.png")))
+            .is_err());
+    }
+
+    #[test]
+    fn a_folder_granted_as_a_file_records_no_document_folder() {
+        let tmp = TempDir::new().unwrap();
+        let folder = tmp.path().join("album");
+        fs::create_dir_all(&folder).unwrap();
+        let beside = tmp.path().join("photo.png");
+        fs::write(&beside, "x").unwrap();
+
+        let grants = GrantRegistry::default();
+        grants.grant_file(&folder).unwrap();
+
+        assert!(grants.ensure_document_asset(&as_str(&beside)).is_err());
+    }
+
+    #[test]
+    fn restored_recent_files_record_their_folders() {
+        let tmp = TempDir::new().unwrap();
+        let file = tmp.path().join("recent.md");
+        let image = tmp.path().join("cover.png");
+        fs::write(&file, "x").unwrap();
+        fs::write(&image, "x").unwrap();
+        let raw = serde_json::json!({
+            "settings": { "behavior": { "recentFiles": [as_str(&file)] } }
+        })
+        .to_string();
+
+        let grants = GrantRegistry::default();
+        grants.seed_from_settings_json(&raw);
+
+        assert!(grants.ensure_document_asset(&as_str(&image)).is_ok());
     }
 
     #[test]

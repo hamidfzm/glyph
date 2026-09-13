@@ -1,7 +1,6 @@
 import type { ComponentPropsWithoutRef } from "react";
 import type { ExtraProps } from "react-markdown";
-import { useWorkspaceRoot } from "@/contexts/TabsContext";
-import { resolveAssetRef } from "./resolveImageSrc";
+import { useAssetRef } from "@/hooks/useAssetRef";
 
 interface MarkdownMediaSourceProps extends ComponentPropsWithoutRef<"source">, ExtraProps {
   filePath: string | undefined;
@@ -16,8 +15,7 @@ export function MarkdownMediaSource({
   node: _node,
   ...rest
 }: MarkdownMediaSourceProps) {
-  const workspaceRoot = useWorkspaceRoot();
-  const resolved = resolveAssetRef(src, filePath, workspaceRoot);
+  const resolved = useAssetRef(src, filePath);
   if (!resolved.src) return null;
   return <source {...rest} src={resolved.src} data-media-path={resolved.path} />;
 }

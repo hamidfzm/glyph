@@ -67,7 +67,7 @@ fn embed_comctl32_v6_in_test_binaries() {
 /// the OS sees (Windows registry, macOS Info.plist, Linux `.desktop` file), so
 /// anything not in it can't reach the app via file association anyway.
 ///
-/// Everything else (canvas, notebook, image) is not an OS file association and
+/// Everything else (canvas, notebook, image, media) is not an OS file association and
 /// comes from `extensions.json` next to it. The frontend reads both files
 /// through `src/lib/extensionConfig.ts`, so the two sides cannot drift.
 ///
@@ -95,6 +95,7 @@ fn generate_extensions() {
             declared_extensions(&declared, "notebook"),
         ),
         ("IMAGE_EXTENSIONS", declared_extensions(&declared, "image")),
+        ("MEDIA_EXTENSIONS", declared_extensions(&declared, "media")),
     ];
 
     // Every extension that names a file the user opened, for telemetry

@@ -29,7 +29,7 @@ the missing remainder is rejected.
 | Grant | Scope | Rights |
 | ----- | ----- | ------ |
 | workspace | folder, recursive | read, write, watch |
-| file | exact path | read, write (autosave), watch |
+| file | exact path | read, write (autosave), watch; the image, audio, and video files in its folder tree load as document assets (see below) |
 | export dir | folder, recursive | write, and delete what a previous export into that folder recorded |
 | export file | exact path | write only |
 
@@ -58,7 +58,25 @@ nothing.
 
 Workspace and file grants are also mirrored into Tauri's runtime
 asset-protocol scope so `asset://` image URLs resolve only inside granted
-locations (the static scope in `tauri.conf.json` is empty).
+locations (the static scope in `tauri.conf.json` is empty). The asset
+protocol echoes the window origin in `Access-Control-Allow-Origin`, so the
+page can read what it serves: the asset scope is read access.
+
+A loose file's relative images and media sit outside its exact-path grant
+(#670), so there the asset scope reaches one step past the read rule.
+Granting a loose file (opened, or restored at launch from open tabs and recent
+files) records its folder, and `allow_document_asset` mirrors one path at a
+time into the asset scope when, after symlinks resolve, it is an existing
+image, audio, or video file (the `image` and `media` lists in
+`extensions.json`) inside that folder or below it. Tauri's scope matches
+escaped paths only, so the extension rule cannot be a scope pattern; media the
+lists do not name still loads inside a workspace, but not beside a loose file.
+The registry itself gains nothing: `read_file` and every other gated command
+keep the exact-path rule for the file's neighbours. The folder is recorded
+where the grant is minted, so the command checks a rule rather than minting
+one. On the rendering side, `..` in a reference stops at the drive, verbatim
+prefix, or UNC share, so a document cannot turn a relative path into a
+request to another host.
 
 Grants live for the app session. Closing a workspace does not revoke its
 grant: another window may still show the same folder and loose tabs from it
@@ -78,6 +96,7 @@ and files: <path>`), which never echoes the grant list.
 | Command | Check |
 | ------- | ----- |
 | `read_file`, `get_file_metadata`, `read_directory`, `list_markdown_files` | readable |
+| `allow_document_asset` | an existing image, audio, or video file, judged after symlinks resolve, inside the folder of an opened loose file; mirrored into the asset scope only |
 | `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_neighbors`, `vault_query`, `vault_paths_with_tag`, `vault_canvas` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable |
 | `copy_file` | source readable and destination writable |
@@ -172,6 +191,14 @@ it, and `http:default` is scoped to the marketplace hosts.
   there. This matches the trust the file already carries (it decides what
   reopens on launch); it is accepted so session restore keeps working, and it
   only matters after the renderer is already compromised.
+- **Media beside a loose file.** A compromised renderer can load, and so
+  read, every image, audio, and video file under the folder of any loose file
+  the session granted, including files restored at launch from open tabs and
+  recent files, not only the ones the document references. A note in the home
+  folder or at a drive root exposes the media beneath it, and a staged file
+  grant (above) stages its folder too. Accepted so a document opened on its
+  own renders its relative images (#670); every other file there stays
+  denied, and a reference that climbs above the folder (`../`) does not load.
 - **`glyph serve` is an inbound listener.** The one place Glyph accepts
   connections rather than making them. It binds `127.0.0.1` unless `--host`
   says otherwise, answers only to `Host` headers naming itself (so a web page
