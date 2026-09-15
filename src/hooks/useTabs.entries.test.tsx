@@ -222,7 +222,7 @@ describe("useTabs creating entries", () => {
   it("renamePath invokes rename_path and returns the final path", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        rename_path: async () => "/p/ws/My Note.md",
+        rename_path: async () => ({ newPath: "/p/ws/My Note.md", files: [], failed: null }),
         read_directory: async () => [],
       }) as typeof invoke,
     );
@@ -242,6 +242,7 @@ describe("useTabs creating entries", () => {
       path: "/p/ws/Untitled.md",
       newName: "My Note",
       root: "/p/ws",
+      dryRun: false,
     });
   });
 

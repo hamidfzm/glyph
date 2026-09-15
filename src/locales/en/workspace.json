@@ -8,7 +8,8 @@
     "saveFailed": "Couldn't save \"{{name}}\". Your changes are still here; edit again to retry.",
     "saveTargetOpen": "\"{{name}}\" is already open in another tab. Save this document under a different name, or switch to that tab.",
     "indexIncompleteFiles": "The workspace index is incomplete: only the first {{limit}} documents were indexed, so the file list, graph, backlinks, and wikilinks may be missing results.",
-    "indexIncompleteDepth": "The workspace index is incomplete: folders nested deeper than {{limit}} levels were not indexed, so the file list, graph, backlinks, and wikilinks may be missing results."
+    "indexIncompleteDepth": "The workspace index is incomplete: folders nested deeper than {{limit}} levels were not indexed, so the file list, graph, backlinks, and wikilinks may be missing results.",
+    "relinkFailed": "The move went ahead, but updating links stopped at \"{{name}}\", so some links still point to the old location."
   },
   "confirmDelete": {
     "message": "Delete \"{{name}}\"? This can't be undone.",
@@ -21,6 +22,15 @@
     "title": "Unsaved changes",
     "message": "These changes couldn't be saved:\n{{files}}\n\nClose anyway and discard them?",
     "discard": "Discard & Close",
+    "cancel": "Cancel"
+  },
+  "relink": {
+    "title": "Update links",
+    "message": "Links in these files will be updated to the new location:",
+    "links_one": "{{count}} link",
+    "links_other": "{{count}} links",
+    "unsaved": "Unsaved changes will be saved first",
+    "update": "Update Links",
     "cancel": "Cancel"
   }
 }

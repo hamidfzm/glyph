@@ -418,6 +418,8 @@ leaves every relative link to the browser instead.
 
 When you have the `samples/` folder open, the **Backlinks** section under the file tree lists every other note that links to the current document. This file is referenced from [[Index]] and [[Notes/Cooking]], so opening either of them will show *this* file in their backlinks panel.
 
+Renaming or moving a note or folder in the file tree keeps those links working: Glyph lists the notes whose `[[wikilinks]]`, `![[embeds]]`, relative `[links](Notes/Cooking.md)` and canvas cards point at it, and rewrites them once you confirm. Aliases, `#heading` fragments and links inside code stay as written, and a same-named note in another folder keeps its own links.
+
 ### Graph view
 
 With the `samples/` folder open, press `Cmd/Ctrl+G` (or View → Open Graph) to see this workspace as a graph: every note is a node, every wikilink an edge. Hover a node to highlight its neighbours, click one to focus it and pull the view in around it, click the focused node again to open that note, drag to pan, and scroll to zoom. `Missing` targets never appear (broken links are dropped), and notes nothing links to render muted.

@@ -1,9 +1,11 @@
 //! Per-note extraction: what one file contributes to the index.
 
 use std::collections::BTreeMap;
+use std::ops::Range;
 
 use super::frontmatter::{parse_frontmatter, split_frontmatter};
 use super::headings::{js_lines, Fences};
+use super::md_links::{code_spans, in_spans, relative_destinations};
 use super::tags::{add_tags, inline_tags};
 
 pub const MAX_SNIPPET_CHARS: usize = 200;
@@ -33,6 +35,16 @@ pub(crate) struct Note {
     pub fields: BTreeMap<String, String>,
     pub aliases: Vec<String>,
     pub links: Vec<Link>,
+    /// Relative markdown link and image destinations, as written.
+    pub file_links: Vec<String>,
+}
+
+/// Every link in a note with the byte range a rewrite replaces: a wikilink's
+/// target, or a markdown link's destination.
+#[derive(Debug, Default)]
+pub(crate) struct Scan {
+    pub links: Vec<(Link, Range<usize>)>,
+    pub file_links: Vec<(String, Range<usize>)>,
 }
 
 pub(crate) fn extract_note(path: &str, content: &str) -> Note {
@@ -70,70 +82,88 @@ pub(crate) fn extract_note(path: &str, content: &str) -> Note {
     }
     tags.sort();
 
+    let scan = scan(content, body_start);
     Note {
         path: path.to_string(),
         title,
         tags,
         fields,
         aliases,
-        links: parse_links(content, body_start),
+        links: scan.links.into_iter().map(|(link, _)| link).collect(),
+        file_links: scan.file_links.into_iter().map(|(dest, _)| dest).collect(),
     }
 }
 
-/// Every `[[target]]` and `![[embed]]` outside fenced code, in source order.
-/// The frontmatter block is skipped the way the tag scan skips it: the
-/// renderer shows those lines as a table, never as links.
-fn parse_links(content: &str, body_start: usize) -> Vec<Link> {
-    let mut links = Vec::new();
+/// Every `[[target]]`, `![[embed]]` and relative markdown destination outside
+/// fenced and inline code, in source order. The frontmatter block is skipped
+/// the way the tag scan skips it: the renderer shows those lines as a table,
+/// never as links.
+pub(crate) fn scan(content: &str, body_start: usize) -> Scan {
+    let mut scan = Scan::default();
     let mut fences = Fences::new();
 
     for (idx, line) in js_lines(content).enumerate().skip(body_start) {
         if fences.skip(line) {
             continue;
         }
-        push_line_links(line, (idx + 1) as u32, &mut links);
+        // `js_lines` yields slices of `content`, so this is the line's offset.
+        let offset = line.as_ptr() as usize - content.as_ptr() as usize;
+        let code = code_spans(line);
+        push_line_links(line, (idx + 1) as u32, &code, offset, &mut scan.links);
+        for (dest, span) in relative_destinations(line, &code) {
+            scan.file_links
+                .push((dest, span.start + offset..span.end + offset));
+        }
     }
 
-    links
+    scan
 }
 
-fn push_line_links(line: &str, line_number: u32, out: &mut Vec<Link>) {
-    let chars: Vec<char> = line.chars().collect();
+fn push_line_links(
+    line: &str,
+    line_number: u32,
+    code: &[Range<usize>],
+    offset: usize,
+    out: &mut Vec<(Link, Range<usize>)>,
+) {
+    let bytes = line.as_bytes();
     let mut i = 0;
-    while i + 1 < chars.len() {
-        if chars[i] != '[' || chars[i + 1] != '[' {
+    while i + 1 < bytes.len() {
+        if bytes[i] != b'[' || bytes[i + 1] != b'[' || in_spans(code, i) {
             i += 1;
             continue;
         }
         // The inner text may not span a `]`, matching the renderer's pattern,
         // so `[[a]b]]` is text rather than a link to `a]b`.
         let start = i + 2;
-        let Some(close) = (start..chars.len()).find(|&j| chars[j] == ']') else {
+        let Some(close) = (start..bytes.len()).find(|&j| bytes[j] == b']') else {
             break;
         };
-        if close + 1 >= chars.len() || chars[close + 1] != ']' || close == start {
+        if close + 1 >= bytes.len() || bytes[close + 1] != b']' || close == start {
             i += 1;
             continue;
         }
 
-        let inner: String = chars[start..close].iter().collect();
-        if let Some((target, heading, alias)) = split_link(&inner) {
-            out.push(Link {
-                target,
+        let inner = &line[start..close];
+        if let Some((span, heading, alias)) = split_link(inner) {
+            let link = Link {
+                target: inner[span.clone()].to_string(),
                 heading,
                 alias,
-                embed: i > 0 && chars[i - 1] == '!',
+                embed: i > 0 && bytes[i - 1] == b'!',
                 line: line_number,
                 snippet: snippet_for(line),
-            });
+            };
+            out.push((link, offset + start + span.start..offset + start + span.end));
         }
         i = close + 2;
     }
 }
 
 /// Split `name#heading|alias` the way the renderer does: the alias at the
-/// first `|`, then the heading at the first `#` before it. No target, no link.
-fn split_link(inner: &str) -> Option<(String, Option<String>, Option<String>)> {
+/// first `|`, then the heading at the first `#` before it. The target comes
+/// back as its trimmed byte range in `inner`. No target, no link.
+fn split_link(inner: &str) -> Option<(Range<usize>, Option<String>, Option<String>)> {
     let (target_with_heading, alias) = match inner.split_once('|') {
         Some((target, alias)) => (target, Some(alias.to_string())),
         None => (inner, None),
@@ -142,8 +172,9 @@ fn split_link(inner: &str) -> Option<(String, Option<String>, Option<String>)> {
         Some((target, heading)) => (target, Some(heading.to_string())),
         None => (target_with_heading, None),
     };
-    let target = target.trim();
-    (!target.is_empty()).then(|| (target.to_string(), heading, alias))
+    let start = target.len() - target.trim_start().len();
+    let span = start..start + target.trim().len();
+    (!span.is_empty()).then_some((span, heading, alias))
 }
 
 pub fn snippet_for(line: &str) -> String {
@@ -159,6 +190,42 @@ pub fn snippet_for(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parse_links(content: &str, body_start: usize) -> Vec<Link> {
+        scan(content, body_start)
+            .links
+            .into_iter()
+            .map(|(link, _)| link)
+            .collect()
+    }
+
+    #[test]
+    fn inline_code_holds_no_links() {
+        assert_eq!(
+            targets("`[[Code]]` and ``a [[Also]] b`` but [[Real]]\n"),
+            ["Real"]
+        );
+        let scan = scan("```\n[a](fenced.md)\n```\n`[b](code.md)` [c](real.md)\n", 0);
+        let dests: Vec<&str> = scan.file_links.iter().map(|(d, _)| d.as_str()).collect();
+        assert_eq!(dests, ["real.md"]);
+    }
+
+    #[test]
+    fn spans_cover_the_target_and_the_destination_in_the_content() {
+        // A multi-byte character and a CRLF ahead of the links move byte
+        // offsets away from char offsets.
+        let content = "---\nt: x\n---\ncafé ![[  Tar get #h|a ]] [n](../Note.md#s)\r\nnext [[B]]";
+        let (_, body_start) = split_frontmatter(content);
+        let found = scan(content, body_start);
+        let targets: Vec<&str> = found
+            .links
+            .iter()
+            .map(|(_, s)| &content[s.clone()])
+            .collect();
+        assert_eq!(targets, ["Tar get", "B"]);
+        assert_eq!(found.links[0].0.target, "Tar get");
+        assert_eq!(&content[found.file_links[0].1.clone()], "../Note.md#s");
+    }
 
     #[test]
     fn a_fence_closes_only_on_its_own_marker() {

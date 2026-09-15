@@ -107,7 +107,7 @@ and files: <path>`), which never echoes the grant list.
 | `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export) |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |
 | `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it |
-| `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target) |
+| `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target). `rename_path` and `move_path` also rewrite links in the workspace's own indexed notes and canvases, each write passing `ensure_writable`; a link target that resolves outside the workspace is never rewritten, and `dryRun` reads without writing |
 | `request_open` | folders only; the path must already be a granted workspace root |
 | `open_in_new_window` | readable |
 | `workspace_get_last_file`, `workspace_set_last_file` | granted workspace |

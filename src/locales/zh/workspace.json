@@ -8,7 +8,8 @@
     "saveFailed": "无法保存 \"{{name}}\"。你的更改仍然在此；再次编辑以重试。",
     "saveTargetOpen": "\"{{name}}\" 已在另一个标签页中打开。请用其他名称保存此文档，或切换到该标签页。",
     "indexIncompleteFiles": "工作区索引不完整：仅索引了前 {{limit}} 个文档，因此文件列表、图谱、反向链接和维基链接可能缺少结果。",
-    "indexIncompleteDepth": "工作区索引不完整：嵌套超过 {{limit}} 层的文件夹未被索引，因此文件列表、图谱、反向链接和维基链接可能缺少结果。"
+    "indexIncompleteDepth": "工作区索引不完整：嵌套超过 {{limit}} 层的文件夹未被索引，因此文件列表、图谱、反向链接和维基链接可能缺少结果。",
+    "relinkFailed": "移动已完成，但更新链接在 \"{{name}}\" 处停止，部分链接仍指向旧位置。"
   },
   "confirmDelete": {
     "message": "删除 \"{{name}}\"？此操作无法撤销。",
@@ -21,6 +22,15 @@
     "title": "未保存的更改",
     "message": "这些更改无法保存：\n{{files}}\n\n仍要关闭并放弃它们吗？",
     "discard": "放弃并关闭",
+    "cancel": "取消"
+  },
+  "relink": {
+    "title": "更新链接",
+    "message": "这些文件中的链接将更新为新位置：",
+    "links_one": "{{count}} 个链接",
+    "links_other": "{{count}} 个链接",
+    "unsaved": "未保存的更改将先保存",
+    "update": "更新链接",
     "cancel": "取消"
   }
 }

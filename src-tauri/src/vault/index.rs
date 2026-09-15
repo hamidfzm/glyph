@@ -91,11 +91,12 @@ impl Vault {
     /// Re-index only the paths that changed. Files that vanished are dropped,
     /// new ones are inserted; nothing else is read from disk.
     pub fn apply_changes(&mut self, paths: &[PathBuf]) {
+        let paths = self.with_folder_contents(paths);
         let mut seen = HashSet::new();
         let mut removed = HashSet::new();
         let mut added = Vec::new();
         let mut touched = false;
-        for path in paths {
+        for path in &paths {
             let Some((path, relative)) = self.inside_root(path) else {
                 continue;
             };
@@ -163,6 +164,33 @@ impl Vault {
         if touched {
             self.rebuild_derived();
         }
+    }
+
+    /// `paths` plus what a folder among them stands for: the files under one
+    /// that exists, and the notes still indexed under one that is gone. A
+    /// folder rename reaches the index as the folder's two paths alone.
+    fn with_folder_contents(&self, paths: &[PathBuf]) -> Vec<PathBuf> {
+        let mut expanded = paths.to_vec();
+        for path in paths {
+            let Some((spelled, _)) = self.inside_root(path) else {
+                continue;
+            };
+            if spelled.is_dir() {
+                if let Ok((files, _)) =
+                    collect_files(&spelled, is_indexable, self.max_files, self.max_depth)
+                {
+                    expanded.extend(files.into_iter().map(|(file, _)| file));
+                }
+            } else if !spelled.exists() && self.id_of(&spelled.to_string_lossy()).is_none() {
+                expanded.extend(
+                    self.notes
+                        .iter()
+                        .map(|note| PathBuf::from(&note.path))
+                        .filter(|note| note.starts_with(&spelled)),
+                );
+            }
+        }
+        expanded
     }
 
     /// Catch up with the disk without a watcher: walk again, and re-read only

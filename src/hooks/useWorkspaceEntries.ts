@@ -14,9 +14,10 @@ interface UseWorkspaceEntriesOptions {
 }
 
 /**
- * Entry mutations on the workspace tree: create, rename, duplicate, move,
- * delete. Each refreshes the affected directory listings so the change shows
- * immediately rather than waiting on the directory watcher's debounce.
+ * Entry mutations on the workspace tree: create, duplicate, delete, and the
+ * tree side of a rename or move (`useRelocation` runs the command). Each
+ * refreshes the affected directory listings so the change shows immediately
+ * rather than waiting on the directory watcher's debounce.
  */
 export function useWorkspaceEntries({
   workspaceRef,
@@ -54,29 +55,20 @@ export function useWorkspaceEntries({
     [loadDirectory, setWorkspace, workspaceRef],
   );
 
-  // Rename an entry (inline rename). Returns the final (collision-safe) path.
-  const renamePath = useCallback(
-    async (path: string, newName: string): Promise<string | null> => {
-      const ws = workspaceRef.current;
-      if (!ws) return null;
-      try {
-        const finalPath = await invoke<string>("rename_path", { path, newName, root: ws.root });
-        const parent = parentDir(path, ws.root);
-        const entries = await loadDirectory(parent);
-        repointOpenFiles(path, finalPath);
-        setWorkspace((prev) => {
-          if (!prev) return prev;
-          const nodes = new Map(prev.nodes);
-          nodes.set(parent, entries);
-          return { ...prev, nodes };
-        });
-        return finalPath;
-      } catch (err) {
-        console.error("Failed to rename:", err);
-        return null;
-      }
+  // Show a finished rename: refresh the parent listing and re-point open tabs.
+  const refreshAfterRename = useCallback(
+    async (path: string, newPath: string, root: string) => {
+      const parent = parentDir(path, root);
+      const entries = await loadDirectory(parent);
+      repointOpenFiles(path, newPath);
+      setWorkspace((prev) => {
+        if (!prev) return prev;
+        const nodes = new Map(prev.nodes);
+        nodes.set(parent, entries);
+        return { ...prev, nodes };
+      });
     },
-    [loadDirectory, repointOpenFiles, setWorkspace, workspaceRef],
+    [loadDirectory, repointOpenFiles, setWorkspace],
   );
 
   // Duplicate a note/folder next to itself, then refresh the parent listing.
@@ -103,37 +95,26 @@ export function useWorkspaceEntries({
     [loadDirectory, setWorkspace, workspaceRef],
   );
 
-  // Move a note/folder into `toDir`. Refreshes both the source and destination
-  // listings, prunes cached child listings under the old location, and
-  // re-points open tabs (and their watchers) if they moved.
-  const movePath = useCallback(
-    async (from: string, toDir: string): Promise<string | null> => {
-      const ws = workspaceRef.current;
-      if (!ws) return null;
-      try {
-        const newPath = await invoke<string>("move_path", { from, toDir, root: ws.root });
-        if (newPath === from) return newPath;
-        const sourceParent = parentDir(from, ws.root);
-        const [sourceEntries, destEntries] = await Promise.all([
-          loadDirectory(sourceParent),
-          loadDirectory(toDir),
-        ]);
-        repointOpenFiles(from, newPath);
-        setWorkspace((prev) => {
-          if (!prev) return prev;
-          const nodes = new Map(prev.nodes);
-          nodes.set(sourceParent, sourceEntries);
-          nodes.set(toDir, destEntries);
-          pruneInside(nodes.keys(), from, (key) => nodes.delete(key));
-          return { ...prev, nodes };
-        });
-        return newPath;
-      } catch (err) {
-        console.error("Failed to move:", err);
-        return null;
-      }
+  // Show a finished move into `toDir`: refresh both listings, prune cached child
+  // listings under the old location, and re-point open tabs that moved.
+  const refreshAfterMove = useCallback(
+    async (from: string, toDir: string, newPath: string, root: string) => {
+      const sourceParent = parentDir(from, root);
+      const [sourceEntries, destEntries] = await Promise.all([
+        loadDirectory(sourceParent),
+        loadDirectory(toDir),
+      ]);
+      repointOpenFiles(from, newPath);
+      setWorkspace((prev) => {
+        if (!prev) return prev;
+        const nodes = new Map(prev.nodes);
+        nodes.set(sourceParent, sourceEntries);
+        nodes.set(toDir, destEntries);
+        pruneInside(nodes.keys(), from, (key) => nodes.delete(key));
+        return { ...prev, nodes };
+      });
     },
-    [loadDirectory, repointOpenFiles, setWorkspace, workspaceRef],
+    [loadDirectory, repointOpenFiles, setWorkspace],
   );
 
   // Delete a note/folder after confirming, then refresh the parent listing and
@@ -171,5 +152,5 @@ export function useWorkspaceEntries({
     [loadDirectory, setWorkspace, t, workspaceRef],
   );
 
-  return { createEntry, renamePath, duplicatePath, movePath, deleteEntry };
+  return { createEntry, refreshAfterRename, duplicatePath, refreshAfterMove, deleteEntry };
 }

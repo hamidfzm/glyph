@@ -3,6 +3,8 @@
 //! the editor's own model; the validation that decides whether a node exists
 //! at all is kept, so both sides see the same set of cards.
 
+use std::ops::Range;
+
 use serde::Serialize;
 use serde_json::Value;
 
@@ -160,9 +162,68 @@ pub(crate) fn extract_canvas(path: &str, content: &str) -> (Note, Canvas) {
     (note, canvas)
 }
 
+/// Every `"file"` string value in a board's raw JSON, decoded, with the byte
+/// range between its quotes, so a rewrite can splice one card's path and leave
+/// the rest of the file exactly as it was written.
+pub(crate) fn file_values(json: &str) -> Vec<(String, Range<usize>)> {
+    let bytes = json.as_bytes();
+    let mut values = Vec::new();
+    let mut last_string: Option<Range<usize>> = None;
+    let mut in_file_value = false;
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' => {
+                let end = string_end(bytes, i + 1);
+                if end == bytes.len() {
+                    break;
+                }
+                if in_file_value {
+                    if let Ok(value) = serde_json::from_str::<String>(&json[i..=end]) {
+                        values.push((value, i + 1..end));
+                    }
+                }
+                last_string = Some(i + 1..end);
+                in_file_value = false;
+                i = end + 1;
+                continue;
+            }
+            b':' => in_file_value = last_string.take().is_some_and(|key| &json[key] == "file"),
+            b if b.is_ascii_whitespace() => {}
+            _ => {
+                last_string = None;
+                in_file_value = false;
+            }
+        }
+        i += 1;
+    }
+    values
+}
+
+/// The index of the quote that closes a JSON string whose body starts at `i`.
+fn string_end(bytes: &[u8], mut i: usize) -> usize {
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => i += 2,
+            b'"' => return i,
+            _ => i += 1,
+        }
+    }
+    bytes.len()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_values_are_found_by_key_and_never_inside_text() {
+        let json = r##"{"nodes":[{"type":"text","text":"say \"file\": \"x.md\""},{"type":"file","file" : "Notes\/Café.md","subpath":"#s"}],"file":7,"file":"##;
+        let values = file_values(json);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].0, "Notes/Café.md");
+        assert_eq!(&json[values[0].1.clone()], r"Notes\/Café.md");
+    }
 
     fn node(json: &str) -> Option<CanvasNode> {
         parse_canvas(&format!("{{\"nodes\":[{json}]}}"))?
