@@ -511,6 +511,16 @@ describe("GraphView view state across a tab switch", () => {
     expect(lastWorldTransform().tx).toBeCloseTo(panned.tx);
   });
 
+  it("comes back with the focused node still highlighted", () => {
+    const first = render(graphIn(ROOT, TRIO_GRAPH));
+    click(screen.getByRole("img", { name: "Workspace graph" }), TRIO_NODE_A, 1);
+    first.unmount();
+
+    alphas.length = 0;
+    render(graphIn(ROOT, TRIO_GRAPH));
+    expect(alphas).toContain(ALPHA_DIMMED);
+  });
+
   it("keeps one workspace's camera out of another's", () => {
     const first = renderInRoot();
     pan(first.canvas, 60);

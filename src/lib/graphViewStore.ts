@@ -1,7 +1,7 @@
 // Module-level store of graph view state, keyed by workspace root. `TabContent`
 // renders the graph only while its tab is active, so switching to a document tab
-// unmounts the whole subtree; without shared state the camera, the auto-fit flag
-// and the settled layout would all be rebuilt from scratch on every return.
+// unmounts the whole subtree; without shared state the camera, the auto-fit flag,
+// the focused node and the settled layout would all be reset on every return.
 // One entry per open graph tab, so no eviction is needed. Session-only: nothing
 // reaches disk.
 
@@ -12,6 +12,7 @@ export interface GraphViewState {
   camera: Camera;
   /** False once the user has taken the camera by hand. */
   autoFit: boolean;
+  focusedId: string | null;
   positions: ReadonlyMap<string, NodePosition>;
 }
 
