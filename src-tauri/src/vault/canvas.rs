@@ -223,6 +223,8 @@ mod tests {
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].0, "Notes/Café.md");
         assert_eq!(&json[values[0].1.clone()], r"Notes\/Café.md");
+        // A truncated board ends the scan instead of reading past the end.
+        assert!(file_values(r#"{"file":"Notes/unterminated"#).is_empty());
     }
 
     fn node(json: &str) -> Option<CanvasNode> {

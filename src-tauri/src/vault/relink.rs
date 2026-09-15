@@ -253,13 +253,13 @@ impl<'a> Relinker<'a> {
         if self.resolves_after(target, &source_after) == Some(expected.as_str()) {
             return None;
         }
-        Some(shortest_target(
+        shortest_target(
             target,
             &expected,
             &source_after,
             &self.vault.root,
             &self.after,
-        ))
+        )
     }
 
     /// The new destination of a relative markdown link in `source`, when the
@@ -361,29 +361,23 @@ fn shortest_target(
     from: &str,
     root: &Path,
     resolver: &Resolver,
-) -> String {
-    let Some(mut parts) = segments(root, Path::new(to)).filter(|parts| !parts.is_empty()) else {
-        return written.to_string();
-    };
-    if let Some(name) = parts.last_mut() {
-        let typed_md = written.to_ascii_lowercase().ends_with(".md");
-        if !(typed_md && name.to_ascii_lowercase().ends_with(".md")) {
-            *name = stem_of(name).to_string();
-        }
+) -> Option<String> {
+    let mut parts = segments(root, Path::new(to))?;
+    let name = parts.last_mut()?;
+    let typed_md = written.to_ascii_lowercase().ends_with(".md");
+    if !(typed_md && name.to_ascii_lowercase().ends_with(".md")) {
+        *name = stem_of(name).to_string();
     }
     let written_depth = written.split(['/', '\\']).filter(|s| !s.is_empty()).count();
-    for depth in written_depth.clamp(1, parts.len())..=parts.len() {
-        let candidate = parts[parts.len() - depth..].join("/");
-        let reached = resolver
-            .resolve(&candidate, Some(from))
-            .map(|id| resolver.path(id));
-        if reached == Some(to) {
-            return candidate;
-        }
-    }
-    // ponytail: a note at the root shadowed by a same-named one beside the
-    // link has no target that reaches it; the full path is the nearest.
-    parts.join("/")
+    // A note at the root shadowed by a same-named one beside the link has no
+    // target that reaches it; that link is left as written rather than pointed
+    // at the wrong note.
+    (written_depth.clamp(1, parts.len())..=parts.len())
+        .map(|depth| parts[parts.len() - depth..].join("/"))
+        .find(|candidate| {
+            let reached = resolver.resolve(candidate, Some(from));
+            reached.map(|id| resolver.path(id)) == Some(to)
+        })
 }
 
 /// `content` with each range replaced. A range overlapping an earlier one is
@@ -635,6 +629,50 @@ mod tests {
             &[("Travel.md", "[[Nowhere]]"), ("Index.md", "text")],
         );
         assert!(planned(&root, "Travel.md", "Trip.md").is_empty());
+    }
+
+    #[test]
+    fn a_link_no_target_can_reach_is_left_as_written() {
+        let root = workspace(
+            "shadowed",
+            &[
+                ("Notes/Travel.md", ""),
+                ("Archive/Travel.md", ""),
+                ("Notes/Day.md", "[[Archive/Travel]] and [[Travel]]"),
+            ],
+        );
+        // At the root, `[[Travel]]` from Notes/ would reach Notes/Travel.md.
+        assert!(planned(&root, "Archive/Travel.md", "Travel.md").is_empty());
+    }
+
+    #[test]
+    fn a_file_edited_since_indexing_is_planned_from_disk() {
+        let root = workspace("stale", &[("Travel.md", ""), ("Index.md", "[[Travel]]")]);
+        let vault = Vault::build(&root).unwrap();
+        fs::write(root.join("Index.md"), "no links now").unwrap();
+        let rewrites = plan(&vault, &root.join("Travel.md"), &root.join("Trip.md")).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        assert!(rewrites.is_empty());
+    }
+
+    #[test]
+    fn a_card_on_an_attachment_that_stays_put_is_untouched() {
+        let board = r#"{"nodes":[{"id":"a","type":"file","file":"Other/pic.png","x":0,"y":0,"width":1,"height":1}]}"#;
+        let root = workspace(
+            "canvas_unmoved",
+            &[
+                ("Notes/Travel.md", ""),
+                ("Other/pic.png", "png"),
+                ("Board.canvas", board),
+            ],
+        );
+        assert!(planned(&root, "Notes", "Trips").is_empty());
+    }
+
+    #[test]
+    fn overlapping_edits_keep_the_first() {
+        let edits = vec![(1..4, "X".to_string()), (2..3, "Y".to_string())];
+        assert_eq!(splice("abcdef", edits), "aXef");
     }
 
     #[test]

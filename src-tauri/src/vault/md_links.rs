@@ -207,5 +207,6 @@ mod tests {
     fn code_spans_and_unclosed_links_hold_no_destination() {
         assert!(destinations("`[a](a.md)` and [b](b.md and x](y.md)").is_empty());
         assert!(destinations(r"\[a](a.md)").is_empty());
+        assert!(destinations("[a](<x<y>)").is_empty());
     }
 }
