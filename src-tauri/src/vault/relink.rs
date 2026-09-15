@@ -192,12 +192,14 @@ impl Move {
 
 /// Windows and macOS ignore case in file names by default, so a link can spell a
 /// folder or note differently from the disk and still reach it.
+#[cfg(any(windows, target_os = "macos"))]
 fn same_name(a: &OsStr, b: &OsStr) -> bool {
-    if cfg!(any(windows, target_os = "macos")) {
-        a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
-    } else {
-        a == b
-    }
+    a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn same_name(a: &OsStr, b: &OsStr) -> bool {
+    a == b
 }
 
 struct Relinker<'a> {

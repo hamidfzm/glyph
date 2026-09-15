@@ -185,11 +185,10 @@ impl Vault {
                 if known {
                     continue;
                 }
-                if let Ok((files, _)) =
-                    collect_files(&spelled, is_indexable, self.max_files, self.max_depth)
-                {
-                    expanded.extend(files.into_iter().map(|(file, _)| file));
-                }
+                let walked = collect_files(&spelled, is_indexable, self.max_files, self.max_depth)
+                    .map(|(files, _)| files)
+                    .unwrap_or_default();
+                expanded.extend(walked.into_iter().map(|(file, _)| file));
             } else if !spelled.exists() && self.id_of(&spelled.to_string_lossy()).is_none() {
                 expanded.extend(
                     self.notes

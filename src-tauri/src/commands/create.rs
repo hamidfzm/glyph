@@ -999,4 +999,89 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         let _ = fs::remove_dir_all(&outside);
     }
+
+    // An async command's IPC marshalling is generated at its attribute line and
+    // only runs for a real IPC message, so rename and move go through one here.
+    #[test]
+    fn rename_and_move_answer_over_ipc() {
+        use serde_json::{json, Value};
+        use tauri::test::{get_ipc_response, mock_builder, mock_context, noop_assets, INVOKE_KEY};
+        use tauri::webview::InvokeRequest;
+        use tauri::WebviewWindowBuilder;
+
+        let dir = unique_tmp("ipc");
+        fs::create_dir(dir.join("sub")).unwrap();
+        fs::write(dir.join("note.md"), "x").unwrap();
+        let root = dir.to_string_lossy().to_string();
+        let note = dir.join("note.md").to_string_lossy().to_string();
+        let sub = dir.join("sub").to_string_lossy().to_string();
+
+        let app = mock_builder()
+            .invoke_handler(tauri::generate_handler![
+                super::rename_path,
+                super::move_path
+            ])
+            .build(mock_context(noop_assets()))
+            .expect("mock app builds");
+        app.manage(GrantRegistry::default());
+        app.manage(VaultStore::default());
+        app.state::<GrantRegistry>().grant_workspace(&dir).unwrap();
+        let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .expect("webview builds");
+        let request = |cmd: &str, args: Value| {
+            #[cfg(any(windows, target_os = "android"))]
+            let url = "http://tauri.localhost";
+            #[cfg(not(any(windows, target_os = "android")))]
+            let url = "tauri://localhost";
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: tauri::ipc::CallbackFn(0),
+                error: tauri::ipc::CallbackFn(1),
+                url: url.parse().unwrap(),
+                body: tauri::ipc::InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            }
+        };
+        let call = |cmd: &str, args: Value| -> Value {
+            get_ipc_response(&webview, request(cmd, args))
+                .expect("ipc call succeeds")
+                .deserialize()
+                .expect("response deserialises")
+        };
+        let refused =
+            |cmd: &str, args: Value| get_ipc_response(&webview, request(cmd, args)).is_err();
+
+        let preview = call(
+            "rename_path",
+            json!({ "path": note, "newName": "renamed", "root": root, "dryRun": true }),
+        );
+        assert!(preview["newPath"].as_str().unwrap().ends_with("renamed.md"));
+        assert!(dir.join("note.md").is_file());
+
+        // A missing argument and an ungranted root are refused over IPC as well.
+        let outside = unique_tmp("ipc_outside");
+        let outside_root = outside.to_string_lossy().to_string();
+        assert!(refused(
+            "rename_path",
+            json!({ "path": note, "newName": "x", "root": root })
+        ));
+        assert!(refused(
+            "move_path",
+            json!({ "from": note, "toDir": sub, "root": outside_root, "dryRun": true })
+        ));
+        let _ = fs::remove_dir_all(&outside);
+
+        let moved = call(
+            "move_path",
+            json!({ "from": note, "toDir": sub, "root": root, "dryRun": false }),
+        );
+        assert_eq!(
+            Path::new(moved["newPath"].as_str().unwrap()),
+            dir.join("sub").join("note.md")
+        );
+        assert!(dir.join("sub").join("note.md").is_file());
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
