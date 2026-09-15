@@ -4,6 +4,7 @@ import {
   displayName,
   isPathInside,
   lastSegment,
+  movedPath,
   parentDir,
   pathStem,
   pruneInside,
@@ -128,6 +129,19 @@ describe("isPathInside", () => {
 
   it("rejects a sibling that only shares a name prefix", () => {
     expect(isPathInside("/a/bc", "/a/b")).toBe(false);
+  });
+});
+
+describe("movedPath", () => {
+  it("re-roots the moved entry and everything inside it", () => {
+    expect(movedPath("/ws/a.md", "/ws/a.md", "/ws/b.md")).toBe("/ws/b.md");
+    expect(movedPath("C:\\ws\\sub\\n.md", "C:\\ws\\sub", "C:\\ws\\dest\\sub")).toBe(
+      "C:\\ws\\dest\\sub\\n.md",
+    );
+  });
+
+  it("leaves a path that only shares the moved entry's prefix", () => {
+    expect(movedPath("/ws/sub 1/n.md", "/ws/sub", "/ws/dest/sub")).toBe("/ws/sub 1/n.md");
   });
 });
 

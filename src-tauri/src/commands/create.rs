@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use tauri::State;
 
 use crate::grants::GrantRegistry;
+use crate::vault::{relocate, Relink, VaultStore};
 
 const DEFAULT_NOTE_STEM: &str = "Untitled";
 const DEFAULT_FOLDER_NAME: &str = "Untitled Folder";
@@ -119,20 +120,22 @@ pub fn create_folder(
     Ok(path.to_string_lossy().to_string())
 }
 
-/// Rename `path` to `new_name` within the same directory. Used by the inline
-/// rename after a create. The extension of the original file is preserved when
-/// the typed name doesn't carry one (so "My Note" stays a `.md` file). Returns
-/// the final (collision-safe) path.
-#[tauri::command]
+/// Rename `path` to `new_name` within the same directory, rewriting the links
+/// the rename would break. The extension of the original file is preserved when
+/// the typed name doesn't carry one (so "My Note" stays a `.md` file). Reports
+/// the final (collision-safe) path; a dry run reports it without renaming or writing.
+#[tauri::command(async)]
 pub fn rename_path(
     path: String,
     new_name: String,
     root: String,
+    dry_run: bool,
     grants: State<'_, GrantRegistry>,
-) -> Result<String, String> {
-    let root = grants.ensure_workspace(&root)?;
+    store: State<'_, VaultStore>,
+) -> Result<Relink, String> {
+    let root_dir = grants.ensure_workspace(&root)?;
     let source = Path::new(&path);
-    ensure_entry_inside_root(source, &root)?;
+    ensure_entry_inside_root(source, &root_dir)?;
     let parent = source
         .parent()
         .ok_or_else(|| "Path has no parent directory".to_string())?;
@@ -165,12 +168,11 @@ pub fn rename_path(
         None => parent.join(stem),
     };
     if desired == source {
-        return Ok(path);
+        return Ok(Relink::unmoved(path));
     }
 
     let target = unique_path(parent, stem, ext);
-    fs::rename(source, &target).map_err(|e| format!("Failed to rename: {e}"))?;
-    Ok(target.to_string_lossy().to_string())
+    relocate(&root, source, &target, dry_run, &grants, &store)
 }
 
 fn copy_dir_recursive(from: &Path, to: &Path) -> std::io::Result<()> {
@@ -232,22 +234,25 @@ pub fn duplicate_path(
     Ok(dest.to_string_lossy().to_string())
 }
 
-/// Move a note or folder into `to_dir` (same name, collision-safe). Both the
-/// source's parent and the destination must be inside `root`, and a folder
-/// can't be moved into itself or a descendant. Returns the new path; a move
-/// into the current directory is a no-op that returns the original path.
-#[tauri::command]
+/// Move a note or folder into `to_dir` (same name, collision-safe), rewriting
+/// the links the move would break. Both the source's parent and the destination
+/// must be inside `root`, and a folder can't be moved into itself or a
+/// descendant. A move into the current directory is a no-op that reports the
+/// original path; a dry run reports without moving or writing.
+#[tauri::command(async)]
 pub fn move_path(
     from: String,
     to_dir: String,
     root: String,
+    dry_run: bool,
     grants: State<'_, GrantRegistry>,
-) -> Result<String, String> {
-    let root = grants.ensure_workspace(&root)?;
+    store: State<'_, VaultStore>,
+) -> Result<Relink, String> {
+    let root_dir = grants.ensure_workspace(&root)?;
     let source = Path::new(&from);
     let dest_dir = Path::new(&to_dir);
-    let source_abs = ensure_entry_inside_root(source, &root)?;
-    ensure_dir_within_root(dest_dir, &root)?;
+    let source_abs = ensure_entry_inside_root(source, &root_dir)?;
+    ensure_dir_within_root(dest_dir, &root_dir)?;
     let parent = source
         .parent()
         .ok_or_else(|| "Path has no parent directory".to_string())?;
@@ -260,7 +265,7 @@ pub fn move_path(
     }
     // Moving into the current parent is a no-op.
     if parent.canonicalize().ok() == Some(dest_abs) {
-        return Ok(from);
+        return Ok(Relink::unmoved(from));
     }
 
     let name = source
@@ -275,8 +280,7 @@ pub fn move_path(
         unique_path(dest_dir, name, None)
     };
 
-    fs::rename(source, &target).map_err(|e| format!("Failed to move: {e}"))?;
-    Ok(target.to_string_lossy().to_string())
+    relocate(&root, source, &target, dry_run, &grants, &store)
 }
 
 /// Permanently delete a note or folder. The frontend always confirms first.
@@ -307,6 +311,7 @@ mod tests {
     fn app_with_root(root: &str) -> tauri::App<MockRuntime> {
         let app = mock_app();
         app.manage(GrantRegistry::default());
+        app.manage(VaultStore::default());
         app.state::<GrantRegistry>()
             .grant_workspace(Path::new(root))
             .unwrap();
@@ -332,7 +337,8 @@ mod tests {
 
     fn rename_path(path: String, new_name: String, root: String) -> Result<String, String> {
         let app = app_with_root(&root);
-        super::rename_path(path, new_name, root, app.state::<GrantRegistry>())
+        let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+        super::rename_path(path, new_name, root, false, grants, store).map(|done| done.new_path)
     }
 
     fn duplicate_path(path: String, root: String) -> Result<String, String> {
@@ -342,7 +348,8 @@ mod tests {
 
     fn move_path(from: String, to_dir: String, root: String) -> Result<String, String> {
         let app = app_with_root(&root);
-        super::move_path(from, to_dir, root, app.state::<GrantRegistry>())
+        let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+        super::move_path(from, to_dir, root, false, grants, store).map(|done| done.new_path)
     }
 
     fn delete_path(path: String, root: String) -> Result<(), String> {
@@ -552,6 +559,60 @@ mod tests {
     }
 
     #[test]
+    fn a_dry_run_is_denied_without_a_grant_and_otherwise_moves_nothing() {
+        let dir = unique_tmp("dry_run");
+        let root = dir.to_string_lossy().to_string();
+        let note = dir.join("note.md").to_string_lossy().to_string();
+        let sub = dir.join("sub").to_string_lossy().to_string();
+        fs::create_dir(&sub).unwrap();
+        fs::write(&note, "x").unwrap();
+
+        let ungranted = mock_app();
+        ungranted.manage(GrantRegistry::default());
+        ungranted.manage(VaultStore::default());
+        let (grants, store) = (
+            ungranted.state::<GrantRegistry>(),
+            ungranted.state::<VaultStore>(),
+        );
+        let renamed = super::rename_path(
+            note.clone(),
+            "y".into(),
+            root.clone(),
+            true,
+            grants.clone(),
+            store.clone(),
+        );
+        let moved = super::move_path(note.clone(), sub.clone(), root.clone(), true, grants, store);
+        for denied in [
+            renamed.map(|done| done.new_path),
+            moved.map(|done| done.new_path),
+        ] {
+            assert!(denied
+                .unwrap_err()
+                .starts_with("path is outside the allowed workspaces"));
+        }
+
+        let app = app_with_root(&root);
+        let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+        let renamed = super::rename_path(
+            note.clone(),
+            "y".into(),
+            root.clone(),
+            true,
+            grants.clone(),
+            store.clone(),
+        )
+        .unwrap();
+        let moved = super::move_path(note, sub, root, true, grants, store).unwrap();
+        assert!(renamed.new_path.ends_with("y.md"));
+        assert_eq!(Path::new(&moved.new_path), dir.join("sub").join("note.md"));
+        assert!(dir.join("note.md").is_file());
+        assert!(!dir.join("y.md").exists());
+        assert!(!dir.join("sub").join("note.md").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn create_outside_root_is_refused() {
         let root = unique_tmp("guard_root");
         let outside = unique_tmp("guard_outside");
@@ -590,7 +651,9 @@ mod tests {
             folder.to_string_lossy().to_string(),
             child.to_string_lossy().to_string(),
             root.to_string_lossy().to_string(),
+            false,
             app.state::<GrantRegistry>(),
+            app.state::<VaultStore>(),
         );
         // The guard must answer, not the OS rename failure.
         assert_eq!(result.unwrap_err(), "Can't move an item into itself");
@@ -935,5 +998,90 @@ mod tests {
         assert!(victim.exists(), "guarded file must survive");
         let _ = fs::remove_dir_all(&root);
         let _ = fs::remove_dir_all(&outside);
+    }
+
+    // An async command's IPC marshalling is generated at its attribute line and
+    // only runs for a real IPC message, so rename and move go through one here.
+    #[test]
+    fn rename_and_move_answer_over_ipc() {
+        use serde_json::{json, Value};
+        use tauri::test::{get_ipc_response, mock_builder, mock_context, noop_assets, INVOKE_KEY};
+        use tauri::webview::InvokeRequest;
+        use tauri::WebviewWindowBuilder;
+
+        let dir = unique_tmp("ipc");
+        fs::create_dir(dir.join("sub")).unwrap();
+        fs::write(dir.join("note.md"), "x").unwrap();
+        let root = dir.to_string_lossy().to_string();
+        let note = dir.join("note.md").to_string_lossy().to_string();
+        let sub = dir.join("sub").to_string_lossy().to_string();
+
+        let app = mock_builder()
+            .invoke_handler(tauri::generate_handler![
+                super::rename_path,
+                super::move_path
+            ])
+            .build(mock_context(noop_assets()))
+            .expect("mock app builds");
+        app.manage(GrantRegistry::default());
+        app.manage(VaultStore::default());
+        app.state::<GrantRegistry>().grant_workspace(&dir).unwrap();
+        let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .expect("webview builds");
+        let request = |cmd: &str, args: Value| {
+            #[cfg(any(windows, target_os = "android"))]
+            let url = "http://tauri.localhost";
+            #[cfg(not(any(windows, target_os = "android")))]
+            let url = "tauri://localhost";
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: tauri::ipc::CallbackFn(0),
+                error: tauri::ipc::CallbackFn(1),
+                url: url.parse().unwrap(),
+                body: tauri::ipc::InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            }
+        };
+        let call = |cmd: &str, args: Value| -> Value {
+            get_ipc_response(&webview, request(cmd, args))
+                .expect("ipc call succeeds")
+                .deserialize()
+                .expect("response deserialises")
+        };
+        let refused =
+            |cmd: &str, args: Value| get_ipc_response(&webview, request(cmd, args)).is_err();
+
+        let preview = call(
+            "rename_path",
+            json!({ "path": note, "newName": "renamed", "root": root, "dryRun": true }),
+        );
+        assert!(preview["newPath"].as_str().unwrap().ends_with("renamed.md"));
+        assert!(dir.join("note.md").is_file());
+
+        // A missing argument and an ungranted root are refused over IPC as well.
+        let outside = unique_tmp("ipc_outside");
+        let outside_root = outside.to_string_lossy().to_string();
+        assert!(refused(
+            "rename_path",
+            json!({ "path": note, "newName": "x", "root": root })
+        ));
+        assert!(refused(
+            "move_path",
+            json!({ "from": note, "toDir": sub, "root": outside_root, "dryRun": true })
+        ));
+        let _ = fs::remove_dir_all(&outside);
+
+        let moved = call(
+            "move_path",
+            json!({ "from": note, "toDir": sub, "root": root, "dryRun": false }),
+        );
+        assert_eq!(
+            Path::new(moved["newPath"].as_str().unwrap()),
+            dir.join("sub").join("note.md")
+        );
+        assert!(dir.join("sub").join("note.md").is_file());
+        let _ = fs::remove_dir_all(&dir);
     }
 }

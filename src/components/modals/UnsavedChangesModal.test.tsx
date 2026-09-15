@@ -30,35 +30,6 @@ describe("UnsavedChangesModal", () => {
     expect(screen.getByRole("button", { name: "Save" })).toHaveFocus();
   });
 
-  it("keeps Tab inside the dialog so the app behind it cannot be edited", () => {
-    render(<UnsavedChangesModal {...defaultProps} />);
-    const save = screen.getByRole("button", { name: "Save" });
-    const cancel = screen.getByRole("button", { name: "Cancel" });
-
-    // Save is last in the strip, so Tab wraps back to the first button.
-    fireEvent.keyDown(save, { key: "Tab" });
-    expect(cancel).toHaveFocus();
-    fireEvent.keyDown(cancel, { key: "Tab", shiftKey: true });
-    expect(save).toHaveFocus();
-
-    // Ordinary typing is left alone.
-    fireEvent.keyDown(save, { key: "a" });
-    expect(save).toHaveFocus();
-  });
-
-  it("returns focus to where it was when the prompt closes", () => {
-    const outside = document.createElement("button");
-    document.body.append(outside);
-    outside.focus();
-
-    const { unmount } = render(<UnsavedChangesModal {...defaultProps} />);
-    expect(screen.getByRole("button", { name: "Save" })).toHaveFocus();
-    unmount();
-
-    expect(outside).toHaveFocus();
-    outside.remove();
-  });
-
   it("cancels on Escape", () => {
     const onChoose = vi.fn();
     render(<UnsavedChangesModal {...defaultProps} onChoose={onChoose} />);

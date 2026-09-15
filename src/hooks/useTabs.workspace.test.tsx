@@ -253,9 +253,9 @@ describe("useTabs workspace teardown races", () => {
           ]);
         return Promise.resolve([]);
       },
-      rename_path: async () => "/p/ws/renamed.md",
+      rename_path: async () => ({ newPath: "/p/ws/renamed.md", files: [], failed: null }),
       duplicate_path: async () => "/p/ws/copy.md",
-      move_path: async () => "/p/ws/dest/a.md",
+      move_path: async () => ({ newPath: "/p/ws/dest/a.md", files: [], failed: null }),
       create_note: async () => "/p/ws/sub/Untitled.md",
       delete_path: async () => undefined,
     };

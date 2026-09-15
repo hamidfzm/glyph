@@ -108,6 +108,7 @@ export function defaultOptions(over: Partial<Parameters<typeof useTabs>[0]> = {}
     onSettingsChange: vi.fn(),
     onWorkspaceNotice: vi.fn(),
     confirmUnsaved: vi.fn(async () => "cancel" as const),
+    confirmRelink: vi.fn(async () => true),
     ...over,
   };
 }

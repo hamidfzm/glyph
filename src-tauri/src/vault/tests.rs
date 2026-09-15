@@ -1,6 +1,7 @@
 //! Tests that span the vault's siblings or drive its command surface. The
 //! per-sibling rules live in each sibling's own test module.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -12,8 +13,9 @@ use super::frontmatter::{parse_frontmatter, split_frontmatter};
 use super::headings::{parse_headings, section, slug};
 use super::index::strip_bom;
 use super::resolve::{MatchedBy, TieBreak};
+use super::store::with_vault;
 use super::test_support::*;
-use super::{apply_changes, forget, Direction, Vault, VaultStore};
+use super::{apply_changes, forget, relocate, Direction, Vault, VaultStore};
 use crate::grants::GrantRegistry;
 
 fn build(root: &Path) -> Vault {
@@ -390,6 +392,166 @@ fn creating_editing_deleting_and_renaming_update_the_index_in_place() {
     assert_eq!(resolve_one(&vault, None, "Renamed"), None);
     assert_matches_rebuild(&vault, &root);
 
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_folder_rename_reported_as_its_two_paths_reindexes_every_note_inside() {
+    let root = fixture_vault("folder_rename");
+    let mut vault = build(&root);
+
+    let (old, new) = (root.join("Notes"), root.join("Recipes"));
+    fs::rename(&old, &new).unwrap();
+    vault.apply_changes(&[old, new]);
+
+    assert_eq!(
+        resolve_one(&vault, None, "Cooking").map(|p| relative(&root, &p)),
+        Some("Recipes/Cooking.md".to_string())
+    );
+    assert_matches_rebuild(&vault, &root);
+
+    // An event naming a folder the index already holds leaves it as it is.
+    vault.apply_changes(&[root.join("Recipes")]);
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+// ------------------------------------------------------- moving with links
+
+/// Every file under `dir` with its bytes, by forward-slashed relative path.
+fn file_bytes(root: &Path, dir: &Path, out: &mut BTreeMap<String, Vec<u8>>) {
+    for entry in fs::read_dir(dir).unwrap().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            file_bytes(root, &path, out);
+        } else {
+            out.insert(
+                relative(root, &path.to_string_lossy()),
+                fs::read(&path).unwrap(),
+            );
+        }
+    }
+}
+
+fn snapshot_files(root: &Path) -> BTreeMap<String, Vec<u8>> {
+    let mut files = BTreeMap::new();
+    file_bytes(root, root, &mut files);
+    files
+}
+
+fn relinked_files(root: &Path, files: &[super::relink::RelinkedFile]) -> Vec<String> {
+    files
+        .iter()
+        .map(|file| relative(root, &file.path))
+        .collect()
+}
+
+#[test]
+fn a_dry_run_changes_nothing_and_a_rename_rewrites_and_reindexes() {
+    let root = fixture_vault("relocate");
+    let app = app_with_workspace(&root);
+    let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+    let path = root.to_string_lossy().to_string();
+    let (from, to) = (
+        root.join("Notes").join("Travel.md"),
+        root.join("Notes").join("Trip.md"),
+    );
+    let before = snapshot_files(&root);
+
+    let preview = relocate(&path, &from, &to, true, &grants, &store).unwrap();
+    assert_eq!(relinked_files(&root, &preview.files), ["Index.md"]);
+    assert_eq!(snapshot_files(&root), before);
+
+    let moved = relocate(&path, &from, &to, false, &grants, &store).unwrap();
+    assert!(moved.failed.is_none());
+    assert_eq!(relinked_files(&root, &moved.files), ["Index.md"]);
+    let index = fs::read_to_string(root.join("Index.md")).unwrap();
+    assert!(index.contains("[[Notes/Trip]]"), "{index}");
+    // Archive/Travel.md links its own folder's copy, which did not move.
+    assert_eq!(
+        fs::read(root.join("Archive").join("Travel.md")).unwrap(),
+        before["Archive/Travel.md"]
+    );
+    with_vault(&path, &grants, &store, |vault| {
+        assert_matches_rebuild(vault, &root);
+        Ok(())
+    })
+    .unwrap();
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_folder_move_rewrites_notes_and_canvas_cards_and_reindexes() {
+    let root = fixture_vault("relocate_folder");
+    let app = app_with_workspace(&root);
+    let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+    let path = root.to_string_lossy().to_string();
+
+    let moved = relocate(
+        &path,
+        &root.join("Notes"),
+        &root.join("Recipes"),
+        false,
+        &grants,
+        &store,
+    )
+    .unwrap();
+
+    assert_eq!(
+        relinked_files(&root, &moved.files),
+        ["Board.canvas", "Index.md"]
+    );
+    let board = fs::read_to_string(root.join("Board.canvas")).unwrap();
+    assert!(
+        board.contains("\"file\": \"Recipes/Cooking.md\""),
+        "{board}"
+    );
+    let index = fs::read_to_string(root.join("Index.md")).unwrap();
+    assert!(index.contains("[[Recipes/Travel]]"), "{index}");
+    with_vault(&path, &grants, &store, |vault| {
+        assert_matches_rebuild(vault, &root);
+        Ok(())
+    })
+    .unwrap();
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_write_failing_midway_keeps_earlier_files_and_names_the_one_that_failed() {
+    let root = unique_tmp("relocate_partial");
+    for (name, body) in [
+        ("A.md", "[[Travel]]"),
+        ("B.md", "[[Travel]]"),
+        ("Travel.md", ""),
+    ] {
+        fs::write(root.join(name), body).unwrap();
+    }
+    let locked = root.join("B.md");
+    let writable = fs::metadata(&locked).unwrap().permissions();
+    let mut read_only = writable.clone();
+    read_only.set_readonly(true);
+    fs::set_permissions(&locked, read_only).unwrap();
+    let app = app_with_workspace(&root);
+    let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+    let path = root.to_string_lossy().to_string();
+
+    let moved = relocate(
+        &path,
+        &root.join("Travel.md"),
+        &root.join("Trip.md"),
+        false,
+        &grants,
+        &store,
+    )
+    .unwrap();
+
+    assert!(root.join("Trip.md").is_file());
+    assert_eq!(relinked_files(&root, &moved.files), ["A.md"]);
+    assert_eq!(fs::read_to_string(root.join("A.md")).unwrap(), "[[Trip]]");
+    let failed = moved.failed.expect("the read-only file fails");
+    assert_eq!(relative(&root, &failed.path), "B.md");
+    assert_eq!(fs::read_to_string(&locked).unwrap(), "[[Travel]]");
+    fs::set_permissions(&locked, writable).unwrap();
     fs::remove_dir_all(&root).unwrap();
 }
 

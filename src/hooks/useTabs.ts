@@ -2,15 +2,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import type { UnsavedChoice } from "@/components/modals/UnsavedChangesModal";
+import { useDiskReload } from "@/hooks/useDiskReload";
 import { useDocumentEdits } from "@/hooks/useDocumentEdits";
 import { useDocumentSave } from "@/hooks/useDocumentSave";
 import { useNavigationHistory } from "@/hooks/useNavigationHistory";
 import { useOpenDocument } from "@/hooks/useOpenDocument";
+import { useRelocation } from "@/hooks/useRelocation";
 import { useSelfSaveTracker } from "@/hooks/useSelfSaveTracker";
 import { useTabEvents } from "@/hooks/useTabEvents";
 import { useTabStrip } from "@/hooks/useTabStrip";
 import { useTabsSession } from "@/hooks/useTabsSession";
-import type { UnsavedChoice } from "@/hooks/useUnsavedChangesPrompt";
 import { useWorkspaceIndex } from "@/hooks/useWorkspaceIndex";
 import { useWorkspaceLifecycle } from "@/hooks/useWorkspaceLifecycle";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
@@ -18,9 +20,10 @@ import { useWorkspaceSession, type WorkspaceSessionApi } from "@/hooks/useWorksp
 import { useWorkspaceTree } from "@/hooks/useWorkspaceTree";
 import { isCliExportProcess } from "@/lib/cliExport";
 import { pruneGraphViews } from "@/lib/graphViewStore";
-import { basename, isPathInside } from "@/lib/paths";
+import { basename, isPathInside, movedPath } from "@/lib/paths";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { type FileTab, type PersistedTab, removeTabs } from "@/lib/tabs";
+import type { RelinkRequest } from "@/lib/vault";
 
 const MAX_RECENT_FILES = 10;
 
@@ -35,6 +38,8 @@ interface UseTabsOptions {
   onSettingsChange: (key: string, value: unknown) => void;
   // Only consulted with autosave off (#563).
   confirmUnsaved: (paths: string[]) => Promise<UnsavedChoice>;
+  // Shown before a rename or move rewrites links in other files (#711).
+  confirmRelink: (request: RelinkRequest) => Promise<boolean>;
   // Called to surface a workspace notice (see #262): a refusal (a folder nested
   // inside another Glyph workspace) or a `persistent` warning (a folder opened
   // despite sitting inside a parent git repo). The provider surfaces it as a
@@ -44,10 +49,11 @@ interface UseTabsOptions {
 
 /**
  * The window's documents: the tab strip, its single folder workspace, and the
- * lifecycle that ties them together. Each concern lives in its own hook —
+ * lifecycle that ties them together. Each concern lives in its own hook:
  * `useTabStrip`, `useWorkspaceTree`, `useWorkspaceIndex`, `useOpenDocument`,
- * `useDocumentSave`, `useDocumentEdits`, `useWorkspaceLifecycle`,
- * `useTabsSession`, `useWorkspaceSession`, `useTabEvents`. This hook wires
+ * `useDocumentSave`, `useDocumentEdits`, `useDiskReload`, `useRelocation`,
+ * `useWorkspaceLifecycle`, `useTabsSession`, `useWorkspaceSession`,
+ * `useTabEvents`. This hook wires
  * them together and owns only the operations that touch more than one.
  */
 export function useTabs(options: UseTabsOptions) {
@@ -86,16 +92,17 @@ export function useTabs(options: UseTabsOptions) {
       repointHistoryRef.current(oldPath, newPath);
       for (const tab of stateRef.current.tabs) {
         if (tab.kind !== "file" || !isPathInside(tab.file.path, oldPath)) continue;
-        const moved = newPath + tab.file.path.slice(oldPath.length);
         invoke("unwatch_file", { path: tab.file.path }).catch(() => {});
-        invoke("watch_file", { path: moved }).catch(() => {});
+        invoke("watch_file", { path: movedPath(tab.file.path, oldPath, newPath) }).catch(() => {});
       }
       setState((prev) => ({
         ...prev,
         tabs: prev.tabs.map((tab) => {
           if (tab.kind !== "file" || !isPathInside(tab.file.path, oldPath)) return tab;
-          const moved = newPath + tab.file.path.slice(oldPath.length);
-          return { ...tab, file: { ...tab.file, path: moved } };
+          return {
+            ...tab,
+            file: { ...tab.file, path: movedPath(tab.file.path, oldPath, newPath) },
+          };
         }),
       }));
     },
@@ -112,9 +119,9 @@ export function useTabs(options: UseTabsOptions) {
     collapseAll,
     expandAll,
     createEntry,
-    renamePath,
+    refreshAfterRename,
     duplicatePath,
-    movePath,
+    refreshAfterMove,
     deleteEntry,
   } = useWorkspaceTree({ repointOpenFiles });
 
@@ -169,6 +176,21 @@ export function useTabs(options: UseTabsOptions) {
     stateRef,
     updateActiveFile,
     markSelfSave,
+  });
+
+  const reloadFromDisk = useDiskReload({ setState, forgetHistory });
+
+  const { renamePath, movePath } = useRelocation({
+    stateRef,
+    workspaceRef,
+    saveDocument,
+    markSelfSave,
+    reloadFromDisk,
+    refreshIndexes,
+    refreshAfterRename,
+    refreshAfterMove,
+    confirmRelink: options.confirmRelink,
+    onWorkspaceNotice: options.onWorkspaceNotice,
   });
 
   // The single close coordinator: every destructive lifecycle path (tab close,
@@ -367,13 +389,12 @@ export function useTabs(options: UseTabsOptions) {
 
   useTabEvents({
     stateRef,
-    setState,
     workspaceRef,
     openFile,
     openFolder,
     isAutoReloadEnabled,
     isRecentSelfSave,
-    forgetHistory,
+    reloadFromDisk,
     refreshWorkspace,
   });
 

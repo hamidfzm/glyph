@@ -59,6 +59,11 @@ export function isPathInside(candidate: string, base: string): boolean {
   );
 }
 
+/** Where `path` lands when `from` moves to `to`; a path outside `from` stays put. */
+export function movedPath(path: string, from: string, to: string): string {
+  return isPathInside(path, from) ? to + path.slice(from.length) : path;
+}
+
 /**
  * Call `remove` for every key that is `base` itself or inside it. Used to drop
  * cached directory listings / expanded entries when a folder is moved or
