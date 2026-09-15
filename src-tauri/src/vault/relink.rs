@@ -3,6 +3,7 @@
 //! only a link whose answer would change is rewritten, so a same-named note
 //! elsewhere or a mention in code is never touched.
 
+use std::ffi::OsStr;
 use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -58,6 +59,8 @@ struct Rewrite {
     moved_to: String,
     content: String,
     links: usize,
+    /// The file as the plan read it.
+    original: String,
 }
 
 /// Move `from` to `to` and rewrite every link the move would break; a rename
@@ -86,24 +89,7 @@ pub fn relocate(
         // Renamed first: the destination is only final once it exists, and a
         // rename that fails leaves every file untouched.
         fs::rename(from, to).map_err(|e| format!("Failed to move: {e}"))?;
-        let mut files = Vec::new();
-        for rewrite in rewrites {
-            let written = grants
-                .ensure_writable(&rewrite.moved_to)
-                .and_then(|path| fs::write(path, &rewrite.content).map_err(|e| e.to_string()));
-            if let Err(error) = written {
-                let failure = RelinkFailure {
-                    path: rewrite.moved_to,
-                    error,
-                };
-                return Ok((files, Some(failure)));
-            }
-            files.push(RelinkedFile {
-                path: rewrite.moved_to,
-                links: rewrite.links,
-            });
-        }
-        Ok((files, None))
+        Ok(write_rewrites(grants, rewrites))
     })?;
 
     if !dry_run {
@@ -140,9 +126,44 @@ fn plan(vault: &Vault, from: &Path, to: &Path) -> Result<Vec<Rewrite>, String> {
             moved_to: relinker.moved.apply(&note.path),
             links: edits.len(),
             content: format!("{}{}", &raw[..raw.len() - body.len()], splice(body, edits)),
+            original: raw,
         });
     }
     Ok(rewrites)
+}
+
+/// Writes the rewrites in order and stops at the first that fails, so the files
+/// already written stay written and the failure names the one that was not.
+fn write_rewrites(
+    grants: &GrantRegistry,
+    rewrites: Vec<Rewrite>,
+) -> (Vec<RelinkedFile>, Option<RelinkFailure>) {
+    let mut files = Vec::new();
+    for rewrite in rewrites {
+        if let Err(error) = write_rewrite(grants, &rewrite) {
+            let failure = RelinkFailure {
+                path: rewrite.moved_to,
+                error,
+            };
+            return (files, Some(failure));
+        }
+        files.push(RelinkedFile {
+            path: rewrite.moved_to,
+            links: rewrite.links,
+        });
+    }
+    (files, None)
+}
+
+/// A file that changed since it was planned keeps its new content: the planned
+/// text would put back what an editor or a sync pull just replaced.
+fn write_rewrite(grants: &GrantRegistry, rewrite: &Rewrite) -> Result<(), String> {
+    let path = grants.ensure_writable(&rewrite.moved_to)?;
+    let current = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    if current != rewrite.original {
+        return Err("changed on disk while its links were being updated".to_string());
+    }
+    fs::write(&path, &rewrite.content).map_err(|e| e.to_string())
 }
 
 struct Move {
@@ -153,11 +174,29 @@ struct Move {
 impl Move {
     /// `path` once the move is done, spelled the way the index spells it.
     fn apply(&self, path: &str) -> String {
-        match Path::new(path).strip_prefix(&self.from) {
-            Ok(rest) if rest.as_os_str().is_empty() => self.to.to_string_lossy().to_string(),
-            Ok(rest) => self.to.join(rest).to_string_lossy().to_string(),
-            Err(_) => path.to_string(),
+        let mut rest = Path::new(path).components();
+        let inside = self.from.components().all(|part| {
+            rest.next()
+                .is_some_and(|own| same_name(own.as_os_str(), part.as_os_str()))
+        });
+        if !inside {
+            return path.to_string();
         }
+        let rest = rest.as_path();
+        if rest.as_os_str().is_empty() {
+            return self.to.to_string_lossy().to_string();
+        }
+        self.to.join(rest).to_string_lossy().to_string()
+    }
+}
+
+/// Windows and macOS ignore case in file names by default, so a link can spell a
+/// folder or note differently from the disk and still reach it.
+fn same_name(a: &OsStr, b: &OsStr) -> bool {
+    if cfg!(any(windows, target_os = "macos")) {
+        a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+    } else {
+        a == b
     }
 }
 
@@ -190,9 +229,10 @@ impl<'a> Relinker<'a> {
     }
 
     fn affects(&self, note: &Note) -> bool {
+        // A canvas card's `file` is relative to its board, as the renderer reads it.
         let links = note.links.iter().any(|link| {
             if self.is_canvas(&note.path) {
-                self.card(&note.path, &link.target).is_some()
+                self.destination(&note.path, &link.target).is_some()
             } else {
                 self.wikilink(&note.path, &link.target).is_some()
             }
@@ -209,7 +249,7 @@ impl<'a> Relinker<'a> {
             return file_values(content)
                 .into_iter()
                 .filter_map(|(file, span)| {
-                    let quoted = serde_json::to_string(&self.card(source, &file)?).ok()?;
+                    let quoted = serde_json::to_string(&self.destination(source, &file)?).ok()?;
                     Some((span, quoted[1..quoted.len() - 1].to_string()))
                 })
                 .collect();
@@ -262,53 +302,34 @@ impl<'a> Relinker<'a> {
         )
     }
 
-    /// The new destination of a relative markdown link in `source`, when the
-    /// link or what it points at moves. A link that was already broken stays.
+    /// The new destination of a link relative to `source` (a markdown link, or a
+    /// canvas card's `file`), when the link or what it points at moves. A link
+    /// that was already broken stays.
     fn destination(&self, source: &str, dest: &str) -> Option<String> {
         let root = &self.vault.root;
         let (path, fragment) = dest.split_at(dest.find('#').unwrap_or(dest.len()));
         let target = resolve_relative(root, source, path)?;
-        if !target.exists() {
-            return None;
-        }
         let expected = self.moved.apply(&target.to_string_lossy());
         let source_after = self.moved.apply(source);
         let now = resolve_relative(root, &source_after, path);
         if now.is_some_and(|now| now.to_string_lossy() == expected) {
             return None;
         }
+        // Probed only for a link the move affects, and only inside the workspace.
+        if !target.exists() {
+            return None;
+        }
         let relative = relative_path(root, &source_after, &expected)?;
+        // The renderer ends a destination at `#`, so such a name cannot be linked.
+        if relative.contains('#') {
+            return None;
+        }
         let dot = if dest.starts_with("./") && !relative.starts_with("../") {
             "./"
         } else {
             ""
         };
         Some(format!("{dot}{relative}{fragment}"))
-    }
-
-    /// The new `file` of a canvas card: resolved the way the index resolves it,
-    /// or by workspace path for an attachment the index does not hold.
-    fn card(&self, canvas: &str, file: &str) -> Option<String> {
-        let before = &self.vault.resolver;
-        let expected = match before.resolve(file, Some(canvas)) {
-            Some(id) => {
-                let expected = self.moved.apply(before.path(id));
-                let canvas_after = self.moved.apply(canvas);
-                if self.resolves_after(file, &canvas_after) == Some(expected.as_str()) {
-                    return None;
-                }
-                expected
-            }
-            None => {
-                let target = self.vault.root.join(file);
-                let expected = self.moved.apply(&target.to_string_lossy());
-                if !target.exists() || expected == target.to_string_lossy() {
-                    return None;
-                }
-                expected
-            }
-        };
-        Some(segments(&self.vault.root, Path::new(&expected))?.join("/"))
     }
 }
 
@@ -374,6 +395,8 @@ fn shortest_target(
     // at the wrong note.
     (written_depth.clamp(1, parts.len())..=parts.len())
         .map(|depth| parts[parts.len() - depth..].join("/"))
+        // Inside `[[...]]` these end the target, so such a name cannot be linked.
+        .filter(|candidate| !candidate.contains(['#', '|', '[', ']']))
         .find(|candidate| {
             let reached = resolver.resolve(candidate, Some(from));
             reached.map(|id| resolver.path(id)) == Some(to)
@@ -673,6 +696,134 @@ mod tests {
     fn overlapping_edits_keep_the_first() {
         let edits = vec![(1..4, "X".to_string()), (2..3, "Y".to_string())];
         assert_eq!(splice("abcdef", edits), "aXef");
+    }
+
+    /// A board holding one file card per value.
+    fn board(files: &[&str]) -> String {
+        let cards: Vec<String> = files
+            .iter()
+            .enumerate()
+            .map(|(i, file)| {
+                format!(r#"{{"id":"{i}","type":"file","file":"{file}","x":0,"y":0,"width":1,"height":1}}"#)
+            })
+            .collect();
+        format!(r#"{{"nodes":[{}]}}"#, cards.join(","))
+    }
+
+    #[test]
+    fn a_card_is_relative_to_its_board_like_a_markdown_link() {
+        // A board at the root whose card names the note bare.
+        let root = workspace(
+            "card_root",
+            &[("Travel.md", ""), ("Board.canvas", &board(&["Travel.md"]))],
+        );
+        assert_eq!(
+            planned(&root, "Travel.md", "Trips/Travel.md"),
+            one("Board.canvas", &board(&["Trips/Travel.md"]))
+        );
+
+        // A board in a subfolder, beside its note.
+        let root = workspace(
+            "card_sub",
+            &[
+                ("Boards/Travel.md", ""),
+                ("Boards/Board.canvas", &board(&["Travel.md"])),
+            ],
+        );
+        assert_eq!(
+            planned(&root, "Boards/Travel.md", "Boards/Trip.md"),
+            one("Boards/Board.canvas", &board(&["Trip.md"]))
+        );
+
+        // The board itself moving away from its cards.
+        let root = workspace(
+            "card_board",
+            &[
+                ("Notes/Travel.md", ""),
+                ("Board.canvas", &board(&["Notes/Travel.md"])),
+            ],
+        );
+        assert_eq!(
+            planned(&root, "Board.canvas", "Boards/Board.canvas"),
+            one("Board.canvas", &board(&["../Notes/Travel.md"]))
+        );
+    }
+
+    #[test]
+    fn a_card_naming_a_path_outside_the_workspace_is_never_followed() {
+        let hostile = [
+            "//attacker.example/share/x.md",
+            "C:/Windows/x.md",
+            "/etc/hosts",
+            "Notes/../../x.md",
+            "https://example.com/x.md",
+        ];
+        let root = workspace(
+            "card_outside",
+            &[("Notes/Travel.md", ""), ("Board.canvas", &board(&hostile))],
+        );
+        let board_path = root.join("Board.canvas").to_string_lossy().to_string();
+        for file in hostile {
+            let resolved = resolve_relative(&root, &board_path, file);
+            assert!(
+                resolved.is_none_or(|path| path.starts_with(&root)),
+                "{file} resolved outside the workspace"
+            );
+        }
+        assert!(planned(&root, "Notes", "Trips").is_empty());
+    }
+
+    #[test]
+    fn a_name_no_link_can_spell_leaves_the_links_alone() {
+        let root = workspace(
+            "hash_name",
+            &[("Travel.md", ""), ("Index.md", "[[Travel]] [t](Travel.md)")],
+        );
+        assert!(planned(&root, "Travel.md", "C# notes.md").is_empty());
+    }
+
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn a_link_spelled_in_another_case_follows_the_move() {
+        let root = workspace(
+            "case",
+            &[
+                ("Notes/Travel.md", ""),
+                ("Index.md", "[t](notes/travel.md)"),
+            ],
+        );
+        assert_eq!(
+            planned(&root, "Notes", "Trips"),
+            one("Index.md", "[t](Trips/travel.md)")
+        );
+    }
+
+    #[test]
+    fn a_file_changed_after_planning_keeps_its_new_content() {
+        let root = workspace(
+            "changed",
+            &[
+                ("Travel.md", ""),
+                ("A.md", "[[Travel]]"),
+                ("B.md", "[[Travel]]"),
+            ],
+        );
+        let vault = Vault::build(&root).unwrap();
+        let rewrites = plan(&vault, &root.join("Travel.md"), &root.join("Trip.md")).unwrap();
+        fs::write(root.join("B.md"), "[[Travel]] edited meanwhile").unwrap();
+        let grants = GrantRegistry::default();
+        grants.grant_workspace(&root).unwrap();
+
+        let (files, failed) = write_rewrites(&grants, rewrites);
+
+        let a = fs::read_to_string(root.join("A.md")).unwrap();
+        let b = fs::read_to_string(root.join("B.md")).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        let written: Vec<String> = files.iter().map(|f| relative(&root, &f.path)).collect();
+        assert_eq!(written, ["A.md"]);
+        assert_eq!(relative(&root, &failed.expect("B.md changed").path), "B.md");
+        assert_eq!(a, "[[Trip]]");
+        assert_eq!(b, "[[Travel]] edited meanwhile");
     }
 
     #[test]

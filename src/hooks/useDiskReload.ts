@@ -10,11 +10,12 @@ interface UseDiskReloadOptions {
 
 /**
  * Reloads an open tab from disk after a change it did not type: an external
- * edit, or a link rewrite. A tab holding unsaved edits keeps them.
+ * edit, or a link rewrite. A tab holding unsaved edits keeps them, and so does
+ * a tab edited since `revision` when the caller names one.
  */
 export function useDiskReload({ setState, forgetHistory }: UseDiskReloadOptions) {
   return useCallback(
-    async (path: string) => {
+    async (path: string, revision?: number) => {
       try {
         const { content, metadata } = await loadFileContent(path);
         setState((prev) => ({
@@ -24,6 +25,7 @@ export function useDiskReload({ setState, forgetHistory }: UseDiskReloadOptions)
             // Checked against the latest state, so an edit made while the file
             // was being read is never replaced.
             if (t.file.mode !== EDITOR_MODE.view && t.file.dirty) return t;
+            if (revision !== undefined && t.file.revision !== revision) return t;
             // Replaying old diffs against changed content is unsafe.
             forgetHistory(t.id);
             // Edit/split panes render `editContent ?? content`, so a seeded

@@ -49,10 +49,11 @@ interface UseTabsOptions {
 
 /**
  * The window's documents: the tab strip, its single folder workspace, and the
- * lifecycle that ties them together. Each concern lives in its own hook —
+ * lifecycle that ties them together. Each concern lives in its own hook:
  * `useTabStrip`, `useWorkspaceTree`, `useWorkspaceIndex`, `useOpenDocument`,
- * `useDocumentSave`, `useDocumentEdits`, `useWorkspaceLifecycle`,
- * `useTabsSession`, `useWorkspaceSession`, `useTabEvents`. This hook wires
+ * `useDocumentSave`, `useDocumentEdits`, `useDiskReload`, `useRelocation`,
+ * `useWorkspaceLifecycle`, `useTabsSession`, `useWorkspaceSession`,
+ * `useTabEvents`. This hook wires
  * them together and owns only the operations that touch more than one.
  */
 export function useTabs(options: UseTabsOptions) {

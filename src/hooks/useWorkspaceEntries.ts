@@ -62,7 +62,7 @@ export function useWorkspaceEntries({
       const entries = await loadDirectory(parent);
       repointOpenFiles(path, newPath);
       setWorkspace((prev) => {
-        if (!prev) return prev;
+        if (prev?.root !== root) return prev;
         const nodes = new Map(prev.nodes);
         nodes.set(parent, entries);
         return { ...prev, nodes };
@@ -106,7 +106,7 @@ export function useWorkspaceEntries({
       ]);
       repointOpenFiles(from, newPath);
       setWorkspace((prev) => {
-        if (!prev) return prev;
+        if (prev?.root !== root) return prev;
         const nodes = new Map(prev.nodes);
         nodes.set(sourceParent, sourceEntries);
         nodes.set(toDir, destEntries);

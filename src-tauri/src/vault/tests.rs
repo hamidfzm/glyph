@@ -409,6 +409,10 @@ fn a_folder_rename_reported_as_its_two_paths_reindexes_every_note_inside() {
         Some("Recipes/Cooking.md".to_string())
     );
     assert_matches_rebuild(&vault, &root);
+
+    // An event naming a folder the index already holds leaves it as it is.
+    vault.apply_changes(&[root.join("Recipes")]);
+    assert_matches_rebuild(&vault, &root);
     fs::remove_dir_all(&root).unwrap();
 }
 

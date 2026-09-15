@@ -123,8 +123,8 @@ pub fn create_folder(
 /// Rename `path` to `new_name` within the same directory, rewriting the links
 /// the rename would break. The extension of the original file is preserved when
 /// the typed name doesn't carry one (so "My Note" stays a `.md` file). Reports
-/// the final (collision-safe) path; a dry run renames and writes nothing.
-#[tauri::command]
+/// the final (collision-safe) path; a dry run reports it without renaming or writing.
+#[tauri::command(async)]
 pub fn rename_path(
     path: String,
     new_name: String,
@@ -238,8 +238,8 @@ pub fn duplicate_path(
 /// the links the move would break. Both the source's parent and the destination
 /// must be inside `root`, and a folder can't be moved into itself or a
 /// descendant. A move into the current directory is a no-op that reports the
-/// original path; a dry run moves and writes nothing.
-#[tauri::command]
+/// original path; a dry run reports without moving or writing.
+#[tauri::command(async)]
 pub fn move_path(
     from: String,
     to_dir: String,

@@ -10,7 +10,7 @@ interface UseRelocationOptions {
   workspaceRef: RefObject<Workspace | null>;
   saveDocument: (id: string) => Promise<boolean>;
   markSelfSave: (path: string) => void;
-  reloadFromDisk: (path: string) => Promise<void>;
+  reloadFromDisk: (path: string, revision?: number) => Promise<void>;
   refreshIndexes: (root: string, isCurrent: () => boolean) => Promise<void>;
   refreshAfterRename: (path: string, newPath: string, root: string) => Promise<void>;
   refreshAfterMove: (from: string, toDir: string, newPath: string, root: string) => Promise<void>;
@@ -18,11 +18,14 @@ interface UseRelocationOptions {
   onWorkspaceNotice: (notice: WorkspaceNotice, options?: { persistent?: boolean }) => void;
 }
 
+const fileTabs = (state: TabsState) =>
+  state.tabs.filter((tab): tab is FileTab => tab.kind === "file");
+
 /**
  * Rename and move with their link rewrite. The backend previews the files it
  * would change; the user confirms, the affected tabs are saved so the rewrite
- * reads their edits and no stale buffer overwrites it, and once it lands the
- * rewritten tabs reload and the index catches up.
+ * reads their edits, and once it lands the rewritten tabs reload and the index
+ * catches up.
  */
 export function useRelocation({
   stateRef,
@@ -41,10 +44,7 @@ export function useRelocation({
       if (preview.files.length === 0) return true;
       const affected = new Set(preview.files.map((file) => file.path));
       const dirtyTabs = () =>
-        stateRef.current.tabs.filter(
-          (tab): tab is FileTab =>
-            tab.kind === "file" && tab.file.dirty && affected.has(tab.file.path),
-        );
+        fileTabs(stateRef.current).filter((tab) => tab.file.dirty && affected.has(tab.file.path));
       const unsaved = dirtyTabs().map((tab) => tab.file.path);
       if (!(await confirmRelink({ root, files: preview.files, unsaved }))) return false;
       // The prompt is open for an unbounded time, so save what is dirty now.
@@ -54,18 +54,24 @@ export function useRelocation({
     [confirmRelink, saveDocument, stateRef],
   );
 
-  // Null when the user backs out at the prompt.
+  // Null when the user backs out at the prompt, or the workspace changed while
+  // it was open.
   const relocate = useCallback(
     async (command: "rename_path" | "move_path", args: Record<string, string>, root: string) => {
       const preview = await invoke<Relink>(command, { ...args, root, dryRun: true });
       if (!(await confirm(preview, root))) return null;
-      return invoke<Relink>(command, { ...args, root, dryRun: false });
+      if (workspaceRef.current?.root !== root) return null;
+      const revisions = new Map(
+        fileTabs(stateRef.current).map((tab) => [tab.id, tab.file.revision] as const),
+      );
+      const done = await invoke<Relink>(command, { ...args, root, dryRun: false });
+      return { done, revisions };
     },
-    [confirm],
+    [confirm, stateRef, workspaceRef],
   );
 
   const settle = useCallback(
-    async (done: Relink, from: string, root: string) => {
+    async (done: Relink, from: string, root: string, revisions: Map<string, number>) => {
       for (const file of done.files) markSelfSave(file.path);
       if (done.failed) {
         console.error("Failed to update links:", done.failed.error);
@@ -74,15 +80,13 @@ export function useRelocation({
           { persistent: true },
         );
       }
-      // The tabs may not have re-rendered onto their new paths yet.
-      const open = new Set(
-        stateRef.current.tabs
-          .filter((tab): tab is FileTab => tab.kind === "file")
-          .map((tab) => movedPath(tab.file.path, from, done.newPath)),
-      );
-      const reloads = done.files
-        .filter((file) => open.has(file.path))
-        .map((file) => reloadFromDisk(file.path));
+      const rewritten = new Set(done.files.map((file) => file.path));
+      // The tabs may not have re-rendered onto their new paths yet, and a tab
+      // edited while the move ran keeps what was typed.
+      const reloads = fileTabs(stateRef.current)
+        .map((tab) => ({ id: tab.id, path: movedPath(tab.file.path, from, done.newPath) }))
+        .filter((tab) => rewritten.has(tab.path))
+        .map((tab) => reloadFromDisk(tab.path, revisions.get(tab.id)));
       const isCurrent = () => workspaceRef.current?.root === root;
       await Promise.all([...reloads, refreshIndexes(root, isCurrent)]);
     },
@@ -94,10 +98,11 @@ export function useRelocation({
       const root = workspaceRef.current?.root;
       if (!root) return null;
       try {
-        const done = await relocate("rename_path", { path, newName }, root);
-        if (!done) return null;
+        const relocated = await relocate("rename_path", { path, newName }, root);
+        if (!relocated) return null;
+        const { done, revisions } = relocated;
         await refreshAfterRename(path, done.newPath, root);
-        await settle(done, path, root);
+        await settle(done, path, root, revisions);
         return done.newPath;
       } catch (err) {
         console.error("Failed to rename:", err);
@@ -112,11 +117,12 @@ export function useRelocation({
       const root = workspaceRef.current?.root;
       if (!root) return null;
       try {
-        const done = await relocate("move_path", { from, toDir }, root);
-        if (!done) return null;
+        const relocated = await relocate("move_path", { from, toDir }, root);
+        if (!relocated) return null;
+        const { done, revisions } = relocated;
         if (done.newPath === from) return from;
         await refreshAfterMove(from, toDir, done.newPath, root);
-        await settle(done, from, root);
+        await settle(done, from, root, revisions);
         return done.newPath;
       } catch (err) {
         console.error("Failed to move:", err);

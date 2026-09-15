@@ -9,7 +9,7 @@
     "saveTargetOpen": "\"{{name}}\" 已在另一个标签页中打开。请用其他名称保存此文档，或切换到该标签页。",
     "indexIncompleteFiles": "工作区索引不完整：仅索引了前 {{limit}} 个文档，因此文件列表、图谱、反向链接和维基链接可能缺少结果。",
     "indexIncompleteDepth": "工作区索引不完整：嵌套超过 {{limit}} 层的文件夹未被索引，因此文件列表、图谱、反向链接和维基链接可能缺少结果。",
-    "relinkFailed": "移动已完成，但更新链接在 \"{{name}}\" 处停止，部分链接仍指向旧位置。"
+    "relinkFailed": "更新链接在 \"{{name}}\" 处停止，部分链接仍指向旧名称或旧位置。"
   },
   "confirmDelete": {
     "message": "删除 \"{{name}}\"？此操作无法撤销。",

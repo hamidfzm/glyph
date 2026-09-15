@@ -466,6 +466,31 @@ describe("useTabs link rewriting on rename and move", () => {
     expect(applied("move_path")).toBe(false);
   });
 
+  it("drops a rename confirmed after the workspace changed behind the prompt", async () => {
+    let switchWorkspace: () => Promise<unknown> = async () => {};
+    const confirmRelink = vi.fn(async () => {
+      await switchWorkspace();
+      return true;
+    });
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        rename_path: async () => relinked("/p/ws/trip.md", { files: index }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ confirmRelink })));
+    await openWorkspace(result);
+    switchWorkspace = () => result.current.openFolder("/p/other");
+
+    let renamed: string | null = "unset";
+    await act(async () => {
+      renamed = await result.current.renamePath("/p/ws/travel.md", "trip");
+    });
+
+    expect(renamed).toBeNull();
+    expect(applied("rename_path")).toBe(false);
+    expect(result.current.workspace?.root).toBe("/p/other");
+  });
+
   it("renames without asking when nothing links to the note", async () => {
     const confirmRelink = vi.fn(async () => true);
     vi.mocked(invoke).mockImplementation(

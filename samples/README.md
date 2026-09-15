@@ -418,7 +418,7 @@ leaves every relative link to the browser instead.
 
 When you have the `samples/` folder open, the **Backlinks** section under the file tree lists every other note that links to the current document. This file is referenced from [[Index]] and [[Notes/Cooking]], so opening either of them will show *this* file in their backlinks panel.
 
-Renaming or moving a note or folder in the file tree keeps those links working: Glyph lists the notes whose `[[wikilinks]]`, `![[embeds]]`, relative `[links](Notes/Cooking.md)` and canvas cards point at it, and rewrites them once you confirm. Aliases, `#heading` fragments and links inside code stay as written, and a same-named note in another folder keeps its own links.
+Renaming or moving a note or folder in the file tree keeps those links working: Glyph lists the notes whose `[[wikilinks]]`, `![[embeds]]`, relative `[links](Notes/Cooking.md)` and canvas cards point at it, and rewrites them once you confirm. Aliases and `#heading` fragments are kept, links inside inline code or fenced code blocks stay as written, and a same-named note in another folder keeps its own links.
 
 ### Graph view
 

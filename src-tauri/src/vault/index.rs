@@ -176,6 +176,15 @@ impl Vault {
                 continue;
             };
             if spelled.is_dir() {
+                // A folder already holding indexed notes reports its changes file
+                // by file; only a newly arrived one needs walking.
+                let known = self
+                    .notes
+                    .iter()
+                    .any(|note| Path::new(&note.path).starts_with(&spelled));
+                if known {
+                    continue;
+                }
                 if let Ok((files, _)) =
                     collect_files(&spelled, is_indexable, self.max_files, self.max_depth)
                 {

@@ -9,7 +9,7 @@
     "saveTargetOpen": "\"{{name}}\" ya está abierto en otra pestaña. Guarda este documento con otro nombre o cambia a esa pestaña.",
     "indexIncompleteFiles": "El índice del espacio de trabajo está incompleto: solo se indexaron los primeros {{limit}} documentos, por lo que la lista de archivos, el grafo, los enlaces entrantes y los wikilinks pueden estar incompletos.",
     "indexIncompleteDepth": "El índice del espacio de trabajo está incompleto: las carpetas anidadas a más de {{limit}} niveles no se indexaron, por lo que la lista de archivos, el grafo, los enlaces entrantes y los wikilinks pueden estar incompletos.",
-    "relinkFailed": "El movimiento se realizó, pero la actualización de enlaces se detuvo en \"{{name}}\", así que algunos enlaces aún apuntan a la ubicación anterior."
+    "relinkFailed": "La actualización de enlaces se detuvo en \"{{name}}\", así que algunos enlaces aún apuntan al nombre o la ubicación anterior."
   },
   "confirmDelete": {
     "message": "¿Eliminar \"{{name}}\"? Esto no se puede deshacer.",
