@@ -162,6 +162,10 @@ jobs:
           cache: gradle
       - name: Set up Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          # The default also installs the legacy `tools` package, which the
+          # runner's cmdline-tools 16.0 no longer carries, so sdkmanager fails.
+          packages: platform-tools
       - name: Cache NDK
         id: ndk-cache
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
