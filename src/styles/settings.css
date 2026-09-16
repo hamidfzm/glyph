@@ -548,30 +548,35 @@
   color: var(--color-error);
 }
 
-/* Unsaved-changes prompt (Save / Don't Save / Cancel) */
+/* Blocking prompts: unsaved changes on close, link updates on rename or move */
 
-/* The only dialog that blocks a close, so it outranks every other surface it
-   can be raised over (lightbox 200, editor context menus 1000). */
-.unsaved-overlay {
+/* A prompt blocks the action the user took, so it outranks every other surface
+   it can be raised over (lightbox 200, editor context menus 1000). */
+.prompt-overlay {
   z-index: 1100;
 }
 
-.unsaved-modal {
+.prompt-modal {
   width: 420px;
   height: auto;
 }
 
-.unsaved-body {
+.prompt-body {
   padding: 16px 20px;
   overflow-y: auto;
 }
 
-.unsaved-body p {
+.prompt-body p {
   margin: 0 0 8px;
   color: var(--color-text-primary);
 }
 
-.unsaved-body ul {
+.prompt-detail {
+  margin-inline-start: 8px;
+  color: var(--color-text-tertiary);
+}
+
+.prompt-body ul {
   margin: 0;
   padding-inline-start: 18px;
   list-style: disc;
@@ -580,7 +585,7 @@
   user-select: text;
 }
 
-.unsaved-footer {
+.prompt-footer {
   justify-content: flex-end;
   gap: 8px;
 }

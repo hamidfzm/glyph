@@ -1,20 +1,23 @@
 import { type ReactNode, useMemo } from "react";
-import { UnsavedChangesModal } from "@/components/modals/UnsavedChangesModal";
+import { RelinkConfirmModal } from "@/components/modals/RelinkConfirmModal";
+import { UnsavedChangesModal, type UnsavedChoice } from "@/components/modals/UnsavedChangesModal";
 import { useBacklinks } from "@/hooks/useBacklinks";
+import { usePrompt } from "@/hooks/usePrompt";
 import { useSettings } from "@/hooks/useSettings";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
 import { useTabs } from "@/hooks/useTabs";
-import { useUnsavedChangesPrompt } from "@/hooks/useUnsavedChangesPrompt";
 import { useWindowRegistrySync } from "@/hooks/useWindowRegistrySync";
 import { useWorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { displayContentFor, tocContentFor } from "@/lib/displayContent";
 import { EDITOR_MODE } from "@/lib/settings";
+import type { RelinkRequest } from "@/lib/vault";
 import { TabsContext, type TabsContextValue } from "./TabsContext";
 
 export function TabsProvider({ children }: { children: ReactNode }) {
   const { settings, updateSettings } = useSettings();
   const workspaceNotice = useWorkspaceNotice();
-  const unsavedPrompt = useUnsavedChangesPrompt();
+  const unsavedPrompt = usePrompt<string[], UnsavedChoice>("cancel");
+  const relinkPrompt = usePrompt<RelinkRequest, boolean>(false);
   const tabs = useTabs({
     reopenLastFile: settings.behavior.reopenLastFile,
     openTabs: settings.behavior.openTabs,
@@ -26,6 +29,7 @@ export function TabsProvider({ children }: { children: ReactNode }) {
     onSettingsChange: updateSettings,
     onWorkspaceNotice: workspaceNotice.show,
     confirmUnsaved: unsavedPrompt.confirm,
+    confirmRelink: relinkPrompt.confirm,
   });
 
   // Report what this window shows so open requests route to the window already
@@ -67,8 +71,11 @@ export function TabsProvider({ children }: { children: ReactNode }) {
   return (
     <TabsContext.Provider value={value}>
       {children}
-      {unsavedPrompt.files && unsavedPrompt.files.length > 0 && (
-        <UnsavedChangesModal files={unsavedPrompt.files} onChoose={unsavedPrompt.choose} />
+      {unsavedPrompt.request && unsavedPrompt.request.length > 0 && (
+        <UnsavedChangesModal files={unsavedPrompt.request} onChoose={unsavedPrompt.choose} />
+      )}
+      {relinkPrompt.request && (
+        <RelinkConfirmModal request={relinkPrompt.request} onChoose={relinkPrompt.choose} />
       )}
     </TabsContext.Provider>
   );

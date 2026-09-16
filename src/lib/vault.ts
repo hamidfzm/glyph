@@ -40,6 +40,29 @@ export interface Backlink {
   snippet: string;
 }
 
+export interface RelinkedFile {
+  path: string;
+  /** How many links in the file change. */
+  links: number;
+}
+
+/** A rename or move with its link rewrite, as `rename_path` and `move_path` report it. */
+export interface Relink {
+  newPath: string;
+  /** Where each file lives when the call returns: before the move for a dry run. */
+  files: RelinkedFile[];
+  /** The write that stopped the rewrite; the files listed stay written. */
+  failed: { path: string; error: string } | null;
+}
+
+/** What the link prompt shows before a rename or move rewrites anything. */
+export interface RelinkRequest {
+  root: string;
+  files: RelinkedFile[];
+  /** Affected files open with unsaved changes, which are saved first. */
+  unsaved: string[];
+}
+
 export interface UnresolvedLink {
   source: string;
   /** Target as written, with `|alias` and `#heading` already removed. */

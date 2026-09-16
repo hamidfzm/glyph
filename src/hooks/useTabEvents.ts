@@ -1,7 +1,5 @@
-import { type Dispatch, type RefObject, type SetStateAction, useEffect } from "react";
-import { loadFileContent } from "@/lib/documentContent";
+import { type RefObject, useEffect } from "react";
 import { isImageFile } from "@/lib/imageExtensions";
-import { EDITOR_MODE } from "@/lib/settings";
 import { activeFileOf, type TabsState, type Workspace } from "@/lib/tabs";
 import { subscribe } from "@/lib/tauriEvent";
 
@@ -10,13 +8,12 @@ const FILE_RELOAD_DEBOUNCE = 300;
 
 interface UseTabEventsParams {
   stateRef: RefObject<TabsState>;
-  setState: Dispatch<SetStateAction<TabsState>>;
   workspaceRef: RefObject<Workspace | null>;
   openFile: (path: string) => Promise<unknown>;
   openFolder: (root?: string) => Promise<void>;
   isAutoReloadEnabled: () => boolean;
   isRecentSelfSave: (path: string) => boolean;
-  forgetHistory: (id: string) => void;
+  reloadFromDisk: (path: string) => Promise<void>;
   refreshWorkspace: (root: string) => Promise<void>;
 }
 
@@ -27,13 +24,12 @@ interface UseTabEventsParams {
  */
 export function useTabEvents({
   stateRef,
-  setState,
   workspaceRef,
   openFile,
   openFolder,
   isAutoReloadEnabled,
   isRecentSelfSave,
-  forgetHistory,
+  reloadFromDisk,
   refreshWorkspace,
 }: UseTabEventsParams): void {
   // Listen for open-file and open-folder events (drag-drop, file associations)
@@ -64,42 +60,11 @@ export function useTabEvents({
         timeouts.delete(changedPath);
         // Images are never watched and never read as text; ignore defensively.
         if (isImageFile(changedPath)) return;
-        const file = stateRef.current.tabs
-          .map((t) => activeFileOf(t))
-          .find((candidate) => candidate?.path === changedPath);
-        if (!file) return;
-        // Skip reload if the file is in edit mode with unsaved changes
-        if (file.mode !== EDITOR_MODE.view && file.dirty) return;
+        const isOpen = stateRef.current.tabs.some((t) => activeFileOf(t)?.path === changedPath);
+        if (!isOpen) return;
         // Skip if this file-changed was triggered by our own auto-save.
         if (isRecentSelfSave(changedPath)) return;
-        try {
-          const { content, metadata } = await loadFileContent(changedPath);
-          setState((prev) => ({
-            ...prev,
-            tabs: prev.tabs.map((t) => {
-              if (t.kind === "graph" || t.file.path !== changedPath) return t;
-              // External reload invalidates our edit history — replaying old
-              // diffs against changed content is unsafe.
-              forgetHistory(t.id);
-              // Edit/split panes render `editContent ?? content`, so a seeded
-              // buffer would shadow the reload. Only one tab can hold a path
-              // (Save As refuses a collision, rename and move route through
-              // `unique_path`), so the dirty check above covers this tab too and
-              // refreshing its buffer discards no user work.
-              return {
-                ...t,
-                file: {
-                  ...t.file,
-                  content,
-                  metadata,
-                  ...(t.file.editContent != null ? { editContent: content } : {}),
-                },
-              };
-            }),
-          }));
-        } catch {
-          // ignore reload errors
-        }
+        await reloadFromDisk(changedPath);
       }, FILE_RELOAD_DEBOUNCE);
       timeouts.set(changedPath, timeout);
     });
