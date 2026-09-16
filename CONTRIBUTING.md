@@ -141,6 +141,23 @@ the Build workflow: it flags (non-blocking) on PRs and hard-fails on pushes to
 `main` and at release, where a failure blocks channel publishing (see
 `.github/actions/app-smoke`).
 
+### Plugin API contract
+
+The **Plugin contract** CI job checks the host's plugin API against the
+ecosystem repos: `glyph-md/plugin-template`'s `types/glyph.d.ts` must declare
+the same `ctx` surface as `src/lib/plugins/types.ts`, the built template must
+load through the real loader, and `glyph-md/plugins`' `index.schema.json` and
+`index.json` must match what the marketplace parser reads. A plugin API change
+therefore lands in the template and plugins repos first. To run it locally:
+
+```bash
+git clone https://github.com/glyph-md/plugin-template .ecosystem/plugin-template
+git clone https://github.com/glyph-md/plugins .ecosystem/plugins
+(cd .ecosystem/plugin-template && npm install && npm run build)
+pnpm exec tsc -p scripts/plugin-contract
+pnpm exec vitest run src/lib/plugins/ecosystemContract.test.ts
+```
+
 ### Mobile: Android and iOS (experimental)
 
 Glyph also builds as an Android and iOS app (see issue #79; single-file
