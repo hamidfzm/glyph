@@ -6,6 +6,7 @@ import type { NoteSummary } from "@/lib/vault";
 import {
   captureListener,
   defaultOptions,
+  fileOf,
   fileScan,
   makeInvoker,
   resetTabsMocks,
@@ -153,6 +154,43 @@ describe("useTabs file-changed events", () => {
     const fileTab = result.current.tabs.find((t) => t.kind === "file");
     expect(fileTab?.kind === "file" ? fileTab.file.content : null).toBe("v2");
     expect(result.current.tabs.some((t) => t.kind === "graph")).toBe(true);
+  });
+
+  it("reloads every file changed within one debounce window", async () => {
+    const bodies: Record<string, string> = { "/p/a.md": "a1", "/p/b.md": "b1" };
+    const reads: string[] = [];
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async (_cmd, args) => {
+          const path = String(args?.path ?? "");
+          reads.push(path);
+          return bodies[path];
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+      await result.current.openFile("/p/b.md");
+    });
+
+    // A git checkout rewrites both files in one burst; a repeat event for the
+    // same path still collapses into a single reload.
+    bodies["/p/a.md"] = "a2";
+    bodies["/p/b.md"] = "b2";
+    reads.length = 0;
+    await act(async () => {
+      fileChanged.handler?.({ payload: "/p/a.md" });
+      fileChanged.handler?.({ payload: "/p/b.md" });
+      fileChanged.handler?.({ payload: "/p/a.md" });
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    expect(fileOf(result, 0).content).toBe("a2");
+    expect(fileOf(result, 1).content).toBe("b2");
+    expect(reads.sort()).toEqual(["/p/a.md", "/p/b.md"]);
   });
 
   it("refreshes the edit buffer of a clean edit-mode tab so the reload renders", async () => {
