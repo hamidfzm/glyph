@@ -1,6 +1,5 @@
 import { SettingsModal } from "@/components/modals/settings/lazySettings";
 import { WorkspaceSettingsModal } from "@/components/modals/workspace/lazyWorkspaceSettings";
-import { PluginsModal } from "@/components/plugins/lazyPluginsModal";
 import type { AppModals as AppModalsState } from "@/hooks/useAppModals";
 import { useSpringPresence } from "@/hooks/useSpringPresence";
 
@@ -14,7 +13,12 @@ export function AppModals({ modals }: { modals: AppModalsState }) {
     <>
       {settings.mounted && (
         <div className="contents" data-spring ref={settings.ref}>
-          <SettingsModal open onClose={modals.closeSettings} />
+          <SettingsModal
+            open
+            tab={modals.settingsTab}
+            onTabChange={modals.setSettingsTab}
+            onClose={modals.closeSettings}
+          />
         </div>
       )}
       {modals.workspaceSettingsTab && (
@@ -25,7 +29,6 @@ export function AppModals({ modals }: { modals: AppModalsState }) {
           onClose={modals.closeWorkspaceSettings}
         />
       )}
-      {modals.pluginsOpen && <PluginsModal onClose={modals.closePlugins} />}
     </>
   );
 }

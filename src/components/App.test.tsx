@@ -18,9 +18,9 @@ vi.mock("./markdown/MarkdownViewer", () => ({
 }));
 
 vi.mock("./modals/settings/lazySettings", () => ({
-  SettingsModal: ({ open, onClose }: { open: boolean; onClose: () => void }) =>
+  SettingsModal: ({ open, onClose, tab }: { open: boolean; onClose: () => void; tab: string }) =>
     open ? (
-      <button type="button" data-testid="settings-modal" onClick={onClose}>
+      <button type="button" data-testid="settings-modal" data-tab={tab} onClick={onClose}>
         settings
       </button>
     ) : null,
@@ -197,18 +197,17 @@ describe("App", () => {
     await waitFor(() => expect(queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  it("opens the plugins modal in response to menu-manage-plugins", async () => {
+  it("opens Settings on the Plugins tab in response to menu-manage-plugins", async () => {
     const listeners = captureMenuListeners();
     const { wrapper } = withProviders();
-    const { queryByRole, findByRole } = render(<App />, { wrapper });
+    const { queryByTestId, findByTestId } = render(<App />, { wrapper });
     await waitFor(() => expect(listeners["menu-manage-plugins"]).toBeDefined());
-    expect(queryByRole("dialog")).not.toBeInTheDocument();
+    expect(queryByTestId("settings-modal")).not.toBeInTheDocument();
 
     await act(async () => {
       listeners["menu-manage-plugins"]?.({ payload: undefined });
     });
-    // The modal is a lazy chunk now; give its first import the chunk timeout.
-    expect(await findByRole("dialog", {}, { timeout: CHUNK_LOAD_TIMEOUT_MS })).toBeInTheDocument();
+    expect(await findByTestId("settings-modal")).toHaveAttribute("data-tab", "plugins");
   });
 
   it("renders EmptyState with a working Open Folder button (covers inline arrow)", async () => {

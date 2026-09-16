@@ -1,13 +1,28 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
-import { SettingsModal } from "./SettingsModal";
+import { SettingsModal, type SettingsTabId } from "./SettingsModal";
 
 // The Privacy tab's Secrets section asks the backend which keychain slots are
 // filled; nothing is stored in these tests.
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(false) }));
+// The Plugins tab has its own suite; here it only needs to mount.
+vi.mock("@/components/plugins/PluginsTab", () => ({ PluginsTab: () => <div>plugins tab</div> }));
+
+// The tab is controlled by the opener in production (useAppModals), so the
+// tab-switch cases drive it through that same shape.
+function Controlled({
+  onClose,
+  initial = "appearance",
+}: {
+  onClose: () => void;
+  initial?: SettingsTabId;
+}) {
+  const [tab, setTab] = useState<SettingsTabId>(initial);
+  return <SettingsModal open tab={tab} onTabChange={setTab} onClose={onClose} />;
+}
 
 function withSettings(overrides: Partial<SettingsContextValue> = {}) {
   const value: SettingsContextValue = {
@@ -27,15 +42,18 @@ function withSettings(overrides: Partial<SettingsContextValue> = {}) {
 describe("SettingsModal", () => {
   it("renders nothing when closed", () => {
     const { wrapper } = withSettings();
-    const { container } = render(<SettingsModal open={false} onClose={vi.fn()} />, {
-      wrapper,
-    });
+    const { container } = render(
+      <SettingsModal open={false} onClose={vi.fn()} tab="appearance" onTabChange={vi.fn()} />,
+      {
+        wrapper,
+      },
+    );
     expect(container.querySelector(".settings-overlay")).toBeNull();
   });
 
   it("renders the modal with all top-level tabs when open", () => {
     const { wrapper } = withSettings();
-    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    render(<Controlled onClose={vi.fn()} />, { wrapper });
 
     expect(screen.getByText("Appearance")).toBeInTheDocument();
     expect(screen.getByText("Layout")).toBeInTheDocument();
@@ -45,11 +63,23 @@ describe("SettingsModal", () => {
     expect(screen.getByText("AI")).toBeInTheDocument();
     expect(screen.getByText("Print")).toBeInTheDocument();
     expect(screen.getByText("Privacy")).toBeInTheDocument();
+    expect(screen.getByText("Plugins")).toBeInTheDocument();
+  });
+
+  it("opens on the tab the opener picked, so Manage Plugins lands on Plugins", () => {
+    const { wrapper } = withSettings();
+    render(<Controlled onClose={vi.fn()} initial="plugins" />, { wrapper });
+    expect(screen.getByText("plugins tab")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Appearance"));
+    expect(screen.queryByText("plugins tab")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Plugins"));
+    expect(screen.getByText("plugins tab")).toBeInTheDocument();
   });
 
   it("renders each tab's content when selected", async () => {
     const { wrapper } = withSettings();
-    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    render(<Controlled onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(screen.getByText("Layout"));
     expect(screen.getByText("Sidebars")).toBeInTheDocument();
@@ -81,7 +111,7 @@ describe("SettingsModal", () => {
   it("calls onClose when Escape is pressed", () => {
     const onClose = vi.fn();
     const { wrapper } = withSettings();
-    render(<SettingsModal open={true} onClose={onClose} />, { wrapper });
+    render(<Controlled onClose={onClose} />, { wrapper });
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -90,7 +120,7 @@ describe("SettingsModal", () => {
   it("does not call onClose on other keys", () => {
     const onClose = vi.fn();
     const { wrapper } = withSettings();
-    render(<SettingsModal open={true} onClose={onClose} />, { wrapper });
+    render(<Controlled onClose={onClose} />, { wrapper });
 
     fireEvent.keyDown(window, { key: "Enter" });
     expect(onClose).not.toHaveBeenCalled();
@@ -99,7 +129,7 @@ describe("SettingsModal", () => {
   it("handles keydown on the dialog overlay (Escape closes, other keys do not)", () => {
     const onClose = vi.fn();
     const { wrapper } = withSettings();
-    const { container } = render(<SettingsModal open={true} onClose={onClose} />, { wrapper });
+    const { container } = render(<Controlled onClose={onClose} />, { wrapper });
     const overlay = container.querySelector(".settings-overlay") as Element;
 
     fireEvent.keyDown(overlay, { key: "Enter" });
@@ -112,7 +142,7 @@ describe("SettingsModal", () => {
   it("calls onClose when the backdrop is clicked but not when content is clicked", () => {
     const onClose = vi.fn();
     const { wrapper } = withSettings();
-    const { container } = render(<SettingsModal open={true} onClose={onClose} />, {
+    const { container } = render(<Controlled onClose={onClose} />, {
       wrapper,
     });
 
@@ -128,7 +158,7 @@ describe("SettingsModal", () => {
   it("invokes updateSettings when an Appearance segmented control changes", () => {
     const updateSettings = vi.fn();
     const { wrapper } = withSettings({ updateSettings });
-    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    render(<Controlled onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(screen.getByText("Dark"));
     expect(updateSettings).toHaveBeenCalledWith("appearance.theme", "dark");
@@ -143,7 +173,7 @@ describe("SettingsModal", () => {
         behavior: { ...DEFAULT_SETTINGS.behavior, recentFiles: ["/p/a.md", "/p/b.md"] },
       },
     });
-    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    render(<Controlled onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(screen.getByText("Behavior"));
     fireEvent.click(screen.getByText(/Clear Recent Files/i));
@@ -153,7 +183,7 @@ describe("SettingsModal", () => {
   it("toggles error reporting from the Privacy tab", async () => {
     const updateSettings = vi.fn();
     const { wrapper } = withSettings({ updateSettings });
-    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    render(<Controlled onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(screen.getByText("Privacy"));
     expect(screen.getByText("Send crash reports")).toBeInTheDocument();
@@ -171,7 +201,7 @@ describe("SettingsModal", () => {
         appearance: { ...DEFAULT_SETTINGS.appearance, fontFamily: "custom" },
       },
     });
-    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    render(<Controlled onClose={vi.fn()} />, { wrapper });
     expect(screen.getByText("Custom Font Name")).toBeInTheDocument();
   });
 
@@ -179,7 +209,7 @@ describe("SettingsModal", () => {
     const { wrapper } = withSettings({
       settings: { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "claude" } },
     });
-    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    render(<Controlled onClose={vi.fn()} />, { wrapper });
     fireEvent.click(screen.getByText("AI"));
     expect(screen.getByText("API Key")).toBeInTheDocument();
     expect(screen.getByText("Model")).toBeInTheDocument();
@@ -189,7 +219,7 @@ describe("SettingsModal", () => {
     const { wrapper } = withSettings({
       settings: { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } },
     });
-    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    render(<Controlled onClose={vi.fn()} />, { wrapper });
     fireEvent.click(screen.getByText("AI"));
     expect(screen.getByText("Ollama URL")).toBeInTheDocument();
   });
@@ -197,7 +227,7 @@ describe("SettingsModal", () => {
   it("calls resetSettings from the footer Reset button", () => {
     const resetSettings = vi.fn();
     const { wrapper } = withSettings({ resetSettings });
-    render(<SettingsModal open={true} onClose={vi.fn()} />, { wrapper });
+    render(<Controlled onClose={vi.fn()} />, { wrapper });
 
     fireEvent.click(screen.getByText("Reset to Defaults"));
     expect(resetSettings).toHaveBeenCalled();

@@ -22,7 +22,7 @@ export function PluginToasts({ toasts }: { toasts: readonly PluginToast[] }) {
   if (toasts.length === 0) return null;
   return (
     // z-[200] clears the modal backdrop (z-index 100 in settings.css): installs are
-    // driven from PluginsModal, and under its scrim the toast reads as a black smear.
+    // driven from the Settings Plugins tab, and under its scrim the toast reads as a black smear.
     // Sitting above the modal means it must not swallow the clicks meant for it.
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[200] flex flex-col items-center gap-2 pointer-events-none">
       {toasts.map((toast) => (

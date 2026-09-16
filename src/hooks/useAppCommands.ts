@@ -89,7 +89,7 @@ export function useAppCommands({
     out.push(...appPaletteCommands(t, actions, workspaceOpen));
 
     // Commands contributed by loaded plugins (the marketplace, install, enable,
-    // and remove actions all live in the Manage Plugins modal instead).
+    // and remove actions all live in the Settings Plugins tab instead).
     for (const c of pluginCommands) {
       out.push({
         id: `plugin:${c.id}`,

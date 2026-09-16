@@ -134,7 +134,7 @@ export interface SidebarPanelContribution extends MountContribution {
 }
 
 /**
- * A settings UI contribution, shown under the plugin's row in Manage Plugins.
+ * A settings UI contribution, shown under the plugin's row in the Settings Plugins tab.
  * The host keys it by plugin id, so each plugin has at most one panel.
  */
 export interface SettingsPanelContribution extends MountContribution {

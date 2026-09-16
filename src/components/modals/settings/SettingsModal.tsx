@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
+import { PluginsTab } from "@/components/plugins/PluginsTab";
 import { useSettings } from "@/hooks/useSettings";
 import { AITab } from "./AITab";
 import { AppearanceTab } from "./AppearanceTab";
@@ -12,7 +13,7 @@ import { MarkdownTab } from "./MarkdownTab";
 import { PrintTab } from "./PrintTab";
 import { PrivacyTab } from "./PrivacyTab";
 
-type Tab =
+export type SettingsTabId =
   | "appearance"
   | "layout"
   | "behavior"
@@ -21,17 +22,21 @@ type Tab =
   | "hotkeys"
   | "ai"
   | "print"
-  | "privacy";
+  | "privacy"
+  | "plugins";
 
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
+  tab: SettingsTabId;
+  onTabChange: (tab: SettingsTabId) => void;
 }
 
-export function SettingsModal({ open, onClose }: SettingsModalProps) {
+/** App-wide settings. The active tab is controlled by the opener so "Manage
+ *  Plugins…" lands on the Plugins tab even while another tab is showing. */
+export function SettingsModal({ open, onClose, tab, onTabChange }: SettingsModalProps) {
   const { t } = useTranslation("settings");
   const { resetSettings } = useSettings();
-  const [tab, setTab] = useState<Tab>("appearance");
 
   // Close on Escape
   useEffect(() => {
@@ -52,7 +57,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
   if (!open) return null;
 
-  const tabs: { id: Tab; label: string }[] = [
+  const tabs: { id: SettingsTabId; label: string }[] = [
     { id: "appearance", label: t("modal.tabs.appearance") },
     { id: "layout", label: t("modal.tabs.layout") },
     { id: "behavior", label: t("modal.tabs.behavior") },
@@ -62,6 +67,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     { id: "ai", label: t("modal.tabs.ai") },
     { id: "print", label: t("modal.tabs.print") },
     { id: "privacy", label: t("modal.tabs.privacy") },
+    { id: "plugins", label: t("modal.tabs.plugins") },
   ];
 
   return (
@@ -89,7 +95,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 key={t.id}
                 className="settings-tab"
                 data-active={tab === t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => onTabChange(t.id)}
               >
                 {t.label}
               </button>
@@ -106,6 +112,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             {tab === "ai" && <AITab />}
             {tab === "print" && <PrintTab />}
             {tab === "privacy" && <PrivacyTab />}
+            {tab === "plugins" && <PluginsTab />}
           </div>
         </div>
 
