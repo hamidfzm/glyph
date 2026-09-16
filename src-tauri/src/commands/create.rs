@@ -124,8 +124,8 @@ pub fn create_folder(
 /// the rename would break. The extension of the original file is preserved when
 /// the typed name doesn't carry one (so "My Note" stays a `.md` file). Reports
 /// the final (collision-safe) path; a dry run reports it without renaming or writing.
-#[tauri::command(async)]
-pub fn rename_path(
+#[tauri::command]
+pub async fn rename_path(
     path: String,
     new_name: String,
     root: String,
@@ -239,8 +239,8 @@ pub fn duplicate_path(
 /// must be inside `root`, and a folder can't be moved into itself or a
 /// descendant. A move into the current directory is a no-op that reports the
 /// original path; a dry run reports without moving or writing.
-#[tauri::command(async)]
-pub fn move_path(
+#[tauri::command]
+pub async fn move_path(
     from: String,
     to_dir: String,
     root: String,
@@ -305,6 +305,7 @@ pub fn delete_path(
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use tauri::async_runtime::block_on;
     use tauri::test::{mock_app, MockRuntime};
     use tauri::Manager;
 
@@ -338,7 +339,10 @@ mod tests {
     fn rename_path(path: String, new_name: String, root: String) -> Result<String, String> {
         let app = app_with_root(&root);
         let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
-        super::rename_path(path, new_name, root, false, grants, store).map(|done| done.new_path)
+        block_on(super::rename_path(
+            path, new_name, root, false, grants, store,
+        ))
+        .map(|done| done.new_path)
     }
 
     fn duplicate_path(path: String, root: String) -> Result<String, String> {
@@ -349,7 +353,8 @@ mod tests {
     fn move_path(from: String, to_dir: String, root: String) -> Result<String, String> {
         let app = app_with_root(&root);
         let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
-        super::move_path(from, to_dir, root, false, grants, store).map(|done| done.new_path)
+        block_on(super::move_path(from, to_dir, root, false, grants, store))
+            .map(|done| done.new_path)
     }
 
     fn delete_path(path: String, root: String) -> Result<(), String> {
@@ -574,15 +579,22 @@ mod tests {
             ungranted.state::<GrantRegistry>(),
             ungranted.state::<VaultStore>(),
         );
-        let renamed = super::rename_path(
+        let renamed = block_on(super::rename_path(
             note.clone(),
             "y".into(),
             root.clone(),
             true,
             grants.clone(),
             store.clone(),
-        );
-        let moved = super::move_path(note.clone(), sub.clone(), root.clone(), true, grants, store);
+        ));
+        let moved = block_on(super::move_path(
+            note.clone(),
+            sub.clone(),
+            root.clone(),
+            true,
+            grants,
+            store,
+        ));
         for denied in [
             renamed.map(|done| done.new_path),
             moved.map(|done| done.new_path),
@@ -594,16 +606,16 @@ mod tests {
 
         let app = app_with_root(&root);
         let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
-        let renamed = super::rename_path(
+        let renamed = block_on(super::rename_path(
             note.clone(),
             "y".into(),
             root.clone(),
             true,
             grants.clone(),
             store.clone(),
-        )
+        ))
         .unwrap();
-        let moved = super::move_path(note, sub, root, true, grants, store).unwrap();
+        let moved = block_on(super::move_path(note, sub, root, true, grants, store)).unwrap();
         assert!(renamed.new_path.ends_with("y.md"));
         assert_eq!(Path::new(&moved.new_path), dir.join("sub").join("note.md"));
         assert!(dir.join("note.md").is_file());
@@ -647,14 +659,14 @@ mod tests {
         fs::create_dir_all(&child).unwrap();
 
         let app = app_with_root(&root.to_string_lossy());
-        let result = super::move_path(
+        let result = block_on(super::move_path(
             folder.to_string_lossy().to_string(),
             child.to_string_lossy().to_string(),
             root.to_string_lossy().to_string(),
             false,
             app.state::<GrantRegistry>(),
             app.state::<VaultStore>(),
-        );
+        ));
         // The guard must answer, not the OS rename failure.
         assert_eq!(result.unwrap_err(), "Can't move an item into itself");
         assert!(folder.is_dir());
