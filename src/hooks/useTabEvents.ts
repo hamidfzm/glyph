@@ -49,13 +49,15 @@ export function useTabEvents({
   // Listen for file-changed events (auto-reload). Applies to any open file tab.
   // biome-ignore lint/correctness/useExhaustiveDependencies: subscribes once; every dependency is read through a ref or a stable callback
   useEffect(() => {
-    let timeout: ReturnType<typeof setTimeout>;
+    // Per path: a burst touching several files (git checkout, sync pull) must reload each one.
+    const timeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
     const unsubscribe = subscribe<string>("file-changed", (event) => {
       if (!isAutoReloadEnabled()) return;
-      clearTimeout(timeout);
-      timeout = setTimeout(async () => {
-        const changedPath = event.payload;
+      const changedPath = event.payload;
+      clearTimeout(timeouts.get(changedPath));
+      const timeout = setTimeout(async () => {
+        timeouts.delete(changedPath);
         // Images are never watched and never read as text; ignore defensively.
         if (isImageFile(changedPath)) return;
         const isOpen = stateRef.current.tabs.some((t) => activeFileOf(t)?.path === changedPath);
@@ -64,10 +66,11 @@ export function useTabEvents({
         if (isRecentSelfSave(changedPath)) return;
         await reloadFromDisk(changedPath);
       }, FILE_RELOAD_DEBOUNCE);
+      timeouts.set(changedPath, timeout);
     });
 
     return () => {
-      clearTimeout(timeout);
+      for (const timeout of timeouts.values()) clearTimeout(timeout);
       unsubscribe();
     };
   }, []);
