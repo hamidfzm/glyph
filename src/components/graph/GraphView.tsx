@@ -40,7 +40,7 @@ export function GraphView({ graph, onOpenFile }: GraphViewProps) {
   // this only indexes them for lookup.
   const neighbors = useMemo(() => neighborIndex(graph.edges), [graph.edges]);
   // The graph tab unmounts whenever another tab is active, so its camera,
-  // auto-fit flag and layout live in a store keyed by workspace root.
+  // auto-fit flag, focused node and layout live in a store keyed by workspace root.
   const persistKey = useWorkspaceRoot();
   const { layout, version, reheat } = useGraphSimulation(graph, { persistKey });
   const camera = useGraphCamera(persistKey);
@@ -91,6 +91,7 @@ export function GraphView({ graph, onOpenFile }: GraphViewProps) {
     cameraNow,
     takeManualControl,
     layout,
+    persistKey,
   });
 
   // A second press on the node already in focus is what opens it. Chromium

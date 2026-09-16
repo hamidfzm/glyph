@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { GraphCameraApi } from "@/hooks/useGraphCamera";
 import { type Camera, centerCameraOn, FOCUS_SCALE, lerpCamera } from "@/lib/graphCanvas";
 import type { GraphLayout, LayoutNode } from "@/lib/graphSimulation";
+import { loadGraphView, saveGraphView } from "@/lib/graphViewStore";
 import { createSpringAnimation, type SpringAnimation } from "@/lib/spring";
 
 // Windows' default double-click time, and the longest of the platform defaults.
@@ -16,6 +17,8 @@ interface UseGraphFocusOptions {
   /** Switch the view from auto-fit to the user's own camera. */
   takeManualControl: () => void;
   layout: GraphLayout;
+  /** Workspace root the focus is kept under while the graph tab is unmounted. */
+  persistKey?: string;
 }
 
 export interface GraphFocusApi {
@@ -37,8 +40,14 @@ export function useGraphFocus({
   cameraNow,
   takeManualControl,
   layout,
+  persistKey,
 }: UseGraphFocusOptions): GraphFocusApi {
-  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(
+    () => (persistKey ? loadGraphView(persistKey)?.focusedId : undefined) ?? null,
+  );
+  useEffect(() => {
+    if (persistKey) saveGraphView(persistKey, { focusedId });
+  }, [persistKey, focusedId]);
   const timerRef = useRef(0);
   const animationRef = useRef<SpringAnimation | null>(null);
   // The deferred move reads the camera and the layout when it fires, not when it
