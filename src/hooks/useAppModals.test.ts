@@ -28,6 +28,26 @@ describe("useAppModals", () => {
     expect(result.current.settingsTab).toBe(tab);
   });
 
+  it("reopens Settings on the last tab rather than resetting it", () => {
+    const { result } = renderHook(() => useAppModals());
+    act(() => result.current.openPlugins());
+    act(() => result.current.closeSettings());
+    act(() => result.current.openSettings());
+    expect(result.current.settingsTab).toBe("plugins");
+  });
+
+  it("marks whichever settings modal opened last as on top", () => {
+    const { result } = renderHook(() => useAppModals());
+    act(() => result.current.openWorkspaceSettings());
+    expect(result.current.settingsOnTop).toBe(false);
+    act(() => result.current.openPlugins());
+    expect(result.current.settingsOnTop).toBe(true);
+    act(() => result.current.openSyncSettings());
+    expect(result.current.settingsOnTop).toBe(false);
+    act(() => result.current.openSettings());
+    expect(result.current.settingsOnTop).toBe(true);
+  });
+
   it("moves open Settings to the Plugins tab without reopening it", () => {
     const { result } = renderHook(() => useAppModals());
     act(() => result.current.openSettings());

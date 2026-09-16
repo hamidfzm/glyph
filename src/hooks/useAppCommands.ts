@@ -28,7 +28,7 @@ export interface AppCommandSources {
 export interface AppActions extends MenuEventHandlers {
   /** Open the given workspace file as a document tab. Used by file rows. */
   openWorkspaceFile: (path: string) => void;
-  /** Open the plugin management modal. */
+  /** Open Settings on the Plugins tab. */
   managePlugins: () => void;
   /** Open Workspace Settings on the Cloud Sync tab. Palette-only: the status
    *  bar's sync pill is the other entry point, and there is no menu item. */

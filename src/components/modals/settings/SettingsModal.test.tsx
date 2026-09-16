@@ -75,6 +75,8 @@ describe("SettingsModal", () => {
     expect(screen.queryByText("plugins tab")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("Plugins"));
     expect(screen.getByText("plugins tab")).toBeInTheDocument();
+    // Reset only touches app settings, so it is hidden under the plugin list.
+    expect(screen.queryByText("Reset to Defaults")).not.toBeInTheDocument();
   });
 
   it("renders each tab's content when selected", async () => {

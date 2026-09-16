@@ -18,6 +18,7 @@ function makeModals(): AppModals {
     settingsOpen: false,
     settingsTab: "appearance",
     workspaceSettingsTab: null,
+    settingsOnTop: false,
     setSettingsTab: vi.fn(),
     setWorkspaceSettingsTab: vi.fn(),
     openSettings: vi.fn(),

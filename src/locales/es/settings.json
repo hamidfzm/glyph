@@ -14,7 +14,8 @@
       "privacy": "Privacidad",
       "markdown": "Markdown",
       "plugins": "Complementos"
-    }
+    },
+    "close": "Cerrar"
   },
   "language": {
     "sectionTitle": "Idioma",

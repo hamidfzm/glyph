@@ -13,25 +13,35 @@ export function useAppModals() {
   const [workspaceSettingsTab, setWorkspaceSettingsTab] = useState<WorkspaceSettingsTabId | null>(
     null,
   );
+  // Both overlays share one z-index, so the shell orders them by which opened last.
+  const [settingsOnTop, setSettingsOnTop] = useState(false);
 
   return {
     settingsOpen,
     settingsTab,
     workspaceSettingsTab,
+    settingsOnTop,
     setSettingsTab,
     setWorkspaceSettingsTab,
     openSettings: useCallback(() => {
-      setSettingsTab("appearance");
       setSettingsOpen(true);
+      setSettingsOnTop(true);
     }, []),
     // Plugin management is the Settings modal's Plugins tab.
     openPlugins: useCallback(() => {
       setSettingsTab("plugins");
       setSettingsOpen(true);
+      setSettingsOnTop(true);
     }, []),
     closeSettings: useCallback(() => setSettingsOpen(false), []),
-    openSyncSettings: useCallback(() => setWorkspaceSettingsTab("sync"), []),
-    openWorkspaceSettings: useCallback(() => setWorkspaceSettingsTab("website"), []),
+    openSyncSettings: useCallback(() => {
+      setWorkspaceSettingsTab("sync");
+      setSettingsOnTop(false);
+    }, []),
+    openWorkspaceSettings: useCallback(() => {
+      setWorkspaceSettingsTab("website");
+      setSettingsOnTop(false);
+    }, []),
     closeWorkspaceSettings: useCallback(() => setWorkspaceSettingsTab(null), []),
   };
 }

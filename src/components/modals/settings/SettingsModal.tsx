@@ -33,7 +33,8 @@ interface SettingsModalProps {
 }
 
 /** App-wide settings. The active tab is controlled by the opener so "Manage
- *  Plugins…" lands on the Plugins tab even while another tab is showing. */
+ *  Plugins…" lands on the Plugins tab even while another tab is showing, and
+ *  reopening Settings returns to the last tab. */
 export function SettingsModal({ open, onClose, tab, onTabChange }: SettingsModalProps) {
   const { t } = useTranslation("settings");
   const { resetSettings } = useSettings();
@@ -78,11 +79,18 @@ export function SettingsModal({ open, onClose, tab, onTabChange }: SettingsModal
         if (e.key === "Escape") onClose();
       }}
       role="dialog"
+      aria-modal="true"
+      aria-label={t("modal.title")}
     >
       <div className="settings-modal">
         <div className="settings-header">
           <h2>{t("modal.title")}</h2>
-          <button type="button" className="settings-close" onClick={onClose}>
+          <button
+            type="button"
+            className="settings-close"
+            onClick={onClose}
+            aria-label={t("modal.close")}
+          >
             <ModalCloseIcon />
           </button>
         </div>
@@ -116,14 +124,17 @@ export function SettingsModal({ open, onClose, tab, onTabChange }: SettingsModal
           </div>
         </div>
 
-        <div className="settings-footer">
-          <button type="button" className="settings-reset-btn" onClick={resetSettings}>
-            {t("modal.reset")}
-          </button>
-          <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
-            {t("modal.changesApply")}
-          </span>
-        </div>
+        {/* Reset touches app settings only, so it would mislead under the plugin list. */}
+        {tab !== "plugins" && (
+          <div className="settings-footer">
+            <button type="button" className="settings-reset-btn" onClick={resetSettings}>
+              {t("modal.reset")}
+            </button>
+            <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
+              {t("modal.changesApply")}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

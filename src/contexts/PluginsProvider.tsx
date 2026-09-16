@@ -13,7 +13,7 @@ const TOAST_DURATION_MS = 4000;
  * Owns the plugin host for the app: loads enabled plugins on startup, exposes
  * the contribution registries and the marketplace, renders plugin toasts
  * (`ctx.notify`), and provides the install / enable / uninstall actions the
- * management modal drives.
+ * Settings Plugins tab drives.
  */
 export function PluginsProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<PluginToast[]>([]);
