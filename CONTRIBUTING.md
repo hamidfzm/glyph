@@ -148,14 +148,16 @@ ecosystem repos: `glyph-md/plugin-template`'s `types/glyph.d.ts` must declare
 the same `ctx` surface as `src/lib/plugins/types.ts`, the built template must
 load through the real loader, and `glyph-md/plugins`' `index.schema.json` and
 `index.json` must match what the marketplace parser reads. A plugin API change
-therefore lands in the template and plugins repos first. To run it locally:
+therefore lands in the template and plugins repos first. To run it locally,
+put the two repos in `.ecosystem/` (a clone, or a symlink/junction to your
+`../glyph-md/` working copies to test unpushed edits):
 
 ```bash
 git clone https://github.com/glyph-md/plugin-template .ecosystem/plugin-template
 git clone https://github.com/glyph-md/plugins .ecosystem/plugins
-(cd .ecosystem/plugin-template && npm install && npm run build)
+(cd .ecosystem/plugin-template && npm install --ignore-scripts && npm run build)
 pnpm exec tsc -p scripts/plugin-contract
-pnpm exec vitest run src/lib/plugins/ecosystemContract.test.ts
+GLYPH_PLUGIN_CONTRACT=1 pnpm exec vitest run src/lib/plugins/ecosystemContract.test.ts
 ```
 
 ### Mobile: Android and iOS (experimental)

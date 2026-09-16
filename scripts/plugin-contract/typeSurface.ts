@@ -5,57 +5,63 @@
 import type * as Host from "@/lib/plugins/types";
 import type * as Template from "glyph";
 
-type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
-
-// Methods are bivariant in their parameters, so a narrowed parameter still
-// assigns; tuples are not, which is why signatures compare as [params, return].
-type Signature<F> = F extends (...args: infer P) => infer R ? [P, R] : F;
-
-type SameMembers<A, B> =
-  Same<keyof A, keyof B> extends true
-    ? Same<{ [K in keyof A & keyof B]-?: Same<Signature<A[K]>, Signature<B[K]>> }[keyof A & keyof B], true>
-    : false;
-
-// The template types markdown plugins and fenced renderers loosely so plugin
-// authors need no React or unified types; only names and arity must match.
-type Arity<T> = { [K in keyof T]: T[K] extends (...args: infer P) => unknown ? P["length"] : never };
+// Identity, not mutual assignability: assignability lets optional members,
+// readonly, `any`, and generics drift unnoticed.
+type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
 
 type HostCtx = Host.GlyphPluginContext;
 type TemplateCtx = Template.GlyphPluginContext;
 
-export const contextMembers: Same<keyof HostCtx, keyof TemplateCtx> = true;
-export const apiVersion: Same<HostCtx["apiVersion"], TemplateCtx["apiVersion"]> = true;
-export const commands: SameMembers<HostCtx["commands"], TemplateCtx["commands"]> = true;
-export const ui: SameMembers<HostCtx["ui"], TemplateCtx["ui"]> = true;
-export const markdown: SameMembers<Arity<HostCtx["markdown"]>, Arity<TemplateCtx["markdown"]>> =
-  true;
-export const workspace: SameMembers<HostCtx["workspace"], TemplateCtx["workspace"]> = true;
-export const assets: SameMembers<HostCtx["assets"], TemplateCtx["assets"]> = true;
-export const exporters: SameMembers<HostCtx["exporters"], TemplateCtx["exporters"]> = true;
-export const spellcheck: SameMembers<HostCtx["spellcheck"], TemplateCtx["spellcheck"]> = true;
-export const settings: SameMembers<HostCtx["settings"], TemplateCtx["settings"]> = true;
-export const notify: Same<Signature<HostCtx["notify"]>, Signature<TemplateCtx["notify"]>> = true;
-export const registerTranslations: Same<
-  Signature<HostCtx["registerTranslations"]>,
-  Signature<TemplateCtx["registerTranslations"]>
+// The template types markdown plugins and fenced renderers loosely so plugin
+// authors need no React or unified types: compare names, arity, returns, and
+// the fenced renderer's language parameter only.
+type MarkdownShape<M> = {
+  [K in keyof M]: M[K] extends (...args: infer P) => infer R ? [P["length"], R] : never;
+};
+type FencedLanguage<M extends { registerFencedRenderer: (...args: never[]) => unknown }> =
+  Parameters<M["registerFencedRenderer"]>[0];
+
+export const context: Equal<Omit<HostCtx, "markdown">, Omit<TemplateCtx, "markdown">> = true;
+export const commands: Equal<HostCtx["commands"], TemplateCtx["commands"]> = true;
+export const ui: Equal<HostCtx["ui"], TemplateCtx["ui"]> = true;
+export const workspace: Equal<HostCtx["workspace"], TemplateCtx["workspace"]> = true;
+export const assets: Equal<HostCtx["assets"], TemplateCtx["assets"]> = true;
+export const exporters: Equal<HostCtx["exporters"], TemplateCtx["exporters"]> = true;
+export const spellcheck: Equal<HostCtx["spellcheck"], TemplateCtx["spellcheck"]> = true;
+export const settings: Equal<HostCtx["settings"], TemplateCtx["settings"]> = true;
+export const markdown: Equal<
+  MarkdownShape<HostCtx["markdown"]>,
+  MarkdownShape<TemplateCtx["markdown"]>
+> = true;
+export const fencedLanguage: Equal<
+  FencedLanguage<HostCtx["markdown"]>,
+  FencedLanguage<TemplateCtx["markdown"]>
 > = true;
 
-export const commandContribution: Same<Host.CommandContribution, Template.CommandContribution> =
+export const commandContribution: Equal<Host.CommandContribution, Template.CommandContribution> =
   true;
-export const mountContribution: Same<Host.MountContribution, Template.MountContribution> = true;
-export const sidebarPanelContribution: Same<
+export const mountContribution: Equal<Host.MountContribution, Template.MountContribution> = true;
+export const sidebarPanelContribution: Equal<
   Host.SidebarPanelContribution,
   Template.SidebarPanelContribution
 > = true;
-export const exporterContribution: Same<Host.ExporterContribution, Template.ExporterContribution> =
+export const exporterContribution: Equal<Host.ExporterContribution, Template.ExporterContribution> =
   true;
-export const siteThemeContribution: Same<
+export const siteThemeContribution: Equal<
   Host.SiteThemeContribution,
   Template.SiteThemeContribution
 > = true;
-export const dictionaryContribution: Same<
+export const dictionaryContribution: Equal<
   Host.DictionaryContribution,
   Template.DictionaryContribution
 > = true;
-// activate's ctx parameter is compared member by member above.
-export const pluginModule: Same<keyof Host.PluginModule, keyof Template.PluginModule> = true;
+
+// activate's ctx parameter differs only through the markdown types checked above.
+export const pluginModule: Equal<
+  Omit<Host.PluginModule, "activate">,
+  Omit<Template.PluginModule, "activate">
+> = true;
+export const activateReturn: Equal<
+  ReturnType<Host.PluginModule["activate"]>,
+  ReturnType<Template.PluginModule["activate"]>
+> = true;

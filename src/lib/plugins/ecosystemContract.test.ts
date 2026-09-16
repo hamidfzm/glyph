@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { satisfiesApiVersion } from "@/lib/plugins/apiVersion";
@@ -7,44 +7,48 @@ import { fetchRegistry, REGISTRY_CATEGORIES, type RegistryEntry } from "@/lib/pl
 import { installed } from "@/test/fixtures/pluginHost";
 
 // Checks the host against real checkouts of glyph-md/plugin-template (built)
-// and glyph-md/plugins. The Plugin contract CI job clones both into
-// .ecosystem/; without that folder the suite is skipped.
-const ECOSYSTEM = path.resolve(".ecosystem");
+// and glyph-md/plugins in .ecosystem/. Only the Plugin contract CI job (or a
+// local run that sets GLYPH_PLUGIN_CONTRACT) runs it, so stale local clones
+// never gate commits.
+const ECOSYSTEM = path.resolve(__dirname, "../../../.ecosystem");
 
 function readEcosystemFile(file: string): string {
   return readFileSync(path.join(ECOSYSTEM, file), "utf-8");
 }
 
-const REGISTRY_ENTRY_FIELDS = {
-  id: true,
-  name: true,
-  description: true,
-  version: true,
-  apiVersion: true,
-  permissions: true,
-  packageUrl: true,
-  sha256: true,
-  sandbox: true,
-  category: true,
-  keywords: true,
-  official: true,
-} satisfies Record<keyof RegistryEntry, true>;
+type FieldPresence<T> = { [K in keyof T]-?: object extends Pick<T, K> ? "optional" : "required" };
+
+const REGISTRY_ENTRY_FIELDS: FieldPresence<RegistryEntry> = {
+  id: "required",
+  name: "required",
+  description: "optional",
+  version: "required",
+  apiVersion: "required",
+  permissions: "optional",
+  packageUrl: "required",
+  sha256: "required",
+  sandbox: "optional",
+  category: "optional",
+  keywords: "optional",
+  official: "optional",
+};
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe.runIf(existsSync(ECOSYSTEM))("plugin ecosystem contract", () => {
+describe.runIf(process.env.GLYPH_PLUGIN_CONTRACT)("plugin ecosystem contract", () => {
   it("loads the built plugin template through the real loader", async () => {
     const manifest = JSON.parse(readEcosystemFile("plugin-template/manifest.json"));
+    // The template contributes UI, which only full-trust plugins can; happy-dom
+    // has no Worker to run the sandboxed path anyway.
+    expect(manifest.sandbox).toBe(false);
     const host = createPluginHost(vi.fn());
 
-    // happy-dom has no Worker, so this drives the main-thread module path;
-    // the sandbox bootstrap has its own suite.
     await host.load(
       installed({
         id: manifest.id,
         apiVersion: manifest.apiVersion,
         sandbox: false,
-        mainSource: readEcosystemFile("plugin-template/main.js"),
+        mainSource: readEcosystemFile(`plugin-template/${manifest.main ?? "main.js"}`),
       }),
     );
 
@@ -54,8 +58,13 @@ describe.runIf(existsSync(ECOSYSTEM))("plugin ecosystem contract", () => {
 
   it("reads exactly the entry fields and categories the marketplace schema defines", () => {
     const entry = JSON.parse(readEcosystemFile("plugins/index.schema.json")).definitions.entry;
+    const hostRequired = Object.entries(REGISTRY_ENTRY_FIELDS)
+      .filter(([, presence]) => presence === "required")
+      .map(([field]) => field);
 
     expect(Object.keys(entry.properties).sort()).toEqual(Object.keys(REGISTRY_ENTRY_FIELDS).sort());
+    // The host may tolerate more missing fields than the schema allows, never fewer.
+    expect(entry.required).toEqual(expect.arrayContaining(hostRequired));
     expect(entry.properties.category.enum).toEqual([...REGISTRY_CATEGORIES]);
   });
 
