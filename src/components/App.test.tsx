@@ -313,6 +313,10 @@ describe("App", () => {
         case "vault_refresh":
         case "vault_snapshot":
           return Promise.resolve(vaultSnapshot(["/workspace/a.md"]));
+        // The backlinks panel queries once the note's tab and the index are up;
+        // the default undefined would crash it whenever that lands in the test.
+        case "vault_backlinks":
+          return Promise.resolve([]);
         case "workspace_resolve":
           return Promise.resolve({
             selected: String(args?.selected ?? ""),
