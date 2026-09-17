@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickFiles } from "@/lib/pickers";
+import { registerFileType } from "@/lib/plugins/fileTypes";
 import { saveWorkspaceSession } from "@/lib/workspaceSession";
 import {
   captureListener,
@@ -38,6 +39,23 @@ describe("useTabs opening folders", () => {
     });
 
     expect(result.current.tabs).toHaveLength(2);
+  });
+
+  it("openFileDialog offers plugin file types in the all-documents filter", async () => {
+    vi.mocked(pickFiles).mockResolvedValue(null);
+    const dispose = registerFileType({ extensions: ["puml", "d2"], language: "plantuml" });
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFileDialog();
+    });
+    dispose();
+
+    const [documents] = vi.mocked(pickFiles).mock.calls[0][0];
+    expect(documents.extensions).toContain("puml");
+    // The built-in d2 entry is not listed twice.
+    expect(documents.extensions.filter((ext) => ext === "d2")).toHaveLength(1);
   });
 
   it("openFileDialog is a no-op when nothing is selected", async () => {
