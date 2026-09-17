@@ -43,6 +43,22 @@ describe("waitForRenderIdle", () => {
 
   // A document waiting on a lazy chunk mutates nothing, so the quiet check
   // alone would call it finished and export the unrendered shortcode.
+  it("waits for a plugin render marked aria-busy", async () => {
+    const body = setBody('<div data-fenced-language="d2"><div aria-busy="true"></div></div>');
+    const pending = waitForRenderIdle(document, 3000);
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    let done = false;
+    void pending.then(() => {
+      done = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(done).toBe(false);
+
+    body.querySelector("[aria-busy]")!.setAttribute("aria-busy", "false");
+    await expect(pending).resolves.toEqual({ settled: true });
+  });
+
   it("waits for a lazy plugin chunk that is still loading", async () => {
     setBody("<p>shipped :tada:</p>");
     let settle = () => {};

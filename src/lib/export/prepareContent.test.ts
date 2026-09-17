@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TocEntry } from "@/hooks/useTableOfContents";
+import { staticRenderers } from "@/lib/plugins/staticRenderers";
 import { prepareContent } from "./prepareContent";
 
 // Rendering needs a real layout/canvas/WASM engine; mock the helpers so the
@@ -159,6 +160,44 @@ describe("prepareContent", () => {
     expect(result?.html).toContain('data-diagram="d2-light"');
     expect(result?.html).not.toContain("d2-diagram");
     expect(result?.html).not.toContain("data:image/png");
+  });
+
+  it("swaps a plugin block for its sanitized static render for PDF", async () => {
+    sanitizeMock.mockClear();
+    const dispose = staticRenderers.register({
+      language: "puml",
+      renderStatic: async (code) => `<svg data-light="${code}"></svg>`,
+    });
+    setBody('<div data-fenced-language="puml" data-fenced-source="a"><div>dark</div></div>');
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    dispose();
+    expect(result?.html).toContain('<svg data-light="a"></svg>');
+    expect(result?.html).not.toContain("data-fenced-language");
+    expect(sanitizeMock).toHaveBeenCalledWith('<svg data-light="a"></svg>', {
+      FORBID_TAGS: ["foreignObject"],
+    });
+  });
+
+  it("keeps a plugin block as rendered when it has no static render", async () => {
+    setBody('<div data-fenced-language="puml" data-fenced-source="a"><p>live</p></div>');
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(result?.html).toContain("<p>live</p>");
+  });
+
+  it("drops a plugin block whose static render fails", async () => {
+    const dispose = staticRenderers.register({
+      language: "puml",
+      renderStatic: async () => {
+        throw new Error("bad source");
+      },
+    });
+    setBody(
+      '<div data-fenced-language="puml" data-fenced-source="a"><p>dark</p></div><p>after</p>',
+    );
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    dispose();
+    expect(result?.html).not.toContain("dark");
+    expect(result?.html).toContain("after");
   });
 
   it("leaves a D2 diagram untouched when its source is missing", async () => {

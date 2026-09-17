@@ -160,6 +160,17 @@ function buildContext(init) {
         return () => {};
       },
     },
+    documents: {
+      registerFileType(fileType) {
+        // Pure data, like site themes: the host registry owns it.
+        postMessage({
+          type: "register-file-type",
+          extensions: Array.from(fileType.extensions, String),
+          language: String(fileType.language),
+        });
+        return () => {};
+      },
+    },
     workspace: {
       readFile(path) {
         return hostCall({ type: "workspace-read", path });

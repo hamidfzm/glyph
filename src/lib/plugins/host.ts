@@ -2,6 +2,7 @@ import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_COMPAT_FLOOR, PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 import { createAssetsApi } from "./assetsApi";
 import { DisposerBag } from "./disposer";
+import { registerFileType } from "./fileTypes";
 import { importPluginModule, type ModuleImporter } from "./loader";
 import { buildPluginContext, type ContextRegistries, tracked } from "./pluginContext";
 import { createRegistry, type Registry } from "./registry";
@@ -180,6 +181,7 @@ export function createPluginHost(
             },
             registerExporter: tracked(exporters.register, bag),
             registerSiteTheme: tracked(siteThemes.register, bag),
+            registerFileType: tracked(registerFileType, bag),
             registerDictionary: tracked(registerDictionarySource, bag),
             notify,
             registerTranslations,

@@ -16,11 +16,13 @@ const QUIET_MS = 250;
 // wait on; leaving it out made a board export sit here until the deadline.
 export const EXPORTABLE_ROOT_SELECTOR = ".markdown-body, .notebook-body, .glyph-canvas";
 
-/** Diagram containers still waiting for their SVG (or their error message). */
+/** Diagram containers still waiting for their SVG (or their error message),
+ *  plus plugin renders that mark themselves `aria-busy`. */
 function pendingDiagrams(root: ParentNode): number {
-  return Array.from(root.querySelectorAll(".mermaid-diagram, .d2-diagram")).filter(
+  const emptyDiagrams = Array.from(root.querySelectorAll(".mermaid-diagram, .d2-diagram")).filter(
     (el) => el.childElementCount === 0,
   ).length;
+  return emptyDiagrams + root.querySelectorAll('[aria-busy="true"]').length;
 }
 
 /**
