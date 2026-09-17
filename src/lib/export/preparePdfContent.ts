@@ -4,12 +4,11 @@
 // syntax-highlight colours inlined onto code spans. Applied to the export
 // clone by prepareContent.
 
-import { renderD2 } from "@/lib/d2Render";
 import { staticRendererFor } from "@/lib/plugins/staticRenderers";
 import { containsRtlText } from "@/lib/textDirection";
 import { rasterizeElement, renderMermaidLightSvg, restoreMermaidTheme } from "./rasterize";
 
-// For PDF export: swap each Mermaid / D2 diagram in the clone for its
+// For PDF export: swap each Mermaid diagram or plugin block in the clone for its
 // light-theme vector `<svg>` (the walker embeds SVG natively; see htmlToPdf),
 // and rasterize block math (`.katex-display`) to a PNG <img> (vector math is
 // #256). Diagrams re-render light so they don't sit as a dark box on the white
@@ -17,7 +16,7 @@ import { rasterizeElement, renderMermaidLightSvg, restoreMermaidTheme } from "./
 // LaTeX source); a diagram whose light re-render fails is removed so the dark
 // on-screen SVG never leaks into the PDF.
 export async function preparePdfRichContent(liveBody: Element, clone: Element): Promise<void> {
-  const selector = ".katex-display, .mermaid-diagram, .d2-diagram, [data-fenced-language]";
+  const selector = ".katex-display, .mermaid-diagram, [data-fenced-language]";
   const live = liveBody.querySelectorAll<HTMLElement>(selector);
   if (live.length === 0) return;
   const cloned = clone.querySelectorAll(selector);
@@ -46,15 +45,14 @@ export async function preparePdfRichContent(liveBody: Element, clone: Element): 
         cloned[i].replaceWith(img);
         continue;
       }
-      const isMermaid = el.classList.contains("mermaid-diagram");
-      const source = el.getAttribute(isMermaid ? "data-mermaid-source" : "data-d2-source");
+      const source = el.getAttribute("data-mermaid-source");
       if (!source) continue; // no source to re-render; the on-screen SVG embeds as-is
-      const svg = isMermaid ? await renderMermaidLightSvg(source) : await renderD2(source, false);
-      if (isMermaid) mermaidRendered = true;
+      const svg = await renderMermaidLightSvg(source);
+      mermaidRendered = true;
       const wrap = clone.ownerDocument.createElement("div");
-      // The diagram source is user-authored, and unlike D2 (sanitized in
-      // d2Render) Mermaid's output is raw, so sanitize at the sink before it
-      // re-enters the DOM and later flows into pdfmake's SVG parser. DOMPurify
+      // The diagram source is user-authored and Mermaid's output is raw, so
+      // sanitize at the sink before it re-enters the DOM and later flows into
+      // pdfmake's SVG parser. DOMPurify
       // keeps <style> blocks and style attributes, which Mermaid's colors need;
       // <foreignObject> is forbidden as the SVG-embedded-HTML vector (and
       // pdfmake can't draw it anyway).

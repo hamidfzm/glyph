@@ -155,7 +155,7 @@ describe("PluginsTab", () => {
   it("toggles an installed plugin's active state", () => {
     const value = ctx();
     renderTab(value);
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Enable Alpha" }));
     expect(value.setEnabled).toHaveBeenCalledWith("a.b", false);
   });
 

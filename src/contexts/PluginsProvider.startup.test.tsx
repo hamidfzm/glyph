@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getStore } from "@tauri-apps/plugin-store";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { PluginsProvider } from "@/contexts/PluginsProvider";
@@ -18,12 +18,20 @@ vi.mock("@/lib/pickers", () => ({
   pickPluginDir: vi.fn(),
 }));
 
+// Core plugins follow app settings, covered by useCorePlugins.test; here only
+// their readiness matters, and it is steerable per case.
+const coreReady = vi.hoisted(() => ({ value: true }));
+vi.mock("@/hooks/useCorePlugins", () => ({ useCorePlugins: () => coreReady.value }));
+
 vi.mock("@/lib/plugins/settingsStore", () => ({
   loadPluginSettings: vi.fn(() => Promise.resolve({})),
   savePluginSettings: vi.fn(() => Promise.resolve()),
 }));
 
-beforeEach(resetPluginsMocks);
+beforeEach(() => {
+  resetPluginsMocks();
+  coreReady.value = true;
+});
 
 describe("PluginsProvider startup", () => {
   it("flips initialLoadDone once the startup scan and load pass finishes", async () => {
@@ -36,6 +44,28 @@ describe("PluginsProvider startup", () => {
     );
     // Renders false first, then true after the async startup pass, even with
     // nothing installed: the CLI website export gates on this.
+    await waitFor(() => expect(screen.getByTestId("initial-load")).toHaveTextContent("true"));
+  });
+
+  it("holds initialLoadDone until core plugins have settled too", async () => {
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    coreReady.value = false;
+    const { rerender } = render(
+      <PluginsProvider>
+        <Probe />
+      </PluginsProvider>,
+    );
+    // Long enough for the library pass alone to have flipped it.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(screen.getByTestId("initial-load")).toHaveTextContent("false");
+
+    coreReady.value = true;
+    rerender(
+      <PluginsProvider>
+        <Probe />
+      </PluginsProvider>,
+    );
     await waitFor(() => expect(screen.getByTestId("initial-load")).toHaveTextContent("true"));
   });
 

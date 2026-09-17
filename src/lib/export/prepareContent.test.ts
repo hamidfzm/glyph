@@ -7,15 +7,11 @@ import { prepareContent } from "./prepareContent";
 // orchestration is testable without them.
 const rasterizeElementMock = vi.fn(async () => "data:image/png;base64,MATH");
 const renderMermaidMock = vi.fn(async () => '<svg data-diagram="mermaid-light"></svg>');
-const renderD2Mock = vi.fn(async () => '<svg data-diagram="d2-light"></svg>');
 const restoreMermaidMock = vi.fn(async () => {});
 vi.mock("./rasterize", () => ({
   rasterizeElement: () => rasterizeElementMock(),
   renderMermaidLightSvg: () => renderMermaidMock(),
   restoreMermaidTheme: () => restoreMermaidMock(),
-}));
-vi.mock("@/lib/d2Render", () => ({
-  renderD2: () => renderD2Mock(),
 }));
 // DOMPurify does not run faithfully under happy-dom (it drops the <svg>
 // wrapper), so mock it pass-through and assert the sanitize wiring instead;
@@ -152,16 +148,6 @@ describe("prepareContent", () => {
     expect(result?.html).not.toContain("mermaid-diagram");
   });
 
-  it("swaps a D2 diagram for its light vector SVG for PDF", async () => {
-    renderD2Mock.mockClear();
-    setBody('<div class="d2-diagram" data-d2-source="a -> b"><svg></svg></div>');
-    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(renderD2Mock).toHaveBeenCalledTimes(1);
-    expect(result?.html).toContain('data-diagram="d2-light"');
-    expect(result?.html).not.toContain("d2-diagram");
-    expect(result?.html).not.toContain("data:image/png");
-  });
-
   it("swaps a plugin block for its sanitized static render for PDF", async () => {
     sanitizeMock.mockClear();
     const dispose = staticRenderers.register({
@@ -200,14 +186,6 @@ describe("prepareContent", () => {
     expect(result?.html).toContain("after");
   });
 
-  it("leaves a D2 diagram untouched when its source is missing", async () => {
-    renderD2Mock.mockClear();
-    setBody('<div class="d2-diagram"><svg></svg></div>');
-    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(renderD2Mock).not.toHaveBeenCalled();
-    expect(result?.html).toContain("d2-diagram");
-  });
-
   it("leaves a Mermaid diagram untouched when its source is missing", async () => {
     renderMermaidMock.mockClear();
     setBody('<div class="mermaid-diagram"><svg></svg></div>');
@@ -228,12 +206,9 @@ describe("prepareContent", () => {
 
   it("sanitizes the re-rendered diagram SVG before it re-enters the DOM", async () => {
     sanitizeMock.mockClear();
-    setBody(
-      '<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg></svg></div>' +
-        '<div class="d2-diagram" data-d2-source="a -> b"><svg></svg></div>',
-    );
+    setBody('<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg></svg></div>');
     await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(sanitizeMock).toHaveBeenCalledTimes(2);
+    expect(sanitizeMock).toHaveBeenCalledTimes(1);
     for (const call of sanitizeMock.mock.calls) {
       expect(call[1]).toEqual({ FORBID_TAGS: ["foreignObject"] });
     }
@@ -253,10 +228,12 @@ describe("prepareContent", () => {
   });
 
   it("drops a diagram whose light render returns no svg", async () => {
-    renderD2Mock.mockResolvedValueOnce("plain text, not svg");
-    setBody('<div class="d2-diagram" data-d2-source="a -> b"><svg data-dark="1"></svg></div>');
+    renderMermaidMock.mockResolvedValueOnce("plain text, not svg");
+    setBody(
+      '<div class="mermaid-diagram" data-mermaid-source="graph"><svg data-dark="1"></svg></div>',
+    );
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(result?.html).not.toContain("d2-diagram");
+    expect(result?.html).not.toContain("mermaid-diagram");
     expect(result?.html).not.toContain('data-dark="1"');
   });
 

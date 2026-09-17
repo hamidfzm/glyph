@@ -4,22 +4,13 @@ import { D2Diagram } from "./D2Diagram";
 
 const renderD2 = vi.fn();
 
-vi.mock("@/lib/d2Render", () => ({
+vi.mock("./d2Render", () => ({
   renderD2: (...args: unknown[]) => renderD2(...args),
-}));
-
-// Controllable lightbox: null by default (no provider in scope), set per-test to
-// exercise the click-to-zoom path.
-let mockLightbox: { open: ReturnType<typeof vi.fn>; openSrc: ReturnType<typeof vi.fn> } | null =
-  null;
-vi.mock("@/contexts/LightboxContext", () => ({
-  useLightbox: () => mockLightbox,
 }));
 
 describe("D2Diagram", () => {
   beforeEach(() => {
     renderD2.mockReset();
-    mockLightbox = null;
     document.documentElement.classList.remove("dark");
   });
 
@@ -88,12 +79,15 @@ describe("D2Diagram", () => {
     expect(renderD2).not.toHaveBeenCalled();
   });
 
-  it("exposes the source via data-d2-source so PDF export can re-render it", async () => {
-    renderD2.mockResolvedValue("<svg></svg>");
+  it("stays aria-busy until the SVG is in, so exports wait for it", async () => {
+    let resolve: (svg: string) => void = () => {};
+    renderD2.mockImplementationOnce(() => new Promise<string>((r) => (resolve = r)));
     const { container } = render(<D2Diagram code="a -> b" />);
 
-    await waitFor(() => expect(container.querySelector(".d2-diagram")).not.toBeNull());
-    expect(container.querySelector(".d2-diagram")?.getAttribute("data-d2-source")).toBe("a -> b");
+    const diagram = container.querySelector(".d2-diagram");
+    expect(diagram?.getAttribute("aria-busy")).toBe("true");
+    await act(async () => resolve("<svg></svg>"));
+    expect(diagram?.getAttribute("aria-busy")).toBe("false");
   });
 
   it("falls back to a generic error message when render rejects with a non-Error value", async () => {
@@ -171,13 +165,10 @@ describe("D2Diagram", () => {
   });
 
   describe("lightbox zoom", () => {
-    beforeEach(() => {
-      mockLightbox = { open: vi.fn(), openSrc: vi.fn() };
-    });
-
     it("is a zoomable button and opens the rendered SVG in the lightbox on click", async () => {
       renderD2.mockResolvedValue("<svg id='zoomed'></svg>");
-      const { container } = render(<D2Diagram code="x -> y" />);
+      const openLightbox = vi.fn();
+      const { container } = render(<D2Diagram code="x -> y" openLightbox={openLightbox} />);
 
       const diagram = await waitFor(() => {
         const el = container.querySelector(".d2-diagram");
@@ -186,24 +177,26 @@ describe("D2Diagram", () => {
       });
       fireEvent.click(diagram);
 
-      expect(mockLightbox?.openSrc).toHaveBeenCalledTimes(1);
-      expect(mockLightbox?.openSrc.mock.calls[0][0]).toMatch(/^data:image\/svg\+xml/);
+      expect(openLightbox).toHaveBeenCalledTimes(1);
+      expect(openLightbox.mock.calls[0][0]).toMatch(/^data:image\/svg\+xml/);
+      expect(openLightbox.mock.calls[0][0]).toContain(encodeURIComponent("xmlns"));
     });
 
     it("opens the lightbox on Enter and Space but not other keys", async () => {
       renderD2.mockResolvedValue("<svg></svg>");
-      const { container } = render(<D2Diagram code="x -> y" />);
-      const diagram = await waitFor(() => container.querySelector(".d2-diagram") as HTMLElement);
+      const openLightbox = vi.fn();
+      const { container } = render(<D2Diagram code="x -> y" openLightbox={openLightbox} />);
+      const diagram = container.querySelector(".d2-diagram") as HTMLElement;
+      await waitFor(() => expect(diagram.getAttribute("aria-busy")).toBe("false"));
 
       fireEvent.keyDown(diagram, { key: "Enter" });
       fireEvent.keyDown(diagram, { key: " " });
       fireEvent.keyDown(diagram, { key: "a" });
 
-      expect(mockLightbox?.openSrc).toHaveBeenCalledTimes(2);
+      expect(openLightbox).toHaveBeenCalledTimes(2);
     });
 
-    it("is not a button when no lightbox provider is in scope", async () => {
-      mockLightbox = null;
+    it("is not a button when the host offers no lightbox", async () => {
       renderD2.mockResolvedValue("<svg></svg>");
       const { container } = render(<D2Diagram code="x -> y" />);
       const diagram = await waitFor(() => container.querySelector(".d2-diagram") as HTMLElement);

@@ -128,7 +128,7 @@ export function createPluginHost(
     siteThemes,
   };
 
-  const unload = (id: string) => {
+  const teardown = (id: string) => {
     const plugin = loaded.get(id);
     if (!plugin) return;
     loaded.delete(id);
@@ -143,9 +143,16 @@ export function createPluginHost(
   // Guards against overlapping load() calls for the same id (rapid re-enable
   // or double-clicked update) and against loads that resolve after teardown:
   // only the newest generation commits; anything stale rolls itself back.
-  // unloadAll bumps every generation instead of latching a closed flag, so a
-  // StrictMode remount (same host instance) can still load plugins afterwards.
+  // unload and unloadAll bump generations instead of latching a closed flag,
+  // so a disable during an in-flight enable wins, and a StrictMode remount
+  // (same host instance) can still load plugins afterwards.
   const loadGeneration = new Map<string, number>();
+  const invalidate = (id: string) => loadGeneration.set(id, (loadGeneration.get(id) ?? 0) + 1);
+
+  const unload = (id: string) => {
+    invalidate(id);
+    teardown(id);
+  };
 
   return {
     commands,
@@ -164,8 +171,8 @@ export function createPluginHost(
           `${plugin.name} requires plugin API ${plugin.apiVersion}, but this Glyph accepts ${PLUGIN_API_COMPAT_FLOOR} through ${PLUGIN_API_VERSION}`,
         );
       }
-      const generation = (loadGeneration.get(plugin.id) ?? 0) + 1;
-      loadGeneration.set(plugin.id, generation);
+      invalidate(plugin.id);
+      const generation = loadGeneration.get(plugin.id);
 
       if (plugin.sandbox) {
         const settings = await settingsBackend.load(plugin.id);
@@ -200,7 +207,7 @@ export function createPluginHost(
           bag.dispose();
           return;
         }
-        unload(plugin.id);
+        teardown(plugin.id);
         loaded.set(plugin.id, {
           info: {
             id: plugin.id,
@@ -249,7 +256,7 @@ export function createPluginHost(
       }
       // The previous instance stays live while the new one downloads and
       // activates; swap only at commit time.
-      unload(plugin.id);
+      teardown(plugin.id);
       loaded.set(plugin.id, {
         info: {
           id: plugin.id,
@@ -264,10 +271,8 @@ export function createPluginHost(
     unload,
     unloadAll() {
       // Invalidate in-flight loads too, not just committed instances.
-      for (const [id, generation] of loadGeneration) {
-        loadGeneration.set(id, generation + 1);
-      }
-      for (const id of [...loaded.keys()]) unload(id);
+      for (const id of loadGeneration.keys()) invalidate(id);
+      for (const id of [...loaded.keys()]) teardown(id);
     },
     listLoaded() {
       return [...loaded.values()].map((p) => p.info);

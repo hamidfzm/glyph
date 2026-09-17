@@ -117,7 +117,7 @@ describe("waitForRenderIdle", () => {
   });
 
   it("gives up at the deadline so one stuck diagram cannot hang the process", async () => {
-    setBody('<div class="d2-diagram" data-d2-source="a -> b"></div>');
+    setBody('<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"></div>');
     await expect(waitForRenderIdle(document, 300)).resolves.toEqual({ settled: false });
   });
 

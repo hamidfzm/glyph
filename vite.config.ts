@@ -57,7 +57,8 @@ export default defineConfig(async ({ mode }) => ({
         // The `@terrastruct/d2` browser build resolves to its own `index.js`, so
         // its lazy chunk would otherwise be named `index-<hash>.js` and collide
         // with the entry chunk in bundle-size diffs. Give it a stable name; it
-        // stays lazy (only the dynamic import in d2Render.ts references it).
+        // stays lazy (only the dynamic import in the D2 core plugin's d2Render.ts
+        // references it).
         manualChunks(id) {
           if (id.includes("@terrastruct/d2")) return "d2";
         },
