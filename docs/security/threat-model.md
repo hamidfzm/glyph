@@ -279,4 +279,9 @@ the way a renderer-supplied path is.
   `"sandbox": false` still executes in the app context and sees everything the
   renderer sees; that mode requires an explicit full-trust consent, persisted
   per plugin, and marketplace packages are SHA-256-verified against the
-  reviewed registry entry before install.
+  reviewed registry entry before install. Core plugins (the compiled-in
+  `CORE_PLUGINS` list, D2 today) are app code shipped in the signed binary:
+  they load with full trust and no consent prompt, and only their on/off
+  state lives in `settings.json`. The backend reserves the `glyph.core.` id
+  prefix, so an installed plugin cannot take a core plugin's settings, grants,
+  or host slot.

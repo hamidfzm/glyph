@@ -189,6 +189,10 @@ fence and renders it directly, the same way `.mmd` files render as Mermaid.
 `.d2` files show up in the workspace file tree and open straight into the
 diagram viewer.
 
+D2 rendering is a core plugin: switch it off under **Settings → Plugins → Core
+plugins** and ` ```d2 ` blocks and `.d2` files show their source instead,
+without loading the D2 engine.
+
 Open [[Architecture]] for a full example using nested containers, a person
 and cylinder shape, and bidirectional connections.
 

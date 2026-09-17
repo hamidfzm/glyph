@@ -3,14 +3,10 @@ import { staticRenderers } from "@/lib/plugins/staticRenderers";
 import { swapDiagramsLight } from "./lightDiagrams";
 
 const renderMermaidMock = vi.fn(async () => '<svg data-diagram="mermaid-light"></svg>');
-const renderD2Mock = vi.fn(async () => '<svg data-diagram="d2-light"></svg>');
 const restoreMermaidMock = vi.fn(async (_dark: boolean) => {});
 vi.mock("./rasterize", () => ({
   renderMermaidLightSvg: () => renderMermaidMock(),
   restoreMermaidTheme: (dark: boolean) => restoreMermaidMock(dark),
-}));
-vi.mock("@/lib/d2Render", () => ({
-  renderD2: () => renderD2Mock(),
 }));
 // DOMPurify does not run faithfully under happy-dom (it drops the <svg>
 // wrapper), so mock it pass-through; real stripping is its job in the webview.
@@ -68,14 +64,12 @@ describe("swapDiagramsLight", () => {
     dispose();
   });
 
-  it("replaces Mermaid and D2 diagrams with their light renders", async () => {
+  it("replaces Mermaid diagrams with their light renders", async () => {
     setBody(
-      '<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg data-dark="1"></svg></div>' +
-        '<div class="d2-diagram" data-d2-source="a -> b"><svg data-dark="1"></svg></div>',
+      '<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg data-dark="1"></svg></div>',
     );
     await swapDiagramsLight(document);
     expect(document.body.innerHTML).toContain('data-diagram="mermaid-light"');
-    expect(document.body.innerHTML).toContain('data-diagram="d2-light"');
     expect(document.body.innerHTML).not.toContain('data-dark="1"');
     // Mermaid's global config is left on the app (dark) theme.
     expect(restoreMermaidMock).toHaveBeenCalledWith(true);

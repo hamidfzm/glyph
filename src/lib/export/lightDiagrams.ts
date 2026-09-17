@@ -4,27 +4,25 @@
 // diagram for a light re-render before printing; the returned callback restores
 // the originals afterwards.
 
-import { renderD2 } from "@/lib/d2Render";
 import { staticRendererFor } from "@/lib/plugins/staticRenderers";
 import { renderMermaidLightSvg, restoreMermaidTheme } from "./rasterize";
 
 export async function swapDiagramsLight(doc: Document): Promise<() => void> {
-  const diagrams = Array.from(doc.querySelectorAll<HTMLElement>(".mermaid-diagram, .d2-diagram"));
+  const diagrams = Array.from(doc.querySelectorAll<HTMLElement>(".mermaid-diagram"));
   const restores: Array<() => void> = [];
   let mermaidRendered = false;
 
   for (const el of diagrams) {
-    const isMermaid = el.classList.contains("mermaid-diagram");
-    const source = el.getAttribute(isMermaid ? "data-mermaid-source" : "data-d2-source");
+    const source = el.getAttribute("data-mermaid-source");
     if (!source) continue;
     const original = el.innerHTML;
     try {
-      const svg = isMermaid ? await renderMermaidLightSvg(source) : await renderD2(source, false);
-      // Unlike D2 (sanitized in d2Render) Mermaid's output is raw, and this goes
-      // back into the live DOM; <foreignObject> is the SVG-embedded-HTML vector.
+      const svg = await renderMermaidLightSvg(source);
+      // Mermaid's output is raw, and this goes back into the live DOM;
+      // <foreignObject> is the SVG-embedded-HTML vector.
       const { default: DOMPurify } = await import("dompurify");
       el.innerHTML = DOMPurify.sanitize(svg, { FORBID_TAGS: ["foreignObject"] });
-      if (isMermaid) mermaidRendered = true;
+      mermaidRendered = true;
       restores.push(() => {
         el.innerHTML = original;
       });

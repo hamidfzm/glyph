@@ -4,7 +4,6 @@ import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { CopyButton } from "./CopyButton";
 import { CsvTable } from "./CsvTable";
-import { D2Diagram } from "./D2Diagram";
 import { MermaidDiagram } from "./MermaidDiagram";
 
 interface CodeProps {
@@ -32,10 +31,6 @@ export function CodeBlockComponent(props: ComponentPropsWithoutRef<"pre">) {
     if (/\blanguage-mermaid\b/.test(className)) {
       const code = extractText(children.props.children).trim();
       return <MermaidDiagram code={code} />;
-    }
-    if (/\blanguage-d2\b/.test(className)) {
-      const code = extractText(children.props.children).trim();
-      return <D2Diagram code={code} />;
     }
     if (/\blanguage-csv\b/.test(className)) {
       const code = extractText(children.props.children).trim();

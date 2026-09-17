@@ -1,16 +1,12 @@
 import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLightbox } from "@/contexts/LightboxContext";
-import { useIsDarkMode } from "@/hooks/useIsDarkMode";
-import { renderD2 } from "@/lib/d2Render";
-import { svgToDataUrl } from "@/lib/svgDataUrl";
+import type { FencedRendererProps } from "@/lib/plugins/types";
+import { renderD2 } from "./d2Render";
+import { svgToDataUrl } from "./svgDataUrl";
+import { useDarkClass } from "./useDarkClass";
 
-interface D2DiagramProps {
-  code: string;
-}
-
-export function D2Diagram({ code }: D2DiagramProps) {
-  const { t } = useTranslation("common");
+export function D2Diagram({ code, openLightbox }: FencedRendererProps) {
+  const { t } = useTranslation("d2");
   const containerRef = useRef<HTMLDivElement>(null);
   // Last rendered SVG markup, so a click can open it zoomable in the lightbox.
   const svgRef = useRef<string>("");
@@ -18,19 +14,22 @@ export function D2Diagram({ code }: D2DiagramProps) {
   // finishes after a newer one started, we leave the DOM to the newer render.
   const renderSeqRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
-  const isDark = useIsDarkMode();
-  const lightbox = useLightbox();
+  // aria-busy holds export readiness until the SVG (or the error) is in.
+  const [busy, setBusy] = useState(true);
+  const isDark = useDarkClass();
 
   const renderDiagram = useCallback(async () => {
     const mySeq = ++renderSeqRef.current;
     if (code.trim().length === 0) {
-      setError(t("d2.empty"));
+      setError(t("empty"));
+      setBusy(false);
       return;
     }
     // Clear any prior error up front so the container div remounts before the
     // async render resolves; otherwise the error fallback keeps the container
     // unmounted and a successful re-render could never write its SVG.
     setError(null);
+    setBusy(true);
     try {
       const svg = await renderD2(code, isDark);
       if (renderSeqRef.current !== mySeq) return;
@@ -38,17 +37,19 @@ export function D2Diagram({ code }: D2DiagramProps) {
       if (containerRef.current) {
         containerRef.current.innerHTML = svg;
       }
+      setBusy(false);
     } catch (err) {
       if (renderSeqRef.current !== mySeq) return;
-      setError(err instanceof Error ? err.message : t("d2.errorLabel"));
+      setError(err instanceof Error ? err.message : t("errorLabel"));
+      setBusy(false);
     }
   }, [code, isDark, t]);
 
-  const openInLightbox = useCallback(() => {
-    if (lightbox && svgRef.current) {
-      lightbox.openSrc(svgToDataUrl(svgRef.current), t("d2.label"));
+  const zoom = useCallback(() => {
+    if (openLightbox && svgRef.current) {
+      openLightbox(svgToDataUrl(svgRef.current), t("label"));
     }
-  }, [lightbox, t]);
+  }, [openLightbox, t]);
 
   useEffect(() => {
     renderDiagram();
@@ -57,7 +58,7 @@ export function D2Diagram({ code }: D2DiagramProps) {
   if (error) {
     return (
       <div className="d2-error">
-        <div className="d2-error-label">{t("d2.errorTitle")}</div>
+        <div className="d2-error-label">{t("errorTitle")}</div>
         <pre>
           <code>{code}</code>
         </pre>
@@ -65,26 +66,24 @@ export function D2Diagram({ code }: D2DiagramProps) {
     );
   }
 
-  // The source is exposed so PDF export can re-render the diagram in a light
-  // theme (the rendered SVG bakes in the app theme's colors). Clicking (or
-  // Enter/Space) opens the diagram zoomable in the lightbox when one is in
-  // scope (not during export/print, where the provider is absent).
+  // Clicking (or Enter/Space) opens the diagram zoomable when the host offers
+  // a lightbox (not during export or print).
   return (
     <div
       ref={containerRef}
       className="d2-diagram"
-      data-d2-source={code}
-      {...(lightbox
+      aria-busy={busy}
+      {...(openLightbox
         ? {
             role: "button",
             tabIndex: 0,
-            title: t("d2.zoomHint"),
-            "aria-label": t("d2.label"),
-            onClick: openInLightbox,
+            title: t("zoomHint"),
+            "aria-label": t("label"),
+            onClick: zoom,
             onKeyDown: (e: KeyboardEvent) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                openInLightbox();
+                zoom();
               }
             },
           }
