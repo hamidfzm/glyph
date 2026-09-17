@@ -62,6 +62,7 @@ const fullPlugin = `export default {
     ctx.settings.set("who", "world");
     ctx.exporters.register({ id: "e1", label: "Upper", extension: "txt", build: async (html) => html.toUpperCase() });
     ctx.exporters.registerSiteTheme({ id: "t1", label: "Theme", css: "body { background: beige }" });
+    ctx.documents.registerFileType({ extensions: ["puml"], language: "plantuml" });
   },
 }`;
 
@@ -90,6 +91,11 @@ describe("worker bootstrap", () => {
       id: "t1",
       label: "Theme",
       css: "body { background: beige }",
+    });
+    expect(w.posted).toContainEqual({
+      type: "register-file-type",
+      extensions: ["puml"],
+      language: "plantuml",
     });
   });
 

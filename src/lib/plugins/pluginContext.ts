@@ -2,8 +2,10 @@ import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_VERSION } from "./apiVersion";
 import { createAssetsApi } from "./assetsApi";
 import type { Disposer, DisposerBag } from "./disposer";
+import { registerFileType } from "./fileTypes";
 import type { PluginSettingsBackend } from "./host";
 import type { Registry } from "./registry";
+import { staticRenderers } from "./staticRenderers";
 import type {
   CommandContribution,
   ExporterContribution,
@@ -94,10 +96,18 @@ export function buildPluginContext({
     markdown: {
       registerRemarkPlugin: tracked(remarkPlugins.register, bag),
       registerRehypePlugin: tracked(rehypePlugins.register, bag),
-      registerFencedRenderer(language, render) {
-        return tracked(fencedRenderers.register, bag)({ language, render });
+      registerFencedRenderer(language, render, options) {
+        const disposeRenderer = tracked(fencedRenderers.register, bag)({ language, render });
+        const renderStatic = options?.renderStatic;
+        if (!renderStatic) return disposeRenderer;
+        const disposeStatic = tracked(staticRenderers.register, bag)({ language, renderStatic });
+        return () => {
+          disposeRenderer();
+          disposeStatic();
+        };
       },
     },
+    documents: { registerFileType: tracked(registerFileType, bag) },
     workspace: createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? []),
     assets: createAssetsApi(plugin.id),
     exporters: {

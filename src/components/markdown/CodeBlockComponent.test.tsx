@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LightboxContext } from "@/contexts/LightboxContext";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import { createRegistry } from "@/lib/plugins/registry";
 import type { FencedRendererContribution } from "@/lib/plugins/types";
@@ -45,6 +46,44 @@ describe("CodeBlockComponent", () => {
       </PluginsContext.Provider>,
     );
     expect(screen.getByTestId("plantuml").textContent).toBe("A -> B");
+  });
+
+  it("stamps a plugin block for export and hands it the lightbox only where one is in scope", () => {
+    const fencedRenderers = createRegistry<FencedRendererContribution>();
+    fencedRenderers.register({
+      language: "plantuml",
+      render: ({ openLightbox }) => (
+        <button type="button" onClick={() => openLightbox?.("data:x", "diagram")}>
+          {openLightbox ? "zoomable" : "static"}
+        </button>
+      ),
+    });
+    const plugins = { fencedRenderers } as unknown as PluginsContextValue;
+    const block = (
+      <CodeBlockComponent>
+        <code className="language-plantuml">A -&gt; B</code>
+      </CodeBlockComponent>
+    );
+
+    const { container, unmount } = render(
+      <PluginsContext.Provider value={plugins}>{block}</PluginsContext.Provider>,
+    );
+    const wrapper = container.firstElementChild as HTMLElement;
+    expect(wrapper.dataset.fencedLanguage).toBe("plantuml");
+    expect(wrapper.dataset.fencedSource).toBe("A -> B");
+    expect(screen.getByRole("button").textContent).toBe("static");
+    unmount();
+
+    const openSrc = vi.fn();
+    render(
+      <PluginsContext.Provider value={plugins}>
+        <LightboxContext.Provider value={{ open: vi.fn(), openSrc }}>
+          {block}
+        </LightboxContext.Provider>
+      </PluginsContext.Provider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "zoomable" }));
+    expect(openSrc).toHaveBeenCalledWith("data:x", "diagram");
   });
 
   it("renders MermaidDiagram for mermaid code blocks", () => {

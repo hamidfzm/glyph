@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { type Dispatch, type RefObject, type SetStateAction, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { isCanvasFile } from "@/lib/canvasExtensions";
-import { D2_EXTENSIONS, isD2File } from "@/lib/d2Extensions";
+import { D2_EXTENSIONS } from "@/lib/d2Extensions";
 import { loadFileContent } from "@/lib/documentContent";
 import { isImageFile } from "@/lib/imageExtensions";
 import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
@@ -11,6 +11,7 @@ import { isPathInside } from "@/lib/paths";
 import { pickFiles } from "@/lib/pickers";
 import { isMobilePlatform } from "@/lib/platform";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
+import { isSourceDocument } from "@/lib/sourceDocuments";
 import { generateTabId, nextUntitledTitle } from "@/lib/tabIds";
 import {
   type FileMetadata,
@@ -154,12 +155,10 @@ export function useOpenDocument({
           if (!nowOwned) invoke("unwatch_file", { path }).catch(() => {});
           return;
         }
-        // Notebooks, canvases, images, and D2 files are read-only; open straight
-        // into the viewer regardless of the user's default editor mode. (`.d2`
-        // content is fence-wrapped for rendering, so an editor would write the
-        // wrapper back over the source.)
+        // Notebooks, canvases, images, and source documents open straight into
+        // the viewer regardless of the user's default editor mode.
         const mode =
-          isImage || isNotebookFile(path) || isCanvasFile(path) || isD2File(path)
+          isImage || isNotebookFile(path) || isCanvasFile(path) || isSourceDocument(path)
             ? EDITOR_MODE.view
             : getDefaultEditorMode();
         const newTab: FileTab = {

@@ -5,6 +5,7 @@
 // clone by prepareContent.
 
 import { renderD2 } from "@/lib/d2Render";
+import { staticRendererFor } from "@/lib/plugins/staticRenderers";
 import { containsRtlText } from "@/lib/textDirection";
 import { rasterizeElement, renderMermaidLightSvg, restoreMermaidTheme } from "./rasterize";
 
@@ -16,7 +17,7 @@ import { rasterizeElement, renderMermaidLightSvg, restoreMermaidTheme } from "./
 // LaTeX source); a diagram whose light re-render fails is removed so the dark
 // on-screen SVG never leaks into the PDF.
 export async function preparePdfRichContent(liveBody: Element, clone: Element): Promise<void> {
-  const selector = ".katex-display, .mermaid-diagram, .d2-diagram";
+  const selector = ".katex-display, .mermaid-diagram, .d2-diagram, [data-fenced-language]";
   const live = liveBody.querySelectorAll<HTMLElement>(selector);
   if (live.length === 0) return;
   const cloned = clone.querySelectorAll(selector);
@@ -26,7 +27,19 @@ export async function preparePdfRichContent(liveBody: Element, clone: Element): 
   for (let i = 0; i < live.length; i++) {
     const el = live[i];
     const isMath = el.classList.contains("katex-display");
+    const pluginLanguage = el.dataset.fencedLanguage;
     try {
+      if (pluginLanguage !== undefined) {
+        const renderStatic = staticRendererFor(pluginLanguage);
+        // Without a static render the live block embeds as it is on screen.
+        if (!renderStatic) continue;
+        const markup = await renderStatic(el.dataset.fencedSource ?? "");
+        const { default: DOMPurify } = await import("dompurify");
+        const wrap = clone.ownerDocument.createElement("div");
+        wrap.innerHTML = DOMPurify.sanitize(markup, { FORBID_TAGS: ["foreignObject"] });
+        cloned[i].replaceWith(...wrap.childNodes);
+        continue;
+      }
       if (isMath) {
         const img = clone.ownerDocument.createElement("img");
         img.setAttribute("src", await rasterizeElement(el, mathBackground));

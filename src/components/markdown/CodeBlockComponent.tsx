@@ -1,4 +1,5 @@
 import { type ComponentPropsWithoutRef, isValidElement, type ReactNode } from "react";
+import { useLightbox } from "@/contexts/LightboxContext";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { CopyButton } from "./CopyButton";
@@ -24,6 +25,7 @@ export function CodeBlockComponent(props: ComponentPropsWithoutRef<"pre">) {
   const { children, ...rest } = props;
   const plugins = usePluginsOptional();
   const fencedRenderers = useRegistryEntries(plugins?.fencedRenderers ?? null);
+  const lightbox = useLightbox();
 
   if (isValidElement<CodeProps>(children)) {
     const className = children.props.className ?? "";
@@ -49,7 +51,14 @@ export function CodeBlockComponent(props: ComponentPropsWithoutRef<"pre">) {
     const custom = lang && fencedRenderers.find((r) => r.language === lang);
     if (custom) {
       const Render = custom.render;
-      return <Render code={extractText(children.props.children).trim()} />;
+      const code = extractText(children.props.children).trim();
+      // Print and PDF export find the block by these to re-render it through
+      // the plugin's renderStatic.
+      return (
+        <div data-fenced-language={custom.language} data-fenced-source={code}>
+          <Render code={code} openLightbox={lightbox?.openSrc} />
+        </div>
+      );
     }
   }
 

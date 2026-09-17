@@ -1,7 +1,12 @@
 import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_VERSION } from "../apiVersion";
 import type { Disposer } from "../disposer";
-import type { ExporterContribution, InstalledPlugin, SiteThemeContribution } from "../types";
+import type {
+  ExporterContribution,
+  FileTypeContribution,
+  InstalledPlugin,
+  SiteThemeContribution,
+} from "../types";
 import { buildWorkerBootstrap } from "./bootstrap";
 import type { HostMessage, WorkerMessage } from "./protocol";
 
@@ -22,6 +27,7 @@ export interface SandboxHostApi {
   addStyles(css: string): void;
   registerExporter(exporter: ExporterContribution): void;
   registerSiteTheme(theme: SiteThemeContribution): void;
+  registerFileType(fileType: FileTypeContribution): void;
   registerDictionary(dictionary: DictionaryContribution): void;
   notify(message: string): void;
   registerTranslations(locale: string, namespace: string, resources: Record<string, unknown>): void;
@@ -109,6 +115,9 @@ export function startSandbox(
           break;
         case "register-site-theme":
           api.registerSiteTheme({ id: data.id, label: data.label, css: data.css });
+          break;
+        case "register-file-type":
+          api.registerFileType({ extensions: data.extensions, language: data.language });
           break;
         case "register-exporter":
           api.registerExporter({

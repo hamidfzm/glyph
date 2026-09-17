@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { fileTypeFor } from "@/lib/plugins/fileTypes";
 import { createPluginHost } from "@/lib/plugins/host";
+import { staticRendererFor } from "@/lib/plugins/staticRenderers";
 import type { PluginModule } from "@/lib/plugins/types";
 import { importerFor, installed } from "@/test/fixtures/pluginHost";
 
@@ -22,6 +24,43 @@ describe("createPluginHost plugin context", () => {
     host.unload("com.x.demo");
     expect(host.remarkPlugins.list()).toHaveLength(0);
     expect(host.fencedRenderers.list()).toHaveLength(0);
+  });
+
+  it("registers file types and static renders, and removes them on unload", async () => {
+    const host = createPluginHost(vi.fn());
+    const renderStatic = async () => "<svg></svg>";
+    const module: PluginModule = {
+      activate(ctx) {
+        ctx.documents.registerFileType({ extensions: ["d2"], language: "d2" });
+        ctx.markdown.registerFencedRenderer("d2", () => null, { renderStatic });
+      },
+    };
+
+    await host.load(installed(), importerFor(module));
+    expect(fileTypeFor("/p/a.d2")?.language).toBe("d2");
+    expect(staticRendererFor("d2")).toBe(renderStatic);
+
+    host.unload("com.x.demo");
+    expect(fileTypeFor("/p/a.d2")).toBeUndefined();
+    expect(staticRendererFor("d2")).toBeUndefined();
+  });
+
+  it("removes a fenced renderer and its static render together through the returned disposer", async () => {
+    const host = createPluginHost(vi.fn());
+    let dispose = () => {};
+    const module: PluginModule = {
+      activate(ctx) {
+        dispose = ctx.markdown.registerFencedRenderer("d2", () => null, {
+          renderStatic: async () => "",
+        });
+      },
+    };
+
+    await host.load(installed(), importerFor(module));
+    dispose();
+    expect(host.fencedRenderers.list()).toHaveLength(0);
+    expect(staticRendererFor("d2")).toBeUndefined();
+    host.unload("com.x.demo");
   });
 
   it("routes ctx.notify to the host notifier", async () => {

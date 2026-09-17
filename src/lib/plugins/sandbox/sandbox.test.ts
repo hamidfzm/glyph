@@ -23,6 +23,7 @@ function apiStub(): SandboxHostApi {
     addStyles: vi.fn(),
     registerExporter: vi.fn(),
     registerSiteTheme: vi.fn(),
+    registerFileType: vi.fn(),
     registerDictionary: vi.fn(),
     notify: vi.fn(),
     registerTranslations: vi.fn(),
@@ -139,6 +140,15 @@ describe("startSandbox", () => {
     expect(api.notify).toHaveBeenCalledWith("hi");
     expect(api.registerTranslations).toHaveBeenCalledWith("de", "ns", { k: "v" });
     expect(api.settingsSet).toHaveBeenCalledWith("a", 1);
+  });
+
+  it("bridges a file type as pure data", async () => {
+    const { worker, api } = await startActivated();
+    worker.emit({ type: "register-file-type", extensions: ["puml"], language: "plantuml" });
+    expect(api.registerFileType).toHaveBeenCalledWith({
+      extensions: ["puml"],
+      language: "plantuml",
+    });
   });
 
   it("round-trips an exporter build through the worker", async () => {

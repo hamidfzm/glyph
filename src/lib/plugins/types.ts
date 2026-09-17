@@ -15,10 +15,37 @@ export type PluginPermission = "workspace:read" | "workspace:write" | `network:$
  */
 export type MarkdownPlugin = NonNullable<Options["remarkPlugins"]>[number];
 
+/** What a fenced renderer component receives. */
+export interface FencedRendererProps {
+  code: string;
+  /** Open an image zoomable over the document. Absent where zoom is unavailable (export, print). */
+  openLightbox?: (src: string, label: string) => void;
+}
+
+export interface FencedRendererOptions {
+  /**
+   * Light-theme markup (typically an SVG) for print and PDF export, which
+   * cannot reuse a live render drawn in the app theme's colors. The host
+   * sanitizes it before it reaches the document.
+   */
+  renderStatic?: (code: string) => Promise<string>;
+}
+
 /** Renders a fenced code block of `language` (e.g. ```d2) as a React component. */
 export interface FencedRendererContribution {
   language: string;
-  render: ComponentType<{ code: string }>;
+  render: ComponentType<FencedRendererProps>;
+}
+
+/**
+ * A document type a plugin opens. Files with these extensions open read-only
+ * and render as one fenced `language` block, so pair it with a fenced renderer
+ * for that language.
+ */
+export interface FileTypeContribution {
+  /** Extensions without the dot, e.g. `["d2"]`. */
+  extensions: readonly string[];
+  language: string;
 }
 
 /**
@@ -45,8 +72,9 @@ export interface PluginManifest {
   /**
    * Run in a dedicated worker instead of the app context. Sandboxed plugins
    * get no DOM and network fenced to their `network:` permissions, but only
-   * the non-UI API subset: commands, styles, exporters, workspace, settings,
-   * notify, and translations. No markdown pipeline or panel mounts.
+   * the non-UI API subset: commands, styles, exporters, file types, workspace,
+   * assets, spellcheck, settings, notify, and translations. No markdown
+   * pipeline or panel mounts.
    *
    * Absent defaults to `true`: isolation is the default, and only an explicit
    * `false` opts into full trust, which needs a distinct user grant.
@@ -227,8 +255,20 @@ export interface MarkdownRegistryApi {
   registerRemarkPlugin(plugin: MarkdownPlugin): Disposer;
   /** Add a rehype plugin (runs after the built-in rehype plugins, incl. sanitize). */
   registerRehypePlugin(plugin: MarkdownPlugin): Disposer;
-  /** Render fenced ```<language> blocks with a React component. */
-  registerFencedRenderer(language: string, render: ComponentType<{ code: string }>): Disposer;
+  /**
+   * Render fenced ```<language> blocks with a React component. While a render
+   * is still pending, mark its element `aria-busy="true"` so exports wait.
+   */
+  registerFencedRenderer(
+    language: string,
+    render: ComponentType<FencedRendererProps>,
+    options?: FencedRendererOptions,
+  ): Disposer;
+}
+
+export interface DocumentsRegistryApi {
+  /** Open files with these extensions as one fenced block; see {@link FileTypeContribution}. */
+  registerFileType(fileType: FileTypeContribution): Disposer;
 }
 
 /**
@@ -264,6 +304,7 @@ export interface GlyphPluginContext {
   readonly commands: CommandRegistryApi;
   readonly ui: UiRegistryApi;
   readonly markdown: MarkdownRegistryApi;
+  readonly documents: DocumentsRegistryApi;
   readonly workspace: WorkspaceApi;
   readonly assets: AssetsApi;
   readonly exporters: ExportersRegistryApi;
