@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { i18n } from "@/lib/i18n";
 import { fileTypeFor } from "@/lib/plugins/fileTypes";
 import { createPluginHost } from "@/lib/plugins/host";
 import { staticRendererFor } from "@/lib/plugins/staticRenderers";
@@ -61,6 +62,30 @@ describe("createPluginHost plugin context", () => {
     expect(host.fencedRenderers.list()).toHaveLength(0);
     expect(staticRendererFor("d2")).toBeUndefined();
     host.unload("com.x.demo");
+  });
+
+  it("reads registered translations and stops following the language after unload", async () => {
+    const host = createPluginHost(vi.fn());
+    const listener = vi.fn();
+    let translated = "";
+    const module: PluginModule = {
+      activate(ctx) {
+        i18n.addResourceBundle("en", "com.x.demo", { hello: "Hello {{name}}" });
+        translated = ctx.i18n.t("com.x.demo:hello", { name: "Ada" });
+        ctx.i18n.onLanguageChange(listener);
+      },
+    };
+
+    await host.load(installed(), importerFor(module));
+    expect(translated).toBe("Hello Ada");
+
+    const language = i18n.language;
+    await i18n.changeLanguage("de");
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    host.unload("com.x.demo");
+    await i18n.changeLanguage(language);
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it("routes ctx.notify to the host notifier", async () => {

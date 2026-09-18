@@ -211,6 +211,12 @@ function buildContext(init) {
         postMessage({ type: "settings-set", key, value });
       },
     },
+    // Reading translations needs the app's i18n instance, which a worker has
+    // no copy of; registering them (below) still works.
+    i18n: {
+      t: sandboxUnavailable("i18n.t"),
+      onLanguageChange: sandboxUnavailable("i18n.onLanguageChange"),
+    },
     notify(message) {
       postMessage({ type: "notify", message: String(message) });
     },
