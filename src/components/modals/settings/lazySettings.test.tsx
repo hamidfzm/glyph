@@ -18,7 +18,9 @@ describe("lazySettings", { timeout: CHUNK_LOAD_TIMEOUT_MS }, () => {
     const wrapper = ({ children }: { children: ReactNode }) => (
       <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
     );
-    render(<SettingsModal open onClose={vi.fn()} />, { wrapper });
+    render(<SettingsModal open onClose={vi.fn()} tab="appearance" onTabChange={vi.fn()} />, {
+      wrapper,
+    });
 
     // Resolves once the dynamically imported chunk has loaded.
     expect(

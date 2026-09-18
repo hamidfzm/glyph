@@ -12,8 +12,10 @@
       "ai": "AI",
       "print": "打印",
       "privacy": "隐私",
-      "markdown": "Markdown"
-    }
+      "markdown": "Markdown",
+      "plugins": "插件"
+    },
+    "close": "关闭"
   },
   "language": {
     "sectionTitle": "语言",

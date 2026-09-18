@@ -590,7 +590,7 @@
   gap: 8px;
 }
 
-/* A plugin README renders through .markdown-body inside the plugins modal,
+/* A plugin README renders through .markdown-body inside the Settings Plugins tab,
    which is chrome, so it keeps the UI face rather than the reading serif. */
 .plugin-readme {
   font-family: inherit;

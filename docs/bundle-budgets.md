@@ -37,8 +37,8 @@ optional loads on first use:
 - Editor (CodeMirror), notebook, canvas, graph view, and the settings modals
   are `lazy()` components (`lazyEditor`, `lazyNotebook`, `lazyCanvas`,
   `lazyGraph`, `lazySettings`, `lazyWorkspaceSettings`).
-- The AI chat panel (`lazyAIChatPanel`) and plugin marketplace modal
-  (`lazyPluginsModal`) load on first open.
+- The AI chat panel (`lazyAIChatPanel`) loads on first open, and the plugin
+  marketplace rides in the settings chunk as its Plugins tab.
 - Syntax highlighting, KaTeX, and the gemoji table load when a document first
   needs them (`lazyHighlight`, `lazyKatex`, `lazyGemoji`).
 - The Sentry SDK loads only after the production telemetry opt-in

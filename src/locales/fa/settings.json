@@ -12,8 +12,10 @@
       "ai": "هوش مصنوعی",
       "print": "چاپ",
       "privacy": "حریم خصوصی",
-      "markdown": "مارک‌داون"
-    }
+      "markdown": "مارک‌داون",
+      "plugins": "افزونه‌ها"
+    },
+    "close": "بستن"
   },
   "language": {
     "sectionTitle": "زبان",

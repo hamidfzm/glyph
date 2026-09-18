@@ -1,6 +1,5 @@
 import { SettingsModal } from "@/components/modals/settings/lazySettings";
 import { WorkspaceSettingsModal } from "@/components/modals/workspace/lazyWorkspaceSettings";
-import { PluginsModal } from "@/components/plugins/lazyPluginsModal";
 import type { AppModals as AppModalsState } from "@/hooks/useAppModals";
 import { useSpringPresence } from "@/hooks/useSpringPresence";
 
@@ -10,22 +9,28 @@ import { useSpringPresence } from "@/hooks/useSpringPresence";
  *  the overlay) and `data-spring` opts its CSS out of the keyframe path. */
 export function AppModals({ modals }: { modals: AppModalsState }) {
   const settings = useSpringPresence(modals.settingsOpen);
-  return (
-    <>
-      {settings.mounted && (
-        <div className="contents" data-spring ref={settings.ref}>
-          <SettingsModal open onClose={modals.closeSettings} />
-        </div>
-      )}
-      {modals.workspaceSettingsTab && (
-        <WorkspaceSettingsModal
-          open
-          tab={modals.workspaceSettingsTab}
-          onTabChange={modals.setWorkspaceSettingsTab}
-          onClose={modals.closeWorkspaceSettings}
-        />
-      )}
-      {modals.pluginsOpen && <PluginsModal onClose={modals.closePlugins} />}
-    </>
+  const settingsModal = settings.mounted && (
+    <div key="settings" className="contents" data-spring ref={settings.ref}>
+      <SettingsModal
+        open
+        tab={modals.settingsTab}
+        onTabChange={modals.setSettingsTab}
+        onClose={modals.closeSettings}
+      />
+    </div>
   );
+  const workspaceSettingsModal = modals.workspaceSettingsTab && (
+    <WorkspaceSettingsModal
+      key="workspaceSettings"
+      open
+      tab={modals.workspaceSettingsTab}
+      onTabChange={modals.setWorkspaceSettingsTab}
+      onClose={modals.closeWorkspaceSettings}
+    />
+  );
+  // Keyed, so reordering moves the overlays instead of remounting them (which
+  // would drop the unsaved Workspace Settings form).
+  return modals.settingsOnTop
+    ? [workspaceSettingsModal, settingsModal]
+    : [settingsModal, workspaceSettingsModal];
 }

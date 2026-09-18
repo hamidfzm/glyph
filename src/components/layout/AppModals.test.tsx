@@ -1,4 +1,5 @@
 import { act, render, screen } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppModals as AppModalsState } from "@/hooks/useAppModals";
 import { restoreRaf, stubRaf } from "@/test/raf";
@@ -7,24 +8,26 @@ import { AppModals } from "./AppModals";
 vi.mock("@/components/modals/settings/lazySettings", () => ({
   SettingsModal: () => <div>settings modal</div>,
 }));
+const workspaceMounts = vi.hoisted(() => vi.fn());
 vi.mock("@/components/modals/workspace/lazyWorkspaceSettings", () => ({
-  WorkspaceSettingsModal: () => <div>workspace modal</div>,
-}));
-vi.mock("@/components/plugins/lazyPluginsModal", () => ({
-  PluginsModal: () => <div>plugins modal</div>,
+  WorkspaceSettingsModal: () => {
+    useEffect(() => workspaceMounts(), []);
+    return <div>workspace modal</div>;
+  },
 }));
 
 const CASES = [
   { flag: "settingsOpen", text: "settings modal" },
   { flag: "workspaceSettingsTab", text: "workspace modal" },
-  { flag: "pluginsOpen", text: "plugins modal" },
 ] as const;
 
 function state(open?: (typeof CASES)[number]["flag"]): AppModalsState {
   return {
     settingsOpen: open === "settingsOpen",
+    settingsTab: "appearance",
     workspaceSettingsTab: open === "workspaceSettingsTab" ? "website" : null,
-    pluginsOpen: open === "pluginsOpen",
+    settingsOnTop: false,
+    setSettingsTab: vi.fn(),
     setWorkspaceSettingsTab: vi.fn(),
     openSettings: vi.fn(),
     closeSettings: vi.fn(),
@@ -32,7 +35,6 @@ function state(open?: (typeof CASES)[number]["flag"]): AppModalsState {
     openWorkspaceSettings: vi.fn(),
     closeWorkspaceSettings: vi.fn(),
     openPlugins: vi.fn(),
-    closePlugins: vi.fn(),
   };
 }
 
@@ -50,6 +52,22 @@ describe("AppModals", () => {
     for (const other of CASES.filter((c) => c.flag !== flag)) {
       expect(screen.queryByText(other.text)).not.toBeInTheDocument();
     }
+  });
+
+  it("stacks the later-opened settings modal on top without remounting the other", () => {
+    const bothOpen = { ...state("settingsOpen"), workspaceSettingsTab: "website" as const };
+    const { rerender } = render(<AppModals modals={bothOpen} />);
+    const isAbove = (upper: string, lower: string) =>
+      Boolean(
+        screen.getByText(lower).compareDocumentPosition(screen.getByText(upper)) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    expect(isAbove("workspace modal", "settings modal")).toBe(true);
+
+    workspaceMounts.mockClear();
+    rerender(<AppModals modals={{ ...bothOpen, settingsOnTop: true }} />);
+    expect(isAbove("settings modal", "workspace modal")).toBe(true);
+    expect(workspaceMounts).not.toHaveBeenCalled();
   });
 
   describe("settings exit spring", () => {

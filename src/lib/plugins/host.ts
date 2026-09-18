@@ -56,7 +56,7 @@ export interface PluginHost {
   readonly fencedRenderers: Registry<FencedRendererContribution>;
   /** Titled sidebar sections contributed by loaded plugins. */
   readonly sidebarPanels: Registry<SidebarPanelContribution>;
-  /** Per-plugin settings UIs, shown under each row in Manage Plugins. */
+  /** Per-plugin settings UIs, shown under each row in the Settings Plugins tab. */
   readonly settingsPanels: Registry<SettingsPanelContribution>;
   /** Stylesheets contributed by loaded plugins, injected after app styles. */
   readonly styles: Registry<StyleContribution>;

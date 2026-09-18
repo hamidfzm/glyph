@@ -15,7 +15,7 @@ import type {
   StatusBarItemContribution,
   StyleContribution,
 } from "@/lib/plugins/types";
-import { PluginsModal } from "./PluginsModal";
+import { PluginsTab } from "./PluginsTab";
 
 const installed: InstalledPlugin = {
   id: "a.b",
@@ -65,22 +65,22 @@ function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
   };
 }
 
-function renderModal(value: PluginsContextValue, onClose = vi.fn()) {
+function renderTab(value: PluginsContextValue) {
   return render(
     <PluginsContext.Provider value={value}>
-      <PluginsModal onClose={onClose} />
+      <PluginsTab />
     </PluginsContext.Provider>,
   );
 }
 
-describe("PluginsModal", () => {
+describe("PluginsTab", () => {
   it("renders nothing without a PluginsProvider", () => {
-    const { container } = render(<PluginsModal onClose={vi.fn()} />);
+    const { container } = render(<PluginsTab />);
     expect(container.firstChild).toBeNull();
   });
 
   it("lists installed and available plugins", () => {
-    renderModal(ctx());
+    renderTab(ctx());
     expect(screen.getByText("Alpha")).toBeInTheDocument();
     expect(screen.getByText("the alpha plugin")).toBeInTheDocument();
     expect(screen.getByText("Charlie")).toBeInTheDocument();
@@ -96,20 +96,20 @@ describe("PluginsModal", () => {
       },
     });
 
-    const { rerender } = renderModal(ctx({ settingsPanels }));
+    const { rerender } = renderTab(ctx({ settingsPanels }));
     expect(screen.getByText("size: 12")).toBeInTheDocument();
 
     // Disabled plugin: the panel disappears.
     rerender(
       <PluginsContext.Provider value={ctx({ settingsPanels, disabled: ["a.b"] })}>
-        <PluginsModal onClose={vi.fn()} />
+        <PluginsTab />
       </PluginsContext.Provider>,
     );
     expect(screen.queryByText("size: 12")).not.toBeInTheDocument();
   });
 
   it("shows an installed plugin's declared permissions and full-trust marker", () => {
-    renderModal(
+    renderTab(
       ctx({ installed: [{ ...installed, permissions: ["workspace:read", "network:api.test"] }] }),
     );
     expect(
@@ -120,7 +120,7 @@ describe("PluginsModal", () => {
   });
 
   it("shows an explicit None for plugins without permissions, on both lists", () => {
-    renderModal(ctx());
+    renderTab(ctx());
     // Installed Alpha opted out of the sandbox; marketplace Charlie declares
     // nothing, which defaults to sandboxed.
     expect(
@@ -132,7 +132,7 @@ describe("PluginsModal", () => {
   });
 
   it("shows a marketplace entry's permissions and sandbox badge before install", () => {
-    renderModal(
+    renderTab(
       ctx({
         registry: [{ ...available, permissions: ["network:api.example.com"], sandbox: true }],
       }),
@@ -145,7 +145,7 @@ describe("PluginsModal", () => {
   });
 
   it("marks sandboxed installed plugins", () => {
-    renderModal(ctx({ installed: [{ ...installed, sandbox: true }] }));
+    renderTab(ctx({ installed: [{ ...installed, sandbox: true }] }));
     // Both the sandboxed install and the (default-sandboxed) marketplace entry.
     expect(
       screen.getAllByText((_, el) => el?.textContent === "Permissions: None · Sandboxed"),
@@ -154,21 +154,21 @@ describe("PluginsModal", () => {
 
   it("toggles an installed plugin's active state", () => {
     const value = ctx();
-    renderModal(value);
+    renderTab(value);
     fireEvent.click(screen.getByRole("checkbox"));
     expect(value.setEnabled).toHaveBeenCalledWith("a.b", false);
   });
 
   it("removes an installed plugin", () => {
     const value = ctx();
-    renderModal(value);
+    renderTab(value);
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(value.uninstall).toHaveBeenCalledWith("a.b");
   });
 
   it("installs an available plugin", () => {
     const value = ctx();
-    renderModal(value);
+    renderTab(value);
     fireEvent.click(screen.getByRole("button", { name: "Install" }));
     expect(value.installFromRegistry).toHaveBeenCalledWith(available);
   });
@@ -177,33 +177,20 @@ describe("PluginsModal", () => {
     const value = ctx({
       updates: [{ entry: { ...available, id: "a.b" }, installedVersion: "1.0.0" }],
     });
-    renderModal(value);
+    renderTab(value);
     fireEvent.click(screen.getByRole("button", { name: /Update to v2.0.0/ }));
     expect(value.installFromRegistry).toHaveBeenCalled();
   });
 
-  it("installs from a folder and closes on Escape but not on other keys or inner clicks", () => {
+  it("installs from a folder", () => {
     const value = ctx();
-    const onClose = vi.fn();
-    renderModal(value, onClose);
+    renderTab(value);
     fireEvent.click(screen.getByRole("button", { name: "Install from folder…" }));
     expect(value.installFromFolder).toHaveBeenCalled();
-
-    // Neither a non-Escape key nor a click inside the panel closes the modal.
-    fireEvent.keyDown(window, { key: "Enter" });
-    fireEvent.click(screen.getByText("Alpha"));
-    expect(onClose).not.toHaveBeenCalled();
-
-    // Clicking the backdrop itself closes.
-    fireEvent.click(screen.getByRole("dialog"));
-    expect(onClose).toHaveBeenCalledTimes(1);
-
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(onClose).toHaveBeenCalledTimes(2);
   });
 
   it("shows empty states", () => {
-    renderModal(ctx({ installed: [], registry: [] }));
+    renderTab(ctx({ installed: [], registry: [] }));
     expect(screen.getByText("No plugins installed.")).toBeInTheDocument();
     expect(screen.getByText("No plugins available.")).toBeInTheDocument();
   });

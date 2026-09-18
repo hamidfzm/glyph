@@ -16,8 +16,10 @@ import { tabsContextValue } from "@/test/fixtures/tabsContext";
 function makeModals(): AppModals {
   return {
     settingsOpen: false,
+    settingsTab: "appearance",
     workspaceSettingsTab: null,
-    pluginsOpen: false,
+    settingsOnTop: false,
+    setSettingsTab: vi.fn(),
     setWorkspaceSettingsTab: vi.fn(),
     openSettings: vi.fn(),
     closeSettings: vi.fn(),
@@ -25,7 +27,6 @@ function makeModals(): AppModals {
     openWorkspaceSettings: vi.fn(),
     closeWorkspaceSettings: vi.fn(),
     openPlugins: vi.fn(),
-    closePlugins: vi.fn(),
   };
 }
 

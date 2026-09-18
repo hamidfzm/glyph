@@ -12,8 +12,10 @@
       "ai": "IA",
       "print": "Impresión",
       "privacy": "Privacidad",
-      "markdown": "Markdown"
-    }
+      "markdown": "Markdown",
+      "plugins": "Complementos"
+    },
+    "close": "Cerrar"
   },
   "language": {
     "sectionTitle": "Idioma",

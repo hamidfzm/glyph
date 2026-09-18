@@ -6,7 +6,7 @@ import { PluginDetail } from "./PluginDetail";
 import { PluginMarketplaceRow } from "./PluginMarketplaceRow";
 
 /**
- * The marketplace section of Manage Plugins: search + category filter over
+ * The marketplace section of the Settings Plugins tab: search + category filter over
  * the not-yet-installed registry entries, with a per-plugin details view
  * (the plugin's registry README) a click away.
  */
