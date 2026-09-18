@@ -40,6 +40,8 @@ interface UseTabsOptions {
   confirmUnsaved: (paths: string[]) => Promise<UnsavedChoice>;
   // Shown before a rename or move rewrites links in other files (#711).
   confirmRelink: (request: RelinkRequest) => Promise<boolean>;
+  // Session restore waits for plugins to register their file types.
+  pluginsReady?: boolean;
   // Called to surface a workspace notice (see #262): a refusal (a folder nested
   // inside another Glyph workspace) or a `persistent` warning (a folder opened
   // despite sitting inside a parent git repo). The provider surfaces it as a
@@ -351,6 +353,7 @@ export function useTabs(options: UseTabsOptions) {
     openFile,
     openFolder,
     activateTabByPath,
+    pluginsReady: options.pluginsReady ?? true,
   });
 
   const { captureSession, restoreSession, flushSessionForClose } = useWorkspaceSession({

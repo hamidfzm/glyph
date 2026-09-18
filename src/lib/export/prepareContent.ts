@@ -94,6 +94,18 @@ export async function prepareContent({
     el.remove();
   }
 
+  // Plugin blocks carry their source (for the static re-render above) and
+  // click-to-zoom hooks; an exported file needs neither.
+  for (const block of Array.from(clone.querySelectorAll("[data-fenced-language]"))) {
+    block.removeAttribute("data-fenced-language");
+    block.removeAttribute("data-fenced-source");
+    for (const el of Array.from(block.querySelectorAll('[role="button"]'))) {
+      el.removeAttribute("role");
+      el.removeAttribute("tabindex");
+      el.removeAttribute("title");
+    }
+  }
+
   // Task-list checkboxes are interactive in the app; an exported document must
   // show their state without being togglable.
   for (const checkbox of Array.from(clone.querySelectorAll('input[type="checkbox"]'))) {

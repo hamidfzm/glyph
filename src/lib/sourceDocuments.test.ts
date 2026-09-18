@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { Disposer } from "@/lib/plugins/disposer";
 import { registerFileType } from "@/lib/plugins/fileTypes";
-import { isSourceDocument, sourceDocumentMarkdown } from "./sourceDocuments";
+import { fenceSource, isSourceDocument } from "./sourceDocuments";
 
 let dispose: Disposer | undefined;
 afterEach(() => {
@@ -25,18 +25,28 @@ describe("isSourceDocument", () => {
   });
 });
 
-describe("sourceDocumentMarkdown", () => {
-  it("fences the body with the registered language, trimming trailing space", () => {
-    dispose = registerFileType({ extensions: ["d2"], language: "d2" });
-    expect(sourceDocumentMarkdown("/p/a.d2", "x -> y\n\n  ")).toBe("```d2\nx -> y\n```\n");
+describe("fenceSource", () => {
+  it("fences the body with the language, trimming trailing space", () => {
+    expect(fenceSource("x -> y\n\n  ", "d2")).toBe("```d2\nx -> y\n```\n");
   });
 
-  it("shows plain source in an untagged fence when no plugin claims the extension", () => {
-    expect(sourceDocumentMarkdown("/p/a.d2", "x -> y")).toBe("```\nx -> y\n```\n");
+  it("shows plain source in an untagged fence", () => {
+    expect(fenceSource("x -> y", "")).toBe("```\nx -> y\n```\n");
   });
 
   it("outruns any backtick run in the body so it cannot close the fence", () => {
     const body = "label: ````code````";
-    expect(sourceDocumentMarkdown("/p/a.d2", body)).toBe(`\`\`\`\`\`\n${body}\n\`\`\`\`\`\n`);
+    expect(fenceSource(body, "d2")).toBe(`\`\`\`\`\`d2\n${body}\n\`\`\`\`\`\n`);
+  });
+
+  it("handles huge bodies of backtick runs and whitespace without blowing the stack", () => {
+    // One argument per run used to go through Math.max, which overflows the
+    // call stack past ~65k runs; a long trailing whitespace run was quadratic.
+    const runs = "` ".repeat(200_000);
+    const spaces = " ".repeat(200_000);
+    const started = performance.now();
+    expect(fenceSource(runs, "d2").startsWith("```d2\n")).toBe(true);
+    expect(fenceSource(`a${spaces}b${spaces}`, "d2")).toContain("a");
+    expect(performance.now() - started).toBeLessThan(2000);
   });
 });

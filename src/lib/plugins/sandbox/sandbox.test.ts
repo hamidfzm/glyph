@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
+import { expectConsole } from "@/test/consoleGuard";
 import { FakeWorker } from "@/test/fakeWorker";
 import { PLUGIN_API_VERSION } from "../apiVersion";
 import type { ExporterContribution, InstalledPlugin } from "../types";
@@ -140,6 +141,22 @@ describe("startSandbox", () => {
     expect(api.notify).toHaveBeenCalledWith("hi");
     expect(api.registerTranslations).toHaveBeenCalledWith("de", "ns", { k: "v" });
     expect(api.settingsSet).toHaveBeenCalledWith("a", 1);
+  });
+
+  it("logs and drops a malformed file type instead of throwing out of the bridge", async () => {
+    expectConsole(/registered a bad file type/);
+    const api = apiStub();
+    vi.mocked(api.registerFileType).mockImplementation(() => {
+      throw new Error("invalid");
+    });
+    const { worker } = await startActivated(api);
+    expect(() =>
+      worker.emit({
+        type: "register-file-type",
+        extensions: "md" as unknown as string[],
+        language: "x",
+      }),
+    ).not.toThrow();
   });
 
   it("bridges a file type as pure data", async () => {

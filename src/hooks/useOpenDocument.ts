@@ -80,9 +80,11 @@ export function useOpenDocument({
       // Defensive gate: never load an unsupported file. Glyph rendering treats
       // content as markdown (HTML included via the sanitizer), so opening a
       // random `.txt` / `.html` / etc. is a code-injection vector. Notebooks
-      // (`.ipynb`) are allowed — they take the dedicated NotebookViewer path.
-      // Images/SVGs are allowed too — they render in the read-only image
-      // viewer, never as text. See memory/reject-unsupported-file-types.md.
+      // (`.ipynb`) are allowed: they take the dedicated NotebookViewer path.
+      // Images/SVGs are allowed too: they render in the read-only image
+      // viewer, never as text. Source documents (`.d2`, and extensions an
+      // enabled plugin registered) are allowed because they render fenced as
+      // code, never as markdown.
       // Android's document picker returns opaque `content://` URIs with no file
       // extension, so the extension-based check below can't classify them. The
       // picker's own type filters already restricted selection to supported

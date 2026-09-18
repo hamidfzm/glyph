@@ -67,10 +67,11 @@ export interface PluginHost {
   readonly siteThemes: Registry<SiteThemeContribution>;
   /**
    * Import and activate an installed plugin. Re-loading an already-loaded id
-   * unloads the previous instance first. Throws on apiVersion mismatch, a bad
-   * entry module, or an `activate` that throws.
+   * unloads the previous instance first. Resolves `false` when a newer load or
+   * an unload superseded this one and it rolled itself back. Throws on
+   * apiVersion mismatch, a bad entry module, or an `activate` that throws.
    */
-  load(plugin: InstalledPlugin, importer?: ModuleImporter): Promise<void>;
+  load(plugin: InstalledPlugin, importer?: ModuleImporter): Promise<boolean>;
   /** Tear down one plugin: run its disposers, then its `deactivate`. */
   unload(id: string): void;
   /** Tear down every loaded plugin (app shutdown / provider unmount). */
@@ -205,7 +206,7 @@ export function createPluginHost(
         bag.add(terminate);
         if (loadGeneration.get(plugin.id) !== generation) {
           bag.dispose();
-          return;
+          return false;
         }
         teardown(plugin.id);
         loaded.set(plugin.id, {
@@ -218,7 +219,7 @@ export function createPluginHost(
           module: { activate: () => {} },
           bag,
         });
-        return;
+        return true;
       }
 
       const [module, settings] = await Promise.all([
@@ -252,7 +253,7 @@ export function createPluginHost(
         } catch (err) {
           console.error(`Plugin ${plugin.id} threw in deactivate():`, err);
         }
-        return;
+        return false;
       }
       // The previous instance stays live while the new one downloads and
       // activates; swap only at commit time.
@@ -267,6 +268,7 @@ export function createPluginHost(
         module,
         bag,
       });
+      return true;
     },
     unload,
     unloadAll() {

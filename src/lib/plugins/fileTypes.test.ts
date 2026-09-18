@@ -29,6 +29,28 @@ describe("fileTypes", () => {
     expect(fileTypeFor("a.puml")?.language).toBe("first");
   });
 
+  it.each([
+    ["a newline in the language", { extensions: ["puml"], language: "x\n```\n[a](b)" }],
+    ["a backtick in the language", { extensions: ["puml"], language: "x`y" }],
+    ["no extensions", { extensions: [], language: "plantuml" }],
+    ["a non-array extensions field", { extensions: "puml", language: "plantuml" }],
+    ["an extension with a path in it", { extensions: ["a/b"], language: "plantuml" }],
+    ["a markdown extension", { extensions: ["md"], language: "plantuml" }],
+    ["a canvas extension", { extensions: ["Canvas"], language: "plantuml" }],
+    ["a notebook extension", { extensions: ["ipynb"], language: "plantuml" }],
+    ["an image extension", { extensions: ["png"], language: "plantuml" }],
+  ])("refuses %s", (_, contribution) => {
+    expect(() =>
+      registerFileType(contribution as unknown as Parameters<typeof registerFileType>[0]),
+    ).toThrow();
+    expect(fileTypes.list()).toHaveLength(0);
+  });
+
+  it("lets a plugin claim .d2, which the app only associates", () => {
+    register(["d2"], "d2");
+    expect(fileTypeFor("a.d2")?.language).toBe("d2");
+  });
+
   it("forgets a file type once its disposer runs", () => {
     register(["puml"], "plantuml");
     for (const dispose of disposers.splice(0)) dispose();

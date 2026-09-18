@@ -39,7 +39,7 @@ describe("createPluginHost plugin context", () => {
 
     await host.load(installed(), importerFor(module));
     expect(fileTypeFor("/p/a.d2")?.language).toBe("d2");
-    expect(staticRendererFor("d2")).toBe(renderStatic);
+    expect(await staticRendererFor("d2")?.("x")).toBe("<svg></svg>");
 
     host.unload("com.x.demo");
     expect(fileTypeFor("/p/a.d2")).toBeUndefined();

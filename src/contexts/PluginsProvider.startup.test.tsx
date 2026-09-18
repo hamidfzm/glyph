@@ -47,7 +47,7 @@ describe("PluginsProvider startup", () => {
     await waitFor(() => expect(screen.getByTestId("initial-load")).toHaveTextContent("true"));
   });
 
-  it("holds initialLoadDone until core plugins have settled too", async () => {
+  it("scans community plugins only after core plugins settle, so core registers first", async () => {
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockResolvedValue(undefined);
     coreReady.value = false;
@@ -59,6 +59,7 @@ describe("PluginsProvider startup", () => {
     // Long enough for the library pass alone to have flipped it.
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
     expect(screen.getByTestId("initial-load")).toHaveTextContent("false");
+    expect(invoke).not.toHaveBeenCalledWith("list_plugins");
 
     coreReady.value = true;
     rerender(

@@ -19,9 +19,10 @@ const plugin: PluginModule = {
       ctx.registerTranslations(locale, D2_NAMESPACE, resources);
     }
     ctx.ui.addStyles(styles);
-    // Print and PDF put diagrams on white paper, so the static render is light.
+    // Print and PDF put diagrams on white paper, so the static render is light,
+    // wrapped in the same class so the plugin's layout styles still apply.
     ctx.markdown.registerFencedRenderer("d2", createD2Renderer(ctx.i18n), {
-      renderStatic: (code) => renderD2(code, false),
+      renderStatic: async (code) => `<div class="d2-diagram">${await renderD2(code, false)}</div>`,
     });
     ctx.documents.registerFileType({ extensions: ["d2"], language: "d2" });
   },

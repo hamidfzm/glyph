@@ -32,6 +32,12 @@ interface UseTabsSessionParams {
   openFile: (path: string) => Promise<unknown>;
   openFolder: (root?: string, options?: OpenFolderOptions) => Promise<void>;
   activateTabByPath: (path: string) => void;
+  /**
+   * Plugins have registered their file types. Restore waits for it: a tab of a
+   * plugin file type opened before its plugin loads would be refused, and the
+   * next session save would drop it for good.
+   */
+  pluginsReady: boolean;
 }
 
 /**
@@ -51,6 +57,7 @@ export function useTabsSession({
   openFile,
   openFolder,
   activateTabByPath,
+  pluginsReady,
 }: UseTabsSessionParams): { initializing: boolean } {
   const [initializing, setInitializing] = useState(true);
   // Guards the mount-only init effect against StrictMode's double invoke.
@@ -84,8 +91,9 @@ export function useTabsSession({
   }, [tabs, activeTab, workspace, initializing, optionsRef]);
 
   // Initialize: load CLI arg, restore workspace + tabs, or reopen last file
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only effect
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, as soon as plugins are ready
   useEffect(() => {
+    if (!pluginsReady) return;
     // `get_initial_file` / `get_initial_folder` consume their value, so a second
     // run reads None and would fall through to session restore, replacing the
     // folder the CLI just opened. StrictMode double-invokes effects in dev, so
@@ -156,7 +164,7 @@ export function useTabsSession({
       }
       setInitializing(false);
     })();
-  }, []);
+  }, [pluginsReady]);
 
   return { initializing };
 }

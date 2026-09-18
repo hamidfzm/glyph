@@ -294,6 +294,58 @@ describe("PluginsProvider enable and uninstall", () => {
     expect(screen.getByTestId("disabled").textContent).toBe("");
   });
 
+  it("a disable while an enable is still activating wins, in the host and in saved state", async () => {
+    // Activation takes a while, which is the window the disable lands in.
+    const slow = installedPlugin({
+      mainSource: `export default {
+        async activate(ctx) {
+          await new Promise((resolve) => setTimeout(resolve, 30));
+          ctx.commands.register({ id: "demo.hi", title: "Say Hi", run() {} });
+        },
+      };`,
+    });
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(cmd === "list_plugins" ? [slow] : undefined),
+    );
+
+    function ToggleProbe() {
+      const p = usePluginsOptional();
+      if (!p) return null;
+      return (
+        <div>
+          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
+          <span data-testid="disabled">{p.disabled.join(",")}</span>
+          <button type="button" onClick={() => void p.setEnabled("com.x.demo", false)}>
+            off
+          </button>
+          <button type="button" onClick={() => void p.setEnabled("com.x.demo", true)}>
+            on
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <ToggleProbe />
+      </PluginsProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
+    await act(async () => {
+      screen.getByRole("button", { name: "off" }).click();
+    });
+
+    await act(async () => {
+      screen.getByRole("button", { name: "on" }).click();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      screen.getByRole("button", { name: "off" }).click();
+    });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+
+    expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo");
+    expect(screen.getByTestId("loaded").textContent).toBe("");
+  });
+
   it("uninstalls a plugin", async () => {
     vi.mocked(invoke).mockImplementation((cmd) =>
       Promise.resolve(cmd === "list_plugins" ? [installedPlugin()] : undefined),

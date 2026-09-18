@@ -46,7 +46,7 @@ const cache = new RenderCache<Promise<string>>();
 // default config already drops <script>, on* handlers, and javascript:/external
 // href references while keeping SVG elements; we additionally forbid
 // <foreignObject>, the SVG-embedded-HTML XSS vector. Note: this also strips D2's
-// foreignObject-based markdown/code blocks, an accepted trade-off — the XSS
+// foreignObject-based markdown/code blocks, an accepted trade-off: the XSS
 // guard outweighs those rare embeds.
 // DOMPurify is imported on demand so it stays out of the startup bundle; a D2
 // render already awaits the multi-MB compiler, so the extra import is noise.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
 import { CORE_PLUGINS, coreInstalledPlugin } from "@/lib/plugins/corePlugins";
 import type { PluginHost } from "@/lib/plugins/host";
@@ -6,10 +7,14 @@ import type { PluginHost } from "@/lib/plugins/host";
 /**
  * Keeps the host's core plugins in line with their Settings toggles: loads the
  * enabled ones and unloads the rest, at startup and on every toggle, with no
- * restart. Returns whether the first pass has settled, so export readiness can
- * wait for core contributions.
+ * restart. Returns whether the first pass has settled; community plugins load
+ * after it.
  */
-export function useCorePlugins(host: PluginHost): boolean {
+export function useCorePlugins(
+  host: PluginHost,
+  pushToast: (message: string, tone?: "error") => void,
+): boolean {
+  const { t } = useTranslation("plugins");
   const { settings, loaded } = useSettings();
   const enabled = settings.corePlugins;
   const [ready, setReady] = useState(false);
@@ -27,6 +32,8 @@ export function useCorePlugins(host: PluginHost): boolean {
           await host.load(coreInstalledPlugin(core), core.load);
         } catch (err) {
           console.error(`Failed to load core plugin ${core.id}:`, err);
+          const message = err instanceof Error ? err.message : String(err);
+          pushToast(t("toast.error", { message }), "error");
         }
       }),
     ).then(() => {
@@ -35,7 +42,7 @@ export function useCorePlugins(host: PluginHost): boolean {
     return () => {
       cancelled = true;
     };
-  }, [host, loaded, enabled]);
+  }, [host, loaded, enabled, pushToast, t]);
 
   return ready;
 }

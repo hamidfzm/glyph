@@ -34,7 +34,7 @@ Closing or replacing an owner (tab, workspace, window) flushes or transfers ever
 
 ### INV-5: All external input is untrusted
 
-Renderer input, Markdown content, plugins, filenames, URLs, and IPC arguments are untrusted until validated. Bundled core plugins are app code, not external input; which plugins are core comes only from the compiled-in list. See the [threat model](security/threat-model.md).
+Renderer input, Markdown content, plugins, filenames, URLs, and IPC arguments are untrusted until validated. Bundled core plugins are trusted code, though the documents they render are not; which plugins are core comes only from the compiled-in list. See the [threat model](security/threat-model.md).
 
 - Owners: `src-tauri/src/grants.rs`, every Tauri command, Markdown/link/image rendering components
 - Evidence: negative tests in `src-tauri/src/grants.rs` and command test modules
