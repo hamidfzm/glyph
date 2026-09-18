@@ -5,6 +5,8 @@
 import { canvasDisplayText } from "./canvas/canvasText";
 import { isCanvasFile } from "./canvasExtensions";
 import { isNotebookFile } from "./notebookExtensions";
+import { fileTypes } from "./plugins/fileTypes";
+import type { FileTypeContribution } from "./plugins/types";
 import { isSourceDocument } from "./sourceDocuments";
 
 /**
@@ -15,10 +17,14 @@ import { isSourceDocument } from "./sourceDocuments";
  * or outline. Canvases are JSON too, but their boards carry real prose, so the
  * text cards, group labels, and link URLs are projected instead of the syntax.
  */
-export function displayContentFor(path: string | undefined, live: string | null): string | null {
+export function displayContentFor(
+  path: string | undefined,
+  live: string | null,
+  registered: readonly FileTypeContribution[] = fileTypes.list(),
+): string | null {
   if (!path) return live;
   if (isNotebookFile(path)) return null;
-  if (isSourceDocument(path)) return null;
+  if (isSourceDocument(path, registered)) return null;
   if (isCanvasFile(path)) return live ? canvasDisplayText(live) : null;
   return live;
 }

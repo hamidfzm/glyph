@@ -117,7 +117,13 @@ export function startSandbox(
           api.registerSiteTheme({ id: data.id, label: data.label, css: data.css });
           break;
         case "register-file-type":
-          api.registerFileType({ extensions: data.extensions, language: data.language });
+          // Worker data is untrusted: a malformed file type is refused, not thrown
+          // out of the message handler.
+          try {
+            api.registerFileType({ extensions: data.extensions, language: data.language });
+          } catch (err) {
+            console.error(`Sandboxed plugin ${plugin.id} registered a bad file type:`, err);
+          }
           break;
         case "register-exporter":
           api.registerExporter({

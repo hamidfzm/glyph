@@ -32,20 +32,23 @@ describe("swapDiagramsLight", () => {
       language: "puml",
       renderStatic: async (code) => `<svg data-light="${code}"></svg>`,
     });
-    setBody(
-      '<div data-fenced-language="puml" data-fenced-source="a"><div id="live">dark</div></div>' +
-        '<div data-fenced-language="unknown" data-fenced-source="b"><div id="other">keep</div></div>',
-    );
+    try {
+      setBody(
+        '<div data-fenced-language="puml" data-fenced-source="a"><div id="live">dark</div></div>' +
+          '<div data-fenced-language="unknown" data-fenced-source="b"><div id="other">keep</div></div>',
+      );
 
-    const restore = await swapDiagramsLight(document);
-    expect(document.body.innerHTML).toContain('data-light="a"');
-    expect(document.getElementById("live")?.style.display).toBe("none");
-    expect(document.getElementById("other")?.style.display).toBe("");
+      const restore = await swapDiagramsLight(document);
+      expect(document.body.innerHTML).toContain('data-light="a"');
+      expect(document.getElementById("live")?.style.display).toBe("none");
+      expect(document.getElementById("other")?.style.display).toBe("");
 
-    restore();
-    expect(document.body.innerHTML).not.toContain("data-light");
-    expect(document.getElementById("live")?.style.display).toBe("");
-    dispose();
+      restore();
+      expect(document.body.innerHTML).not.toContain("data-light");
+      expect(document.getElementById("live")?.style.display).toBe("");
+    } finally {
+      dispose();
+    }
   });
 
   it("leaves a plugin block alone when its static render fails", async () => {
@@ -55,13 +58,15 @@ describe("swapDiagramsLight", () => {
         throw new Error("bad source");
       },
     });
-    setBody(
-      '<div data-fenced-language="puml" data-fenced-source="a"><div id="live">dark</div></div>',
-    );
-
-    await swapDiagramsLight(document);
-    expect(document.getElementById("live")?.style.display).toBe("");
-    dispose();
+    try {
+      setBody(
+        '<div data-fenced-language="puml" data-fenced-source="a"><div id="live">dark</div></div>',
+      );
+      await swapDiagramsLight(document);
+      expect(document.getElementById("live")?.style.display).toBe("");
+    } finally {
+      dispose();
+    }
   });
 
   it("replaces Mermaid diagrams with their light renders", async () => {

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const compile = vi.fn();
 const renderSvg = vi.fn();
 // DOMPurify does not run faithfully under happy-dom (it leaves <script> intact
-// and drops the <svg> wrapper), so we can't assert real stripping here — that's
+// and drops the <svg> wrapper), so we can't assert real stripping here; that's
 // DOMPurify's own job and works in the Tauri webview's real Chromium. Instead we
 // mock it and assert renderD2 routes the rendered SVG through it with the
 // foreignObject-forbidding config before returning/caching.

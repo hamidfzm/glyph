@@ -137,10 +137,8 @@ describe("App", () => {
     const { wrapper } = withProviders();
     const { container } = render(<App />, { wrapper });
 
-    await waitFor(() => {
-      expect(container.firstChild).not.toBeNull();
-    });
-    expect(container.textContent).toMatch(/Open a Markdown file/i);
+    // The empty state waits for session restore, which waits for plugins.
+    await waitFor(() => expect(container.textContent).toMatch(/Open a Markdown file/i));
   });
 
   it("does not crash when settings.loaded is false", async () => {

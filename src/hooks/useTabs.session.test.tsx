@@ -34,6 +34,30 @@ describe("useTabs initialization", () => {
     expect(result.current.workspace).toBeNull();
   });
 
+  it("restores a plugin file type's tab once plugins are ready, not before", async () => {
+    // Opened before its plugin registers, the tab would be refused and the
+    // next session save would drop it.
+    const dispose = { current: () => {} };
+    const { registerFileType } = await import("@/lib/plugins/fileTypes");
+    const options = { ...defaultOptions(), openTabs: ["/p/seq.puml"], pluginsReady: false };
+    const { result, rerender } = renderHook((props) => useTabs(props), { initialProps: options });
+
+    await act(() => Promise.resolve());
+    expect(result.current.initializing).toBe(true);
+    expect(invoke).not.toHaveBeenCalledWith("get_initial_file");
+
+    dispose.current = registerFileType({ extensions: ["puml"], language: "plantuml" });
+    try {
+      rerender({ ...options, pluginsReady: true });
+      await waitFor(() => expect(result.current.initializing).toBe(false));
+      expect(result.current.tabs.map((tab) => (tab.kind === "file" ? tab.file.path : ""))).toEqual([
+        "/p/seq.puml",
+      ]);
+    } finally {
+      dispose.current();
+    }
+  });
+
   it("opens the initial file from get_initial_file", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({

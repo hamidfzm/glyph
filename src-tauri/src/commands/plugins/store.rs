@@ -490,4 +490,19 @@ mod tests {
         assert!(uninstall_from(&root, "../escape").is_err());
         let _ = fs::remove_dir_all(&root);
     }
+
+    #[test]
+    fn install_and_uninstall_refuse_a_core_plugin_id() {
+        let root = temp_root("core_id");
+        let src = temp_root("core_id_src");
+        write_plugin(&src, "glyph.core.d2", "export default {}");
+
+        let err = install_into(&root, &src).unwrap_err();
+        assert!(err.contains("reserved for core plugins"), "{err}");
+        assert!(!root.join("glyph.core.d2").exists());
+        assert!(uninstall_from(&root, "glyph.core.d2").is_err());
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&src);
+    }
 }

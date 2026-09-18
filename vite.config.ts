@@ -61,6 +61,8 @@ export default defineConfig(async ({ mode }) => ({
         // references it).
         manualChunks(id) {
           if (id.includes("@terrastruct/d2")) return "d2";
+          // The D2 core plugin's own code, loaded only while it is enabled.
+          if (id.includes("/src/plugins/core/d2/")) return "core-d2";
         },
       },
     },

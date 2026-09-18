@@ -41,8 +41,9 @@ describe("D2 core plugin", () => {
     // reach the app's React, so the core plugin does not either.
     expect(typeof renderer.mount).toBe("function");
 
-    // Print and PDF are on white paper, so the static render is the light theme.
-    await options.renderStatic("x -> y");
+    // Print and PDF are on white paper, so the static render is the light
+    // theme, in the plugin's own class so its layout styles apply.
+    expect(await options.renderStatic("x -> y")).toBe('<div class="d2-diagram"><svg></svg></div>');
     expect(renderD2).toHaveBeenCalledWith("x -> y", false);
   });
 

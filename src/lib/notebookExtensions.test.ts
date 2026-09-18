@@ -36,7 +36,10 @@ describe("isSupportedFile", () => {
     expect(isSupportedFile("arch.d2")).toBe(true);
     expect(isSupportedFile("seq.puml")).toBe(false);
     const dispose = registerFileType({ extensions: ["puml"], language: "plantuml" });
-    expect(isSupportedFile("seq.puml")).toBe(true);
-    dispose();
+    try {
+      expect(isSupportedFile("seq.puml")).toBe(true);
+    } finally {
+      dispose();
+    }
   });
 });

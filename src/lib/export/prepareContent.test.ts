@@ -164,6 +164,22 @@ describe("prepareContent", () => {
     });
   });
 
+  it("strips a plugin block's source and zoom hooks from every export", async () => {
+    setBody(
+      '<div data-fenced-language="puml" data-fenced-source="secret source">' +
+        '<div role="button" tabindex="0" title="Click to zoom" aria-label="Diagram"><svg></svg></div>' +
+        "</div>",
+    );
+    const html = (await prepareContent({ entries: ENTRIES, includeToc: false }))?.html ?? "";
+    expect(html).not.toContain("secret source");
+    expect(html).not.toContain("data-fenced-language");
+    expect(html).not.toContain('role="button"');
+    expect(html).not.toContain("tabindex");
+    expect(html).not.toContain("Click to zoom");
+    // The accessible name stays: it describes the diagram, not the click.
+    expect(html).toContain('aria-label="Diagram"');
+  });
+
   it("keeps a plugin block as rendered when it has no static render", async () => {
     setBody('<div data-fenced-language="puml" data-fenced-source="a"><p>live</p></div>');
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });

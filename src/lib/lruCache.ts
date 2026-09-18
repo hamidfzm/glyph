@@ -1,10 +1,10 @@
-// Minimal LRU used by the diagram render caches: a Map whose insertion order
+// Minimal LRU used by the Mermaid render cache: a Map whose insertion order
 // doubles as recency (get re-inserts). Deliberately tiny, not a general cache
-// abstraction.
+// abstraction. (The D2 core plugin carries its own copy, since it imports
+// nothing from the app.)
 
-// Shared bound for the Mermaid and D2 render caches. A rendered+sanitized
-// diagram SVG is typically 10-100KB, so 50 entries keeps each cache under a
-// few MB worst case while still covering every diagram in the handful of
+// Bound for the Mermaid render cache. A rendered+sanitized diagram SVG is
+// typically 10-100KB, so 50 entries keeps the cache under a few MB worst case while still covering every diagram in the handful of
 // documents a session flips between. Evicting an entry never breaks a diagram
 // already on screen: components hold their own copy of the SVG, the cache only
 // decides whether a future mount re-renders.

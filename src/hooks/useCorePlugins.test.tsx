@@ -36,13 +36,14 @@ function renderCore(initial: SettingsContextValue) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
   );
-  const view = renderHook(() => useCorePlugins(host), { wrapper });
+  const pushToast = vi.fn();
+  const view = renderHook(() => useCorePlugins(host, pushToast), { wrapper });
   const setSettings = (next: SettingsContextValue) => {
     value = next;
     view.rerender();
   };
   const commandIds = () => host.commands.list().map((c) => c.id);
-  return { ...view, host, setSettings, commandIds };
+  return { ...view, host, setSettings, commandIds, pushToast };
 }
 
 beforeEach(() => {
@@ -104,10 +105,11 @@ describe("useCorePlugins", () => {
     expect(host.listLoaded()).toEqual([]);
   });
 
-  it("logs a core plugin that fails to load and still reports ready", async () => {
+  it("reports a core plugin that fails to load and still settles", async () => {
     expectConsole(/Failed to load core plugin glyph\.core\.d2/);
     load.mockRejectedValueOnce(new Error("chunk failed"));
-    const { result } = renderCore(settingsValue(true));
+    const { result, pushToast } = renderCore(settingsValue(true));
     await waitFor(() => expect(result.current).toBe(true));
+    expect(pushToast).toHaveBeenCalledWith("Plugin error: chunk failed", "error");
   });
 });
