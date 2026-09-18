@@ -180,6 +180,18 @@ describe("prepareContent", () => {
     expect(html).toContain('aria-label="Diagram"');
   });
 
+  it("re-renders a plugin block that carries no source as empty source for PDF", async () => {
+    const renderStatic = vi.fn(async () => "<svg></svg>");
+    const dispose = staticRenderers.register({ language: "puml", renderStatic });
+    try {
+      setBody('<div data-fenced-language="puml"><p>dark</p></div>');
+      await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+      expect(renderStatic).toHaveBeenCalledWith("");
+    } finally {
+      dispose();
+    }
+  });
+
   it("keeps a plugin block as rendered when it has no static render", async () => {
     setBody('<div data-fenced-language="puml" data-fenced-source="a"><p>live</p></div>');
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });

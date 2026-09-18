@@ -7,6 +7,7 @@ import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { PluginsProvider } from "@/contexts/PluginsProvider";
 import { pickPluginDir } from "@/lib/pickers";
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
+import { loadPluginSettings } from "@/lib/plugins/settingsStore";
 import { inspection, installedPlugin, Probe, resetPluginsMocks } from "@/test/pluginsHarness";
 
 vi.mock("@/lib/pickers", () => ({
@@ -398,4 +399,92 @@ describe("PluginsProvider installing", () => {
     );
     spy.mockRestore();
   });
+});
+
+// Activation takes a while, which is the window the uninstall lands in.
+const slowSource = `export default {
+  async activate(ctx) {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    ctx.commands.register({ id: "slow.cmd", title: "Slow", run() {} });
+  },
+};`;
+
+function SupersedeProbe({ install }: { install: "folder" | "registry" }) {
+  const p = usePluginsOptional();
+  if (!p) return null;
+  return (
+    <div>
+      <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
+      <button
+        type="button"
+        onClick={() =>
+          void (install === "folder" ? p.installFromFolder() : p.installFromRegistry(p.registry[0]))
+        }
+      >
+        install
+      </button>
+      <button type="button" onClick={() => void p.uninstall("com.x.slow")}>
+        uninstall
+      </button>
+    </div>
+  );
+}
+
+describe("PluginsProvider installs overtaken by an uninstall", () => {
+  it.each(["folder", "registry"] as const)(
+    "a %s install whose load an uninstall overtook leaves the plugin gone",
+    async (install) => {
+      const slow = installedPlugin({ id: "com.x.slow", name: "Slow", mainSource: slowSource });
+      const entry = {
+        id: "com.x.slow",
+        name: "Slow",
+        version: "1.0.0",
+        apiVersion: `^${PLUGIN_API_VERSION}`,
+        packageUrl: "https://example.test/plugin.zip",
+        // SHA-256 of the one-byte package the fetch stub serves.
+        sha256: "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) =>
+          Promise.resolve(
+            url === entry.packageUrl
+              ? { ok: true, arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer) }
+              : { ok: true, json: () => Promise.resolve({ plugins: [entry] }) },
+          ),
+        ),
+      );
+      vi.mocked(invoke).mockImplementation((cmd) => {
+        if (cmd === "list_plugins") return Promise.resolve([]);
+        if (cmd === "inspect_plugin") return Promise.resolve(inspection({ id: "com.x.slow" }));
+        if (cmd === "install_plugin" || cmd === "install_plugin_package") {
+          return Promise.resolve(slow);
+        }
+        return Promise.resolve(undefined);
+      });
+      vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
+
+      render(
+        <PluginsProvider>
+          <SupersedeProbe install={install} />
+          <Probe />
+        </PluginsProvider>,
+      );
+      await waitFor(() => expect(screen.getByTestId("initial-load")).toHaveTextContent("true"));
+
+      await act(async () => {
+        screen.getByRole("button", { name: "install" }).click();
+      });
+      // The host reads the plugin's settings as it starts loading it.
+      await waitFor(() => expect(loadPluginSettings).toHaveBeenCalledWith("com.x.slow"));
+      await act(async () => {
+        screen.getByRole("button", { name: "uninstall" }).click();
+      });
+      await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+
+      expect(screen.getByTestId("installed").textContent).toBe("");
+      expect(screen.getByTestId("loaded").textContent).toBe("");
+      expect(screen.queryByText(/Installed plugin/)).not.toBeInTheDocument();
+    },
+  );
 });

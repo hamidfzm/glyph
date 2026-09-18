@@ -16,8 +16,8 @@ export function FencedMountSlot({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    // Effects run after commit, so the ref is attached.
+    const el = ref.current as HTMLDivElement;
     const bag = new DisposerBag();
     try {
       renderer.mount(el, { code, openLightbox }, (cleanup) => bag.add(cleanup));

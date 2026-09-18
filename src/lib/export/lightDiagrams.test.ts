@@ -51,6 +51,18 @@ describe("swapDiagramsLight", () => {
     }
   });
 
+  it("re-renders a plugin block that carries no source as empty source", async () => {
+    const renderStatic = vi.fn(async () => "<svg></svg>");
+    const dispose = staticRenderers.register({ language: "puml", renderStatic });
+    try {
+      setBody('<div data-fenced-language="puml"><div>dark</div></div>');
+      await swapDiagramsLight(document);
+      expect(renderStatic).toHaveBeenCalledWith("");
+    } finally {
+      dispose();
+    }
+  });
+
   it("leaves a plugin block alone when its static render fails", async () => {
     const dispose = staticRenderers.register({
       language: "puml",
