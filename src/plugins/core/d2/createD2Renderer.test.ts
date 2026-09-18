@@ -1,7 +1,6 @@
 import { act, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Disposer } from "@/lib/plugins/disposer";
-import type { FencedRendererProps } from "@/lib/plugins/types";
+import type { Disposer, FencedRendererProps } from "@/lib/plugins/types";
 import { createD2Renderer } from "./createD2Renderer";
 
 const renderD2 = vi.hoisted(() => vi.fn());
@@ -20,11 +19,15 @@ const i18n = {
 
 const cleanups: Disposer[] = [];
 
+function mountInto(el: HTMLElement, props: FencedRendererProps): HTMLElement {
+  createD2Renderer(i18n).mount(el, props, (cleanup) => cleanups.push(cleanup));
+  return el;
+}
+
 function mount(props: FencedRendererProps): HTMLElement {
   const el = document.createElement("div");
   document.body.append(el);
-  createD2Renderer(i18n).mount(el, props, (cleanup) => cleanups.push(cleanup));
-  return el;
+  return mountInto(el, props);
 }
 
 function unmount(): void {
@@ -53,18 +56,17 @@ afterEach(() => {
 });
 
 describe("createD2Renderer", () => {
-  it("renders the SVG in the light theme and clears aria-busy once it is in", async () => {
+  it("renders the SVG in the light theme, busy until it is in", async () => {
     const pending = deferred();
     renderD2.mockReturnValue(pending.promise);
     const el = mount({ code: "x -> y" });
 
-    const diagram = el.querySelector(".d2-diagram");
-    expect(diagram?.getAttribute("aria-busy")).toBe("true");
+    expect(el.getAttribute("aria-busy")).toBe("true");
     expect(renderD2).toHaveBeenCalledWith("x -> y", false);
 
     await act(async () => pending.resolve("<svg data-test='d'></svg>"));
     expect(el.querySelector(".d2-diagram svg")?.getAttribute("data-test")).toBe("d");
-    expect(diagram?.getAttribute("aria-busy")).toBe("false");
+    expect(el.getAttribute("aria-busy")).toBe("false");
   });
 
   it("renders in the dark theme when the app is dark", () => {
@@ -72,6 +74,24 @@ describe("createD2Renderer", () => {
     renderD2.mockResolvedValue("<svg></svg>");
     mount({ code: "x -> y" });
     expect(renderD2).toHaveBeenCalledWith("x -> y", true);
+  });
+
+  it("keeps the previous diagram on screen while a remount's render is pending", async () => {
+    renderD2.mockResolvedValueOnce("<svg id='first'></svg>");
+    const el = mount({ code: "a -> b" });
+    await waitFor(() => expect(el.querySelector("svg#first")).not.toBeNull());
+
+    // The host remounts over the same element when the source changes.
+    unmount();
+    const pending = deferred();
+    renderD2.mockReturnValueOnce(pending.promise);
+    mountInto(el, { code: "a -> c" });
+    expect(el.querySelector("svg#first")).not.toBeNull();
+    expect(el.getAttribute("aria-busy")).toBe("true");
+
+    await act(async () => pending.resolve("<svg id='second'></svg>"));
+    expect(el.querySelector("svg#first")).toBeNull();
+    expect(el.querySelector("svg#second")).not.toBeNull();
   });
 
   it("shows the failure with the source as text when the render rejects", async () => {
@@ -82,7 +102,7 @@ describe("createD2Renderer", () => {
     expect(el.querySelector(".d2-error-label")?.textContent).toBe("t(glyph.core.d2:errorTitle)");
     expect(el.querySelector("pre code")?.textContent).toBe("<b>garbage</b>");
     expect(el.querySelector("b")).toBeNull();
-    expect(el.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(el.getAttribute("aria-busy")).toBe("false");
   });
 
   it("flags empty source without calling the renderer", () => {
@@ -126,12 +146,13 @@ describe("createD2Renderer", () => {
     expect(el.querySelector(".d2-error")).toBeNull();
   });
 
-  it("stops writing and watching the theme once cleaned up", async () => {
+  it("stops writing, watching the theme, and holding export once cleaned up", async () => {
     const pending = deferred();
     renderD2.mockReturnValue(pending.promise);
     const el = mount({ code: "x -> y" });
 
     unmount();
+    expect(el.hasAttribute("aria-busy")).toBe(false);
     await act(async () => pending.resolve("<svg id='late'></svg>"));
     expect(el.querySelector("svg#late")).toBeNull();
 
@@ -140,18 +161,22 @@ describe("createD2Renderer", () => {
     expect(renderD2).toHaveBeenCalledTimes(1);
   });
 
-  it("refreshes its labels when the app language changes", () => {
-    renderD2.mockReturnValue(new Promise(() => {}));
+  it("refreshes its labels when the app language changes", async () => {
+    renderD2.mockResolvedValue("<svg></svg>");
     let suffix = "";
     const translate = vi.spyOn(i18n, "t").mockImplementation((key) => `${key}${suffix}`);
-    const el = mount({ code: "x -> y", openLightbox: vi.fn() });
+    try {
+      const el = mount({ code: "x -> y", openLightbox: vi.fn() });
+      await waitFor(() => expect(el.querySelector(".d2-diagram")).not.toBeNull());
 
-    suffix = " (fa)";
-    for (const listener of languageListeners) listener();
-    expect(el.querySelector(".d2-diagram")?.getAttribute("aria-label")).toBe(
-      "glyph.core.d2:label (fa)",
-    );
-    translate.mockRestore();
+      suffix = " (fa)";
+      for (const listener of languageListeners) listener();
+      expect(el.querySelector(".d2-diagram")?.getAttribute("aria-label")).toBe(
+        "glyph.core.d2:label (fa)",
+      );
+    } finally {
+      translate.mockRestore();
+    }
   });
 
   describe("lightbox zoom", () => {
@@ -159,8 +184,8 @@ describe("createD2Renderer", () => {
       renderD2.mockResolvedValue("<svg id='zoomed'></svg>");
       const openLightbox = vi.fn();
       const el = mount({ code: "x -> y", openLightbox });
+      await waitFor(() => expect(el.querySelector(".d2-diagram")).not.toBeNull());
       const diagram = el.querySelector(".d2-diagram") as HTMLElement;
-      await waitFor(() => expect(diagram.getAttribute("aria-busy")).toBe("false"));
 
       expect(diagram.getAttribute("role")).toBe("button");
       expect(diagram.tabIndex).toBe(0);
@@ -173,26 +198,23 @@ describe("createD2Renderer", () => {
       expect(label).toBe("t(glyph.core.d2:label)");
     });
 
-    it("opens on Enter and Space but not other keys, and not before the SVG is in", async () => {
-      const pending = deferred();
-      renderD2.mockReturnValue(pending.promise);
+    it("opens on Enter and Space but not other keys", async () => {
+      renderD2.mockResolvedValue("<svg></svg>");
       const openLightbox = vi.fn();
       const el = mount({ code: "x -> y", openLightbox });
+      await waitFor(() => expect(el.querySelector(".d2-diagram")).not.toBeNull());
       const diagram = el.querySelector(".d2-diagram") as HTMLElement;
 
-      fireEvent.click(diagram);
-      expect(openLightbox).not.toHaveBeenCalled();
-
-      await act(async () => pending.resolve("<svg></svg>"));
       fireEvent.keyDown(diagram, { key: "Enter" });
       fireEvent.keyDown(diagram, { key: " " });
       fireEvent.keyDown(diagram, { key: "a" });
       expect(openLightbox).toHaveBeenCalledTimes(2);
     });
 
-    it("is not a button when the host offers no lightbox", () => {
+    it("is not a button when the host offers no lightbox", async () => {
       renderD2.mockResolvedValue("<svg></svg>");
       const el = mount({ code: "x -> y" });
+      await waitFor(() => expect(el.querySelector(".d2-diagram")).not.toBeNull());
       const diagram = el.querySelector(".d2-diagram");
       expect(diagram?.getAttribute("role")).toBeNull();
       expect(diagram?.getAttribute("aria-label")).toBeNull();

@@ -391,18 +391,31 @@ describe("worker bootstrap", () => {
     expect(error.message).toContain("bad start");
   });
 
-  // The regression: these three were simply absent from the worker's ctx.ui,
-  // so a sandboxed plugin calling one died with "ctx.ui.addStatusBarItem is
-  // not a function" and nothing said the sandbox was the reason.
-  it.each(["t", "onLanguageChange"])("refuses i18n.%s by name", async (method) => {
+  it.each(["t", "onLanguageChange"])("refuses i18n.%s by name, with the reason", async (method) => {
     const w = bootWorker();
     await w.send(init(`export default { activate(ctx) { ctx.i18n.${method}("k"); } }`));
 
     await vi.waitFor(() => expect(w.typesPosted()).toContain("error"));
     const error = w.posted.find((m) => m.type === "error") as { message: string };
     expect(error.message).toContain(`ctx.i18n.${method}`);
-    expect(error.message).toContain("sandboxed plugins");
+    expect(error.message).toContain("needs the app's strings");
   });
+
+  it("refuses a file type whose extensions are not an array", async () => {
+    // Array.from would otherwise split "puml" into one-letter extensions.
+    const w = bootWorker();
+    await w.send(
+      init(
+        'export default { activate(ctx) { ctx.documents.registerFileType({ extensions: "puml", language: "x" }); } }',
+      ),
+    );
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("error"));
+    expect(w.typesPosted()).not.toContain("register-file-type");
+  });
+
+  // The regression: these three were simply absent from the worker's ctx.ui,
+  // so a sandboxed plugin calling one died with "ctx.ui.addStatusBarItem is
+  // not a function" and nothing said the sandbox was the reason.
 
   it.each(["addStatusBarItem", "addSidebarPanel", "addSettingsPanel"])(
     "refuses ui.%s by name instead of being undefined",

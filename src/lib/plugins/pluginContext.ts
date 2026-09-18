@@ -131,9 +131,14 @@ export function buildPluginContext({
       onLanguageChange(listener) {
         const handleLanguageChanged = () => listener();
         i18n.on("languageChanged", handleLanguageChanged);
-        const dispose = () => i18n.off("languageChanged", handleLanguageChanged);
-        bag.add(dispose);
-        return dispose;
+        const unsubscribe = () => i18n.off("languageChanged", handleLanguageChanged);
+        bag.add(unsubscribe);
+        // Renderers subscribe on every mount, so an early dispose must also
+        // leave the bag, or each remount would pin its closure until unload.
+        return () => {
+          unsubscribe();
+          bag.delete(unsubscribe);
+        };
       },
     },
     notify,

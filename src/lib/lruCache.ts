@@ -4,8 +4,9 @@
 // nothing from the app.)
 
 // Bound for the Mermaid render cache. A rendered+sanitized diagram SVG is
-// typically 10-100KB, so 50 entries keeps the cache under a few MB worst case while still covering every diagram in the handful of
-// documents a session flips between. Evicting an entry never breaks a diagram
+// typically 10-100KB, so 50 entries keeps the cache under a few MB worst case
+// while still covering every diagram in the handful of documents a session
+// flips between. Evicting an entry never breaks a diagram
 // already on screen: components hold their own copy of the SVG, the cache only
 // decides whether a future mount re-renders.
 export const DIAGRAM_RENDER_CACHE_LIMIT = 50;

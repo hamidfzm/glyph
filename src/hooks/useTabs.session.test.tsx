@@ -3,9 +3,11 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getCliExportRequest, resetCliExportRequestCache } from "@/lib/cliExport";
+import { registerFileType } from "@/lib/plugins/fileTypes";
 import { getWorkspaceSession } from "@/lib/workspaceSession";
 import { defaultOptions, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
+import { RESTORE_PLUGIN_WAIT_MS } from "./useTabsSession";
 
 vi.mock("@/lib/pickers", () => ({
   pickFolder: vi.fn(),
@@ -34,28 +36,70 @@ describe("useTabs initialization", () => {
     expect(result.current.workspace).toBeNull();
   });
 
-  it("restores a plugin file type's tab once plugins are ready, not before", async () => {
-    // Opened before its plugin registers, the tab would be refused and the
-    // next session save would drop it.
-    const dispose = { current: () => {} };
-    const { registerFileType } = await import("@/lib/plugins/fileTypes");
-    const options = { ...defaultOptions(), openTabs: ["/p/seq.puml"], pluginsReady: false };
-    const { result, rerender } = renderHook((props) => useTabs(props), { initialProps: options });
+  describe("waiting for plugins before a saved-session restore", () => {
+    const tabPaths = (tabs: ReturnType<typeof useTabs>["tabs"]) =>
+      tabs.map((tab) => (tab.kind === "file" ? tab.file.path : ""));
 
-    await act(() => Promise.resolve());
-    expect(result.current.initializing).toBe(true);
-    expect(invoke).not.toHaveBeenCalledWith("get_initial_file");
+    it("restores a plugin file type's tab once plugins are ready, not before", async () => {
+      // Opened before its plugin registers, the tab would be refused and the
+      // next session save would drop it.
+      const options = { ...defaultOptions(), openTabs: ["/p/seq.puml"], pluginsReady: false };
+      const { result, rerender } = renderHook((props) => useTabs(props), { initialProps: options });
 
-    dispose.current = registerFileType({ extensions: ["puml"], language: "plantuml" });
-    try {
+      await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+      expect(result.current.initializing).toBe(true);
+      expect(result.current.tabs).toEqual([]);
+
+      const dispose = registerFileType({ extensions: ["puml"], language: "plantuml" });
+      try {
+        rerender({ ...options, pluginsReady: true });
+        await waitFor(() => expect(result.current.initializing).toBe(false));
+        expect(tabPaths(result.current.tabs)).toEqual(["/p/seq.puml"]);
+      } finally {
+        dispose();
+      }
+    });
+
+    it("gives up waiting on a plugin that never finishes, and restores the rest", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const options = {
+          ...defaultOptions(),
+          openTabs: ["/p/a.md"],
+          pluginsReady: false,
+        };
+        const { result } = renderHook(() => useTabs(options));
+        await act(() => vi.advanceTimersByTimeAsync(RESTORE_PLUGIN_WAIT_MS));
+        await waitFor(() => expect(result.current.initializing).toBe(false));
+        expect(tabPaths(result.current.tabs)).toEqual(["/p/a.md"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("opens a CLI file right away, without waiting for plugins", async () => {
+      vi.mocked(invoke).mockImplementation(
+        makeInvoker({ get_initial_file: async () => "/p/cli.md" }) as typeof invoke,
+      );
+      const { result } = renderHook(() =>
+        useTabs({ ...defaultOptions(), openTabs: ["/p/old.md"], pluginsReady: false }),
+      );
+      await waitFor(() => expect(result.current.initializing).toBe(false));
+      expect(tabPaths(result.current.tabs)).toEqual(["/p/cli.md"]);
+    });
+
+    it("keeps what the user opened while waiting instead of restoring over it", async () => {
+      const options = { ...defaultOptions(), openTabs: ["/p/old.md"], pluginsReady: false };
+      const { result, rerender } = renderHook((props) => useTabs(props), { initialProps: options });
+      await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+
+      await act(async () => {
+        await result.current.openFile("/p/new.md");
+      });
       rerender({ ...options, pluginsReady: true });
       await waitFor(() => expect(result.current.initializing).toBe(false));
-      expect(result.current.tabs.map((tab) => (tab.kind === "file" ? tab.file.path : ""))).toEqual([
-        "/p/seq.puml",
-      ]);
-    } finally {
-      dispose.current();
-    }
+      expect(tabPaths(result.current.tabs)).toEqual(["/p/new.md"]);
+    });
   });
 
   it("opens the initial file from get_initial_file", async () => {

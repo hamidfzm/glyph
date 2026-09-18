@@ -2,6 +2,23 @@ import { describe, expect, it, vi } from "vitest";
 import { DisposerBag } from "./disposer";
 
 describe("DisposerBag", () => {
+  it("forgets a deleted disposer so dispose does not run it again", () => {
+    const bag = new DisposerBag();
+    const kept = vi.fn();
+    const early = vi.fn();
+    bag.add(kept);
+    bag.add(early);
+
+    early();
+    bag.delete(early);
+    bag.delete(() => {}); // unknown: ignored
+    expect(bag.size).toBe(1);
+
+    bag.dispose();
+    expect(kept).toHaveBeenCalledTimes(1);
+    expect(early).toHaveBeenCalledTimes(1);
+  });
+
   it("runs disposers most-recent first", () => {
     const order: number[] = [];
     const bag = new DisposerBag();

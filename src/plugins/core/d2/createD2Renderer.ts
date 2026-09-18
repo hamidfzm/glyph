@@ -18,8 +18,6 @@ export function createD2Renderer(i18n: I18nApi): FencedRendererMount {
     mount(el, { code, openLightbox }, registerCleanup) {
       const diagram = document.createElement("div");
       diagram.className = "d2-diagram";
-      // Holds export readiness until the SVG (or the failure) is in.
-      diagram.setAttribute("aria-busy", "true");
 
       const failure = document.createElement("div");
       failure.className = "d2-error";
@@ -37,28 +35,29 @@ export function createD2Renderer(i18n: I18nApi): FencedRendererMount {
       // compiling; only the newest may touch the DOM.
       let renderSeq = 0;
 
-      const fail = () => {
-        diagram.setAttribute("aria-busy", "false");
-        el.replaceChildren(failure);
+      // `el` keeps whatever it shows (the previous render, after a source edit)
+      // until the new result is in; aria-busy holds export readiness meanwhile.
+      const show = (content: HTMLElement) => {
+        el.replaceChildren(content);
+        el.setAttribute("aria-busy", "false");
       };
 
       const render = async () => {
         const seq = ++renderSeq;
         if (code.trim().length === 0) {
-          fail();
+          show(failure);
           return;
         }
-        diagram.setAttribute("aria-busy", "true");
+        el.setAttribute("aria-busy", "true");
         try {
           const rendered = await renderD2(code, dark);
           if (seq !== renderSeq) return;
           svg = rendered;
           diagram.innerHTML = rendered;
-          diagram.setAttribute("aria-busy", "false");
-          el.replaceChildren(diagram);
+          show(diagram);
         } catch {
           if (seq !== renderSeq) return;
-          fail();
+          show(failure);
         }
       };
 
@@ -71,9 +70,8 @@ export function createD2Renderer(i18n: I18nApi): FencedRendererMount {
       };
 
       if (openLightbox) {
-        const zoom = () => {
-          if (svg) openLightbox(svgToDataUrl(svg), t("label"));
-        };
+        // The diagram is only on screen once an SVG is in.
+        const zoom = () => openLightbox(svgToDataUrl(svg), t("label"));
         diagram.setAttribute("role", "button");
         diagram.tabIndex = 0;
         diagram.addEventListener("click", zoom);
@@ -100,8 +98,8 @@ export function createD2Renderer(i18n: I18nApi): FencedRendererMount {
       registerCleanup(() => {
         themeObserver.disconnect();
         renderSeq++;
+        el.removeAttribute("aria-busy");
       });
-      el.replaceChildren(diagram);
       void render();
     },
   };

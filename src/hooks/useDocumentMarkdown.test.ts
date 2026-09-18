@@ -4,8 +4,9 @@ import { registerFileType } from "@/lib/plugins/fileTypes";
 import { useDocumentMarkdown } from "./useDocumentMarkdown";
 
 describe("useDocumentMarkdown", () => {
-  it("passes markdown and path-less content through", () => {
+  it("passes markdown, untitled, and path-less content through", () => {
     expect(renderHook(() => useDocumentMarkdown("/p/a.md", "# Hi")).result.current).toBe("# Hi");
+    expect(renderHook(() => useDocumentMarkdown("Untitled-2", "# Hi")).result.current).toBe("# Hi");
     expect(renderHook(() => useDocumentMarkdown(undefined, "x")).result.current).toBe("x");
   });
 

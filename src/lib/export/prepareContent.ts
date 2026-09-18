@@ -100,7 +100,9 @@ export async function prepareContent({
     block.removeAttribute("data-fenced-language");
     block.removeAttribute("data-fenced-source");
     for (const el of Array.from(block.querySelectorAll('[role="button"]'))) {
-      el.removeAttribute("role");
+      // A labelled render stays a named image; a bare one loses the role.
+      if (el.hasAttribute("aria-label")) el.setAttribute("role", "img");
+      else el.removeAttribute("role");
       el.removeAttribute("tabindex");
       el.removeAttribute("title");
     }

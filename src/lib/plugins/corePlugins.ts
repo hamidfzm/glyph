@@ -16,7 +16,7 @@ export interface CorePlugin {
 // They have no plugin folder and declare no permissions, so ctx.assets and
 // ctx.workspace refuse them; ship data in the bundle instead.
 export const CORE_PLUGINS: readonly CorePlugin[] = [
-  { id: "glyph.core.d2", settingsKey: "d2", load: () => import("@/plugins/core/d2") },
+  { id: "glyph.core.d2", settingsKey: "d2", load: () => import("@/plugins/core/d2/d2Plugin") },
 ];
 
 /** The host entry for a core plugin: bundled, so there is no folder or source text. */

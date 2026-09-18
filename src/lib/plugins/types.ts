@@ -4,6 +4,7 @@ import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources"
 import type { Disposer } from "./disposer";
 
 export type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
+export type { Disposer } from "./disposer";
 
 /** Capability a plugin requests; surfaced for user consent before enabling. */
 export type PluginPermission = "workspace:read" | "workspace:write" | `network:${string}`;
@@ -27,8 +28,10 @@ export interface FencedRendererProps {
 
 /**
  * A framework-agnostic fenced renderer: draws into `el` the way the panel
- * mounts do, with no dependency on the app's React. Mounted again (after the
- * previous cleanups run) whenever the block's props change.
+ * mounts do, with no dependency on the app's React. When the block's props
+ * change, the previous cleanups run and it is mounted again over its previous
+ * output, so it can keep that on screen until the new render is ready (set
+ * `aria-busy` on `el` meanwhile).
  */
 export interface FencedRendererMount {
   mount(
@@ -54,9 +57,9 @@ export interface FencedRendererContribution {
 }
 
 /**
- * A document type a plugin opens. Files with these extensions open read-only
- * and render as one fenced `language` block, so pair it with a fenced renderer
- * for that language.
+ * A document type a plugin opens. Files with these extensions open in the
+ * viewer and render as one fenced `language` block, so pair it with a fenced
+ * renderer for that language.
  */
 export interface FileTypeContribution {
   /** Extensions without the dot, e.g. `["d2"]`. */

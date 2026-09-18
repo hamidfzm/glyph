@@ -174,6 +174,8 @@ describe("prepareContent", () => {
     expect(html).not.toContain("secret source");
     expect(html).not.toContain("data-fenced-language");
     expect(html).not.toContain('role="button"');
+    // A labelled render stays a named image.
+    expect(html).toContain('role="img"');
     expect(html).not.toContain("tabindex");
     expect(html).not.toContain("Click to zoom");
     // The accessible name stays: it describes the diagram, not the click.
@@ -192,26 +194,61 @@ describe("prepareContent", () => {
     }
   });
 
+  it("drops the role from an unlabelled zoomable plugin render in exports", async () => {
+    setBody(
+      '<div data-fenced-language="puml" data-fenced-source="a"><div role="button"></div></div>',
+    );
+    const html = (await prepareContent({ entries: ENTRIES, includeToc: false }))?.html ?? "";
+    expect(html).not.toContain("role=");
+  });
+
   it("keeps a plugin block as rendered when it has no static render", async () => {
     setBody('<div data-fenced-language="puml" data-fenced-source="a"><p>live</p></div>');
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
     expect(result?.html).toContain("<p>live</p>");
   });
 
-  it("drops a plugin block whose static render fails", async () => {
+  it("puts a plugin block's source in the PDF when its static render fails", async () => {
     const dispose = staticRenderers.register({
       language: "puml",
       renderStatic: async () => {
         throw new Error("bad source");
       },
     });
-    setBody(
-      '<div data-fenced-language="puml" data-fenced-source="a"><p>dark</p></div><p>after</p>',
-    );
-    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    dispose();
-    expect(result?.html).not.toContain("dark");
-    expect(result?.html).toContain("after");
+    try {
+      setBody(
+        '<div data-fenced-language="puml" data-fenced-source="A -> B"><p>dark</p></div><p>after</p>',
+      );
+      const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+      // Never the dark live render, and never silently nothing.
+      expect(result?.html).not.toContain("dark");
+      expect(result?.html).toContain("<pre><code>A -&gt; B</code></pre>");
+      expect(result?.html).toContain("after");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("rasterizes the right RTL block after a plugin's static render changes the page shape", async () => {
+    rasterizeElementMock.mockClear();
+    const dispose = staticRenderers.register({
+      language: "puml",
+      renderStatic: async () => "<p>light one</p><p>light two</p>",
+    });
+    try {
+      setBody(
+        '<div data-fenced-language="puml" data-fenced-source="a"><svg></svg></div>' +
+          "<p>سلام دنیا</p><p>plain english</p>",
+      );
+      const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+      expect(rasterizeElementMock).toHaveBeenCalledTimes(1);
+      expect(result?.html).toContain("light one");
+      expect(result?.html).toContain("light two");
+      expect(result?.html).not.toContain("سلام");
+      expect(result?.html).toContain("plain english");
+    } finally {
+      dispose();
+    }
   });
 
   it("leaves a Mermaid diagram untouched when its source is missing", async () => {

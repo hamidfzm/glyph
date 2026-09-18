@@ -80,11 +80,14 @@ describe("createPluginHost plugin context", () => {
     expect(translated).toBe("Hello Ada bye");
 
     const language = i18n.language;
-    await i18n.changeLanguage("de");
-    expect(listener).toHaveBeenCalledTimes(1);
+    try {
+      await i18n.changeLanguage("de");
+      expect(listener).toHaveBeenCalledTimes(1);
 
-    host.unload("com.x.demo");
-    await i18n.changeLanguage(language);
+      host.unload("com.x.demo");
+    } finally {
+      await i18n.changeLanguage(language);
+    }
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
