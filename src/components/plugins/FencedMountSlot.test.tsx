@@ -28,6 +28,26 @@ describe("FencedMountSlot", () => {
     expect(cleanup).toHaveBeenCalledTimes(2);
   });
 
+  it("mounts again over the previous render on a source change, and clears for a new renderer", () => {
+    // A renderer that keeps what is on screen until it has something new.
+    const keeper = {
+      mount: (el: HTMLElement, { code }: { code: string }) => {
+        if (!el.textContent) el.textContent = code;
+      },
+    };
+    const { container, rerender } = render(<FencedMountSlot renderer={keeper} code="a" />);
+    rerender(<FencedMountSlot renderer={keeper} code="b" />);
+    expect(container.textContent).toBe("a");
+
+    const other = {
+      mount: (el: HTMLElement) => {
+        el.append("other");
+      },
+    };
+    rerender(<FencedMountSlot renderer={other} code="b" />);
+    expect(container.textContent).toBe("other");
+  });
+
   it("contains a mount that throws", () => {
     expectConsole(/threw in mount/);
     const renderer = {

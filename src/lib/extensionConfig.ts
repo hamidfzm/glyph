@@ -63,15 +63,21 @@ export function declaredExtensions(config: unknown, key: string): readonly strin
 }
 
 /**
- * Whether `path` ends in one of `extensions`, ignoring case. A leading dot is
- * a dotfile, not an extension (`.md` is a file named ".md"), which is what
- * Rust's `Path::extension` reports and therefore what the backend gate uses.
+ * The lowercase extension of `path`, or null. A leading dot is a dotfile, not
+ * an extension (`.md` is a file named ".md"), which is what Rust's
+ * `Path::extension` reports and therefore what the backend gate uses.
  */
-export function hasExtension(path: string, extensions: readonly string[]): boolean {
+export function extensionOf(path: string): string | null {
   const name = path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
   const dot = name.lastIndexOf(".");
-  if (dot <= 0) return false;
-  return extensions.includes(name.slice(dot + 1).toLowerCase());
+  if (dot <= 0) return null;
+  return name.slice(dot + 1).toLowerCase();
+}
+
+/** Whether `path` ends in one of `extensions`, ignoring case. */
+export function hasExtension(path: string, extensions: readonly string[]): boolean {
+  const ext = extensionOf(path);
+  return ext !== null && extensions.includes(ext);
 }
 
 // Associations are keyed by mime type, not position, so reordering

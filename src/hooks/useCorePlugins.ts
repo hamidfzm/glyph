@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
 import { CORE_PLUGINS, coreInstalledPlugin } from "@/lib/plugins/corePlugins";
@@ -15,6 +15,10 @@ export function useCorePlugins(
   pushToast: (message: string, tone?: "error") => void,
 ): boolean {
   const { t } = useTranslation("plugins");
+  // A ref, so a language switch does not re-run the load pass (and retry a
+  // failed load with another toast).
+  const tRef = useRef(t);
+  tRef.current = t;
   const { settings, loaded } = useSettings();
   const enabled = settings.corePlugins;
   const [ready, setReady] = useState(false);
@@ -33,7 +37,7 @@ export function useCorePlugins(
         } catch (err) {
           console.error(`Failed to load core plugin ${core.id}:`, err);
           const message = err instanceof Error ? err.message : String(err);
-          pushToast(t("toast.error", { message }), "error");
+          pushToast(tRef.current("toast.error", { message }), "error");
         }
       }),
     ).then(() => {
@@ -42,7 +46,7 @@ export function useCorePlugins(
     return () => {
       cancelled = true;
     };
-  }, [host, loaded, enabled, pushToast, t]);
+  }, [host, loaded, enabled, pushToast]);
 
   return ready;
 }

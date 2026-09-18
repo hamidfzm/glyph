@@ -7,7 +7,7 @@ import { isCanvasFile } from "./canvasExtensions";
 import { isNotebookFile } from "./notebookExtensions";
 import { fileTypes } from "./plugins/fileTypes";
 import type { FileTypeContribution } from "./plugins/types";
-import { isSourceDocument } from "./sourceDocuments";
+import { isFencedDocument } from "./sourceDocuments";
 
 /**
  * Markdown passes through as-is. Notebooks suppress entirely — their raw
@@ -24,7 +24,7 @@ export function displayContentFor(
 ): string | null {
   if (!path) return live;
   if (isNotebookFile(path)) return null;
-  if (isSourceDocument(path, registered)) return null;
+  if (isFencedDocument(path, registered)) return null;
   if (isCanvasFile(path)) return live ? canvasDisplayText(live) : null;
   return live;
 }

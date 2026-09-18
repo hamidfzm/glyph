@@ -32,6 +32,9 @@ describe("fileTypes", () => {
   it.each([
     ["a newline in the language", { extensions: ["puml"], language: "x\n```\n[a](b)" }],
     ["a backtick in the language", { extensions: ["puml"], language: "x`y" }],
+    // The renderer lookup reads the language as `language-([\w-]+)`.
+    ["a dot in the language", { extensions: ["puml"], language: "x.y" }],
+    ["a plus in the language", { extensions: ["puml"], language: "c++" }],
     ["no extensions", { extensions: [], language: "plantuml" }],
     ["a non-array extensions field", { extensions: "puml", language: "plantuml" }],
     ["an extension with a path in it", { extensions: ["a/b"], language: "plantuml" }],

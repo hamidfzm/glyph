@@ -32,11 +32,24 @@ export async function preparePdfRichContent(liveBody: Element, clone: Element): 
         const renderStatic = staticRendererFor(pluginLanguage);
         // Without a static render the live block embeds as it is on screen.
         if (!renderStatic) continue;
-        const markup = await renderStatic(el.dataset.fencedSource ?? "");
-        const { default: DOMPurify } = await import("dompurify");
+        const source = el.dataset.fencedSource ?? "";
+        // The wrapper keeps the marker, so the RTL pass skips plugin output on
+        // both sides and its live/clone node lists still line up.
         const wrap = clone.ownerDocument.createElement("div");
-        wrap.innerHTML = DOMPurify.sanitize(markup, { FORBID_TAGS: ["foreignObject"] });
-        cloned[i].replaceWith(...wrap.childNodes);
+        wrap.setAttribute("data-fenced-language", pluginLanguage);
+        try {
+          const markup = await renderStatic(source);
+          const { default: DOMPurify } = await import("dompurify");
+          wrap.innerHTML = DOMPurify.sanitize(markup, { FORBID_TAGS: ["foreignObject"] });
+        } catch {
+          // Never the dark live render, never nothing: the block's source.
+          const pre = clone.ownerDocument.createElement("pre");
+          const code = clone.ownerDocument.createElement("code");
+          code.textContent = source;
+          pre.append(code);
+          wrap.replaceChildren(pre);
+        }
+        cloned[i].replaceWith(wrap);
         continue;
       }
       if (isMath) {
@@ -80,10 +93,18 @@ export async function preparePdfRichContent(liveBody: Element, clone: Element): 
 // not candidates and stay selectable text.
 const RTL_BLOCK_SELECTOR = "p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, table";
 
+// Plugin blocks are excluded on both sides: their clone may hold a static
+// render with a different shape than the live one.
+function rtlCandidates<T extends Element>(root: Element): T[] {
+  return Array.from(root.querySelectorAll<T>(RTL_BLOCK_SELECTOR)).filter(
+    (el) => !el.closest("[data-fenced-language]"),
+  );
+}
+
 export async function rasterizeRtlBlocks(liveBody: Element, clone: Element): Promise<void> {
-  const live = liveBody.querySelectorAll<HTMLElement>(RTL_BLOCK_SELECTOR);
+  const live = rtlCandidates<HTMLElement>(liveBody);
   if (live.length === 0) return;
-  const cloned = clone.querySelectorAll(RTL_BLOCK_SELECTOR);
+  const cloned = rtlCandidates(clone);
   const background = getComputedStyle(liveBody).backgroundColor || "#ffffff";
   for (let i = 0; i < live.length; i++) {
     const el = live[i];

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { Disposer } from "@/lib/plugins/disposer";
 import { registerFileType } from "@/lib/plugins/fileTypes";
-import { fenceSource, isSourceDocument } from "./sourceDocuments";
+import { fenceSource, isFencedDocument, isSourceDocument } from "./sourceDocuments";
 
 let dispose: Disposer | undefined;
 afterEach(() => {
@@ -22,6 +22,20 @@ describe("isSourceDocument", () => {
 
   it("leaves markdown alone", () => {
     expect(isSourceDocument("/p/notes.md")).toBe(false);
+  });
+});
+
+describe("isFencedDocument", () => {
+  it.each([
+    ["an untitled document", "Untitled-1", false],
+    ["an Android content id", "content://com.android.providers.downloads/document/msf%3A12", false],
+    ["a markdown note", "/p/notes.md", false],
+    ["a notebook's source view", "/p/analysis.ipynb", false],
+    ["a canvas", "/p/board.canvas", false],
+    ["a .d2 diagram", "/p/arch.d2", true],
+    ["a file whose plugin is off", "/p/seq.puml", true],
+  ])("%s: %s", (_, path, fenced) => {
+    expect(isFencedDocument(path)).toBe(fenced);
   });
 });
 

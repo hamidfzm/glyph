@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { GlyphPluginContext } from "@/lib/plugins/types";
-import plugin from "./index";
+import plugin from "./d2Plugin";
 
 const renderD2 = vi.hoisted(() => vi.fn(async () => "<svg></svg>"));
 vi.mock("./d2Render", () => ({ renderD2 }));

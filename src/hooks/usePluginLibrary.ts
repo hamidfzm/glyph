@@ -115,6 +115,12 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
     [host, pushToast, persistDisabled, t],
   );
 
+  // A load that a disable or uninstall overtook still landed on disk: show the
+  // new version if the plugin is still installed, without re-enabling it.
+  const keepInstalledCurrent = useCallback((plugin: InstalledPlugin) => {
+    setInstalled((prev) => prev.map((p) => (p.id === plugin.id ? plugin : p)));
+  }, []);
+
   const reportFailure = useCallback(
     (err: unknown) => {
       console.error("Plugin operation failed:", err);
@@ -172,8 +178,10 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
       consentedId = inspection.id;
       plugin = await invoke<InstalledPlugin>("install_plugin");
       if (!(await consentInstalledOrRollBack(plugin))) return;
-      // Superseded by a disable or uninstall while loading: leave their state.
-      if (!(await host.load(plugin))) return;
+      if (!(await host.load(plugin))) {
+        keepInstalledCurrent(plugin);
+        return;
+      }
       afterInstall(plugin);
     } catch (err) {
       // Nothing was installed, so the grant recorded at consent must not
@@ -191,6 +199,7 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
     consentInstalledOrRollBack,
     getGrant,
     restoreGrant,
+    keepInstalledCurrent,
   ]);
 
   const installFromRegistry = useCallback(
@@ -204,7 +213,10 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
         consented = true;
         plugin = await downloadAndInstall(entry);
         if (!(await consentInstalledOrRollBack(plugin))) return;
-        if (!(await host.load(plugin))) return;
+        if (!(await host.load(plugin))) {
+          keepInstalledCurrent(plugin);
+          return;
+        }
         afterInstall(plugin);
       } catch (err) {
         // See installFromFolder: an accepted consent for a failed install
@@ -223,6 +235,7 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
       consentInstalledOrRollBack,
       getGrant,
       restoreGrant,
+      keepInstalledCurrent,
     ],
   );
 

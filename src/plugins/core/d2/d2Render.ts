@@ -1,4 +1,4 @@
-// Lazy D2 renderer + render cache, shared by the on-screen `D2Diagram` and the
+// Lazy D2 renderer + render cache, shared by the on-screen renderer and the
 // plugin's static (print and PDF) render. `@terrastruct/d2`'s browser build
 // inlines the multi-MB WASM and runs it in a blob-URL worker, so the dynamic
 // import is fully self-contained and makes no network request: the diagram

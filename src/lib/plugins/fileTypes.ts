@@ -8,15 +8,16 @@ import type { FileTypeContribution } from "./types";
 export const fileTypes = createRegistry<FileTypeContribution>();
 
 // Markdown, notebooks, canvases, images, and media have their own viewers; a
-// plugin claiming one would turn every such file into a read-only code block.
-// `.d2` is the exception: it is a plugin-rendered type the app only associates.
-const BUILT_IN_EXTENSIONS = new Set(
+// plugin claiming one would turn every such file into a code block. `.d2` is
+// the exception: it is a plugin-rendered type the app only associates.
+export const BUILT_IN_EXTENSIONS: ReadonlySet<string> = new Set(
   USER_FILE_EXTENSIONS.filter((ext) => !D2_EXTENSIONS.includes(ext)),
 );
 
 // The language becomes a fence info string, so anything beyond a plain word
 // (a newline, a backtick) would let a plugin inject markdown around the file.
-const LANGUAGE = /^[\w.+-]+$/;
+// It must also survive the renderer lookup's `language-([\w-]+)` class match.
+const LANGUAGE = /^[\w-]+$/;
 const EXTENSION = /^[a-z0-9]+$/;
 
 /**
