@@ -1,6 +1,8 @@
 node_modules/
 dist/
 coverage/
+# glyph-md/plugin-template and glyph-md/plugins checkouts for the plugin contract check
+.ecosystem/
 src-tauri/target/
 # `cargo llvm-cov --output-path ../coverage-rust.lcov`, the same path CI uses.
 coverage-rust.lcov

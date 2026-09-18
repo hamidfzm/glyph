@@ -101,6 +101,43 @@ jobs:
         working-directory: src-tauri
         run: cargo test --lib
 
+  # Checks the host's plugin API against glyph-md/plugin-template's declared
+  # types and built plugin, and the marketplace schema and index in
+  # glyph-md/plugins. An app PR that changes the API goes red here until the
+  # matching template/plugins change lands on their main. Not in the
+  # required-checks ruleset.
+  plugin-contract:
+    name: Plugin contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: glyph-md/plugin-template
+          path: .ecosystem/plugin-template
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: glyph-md/plugins
+          path: .ecosystem/plugins
+          persist-credentials: false
+      - uses: ./.github/actions/pnpm-setup
+      - run: pnpm install --frozen-lockfile
+      # The template has no lockfile, so its install runs no lifecycle scripts.
+      - name: Typecheck and build the plugin template
+        working-directory: .ecosystem/plugin-template
+        run: npm install --ignore-scripts --no-audit --no-fund && npm run typecheck && npm run build
+      - name: Add TypeScript problem matcher
+        run: echo "::add-matcher::.github/matchers/tsc.json"
+      - name: Compare the template's API types with the host's
+        run: pnpm exec tsc -p scripts/plugin-contract
+      - name: Load the template and read the marketplace index
+        env:
+          GLYPH_PLUGIN_CONTRACT: "1"
+        run: pnpm exec vitest run src/lib/plugins/ecosystemContract.test.ts
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
