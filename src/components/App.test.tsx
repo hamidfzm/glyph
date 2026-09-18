@@ -137,10 +137,8 @@ describe("App", () => {
     const { wrapper } = withProviders();
     const { container } = render(<App />, { wrapper });
 
-    await waitFor(() => {
-      expect(container.firstChild).not.toBeNull();
-    });
-    expect(container.textContent).toMatch(/Open a Markdown file/i);
+    // The empty state waits for session restore, which waits for plugins.
+    await waitFor(() => expect(container.textContent).toMatch(/Open a Markdown file/i));
   });
 
   it("does not crash when settings.loaded is false", async () => {
@@ -313,6 +311,10 @@ describe("App", () => {
         case "vault_refresh":
         case "vault_snapshot":
           return Promise.resolve(vaultSnapshot(["/workspace/a.md"]));
+        // The backlinks panel queries once the note's tab and the index are up;
+        // the default undefined would crash it whenever that lands in the test.
+        case "vault_backlinks":
+          return Promise.resolve([]);
         case "workspace_resolve":
           return Promise.resolve({
             selected: String(args?.selected ?? ""),

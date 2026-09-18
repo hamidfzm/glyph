@@ -1,15 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { staticRenderers } from "@/lib/plugins/staticRenderers";
 import { swapDiagramsLight } from "./lightDiagrams";
 
 const renderMermaidMock = vi.fn(async () => '<svg data-diagram="mermaid-light"></svg>');
-const renderD2Mock = vi.fn(async () => '<svg data-diagram="d2-light"></svg>');
 const restoreMermaidMock = vi.fn(async (_dark: boolean) => {});
 vi.mock("./rasterize", () => ({
   renderMermaidLightSvg: () => renderMermaidMock(),
   restoreMermaidTheme: (dark: boolean) => restoreMermaidMock(dark),
-}));
-vi.mock("@/lib/d2Render", () => ({
-  renderD2: () => renderD2Mock(),
 }));
 // DOMPurify does not run faithfully under happy-dom (it drops the <svg>
 // wrapper), so mock it pass-through; real stripping is its job in the webview.
@@ -30,14 +27,66 @@ afterEach(() => {
 });
 
 describe("swapDiagramsLight", () => {
-  it("replaces Mermaid and D2 diagrams with their light renders", async () => {
+  it("shows a plugin block's static render beside the hidden live one, then restores it", async () => {
+    const dispose = staticRenderers.register({
+      language: "puml",
+      renderStatic: async (code) => `<svg data-light="${code}"></svg>`,
+    });
+    try {
+      setBody(
+        '<div data-fenced-language="puml" data-fenced-source="a"><div id="live">dark</div></div>' +
+          '<div data-fenced-language="unknown" data-fenced-source="b"><div id="other">keep</div></div>',
+      );
+
+      const restore = await swapDiagramsLight(document);
+      expect(document.body.innerHTML).toContain('data-light="a"');
+      expect(document.getElementById("live")?.style.display).toBe("none");
+      expect(document.getElementById("other")?.style.display).toBe("");
+
+      restore();
+      expect(document.body.innerHTML).not.toContain("data-light");
+      expect(document.getElementById("live")?.style.display).toBe("");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("re-renders a plugin block that carries no source as empty source", async () => {
+    const renderStatic = vi.fn(async () => "<svg></svg>");
+    const dispose = staticRenderers.register({ language: "puml", renderStatic });
+    try {
+      setBody('<div data-fenced-language="puml"><div>dark</div></div>');
+      await swapDiagramsLight(document);
+      expect(renderStatic).toHaveBeenCalledWith("");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("leaves a plugin block alone when its static render fails", async () => {
+    const dispose = staticRenderers.register({
+      language: "puml",
+      renderStatic: async () => {
+        throw new Error("bad source");
+      },
+    });
+    try {
+      setBody(
+        '<div data-fenced-language="puml" data-fenced-source="a"><div id="live">dark</div></div>',
+      );
+      await swapDiagramsLight(document);
+      expect(document.getElementById("live")?.style.display).toBe("");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("replaces Mermaid diagrams with their light renders", async () => {
     setBody(
-      '<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg data-dark="1"></svg></div>' +
-        '<div class="d2-diagram" data-d2-source="a -> b"><svg data-dark="1"></svg></div>',
+      '<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg data-dark="1"></svg></div>',
     );
     await swapDiagramsLight(document);
     expect(document.body.innerHTML).toContain('data-diagram="mermaid-light"');
-    expect(document.body.innerHTML).toContain('data-diagram="d2-light"');
     expect(document.body.innerHTML).not.toContain('data-dark="1"');
     // Mermaid's global config is left on the app (dark) theme.
     expect(restoreMermaidMock).toHaveBeenCalledWith(true);

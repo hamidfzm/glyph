@@ -26,10 +26,10 @@ let settings = {};
 
 // A ctx method the sandbox cannot implement. Named explicitly so the plugin
 // author sees which API is unavailable and why, instead of a TypeError.
-function sandboxUnavailable(name) {
+function sandboxUnavailable(name, reason = "it needs DOM access") {
   return () => {
     throw new Error(
-      \`ctx.\${name} is not available to sandboxed plugins: it needs DOM access. \` +
+      \`ctx.\${name} is not available to sandboxed plugins: \${reason}. \` +
         \`Set "sandbox": false in the plugin manifest to use it.\`,
     );
   };
@@ -160,6 +160,21 @@ function buildContext(init) {
         return () => {};
       },
     },
+    documents: {
+      registerFileType(fileType) {
+        // Array.from would split a string into one-letter extensions.
+        if (!Array.isArray(fileType.extensions)) {
+          throw new Error("file type extensions must be a non-empty array");
+        }
+        // Pure data, like site themes: the host registry owns it.
+        postMessage({
+          type: "register-file-type",
+          extensions: Array.from(fileType.extensions, String),
+          language: String(fileType.language),
+        });
+        return () => {};
+      },
+    },
     workspace: {
       readFile(path) {
         return hostCall({ type: "workspace-read", path });
@@ -199,6 +214,12 @@ function buildContext(init) {
         settings[key] = value;
         postMessage({ type: "settings-set", key, value });
       },
+    },
+    // Reading translations needs the app's i18n instance, which a worker has
+    // no copy of; registering them (below) still works.
+    i18n: {
+      t: sandboxUnavailable("i18n.t", "it needs the app's strings"),
+      onLanguageChange: sandboxUnavailable("i18n.onLanguageChange", "it needs the app's strings"),
     },
     notify(message) {
       postMessage({ type: "notify", message: String(message) });

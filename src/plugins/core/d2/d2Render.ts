@@ -1,11 +1,11 @@
-// Lazy D2 renderer + render cache. Pure logic (no JSX) shared by the on-screen
-// `D2Diagram` component and the PDF export rasterizer, so it lives in `lib`
-// rather than under `components`. `@terrastruct/d2`'s browser build inlines the
-// multi-MB WASM and runs it in a blob-URL worker, so the dynamic import is fully
-// self-contained and makes no network request — the diagram renders offline.
+// Lazy D2 renderer + render cache, shared by the on-screen renderer and the
+// plugin's static (print and PDF) render. `@terrastruct/d2`'s browser build
+// inlines the multi-MB WASM and runs it in a blob-URL worker, so the dynamic
+// import is fully self-contained and makes no network request: the diagram
+// renders offline.
 
 import type { CompileOptions, Diagram, RenderOptions } from "@terrastruct/d2";
-import { DIAGRAM_RENDER_CACHE_LIMIT, LruCache } from "@/lib/lruCache";
+import { RenderCache } from "./renderCache";
 
 // The shipped `D2` class types `compile`'s second argument as
 // `Omit<CompileRequest, "fs">` ({ inputPath?, options }), but the runtime treats
@@ -38,19 +38,18 @@ const DARK_THEME_ID = 200;
 // WASM layout. Promises are cached (not strings) so concurrent renders of the
 // same diagram share one compile; failures are evicted so they can be retried.
 // LRU-bounded so a long session with many distinct diagrams cannot grow it
-// without limit (rationale on the shared constant).
-const cache = new LruCache<Promise<string>>(DIAGRAM_RENDER_CACHE_LIMIT);
+// without limit.
+const cache = new RenderCache<Promise<string>>();
 
 // The rendered SVG is untrusted (it derives from arbitrary D2 source) and is
 // injected via innerHTML, so sanitize before it reaches the DOM. DOMPurify's
 // default config already drops <script>, on* handlers, and javascript:/external
 // href references while keeping SVG elements; we additionally forbid
 // <foreignObject>, the SVG-embedded-HTML XSS vector. Note: this also strips D2's
-// foreignObject-based markdown/code blocks, an accepted trade-off — the XSS
+// foreignObject-based markdown/code blocks, an accepted trade-off: the XSS
 // guard outweighs those rare embeds.
-// DOMPurify is imported on demand (matching the export-path call sites) so it
-// stays out of the startup bundle; a D2 render already awaits the multi-MB
-// compiler, so the extra dynamic import is noise.
+// DOMPurify is imported on demand so it stays out of the startup bundle; a D2
+// render already awaits the multi-MB compiler, so the extra import is noise.
 async function sanitizeSvg(svg: string): Promise<string> {
   const { default: DOMPurify } = await import("dompurify");
   return DOMPurify.sanitize(svg, { FORBID_TAGS: ["foreignObject"] });
