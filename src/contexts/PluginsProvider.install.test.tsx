@@ -488,3 +488,73 @@ describe("PluginsProvider installs overtaken by an uninstall", () => {
     },
   );
 });
+
+it("an update that a disable overtook shows the new version, still disabled", async () => {
+  const v2 = installedPlugin({ version: "2.0.0", mainSource: slowSource });
+  const entry = {
+    id: "com.x.demo",
+    name: "Demo",
+    version: "2.0.0",
+    apiVersion: `^${PLUGIN_API_VERSION}`,
+    packageUrl: "https://example.test/plugin.zip",
+    // SHA-256 of the one-byte package the fetch stub serves.
+    sha256: "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) =>
+      Promise.resolve(
+        url === entry.packageUrl
+          ? { ok: true, arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer) }
+          : { ok: true, json: () => Promise.resolve({ plugins: [entry] }) },
+      ),
+    ),
+  );
+  vi.mocked(invoke).mockImplementation((cmd) => {
+    if (cmd === "list_plugins") return Promise.resolve([installedPlugin()]);
+    if (cmd === "install_plugin_package") return Promise.resolve(v2);
+    return Promise.resolve(undefined);
+  });
+
+  function UpdateProbe() {
+    const p = usePluginsOptional();
+    if (!p) return null;
+    return (
+      <div>
+        <span data-testid="versions">{p.installed.map((x) => x.version).join(",")}</span>
+        <span data-testid="disabled">{p.disabled.join(",")}</span>
+        <button type="button" onClick={() => void p.installFromRegistry(p.updates[0].entry)}>
+          update
+        </button>
+        <button type="button" onClick={() => void p.setEnabled("com.x.demo", false)}>
+          off
+        </button>
+      </div>
+    );
+  }
+
+  render(
+    <PluginsProvider>
+      <UpdateProbe />
+      <Probe />
+    </PluginsProvider>,
+  );
+  await waitFor(() => expect(screen.getByRole("button", { name: "update" })).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
+  const settingsLoadsBefore = vi.mocked(loadPluginSettings).mock.calls.length;
+
+  await act(async () => {
+    screen.getByRole("button", { name: "update" }).click();
+  });
+  await waitFor(() =>
+    expect(vi.mocked(loadPluginSettings).mock.calls.length).toBeGreaterThan(settingsLoadsBefore),
+  );
+  await act(async () => {
+    screen.getByRole("button", { name: "off" }).click();
+  });
+  await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+
+  expect(screen.getByTestId("versions").textContent).toBe("2.0.0");
+  expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo");
+  expect(screen.getByTestId("loaded").textContent).toBe("");
+});
