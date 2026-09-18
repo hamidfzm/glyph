@@ -105,6 +105,14 @@ describe("useCorePlugins", () => {
     expect(host.listLoaded()).toEqual([]);
   });
 
+  it("reports a non-Error load failure by its text", async () => {
+    expectConsole(/Failed to load core plugin glyph\.core\.d2/);
+    load.mockRejectedValueOnce("offline");
+    const { result, pushToast } = renderCore(settingsValue(true));
+    await waitFor(() => expect(result.current).toBe(true));
+    expect(pushToast).toHaveBeenCalledWith("Plugin error: offline", "error");
+  });
+
   it("reports a core plugin that fails to load and still settles", async () => {
     expectConsole(/Failed to load core plugin glyph\.core\.d2/);
     load.mockRejectedValueOnce(new Error("chunk failed"));

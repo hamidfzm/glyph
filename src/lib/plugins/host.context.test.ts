@@ -70,14 +70,14 @@ describe("createPluginHost plugin context", () => {
     let translated = "";
     const module: PluginModule = {
       activate(ctx) {
-        i18n.addResourceBundle("en", "com.x.demo", { hello: "Hello {{name}}" });
-        translated = ctx.i18n.t("com.x.demo:hello", { name: "Ada" });
+        i18n.addResourceBundle("en", "com.x.demo", { hello: "Hello {{name}}", plain: "bye" });
+        translated = `${ctx.i18n.t("com.x.demo:hello", { name: "Ada" })} ${ctx.i18n.t("com.x.demo:plain")}`;
         ctx.i18n.onLanguageChange(listener);
       },
     };
 
     await host.load(installed(), importerFor(module));
-    expect(translated).toBe("Hello Ada");
+    expect(translated).toBe("Hello Ada bye");
 
     const language = i18n.language;
     await i18n.changeLanguage("de");

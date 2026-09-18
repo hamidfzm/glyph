@@ -37,11 +37,11 @@ export async function swapDiagramsLight(doc: Document): Promise<() => void> {
   // Plugin blocks are React-owned, so the light render goes in beside the live
   // one (hidden, not replaced) and comes back out on restore.
   for (const block of Array.from(doc.querySelectorAll<HTMLElement>("[data-fenced-language]"))) {
-    const renderStatic = staticRendererFor(block.dataset.fencedLanguage ?? "");
-    const source = block.dataset.fencedSource;
-    if (!renderStatic || source === undefined) continue;
+    // The selector guarantees the attribute.
+    const renderStatic = staticRendererFor(block.dataset.fencedLanguage as string);
+    if (!renderStatic) continue;
     try {
-      const markup = await renderStatic(source);
+      const markup = await renderStatic(block.dataset.fencedSource ?? "");
       const { default: DOMPurify } = await import("dompurify");
       const light = doc.createElement("div");
       light.innerHTML = DOMPurify.sanitize(markup, { FORBID_TAGS: ["foreignObject"] });
