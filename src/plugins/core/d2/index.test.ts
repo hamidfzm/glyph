@@ -11,6 +11,7 @@ function fakeContext() {
     ui: { addStyles: vi.fn() },
     markdown: { registerFencedRenderer: vi.fn() },
     documents: { registerFileType: vi.fn() },
+    i18n: { t: vi.fn(), onLanguageChange: vi.fn() },
   };
 }
 
@@ -28,14 +29,17 @@ describe("D2 core plugin", () => {
     expect(
       ctx.registerTranslations.mock.calls.map(([locale, namespace]) => [locale, namespace]),
     ).toEqual([
-      ["en", "d2"],
-      ["de", "d2"],
-      ["es", "d2"],
-      ["fa", "d2"],
-      ["zh", "d2"],
+      ["en", "glyph.core.d2"],
+      ["de", "glyph.core.d2"],
+      ["es", "glyph.core.d2"],
+      ["fa", "glyph.core.d2"],
+      ["zh", "glyph.core.d2"],
     ]);
-    const [language, , options] = ctx.markdown.registerFencedRenderer.mock.calls[0];
+    const [language, renderer, options] = ctx.markdown.registerFencedRenderer.mock.calls[0];
     expect(language).toBe("d2");
+    // A framework-free mount, not a React component: community plugins cannot
+    // reach the app's React, so the core plugin does not either.
+    expect(typeof renderer.mount).toBe("function");
 
     // Print and PDF are on white paper, so the static render is the light theme.
     await options.renderStatic("x -> y");

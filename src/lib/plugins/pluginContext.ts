@@ -1,3 +1,4 @@
+import { i18n } from "@/lib/i18n";
 import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_VERSION } from "./apiVersion";
 import { createAssetsApi } from "./assetsApi";
@@ -123,6 +124,16 @@ export function buildPluginContext({
       set(key, value) {
         settings[key] = value;
         settingsBackend.save(plugin.id, settings);
+      },
+    },
+    i18n: {
+      t: (key, values) => i18n.t(key, values ?? {}),
+      onLanguageChange(listener) {
+        const handleLanguageChanged = () => listener();
+        i18n.on("languageChanged", handleLanguageChanged);
+        const dispose = () => i18n.off("languageChanged", handleLanguageChanged);
+        bag.add(dispose);
+        return dispose;
       },
     },
     notify,

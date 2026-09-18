@@ -15,11 +15,27 @@ export type PluginPermission = "workspace:read" | "workspace:write" | `network:$
  */
 export type MarkdownPlugin = NonNullable<Options["remarkPlugins"]>[number];
 
-/** What a fenced renderer component receives. */
+/** What a fenced renderer receives. */
 export interface FencedRendererProps {
   code: string;
-  /** Open an image zoomable over the document. Absent where zoom is unavailable (export, print). */
+  /**
+   * Open an image zoomable over the document. Absent where the host offers no
+   * zoom; exports strip the interactive attributes a render adds for it.
+   */
   openLightbox?: (src: string, label: string) => void;
+}
+
+/**
+ * A framework-agnostic fenced renderer: draws into `el` the way the panel
+ * mounts do, with no dependency on the app's React. Mounted again (after the
+ * previous cleanups run) whenever the block's props change.
+ */
+export interface FencedRendererMount {
+  mount(
+    el: HTMLElement,
+    props: FencedRendererProps,
+    registerCleanup: (cleanup: Disposer) => void,
+  ): void;
 }
 
 export interface FencedRendererOptions {
@@ -31,10 +47,10 @@ export interface FencedRendererOptions {
   renderStatic?: (code: string) => Promise<string>;
 }
 
-/** Renders a fenced code block of `language` (e.g. ```d2) as a React component. */
+/** Renders a fenced code block of `language` (e.g. ```d2). */
 export interface FencedRendererContribution {
   language: string;
-  render: ComponentType<FencedRendererProps>;
+  render: ComponentType<FencedRendererProps> | FencedRendererMount;
 }
 
 /**
@@ -73,8 +89,8 @@ export interface PluginManifest {
    * Run in a dedicated worker instead of the app context. Sandboxed plugins
    * get no DOM and network fenced to their `network:` permissions, but only
    * the non-UI API subset: commands, styles, exporters, file types, workspace,
-   * assets, spellcheck, settings, notify, and translations. No markdown
-   * pipeline or panel mounts.
+   * assets, spellcheck, settings, notify, and registering translations. No
+   * markdown pipeline, panel mounts, or reading translations.
    *
    * Absent defaults to `true`: isolation is the default, and only an explicit
    * `false` opts into full trust, which needs a distinct user grant.
@@ -256,14 +272,23 @@ export interface MarkdownRegistryApi {
   /** Add a rehype plugin (runs after the built-in rehype plugins, incl. sanitize). */
   registerRehypePlugin(plugin: MarkdownPlugin): Disposer;
   /**
-   * Render fenced ```<language> blocks with a React component. While a render
-   * is still pending, mark its element `aria-busy="true"` so exports wait.
+   * Render fenced ```<language> blocks, with a {@link FencedRendererMount} or
+   * a React component. While a render is still pending, mark its element
+   * `aria-busy="true"` so exports wait.
    */
   registerFencedRenderer(
     language: string,
-    render: ComponentType<FencedRendererProps>,
+    render: ComponentType<FencedRendererProps> | FencedRendererMount,
     options?: FencedRendererOptions,
   ): Disposer;
+}
+
+/** Read the translations a plugin registered. Not available to sandboxed plugins. */
+export interface I18nApi {
+  /** Translate `namespace:key` in the app's current language, with i18next `{{name}}` values. */
+  t(key: string, values?: Record<string, unknown>): string;
+  /** Run `listener` after the app switches language, to refresh strings already on screen. */
+  onLanguageChange(listener: () => void): Disposer;
 }
 
 export interface DocumentsRegistryApi {
@@ -310,6 +335,7 @@ export interface GlyphPluginContext {
   readonly exporters: ExportersRegistryApi;
   readonly spellcheck: SpellcheckRegistryApi;
   readonly settings: PluginSettingsApi;
+  readonly i18n: I18nApi;
   notify(message: string): void;
   /**
    * Register (or extend) translations for a locale + namespace. A plugin ships

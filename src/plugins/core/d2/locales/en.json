@@ -1,6 +1,4 @@
 {
-  "empty": "Empty diagram source",
-  "errorLabel": "Diagram error",
   "errorTitle": "Failed to render diagram",
   "label": "D2 diagram",
   "zoomHint": "Click to zoom"

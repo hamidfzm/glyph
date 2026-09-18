@@ -44,6 +44,26 @@ describe("CodeBlockComponent", () => {
     expect(screen.getByTestId("plantuml").textContent).toBe("A -> B");
   });
 
+  it("mounts a framework-free plugin renderer", () => {
+    const fencedRenderers = createRegistry<FencedRendererContribution>();
+    fencedRenderers.register({
+      language: "plantuml",
+      render: {
+        mount: (el, { code }) => {
+          el.textContent = `mounted ${code}`;
+        },
+      },
+    });
+    render(
+      <PluginsContext.Provider value={{ fencedRenderers } as unknown as PluginsContextValue}>
+        <CodeBlockComponent>
+          <code className="language-plantuml">A</code>
+        </CodeBlockComponent>
+      </PluginsContext.Provider>,
+    );
+    expect(screen.getByText("mounted A")).toBeInTheDocument();
+  });
+
   it("stamps a plugin block for export and hands it the lightbox only where one is in scope", () => {
     const fencedRenderers = createRegistry<FencedRendererContribution>();
     fencedRenderers.register({

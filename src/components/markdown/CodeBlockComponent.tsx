@@ -1,7 +1,9 @@
 import { type ComponentPropsWithoutRef, isValidElement, type ReactNode } from "react";
+import { FencedMountSlot } from "@/components/plugins/FencedMountSlot";
 import { useLightbox } from "@/contexts/LightboxContext";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
+import { isFencedRendererMount } from "@/lib/plugins/fencedRenderers";
 import { CopyButton } from "./CopyButton";
 import { CsvTable } from "./CsvTable";
 import { MermaidDiagram } from "./MermaidDiagram";
@@ -45,13 +47,22 @@ export function CodeBlockComponent(props: ComponentPropsWithoutRef<"pre">) {
     const lang = /\blanguage-([\w-]+)\b/.exec(className)?.[1];
     const custom = lang && fencedRenderers.find((r) => r.language === lang);
     if (custom) {
-      const Render = custom.render;
       const code = extractText(children.props.children).trim();
+      const openLightbox = lightbox?.openSrc;
+      let rendered: ReactNode;
+      if (isFencedRendererMount(custom.render)) {
+        rendered = (
+          <FencedMountSlot renderer={custom.render} code={code} openLightbox={openLightbox} />
+        );
+      } else {
+        const Render = custom.render;
+        rendered = <Render code={code} openLightbox={openLightbox} />;
+      }
       // Print and PDF export find the block by these to re-render it through
       // the plugin's renderStatic.
       return (
         <div data-fenced-language={custom.language} data-fenced-source={code}>
-          <Render code={code} openLightbox={lightbox?.openSrc} />
+          {rendered}
         </div>
       );
     }

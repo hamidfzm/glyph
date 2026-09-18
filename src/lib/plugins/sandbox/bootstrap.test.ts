@@ -394,6 +394,16 @@ describe("worker bootstrap", () => {
   // The regression: these three were simply absent from the worker's ctx.ui,
   // so a sandboxed plugin calling one died with "ctx.ui.addStatusBarItem is
   // not a function" and nothing said the sandbox was the reason.
+  it.each(["t", "onLanguageChange"])("refuses i18n.%s by name", async (method) => {
+    const w = bootWorker();
+    await w.send(init(`export default { activate(ctx) { ctx.i18n.${method}("k"); } }`));
+
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("error"));
+    const error = w.posted.find((m) => m.type === "error") as { message: string };
+    expect(error.message).toContain(`ctx.i18n.${method}`);
+    expect(error.message).toContain("sandboxed plugins");
+  });
+
   it.each(["addStatusBarItem", "addSidebarPanel", "addSettingsPanel"])(
     "refuses ui.%s by name instead of being undefined",
     async (method) => {
