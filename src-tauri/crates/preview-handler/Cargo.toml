@@ -1,0 +1,31 @@
+[package]
+name = "glyph-preview-handler"
+version = "0.0.0"
+description = "Windows Explorer preview handler for markdown files"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"
+
+# The versions wry already locks, so the handler adds no second copy of either.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows-core = "0.61"
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Ole",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_PropertiesSystem",
+    "Win32_UI_WindowsAndMessaging",
+] }

@@ -303,5 +303,10 @@
     "enable": "Enable",
     "noThanks": "No thanks",
     "dismiss": "Dismiss crash-reporting prompt"
+  },
+  "preview": {
+    "tooLarge": "This file is too large to preview ({{size}}). Open it in Glyph to read it.",
+    "unreadable": "This file can't be previewed. It may have moved, or it isn't UTF-8 text.",
+    "failed": "Something went wrong while rendering this preview. Open the file in Glyph to read it."
   }
 }
