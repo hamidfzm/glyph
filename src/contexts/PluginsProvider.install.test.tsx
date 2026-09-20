@@ -525,7 +525,18 @@ it("an update that a disable overtook shows the new version, still disabled", as
     ),
   );
   vi.mocked(invoke).mockImplementation((cmd) => {
-    if (cmd === "list_plugins") return Promise.resolve([installedPlugin()]);
+    // A second installed plugin, so the recovery must touch only the one it
+    // was handed. com.x.broken is pre-granted by the harness.
+    if (cmd === "list_plugins") {
+      return Promise.resolve([
+        installedPlugin(),
+        installedPlugin({
+          id: "com.x.broken",
+          name: "Other",
+          mainSource: "export default { activate() {} };",
+        }),
+      ]);
+    }
     if (cmd === "install_plugin_package") return Promise.resolve(v2);
     return Promise.resolve(undefined);
   });
@@ -573,7 +584,7 @@ it("an update that a disable overtook shows the new version, still disabled", as
 
   // The load lost the race, so it must not re-enable the plugin, and must not
   // leave the old version on screen either: it is gone from disk.
-  expect(screen.getByTestId("versions").textContent).toBe("2.0.0");
+  expect(screen.getByTestId("versions").textContent).toBe("2.0.0,1.0.0");
   expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo");
-  expect(screen.getByTestId("loaded").textContent).toBe("");
+  expect(screen.getByTestId("loaded").textContent).not.toContain("com.x.demo");
 });
