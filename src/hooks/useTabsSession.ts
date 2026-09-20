@@ -139,8 +139,11 @@ export function useTabsSession({
           (options.openTabs.length > 0 || (options.reopenLastFile && options.recentFiles[0]));
         if (willRestore && !pluginsReadyRef.current) {
           await new Promise<void>((resolve) => {
-            pluginsReadyWaiters.current.push(resolve);
-            window.setTimeout(resolve, RESTORE_PLUGIN_WAIT_MS);
+            const timer = window.setTimeout(resolve, RESTORE_PLUGIN_WAIT_MS);
+            pluginsReadyWaiters.current.push(() => {
+              window.clearTimeout(timer);
+              resolve();
+            });
           });
         }
         // Something the user opened while plugins loaded wins over the older

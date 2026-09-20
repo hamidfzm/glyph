@@ -48,5 +48,15 @@ export function useCorePlugins(
     };
   }, [host, loaded, enabled, pushToast]);
 
+  // Unmount (a closing window, mostly): take the core plugins back down. An
+  // import still in flight is superseded by the unload, so a chunk that lands
+  // after the app is gone cannot register file types nobody owns any more.
+  useEffect(
+    () => () => {
+      for (const core of CORE_PLUGINS) host.unload(core.id);
+    },
+    [host],
+  );
+
   return ready;
 }

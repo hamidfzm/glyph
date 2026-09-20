@@ -63,6 +63,28 @@ describe("useCorePlugins", () => {
     expect(commandIds()).toEqual(["d2.cmd"]);
   });
 
+  it("takes down a core plugin whose import lands after unmount", async () => {
+    // Closing the window mid-startup: the 8 MB chunk resolves into a host
+    // nobody holds any more, and its file types would stay registered.
+    let landImport = (_module: { default: PluginModule }) => {};
+    load.mockReturnValue(
+      new Promise<{ default: PluginModule }>((resolve) => {
+        landImport = resolve;
+      }),
+    );
+    const { host, unmount, commandIds } = renderCore(settingsValue(true));
+    await act(() => Promise.resolve());
+    expect(load).toHaveBeenCalled();
+
+    unmount();
+    await act(async () => {
+      landImport({ default: d2Module });
+      await Promise.resolve();
+    });
+    expect(host.listLoaded()).toEqual([]);
+    expect(commandIds()).toEqual([]);
+  });
+
   it("never imports a disabled core plugin", async () => {
     const { result, commandIds } = renderCore(settingsValue(false));
     await waitFor(() => expect(result.current).toBe(true));
