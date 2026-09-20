@@ -117,6 +117,23 @@ describe("swapDiagramsLight", () => {
     expect(document.body.innerHTML).toContain('data-dark="1"');
   });
 
+  it("sanitizes a plugin's static render before it re-enters the DOM", async () => {
+    // Third-party markup, straight into the live document ahead of printing.
+    const dispose = staticRenderers.register({
+      language: "puml",
+      renderStatic: async () => '<svg onload="alert(1)"></svg>',
+    });
+    try {
+      setBody('<div data-fenced-language="puml" data-fenced-source="a"><div>dark</div></div>');
+      await swapDiagramsLight(document);
+      expect(sanitizeMock).toHaveBeenCalledTimes(1);
+      expect(sanitizeMock.mock.calls[0][0]).toContain("onload");
+      expect(sanitizeMock.mock.calls[0][1]).toEqual({ FORBID_TAGS: ["foreignObject"] });
+    } finally {
+      dispose();
+    }
+  });
+
   it("sanitizes the re-rendered SVG before it re-enters the DOM", async () => {
     setBody('<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg/></div>');
     await swapDiagramsLight(document);

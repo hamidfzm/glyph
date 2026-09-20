@@ -489,8 +489,22 @@ describe("PluginsProvider installs overtaken by an uninstall", () => {
   );
 });
 
+// Activation blocks on a gate the test opens, so the disable lands while the
+// update's load is still in flight, every run.
+const gatedSource = `export default {
+  async activate() {
+    await globalThis.__glyphActivateGate;
+  },
+};`;
+
 it("an update that a disable overtook shows the new version, still disabled", async () => {
-  const v2 = installedPlugin({ version: "2.0.0", mainSource: slowSource });
+  let openGate = () => {};
+  (globalThis as { __glyphActivateGate?: Promise<void> }).__glyphActivateGate = new Promise<void>(
+    (resolve) => {
+      openGate = resolve;
+    },
+  );
+  const v2 = installedPlugin({ version: "2.0.0", mainSource: gatedSource });
   const entry = {
     id: "com.x.demo",
     name: "Demo",
@@ -552,8 +566,13 @@ it("an update that a disable overtook shows the new version, still disabled", as
   await act(async () => {
     screen.getByRole("button", { name: "off" }).click();
   });
-  await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+  await act(async () => {
+    openGate();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 
+  // The load lost the race, so it must not re-enable the plugin, and must not
+  // leave the old version on screen either: it is gone from disk.
   expect(screen.getByTestId("versions").textContent).toBe("2.0.0");
   expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo");
   expect(screen.getByTestId("loaded").textContent).toBe("");
