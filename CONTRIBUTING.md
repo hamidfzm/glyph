@@ -76,7 +76,7 @@ sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl \
 2. `pnpm typecheck`
 3. `pnpm test --run`
 4. `cargo test --lib` (in `src-tauri/`)
-5. `cargo clippy --all-targets -- -D warnings` (in `src-tauri/`)
+5. `cargo clippy --workspace --all-targets -- -D warnings` (in `src-tauri/`)
 
 Budget roughly 1–2 minutes on a clean working tree. The fast lint-staged step gates the slow tests so a formatter miss fails in seconds.
 

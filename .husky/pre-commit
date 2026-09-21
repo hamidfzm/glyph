@@ -8,8 +8,8 @@
 #      `cargo fmt --check` once if any Rust file is staged.
 #   2. pnpm typecheck (tsc --noEmit)
 #   3. pnpm test --run (full vitest suite)
-#   4. cargo test --lib (Rust unit tests)
-#   5. cargo clippy --all-targets -- -D warnings
+#   4. cargo test --workspace --lib (Rust unit tests)
+#   5. cargo clippy --workspace --all-targets -- -D warnings
 #
 # To bypass in a genuine emergency: `git commit --no-verify`. Don't make
 # a habit of it — CI runs the same gate and will reject the PR.
@@ -29,9 +29,9 @@ echo "→ pnpm test --run"
 pnpm test --run
 
 # 4. Rust unit tests.
-echo "→ cargo test --lib (src-tauri)"
-(cd src-tauri && cargo test --lib)
+echo "→ cargo test --workspace --lib (src-tauri)"
+(cd src-tauri && cargo test --workspace --lib)
 
 # 5. Clippy with warnings denied.
-echo "→ cargo clippy --all-targets -- -D warnings (src-tauri)"
-(cd src-tauri && cargo clippy --all-targets -- -D warnings)
+echo "→ cargo clippy --workspace --all-targets -- -D warnings (src-tauri)"
+(cd src-tauri && cargo clippy --workspace --all-targets -- -D warnings)
