@@ -31,14 +31,13 @@ enum Contents {
 fn read_capped(path: &Path, cap: u64) -> std::io::Result<Contents> {
     let file = File::open(path)?;
     let size = file.metadata()?.len();
-    if size > cap {
-        return Ok(Contents::TooLarge(size));
-    }
-    // The file can grow between the size check and the read.
+    // One byte past the cap is what decides, so a file that grew since the
+    // stat is still caught; the stat only supplies the size for the notice.
     let mut bytes = Vec::new();
     file.take(cap + 1).read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > cap {
-        return Ok(Contents::TooLarge(bytes.len() as u64));
+    let read = bytes.len() as u64;
+    if read > cap {
+        return Ok(Contents::TooLarge(size.max(read)));
     }
     let text = String::from_utf8(bytes)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;

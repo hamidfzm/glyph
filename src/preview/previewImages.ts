@@ -5,8 +5,12 @@ interface HastNode {
   type: string;
   tagName?: string;
   value?: string;
-  properties?: Record<string, unknown>;
   children?: HastNode[];
+}
+
+// Every element hast produces carries `properties`, empty object included.
+interface HastElement extends HastNode {
+  properties: Record<string, unknown>;
 }
 
 type VisitTree = Parameters<typeof visit>[0];
@@ -20,9 +24,10 @@ export function rehypePreviewImages(baseUrl: string) {
     visit(
       tree as unknown as VisitTree,
       "element",
-      (node: HastNode, index: number | undefined, parent: HastNode | undefined) => {
+      (node: HastElement, index: number | undefined, parent: HastNode | undefined) => {
         if (node.tagName !== "img" || !parent?.children || index === undefined) return;
-        const props = node.properties ?? {};
+        const props = node.properties;
+        // Raw `<img>` in the document can reach here with neither attribute.
         const src = typeof props.src === "string" ? props.src : "";
         if (isInFolder(src)) {
           props.src = new URL(src, baseUrl).href;
