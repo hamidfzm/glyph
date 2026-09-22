@@ -33,5 +33,20 @@ const targetDir = process.env.CARGO_TARGET_DIR
   ? path.resolve(root, process.env.CARGO_TARGET_DIR)
   : path.join(root, "src-tauri", "target");
 const dll = "glyph_preview_handler.dll";
-copyFileSync(path.join(targetDir, "release", dll), path.join(root, "dist-preview", dll));
+const staged = path.join(root, "dist-preview", dll);
+
+try {
+  copyFileSync(path.join(targetDir, "release", dll), staged);
+} catch (error) {
+  // Explorer's preview host keeps a registered handler loaded, which locks the
+  // staged copy. It is a transient surrogate: Explorer starts a new one.
+  if (error.code !== "EBUSY" || process.platform !== "win32") throw error;
+  try {
+    execFileSync("taskkill", ["/f", "/im", "prevhost.exe"], { stdio: "ignore" });
+    copyFileSync(path.join(targetDir, "release", dll), staged);
+  } catch {
+    // An elevated preview host is out of reach; it exits on its own.
+    throw new Error(`${staged} is locked by Explorer's preview host. Close the preview pane, or wait for prevhost.exe to exit, then run this again.`);
+  }
+}
 console.log(`Staged dist-preview/${dll} and dist-preview/web`);

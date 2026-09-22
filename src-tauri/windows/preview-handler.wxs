@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Registers the Explorer preview handler that the MSI installs at
+  [INSTALLDIR]preview (see bundle.resources in tauri.windows.conf.json).
+
+  HKLM, not HKCU: the MSI installs per machine, so per-user keys would reach
+  only the installing account, and another user's uninstall would leave them
+  behind. It is also the hive COM's surrogate launcher picks up without a
+  sign-out, which a freshly written HKCU registration is not.
+
+  Keep the CLSID and the extension list in step with
+  crates/preview-handler/src/lib.rs and tauri.conf.json; a test in that crate
+  fails if they drift.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="GlyphPreviewHandlerClass" Guid="65852308-5DB6-4A1C-ACBF-43382B5E6DB7" Win64="yes">
+        <RegistryKey Root="HKLM" Key="Software\Classes\CLSID\{D0BF6AA3-FB9F-473F-BDEF-ABB364324298}" ForceDeleteOnUninstall="yes">
+          <RegistryValue Type="string" Value="Glyph Markdown Preview Handler" KeyPath="yes" />
+          <RegistryValue Name="DisplayName" Type="string" Value="Glyph Markdown Preview Handler" />
+          <!-- Explorer's own surrogate, so a crash here cannot take Explorer down. -->
+          <RegistryValue Name="AppID" Type="string" Value="{6d2b5079-2f0b-48dd-ab7f-97cec514d30b}" />
+          <!-- WebView2 fails with E_ACCESSDENIED in the low-integrity surrogate. -->
+          <RegistryValue Name="DisableLowILProcessIsolation" Type="integer" Value="1" />
+          <RegistryKey Key="InprocServer32">
+            <RegistryValue Type="string" Value="[INSTALLDIR]preview\glyph_preview_handler.dll" />
+            <RegistryValue Name="ThreadingModel" Type="string" Value="Apartment" />
+          </RegistryKey>
+        </RegistryKey>
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\PreviewHandlers" Name="{D0BF6AA3-FB9F-473F-BDEF-ABB364324298}" Type="string" Value="Glyph Markdown Preview Handler" />
+      </Component>
+
+      <!-- On the extension keys rather than Glyph's ProgIds, so the preview
+           works whichever app owns the file type. -->
+      <Component Id="GlyphPreviewHandlerExtensions" Guid="D68CCA96-EDDF-456B-8BBA-AAF20DB80F2E" Win64="yes">
+        <RegistryValue Root="HKLM" Key="Software\Classes\.md\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Type="string" Value="{D0BF6AA3-FB9F-473F-BDEF-ABB364324298}" KeyPath="yes" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.markdown\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Type="string" Value="{D0BF6AA3-FB9F-473F-BDEF-ABB364324298}" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.mdown\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Type="string" Value="{D0BF6AA3-FB9F-473F-BDEF-ABB364324298}" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.mkd\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Type="string" Value="{D0BF6AA3-FB9F-473F-BDEF-ABB364324298}" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.mkdn\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Type="string" Value="{D0BF6AA3-FB9F-473F-BDEF-ABB364324298}" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.mdx\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Type="string" Value="{D0BF6AA3-FB9F-473F-BDEF-ABB364324298}" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.mmd\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Type="string" Value="{D0BF6AA3-FB9F-473F-BDEF-ABB364324298}" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.mdtext\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Type="string" Value="{D0BF6AA3-FB9F-473F-BDEF-ABB364324298}" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.mdtxt\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Type="string" Value="{D0BF6AA3-FB9F-473F-BDEF-ABB364324298}" />
+
+        <!-- The values alone would leave the empty shellex keys behind. -->
+        <RemoveRegistryKey Root="HKLM" Key="Software\Classes\.md\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Action="removeOnUninstall" />
+        <RemoveRegistryKey Root="HKLM" Key="Software\Classes\.markdown\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Action="removeOnUninstall" />
+        <RemoveRegistryKey Root="HKLM" Key="Software\Classes\.mdown\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Action="removeOnUninstall" />
+        <RemoveRegistryKey Root="HKLM" Key="Software\Classes\.mkd\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Action="removeOnUninstall" />
+        <RemoveRegistryKey Root="HKLM" Key="Software\Classes\.mkdn\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Action="removeOnUninstall" />
+        <RemoveRegistryKey Root="HKLM" Key="Software\Classes\.mdx\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Action="removeOnUninstall" />
+        <RemoveRegistryKey Root="HKLM" Key="Software\Classes\.mmd\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Action="removeOnUninstall" />
+        <RemoveRegistryKey Root="HKLM" Key="Software\Classes\.mdtext\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Action="removeOnUninstall" />
+        <RemoveRegistryKey Root="HKLM" Key="Software\Classes\.mdtxt\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Action="removeOnUninstall" />
+      </Component>
+    </DirectoryRef>
+
+    <ComponentGroup Id="GlyphPreviewHandler">
+      <ComponentRef Id="GlyphPreviewHandlerClass" />
+      <ComponentRef Id="GlyphPreviewHandlerExtensions" />
+    </ComponentGroup>
+  </Fragment>
+</Wix>

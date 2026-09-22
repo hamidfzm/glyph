@@ -8,6 +8,12 @@
 #
 # A handler already registered for an extension (PowerToys uses HKCU too) is
 # saved on register and put back on unregister.
+#
+# Sign out and back in after registering. COM's surrogate launcher caches the
+# per-user class registrations, so a CLSID written into HKCU during the current
+# session activates in process but not in Explorer's prevhost.exe, which fails
+# with 0x80040154 and leaves the pane on "This file can't be previewed". The
+# MSI writes the same keys under HKLM, where they take effect immediately.
 param([switch]$Unregister)
 $ErrorActionPreference = 'Stop'
 
@@ -22,8 +28,9 @@ $root = Split-Path $PSScriptRoot -Parent
 $conf = Get-Content "$root\src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json
 $extensions = ($conf.bundle.fileAssociations | Where-Object mimeType -eq 'text/markdown').ext
 
-# prevhost.exe keeps the DLL loaded (and locked) between previews.
-Get-Process prevhost -ErrorAction SilentlyContinue | Stop-Process -Force
+# prevhost.exe keeps the DLL loaded (and locked) between previews. One started
+# from an elevated shell cannot be stopped from here; it exits on its own.
+Get-Process prevhost -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
 function Get-Handler($ext) {
   $key = "$classes\.$ext\shellex\$previewShellex"
@@ -74,3 +81,4 @@ foreach ($ext in $extensions) {
 if (-not (Test-Path $approved)) { New-Item $approved | Out-Null }
 Set-ItemProperty $approved -Name $clsid -Value 'Glyph Markdown Preview Handler'
 Write-Host "Registered $dll for: $($extensions -join ', ')"
+Write-Host 'Sign out and back in before testing: Explorer will not pick this up until then.' -ForegroundColor Yellow
