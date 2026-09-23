@@ -3,6 +3,8 @@
 // outline columns, and the outline scroll spy. Kept apart from the document
 // builder in html.ts, which only assembles them into a page.
 
+import { LIGHTBOX_SCRIPT } from "./site/lightboxScript";
+
 // The app's base styles lock the shell to the viewport (`html, body, #root {
 // height: 100%; overflow: hidden }`) and the markdown body is normally laid out
 // inside a separate scroll container. A standalone page has neither, so reset
@@ -58,10 +60,11 @@ export function siteChromeCss(): string {
  * Script shared by every generated site page, written once as the site's
  * site.js: the theme toggle (loaded synchronously from <head> so the dark
  * class is applied before first paint, exactly like the inline variant) plus
- * the outline scroll spy. Single-file exports inline only the theme script.
+ * the outline scroll spy and the image lightbox. Single-file exports inline
+ * only the theme script.
  */
 export function siteChromeScript(): string {
-  return `${THEME_SCRIPT}\n${OUTLINE_SPY_SCRIPT}`;
+  return `${THEME_SCRIPT}\n${OUTLINE_SPY_SCRIPT}\n${LIGHTBOX_SCRIPT}`;
 }
 
 // Site layout for the multi-page export: sticky nav tree beside the content
@@ -107,6 +110,8 @@ html { scroll-behavior: smooth; }
   .glyph-site { flex-direction: column; }
   .glyph-site-nav { position: static; flex: none; width: 100%; }
 }
+/* The lightbox covers the floating theme toggle. */
+.lightbox-overlay { z-index: 1001; }
 @media print { .glyph-site-header, .glyph-site-nav, .glyph-site-outline { display: none; } }`;
 
 /**
