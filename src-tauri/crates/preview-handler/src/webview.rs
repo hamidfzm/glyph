@@ -14,6 +14,7 @@ use webview2_com::{
     NavigationStartingEventHandler, NewWindowRequestedEventHandler,
 };
 use windows::Win32::Foundation::{COLORREF, E_POINTER, HMODULE, HWND, RECT};
+use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 use windows::Win32::System::LibraryLoader::{
     GetModuleFileNameW, GetModuleHandleExW, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
     GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -37,6 +38,7 @@ pub fn create(
     parent: HWND,
     on_created: impl FnOnce(windows_core::Result<ICoreWebView2Controller>) + 'static,
 ) -> windows_core::Result<()> {
+    enter_apartment();
     let environment_created = CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(
         move |result, environment| {
             let environment = match result.and_then(|()| environment.ok_or(E_POINTER.into())) {
@@ -64,6 +66,15 @@ pub fn create(
             &environment_created,
         )
     }
+}
+
+// Explorer calls DoPreview on a thread it has not put in an apartment, and
+// WebView2 refuses to create an environment there (CO_E_NOTINITIALIZED). The
+// apartment is left in place: WebView2 objects on this thread outlive the
+// call, and prevhost.exe exits on its own once Explorer is done with it.
+fn enter_apartment() {
+    // S_FALSE means the thread already had one, which is just as good.
+    let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
 }
 
 /// Locks the view down, then loads the preview page and hands it the document.
