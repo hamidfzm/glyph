@@ -3,11 +3,10 @@ use std::os::windows::ffi::OsStringExt;
 use std::path::PathBuf;
 
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller,
-    ICoreWebView2Controller2, ICoreWebView2EnvironmentOptions, ICoreWebView2Settings,
-    ICoreWebView2Settings3, ICoreWebView2Settings6, ICoreWebView2Settings8, ICoreWebView2_3,
-    COREWEBVIEW2_COLOR, COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY,
-    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS,
+    CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller, ICoreWebView2Controller2,
+    ICoreWebView2EnvironmentOptions, ICoreWebView2Settings, ICoreWebView2Settings3,
+    ICoreWebView2Settings6, ICoreWebView2Settings8, ICoreWebView2_3, COREWEBVIEW2_COLOR,
+    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY, COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS,
 };
 use webview2_com::{
     take_pwstr, CreateCoreWebView2ControllerCompletedHandler,
@@ -138,8 +137,17 @@ pub fn set_background(
     color: COLORREF,
 ) -> windows_core::Result<()> {
     let [r, g, b, _] = color.0.to_le_bytes();
-    let color = COREWEBVIEW2_COLOR { A: 255, R: r, G: g, B: b };
-    unsafe { controller.cast::<ICoreWebView2Controller2>()?.SetDefaultBackgroundColor(color) }
+    let color = COREWEBVIEW2_COLOR {
+        A: 255,
+        R: r,
+        G: g,
+        B: b,
+    };
+    unsafe {
+        controller
+            .cast::<ICoreWebView2Controller2>()?
+            .SetDefaultBackgroundColor(color)
+    }
 }
 
 fn lock_down(settings: &ICoreWebView2Settings) -> windows_core::Result<()> {
@@ -149,7 +157,9 @@ fn lock_down(settings: &ICoreWebView2Settings) -> windows_core::Result<()> {
         settings.SetAreDefaultScriptDialogsEnabled(false)?;
         settings.SetAreHostObjectsAllowed(false)?;
         settings.SetIsStatusBarEnabled(false)?;
-        settings.cast::<ICoreWebView2Settings3>()?.SetAreBrowserAcceleratorKeysEnabled(false)?;
+        settings
+            .cast::<ICoreWebView2Settings3>()?
+            .SetAreBrowserAcceleratorKeysEnabled(false)?;
         // Newer interfaces: an older runtime lacks them, and the navigation
         // guard and CSP hold without them.
         if let Ok(settings) = settings.cast::<ICoreWebView2Settings6>() {

@@ -41,7 +41,10 @@ fn read_capped(path: &Path, cap: u64) -> std::io::Result<Contents> {
     }
     let text = String::from_utf8(bytes)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    let text = text.strip_prefix('\u{feff}').map(str::to_owned).unwrap_or(text);
+    let text = text
+        .strip_prefix('\u{feff}')
+        .map(str::to_owned)
+        .unwrap_or(text);
     Ok(Contents::Text(text))
 }
 
@@ -64,28 +67,40 @@ mod tests {
     fn reads_utf8_text() {
         let dir = tempfile::tempdir().unwrap();
         let path = write(&dir, "# Hi ✓".as_bytes());
-        assert_eq!(read_capped(&path, 100).unwrap(), Contents::Text("# Hi ✓".into()));
+        assert_eq!(
+            read_capped(&path, 100).unwrap(),
+            Contents::Text("# Hi ✓".into())
+        );
     }
 
     #[test]
     fn strips_the_byte_order_mark() {
         let dir = tempfile::tempdir().unwrap();
         let path = write(&dir, b"\xEF\xBB\xBF# Hi");
-        assert_eq!(read_capped(&path, 100).unwrap(), Contents::Text("# Hi".into()));
+        assert_eq!(
+            read_capped(&path, 100).unwrap(),
+            Contents::Text("# Hi".into())
+        );
     }
 
     #[test]
     fn reads_an_empty_file() {
         let dir = tempfile::tempdir().unwrap();
         let path = write(&dir, b"");
-        assert_eq!(read_capped(&path, 100).unwrap(), Contents::Text(String::new()));
+        assert_eq!(
+            read_capped(&path, 100).unwrap(),
+            Contents::Text(String::new())
+        );
     }
 
     #[test]
     fn reads_a_file_exactly_at_the_cap() {
         let dir = tempfile::tempdir().unwrap();
         let path = write(&dir, &[b'a'; 10]);
-        assert_eq!(read_capped(&path, 10).unwrap(), Contents::Text("a".repeat(10)));
+        assert_eq!(
+            read_capped(&path, 10).unwrap(),
+            Contents::Text("a".repeat(10))
+        );
     }
 
     #[test]
@@ -125,7 +140,10 @@ mod tests {
     #[test]
     fn missing_or_undecodable_files_are_unreadable() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(parsed(&dir.path().join("gone.md")), json!({ "kind": "unreadable" }));
+        assert_eq!(
+            parsed(&dir.path().join("gone.md")),
+            json!({ "kind": "unreadable" })
+        );
         let path = write(&dir, b"\xFF");
         assert_eq!(parsed(&path), json!({ "kind": "unreadable" }));
     }

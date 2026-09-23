@@ -11,7 +11,9 @@ use crate::{APP_IDENTIFIER, CLSID_TEXT};
 const PREVIEW_SHELLEX: &str = "{8895b1c6-b41f-4c1c-a562-0d564250836f}";
 
 fn repo_path(relative: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..").join(relative)
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .join(relative)
 }
 
 fn read(relative: &str) -> String {
@@ -43,7 +45,10 @@ fn the_fragment_registers_the_handler_for_every_markdown_extension() {
     let fragment = read("src-tauri/windows/preview-handler.wxs");
     for ext in markdown_extensions() {
         let key = format!("Software\\Classes\\.{ext}\\shellex\\{PREVIEW_SHELLEX}");
-        assert!(fragment.contains(&key), "{ext} is not registered in the WiX fragment");
+        assert!(
+            fragment.contains(&key),
+            "{ext} is not registered in the WiX fragment"
+        );
         assert!(
             fragment.contains(&format!(r#"<RemoveRegistryKey Root="HKLM" Key="{key}""#)),
             "{ext} would leave its shellex key behind on uninstall"
@@ -55,7 +60,10 @@ fn the_fragment_registers_the_handler_for_every_markdown_extension() {
 fn the_fragment_registers_no_extension_glyph_does_not_associate() {
     let fragment = read("src-tauri/windows/preview-handler.wxs");
     let extensions = markdown_extensions();
-    for line in fragment.lines().filter(|line| line.contains("Software\\Classes\\.")) {
+    for line in fragment
+        .lines()
+        .filter(|line| line.contains("Software\\Classes\\."))
+    {
         let registered = line
             .split("Software\\Classes\\.")
             .nth(1)
@@ -72,7 +80,10 @@ fn the_fragment_registers_no_extension_glyph_does_not_associate() {
 fn the_fragment_registers_this_crate_clsid() {
     let fragment = read("src-tauri/windows/preview-handler.wxs");
     let clsid = format!("{{{CLSID_TEXT}}}");
-    assert!(fragment.contains(&clsid), "the WiX fragment registers a different CLSID");
+    assert!(
+        fragment.contains(&clsid),
+        "the WiX fragment registers a different CLSID"
+    );
     assert!(
         fragment.contains(r#"Key="Software\Classes\CLSID\"#),
         "the CLSID must be registered under HKLM classes"

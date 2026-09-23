@@ -12,7 +12,9 @@ use windows::Win32::Foundation::{
     S_FALSE,
 };
 use windows::Win32::Graphics::Gdi::LOGFONTW;
-use windows::Win32::System::Ole::{IObjectWithSite, IObjectWithSite_Impl, IOleWindow, IOleWindow_Impl};
+use windows::Win32::System::Ole::{
+    IObjectWithSite, IObjectWithSite_Impl, IOleWindow, IOleWindow_Impl,
+};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetFocus;
 use windows::Win32::UI::Shell::PropertiesSystem::{IInitializeWithFile, IInitializeWithFile_Impl};
 use windows::Win32::UI::Shell::{

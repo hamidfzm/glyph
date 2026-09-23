@@ -25,12 +25,12 @@ mod host {
 
     use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
     use windows::Win32::System::Com::{
-        CoCreateInstance, CoInitializeEx, IClassFactory, CLSCTX_INPROC_SERVER,
-        CLSCTX_LOCAL_SERVER, COINIT_APARTMENTTHREADED,
+        CoCreateInstance, CoInitializeEx, IClassFactory, CLSCTX_INPROC_SERVER, CLSCTX_LOCAL_SERVER,
+        COINIT_APARTMENTTHREADED,
     };
     use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
-    use windows::Win32::UI::Shell::PropertiesSystem::IInitializeWithFile;
     use windows::Win32::UI::Shell::IPreviewHandler;
+    use windows::Win32::UI::Shell::PropertiesSystem::IInitializeWithFile;
     use windows::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW,
         PostQuitMessage, RegisterClassW, TranslateMessage, CW_USEDEFAULT, MSG, WINDOW_EX_STYLE,
@@ -43,7 +43,12 @@ mod host {
     type GetClassObject =
         unsafe extern "system" fn(*const GUID, *const GUID, *mut *mut c_void) -> HRESULT;
 
-    extern "system" fn window_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    extern "system" fn window_proc(
+        hwnd: HWND,
+        msg: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
         if msg == WM_DESTROY {
             unsafe { PostQuitMessage(0) };
             return LRESULT(0);
@@ -57,8 +62,10 @@ mod host {
         let inproc = args.iter().any(|arg| arg == "--inproc");
         let clsid = match args.iter().position(|arg| arg == "--clsid") {
             Some(at) => {
-                let digits: String =
-                    args[at + 1].chars().filter(|c| c.is_ascii_hexdigit()).collect();
+                let digits: String = args[at + 1]
+                    .chars()
+                    .filter(|c| c.is_ascii_hexdigit())
+                    .collect();
                 GUID::from_u128(u128::from_str_radix(&digits, 16).expect("a CLSID"))
             }
             None => CLSID,
@@ -75,7 +82,11 @@ mod host {
         unsafe {
             CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok()?;
             let handler: IPreviewHandler = if surrogate || inproc {
-                let context = if inproc { CLSCTX_INPROC_SERVER } else { CLSCTX_LOCAL_SERVER };
+                let context = if inproc {
+                    CLSCTX_INPROC_SERVER
+                } else {
+                    CLSCTX_LOCAL_SERVER
+                };
                 println!("activating {clsid:?} with {context:?}");
                 CoCreateInstance(&clsid, None, context)
                     .inspect_err(|error| println!("CoCreateInstance failed: {error}"))?
@@ -84,8 +95,12 @@ mod host {
                 let get_class_object: GetClassObject =
                     std::mem::transmute(GetProcAddress(module, s!("DllGetClassObject")).unwrap());
                 let mut factory: Option<IClassFactory> = None;
-                get_class_object(&CLSID, &IClassFactory::IID, &mut factory as *mut _ as *mut _)
-                    .ok()?;
+                get_class_object(
+                    &CLSID,
+                    &IClassFactory::IID,
+                    &mut factory as *mut _ as *mut _,
+                )
+                .ok()?;
                 factory.unwrap().CreateInstance(None)?
             };
 

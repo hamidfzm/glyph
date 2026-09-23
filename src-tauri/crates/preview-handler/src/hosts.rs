@@ -30,7 +30,9 @@ mod tests {
     #[test]
     fn allows_the_preview_page_and_its_anchors() {
         assert!(is_preview_url(ENTRY_URL));
-        assert!(is_preview_url("https://glyph-preview.example/index.html#install"));
+        assert!(is_preview_url(
+            "https://glyph-preview.example/index.html#install"
+        ));
     }
 
     #[test]

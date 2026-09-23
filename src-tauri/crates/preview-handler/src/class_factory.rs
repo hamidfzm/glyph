@@ -2,7 +2,7 @@ use std::ffi::c_void;
 
 use windows::Win32::Foundation::{CLASS_E_NOAGGREGATION, E_POINTER};
 use windows::Win32::System::Com::{IClassFactory, IClassFactory_Impl};
-use windows_core::{implement, Interface, IUnknown, Ref, BOOL, GUID};
+use windows_core::{implement, IUnknown, Interface, Ref, BOOL, GUID};
 
 use crate::handler::PreviewHandler;
 

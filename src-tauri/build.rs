@@ -7,7 +7,29 @@ fn main() {
     emit_identifier();
     emit_sentry_dsn();
     embed_comctl32_v6_in_test_binaries();
+    ensure_preview_handler_staging();
     tauri_build::build();
+}
+
+/// `tauri.windows.conf.json` installs `dist-preview/` (the Explorer preview
+/// handler and its page) as a bundle resource, and Tauri refuses to build when
+/// a declared resource path is missing. `pnpm build:preview-handler` fills it,
+/// but a plain `cargo test` or `cargo clippy` never runs that, so the directory
+/// is created empty here. An installer really built without it would register a
+/// handler pointing at a missing DLL, which `scripts/preview-handler-smoke.ps1`
+/// fails on in CI.
+fn ensure_preview_handler_staging() {
+    // The target, not the host: a build script is always compiled for the host.
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+        return;
+    }
+    let staging = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dist-preview");
+    if let Err(error) = fs::create_dir_all(&staging) {
+        println!(
+            "cargo:warning=could not create {}: {error}",
+            staging.display()
+        );
+    }
 }
 
 /// The bundle identifier from `tauri.conf.json`, as `GLYPH_IDENTIFIER`, for
