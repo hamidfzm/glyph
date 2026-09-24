@@ -14,7 +14,7 @@ export interface HtmlDocOptions {
   // collected app CSS inline in every page. The page then emits no <style> at
   // all (`css` is ignored); the shared sheet must include siteChromeCss().
   stylesheetHref?: string;
-  // Multi-page site export: link the shared theme script (siteChromeScript(),
+  // Multi-page site export: link the shared site script (siteChromeScript(),
   // written once as site.js) instead of inlining it into every page.
   scriptHref?: string;
   // Multi-page site export: navigation tree markup placed beside the content.
