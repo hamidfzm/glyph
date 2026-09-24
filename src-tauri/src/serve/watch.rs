@@ -4,7 +4,7 @@
 //! and workspaces: this one watches a folder nobody has open, and its answer
 //! is not "refresh a view" but "render the whole site again".
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
@@ -72,11 +72,27 @@ pub fn watch<R: Runtime>(app: AppHandle<R>, root: &Path) -> notify::Result<Recom
     let mut watcher = notify::recommended_watcher(move |result| {
         let _ = sender.send(result);
     })?;
-    watcher.watch(root, RecursiveMode::Recursive)?;
-
-    let root = root.to_path_buf();
-    std::thread::spawn(move || debounce_loop(&app, &receiver, &root));
+    let root = start_rebuilds(app, receiver, root).map_err(notify::Error::io)?;
+    watcher.watch(&root, RecursiveMode::Recursive)?;
     Ok(watcher)
+}
+
+/// Resolve `root`, start rebuilding on the changes `receiver` delivers, and
+/// return the resolved root, which is the one to watch.
+///
+/// FSEvents reports resolved paths (`/private/var/...` for `/var/...`), and
+/// [`is_relevant_change`] needs events spelled like the root it is given.
+/// Watching and judging the same resolved root keeps every backend's
+/// spelling in step with it.
+fn start_rebuilds<R: Runtime>(
+    app: AppHandle<R>,
+    receiver: Receiver<Result<Event, notify::Error>>,
+    root: &Path,
+) -> std::io::Result<PathBuf> {
+    let root = std::fs::canonicalize(root)?;
+    let judged = root.clone();
+    std::thread::spawn(move || debounce_loop(&app, &receiver, &judged));
+    Ok(root)
 }
 
 /// Block on changes, collapse each burst into one rebuild, and tell the
@@ -111,7 +127,6 @@ fn drain_burst(receiver: &Receiver<Result<Event, notify::Error>>) {
 mod tests {
     use super::*;
     use notify::event::{CreateKind, ModifyKind, RemoveKind};
-    use std::path::PathBuf;
 
     fn event(kind: EventKind, paths: &[&str]) -> Event {
         Event {
@@ -268,6 +283,53 @@ mod tests {
             seen,
             "writes under .git must not rebuild the site"
         );
+    }
+
+    // Runs on every platform CI covers, unlike the real-edit test above, which
+    // only hits a spelling mismatch where FSEvents resolves paths (macOS).
+    #[cfg(unix)]
+    #[test]
+    fn events_spelled_through_the_resolved_root_still_rebuild() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use tauri::Listener;
+
+        // Served through a symlink, under a hidden folder: judged against the
+        // unresolved spelling, the whole path would be classified and the
+        // hidden ancestor would ignore every event.
+        let dir = tempfile::tempdir().expect("temp dir");
+        let real = dir.path().join(".hidden/real");
+        std::fs::create_dir_all(&real).unwrap();
+        let link = dir.path().join(".hidden/link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let resolved = std::fs::canonicalize(&real).unwrap();
+
+        let app = tauri::test::mock_app();
+        let rebuilds = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&rebuilds);
+        app.listen(CHANGED_EVENT, move |_| {
+            counted.fetch_add(1, Ordering::SeqCst);
+        });
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let watched = start_rebuilds(app.handle().clone(), receiver, &link).unwrap();
+        assert_eq!(watched, resolved);
+
+        // Reported the way FSEvents reports it: under the resolved path.
+        let edit = resolved.join("index.md");
+        sender
+            .send(Ok(event(
+                EventKind::Modify(ModifyKind::Any),
+                &[edit.to_str().unwrap()],
+            )))
+            .unwrap();
+        drop(sender);
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while rebuilds.load(Ordering::SeqCst) == 0 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(rebuilds.load(Ordering::SeqCst), 1);
     }
 
     #[test]

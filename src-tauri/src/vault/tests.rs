@@ -665,7 +665,7 @@ fn an_incremental_update_refuses_a_note_under_a_symlinked_directory() {
     fs::write(outside.join("secret.md"), "top secret #classified\n").unwrap();
 
     let mut vault = build(&root);
-    let linked = root.join("archive");
+    let linked = root.join("linked_archive");
     std::os::unix::fs::symlink(&outside, &linked).unwrap();
     vault.apply_changes(&[linked.join("secret.md")]);
 
