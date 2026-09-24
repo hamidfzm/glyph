@@ -3,7 +3,7 @@
 // outline columns, and the outline scroll spy. Kept apart from the document
 // builder in html.ts, which only assembles them into a page.
 
-import { LIGHTBOX_SCRIPT } from "./site/lightboxScript";
+import { type LightboxLabels, lightboxScript } from "./site/lightboxScript";
 
 // The app's base styles lock the shell to the viewport (`html, body, #root {
 // height: 100%; overflow: hidden }`) and the markdown body is normally laid out
@@ -63,8 +63,8 @@ export function siteChromeCss(): string {
  * the outline scroll spy and the image lightbox. Single-file exports inline
  * only the theme script.
  */
-export function siteChromeScript(): string {
-  return `${THEME_SCRIPT}\n${OUTLINE_SPY_SCRIPT}\n${LIGHTBOX_SCRIPT}`;
+export function siteChromeScript(lightboxLabels: LightboxLabels): string {
+  return `${THEME_SCRIPT}\n${OUTLINE_SPY_SCRIPT}\n${lightboxScript(lightboxLabels)}`;
 }
 
 // Site layout for the multi-page export: sticky nav tree beside the content
