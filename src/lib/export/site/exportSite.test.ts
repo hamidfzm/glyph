@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { restoreMermaidTheme } from "@/lib/export/rasterize";
+import { i18n } from "@/lib/i18n";
 import { pathStem } from "@/lib/paths";
 import type { MarkdownPlugin } from "@/lib/plugins/types";
 import { exportSite } from "./exportSite";
@@ -136,6 +137,19 @@ describe("exportSite", () => {
     expect(intro).not.toContain("<style>");
     expect(fs.writes.get("/out/style.css")).toContain(".glyph-site {");
     expect(fs.writes.get("/out/site.js")).toContain("glyph-export-theme");
+  });
+
+  it("writes the lightbox labels in the app's UI language", async () => {
+    const fs = mockFs({ "/ws/notes.md": "# N" });
+    await i18n.changeLanguage("de");
+    try {
+      await exportSite({ root: "/ws", outDir: "/out" });
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+    const deClose = i18n.getFixedT("de")("common:lightbox.close");
+    expect(deClose).not.toBe(i18n.t("common:lightbox.close"));
+    expect(fs.writes.get("/out/site.js")).toContain(JSON.stringify(deClose));
   });
 
   it("generates an index page when the workspace has no root README", async () => {

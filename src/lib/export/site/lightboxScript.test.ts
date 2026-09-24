@@ -1,18 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildHtmlDocument } from "@/lib/export/html";
 import { siteChromeScript } from "@/lib/export/siteChrome";
-import { LIGHTBOX_SCRIPT } from "./lightboxScript";
+import { i18n } from "@/lib/i18n";
+import { type LightboxLabels, lightboxLabels, lightboxScript } from "./lightboxScript";
+
+const LABELS = lightboxLabels(i18n.t);
 
 // Mount a site page body and run the shipped script. Its DOMContentLoaded
 // handler is captured and called directly so earlier tests' instances don't
 // also bind to this page.
-function mount(bodyHtml: string) {
+function mount(bodyHtml: string, labels: LightboxLabels = LABELS) {
   document.body.innerHTML = `<div class="markdown-body">${bodyHtml}</div>`;
   let ready: (() => void) | undefined;
   const spy = vi.spyOn(document, "addEventListener").mockImplementationOnce((_type, handler) => {
     ready = handler as () => void;
   });
-  new Function(LIGHTBOX_SCRIPT)();
+  new Function(lightboxScript(labels))();
   spy.mockRestore();
   ready?.();
 }
@@ -35,9 +38,27 @@ afterEach(() => {
 
 describe("site lightbox script", () => {
   it("ships in the shared site.js but not in single-file exports", () => {
-    expect(siteChromeScript()).toContain(LIGHTBOX_SCRIPT);
+    expect(siteChromeScript(LABELS)).toContain(lightboxScript(LABELS));
     const single = buildHtmlDocument({ bodyHtml: "<p>x</p>", title: "t", css: "", dark: false });
     expect(single).not.toContain("lightbox-overlay");
+  });
+
+  it("labels the controls with the exporter's UI strings", () => {
+    const de: LightboxLabels = {
+      ...LABELS,
+      close: "Schließen (Esc)",
+      zoomIn: "Vergrößern (+)",
+      image: "Bild: {{alt}}",
+      diagram: "Mermaid-Diagramm",
+    };
+    mount(`<img src="a.png" alt="Foto">${MERMAID}`, de);
+    expect(document.querySelector(".mermaid-diagram")?.getAttribute("aria-label")).toBe(
+      "Mermaid-Diagramm",
+    );
+    document.querySelector<HTMLImageElement>(".markdown-body img")?.click();
+    expect(overlay()?.getAttribute("aria-label")).toBe("Bild: Foto");
+    expect(document.querySelector('[aria-label="Schließen (Esc)"]')).not.toBeNull();
+    expect(document.querySelector('[title="Vergrößern (+)"]')).not.toBeNull();
   });
 
   it("does nothing on a page without images or diagrams", () => {
@@ -103,7 +124,7 @@ describe("site lightbox script", () => {
     expect(counter()).toBe("1 / 3");
     press("ArrowRight");
     expect(counter()).toBe("2 / 3");
-    expect(lightboxImg()?.alt).toBe("Diagram");
+    expect(lightboxImg()?.alt).toBe("Mermaid diagram");
     clickLabel("Next image (→)");
     expect(counter()).toBe("3 / 3");
     expect(document.querySelector<HTMLButtonElement>(".lightbox-next")?.disabled).toBe(true);
