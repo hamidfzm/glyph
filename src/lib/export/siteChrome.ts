@@ -46,6 +46,24 @@ export const THEME_TOGGLE_BUTTON = `<button id="glyph-theme-toggle" type="button
 // without an outline.
 const OUTLINE_SPY_SCRIPT = `(function(){document.addEventListener('DOMContentLoaded',function(){var outline=document.querySelector('.glyph-site-outline');if(!outline)return;var targets=[];var anchors=outline.querySelectorAll('a[href^="#"]');for(var i=0;i<anchors.length;i++){var id=decodeURIComponent(anchors[i].getAttribute('href').slice(1));var el=document.getElementById(id);if(el)targets.push({a:anchors[i],el:el})}if(!targets.length)return;var active=null;function update(){var line=window.scrollY+96;var atEnd=window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-2;var current=targets[0];for(var i=0;i<targets.length;i++){if(targets[i].el.getBoundingClientRect().top+window.scrollY<=line)current=targets[i]}if(atEnd)current=targets[targets.length-1];if(current===active)return;if(active)active.a.classList.remove('active');current.a.classList.add('active');active=current}var ticking=false;function onScroll(){if(ticking)return;ticking=true;requestAnimationFrame(function(){ticking=false;update()})}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});update()})})();`;
 
+// Remembers which nav folders the reader opened or closed, per browser tab
+// (sessionStorage, so a new tab or visit starts from the default). Folders
+// holding the current page are rendered open and stay open; every other
+// folder takes its remembered state. The snapshot is taken on pagehide, not
+// per toggle event: restoring a folder queues a toggle that a quick click can
+// coalesce away, losing the reader's choice.
+export const NAV_STATE_SCRIPT = `(function(){document.addEventListener('DOMContentLoaded',function(){
+  var nav=document.querySelector('.glyph-site-nav');if(!nav)return;
+  var KEY='glyph-site-nav',state={};
+  try{state=JSON.parse(sessionStorage.getItem(KEY)||'{}')||{}}catch(e){}
+  var folders=nav.querySelectorAll('details[data-path]');
+  folders.forEach(function(d){if(!d.open&&state[d.getAttribute('data-path')]===true)d.open=true});
+  window.addEventListener('pagehide',function(){
+    folders.forEach(function(d){state[d.getAttribute('data-path')]=d.open});
+    try{sessionStorage.setItem(KEY,JSON.stringify(state))}catch(e){}
+  });
+})})();`;
+
 /**
  * Chrome CSS shared by every generated site page (viewport reset, theme
  * toggle, nav/outline layout). The site exporter appends it once to the
@@ -60,11 +78,14 @@ export function siteChromeCss(): string {
  * Script shared by every generated site page, written once as the site's
  * site.js: the theme toggle (loaded synchronously from <head> so the dark
  * class is applied before first paint, exactly like the inline variant) plus
- * the outline scroll spy and the image lightbox. Single-file exports inline
+ * the outline scroll spy, the nav folder memory, and the image lightbox. Single-file exports inline
  * only the theme script.
  */
 export function siteChromeScript(lightboxLabels: LightboxLabels): string {
-  return `${THEME_SCRIPT}\n${OUTLINE_SPY_SCRIPT}\n${lightboxScript(lightboxLabels)}`;
+  return `${THEME_SCRIPT}
+${OUTLINE_SPY_SCRIPT}
+${NAV_STATE_SCRIPT}
+${lightboxScript(lightboxLabels)}`;
 }
 
 // Site layout for the multi-page export: sticky nav tree beside the content
