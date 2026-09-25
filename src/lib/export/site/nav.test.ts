@@ -12,9 +12,25 @@ describe("buildNavHtml", () => {
   it("nests folder pages inside a details disclosure", () => {
     const nav = buildNavHtml(PAGES, "index.html");
     expect(nav).toContain("<nav");
-    expect(nav).toContain("<details open><summary>guide</summary>");
+    expect(nav).toContain('<details data-path="guide"><summary>guide</summary>');
     expect(nav).toContain(">Intro</a>");
     expect(nav).toContain(">Advanced</a>");
+  });
+
+  it("opens only the folders that contain the current page", () => {
+    const pages: SitePage[] = [
+      ...PAGES,
+      { rel: "guide/deep/page.html", title: "Deep" },
+      { rel: "reference/api.html", title: "API" },
+    ];
+    const nav = buildNavHtml(pages, "guide/deep/page.html");
+    expect(nav).toContain('<details data-path="guide" open>');
+    expect(nav).toContain('<details data-path="guide/deep" open>');
+    expect(nav).toContain('<details data-path="reference">');
+    // A sibling whose name only shares a prefix is not an ancestor.
+    expect(
+      buildNavHtml([{ rel: "guidebook/x.html", title: "X" }, ...pages], "guide/intro.html"),
+    ).toContain('<details data-path="guidebook">');
   });
 
   it("relativizes hrefs to the current page", () => {
