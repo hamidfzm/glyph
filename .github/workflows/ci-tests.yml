@@ -22,7 +22,7 @@ jobs:
           retention-days: 14
       - name: Upload frontend coverage
         if: always()
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage/lcov.info
           flags: frontend
@@ -32,7 +32,7 @@ jobs:
           use_pypi: true
       - name: Upload frontend test results
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: junit-frontend.xml
           flags: frontend
@@ -56,11 +56,11 @@ jobs:
         with:
           cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@26e9283f268b880168bdbd2c545dfcd60ec2c6ab # v2.87.13
+        uses: taiki-e/install-action@dfae9bf3d6f6c6f20ef4ebb3486c01a51341ff12 # v2.87.18
         with:
           tool: cargo-llvm-cov
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@26e9283f268b880168bdbd2c545dfcd60ec2c6ab # v2.87.13
+        uses: taiki-e/install-action@dfae9bf3d6f6c6f20ef4ebb3486c01a51341ff12 # v2.87.18
         with:
           tool: nextest
       - name: Run Rust tests with coverage
@@ -68,7 +68,7 @@ jobs:
         run: cargo llvm-cov nextest --lcov --output-path ../coverage-rust.lcov --profile ci
       - name: Upload Rust coverage
         if: always()
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage-rust.lcov
           flags: rust
@@ -78,7 +78,7 @@ jobs:
           use_pypi: true
       - name: Upload Rust test results
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: src-tauri/target/nextest/ci/junit.xml
           flags: rust
