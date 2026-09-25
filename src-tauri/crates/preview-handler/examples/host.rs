@@ -9,6 +9,9 @@
 //! With `--surrogate` it instead activates the registered CLSID out of process,
 //! which is what Explorer does: the handler runs inside prevhost.exe, so this
 //! reproduces registration and surrogate failures the direct load cannot.
+//!
+//! With `--mta` it calls the handler from a multithreaded apartment, which is
+//! what Explorer's preview host does and where WebView2 refuses to start.
 
 #[cfg(windows)]
 fn main() -> windows_core::Result<()> {
@@ -26,7 +29,7 @@ mod host {
     use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, IClassFactory, CLSCTX_INPROC_SERVER, CLSCTX_LOCAL_SERVER,
-        COINIT_APARTMENTTHREADED,
+        COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED,
     };
     use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
     use windows::Win32::UI::Shell::IPreviewHandler;
@@ -60,6 +63,7 @@ mod host {
         let args: Vec<String> = std::env::args().collect();
         let surrogate = args.iter().any(|arg| arg == "--surrogate");
         let inproc = args.iter().any(|arg| arg == "--inproc");
+        let mta = args.iter().any(|arg| arg == "--mta");
         let clsid = match args.iter().position(|arg| arg == "--clsid") {
             Some(at) => {
                 let digits: String = args[at + 1]
@@ -80,7 +84,12 @@ mod host {
             .join("../../../dist-preview/glyph_preview_handler.dll");
 
         unsafe {
-            CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok()?;
+            let apartment = if mta {
+                COINIT_MULTITHREADED
+            } else {
+                COINIT_APARTMENTTHREADED
+            };
+            CoInitializeEx(None, apartment).ok()?;
             let handler: IPreviewHandler = if surrogate || inproc {
                 let context = if inproc {
                     CLSCTX_INPROC_SERVER

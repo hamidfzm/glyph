@@ -16,6 +16,8 @@ mod class_factory;
 mod handler;
 #[cfg(windows)]
 mod webview;
+#[cfg(windows)]
+mod worker;
 
 /// The handler's COM class id; the WiX fragment registers the same value.
 pub const CLSID_TEXT: &str = "D0BF6AA3-FB9F-473F-BDEF-ABB364324298";
