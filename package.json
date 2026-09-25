@@ -107,7 +107,7 @@
     }
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.13",
+    "@biomejs/biome": "^2.5.14",
     "@codecov/vite-plugin": "^2.0.1",
     "@playwright/test": "^1.63.0",
     "@sentry/vite-plugin": "^5.4.0",
@@ -117,7 +117,7 @@
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/d3-force": "^3.0.10",
-    "@types/node": "^22.20.3",
+    "@types/node": "^22.20.4",
     "@types/nspell": "^2.1.6",
     "@types/papaparse": "^5.5.2",
     "@types/pdfmake": "^0.3.3",
