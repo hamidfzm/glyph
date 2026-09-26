@@ -21,7 +21,7 @@ describe("displayContentFor", () => {
   });
 
   it("suppresses D2 diagrams (fenced source is not prose)", () => {
-    expect(displayContentFor("/d/arch.d2", "```d2\n# a comment\na -> b\n```")).toBeNull();
+    expect(displayContentFor("/d/arch.d2", "# a comment\na -> b")).toBeNull();
   });
 
   it("projects a canvas board's prose", () => {
@@ -44,9 +44,7 @@ describe("tocContentFor", () => {
 
   it("keeps the outline empty for a D2 file (suppressed display)", () => {
     // `#` comments in D2 source would otherwise read as outline headings.
-    expect(
-      tocContentFor("/d/arch.d2", displayContentFor("/d/arch.d2", "```d2\n# c\n```")),
-    ).toBeNull();
+    expect(tocContentFor("/d/arch.d2", displayContentFor("/d/arch.d2", "# c"))).toBeNull();
   });
 
   it("passes through when there is no path", () => {

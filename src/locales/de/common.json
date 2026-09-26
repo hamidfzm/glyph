@@ -199,13 +199,6 @@
     "label": "Mermaid-Diagramm",
     "zoomHint": "Zum Zoomen klicken"
   },
-  "d2": {
-    "empty": "Leere Diagrammquelle",
-    "errorLabel": "Diagrammfehler",
-    "errorTitle": "Diagramm konnte nicht gerendert werden",
-    "label": "D2-Diagramm",
-    "zoomHint": "Zum Zoomen klicken"
-  },
   "taskList": {
     "toggle": "Aufgabe umschalten"
   },

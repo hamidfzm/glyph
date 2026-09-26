@@ -199,13 +199,6 @@
     "label": "Mermaid 图表",
     "zoomHint": "点击放大"
   },
-  "d2": {
-    "empty": "图表源为空",
-    "errorLabel": "图表错误",
-    "errorTitle": "图表渲染失败",
-    "label": "D2 图表",
-    "zoomHint": "点击放大"
-  },
   "taskList": {
     "toggle": "切换任务状态"
   },

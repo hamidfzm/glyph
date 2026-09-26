@@ -1,6 +1,7 @@
 {
   "installFromFolder": "Install from folder…",
-  "installedHeading": "Installed",
+  "coreHeading": "Core plugins",
+  "communityHeading": "Community plugins",
   "availableHeading": "Available",
   "install": "Install",
   "update": "Update",
@@ -40,5 +41,11 @@
   "toast": {
     "installed": "Installed plugin: {{name}} v{{version}}",
     "error": "Plugin error: {{message}}"
+  },
+  "core": {
+    "d2": {
+      "name": "D2 diagrams",
+      "description": "Render D2 code blocks and .d2 files as diagrams."
+    }
   }
 }

@@ -24,6 +24,12 @@ export class DisposerBag {
     this.disposers.push(disposer);
   }
 
+  /** Forget a disposer that already ran on its own, so it is not held until dispose. */
+  delete(disposer: Disposer): void {
+    const index = this.disposers.indexOf(disposer);
+    if (index >= 0) this.disposers.splice(index, 1);
+  }
+
   /**
    * Run every collected disposer (most-recent first, so later registrations
    * that build on earlier ones unwind first) and clear the bag. Idempotent; a

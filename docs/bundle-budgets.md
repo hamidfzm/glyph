@@ -61,8 +61,9 @@ there is no split `.wasm` asset or slimmer browser build. Repackaging the WASM
 ourselves would mean patching upstream's blob-worker bootstrap, which is
 CSP-sensitive (see the WebKit smoke suite) and would break on every upgrade.
 
-Accepted tradeoff: the chunk stays lazy behind `d2Render.ts`, so it is parsed
-only on the first D2 diagram render and never touches startup; the cost that
+Accepted tradeoff: the chunk stays lazy behind `d2Render.ts` in the D2 core
+plugin, so it is parsed only on the first D2 diagram render (never while the
+plugin is off) and never touches startup; the cost that
 remains is installer size. Revisit if upstream publishes a separable WASM
 artifact; the budget pins today's size so an upstream regression is visible.
 

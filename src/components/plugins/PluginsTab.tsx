@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
+import { CorePluginsSection } from "./CorePluginsSection";
 import { PluginMarketplace } from "./PluginMarketplace";
 import { PluginMountSlot } from "./PluginMountSlot";
 import { PluginPermissionsLine } from "./PluginPermissionsLine";
@@ -27,9 +28,10 @@ export function PluginsTab() {
 
   return (
     <div>
+      <CorePluginsSection />
       <div className="flex items-center justify-between mb-1">
         <h3 className="text-sm font-semibold text-[var(--color-text-secondary)]">
-          {t("installedHeading")}
+          {t("communityHeading")}
         </h3>
         <button type="button" className={btnClass} onClick={() => void plugins.installFromFolder()}>
           {t("installFromFolder")}

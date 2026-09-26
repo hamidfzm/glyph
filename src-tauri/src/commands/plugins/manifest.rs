@@ -96,9 +96,18 @@ pub(crate) fn required_str(value: &serde_json::Value, key: &str) -> Result<Strin
     }
 }
 
+/// Ids of the plugins bundled with the app. The frontend keys settings, grants,
+/// and host slots by id, so no installed plugin may take one.
+const CORE_PLUGIN_ID_PREFIX: &str = "glyph.core.";
+
 /// The plugin id doubles as its folder name, so restrict it to characters that
 /// are safe on every filesystem and can never traverse out of the plugins dir.
 pub(crate) fn validate_id(id: &str) -> Result<(), String> {
+    if id.to_ascii_lowercase().starts_with(CORE_PLUGIN_ID_PREFIX) {
+        return Err(format!(
+            "invalid plugin id \"{id}\": the \"{CORE_PLUGIN_ID_PREFIX}\" prefix is reserved for core plugins"
+        ));
+    }
     let ok = !id.is_empty()
         && !id.starts_with('.')
         && id
@@ -212,6 +221,12 @@ mod tests {
                 "should reject id {id}"
             );
         }
+        for id in ["glyph.core.d2", "Glyph.Core.mine"] {
+            let err = parse_manifest(&with_id(id)).unwrap_err();
+            assert!(err.contains("reserved for core plugins"), "{err}");
+        }
+        // Only the exact prefix is reserved, not every id mentioning core.
+        assert!(parse_manifest(&with_id("glyph.corelike")).is_ok());
         let bad_main =
             r#"{"id":"ok.id","name":"n","version":"1.0.0","apiVersion":"^1.0.0","main":"../x.js"}"#;
         assert!(parse_manifest(bad_main).is_err());

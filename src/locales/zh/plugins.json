@@ -1,6 +1,7 @@
 {
   "installFromFolder": "从文件夹安装…",
-  "installedHeading": "已安装",
+  "coreHeading": "核心插件",
+  "communityHeading": "社区插件",
   "availableHeading": "可用",
   "install": "安装",
   "update": "更新",
@@ -40,5 +41,11 @@
   "toast": {
     "installed": "已安装插件：{{name}} v{{version}}",
     "error": "插件错误：{{message}}"
+  },
+  "core": {
+    "d2": {
+      "name": "D2 图表",
+      "description": "将 D2 代码块和 .d2 文件渲染为图表。"
+    }
   }
 }

@@ -5,12 +5,14 @@ import { buildHtmlDocument } from "@/lib/export/html";
 import { deriveExportMeta } from "@/lib/export/meta";
 import { restoreMermaidTheme } from "@/lib/export/rasterize";
 import { siteChromeCss, siteChromeScript } from "@/lib/export/siteChrome";
+import { i18n } from "@/lib/i18n";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { basename } from "@/lib/paths";
 import type { MarkdownPlugin, SiteThemeContribution } from "@/lib/plugins/types";
 import { resolveTargets } from "@/lib/wikilinkResolutions";
 import type { FileScan } from "@/lib/workspaceScan";
 import { buildIndexBodyHtml } from "./indexPage";
+import { lightboxLabels } from "./lightboxScript";
 import { inlineMermaidSvgs } from "./mermaidInline";
 import { buildNavHtml } from "./nav";
 import { buildOutlineHtml } from "./outline";
@@ -248,7 +250,10 @@ export async function exportSite({
       content: `${collectStyles()}\n${siteChromeCss()}\n${theme.css}`,
     });
     written.push("style.css");
-    await invoke("write_file", { path: outPath(outDir, "site.js"), content: siteChromeScript() });
+    await invoke("write_file", {
+      path: outPath(outDir, "site.js"),
+      content: siteChromeScript(lightboxLabels(i18n.t)),
+    });
     written.push("site.js");
     if (config.robots !== null) {
       await invoke("write_file", {

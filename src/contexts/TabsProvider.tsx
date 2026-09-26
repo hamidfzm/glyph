@@ -1,6 +1,7 @@
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useMemo, useSyncExternalStore } from "react";
 import { RelinkConfirmModal } from "@/components/modals/RelinkConfirmModal";
 import { UnsavedChangesModal, type UnsavedChoice } from "@/components/modals/UnsavedChangesModal";
+import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useBacklinks } from "@/hooks/useBacklinks";
 import { usePrompt } from "@/hooks/usePrompt";
 import { useSettings } from "@/hooks/useSettings";
@@ -9,12 +10,14 @@ import { useTabs } from "@/hooks/useTabs";
 import { useWindowRegistrySync } from "@/hooks/useWindowRegistrySync";
 import { useWorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { displayContentFor, tocContentFor } from "@/lib/displayContent";
+import { fileTypes } from "@/lib/plugins/fileTypes";
 import { EDITOR_MODE } from "@/lib/settings";
 import type { RelinkRequest } from "@/lib/vault";
 import { TabsContext, type TabsContextValue } from "./TabsContext";
 
 export function TabsProvider({ children }: { children: ReactNode }) {
   const { settings, updateSettings } = useSettings();
+  const pluginsReady = usePluginsOptional()?.initialLoadDone ?? true;
   const workspaceNotice = useWorkspaceNotice();
   const unsavedPrompt = usePrompt<string[], UnsavedChoice>("cancel");
   const relinkPrompt = usePrompt<RelinkRequest, boolean>(false);
@@ -30,6 +33,7 @@ export function TabsProvider({ children }: { children: ReactNode }) {
     onWorkspaceNotice: workspaceNotice.show,
     confirmUnsaved: unsavedPrompt.confirm,
     confirmRelink: relinkPrompt.confirm,
+    pluginsReady,
   });
 
   // Report what this window shows so open requests route to the window already
@@ -48,10 +52,12 @@ export function TabsProvider({ children }: { children: ReactNode }) {
         (tabs.activeFile?.editContent ?? content)
       : content;
   // Per-file-type derivation (markdown passthrough, notebook suppression,
-  // canvas prose projection) lives in lib/displayContent.
+  // canvas prose projection) lives in lib/displayContent. A plugin file type
+  // registering or going away changes the answer for an open tab.
+  const registeredFileTypes = useSyncExternalStore(fileTypes.subscribe, fileTypes.list);
   const displayContent = useMemo(
-    () => displayContentFor(activePath, liveContent),
-    [activePath, liveContent],
+    () => displayContentFor(activePath, liveContent, registeredFileTypes),
+    [activePath, liveContent, registeredFileTypes],
   );
   const tocEntries = useTableOfContents(tocContentFor(activePath, displayContent));
   const backlinks = useBacklinks(tabs.workspace?.root, tabs.activeFile?.path, tabs.snapshot);

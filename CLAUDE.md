@@ -75,6 +75,7 @@ Do **not** use `closing` (or `closed out`, `fixing`, `resolving`, or any other v
 - `src/components/layout/`: App shell (Sidebar, StatusBar, Titlebar, EmptyState)
 - `src/components/icons/`: SVG icon components
 - `src/components/modals/`: Overlay UI (SettingsModal, AIPanel)
+- `src/plugins/core/<id>/`: Core plugins (bundled, toggled in Settings, Plugins), each self-contained and registered only through the public plugin API; the list is `src/lib/plugins/corePlugins.ts`
 
 ## Releases
 

@@ -1,6 +1,7 @@
 {
   "installFromFolder": "Aus Ordner installieren…",
-  "installedHeading": "Installiert",
+  "coreHeading": "Kern-Plugins",
+  "communityHeading": "Community-Plugins",
   "availableHeading": "Verfügbar",
   "install": "Installieren",
   "update": "Aktualisieren",
@@ -40,5 +41,11 @@
   "toast": {
     "installed": "Plugin installiert: {{name}} v{{version}}",
     "error": "Plugin-Fehler: {{message}}"
+  },
+  "core": {
+    "d2": {
+      "name": "D2-Diagramme",
+      "description": "Stellt D2-Codeblöcke und .d2-Dateien als Diagramme dar."
+    }
   }
 }

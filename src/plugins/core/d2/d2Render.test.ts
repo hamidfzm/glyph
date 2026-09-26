@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const compile = vi.fn();
 const renderSvg = vi.fn();
 // DOMPurify does not run faithfully under happy-dom (it leaves <script> intact
-// and drops the <svg> wrapper), so we can't assert real stripping here — that's
+// and drops the <svg> wrapper), so we can't assert real stripping here; that's
 // DOMPurify's own job and works in the Tauri webview's real Chromium. Instead we
 // mock it and assert renderD2 routes the rendered SVG through it with the
 // foreignObject-forbidding config before returning/caching.
@@ -23,7 +23,7 @@ vi.mock("dompurify", () => ({
 }));
 
 import { renderD2 } from "./d2Render";
-import { DIAGRAM_RENDER_CACHE_LIMIT } from "./lruCache";
+import { RENDER_CACHE_LIMIT } from "./renderCache";
 
 describe("renderD2", () => {
   beforeEach(() => {
@@ -77,7 +77,7 @@ describe("renderD2", () => {
     await vi.waitFor(() => expect(compile).toHaveBeenCalledTimes(1));
     // These synchronous cache.set calls push "dup-key" out of the LRU while
     // its render is still in flight.
-    for (let i = 0; i < DIAGRAM_RENDER_CACHE_LIMIT; i++) {
+    for (let i = 0; i < RENDER_CACHE_LIMIT; i++) {
       await renderD2(`dup-fill-${i}`, false);
     }
     // Miss (the key was evicted): a second, healthy promise is cached.
@@ -93,7 +93,7 @@ describe("renderD2", () => {
 
   it("evicts the least recently used entry past the cache limit", async () => {
     renderSvg.mockResolvedValue("<svg></svg>");
-    for (let i = 0; i < DIAGRAM_RENDER_CACHE_LIMIT; i++) {
+    for (let i = 0; i < RENDER_CACHE_LIMIT; i++) {
       await renderD2(`evict-${i}`, false);
     }
     const cold = compile.mock.calls.length;

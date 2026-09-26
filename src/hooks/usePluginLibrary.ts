@@ -17,6 +17,11 @@ import type { InstalledPlugin, PluginInspection } from "@/lib/plugins/types";
 interface UsePluginLibraryOptions {
   host: PluginHost;
   pushToast: (message: string, tone?: "error") => void;
+  /**
+   * Core plugins have settled. Community plugins load after them, so a core
+   * plugin always registers first for the languages and file types it claims.
+   */
+  coreReady?: boolean;
 }
 
 /**
@@ -25,7 +30,7 @@ interface UsePluginLibraryOptions {
  * uninstall. Every install routes through the consent prompt, and a refused or
  * failed one rolls its grant back.
  */
-export function usePluginLibrary({ host, pushToast }: UsePluginLibraryOptions) {
+export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePluginLibraryOptions) {
   const { t } = useTranslation("plugins");
   const { hydrateGrants, hasFullTrust, getGrant, restoreGrant, ensureConsent, revokeGrant } =
     usePluginConsent();
@@ -36,6 +41,7 @@ export function usePluginLibrary({ host, pushToast }: UsePluginLibraryOptions) {
   const [registry, setRegistry] = useState<RegistryEntry[]>([]);
 
   useEffect(() => {
+    if (!coreReady) return;
     let cancelled = false;
     (async () => {
       const [dis] = await Promise.all([loadDisabled(), hydrateGrants()]);
@@ -81,7 +87,7 @@ export function usePluginLibrary({ host, pushToast }: UsePluginLibraryOptions) {
       cancelled = true;
       host.unloadAll();
     };
-  }, [host, hydrateGrants, hasFullTrust]);
+  }, [host, hydrateGrants, hasFullTrust, coreReady]);
 
   const updates = useMemo(() => findUpdates(installed, registry), [installed, registry]);
 
@@ -108,6 +114,12 @@ export function usePluginLibrary({ host, pushToast }: UsePluginLibraryOptions) {
     },
     [host, pushToast, persistDisabled, t],
   );
+
+  // A load that a disable or uninstall overtook still landed on disk: show the
+  // new version if the plugin is still installed, without re-enabling it.
+  const keepInstalledCurrent = useCallback((plugin: InstalledPlugin) => {
+    setInstalled((prev) => prev.map((p) => (p.id === plugin.id ? plugin : p)));
+  }, []);
 
   const reportFailure = useCallback(
     (err: unknown) => {
@@ -166,7 +178,10 @@ export function usePluginLibrary({ host, pushToast }: UsePluginLibraryOptions) {
       consentedId = inspection.id;
       plugin = await invoke<InstalledPlugin>("install_plugin");
       if (!(await consentInstalledOrRollBack(plugin))) return;
-      await host.load(plugin);
+      if (!(await host.load(plugin))) {
+        keepInstalledCurrent(plugin);
+        return;
+      }
       afterInstall(plugin);
     } catch (err) {
       // Nothing was installed, so the grant recorded at consent must not
@@ -184,6 +199,7 @@ export function usePluginLibrary({ host, pushToast }: UsePluginLibraryOptions) {
     consentInstalledOrRollBack,
     getGrant,
     restoreGrant,
+    keepInstalledCurrent,
   ]);
 
   const installFromRegistry = useCallback(
@@ -197,7 +213,10 @@ export function usePluginLibrary({ host, pushToast }: UsePluginLibraryOptions) {
         consented = true;
         plugin = await downloadAndInstall(entry);
         if (!(await consentInstalledOrRollBack(plugin))) return;
-        await host.load(plugin);
+        if (!(await host.load(plugin))) {
+          keepInstalledCurrent(plugin);
+          return;
+        }
         afterInstall(plugin);
       } catch (err) {
         // See installFromFolder: an accepted consent for a failed install
@@ -216,6 +235,7 @@ export function usePluginLibrary({ host, pushToast }: UsePluginLibraryOptions) {
       consentInstalledOrRollBack,
       getGrant,
       restoreGrant,
+      keepInstalledCurrent,
     ],
   );
 
@@ -228,7 +248,7 @@ export function usePluginLibrary({ host, pushToast }: UsePluginLibraryOptions) {
         // warning runs here and the grant persists on acceptance.
         if (!(await ensureConsent(plugin))) return;
         try {
-          await host.load(plugin);
+          if (!(await host.load(plugin))) return;
         } catch (err) {
           reportFailure(err);
           return;

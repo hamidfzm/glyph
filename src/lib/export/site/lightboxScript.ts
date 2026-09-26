@@ -1,4 +1,36 @@
+import type { TFunction } from "i18next";
 import { MAX_SCALE, MIN_SCALE, ZOOM_STEP } from "@/lib/lightbox";
+
+/** Lightbox UI strings, resolved at export time in the app's UI language. */
+export interface LightboxLabels {
+  close: string;
+  previous: string;
+  next: string;
+  zoomOut: string;
+  zoomIn: string;
+  fit: string;
+  actualSize: string;
+  viewer: string;
+  /** Dialog label for an image with alt text; `{{alt}}` is filled in by the page. */
+  image: string;
+  diagram: string;
+}
+
+/** The app lightbox's own strings, so the site speaks the exporter's language. */
+export function lightboxLabels(t: TFunction): LightboxLabels {
+  return {
+    close: t("common:lightbox.close"),
+    previous: t("common:lightbox.previous"),
+    next: t("common:lightbox.next"),
+    zoomOut: t("common:lightbox.zoomOut"),
+    zoomIn: t("common:lightbox.zoomIn"),
+    fit: t("common:lightbox.fit"),
+    actualSize: t("common:lightbox.actualSize"),
+    viewer: t("common:lightbox.viewer"),
+    image: t("common:lightbox.image", { alt: "{{alt}}" }),
+    diagram: t("common:mermaid.label"),
+  };
+}
 
 // Toolbar and nav glyphs, copied from the app's lightbox icon components.
 const ICON = {
@@ -22,8 +54,9 @@ const ICON = {
 // page, the same keyboard shortcuts, backdrop-click close, and drag-to-pan.
 // The image is laid out at natural size x scale inside the scrollable overlay,
 // so zooming past the viewport scrolls rather than clips.
-export const LIGHTBOX_SCRIPT = `(function(){
-var STEP=${ZOOM_STEP},MIN=${MIN_SCALE},MAX=${MAX_SCALE},ICON=${JSON.stringify(ICON)};
+export function lightboxScript(labels: LightboxLabels): string {
+  return `(function(){
+var STEP=${ZOOM_STEP},MIN=${MIN_SCALE},MAX=${MAX_SCALE},ICON=${JSON.stringify(ICON)},L=${JSON.stringify(labels)};
 document.addEventListener('DOMContentLoaded',function(){
   var items=Array.prototype.slice.call(document.querySelectorAll('.markdown-body img,.markdown-body .mermaid-diagram > svg'));
   if(!items.length)return;
@@ -36,15 +69,15 @@ document.addEventListener('DOMContentLoaded',function(){
     img=document.createElement('img');img.className='lightbox-image';img.draggable=false;
     img.addEventListener('load',function(){natural=measure(items[index]);img.style.opacity='1';fit()});
     img.addEventListener('error',function(){img.style.opacity='1'});
-    prev=button('lightbox-nav lightbox-prev','Previous image (\\u2190)',ICON.prev,function(){go(index-1)});
-    next=button('lightbox-nav lightbox-next','Next image (\\u2192)',ICON.next,function(){go(index+1)});
+    prev=button('lightbox-nav lightbox-prev',L.previous,ICON.prev,function(){go(index-1)});
+    next=button('lightbox-nav lightbox-next',L.next,ICON.next,function(){go(index+1)});
     var bar=document.createElement('div');bar.className='lightbox-toolbar';
     level=document.createElement('span');level.className='lightbox-zoom-level';level.setAttribute('aria-live','polite');
     counter=document.createElement('span');counter.className='lightbox-counter';
     function divider(){var d=document.createElement('span');d.className='lightbox-toolbar-divider';d.setAttribute('aria-hidden','true');return d}
-    bar.append(button('','Zoom out (-)',ICON.zoomOut,function(){zoom(1/STEP)}),level,button('','Zoom in (+)',ICON.zoomIn,function(){zoom(STEP)}),divider(),button('','Fit to screen (0)',ICON.fit,fit),button('','Actual size (1)',ICON.actual,function(){scale=1;fitted=false;render()}));
+    bar.append(button('',L.zoomOut,ICON.zoomOut,function(){zoom(1/STEP)}),level,button('',L.zoomIn,ICON.zoomIn,function(){zoom(STEP)}),divider(),button('',L.fit,ICON.fit,fit),button('',L.actualSize,ICON.actual,function(){scale=1;fitted=false;render()}));
     if(items.length>1)bar.append(divider(),counter);
-    overlay.append(button('lightbox-close','Close (Esc)',ICON.close,close),img,bar);
+    overlay.append(button('lightbox-close',L.close,ICON.close,close),img,bar);
     if(items.length>1){overlay.insertBefore(prev,img);overlay.append(next)}
     overlay.addEventListener('click',function(e){if(e.target===overlay)close()});
     pan(overlay);
@@ -72,8 +105,8 @@ document.addEventListener('DOMContentLoaded',function(){
   }
   function show(i){
     var el=items[i];index=i;img.style.opacity='0';
-    var alt=isSvg(el)?'Diagram':el.getAttribute('alt')||'';
-    img.alt=alt;overlay.setAttribute('aria-label',alt?'Image: '+alt:'Image viewer');
+    var alt=isSvg(el)?L.diagram:el.getAttribute('alt')||'';
+    img.alt=alt;overlay.setAttribute('aria-label',alt?L.image.replace('{{alt}}',alt):L.viewer);
     // Exported Mermaid SVGs are light-theme with a transparent background,
     // illegible on the dark backdrop without a light card behind them.
     img.style.background=isSvg(el)?'#fff':'';
@@ -120,7 +153,7 @@ document.addEventListener('DOMContentLoaded',function(){
   // focus to the link.
   var triggers=items.map(function(el,i){
     var t=el;
-    if(isSvg(el)){t=el.parentNode;t.setAttribute('role','button');t.setAttribute('aria-label','Diagram')}else t.setAttribute('data-zoomable','true');
+    if(isSvg(el)){t=el.parentNode;t.setAttribute('role','button');t.setAttribute('aria-label',L.diagram)}else t.setAttribute('data-zoomable','true');
     if(!t.closest('a'))t.tabIndex=0;
     t.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();open(i)});
     t.addEventListener('keydown',function(e){if(e.target===t&&(e.key==='Enter'||e.key===' ')){e.preventDefault();open(i)}});
@@ -128,3 +161,4 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 });
 })();`;
+}

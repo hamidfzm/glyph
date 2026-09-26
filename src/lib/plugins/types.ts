@@ -4,6 +4,7 @@ import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources"
 import type { Disposer } from "./disposer";
 
 export type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
+export type { Disposer } from "./disposer";
 
 /** Capability a plugin requests; surfaced for user consent before enabling. */
 export type PluginPermission = "workspace:read" | "workspace:write" | `network:${string}`;
@@ -15,10 +16,55 @@ export type PluginPermission = "workspace:read" | "workspace:write" | `network:$
  */
 export type MarkdownPlugin = NonNullable<Options["remarkPlugins"]>[number];
 
-/** Renders a fenced code block of `language` (e.g. ```d2) as a React component. */
+/** What a fenced renderer receives. */
+export interface FencedRendererProps {
+  code: string;
+  /**
+   * Open an image zoomable over the document. Absent where the host offers no
+   * zoom; exports strip the interactive attributes a render adds for it.
+   */
+  openLightbox?: (src: string, label: string) => void;
+}
+
+/**
+ * A framework-agnostic fenced renderer: draws into `el` the way the panel
+ * mounts do, with no dependency on the app's React. When the block's props
+ * change, the previous cleanups run and it is mounted again over its previous
+ * output, so it can keep that on screen until the new render is ready (set
+ * `aria-busy` on `el` meanwhile).
+ */
+export interface FencedRendererMount {
+  mount(
+    el: HTMLElement,
+    props: FencedRendererProps,
+    registerCleanup: (cleanup: Disposer) => void,
+  ): void;
+}
+
+export interface FencedRendererOptions {
+  /**
+   * Light-theme markup (typically an SVG) for print and PDF export, which
+   * cannot reuse a live render drawn in the app theme's colors. The host
+   * sanitizes it before it reaches the document.
+   */
+  renderStatic?: (code: string) => Promise<string>;
+}
+
+/** Renders a fenced code block of `language` (e.g. ```d2). */
 export interface FencedRendererContribution {
   language: string;
-  render: ComponentType<{ code: string }>;
+  render: ComponentType<FencedRendererProps> | FencedRendererMount;
+}
+
+/**
+ * A document type a plugin opens. Files with these extensions open in the
+ * viewer and render as one fenced `language` block, so pair it with a fenced
+ * renderer for that language.
+ */
+export interface FileTypeContribution {
+  /** Extensions without the dot, e.g. `["d2"]`. */
+  extensions: readonly string[];
+  language: string;
 }
 
 /**
@@ -45,8 +91,9 @@ export interface PluginManifest {
   /**
    * Run in a dedicated worker instead of the app context. Sandboxed plugins
    * get no DOM and network fenced to their `network:` permissions, but only
-   * the non-UI API subset: commands, styles, exporters, workspace, settings,
-   * notify, and translations. No markdown pipeline or panel mounts.
+   * the non-UI API subset: commands, styles, exporters, file types, workspace,
+   * assets, spellcheck, settings, notify, and registering translations. No
+   * markdown pipeline, panel mounts, or reading translations.
    *
    * Absent defaults to `true`: isolation is the default, and only an explicit
    * `false` opts into full trust, which needs a distinct user grant.
@@ -227,8 +274,29 @@ export interface MarkdownRegistryApi {
   registerRemarkPlugin(plugin: MarkdownPlugin): Disposer;
   /** Add a rehype plugin (runs after the built-in rehype plugins, incl. sanitize). */
   registerRehypePlugin(plugin: MarkdownPlugin): Disposer;
-  /** Render fenced ```<language> blocks with a React component. */
-  registerFencedRenderer(language: string, render: ComponentType<{ code: string }>): Disposer;
+  /**
+   * Render fenced ```<language> blocks, with a {@link FencedRendererMount} or
+   * a React component. While a render is still pending, mark its element
+   * `aria-busy="true"` so exports wait.
+   */
+  registerFencedRenderer(
+    language: string,
+    render: ComponentType<FencedRendererProps> | FencedRendererMount,
+    options?: FencedRendererOptions,
+  ): Disposer;
+}
+
+/** Read the translations a plugin registered. Not available to sandboxed plugins. */
+export interface I18nApi {
+  /** Translate `namespace:key` in the app's current language, with i18next `{{name}}` values. */
+  t(key: string, values?: Record<string, unknown>): string;
+  /** Run `listener` after the app switches language, to refresh strings already on screen. */
+  onLanguageChange(listener: () => void): Disposer;
+}
+
+export interface DocumentsRegistryApi {
+  /** Open files with these extensions as one fenced block; see {@link FileTypeContribution}. */
+  registerFileType(fileType: FileTypeContribution): Disposer;
 }
 
 /**
@@ -264,11 +332,13 @@ export interface GlyphPluginContext {
   readonly commands: CommandRegistryApi;
   readonly ui: UiRegistryApi;
   readonly markdown: MarkdownRegistryApi;
+  readonly documents: DocumentsRegistryApi;
   readonly workspace: WorkspaceApi;
   readonly assets: AssetsApi;
   readonly exporters: ExportersRegistryApi;
   readonly spellcheck: SpellcheckRegistryApi;
   readonly settings: PluginSettingsApi;
+  readonly i18n: I18nApi;
   notify(message: string): void;
   /**
    * Register (or extend) translations for a locale + namespace. A plugin ships

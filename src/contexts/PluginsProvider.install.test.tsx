@@ -7,11 +7,15 @@ import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { PluginsProvider } from "@/contexts/PluginsProvider";
 import { pickPluginDir } from "@/lib/pickers";
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
+import { loadPluginSettings } from "@/lib/plugins/settingsStore";
 import { inspection, installedPlugin, Probe, resetPluginsMocks } from "@/test/pluginsHarness";
 
 vi.mock("@/lib/pickers", () => ({
   pickPluginDir: vi.fn(),
 }));
+
+// Core plugins follow app settings and have their own suite (useCorePlugins.test).
+vi.mock("@/hooks/useCorePlugins", () => ({ useCorePlugins: () => true }));
 
 vi.mock("@/lib/plugins/settingsStore", () => ({
   loadPluginSettings: vi.fn(() => Promise.resolve({})),
@@ -395,4 +399,192 @@ describe("PluginsProvider installing", () => {
     );
     spy.mockRestore();
   });
+});
+
+// Activation takes a while, which is the window the uninstall lands in.
+const slowSource = `export default {
+  async activate(ctx) {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    ctx.commands.register({ id: "slow.cmd", title: "Slow", run() {} });
+  },
+};`;
+
+function SupersedeProbe({ install }: { install: "folder" | "registry" }) {
+  const p = usePluginsOptional();
+  if (!p) return null;
+  return (
+    <div>
+      <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
+      <button
+        type="button"
+        onClick={() =>
+          void (install === "folder" ? p.installFromFolder() : p.installFromRegistry(p.registry[0]))
+        }
+      >
+        install
+      </button>
+      <button type="button" onClick={() => void p.uninstall("com.x.slow")}>
+        uninstall
+      </button>
+    </div>
+  );
+}
+
+describe("PluginsProvider installs overtaken by an uninstall", () => {
+  it.each(["folder", "registry"] as const)(
+    "a %s install whose load an uninstall overtook leaves the plugin gone",
+    async (install) => {
+      const slow = installedPlugin({ id: "com.x.slow", name: "Slow", mainSource: slowSource });
+      const entry = {
+        id: "com.x.slow",
+        name: "Slow",
+        version: "1.0.0",
+        apiVersion: `^${PLUGIN_API_VERSION}`,
+        packageUrl: "https://example.test/plugin.zip",
+        // SHA-256 of the one-byte package the fetch stub serves.
+        sha256: "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) =>
+          Promise.resolve(
+            url === entry.packageUrl
+              ? { ok: true, arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer) }
+              : { ok: true, json: () => Promise.resolve({ plugins: [entry] }) },
+          ),
+        ),
+      );
+      vi.mocked(invoke).mockImplementation((cmd) => {
+        if (cmd === "list_plugins") return Promise.resolve([]);
+        if (cmd === "inspect_plugin") return Promise.resolve(inspection({ id: "com.x.slow" }));
+        if (cmd === "install_plugin" || cmd === "install_plugin_package") {
+          return Promise.resolve(slow);
+        }
+        return Promise.resolve(undefined);
+      });
+      vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
+
+      render(
+        <PluginsProvider>
+          <SupersedeProbe install={install} />
+          <Probe />
+        </PluginsProvider>,
+      );
+      await waitFor(() => expect(screen.getByTestId("initial-load")).toHaveTextContent("true"));
+
+      await act(async () => {
+        screen.getByRole("button", { name: "install" }).click();
+      });
+      // The host reads the plugin's settings as it starts loading it.
+      await waitFor(() => expect(loadPluginSettings).toHaveBeenCalledWith("com.x.slow"));
+      await act(async () => {
+        screen.getByRole("button", { name: "uninstall" }).click();
+      });
+      await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+
+      expect(screen.getByTestId("installed").textContent).toBe("");
+      expect(screen.getByTestId("loaded").textContent).toBe("");
+      expect(screen.queryByText(/Installed plugin/)).not.toBeInTheDocument();
+    },
+  );
+});
+
+// Activation blocks on a gate the test opens, so the disable lands while the
+// update's load is still in flight, every run.
+const gatedSource = `export default {
+  async activate() {
+    await globalThis.__glyphActivateGate;
+  },
+};`;
+
+it("an update that a disable overtook shows the new version, still disabled", async () => {
+  let openGate = () => {};
+  (globalThis as { __glyphActivateGate?: Promise<void> }).__glyphActivateGate = new Promise<void>(
+    (resolve) => {
+      openGate = resolve;
+    },
+  );
+  const v2 = installedPlugin({ version: "2.0.0", mainSource: gatedSource });
+  const entry = {
+    id: "com.x.demo",
+    name: "Demo",
+    version: "2.0.0",
+    apiVersion: `^${PLUGIN_API_VERSION}`,
+    packageUrl: "https://example.test/plugin.zip",
+    // SHA-256 of the one-byte package the fetch stub serves.
+    sha256: "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) =>
+      Promise.resolve(
+        url === entry.packageUrl
+          ? { ok: true, arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer) }
+          : { ok: true, json: () => Promise.resolve({ plugins: [entry] }) },
+      ),
+    ),
+  );
+  vi.mocked(invoke).mockImplementation((cmd) => {
+    // A second installed plugin, so the recovery must touch only the one it
+    // was handed. com.x.broken is pre-granted by the harness.
+    if (cmd === "list_plugins") {
+      return Promise.resolve([
+        installedPlugin(),
+        installedPlugin({
+          id: "com.x.broken",
+          name: "Other",
+          mainSource: "export default { activate() {} };",
+        }),
+      ]);
+    }
+    if (cmd === "install_plugin_package") return Promise.resolve(v2);
+    return Promise.resolve(undefined);
+  });
+
+  function UpdateProbe() {
+    const p = usePluginsOptional();
+    if (!p) return null;
+    return (
+      <div>
+        <span data-testid="versions">{p.installed.map((x) => x.version).join(",")}</span>
+        <span data-testid="disabled">{p.disabled.join(",")}</span>
+        <button type="button" onClick={() => void p.installFromRegistry(p.updates[0].entry)}>
+          update
+        </button>
+        <button type="button" onClick={() => void p.setEnabled("com.x.demo", false)}>
+          off
+        </button>
+      </div>
+    );
+  }
+
+  render(
+    <PluginsProvider>
+      <UpdateProbe />
+      <Probe />
+    </PluginsProvider>,
+  );
+  await waitFor(() => expect(screen.getByRole("button", { name: "update" })).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
+  const settingsLoadsBefore = vi.mocked(loadPluginSettings).mock.calls.length;
+
+  await act(async () => {
+    screen.getByRole("button", { name: "update" }).click();
+  });
+  await waitFor(() =>
+    expect(vi.mocked(loadPluginSettings).mock.calls.length).toBeGreaterThan(settingsLoadsBefore),
+  );
+  await act(async () => {
+    screen.getByRole("button", { name: "off" }).click();
+  });
+  await act(async () => {
+    openGate();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  // The load lost the race, so it must not re-enable the plugin, and must not
+  // leave the old version on screen either: it is gone from disk.
+  expect(screen.getByTestId("versions").textContent).toBe("2.0.0,1.0.0");
+  expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo");
+  expect(screen.getByTestId("loaded").textContent).not.toContain("com.x.demo");
 });

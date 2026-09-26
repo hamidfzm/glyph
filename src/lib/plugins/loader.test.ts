@@ -29,8 +29,10 @@ describe("importPluginModule", () => {
         registerRehypePlugin: vi.fn(),
         registerFencedRenderer: vi.fn(),
       },
+      documents: { registerFileType: vi.fn() },
       workspace: { readFile: vi.fn(), listFiles: vi.fn() },
       assets: { readText: vi.fn(), readBinary: vi.fn() },
+      i18n: { t: vi.fn(), onLanguageChange: vi.fn() },
       notify,
       registerTranslations: vi.fn(),
     });
@@ -59,8 +61,10 @@ describe("importPluginModule", () => {
         registerRehypePlugin: vi.fn(),
         registerFencedRenderer: vi.fn(),
       },
+      documents: { registerFileType: vi.fn() },
       workspace: { readFile: vi.fn(), listFiles: vi.fn() },
       assets: { readText: vi.fn(), readBinary: vi.fn() },
+      i18n: { t: vi.fn(), onLanguageChange: vi.fn() },
       notify,
       registerTranslations: vi.fn(),
     });

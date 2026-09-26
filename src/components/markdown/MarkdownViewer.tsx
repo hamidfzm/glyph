@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { SearchBar } from "@/components/layout/SearchBar";
+import { useDocumentMarkdown } from "@/hooks/useDocumentMarkdown";
 import { useSearch } from "@/hooks/useSearch";
 import { MarkdownContent } from "./MarkdownContent";
 
@@ -37,6 +38,7 @@ export function MarkdownViewer({
 
   const { t } = useTranslation("common");
   const search = useSearch({ containerRef: contentRef });
+  const markdown = useDocumentMarkdown(filePath, content);
 
   // MDX files render as plain markdown; JSX components are not evaluated
   // (see #77). A per-file notice beats silently showing broken output.
@@ -110,7 +112,7 @@ export function MarkdownViewer({
             per-element via `unicode-bidi: plaintext` in markdown.css. */}
         <div ref={contentRef} className="markdown-body px-8 py-6" dir="auto">
           <MarkdownContent
-            content={content}
+            content={markdown}
             filePath={filePath}
             workspaceFiles={workspaceFiles}
             onOpenWikilink={onOpenWikilink}

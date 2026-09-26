@@ -2,6 +2,7 @@ import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_COMPAT_FLOOR, PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 import { createAssetsApi } from "./assetsApi";
 import { DisposerBag } from "./disposer";
+import { registerFileType } from "./fileTypes";
 import { importPluginModule, type ModuleImporter } from "./loader";
 import { buildPluginContext, type ContextRegistries, tracked } from "./pluginContext";
 import { createRegistry, type Registry } from "./registry";
@@ -66,10 +67,11 @@ export interface PluginHost {
   readonly siteThemes: Registry<SiteThemeContribution>;
   /**
    * Import and activate an installed plugin. Re-loading an already-loaded id
-   * unloads the previous instance first. Throws on apiVersion mismatch, a bad
-   * entry module, or an `activate` that throws.
+   * unloads the previous instance first. Resolves `false` when a newer load or
+   * an unload superseded this one and it rolled itself back. Throws on
+   * apiVersion mismatch, a bad entry module, or an `activate` that throws.
    */
-  load(plugin: InstalledPlugin, importer?: ModuleImporter): Promise<void>;
+  load(plugin: InstalledPlugin, importer?: ModuleImporter): Promise<boolean>;
   /** Tear down one plugin: run its disposers, then its `deactivate`. */
   unload(id: string): void;
   /** Tear down every loaded plugin (app shutdown / provider unmount). */
@@ -127,7 +129,7 @@ export function createPluginHost(
     siteThemes,
   };
 
-  const unload = (id: string) => {
+  const teardown = (id: string) => {
     const plugin = loaded.get(id);
     if (!plugin) return;
     loaded.delete(id);
@@ -142,9 +144,16 @@ export function createPluginHost(
   // Guards against overlapping load() calls for the same id (rapid re-enable
   // or double-clicked update) and against loads that resolve after teardown:
   // only the newest generation commits; anything stale rolls itself back.
-  // unloadAll bumps every generation instead of latching a closed flag, so a
-  // StrictMode remount (same host instance) can still load plugins afterwards.
+  // unload and unloadAll bump generations instead of latching a closed flag,
+  // so a disable during an in-flight enable wins, and a StrictMode remount
+  // (same host instance) can still load plugins afterwards.
   const loadGeneration = new Map<string, number>();
+  const invalidate = (id: string) => loadGeneration.set(id, (loadGeneration.get(id) ?? 0) + 1);
+
+  const unload = (id: string) => {
+    invalidate(id);
+    teardown(id);
+  };
 
   return {
     commands,
@@ -163,8 +172,8 @@ export function createPluginHost(
           `${plugin.name} requires plugin API ${plugin.apiVersion}, but this Glyph accepts ${PLUGIN_API_COMPAT_FLOOR} through ${PLUGIN_API_VERSION}`,
         );
       }
-      const generation = (loadGeneration.get(plugin.id) ?? 0) + 1;
-      loadGeneration.set(plugin.id, generation);
+      invalidate(plugin.id);
+      const generation = loadGeneration.get(plugin.id);
 
       if (plugin.sandbox) {
         const settings = await settingsBackend.load(plugin.id);
@@ -180,6 +189,7 @@ export function createPluginHost(
             },
             registerExporter: tracked(exporters.register, bag),
             registerSiteTheme: tracked(siteThemes.register, bag),
+            registerFileType: tracked(registerFileType, bag),
             registerDictionary: tracked(registerDictionarySource, bag),
             notify,
             registerTranslations,
@@ -196,9 +206,9 @@ export function createPluginHost(
         bag.add(terminate);
         if (loadGeneration.get(plugin.id) !== generation) {
           bag.dispose();
-          return;
+          return false;
         }
-        unload(plugin.id);
+        teardown(plugin.id);
         loaded.set(plugin.id, {
           info: {
             id: plugin.id,
@@ -209,7 +219,7 @@ export function createPluginHost(
           module: { activate: () => {} },
           bag,
         });
-        return;
+        return true;
       }
 
       const [module, settings] = await Promise.all([
@@ -243,11 +253,11 @@ export function createPluginHost(
         } catch (err) {
           console.error(`Plugin ${plugin.id} threw in deactivate():`, err);
         }
-        return;
+        return false;
       }
       // The previous instance stays live while the new one downloads and
       // activates; swap only at commit time.
-      unload(plugin.id);
+      teardown(plugin.id);
       loaded.set(plugin.id, {
         info: {
           id: plugin.id,
@@ -258,14 +268,13 @@ export function createPluginHost(
         module,
         bag,
       });
+      return true;
     },
     unload,
     unloadAll() {
       // Invalidate in-flight loads too, not just committed instances.
-      for (const [id, generation] of loadGeneration) {
-        loadGeneration.set(id, generation + 1);
-      }
-      for (const id of [...loaded.keys()]) unload(id);
+      for (const id of loadGeneration.keys()) invalidate(id);
+      for (const id of [...loaded.keys()]) teardown(id);
     },
     listLoaded() {
       return [...loaded.values()].map((p) => p.info);

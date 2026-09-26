@@ -31,6 +31,27 @@ describe("createPluginHost overlapping loads", () => {
     expect(staleDeactivate).toHaveBeenCalledTimes(1);
   });
 
+  it("an unload during an in-flight load wins: the load rolls back instead of committing", async () => {
+    const host = createPluginHost(vi.fn());
+    const deactivate = vi.fn();
+    const module: PluginModule = {
+      activate(ctx) {
+        ctx.commands.register({ id: "late.cmd", title: "Late", run: () => {} });
+      },
+      deactivate,
+    };
+
+    const pending = deferredImporterFor(module);
+    const load = host.load(installed(), pending.importer);
+    host.unload("com.x.demo");
+    pending.resolve();
+    await load;
+
+    expect(host.commands.list()).toHaveLength(0);
+    expect(host.listLoaded()).toEqual([]);
+    expect(deactivate).toHaveBeenCalledTimes(1);
+  });
+
   it("logs but survives when a superseded load's deactivate throws", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const host = createPluginHost(vi.fn());

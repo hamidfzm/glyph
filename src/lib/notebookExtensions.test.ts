@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { registerFileType } from "@/lib/plugins/fileTypes";
 import { isNotebookFile, isSupportedFile } from "./notebookExtensions";
 
 describe("isNotebookFile", () => {
@@ -29,5 +30,16 @@ describe("isSupportedFile", () => {
   it("rejects everything else", () => {
     expect(isSupportedFile("image.png")).toBe(false);
     expect(isSupportedFile("script.py")).toBe(false);
+  });
+
+  it("accepts .d2 and a plugin file type while it is registered", () => {
+    expect(isSupportedFile("arch.d2")).toBe(true);
+    expect(isSupportedFile("seq.puml")).toBe(false);
+    const dispose = registerFileType({ extensions: ["puml"], language: "plantuml" });
+    try {
+      expect(isSupportedFile("seq.puml")).toBe(true);
+    } finally {
+      dispose();
+    }
   });
 });

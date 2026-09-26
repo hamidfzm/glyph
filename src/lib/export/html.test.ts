@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { i18n } from "@/lib/i18n";
 import { buildHtmlDocument } from "./html";
+import { lightboxLabels } from "./site/lightboxScript";
 import { siteChromeCss, siteChromeScript } from "./siteChrome";
+
+const siteScript = () => siteChromeScript(lightboxLabels(i18n.t));
 
 describe("buildHtmlDocument", () => {
   it("wraps body and css in a standalone document with the markdown-body class", () => {
@@ -109,7 +113,7 @@ describe("buildHtmlDocument", () => {
     expect(css).toContain("#glyph-theme-toggle");
     expect(css).toContain(".glyph-site {");
     expect(css).toContain(".glyph-site-outline {");
-    expect(siteChromeScript()).toContain("glyph-export-theme");
+    expect(siteScript()).toContain("glyph-export-theme");
   });
 
   it("animates the nav disclosures and anchor jumps, gated on reduced motion", () => {
@@ -121,8 +125,8 @@ describe("buildHtmlDocument", () => {
   });
 
   it("ships the outline scroll spy in the shared site script, not in single files", () => {
-    expect(siteChromeScript()).toContain("glyph-site-outline");
-    expect(siteChromeScript()).toContain("classList.add('active')");
+    expect(siteScript()).toContain("glyph-site-outline");
+    expect(siteScript()).toContain("classList.add('active')");
     const single = buildHtmlDocument({ bodyHtml: "<p>x</p>", title: "t", css: "", dark: false });
     expect(single).not.toContain("glyph-site-outline");
   });

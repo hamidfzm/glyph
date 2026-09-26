@@ -32,12 +32,14 @@ function insert(root: TreeDir, page: SitePage): void {
   dir.pages.push(page);
 }
 
-function renderDir(dir: TreeDir, currentRel: string): string {
+function renderDir(dir: TreeDir, currentRel: string, dirPath = ""): string {
   const items: string[] = [];
   // Folders first, then pages, each alphabetical; index.html leads its folder.
   for (const [name, sub] of [...dir.dirs].sort(([a], [b]) => a.localeCompare(b))) {
+    const path = dirPath ? `${dirPath}/${name}` : name;
+    const containsCurrent = currentRel.startsWith(`${path}/`);
     items.push(
-      `<li><details open><summary>${escapeXml(name)}</summary>${renderDir(sub, currentRel)}</details></li>`,
+      `<li><details data-path="${escapeXml(path)}"${containsCurrent ? " open" : ""}><summary>${escapeXml(name)}</summary>${renderDir(sub, currentRel, path)}</details></li>`,
     );
   }
   const pages = [...dir.pages].sort((a, b) =>
@@ -53,8 +55,9 @@ function renderDir(dir: TreeDir, currentRel: string): string {
 
 /**
  * Cross-page navigation tree included on every generated page. Folders are
- * native `<details>` disclosures (open by default, no JS); the current page is
- * marked with `aria-current` for styling and assistive tech.
+ * native `<details>` disclosures, collapsed except those holding the current
+ * page; `data-path` lets the site script restore the reader's open/closed
+ * choices. The current page is marked with `aria-current`.
  */
 export function buildNavHtml(pages: readonly SitePage[], currentRel: string): string {
   const root = newDir();

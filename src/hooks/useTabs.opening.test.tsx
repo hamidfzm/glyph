@@ -146,10 +146,9 @@ describe("useTabs opening documents", () => {
     expect(tab.kind === "file" ? tab.file.mode : null).toBe("view");
   });
 
-  it("opens a .d2 file in view mode with the body fence-wrapped as a d2 block", async () => {
-    // `.d2` is the D2 diagram language: the whole file body is diagram source,
-    // so it's fence-wrapped (rendered via the markdown path) and opened
-    // read-only, since an editor would write the wrapper back over the source.
+  it("opens a .d2 file in view mode keeping its raw body", async () => {
+    // A `.d2` body is diagram source: it opens read-only, and the viewer fences
+    // it at render time for whichever plugin renders D2.
     const { result } = renderHook(() =>
       useTabs({ ...defaultOptions(), defaultEditorMode: "edit" }),
     );
@@ -162,7 +161,7 @@ describe("useTabs opening documents", () => {
     const tab = result.current.tabs[0];
     expect(tab.kind === "file" ? tab.file.mode : null).toBe("view");
     const content = tab.kind === "file" ? tab.file.content : null;
-    expect(content).toContain("```d2");
+    expect(content).not.toContain("```");
     expect(content).toContain("FILE BODY");
   });
 

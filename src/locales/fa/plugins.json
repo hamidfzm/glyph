@@ -1,6 +1,7 @@
 {
   "installFromFolder": "نصب از پوشه…",
-  "installedHeading": "نصب‌شده",
+  "coreHeading": "افزونه‌های اصلی",
+  "communityHeading": "افزونه‌های جامعه",
   "availableHeading": "در دسترس",
   "install": "نصب",
   "update": "به‌روزرسانی",
@@ -40,5 +41,11 @@
   "toast": {
     "installed": "افزونه نصب شد: {{name}} نسخه {{version}}",
     "error": "خطای افزونه: {{message}}"
+  },
+  "core": {
+    "d2": {
+      "name": "نمودارهای D2",
+      "description": "بلوک‌های کد D2 و فایل‌های ‎.d2 را به‌صورت نمودار نمایش می‌دهد."
+    }
   }
 }

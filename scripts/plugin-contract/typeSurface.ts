@@ -55,6 +55,17 @@ export const dictionaryContribution: Equal<
   Host.DictionaryContribution,
   Template.DictionaryContribution
 > = true;
+export const fileTypeContribution: Equal<Host.FileTypeContribution, Template.FileTypeContribution> =
+  true;
+export const fencedRendererProps: Equal<Host.FencedRendererProps, Template.FencedRendererProps> =
+  true;
+export const fencedRendererOptions: Equal<
+  Host.FencedRendererOptions,
+  Template.FencedRendererOptions
+> = true;
+export const fencedRendererMount: Equal<Host.FencedRendererMount, Template.FencedRendererMount> =
+  true;
+export const i18nApi: Equal<Host.I18nApi, Template.I18nApi> = true;
 
 // activate's ctx parameter differs only through the markdown types checked above.
 export const pluginModule: Equal<

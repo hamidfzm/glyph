@@ -36,9 +36,10 @@ export interface PluginsContextValue {
   /** Mirror the opened workspace root into the host (for ctx.workspace). */
   setWorkspaceRoot: (root: string | null) => void;
   /**
-   * The startup plugin scan and load pass has finished (an empty or failed
-   * scan counts). Gate work that must see every enabled plugin's
-   * contributions (the CLI website export resolving a plugin theme) on this.
+   * The startup plugin scan and load pass, core plugins included, has
+   * finished (an empty or failed scan counts). Gate work that must see every
+   * enabled plugin's contributions (the CLI website export resolving a plugin
+   * theme) on this.
    */
   initialLoadDone: boolean;
 }

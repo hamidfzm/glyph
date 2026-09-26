@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LightboxContext } from "@/contexts/LightboxContext";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import { createRegistry } from "@/lib/plugins/registry";
 import type { FencedRendererContribution } from "@/lib/plugins/types";
@@ -7,10 +8,6 @@ import { CodeBlockComponent } from "./CodeBlockComponent";
 
 vi.mock("./MermaidDiagram", () => ({
   MermaidDiagram: ({ code }: { code: string }) => <div data-testid="mermaid-diagram">{code}</div>,
-}));
-
-vi.mock("./D2Diagram", () => ({
-  D2Diagram: ({ code }: { code: string }) => <div data-testid="d2-diagram">{code}</div>,
 }));
 
 const writeTextMock = vi.fn().mockResolvedValue(undefined);
@@ -47,6 +44,64 @@ describe("CodeBlockComponent", () => {
     expect(screen.getByTestId("plantuml").textContent).toBe("A -> B");
   });
 
+  it("mounts a framework-free plugin renderer", () => {
+    const fencedRenderers = createRegistry<FencedRendererContribution>();
+    fencedRenderers.register({
+      language: "plantuml",
+      render: {
+        mount: (el, { code }) => {
+          el.textContent = `mounted ${code}`;
+        },
+      },
+    });
+    render(
+      <PluginsContext.Provider value={{ fencedRenderers } as unknown as PluginsContextValue}>
+        <CodeBlockComponent>
+          <code className="language-plantuml">A</code>
+        </CodeBlockComponent>
+      </PluginsContext.Provider>,
+    );
+    expect(screen.getByText("mounted A")).toBeInTheDocument();
+  });
+
+  it("stamps a plugin block for export and hands it the lightbox only where one is in scope", () => {
+    const fencedRenderers = createRegistry<FencedRendererContribution>();
+    fencedRenderers.register({
+      language: "plantuml",
+      render: ({ openLightbox }) => (
+        <button type="button" onClick={() => openLightbox?.("data:x", "diagram")}>
+          {openLightbox ? "zoomable" : "static"}
+        </button>
+      ),
+    });
+    const plugins = { fencedRenderers } as unknown as PluginsContextValue;
+    const block = (
+      <CodeBlockComponent>
+        <code className="language-plantuml">A -&gt; B</code>
+      </CodeBlockComponent>
+    );
+
+    const { container, unmount } = render(
+      <PluginsContext.Provider value={plugins}>{block}</PluginsContext.Provider>,
+    );
+    const wrapper = container.firstElementChild as HTMLElement;
+    expect(wrapper.dataset.fencedLanguage).toBe("plantuml");
+    expect(wrapper.dataset.fencedSource).toBe("A -> B");
+    expect(screen.getByRole("button").textContent).toBe("static");
+    unmount();
+
+    const openSrc = vi.fn();
+    render(
+      <PluginsContext.Provider value={plugins}>
+        <LightboxContext.Provider value={{ open: vi.fn(), openSrc }}>
+          {block}
+        </LightboxContext.Provider>
+      </PluginsContext.Provider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "zoomable" }));
+    expect(openSrc).toHaveBeenCalledWith("data:x", "diagram");
+  });
+
   it("renders MermaidDiagram for mermaid code blocks", () => {
     render(
       <CodeBlockComponent>
@@ -65,23 +120,14 @@ describe("CodeBlockComponent", () => {
     expect(screen.getByTestId("mermaid-diagram")).toHaveTextContent("graph LR; A-->B;");
   });
 
-  it("renders D2Diagram for d2 code blocks", () => {
-    render(
+  it("leaves d2 as a plain code block while no plugin renders it", () => {
+    // D2 is the D2 core plugin's job; with the plugin off the source shows as code.
+    const { container } = render(
       <CodeBlockComponent>
         <code className="language-d2">a {"->"} b</code>
       </CodeBlockComponent>,
     );
-    expect(screen.getByTestId("d2-diagram")).toBeInTheDocument();
-    expect(screen.getByTestId("d2-diagram")).toHaveTextContent("a -> b");
-  });
-
-  it("does not render a copy button for d2 blocks", () => {
-    render(
-      <CodeBlockComponent>
-        <code className="language-d2">a {"->"} b</code>
-      </CodeBlockComponent>,
-    );
-    expect(screen.queryByRole("button", { name: "Copy code" })).not.toBeInTheDocument();
+    expect(container.querySelector("pre code")).toHaveTextContent("a -> b");
   });
 
   it("renders a CSV table for csv code blocks", () => {

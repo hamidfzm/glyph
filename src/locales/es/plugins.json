@@ -1,6 +1,7 @@
 {
   "installFromFolder": "Instalar desde carpeta…",
-  "installedHeading": "Instalados",
+  "coreHeading": "Complementos principales",
+  "communityHeading": "Complementos de la comunidad",
   "availableHeading": "Disponibles",
   "install": "Instalar",
   "update": "Actualizar",
@@ -40,5 +41,11 @@
   "toast": {
     "installed": "Complemento instalado: {{name}} v{{version}}",
     "error": "Error del complemento: {{message}}"
+  },
+  "core": {
+    "d2": {
+      "name": "Diagramas D2",
+      "description": "Muestra los bloques de código D2 y los archivos .d2 como diagramas."
+    }
   }
 }
