@@ -35,10 +35,16 @@ flags:
   rust:
     paths:
       - src-tauri/src/
+      - src-tauri/crates/
     carryforward: true
 
 ignore:
   - "src/main.tsx"
+  # src/preview/main.ts is the Explorer preview page's entry point, the analog
+  # of src/main.tsx: CSS imports plus one call into startPreview (tested) once
+  # WebView2's bridge is present. There is nothing to exercise without a real
+  # WebView2 host.
+  - "src/preview/main.ts"
   - "src/vite-env.d.ts"
   - "src/test/**"
   - "src/components/icons/**"

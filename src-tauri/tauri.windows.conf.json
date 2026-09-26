@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/v2/crates/tauri/schema.json",
+  "build": {
+    "beforeBuildCommand": "pnpm build && pnpm build:preview-handler"
+  },
+  "bundle": {
+    "resources": {
+      "../dist-preview/": "preview/"
+    },
+    "windows": {
+      "wix": {
+        "fragmentPaths": ["windows/preview-handler.wxs"],
+        "componentGroupRefs": ["GlyphPreviewHandler"]
+      }
+    }
+  }
+}

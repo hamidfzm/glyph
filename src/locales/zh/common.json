@@ -296,5 +296,10 @@
     "enable": "启用",
     "noThanks": "不用了",
     "dismiss": "关闭崩溃报告提示"
+  },
+  "preview": {
+    "tooLarge": "此文件过大，无法预览（{{size}}）。请在 Glyph 中打开阅读。",
+    "unreadable": "无法预览此文件。它可能已被移动，或者不是 UTF-8 文本。",
+    "failed": "生成预览时出错。请在 Glyph 中打开此文件阅读。"
   }
 }

@@ -154,6 +154,41 @@ feature:
 The dev CSP is identical plus the Vite dev server and HMR websocket on
 `localhost:1420`.
 
+## Windows Explorer preview handler
+
+The preview handler (`src-tauri/crates/preview-handler/`) renders markdown
+inside Explorer's preview pane. Its exposure differs from the app's in one
+way that matters: **selecting** a file renders it. No open, no double-click,
+so a hostile document in a Downloads folder is rendered by hovering the arrow
+keys over it. What holds it in:
+
+- **The same sanitizer.** The page reuses `renderPageHtml`, so document HTML
+  goes through the `rehype-sanitize` schema the app uses. Nothing document-
+  authored reaches the DOM unsanitized.
+- **No network.** The page's CSP is `default-src 'self'` with images also
+  allowed from the previewed file's own folder, which the host maps to
+  `glyph-document.example` read-only (`DENY_CORS`: images load, `fetch` does
+  not). Remote images are replaced by their alt text before they reach the
+  DOM, so a document cannot phone home or leak the viewer's IP by being
+  selected. SmartScreen reputation checks are off for the same reason.
+- **No navigation.** The Rust host cancels every navigation that is not the
+  preview page or one of its anchors, so links, including a relative
+  `other.md` that would otherwise resolve onto the preview host, are inert.
+  New windows are refused, host objects, dev tools and browser accelerator
+  keys are off.
+- **A size cap.** Files over 2 MiB get a notice instead of a render, so a
+  large file cannot stall Explorer's pane.
+- **Process isolation.** The handler runs in Explorer's `prevhost.exe`
+  surrogate, not in Explorer, and the WebView2 renderer keeps its own sandbox.
+  A crash or a hang takes down the surrogate only.
+
+The handler opts out of the surrogate's low integrity level
+(`DisableLowILProcessIsolation`), because WebView2 fails with `E_ACCESSDENIED`
+at low IL. It therefore runs at medium integrity, with the user's own rights,
+which is the same level the app itself runs at. What it does with them is
+narrow: it opens one file, reads at most 2 MiB of it, and maps that file's
+folder into the view read-only.
+
 ## Plugin permissions
 
 `capabilities/default.json` grants no permission set whose members resolve

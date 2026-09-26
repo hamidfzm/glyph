@@ -65,7 +65,7 @@ jobs:
           tool: nextest
       - name: Run Rust tests with coverage
         working-directory: src-tauri
-        run: cargo llvm-cov nextest --lcov --output-path ../coverage-rust.lcov --profile ci
+        run: cargo llvm-cov nextest --workspace --lcov --output-path ../coverage-rust.lcov --profile ci
       - name: Upload Rust coverage
         if: always()
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
@@ -89,7 +89,9 @@ jobs:
           use_pypi: true
 
   # Windows-gated guards (the junction escape test in grants.rs) never compile
-  # on the ubuntu coverage job above; this keeps them exercised in CI. Not in
+  # on the ubuntu coverage job above; this keeps them exercised in CI. The
+  # preview handler is Windows-only in full: its COM and WebView2 code compiles
+  # nowhere else, so this is the only job that type-checks or lints it. Not in
   # the required-checks ruleset.
   test-rust-windows:
     name: Rust Windows
@@ -97,9 +99,14 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: ./.github/actions/rust-setup
+        with:
+          components: clippy
       - name: Run Rust unit tests
         working-directory: src-tauri
-        run: cargo test --lib
+        run: cargo test --workspace --lib
+      - name: Run Clippy on the Windows-only code
+        working-directory: src-tauri
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
   # Checks the host's plugin API against glyph-md/plugin-template's declared
   # types and built plugin, and the marketplace schema and index in
@@ -155,4 +162,4 @@ jobs:
         run: echo "::add-matcher::.github/matchers/rust.json"
       - name: Run Clippy
         working-directory: src-tauri
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings

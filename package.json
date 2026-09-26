@@ -23,6 +23,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "size:check": "node scripts/check-bundle-size.mjs",
+    "build:preview-handler": "node scripts/build-preview-handler.mjs",
     "sync:tauri-npm": "node scripts/sync-tauri-npm-versions.mjs",
     "sync:tauri-npm:check": "node scripts/sync-tauri-npm-versions.mjs --check",
     "prepare": "husky",
