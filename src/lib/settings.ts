@@ -224,6 +224,13 @@ export interface MarkdownSettings {
   wikilinks: boolean;
 }
 
+// Bundled first-party plugins, keyed by their CORE_PLUGINS settingsKey. On by
+// default; off unloads the plugin and never fetches its code.
+export interface CorePluginSettings {
+  /** D2 diagrams: ```d2 blocks and .d2 files. */
+  d2: boolean;
+}
+
 export interface Settings {
   appearance: AppearanceSettings;
   layout: LayoutSettings;
@@ -234,6 +241,7 @@ export interface Settings {
   keybindings: KeybindingSettings;
   editor: EditorSettings;
   markdown: MarkdownSettings;
+  corePlugins: CorePluginSettings;
 }
 
 /** Copy of `settings` that is safe to persist: provider API keys live in the
@@ -313,5 +321,8 @@ export const DEFAULT_SETTINGS: Settings = {
     alerts: true,
     emoji: true,
     wikilinks: true,
+  },
+  corePlugins: {
+    d2: true,
   },
 };

@@ -1,20 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TocEntry } from "@/hooks/useTableOfContents";
+import { staticRenderers } from "@/lib/plugins/staticRenderers";
 import { prepareContent } from "./prepareContent";
 
 // Rendering needs a real layout/canvas/WASM engine; mock the helpers so the
 // orchestration is testable without them.
 const rasterizeElementMock = vi.fn(async () => "data:image/png;base64,MATH");
 const renderMermaidMock = vi.fn(async () => '<svg data-diagram="mermaid-light"></svg>');
-const renderD2Mock = vi.fn(async () => '<svg data-diagram="d2-light"></svg>');
 const restoreMermaidMock = vi.fn(async () => {});
 vi.mock("./rasterize", () => ({
   rasterizeElement: () => rasterizeElementMock(),
   renderMermaidLightSvg: () => renderMermaidMock(),
   restoreMermaidTheme: () => restoreMermaidMock(),
-}));
-vi.mock("@/lib/d2Render", () => ({
-  renderD2: () => renderD2Mock(),
 }));
 // DOMPurify does not run faithfully under happy-dom (it drops the <svg>
 // wrapper), so mock it pass-through and assert the sanitize wiring instead;
@@ -151,22 +148,107 @@ describe("prepareContent", () => {
     expect(result?.html).not.toContain("mermaid-diagram");
   });
 
-  it("swaps a D2 diagram for its light vector SVG for PDF", async () => {
-    renderD2Mock.mockClear();
-    setBody('<div class="d2-diagram" data-d2-source="a -> b"><svg></svg></div>');
+  it("swaps a plugin block for its sanitized static render for PDF", async () => {
+    sanitizeMock.mockClear();
+    const dispose = staticRenderers.register({
+      language: "puml",
+      renderStatic: async (code) => `<svg data-light="${code}"></svg>`,
+    });
+    setBody('<div data-fenced-language="puml" data-fenced-source="a"><div>dark</div></div>');
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(renderD2Mock).toHaveBeenCalledTimes(1);
-    expect(result?.html).toContain('data-diagram="d2-light"');
-    expect(result?.html).not.toContain("d2-diagram");
-    expect(result?.html).not.toContain("data:image/png");
+    dispose();
+    expect(result?.html).toContain('<svg data-light="a"></svg>');
+    expect(result?.html).not.toContain("data-fenced-language");
+    expect(sanitizeMock).toHaveBeenCalledWith('<svg data-light="a"></svg>', {
+      FORBID_TAGS: ["foreignObject"],
+    });
   });
 
-  it("leaves a D2 diagram untouched when its source is missing", async () => {
-    renderD2Mock.mockClear();
-    setBody('<div class="d2-diagram"><svg></svg></div>');
+  it("strips a plugin block's source and zoom hooks from every export", async () => {
+    setBody(
+      '<div data-fenced-language="puml" data-fenced-source="secret source">' +
+        '<div role="button" tabindex="0" title="Click to zoom" aria-label="Diagram"><svg></svg></div>' +
+        "</div>",
+    );
+    const html = (await prepareContent({ entries: ENTRIES, includeToc: false }))?.html ?? "";
+    expect(html).not.toContain("secret source");
+    expect(html).not.toContain("data-fenced-language");
+    expect(html).not.toContain('role="button"');
+    // A labelled render stays a named image.
+    expect(html).toContain('role="img"');
+    expect(html).not.toContain("tabindex");
+    expect(html).not.toContain("Click to zoom");
+    // The accessible name stays: it describes the diagram, not the click.
+    expect(html).toContain('aria-label="Diagram"');
+  });
+
+  it("re-renders a plugin block that carries no source as empty source for PDF", async () => {
+    const renderStatic = vi.fn(async () => "<svg></svg>");
+    const dispose = staticRenderers.register({ language: "puml", renderStatic });
+    try {
+      setBody('<div data-fenced-language="puml"><p>dark</p></div>');
+      await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+      expect(renderStatic).toHaveBeenCalledWith("");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("drops the role from an unlabelled zoomable plugin render in exports", async () => {
+    setBody(
+      '<div data-fenced-language="puml" data-fenced-source="a"><div role="button"></div></div>',
+    );
+    const html = (await prepareContent({ entries: ENTRIES, includeToc: false }))?.html ?? "";
+    expect(html).not.toContain("role=");
+  });
+
+  it("keeps a plugin block as rendered when it has no static render", async () => {
+    setBody('<div data-fenced-language="puml" data-fenced-source="a"><p>live</p></div>');
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(renderD2Mock).not.toHaveBeenCalled();
-    expect(result?.html).toContain("d2-diagram");
+    expect(result?.html).toContain("<p>live</p>");
+  });
+
+  it("puts a plugin block's source in the PDF when its static render fails", async () => {
+    const dispose = staticRenderers.register({
+      language: "puml",
+      renderStatic: async () => {
+        throw new Error("bad source");
+      },
+    });
+    try {
+      setBody(
+        '<div data-fenced-language="puml" data-fenced-source="A -> B"><p>dark</p></div><p>after</p>',
+      );
+      const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+      // Never the dark live render, and never silently nothing.
+      expect(result?.html).not.toContain("dark");
+      expect(result?.html).toContain("<pre><code>A -&gt; B</code></pre>");
+      expect(result?.html).toContain("after");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("rasterizes the right RTL block after a plugin's static render changes the page shape", async () => {
+    rasterizeElementMock.mockClear();
+    const dispose = staticRenderers.register({
+      language: "puml",
+      renderStatic: async () => "<p>light one</p><p>light two</p>",
+    });
+    try {
+      setBody(
+        '<div data-fenced-language="puml" data-fenced-source="a"><svg></svg></div>' +
+          "<p>سلام دنیا</p><p>plain english</p>",
+      );
+      const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+      expect(rasterizeElementMock).toHaveBeenCalledTimes(1);
+      expect(result?.html).toContain("light one");
+      expect(result?.html).toContain("light two");
+      expect(result?.html).not.toContain("سلام");
+      expect(result?.html).toContain("plain english");
+    } finally {
+      dispose();
+    }
   });
 
   it("leaves a Mermaid diagram untouched when its source is missing", async () => {
@@ -189,12 +271,9 @@ describe("prepareContent", () => {
 
   it("sanitizes the re-rendered diagram SVG before it re-enters the DOM", async () => {
     sanitizeMock.mockClear();
-    setBody(
-      '<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg></svg></div>' +
-        '<div class="d2-diagram" data-d2-source="a -> b"><svg></svg></div>',
-    );
+    setBody('<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg></svg></div>');
     await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(sanitizeMock).toHaveBeenCalledTimes(2);
+    expect(sanitizeMock).toHaveBeenCalledTimes(1);
     for (const call of sanitizeMock.mock.calls) {
       expect(call[1]).toEqual({ FORBID_TAGS: ["foreignObject"] });
     }
@@ -214,10 +293,12 @@ describe("prepareContent", () => {
   });
 
   it("drops a diagram whose light render returns no svg", async () => {
-    renderD2Mock.mockResolvedValueOnce("plain text, not svg");
-    setBody('<div class="d2-diagram" data-d2-source="a -> b"><svg data-dark="1"></svg></div>');
+    renderMermaidMock.mockResolvedValueOnce("plain text, not svg");
+    setBody(
+      '<div class="mermaid-diagram" data-mermaid-source="graph"><svg data-dark="1"></svg></div>',
+    );
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(result?.html).not.toContain("d2-diagram");
+    expect(result?.html).not.toContain("mermaid-diagram");
     expect(result?.html).not.toContain('data-dark="1"');
   });
 

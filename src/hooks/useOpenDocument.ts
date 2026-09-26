@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { type Dispatch, type RefObject, type SetStateAction, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { isCanvasFile } from "@/lib/canvasExtensions";
-import { D2_EXTENSIONS, isD2File } from "@/lib/d2Extensions";
+import { D2_EXTENSIONS } from "@/lib/d2Extensions";
 import { loadFileContent } from "@/lib/documentContent";
 import { isImageFile } from "@/lib/imageExtensions";
 import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
@@ -10,7 +10,9 @@ import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/note
 import { isPathInside } from "@/lib/paths";
 import { pickFiles } from "@/lib/pickers";
 import { isMobilePlatform } from "@/lib/platform";
+import { fileTypes } from "@/lib/plugins/fileTypes";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
+import { isSourceDocument } from "@/lib/sourceDocuments";
 import { generateTabId, nextUntitledTitle } from "@/lib/tabIds";
 import {
   type FileMetadata,
@@ -78,9 +80,11 @@ export function useOpenDocument({
       // Defensive gate: never load an unsupported file. Glyph rendering treats
       // content as markdown (HTML included via the sanitizer), so opening a
       // random `.txt` / `.html` / etc. is a code-injection vector. Notebooks
-      // (`.ipynb`) are allowed — they take the dedicated NotebookViewer path.
-      // Images/SVGs are allowed too — they render in the read-only image
-      // viewer, never as text. See memory/reject-unsupported-file-types.md.
+      // (`.ipynb`) are allowed: they take the dedicated NotebookViewer path.
+      // Images/SVGs are allowed too: they render in the read-only image
+      // viewer, never as text. Source documents (`.d2`, and extensions an
+      // enabled plugin registered) are allowed because they render fenced as
+      // code, never as markdown.
       // Android's document picker returns opaque `content://` URIs with no file
       // extension, so the extension-based check below can't classify them. The
       // picker's own type filters already restricted selection to supported
@@ -154,12 +158,10 @@ export function useOpenDocument({
           if (!nowOwned) invoke("unwatch_file", { path }).catch(() => {});
           return;
         }
-        // Notebooks, canvases, images, and D2 files are read-only; open straight
-        // into the viewer regardless of the user's default editor mode. (`.d2`
-        // content is fence-wrapped for rendering, so an editor would write the
-        // wrapper back over the source.)
+        // Notebooks, canvases, images, and source documents open straight into
+        // the viewer regardless of the user's default editor mode.
         const mode =
-          isImage || isNotebookFile(path) || isCanvasFile(path) || isD2File(path)
+          isImage || isNotebookFile(path) || isCanvasFile(path) || isSourceDocument(path)
             ? EDITOR_MODE.view
             : getDefaultEditorMode();
         const newTab: FileTab = {
@@ -232,10 +234,20 @@ export function useOpenDocument({
   );
 
   const openFileDialog = useCallback(async () => {
+    // Plugin file types have no picker entry of their own; the all-documents
+    // filter is where they become reachable.
+    const pluginExtensions = fileTypes.list().flatMap((type) => type.extensions);
     const selected = await pickFiles([
       {
         name: t("common:fileDialog.documents"),
-        extensions: [...MARKDOWN_EXTENSIONS, ...NOTEBOOK_EXTENSIONS, ...D2_EXTENSIONS] as string[],
+        extensions: [
+          ...new Set([
+            ...MARKDOWN_EXTENSIONS,
+            ...NOTEBOOK_EXTENSIONS,
+            ...D2_EXTENSIONS,
+            ...pluginExtensions,
+          ]),
+        ],
       },
       {
         name: t("common:fileDialog.markdown"),

@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useRef, useState } from "react";
 import { PluginStyles } from "@/components/plugins/PluginStyles";
 import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToasts";
 import { PluginsContext } from "@/contexts/PluginsContext";
+import { useCorePlugins } from "@/hooks/useCorePlugins";
 import { usePluginLibrary } from "@/hooks/usePluginLibrary";
 import { registerTranslations } from "@/lib/i18n";
 import { createPluginHost } from "@/lib/plugins/host";
@@ -44,6 +45,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     }),
   );
 
+  const coreReady = useCorePlugins(host, pushToast);
   const {
     installed,
     disabled,
@@ -55,7 +57,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     installFromRegistry,
     setEnabled,
     uninstall,
-  } = usePluginLibrary({ host, pushToast });
+  } = usePluginLibrary({ host, pushToast, coreReady });
 
   return (
     <PluginsContext.Provider

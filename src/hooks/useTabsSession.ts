@@ -14,6 +14,10 @@ import { injectedOpen, isPrimaryWindow } from "@/lib/windowContext";
 import { getWorkspaceSession, saveWorkspaceSession } from "@/lib/workspaceSession";
 import { buildSessionFromLegacy } from "@/lib/workspaceSessionSnapshot";
 
+// How long a saved-session restore waits for plugins to register their file
+// types. A plugin that never finishes activating must not hold startup.
+export const RESTORE_PLUGIN_WAIT_MS = 5_000;
+
 /** The slice of `useTabs` options this hook reads. */
 interface TabsSessionOptions {
   reopenLastFile: boolean;
@@ -32,6 +36,12 @@ interface UseTabsSessionParams {
   openFile: (path: string) => Promise<unknown>;
   openFolder: (root?: string, options?: OpenFolderOptions) => Promise<void>;
   activateTabByPath: (path: string) => void;
+  /**
+   * Plugins have registered their file types. A saved-session restore waits
+   * for it (up to RESTORE_PLUGIN_WAIT_MS): a tab of a plugin file type opened
+   * before its plugin loads would be refused, and the next save would drop it.
+   */
+  pluginsReady: boolean;
 }
 
 /**
@@ -51,10 +61,20 @@ export function useTabsSession({
   openFile,
   openFolder,
   activateTabByPath,
+  pluginsReady,
 }: UseTabsSessionParams): { initializing: boolean } {
   const [initializing, setInitializing] = useState(true);
   // Guards the mount-only init effect against StrictMode's double invoke.
   const didInit = useRef(false);
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+
+  const pluginsReadyRef = useRef(pluginsReady);
+  const pluginsReadyWaiters = useRef<Array<() => void>>([]);
+  useEffect(() => {
+    pluginsReadyRef.current = pluginsReady;
+    if (pluginsReady) for (const resolve of pluginsReadyWaiters.current.splice(0)) resolve();
+  }, [pluginsReady]);
 
   // Persist the workspace pointer + loose tabs to settings as state changes
   // (post-init). The workspace travels as a leading "folder" entry in the same
@@ -112,8 +132,27 @@ export function useTabsSession({
           return;
         }
         const initialPath = await invoke<string | null>("get_initial_file");
+        // CLI and OS opens were classified by the backend with the built-in
+        // rules, so only a saved session waits for plugin file types.
+        const willRestore =
+          !initialPath &&
+          (options.openTabs.length > 0 || (options.reopenLastFile && options.recentFiles[0]));
+        if (willRestore && !pluginsReadyRef.current) {
+          await new Promise<void>((resolve) => {
+            const timer = window.setTimeout(resolve, RESTORE_PLUGIN_WAIT_MS);
+            pluginsReadyWaiters.current.push(() => {
+              window.clearTimeout(timer);
+              resolve();
+            });
+          });
+        }
+        // Something the user opened while plugins loaded wins over the older
+        // launch-time session.
+        const userOpened = tabsRef.current.length > 0 || workspaceRef.current !== null;
         if (initialPath) {
           await openFile(initialPath);
+        } else if (userOpened) {
+          // Keep what the user opened.
         } else if (options.openTabs.length > 0) {
           const persistedTabs = normalizePersistedTabs(options.openTabs);
           // One workspace per window: the first folder entry wins. Extra
