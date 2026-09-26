@@ -20,6 +20,8 @@ export function startPreview({ root, host, darkQuery, language }: StartPreviewOp
   document.documentElement.lang = locale;
   document.documentElement.dir = localeDir(locale);
   const translationsReady = i18n.changeLanguage(locale);
+  // Before the document arrives, so the pane is never light in dark mode.
+  applyTheme(darkQuery);
 
   let message: HostMessage | null = null;
   let latestRender = 0;
@@ -27,8 +29,7 @@ export function startPreview({ root, host, darkQuery, language }: StartPreviewOp
   async function show() {
     if (!message) return;
     const render = ++latestRender;
-    const dark = darkQuery.matches;
-    document.documentElement.classList.toggle("dark", dark);
+    const dark = applyTheme(darkQuery);
     await translationsReady;
     const node = await renderMessage(message, dark, locale).catch(() =>
       notice(i18n.t("preview.failed")),
@@ -65,6 +66,11 @@ async function renderMessage(message: HostMessage, dark: boolean, locale: string
     case "unreadable":
       return notice(i18n.t("preview.unreadable"));
   }
+}
+
+function applyTheme(darkQuery: MediaQueryList): boolean {
+  document.documentElement.classList.toggle("dark", darkQuery.matches);
+  return darkQuery.matches;
 }
 
 function notice(text: string): HTMLElement {

@@ -6,6 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::hosts::DOCUMENT_HOST;
+use crate::theme::{SURFACE_DARK, SURFACE_LIGHT};
 use crate::{APP_IDENTIFIER, CLSID_TEXT};
 
 const PREVIEW_SHELLEX: &str = "{8895b1c6-b41f-4c1c-a562-0d564250836f}";
@@ -101,5 +102,25 @@ fn the_page_csp_allows_images_from_the_document_host() {
     assert!(
         page.contains(&format!("img-src 'self' data: https://{DOCUMENT_HOST}")),
         "the page CSP does not admit images from the document host"
+    );
+}
+
+#[test]
+fn the_pane_is_painted_in_the_page_surface_colors() {
+    let styles = read("src/styles/app.css");
+    let dark_block = styles
+        .split(
+            "
+.dark {",
+        )
+        .nth(1)
+        .expect("a .dark block in app.css");
+    assert!(
+        styles.contains(&format!("--color-surface: #{SURFACE_LIGHT:06x};")),
+        "the light surface in theme.rs no longer matches app.css"
+    );
+    assert!(
+        dark_block.contains(&format!("--color-surface: #{SURFACE_DARK:06x};")),
+        "the dark surface in theme.rs no longer matches app.css"
     );
 }

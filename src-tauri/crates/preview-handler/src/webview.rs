@@ -28,7 +28,7 @@ pub struct Config {
     pub document_dir: Option<PathBuf>,
     pub message: String,
     pub bounds: RECT,
-    pub background: Option<COLORREF>,
+    pub background: COLORREF,
 }
 
 /// Starts WebView2 as a child of `parent`; `on_created` runs on this thread
@@ -123,17 +123,14 @@ pub fn show(controller: &ICoreWebView2Controller, config: Config) -> windows_cor
         )?;
 
         controller.SetBounds(config.bounds)?;
-        if let Some(color) = config.background {
-            set_background(controller, color)?;
-        }
+        set_background(controller, config.background)?;
         controller.SetIsVisible(true)?;
         webview.Navigate(&HSTRING::from(ENTRY_URL))
     }
 }
 
-/// Paints Explorer's pane color until the page's first paint, so dark mode
-/// never flashes white.
-pub fn set_background(
+/// The page's own surface until its first paint, so dark mode never flashes white.
+fn set_background(
     controller: &ICoreWebView2Controller,
     color: COLORREF,
 ) -> windows_core::Result<()> {
@@ -174,18 +171,23 @@ fn lock_down(settings: &ICoreWebView2Settings) -> windows_core::Result<()> {
     Ok(())
 }
 
-/// The installed page sits next to this DLL: `<install>\preview\web`.
-pub fn web_dir() -> windows_core::Result<PathBuf> {
-    let mut module = HMODULE::default();
-    let mut buffer = vec![0u16; 32_768];
-    let len = unsafe {
+/// This DLL, found from an address inside it.
+pub fn module() -> windows_core::Result<HMODULE> {
+    let mut handle = HMODULE::default();
+    unsafe {
         GetModuleHandleExW(
             GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            PCWSTR(web_dir as *const u16),
-            &mut module,
+            PCWSTR(module as *const u16),
+            &mut handle,
         )?;
-        GetModuleFileNameW(Some(module), &mut buffer) as usize
-    };
+    }
+    Ok(handle)
+}
+
+/// The installed page sits next to this DLL: `<install>\preview\web`.
+pub fn web_dir() -> windows_core::Result<PathBuf> {
+    let mut buffer = vec![0u16; 32_768];
+    let len = unsafe { GetModuleFileNameW(Some(module()?), &mut buffer) as usize };
     if len == 0 {
         return Err(windows_core::Error::from_win32());
     }
@@ -193,12 +195,19 @@ pub fn web_dir() -> windows_core::Result<PathBuf> {
     Ok(dll.with_file_name("web"))
 }
 
-// Its own folder: WebView2 refuses a user data folder another process opened
-// with different options, and the app's own webview uses the app's.
+// One folder per host application. WebView2 refuses a data folder whose
+// browser process belongs to another process (ERROR_INVALID_STATE), and
+// Explorer is not the only preview host: Outlook and file managers load
+// preview handlers too. The app's own webview keeps the app's folder.
 fn user_data_dir() -> PathBuf {
+    let host = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.file_stem().map(|stem| stem.to_os_string()))
+        .unwrap_or_else(|| "host".into());
     std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
         .join(APP_IDENTIFIER)
         .join("PreviewHandler")
+        .join(host)
 }

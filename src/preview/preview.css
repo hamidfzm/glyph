@@ -1,9 +1,10 @@
 /* The Explorer preview pane: the document alone, without the app's chrome. */
-body {
-  margin: 0;
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-  font-family: var(--glyph-font);
+
+/* app.css locks html and body (the app scrolls inside its own panes), so the
+   pane's scroll container is the preview root. */
+#preview {
+  height: 100%;
+  overflow-y: auto;
 }
 
 /* The app's end-of-document scroll room is for outline jumps the pane lacks. */

@@ -67,6 +67,11 @@ describe("startPreview", () => {
     expect(root.querySelector("article")?.className).toBe("markdown-body");
   });
 
+  it("applies the dark theme before any document arrives", () => {
+    start("en", true);
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+  });
+
   it("follows the Windows theme and re-renders on a switch", async () => {
     const { root, post, switchTheme } = start("en", true);
     post(document_);

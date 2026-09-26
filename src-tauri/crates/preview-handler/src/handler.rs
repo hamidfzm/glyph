@@ -21,7 +21,7 @@ use windows_core::{implement, IUnknown, Interface, Ref, BOOL, GUID, HRESULT, PCW
 
 use crate::document::host_message;
 use crate::hosts::DOCUMENT_BASE_URL;
-use crate::webview::{self, Config};
+use crate::webview;
 use crate::worker::{Show, Worker};
 
 #[implement(
@@ -41,7 +41,6 @@ struct State {
     path: Option<PathBuf>,
     parent: HWND,
     bounds: RECT,
-    background: Option<COLORREF>,
     site: Option<IUnknown>,
     // Started on the first preview: the WebView2 thread (see worker.rs).
     worker: Option<Worker>,
@@ -88,21 +87,17 @@ impl IPreviewHandler_Impl for PreviewHandler_Impl {
     fn DoPreview(&self) -> windows_core::Result<()> {
         let mut state = self.state.borrow_mut();
         let path = state.path.clone().ok_or(E_UNEXPECTED)?;
-        let config = Config {
+        let show = Show {
+            parent: state.parent.0 as isize,
+            bounds: state.bounds,
             web_dir: webview::web_dir()?,
             document_dir: path.parent().map(PathBuf::from),
             message: host_message(&path, DOCUMENT_BASE_URL),
-            bounds: state.bounds,
-            background: state.background,
         };
         if state.worker.is_none() {
             state.worker = Worker::start();
         }
-        let worker = state.worker.as_ref().ok_or(E_FAIL)?;
-        worker.show(Show {
-            parent: state.parent.0 as isize,
-            config,
-        });
+        state.worker.as_ref().ok_or(E_FAIL)?.show(show);
         Ok(())
     }
 
@@ -139,16 +134,12 @@ impl IPreviewHandler_Impl for PreviewHandler_Impl {
 }
 
 impl IPreviewHandlerVisuals_Impl for PreviewHandler_Impl {
-    fn SetBackgroundColor(&self, color: COLORREF) -> windows_core::Result<()> {
-        let mut state = self.state.borrow_mut();
-        state.background = Some(color);
-        if let Some(worker) = &state.worker {
-            worker.set_background(color);
-        }
+    // The pane is painted in the page's own surface color (theme.rs) rather
+    // than Explorer's, so there is no second color change once the page loads.
+    fn SetBackgroundColor(&self, _color: COLORREF) -> windows_core::Result<()> {
         Ok(())
     }
 
-    // The page styles text with the app's own theme.
     fn SetFont(&self, _font: *const LOGFONTW) -> windows_core::Result<()> {
         Ok(())
     }

@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
@@ -14,6 +15,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use crate::generation::Generation;
+use crate::host_window;
+use crate::theme::{colorref, surface, system_is_dark};
 use crate::webview::{self, Config};
 
 /// Explorer calls the handler on a thread in the multithreaded apartment,
@@ -29,14 +32,16 @@ pub struct Worker {
 pub struct Show {
     /// `HWND` is not `Send`, so the window crosses the thread as a number.
     pub parent: isize,
-    pub config: Config,
+    pub bounds: RECT,
+    pub web_dir: PathBuf,
+    pub document_dir: Option<PathBuf>,
+    pub message: String,
 }
 
 enum Command {
     Show(Box<Show>),
     SetWindow(isize, RECT),
     SetBounds(RECT),
-    SetBackground(COLORREF),
     Focus,
     Unload,
     Quit,
@@ -69,10 +74,6 @@ impl Worker {
 
     pub fn set_bounds(&self, bounds: RECT) {
         self.send(Command::SetBounds(bounds));
-    }
-
-    pub fn set_background(&self, color: COLORREF) {
-        self.send(Command::SetBackground(color));
     }
 
     pub fn focus(&self) {
@@ -125,13 +126,15 @@ fn run(commands: &Receiver<Command>, ready: &Sender<u32>) {
     }
 }
 
-/// The WebView2 state, reachable from its own completion callbacks. Those run
-/// from the message loop, never while `handle` holds a borrow.
+/// The preview's windows, reachable from WebView2's completion callbacks.
+/// Those run from the message loop, never while `handle` holds a borrow.
 #[derive(Clone, Default)]
 struct View(Rc<RefCell<ViewState>>);
 
 #[derive(Default)]
 struct ViewState {
+    /// Painted in the page's surface color while WebView2 starts inside it.
+    host: Option<HWND>,
     controller: Option<ICoreWebView2Controller>,
     generation: Generation,
 }
@@ -141,20 +144,20 @@ impl View {
     fn handle(&self, command: Command) -> bool {
         match command {
             Command::Show(show) => self.show(*show),
-            Command::SetWindow(parent, bounds) => self.with_controller(|controller| unsafe {
-                let _ = controller.SetParentWindow(HWND(parent as *mut _));
-                let _ = controller.SetBounds(bounds);
-            }),
-            Command::SetBounds(bounds) => self.with_controller(|controller| {
-                let _ = unsafe { controller.SetBounds(bounds) };
-            }),
-            Command::SetBackground(color) => self.with_controller(|controller| {
-                let _ = webview::set_background(controller, color);
-            }),
-            Command::Focus => self.with_controller(|controller| {
-                let _ =
-                    unsafe { controller.MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC) };
-            }),
+            Command::SetWindow(parent, bounds) => {
+                if let Some(host) = self.0.borrow().host {
+                    host_window::reparent(host, HWND(parent as *mut _));
+                }
+                self.resize(bounds);
+            }
+            Command::SetBounds(bounds) => self.resize(bounds),
+            Command::Focus => {
+                if let Some(controller) = self.controller() {
+                    let _ = unsafe {
+                        controller.MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
+                    };
+                }
+            }
             Command::Unload => self.close(),
             Command::Quit => {
                 self.close();
@@ -164,19 +167,39 @@ impl View {
         true
     }
 
-    fn with_controller(&self, action: impl FnOnce(&ICoreWebView2Controller)) {
-        let controller = self.0.borrow().controller.clone();
-        if let Some(controller) = controller {
-            action(&controller);
+    fn controller(&self) -> Option<ICoreWebView2Controller> {
+        self.0.borrow().controller.clone()
+    }
+
+    fn resize(&self, bounds: RECT) {
+        if let Some(host) = self.0.borrow().host {
+            host_window::move_to(host, bounds);
+        }
+        if let Some(controller) = self.controller() {
+            let _ = unsafe { controller.SetBounds(host_window::client(bounds)) };
         }
     }
 
     fn show(&self, show: Show) {
         self.close();
-        let token = self.0.borrow_mut().generation.advance();
+        let dark = system_is_dark();
+        let Ok(host) = host_window::create(HWND(show.parent as *mut _), show.bounds, dark) else {
+            return;
+        };
+        let token = {
+            let mut state = self.0.borrow_mut();
+            state.host = Some(host);
+            state.generation.advance()
+        };
+        let config = Config {
+            web_dir: show.web_dir,
+            document_dir: show.document_dir,
+            message: show.message,
+            bounds: host_window::client(show.bounds),
+            background: COLORREF(colorref(surface(dark))),
+        };
         let view = self.clone();
-        let Show { parent, config } = show;
-        let started = webview::create(HWND(parent as *mut _), move |created| {
+        let started = webview::create(host, move |created| {
             let Ok(controller) = created else { return };
             // A newer file, or Unload, got here first (INV-3).
             if !view.0.borrow().generation.is_current(token) {
@@ -195,13 +218,16 @@ impl View {
     }
 
     fn close(&self) {
-        let controller = {
+        let (controller, host) = {
             let mut state = self.0.borrow_mut();
             state.generation.advance();
-            state.controller.take()
+            (state.controller.take(), state.host.take())
         };
         if let Some(controller) = controller {
             close(controller);
+        }
+        if let Some(host) = host {
+            host_window::destroy(host);
         }
     }
 }

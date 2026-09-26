@@ -9,11 +9,15 @@ mod document;
 mod generation;
 #[cfg(any(windows, test))]
 mod hosts;
+#[cfg(any(windows, test))]
+mod theme;
 
 #[cfg(windows)]
 mod class_factory;
 #[cfg(windows)]
 mod handler;
+#[cfg(windows)]
+mod host_window;
 #[cfg(windows)]
 mod webview;
 #[cfg(windows)]
