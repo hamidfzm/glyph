@@ -1765,6 +1765,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "glyph-preview-handler"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "webview2-com",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
 name = "gobject-sys"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

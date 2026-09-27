@@ -28,7 +28,7 @@ The spec stays current throughout: acceptance-criteria and task checkboxes on th
 - **Run the gates before every PR** (the same gate the Husky pre-commit hook and CI enforce):
   ```bash
   pnpm typecheck && pnpm check && pnpm test
-  cd src-tauri && cargo clippy --all-targets -- -D warnings
+  cd src-tauri && cargo clippy --workspace --all-targets -- -D warnings
   ```
   Fix Biome warnings by applying the suggested fix, never by suppressing.
 - **Branches** are cut from `main` as `feat/<slug>` or `fix/<slug>`, each in its own git worktree under `.claude/worktrees/`. See [.claude/rules/worktrees.md](.claude/rules/worktrees.md) for the GitHub Flow worktree workflow and how to clean up merged worktrees (see [CONTRIBUTING.md](CONTRIBUTING.md) for the wider conventions).

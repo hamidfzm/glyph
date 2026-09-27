@@ -296,5 +296,10 @@
     "enable": "Activar",
     "noThanks": "No, gracias",
     "dismiss": "Descartar aviso de informes de errores"
+  },
+  "preview": {
+    "tooLarge": "Este archivo es demasiado grande para la vista previa ({{size}}). Ábrelo en Glyph para leerlo.",
+    "unreadable": "No se puede previsualizar este archivo. Puede que se haya movido o que no sea texto UTF-8.",
+    "failed": "Algo salió mal al generar esta vista previa. Abre el archivo en Glyph para leerlo."
   }
 }

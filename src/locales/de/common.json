@@ -296,5 +296,10 @@
     "enable": "Aktivieren",
     "noThanks": "Nein, danke",
     "dismiss": "Hinweis zu Fehlerberichten schließen"
+  },
+  "preview": {
+    "tooLarge": "Diese Datei ist zu groß für die Vorschau ({{size}}). Öffne sie in Glyph, um sie zu lesen.",
+    "unreadable": "Für diese Datei ist keine Vorschau möglich. Sie wurde eventuell verschoben oder ist kein UTF-8-Text.",
+    "failed": "Beim Erstellen der Vorschau ist ein Fehler aufgetreten. Öffne die Datei in Glyph, um sie zu lesen."
   }
 }

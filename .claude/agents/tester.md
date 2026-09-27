@@ -13,7 +13,7 @@ Run the complete gates (equivalent to or stricter than what CI runs):
 3. `pnpm test` (frontend suite)
 4. `pnpm build` (Vite production build)
 5. `cd src-tauri && cargo test`
-6. `cd src-tauri && cargo clippy --all-targets -- -D warnings`
+6. `cd src-tauri && cargo clippy --workspace --all-targets -- -D warnings`
 
 Report each step pass/fail with the decisive error lines for failures, and inspect stderr for warnings even when a step passes.
 

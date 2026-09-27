@@ -5,6 +5,11 @@ description = "A cross-platform markdown viewer"
 authors = ["hamidfzm"]
 edition = "2021"
 
+# The Windows Explorer preview handler DLL, built by
+# `scripts/build-preview-handler.mjs` and installed by the MSI.
+[workspace]
+members = ["crates/preview-handler"]
+
 [lib]
 name = "glyph_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]

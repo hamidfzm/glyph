@@ -46,7 +46,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Folder workspaces with a sidebar tree, tabs, and create/rename/move/delete (links follow renames and moves); create a new workspace from within the app
 - Graph view (`Cmd/Ctrl+G`), command palette (`Cmd/Ctrl+K`, with `tag:` / frontmatter filters), a sidebar Tags panel, in-document search (`Cmd/Ctrl+F`), and workspace-wide full-text search with case/whole-word/regex toggles (`Cmd/Ctrl+Shift+F`)
 - Table of contents, resizable panels, zoom, and session/window restore
-- Drag-and-drop, file associations, and a `glyph` CLI (`glyph file.md`, `glyph ~/notes/`)
+- Drag-and-drop, file associations, the Windows Explorer preview pane, and a `glyph` CLI (`glyph file.md`, `glyph ~/notes/`)
 
 ### Viewer & Export
 - Jupyter notebooks (`.ipynb`) and JSON Canvas (`.canvas`) boards

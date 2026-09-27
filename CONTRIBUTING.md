@@ -76,7 +76,7 @@ sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl \
 2. `pnpm typecheck`
 3. `pnpm test --run`
 4. `cargo test --lib` (in `src-tauri/`)
-5. `cargo clippy --all-targets -- -D warnings` (in `src-tauri/`)
+5. `cargo clippy --workspace --all-targets -- -D warnings` (in `src-tauri/`)
 
 Budget roughly 1–2 minutes on a clean working tree. The fast lint-staged step gates the slow tests so a formatter miss fails in seconds.
 
@@ -101,6 +101,7 @@ pnpm test:coverage              # Run frontend tests with coverage
 pnpm test:e2e                   # WebKit smoke tests (Playwright; run `pnpm exec playwright install webkit` once first)
 pnpm test:app                   # Built-app smoke: drives the real binary over WebDriver (setup below)
 pnpm size:check                 # Bundle budget gate against dist/ (see docs/bundle-budgets.md)
+pnpm build:preview-handler      # Windows Explorer preview handler: page + DLL into dist-preview/
 cd src-tauri && cargo check     # Rust type checking
 cd src-tauri && cargo clippy    # Rust linting
 cd src-tauri && cargo test      # Rust tests
@@ -140,6 +141,37 @@ known-folder APIs, which env vars cannot redirect. CI runs this on Linux from
 the Build workflow: it flags (non-blocking) on PRs and hard-fails on pushes to
 `main` and at release, where a failure blocks channel publishing (see
 `.github/actions/app-smoke`).
+
+### Windows Explorer preview handler
+
+`src-tauri/crates/preview-handler/` is a Windows-only cdylib: a COM in-proc
+server (`IPreviewHandler`) that Explorer loads into its `prevhost.exe`
+surrogate to render the selected markdown file. It hosts WebView2 on the
+standalone page in `src/preview/`, which reuses the site export's renderer so
+the pane matches the app. `pnpm build:preview-handler` builds both into
+`dist-preview/`; the MSI installs them under `preview/` and registers the
+handler through `src-tauri/windows/preview-handler.wxs`.
+
+To try it without building an installer:
+
+```bash
+pnpm build:preview-handler
+powershell -File scripts/dev-preview-handler.ps1              # register (HKCU)
+powershell -File scripts/dev-preview-handler.ps1 -Unregister  # restore
+```
+
+**Sign out and back in after registering.** COM's surrogate launcher caches
+per-user class registrations, so a CLSID written into HKCU mid-session
+activates in process but not in `prevhost.exe`: activation fails with
+`0x80040154` and the pane shows "This file can't be previewed". The MSI's HKLM
+keys take effect immediately, so this affects only the dev loop. The script
+also saves and restores any handler already registered for those extensions,
+which is how it coexists with PowerToys.
+
+`cargo run -p glyph-preview-handler --example host -- <file.md>` hosts the
+built DLL in a plain window, which is the quickest way to see a render without
+Explorer; `--surrogate` activates the registered CLSID out of process instead,
+which is what reproduces Explorer's path.
 
 ### Plugin API contract
 
