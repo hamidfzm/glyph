@@ -6,12 +6,12 @@ export interface StaticRendererContribution {
   renderStatic: NonNullable<FencedRendererOptions["renderStatic"]>;
 }
 
-// Module-level so the print and PDF export passes, which are plain modules,
-// can re-render plugin blocks without the plugins context.
+// Module-level so the print, PDF, and website export passes, which are plain
+// modules, can re-render plugin blocks without the plugins context.
 export const staticRenderers = createRegistry<StaticRendererContribution>();
 
-// A plugin promise that never settles must not hang print or PDF export; the
-// export then falls back as it does for a failed render.
+// A plugin promise that never settles must not hang an export; the export then
+// falls back as it does for a failed render.
 export const STATIC_RENDER_TIMEOUT_MS = 15_000;
 
 /** The static render registered for `language`, bounded by the timeout. */

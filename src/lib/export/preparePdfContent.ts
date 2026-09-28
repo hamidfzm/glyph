@@ -6,81 +6,56 @@
 
 import { staticRendererFor } from "@/lib/plugins/staticRenderers";
 import { containsRtlText } from "@/lib/textDirection";
-import { rasterizeElement, renderMermaidLightSvg, restoreMermaidTheme } from "./rasterize";
+import { rasterizeElement } from "./rasterize";
 
-// For PDF export: swap each Mermaid diagram or plugin block in the clone for its
-// light-theme vector `<svg>` (the walker embeds SVG natively; see htmlToPdf),
-// and rasterize block math (`.katex-display`) to a PNG <img> (vector math is
+// For PDF export: swap each plugin block (Mermaid, D2) in the clone for its
+// light static render (the walker embeds SVG natively; see htmlToPdf), and
+// rasterize block math (`.katex-display`) to a PNG <img> (vector math is
 // #256). Diagrams re-render light so they don't sit as a dark box on the white
 // page. A math failure leaves the original node (the walker falls back to the
-// LaTeX source); a diagram whose light re-render fails is removed so the dark
-// on-screen SVG never leaks into the PDF.
+// LaTeX source); a block whose static render fails becomes its source, so the
+// dark on-screen SVG never leaks into the PDF.
 export async function preparePdfRichContent(liveBody: Element, clone: Element): Promise<void> {
-  const selector = ".katex-display, .mermaid-diagram, [data-fenced-language]";
+  const selector = ".katex-display, [data-fenced-language]";
   const live = liveBody.querySelectorAll<HTMLElement>(selector);
   if (live.length === 0) return;
   const cloned = clone.querySelectorAll(selector);
   const mathBackground = getComputedStyle(liveBody).backgroundColor || "#ffffff";
-  let mermaidRendered = false;
 
   for (let i = 0; i < live.length; i++) {
     const el = live[i];
-    const isMath = el.classList.contains("katex-display");
     const pluginLanguage = el.dataset.fencedLanguage;
-    try {
-      if (pluginLanguage !== undefined) {
-        const renderStatic = staticRendererFor(pluginLanguage);
-        // Without a static render the live block embeds as it is on screen.
-        if (!renderStatic) continue;
-        const source = el.dataset.fencedSource ?? "";
-        // The wrapper keeps the marker, so the RTL pass skips plugin output on
-        // both sides and its live/clone node lists still line up.
-        const wrap = clone.ownerDocument.createElement("div");
-        wrap.setAttribute("data-fenced-language", pluginLanguage);
-        try {
-          const markup = await renderStatic(source);
-          const { default: DOMPurify } = await import("dompurify");
-          wrap.innerHTML = DOMPurify.sanitize(markup, { FORBID_TAGS: ["foreignObject"] });
-        } catch {
-          // Never the dark live render, never nothing: the block's source.
-          const pre = clone.ownerDocument.createElement("pre");
-          const code = clone.ownerDocument.createElement("code");
-          code.textContent = source;
-          pre.append(code);
-          wrap.replaceChildren(pre);
-        }
-        cloned[i].replaceWith(wrap);
-        continue;
-      }
-      if (isMath) {
-        const img = clone.ownerDocument.createElement("img");
-        img.setAttribute("src", await rasterizeElement(el, mathBackground));
-        cloned[i].replaceWith(img);
-        continue;
-      }
-      const source = el.getAttribute("data-mermaid-source");
-      if (!source) continue; // no source to re-render; the on-screen SVG embeds as-is
-      const svg = await renderMermaidLightSvg(source);
-      mermaidRendered = true;
+    if (pluginLanguage !== undefined) {
+      const renderStatic = staticRendererFor(pluginLanguage);
+      // Without a static render the live block embeds as it is on screen.
+      if (!renderStatic) continue;
+      const source = el.dataset.fencedSource ?? "";
+      // The wrapper keeps the marker, so the RTL pass skips plugin output on
+      // both sides and its live/clone node lists still line up.
       const wrap = clone.ownerDocument.createElement("div");
-      // The diagram source is user-authored and Mermaid's output is raw, so
-      // sanitize at the sink before it re-enters the DOM and later flows into
-      // pdfmake's SVG parser. DOMPurify
-      // keeps <style> blocks and style attributes, which Mermaid's colors need;
-      // <foreignObject> is forbidden as the SVG-embedded-HTML vector (and
-      // pdfmake can't draw it anyway).
-      const { default: DOMPurify } = await import("dompurify");
-      wrap.innerHTML = DOMPurify.sanitize(svg, { FORBID_TAGS: ["foreignObject"] });
-      const svgEl = wrap.querySelector("svg");
-      if (!svgEl) throw new Error("no svg in rendered diagram");
-      cloned[i].replaceWith(svgEl);
-    } catch {
-      if (!isMath) cloned[i].remove();
+      wrap.setAttribute("data-fenced-language", pluginLanguage);
+      try {
+        const markup = await renderStatic(source);
+        const { default: DOMPurify } = await import("dompurify");
+        wrap.innerHTML = DOMPurify.sanitize(markup, { FORBID_TAGS: ["foreignObject"] });
+      } catch {
+        // Never the dark live render, never nothing: the block's source.
+        const pre = clone.ownerDocument.createElement("pre");
+        const code = clone.ownerDocument.createElement("code");
+        code.textContent = source;
+        pre.append(code);
+        wrap.replaceChildren(pre);
+      }
+      cloned[i].replaceWith(wrap);
+      continue;
     }
-  }
-
-  if (mermaidRendered) {
-    await restoreMermaidTheme(liveBody.ownerDocument.documentElement.classList.contains("dark"));
+    try {
+      const img = clone.ownerDocument.createElement("img");
+      img.setAttribute("src", await rasterizeElement(el, mathBackground));
+      cloned[i].replaceWith(img);
+    } catch {
+      // Leave the math node; the walker falls back to the LaTeX source.
+    }
   }
 }
 

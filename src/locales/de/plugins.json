@@ -46,6 +46,10 @@
     "d2": {
       "name": "D2-Diagramme",
       "description": "Stellt D2-Codeblöcke und .d2-Dateien als Diagramme dar."
+    },
+    "mermaid": {
+      "name": "Mermaid-Diagramme",
+      "description": "Stellt Mermaid-Codeblöcke und .mmd-Diagrammdateien als Diagramme dar."
     }
   }
 }

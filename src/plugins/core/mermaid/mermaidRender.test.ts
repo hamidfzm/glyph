@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DIAGRAM_RENDER_CACHE_LIMIT } from "./lruCache";
+import { RENDER_CACHE_LIMIT } from "./renderCache";
 
 const initialize = vi.fn();
 const renderSvg = vi.fn();
@@ -11,10 +11,26 @@ vi.mock("mermaid", () => ({
   },
 }));
 
-import { renderMermaid } from "./mermaidRender";
+// DOMPurify does not run faithfully under happy-dom (it drops the <svg>
+// wrapper), so mock it as a pass-through that still returns a real fragment,
+// and assert the sanitize wiring instead; real stripping is its job in the
+// webview.
+const sanitizeMock = vi.fn((svg: string, _opts?: Record<string, unknown>) => {
+  const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
+  const fragment = document.createDocumentFragment();
+  if (!parsed.querySelector("parsererror")) fragment.appendChild(parsed.documentElement);
+  return fragment;
+});
+vi.mock("dompurify", () => ({
+  default: {
+    sanitize: (svg: string, opts?: Record<string, unknown>) => sanitizeMock(svg, opts),
+  },
+}));
+
+import { renderMermaid, renderMermaidPreview, renderMermaidStatic } from "./mermaidRender";
 
 // The module-level cache survives across tests in this file, so every test
-// uses its own distinct source strings (same convention as d2Render.test.ts).
+// uses its own distinct source strings (same convention as the D2 plugin's d2Render.test.ts).
 describe("renderMermaid", () => {
   beforeEach(() => {
     initialize.mockClear();
@@ -115,7 +131,7 @@ describe("renderMermaid", () => {
     // These synchronous cache.set calls push "w1-dup" out of the LRU while its
     // render is still queued.
     const fillers: Promise<string>[] = [];
-    for (let i = 0; i < DIAGRAM_RENDER_CACHE_LIMIT; i++) {
+    for (let i = 0; i < RENDER_CACHE_LIMIT; i++) {
       fillers.push(renderMermaid(`w1-fill-${i}`, false));
     }
     // Miss (the key was evicted): a second, healthy promise is cached.
@@ -132,18 +148,103 @@ describe("renderMermaid", () => {
   });
 
   it("evicts the least recently used entry past the cache limit", async () => {
-    for (let i = 0; i < DIAGRAM_RENDER_CACHE_LIMIT; i++) {
+    for (let i = 0; i < RENDER_CACHE_LIMIT; i++) {
       await renderMermaid(`evict-${i}`, false);
     }
-    expect(renderSvg).toHaveBeenCalledTimes(DIAGRAM_RENDER_CACHE_LIMIT);
+    expect(renderSvg).toHaveBeenCalledTimes(RENDER_CACHE_LIMIT);
     // Touch evict-0 so it is the most recently used, then push one past the
     // limit: evict-1 (now oldest) falls out, evict-0 survives.
     await renderMermaid("evict-0", false);
-    expect(renderSvg).toHaveBeenCalledTimes(DIAGRAM_RENDER_CACHE_LIMIT);
+    expect(renderSvg).toHaveBeenCalledTimes(RENDER_CACHE_LIMIT);
     await renderMermaid("evict-overflow", false);
     await renderMermaid("evict-0", false);
-    expect(renderSvg).toHaveBeenCalledTimes(DIAGRAM_RENDER_CACHE_LIMIT + 1);
+    expect(renderSvg).toHaveBeenCalledTimes(RENDER_CACHE_LIMIT + 1);
     await renderMermaid("evict-1", false);
-    expect(renderSvg).toHaveBeenCalledTimes(DIAGRAM_RENDER_CACHE_LIMIT + 2);
+    expect(renderSvg).toHaveBeenCalledTimes(RENDER_CACHE_LIMIT + 2);
+  });
+});
+
+describe("renderMermaidStatic", () => {
+  beforeEach(() => {
+    initialize.mockReset();
+    renderSvg.mockReset();
+  });
+
+  it("re-renders light with SVG text labels and returns the markup", async () => {
+    renderSvg.mockResolvedValue({ svg: "<svg data-light='1'></svg>" });
+    // Re-serialized (the label-background pass parses it), so assert on content.
+    const svg = await renderMermaidStatic("graph TD; A-->B");
+    expect(svg).toContain('data-light="1"');
+    // The top-level flag matters: with only the flowchart one, Mermaid v11 still
+    // emits <foreignObject> node labels and they vanish from the PDF.
+    expect(initialize).toHaveBeenCalledWith({
+      startOnLoad: false,
+      theme: "default",
+      htmlLabels: false,
+      flowchart: { htmlLabels: false },
+    });
+  });
+
+  it("leaves no export options behind for the next screen render", async () => {
+    renderSvg.mockResolvedValue({ svg: "<svg/>" });
+    await renderMermaidStatic("graph TD; A-->B");
+    await renderMermaid("after-static", false);
+    // Relies on Mermaid 11's initialize resetting to its defaults first, so
+    // passing no htmlLabels flag here brings HTML labels back on screen.
+    expect(initialize).toHaveBeenLastCalledWith({ startOnLoad: false, theme: "default" });
+  });
+
+  it("sanitizes the rendered markup before any consumer sees it", async () => {
+    renderSvg.mockResolvedValue({ svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+    await renderMermaidStatic("graph TD; A-->B");
+    expect(sanitizeMock.mock.calls[0][1]).toMatchObject({ FORBID_TAGS: ["foreignObject"] });
+  });
+
+  it("clears the filled backdrop Mermaid puts behind edge and cluster labels", async () => {
+    renderSvg.mockResolvedValue({
+      svg: '<svg xmlns="http://www.w3.org/2000/svg"><g class="edgeLabel"><rect class="background" style="stroke: none"/></g></svg>',
+    });
+    const svg = await renderMermaidStatic("graph TD; A-->|x|B");
+    expect(svg).toMatch(/fill:\s*none/);
+    // The existing inline declarations survive.
+    expect(svg).toMatch(/stroke:\s*none/);
+  });
+
+  it("rejects when sanitizing leaves no svg behind", async () => {
+    renderSvg.mockResolvedValue({ svg: "<svg><unclosed></svg>" });
+    await expect(renderMermaidStatic("graph TD; A-->B")).rejects.toThrow("no svg");
+  });
+
+  it("passes a fresh id per render (Mermaid keeps state per id)", async () => {
+    renderSvg.mockResolvedValue({ svg: "<svg/>" });
+    await renderMermaidStatic("graph TD; A-->B");
+    await renderMermaidStatic("graph TD; A-->B");
+    const ids = renderSvg.mock.calls.map((c) => c[0]);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("renderMermaidPreview", () => {
+  beforeEach(() => {
+    initialize.mockReset();
+    renderSvg.mockReset();
+  });
+
+  it("renders in the given theme with SVG text labels, sanitized", async () => {
+    renderSvg.mockResolvedValue({ svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+    sanitizeMock.mockClear();
+    await renderMermaidPreview("graph TD; A-->B", true);
+    expect(initialize).toHaveBeenCalledWith(
+      expect.objectContaining({ theme: "dark", htmlLabels: false }),
+    );
+    expect(sanitizeMock.mock.calls[0][1]).toMatchObject({ FORBID_TAGS: ["foreignObject"] });
+  });
+
+  it("keeps the label backgrounds, which only paper drops", async () => {
+    renderSvg.mockResolvedValue({
+      svg: '<svg xmlns="http://www.w3.org/2000/svg"><rect class="background" style="stroke: none"/></svg>',
+    });
+    const svg = await renderMermaidPreview("graph TD; A-->|x|B", false);
+    expect(svg).not.toMatch(/fill:\s*none/);
   });
 });

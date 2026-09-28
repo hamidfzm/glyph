@@ -2,7 +2,7 @@
 // plugin depends only on its own folder, the public plugin types, and npm
 // packages, so each carries its own copy.
 
-// A rendered+sanitized D2 SVG is typically 10-100KB, so 50 entries keeps the
+// A rendered diagram SVG is typically 10-100KB, so 50 entries keeps the
 // cache under a few MB while covering every diagram in the documents a session
 // flips between. Evicting never breaks a diagram on screen: components hold
 // their own copy of the SVG.

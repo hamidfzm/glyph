@@ -3,7 +3,6 @@ import { collectStyles } from "@/lib/export/collectStyles";
 import { escapeXml } from "@/lib/export/escape";
 import { buildHtmlDocument } from "@/lib/export/html";
 import { deriveExportMeta } from "@/lib/export/meta";
-import { restoreMermaidTheme } from "@/lib/export/rasterize";
 import { siteChromeCss, siteChromeScript } from "@/lib/export/siteChrome";
 import { i18n } from "@/lib/i18n";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
@@ -13,7 +12,6 @@ import { resolveTargets } from "@/lib/wikilinkResolutions";
 import type { FileScan } from "@/lib/workspaceScan";
 import { buildIndexBodyHtml } from "./indexPage";
 import { lightboxLabels } from "./lightboxScript";
-import { inlineMermaidSvgs } from "./mermaidInline";
 import { buildNavHtml } from "./nav";
 import { buildOutlineHtml } from "./outline";
 import { buildPageMetaHtml, pageDescription, pageDocumentTitle } from "./pageMeta";
@@ -23,6 +21,7 @@ import { resolveSiteBranding } from "./siteBranding";
 import { parseSiteConfig, robotsTxt, SITE_CONFIG_PATH } from "./siteConfig";
 import { planSitePages } from "./sitePagePlan";
 import { encodeHref, relativeHref } from "./sitePaths";
+import { inlineStaticRenders } from "./staticInline";
 import { resolveSiteTheme } from "./themes";
 
 export interface ExportSiteOptions {
@@ -47,8 +46,6 @@ export interface ExportSiteResult {
   removed: number;
 }
 
-const MERMAID_FENCE = /^(```|~~~)mermaid\b/m;
-
 /** Join a site-relative POSIX path onto the output directory. */
 function outPath(outDir: string, rel: string): string {
   return `${outDir.replace(/[/\\]+$/, "")}/${rel}`;
@@ -65,8 +62,9 @@ function siteDir(rel: string): string {
  * file (structure preserved; the root index.*, else the root README.*, owns
  * index.html), a shared style.css collected from the live document, per-page
  * nav and outline, rewritten wikilinks/relative links, copied images, media
- * and linked files, and inline Mermaid SVGs. Rendering is headless (no React mount), so every
- * file exports with the same fidelity regardless of what is open in the app.
+ * and linked files, and plugin blocks (Mermaid, D2) inlined as their static
+ * render. Rendering is headless (no React mount), so every file exports with
+ * the same fidelity regardless of what is open in the app.
  *
  * Exporting again into the same directory prunes what the previous export
  * wrote and this one did not, so a deleted or renamed note leaves no page
@@ -82,8 +80,8 @@ export async function exportSite({
   rehypePlugins = [],
 }: ExportSiteOptions): Promise<ExportSiteResult> {
   // `list_markdown_files` returns every openable document type; the site
-  // renders the markdown family only (notebooks, canvases, and D2 sources
-  // have their own renderers the headless pipeline can't reproduce).
+  // renders the markdown family only (notebooks, canvases, and standalone D2
+  // sources open in their own viewers, which the site has no page type for).
   const listed = await invoke<FileScan>("list_markdown_files", { path: root });
   const unordered = listed.files.filter(isMarkdownFile);
   if (unordered.length === 0) {
@@ -186,95 +184,87 @@ export async function exportSite({
   let done = 0;
   let copied = 0;
   let removed = 0;
-  let usedMermaid = false;
-  try {
-    for (const { file, content, rel: pageRel } of jobs) {
-      let body = await renderPageHtml({
-        content,
-        // Resolved per page: the exported site links notes to each other the
-        // same way the viewer does, through the one index.
-        resolutions: await resolveTargets(root, file, content),
-        extraRemark: remarkPlugins,
-        // The URL rewriter runs last so links emitted by plugin rehype plugins
-        // are relativized like every other in-document link.
-        extraRehype: [
-          ...rehypePlugins,
-          [rehypeSiteUrls, { filePath: file, pageRel, root, pages, assets }],
-        ],
-      });
-      if (MERMAID_FENCE.test(content)) {
-        usedMermaid = true;
-        body = await inlineMermaidSvgs(body);
-      }
-      await writePage(
-        pageRel,
-        body,
-        deriveExportMeta(file, content).title,
-        pageDescription(content, config.description),
-      );
-      done++;
-      onProgress?.(done, total);
-    }
-
-    if (!hasIndex) {
-      await writePage(
-        "index.html",
-        buildIndexBodyHtml(config.title, sitePages),
-        config.title,
-        pageDescription("", config.description),
-      );
-      done++;
-      onProgress?.(done, total);
-    }
-
-    for (const [src, destRel] of assets) {
-      await ensureDir(destRel);
-      try {
-        await invoke("copy_file", { src, dest: outPath(outDir, destRel) });
-        copied++;
-        written.push(destRel);
-      } catch (err) {
-        // A reference to something missing on disk is already broken in the
-        // app; the exported page carries a broken reference too, rather than
-        // the whole export failing on it.
-        console.error(`Failed to copy asset ${src}:`, err);
-      }
-    }
-
-    // Collected last so stylesheets loaded during rendering (KaTeX) are in.
-    // The chrome CSS and theme script live in shared files rather than being
-    // repeated inline in every page.
-    await ensureDir("style.css");
-    await invoke("write_file", {
-      path: outPath(outDir, "style.css"),
-      content: `${collectStyles()}\n${siteChromeCss()}\n${theme.css}`,
+  for (const { file, content, rel: pageRel } of jobs) {
+    const rendered = await renderPageHtml({
+      content,
+      // Resolved per page: the exported site links notes to each other the
+      // same way the viewer does, through the one index.
+      resolutions: await resolveTargets(root, file, content),
+      extraRemark: remarkPlugins,
+      // The URL rewriter runs last so links emitted by plugin rehype plugins
+      // are relativized like every other in-document link.
+      extraRehype: [
+        ...rehypePlugins,
+        [rehypeSiteUrls, { filePath: file, pageRel, root, pages, assets }],
+      ],
     });
-    written.push("style.css");
-    await invoke("write_file", {
-      path: outPath(outDir, "site.js"),
-      content: siteChromeScript(lightboxLabels(i18n.t)),
-    });
-    written.push("site.js");
-    if (config.robots !== null) {
-      await invoke("write_file", {
-        path: outPath(outDir, "robots.txt"),
-        content: robotsTxt(config.robots),
-      });
-      written.push("robots.txt");
-    }
+    const body = await inlineStaticRenders(rendered);
+    await writePage(
+      pageRel,
+      body,
+      deriveExportMeta(file, content).title,
+      pageDescription(content, config.description),
+    );
+    done++;
+    onProgress?.(done, total);
+  }
 
-    // Last, so a failed export leaves the previous build's files (and its
-    // manifest) alone rather than pruning against a half-written site.
+  if (!hasIndex) {
+    await writePage(
+      "index.html",
+      buildIndexBodyHtml(config.title, sitePages),
+      config.title,
+      pageDescription("", config.description),
+    );
+    done++;
+    onProgress?.(done, total);
+  }
+
+  for (const [src, destRel] of assets) {
+    await ensureDir(destRel);
     try {
-      removed = await invoke<number>("prune_export_dir", { outDir, written });
+      await invoke("copy_file", { src, dest: outPath(outDir, destRel) });
+      copied++;
+      written.push(destRel);
     } catch (err) {
-      // Cleanup, not part of producing the site: the pages and assets are all
-      // on disk, so a failure here leaves stale files behind rather than
-      // failing an export that succeeded.
-      console.error("Failed to prune stale files from the export:", err);
+      // A reference to something missing on disk is already broken in the
+      // app; the exported page carries a broken reference too, rather than
+      // the whole export failing on it.
+      console.error(`Failed to copy asset ${src}:`, err);
     }
-  } finally {
-    if (usedMermaid) await restoreMermaidTheme(dark);
+  }
+
+  // Collected last so stylesheets loaded during rendering (KaTeX) are in.
+  // The chrome CSS and theme script live in shared files rather than being
+  // repeated inline in every page.
+  await ensureDir("style.css");
+  await invoke("write_file", {
+    path: outPath(outDir, "style.css"),
+    content: `${collectStyles()}\n${siteChromeCss()}\n${theme.css}`,
+  });
+  written.push("style.css");
+  await invoke("write_file", {
+    path: outPath(outDir, "site.js"),
+    content: siteChromeScript(lightboxLabels(i18n.t)),
+  });
+  written.push("site.js");
+  if (config.robots !== null) {
+    await invoke("write_file", {
+      path: outPath(outDir, "robots.txt"),
+      content: robotsTxt(config.robots),
+    });
+    written.push("robots.txt");
+  }
+
+  // Last, so a failed export leaves the previous build's files (and its
+  // manifest) alone rather than pruning against a half-written site.
+  try {
+    removed = await invoke<number>("prune_export_dir", { outDir, written });
+  } catch (err) {
+    // Cleanup, not part of producing the site: the pages and assets are all
+    // on disk, so a failure here leaves stale files behind rather than
+    // failing an export that succeeded.
+    console.error("Failed to prune stale files from the export:", err);
   }
 
   return { pages: done, assets: copied, removed };

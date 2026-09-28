@@ -28,7 +28,7 @@ export function lightboxLabels(t: TFunction): LightboxLabels {
     actualSize: t("common:lightbox.actualSize"),
     viewer: t("common:lightbox.viewer"),
     image: t("common:lightbox.image", { alt: "{{alt}}" }),
-    diagram: t("common:mermaid.label"),
+    diagram: t("common:lightbox.diagram"),
   };
 }
 
@@ -49,8 +49,8 @@ const ICON = {
 
 // Click-to-zoom lightbox for website export pages: a dependency-free port of
 // the app's Lightbox component (same classes, so the lightbox rules already in
-// the collected style.css style it). Images and inline Mermaid SVGs open in a
-// full-viewport overlay with fit / actual size / zoom, prev/next across the
+// the collected style.css style it). Images and inline plugin diagram SVGs open
+// in a full-viewport overlay with fit / actual size / zoom, prev/next across the
 // page, the same keyboard shortcuts, backdrop-click close, and drag-to-pan.
 // The image is laid out at natural size x scale inside the scrollable overlay,
 // so zooming past the viewport scrolls rather than clips.
@@ -58,7 +58,7 @@ export function lightboxScript(labels: LightboxLabels): string {
   return `(function(){
 var STEP=${ZOOM_STEP},MIN=${MIN_SCALE},MAX=${MAX_SCALE},ICON=${JSON.stringify(ICON)},L=${JSON.stringify(labels)};
 document.addEventListener('DOMContentLoaded',function(){
-  var items=Array.prototype.slice.call(document.querySelectorAll('.markdown-body img,.markdown-body .mermaid-diagram > svg'));
+  var items=Array.prototype.slice.call(document.querySelectorAll('.markdown-body img,.markdown-body [data-fenced-language] > * > svg'));
   if(!items.length)return;
   var overlay,img,level,counter,prev,next,index=0,scale=1,fitted=true,natural={w:1,h:1};
   function clamp(s){return Math.min(MAX,Math.max(MIN,s))}
@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded',function(){
     overlay.addEventListener('click',function(e){if(e.target===overlay)close()});
     pan(overlay);
   }
-  // Mermaid SVGs are sized by their viewBox (as an <img> a width="100%" SVG
+  // Diagram SVGs are sized by their viewBox (as an <img> a width="100%" SVG
   // has no reliable intrinsic size); images by their pixels, falling back to
   // the on-page box for a dimensionless SVG file.
   function measure(el){
@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded',function(){
     var el=items[i];index=i;img.style.opacity='0';
     var alt=isSvg(el)?L.diagram:el.getAttribute('alt')||'';
     img.alt=alt;overlay.setAttribute('aria-label',alt?L.image.replace('{{alt}}',alt):L.viewer);
-    // Exported Mermaid SVGs are light-theme with a transparent background,
+    // Exported diagram SVGs are light-theme with a transparent background,
     // illegible on the dark backdrop without a light card behind them.
     img.style.background=isSvg(el)?'#fff':'';
     img.src=isSvg(el)?'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(new XMLSerializer().serializeToString(el)):(el.currentSrc||el.src);

@@ -190,17 +190,11 @@
     "zoomOut": "Zoom out (-)",
     "zoomIn": "Zoom in (+)",
     "fit": "Fit to screen (0)",
-    "actualSize": "Actual size (1)"
+    "actualSize": "Actual size (1)",
+    "diagram": "Diagram"
   },
   "mdxNotice": {
     "body": "MDX file: JSX components are not rendered; only the markdown content is shown."
-  },
-  "mermaid": {
-    "empty": "Empty diagram source",
-    "errorLabel": "Diagram error",
-    "errorTitle": "Failed to render diagram",
-    "label": "Mermaid diagram",
-    "zoomHint": "Click to zoom"
   },
   "taskList": {
     "toggle": "Toggle task"

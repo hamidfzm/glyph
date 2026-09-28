@@ -6,10 +6,6 @@ import { createRegistry } from "@/lib/plugins/registry";
 import type { FencedRendererContribution } from "@/lib/plugins/types";
 import { CodeBlockComponent } from "./CodeBlockComponent";
 
-vi.mock("./MermaidDiagram", () => ({
-  MermaidDiagram: ({ code }: { code: string }) => <div data-testid="mermaid-diagram">{code}</div>,
-}));
-
 const writeTextMock = vi.fn().mockResolvedValue(undefined);
 Object.defineProperty(navigator, "clipboard", {
   value: { writeText: writeTextMock },
@@ -17,7 +13,7 @@ Object.defineProperty(navigator, "clipboard", {
 });
 
 describe("CodeBlockComponent", () => {
-  it("renders a normal pre element for non-mermaid code", () => {
+  it("renders a normal pre element for code", () => {
     const { container } = render(
       <CodeBlockComponent>
         <code className="language-javascript">const x = 1;</code>
@@ -102,22 +98,14 @@ describe("CodeBlockComponent", () => {
     expect(openSrc).toHaveBeenCalledWith("data:x", "diagram");
   });
 
-  it("renders MermaidDiagram for mermaid code blocks", () => {
-    render(
+  it("leaves mermaid as a plain code block while no plugin renders it", () => {
+    // Mermaid is the Mermaid core plugin's job; with the plugin off the source shows as code.
+    const { container } = render(
       <CodeBlockComponent>
         <code className="language-mermaid">graph TD; A--&gt;B;</code>
       </CodeBlockComponent>,
     );
-    expect(screen.getByTestId("mermaid-diagram")).toBeInTheDocument();
-  });
-
-  it("passes code content to MermaidDiagram", () => {
-    render(
-      <CodeBlockComponent>
-        <code className="language-mermaid">graph LR; A--&gt;B;</code>
-      </CodeBlockComponent>,
-    );
-    expect(screen.getByTestId("mermaid-diagram")).toHaveTextContent("graph LR; A-->B;");
+    expect(container.querySelector("pre code")).toHaveTextContent("graph TD; A-->B;");
   });
 
   it("leaves d2 as a plain code block while no plugin renders it", () => {
@@ -196,10 +184,12 @@ describe("CodeBlockComponent", () => {
       expect(screen.getByRole("button", { name: "Copy code" })).toBeInTheDocument();
     });
 
-    it("does not render a copy button for mermaid blocks", () => {
+    it("does not render a copy button when the code holds only empty elements", () => {
       render(
         <CodeBlockComponent>
-          <code className="language-mermaid">graph TD; A--&gt;B;</code>
+          <code className="language-javascript">
+            <span />
+          </code>
         </CodeBlockComponent>,
       );
       expect(screen.queryByRole("button", { name: "Copy code" })).not.toBeInTheDocument();

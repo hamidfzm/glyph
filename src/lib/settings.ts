@@ -229,6 +229,8 @@ export interface MarkdownSettings {
 export interface CorePluginSettings {
   /** D2 diagrams: ```d2 blocks and .d2 files. */
   d2: boolean;
+  /** Mermaid diagrams: ```mermaid blocks and .mmd diagram sources. */
+  mermaid: boolean;
 }
 
 export interface Settings {
@@ -324,5 +326,6 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   corePlugins: {
     d2: true,
+    mermaid: true,
   },
 };

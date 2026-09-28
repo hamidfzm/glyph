@@ -27,7 +27,7 @@ const clickLabel = (label: string) =>
   document.querySelector<HTMLButtonElement>(`.lightbox-overlay [aria-label="${label}"]`)?.click();
 
 const MERMAID =
-  '<div class="mermaid-diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="100%"><rect width="10" height="10"/></svg></div>';
+  '<div data-fenced-language="mermaid"><div class="mermaid-diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="100%"><rect width="10" height="10"/></svg></div></div>';
 
 afterEach(() => {
   // Close any lightbox left open so its key listener goes away.
@@ -49,12 +49,10 @@ describe("site lightbox script", () => {
       close: "Schließen (Esc)",
       zoomIn: "Vergrößern (+)",
       image: "Bild: {{alt}}",
-      diagram: "Mermaid-Diagramm",
+      diagram: "Diagramm",
     };
     mount(`<img src="a.png" alt="Foto">${MERMAID}`, de);
-    expect(document.querySelector(".mermaid-diagram")?.getAttribute("aria-label")).toBe(
-      "Mermaid-Diagramm",
-    );
+    expect(document.querySelector(".mermaid-diagram")?.getAttribute("aria-label")).toBe("Diagramm");
     document.querySelector<HTMLImageElement>(".markdown-body img")?.click();
     expect(overlay()?.getAttribute("aria-label")).toBe("Bild: Foto");
     expect(document.querySelector('[aria-label="Schließen (Esc)"]')).not.toBeNull();
@@ -124,7 +122,7 @@ describe("site lightbox script", () => {
     expect(counter()).toBe("1 / 3");
     press("ArrowRight");
     expect(counter()).toBe("2 / 3");
-    expect(lightboxImg()?.alt).toBe("Mermaid diagram");
+    expect(lightboxImg()?.alt).toBe("Diagram");
     clickLabel("Next image (→)");
     expect(counter()).toBe("3 / 3");
     expect(document.querySelector<HTMLButtonElement>(".lightbox-next")?.disabled).toBe(true);

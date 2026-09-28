@@ -43,9 +43,10 @@ export interface FencedRendererMount {
 
 export interface FencedRendererOptions {
   /**
-   * Light-theme markup (typically an SVG) for print and PDF export, which
-   * cannot reuse a live render drawn in the app theme's colors. The host
-   * sanitizes it before it reaches the document.
+   * Light-theme markup (typically an SVG) for print, PDF, and website export,
+   * which cannot reuse a live render drawn in the app theme's colors. The host
+   * sanitizes it before it reaches the document, and a website export drops
+   * its image references other than `data:` URLs.
    */
   renderStatic?: (code: string) => Promise<string>;
 }

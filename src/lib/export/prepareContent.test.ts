@@ -6,12 +6,8 @@ import { prepareContent } from "./prepareContent";
 // Rendering needs a real layout/canvas/WASM engine; mock the helpers so the
 // orchestration is testable without them.
 const rasterizeElementMock = vi.fn(async () => "data:image/png;base64,MATH");
-const renderMermaidMock = vi.fn(async () => '<svg data-diagram="mermaid-light"></svg>');
-const restoreMermaidMock = vi.fn(async () => {});
 vi.mock("./rasterize", () => ({
   rasterizeElement: () => rasterizeElementMock(),
-  renderMermaidLightSvg: () => renderMermaidMock(),
-  restoreMermaidTheme: () => restoreMermaidMock(),
 }));
 // DOMPurify does not run faithfully under happy-dom (it drops the <svg>
 // wrapper), so mock it pass-through and assert the sanitize wiring instead;
@@ -130,22 +126,26 @@ describe("prepareContent", () => {
     expect(result?.html).toContain("rgb(40, 42, 54)");
   });
 
-  it("rasterizes block math and swaps Mermaid for its light vector SVG for PDF", async () => {
+  it("rasterizes block math and swaps a plugin diagram for its light vector SVG for PDF", async () => {
     rasterizeElementMock.mockClear();
-    renderMermaidMock.mockClear();
-    restoreMermaidMock.mockClear();
+    const dispose = staticRenderers.register({
+      language: "puml",
+      renderStatic: async () => '<svg data-diagram="light"></svg>',
+    });
     setBody(
       '<p><span class="katex-display">math</span></p>' +
-        '<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg></svg></div>',
+        '<div data-fenced-language="puml" data-fenced-source="a"><svg data-dark="1"></svg></div>',
     );
-    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(rasterizeElementMock).toHaveBeenCalledTimes(1); // block math stays raster
-    expect(renderMermaidMock).toHaveBeenCalledTimes(1); // diagram re-rendered light
-    expect(restoreMermaidMock).toHaveBeenCalledTimes(1); // app theme restored after
-    expect(result?.html).toContain("data:image/png;base64,MATH");
-    expect(result?.html).toContain('data-diagram="mermaid-light"'); // inline vector SVG, not a PNG
-    expect(result?.html).not.toContain("katex-display");
-    expect(result?.html).not.toContain("mermaid-diagram");
+    try {
+      const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+      expect(rasterizeElementMock).toHaveBeenCalledTimes(1); // block math stays raster
+      expect(result?.html).toContain("data:image/png;base64,MATH");
+      expect(result?.html).toContain('data-diagram="light"'); // inline vector SVG, not a PNG
+      expect(result?.html).not.toContain('data-dark="1"');
+      expect(result?.html).not.toContain("katex-display");
+    } finally {
+      dispose();
+    }
   });
 
   it("swaps a plugin block for its sanitized static render for PDF", async () => {
@@ -251,14 +251,6 @@ describe("prepareContent", () => {
     }
   });
 
-  it("leaves a Mermaid diagram untouched when its source is missing", async () => {
-    renderMermaidMock.mockClear();
-    setBody('<div class="mermaid-diagram"><svg></svg></div>');
-    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(renderMermaidMock).not.toHaveBeenCalled();
-    expect(result?.html).toContain("mermaid-diagram");
-  });
-
   it("keeps the original node when math rasterization fails", async () => {
     rasterizeElementMock.mockClear();
     rasterizeElementMock.mockRejectedValueOnce(new Error("canvas tainted"));
@@ -267,39 +259,6 @@ describe("prepareContent", () => {
     // Fallback: the math element survives (the walker turns it into LaTeX text).
     expect(result?.html).toContain("katex-display");
     expect(result?.html).not.toContain("data:image/png");
-  });
-
-  it("sanitizes the re-rendered diagram SVG before it re-enters the DOM", async () => {
-    sanitizeMock.mockClear();
-    setBody('<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"><svg></svg></div>');
-    await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(sanitizeMock).toHaveBeenCalledTimes(1);
-    for (const call of sanitizeMock.mock.calls) {
-      expect(call[1]).toEqual({ FORBID_TAGS: ["foreignObject"] });
-    }
-  });
-
-  it("drops a diagram whose light re-render fails (never embeds the dark SVG)", async () => {
-    renderMermaidMock.mockClear();
-    renderMermaidMock.mockRejectedValueOnce(new Error("bad source"));
-    setBody(
-      '<div class="mermaid-diagram" data-mermaid-source="broken"><svg data-dark="1"></svg></div>' +
-        "<p>after</p>",
-    );
-    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(result?.html).not.toContain("mermaid-diagram");
-    expect(result?.html).not.toContain('data-dark="1"');
-    expect(result?.html).toContain("after");
-  });
-
-  it("drops a diagram whose light render returns no svg", async () => {
-    renderMermaidMock.mockResolvedValueOnce("plain text, not svg");
-    setBody(
-      '<div class="mermaid-diagram" data-mermaid-source="graph"><svg data-dark="1"></svg></div>',
-    );
-    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    expect(result?.html).not.toContain("mermaid-diagram");
-    expect(result?.html).not.toContain('data-dark="1"');
   });
 
   it("rasterizes blocks containing RTL text for PDF (browser bidi is exact)", async () => {
@@ -347,11 +306,19 @@ describe("prepareContent", () => {
 
   it("does not touch math or diagrams for non-PDF exports", async () => {
     rasterizeElementMock.mockClear();
-    renderMermaidMock.mockClear();
-    setBody('<span class="katex-display">math</span>');
-    await prepareContent({ entries: ENTRIES, includeToc: false });
-    expect(rasterizeElementMock).not.toHaveBeenCalled();
-    expect(renderMermaidMock).not.toHaveBeenCalled();
+    const renderStatic = vi.fn(async () => "<svg></svg>");
+    const dispose = staticRenderers.register({ language: "puml", renderStatic });
+    setBody(
+      '<span class="katex-display">math</span>' +
+        '<div data-fenced-language="puml" data-fenced-source="a"><svg></svg></div>',
+    );
+    try {
+      await prepareContent({ entries: ENTRIES, includeToc: false });
+      expect(rasterizeElementMock).not.toHaveBeenCalled();
+      expect(renderStatic).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
   });
 
   it("injects a table of contents when requested", async () => {

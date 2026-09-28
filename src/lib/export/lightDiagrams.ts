@@ -1,38 +1,13 @@
-// Mermaid and D2 bake the app theme's colors into the rendered SVG, so printing
-// a dark-mode document puts dark boxes with dark labels on white paper, and no
-// print stylesheet can override the baked `fill` values. Swap every live
-// diagram for a light re-render before printing; the returned callback restores
-// the originals afterwards.
+// Diagram plugins (Mermaid, D2) bake the app theme's colors into the rendered
+// SVG, so printing a dark-mode document puts dark boxes with dark labels on
+// white paper, and no print stylesheet can override the baked `fill` values.
+// Swap every live plugin block for its light static render before printing;
+// the returned callback restores the originals afterwards.
 
 import { staticRendererFor } from "@/lib/plugins/staticRenderers";
-import { renderMermaidLightSvg, restoreMermaidTheme } from "./rasterize";
 
 export async function swapDiagramsLight(doc: Document): Promise<() => void> {
-  const diagrams = Array.from(doc.querySelectorAll<HTMLElement>(".mermaid-diagram"));
   const restores: Array<() => void> = [];
-  let mermaidRendered = false;
-
-  for (const el of diagrams) {
-    const source = el.getAttribute("data-mermaid-source");
-    if (!source) continue;
-    const original = el.innerHTML;
-    try {
-      const svg = await renderMermaidLightSvg(source);
-      // Mermaid's output is raw, and this goes back into the live DOM;
-      // <foreignObject> is the SVG-embedded-HTML vector.
-      const { default: DOMPurify } = await import("dompurify");
-      el.innerHTML = DOMPurify.sanitize(svg, { FORBID_TAGS: ["foreignObject"] });
-      mermaidRendered = true;
-      restores.push(() => {
-        el.innerHTML = original;
-      });
-    } catch {
-      // Leave the on-screen diagram; a dark diagram beats a missing one.
-    }
-  }
-
-  // renderMermaidLightSvg mutates Mermaid's global config.
-  if (mermaidRendered) await restoreMermaidTheme(true);
 
   // Plugin blocks are React-owned, so the light render goes in beside the live
   // one (hidden, not replaced) and comes back out on restore.

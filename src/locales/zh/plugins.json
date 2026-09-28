@@ -46,6 +46,10 @@
     "d2": {
       "name": "D2 图表",
       "description": "将 D2 代码块和 .d2 文件渲染为图表。"
+    },
+    "mermaid": {
+      "name": "Mermaid 图表",
+      "description": "将 Mermaid 代码块和 .mmd 图表文件渲染为图表。"
     }
   }
 }

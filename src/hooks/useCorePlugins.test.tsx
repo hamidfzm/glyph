@@ -22,7 +22,7 @@ const d2Module: PluginModule = {
 
 function settingsValue(d2: boolean, loaded = true): SettingsContextValue {
   return {
-    settings: { ...DEFAULT_SETTINGS, corePlugins: { d2 } },
+    settings: { ...DEFAULT_SETTINGS, corePlugins: { ...DEFAULT_SETTINGS.corePlugins, d2 } },
     updateSettings: vi.fn(),
     resetSettings: vi.fn(),
     flushSettings: async () => true,

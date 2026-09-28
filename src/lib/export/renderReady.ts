@@ -1,9 +1,9 @@
 import { pendingDocumentAssets } from "@/lib/documentAssets";
 import { pendingPluginLoads } from "@/lib/markdown/pluginLoads";
 
-// Diagrams and math render asynchronously after the document mounts (Mermaid
-// and D2 compile in a worker, highlighting/KaTeX/gemoji load lazily), so an
-// export that fired on mount would write a document with empty diagram slots
+// Diagrams and math render asynchronously after the document mounts (diagram
+// plugins, highlighting, KaTeX, and gemoji all load lazily), so an export that
+// fired on mount would write a document with empty diagram slots
 // and unrendered shortcodes. Wait for the rendered body to appear and settle.
 
 // How long the body must go unchanged before it counts as settled. Long enough
@@ -16,13 +16,9 @@ const QUIET_MS = 250;
 // wait on; leaving it out made a board export sit here until the deadline.
 export const EXPORTABLE_ROOT_SELECTOR = ".markdown-body, .notebook-body, .glyph-canvas";
 
-/** Diagram containers still waiting for their SVG (or their error message),
- *  plus plugin renders that mark themselves `aria-busy`. */
+/** Plugin renders (diagrams) that mark themselves `aria-busy` while pending. */
 function pendingDiagrams(root: ParentNode): number {
-  const emptyDiagrams = Array.from(root.querySelectorAll(".mermaid-diagram")).filter(
-    (el) => el.childElementCount === 0,
-  ).length;
-  return emptyDiagrams + root.querySelectorAll('[aria-busy="true"]').length;
+  return root.querySelectorAll('[aria-busy="true"]').length;
 }
 
 /**
