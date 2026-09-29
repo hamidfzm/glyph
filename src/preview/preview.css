@@ -1,4 +1,5 @@
-/* The Explorer preview pane: the document alone, without the app's chrome. */
+/* The Explorer preview pane and Quick Look: the document alone, without the
+   app's chrome. */
 
 /* app.css locks html and body (the app scrolls inside its own panes), so the
    pane's scroll container is the preview root. */

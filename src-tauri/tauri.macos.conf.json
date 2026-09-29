@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/v2/crates/tauri/schema.json",
+  "build": {
+    "beforeBuildCommand": "pnpm build && pnpm build:quicklook"
+  },
+  "bundle": {
+    "macOS": {
+      "signingIdentity": "-",
+      "files": {
+        "PlugIns/GlyphQuickLook.appex": "../dist-quicklook/GlyphQuickLook.appex"
+      }
+    }
+  }
+}

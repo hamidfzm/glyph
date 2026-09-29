@@ -3,7 +3,7 @@ import { localeDir, resolveLocale } from "@/lib/locales";
 import { type HostMessage, parseHostMessage } from "./hostMessage";
 import { renderPreview } from "./renderPreview";
 
-/** WebView2's `window.chrome.webview`: how the preview handler reaches the page. */
+/** How the host (WebView2 on Windows, Quick Look on macOS) reaches the page: previewHost.ts. */
 export interface PreviewHost {
   addEventListener(type: "message", listener: (event: { data: unknown }) => void): void;
 }

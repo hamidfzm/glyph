@@ -18,11 +18,12 @@ jobs:
           - platform: ubuntu-22.04-arm
             is_pr: true
         include:
-          # PRs skip installer bundling and build single-arch macOS; pushes
-          # to main build the full universal/bundled artifacts.
+          # PRs build single-arch macOS and only the .app (no DMG), which the
+          # Quick Look smoke test inspects; pushes to main build the full
+          # universal/bundled artifacts.
           - platform: macos-latest
             args_full: "--target universal-apple-darwin"
-            args_pr: "--target aarch64-apple-darwin --no-bundle"
+            args_pr: "--target aarch64-apple-darwin --bundles app"
             targets_full: "aarch64-apple-darwin,x86_64-apple-darwin"
             targets_pr: "aarch64-apple-darwin"
           - platform: ubuntu-22.04
@@ -61,6 +62,10 @@ jobs:
         with:
           workspaces: src-tauri
       - run: pnpm install --frozen-lockfile
+      # The Quick Look extension's Swift, which no other job compiles.
+      - name: Quick Look self-check
+        if: matrix.platform == 'macos-latest'
+        run: pnpm build:quicklook --check
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -73,6 +78,11 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: ./scripts/preview-handler-smoke.ps1
+      # Checks the .app embeds the Quick Look extension signed and sandboxed,
+      # and that PlugInKit accepts its ad-hoc signature.
+      - name: Quick Look smoke test
+        if: matrix.platform == 'macos-latest'
+        run: ./scripts/quicklook-smoke.sh "$(find src-tauri/target -maxdepth 5 -path '*/release/bundle/macos/Glyph.app' | head -n 1)"
       # Starts `glyph mcp` the way an MCP client does, on every platform and
       # with no xvfb: the server must answer without a display, and on Windows
       # the release binary is a GUI-subsystem program talking over pipes. A
