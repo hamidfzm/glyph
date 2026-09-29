@@ -22,8 +22,9 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
     private enum Page { case loading, loaded, failed(Error) }
     private var page = Page.loading
     private var pending: (message: [String: Any], done: (Error?) -> Void)?
-    /// Posted again if WebKit's content process dies, so the preview never goes blank.
+    /// Posted again whenever the page reloads, so the preview never goes blank.
     private var shown: [String: Any]?
+    private var reloadedAfterCrash = false
 
     override func loadView() {
         let configuration = WKWebViewConfiguration()
@@ -54,6 +55,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
 
     func preparePreviewOfFile(at url: URL, completionHandler handler: @escaping (Error?) -> Void) {
         schemeHandler.documentRoot = url.deletingLastPathComponent()
+        reloadedAfterCrash = false
         // A superseded file is done: its preview is gone, and its message
         // must never land after the newer one (INV-3).
         pending?.done(nil)
@@ -65,9 +67,11 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         }
     }
 
+    // Also a reload: a link to the page itself, or a crash recovery below.
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        guard case .loading = page else { return }
+        if case .failed = page { return }
         page = .loaded
+        if pending == nil, let shown { pending = (shown, { _ in }) }
         post()
     }
 
@@ -81,10 +85,11 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         if case .loading = page { fail(error) }
     }
 
-    // WebKit can kill its content process (memory pressure): reload, and show
-    // the same file again unless a newer one is already waiting.
+    // WebKit can kill its content process (memory pressure): reload and show
+    // the file again, once, so a document that always crashes it cannot loop.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        if pending == nil, let shown { pending = (shown, { _ in }) }
+        if reloadedAfterCrash { shown = nil }
+        reloadedAfterCrash = true
         loadPage()
     }
 

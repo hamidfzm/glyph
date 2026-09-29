@@ -43,6 +43,8 @@ private let imageTypes = [
     "ico": "image/x-icon",
 ]
 
+private let maxServedBytes = 20 * 1024 * 1024
+
 final class SchemeHandler: NSObject, WKURLSchemeHandler {
     private let pageRoot: URL
     var documentRoot: URL?
@@ -54,7 +56,9 @@ final class SchemeHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
         guard let url = task.request.url,
               let (file, type) = servedFile(for: url, pageRoot: pageRoot, documentRoot: documentRoot),
-              let data = try? Data(contentsOf: file) else {
+              // A huge image beside a document must not stall Quick Look.
+              let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= maxServedBytes,
+              let data = try? Data(contentsOf: file, options: .mappedIfSafe) else {
             task.didFailWithError(URLError(.fileDoesNotExist))
             return
         }

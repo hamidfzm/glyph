@@ -9,6 +9,7 @@ app="$1"
 appex="$app/Contents/PlugIns/GlyphQuickLook.appex"
 fail() { echo "quicklook smoke: $*" >&2; exit 1; }
 
+[[ -d "$app" ]] || fail "no Glyph.app at '$app'"
 [[ -f "$appex/Contents/Resources/web/index.html" ]] || fail "no preview page in $appex"
 codesign --verify --deep --strict "$app" || fail "Glyph.app signature does not verify"
 codesign -d --entitlements - "$appex" 2>/dev/null | grep -q com.apple.security.app-sandbox \

@@ -176,7 +176,7 @@ which is what reproduces Explorer's path.
 
 ### macOS Quick Look extension
 
-`src-tauri/macos/quicklook/` is a small Swift Quick Look preview extension (`QLPreviewingController`) that renders the markdown file under Space in Finder. It hosts a `WKWebView` on the same standalone page in `src/preview/` as the Windows handler, served from the extension's resources on a `glyph-preview://` scheme. `pnpm build:quicklook` compiles it with plain `swiftc` (no Xcode project) for arm64 and x86_64 and ad-hoc signs it into `dist-quicklook/GlyphQuickLook.appex`; `tauri.macos.conf.json` runs that before every macOS build and embeds the result in `Glyph.app/Contents/PlugIns`. No Apple Developer account is involved: the app and the extension are ad-hoc signed, and macOS loads the extension once the app's quarantine is cleared (the Homebrew cask does this; a DMG install does it at the first-run Gatekeeper prompt).
+`src-tauri/macos/quicklook/` is a small Swift Quick Look preview extension (`QLPreviewingController`) that renders the markdown file under Space in Finder. It hosts a `WKWebView` on the same standalone page in `src/preview/` as the Windows handler, served from the extension's resources on a `glyph-preview://` scheme. `pnpm build:quicklook` compiles it with plain `swiftc` (no Xcode project) for arm64 and x86_64 and ad-hoc signs it into `dist-quicklook/GlyphQuickLook.appex`; `tauri.macos.conf.json` runs that before every macOS build and embeds the result in `Glyph.app/Contents/PlugIns`. No Apple Developer account is involved: the app and the extension are ad-hoc signed, and macOS loads the extension once the app's quarantine is cleared (the Homebrew cask does this; a DMG install does it when the user allows the app through Open Anyway in System Settings, Privacy & Security).
 
 `src-tauri/Info.plist` declares `com.hamidfzm.glyph.markdown` for the markdown extensions macOS does not already type as markdown; `scripts/quicklook-types.test.mjs` keeps it in step with `tauri.conf.json`.
 
@@ -188,7 +188,7 @@ qlmanage -p samples/README.md       # or press Space on a markdown file in Finde
 scripts/dev-quicklook.sh --remove   # unregister and delete the test install
 ```
 
-While it is registered, the test install previews every markdown file you press Space on, not only the repo's. `pnpm build:quicklook --check` compiles and runs `SelfCheck.swift`, which covers the file reader and the scheme handler's path checks without Quick Look.
+While it is registered, the test install previews every markdown file you press Space on, not only the repo's. Relative images beside a file in Desktop, Documents or Downloads trigger macOS's one-time folder access prompt for Glyph; that is expected (see the threat model). `pnpm build:quicklook --check` compiles and runs `SelfCheck.swift`, which covers the file reader and the scheme handler's path checks without Quick Look.
 
 ### Plugin API contract
 

@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Merged into the app's generated Info.plist by Tauri. macOS types only .md
-     and .markdown as markdown (net.daringfireball.markdown); this names the
-     rest of the markdown extensions in tauri.conf.json so the Quick Look
-     extension (macos/quicklook) can claim them. -->
+<!-- Merged into the app's generated Info.plist by Tauri. Current macOS types
+     only .md and .markdown as markdown (net.daringfireball.markdown); the
+     export names the rest of the markdown extensions in tauri.conf.json so the
+     Quick Look extension (macos/quicklook) can claim them. The import declares
+     the system type for releases that lack it, and is ignored where it exists. -->
 <plist version="1.0">
 <dict>
 	<key>UTExportedTypeDeclarations</key>
@@ -28,6 +29,27 @@
 					<string>mmd</string>
 					<string>mdtext</string>
 					<string>mdtxt</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>net.daringfireball.markdown</string>
+			<key>UTTypeDescription</key>
+			<string>Markdown Document</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.plain-text</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>md</string>
+					<string>markdown</string>
 				</array>
 			</dict>
 		</dict>
