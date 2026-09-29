@@ -15,8 +15,8 @@ interface HastElement extends HastNode {
 
 type VisitTree = Parameters<typeof visit>[0];
 
-// Rehype plugin for the Explorer preview. Relative images load from the
-// previewed file's folder, which the preview handler serves read-only at
+// Rehype plugin for the Explorer and Quick Look previews. Relative images load
+// from the previewed file's folder, which the host serves read-only at
 // `baseUrl`. Every other image becomes its alt text: a remote image would need
 // the network, and a path outside that folder is not served.
 export function rehypePreviewImages(baseUrl: string) {

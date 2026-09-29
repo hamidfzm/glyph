@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- docs/security/threat-model.md ("macOS Quick Look extension") explains each. -->
+<plist version="1.0">
+<dict>
+	<!-- PlugInKit loads only sandboxed extensions. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- WebKit cannot start its web content process without it. The
+	     extension blocks every network load itself (PreviewViewController.swift). -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Quick Look grants the previewed file alone; this reads the images
+	     beside it. Read-only, and served only from the file's own folder
+	     (SchemeHandler.swift). -->
+	<key>com.apple.security.temporary-exception.files.home-relative-path.read-only</key>
+	<array>
+		<string>/</string>
+	</array>
+</dict>
+</plist>

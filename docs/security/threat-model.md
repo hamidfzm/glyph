@@ -189,6 +189,24 @@ which is the same level the app itself runs at. What it does with them is
 narrow: it opens one file, reads at most 2 MiB of it, and maps that file's
 folder into the view read-only.
 
+## macOS Quick Look extension
+
+The Quick Look extension (`src-tauri/macos/quicklook/`) renders markdown when the user presses Space on a file in Finder. Like the Windows handler, a single keypress on a hostile file in Downloads renders it, so it carries the same controls, enforced in Swift rather than only by the page:
+
+- **The same sanitizer.** It loads the same `src/preview` page, so document HTML goes through the app's `rehype-sanitize` schema.
+- **No network.** The page's CSP allows only its own files, `data:` images, and `glyph-preview://document` (the previewed file's folder). Independently, a WebKit content rule list blocks every load that is not `glyph-preview:`, `data:` or `blob:`, so a CSP gap still cannot reach the network. Remote images become their alt text before they reach the DOM.
+- **No navigation.** The navigation delegate allows only the preview page and its in-page anchors, so every link to anything else is inert; a link to the page itself reloads it and the document is shown again. There is no `uiDelegate`, so a link that asks for a new window opens nothing, and the page gets no script message handler: the host posts the document in, the page never calls out.
+- **A size cap.** Files over 2 MiB get a notice instead of a render, so a large file cannot stall Quick Look.
+- **Process isolation.** The extension is its own sandboxed process, launched by Quick Look, and WebKit's web content process keeps its own sandbox. A crash takes down the extension only.
+
+The extension's sandbox carries three entitlements (`GlyphQuickLook.entitlements`):
+
+- `com.apple.security.app-sandbox`, which PlugInKit requires of every extension.
+- `com.apple.security.network.client`, because a sandboxed `WKWebView` cannot start its web content process without it. The content rule list above is what keeps the network closed.
+- `com.apple.security.temporary-exception.files.home-relative-path.read-only` for `/`, because Quick Look grants the previewed file alone and relative images live beside it. This is a read of the user's whole home folder, which is broader than the Windows handler's folder mapping. What narrows it is the only code that uses it: the scheme handler serves `glyph-preview://document/` from the previewed file's own folder, refuses `..`, empty segments and symlinks resolving outside that folder, and serves only image types. The page itself cannot name a path outside that folder, and there is no channel out for anything it could load. The exception does not bypass macOS privacy controls: an image beside a file in Desktop, Documents, Downloads or iCloud Drive triggers the system's one-time folder access prompt, attributed to Glyph, and if the user declines, those images do not load. Files outside the home folder (external volumes, `/tmp`) never get their images.
+
+The app and the extension are ad-hoc signed; there is no Developer ID or notarization. That changes nothing about the extension's sandbox, which macOS enforces from the entitlements in the ad-hoc signature, but it means Gatekeeper does not vouch for the download: users trust the release the same way they trust the rest of the app today.
+
 ## Plugin permissions
 
 `capabilities/default.json` grants no permission set whose members resolve

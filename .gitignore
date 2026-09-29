@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-preview/
+dist-quicklook/
 coverage/
 # glyph-md/plugin-template and glyph-md/plugins checkouts for the plugin contract check
 .ecosystem/

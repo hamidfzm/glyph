@@ -1,4 +1,4 @@
-// What the preview handler DLL posts to the page (document.rs builds it).
+// What the host posts to the page (document.rs on Windows, Document.swift on macOS).
 export type HostMessage =
   | { kind: "document"; content: string; baseUrl: string }
   | { kind: "tooLarge"; bytes: number }

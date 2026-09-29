@@ -2,13 +2,14 @@ import "@/styles/app.css";
 import "@/styles/highlight.css";
 import "@/plugins/core/mermaid/mermaid.css";
 import "./preview.css";
-import { type PreviewHost, startPreview } from "./startPreview";
+import { connectHost } from "./previewHost";
+import { startPreview } from "./startPreview";
 
-// Present only inside WebView2, where the preview handler posts the document.
-const host = (window as { chrome?: { webview?: PreviewHost } }).chrome?.webview;
+const { host, platform } = connectHost(window);
+document.documentElement.dataset.platform = platform;
 const root = document.getElementById("preview");
 
-if (host && root) {
+if (root) {
   startPreview({
     root,
     host,
