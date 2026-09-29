@@ -1,80 +1,14 @@
 // Rendering helpers for PDF export. Block math is captured from the live DOM
-// as a raster image (vector math is #256); diagrams re-render in the light
-// theme as SVG strings so the PDF embeds them as true vectors (the on-screen
-// SVG bakes in the app theme's colors). `rasterizeSvgsInHtml` is the fallback
-// for SVGs pdfmake's renderer rejects.
+// as a raster image (vector math is #256). `rasterizeSvgsInHtml` is the
+// fallback for SVGs pdfmake's renderer rejects.
 
-import { enqueueMermaid } from "@/lib/mermaidRender";
 import { decodeSvgDataUrl, toXmlSvg } from "@/lib/svgDataUrl";
-
-let mermaidId = 0;
 
 // Rasterize a live element (e.g. block math) to a PNG data URI via html2canvas.
 export async function rasterizeElement(el: HTMLElement, backgroundColor: string): Promise<string> {
   const { default: html2canvas } = await import("html2canvas");
   const canvas = await html2canvas(el, { backgroundColor, scale: 2, logging: false });
   return canvas.toDataURL("image/png");
-}
-
-// Re-render a Mermaid source in the light theme with SVG text labels (no
-// `<foreignObject>`, which pdfmake's SVG renderer can't draw and which would
-// taint a canvas in the raster fallback). Returns the SVG markup. Always
-// light, regardless of the app theme.
-export async function renderMermaidLightSvg(source: string): Promise<string> {
-  // Queued so this export-config pair cannot steal the theme from a viewer
-  // render mid-flight (which the viewer would then cache).
-  const svg = await enqueueMermaid(async () => {
-    const { default: mermaid } = await import("mermaid");
-    // Both flags are needed: with only the flowchart one, Mermaid v11 still
-    // wraps every node label in a `<foreignObject>` and the labels vanish from
-    // the PDF.
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: "default",
-      htmlLabels: false,
-      flowchart: { htmlLabels: false },
-    });
-    const { svg } = await mermaid.render(`glyph-export-mermaid-${mermaidId++}`, source);
-    return svg;
-  });
-  return sanitizeDiagramSvg(svg);
-}
-
-// Mermaid builds raw markup out of user-authored diagram source, so it is
-// sanitized here, before any consumer (PDF, print, site export) can put it in a
-// document; `<foreignObject>` is the SVG-embedded-HTML vector.
-//
-// Mermaid also backs every edge and cluster label with a filled
-// `rect.background` so labels stay readable where they cross an edge. On a
-// printed page that reads as a grey slab, worst over a colored subgraph, so the
-// fill is dropped while the sanitized DOM is in hand. Inline styles win over
-// the stylesheet rule that sets it.
-async function sanitizeDiagramSvg(svg: string): Promise<string> {
-  const { default: DOMPurify } = await import("dompurify");
-  const fragment = DOMPurify.sanitize(svg, {
-    FORBID_TAGS: ["foreignObject"],
-    RETURN_DOM_FRAGMENT: true,
-  });
-  for (const rect of Array.from(fragment.querySelectorAll("rect.background"))) {
-    (rect as SVGElement).style.setProperty("fill", "none");
-  }
-  const root = fragment.querySelector("svg");
-  if (!root) throw new Error("no svg in rendered diagram");
-  return root.outerHTML;
-}
-
-// Restore Mermaid's (global) config to the app theme after export-time renders,
-// so on-screen diagrams keep their theme and HTML labels.
-export async function restoreMermaidTheme(dark: boolean): Promise<void> {
-  await enqueueMermaid(async () => {
-    const { default: mermaid } = await import("mermaid");
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: dark ? "dark" : "default",
-      htmlLabels: true,
-      flowchart: { htmlLabels: true },
-    });
-  });
 }
 
 /**

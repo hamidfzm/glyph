@@ -1,15 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { restoreMermaidTheme } from "@/lib/export/rasterize";
 import { i18n } from "@/lib/i18n";
 import { pathStem } from "@/lib/paths";
+import { staticRenderers } from "@/lib/plugins/staticRenderers";
 import type { MarkdownPlugin } from "@/lib/plugins/types";
 import { exportSite } from "./exportSite";
 
-vi.mock("@/lib/export/rasterize", () => ({
-  renderMermaidLightSvg: vi.fn(() => Promise.resolve("<svg>diagram</svg>")),
-  restoreMermaidTheme: vi.fn(() => Promise.resolve()),
-}));
+// happy-dom cannot run DOMPurify faithfully; the sanitize wiring is covered
+// in staticInline.test.ts.
+vi.mock("dompurify", () => ({ default: { sanitize: (markup: string) => markup } }));
 
 interface FakeFs {
   writes: Map<string, string>;
@@ -66,7 +65,6 @@ function mockFs(files: Record<string, string>, removed = 0): FakeFs {
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
-  vi.mocked(restoreMermaidTheme).mockClear();
 });
 
 describe("exportSite", () => {
@@ -176,12 +174,25 @@ describe("exportSite", () => {
     expect(fs.writes.get("/out/notes.html")).toContain('href="docs/report.pdf"');
   });
 
-  it("inlines mermaid diagrams and restores the app theme afterwards", async () => {
+  it("inlines plugin diagrams as their static render", async () => {
+    const dispose = staticRenderers.register({
+      language: "mermaid",
+      renderStatic: async () => '<div class="mermaid-diagram"><svg>diagram</svg></div>',
+    });
+    try {
+      const fs = mockFs({ "/ws/d.md": "```mermaid\ngraph TD; A-->B;\n```" });
+      await exportSite({ root: "/ws", outDir: "/out" });
+      const page = fs.writes.get("/out/d.html") ?? "";
+      expect(page).toContain('<div class="mermaid-diagram"><svg>diagram</svg></div>');
+    } finally {
+      dispose();
+    }
+  });
+
+  it("keeps a diagram as its source when the plugin is off", async () => {
     const fs = mockFs({ "/ws/d.md": "```mermaid\ngraph TD; A-->B;\n```" });
     await exportSite({ root: "/ws", outDir: "/out" });
-    const page = fs.writes.get("/out/d.html") ?? "";
-    expect(page).toContain('<div class="mermaid-diagram"><svg>diagram</svg></div>');
-    expect(restoreMermaidTheme).toHaveBeenCalledTimes(1);
+    expect(fs.writes.get("/out/d.html")).toContain("language-mermaid");
   });
 
   it("exports only the markdown family, skipping notebooks, canvases, and D2", async () => {
@@ -199,10 +210,18 @@ describe("exportSite", () => {
   });
 
   it("renders a Mermaid-source .mmd file as a diagram page", async () => {
-    const fs = mockFs({ "/ws/flow.mmd": "flowchart TD\n  A --> B" });
-    await exportSite({ root: "/ws", outDir: "/out" });
-    const page = fs.writes.get("/out/flow.html") ?? "";
-    expect(page).toContain('<div class="mermaid-diagram">');
+    const dispose = staticRenderers.register({
+      language: "mermaid",
+      renderStatic: async () => '<div class="mermaid-diagram"><svg>diagram</svg></div>',
+    });
+    try {
+      const fs = mockFs({ "/ws/flow.mmd": "flowchart TD\n  A --> B" });
+      await exportSite({ root: "/ws", outDir: "/out" });
+      const page = fs.writes.get("/out/flow.html") ?? "";
+      expect(page).toContain('<div class="mermaid-diagram">');
+    } finally {
+      dispose();
+    }
   });
 
   it("prefers a root index file over the README for index.html", async () => {

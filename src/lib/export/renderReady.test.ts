@@ -22,25 +22,6 @@ describe("waitForRenderIdle", () => {
     await expect(waitForRenderIdle(document, 2000)).resolves.toEqual({ settled: true });
   });
 
-  it("waits for an empty diagram container to be filled", async () => {
-    const body = setBody(
-      '<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"></div>',
-    );
-    const pending = waitForRenderIdle(document, 3000);
-
-    // Still empty after the quiet window: the exporter must not proceed.
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    let done = false;
-    void pending.then(() => {
-      done = true;
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(done).toBe(false);
-
-    body.querySelector(".mermaid-diagram")!.innerHTML = "<svg></svg>";
-    await expect(pending).resolves.toEqual({ settled: true });
-  });
-
   // A document waiting on a lazy chunk mutates nothing, so the quiet check
   // alone would call it finished and export the unrendered shortcode.
   it("waits for a plugin render marked aria-busy", async () => {
@@ -117,7 +98,7 @@ describe("waitForRenderIdle", () => {
   });
 
   it("gives up at the deadline so one stuck diagram cannot hang the process", async () => {
-    setBody('<div class="mermaid-diagram" data-mermaid-source="graph TD; A-->B"></div>');
+    setBody('<div data-fenced-language="mermaid"><div aria-busy="true"></div></div>');
     await expect(waitForRenderIdle(document, 300)).resolves.toEqual({ settled: false });
   });
 

@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderPreview } from "./renderPreview";
 
-vi.mock("@/lib/mermaidRender", () => ({
-  renderMermaid: vi.fn((_source: string, dark: boolean) =>
+vi.mock("@/plugins/core/mermaid/mermaidRender", () => ({
+  renderMermaidPreview: vi.fn((_source: string, dark: boolean) =>
     Promise.resolve(`<svg data-theme="${dark ? "dark" : "light"}"></svg>`),
   ),
 }));
+// happy-dom cannot run DOMPurify faithfully; the sanitize wiring is covered
+// in staticInline.test.ts.
+vi.mock("dompurify", () => ({ default: { sanitize: (markup: string) => markup } }));
 
-const { renderMermaid } = await import("@/lib/mermaidRender");
+const { renderMermaidPreview } = await import("@/plugins/core/mermaid/mermaidRender");
 
 const options = { dark: false, baseUrl: "https://glyph-document.example/" };
 
@@ -50,11 +53,11 @@ describe("renderPreview", () => {
     });
     expect(html).toContain('<svg data-theme="dark">');
     expect(html).not.toContain("language-mermaid");
-    expect(renderMermaid).toHaveBeenCalledWith("flowchart LR; A --- B;\n", true);
+    expect(renderMermaidPreview).toHaveBeenCalledWith("flowchart LR; A --- B;\n", true);
   });
 
   it("keeps the source block when a diagram fails to render", async () => {
-    vi.mocked(renderMermaid).mockRejectedValueOnce(new Error("bad diagram"));
+    vi.mocked(renderMermaidPreview).mockRejectedValueOnce(new Error("bad diagram"));
     const html = await renderPreview("```mermaid\nnope\n```", options);
     expect(html).toContain("language-mermaid");
   });

@@ -46,6 +46,10 @@
     "d2": {
       "name": "Diagramas D2",
       "description": "Muestra los bloques de código D2 y los archivos .d2 como diagramas."
+    },
+    "mermaid": {
+      "name": "Diagramas Mermaid",
+      "description": "Muestra los bloques de código Mermaid y los archivos de diagrama .mmd como diagramas."
     }
   }
 }

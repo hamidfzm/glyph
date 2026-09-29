@@ -161,6 +161,8 @@ as plain markdown.
 Open [[Flowchart]] for the diagram variant and [[Notes/Cooking]] for the
 MultiMarkdown variant; both files use the `.mmd` extension.
 
+Mermaid rendering is a core plugin: switch it off under **Settings → Plugins → Core plugins** and ` ```mermaid ` blocks and diagram `.mmd` files show their source instead, without loading the Mermaid engine.
+
 ## D2 Diagrams
 
 Fenced code blocks tagged `d2` render as [D2](https://d2lang.com) diagrams,
@@ -432,7 +434,7 @@ This workspace is wired to make the graph worth a look: [[Index]] and [[Graph Vi
 
 ### Export as a website
 
-With the `samples/` folder open, `File → Export → Website…` turns this whole workspace into a static site: every note becomes a linked HTML page (the root `index.md`, or else this README, becomes `index.html`), wikilinks and relative links navigate between pages, images are copied alongside, Mermaid diagrams render as inline SVG, and a navigation sidebar ties it together. This folder's [`.glyph/site.json`](.glyph/site.json) shows the optional site metadata (editable in-app via File > Workspace Settings…): a site title for every page's browser tab and social tags, a shared description, a robots.txt directive, and a theme (GitHub-style by default, with a site header on every page; plugins can add more); a `favicon`, `socialImage`, and `baseUrl` can join it for link previews. The same export runs headless from the terminal for CI publishing:
+With the `samples/` folder open, `File → Export → Website…` turns this whole workspace into a static site: every note becomes a linked HTML page (the root `index.md`, or else this README, becomes `index.html`), wikilinks and relative links navigate between pages, images are copied alongside, Mermaid and D2 diagrams render as inline SVG (while their core plugins are on), and a navigation sidebar ties it together. This folder's [`.glyph/site.json`](.glyph/site.json) shows the optional site metadata (editable in-app via File > Workspace Settings…): a site title for every page's browser tab and social tags, a shared description, a robots.txt directive, and a theme (GitHub-style by default, with a site header on every page; plugins can add more); a `favicon`, `socialImage`, and `baseUrl` can join it for link previews. The same export runs headless from the terminal for CI publishing:
 
 ```bash
 glyph export samples/ --format site --out ./site

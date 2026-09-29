@@ -187,17 +187,11 @@
     "zoomOut": "Alejar (-)",
     "zoomIn": "Acercar (+)",
     "fit": "Ajustar a la pantalla (0)",
-    "actualSize": "Tamaño real (1)"
+    "actualSize": "Tamaño real (1)",
+    "diagram": "Diagrama"
   },
   "mdxNotice": {
     "body": "Archivo MDX: los componentes JSX no se renderizan; solo se muestra el contenido markdown."
-  },
-  "mermaid": {
-    "empty": "El código del diagrama está vacío",
-    "errorLabel": "Error del diagrama",
-    "errorTitle": "No se pudo mostrar el diagrama",
-    "label": "Diagrama Mermaid",
-    "zoomHint": "Haz clic para ampliar"
   },
   "taskList": {
     "toggle": "Marcar o desmarcar tarea"

@@ -6,7 +6,6 @@ import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { isFencedRendererMount } from "@/lib/plugins/fencedRenderers";
 import { CopyButton } from "./CopyButton";
 import { CsvTable } from "./CsvTable";
-import { MermaidDiagram } from "./MermaidDiagram";
 
 interface CodeProps {
   className?: string;
@@ -30,10 +29,6 @@ export function CodeBlockComponent(props: ComponentPropsWithoutRef<"pre">) {
 
   if (isValidElement<CodeProps>(children)) {
     const className = children.props.className ?? "";
-    if (/\blanguage-mermaid\b/.test(className)) {
-      const code = extractText(children.props.children).trim();
-      return <MermaidDiagram code={code} />;
-    }
     if (/\blanguage-csv\b/.test(className)) {
       const code = extractText(children.props.children).trim();
       return <CsvTable code={code} delimiter="," />;

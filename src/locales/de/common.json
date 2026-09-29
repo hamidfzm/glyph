@@ -187,17 +187,11 @@
     "zoomOut": "Verkleinern (-)",
     "zoomIn": "Vergrößern (+)",
     "fit": "An den Bildschirm anpassen (0)",
-    "actualSize": "Tatsächliche Größe (1)"
+    "actualSize": "Tatsächliche Größe (1)",
+    "diagram": "Diagramm"
   },
   "mdxNotice": {
     "body": "MDX-Datei: JSX-Komponenten werden nicht gerendert; nur der Markdown-Inhalt wird angezeigt."
-  },
-  "mermaid": {
-    "empty": "Leere Diagrammquelle",
-    "errorLabel": "Diagrammfehler",
-    "errorTitle": "Diagramm konnte nicht gerendert werden",
-    "label": "Mermaid-Diagramm",
-    "zoomHint": "Zum Zoomen klicken"
   },
   "taskList": {
     "toggle": "Aufgabe umschalten"

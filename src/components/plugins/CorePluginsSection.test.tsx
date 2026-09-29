@@ -6,7 +6,7 @@ import { CorePluginsSection } from "./CorePluginsSection";
 
 function renderSection(d2: boolean) {
   const value: SettingsContextValue = {
-    settings: { ...DEFAULT_SETTINGS, corePlugins: { d2 } },
+    settings: { ...DEFAULT_SETTINGS, corePlugins: { ...DEFAULT_SETTINGS.corePlugins, d2 } },
     updateSettings: vi.fn(),
     resetSettings: vi.fn(),
     flushSettings: async () => true,
@@ -29,6 +29,12 @@ describe("CorePluginsSection", () => {
 
     fireEvent.click(toggle);
     expect(value.updateSettings).toHaveBeenCalledWith("corePlugins.d2", false);
+  });
+
+  it("lists Mermaid with its own setting", () => {
+    const value = renderSection(true);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Enable Mermaid diagrams" }));
+    expect(value.updateSettings).toHaveBeenCalledWith("corePlugins.mermaid", false);
   });
 
   it("switches a disabled core plugin back on", () => {

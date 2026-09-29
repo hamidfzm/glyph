@@ -17,6 +17,11 @@ export interface CorePlugin {
 // ctx.workspace refuse them; ship data in the bundle instead.
 export const CORE_PLUGINS: readonly CorePlugin[] = [
   { id: "glyph.core.d2", settingsKey: "d2", load: () => import("@/plugins/core/d2/d2Plugin") },
+  {
+    id: "glyph.core.mermaid",
+    settingsKey: "mermaid",
+    load: () => import("@/plugins/core/mermaid/mermaidPlugin"),
+  },
 ];
 
 /** The host entry for a core plugin: bundled, so there is no folder or source text. */

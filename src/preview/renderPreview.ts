@@ -1,11 +1,11 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FrontmatterBlock } from "@/components/markdown/FrontmatterBlock";
-import { inlineMermaidSvgs } from "@/lib/export/site/mermaidInline";
 import { renderPageHtml } from "@/lib/export/site/renderPage";
+import { inlineStaticRenders } from "@/lib/export/site/staticInline";
 import { parseFrontmatter } from "@/lib/frontmatter";
-import { renderMermaid } from "@/lib/mermaidRender";
 import type { MarkdownPlugin } from "@/lib/plugins/types";
+import { renderMermaidPreview } from "@/plugins/core/mermaid/mermaidRender";
 import { rehypePreviewImages } from "./previewImages";
 
 export interface PreviewOptions {
@@ -14,8 +14,10 @@ export interface PreviewOptions {
   baseUrl: string;
 }
 
-// The site export's React-free pipeline plus the pieces the app draws with
-// components: the frontmatter table and Mermaid diagrams (in the current theme).
+// The site export's React-free pipeline plus the frontmatter table the app
+// draws with a component, and Mermaid diagrams in the current theme. The pane
+// has no plugin host or settings, so it calls the Mermaid core plugin's
+// renderer directly, whatever the plugin's toggle in the app.
 export async function renderPreview(
   content: string,
   { dark, baseUrl }: PreviewOptions,
@@ -30,6 +32,11 @@ export async function renderPreview(
     resolutions: new Map(),
     extraRehype: [[rehypePreviewImages, baseUrl] as MarkdownPlugin],
   });
-  const withDiagrams = await inlineMermaidSvgs(body, (source) => renderMermaid(source, dark));
+  const withDiagrams = await inlineStaticRenders(body, (language) =>
+    language === "mermaid"
+      ? async (code) =>
+          `<div class="mermaid-diagram">${await renderMermaidPreview(code, dark)}</div>`
+      : undefined,
+  );
   return header + withDiagrams;
 }

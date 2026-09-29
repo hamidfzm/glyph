@@ -4,10 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { MarkdownViewer } from "./MarkdownViewer";
 
-vi.mock("./MermaidDiagram", () => ({
-  MermaidDiagram: ({ code }: { code: string }) => <div data-testid="mermaid-diagram">{code}</div>,
-}));
-
 function renderMd(
   content: string,
   extra: Partial<React.ComponentProps<typeof MarkdownViewer>> = {},
