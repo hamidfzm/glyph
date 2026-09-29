@@ -171,7 +171,9 @@ describe("renderMermaidStatic", () => {
   });
 
   it("re-renders light with SVG text labels and returns the markup", async () => {
-    renderSvg.mockResolvedValue({ svg: "<svg data-light='1'></svg>" });
+    renderSvg.mockResolvedValue({
+      svg: "<svg xmlns='http://www.w3.org/2000/svg' data-light='1'></svg>",
+    });
     // Re-serialized (the label-background pass parses it), so assert on content.
     const svg = await renderMermaidStatic("graph TD; A-->B");
     expect(svg).toContain('data-light="1"');
@@ -186,7 +188,7 @@ describe("renderMermaidStatic", () => {
   });
 
   it("leaves no export options behind for the next screen render", async () => {
-    renderSvg.mockResolvedValue({ svg: "<svg/>" });
+    renderSvg.mockResolvedValue({ svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
     await renderMermaidStatic("graph TD; A-->B");
     await renderMermaid("after-static", false);
     // Relies on Mermaid 11's initialize resetting to its defaults first, so
@@ -210,13 +212,18 @@ describe("renderMermaidStatic", () => {
     expect(svg).toMatch(/stroke:\s*none/);
   });
 
+  it("paints the canvas white so it reads on a dark page", async () => {
+    renderSvg.mockResolvedValue({ svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+    expect(await renderMermaidStatic("graph TD; A-->B")).toMatch(/background-color:\s*#fff/);
+  });
+
   it("rejects when sanitizing leaves no svg behind", async () => {
     renderSvg.mockResolvedValue({ svg: "<svg><unclosed></svg>" });
     await expect(renderMermaidStatic("graph TD; A-->B")).rejects.toThrow("no svg");
   });
 
   it("passes a fresh id per render (Mermaid keeps state per id)", async () => {
-    renderSvg.mockResolvedValue({ svg: "<svg/>" });
+    renderSvg.mockResolvedValue({ svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
     await renderMermaidStatic("graph TD; A-->B");
     await renderMermaidStatic("graph TD; A-->B");
     const ids = renderSvg.mock.calls.map((c) => c[0]);
@@ -246,5 +253,7 @@ describe("renderMermaidPreview", () => {
     });
     const svg = await renderMermaidPreview("graph TD; A-->|x|B", false);
     expect(svg).not.toMatch(/fill:\s*none/);
+    // The preview follows the pane's theme, so no white canvas either.
+    expect(svg).not.toContain("background-color");
   });
 });

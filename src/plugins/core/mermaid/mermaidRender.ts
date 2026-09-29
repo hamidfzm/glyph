@@ -76,6 +76,9 @@ export async function renderMermaidStatic(source: string): Promise<string> {
   for (const rect of Array.from(fragment.querySelectorAll("rect.background"))) {
     (rect as SVGElement).style.setProperty("fill", "none");
   }
+  // Mermaid's canvas is transparent, so a dark website page would show the
+  // light diagram's dark lines on dark; paint it white like D2's.
+  fragment.querySelector("svg")?.style.setProperty("background-color", "#fff");
   return svgMarkup(fragment);
 }
 
