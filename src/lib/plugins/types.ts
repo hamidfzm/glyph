@@ -16,6 +16,17 @@ export type PluginPermission = "workspace:read" | "workspace:write" | `network:$
  */
 export type MarkdownPlugin = NonNullable<Options["remarkPlugins"]>[number];
 
+/**
+ * 0.25.0: a rehype plugin that loads only once a document needs it, so a heavy
+ * renderer (KaTeX for math) costs nothing until then.
+ */
+export interface LazyMarkdownPlugin {
+  /** A cheap check of a document's markdown. True starts the load. */
+  detect(markdown: string): boolean;
+  /** Import the plugin. Runs once, for the first document `detect` accepts. */
+  load(): Promise<MarkdownPlugin>;
+}
+
 /** What a fenced renderer receives. */
 export interface FencedRendererProps {
   code: string;
@@ -273,8 +284,15 @@ export interface SpellcheckRegistryApi {
 export interface MarkdownRegistryApi {
   /** Add a remark plugin (runs after the built-in remark plugins). */
   registerRemarkPlugin(plugin: MarkdownPlugin): Disposer;
-  /** Add a rehype plugin (runs after the built-in rehype plugins, incl. sanitize). */
-  registerRehypePlugin(plugin: MarkdownPlugin): Disposer;
+  /**
+   * Add a rehype plugin (runs after the built-in rehype plugins, incl. sanitize).
+   * 0.25.0: a {@link LazyMarkdownPlugin} loads only for documents that need it.
+   *
+   * Math: wrap rendered math in an element carrying its TeX source in
+   * `data-math-source`, plus `data-math-display` for block math. PDF export
+   * rasterizes the blocks and PDF and Word fall back to the source.
+   */
+  registerRehypePlugin(plugin: MarkdownPlugin | LazyMarkdownPlugin): Disposer;
   /**
    * Render fenced ```<language> blocks, with a {@link FencedRendererMount} or
    * a React component. While a render is still pending, mark its element

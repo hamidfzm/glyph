@@ -346,10 +346,6 @@
       "label": "表格与任务列表",
       "description": "GitHub 风格 Markdown：表格、任务列表、删除线、自动链接"
     },
-    "math": {
-      "label": "数学公式",
-      "description": "KaTeX 公式：$行内$ 与 $$块级$$"
-    },
     "alerts": {
       "label": "提示块",
       "description": "GitHub 风格标注：> [!NOTE], [!TIP], [!WARNING]"

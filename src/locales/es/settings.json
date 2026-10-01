@@ -346,10 +346,6 @@
       "label": "Tablas y listas de tareas",
       "description": "GitHub Flavored Markdown: tablas, listas de tareas, tachado, autoenlaces"
     },
-    "math": {
-      "label": "Matemáticas",
-      "description": "Ecuaciones KaTeX: $inline$ y $$block$$"
-    },
     "alerts": {
       "label": "Avisos",
       "description": "Llamadas estilo GitHub: > [!NOTE], [!TIP], [!WARNING]"

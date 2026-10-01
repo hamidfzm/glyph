@@ -7,9 +7,9 @@ import { CONTENT_WIDTH, svgNode } from "./svgPdfNode";
 const HEADING_SIZES: Record<string, number> = { h1: 24, h2: 20, h3: 16, h4: 14, h5: 12, h6: 11 };
 
 // Block-level wrappers whose children are themselves blocks. Anything else that
-// reaches the fallback (spans, KaTeX's `katex-display`, etc.) is inline-level
-// and must go through inlinePdf so math is extracted rather than its rendered
-// glyph spans being dumped as paragraphs.
+// reaches the fallback (spans, etc.) is inline-level and must go through
+// inlinePdf so marked math is extracted rather than its rendered glyph spans
+// being dumped as paragraphs.
 const CONTAINER_TAGS = new Set([
   "div",
   "section",
@@ -185,13 +185,20 @@ function blocksForNode(node: Node): Content[] {
     ];
   }
 
+  // Block math the PDF pass could not rasterize: its TeX source, never the
+  // rendered glyph spans.
+  const mathSource = el.getAttribute("data-math-source");
+  if (mathSource !== null) {
+    const tex = mathSource.trim();
+    return tex ? [{ text: tex, italics: true, margin: [0, 0, 0, 8] }] : [];
+  }
+
   if (CONTAINER_TAGS.has(tag)) {
     return Array.from(el.childNodes).flatMap((c) => blocksForNode(c));
   }
 
-  // Inline-level element at block position (e.g. a bare <span> or KaTeX's
-  // `katex-display`): render its inline content so math is reduced to LaTeX
-  // rather than recursing into KaTeX's glyph spans.
+  // Inline-level element at block position (e.g. a bare <span>): render its
+  // inline content, so inline math inside it is reduced to its source.
   const inline = inlinePdf(el);
   return inline.length ? [{ text: inline, margin: [0, 0, 0, 8] }] : [];
 }

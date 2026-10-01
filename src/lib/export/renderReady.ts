@@ -2,7 +2,7 @@ import { pendingDocumentAssets } from "@/lib/documentAssets";
 import { pendingPluginLoads } from "@/lib/markdown/pluginLoads";
 
 // Diagrams and math render asynchronously after the document mounts (diagram
-// plugins, highlighting, KaTeX, and gemoji all load lazily), so an export that
+// and math plugins, highlighting, and gemoji all load lazily), so an export that
 // fired on mount would write a document with empty diagram slots
 // and unrendered shortcodes. Wait for the rendered body to appear and settle.
 
@@ -26,7 +26,7 @@ function pendingDiagrams(root: ParentNode): number {
  * diagram left empty, no lazy plugin still loading, and no loose-file asset
  * still waiting on the backend (its image has no src yet), or when `timeoutMs`
  * elapses. The plugin check matters on its own: a document waiting for the
- * gemoji or KaTeX chunk mutates nothing, so quiet alone would mean "finished"
+ * gemoji or math chunk mutates nothing, so quiet alone would mean "finished"
  * while the swap is still coming. The timeout is the CI guard:
  * one diagram that never resolves must not hang the process forever, so the
  * export proceeds with whatever rendered. A diagram missing from the output is

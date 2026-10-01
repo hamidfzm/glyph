@@ -41,6 +41,20 @@ function migrateSpellCheckLanguages(saved: Record<string, unknown>): Record<stri
   return { ...saved, editor: rest };
 }
 
+/**
+ * Math moved from the Markdown settings into a core plugin. Carry an explicit
+ * `markdown.math: false` over to `corePlugins.math` (unless the store already
+ * has that key) and drop the old key.
+ */
+function migrateMathToCorePlugin(saved: Record<string, unknown>): Record<string, unknown> {
+  const markdown = saved.markdown;
+  if (!isSafePlainObject(markdown) || !("math" in markdown)) return saved;
+  const { math, ...rest } = markdown;
+  const corePlugins = isSafePlainObject(saved.corePlugins) ? saved.corePlugins : {};
+  if (math !== false || "math" in corePlugins) return { ...saved, markdown: rest };
+  return { ...saved, markdown: rest, corePlugins: { ...corePlugins, math: false } };
+}
+
 export function migrateLegacySettings(saved: Record<string, unknown>): Record<string, unknown> {
-  return migrateSpellCheckLanguages(migrateSidebarWidth(saved));
+  return migrateMathToCorePlugin(migrateSpellCheckLanguages(migrateSidebarWidth(saved)));
 }

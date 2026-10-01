@@ -1,10 +1,13 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import remarkMath from "remark-math";
 import { FrontmatterBlock } from "@/components/markdown/FrontmatterBlock";
 import { renderPageHtml } from "@/lib/export/site/renderPage";
 import { inlineStaticRenders } from "@/lib/export/site/staticInline";
 import { parseFrontmatter } from "@/lib/frontmatter";
-import type { MarkdownPlugin } from "@/lib/plugins/types";
+import type { LazyMarkdownPlugin, MarkdownPlugin } from "@/lib/plugins/types";
+import { hasMath } from "@/plugins/core/math/mathPattern";
+import { loadRehypeMath } from "@/plugins/core/math/rehypeMath";
 import { renderMermaidPreview } from "@/plugins/core/mermaid/mermaidRender";
 import { rehypePreviewImages } from "./previewImages";
 
@@ -14,10 +17,19 @@ export interface PreviewOptions {
   baseUrl: string;
 }
 
+// KaTeX and its stylesheet load only for a file containing math, as in the app.
+const math: LazyMarkdownPlugin = {
+  detect: hasMath,
+  load: async () => {
+    await import("katex/dist/katex.min.css");
+    return loadRehypeMath();
+  },
+};
+
 // The site export's React-free pipeline plus the frontmatter table the app
-// draws with a component, and Mermaid diagrams in the current theme. The pane
-// has no plugin host or settings, so it calls the Mermaid core plugin's
-// renderer directly, whatever the plugin's toggle in the app.
+// draws with a component, math, and Mermaid diagrams in the current theme. The
+// pane has no plugin host or settings, so it calls the math and Mermaid core
+// plugins directly, whatever their toggles in the app.
 export async function renderPreview(
   content: string,
   { dark, baseUrl }: PreviewOptions,
@@ -30,7 +42,8 @@ export async function renderPreview(
     content,
     // No workspace index in a preview: wikilinks render unresolved.
     resolutions: new Map(),
-    extraRehype: [[rehypePreviewImages, baseUrl] as MarkdownPlugin],
+    extraRemark: [remarkMath],
+    extraRehype: [[rehypePreviewImages, baseUrl] as MarkdownPlugin, math],
   });
   const withDiagrams = await inlineStaticRenders(body, (language) =>
     language === "mermaid"

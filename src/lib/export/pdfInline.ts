@@ -35,7 +35,7 @@ export function styledText(text: string, style: InlineStyle): Content {
 }
 
 // Flatten an element's inline descendants into pdfmake text fragments. Anchors
-// become links; `<br>` becomes a newline; KaTeX falls back to its LaTeX source;
+// become links; `<br>` becomes a newline; marked math falls back to its source;
 // an SVG at inline position is skipped (block-level SVG embeds as a vector
 // node). Inline images degrade to their alt text — block images are handled
 // separately and embedded.
@@ -51,10 +51,9 @@ export function inlinePdf(node: Node, style: InlineStyle = {}): Content[] {
     const el = child as Element;
     const tag = el.tagName.toLowerCase();
 
-    if (el.classList.contains("katex")) {
-      const annotation = el.querySelector('annotation[encoding="application/x-tex"]');
-      // textContent is never null for an element, so no empty-string fallback.
-      const tex = (annotation?.textContent ?? el.textContent!).trim();
+    const mathSource = el.getAttribute("data-math-source");
+    if (mathSource !== null) {
+      const tex = mathSource.trim();
       if (tex) out.push({ text: tex, italics: true });
       continue;
     }

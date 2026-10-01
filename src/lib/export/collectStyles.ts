@@ -1,7 +1,7 @@
 /**
  * Serialize every CSS rule currently applied to the document into one string.
  *
- * The app's Tailwind v4 output, component CSS, KaTeX, and the active code theme
+ * The app's Tailwind v4 output, component CSS, plugin styles, and the active code theme
  * are all injected as `<style>`/`<link>` sheets, so walking `document.styleSheets`
  * captures everything needed to render exported HTML/EPUB standalone, offline.
  *

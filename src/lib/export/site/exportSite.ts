@@ -5,6 +5,7 @@ import { buildHtmlDocument } from "@/lib/export/html";
 import { deriveExportMeta } from "@/lib/export/meta";
 import { siteChromeCss, siteChromeScript } from "@/lib/export/siteChrome";
 import { i18n } from "@/lib/i18n";
+import type { RehypeContribution } from "@/lib/markdown/lazyPlugins";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { basename } from "@/lib/paths";
 import type { MarkdownPlugin, SiteThemeContribution } from "@/lib/plugins/types";
@@ -36,7 +37,7 @@ export interface ExportSiteOptions {
   /** Plugin-contributed remark plugins, so plugin syntax renders in the export. */
   remarkPlugins?: readonly MarkdownPlugin[];
   /** Plugin-contributed rehype plugins, applied before the site URL rewriter. */
-  rehypePlugins?: readonly MarkdownPlugin[];
+  rehypePlugins?: readonly RehypeContribution[];
 }
 
 export interface ExportSiteResult {
@@ -234,7 +235,7 @@ export async function exportSite({
     }
   }
 
-  // Collected last so stylesheets loaded during rendering (KaTeX) are in.
+  // Collected last so stylesheets loaded during rendering (math) are in.
   // The chrome CSS and theme script live in shared files rather than being
   // repeated inline in every page.
   await ensureDir("style.css");

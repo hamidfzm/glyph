@@ -22,6 +22,11 @@ export const CORE_PLUGINS: readonly CorePlugin[] = [
     settingsKey: "mermaid",
     load: () => import("@/plugins/core/mermaid/mermaidPlugin"),
   },
+  {
+    id: "glyph.core.math",
+    settingsKey: "math",
+    load: () => import("@/plugins/core/math/mathPlugin"),
+  },
 ];
 
 /** The host entry for a core plugin: bundled, so there is no folder or source text. */

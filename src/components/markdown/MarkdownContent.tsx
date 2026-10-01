@@ -6,7 +6,7 @@ import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { useGemojiPlugin } from "@/hooks/useGemojiPlugin";
 import { useHighlightPlugin } from "@/hooks/useHighlightPlugin";
-import { useKatexPlugin } from "@/hooks/useKatexPlugin";
+import { useLazyMarkdownPlugins } from "@/hooks/useLazyMarkdownPlugins";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { useSettings } from "@/hooks/useSettings";
 import { useWikilinkResolutions } from "@/hooks/useWikilinkResolutions";
@@ -38,8 +38,8 @@ interface MarkdownContentProps {
 }
 
 // The markdown rendering core: frontmatter block + ReactMarkdown wired up with
-// the full plugin/component set (GFM, math, alerts, wikilinks, syntax
-// highlighting, sanitized raw HTML). Extracted from MarkdownViewer so both the
+// the full plugin/component set (GFM, alerts, wikilinks, syntax highlighting,
+// sanitized raw HTML, and whatever plugins contribute). Extracted from MarkdownViewer so both the
 // document viewer and notebook markdown/HTML cells render identically. Owns no
 // scroll container or search — callers provide those.
 export function MarkdownContent({
@@ -63,16 +63,16 @@ export function MarkdownContent({
   }, [parentEmbed.chain, filePath, workspaceFiles, onOpenWikilink]);
   const { settings } = useSettings();
   const features = settings.markdown;
-  // With math off, skip the KaTeX lazy-load entirely (remark-math is also
-  // dropped from the pipeline, so $…$ stays literal text).
-  const katexPlugin = useKatexPlugin(features.math ? content : "");
-  // Same deal for emoji: with the toggle off, the gemoji table never loads.
+  // With emoji off, the gemoji table never loads.
   const gemojiPlugin = useGemojiPlugin(features.emoji ? content : "");
   const highlightPlugin = useHighlightPlugin(content);
   // Plugin-contributed remark/rehype plugins, appended to the built-in pipeline.
   const plugins = usePluginsOptional();
   const pluginRemark = useRegistryEntries(plugins?.remarkPlugins ?? null);
-  const pluginRehype = useRegistryEntries(plugins?.rehypePlugins ?? null);
+  const pluginRehype = useLazyMarkdownPlugins(
+    useRegistryEntries(plugins?.rehypePlugins ?? null),
+    content,
+  );
   const frontmatter = useMemo(
     () => (showFrontmatter ? parseFrontmatter(content) : null),
     [content, showFrontmatter],
@@ -107,8 +107,8 @@ export function MarkdownContent({
   );
 
   const rehypePlugins = useMemo(
-    () => buildRehypePlugins({ highlightPlugin, katexPlugin, extra: pluginRehype, sourceLines }),
-    [highlightPlugin, katexPlugin, pluginRehype, sourceLines],
+    () => buildRehypePlugins({ highlightPlugin, extra: pluginRehype, sourceLines }),
+    [highlightPlugin, pluginRehype, sourceLines],
   );
 
   const remarkPlugins = useMemo(

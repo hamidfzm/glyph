@@ -1,4 +1,4 @@
-// Lazy markdown plugins (syntax highlighting, KaTeX, gemoji) swap into an
+// Lazy markdown plugins (syntax highlighting, gemoji, plugin math) swap into an
 // already-painted document when their chunk arrives. Exports read the live DOM,
 // and a document waiting on a chunk mutates nothing, so a quiet-DOM check alone
 // would call it finished and snapshot `:tada:` instead of the emoji. Counting

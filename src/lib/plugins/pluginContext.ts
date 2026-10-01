@@ -1,4 +1,5 @@
 import { i18n } from "@/lib/i18n";
+import type { RehypeContribution } from "@/lib/markdown/lazyPlugins";
 import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_VERSION } from "./apiVersion";
 import { createAssetsApi } from "./assetsApi";
@@ -27,7 +28,7 @@ export interface ContextRegistries {
   commands: Registry<CommandContribution>;
   statusBarItems: Registry<StatusBarItemContribution>;
   remarkPlugins: Registry<MarkdownPlugin>;
-  rehypePlugins: Registry<MarkdownPlugin>;
+  rehypePlugins: Registry<RehypeContribution>;
   fencedRenderers: Registry<FencedRendererContribution>;
   sidebarPanels: Registry<SidebarPanelContribution>;
   settingsPanels: Registry<SettingsPanelContribution>;

@@ -92,6 +92,35 @@ describe("migrateLegacySettings", () => {
     expect(migrated.editor).toEqual({ spellCheckLanguages: ["de"] });
   });
 
+  it("moves math off from the Markdown settings to the core plugin toggle", () => {
+    const migrated = migrateLegacySettings({ markdown: { gfm: true, math: false } });
+    expect(migrated.markdown).toEqual({ gfm: true });
+    expect(migrated.corePlugins).toEqual({ math: false });
+  });
+
+  it("drops math on without touching the core plugins, so the default applies", () => {
+    const migrated = migrateLegacySettings({
+      markdown: { math: true },
+      corePlugins: { d2: false },
+    });
+    expect(migrated.markdown).toEqual({});
+    expect(migrated.corePlugins).toEqual({ d2: false });
+  });
+
+  it("keeps a core plugin math choice the store already has", () => {
+    const migrated = migrateLegacySettings({
+      markdown: { math: false },
+      corePlugins: { math: true },
+    });
+    expect(migrated.corePlugins).toEqual({ math: true });
+    expect(migrateLegacySettings(migrated)).toEqual(migrated);
+  });
+
+  it("leaves a store without the legacy math key unchanged", () => {
+    const saved = { markdown: { gfm: false } };
+    expect(migrateLegacySettings(saved)).toBe(saved);
+  });
+
   it("applies the sidebar and spell-check migrations together", () => {
     const migrated = migrateLegacySettings({
       layout: { sidebarWidth: 200 },

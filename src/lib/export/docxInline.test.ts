@@ -58,9 +58,11 @@ describe("inlineRuns", () => {
     expect(fallback[0]).toBeInstanceOf(TextRun);
   });
 
-  it("reduces KaTeX to its LaTeX source", () => {
+  it("reduces marked math to its source, not its rendered markup", () => {
     const runs = inlineRuns(
-      el('<span class="katex"><annotation encoding="application/x-tex">x^2</annotation></span>'),
+      el(
+        '<span data-math-source="x^2"><span class="katex"><span>x</span><span>2</span></span></span>',
+      ),
     );
     expect(runs).toHaveLength(1);
     expect(runs[0]).toBeInstanceOf(TextRun);
@@ -78,9 +80,8 @@ describe("inlineRuns", () => {
     expect(runs).toHaveLength(2); // only "a" and "b"
   });
 
-  it("uses KaTeX textContent without an annotation and skips empty math", () => {
-    expect(inlineRuns(el('<span class="katex">x2</span>'))).toHaveLength(1);
-    expect(inlineRuns(el('<span class="katex">   </span>'))).toHaveLength(0);
+  it("skips marked math with an empty source", () => {
+    expect(inlineRuns(el('<span data-math-source="   "><span>x</span></span>'))).toHaveLength(0);
   });
 
   it("falls back to empty text for an image with no src and no alt", () => {

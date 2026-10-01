@@ -66,14 +66,12 @@ export function inlineRuns(node: Node, style: InlineStyle = {}): ParagraphChild[
     const el = child as Element;
     const tag = el.tagName.toLowerCase();
 
-    // DOCX has no math/vector support here. For KaTeX, emit the original LaTeX
-    // source (from its MathML annotation) as monospace rather than the
-    // duplicated MathML+HTML text the markup would otherwise flatten to. Skip
-    // raw SVG (e.g. Mermaid) entirely — it has no useful text.
-    if (el.classList.contains("katex")) {
-      const annotation = el.querySelector('annotation[encoding="application/x-tex"]');
-      // textContent is never null for an element, so no empty-string fallback.
-      const tex = (annotation?.textContent ?? el.textContent!).trim();
+    // DOCX has no math/vector support here. For marked math, emit its TeX
+    // source as monospace rather than the text its rendered markup would
+    // flatten to. Skip raw SVG (e.g. diagrams) entirely: it has no useful text.
+    const mathSource = el.getAttribute("data-math-source");
+    if (mathSource !== null) {
+      const tex = mathSource.trim();
       if (tex) runs.push(textRun(tex, { ...style, code: true }));
       continue;
     }

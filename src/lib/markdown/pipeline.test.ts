@@ -14,7 +14,7 @@ describe("buildRemarkPlugins", () => {
 
     // The built-ins come first; the two extras come last, in the given order.
     expect(plugins.slice(-2).map(ref)).toEqual([extraA, extraB]);
-    expect(plugins.length).toBeGreaterThanOrEqual(7);
+    expect(plugins.length).toBeGreaterThanOrEqual(6);
   });
 
   it("threads the index's link resolutions into the wikilink plugin", () => {
@@ -25,7 +25,7 @@ describe("buildRemarkPlugins", () => {
   });
 
   it("works with no extras", () => {
-    expect(buildRemarkPlugins({}).length).toBeGreaterThanOrEqual(5);
+    expect(buildRemarkPlugins({}).length).toBeGreaterThanOrEqual(4);
   });
 
   it("includes the gemoji plugin only when the caller provides it resolved", () => {
@@ -38,8 +38,8 @@ describe("buildRemarkPlugins", () => {
 
   it("drops a feature's plugin when its toggle is off", () => {
     const all = buildRemarkPlugins({});
-    const noMath = buildRemarkPlugins({ features: { math: false } });
-    expect(noMath.length).toBe(all.length - 1);
+    const noAlerts = buildRemarkPlugins({ features: { alerts: false } });
+    expect(noAlerts.length).toBe(all.length - 1);
 
     // Wikilinks is the only tuple entry; disabling it removes the tuple.
     const noWikilinks = buildRemarkPlugins({ features: { wikilinks: false } });
@@ -49,7 +49,7 @@ describe("buildRemarkPlugins", () => {
   it("disabling every feature leaves only frontmatter plus extras", () => {
     const extra = vi.fn();
     const plugins = buildRemarkPlugins({
-      features: { gfm: false, math: false, alerts: false, emoji: false, wikilinks: false },
+      features: { gfm: false, alerts: false, emoji: false, wikilinks: false },
       extra: [extra],
     });
     expect(plugins.length).toBe(2); // frontmatter + the extra
@@ -57,28 +57,23 @@ describe("buildRemarkPlugins", () => {
   });
 
   it("treats omitted feature keys as enabled", () => {
-    const partial = buildRemarkPlugins({ features: { math: false } });
+    const partial = buildRemarkPlugins({ features: { alerts: false } });
     const full = buildRemarkPlugins({ features: {} });
     expect(full.length).toBe(partial.length + 1);
   });
 });
 
 describe("buildRehypePlugins", () => {
-  it("omits highlight/katex when not provided", () => {
+  it("omits highlight when not provided", () => {
     const plugins = buildRehypePlugins({});
     expect(plugins.length).toBe(3); // raw, sanitize, slug
   });
 
-  it("appends highlight, katex, then plugin extras in order", () => {
+  it("appends highlight, then plugin extras in order", () => {
     const highlight = vi.fn();
-    const katex = vi.fn();
     const extra = vi.fn();
-    const plugins = buildRehypePlugins({
-      highlightPlugin: highlight,
-      katexPlugin: katex,
-      extra: [extra],
-    });
-    expect(plugins.slice(-3).map(ref)).toEqual([highlight, katex, extra]);
+    const plugins = buildRehypePlugins({ highlightPlugin: highlight, extra: [extra] });
+    expect(plugins.slice(-2).map(ref)).toEqual([highlight, extra]);
   });
 
   it("keeps sanitize ahead of plugin extras", () => {

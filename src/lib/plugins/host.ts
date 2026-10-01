@@ -1,3 +1,4 @@
+import type { RehypeContribution } from "@/lib/markdown/lazyPlugins";
 import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_COMPAT_FLOOR, PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 import { createAssetsApi } from "./assetsApi";
@@ -52,7 +53,7 @@ export interface PluginHost {
   /** Remark plugins contributed by loaded plugins. */
   readonly remarkPlugins: Registry<MarkdownPlugin>;
   /** Rehype plugins contributed by loaded plugins. */
-  readonly rehypePlugins: Registry<MarkdownPlugin>;
+  readonly rehypePlugins: Registry<RehypeContribution>;
   /** Fenced code-block renderers contributed by loaded plugins. */
   readonly fencedRenderers: Registry<FencedRendererContribution>;
   /** Titled sidebar sections contributed by loaded plugins. */
@@ -108,7 +109,7 @@ export function createPluginHost(
   const commands = createRegistry<CommandContribution>();
   const statusBarItems = createRegistry<StatusBarItemContribution>();
   const remarkPlugins = createRegistry<MarkdownPlugin>();
-  const rehypePlugins = createRegistry<MarkdownPlugin>();
+  const rehypePlugins = createRegistry<RehypeContribution>();
   const fencedRenderers = createRegistry<FencedRendererContribution>();
   const sidebarPanels = createRegistry<SidebarPanelContribution>();
   const settingsPanels = createRegistry<SettingsPanelContribution>();

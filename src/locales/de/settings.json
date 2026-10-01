@@ -346,10 +346,6 @@
       "label": "Tabellen & Aufgabenlisten",
       "description": "GitHub Flavored Markdown: Tabellen, Aufgabenlisten, Durchstreichen, Autolinks"
     },
-    "math": {
-      "label": "Mathematik",
-      "description": "KaTeX-Formeln: $inline$ und $$block$$"
-    },
     "alerts": {
       "label": "Hinweise",
       "description": "Callouts im GitHub-Stil: > [!NOTE], [!TIP], [!WARNING]"

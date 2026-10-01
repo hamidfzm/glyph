@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { useSettings } from "@/hooks/useSettings";
+import type { RehypeContribution } from "@/lib/markdown/lazyPlugins";
 import type { MarkdownPlugin, SiteThemeContribution } from "@/lib/plugins/types";
 
 // How long a headless render waits for the plugin host's startup load. A hung
@@ -18,7 +19,7 @@ export interface ExportReadiness {
   /** Plugin-contributed remark plugins, so plugin syntax renders. */
   remarkPlugins: readonly MarkdownPlugin[];
   /** Plugin-contributed rehype plugins, applied before the site rewriter. */
-  rehypePlugins: readonly MarkdownPlugin[];
+  rehypePlugins: readonly RehypeContribution[];
 }
 
 /**

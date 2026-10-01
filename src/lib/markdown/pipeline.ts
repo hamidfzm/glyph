@@ -5,7 +5,6 @@ import rehypeSlug from "rehype-slug";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import { remarkAlert } from "remark-github-blockquote-alert";
-import remarkMath from "remark-math";
 import { markdownSanitizeSchema } from "@/components/markdown/sanitizeSchema";
 import { rehypeSourceLines } from "@/lib/markdown/rehypeSourceLines";
 import type { MarkdownPlugin } from "@/lib/plugins/types";
@@ -15,7 +14,7 @@ import { remarkWikilink } from "@/lib/wikilink";
 // The markdown remark/rehype pipeline, built outside the render tree so the
 // plugin order lives in one documented place and the renderer component shrinks
 // to "feed me a processor, give me output" (#225). Pure and React-independent:
-// the lazily-loaded highlight/katex plugins and plugin-contributed extras are
+// the lazily-loaded highlight plugin and plugin-contributed extras are
 // passed in already resolved, not fetched here.
 
 type RemarkPlugins = NonNullable<Options["remarkPlugins"]>;
@@ -52,7 +51,6 @@ export function buildRemarkPlugins({
 }: RemarkPipelineOptions): RemarkPlugins {
   const plugins: RemarkPlugins = [remarkFrontmatter];
   if (features.gfm !== false) plugins.push(remarkGfm);
-  if (features.math !== false) plugins.push(remarkMath);
   if (gemojiPlugin) plugins.push(gemojiPlugin);
   if (features.alerts !== false) plugins.push(remarkAlert);
   if (features.wikilinks !== false) {
@@ -65,8 +63,6 @@ export function buildRemarkPlugins({
 export interface RehypePipelineOptions {
   /** Syntax-highlight plugin, lazily loaded only when the document has code. */
   highlightPlugin?: MarkdownPlugin | null;
-  /** KaTeX plugin, lazily loaded only when the document has math. */
-  katexPlugin?: MarkdownPlugin | null;
   /** Plugin-contributed rehype plugins, appended after the built-ins. */
   extra?: readonly MarkdownPlugin[];
   /** Stamp `data-line` on top-level blocks, for split view scroll sync. */
@@ -75,7 +71,6 @@ export interface RehypePipelineOptions {
 
 export function buildRehypePlugins({
   highlightPlugin,
-  katexPlugin,
   extra = [],
   sourceLines = false,
 }: RehypePipelineOptions): RehypePlugins {
@@ -84,7 +79,6 @@ export function buildRehypePlugins({
   // it), so its output is intentionally not re-sanitized.
   const plugins: RehypePlugins = [rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], rehypeSlug];
   if (highlightPlugin) plugins.push(highlightPlugin);
-  if (katexPlugin) plugins.push(katexPlugin);
   if (sourceLines) plugins.push(rehypeSourceLines);
   plugins.push(...extra);
   return plugins;

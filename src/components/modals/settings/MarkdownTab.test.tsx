@@ -11,7 +11,7 @@ vi.mock("@/hooks/useSettings", async (importOriginal) => {
     useSettings: () => ({
       settings: {
         ...DEFAULT_SETTINGS,
-        markdown: { ...DEFAULT_SETTINGS.markdown, math: false },
+        markdown: { ...DEFAULT_SETTINGS.markdown, alerts: false },
       },
       updateSettings,
       loaded: true,
@@ -24,8 +24,10 @@ describe("MarkdownTab", () => {
   it("renders a toggle per markdown feature reflecting current state", () => {
     render(<MarkdownTab />);
     const toggles = screen.getAllByRole("checkbox");
-    expect(toggles).toHaveLength(5);
-    // gfm on, math off (per the mocked settings).
+    // Math is a core plugin now, toggled under Settings, Plugins.
+    expect(toggles).toHaveLength(4);
+    expect(screen.queryByText("Math")).toBeNull();
+    // gfm on, alerts off (per the mocked settings).
     expect(toggles[0]).toBeChecked();
     expect(toggles[1]).not.toBeChecked();
   });
@@ -33,6 +35,6 @@ describe("MarkdownTab", () => {
   it("writes the toggled feature back through updateSettings", () => {
     render(<MarkdownTab />);
     fireEvent.click(screen.getAllByRole("checkbox")[1]);
-    expect(updateSettings).toHaveBeenCalledWith("markdown.math", true);
+    expect(updateSettings).toHaveBeenCalledWith("markdown.alerts", true);
   });
 });

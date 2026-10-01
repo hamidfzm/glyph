@@ -39,8 +39,9 @@ optional loads on first use:
   `lazyGraph`, `lazySettings`, `lazyWorkspaceSettings`).
 - The AI chat panel (`lazyAIChatPanel`) loads on first open, and the plugin
   marketplace rides in the settings chunk as its Plugins tab.
-- Syntax highlighting, KaTeX, and the gemoji table load when a document first
-  needs them (`lazyHighlight`, `lazyKatex`, `lazyGemoji`).
+- Syntax highlighting and the gemoji table load when a document first needs
+  them (`lazyHighlight`, `lazyGemoji`), and so does KaTeX, through the math
+  core plugin's lazy rehype contribution (`src/plugins/core/math/`).
 - The Sentry SDK loads only after the production telemetry opt-in
   (`src/lib/telemetry.ts`); error reporting before that is a no-op by design.
 - The export pipeline (`src/lib/export/*`) is reached only through dynamic

@@ -133,7 +133,7 @@ describe("prepareContent", () => {
       renderStatic: async () => '<svg data-diagram="light"></svg>',
     });
     setBody(
-      '<p><span class="katex-display">math</span></p>' +
+      '<div data-math-source="m" data-math-display=""><span class="katex-display">math</span></div>' +
         '<div data-fenced-language="puml" data-fenced-source="a"><svg data-dark="1"></svg></div>',
     );
     try {
@@ -251,13 +251,23 @@ describe("prepareContent", () => {
     }
   });
 
+  it("rasterizes only marked block math, never a bare katex-display", async () => {
+    rasterizeElementMock.mockClear();
+    setBody('<span class="katex-display">unmarked</span>');
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(rasterizeElementMock).not.toHaveBeenCalled();
+    expect(result?.html).toContain("unmarked");
+  });
+
   it("keeps the original node when math rasterization fails", async () => {
     rasterizeElementMock.mockClear();
     rasterizeElementMock.mockRejectedValueOnce(new Error("canvas tainted"));
-    setBody('<span class="katex-display">E=mc^2</span>');
+    setBody(
+      '<div data-math-source="E=mc^2" data-math-display=""><span class="katex-display">E</span></div>',
+    );
     const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
-    // Fallback: the math element survives (the walker turns it into LaTeX text).
-    expect(result?.html).toContain("katex-display");
+    // Fallback: the marked math survives (the walker turns it into its source).
+    expect(result?.html).toContain('data-math-source="E=mc^2"');
     expect(result?.html).not.toContain("data:image/png");
   });
 
@@ -309,7 +319,7 @@ describe("prepareContent", () => {
     const renderStatic = vi.fn(async () => "<svg></svg>");
     const dispose = staticRenderers.register({ language: "puml", renderStatic });
     setBody(
-      '<span class="katex-display">math</span>' +
+      '<div data-math-source="m" data-math-display=""><span class="katex-display">math</span></div>' +
         '<div data-fenced-language="puml" data-fenced-source="a"><svg></svg></div>',
     );
     try {

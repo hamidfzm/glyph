@@ -52,9 +52,9 @@ describe("convertHtmlToPdf", () => {
     expect(content.some((c) => typeof c === "object" && c !== null && "table" in c)).toBe(true);
   });
 
-  it("reduces KaTeX to its LaTeX source; a block-level SVG embeds as a vector node", () => {
+  it("reduces marked math to its source; a block-level SVG embeds as a vector node", () => {
     const content = convertHtmlToPdf(
-      '<p><span class="katex"><annotation encoding="application/x-tex">x^2</annotation></span></p>' +
+      '<p><span data-math-source="x^2"><span class="katex">rendered</span></span></p>' +
         "<svg><path/></svg>",
     );
     const json = JSON.stringify(content);
@@ -152,11 +152,6 @@ describe("convertHtmlToPdf", () => {
     expect(JSON.stringify(content)).toContain("lineThrough");
   });
 
-  it("falls back to KaTeX textContent when there's no annotation", () => {
-    const content = convertHtmlToPdf('<p><span class="katex">x2</span></p>');
-    expect(JSON.stringify(content)).toContain("x2");
-  });
-
   it("uses inline image alt text and skips alt-less inline images", () => {
     const withAlt = convertHtmlToPdf('<p>see <img src="https://x/y.png" alt="chart"></p>');
     expect(JSON.stringify(withAlt)).toContain("chart");
@@ -195,10 +190,13 @@ describe("convertHtmlToPdf", () => {
   });
 
   it("skips inline SVG and empty math while keeping surrounding text", () => {
-    const content = convertHtmlToPdf('<p>a<svg></svg><span class="katex">   </span>b</p>');
+    const content = convertHtmlToPdf(
+      '<p>a<svg></svg><span data-math-source="   "><span>JUNK</span></span>b</p>',
+    );
     const json = JSON.stringify(content);
     expect(json).toContain("a");
     expect(json).toContain("b");
+    expect(json).not.toContain("JUNK");
   });
 
   it("embeds a JPEG block image", () => {
@@ -251,21 +249,28 @@ describe("convertHtmlToPdf", () => {
 
   // Mirrors KaTeX's real output: a MathML branch carrying the LaTeX annotation
   // plus an aria-hidden HTML branch of rendered glyph spans.
-  const katex = (tex: string) =>
-    `<span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>z</mi></mrow>` +
-    `<annotation encoding="application/x-tex">${tex}</annotation></semantics></math></span>` +
-    `<span class="katex-html" aria-hidden="true">GLYPH_JUNK</span></span>`;
+  // Rendered math as the math plugin marks it, with glyph markup inside.
+  const rendered = '<span class="katex"><span class="katex-html">GLYPH_JUNK</span></span>';
+  const inlineMath = (tex: string) => `<span data-math-source="${tex}">${rendered}</span>`;
 
-  it("extracts block KaTeX as LaTeX source instead of its glyph spans", () => {
-    // `$$...$$` renders as a block-level katex-display wrapper.
-    const content = convertHtmlToPdf(`<span class="katex-display">${katex("a^2+b^2")}</span>`);
+  it("extracts block math as its source instead of its glyph spans", () => {
+    const content = convertHtmlToPdf(
+      `<div data-math-source="a^2+b^2" data-math-display=""><span class="katex-display">${rendered}</span></div>`,
+    );
     const json = JSON.stringify(content);
     expect(json).toContain("a^2+b^2");
     expect(json).not.toContain("GLYPH_JUNK");
   });
 
-  it("extracts inline KaTeX inside a paragraph", () => {
-    const content = convertHtmlToPdf(`<p>see ${katex("x_1")} here</p>`);
+  it("drops block math with an empty source", () => {
+    const content = convertHtmlToPdf(
+      `<div data-math-source=" " data-math-display="">${rendered}</div>`,
+    );
+    expect(JSON.stringify(content)).not.toContain("GLYPH_JUNK");
+  });
+
+  it("extracts inline math inside a paragraph", () => {
+    const content = convertHtmlToPdf(`<p>see ${inlineMath("x_1")} here</p>`);
     const json = JSON.stringify(content);
     expect(json).toContain("x_1");
     expect(json).toContain("see");
