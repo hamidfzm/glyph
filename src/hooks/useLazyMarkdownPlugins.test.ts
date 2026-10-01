@@ -1,7 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { RehypeContribution } from "@/lib/markdown/lazyPlugins";
-import type { LazyMarkdownPlugin, MarkdownPlugin } from "@/lib/plugins/types";
+import type { LazyMarkdownPlugin, MarkdownPlugin, RehypeContribution } from "@/lib/plugins/types";
 import { useLazyMarkdownPlugins } from "./useLazyMarkdownPlugins";
 
 const plugin = (): MarkdownPlugin => () => () => {};
@@ -35,6 +34,33 @@ describe("useLazyMarkdownPlugins", () => {
     await waitFor(() => expect(entry.load).toHaveBeenCalled());
     await act(async () => finish(loaded));
     await waitFor(() => expect(result.current).toEqual([plain, loaded]));
+  });
+
+  it("does nothing when a load lands after the document unmounted", async () => {
+    const { entry, finish } = deferredLazy();
+    const { unmount } = renderHook(() => useLazyMarkdownPlugins([entry], "math"));
+    await waitFor(() => expect(entry.load).toHaveBeenCalled());
+    unmount();
+    await act(async () => finish(plugin()));
+    expect(entry.load).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips the re-render for a document that stopped needing the plugin, then reuses the load", async () => {
+    const loaded = plugin();
+    const { entry, finish } = deferredLazy();
+    const entries: RehypeContribution[] = [entry];
+    const { result, rerender } = renderHook(
+      ({ content }) => useLazyMarkdownPlugins(entries, content),
+      { initialProps: { content: "math" } },
+    );
+    await waitFor(() => expect(entry.load).toHaveBeenCalled());
+    rerender({ content: "prose" });
+    await act(async () => finish(loaded));
+    expect(result.current).toEqual([]);
+
+    rerender({ content: "math again" });
+    expect(result.current).toEqual([loaded]);
+    expect(entry.load).toHaveBeenCalledTimes(1);
   });
 
   it("ignores a load that lands after its plugin was removed", async () => {

@@ -39,9 +39,9 @@ interface MarkdownContentProps {
 
 // The markdown rendering core: frontmatter block + ReactMarkdown wired up with
 // the full plugin/component set (GFM, alerts, wikilinks, syntax highlighting,
-// sanitized raw HTML, and whatever plugins contribute). Extracted from MarkdownViewer so both the
-// document viewer and notebook markdown/HTML cells render identically. Owns no
-// scroll container or search — callers provide those.
+// sanitized raw HTML, and whatever plugins contribute). Extracted from
+// MarkdownViewer so both the document viewer and notebook markdown/HTML cells
+// render identically. Owns no scroll container or search; callers provide those.
 export function MarkdownContent({
   content,
   filePath,
@@ -69,10 +69,8 @@ export function MarkdownContent({
   // Plugin-contributed remark/rehype plugins, appended to the built-in pipeline.
   const plugins = usePluginsOptional();
   const pluginRemark = useRegistryEntries(plugins?.remarkPlugins ?? null);
-  const pluginRehype = useLazyMarkdownPlugins(
-    useRegistryEntries(plugins?.rehypePlugins ?? null),
-    content,
-  );
+  const pluginRehypeEntries = useRegistryEntries(plugins?.rehypePlugins ?? null);
+  const pluginRehype = useLazyMarkdownPlugins(pluginRehypeEntries, content);
   const frontmatter = useMemo(
     () => (showFrontmatter ? parseFrontmatter(content) : null),
     [content, showFrontmatter],

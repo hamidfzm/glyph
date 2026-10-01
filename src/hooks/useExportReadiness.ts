@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { useSettings } from "@/hooks/useSettings";
-import type { RehypeContribution } from "@/lib/markdown/lazyPlugins";
-import type { MarkdownPlugin, SiteThemeContribution } from "@/lib/plugins/types";
+import type {
+  MarkdownPlugin,
+  RehypeContribution,
+  SiteThemeContribution,
+} from "@/lib/plugins/types";
 
 // How long a headless render waits for the plugin host's startup load. A hung
 // plugin must not hang a CI job forever: past this, the render proceeds with

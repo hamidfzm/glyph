@@ -27,7 +27,7 @@ function imageRun(el: Element): ParagraphChild | null {
   });
 }
 
-function textRun(text: string, style: InlineStyle): TextRun {
+export function textRun(text: string, style: InlineStyle): TextRun {
   return new TextRun({
     text,
     bold: style.bold,

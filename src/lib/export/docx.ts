@@ -25,8 +25,8 @@ const NUMBERING = {
 
 /**
  * Build a `.docx` from prepared body HTML. Headings, lists, tables, quotes,
- * code, links, and inline formatting are preserved. Math is reduced to its
- * LaTeX source and diagrams (SVG) are dropped — DOCX has no faithful equivalent.
+ * code, links, and inline formatting are preserved. Marked math is reduced to
+ * its TeX source and diagrams (SVG) are dropped — DOCX has no faithful equivalent.
  */
 export async function buildDocx(bodyHtml: string, meta: DocxMetadata): Promise<Uint8Array> {
   const doc = new Document({

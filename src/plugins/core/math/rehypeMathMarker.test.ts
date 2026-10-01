@@ -43,10 +43,13 @@ describe("rehypeMathMarker", () => {
     );
   });
 
-  it("turns a display block into a marked div that keeps its source line", async () => {
+  it("wraps a display block in a marked div that keeps its source line", async () => {
     const html = await mark("intro\n\n$$\na + b\n$$");
-    expect(html).toContain('<div data-line="3" data-math-source="a + b" data-math-display="">');
-    expect(html).not.toContain("<pre>");
+    // The <pre> stays inside: it is how rehype-katex picks display mode once
+    // sanitize has stripped the `math-display` class.
+    expect(html).toContain(
+      '<div data-line="3" data-math-source="a + b" data-math-display=""><pre data-line="3"><code class="language-math math-display">',
+    );
   });
 
   it("marks math nested in other blocks", async () => {

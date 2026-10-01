@@ -10,7 +10,7 @@ import {
   WidthType,
 } from "docx";
 import { isRtlText } from "@/lib/textDirection";
-import { inlineRuns } from "./docxInline";
+import { inlineRuns, textRun } from "./docxInline";
 
 export const OL_REFERENCE = "glyph-ordered";
 const MONOSPACE = "Courier New";
@@ -183,6 +183,14 @@ function blocksForNode(node: Node, ctx: Ctx): Block[] {
   if (tag === "table") return [tableBlock(el)];
   if (tag === "svg") return [];
   if (tag === "div" && el.classList.contains("markdown-embed")) return [embedBlock(el, ctx)];
+
+  // Block math: its TeX source as one monospace paragraph, never the rendered
+  // markup it would flatten to.
+  const mathSource = el.getAttribute("data-math-source");
+  if (mathSource !== null) {
+    const tex = mathSource.trim();
+    return tex ? [new Paragraph({ children: [textRun(tex, { code: true })] })] : [];
+  }
 
   if (CONTAINER_TAGS.has(tag)) {
     return Array.from(el.childNodes).flatMap((c) => blocksForNode(c, ctx));

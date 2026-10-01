@@ -3,14 +3,12 @@
 // most once: a plugin turned off and on again registers a new entry, and the
 // module cache makes that second import cheap.
 
-import type { LazyMarkdownPlugin, MarkdownPlugin } from "@/lib/plugins/types";
+import type { LazyMarkdownPlugin, MarkdownPlugin, RehypeContribution } from "@/lib/plugins/types";
 import { trackPluginLoad } from "./pluginLoads";
-
-/** What `ctx.markdown.registerRehypePlugin` accepts. */
-export type RehypeContribution = MarkdownPlugin | LazyMarkdownPlugin;
 
 const loads = new WeakMap<LazyMarkdownPlugin, Promise<MarkdownPlugin | null>>();
 const loaded = new WeakMap<LazyMarkdownPlugin, MarkdownPlugin>();
+const detectFailures = new WeakSet<LazyMarkdownPlugin>();
 // Bumped whenever a load lands, so a cached ready list is rebuilt once.
 let generation = 0;
 const readyCache = new WeakMap<
@@ -25,12 +23,16 @@ export function isLazyMarkdownPlugin(entry: RehypeContribution): entry is LazyMa
   return typeof candidate.detect === "function" && typeof candidate.load === "function";
 }
 
-// A throwing check is the plugin's bug; it must not take the document down.
+// A throwing check is the plugin's bug; it must not take the document down,
+// nor log on every keystroke.
 function detects(entry: LazyMarkdownPlugin, markdown: string): boolean {
   try {
     return entry.detect(markdown);
   } catch (err) {
-    console.error("A lazy markdown plugin's detect threw:", err);
+    if (!detectFailures.has(entry)) {
+      detectFailures.add(entry);
+      console.error("A lazy markdown plugin's detect threw:", err);
+    }
     return false;
   }
 }

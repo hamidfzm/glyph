@@ -87,7 +87,10 @@ describe("MarkdownContent", () => {
       <MarkdownContent content={"intro\n\n$$\nx + y\n$$"} showFrontmatter={false} sourceLines />,
       { wrapper: await withMathPlugin() },
     );
-    await waitFor(() => expect(container.querySelector("[data-math-display] .katex")).toBeTruthy());
+    // Display mode, after sanitize stripped remark-math's `math-display` class.
+    await waitFor(() =>
+      expect(container.querySelector("[data-math-display] .katex-display")).toBeTruthy(),
+    );
     const block = container.querySelector("[data-math-display]");
     expect(block?.getAttribute("data-line")).toBe("3");
     expect(block?.getAttribute("data-math-source")).toBe("x + y");

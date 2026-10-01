@@ -8,9 +8,9 @@ import {
   hasCodeBlock,
   loadHighlight,
 } from "@/components/markdown/lazyHighlight";
-import { type RehypeContribution, resolveForDocument } from "@/lib/markdown/lazyPlugins";
+import { resolveForDocument } from "@/lib/markdown/lazyPlugins";
 import { buildRehypePlugins, buildRemarkPlugins } from "@/lib/markdown/pipeline";
-import type { MarkdownPlugin } from "@/lib/plugins/types";
+import type { MarkdownPlugin, RehypeContribution } from "@/lib/plugins/types";
 
 export interface RenderPageOptions {
   content: string;

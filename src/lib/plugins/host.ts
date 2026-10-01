@@ -1,4 +1,3 @@
-import type { RehypeContribution } from "@/lib/markdown/lazyPlugins";
 import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_COMPAT_FLOOR, PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 import { createAssetsApi } from "./assetsApi";
@@ -16,6 +15,7 @@ import type {
   InstalledPlugin,
   MarkdownPlugin,
   PluginModule,
+  RehypeContribution,
   SettingsPanelContribution,
   SidebarPanelContribution,
   SiteThemeContribution,

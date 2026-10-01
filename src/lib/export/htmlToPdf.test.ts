@@ -247,8 +247,6 @@ describe("convertHtmlToPdf", () => {
     expect(JSON.stringify(content)).toContain("hello");
   });
 
-  // Mirrors KaTeX's real output: a MathML branch carrying the LaTeX annotation
-  // plus an aria-hidden HTML branch of rendered glyph spans.
   // Rendered math as the math plugin marks it, with glyph markup inside.
   const rendered = '<span class="katex"><span class="katex-html">GLYPH_JUNK</span></span>';
   const inlineMath = (tex: string) => `<span data-math-source="${tex}">${rendered}</span>`;

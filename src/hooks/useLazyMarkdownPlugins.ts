@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef } from "react";
-import { loadForDocument, type RehypeContribution, readyPlugins } from "@/lib/markdown/lazyPlugins";
-import type { MarkdownPlugin } from "@/lib/plugins/types";
+import { loadForDocument, readyPlugins } from "@/lib/markdown/lazyPlugins";
+import type { MarkdownPlugin, RehypeContribution } from "@/lib/plugins/types";
 
 /**
  * The rehype contributions ready for `content`: lazy ones `content` needs start
@@ -12,10 +12,12 @@ export function useLazyMarkdownPlugins(
 ): MarkdownPlugin[] {
   const [, landed] = useReducer((count: number) => count + 1, 0);
   const ready = readyPlugins(entries);
-  // What this render used, so a load that landed meanwhile (for this document
-  // or another one) still re-renders it.
+  // What the committed render used, so a load that landed meanwhile (for this
+  // document or another one) still re-renders it.
   const rendered = useRef(ready);
-  rendered.current = ready;
+  useEffect(() => {
+    rendered.current = ready;
+  });
 
   useEffect(() => {
     let live = true;

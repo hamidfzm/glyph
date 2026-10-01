@@ -27,6 +27,9 @@ export interface LazyMarkdownPlugin {
   load(): Promise<MarkdownPlugin>;
 }
 
+/** What `registerRehypePlugin` accepts. */
+export type RehypeContribution = MarkdownPlugin | LazyMarkdownPlugin;
+
 /** What a fenced renderer receives. */
 export interface FencedRendererProps {
   code: string;
@@ -292,7 +295,7 @@ export interface MarkdownRegistryApi {
    * `data-math-source`, plus `data-math-display` for block math. PDF export
    * rasterizes the blocks and PDF and Word fall back to the source.
    */
-  registerRehypePlugin(plugin: MarkdownPlugin | LazyMarkdownPlugin): Disposer;
+  registerRehypePlugin(plugin: RehypeContribution): Disposer;
   /**
    * Render fenced ```<language> blocks, with a {@link FencedRendererMount} or
    * a React component. While a render is still pending, mark its element

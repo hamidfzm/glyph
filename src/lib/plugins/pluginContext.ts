@@ -1,5 +1,4 @@
 import { i18n } from "@/lib/i18n";
-import type { RehypeContribution } from "@/lib/markdown/lazyPlugins";
 import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_VERSION } from "./apiVersion";
 import { createAssetsApi } from "./assetsApi";
@@ -15,6 +14,7 @@ import type {
   GlyphPluginContext,
   InstalledPlugin,
   MarkdownPlugin,
+  RehypeContribution,
   SettingsPanelContribution,
   SidebarPanelContribution,
   SiteThemeContribution,

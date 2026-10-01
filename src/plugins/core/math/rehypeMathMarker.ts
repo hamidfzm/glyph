@@ -1,7 +1,9 @@
 // Wraps each math element remark-math emits in the marker exports key on:
 // `data-math-source` holding its TeX, plus `data-math-display` on block math.
 // rehype-katex replaces the math element itself, so the wrapper is also what
-// keeps a top-level block's `data-line` for split view scroll sync.
+// keeps a top-level block's `data-line` for split view scroll sync. A block
+// keeps its <pre> inside the wrapper: sanitize strips the `math-display`
+// class, so the <pre> parent is how rehype-katex knows to render it as display.
 
 // Structural shape of the hast nodes this touches, declared locally rather
 // than pulling in a types-only dependency.
@@ -38,7 +40,7 @@ function mark(parent: HastNode): void {
         type: "element",
         tagName: "div",
         properties: { ...node.properties, dataMathSource: textOf(block), dataMathDisplay: "" },
-        children: [block],
+        children: [node],
       };
     } else if (isMath(node)) {
       children[i] = {

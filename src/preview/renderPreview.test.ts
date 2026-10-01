@@ -39,9 +39,15 @@ describe("renderPreview", () => {
   });
 
   it("highlights code and renders math", async () => {
-    const html = await renderPreview("```js\nconst a = 1;\n```\n\n$E = mc^2$", options);
+    const html = await renderPreview(
+      "```js\nconst a = 1;\n```\n\n$E = mc^2$\n\n$$\nx^2\n$$",
+      options,
+    );
     expect(html).toContain("hljs");
-    expect(html).toContain("katex");
+    expect(html).toContain('<span data-math-source="E = mc^2"><span class="katex">');
+    expect(html).toContain(
+      '<div data-math-source="x^2" data-math-display=""><span class="katex-display">',
+    );
   });
 
   // `A-->B` would read the source back mangled: happy-dom mis-tokenizes `-->`

@@ -5,10 +5,13 @@ import { buildHtmlDocument } from "@/lib/export/html";
 import { deriveExportMeta } from "@/lib/export/meta";
 import { siteChromeCss, siteChromeScript } from "@/lib/export/siteChrome";
 import { i18n } from "@/lib/i18n";
-import type { RehypeContribution } from "@/lib/markdown/lazyPlugins";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { basename } from "@/lib/paths";
-import type { MarkdownPlugin, SiteThemeContribution } from "@/lib/plugins/types";
+import type {
+  MarkdownPlugin,
+  RehypeContribution,
+  SiteThemeContribution,
+} from "@/lib/plugins/types";
 import { resolveTargets } from "@/lib/wikilinkResolutions";
 import type { FileScan } from "@/lib/workspaceScan";
 import { buildIndexBodyHtml } from "./indexPage";

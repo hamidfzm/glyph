@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { LazyMarkdownPlugin, MarkdownPlugin } from "@/lib/plugins/types";
+import type { LazyMarkdownPlugin, MarkdownPlugin, RehypeContribution } from "@/lib/plugins/types";
 import { expectConsole } from "@/test/consoleGuard";
 import {
   isLazyMarkdownPlugin,
   loadForDocument,
-  type RehypeContribution,
   readyPlugins,
   resolveForDocument,
 } from "./lazyPlugins";
@@ -86,8 +85,15 @@ describe("resolveForDocument", () => {
       },
       load: vi.fn(async () => plugin()),
     };
+    const logged = vi.spyOn(console, "error");
     expect(await resolveForDocument([entry], "x")).toEqual([]);
+    await resolveForDocument([entry], "xy");
     expect(entry.load).not.toHaveBeenCalled();
+    // Once per entry, not on every keystroke.
+    expect(
+      logged.mock.calls.filter(([message]) => String(message).includes("detect threw")),
+    ).toHaveLength(1);
+    logged.mockRestore();
   });
 });
 
