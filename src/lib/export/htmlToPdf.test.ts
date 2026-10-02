@@ -142,6 +142,17 @@ describe("convertHtmlToPdf", () => {
     expect(JSON.stringify(content)).toContain('"image"');
   });
 
+  it("sizes a captured block by its declared width and centers captured block math", () => {
+    const [math, block] = convertHtmlToPdf(
+      `<img src="${pngDataUri()}" width="96" data-math-display="">` +
+        `<img src="${pngDataUri()}" width="9000">`,
+    ) as Array<{ width: number; alignment?: string }>;
+    expect(math).toMatchObject({ width: 96, alignment: "center" });
+    // Never wider than the page, and only math is centered.
+    expect(block.width).toBe(515);
+    expect(block.alignment).toBeUndefined();
+  });
+
   it("covers inline formatting, breaks, comments, and bare anchors", () => {
     const content = convertHtmlToPdf(
       "<p><strong>b</strong><em>i</em><del>s</del><code>c</code>plain" +
