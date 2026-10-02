@@ -2,14 +2,19 @@
 // draw, are captured from the live DOM as raster images (vector math is #256).
 // `rasterizeSvgsInHtml` is the fallback for SVGs pdfmake's renderer rejects.
 
+import type { Options } from "html2canvas";
 import { decodeSvgDataUrl, toXmlSvg } from "@/lib/svgDataUrl";
-import { CONTENT_WIDTH } from "./svgPdfNode";
+import { BODY_FONT_SIZE, CONTENT_WIDTH } from "./svgPdfNode";
 
 const SCALE = 2;
 const PT_PER_PX = 0.75;
 
-// The page's measure in CSS px, so a captured text block wraps like the page.
-export const PAGE_MEASURE = `${CONTENT_WIDTH / PT_PER_PX}px`;
+// Ink spills past its box (Arabic dots and tall letters) and html2canvas
+// places some text a few px off, but a capture crops to the box: keep a margin.
+const BLEED = 8;
+
+// The box width whose capture, bleed included, spans the page's measure.
+export const PAGE_MEASURE = `${CONTENT_WIDTH / PT_PER_PX - 2 * BLEED}px`;
 
 interface Raster {
   src: string;
@@ -17,38 +22,67 @@ interface Raster {
   width: number;
 }
 
-// html2canvas inlines each cloned SVG node's live computed style, dark theme
-// included, so KaTeX's radicals would stay light. Resolve the paint again
-// against the light clone; every node is cleared first so children inherit.
-function repaintSvgs(doc: Document, root: HTMLElement): void {
-  const nodes = Array.from(root.querySelectorAll<SVGElement>("svg, svg *"));
-  for (const node of nodes) {
-    for (const prop of ["color", "fill", "stroke"]) node.style.removeProperty(prop);
-  }
+// html2canvas inlines every cloned SVG node's live computed style, dark paint
+// included: restore the authored style, then resolve the paint in the clone.
+function repaintSvgs(doc: Document, live: Element, clone: Element): void {
+  const liveNodes = live.querySelectorAll("svg, svg *");
+  const nodes = Array.from(clone.querySelectorAll<SVGElement>("svg, svg *"));
+  nodes.forEach((node, i) => {
+    const authored = liveNodes[i].getAttribute("style");
+    if (authored === null) node.removeAttribute("style");
+    else node.setAttribute("style", authored);
+  });
   // The clone lives in html2canvas's iframe, which always has a window.
   const view = doc.defaultView!;
-  for (const node of nodes) {
+  // All reads before any write, so the clone restyles once, not per node.
+  const resolved = nodes.map((node) => {
     const style = view.getComputedStyle(node);
-    node.style.fill = style.fill;
-    node.style.stroke = style.stroke;
-  }
+    return { fill: style.fill, stroke: style.stroke };
+  });
+  nodes.forEach((node, i) => {
+    node.style.fill = resolved[i].fill;
+    node.style.stroke = resolved[i].stroke;
+  });
 }
 
 // Capture a live element as a PNG via html2canvas, laid out at `width` (any
-// CSS width) in the light theme: pages export on white whatever the app shows.
-// Only html2canvas's own clone of the document is restyled.
+// CSS width, never under the page measure) as the light page draws it. Only
+// html2canvas's own clone of the document is restyled.
 export async function rasterizeElement(el: HTMLElement, width: string): Promise<Raster> {
   const { default: html2canvas } = await import("html2canvas");
-  const canvas = await html2canvas(el, {
+  const options: Partial<Options> = {
     backgroundColor: "#ffffff",
     scale: SCALE,
     logging: false,
-    onclone: (doc, clone) => {
-      doc.documentElement.classList.remove("dark");
-      clone.style.width = width;
-      repaintSvgs(doc, clone);
+    // Clone only the head and the element's own line: html2canvas otherwise
+    // copies the whole document, styles and all, for every capture.
+    ignoreElements: (node) => {
+      const isOnPath = node.contains(el) || el.contains(node);
+      return !isOnPath && node.closest("head") === null;
     },
-  });
+    onclone: (doc, clone) => {
+      const root = doc.documentElement;
+      root.classList.remove("dark");
+      // Prose at pdfmake's body size, so a capture matches the text beside it.
+      root.style.setProperty("--glyph-font-size", `${BODY_FONT_SIZE / PT_PER_PX}px`);
+      clone.style.width = width;
+      // Also beats a table's `min-width: 100%`, and gives a math tag its margin.
+      clone.style.minWidth = PAGE_MEASURE;
+      repaintSvgs(doc, el, clone);
+      const box = clone.getBoundingClientRect();
+      // No box (in a collapsed <details>): leave the capture empty.
+      if (box.width === 0 || box.height === 0) return;
+      // html2canvas reads its crop from these options only after onclone.
+      Object.assign(options, {
+        x: -BLEED,
+        y: -BLEED,
+        width: Math.ceil(box.width) + 2 * BLEED,
+        height: Math.ceil(box.height) + 2 * BLEED,
+      });
+    },
+  };
+  const canvas = await html2canvas(el, options);
+  if (canvas.width === 0 || canvas.height === 0) throw new Error("empty capture");
   return { src: canvas.toDataURL("image/png"), width: (canvas.width / SCALE) * PT_PER_PX };
 }
 
@@ -93,15 +127,15 @@ export function svgToPng(svg: string): Promise<string> {
       const w = image.naturalWidth || 800;
       const h = image.naturalHeight || 600;
       const canvas = document.createElement("canvas");
-      canvas.width = w * 2;
-      canvas.height = h * 2;
+      canvas.width = w * SCALE;
+      canvas.height = h * SCALE;
       const ctx = canvas.getContext("2d");
       if (!ctx) {
         URL.revokeObjectURL(url);
         reject(new Error("no 2d context"));
         return;
       }
-      ctx.scale(2, 2);
+      ctx.scale(SCALE, SCALE);
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(image, 0, 0, w, h);

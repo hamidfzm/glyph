@@ -2,6 +2,7 @@ import type { TDocumentDefinitions } from "pdfmake/interfaces";
 import { convertHtmlToPdf } from "./htmlToPdf";
 import { pdfEngine } from "./pdfEngine";
 import { rasterizeSvgsInHtml } from "./rasterize";
+import { BODY_FONT_SIZE } from "./svgPdfNode";
 
 export interface PdfMetadata {
   title: string;
@@ -25,7 +26,7 @@ async function renderPdf(bodyHtml: string, meta: PdfMetadata): Promise<Uint8Arra
   const docDefinition: TDocumentDefinitions = {
     info: { title: meta.title, author: meta.author },
     content: convertHtmlToPdf(host),
-    defaultStyle: { fontSize: 11, lineHeight: 1.3 },
+    defaultStyle: { fontSize: BODY_FONT_SIZE, lineHeight: 1.3 },
     pageMargins: [40, 40, 40, 40],
   };
 

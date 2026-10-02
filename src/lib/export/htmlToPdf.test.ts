@@ -142,15 +142,19 @@ describe("convertHtmlToPdf", () => {
     expect(JSON.stringify(content)).toContain('"image"');
   });
 
-  it("sizes a captured block by its declared width and centers captured block math", () => {
-    const [math, block] = convertHtmlToPdf(
-      `<img src="${pngDataUri()}" width="96" data-math-display="">` +
-        `<img src="${pngDataUri()}" width="9000">`,
-    ) as Array<{ width: number; alignment?: string }>;
-    expect(math).toMatchObject({ width: 96, alignment: "center" });
-    // Never wider than the page, and only math is centered.
-    expect(block.width).toBe(515);
-    expect(block.alignment).toBeUndefined();
+  it("sizes a capture by its page width, an image by its pixels, and both to fit the page", () => {
+    const [capture, authored, wide, tall] = convertHtmlToPdf(
+      `<img src="${pngDataUri(400, 50)}" data-capture-width="96">` +
+        `<img src="${pngDataUri(40, 20)}" width="300">` +
+        `<img src="${pngDataUri(9000, 10)}">` +
+        `<img src="${pngDataUri(100, 2000)}">`,
+    ) as Array<{ width: number }>;
+    expect(capture.width).toBe(96);
+    // An author's width attribute is not a capture's: the pixels decide.
+    expect(authored.width).toBe(40);
+    expect(wide.width).toBe(515);
+    // 2000 tall would run off the page, so it shrinks to the page height.
+    expect(tall.width).toBeCloseTo(38.1);
   });
 
   it("covers inline formatting, breaks, comments, and bare anchors", () => {
@@ -363,12 +367,14 @@ function jpgDataUri(): string {
   return `data:image/jpeg;base64,${btoa(bin)}`;
 }
 
-function pngDataUri(): string {
+function pngDataUri(width = 4, height = 2): string {
   const png = new Array(24).fill(0);
   png[0] = 0x89;
   png[1] = 0x50;
-  png[19] = 4;
-  png[23] = 2;
+  png[18] = width >> 8;
+  png[19] = width & 0xff;
+  png[22] = height >> 8;
+  png[23] = height & 0xff;
   let bin = "";
   for (const b of png) bin += String.fromCharCode(b);
   return `data:image/png;base64,${btoa(bin)}`;

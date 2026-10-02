@@ -8,6 +8,8 @@ import { toXmlSvg } from "@/lib/svgDataUrl";
 // Page content box for an A4 page with default pdfmake margins (~40pt each).
 export const CONTENT_WIDTH = 515;
 export const CONTENT_HEIGHT = 762;
+// pdfmake's body text size, which captured text is laid out to match.
+export const BODY_FONT_SIZE = 11;
 
 interface Size {
   width: number;

@@ -8,12 +8,13 @@ import { staticRendererFor } from "@/lib/plugins/staticRenderers";
 import { containsRtlText } from "@/lib/textDirection";
 import { PAGE_MEASURE, rasterizeElement } from "./rasterize";
 
-// The capture's page width rides on the <img> for the walker to size it by.
+// The capture's page width rides on the <img> for the walker to size it by,
+// in an attribute the sanitizer never lets a document set.
 async function rasterImage(live: HTMLElement, clone: Element, width: string): Promise<Element> {
   const raster = await rasterizeElement(live, width);
   const img = clone.ownerDocument.createElement("img");
   img.setAttribute("src", raster.src);
-  img.setAttribute("width", String(raster.width));
+  img.setAttribute("data-capture-width", String(raster.width));
   return img;
 }
 
@@ -38,8 +39,8 @@ export async function preparePdfRichContent(liveBody: Element, clone: Element): 
       // Without a static render the live block embeds as it is on screen.
       if (!renderStatic) continue;
       const source = el.dataset.fencedSource ?? "";
-      // The wrapper keeps the marker, so the RTL pass skips plugin output on
-      // both sides and its live/clone node lists still line up.
+      // The wrapper keeps the marker, so the text-block pass skips plugin
+      // output on both sides.
       const wrap = clone.ownerDocument.createElement("div");
       wrap.setAttribute("data-fenced-language", pluginLanguage);
       try {
@@ -58,10 +59,8 @@ export async function preparePdfRichContent(liveBody: Element, clone: Element): 
       continue;
     }
     try {
-      // Shrink-wrapped to the formula: the block itself spans the window.
-      const img = await rasterImage(el, clone, "fit-content");
-      img.setAttribute("data-math-display", "");
-      cloned[i].replaceWith(img);
+      // A formula wider than the page keeps its width rather than clipping.
+      cloned[i].replaceWith(await rasterImage(el, clone, "fit-content"));
     } catch {
       // Leave the math node; the walker falls back to the LaTeX source.
     }
@@ -86,19 +85,29 @@ function textBlockCandidates<T extends Element>(root: Element): T[] {
   );
 }
 
-export async function rasterizeUndrawableBlocks(liveBody: Element, clone: Element): Promise<void> {
+type BlockPair = [live: HTMLElement, clone: Element];
+
+// Pair each block to capture with its clone. Call it right after cloning,
+// before any await: the live body may change while the export runs.
+export function undrawableBlocks(liveBody: Element, clone: Element): BlockPair[] {
   const live = textBlockCandidates<HTMLElement>(liveBody);
-  if (live.length === 0) return;
   const cloned = textBlockCandidates(clone);
-  for (let i = 0; i < live.length; i++) {
-    const el = live[i];
+  const pairs: BlockPair[] = [];
+  live.forEach((el, i) => {
     // Skip nested matches (an RTL <li> is covered by its list, a table cell's
     // paragraph by its table). A candidate is a descendant, so it has a parent.
-    if (el.parentElement!.closest(TEXT_BLOCK_SELECTOR)) continue;
+    if (el.parentElement!.closest(TEXT_BLOCK_SELECTOR)) return;
     const hasMath = el.querySelector("[data-math-source]") !== null;
-    if (!containsRtlText(el.textContent) && !hasMath) continue;
+    if (!containsRtlText(el.textContent) && !hasMath) return;
+    pairs.push([el, cloned[i]]);
+  });
+  return pairs;
+}
+
+export async function rasterizeBlocks(pairs: BlockPair[]): Promise<void> {
+  for (const [live, cloned] of pairs) {
     try {
-      cloned[i].replaceWith(await rasterImage(el, clone, PAGE_MEASURE));
+      cloned.replaceWith(await rasterImage(live, cloned, PAGE_MEASURE));
     } catch {
       // Leave the original block; the walker degrades to logical-order text
       // and math to its source.
