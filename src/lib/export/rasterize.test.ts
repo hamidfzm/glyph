@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { rasterizeElement, rasterizeSvgsInHtml, svgToPng } from "./rasterize";
+import { PAGE_MEASURE, rasterizeElement, rasterizeSvgsInHtml, svgToPng } from "./rasterize";
 
 const html2canvas = vi.fn();
 vi.mock("html2canvas", () => ({
@@ -7,8 +7,18 @@ vi.mock("html2canvas", () => ({
 }));
 
 describe("rasterizeElement", () => {
+  type Options = {
+    ignoreElements: (node: Element) => boolean;
+    onclone: (doc: Document, clone: HTMLElement) => void;
+  };
+  const lastOptions = () => (html2canvas.mock.lastCall as [HTMLElement, Options])[1];
+
   it("captures at 2x on white and reports the on-screen width in points", async () => {
-    html2canvas.mockResolvedValue({ width: 400, toDataURL: () => "data:image/png;base64,ELEMENT" });
+    html2canvas.mockResolvedValue({
+      width: 400,
+      height: 50,
+      toDataURL: () => "data:image/png;base64,ELEMENT",
+    });
     const el = document.createElement("div");
     await expect(rasterizeElement(el, "fit-content")).resolves.toEqual({
       src: "data:image/png;base64,ELEMENT",
@@ -20,31 +30,72 @@ describe("rasterizeElement", () => {
     );
   });
 
-  it("lays out html2canvas's clone light, at the given width, with SVG paint re-resolved", async () => {
-    html2canvas.mockResolvedValue({ width: 2, toDataURL: () => "" });
-    await rasterizeElement(document.createElement("p"), "686px");
-    const [, { onclone }] = html2canvas.mock.lastCall as [
-      HTMLElement,
-      { onclone: (doc: Document, clone: HTMLElement) => void },
-    ];
+  it("rejects a capture with no box, so the caller keeps the block", async () => {
+    // A block inside a collapsed <details> has no layout box.
+    html2canvas.mockResolvedValue({ width: 0, height: 0, toDataURL: () => "data:," });
+    await expect(rasterizeElement(document.createElement("p"), PAGE_MEASURE)).rejects.toThrow();
+  });
+
+  it("crops a margin around the clone's box, so spilled ink is kept", async () => {
+    html2canvas.mockResolvedValue({ width: 2, height: 2, toDataURL: () => "" });
+    await rasterizeElement(document.createElement("p"), PAGE_MEASURE);
+    const options = lastOptions();
+    const clone = document.createElement("p");
+    clone.getBoundingClientRect = () => ({ width: 100.4, height: 20 }) as DOMRect;
+    options.onclone(document, clone);
+    expect(options).toMatchObject({ x: -8, y: -8, width: 117, height: 36 });
+  });
+
+  it("clones only the head and the element's own line of the document", async () => {
+    html2canvas.mockResolvedValue({ width: 2, height: 2, toDataURL: () => "" });
+    const section = document.createElement("section");
+    section.innerHTML = "<p><b>in</b></p><p>sibling</p>";
+    document.body.append(section);
+    try {
+      const target = section.firstElementChild as HTMLElement;
+      await rasterizeElement(target, PAGE_MEASURE);
+      const { ignoreElements } = lastOptions();
+      expect(ignoreElements(document.head)).toBe(false);
+      expect(ignoreElements(section)).toBe(false);
+      expect(ignoreElements(target.firstElementChild as Element)).toBe(false);
+      expect(ignoreElements(section.lastElementChild as Element)).toBe(true);
+    } finally {
+      section.remove();
+    }
+  });
+
+  it("lays out the clone light, at the page's size, keeping authored SVG paint", async () => {
+    html2canvas.mockResolvedValue({ width: 2, height: 2, toDataURL: () => "" });
+    const live = document.createElement("p");
+    live.innerHTML = '<svg></svg><svg style="stroke: rgb(9, 9, 9)"></svg>';
+    await rasterizeElement(live, "fit-content");
     // Stand-in for html2canvas's cloned document: dark, with the live dark
-    // paint inlined on its SVG nodes.
+    // paint inlined on every SVG node.
     document.documentElement.classList.add("dark");
     const theme = document.createElement("style");
     theme.textContent = "svg { fill: rgb(1, 2, 3); } .dark svg { fill: rgb(238, 238, 238); }";
     document.head.append(theme);
     const clone = document.createElement("p");
-    clone.innerHTML = '<svg style="fill: rgb(238, 238, 238)"></svg>';
+    const darkPaint = "fill: rgb(238, 238, 238); stroke: rgb(238, 238, 238)";
+    clone.innerHTML = `<svg style="${darkPaint}"></svg><svg style="${darkPaint}"></svg>`;
     document.body.append(clone);
     try {
-      onclone(document, clone);
-      expect(document.documentElement.classList.contains("dark")).toBe(false);
-      expect(clone.style.width).toBe("686px");
-      expect(clone.querySelector("svg")?.style.fill).toBe("rgb(1, 2, 3)");
+      lastOptions().onclone(document, clone);
+      const root = document.documentElement;
+      expect(root.classList.contains("dark")).toBe(false);
+      expect(root.style.getPropertyValue("--glyph-font-size")).toMatch(/^14\.66+\d*px$/);
+      expect(clone.style.width).toBe("fit-content");
+      expect(clone.style.minWidth).toBe(PAGE_MEASURE);
+      const [plain, authored] = Array.from(clone.querySelectorAll("svg"));
+      expect(plain.style.fill).toBe("rgb(1, 2, 3)");
+      expect(plain.style.stroke).not.toBe("rgb(238, 238, 238)");
+      expect(authored.style.fill).toBe("rgb(1, 2, 3)");
+      expect(authored.style.stroke).toBe("rgb(9, 9, 9)");
     } finally {
       theme.remove();
       clone.remove();
       document.documentElement.classList.remove("dark");
+      document.documentElement.style.removeProperty("--glyph-font-size");
     }
   });
 });

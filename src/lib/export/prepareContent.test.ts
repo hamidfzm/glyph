@@ -161,10 +161,9 @@ describe("prepareContent", () => {
     try {
       const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
       expect(rasterizeElementMock).toHaveBeenCalledTimes(1); // block math stays raster
-      // Shrink-wrapped to the formula and marked for centering, not window-wide.
       expect(rasterizeElementMock.mock.lastCall?.[1]).toBe("fit-content");
       expect(result?.html).toContain(
-        '<img src="data:image/png;base64,MATH" width="120" data-math-display="">',
+        '<img src="data:image/png;base64,MATH" data-capture-width="120">',
       );
       expect(result?.html).toContain('data-diagram="light"'); // inline vector SVG, not a PNG
       expect(result?.html).not.toContain('data-dark="1"');
@@ -277,6 +276,34 @@ describe("prepareContent", () => {
     }
   });
 
+  it("captures the block it cloned even if the live body changes mid-export", async () => {
+    rasterizeElementMock.mockClear();
+    const dispose = staticRenderers.register({
+      language: "puml",
+      renderStatic: async () => {
+        // An edit lands in the live body while the export awaits.
+        const typed = document.createElement("p");
+        typed.textContent = "typed meanwhile";
+        document.querySelector(".markdown-body")?.prepend(typed);
+        return "<svg></svg>";
+      },
+    });
+    try {
+      setBody(
+        '<div data-fenced-language="puml" data-fenced-source="a"><svg></svg></div>' +
+          '<p>first</p><p>math <span data-math-source="x">x</span></p><p>last</p>',
+      );
+      const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+      expect(rasterizeElementMock).toHaveBeenCalledTimes(1);
+      expect(rasterizeElementMock.mock.lastCall?.[0].textContent).toBe("math x");
+      expect(result?.html).toContain("<p>first</p>");
+      expect(result?.html).toContain("<p>last</p>");
+      expect(result?.html).not.toContain("typed meanwhile");
+    } finally {
+      dispose();
+    }
+  });
+
   it("rasterizes only marked block math, never a bare katex-display", async () => {
     rasterizeElementMock.mockClear();
     setBody('<span class="katex-display">unmarked</span>');
@@ -318,7 +345,7 @@ describe("prepareContent", () => {
     expect(rasterizeElementMock).toHaveBeenCalledTimes(1);
     expect(rasterizeElementMock.mock.lastCall?.[1]).toBe("686px");
     expect(result?.html).not.toContain("katex");
-    expect(result?.html).toContain('width="120"');
+    expect(result?.html).toContain('data-capture-width="120"');
     expect(result?.html).toContain("plain english");
   });
 

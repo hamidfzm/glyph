@@ -2,7 +2,7 @@ import type { Content, TableCell } from "pdfmake/interfaces";
 import { decodeSvgDataUrl } from "@/lib/svgDataUrl";
 import { decodeDataUri } from "./imageSize";
 import { codeRuns, cssColorToHex, inlinePdf } from "./pdfInline";
-import { CONTENT_WIDTH, svgNode } from "./svgPdfNode";
+import { CONTENT_HEIGHT, CONTENT_WIDTH, svgNode } from "./svgPdfNode";
 
 const HEADING_SIZES: Record<string, number> = { h1: 24, h2: 20, h3: 16, h4: 14, h5: 12, h6: 11 };
 
@@ -33,10 +33,12 @@ function imageNode(el: Element): Content | null {
   const decoded = decodeDataUri(src);
   // pdfmake embeds PNG and JPEG; other raster formats are skipped.
   if (!decoded || (decoded.type !== "png" && decoded.type !== "jpg")) return null;
-  // A declared width (a captured block's page width) wins over the pixel count.
-  const width = Math.min(Number(el.getAttribute("width")) || decoded.width, CONTENT_WIDTH);
-  const alignment = el.hasAttribute("data-math-display") ? "center" : undefined;
-  return { image: src, width, alignment, margin: [0, 0, 0, 8] };
+  // A capture carries its page width; any other image sizes by its pixels.
+  const naturalWidth = Number(el.getAttribute("data-capture-width")) || decoded.width;
+  // Taller than the page would be clipped, as for SVG (see svgNode).
+  const fitHeightWidth = (CONTENT_HEIGHT * decoded.width) / Math.max(decoded.height, 1);
+  const width = Math.min(naturalWidth, CONTENT_WIDTH, fitHeightWidth);
+  return { image: src, width, margin: [0, 0, 0, 8] };
 }
 
 function listItems(listEl: Element): Content[] {
@@ -207,8 +209,8 @@ function blocksForNode(node: Node): Content[] {
 
 /**
  * Walk a prepared HTML fragment into a pdfmake content array. Block-level SVG
- * (light-rendered diagrams, SVG images) embeds as vector `svg` nodes; inline
- * math falls back to its LaTeX source, matching the docx walker.
+ * (light-rendered diagrams, SVG images) embeds as vector `svg` nodes; math
+ * the PDF pass could not capture falls back to its LaTeX source.
  *
  * Takes either markup or an element already mounted in the live document; a
  * mounted root is what lets diagrams keep their own CSS (see `svgNode`).

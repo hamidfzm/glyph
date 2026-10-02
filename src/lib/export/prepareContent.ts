@@ -3,7 +3,8 @@ import { type PackagedMedia, packageExportMedia } from "./mediaAssets";
 import {
   inlineCodeColors,
   preparePdfRichContent,
-  rasterizeUndrawableBlocks,
+  rasterizeBlocks,
+  undrawableBlocks,
 } from "./preparePdfContent";
 import { buildTocElement } from "./toc";
 
@@ -13,9 +14,9 @@ export interface PrepareOptions {
   // Overridable for tests; defaults to the live document.
   doc?: Document;
   // PDF export needs extra work the vector walker can't do itself: inline the
-  // rendered syntax-highlight colors onto code spans, rasterize block math to
-  // an embedded image, and re-render diagrams light as inline SVG so pdfmake
-  // embeds them as vectors.
+  // rendered syntax-highlight colors onto code spans, rasterize math, and any
+  // text block holding math or RTL text, to embedded images, and re-render
+  // diagrams light as inline SVG so pdfmake embeds them as vectors.
   pdf?: boolean;
   // Bytes of media a container-backed target (EPUB) may package. 0, the
   // default, degrades every media element to its poster plus name.
@@ -88,11 +89,11 @@ export async function prepareContent({
   const clone = body.cloneNode(true) as HTMLElement;
   if (pdf) {
     inlineCodeColors(body, clone);
+    // Paired now, while live and clone still match; captured after the
+    // math/diagram pass, since a captured block may hold nodes that pass swaps.
+    const blocks = undrawableBlocks(body, clone);
     await preparePdfRichContent(body, clone);
-    // After the math/diagram pass: both passes match live and clone nodes by
-    // querySelectorAll index, and this one replaces whole blocks that may
-    // contain the elements the first pass looks for.
-    await rasterizeUndrawableBlocks(body, clone);
+    await rasterizeBlocks(blocks);
   }
   for (const el of Array.from(clone.querySelectorAll(STRIP_SELECTOR))) {
     el.remove();

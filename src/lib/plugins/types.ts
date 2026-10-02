@@ -293,7 +293,8 @@ export interface MarkdownRegistryApi {
    *
    * Math: wrap rendered math in an element carrying its TeX source in
    * `data-math-source`, plus `data-math-display` for block math. PDF export
-   * rasterizes the blocks and PDF and Word fall back to the source.
+   * captures block math, and any text block holding math, as an image; Word,
+   * and PDF when a capture fails, fall back to the source.
    */
   registerRehypePlugin(plugin: RehypeContribution): Disposer;
   /**
