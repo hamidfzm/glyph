@@ -33,8 +33,10 @@ function imageNode(el: Element): Content | null {
   const decoded = decodeDataUri(src);
   // pdfmake embeds PNG and JPEG; other raster formats are skipped.
   if (!decoded || (decoded.type !== "png" && decoded.type !== "jpg")) return null;
-  const width = Math.min(decoded.width, CONTENT_WIDTH);
-  return { image: src, width, margin: [0, 0, 0, 8] };
+  // A declared width (a captured block's page width) wins over the pixel count.
+  const width = Math.min(Number(el.getAttribute("width")) || decoded.width, CONTENT_WIDTH);
+  const alignment = el.hasAttribute("data-math-display") ? "center" : undefined;
+  return { image: src, width, alignment, margin: [0, 0, 0, 8] };
 }
 
 function listItems(listEl: Element): Content[] {
