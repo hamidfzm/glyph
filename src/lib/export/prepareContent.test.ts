@@ -5,9 +5,13 @@ import { prepareContent } from "./prepareContent";
 
 // Rendering needs a real layout/canvas/WASM engine; mock the helpers so the
 // orchestration is testable without them.
-const rasterizeElementMock = vi.fn(async () => "data:image/png;base64,MATH");
+const rasterizeElementMock = vi.fn(async (_el: HTMLElement, _width: string) => ({
+  src: "data:image/png;base64,MATH",
+  width: 120,
+}));
 vi.mock("./rasterize", () => ({
-  rasterizeElement: () => rasterizeElementMock(),
+  PAGE_MEASURE: "686px",
+  rasterizeElement: (el: HTMLElement, width: string) => rasterizeElementMock(el, width),
 }));
 // DOMPurify does not run faithfully under happy-dom (it drops the <svg>
 // wrapper), so mock it pass-through and assert the sanitize wiring instead;
@@ -126,6 +130,24 @@ describe("prepareContent", () => {
     expect(result?.html).toContain("rgb(40, 42, 54)");
   });
 
+  it("reads code colors as the light theme draws them, then restores dark mode", async () => {
+    const style = document.createElement("style");
+    style.textContent =
+      "pre { background-color: rgb(250, 250, 250); } .dark pre { background-color: rgb(30, 30, 30); }";
+    document.head.append(style);
+    document.documentElement.classList.add("dark");
+    try {
+      setBody("<pre><code>x</code></pre>");
+      const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+      expect(result?.html).toContain("rgb(250, 250, 250)");
+      expect(result?.html).not.toContain("rgb(30, 30, 30)");
+      expect(document.documentElement.classList.contains("dark")).toBe(true);
+    } finally {
+      style.remove();
+      document.documentElement.classList.remove("dark");
+    }
+  });
+
   it("rasterizes block math and swaps a plugin diagram for its light vector SVG for PDF", async () => {
     rasterizeElementMock.mockClear();
     const dispose = staticRenderers.register({
@@ -139,7 +161,11 @@ describe("prepareContent", () => {
     try {
       const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
       expect(rasterizeElementMock).toHaveBeenCalledTimes(1); // block math stays raster
-      expect(result?.html).toContain("data:image/png;base64,MATH");
+      // Shrink-wrapped to the formula and marked for centering, not window-wide.
+      expect(rasterizeElementMock.mock.lastCall?.[1]).toBe("fit-content");
+      expect(result?.html).toContain(
+        '<img src="data:image/png;base64,MATH" width="120" data-math-display="">',
+      );
       expect(result?.html).toContain('data-diagram="light"'); // inline vector SVG, not a PNG
       expect(result?.html).not.toContain('data-dark="1"');
       expect(result?.html).not.toContain("katex-display");
@@ -280,6 +306,31 @@ describe("prepareContent", () => {
     expect(result?.html).not.toContain("سلام");
     // The LTR paragraph stays selectable text.
     expect(result?.html).toContain("plain english");
+  });
+
+  it("rasterizes a block with inline math at the page measure (pdfmake has no inline images)", async () => {
+    rasterizeElementMock.mockClear();
+    setBody(
+      '<p>Energy <span data-math-source="E=mc^2"><span class="katex">E</span></span> here</p>' +
+        "<p>plain english</p>",
+    );
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(rasterizeElementMock).toHaveBeenCalledTimes(1);
+    expect(rasterizeElementMock.mock.lastCall?.[1]).toBe("686px");
+    expect(result?.html).not.toContain("katex");
+    expect(result?.html).toContain('width="120"');
+    expect(result?.html).toContain("plain english");
+  });
+
+  it("rasterizes a list with math in a nested paragraph once, at the list", async () => {
+    rasterizeElementMock.mockClear();
+    setBody(
+      '<ul><li><p>a <span data-math-source="x"><span class="katex">x</span></span></p></li></ul>',
+    );
+    const result = await prepareContent({ entries: ENTRIES, includeToc: false, pdf: true });
+    expect(rasterizeElementMock).toHaveBeenCalledTimes(1);
+    expect(rasterizeElementMock.mock.lastCall?.[0].tagName).toBe("UL");
+    expect(result?.html).not.toContain("<ul>");
   });
 
   it("rasterizes an RTL list once at its outermost block", async () => {

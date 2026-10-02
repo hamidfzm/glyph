@@ -7,15 +7,45 @@ vi.mock("html2canvas", () => ({
 }));
 
 describe("rasterizeElement", () => {
-  it("rasterizes a live element via html2canvas at 2x scale", async () => {
-    html2canvas.mockResolvedValue({ toDataURL: () => "data:image/png;base64,ELEMENT" });
+  it("captures at 2x on white and reports the on-screen width in points", async () => {
+    html2canvas.mockResolvedValue({ width: 400, toDataURL: () => "data:image/png;base64,ELEMENT" });
     const el = document.createElement("div");
-    await expect(rasterizeElement(el, "#ffffff")).resolves.toBe("data:image/png;base64,ELEMENT");
-    expect(html2canvas).toHaveBeenCalledWith(el, {
-      backgroundColor: "#ffffff",
-      scale: 2,
-      logging: false,
+    await expect(rasterizeElement(el, "fit-content")).resolves.toEqual({
+      src: "data:image/png;base64,ELEMENT",
+      width: 150,
     });
+    expect(html2canvas).toHaveBeenCalledWith(
+      el,
+      expect.objectContaining({ backgroundColor: "#ffffff", scale: 2, logging: false }),
+    );
+  });
+
+  it("lays out html2canvas's clone light, at the given width, with SVG paint re-resolved", async () => {
+    html2canvas.mockResolvedValue({ width: 2, toDataURL: () => "" });
+    await rasterizeElement(document.createElement("p"), "686px");
+    const [, { onclone }] = html2canvas.mock.lastCall as [
+      HTMLElement,
+      { onclone: (doc: Document, clone: HTMLElement) => void },
+    ];
+    // Stand-in for html2canvas's cloned document: dark, with the live dark
+    // paint inlined on its SVG nodes.
+    document.documentElement.classList.add("dark");
+    const theme = document.createElement("style");
+    theme.textContent = "svg { fill: rgb(1, 2, 3); } .dark svg { fill: rgb(238, 238, 238); }";
+    document.head.append(theme);
+    const clone = document.createElement("p");
+    clone.innerHTML = '<svg style="fill: rgb(238, 238, 238)"></svg>';
+    document.body.append(clone);
+    try {
+      onclone(document, clone);
+      expect(document.documentElement.classList.contains("dark")).toBe(false);
+      expect(clone.style.width).toBe("686px");
+      expect(clone.querySelector("svg")?.style.fill).toBe("rgb(1, 2, 3)");
+    } finally {
+      theme.remove();
+      clone.remove();
+      document.documentElement.classList.remove("dark");
+    }
   });
 });
 

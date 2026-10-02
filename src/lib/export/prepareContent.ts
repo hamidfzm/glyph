@@ -1,6 +1,10 @@
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { type PackagedMedia, packageExportMedia } from "./mediaAssets";
-import { inlineCodeColors, preparePdfRichContent, rasterizeRtlBlocks } from "./preparePdfContent";
+import {
+  inlineCodeColors,
+  preparePdfRichContent,
+  rasterizeUndrawableBlocks,
+} from "./preparePdfContent";
 import { buildTocElement } from "./toc";
 
 export interface PrepareOptions {
@@ -88,7 +92,7 @@ export async function prepareContent({
     // After the math/diagram pass: both passes match live and clone nodes by
     // querySelectorAll index, and this one replaces whole blocks that may
     // contain the elements the first pass looks for.
-    await rasterizeRtlBlocks(body, clone);
+    await rasterizeUndrawableBlocks(body, clone);
   }
   for (const el of Array.from(clone.querySelectorAll(STRIP_SELECTOR))) {
     el.remove();
