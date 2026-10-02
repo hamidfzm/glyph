@@ -3,7 +3,7 @@ import { useSettings } from "@/hooks/useSettings";
 import type { MarkdownSettings } from "@/lib/settings";
 import { Toggle } from "./Toggle";
 
-const FEATURES: (keyof MarkdownSettings)[] = ["gfm", "math", "alerts", "emoji", "wikilinks"];
+const FEATURES: (keyof MarkdownSettings)[] = ["gfm", "alerts", "emoji", "wikilinks"];
 
 /**
  * Settings → Markdown: toggle the optional syntax extensions. Turning one off

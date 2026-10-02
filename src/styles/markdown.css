@@ -92,10 +92,9 @@
   unicode-bidi: plaintext;
 }
 
-/* Code and math are always left-to-right, even inside an RTL document. */
+/* Code is always left-to-right, even inside an RTL document. */
 .markdown-body pre,
-.markdown-body code,
-.markdown-body .katex {
+.markdown-body code {
   direction: ltr;
   unicode-bidi: isolate;
 }
@@ -388,17 +387,6 @@
   background: none;
   font-size: 0.85em;
   line-height: 1.6;
-}
-
-/* KaTeX math */
-.markdown-body .katex-display {
-  margin: 1em 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-.markdown-body .katex {
-  color: var(--color-text-primary);
 }
 
 /* The wrapper scrolls, not the page. The table sizes to its content so columns

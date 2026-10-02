@@ -132,15 +132,23 @@ describe("convertHtmlToDocx", () => {
     expect(blocks).toHaveLength(1);
   });
 
-  it("renders block KaTeX as a single paragraph (LaTeX source, no glyph spans)", () => {
-    const katexBlock =
-      `<span class="katex-display"><span class="katex"><span class="katex-mathml"><math>` +
-      `<semantics><mrow><mi>z</mi></mrow><annotation encoding="application/x-tex">a^2+b^2` +
-      `</annotation></semantics></math></span>` +
-      `<span class="katex-html" aria-hidden="true">GLYPH_JUNK</span></span></span>`;
-    const blocks = convertHtmlToDocx(katexBlock);
+  it("renders marked block math as one paragraph of its source, no rendered markup", () => {
+    const mathBlock =
+      '<div data-math-source="a^2+b^2" data-math-display=""><span class="katex-display">' +
+      '<span class="katex"><span class="katex-html">GLYPH_JUNK</span></span></span></div>';
+    const blocks = convertHtmlToDocx(mathBlock);
     expect(blocks).toHaveLength(1);
     expect(blocks[0]).toBeInstanceOf(Paragraph);
+    const json = JSON.stringify(blocks[0]);
+    expect(json).toContain("a^2+b^2");
+    expect(json).not.toContain("GLYPH_JUNK");
+  });
+
+  it("drops marked block math with an empty source", () => {
+    const blocks = convertHtmlToDocx(
+      '<div data-math-source=" " data-math-display=""><span>JUNK</span></div>',
+    );
+    expect(JSON.stringify(blocks)).not.toContain("JUNK");
   });
 
   it("renders the media fallback as a poster paragraph and a named paragraph", () => {

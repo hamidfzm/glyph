@@ -10,13 +10,13 @@ import { rasterizeElement } from "./rasterize";
 
 // For PDF export: swap each plugin block (Mermaid, D2) in the clone for its
 // light static render (the walker embeds SVG natively; see htmlToPdf), and
-// rasterize block math (`.katex-display`) to a PNG <img> (vector math is
-// #256). Diagrams re-render light so they don't sit as a dark box on the white
+// rasterize block math (marked `data-math-display`) to a PNG <img> (vector
+// math is #256). Diagrams re-render light so they don't sit as a dark box on the white
 // page. A math failure leaves the original node (the walker falls back to the
 // LaTeX source); a block whose static render fails becomes its source, so the
 // dark on-screen SVG never leaks into the PDF.
 export async function preparePdfRichContent(liveBody: Element, clone: Element): Promise<void> {
-  const selector = ".katex-display, [data-fenced-language]";
+  const selector = "[data-math-display], [data-fenced-language]";
   const live = liveBody.querySelectorAll<HTMLElement>(selector);
   if (live.length === 0) return;
   const cloned = clone.querySelectorAll(selector);

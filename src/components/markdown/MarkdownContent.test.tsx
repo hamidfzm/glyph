@@ -1,32 +1,37 @@
 import { invoke } from "@tauri-apps/api/core";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Settings } from "@/lib/settings";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { describe, expect, it, vi } from "vitest";
+import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
+import { CORE_PLUGINS, coreInstalledPlugin } from "@/lib/plugins/corePlugins";
+import { createPluginHost } from "@/lib/plugins/host";
 import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { MarkdownContent } from "./MarkdownContent";
 
-// Overridable settings for the feature-toggle tests; null falls through to the
-// real hook so every other test keeps the defaults.
-let mockSettings: Settings | null = null;
-vi.mock("@/hooks/useSettings", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("@/hooks/useSettings")>();
-  return {
-    ...orig,
-    useSettings: () => {
-      const real = orig.useSettings();
-      return mockSettings ? { ...real, settings: mockSettings } : real;
-    },
-  };
-});
+// The math core plugin, loaded into a real host the way the app loads it.
+async function mathHost() {
+  const host = createPluginHost(vi.fn());
+  const core = CORE_PLUGINS.find((plugin) => plugin.id === "glyph.core.math");
+  if (!core) throw new Error("math core plugin missing");
+  await host.load(coreInstalledPlugin(core), core.load);
+  const value = {
+    remarkPlugins: host.remarkPlugins,
+    rehypePlugins: host.rehypePlugins,
+  } as unknown as PluginsContextValue;
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <PluginsContext.Provider value={value}>{children}</PluginsContext.Provider>
+  );
+  return { host, wrapper };
+}
 
-afterEach(() => {
-  mockSettings = null;
-});
+async function withMathPlugin() {
+  return (await mathHost()).wrapper;
+}
 
 // MarkdownContent is the shared rendering core (frontmatter + ReactMarkdown with
 // the full plugin set). MarkdownViewer.test covers the sanitiser/alert paths via
 // the viewer; these tests target the branches unique to this component: the
-// frontmatter toggle and the lazily-pushed highlight / katex plugins.
+// frontmatter toggle and the lazily-pushed highlight and plugin contributions.
 describe("MarkdownContent", () => {
   it("renders a frontmatter block when showFrontmatter is on", () => {
     render(<MarkdownContent content={"---\ntitle: Hello\n---\n\nbody"} />);
@@ -67,11 +72,40 @@ describe("MarkdownContent", () => {
     expect(onTaskToggle).toHaveBeenCalledWith(1);
   });
 
-  it("lazily renders math via KaTeX", async () => {
+  it("renders math through the math plugin once KaTeX loads, marked with its source", async () => {
     const { container } = render(
       <MarkdownContent content={"inline $x^2$ math"} showFrontmatter={false} />,
+      { wrapper: await withMathPlugin() },
     );
-    await waitFor(() => expect(container.querySelector(".katex")).toBeTruthy());
+    await waitFor(() =>
+      expect(container.querySelector('[data-math-source="x^2"] .katex')).toBeTruthy(),
+    );
+  });
+
+  it("keeps a display math block's source line for split view scroll sync", async () => {
+    const { container } = render(
+      <MarkdownContent content={"intro\n\n$$\nx + y\n$$"} showFrontmatter={false} sourceLines />,
+      { wrapper: await withMathPlugin() },
+    );
+    // Display mode, after sanitize stripped remark-math's `math-display` class.
+    await waitFor(() =>
+      expect(container.querySelector("[data-math-display] .katex-display")).toBeTruthy(),
+    );
+    const block = container.querySelector("[data-math-display]");
+    expect(block?.getAttribute("data-line")).toBe("3");
+    expect(block?.getAttribute("data-math-source")).toBe("x + y");
+  });
+
+  it("renders math beside a wikilink and an emoji shortcode", async () => {
+    const { container } = render(
+      <MarkdownContent content={"[[Note]] $a$ :smile:"} showFrontmatter={false} />,
+      { wrapper: await withMathPlugin() },
+    );
+    await waitFor(() =>
+      expect(container.querySelector('[data-math-source="a"] .katex')).toBeTruthy(),
+    );
+    await waitFor(() => expect(container.textContent).toContain("\u{1F604}"));
+    expect(container.textContent).toContain("Note");
   });
 
   it("dispatches a standalone note embed to the embed renderer", async () => {
@@ -95,12 +129,31 @@ describe("MarkdownContent", () => {
     expect(invoke).toHaveBeenCalledWith("read_file", { path: "/ws/Note.md" });
   });
 
-  it("leaves math syntax literal when the feature is toggled off", async () => {
-    const { DEFAULT_SETTINGS } = await import("@/lib/settings");
-    mockSettings = {
-      ...DEFAULT_SETTINGS,
-      markdown: { ...DEFAULT_SETTINGS.markdown, math: false },
-    };
+  it("strips a math marker a document writes itself, so exports never trust it", () => {
+    const { container } = render(
+      <MarkdownContent
+        content={'<div data-math-source="x" data-math-display="">forged</div>'}
+        showFrontmatter={false}
+      />,
+    );
+    expect(container.textContent).toContain("forged");
+    expect(container.querySelector("[data-math-source], [data-math-display]")).toBeNull();
+  });
+
+  it("drops back to plain text when the math plugin is turned off", async () => {
+    const { host, wrapper } = await mathHost();
+    const { container } = render(
+      <MarkdownContent content={"inline $x^2$ math"} showFrontmatter={false} />,
+      { wrapper },
+    );
+    await waitFor(() => expect(container.querySelector(".katex")).toBeTruthy());
+
+    act(() => host.unload("glyph.core.math"));
+    expect(container.querySelector(".katex")).toBeNull();
+    expect(container.textContent).toContain("$x^2$");
+  });
+
+  it("leaves math syntax literal without the math plugin", () => {
     const { container } = render(
       <MarkdownContent content={"inline $x^2$ math"} showFrontmatter={false} />,
     );

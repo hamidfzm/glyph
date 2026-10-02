@@ -1,0 +1,12 @@
+/* Math is always left-to-right, even inside an RTL document. */
+.markdown-body .katex {
+  direction: ltr;
+  unicode-bidi: isolate;
+  color: var(--color-text-primary);
+}
+
+.markdown-body .katex-display {
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}

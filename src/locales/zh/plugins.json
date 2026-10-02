@@ -50,6 +50,10 @@
     "mermaid": {
       "name": "Mermaid 图表",
       "description": "将 Mermaid 代码块和 .mmd 图表文件渲染为图表。"
+    },
+    "math": {
+      "name": "数学公式 (KaTeX)",
+      "description": "使用 KaTeX 渲染 $行内$ 与 $$块级$$ 公式。"
     }
   }
 }

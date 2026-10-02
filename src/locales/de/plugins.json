@@ -50,6 +50,10 @@
     "mermaid": {
       "name": "Mermaid-Diagramme",
       "description": "Stellt Mermaid-Codeblöcke und .mmd-Diagrammdateien als Diagramme dar."
+    },
+    "math": {
+      "name": "Mathematik (KaTeX)",
+      "description": "Stellt $inline$- und $$block$$-Formeln mit KaTeX dar."
     }
   }
 }

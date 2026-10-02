@@ -210,12 +210,10 @@ export interface KeybindingSettings {
 
 // Which optional markdown syntax extensions render. All on by default; turning
 // one off drops its plugin from the pipeline, so the raw syntax stays literal
-// (e.g. $x$ renders as plain text with math off).
+// (e.g. :smile: stays as typed with emoji off).
 export interface MarkdownSettings {
   /** GitHub Flavored Markdown: tables, task lists, strikethrough, autolinks. */
   gfm: boolean;
-  /** Math rendering via KaTeX: $inline$ and $$block$$. */
-  math: boolean;
   /** GitHub blockquote alerts: > [!NOTE], [!TIP], … */
   alerts: boolean;
   /** Emoji shortcodes: :smile: */
@@ -231,6 +229,8 @@ export interface CorePluginSettings {
   d2: boolean;
   /** Mermaid diagrams: ```mermaid blocks and .mmd diagram sources. */
   mermaid: boolean;
+  /** Math: $inline$ and $$block$$, rendered with KaTeX. */
+  math: boolean;
 }
 
 export interface Settings {
@@ -319,7 +319,6 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   markdown: {
     gfm: true,
-    math: true,
     alerts: true,
     emoji: true,
     wikilinks: true,
@@ -327,5 +326,6 @@ export const DEFAULT_SETTINGS: Settings = {
   corePlugins: {
     d2: true,
     mermaid: true,
+    math: true,
   },
 };

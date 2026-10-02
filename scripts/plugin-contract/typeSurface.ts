@@ -20,6 +20,10 @@ type MarkdownShape<M> = {
 };
 type FencedLanguage<M extends { registerFencedRenderer: (...args: never[]) => unknown }> =
   Parameters<M["registerFencedRenderer"]>[0];
+// A lazy plugin resolves to a markdown plugin, which the template types loosely.
+type LazyShape<L extends { load: () => Promise<unknown> }> = Omit<L, "load"> & {
+  load: () => Promise<unknown>;
+};
 
 export const context: Equal<Omit<HostCtx, "markdown">, Omit<TemplateCtx, "markdown">> = true;
 export const commands: Equal<HostCtx["commands"], TemplateCtx["commands"]> = true;
@@ -66,6 +70,10 @@ export const fencedRendererOptions: Equal<
 export const fencedRendererMount: Equal<Host.FencedRendererMount, Template.FencedRendererMount> =
   true;
 export const i18nApi: Equal<Host.I18nApi, Template.I18nApi> = true;
+export const lazyMarkdownPlugin: Equal<
+  LazyShape<Host.LazyMarkdownPlugin>,
+  LazyShape<Template.LazyMarkdownPlugin>
+> = true;
 
 // activate's ctx parameter differs only through the markdown types checked above.
 export const pluginModule: Equal<

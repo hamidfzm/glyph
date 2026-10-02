@@ -14,6 +14,7 @@ import type {
   GlyphPluginContext,
   InstalledPlugin,
   MarkdownPlugin,
+  RehypeContribution,
   SettingsPanelContribution,
   SidebarPanelContribution,
   SiteThemeContribution,
@@ -27,7 +28,7 @@ export interface ContextRegistries {
   commands: Registry<CommandContribution>;
   statusBarItems: Registry<StatusBarItemContribution>;
   remarkPlugins: Registry<MarkdownPlugin>;
-  rehypePlugins: Registry<MarkdownPlugin>;
+  rehypePlugins: Registry<RehypeContribution>;
   fencedRenderers: Registry<FencedRendererContribution>;
   sidebarPanels: Registry<SidebarPanelContribution>;
   settingsPanels: Registry<SettingsPanelContribution>;

@@ -1,5 +1,6 @@
 import "@/styles/app.css";
 import "@/styles/highlight.css";
+import "@/plugins/core/math/math.css";
 import "@/plugins/core/mermaid/mermaid.css";
 import "./preview.css";
 import { connectHost } from "./previewHost";

@@ -15,6 +15,7 @@ import type {
   InstalledPlugin,
   MarkdownPlugin,
   PluginModule,
+  RehypeContribution,
   SettingsPanelContribution,
   SidebarPanelContribution,
   SiteThemeContribution,
@@ -52,7 +53,7 @@ export interface PluginHost {
   /** Remark plugins contributed by loaded plugins. */
   readonly remarkPlugins: Registry<MarkdownPlugin>;
   /** Rehype plugins contributed by loaded plugins. */
-  readonly rehypePlugins: Registry<MarkdownPlugin>;
+  readonly rehypePlugins: Registry<RehypeContribution>;
   /** Fenced code-block renderers contributed by loaded plugins. */
   readonly fencedRenderers: Registry<FencedRendererContribution>;
   /** Titled sidebar sections contributed by loaded plugins. */
@@ -108,7 +109,7 @@ export function createPluginHost(
   const commands = createRegistry<CommandContribution>();
   const statusBarItems = createRegistry<StatusBarItemContribution>();
   const remarkPlugins = createRegistry<MarkdownPlugin>();
-  const rehypePlugins = createRegistry<MarkdownPlugin>();
+  const rehypePlugins = createRegistry<RehypeContribution>();
   const fencedRenderers = createRegistry<FencedRendererContribution>();
   const sidebarPanels = createRegistry<SidebarPanelContribution>();
   const settingsPanels = createRegistry<SettingsPanelContribution>();

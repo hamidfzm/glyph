@@ -66,7 +66,7 @@ async function embedAsset(el: Element, attr: "src" | "href"): Promise<void> {
  * table of contents. Returns the cleaned inner HTML plus its wrapper class, or
  * `null` when there is no rendered body to export.
  *
- * Reusing the live DOM (rather than re-parsing markdown) means KaTeX math,
+ * Reusing the live DOM (rather than re-parsing markdown) means rendered math,
  * highlighted code, GFM tables, alerts, Mermaid SVGs, and notebook cells come
  * through exactly as the user sees them.
  */

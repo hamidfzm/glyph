@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { isLazyMarkdownPlugin } from "@/lib/markdown/lazyPlugins";
 import { PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 import { CORE_PLUGINS, coreInstalledPlugin } from "./corePlugins";
+import { createPluginHost } from "./host";
 
 describe("CORE_PLUGINS", () => {
   it("uses the id prefix the backend reserves, one entry per setting", () => {
@@ -14,6 +16,21 @@ describe("CORE_PLUGINS", () => {
     const entry = coreInstalledPlugin(core);
     expect(entry).toMatchObject({ id: core.id, sandbox: false, apiVersion: PLUGIN_API_VERSION });
     expect(satisfiesApiVersion(entry.apiVersion)).toBe(true);
+  });
+
+  it("leaves no KaTeX stylesheet behind when math is turned off while KaTeX loads", async () => {
+    const host = createPluginHost(vi.fn());
+    const math = CORE_PLUGINS.find((core) => core.id === "glyph.core.math");
+    if (!math) throw new Error("math core plugin missing");
+    await host.load(coreInstalledPlugin(math), math.load);
+    const [katex] = host.rehypePlugins.list();
+    if (!katex || !isLazyMarkdownPlugin(katex)) throw new Error("no lazy KaTeX entry");
+    expect(host.styles.list()).toHaveLength(1);
+
+    const loading = katex.load();
+    host.unload(math.id);
+    await loading;
+    expect(host.styles.list()).toEqual([]);
   });
 
   it("imports a module the host can activate", async () => {

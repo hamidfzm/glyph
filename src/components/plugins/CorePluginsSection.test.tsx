@@ -37,6 +37,12 @@ describe("CorePluginsSection", () => {
     expect(value.updateSettings).toHaveBeenCalledWith("corePlugins.mermaid", false);
   });
 
+  it("lists Math with its own setting", () => {
+    const value = renderSection(true);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Enable Math (KaTeX)" }));
+    expect(value.updateSettings).toHaveBeenCalledWith("corePlugins.math", false);
+  });
+
   it("switches a disabled core plugin back on", () => {
     const value = renderSection(false);
     fireEvent.click(screen.getByRole("checkbox", { name: "Enable D2 diagrams" }));

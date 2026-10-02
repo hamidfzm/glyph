@@ -122,6 +122,8 @@ Matrix notation:
 
 $$\begin{pmatrix} a & b \\ c & d \end{pmatrix} \begin{pmatrix} x \\ y \end{pmatrix} = \begin{pmatrix} ax + by \\ cx + dy \end{pmatrix}$$
 
+Math rendering is a core plugin: switch it off under **Settings → Plugins → Core plugins** and `$...$` and `$$...$$` show as plain text, without loading KaTeX.
+
 ## Mermaid Diagrams
 
 ```mermaid

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import type { MarkdownPlugin } from "@/lib/plugins/types";
+import { describe, expect, it, vi } from "vitest";
+import type { LazyMarkdownPlugin, MarkdownPlugin } from "@/lib/plugins/types";
 import { renderPageHtml } from "./renderPage";
 
 // What the index answered for this page's wikilink targets; `missing` is absent
@@ -22,9 +22,35 @@ describe("renderPageHtml", () => {
     expect(html).toContain('<h1 id="getting-started">');
   });
 
-  it("renders math through KaTeX", async () => {
-    const html = await render("Euler: $e^{i\\pi} = -1$");
-    expect(html).toContain("katex");
+  it("leaves math as text without a math plugin", async () => {
+    const html = await render("Euler: $e = 1$");
+    expect(html).toContain("$e = 1$");
+    expect(html).not.toContain("katex");
+  });
+
+  it("loads a lazy rehype contribution only for a page that needs it", async () => {
+    const stamp = () => (tree: { children: { properties?: Record<string, unknown> }[] }) => {
+      for (const node of tree.children) node.properties = { ...node.properties, dataStamped: "" };
+    };
+    const lazy: LazyMarkdownPlugin = {
+      detect: (markdown) => markdown.includes("!!"),
+      load: vi.fn(async () => stamp as MarkdownPlugin),
+    };
+    const plain = await renderPageHtml({
+      content: "plain",
+      resolutions: RESOLUTIONS,
+      extraRehype: [lazy],
+    });
+    expect(lazy.load).not.toHaveBeenCalled();
+    expect(plain).not.toContain("data-stamped");
+
+    const needed = await renderPageHtml({
+      content: "!! go",
+      resolutions: RESOLUTIONS,
+      extraRehype: [lazy],
+    });
+    expect(lazy.load).toHaveBeenCalledTimes(1);
+    expect(needed).toContain("data-stamped");
   });
 
   it("renders emoji shortcodes through gemoji", async () => {
