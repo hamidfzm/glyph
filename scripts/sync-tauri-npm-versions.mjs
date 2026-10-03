@@ -8,7 +8,7 @@
  *   node scripts/sync-tauri-npm-versions.mjs --check   # exit 1 if major.minor diverges
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -104,8 +104,8 @@ function main() {
 				continue;
 			}
 			const npmResolved = pnpmResolved[npmName];
+			// Rust-only plugins (single-instance) have no npm package to align.
 			if (!npmResolved) {
-				mismatches.push(`${npmName}: missing from pnpm-lock.yaml (add to package.json dependencies)`);
 				continue;
 			}
 			if (majorMinor(rustVer) !== majorMinor(npmResolved)) {
@@ -147,7 +147,8 @@ function main() {
 
 	if (changed) {
 		writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
-		execFileSync("pnpm", ["install"], { cwd: root, stdio: "inherit" });
+		// Through the shell: on Windows pnpm is a .cmd, which Node cannot spawn directly.
+		execSync("pnpm install", { cwd: root, stdio: "inherit" });
 		console.log("Updated package.json and lockfile from Cargo resolved versions.");
 	} else {
 		console.log("Already aligned; no changes.");
