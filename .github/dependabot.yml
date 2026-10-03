@@ -1,5 +1,42 @@
 version: 2
+
+# `tauri build` refuses to run when an npm package and its Rust crate differ in
+# major.minor ("Found version mismatched Tauri packages"), so both sides of a
+# Tauri bump must land together. This cross-ecosystem group opens one PR
+# (branch `dependabot/tauri-…`) from the two entries tagged with it below; the
+# regular npm and cargo entries ignore the same names so nothing is bumped twice.
+multi-ecosystem-groups:
+  tauri:
+    schedule:
+      interval: "weekly"
+    # Settable only here, not on a member entry. Group PRs get no prefix by
+    # default, and the CI title check rejects a title without one.
+    commit-message:
+      prefix: "chore(deps)"
+
 updates:
+  # Members of the `tauri` group: `patterns` (required) selects what each
+  # contributes, and the schedule comes from the group.
+  - package-ecosystem: "npm"
+    directory: "/"
+    multi-ecosystem-group: "tauri"
+    patterns:
+      - "@tauri-apps/*"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
+    multi-ecosystem-group: "tauri"
+    patterns:
+      - "tauri"
+      - "tauri-build"
+      - "tauri-plugin-*"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -9,24 +46,15 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-      # NPM @tauri-apps/plugin-* must match Rust tauri-plugin-* minor versions; separate Dependabot PRs drift and break `tauri build`.
-      - dependency-name: "@tauri-apps/plugin-*"
+      # Owned by the `tauri` group above.
+      - dependency-name: "@tauri-apps/*"
     groups:
-      # Group all @tauri-apps/* (api in prod, cli in dev) into one PR so the
-      # JS bindings and the build CLI stay version-aligned.
-      tauri:
-        patterns:
-          - "@tauri-apps/*"
       dev-dependencies:
         # Catches Biome, vitest, TypeScript, Tailwind, husky, lint-staged,
         # and the rest of the tooling. Anything devDependencies sits here.
         dependency-type: "development"
-        exclude-patterns:
-          - "@tauri-apps/*"
       production-dependencies:
         dependency-type: "production"
-        exclude-patterns:
-          - "@tauri-apps/*"
 
   - package-ecosystem: "cargo"
     directory: "/src-tauri"
@@ -37,15 +65,14 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Owned by the `tauri` group above; keep in step with its cargo patterns.
+      - dependency-name: "tauri"
+      - dependency-name: "tauri-build"
+      - dependency-name: "tauri-plugin-*"
     groups:
-      tauri-plugins:
-        patterns:
-          - "tauri-plugin-*"
       all-dependencies:
         patterns:
           - "*"
-        exclude-patterns:
-          - "tauri-plugin-*"
 
   # Every `uses:` is pinned to a commit SHA (see CONTRIBUTING.md); Dependabot
   # rewrites the SHA and the `# vX.Y.Z` comment together. "/" only covers

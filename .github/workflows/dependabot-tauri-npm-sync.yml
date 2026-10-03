@@ -1,21 +1,28 @@
-# Run from Actions → this workflow after a Dependabot Cargo PR bumps `tauri*` crates.
-# Two things happen on the Dependabot branch:
+# Run from Actions → this workflow on the Dependabot `tauri` group branch.
+# That group (see .github/dependabot.yml) already bumps the npm and Rust sides
+# of Tauri in one PR, so the PR builds as opened. This workflow adds the two
+# things Dependabot cannot produce:
 #   1. `pnpm sync:tauri-npm` re-aligns @tauri-apps/plugin-* npm packages with
-#      their matching Rust tauri-plugin-* crate versions.
+#      their matching Rust tauri-plugin-* crate versions, for a week where a
+#      plugin's npm and crates.io releases were out of step. @tauri-apps/api
+#      and @tauri-apps/cli are left to Dependabot: their patch numbers are
+#      independent of the `tauri` crate (tauri 2.11.6 pairs with api 2.11.1),
+#      so there is no crate version to pin them to.
 #   2. `cargo check` invokes `tauri-build`, which regenerates the schemas under
 #      `src-tauri/gen/schemas/` (acl-manifests, capabilities, desktop-schema,
 #      macOS-schema). Only capabilities.json and desktop-schema.json are
 #      tracked; they drift whenever any tauri/tauri-plugin-* version changes.
 #
 # Any changes from either step are committed and pushed back to the branch in a
-# single commit so the PR ends up green and self-contained.
+# single commit so the PR is self-contained.
 #
 # Uses the default `GITHUB_TOKEN` (workflow_dispatch runs in your repo context,
 # unlike Dependabot-triggered workflows, which cannot access custom secrets or
-# push reliably to Dependabot branches).
+# push reliably to Dependabot branches). A push made with that token does not
+# start workflow runs, so CI stays on Dependabot's commit until someone
+# updates the branch.
 #
-# Input: branch name (e.g. `dependabot/cargo/src-tauri/tauri-plugins-…` or
-# `dependabot/cargo/src-tauri/all-dependencies-…`).
+# Input: branch name (e.g. `dependabot/tauri-…`).
 
 name: Sync Tauri artifacts on Dependabot branches
 
@@ -23,7 +30,7 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: "Branch to update (e.g. dependabot/cargo/…)"
+        description: "Branch to update (e.g. dependabot/tauri-…)"
         required: true
         type: string
 
