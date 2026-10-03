@@ -3,7 +3,10 @@
 
 use std::collections::HashMap;
 
-use tauri::{menu::MenuItem, Runtime, State};
+use tauri::{
+    menu::{MenuItem, MenuItemBuilder, Submenu},
+    Runtime, State,
+};
 
 use super::{MenuItemRefs, MenuLabels, MenuRegistry, MenuStateFlags};
 
@@ -127,7 +130,84 @@ pub fn apply_menu_state<R: Runtime>(
     refs.ai_read_aloud
         .set_enabled(flags.tts_available && flags.has_content)
         .map_err(stringify)?;
+    for item in &refs.plugin_export {
+        item.set_enabled(flags.has_file).map_err(stringify)?;
+    }
     Ok(())
+}
+
+/// Swap `old` for fresh items labeled `labels`, placed right after `anchor`.
+fn replace_plugin_items<R: Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    submenu: &Submenu<R>,
+    anchor: &MenuItem<R>,
+    old: &mut Vec<MenuItem<R>>,
+    menu: &str,
+    labels: &[String],
+    enabled: bool,
+) -> Result<(), String> {
+    let s = |e: tauri::Error| e.to_string();
+    for item in old.drain(..) {
+        submenu.remove(&item).map_err(s)?;
+    }
+    let items = submenu.items().map_err(s)?;
+    let start = items
+        .iter()
+        .position(|item| item.id() == anchor.id())
+        .map_or(items.len(), |at| at + 1);
+    // Same owner prefix as the built-in items, so clicks route to this window.
+    let (owner, _) = crate::menu::parse_menu_id(anchor.id().as_ref());
+    for (index, label) in labels.iter().enumerate() {
+        let base = crate::menu::plugin_menu_item_id(menu, index);
+        let id = match owner {
+            Some(owner) => format!("{owner}:{base}"),
+            None => base,
+        };
+        let item = MenuItemBuilder::with_id(id, label)
+            .enabled(enabled)
+            .build(window)
+            .map_err(s)?;
+        submenu.insert(&item, start + index).map_err(s)?;
+        old.push(item);
+    }
+    Ok(())
+}
+
+/// Plugin exporters go after the built-in formats in File > Export, and
+/// `menu: "view"` commands after Open Graph in View. A click emits
+/// `menu-plugin-item` with the item's menu and index.
+#[tauri::command]
+pub fn set_plugin_menu_items(
+    window: tauri::WebviewWindow,
+    registry: State<MenuRegistry>,
+    export: Vec<String>,
+    view: Vec<String>,
+) -> Result<(), String> {
+    crate::menu::check_plugin_menu_labels(&export)?;
+    crate::menu::check_plugin_menu_labels(&view)?;
+    registry
+        .with_refs_mut(window.label(), |refs| {
+            let exports_enabled = refs.export_pdf.is_enabled().map_err(|e| e.to_string())?;
+            replace_plugin_items(
+                &window,
+                &refs.export_menu,
+                &refs.export_pdf,
+                &mut refs.plugin_export,
+                "export",
+                &export,
+                exports_enabled,
+            )?;
+            replace_plugin_items(
+                &window,
+                &refs.view_menu,
+                &refs.open_graph,
+                &mut refs.plugin_view,
+                "view",
+                &view,
+                true,
+            )
+        })
+        .unwrap_or(Ok(()))
 }
 
 #[tauri::command]
@@ -229,16 +309,16 @@ fn covers_monitor(window: &tauri::WebviewWindow) -> bool {
     }
 }
 
-// Fullscreen for the image lightbox, with the in-window menu bar (Windows/
-// Linux) hidden while fullscreen. Entering hides the menu before the
-// transition so the bar never flashes over the fullscreen window. On Windows
-// the fullscreen resize is applied with SWP_ASYNCWINDOWPOS and can lose the
-// race against the menu change's frame recalculation; tao then caches
+// Fullscreen for the image lightbox and plugin overlays, with the in-window
+// menu bar (Windows/Linux) hidden while fullscreen. Entering hides the menu
+// before the transition so the bar never flashes over the fullscreen window.
+// On Windows the fullscreen resize is applied with SWP_ASYNCWINDOWPOS and can
+// lose the race against the menu change's frame recalculation; tao then caches
 // "fullscreen" with the window never resized and early-returns every later
 // request. The verify-retry below heals exactly that: it measures the real
 // bounds against the monitor and clears + re-applies until they match.
 #[tauri::command]
-pub fn set_lightbox_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Result<(), String> {
+pub fn set_overlay_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         // Simple (pre-Lion) fullscreen: covers the screen instantly on the
@@ -250,7 +330,7 @@ pub fn set_lightbox_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Res
             .map_err(|e| e.to_string())?;
         // The transition's style-mask toggle drops the webview as first
         // responder, silencing keyboard events (Escape stopped dismissing
-        // the lightbox). Hand focus back once the mask change has settled;
+        // an overlay). Hand focus back once the mask change has settled;
         // the exit path applies its mask asynchronously.
         let w = window.clone();
         std::thread::spawn(move || {

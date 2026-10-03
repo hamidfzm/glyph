@@ -358,6 +358,8 @@ pub fn build_menu<R: Runtime>(
         ai_menu,
         help_menu,
         export_menu,
+        plugin_export: Vec::new(),
+        plugin_view: Vec::new(),
     };
 
     Ok((menu, refs))

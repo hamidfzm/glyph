@@ -73,6 +73,9 @@ pub struct MenuItemRefs<R: Runtime = Wry> {
     ai_menu: Submenu<R>,
     help_menu: Submenu<R>,
     export_menu: Submenu<R>,
+    // Plugin contributions, replaced wholesale by `set_plugin_menu_items`.
+    plugin_export: Vec<MenuItem<R>>,
+    plugin_view: Vec<MenuItem<R>>,
 }
 
 /// Localized labels for every Glyph-defined menu entry. Pushed from the
@@ -166,6 +169,20 @@ impl<R: Runtime> MenuRegistry<R> {
     fn with_refs<T>(&self, label: &str, f: impl FnOnce(&MenuItemRefs<R>) -> T) -> Option<T> {
         let map = self.0.lock().unwrap();
         map.get(label).or_else(|| map.get("main")).map(f)
+    }
+
+    fn with_refs_mut<T>(
+        &self,
+        label: &str,
+        f: impl FnOnce(&mut MenuItemRefs<R>) -> T,
+    ) -> Option<T> {
+        let mut map = self.0.lock().unwrap();
+        let key = if map.contains_key(label) {
+            label
+        } else {
+            "main"
+        };
+        map.get_mut(key).map(f)
     }
 }
 

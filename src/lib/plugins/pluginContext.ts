@@ -5,7 +5,9 @@ import { createAssetsApi } from "./assetsApi";
 import type { Disposer, DisposerBag } from "./disposer";
 import { registerFileType } from "./fileTypes";
 import type { PluginSettingsBackend } from "./host";
+import { showOverlay } from "./overlays";
 import type { Registry } from "./registry";
+import { prepareRenderedHtml } from "./renderedHtml";
 import { staticRenderers } from "./staticRenderers";
 import type {
   CommandContribution,
@@ -94,6 +96,17 @@ export function buildPluginContext({
       addStyles(css) {
         return tracked(styles.register, bag)({ css });
       },
+      openOverlay(overlay) {
+        // Closed from Escape as often as from the disposer, so it leaves the
+        // bag either way rather than piling up across slide shows.
+        const close = () => {
+          removeOverlay();
+          bag.delete(close);
+        };
+        const removeOverlay = showOverlay({ ...overlay, close });
+        bag.add(close);
+        return close;
+      },
     },
     markdown: {
       registerRemarkPlugin: tracked(remarkPlugins.register, bag),
@@ -109,7 +122,10 @@ export function buildPluginContext({
         };
       },
     },
-    documents: { registerFileType: tracked(registerFileType, bag) },
+    documents: {
+      registerFileType: tracked(registerFileType, bag),
+      getRenderedHtml: prepareRenderedHtml,
+    },
     workspace: createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? []),
     assets: createAssetsApi(plugin.id),
     exporters: {

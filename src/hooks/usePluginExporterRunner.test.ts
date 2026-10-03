@@ -18,7 +18,7 @@ const exporter: ExporterContribution = {
 describe("usePluginExporterRunner", () => {
   it("runs the exporter with the bound document state", async () => {
     const { result } = renderHook(() =>
-      usePluginExporterRunner({ entries: [], filePath: "/ws/a.md", content: "# A" }),
+      usePluginExporterRunner({ filePath: "/ws/a.md", content: "# A" }),
     );
 
     result.current(exporter);
@@ -26,7 +26,6 @@ describe("usePluginExporterRunner", () => {
     await vi.waitFor(() =>
       expect(vi.mocked(runExporter)).toHaveBeenCalledWith({
         exporter,
-        entries: [],
         filePath: "/ws/a.md",
         content: "# A",
       }),
@@ -37,7 +36,7 @@ describe("usePluginExporterRunner", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(runExporter).mockRejectedValueOnce(new Error("boom"));
 
-    const { result } = renderHook(() => usePluginExporterRunner({ entries: [], content: null }));
+    const { result } = renderHook(() => usePluginExporterRunner({ content: null }));
     result.current(exporter);
 
     await vi.waitFor(() => expect(spy).toHaveBeenCalled());

@@ -327,7 +327,8 @@ the way a renderer-supplied path is.
   possible; it cannot reach the filesystem.
 - **Plugins.** Plugins run sandboxed by default (issue #434): a manifest
   without a `sandbox` flag is isolated in a worker, filesystem reads require
-  the declared-and-accepted `workspace:read` permission, and the worker's
+  the declared-and-accepted `workspace:read` permission, the open document
+  reaches it only through an export the user runs, and the worker's
   network is fenced to declared `network:` hosts. A plugin that declares
   `"sandbox": false` still executes in the app context and sees everything the
   renderer sees; that mode requires an explicit full-trust consent, persisted

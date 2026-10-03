@@ -12,7 +12,15 @@ pub use crate::menu_runtime::{
     apply_menu_state, build_menu, handle_menu_event, MenuRegistry, MenuStateFlags,
 };
 
+use serde::Serialize;
 use tauri::{Emitter, Manager};
+
+/// Native menus that list plugin contributions: exporters under File > Export
+/// and `menu: "view"` commands under View.
+const PLUGIN_MENUS: [&str; 2] = ["export", "view"];
+/// Caps on what `set_plugin_menu_items` accepts from the renderer, per menu.
+pub const MAX_PLUGIN_MENU_ITEMS: usize = 32;
+pub const MAX_PLUGIN_MENU_LABEL: usize = 100;
 
 /// What a native menu item id maps to. `Emit` forwards an event (with an
 /// optional string payload) to the frontend; `CloseWindow` closes the window
@@ -26,8 +34,52 @@ pub enum MenuAction {
         payload: Option<&'static str>,
     },
     CloseWindow,
+    /// The `index`th plugin item of `menu`; the frontend owns what it runs.
+    PluginItem {
+        menu: &'static str,
+        index: usize,
+    },
     #[cfg(debug_assertions)]
     ToggleDevTools,
+}
+
+#[derive(Clone, Serialize)]
+struct PluginItemEvent {
+    menu: &'static str,
+    index: usize,
+}
+
+/// Id of the `index`th plugin item in `menu` (`plugin-export-0`).
+pub fn plugin_menu_item_id(menu: &str, index: usize) -> String {
+    format!("plugin-{menu}-{index}")
+}
+
+fn plugin_menu_action(id: &str) -> Option<MenuAction> {
+    let (menu, index) = id.strip_prefix("plugin-")?.split_once('-')?;
+    let menu = PLUGIN_MENUS.into_iter().find(|m| *m == menu)?;
+    Some(MenuAction::PluginItem {
+        menu,
+        index: index.parse().ok()?,
+    })
+}
+
+/// Refuse plugin menu labels beyond the caps, or empty ones, instead of
+/// truncating: the renderer is untrusted and the native menu is shared UI.
+pub fn check_plugin_menu_labels(labels: &[String]) -> Result<(), String> {
+    if labels.len() > MAX_PLUGIN_MENU_ITEMS {
+        return Err(format!(
+            "at most {MAX_PLUGIN_MENU_ITEMS} plugin items fit in one menu"
+        ));
+    }
+    for label in labels {
+        let length = label.trim().chars().count();
+        if length == 0 || length > MAX_PLUGIN_MENU_LABEL {
+            return Err(format!(
+                "plugin menu labels must be 1 to {MAX_PLUGIN_MENU_LABEL} characters"
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Split a menu item id into its owning-window label and base id. Per-window
@@ -45,6 +97,9 @@ pub fn parse_menu_id(id: &str) -> (Option<&str>, &str) {
 /// should perform. Split out so each arm is unit-testable without spinning up
 /// a Tauri runtime.
 pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
+    if let Some(action) = plugin_menu_action(id) {
+        return Some(action);
+    }
     let emit = |event| {
         Some(MenuAction::Emit {
             event,
@@ -124,6 +179,13 @@ pub fn dispatch_menu_action<R: tauri::Runtime>(
                 let _ = window.close();
             }
         }
+        MenuAction::PluginItem { menu, index } => {
+            let _ = app.emit_to(
+                window_label,
+                "menu-plugin-item",
+                PluginItemEvent { menu, index },
+            );
+        }
         #[cfg(debug_assertions)]
         MenuAction::ToggleDevTools => {
             if let Some(window) = app.get_webview_window(window_label) {
@@ -153,6 +215,55 @@ mod tests {
             event,
             payload: Some(payload),
         }
+    }
+
+    #[test]
+    fn plugin_item_ids_round_trip() {
+        assert_eq!(
+            menu_action_for_id(&plugin_menu_item_id("export", 3)),
+            Some(MenuAction::PluginItem {
+                menu: "export",
+                index: 3
+            })
+        );
+        assert_eq!(
+            menu_action_for_id(&plugin_menu_item_id("view", 0)),
+            Some(MenuAction::PluginItem {
+                menu: "view",
+                index: 0
+            })
+        );
+    }
+
+    #[test]
+    fn malformed_plugin_item_ids_return_none() {
+        for id in [
+            "plugin-export-",
+            "plugin-export-x",
+            "plugin-export--1",
+            "plugin-help-0",
+            "plugin-export",
+            "plugin-",
+        ] {
+            assert!(menu_action_for_id(id).is_none(), "{id}");
+        }
+    }
+
+    #[test]
+    fn plugin_menu_labels_within_the_caps_pass() {
+        let labels = vec!["Slides (reveal.js)".to_string(); MAX_PLUGIN_MENU_ITEMS];
+        assert!(check_plugin_menu_labels(&labels).is_ok());
+        assert!(check_plugin_menu_labels(&[]).is_ok());
+        assert!(check_plugin_menu_labels(&["x".repeat(MAX_PLUGIN_MENU_LABEL)]).is_ok());
+    }
+
+    #[test]
+    fn plugin_menu_labels_beyond_the_caps_are_refused() {
+        let too_many = vec!["Item".to_string(); MAX_PLUGIN_MENU_ITEMS + 1];
+        assert!(check_plugin_menu_labels(&too_many).is_err());
+        assert!(check_plugin_menu_labels(&["x".repeat(MAX_PLUGIN_MENU_LABEL + 1)]).is_err());
+        assert!(check_plugin_menu_labels(&["   ".to_string()]).is_err());
+        assert!(check_plugin_menu_labels(&[String::new()]).is_err());
     }
 
     #[test]
@@ -425,6 +536,36 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(50));
 
             assert_eq!(on_w1.lock().unwrap().len(), 1);
+            assert_eq!(on_main.lock().unwrap().len(), 0);
+        }
+
+        #[test]
+        fn plugin_item_action_emits_menu_and_index_to_the_named_window() {
+            let app = mock_app();
+            let main = WebviewWindowBuilder::new(&app, "main", Default::default())
+                .build()
+                .expect("mock main window should build");
+            let w1 = WebviewWindowBuilder::new(&app, "w1", Default::default())
+                .build()
+                .expect("mock w1 window should build");
+            let handle = app.handle().clone();
+            let on_main = capture(&main, "menu-plugin-item");
+            let on_w1 = capture(&w1, "menu-plugin-item");
+
+            dispatch_menu_action(
+                &handle,
+                "w1",
+                MenuAction::PluginItem {
+                    menu: "view",
+                    index: 2,
+                },
+            );
+            std::thread::sleep(std::time::Duration::from_millis(50));
+
+            assert_eq!(
+                on_w1.lock().unwrap().clone(),
+                vec![r#"{"menu":"view","index":2}"#.to_string()]
+            );
             assert_eq!(on_main.lock().unwrap().len(), 0);
         }
 

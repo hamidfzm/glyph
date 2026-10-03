@@ -166,6 +166,8 @@ export interface CommandContribution {
   id: string;
   title: string;
   run: () => void | Promise<void>;
+  /** 0.26.0: also list it in this native menu (desktop). */
+  menu?: "view";
 }
 
 /**
@@ -204,6 +206,14 @@ export interface SettingsPanelContribution extends MountContribution {
   pluginId: string;
 }
 
+/** 0.26.0: what an exporter needs to make its output look like the app. */
+export interface ExportDocument {
+  title: string;
+  /** Every style rule the app applies, so the body HTML renders as it does in the app. */
+  css: string;
+  dark: boolean;
+}
+
 /**
  * An export format contribution. The host runs the shared pipeline (prepare
  * the rendered document, ask for a save location, write the file); the plugin
@@ -211,12 +221,18 @@ export interface SettingsPanelContribution extends MountContribution {
  */
 export interface ExporterContribution {
   id: string;
-  /** Palette label, e.g. "reveal.js slides". */
+  /** Palette and File > Export label, e.g. "reveal.js slides". */
   label: string;
   /** File extension without the dot, e.g. "html". */
   extension: string;
   /** Convert the prepared document HTML into file contents. */
-  build: (bodyHtml: string) => Promise<Uint8Array | string>;
+  build: (bodyHtml: string, doc: ExportDocument) => Promise<Uint8Array | string>;
+}
+
+/** 0.26.0: content shown over the whole app, with the window taken fullscreen. */
+export interface OverlayContribution extends MountContribution {
+  /** Accessible name of the overlay. */
+  label: string;
 }
 
 export interface CommandRegistryApi {
@@ -236,6 +252,12 @@ export interface UiRegistryApi {
   /** One settings panel per plugin; the host keys it by the plugin's id. Not
    *  available to sandboxed plugins; see {@link addStatusBarItem}. */
   addSettingsPanel(panel: MountContribution): Disposer;
+  /**
+   * 0.26.0: open an overlay over the whole app, replacing any open one. Escape
+   * closes it and runs its cleanups, as does the returned disposer. Not
+   * available to sandboxed plugins; see {@link addStatusBarItem}.
+   */
+  openOverlay(overlay: OverlayContribution): Disposer;
   /**
    * Inject a stylesheet after the app styles (theme plugins, custom CSS).
    * Removed automatically when the plugin unloads.
@@ -320,6 +342,12 @@ export interface I18nApi {
 export interface DocumentsRegistryApi {
   /** Open files with these extensions as one fenced block; see {@link FileTypeContribution}. */
   registerFileType(fileType: FileTypeContribution): Disposer;
+  /**
+   * 0.26.0: the active document's rendered HTML as exporters receive it, or
+   * null when nothing is rendered. Not available to sandboxed plugins: they
+   * see document content only through an export the user runs.
+   */
+  getRenderedHtml(): Promise<string | null>;
 }
 
 /**
