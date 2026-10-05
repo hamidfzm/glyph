@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isMobilePlatform } from "@/lib/platform";
 import { createRegistry } from "@/lib/plugins/registry";
-import type { CommandContribution, ExporterContribution } from "@/lib/plugins/types";
+import type { CommandEntry, ExporterEntry } from "@/lib/plugins/types";
 import { subscribe } from "@/lib/tauriEvent";
 import { expectConsole } from "@/test/consoleGuard";
 import { usePluginMenuItems } from "./usePluginMenuItems";
@@ -15,13 +15,17 @@ vi.mock("@/contexts/PluginsContext", () => ({ usePluginsOptional: () => plugins.
 vi.mock("@/lib/platform", () => ({ isMobilePlatform: vi.fn(() => false) }));
 vi.mock("@/lib/tauriEvent", () => ({ subscribe: vi.fn(() => () => {}) }));
 
-function exporter(id: string, label: string): ExporterContribution {
-  return { id, label, extension: "html", build: async () => "" };
+function exporter(id: string, label: string, pluginId = "com.x.slides"): ExporterEntry {
+  return { pluginId, id, label, extension: "html", build: async () => "" };
+}
+
+function viewCommand(pluginId: string, run = vi.fn()): CommandEntry {
+  return { pluginId, id: "present", title: "Slide Show", menu: "view", run };
 }
 
 function setUp() {
-  const exporters = createRegistry<ExporterContribution>();
-  const commands = createRegistry<CommandContribution>();
+  const exporters = createRegistry<ExporterEntry>();
+  const commands = createRegistry<CommandEntry>();
   plugins.current = { exporters, commands };
   return { exporters, commands };
 }
@@ -38,18 +42,23 @@ describe("usePluginMenuItems", () => {
     vi.mocked(isMobilePlatform).mockReturnValue(false);
   });
 
-  it("lists exporters and view commands in the native menu, keyed by id", async () => {
+  it("lists exporters and view commands in the native menu, keyed by plugin and id", async () => {
     const { exporters, commands } = setUp();
     exporters.register(exporter("slides", "Slides"));
-    commands.register({ id: "present", title: "Slide Show", menu: "view", run: vi.fn() });
-    commands.register({ id: "palette-only", title: "Hidden", run: vi.fn() });
+    commands.register(viewCommand("com.x.slides"));
+    commands.register({
+      pluginId: "com.x.slides",
+      id: "palette-only",
+      title: "Hidden",
+      run: vi.fn(),
+    });
 
     renderHook(() => usePluginMenuItems(vi.fn()));
 
     await waitFor(() =>
       expect(invoke).toHaveBeenLastCalledWith("set_plugin_menu_items", {
-        export: [{ key: "slides", label: "Slides…" }],
-        view: [{ key: "present", label: "Slide Show" }],
+        export: [{ key: "com.x.slides/slides", label: "Slides…" }],
+        view: [{ key: "com.x.slides/present", label: "Slide Show" }],
       }),
     );
   });
@@ -67,7 +76,7 @@ describe("usePluginMenuItems", () => {
     });
     await waitFor(() =>
       expect(invoke).toHaveBeenLastCalledWith("set_plugin_menu_items", {
-        export: [{ key: "slides", label: "Slides…" }],
+        export: [{ key: "com.x.slides/slides", label: "Slides…" }],
         view: [],
       }),
     );
@@ -91,14 +100,47 @@ describe("usePluginMenuItems", () => {
     const run = vi.fn();
     const slides = exporter("slides", "Slides");
     exporters.register(slides);
-    commands.register({ id: "present", title: "Slide Show", menu: "view", run });
+    commands.register(viewCommand("com.x.slides", run));
     const runPluginExporter = vi.fn();
     renderHook(() => usePluginMenuItems(runPluginExporter));
 
-    pickMenuItem("export", "slides");
-    pickMenuItem("view", "present");
+    pickMenuItem("export", "com.x.slides/slides");
+    pickMenuItem("view", "com.x.slides/present");
     expect(runPluginExporter).toHaveBeenCalledWith(slides);
     expect(run).toHaveBeenCalled();
+  });
+
+  it("tells two plugins apart when their contributions share an id", async () => {
+    const { exporters, commands } = setUp();
+    const runA = vi.fn();
+    const runB = vi.fn();
+    commands.register(viewCommand("com.a", runA));
+    commands.register(viewCommand("com.b", runB));
+    const deckB = exporter("deck", "Deck B", "com.b");
+    exporters.register(exporter("deck", "Deck A", "com.a"));
+    exporters.register(deckB);
+    const runPluginExporter = vi.fn();
+    renderHook(() => usePluginMenuItems(runPluginExporter));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenLastCalledWith("set_plugin_menu_items", {
+        export: [
+          { key: "com.a/deck", label: "Deck A…" },
+          { key: "com.b/deck", label: "Deck B…" },
+        ],
+        view: [
+          { key: "com.a/present", label: "Slide Show" },
+          { key: "com.b/present", label: "Slide Show" },
+        ],
+      }),
+    );
+
+    pickMenuItem("view", "com.b/present");
+    expect(runB).toHaveBeenCalledOnce();
+    expect(runA).not.toHaveBeenCalled();
+
+    pickMenuItem("export", "com.b/deck");
+    expect(runPluginExporter).toHaveBeenCalledExactlyOnceWith(deckB);
   });
 
   it("runs the contribution a stale menu names, never its neighbor", () => {
@@ -111,10 +153,10 @@ describe("usePluginMenuItems", () => {
     renderHook(() => usePluginMenuItems(runPluginExporter));
     act(() => disposeFirst());
 
-    pickMenuItem("export", "first");
+    pickMenuItem("export", "com.x.slides/first");
     expect(runPluginExporter).not.toHaveBeenCalled();
 
-    pickMenuItem("export", "second");
+    pickMenuItem("export", "com.x.slides/second");
     expect(runPluginExporter).toHaveBeenCalledExactlyOnceWith(second);
   });
 

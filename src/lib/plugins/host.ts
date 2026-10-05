@@ -8,8 +8,8 @@ import { buildPluginContext, type ContextRegistries, tracked } from "./pluginCon
 import { createRegistry, type Registry } from "./registry";
 import { startSandbox, type WorkerSpawner } from "./sandbox/sandbox";
 import type {
-  CommandContribution,
-  ExporterContribution,
+  CommandEntry,
+  ExporterEntry,
   FencedRendererContribution,
   GlyphPluginContext,
   InstalledPlugin,
@@ -47,7 +47,7 @@ export interface LoadedPluginInfo {
 
 export interface PluginHost {
   /** Commands contributed by loaded plugins (palette section "Commands", and the View menu). */
-  readonly commands: Registry<CommandContribution>;
+  readonly commands: Registry<CommandEntry>;
   /** Status bar items contributed by loaded plugins. */
   readonly statusBarItems: Registry<StatusBarItemContribution>;
   /** Remark plugins contributed by loaded plugins. */
@@ -63,7 +63,7 @@ export interface PluginHost {
   /** Stylesheets contributed by loaded plugins, injected after app styles. */
   readonly styles: Registry<StyleContribution>;
   /** Export formats contributed by loaded plugins. */
-  readonly exporters: Registry<ExporterContribution>;
+  readonly exporters: Registry<ExporterEntry>;
   /** Website-export themes contributed by loaded plugins. */
   readonly siteThemes: Registry<SiteThemeContribution>;
   /**
@@ -106,7 +106,7 @@ export function createPluginHost(
   // Worker. Defaults to a real blob-URL Worker inside startSandbox.
   workerSpawner?: WorkerSpawner,
 ): PluginHost {
-  const commands = createRegistry<CommandContribution>();
+  const commands = createRegistry<CommandEntry>();
   const statusBarItems = createRegistry<StatusBarItemContribution>();
   const remarkPlugins = createRegistry<MarkdownPlugin>();
   const rehypePlugins = createRegistry<RehypeContribution>();
@@ -114,7 +114,7 @@ export function createPluginHost(
   const sidebarPanels = createRegistry<SidebarPanelContribution>();
   const settingsPanels = createRegistry<SettingsPanelContribution>();
   const styles = createRegistry<StyleContribution>();
-  const exporters = createRegistry<ExporterContribution>();
+  const exporters = createRegistry<ExporterEntry>();
   const siteThemes = createRegistry<SiteThemeContribution>();
   const loaded = new Map<string, LoadedPlugin>();
   const registries: ContextRegistries = {
@@ -184,11 +184,15 @@ export function createPluginHost(
           plugin,
           settings,
           {
-            registerCommand: tracked(commands.register, bag),
+            registerCommand(command) {
+              tracked(commands.register, bag)({ ...command, pluginId: plugin.id });
+            },
             addStyles(css) {
               tracked(styles.register, bag)({ css });
             },
-            registerExporter: tracked(exporters.register, bag),
+            registerExporter(exporter) {
+              tracked(exporters.register, bag)({ ...exporter, pluginId: plugin.id });
+            },
             registerSiteTheme: tracked(siteThemes.register, bag),
             registerFileType: tracked(registerFileType, bag),
             registerDictionary: tracked(registerDictionarySource, bag),

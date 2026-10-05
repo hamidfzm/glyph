@@ -331,9 +331,11 @@ the way a renderer-supplied path is.
   reaches it only through an export the user runs, and the worker's
   network is fenced to declared `network:` hosts. A plugin that declares
   `"sandbox": false` still executes in the app context and sees everything the
-  renderer sees; that mode requires an explicit full-trust consent, persisted
-  per plugin, and marketplace packages are SHA-256-verified against the
-  reviewed registry entry before install. Core plugins (the compiled-in
+  renderer sees (the host's own Escape handling and close button on a plugin
+  overlay guard against a plugin's bugs, not against a hostile one); that mode
+  requires an explicit full-trust consent, persisted per plugin, and
+  marketplace packages are SHA-256-verified against the reviewed registry
+  entry before install. Core plugins (the compiled-in
   `CORE_PLUGINS` list: D2, Mermaid, and math today) are app code shipped in the signed binary:
   they load with full trust and no consent prompt, and only their on/off
   state lives in `settings.json`. The backend reserves the `glyph.core.` id

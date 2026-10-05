@@ -16,14 +16,18 @@ function documentBody(): HTMLElement | null {
  * document is rendered (an editor-only tab, a canvas, an empty window).
  */
 export async function prepareRenderedHtml(): Promise<string | null> {
-  const body = documentBody();
-  if (!body) return null;
+  // With no document there is nothing to wait for, only the gate's deadline.
+  if (!documentBody()) return null;
   // Loaded on first use so the export pipeline stays out of the startup bundle.
   const [{ prepareBody }, { waitForRenderIdle }] = await Promise.all([
     import("@/lib/export/prepareContent"),
     import("@/lib/export/renderReady"),
   ]);
   await waitForRenderIdle();
+  // Looked up again: a tab switched or closed during the wait leaves the
+  // earlier body detached, and it is no longer the active document.
+  const body = documentBody();
+  if (!body) return null;
   const prepared = await prepareBody(body, { entries: [], includeToc: false });
   return prepared.html;
 }

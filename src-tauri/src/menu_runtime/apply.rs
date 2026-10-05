@@ -194,7 +194,8 @@ fn replace_plugin_items<R: Runtime>(
 /// Plugin exporters go after the built-in formats in File > Export, and
 /// `menu: "view"` commands after Open Graph in View. Picking one emits
 /// `menu-plugin-item` with its menu and key. Returns how many entries were
-/// refused (see `listable_plugin_menu_entries`); the rest are listed.
+/// refused (see `listable_plugin_menu_entries`); the rest are listed. Fails
+/// when the window has no menu, as it does mid-teardown.
 #[tauri::command]
 pub fn set_plugin_menu_items(
     window: tauri::WebviewWindow,
@@ -226,7 +227,9 @@ pub fn set_plugin_menu_items(
                 true,
             )
         })
-        .unwrap_or(Ok(()))?;
+        // Unlike the other menu commands this one reports what it listed, so
+        // a window without a menu is an error, not a quiet success.
+        .ok_or("this window has no menu to list plugin entries in")??;
     Ok(export_refused + view_refused)
 }
 

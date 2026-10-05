@@ -87,6 +87,33 @@ describe("PluginOverlay", () => {
     expect(bubbling).not.toHaveBeenCalled();
   });
 
+  it("sees Escape before a key handler a plugin added when it activated", async () => {
+    render(<PluginOverlay />);
+    // Long before any overlay opens: a listener the host adds on open would
+    // sit behind this one and never hear the key.
+    const swallow = vi.fn((e: KeyboardEvent) => e.stopImmediatePropagation());
+    window.addEventListener("keydown", swallow, true);
+    const { close } = open();
+    await screen.findByRole("dialog");
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    window.removeEventListener("keydown", swallow, true);
+
+    expect(close).toHaveBeenCalled();
+    expect(swallow).not.toHaveBeenCalled();
+  });
+
+  it("leaves Escape alone while no overlay is open", () => {
+    const appKeys = vi.fn();
+    document.addEventListener("keydown", appKeys);
+    render(<PluginOverlay />);
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    document.removeEventListener("keydown", appKeys);
+
+    expect(appKeys).toHaveBeenCalledOnce();
+  });
+
   it("leaves other keys to the plugin", async () => {
     render(<PluginOverlay />);
     const { close } = open();

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { prepareRenderedHtml } from "./renderedHtml";
 
 const AI_REPLY = '<aside><div class="markdown-body"><p>AI reply</p></div></aside>';
@@ -54,5 +54,29 @@ describe("prepareRenderedHtml", () => {
     expect(await prepareRenderedHtml()).toBe(
       '<div class="markdown-body"><p>Cell</p></div><pre>out</pre>',
     );
+  });
+
+  it("returns the document that is active once rendering settles, not the one it began with", async () => {
+    document.body.innerHTML = viewer('<div class="markdown-body"><p>First tab</p></div>');
+    const pending = prepareRenderedHtml();
+    // A tab switch while the render gate is still waiting.
+    document.body.innerHTML = viewer('<div class="markdown-body"><p>Second tab</p></div>');
+
+    expect(await pending).toBe("<p>Second tab</p>");
+  });
+
+  it("is null when the document closes while rendering settles", async () => {
+    vi.useFakeTimers();
+    try {
+      document.body.innerHTML = viewer('<div class="markdown-body"><p>Closing</p></div>');
+      const pending = prepareRenderedHtml();
+      document.body.innerHTML = "";
+      // With nothing rendered the gate runs to its deadline.
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      expect(await pending).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

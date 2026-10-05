@@ -8,8 +8,9 @@ import { PluginMountSlot } from "./PluginMountSlot";
 
 /**
  * A plugin overlay over the whole app, with the window fullscreen. Portaled
- * to <body> so no transformed ancestor can trap it inside a pane. The plugin
- * cannot trap the user either: Escape and the close button belong to the host.
+ * to <body> so no transformed ancestor can trap it inside a pane. The host
+ * keeps its own ways out (Escape in `PluginOverlay`, the close button here)
+ * so a plugin's bug does not strand the user in a fullscreen layer.
  */
 export function PluginOverlayLayer({ overlay }: { overlay: OpenOverlay }) {
   const { t } = useTranslation("common");
@@ -17,21 +18,8 @@ export function PluginOverlayLayer({ overlay }: { overlay: OpenOverlay }) {
   useWindowFullscreen();
 
   // A layout effect runs before the plugin's mount (a passive effect in the
-  // slot), so this capture listener is registered first and sees Escape
-  // before any listener the plugin adds.
-  useLayoutEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      overlay.close();
-    };
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [overlay]);
-
-  // Also ahead of mount: keys leave the editor underneath, the plugin may
-  // then focus its own content, and focus returns where it was on close.
+  // slot): keys leave the editor underneath, the plugin may then focus its
+  // own content, and focus returns where it was on close.
   useLayoutEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     ref.current?.focus();

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { isMobilePlatform } from "@/lib/platform";
+import { contributionKey } from "@/lib/plugins/contributionKey";
 import type { ExporterContribution } from "@/lib/plugins/types";
 import { subscribe } from "@/lib/tauriEvent";
 
@@ -15,9 +16,9 @@ interface PluginMenuItemEvent {
 /**
  * List plugin exporters under File > Export and `menu: "view"` plugin
  * commands under View in the native menu, and run them when picked. Items are
- * keyed by contribution id, not position: a menu that lags the registries (a
- * refused entry, another window's list on a shared app menu) can then only
- * run the contribution it names, or nothing.
+ * keyed by plugin and contribution id, not position: a menu that lags the
+ * registries (a refused entry, another window's list on a shared app menu)
+ * can then only run the contribution it names, or nothing.
  */
 export function usePluginMenuItems(
   runPluginExporter: (exporter: ExporterContribution) => void,
@@ -36,10 +37,13 @@ export function usePluginMenuItems(
     if (isMobilePlatform()) return;
     invoke<number>("set_plugin_menu_items", {
       export: exporters.map((exporter) => ({
-        key: exporter.id,
+        key: contributionKey(exporter),
         label: t("exportMenuItem", { label: exporter.label }),
       })),
-      view: viewCommands.map((command) => ({ key: command.id, label: command.title })),
+      view: viewCommands.map((command) => ({
+        key: contributionKey(command),
+        label: command.title,
+      })),
     })
       .then((refused) => {
         if (refused > 0) console.error(`${refused} plugin menu entries were refused`);
@@ -51,11 +55,11 @@ export function usePluginMenuItems(
     () =>
       subscribe<PluginMenuItemEvent>("menu-plugin-item", ({ payload }) => {
         if (payload.menu === "export") {
-          const exporter = exporters.find((entry) => entry.id === payload.key);
+          const exporter = exporters.find((entry) => contributionKey(entry) === payload.key);
           if (exporter) runPluginExporter(exporter);
           return;
         }
-        void viewCommands.find((command) => command.id === payload.key)?.run();
+        void viewCommands.find((command) => contributionKey(command) === payload.key)?.run();
       }),
     [exporters, viewCommands, runPluginExporter],
   );

@@ -108,7 +108,8 @@ export interface PluginManifest {
    * get no DOM and network fenced to their `network:` permissions, but only
    * the non-UI API subset: commands, styles, exporters, file types, workspace,
    * assets, spellcheck, settings, notify, and registering translations. No
-   * markdown pipeline, panel mounts, or reading translations.
+   * markdown pipeline, panel or overlay mounts, reading the rendered
+   * document, or reading translations.
    *
    * Absent defaults to `true`: isolation is the default, and only an explicit
    * `false` opts into full trust, which needs a distinct user grant.
@@ -166,8 +167,13 @@ export interface CommandContribution {
   id: string;
   title: string;
   run: () => void | Promise<void>;
-  /** 0.26.0: also list it in this native menu (desktop), keyed by `id`. */
+  /** 0.26.0: also list it in this native menu (desktop). */
   menu?: "view";
+}
+
+/** A command as the host holds it, stamped with the plugin that added it. */
+export interface CommandEntry extends CommandContribution {
+  pluginId: string;
 }
 
 /**
@@ -228,6 +234,11 @@ export interface ExporterContribution {
   extension: string;
   /** Convert the prepared document HTML into file contents. */
   build: (bodyHtml: string, doc: ExportDocument) => Promise<Uint8Array | string>;
+}
+
+/** An exporter as the host holds it, stamped with the plugin that added it. */
+export interface ExporterEntry extends ExporterContribution {
+  pluginId: string;
 }
 
 /** 0.26.0: content shown over the whole app, with the window taken fullscreen. */

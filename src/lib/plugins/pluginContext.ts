@@ -10,8 +10,8 @@ import type { Registry } from "./registry";
 import { prepareRenderedHtml } from "./renderedHtml";
 import { staticRenderers } from "./staticRenderers";
 import type {
-  CommandContribution,
-  ExporterContribution,
+  CommandEntry,
+  ExporterEntry,
   FencedRendererContribution,
   GlyphPluginContext,
   InstalledPlugin,
@@ -27,7 +27,7 @@ import { createWorkspaceApi } from "./workspaceApi";
 
 /** The contribution registries a plugin context writes into. */
 export interface ContextRegistries {
-  commands: Registry<CommandContribution>;
+  commands: Registry<CommandEntry>;
   statusBarItems: Registry<StatusBarItemContribution>;
   remarkPlugins: Registry<MarkdownPlugin>;
   rehypePlugins: Registry<RehypeContribution>;
@@ -35,7 +35,7 @@ export interface ContextRegistries {
   sidebarPanels: Registry<SidebarPanelContribution>;
   settingsPanels: Registry<SettingsPanelContribution>;
   styles: Registry<StyleContribution>;
-  exporters: Registry<ExporterContribution>;
+  exporters: Registry<ExporterEntry>;
   siteThemes: Registry<SiteThemeContribution>;
 }
 
@@ -86,7 +86,11 @@ export function buildPluginContext({
   } = registries;
   return {
     apiVersion: PLUGIN_API_VERSION,
-    commands: { register: tracked(commands.register, bag) },
+    commands: {
+      register(command) {
+        return tracked(commands.register, bag)({ ...command, pluginId: plugin.id });
+      },
+    },
     ui: {
       addStatusBarItem: tracked(statusBarItems.register, bag),
       addSidebarPanel: tracked(sidebarPanels.register, bag),
@@ -129,7 +133,9 @@ export function buildPluginContext({
     workspace: createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? []),
     assets: createAssetsApi(plugin.id),
     exporters: {
-      register: tracked(exporters.register, bag),
+      register(exporter) {
+        return tracked(exporters.register, bag)({ ...exporter, pluginId: plugin.id });
+      },
       registerSiteTheme: tracked(siteThemes.register, bag),
     },
     // Dictionaries live in the spellcheck module's own registry (the speller
