@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { EMPTY_SNAPSHOT } from "@/lib/vault";
+import { pluginAppState, setPluginAppState } from "./appState";
 import { createWorkspaceApi } from "./workspaceApi";
 
 describe("createWorkspaceApi", () => {
@@ -55,5 +57,29 @@ describe("createWorkspaceApi", () => {
     root = "/ws-two";
     await api.readFile("a.md");
     expect(vi.mocked(invoke)).toHaveBeenLastCalledWith("read_file", { path: "/ws-two/a.md" });
+  });
+
+  it("names the workspace root, or null when none is open", () => {
+    expect(createWorkspaceApi(() => "/ws", ["workspace:read"]).getRoot()).toBe("/ws");
+    expect(createWorkspaceApi(() => null, ["workspace:read"]).getRoot()).toBeNull();
+  });
+
+  it("keeps the root and its changes from a plugin without workspace:read", () => {
+    const api = createWorkspaceApi(() => "/ws", []);
+    expect(() => api.getRoot()).toThrow(/workspace:read/);
+    expect(() => api.onChange(() => {})).toThrow(/workspace:read/);
+  });
+
+  it("tells a listener when the workspace changes, until it is removed", () => {
+    setPluginAppState({ workspaceRoot: "/ws", activeDocument: null, snapshot: EMPTY_SNAPSHOT });
+    const listener = vi.fn();
+    const stop = createWorkspaceApi(() => "/ws", ["workspace:read"]).onChange(listener);
+
+    setPluginAppState({ ...pluginAppState(), workspaceRoot: "/other" });
+    expect(listener).toHaveBeenCalledOnce();
+
+    stop();
+    setPluginAppState({ ...pluginAppState(), workspaceRoot: null });
+    expect(listener).toHaveBeenCalledOnce();
   });
 });

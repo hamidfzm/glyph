@@ -1,19 +1,10 @@
 import { renderHook } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
+import { PluginsContext } from "@/contexts/PluginsContext";
 import { createRegistry } from "@/lib/plugins/registry";
-import type {
-  CommandContribution,
-  ExporterContribution,
-  FencedRendererContribution,
-  MarkdownPlugin,
-  SettingsPanelContribution,
-  SidebarPanelContribution,
-  SiteThemeContribution,
-  StatusBarItemContribution,
-  StyleContribution,
-} from "@/lib/plugins/types";
+import type { CommandContribution, ExporterContribution } from "@/lib/plugins/types";
+import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import { type AppActions, useAppCommands } from "./useAppCommands";
 
 function makeActions(over: Partial<AppActions> = {}): AppActions {
@@ -278,29 +269,9 @@ describe("useAppCommands", () => {
     const commands = createRegistry<CommandContribution>();
     const run = vi.fn();
     commands.register({ id: "demo.greet", title: "Greet", run });
-    const value: PluginsContextValue = {
+    const value = pluginsContextValue({
       commands,
-      statusBarItems: createRegistry<StatusBarItemContribution>(),
-      remarkPlugins: createRegistry<MarkdownPlugin>(),
-      rehypePlugins: createRegistry<MarkdownPlugin>(),
-      fencedRenderers: createRegistry<FencedRendererContribution>(),
-      sidebarPanels: createRegistry<SidebarPanelContribution>(),
-      settingsPanels: createRegistry<SettingsPanelContribution>(),
-      styles: createRegistry<StyleContribution>(),
-      exporters: createRegistry<ExporterContribution>(),
-      installed: [],
-      disabled: [],
-      loaded: [],
-      registry: [],
-      updates: [],
-      installFromFolder: vi.fn(async () => {}),
-      installFromRegistry: vi.fn(async () => {}),
-      setEnabled: vi.fn(async () => {}),
-      uninstall: vi.fn(async () => {}),
-      setWorkspaceRoot: vi.fn(),
-      siteThemes: createRegistry<SiteThemeContribution>(),
-      initialLoadDone: true,
-    };
+    });
     const wrapper = ({ children }: { children: ReactNode }) =>
       createElement(PluginsContext.Provider, { value }, children);
 
@@ -330,29 +301,9 @@ describe("useAppCommands", () => {
       build: async () => "out",
     };
     exporters.register(slides);
-    const value: PluginsContextValue = {
-      commands: createRegistry<CommandContribution>(),
-      statusBarItems: createRegistry<StatusBarItemContribution>(),
-      remarkPlugins: createRegistry<MarkdownPlugin>(),
-      rehypePlugins: createRegistry<MarkdownPlugin>(),
-      fencedRenderers: createRegistry<FencedRendererContribution>(),
-      sidebarPanels: createRegistry<SidebarPanelContribution>(),
-      settingsPanels: createRegistry<SettingsPanelContribution>(),
-      styles: createRegistry<StyleContribution>(),
+    const value = pluginsContextValue({
       exporters,
-      siteThemes: createRegistry<SiteThemeContribution>(),
-      installed: [],
-      disabled: [],
-      loaded: [],
-      registry: [],
-      updates: [],
-      installFromFolder: vi.fn(async () => {}),
-      installFromRegistry: vi.fn(async () => {}),
-      setEnabled: vi.fn(async () => {}),
-      uninstall: vi.fn(async () => {}),
-      setWorkspaceRoot: vi.fn(),
-      initialLoadDone: true,
-    };
+    });
     const wrapper = ({ children }: { children: ReactNode }) =>
       createElement(PluginsContext.Provider, { value }, children);
     const actions = makeActions();

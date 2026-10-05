@@ -33,7 +33,11 @@
             "patterns": [
               {
                 "group": ["../../**"],
-                "message": "Use the @/ alias for non-sibling imports — e.g. @/hooks/useTabs instead of ../../hooks/useTabs."
+                "message": "Use the @/ alias for non-sibling imports, e.g. @/hooks/useTabs instead of ../../hooks/useTabs."
+              },
+              {
+                "group": ["@/plugins/core/**"],
+                "message": "Core plugins load only through the dynamic imports in src/lib/plugins/corePlugins.ts, so a disabled one never loads its code."
               }
             ]
           }
@@ -41,6 +45,57 @@
       }
     }
   },
+  "overrides": [
+    {
+      "includes": [
+        "src/lib/plugins/corePlugins.ts",
+        "src/preview/**",
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["../../**"],
+                    "message": "Use the @/ alias for non-sibling imports, e.g. @/hooks/useTabs instead of ../../hooks/useTabs."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/plugins/core/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["../**"],
+                    "message": "A core plugin lives whole in its own folder."
+                  },
+                  {
+                    "group": ["@/**", "!@/lib/plugins/types"],
+                    "message": "A core plugin imports only its own folder, @/lib/plugins/types, and npm packages. It reaches the app through ctx, so add what it needs to the public plugin API first."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "formatter": {
     "enabled": true,
     "indentStyle": "space",

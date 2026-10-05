@@ -11,6 +11,7 @@ export interface PluginsContextValue {
   rehypePlugins: PluginHost["rehypePlugins"];
   fencedRenderers: PluginHost["fencedRenderers"];
   sidebarPanels: PluginHost["sidebarPanels"];
+  fileTreeFilters: PluginHost["fileTreeFilters"];
   settingsPanels: PluginHost["settingsPanels"];
   styles: PluginHost["styles"];
   exporters: PluginHost["exporters"];
@@ -33,8 +34,6 @@ export interface PluginsContextValue {
   setEnabled: (id: string, enabled: boolean) => Promise<void>;
   /** Unload and delete an installed plugin from disk. */
   uninstall: (id: string) => Promise<void>;
-  /** Mirror the opened workspace root into the host (for ctx.workspace). */
-  setWorkspaceRoot: (root: string | null) => void;
   /**
    * The startup plugin scan and load pass, core plugins included, has
    * finished (an empty or failed scan counts). Gate work that must see every

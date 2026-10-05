@@ -1,10 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { act, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
+import type { VaultSnapshot } from "@/lib/vault";
 import { CHUNK_LOAD_TIMEOUT_MS } from "@/test/chunkLoadTimeout";
 import { fileScan, vaultSnapshot } from "@/test/tabsHarness";
 
@@ -71,6 +72,52 @@ function withProviders(overrides: Partial<SettingsContextValue> = {}) {
     <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
   );
   return { value, wrapper };
+}
+
+/** Launch with the folder `/workspace` holding one note, answering the index as given. */
+function mockWorkspaceLaunch(
+  index: {
+    snapshot?: VaultSnapshot;
+    backlinks?: Array<{ source: string; line: number; snippet: string }>;
+    taggedPaths?: string[];
+  } = {},
+) {
+  vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
+    switch (cmd) {
+      case "get_initial_folder":
+        return Promise.resolve("/workspace");
+      case "get_initial_file":
+        return Promise.resolve(null);
+      case "read_directory":
+        return Promise.resolve([{ name: "a.md", path: "/workspace/a.md", isDirectory: false }]);
+      case "list_markdown_files":
+        return Promise.resolve(fileScan(["/workspace/a.md"]));
+      case "vault_refresh":
+      case "vault_snapshot":
+        return Promise.resolve(index.snapshot ?? vaultSnapshot(["/workspace/a.md"]));
+      case "vault_backlinks":
+        return Promise.resolve(index.backlinks ?? []);
+      case "vault_paths_with_tag":
+        return Promise.resolve(index.taggedPaths ?? []);
+      case "workspace_resolve":
+        return Promise.resolve({
+          selected: String(args?.selected ?? ""),
+          isGitRepo: false,
+          gitTopLevel: null,
+          nestedUnder: null,
+          glyphConflict: null,
+        });
+      case "get_file_metadata":
+        return Promise.resolve({
+          name: "a.md",
+          path: String(args?.path ?? ""),
+          size: 0,
+          modified: 0,
+        });
+      default:
+        return Promise.resolve(undefined);
+    }
+  }) as unknown as typeof invoke);
 }
 
 beforeEach(() => {
@@ -298,42 +345,7 @@ describe("App", () => {
   });
 
   it("opens the workspace's first note as a document tab when a folder is opened", async () => {
-    vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
-      switch (cmd) {
-        case "get_initial_folder":
-          return Promise.resolve("/workspace");
-        case "get_initial_file":
-          return Promise.resolve(null);
-        case "read_directory":
-          return Promise.resolve([{ name: "a.md", path: "/workspace/a.md", isDirectory: false }]);
-        case "list_markdown_files":
-          return Promise.resolve(fileScan(["/workspace/a.md"]));
-        case "vault_refresh":
-        case "vault_snapshot":
-          return Promise.resolve(vaultSnapshot(["/workspace/a.md"]));
-        // The backlinks panel queries once the note's tab and the index are up;
-        // the default undefined would crash it whenever that lands in the test.
-        case "vault_backlinks":
-          return Promise.resolve([]);
-        case "workspace_resolve":
-          return Promise.resolve({
-            selected: String(args?.selected ?? ""),
-            isGitRepo: false,
-            gitTopLevel: null,
-            nestedUnder: null,
-            glyphConflict: null,
-          });
-        case "get_file_metadata":
-          return Promise.resolve({
-            name: "a.md",
-            path: String(args?.path ?? ""),
-            size: 0,
-            modified: 0,
-          });
-        default:
-          return Promise.resolve(undefined);
-      }
-    }) as unknown as typeof invoke);
+    mockWorkspaceLaunch();
 
     const { wrapper } = withProviders();
     const { container } = render(<App />, { wrapper });
@@ -344,6 +356,48 @@ describe("App", () => {
       const tab = container.querySelector('[data-tab-kind="file"]');
       expect(tab?.textContent).toContain("a.md");
     });
+  });
+
+  // The real tags and backlinks core plugins, through the real plugin host.
+  it("fills the Files panel blocks from the workspace index", async () => {
+    mockWorkspaceLaunch({
+      snapshot: vaultSnapshot(["/workspace/a.md", "/workspace/b.md"], {
+        tagCounts: [{ tag: "work", count: 1 }],
+      }),
+      backlinks: [{ source: "/workspace/b.md", line: 2, snippet: "see the first note" }],
+      taggedPaths: ["/workspace/b.md"],
+    });
+    const { wrapper } = withProviders();
+    render(<App />, { wrapper });
+
+    expect(await screen.findByRole("button", { name: "Tags" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Backlinks" })).toBeInTheDocument();
+    // The open note's inbound link, once its tab and the index are both up.
+    expect(await screen.findByText("see the first note")).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Filter by #work" }));
+    expect(await screen.findByText("#work (1)")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("vault_paths_with_tag", {
+      root: "/workspace",
+      tag: "work",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));
+    await waitFor(() => expect(screen.queryByText("#work (1)")).not.toBeInTheDocument());
+  });
+
+  it("leaves a core plugin's block out of the Files panel while it is switched off", async () => {
+    mockWorkspaceLaunch();
+    const { wrapper } = withProviders({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        corePlugins: { ...DEFAULT_SETTINGS.corePlugins, tags: false },
+      },
+    });
+    render(<App />, { wrapper });
+
+    expect(await screen.findByRole("button", { name: "Backlinks" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tags" })).not.toBeInTheDocument();
   });
 
   it("forwards menu-close-tab, menu-find, and menu-toggle-edit to AppShell handlers", async () => {

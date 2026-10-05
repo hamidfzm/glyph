@@ -1,26 +1,30 @@
 import { i18n } from "@/lib/i18n";
 import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_VERSION } from "./apiVersion";
+import { onPluginAppStateChange, pluginAppState } from "./appState";
 import { createAssetsApi } from "./assetsApi";
 import type { Disposer, DisposerBag } from "./disposer";
 import { registerFileType } from "./fileTypes";
 import type { PluginSettingsBackend } from "./host";
+import { createNavigationApi } from "./navigationApi";
 import type { Registry } from "./registry";
 import { staticRenderers } from "./staticRenderers";
 import type {
   CommandContribution,
   ExporterContribution,
   FencedRendererContribution,
+  FileTreeFilter,
   GlyphPluginContext,
   InstalledPlugin,
   MarkdownPlugin,
   RehypeContribution,
   SettingsPanelContribution,
-  SidebarPanelContribution,
+  SidebarPanelEntry,
   SiteThemeContribution,
   StatusBarItemContribution,
   StyleContribution,
 } from "./types";
+import { createVaultApi } from "./vaultApi";
 import { createWorkspaceApi } from "./workspaceApi";
 
 /** The contribution registries a plugin context writes into. */
@@ -30,7 +34,8 @@ export interface ContextRegistries {
   remarkPlugins: Registry<MarkdownPlugin>;
   rehypePlugins: Registry<RehypeContribution>;
   fencedRenderers: Registry<FencedRendererContribution>;
-  sidebarPanels: Registry<SidebarPanelContribution>;
+  sidebarPanels: Registry<SidebarPanelEntry>;
+  fileTreeFilters: Registry<FileTreeFilter>;
   settingsPanels: Registry<SettingsPanelContribution>;
   styles: Registry<StyleContribution>;
   exporters: Registry<ExporterContribution>;
@@ -50,14 +55,24 @@ interface BuildContextOptions {
 }
 
 /** Route a registration through the plugin's own DisposerBag so unload removes
- *  exactly its contributions. */
+ *  exactly its contributions. Disposing early also leaves the bag: a plugin
+ *  that subscribes on every mount would otherwise pin each closure until unload. */
 export const tracked =
   <T>(register: (entry: T) => Disposer, bag: DisposerBag) =>
   (entry: T): Disposer => {
     const dispose = register(entry);
     bag.add(dispose);
-    return dispose;
+    return () => {
+      dispose();
+      bag.delete(dispose);
+    };
   };
+
+function subscribeToLanguage(listener: () => void): Disposer {
+  const handleLanguageChanged = () => listener();
+  i18n.on("languageChanged", handleLanguageChanged);
+  return () => i18n.off("languageChanged", handleLanguageChanged);
+}
 
 /** The `ctx` object handed to a plugin's `activate()`. */
 export function buildPluginContext({
@@ -77,17 +92,24 @@ export function buildPluginContext({
     rehypePlugins,
     fencedRenderers,
     sidebarPanels,
+    fileTreeFilters,
     settingsPanels,
     styles,
     exporters,
     siteThemes,
   } = registries;
+  const permissions = plugin.permissions ?? [];
+  const workspace = createWorkspaceApi(getWorkspaceRoot, permissions);
+  const vault = createVaultApi(getWorkspaceRoot, permissions);
   return {
     apiVersion: PLUGIN_API_VERSION,
     commands: { register: tracked(commands.register, bag) },
     ui: {
       addStatusBarItem: tracked(statusBarItems.register, bag),
-      addSidebarPanel: tracked(sidebarPanels.register, bag),
+      addSidebarPanel(panel) {
+        return tracked(sidebarPanels.register, bag)({ ...panel, pluginId: plugin.id });
+      },
+      filterFileTree: tracked(fileTreeFilters.register, bag),
       addSettingsPanel(panel) {
         return tracked(settingsPanels.register, bag)({ ...panel, pluginId: plugin.id });
       },
@@ -109,8 +131,21 @@ export function buildPluginContext({
         };
       },
     },
-    documents: { registerFileType: tracked(registerFileType, bag) },
-    workspace: createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? []),
+    documents: {
+      registerFileType: tracked(registerFileType, bag),
+      getActive() {
+        const active = pluginAppState().activeDocument;
+        if (!active) return null;
+        return { ...active, selection: window.getSelection()?.toString() ?? "" };
+      },
+      onActiveChange: tracked(
+        (listener) => onPluginAppStateChange("activeDocument", listener),
+        bag,
+      ),
+    },
+    workspace: { ...workspace, onChange: tracked(workspace.onChange, bag) },
+    vault: { ...vault, onChange: tracked(vault.onChange, bag) },
+    navigation: createNavigationApi(getWorkspaceRoot),
     assets: createAssetsApi(plugin.id),
     exporters: {
       register: tracked(exporters.register, bag),
@@ -129,18 +164,7 @@ export function buildPluginContext({
     },
     i18n: {
       t: (key, values) => i18n.t(key, values ?? {}),
-      onLanguageChange(listener) {
-        const handleLanguageChanged = () => listener();
-        i18n.on("languageChanged", handleLanguageChanged);
-        const unsubscribe = () => i18n.off("languageChanged", handleLanguageChanged);
-        bag.add(unsubscribe);
-        // Renderers subscribe on every mount, so an early dispose must also
-        // leave the bag, or each remount would pin its closure until unload.
-        return () => {
-          unsubscribe();
-          bag.delete(unsubscribe);
-        };
-      },
+      onLanguageChange: tracked(subscribeToLanguage, bag),
     },
     notify,
     registerTranslations,

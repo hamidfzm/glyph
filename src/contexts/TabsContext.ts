@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext } from "react";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { useTabs } from "@/hooks/useTabs";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
-import { type Backlink, EMPTY_SNAPSHOT, type VaultSnapshot } from "@/lib/vault";
+import { EMPTY_SNAPSHOT, type VaultSnapshot } from "@/lib/vault";
 
 // Context + hooks for the tabs/workspace state. Kept in a component-free module
 // so the provider file stays Fast-Refresh-eligible (a file that exports a
@@ -16,7 +16,6 @@ export interface TabsContextValue extends TabsApi {
   // edit/split renders the in-memory editContent so preview reflects typing.
   displayContent: string | null;
   tocEntries: TocEntry[];
-  backlinks: Backlink[];
   // Notice shown for a workspace event (#262): a refusal, or a persistent
   // warning when a folder is opened inside a parent git repo. A translation
   // key + values so the banner re-localizes live (see WorkspaceNoticeBanner).

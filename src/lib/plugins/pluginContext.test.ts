@@ -1,32 +1,51 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { EMPTY_SNAPSHOT } from "@/lib/vault";
 import { installed } from "@/test/fixtures/pluginHost";
+import { type PluginAppState, setPluginAppState } from "./appState";
 import { DisposerBag } from "./disposer";
-import { buildPluginContext } from "./pluginContext";
+import { setPluginFileOpener } from "./navigationApi";
+import { buildPluginContext, type ContextRegistries } from "./pluginContext";
 import { createRegistry } from "./registry";
 
-function context(bag: DisposerBag) {
+const IDLE: PluginAppState = {
+  workspaceRoot: null,
+  activeDocument: null,
+  snapshot: EMPTY_SNAPSHOT,
+};
+
+function registries(): ContextRegistries {
+  return {
+    commands: createRegistry(),
+    statusBarItems: createRegistry(),
+    remarkPlugins: createRegistry(),
+    rehypePlugins: createRegistry(),
+    fencedRenderers: createRegistry(),
+    sidebarPanels: createRegistry(),
+    fileTreeFilters: createRegistry(),
+    settingsPanels: createRegistry(),
+    styles: createRegistry(),
+    exporters: createRegistry(),
+    siteThemes: createRegistry(),
+  };
+}
+
+function context(bag: DisposerBag, into: ContextRegistries = registries()) {
   return buildPluginContext({
-    registries: {
-      commands: createRegistry(),
-      statusBarItems: createRegistry(),
-      remarkPlugins: createRegistry(),
-      rehypePlugins: createRegistry(),
-      fencedRenderers: createRegistry(),
-      sidebarPanels: createRegistry(),
-      settingsPanels: createRegistry(),
-      styles: createRegistry(),
-      exporters: createRegistry(),
-      siteThemes: createRegistry(),
-    },
+    registries: into,
     bag,
-    plugin: installed(),
+    plugin: installed({ permissions: ["workspace:read"] }),
     settings: {},
     notify: vi.fn(),
     registerTranslations: vi.fn(),
-    getWorkspaceRoot: () => null,
+    getWorkspaceRoot: () => "/ws",
     settingsBackend: { load: async () => ({}), save: vi.fn() },
   });
 }
+
+beforeEach(() => {
+  setPluginAppState(IDLE);
+  setPluginFileOpener(null);
+});
 
 describe("buildPluginContext i18n", () => {
   it("drops an early-disposed language listener from the plugin's bag", () => {
@@ -39,5 +58,110 @@ describe("buildPluginContext i18n", () => {
 
     ctx.i18n.onLanguageChange(() => {});
     expect(bag.size).toBe(1);
+  });
+});
+
+describe("buildPluginContext sidebar", () => {
+  it("stamps a sidebar panel with the plugin that added it", () => {
+    const into = registries();
+    const ctx = context(new DisposerBag(), into);
+    ctx.ui.addSidebarPanel({ id: "links", title: "Links", location: "files", mount: () => {} });
+    expect(into.sidebarPanels.list()).toEqual([
+      expect.objectContaining({ id: "links", location: "files", pluginId: "com.x.demo" }),
+    ]);
+  });
+
+  it("removes a file tree filter when disposed, and any left at unload", () => {
+    const into = registries();
+    const bag = new DisposerBag();
+    const ctx = context(bag, into);
+    const filter = { label: "#work (1)", paths: ["/ws/a.md"], onClear: vi.fn() };
+
+    ctx.ui.filterFileTree(filter)();
+    expect(into.fileTreeFilters.list()).toEqual([]);
+    expect(bag.size).toBe(0);
+
+    ctx.ui.filterFileTree(filter);
+    expect(into.fileTreeFilters.list()).toEqual([filter]);
+    bag.dispose();
+    expect(into.fileTreeFilters.list()).toEqual([]);
+  });
+});
+
+describe("buildPluginContext app state", () => {
+  it("reports no active document until a tab shows one", () => {
+    const ctx = context(new DisposerBag());
+    expect(ctx.documents.getActive()).toBeNull();
+  });
+
+  it("hands over the active document with the window's selection", () => {
+    const selection = vi
+      .spyOn(window, "getSelection")
+      .mockReturnValue({ toString: () => "picked" } as Selection);
+    setPluginAppState({ ...IDLE, activeDocument: { path: "/ws/a.md", text: "# A" } });
+    const ctx = context(new DisposerBag());
+
+    expect(ctx.documents.getActive()).toEqual({
+      path: "/ws/a.md",
+      text: "# A",
+      selection: "picked",
+    });
+    selection.mockRestore();
+  });
+
+  it("reports an empty selection when the window has none", () => {
+    const selection = vi.spyOn(window, "getSelection").mockReturnValue(null);
+    setPluginAppState({ ...IDLE, activeDocument: { path: "/ws/a.md", text: "" } });
+    expect(context(new DisposerBag()).documents.getActive()?.selection).toBe("");
+    selection.mockRestore();
+  });
+
+  it("tells a plugin when another document becomes active, not when its text changes", () => {
+    const ctx = context(new DisposerBag());
+    const listener = vi.fn();
+    ctx.documents.onActiveChange(listener);
+
+    setPluginAppState({ ...IDLE, activeDocument: { path: "/ws/a.md", text: "a" } });
+    setPluginAppState({ ...IDLE, activeDocument: { path: "/ws/a.md", text: "ab" } });
+    expect(listener).toHaveBeenCalledOnce();
+
+    setPluginAppState(IDLE);
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops every app state listener when the plugin unloads", () => {
+    const bag = new DisposerBag();
+    const ctx = context(bag);
+    const listener = vi.fn();
+    ctx.documents.onActiveChange(listener);
+    ctx.workspace.onChange(listener);
+    ctx.vault.onChange(listener);
+
+    bag.dispose();
+    setPluginAppState({
+      workspaceRoot: "/other",
+      activeDocument: { path: "/other/a.md", text: "" },
+      snapshot: { ...EMPTY_SNAPSHOT },
+    });
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("drops an early-disposed app state listener from the bag", () => {
+    const bag = new DisposerBag();
+    const ctx = context(bag);
+    const listener = vi.fn();
+    ctx.vault.onChange(listener)();
+    ctx.workspace.onChange(listener)();
+    expect(bag.size).toBe(0);
+
+    setPluginAppState({ ...IDLE, workspaceRoot: "/other", snapshot: { ...EMPTY_SNAPSHOT } });
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("opens a workspace file through the app", () => {
+    const open = vi.fn();
+    setPluginFileOpener(open);
+    context(new DisposerBag()).navigation.openFile("/ws/a.md", { line: 3 });
+    expect(open).toHaveBeenCalledExactlyOnceWith("/ws/a.md", 3);
   });
 });

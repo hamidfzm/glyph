@@ -11,13 +11,14 @@ import type {
   CommandContribution,
   ExporterContribution,
   FencedRendererContribution,
+  FileTreeFilter,
   GlyphPluginContext,
   InstalledPlugin,
   MarkdownPlugin,
   PluginModule,
   RehypeContribution,
   SettingsPanelContribution,
-  SidebarPanelContribution,
+  SidebarPanelEntry,
   SiteThemeContribution,
   StatusBarItemContribution,
   StyleContribution,
@@ -57,7 +58,9 @@ export interface PluginHost {
   /** Fenced code-block renderers contributed by loaded plugins. */
   readonly fencedRenderers: Registry<FencedRendererContribution>;
   /** Titled sidebar sections contributed by loaded plugins. */
-  readonly sidebarPanels: Registry<SidebarPanelContribution>;
+  readonly sidebarPanels: Registry<SidebarPanelEntry>;
+  /** File lists plugins show in place of the file tree; the newest wins. */
+  readonly fileTreeFilters: Registry<FileTreeFilter>;
   /** Per-plugin settings UIs, shown under each row in the Settings Plugins tab. */
   readonly settingsPanels: Registry<SettingsPanelContribution>;
   /** Stylesheets contributed by loaded plugins, injected after app styles. */
@@ -111,7 +114,8 @@ export function createPluginHost(
   const remarkPlugins = createRegistry<MarkdownPlugin>();
   const rehypePlugins = createRegistry<RehypeContribution>();
   const fencedRenderers = createRegistry<FencedRendererContribution>();
-  const sidebarPanels = createRegistry<SidebarPanelContribution>();
+  const sidebarPanels = createRegistry<SidebarPanelEntry>();
+  const fileTreeFilters = createRegistry<FileTreeFilter>();
   const settingsPanels = createRegistry<SettingsPanelContribution>();
   const styles = createRegistry<StyleContribution>();
   const exporters = createRegistry<ExporterContribution>();
@@ -124,6 +128,7 @@ export function createPluginHost(
     rehypePlugins,
     fencedRenderers,
     sidebarPanels,
+    fileTreeFilters,
     settingsPanels,
     styles,
     exporters,
@@ -163,6 +168,7 @@ export function createPluginHost(
     rehypePlugins,
     fencedRenderers,
     sidebarPanels,
+    fileTreeFilters,
     settingsPanels,
     styles,
     exporters,

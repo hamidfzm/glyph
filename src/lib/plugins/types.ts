@@ -1,9 +1,11 @@
 import type { ComponentType } from "react";
 import type { Options } from "react-markdown";
 import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
+import type { Backlink, GraphEdge, GraphNode, TagCount } from "@/lib/vault";
 import type { Disposer } from "./disposer";
 
 export type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
+export type { Backlink, GraphEdge, GraphNode, TagCount } from "@/lib/vault";
 export type { Disposer } from "./disposer";
 
 /** Capability a plugin requests; surfaced for user consent before enabling. */
@@ -108,7 +110,8 @@ export interface PluginManifest {
    * get no DOM and network fenced to their `network:` permissions, but only
    * the non-UI API subset: commands, styles, exporters, file types, workspace,
    * assets, spellcheck, settings, notify, and registering translations. No
-   * markdown pipeline, panel mounts, or reading translations.
+   * markdown pipeline, panel mounts, app state (the active document, the
+   * vault, navigation), or reading translations.
    *
    * Absent defaults to `true`: isolation is the default, and only an explicit
    * `false` opts into full trust, which needs a distinct user grant.
@@ -193,6 +196,37 @@ export interface StyleContribution {
 export interface SidebarPanelContribution extends MountContribution {
   /** Section heading shown above the panel in the sidebar. */
   title: string;
+  /**
+   * 0.26.0: `"files"` puts the panel in the Files panel, below the tree, as a
+   * block the user can collapse and resize, whether or not the note has
+   * headings. Absent or `"outline"` keeps it below the outline.
+   */
+  location?: "outline" | "files";
+  /**
+   * 0.26.0: height bounds of a `files` block in pixels: the smallest the
+   * divider allows, and how far the block grows on its own before it scrolls.
+   */
+  frame?: { min: number; naturalMax?: number };
+  /**
+   * 0.26.0: fills the heading of a `files` block after its title (a count, a
+   * button). While the block is collapsed its element carries `data-collapsed`.
+   */
+  mountHeading?: MountContribution["mount"];
+}
+
+/** A sidebar panel as the host holds it, stamped with the plugin that added it. */
+export interface SidebarPanelEntry extends SidebarPanelContribution {
+  pluginId: string;
+}
+
+/** 0.26.0: a list of workspace files shown in place of the file tree. */
+export interface FileTreeFilter {
+  /** Heading above the list, e.g. `#project (3)`. */
+  label: string;
+  /** Absolute paths, in the order to list them. */
+  paths: readonly string[];
+  /** The user dismissed the list; dispose the filter. */
+  onClear: () => void;
 }
 
 /**
@@ -236,6 +270,12 @@ export interface UiRegistryApi {
   /** One settings panel per plugin; the host keys it by the plugin's id. Not
    *  available to sandboxed plugins; see {@link addStatusBarItem}. */
   addSettingsPanel(panel: MountContribution): Disposer;
+  /**
+   * 0.26.0: list `paths` in place of the file tree until the returned disposer
+   * runs. One filter shows at a time, the newest. Not available to sandboxed
+   * plugins.
+   */
+  filterFileTree(filter: FileTreeFilter): Disposer;
   /**
    * Inject a stylesheet after the app styles (theme plugins, custom CSS).
    * Removed automatically when the plugin unloads.
@@ -317,9 +357,57 @@ export interface I18nApi {
   onLanguageChange(listener: () => void): Disposer;
 }
 
+/** 0.26.0: the document in the active tab. */
+export interface ActiveDocument {
+  /** Absolute path. */
+  path: string;
+  /** Its text, unsaved edits included; null while it loads or when it has none (an image). */
+  text: string | null;
+  /** The text the user has selected in the window, empty when none. */
+  selection: string;
+}
+
 export interface DocumentsRegistryApi {
   /** Open files with these extensions as one fenced block; see {@link FileTypeContribution}. */
   registerFileType(fileType: FileTypeContribution): Disposer;
+  /**
+   * 0.26.0: the active document, or null when no document tab is active. Not
+   * available to sandboxed plugins.
+   */
+  getActive(): ActiveDocument | null;
+  /**
+   * 0.26.0: run `listener` when another document becomes active, or none.
+   * Typing in the active one does not count. Not available to sandboxed plugins.
+   */
+  onActiveChange(listener: () => void): Disposer;
+}
+
+/**
+ * 0.26.0: read-only queries over the workspace index. Requires the
+ * `workspace:read` permission; paths are absolute. Not available to sandboxed
+ * plugins.
+ */
+export interface VaultApi {
+  /** Every indexed note and the resolved links between them. */
+  graph(): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }>;
+  /** Inbound links to the note at `path`. */
+  backlinks(path: string): Promise<Backlink[]>;
+  /** Every tag with the number of files carrying it or a tag nested under it. */
+  tags(): Promise<TagCount[]>;
+  /** Files carrying `tag` or a tag nested under it. */
+  pathsWithTag(tag: string): Promise<string[]>;
+  /** Run `listener` after the index changes: an edit, a rename, another workspace. */
+  onChange(listener: () => void): Disposer;
+}
+
+/** 0.26.0: move the app to a document. Not available to sandboxed plugins. */
+export interface NavigationApi {
+  /**
+   * Open a workspace file in a tab, or switch to its tab. `path` is absolute
+   * or relative to the workspace root; `line` (1-based) scrolls to that source
+   * line once the document has rendered.
+   */
+  openFile(path: string, options?: { line?: number }): void;
 }
 
 /**
@@ -338,6 +426,16 @@ export interface WorkspaceApi {
   readFile(path: string): Promise<string>;
   /** List the workspace's markdown files (absolute paths). */
   listFiles(): Promise<string[]>;
+  /**
+   * 0.26.0: absolute path of the opened workspace, or null when none is open.
+   * Not available to sandboxed plugins.
+   */
+  getRoot(): string | null;
+  /**
+   * 0.26.0: run `listener` when the workspace opens, closes, or changes. Not
+   * available to sandboxed plugins.
+   */
+  onChange(listener: () => void): Disposer;
 }
 
 /**
@@ -357,6 +455,8 @@ export interface GlyphPluginContext {
   readonly markdown: MarkdownRegistryApi;
   readonly documents: DocumentsRegistryApi;
   readonly workspace: WorkspaceApi;
+  readonly vault: VaultApi;
+  readonly navigation: NavigationApi;
   readonly assets: AssetsApi;
   readonly exporters: ExportersRegistryApi;
   readonly spellcheck: SpellcheckRegistryApi;

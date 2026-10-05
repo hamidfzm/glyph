@@ -121,6 +121,55 @@ describe("migrateLegacySettings", () => {
     expect(migrateLegacySettings(saved)).toBe(saved);
   });
 
+  it("moves the backlinks and tags layout into the Files panel blocks", () => {
+    const migrated = migrateLegacySettings({
+      layout: {
+        filesSidebarVisible: true,
+        backlinksHeight: 150,
+        backlinksCollapsed: false,
+        tagsHeight: null,
+        tagsCollapsed: true,
+      },
+    });
+    expect(migrated.layout).toEqual({
+      filesSidebarVisible: true,
+      blocks: {
+        "glyph.core.backlinks:backlinks": { height: 150, collapsed: false },
+        "glyph.core.tags:tags": { height: null, collapsed: true },
+      },
+    });
+    expect(migrateLegacySettings(migrated)).toBe(migrated);
+  });
+
+  it("migrates only the block whose legacy keys are present", () => {
+    const migrated = migrateLegacySettings({ layout: { tagsCollapsed: true } });
+    expect(migrated.layout).toEqual({
+      blocks: { "glyph.core.tags:tags": { height: null, collapsed: true } },
+    });
+  });
+
+  it("keeps a block layout the store already has, and still drops the legacy keys", () => {
+    const saved = { height: 90, collapsed: true };
+    const migrated = migrateLegacySettings({
+      layout: { backlinksHeight: 300, blocks: { "glyph.core.backlinks:backlinks": saved } },
+    });
+    expect(migrated.layout).toEqual({ blocks: { "glyph.core.backlinks:backlinks": saved } });
+  });
+
+  it("discards a legacy block layout of the wrong type instead of carrying it over", () => {
+    const migrated = migrateLegacySettings({
+      layout: { backlinksHeight: "tall", backlinksCollapsed: "yes", blocks: "corrupt" },
+    });
+    expect(migrated.layout).toEqual({
+      blocks: { "glyph.core.backlinks:backlinks": { height: null, collapsed: false } },
+    });
+  });
+
+  it("leaves a layout without the legacy block keys unchanged", () => {
+    const saved = { layout: { filesSidebarVisible: false, blocks: {} } };
+    expect(migrateLegacySettings(saved)).toBe(saved);
+  });
+
   it("applies the sidebar and spell-check migrations together", () => {
     const migrated = migrateLegacySettings({
       layout: { sidebarWidth: 200 },

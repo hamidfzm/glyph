@@ -2,7 +2,6 @@ import { type ReactNode, useMemo, useSyncExternalStore } from "react";
 import { RelinkConfirmModal } from "@/components/modals/RelinkConfirmModal";
 import { UnsavedChangesModal, type UnsavedChoice } from "@/components/modals/UnsavedChangesModal";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
-import { useBacklinks } from "@/hooks/useBacklinks";
 import { usePrompt } from "@/hooks/usePrompt";
 import { useSettings } from "@/hooks/useSettings";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
@@ -60,18 +59,16 @@ export function TabsProvider({ children }: { children: ReactNode }) {
     [activePath, liveContent, registeredFileTypes],
   );
   const tocEntries = useTableOfContents(tocContentFor(activePath, displayContent));
-  const backlinks = useBacklinks(tabs.workspace?.root, tabs.activeFile?.path, tabs.snapshot);
 
   const value = useMemo<TabsContextValue>(
     () => ({
       ...tabs,
       displayContent,
       tocEntries,
-      backlinks,
       workspaceNotice: workspaceNotice.notice,
       dismissWorkspaceNotice: workspaceNotice.dismiss,
     }),
-    [tabs, displayContent, tocEntries, backlinks, workspaceNotice.notice, workspaceNotice.dismiss],
+    [tabs, displayContent, tocEntries, workspaceNotice.notice, workspaceNotice.dismiss],
   );
 
   return (

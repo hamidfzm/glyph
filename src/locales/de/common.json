@@ -36,21 +36,9 @@
     "closeWorkspace": "Arbeitsbereich schließen",
     "outline": "Gliederung",
     "resize": "Größe der Seitenleiste ändern",
-    "resizeBacklinks": "Größe der Rückverweise ändern",
-    "resizeTags": "Größe der Tags ändern",
+    "resizeBlock": "Größe ändern: {{name}}",
+    "clearFilter": "Filter aufheben",
     "indexIncomplete": "Index unvollständig"
-  },
-  "backlinks": {
-    "heading": "Rückverweise",
-    "empty": "Keine Rückverweise"
-  },
-  "tags": {
-    "heading": "Tags",
-    "filterBy": "Nach #{{tag}} filtern",
-    "filtered": "#{{tag}} ({{total}})",
-    "clearFilter": "Tag-Filter aufheben",
-    "sortByCount": "Tags nach Anzahl sortieren",
-    "empty": "Keine Tags"
   },
   "tabBar": {
     "graphLabel": "Graph: {{name}}",

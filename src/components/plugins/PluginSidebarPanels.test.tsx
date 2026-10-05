@@ -1,43 +1,17 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
+import { PluginsContext } from "@/contexts/PluginsContext";
 import { createRegistry } from "@/lib/plugins/registry";
-import type {
-  CommandContribution,
-  ExporterContribution,
-  FencedRendererContribution,
-  MarkdownPlugin,
-  SettingsPanelContribution,
-  SidebarPanelContribution,
-  StatusBarItemContribution,
-  StyleContribution,
-} from "@/lib/plugins/types";
+import type { SidebarPanelEntry } from "@/lib/plugins/types";
+import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import { PluginSidebarPanels } from "./PluginSidebarPanels";
 
-function value(sidebarPanels = createRegistry<SidebarPanelContribution>()): PluginsContextValue {
-  return {
-    commands: createRegistry<CommandContribution>(),
-    statusBarItems: createRegistry<StatusBarItemContribution>(),
-    remarkPlugins: createRegistry<MarkdownPlugin>(),
-    rehypePlugins: createRegistry<MarkdownPlugin>(),
-    fencedRenderers: createRegistry<FencedRendererContribution>(),
-    sidebarPanels,
-    settingsPanels: createRegistry<SettingsPanelContribution>(),
-    styles: createRegistry<StyleContribution>(),
-    exporters: createRegistry<ExporterContribution>(),
-    siteThemes: createRegistry(),
-    installed: [],
-    disabled: [],
-    loaded: [],
-    registry: [],
-    updates: [],
-    installFromFolder: async () => {},
-    installFromRegistry: async () => {},
-    setEnabled: async () => {},
-    uninstall: async () => {},
-    setWorkspaceRoot: () => {},
-    initialLoadDone: true,
-  };
+function renderPanels(sidebarPanels = createRegistry<SidebarPanelEntry>()) {
+  return render(
+    <PluginsContext.Provider value={pluginsContextValue({ sidebarPanels })}>
+      <PluginSidebarPanels />
+    </PluginsContext.Provider>,
+  );
 }
 
 describe("PluginSidebarPanels", () => {
@@ -45,29 +19,33 @@ describe("PluginSidebarPanels", () => {
     const { container } = render(<PluginSidebarPanels />);
     expect(container.firstChild).toBeNull();
 
-    const { container: withProvider } = render(
-      <PluginsContext.Provider value={value()}>
-        <PluginSidebarPanels />
-      </PluginsContext.Provider>,
-    );
-    expect(withProvider.firstChild).toBeNull();
+    expect(renderPanels().container.firstChild).toBeNull();
   });
 
   it("renders a titled section per registered panel", () => {
-    const panels = createRegistry<SidebarPanelContribution>();
+    const panels = createRegistry<SidebarPanelEntry>();
     panels.register({
+      pluginId: "com.x.todo",
       id: "todo",
       title: "TODOs",
       mount: (el) => {
         el.textContent = "3 open";
       },
     });
-    render(
-      <PluginsContext.Provider value={value(panels)}>
-        <PluginSidebarPanels />
-      </PluginsContext.Provider>,
-    );
+    renderPanels(panels);
     expect(screen.getByText("TODOs")).toBeInTheDocument();
     expect(screen.getByText("3 open")).toBeInTheDocument();
+  });
+
+  it("leaves a panel placed in the Files panel to that panel", () => {
+    const panels = createRegistry<SidebarPanelEntry>();
+    panels.register({
+      pluginId: "com.x.links",
+      id: "links",
+      title: "Links",
+      location: "files",
+      mount: () => {},
+    });
+    expect(renderPanels(panels).container.firstChild).toBeNull();
   });
 });

@@ -1,20 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
 import type { RegistryEntry } from "@/lib/plugins/marketplace";
 import { createRegistry } from "@/lib/plugins/registry";
-import type {
-  CommandContribution,
-  ExporterContribution,
-  FencedRendererContribution,
-  InstalledPlugin,
-  MarkdownPlugin,
-  SettingsPanelContribution,
-  SidebarPanelContribution,
-  StatusBarItemContribution,
-  StyleContribution,
-} from "@/lib/plugins/types";
+import type { InstalledPlugin, SettingsPanelContribution } from "@/lib/plugins/types";
+import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import { PluginsTab } from "./PluginsTab";
 
 const installed: InstalledPlugin = {
@@ -39,30 +30,11 @@ const available: RegistryEntry = {
 };
 
 function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
-  return {
-    commands: createRegistry<CommandContribution>(),
-    statusBarItems: createRegistry<StatusBarItemContribution>(),
-    remarkPlugins: createRegistry<MarkdownPlugin>(),
-    rehypePlugins: createRegistry<MarkdownPlugin>(),
-    fencedRenderers: createRegistry<FencedRendererContribution>(),
-    sidebarPanels: createRegistry<SidebarPanelContribution>(),
-    settingsPanels: createRegistry<SettingsPanelContribution>(),
-    styles: createRegistry<StyleContribution>(),
-    exporters: createRegistry<ExporterContribution>(),
-    siteThemes: createRegistry(),
+  return pluginsContextValue({
     installed: [installed],
-    disabled: [],
-    loaded: [],
     registry: [available],
-    updates: [],
-    installFromFolder: vi.fn(async () => {}),
-    installFromRegistry: vi.fn(async () => {}),
-    setEnabled: vi.fn(async () => {}),
-    uninstall: vi.fn(async () => {}),
-    setWorkspaceRoot: vi.fn(),
-    initialLoadDone: true,
     ...over,
-  };
+  });
 }
 
 function renderTab(value: PluginsContextValue) {

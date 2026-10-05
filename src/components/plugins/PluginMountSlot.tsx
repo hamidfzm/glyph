@@ -9,7 +9,13 @@ import type { MountContribution } from "@/lib/plugins/types";
  * the contribution is replaced. A throwing mount is contained here so one bad
  * plugin can't take down the surrounding UI.
  */
-export function PluginMountSlot({ contribution }: { contribution: MountContribution }) {
+export function PluginMountSlot({
+  contribution,
+  className,
+}: {
+  contribution: MountContribution;
+  className?: string;
+}) {
   const ref = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -27,5 +33,5 @@ export function PluginMountSlot({ contribution }: { contribution: MountContribut
     };
   }, [contribution]);
 
-  return <span ref={ref} data-plugin-slot={contribution.id} />;
+  return <span ref={ref} className={className} data-plugin-slot={contribution.id} />;
 }

@@ -1,0 +1,7 @@
+{
+  "heading": "标签",
+  "filterBy": "按 #{{tag}} 筛选",
+  "filtered": "#{{tag}}（{{total}}）",
+  "sortByCount": "按数量排序标签",
+  "empty": "没有标签"
+}

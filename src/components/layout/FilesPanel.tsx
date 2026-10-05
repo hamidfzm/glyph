@@ -1,23 +1,23 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { CollapseAllIcon } from "@/components/icons/CollapseAllIcon";
 import { ExpandAllIcon } from "@/components/icons/ExpandAllIcon";
 import { NewFolderIcon } from "@/components/icons/NewFolderIcon";
 import { NewNoteIcon } from "@/components/icons/NewNoteIcon";
 import { TabCloseIcon } from "@/components/icons/TabCloseIcon";
+import { PluginFilesBlocks } from "@/components/plugins/PluginFilesBlocks";
+import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useSidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import { useTabsContext } from "@/contexts/TabsContext";
 import { useOpenInNewWindow } from "@/hooks/useOpenInNewWindow";
-import { useTaggedPaths } from "@/hooks/useTaggedPaths";
+import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { lastSegment } from "@/lib/paths";
 import { pickMoveDir } from "@/lib/pickers";
 import type { Workspace } from "@/lib/tabs";
-import { BacklinksBlock } from "./BacklinksBlock";
 import { FileTree, type FileTreeHandle } from "./FileTree";
+import { FilteredFileList } from "./FilteredFileList";
 import { PanelHeader } from "./PanelHeader";
-import { TagFileList } from "./TagFileList";
-import { TagsBlock } from "./TagsBlock";
 import { ToolbarButton } from "./ToolbarButton";
 import { WorkspaceIndexWarning } from "./WorkspaceIndexWarning";
 
@@ -27,13 +27,12 @@ interface FilesPanelProps {
   headerSide: "left" | "right";
 }
 
-/** The Files panel body: workspace toolbar, the tree (or a tag-filtered list),
- *  the tag cloud, and the resizable backlinks block. */
+/** The Files panel body: workspace toolbar, the tree (or the list a plugin
+ *  filters it to), and the resizable blocks plugins place below it. */
 export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
   const { t } = useTranslation("common");
   const {
     activeFile,
-    snapshot,
     toggleExpand,
     openFile,
     closeWorkspace,
@@ -50,15 +49,8 @@ export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
   const { compact, closeCompactPanels, toggleFiles } = useSidebarLayoutContext();
   const openInNewWindow = useOpenInNewWindow();
   const fileTreeRef = useRef<FileTreeHandle>(null);
-
-  // The filter carries the workspace it was picked in, and applies only while
-  // that tag still exists: a switched workspace or a tag edited away falls back
-  // to the tree instead of stranding the panel on a stale list.
-  const [tagFilter, setTagFilter] = useState<{ root: string; tag: string } | null>(null);
-  const tags = snapshot.tagCounts;
-  const selectedTag = tagFilter && tagFilter.root === workspace.root ? tagFilter.tag : null;
-  const activeTag = tags.some((tag) => tag.tag === selectedTag) ? selectedTag : null;
-  const taggedPaths = useTaggedPaths(workspace.root, activeTag, snapshot);
+  const filters = useRegistryEntries(usePluginsOptional()?.fileTreeFilters ?? null);
+  const filter = filters.at(-1);
 
   // On a phone the sidebar is a drawer over the document, so opening a file
   // dismisses it, otherwise the freshly opened doc stays hidden behind it.
@@ -88,9 +80,9 @@ export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
         collapseTitle={t("sidebar.hideFiles")}
         actions={
           <>
-            {/* Create and expand/collapse act on the tree, which the tag
-                filter replaces, so they only show alongside it. */}
-            {!activeTag && (
+            {/* Create and expand/collapse act on the tree, which a filter
+                replaces, so they only show alongside it. */}
+            {!filter && (
               <>
                 <ToolbarButton
                   title={t("sidebar.newNote")}
@@ -122,17 +114,17 @@ export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
         }
       />
       {/* The tree scrolls inside its own region so a long file list can't spill
-          over the backlinks block pinned below it (visible when the panel is
-          short, e.g. with devtools open). */}
+          over the blocks pinned below it (visible when the panel is short, e.g.
+          with devtools open). */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {activeTag ? (
-          <TagFileList
-            tag={activeTag}
-            paths={taggedPaths}
+        {filter ? (
+          <FilteredFileList
+            label={filter.label}
+            paths={filter.paths}
             workspaceRoot={workspace.root}
             activeFilePath={activeFile?.path}
             onOpen={handleOpenFile}
-            onClear={() => setTagFilter(null)}
+            onClear={filter.onClear}
           />
         ) : (
           <FileTree
@@ -158,13 +150,8 @@ export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
           />
         )}
       </div>
-      <TagsBlock
-        tags={tags}
-        selected={activeTag}
-        onSelect={(tag) => setTagFilter(tag ? { root: workspace.root, tag } : null)}
-      />
       <WorkspaceIndexWarning />
-      <BacklinksBlock workspaceRoot={workspace.root} onOpen={handleOpenFile} />
+      <PluginFilesBlocks />
     </div>
   );
 }
