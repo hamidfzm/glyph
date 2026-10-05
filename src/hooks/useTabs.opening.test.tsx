@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getCliExportRequest, resetCliExportRequestCache } from "@/lib/cliExport";
 import { defaultOptions, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
@@ -11,7 +12,10 @@ vi.mock("@/lib/pickers", () => ({
   pickNewWorkspace: vi.fn(),
 }));
 
-beforeEach(resetTabsMocks);
+beforeEach(() => {
+  resetTabsMocks();
+  resetCliExportRequestCache();
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -184,6 +188,32 @@ describe("useTabs opening documents", () => {
     expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/diagram.svg" });
     expect(invoke).not.toHaveBeenCalledWith("watch_file", { path: "/p/diagram.svg" });
     expect(invoke).toHaveBeenCalledWith("get_file_metadata", { path: "/p/diagram.svg" });
+  });
+
+  it("opens the document of a headless export in view mode", async () => {
+    // `glyph export notes.md --format pdf` snapshots the rendered viewer, and
+    // edit mode mounts only the editor: the export would wait out its render
+    // deadline and fail with nothing to export.
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        get_cli_export: async () => ({
+          input: "/p/notes.md",
+          format: "pdf",
+          output: "/p/notes.pdf",
+        }),
+        get_initial_file: async () => "/p/notes.md",
+      }) as typeof invoke,
+    );
+    await getCliExportRequest();
+
+    const { result } = renderHook(() =>
+      useTabs({ ...defaultOptions(), defaultEditorMode: "edit" }),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    expect(result.current.tabs).toHaveLength(1);
+    const tab = result.current.tabs[0];
+    expect(tab.kind === "file" ? tab.file.mode : null).toBe("view");
   });
 
   it("never marks a notebook tab dirty when toggled into edit mode", async () => {

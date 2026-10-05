@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { type Dispatch, type RefObject, type SetStateAction, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { isCanvasFile } from "@/lib/canvasExtensions";
+import { isCliExportProcess } from "@/lib/cliExport";
 import { D2_EXTENSIONS } from "@/lib/d2Extensions";
 import { loadFileContent } from "@/lib/documentContent";
 import { isImageFile } from "@/lib/imageExtensions";
@@ -159,11 +160,15 @@ export function useOpenDocument({
           return;
         }
         // Notebooks, canvases, images, and source documents open straight into
-        // the viewer regardless of the user's default editor mode.
-        const mode =
-          isImage || isNotebookFile(path) || isCanvasFile(path) || isSourceDocument(path)
-            ? EDITOR_MODE.view
-            : getDefaultEditorMode();
+        // the viewer regardless of the user's default editor mode. So does a
+        // headless export: it snapshots the viewer, which edit mode never mounts.
+        const opensInViewer =
+          isImage ||
+          isNotebookFile(path) ||
+          isCanvasFile(path) ||
+          isSourceDocument(path) ||
+          isCliExportProcess();
+        const mode = opensInViewer ? EDITOR_MODE.view : getDefaultEditorMode();
         const newTab: FileTab = {
           id,
           kind: "file",

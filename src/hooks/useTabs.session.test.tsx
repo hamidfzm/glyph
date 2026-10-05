@@ -380,9 +380,9 @@ describe("useTabs multi-window", () => {
   });
 
   it("a headless export leaves the saved session and recent files alone", async () => {
-    // `glyph export notes.md --format pdf` opens the document like any other tab, but
-    // it is a renderer, not a session: writing it back would replace the tabs
-    // the user has open in the interactive window it is racing.
+    // `glyph export notes.md --format pdf` opens the document as a tab, but it
+    // is a renderer, not a session: writing it back would replace the tabs the
+    // user has open in the interactive window it is racing.
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         get_cli_export: async () => ({

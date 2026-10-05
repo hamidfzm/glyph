@@ -33,11 +33,12 @@ export function getCliExportRequest(): Promise<CliExportRequest | null> {
 }
 
 /**
- * Whether this process is a headless export, for the paths that must not
- * write user state from one. A CLI export opens the exported document like any
- * other tab, and persisting that would replace the user's saved session and
- * recent files with the exported file, racing the interactive window they
- * already have open.
+ * Whether this process is a headless export, for the paths that must treat
+ * its document differently. A CLI export opens the exported document as a
+ * tab. It opens in view mode, because the export snapshots the rendered
+ * viewer, and it must not be persisted: that would replace the user's saved
+ * session and recent files with the exported file, racing the interactive
+ * window they already have open.
  *
  * Answers false until the probe resolves, which happens on mount, well before
  * a document is opened (that needs its own IPC round trips).
