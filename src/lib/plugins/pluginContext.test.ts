@@ -29,7 +29,11 @@ function registries(): ContextRegistries {
   };
 }
 
-function context(bag: DisposerBag, into: ContextRegistries = registries()) {
+function context(
+  bag: DisposerBag,
+  into: ContextRegistries = registries(),
+  root: string | null = "/ws",
+) {
   return buildPluginContext({
     registries: into,
     bag,
@@ -37,7 +41,7 @@ function context(bag: DisposerBag, into: ContextRegistries = registries()) {
     settings: {},
     notify: vi.fn(),
     registerTranslations: vi.fn(),
-    getWorkspaceRoot: () => "/ws",
+    getWorkspaceRoot: () => root,
     settingsBackend: { load: async () => ({}), save: vi.fn() },
   });
 }
@@ -71,6 +75,31 @@ describe("buildPluginContext sidebar", () => {
     ]);
   });
 
+  // The divider computes with these; NaN or a negative height breaks the block.
+  it.each([
+    ["a NaN minimum", { min: Number.NaN }],
+    ["a negative minimum", { min: -1 }],
+    ["an infinite minimum", { min: Number.POSITIVE_INFINITY }],
+    ["a minimum that is not a number", { min: "80" }],
+    ["a NaN natural maximum", { min: 80, naturalMax: Number.NaN }],
+    ["a negative natural maximum", { min: 80, naturalMax: -160 }],
+  ])("refuses a sidebar panel whose frame has %s", (_case, frame) => {
+    const into = registries();
+    const ctx = context(new DisposerBag(), into);
+    const panel = { id: "links", title: "Links", location: "files", mount: () => {}, frame };
+    expect(() => ctx.ui.addSidebarPanel(panel as never)).toThrow(/frame/);
+    expect(into.sidebarPanels.list()).toEqual([]);
+  });
+
+  it("accepts a sidebar panel with a usable frame, or none", () => {
+    const into = registries();
+    const ctx = context(new DisposerBag(), into);
+    const panel = { id: "links", title: "Links", mount: () => {} };
+    ctx.ui.addSidebarPanel({ ...panel, location: "files", frame: { min: 0, naturalMax: 160 } });
+    ctx.ui.addSidebarPanel({ ...panel, id: "plain" });
+    expect(into.sidebarPanels.list().map((entry) => entry.id)).toEqual(["links", "plain"]);
+  });
+
   it("removes a file tree filter when disposed, and any left at unload", () => {
     const into = registries();
     const bag = new DisposerBag();
@@ -100,6 +129,40 @@ describe("buildPluginContext sidebar", () => {
     const ctx = context(new DisposerBag(), into);
     expect(() => ctx.ui.filterFileTree(filter as never)).toThrow(/file tree filter/);
     expect(into.fileTreeFilters.list()).toEqual([]);
+  });
+
+  // The host opens whatever a filter lists, so the list is held to the same
+  // workspace as navigation.openFile.
+  it.each([
+    ["an absolute path outside the workspace", "/home/me/.ssh/config"],
+    ["a sibling folder sharing the prefix", "/ws-other/a.md"],
+    ["a relative path climbing out", "../outside.md"],
+    ["an absolute path climbing out", "/ws/../etc/passwd"],
+    ["the workspace root itself", "/ws"],
+  ])("refuses a file tree filter listing %s", (_case, outsider) => {
+    const into = registries();
+    const ctx = context(new DisposerBag(), into);
+    const filter = { label: "x", paths: ["/ws/a.md", outsider], onClear: vi.fn() };
+    expect(() => ctx.ui.filterFileTree(filter)).toThrow(/outside the workspace/);
+    expect(into.fileTreeFilters.list()).toEqual([]);
+  });
+
+  it("refuses a file tree filter while no workspace is open", () => {
+    const into = registries();
+    const ctx = context(new DisposerBag(), into, null);
+    const filter = { label: "x", paths: ["a.md"], onClear: vi.fn() };
+    expect(() => ctx.ui.filterFileTree(filter)).toThrow(/no workspace/);
+    expect(into.fileTreeFilters.list()).toEqual([]);
+  });
+
+  it("lists a filter's files by the one path the tabs know each by", () => {
+    const into = registries();
+    context(new DisposerBag(), into).ui.filterFileTree({
+      label: "x",
+      paths: ["notes/a.md", "/ws//notes/./b.md"],
+      onClear: vi.fn(),
+    });
+    expect(into.fileTreeFilters.list()[0].paths).toEqual(["/ws/notes/a.md", "/ws/notes/b.md"]);
   });
 
   it("keeps its own copy of a filter's paths", () => {

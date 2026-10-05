@@ -19,6 +19,7 @@ import type {
   MarkdownPlugin,
   RehypeContribution,
   SettingsPanelContribution,
+  SidebarPanelContribution,
   SidebarPanelEntry,
   SiteThemeContribution,
   StatusBarItemContribution,
@@ -26,6 +27,7 @@ import type {
 } from "./types";
 import { createVaultApi } from "./vaultApi";
 import { createWorkspaceApi } from "./workspaceApi";
+import { resolveWorkspacePath } from "./workspacePath";
 
 /** The contribution registries a plugin context writes into. */
 export interface ContextRegistries {
@@ -68,14 +70,39 @@ export const tracked =
     };
   };
 
-/** The Files panel renders a filter as given, so a malformed one is refused here. */
-function checkedFileTreeFilter(filter: FileTreeFilter): FileTreeFilter {
+/**
+ * The Files panel renders a filter as given and opens the file a user clicks,
+ * so a malformed one is refused here, and its paths are confined to the
+ * workspace the way `navigation.openFile` confines its own.
+ */
+function checkedFileTreeFilter(filter: FileTreeFilter, root: string | null): FileTreeFilter {
   const { label, paths, onClear } = filter ?? {};
   const hasPaths = Array.isArray(paths) && paths.every((path) => typeof path === "string");
   if (typeof label !== "string" || !hasPaths || typeof onClear !== "function") {
     throw new Error("a file tree filter needs a label, a list of paths, and an onClear function");
   }
-  return { label, paths: [...paths], onClear };
+  if (!root) throw new Error("no workspace is open");
+  const confined = paths.map((path) => {
+    const resolved = resolveWorkspacePath(root, path);
+    if (!resolved) throw new Error(`path is outside the workspace: ${path}`);
+    return resolved;
+  });
+  return { label, paths: confined, onClear };
+}
+
+function isHeight(value: unknown): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/** A frame the divider cannot work with (`NaN`, a negative height) is refused. */
+function checkedSidebarPanel(panel: SidebarPanelContribution): SidebarPanelContribution {
+  const frame = panel.frame;
+  if (frame === undefined) return panel;
+  const hasNaturalMax = frame.naturalMax === undefined || isHeight(frame.naturalMax);
+  if (!isHeight(frame.min) || !hasNaturalMax) {
+    throw new Error("a sidebar panel frame needs finite, non-negative heights");
+  }
+  return panel;
 }
 
 function subscribeToLanguage(listener: () => void): Disposer {
@@ -117,10 +144,12 @@ export function buildPluginContext({
     ui: {
       addStatusBarItem: tracked(statusBarItems.register, bag),
       addSidebarPanel(panel) {
-        return tracked(sidebarPanels.register, bag)({ ...panel, pluginId: plugin.id });
+        const entry = { ...checkedSidebarPanel(panel), pluginId: plugin.id };
+        return tracked(sidebarPanels.register, bag)(entry);
       },
       filterFileTree(filter) {
-        return tracked(fileTreeFilters.register, bag)(checkedFileTreeFilter(filter));
+        const checked = checkedFileTreeFilter(filter, getWorkspaceRoot());
+        return tracked(fileTreeFilters.register, bag)(checked);
       },
       addSettingsPanel(panel) {
         return tracked(settingsPanels.register, bag)({ ...panel, pluginId: plugin.id });

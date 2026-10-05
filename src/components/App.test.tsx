@@ -31,11 +31,18 @@ vi.mock("./ai/AIChatPanel", () => ({
   AIChatPanel: ({ open }: { open: boolean }) => (open ? <div data-testid="ai-panel" /> : null),
 }));
 
+// Only the jump itself is stubbed: the mocked viewer renders no lines to land on.
+vi.mock("@/lib/documentHighlight", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/documentHighlight")>()),
+  locateLineInDocument: vi.fn(() => true),
+}));
+
 // Mocked so a test can drive the in-progress-export state (the real hook never
 // sets it here — the mocked viewer renders no `.markdown-body` to export).
 vi.mock("@/hooks/useExport", () => ({ useExport: vi.fn() }));
 
 import { type ExportHandlers, useExport } from "@/hooks/useExport";
+import { locateLineInDocument } from "@/lib/documentHighlight";
 import { App } from "./App";
 
 const IDLE_EXPORTERS: ExportHandlers = {
@@ -107,13 +114,10 @@ function mockWorkspaceLaunch(
           nestedUnder: null,
           glyphConflict: null,
         });
-      case "get_file_metadata":
-        return Promise.resolve({
-          name: "a.md",
-          path: String(args?.path ?? ""),
-          size: 0,
-          modified: 0,
-        });
+      case "get_file_metadata": {
+        const path = String(args?.path ?? "");
+        return Promise.resolve({ name: path.split("/").pop(), path, size: 0, modified: 0 });
+      }
       default:
         return Promise.resolve(undefined);
     }
@@ -384,6 +388,22 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));
     await waitFor(() => expect(screen.queryByText("#work (1)")).not.toBeInTheDocument());
+  });
+
+  it("opens a backlink's note at the line the link is on", async () => {
+    mockWorkspaceLaunch({
+      snapshot: vaultSnapshot(["/workspace/a.md", "/workspace/b.md"]),
+      backlinks: [{ source: "/workspace/b.md", line: 12, snippet: "see the first note" }],
+    });
+    const { wrapper } = withProviders();
+    const { container } = render(<App />, { wrapper });
+
+    fireEvent.click(await screen.findByText("see the first note"));
+    await waitFor(() => {
+      const tabs = [...container.querySelectorAll('[data-tab-kind="file"]')];
+      expect(tabs.map((tab) => tab.textContent).join(" ")).toContain("b.md");
+    });
+    await waitFor(() => expect(locateLineInDocument).toHaveBeenCalledWith(12));
   });
 
   it("leaves a core plugin's block out of the Files panel while it is switched off", async () => {
