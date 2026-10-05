@@ -145,6 +145,7 @@ function buildContext(init) {
       addStatusBarItem: sandboxUnavailable("ui.addStatusBarItem"),
       addSidebarPanel: sandboxUnavailable("ui.addSidebarPanel"),
       addSettingsPanel: sandboxUnavailable("ui.addSettingsPanel"),
+      // No element involved, but it drives the app's own Files panel.
       filterFileTree: sandboxUnavailable("ui.filterFileTree", APP_CONTEXT_ONLY),
     },
     exporters: {
@@ -197,6 +198,7 @@ function buildContext(init) {
       backlinks: sandboxUnavailable("vault.backlinks", APP_CONTEXT_ONLY),
       tags: sandboxUnavailable("vault.tags", APP_CONTEXT_ONLY),
       pathsWithTag: sandboxUnavailable("vault.pathsWithTag", APP_CONTEXT_ONLY),
+      status: sandboxUnavailable("vault.status", APP_CONTEXT_ONLY),
       onChange: sandboxUnavailable("vault.onChange", APP_CONTEXT_ONLY),
     },
     navigation: {

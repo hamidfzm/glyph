@@ -75,7 +75,10 @@ function migrateFilesBlocks(saved: Record<string, unknown>): Record<string, unkn
   const legacy = LEGACY_FILES_BLOCKS.filter(
     (block) => block.height in layout || block.collapsed in layout,
   );
-  if (legacy.length === 0) return saved;
+  // The consumers index into the map, so a corrupt store value is discarded
+  // here (the default then applies) rather than crashing the Files panel.
+  const corrupt = "blocks" in layout && !isSafePlainObject(layout.blocks);
+  if (legacy.length === 0 && !corrupt) return saved;
 
   const rest = { ...layout };
   const blocks = isSafePlainObject(rest.blocks) ? { ...rest.blocks } : {};

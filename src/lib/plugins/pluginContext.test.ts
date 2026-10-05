@@ -86,6 +86,29 @@ describe("buildPluginContext sidebar", () => {
     bag.dispose();
     expect(into.fileTreeFilters.list()).toEqual([]);
   });
+
+  // The Files panel renders a filter as given; a malformed one from an
+  // untyped plugin would take the panel down with it.
+  it.each([
+    ["no paths", { label: "x", onClear: () => {} }],
+    ["paths that are not strings", { label: "x", paths: [1, 2], onClear: () => {} }],
+    ["no label", { paths: [], onClear: () => {} }],
+    ["no onClear", { label: "x", paths: [] }],
+    ["nothing at all", undefined],
+  ])("refuses a file tree filter with %s", (_case, filter) => {
+    const into = registries();
+    const ctx = context(new DisposerBag(), into);
+    expect(() => ctx.ui.filterFileTree(filter as never)).toThrow(/file tree filter/);
+    expect(into.fileTreeFilters.list()).toEqual([]);
+  });
+
+  it("keeps its own copy of a filter's paths", () => {
+    const into = registries();
+    const paths = ["/ws/a.md"];
+    context(new DisposerBag(), into).ui.filterFileTree({ label: "x", paths, onClear: vi.fn() });
+    paths.push("/ws/b.md");
+    expect(into.fileTreeFilters.list()[0].paths).toEqual(["/ws/a.md"]);
+  });
 });
 
 describe("buildPluginContext app state", () => {
@@ -106,6 +129,16 @@ describe("buildPluginContext app state", () => {
       text: "# A",
       selection: "picked",
     });
+    selection.mockRestore();
+  });
+
+  // Most callers want the path; serializing a long selection is not free.
+  it("reads the selection only when it is asked for", () => {
+    const selection = vi.spyOn(window, "getSelection");
+    setPluginAppState({ ...IDLE, activeDocument: { path: "/ws/a.md", text: "# A" } });
+
+    expect(context(new DisposerBag()).documents.getActive()?.path).toBe("/ws/a.md");
+    expect(selection).not.toHaveBeenCalled();
     selection.mockRestore();
   });
 

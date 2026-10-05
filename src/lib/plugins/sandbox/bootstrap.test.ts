@@ -444,6 +444,7 @@ describe("worker bootstrap", () => {
     'vault.backlinks("a.md")',
     "vault.tags()",
     'vault.pathsWithTag("work")',
+    "vault.status()",
     "vault.onChange(() => {})",
     'navigation.openFile("a.md")',
   ])("refuses ctx.%s by name", async (call) => {

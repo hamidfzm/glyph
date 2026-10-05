@@ -165,6 +165,13 @@ describe("migrateLegacySettings", () => {
     });
   });
 
+  // The Files panel indexes into the map, so a hand-edited null would crash it.
+  it.each([null, "corrupt", ["a"], 3])("drops a blocks value of %j", (blocks) => {
+    const migrated = migrateLegacySettings({ layout: { filesSidebarVisible: false, blocks } });
+    expect(migrated.layout).toEqual({ filesSidebarVisible: false, blocks: {} });
+    expect(migrateLegacySettings(migrated)).toBe(migrated);
+  });
+
   it("leaves a layout without the legacy block keys unchanged", () => {
     const saved = { layout: { filesSidebarVisible: false, blocks: {} } };
     expect(migrateLegacySettings(saved)).toBe(saved);

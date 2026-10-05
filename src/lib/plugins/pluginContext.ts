@@ -68,6 +68,16 @@ export const tracked =
     };
   };
 
+/** The Files panel renders a filter as given, so a malformed one is refused here. */
+function checkedFileTreeFilter(filter: FileTreeFilter): FileTreeFilter {
+  const { label, paths, onClear } = filter ?? {};
+  const hasPaths = Array.isArray(paths) && paths.every((path) => typeof path === "string");
+  if (typeof label !== "string" || !hasPaths || typeof onClear !== "function") {
+    throw new Error("a file tree filter needs a label, a list of paths, and an onClear function");
+  }
+  return { label, paths: [...paths], onClear };
+}
+
 function subscribeToLanguage(listener: () => void): Disposer {
   const handleLanguageChanged = () => listener();
   i18n.on("languageChanged", handleLanguageChanged);
@@ -109,7 +119,9 @@ export function buildPluginContext({
       addSidebarPanel(panel) {
         return tracked(sidebarPanels.register, bag)({ ...panel, pluginId: plugin.id });
       },
-      filterFileTree: tracked(fileTreeFilters.register, bag),
+      filterFileTree(filter) {
+        return tracked(fileTreeFilters.register, bag)(checkedFileTreeFilter(filter));
+      },
       addSettingsPanel(panel) {
         return tracked(settingsPanels.register, bag)({ ...panel, pluginId: plugin.id });
       },
@@ -136,7 +148,14 @@ export function buildPluginContext({
       getActive() {
         const active = pluginAppState().activeDocument;
         if (!active) return null;
-        return { ...active, selection: window.getSelection()?.toString() ?? "" };
+        return {
+          ...active,
+          // Read on use: most callers want the path, and a long selection is
+          // not free to serialize.
+          get selection() {
+            return window.getSelection()?.toString() ?? "";
+          },
+        };
       },
       onActiveChange: tracked(
         (listener) => onPluginAppStateChange("activeDocument", listener),

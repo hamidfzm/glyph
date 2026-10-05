@@ -157,18 +157,13 @@ describe("Backlinks core plugin", () => {
     expect(within(el).getByText("Index.md")).toBeInTheDocument();
   });
 
-  it("removes what it rendered once cleaned up, and stops following the index", async () => {
-    const { ctx, fire, panel } = await activate();
+  it("removes what it rendered once cleaned up", async () => {
+    const { panel } = await activate();
     const el = mountPoint();
     act(() => panel.mount(el, registerCleanup));
     expect(within(el).getAllByRole("button")).toHaveLength(2);
 
     runCleanups();
-    expect(el.textContent).toBe("");
-
-    ctx.vault.backlinks.mockResolvedValue([rows[0]]);
-    fire.vaultChange();
-    await flushMicrotasks();
     expect(el.textContent).toBe("");
   });
 

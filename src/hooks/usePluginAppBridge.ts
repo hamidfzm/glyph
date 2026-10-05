@@ -28,16 +28,22 @@ export function usePluginAppBridge(): void {
 
   useEffect(() => {
     let cancelLocate: (() => void) | undefined;
+    let latest = 0;
     setPluginFileOpener((target, line) => {
+      const request = ++latest;
       cancelLocate?.();
-      openFile(target);
-      if (line !== undefined) {
+      void openFile(target).then((tabId) => {
+        // No tab means the note is not on screen here (another window holds
+        // it, or it would not open), so the line has nothing to land on. A
+        // newer navigation owns the viewer by now.
+        if (line === undefined || tabId === undefined || request !== latest) return;
         cancelLocate = locateWhenRendered(() => locateLineInDocument(line));
-      }
+      });
       // On a phone the sidebar is a drawer over the document.
       if (compact) closeCompactPanels();
     });
     return () => {
+      latest += 1;
       cancelLocate?.();
       setPluginFileOpener(null);
     };

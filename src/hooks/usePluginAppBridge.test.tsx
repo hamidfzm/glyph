@@ -7,6 +7,7 @@ import { locateLineInDocument } from "@/lib/documentHighlight";
 import { pluginAppState } from "@/lib/plugins/appState";
 import { createNavigationApi } from "@/lib/plugins/navigationApi";
 import { makeFileState } from "@/lib/tabs";
+import { deferred } from "@/test/deferred";
 import { sidebarLayoutValue } from "@/test/fixtures/sidebarLayout";
 import { tabsContextValue } from "@/test/fixtures/tabsContext";
 import { vaultSnapshot } from "@/test/tabsHarness";
@@ -35,9 +36,15 @@ function renderBridge(tabs: Partial<TabsContextValue> = {}, layout = sidebarLayo
   return { ...view, setTabs };
 }
 
+/** An `openFile` that lands on `tabId`; undefined is "nothing opened here". */
+function opening(tabId: string | undefined) {
+  return vi.fn(async (_path: string) => tabId);
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.mocked(locateLineInDocument).mockClear();
+  vi.mocked(locateLineInDocument).mockReset();
+  vi.mocked(locateLineInDocument).mockReturnValue(true);
 });
 
 afterEach(() => vi.useRealTimers());
@@ -77,31 +84,64 @@ describe("usePluginAppBridge", () => {
     expect(pluginAppState().activeDocument).toBeNull();
   });
 
-  it("opens the file a plugin navigates to", () => {
-    const openFile = vi.fn();
+  it("opens the file a plugin navigates to", async () => {
+    const openFile = opening("tab-b");
     renderBridge({ workspace, openFile });
     navigation.openFile("/ws/b.md");
 
     expect(openFile).toHaveBeenCalledExactlyOnceWith("/ws/b.md");
-    vi.runAllTimers();
+    await vi.runAllTimersAsync();
     expect(locateLineInDocument).not.toHaveBeenCalled();
   });
 
-  it("scrolls to the requested line once the document has rendered", () => {
-    renderBridge({ workspace, openFile: vi.fn() });
+  it("scrolls to the requested line once the note's tab is open", async () => {
+    const open = deferred<string | undefined>();
+    renderBridge({ workspace, openFile: vi.fn(() => open.promise) });
     navigation.openFile("/ws/b.md", { line: 7 });
 
-    vi.runAllTimers();
+    // Until then the viewer still shows the previous note, whose line 7 is not
+    // the one that was asked for.
+    await vi.runAllTimersAsync();
+    expect(locateLineInDocument).not.toHaveBeenCalled();
+
+    open.resolve("tab-b");
+    await vi.runAllTimersAsync();
     expect(locateLineInDocument).toHaveBeenCalledWith(7);
   });
 
+  // Another window holds the note, or it would not open: nothing landed here.
+  it("leaves the note on screen alone when the open produced no tab", async () => {
+    renderBridge({ workspace, openFile: opening(undefined) });
+    navigation.openFile("/ws/b.md", { line: 7 });
+
+    await vi.runAllTimersAsync();
+    expect(locateLineInDocument).not.toHaveBeenCalled();
+  });
+
   // A second jump abandons the first: its line belongs to another document.
-  it("abandons a pending jump when the plugin navigates again", () => {
-    renderBridge({ workspace, openFile: vi.fn() });
+  it("abandons a pending jump when the plugin navigates again", async () => {
+    renderBridge({ workspace, openFile: opening("tab") });
+    navigation.openFile("/ws/b.md", { line: 7 });
+    await vi.advanceTimersByTimeAsync(0);
+    navigation.openFile("/ws/c.md", { line: 2 });
+
+    await vi.runAllTimersAsync();
+    expect(locateLineInDocument).toHaveBeenCalledWith(2);
+    expect(locateLineInDocument).not.toHaveBeenCalledWith(7);
+  });
+
+  it("drops the line of an open that finishes after a newer navigation", async () => {
+    const slow = deferred<string | undefined>();
+    const openFile = vi
+      .fn<(path: string) => Promise<string | undefined>>()
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue("tab-c");
+    renderBridge({ workspace, openFile });
     navigation.openFile("/ws/b.md", { line: 7 });
     navigation.openFile("/ws/c.md", { line: 2 });
 
-    vi.runAllTimers();
+    slow.resolve("tab-b");
+    await vi.runAllTimersAsync();
     expect(locateLineInDocument).toHaveBeenCalledWith(2);
     expect(locateLineInDocument).not.toHaveBeenCalledWith(7);
   });
@@ -110,7 +150,7 @@ describe("usePluginAppBridge", () => {
   it("dismisses the phone drawers after opening a file", () => {
     const closeCompactPanels = vi.fn();
     renderBridge(
-      { workspace, openFile: vi.fn() },
+      { workspace, openFile: opening("tab") },
       sidebarLayoutValue({ compact: true, closeCompactPanels }),
     );
     navigation.openFile("/ws/b.md");
@@ -119,20 +159,36 @@ describe("usePluginAppBridge", () => {
 
   it("leaves the desktop sidebar alone", () => {
     const closeCompactPanels = vi.fn();
-    renderBridge({ workspace, openFile: vi.fn() }, sidebarLayoutValue({ closeCompactPanels }));
+    renderBridge(
+      { workspace, openFile: opening("tab") },
+      sidebarLayoutValue({ closeCompactPanels }),
+    );
     navigation.openFile("/ws/b.md");
     expect(closeCompactPanels).not.toHaveBeenCalled();
   });
 
-  it("stops opening files and abandons a pending jump on unmount", () => {
-    const openFile = vi.fn();
+  it("stops opening files and abandons a pending jump on unmount", async () => {
+    const openFile = opening("tab");
     const { unmount } = renderBridge({ workspace, openFile });
     navigation.openFile("/ws/b.md", { line: 7 });
     unmount();
 
-    vi.runAllTimers();
+    await vi.runAllTimersAsync();
     expect(locateLineInDocument).not.toHaveBeenCalled();
     navigation.openFile("/ws/c.md");
     expect(openFile).toHaveBeenCalledOnce();
+  });
+
+  it("abandons a jump already polling for its line on unmount", async () => {
+    vi.mocked(locateLineInDocument).mockReturnValue(false);
+    const { unmount } = renderBridge({ workspace, openFile: opening("tab") });
+    navigation.openFile("/ws/b.md", { line: 7 });
+    await vi.advanceTimersByTimeAsync(60);
+    const attempts = vi.mocked(locateLineInDocument).mock.calls.length;
+    expect(attempts).toBeGreaterThan(0);
+
+    unmount();
+    await vi.runAllTimersAsync();
+    expect(locateLineInDocument).toHaveBeenCalledTimes(attempts);
   });
 });

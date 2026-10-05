@@ -7,8 +7,9 @@ import { requireWorkspaceRead, requireWorkspaceRoot } from "./workspaceApi";
 /**
  * Read-only queries over the workspace index, for plugins that declared
  * `workspace:read`. The graph and tag counts come from the snapshot the app
- * already holds; per-note and per-tag answers are asked of the Rust index,
- * which checks the workspace grant itself.
+ * already holds, as copies: the app renders from the same objects, and a
+ * plugin laying out a graph rewrites its edges in place. Per-note and per-tag
+ * answers are asked of the Rust index, which checks the workspace grant itself.
  */
 export function createVaultApi(
   getRoot: () => string | null,
@@ -23,11 +24,15 @@ export function createVaultApi(
   return {
     async graph() {
       requireWorkspaceRoot(getRoot, permissions);
-      return pluginAppState().snapshot.graph;
+      const { nodes, edges } = pluginAppState().snapshot.graph;
+      return {
+        nodes: nodes.map((node) => ({ ...node })),
+        edges: edges.map((edge) => ({ ...edge })),
+      };
     },
     async tags() {
       requireWorkspaceRoot(getRoot, permissions);
-      return pluginAppState().snapshot.tagCounts;
+      return pluginAppState().snapshot.tagCounts.map((count) => ({ ...count }));
     },
     async backlinks(path) {
       const root = indexedRoot();
@@ -38,6 +43,10 @@ export function createVaultApi(
       const root = indexedRoot();
       if (!root) return [];
       return invoke<string[]>("vault_paths_with_tag", { root, tag });
+    },
+    async status() {
+      requireWorkspaceRoot(getRoot, permissions);
+      return { truncated: pluginAppState().snapshot.status.truncated };
     },
     onChange(listener) {
       requireWorkspaceRead(permissions);
