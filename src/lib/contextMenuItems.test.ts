@@ -1,6 +1,9 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "@/lib/i18n";
+import { AI_REPLY_HTML } from "@/test/fixtures/aiReply";
+import { CANVAS_CARDS_HTML } from "@/test/fixtures/canvasCards";
+import { mountDocumentBody } from "@/test/mountDocumentBody";
 import {
   buildContextMenuItems,
   type ContextMenuItem,
@@ -13,6 +16,8 @@ vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn().mockResolvedValue
 
 // English-bound translator so label assertions read the same source strings.
 const t = i18n.getFixedT("en", "common");
+// Only Select All reads the click target; any element serves the other items.
+const target = document.body;
 
 function actionLabels(items: ContextMenuItem[]): string[] {
   return items.flatMap((item) => (item.kind === "action" ? [item.label] : []));
@@ -25,24 +30,30 @@ function find(items: ContextMenuItem[], label: string) {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  window.getSelection()?.removeAllRanges();
   document.body.innerHTML = "";
 });
 
 describe("buildContextMenuItems", () => {
   it("without a selection offers Select All only", () => {
-    const items = buildContextMenuItems({}, "", t);
+    const items = buildContextMenuItems({}, "", t, target);
     expect(actionLabels(items)).toEqual(["Select All"]);
     expect(items.some((i) => i.kind === "separator")).toBe(false);
   });
 
   it("never includes an Open File entry", () => {
-    const items = buildContextMenuItems({ ttsAvailable: true, ttsSpeak: vi.fn() }, "text", t);
+    const items = buildContextMenuItems(
+      { ttsAvailable: true, ttsSpeak: vi.fn() },
+      "text",
+      t,
+      target,
+    );
     expect(actionLabels(items).some((l) => l.startsWith("Open File"))).toBe(false);
   });
 
   it("with a selection adds Copy and a truncated Search Google entry", () => {
     const selection = "x".repeat(50);
-    const items = buildContextMenuItems({}, selection, t);
+    const items = buildContextMenuItems({}, selection, t, target);
     const labels = actionLabels(items);
     expect(labels).toContain("Copy");
     const search = labels.find((l) => l.startsWith("Search Google"));
@@ -55,6 +66,7 @@ describe("buildContextMenuItems", () => {
       { ttsAvailable: true, ttsSpeak: speak, content: "doc body" },
       "",
       t,
+      target,
     );
     const readAloud = find(readItems, "Read Aloud");
     expect(readAloud).toBeDefined();
@@ -65,12 +77,18 @@ describe("buildContextMenuItems", () => {
       { ttsAvailable: true, ttsSpeaking: true, ttsStop: vi.fn() },
       "",
       t,
+      target,
     );
     expect(find(speakingItems, "Stop Reading")).toBeDefined();
   });
 
   it("uses 'Read Selection Aloud' when text is selected", () => {
-    const items = buildContextMenuItems({ ttsAvailable: true, ttsSpeak: vi.fn() }, "hello", t);
+    const items = buildContextMenuItems(
+      { ttsAvailable: true, ttsSpeak: vi.fn() },
+      "hello",
+      t,
+      target,
+    );
     expect(find(items, "Read Selection Aloud")).toBeDefined();
   });
 
@@ -79,6 +97,7 @@ describe("buildContextMenuItems", () => {
       { ttsAvailable: true, ttsSpeak: vi.fn(), content: "" },
       "",
       t,
+      target,
     );
     expect(find(items, "Read Aloud")).toBeUndefined();
     expect(find(items, "Read Selection Aloud")).toBeUndefined();
@@ -90,6 +109,7 @@ describe("buildContextMenuItems", () => {
       { aiConfigured: true, aiAction, content: "doc body" },
       "",
       t,
+      target,
     );
     const submenu = items.find((i) => i.kind === "submenu");
     expect(submenu?.kind === "submenu" && submenu.items.map((s) => s.label)).toEqual([
@@ -110,6 +130,7 @@ describe("buildContextMenuItems", () => {
       { aiConfigured: true, aiAction, content: "doc" },
       "picked",
       t,
+      target,
     );
     const submenu = items.find((i) => i.kind === "submenu");
     expect(submenu?.kind === "submenu" && submenu.items[0].label).toBe("Summarize Selection");
@@ -122,6 +143,7 @@ describe("buildContextMenuItems", () => {
       { aiConfigured: true, aiAction: vi.fn(), content: "" },
       "",
       t,
+      target,
     );
     expect(items.some((i) => i.kind === "submenu")).toBe(false);
   });
@@ -129,7 +151,7 @@ describe("buildContextMenuItems", () => {
   it("Copy invokes the clipboard with the captured selection", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });
-    const items = buildContextMenuItems({}, "abc", t);
+    const items = buildContextMenuItems({}, "abc", t, target);
     const copy = find(items, "Copy");
     if (copy?.kind === "action") copy.onSelect();
     expect(writeText).toHaveBeenCalledWith("abc");
@@ -138,14 +160,14 @@ describe("buildContextMenuItems", () => {
   it("Search Google opens the encoded query", () => {
     const open = vi.fn();
     vi.stubGlobal("open", open);
-    const items = buildContextMenuItems({}, "term", t);
+    const items = buildContextMenuItems({}, "term", t, target);
     const search = items.find((i) => i.kind === "action" && i.label.startsWith("Search Google"));
     if (search?.kind === "action") search.onSelect();
     expect(open).toHaveBeenCalledWith("https://www.google.com/search?q=term", "_blank");
   });
 
   it("prepends link actions for an external http(s) link", () => {
-    const items = buildContextMenuItems({}, "", t, "https://example.com/page");
+    const items = buildContextMenuItems({}, "", t, target, "https://example.com/page");
     const labels = actionLabels(items);
     expect(labels.slice(0, 2)).toEqual(["Copy Link Address", "Open in External Browser"]);
   });
@@ -153,14 +175,14 @@ describe("buildContextMenuItems", () => {
   it("Copy Link Address puts the full URL on the clipboard", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });
-    const items = buildContextMenuItems({}, "", t, "http://example.com/a?b=c");
+    const items = buildContextMenuItems({}, "", t, target, "http://example.com/a?b=c");
     const copy = find(items, "Copy Link Address");
     if (copy?.kind === "action") copy.onSelect();
     expect(writeText).toHaveBeenCalledWith("http://example.com/a?b=c");
   });
 
   it("Open in External Browser routes through the opener plugin", () => {
-    const items = buildContextMenuItems({}, "", t, "https://example.com");
+    const items = buildContextMenuItems({}, "", t, target, "https://example.com");
     const open = find(items, "Open in External Browser");
     if (open?.kind === "action") open.onSelect();
     expect(openUrl).toHaveBeenCalledWith("https://example.com");
@@ -168,13 +190,13 @@ describe("buildContextMenuItems", () => {
 
   it("omits link actions for internal targets and when no link is present", () => {
     for (const href of ["#heading", "./notes/other.md", "#", "mailto:a@b.c", undefined]) {
-      const items = buildContextMenuItems({}, "", t, href);
+      const items = buildContextMenuItems({}, "", t, target, href);
       expect(actionLabels(items)).toEqual(["Select All"]);
     }
   });
 
   it("keeps text actions alongside link actions when a link is right-clicked over a selection", () => {
-    const items = buildContextMenuItems({}, "picked", t, "https://example.com");
+    const items = buildContextMenuItems({}, "picked", t, target, "https://example.com");
     const labels = actionLabels(items);
     expect(labels).toContain("Copy Link Address");
     expect(labels).toContain("Open in External Browser");
@@ -184,7 +206,12 @@ describe("buildContextMenuItems", () => {
 
   it("Stop Reading invokes ttsStop", () => {
     const ttsStop = vi.fn();
-    const items = buildContextMenuItems({ ttsAvailable: true, ttsSpeaking: true, ttsStop }, "", t);
+    const items = buildContextMenuItems(
+      { ttsAvailable: true, ttsSpeaking: true, ttsStop },
+      "",
+      t,
+      target,
+    );
     const stop = find(items, "Stop Reading");
     if (stop?.kind === "action") stop.onSelect();
     expect(ttsStop).toHaveBeenCalled();
@@ -192,25 +219,75 @@ describe("buildContextMenuItems", () => {
 });
 
 describe("selectAllContent", () => {
-  it("selects the rendered markdown body when present", () => {
-    const body = document.createElement("div");
-    body.className = "markdown-body";
-    body.textContent = "hello world";
-    document.body.appendChild(body);
+  function selectedText(): string | undefined {
+    return window.getSelection()?.toString();
+  }
 
-    selectAllContent();
-    expect(window.getSelection()?.rangeCount).toBe(1);
+  it("selects the whole document for a click inside it, not a body rendered ahead of it", () => {
+    document.body.innerHTML = AI_REPLY_HTML;
+    const body = mountDocumentBody("<p>intro</p><p>outro</p>");
+
+    selectAllContent(body.lastElementChild as Element);
+    expect(selectedText()).toBe("introoutro");
   });
 
-  it("falls back to the document body when there is no markdown body", () => {
-    document.body.textContent = "plain";
-    selectAllContent();
-    expect(window.getSelection()?.rangeCount).toBe(1);
+  it("selects the whole notebook for a click inside one cell", () => {
+    document.body.innerHTML = AI_REPLY_HTML;
+    const notebook = mountDocumentBody(
+      '<div class="markdown-body"><p>cell one</p></div><div class="markdown-body"><p>cell two</p></div>',
+      "notebook-body",
+    );
+
+    selectAllContent(notebook.querySelector("div:last-child p") as Element);
+    expect(selectedText()).toBe("cell onecell two");
+  });
+
+  it("selects only the clicked canvas card", () => {
+    document.body.innerHTML = CANVAS_CARDS_HTML;
+
+    selectAllContent(document.querySelectorAll(".markdown-body p")[2]);
+    expect(selectedText()).toBe("third");
+  });
+
+  it("selects only the clicked body when it sits outside the open document", () => {
+    mountDocumentBody("<p>document</p>");
+    const preview = document.createElement("div");
+    preview.className = "markdown-body";
+    preview.innerHTML = "<p>preview</p>";
+    document.body.appendChild(preview);
+
+    selectAllContent(preview.firstElementChild as Element);
+    expect(selectedText()).toBe("preview");
+  });
+
+  it("keeps the selection when the clicked body is gone before the item runs", () => {
+    const body = mountDocumentBody("<p>document</p>");
+    const preview = document.createElement("div");
+    preview.className = "markdown-body";
+    preview.innerHTML = "<p>preview</p>";
+    document.body.appendChild(preview);
+    const clicked = preview.firstElementChild as Element;
+    selectAllContent(body);
+
+    preview.remove();
+    selectAllContent(clicked);
+    expect(selectedText()).toBe("document");
+  });
+
+  it("never falls back to selecting the whole page", () => {
+    mountDocumentBody("<p>document</p>");
+    const chrome = document.createElement("div");
+    chrome.textContent = "Sidebar label";
+    document.body.appendChild(chrome);
+
+    selectAllContent(chrome);
+    expect(window.getSelection()?.rangeCount).toBe(0);
   });
 
   it("does nothing when there is no selection object", () => {
+    const body = mountDocumentBody("<p>document</p>");
     vi.spyOn(window, "getSelection").mockReturnValue(null);
-    expect(() => selectAllContent()).not.toThrow();
+    expect(() => selectAllContent(body)).not.toThrow();
   });
 });
 
