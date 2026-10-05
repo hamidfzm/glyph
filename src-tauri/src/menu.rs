@@ -12,15 +12,51 @@ pub use crate::menu_runtime::{
     apply_menu_state, build_menu, handle_menu_event, MenuRegistry, MenuStateFlags,
 };
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager};
 
 /// Native menus that list plugin contributions: exporters under File > Export
 /// and `menu: "view"` commands under View.
 const PLUGIN_MENUS: [&str; 2] = ["export", "view"];
-/// Caps on what `set_plugin_menu_items` accepts from the renderer, per menu.
+/// Caps on what `set_plugin_menu_items` lists from the renderer, per menu.
 pub const MAX_PLUGIN_MENU_ITEMS: usize = 32;
 pub const MAX_PLUGIN_MENU_LABEL: usize = 100;
+const MAX_PLUGIN_MENU_KEY: usize = 128;
+
+/// One plugin contribution to list. `key` comes back in `menu-plugin-item`
+/// when the item is picked, so the frontend runs that contribution and not
+/// whatever sits at the same position by then.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct PluginMenuEntry {
+    pub key: String,
+    pub label: String,
+}
+
+impl PluginMenuEntry {
+    fn is_listable(&self) -> bool {
+        let key_fits = !self.key.is_empty() && self.key.len() <= MAX_PLUGIN_MENU_KEY;
+        let label_fits =
+            !self.label.trim().is_empty() && self.label.chars().count() <= MAX_PLUGIN_MENU_LABEL;
+        // A tab fakes an accelerator column and a NUL cuts the label short.
+        let label_is_plain = !self.label.chars().any(char::is_control);
+        key_fits && label_fits && label_is_plain
+    }
+}
+
+/// The entries fit to list, and how many were refused. The renderer is
+/// untrusted, and one plugin's bad label must not cost the others their items.
+pub fn listable_plugin_menu_entries(
+    entries: Vec<PluginMenuEntry>,
+) -> (Vec<PluginMenuEntry>, usize) {
+    let offered = entries.len();
+    let listed: Vec<PluginMenuEntry> = entries
+        .into_iter()
+        .filter(PluginMenuEntry::is_listable)
+        .take(MAX_PLUGIN_MENU_ITEMS)
+        .collect();
+    let refused = offered - listed.len();
+    (listed, refused)
+}
 
 /// What a native menu item id maps to. `Emit` forwards an event (with an
 /// optional string payload) to the frontend; `CloseWindow` closes the window
@@ -34,52 +70,48 @@ pub enum MenuAction {
         payload: Option<&'static str>,
     },
     CloseWindow,
-    /// The `index`th plugin item of `menu`; the frontend owns what it runs.
+    /// The plugin item of `menu` listed under `key`; the frontend owns what it runs.
     PluginItem {
         menu: &'static str,
-        index: usize,
+        key: String,
     },
     #[cfg(debug_assertions)]
     ToggleDevTools,
 }
 
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct PluginItemEvent {
     menu: &'static str,
-    index: usize,
+    key: String,
 }
 
-/// Id of the `index`th plugin item in `menu` (`plugin-export-0`).
-pub fn plugin_menu_item_id(menu: &str, index: usize) -> String {
-    format!("plugin-{menu}-{index}")
+/// Id of the plugin item listed under `key` in `menu`. The key is hex-encoded
+/// so any string is a safe id (`:` would read as a window prefix).
+pub fn plugin_menu_item_id(menu: &str, key: &str) -> String {
+    let hex: String = key.bytes().map(|byte| format!("{byte:02x}")).collect();
+    format!("plugin-{menu}-{hex}")
+}
+
+fn decode_hex(hex: &str) -> Option<String> {
+    let is_hex = hex.len().is_multiple_of(2) && hex.bytes().all(|b| b.is_ascii_hexdigit());
+    if hex.is_empty() || !is_hex {
+        return None;
+    }
+    let bytes = (0..hex.len())
+        .step_by(2)
+        .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).ok())
+        .collect::<Option<Vec<u8>>>()?;
+    String::from_utf8(bytes).ok()
 }
 
 fn plugin_menu_action(id: &str) -> Option<MenuAction> {
-    let (menu, index) = id.strip_prefix("plugin-")?.split_once('-')?;
+    let (menu, hex) = id.strip_prefix("plugin-")?.split_once('-')?;
     let menu = PLUGIN_MENUS.into_iter().find(|m| *m == menu)?;
     Some(MenuAction::PluginItem {
         menu,
-        index: index.parse().ok()?,
+        key: decode_hex(hex)?,
     })
-}
-
-/// Refuse plugin menu labels beyond the caps, or empty ones, instead of
-/// truncating: the renderer is untrusted and the native menu is shared UI.
-pub fn check_plugin_menu_labels(labels: &[String]) -> Result<(), String> {
-    if labels.len() > MAX_PLUGIN_MENU_ITEMS {
-        return Err(format!(
-            "at most {MAX_PLUGIN_MENU_ITEMS} plugin items fit in one menu"
-        ));
-    }
-    for label in labels {
-        let length = label.trim().chars().count();
-        if length == 0 || length > MAX_PLUGIN_MENU_LABEL {
-            return Err(format!(
-                "plugin menu labels must be 1 to {MAX_PLUGIN_MENU_LABEL} characters"
-            ));
-        }
-    }
-    Ok(())
 }
 
 /// Split a menu item id into its owning-window label and base id. Per-window
@@ -179,11 +211,11 @@ pub fn dispatch_menu_action<R: tauri::Runtime>(
                 let _ = window.close();
             }
         }
-        MenuAction::PluginItem { menu, index } => {
+        MenuAction::PluginItem { menu, key } => {
             let _ = app.emit_to(
                 window_label,
                 "menu-plugin-item",
-                PluginItemEvent { menu, index },
+                PluginItemEvent { menu, key },
             );
         }
         #[cfg(debug_assertions)]
@@ -217,20 +249,31 @@ mod tests {
         }
     }
 
+    fn entry(key: &str, label: &str) -> PluginMenuEntry {
+        PluginMenuEntry {
+            key: key.to_string(),
+            label: label.to_string(),
+        }
+    }
+
     #[test]
-    fn plugin_item_ids_round_trip() {
+    fn plugin_item_ids_round_trip_any_key() {
+        for key in ["slides.revealjs", "w1:odd key/é", "-"] {
+            let id = plugin_menu_item_id("export", key);
+            assert_eq!(parse_menu_id(&id), (None, id.as_str()), "{key}");
+            assert_eq!(
+                menu_action_for_id(&id),
+                Some(MenuAction::PluginItem {
+                    menu: "export",
+                    key: key.to_string()
+                })
+            );
+        }
         assert_eq!(
-            menu_action_for_id(&plugin_menu_item_id("export", 3)),
-            Some(MenuAction::PluginItem {
-                menu: "export",
-                index: 3
-            })
-        );
-        assert_eq!(
-            menu_action_for_id(&plugin_menu_item_id("view", 0)),
+            menu_action_for_id(&plugin_menu_item_id("view", "slides.start")),
             Some(MenuAction::PluginItem {
                 menu: "view",
-                index: 0
+                key: "slides.start".to_string()
             })
         );
     }
@@ -239,9 +282,11 @@ mod tests {
     fn malformed_plugin_item_ids_return_none() {
         for id in [
             "plugin-export-",
-            "plugin-export-x",
-            "plugin-export--1",
-            "plugin-help-0",
+            "plugin-export-6",
+            "plugin-export-zz",
+            "plugin-export-+f",
+            "plugin-export-ff",
+            "plugin-help-61",
             "plugin-export",
             "plugin-",
         ] {
@@ -250,20 +295,41 @@ mod tests {
     }
 
     #[test]
-    fn plugin_menu_labels_within_the_caps_pass() {
-        let labels = vec!["Slides (reveal.js)".to_string(); MAX_PLUGIN_MENU_ITEMS];
-        assert!(check_plugin_menu_labels(&labels).is_ok());
-        assert!(check_plugin_menu_labels(&[]).is_ok());
-        assert!(check_plugin_menu_labels(&["x".repeat(MAX_PLUGIN_MENU_LABEL)]).is_ok());
+    fn plugin_menu_entries_within_the_caps_are_all_listed() {
+        let entries = vec![entry("slides", "Slides (reveal.js)"); MAX_PLUGIN_MENU_ITEMS];
+        assert_eq!(listable_plugin_menu_entries(entries.clone()), (entries, 0));
+        assert_eq!(listable_plugin_menu_entries(Vec::new()), (Vec::new(), 0));
+        let longest = vec![entry(
+            &"k".repeat(MAX_PLUGIN_MENU_KEY),
+            &"x".repeat(MAX_PLUGIN_MENU_LABEL),
+        )];
+        assert_eq!(listable_plugin_menu_entries(longest.clone()), (longest, 0));
     }
 
     #[test]
-    fn plugin_menu_labels_beyond_the_caps_are_refused() {
-        let too_many = vec!["Item".to_string(); MAX_PLUGIN_MENU_ITEMS + 1];
-        assert!(check_plugin_menu_labels(&too_many).is_err());
-        assert!(check_plugin_menu_labels(&["x".repeat(MAX_PLUGIN_MENU_LABEL + 1)]).is_err());
-        assert!(check_plugin_menu_labels(&["   ".to_string()]).is_err());
-        assert!(check_plugin_menu_labels(&[String::new()]).is_err());
+    fn a_bad_plugin_menu_entry_is_refused_without_costing_the_rest() {
+        let good = entry("good", "Q&A deck");
+        let offered = vec![
+            entry("empty", ""),
+            entry("blank", "   "),
+            entry("long", &"x".repeat(MAX_PLUGIN_MENU_LABEL + 1)),
+            // Trimming must not hide length: the raw label is what gets listed.
+            entry("padded", &format!("x{}", " ".repeat(MAX_PLUGIN_MENU_LABEL))),
+            entry("tab", &format!("Save{}Ctrl+S", char::from(9))),
+            entry("nul", &format!("Sli{}des", char::from(0))),
+            entry("", "No key"),
+            entry(&"k".repeat(MAX_PLUGIN_MENU_KEY + 1), "Long key"),
+            good.clone(),
+        ];
+        assert_eq!(listable_plugin_menu_entries(offered), (vec![good], 8));
+    }
+
+    #[test]
+    fn plugin_menu_entries_beyond_the_item_cap_are_refused() {
+        let offered = vec![entry("item", "Item"); MAX_PLUGIN_MENU_ITEMS + 3];
+        let (listed, refused) = listable_plugin_menu_entries(offered);
+        assert_eq!(listed.len(), MAX_PLUGIN_MENU_ITEMS);
+        assert_eq!(refused, 3);
     }
 
     #[test]
@@ -540,7 +606,7 @@ mod tests {
         }
 
         #[test]
-        fn plugin_item_action_emits_menu_and_index_to_the_named_window() {
+        fn plugin_item_action_emits_menu_and_key_to_the_named_window() {
             let app = mock_app();
             let main = WebviewWindowBuilder::new(&app, "main", Default::default())
                 .build()
@@ -557,14 +623,14 @@ mod tests {
                 "w1",
                 MenuAction::PluginItem {
                     menu: "view",
-                    index: 2,
+                    key: "slides.start".to_string(),
                 },
             );
             std::thread::sleep(std::time::Duration::from_millis(50));
 
             assert_eq!(
                 on_w1.lock().unwrap().clone(),
-                vec![r#"{"menu":"view","index":2}"#.to_string()]
+                vec![r#"{"menu":"view","key":"slides.start"}"#.to_string()]
             );
             assert_eq!(on_main.lock().unwrap().len(), 0);
         }

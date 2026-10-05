@@ -14,7 +14,7 @@ use std::sync::Mutex;
 
 use serde::Deserialize;
 use tauri::{
-    menu::{CheckMenuItem, MenuItem, Submenu},
+    menu::{CheckMenuItem, MenuItem, PredefinedMenuItem, Submenu},
     Runtime, Wry,
 };
 
@@ -74,8 +74,24 @@ pub struct MenuItemRefs<R: Runtime = Wry> {
     help_menu: Submenu<R>,
     export_menu: Submenu<R>,
     // Plugin contributions, replaced wholesale by `set_plugin_menu_items`.
-    plugin_export: Vec<MenuItem<R>>,
-    plugin_view: Vec<MenuItem<R>>,
+    plugin_export: PluginMenuSection<R>,
+    plugin_view: PluginMenuSection<R>,
+}
+
+/// One menu's plugin entries, behind a separator that sets them apart from
+/// the built-in entries they sit under.
+pub struct PluginMenuSection<R: Runtime = Wry> {
+    separator: Option<PredefinedMenuItem<R>>,
+    items: Vec<MenuItem<R>>,
+}
+
+impl<R: Runtime> Default for PluginMenuSection<R> {
+    fn default() -> Self {
+        Self {
+            separator: None,
+            items: Vec::new(),
+        }
+    }
 }
 
 /// Localized labels for every Glyph-defined menu entry. Pushed from the

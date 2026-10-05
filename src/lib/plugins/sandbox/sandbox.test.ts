@@ -126,6 +126,18 @@ describe("startSandbox", () => {
     expect(worker.posted).toContainEqual({ type: "run-command", id: "c1" });
   });
 
+  it("lists whatever a worker sends as its strings, never a raw value", async () => {
+    const { worker, api } = await startActivated();
+    // A worker is untrusted: its payload need not match the protocol's types.
+    worker.emit({ type: "register-command", id: 7, title: { toString: () => "T" } } as never);
+    worker.emit({ type: "register-exporter", id: 8, label: null, extension: 9 } as never);
+
+    const [command] = vi.mocked(api.registerCommand).mock.calls[0];
+    expect(command).toMatchObject({ id: "7", title: "T" });
+    const [exporter] = vi.mocked(api.registerExporter).mock.calls[0];
+    expect(exporter).toMatchObject({ id: "8", label: "null", extension: "9" });
+  });
+
   it("carries a command's menu placement across the bridge", async () => {
     const { worker, api } = await startActivated();
     worker.emit({ type: "register-command", id: "c1", title: "Present", menu: "view" });

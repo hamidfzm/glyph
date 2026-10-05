@@ -1,14 +1,18 @@
 //! Runtime mutations of an already-built menu: accelerators, enabled state,
-//! and localized labels, plus the Tauri commands the frontend calls.
+//! localized labels, and plugin entries, plus the Tauri commands the frontend
+//! calls.
 
 use std::collections::HashMap;
 
 use tauri::{
-    menu::{MenuItem, MenuItemBuilder, Submenu},
+    menu::{MenuItem, MenuItemBuilder, PredefinedMenuItem, Submenu},
     Runtime, State,
 };
 
-use super::{MenuItemRefs, MenuLabels, MenuRegistry, MenuStateFlags};
+use super::{MenuItemRefs, MenuLabels, MenuRegistry, MenuStateFlags, PluginMenuSection};
+use crate::menu::{
+    listable_plugin_menu_entries, parse_menu_id, plugin_menu_item_id, PluginMenuEntry,
+};
 
 /// Maps a bindable command id to its menu item, for accelerator updates.
 fn accelerator_target<'a, R: Runtime>(
@@ -130,61 +134,76 @@ pub fn apply_menu_state<R: Runtime>(
     refs.ai_read_aloud
         .set_enabled(flags.tts_available && flags.has_content)
         .map_err(stringify)?;
-    for item in &refs.plugin_export {
+    for item in &refs.plugin_export.items {
         item.set_enabled(flags.has_file).map_err(stringify)?;
     }
     Ok(())
 }
 
-/// Swap `old` for fresh items labeled `labels`, placed right after `anchor`.
+/// Rebuild one menu's plugin section right after `anchor`.
 fn replace_plugin_items<R: Runtime>(
     window: &tauri::WebviewWindow<R>,
     submenu: &Submenu<R>,
     anchor: &MenuItem<R>,
-    old: &mut Vec<MenuItem<R>>,
+    section: &mut PluginMenuSection<R>,
     menu: &str,
-    labels: &[String],
+    entries: &[PluginMenuEntry],
     enabled: bool,
 ) -> Result<(), String> {
     let s = |e: tauri::Error| e.to_string();
-    for item in old.drain(..) {
-        submenu.remove(&item).map_err(s)?;
+    // The handles are forgotten even when a native removal fails, so one
+    // stuck item cannot block every later update.
+    if let Some(separator) = section.separator.take() {
+        let _ = submenu.remove(&separator);
     }
+    for item in std::mem::take(&mut section.items) {
+        let _ = submenu.remove(&item);
+    }
+    if entries.is_empty() {
+        return Ok(());
+    }
+
     let items = submenu.items().map_err(s)?;
     let start = items
         .iter()
         .position(|item| item.id() == anchor.id())
         .map_or(items.len(), |at| at + 1);
+    let separator = PredefinedMenuItem::separator(window).map_err(s)?;
+    submenu.insert(&separator, start).map_err(s)?;
+    section.separator = Some(separator);
+
     // Same owner prefix as the built-in items, so clicks route to this window.
-    let (owner, _) = crate::menu::parse_menu_id(anchor.id().as_ref());
-    for (index, label) in labels.iter().enumerate() {
-        let base = crate::menu::plugin_menu_item_id(menu, index);
+    let (owner, _) = parse_menu_id(anchor.id().as_ref());
+    for (offset, entry) in entries.iter().enumerate() {
+        let base = plugin_menu_item_id(menu, &entry.key);
         let id = match owner {
             Some(owner) => format!("{owner}:{base}"),
             None => base,
         };
-        let item = MenuItemBuilder::with_id(id, label)
+        // A lone `&` would mark a mnemonic instead of showing.
+        let item = MenuItemBuilder::with_id(id, entry.label.replace('&', "&&"))
             .enabled(enabled)
             .build(window)
             .map_err(s)?;
-        submenu.insert(&item, start + index).map_err(s)?;
-        old.push(item);
+        submenu.insert(&item, start + 1 + offset).map_err(s)?;
+        section.items.push(item);
     }
     Ok(())
 }
 
 /// Plugin exporters go after the built-in formats in File > Export, and
-/// `menu: "view"` commands after Open Graph in View. A click emits
-/// `menu-plugin-item` with the item's menu and index.
+/// `menu: "view"` commands after Open Graph in View. Picking one emits
+/// `menu-plugin-item` with its menu and key. Returns how many entries were
+/// refused (see `listable_plugin_menu_entries`); the rest are listed.
 #[tauri::command]
 pub fn set_plugin_menu_items(
     window: tauri::WebviewWindow,
     registry: State<MenuRegistry>,
-    export: Vec<String>,
-    view: Vec<String>,
-) -> Result<(), String> {
-    crate::menu::check_plugin_menu_labels(&export)?;
-    crate::menu::check_plugin_menu_labels(&view)?;
+    export: Vec<PluginMenuEntry>,
+    view: Vec<PluginMenuEntry>,
+) -> Result<usize, String> {
+    let (export, export_refused) = listable_plugin_menu_entries(export);
+    let (view, view_refused) = listable_plugin_menu_entries(view);
     registry
         .with_refs_mut(window.label(), |refs| {
             let exports_enabled = refs.export_pdf.is_enabled().map_err(|e| e.to_string())?;
@@ -207,7 +226,8 @@ pub fn set_plugin_menu_items(
                 true,
             )
         })
-        .unwrap_or(Ok(()))
+        .unwrap_or(Ok(()))?;
+    Ok(export_refused + view_refused)
 }
 
 #[tauri::command]

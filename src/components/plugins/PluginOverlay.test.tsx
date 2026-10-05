@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { overlays, showOverlay } from "@/lib/plugins/overlays";
 import type { OverlayContribution } from "@/lib/plugins/types";
+import { expectConsole } from "@/test/consoleGuard";
 import { PluginOverlay } from "./PluginOverlay";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn(() => Promise.resolve(undefined)) }));
@@ -48,21 +49,42 @@ describe("PluginOverlay", () => {
     );
   });
 
-  it("closes on Escape before the plugin's own handlers see it, and runs its cleanup", async () => {
+  it("closes on Escape and runs the plugin's cleanup", async () => {
     const cleanup = vi.fn();
-    const pluginKeys = vi.fn();
-    document.addEventListener("keydown", pluginKeys);
     render(<PluginOverlay />);
     const { close } = open({ mount: (_el, registerCleanup) => registerCleanup(cleanup) });
     await screen.findByRole("dialog");
 
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
-    document.removeEventListener("keydown", pluginKeys);
 
     expect(close).toHaveBeenCalled();
-    expect(pluginKeys).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(cleanup).toHaveBeenCalled();
+  });
+
+  it("sees Escape before any key handler the plugin adds while mounting", async () => {
+    // Capture on window is the earliest a listener can sit; the host's must
+    // already be there when mount() runs, or a plugin could swallow Escape.
+    const swallow = vi.fn((e: KeyboardEvent) => e.stopImmediatePropagation());
+    const bubbling = vi.fn();
+    render(<PluginOverlay />);
+    const { close } = open({
+      mount: (_el, registerCleanup) => {
+        window.addEventListener("keydown", swallow, true);
+        document.addEventListener("keydown", bubbling);
+        registerCleanup(() => {
+          window.removeEventListener("keydown", swallow, true);
+          document.removeEventListener("keydown", bubbling);
+        });
+      },
+    });
+    await screen.findByRole("dialog");
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+
+    expect(close).toHaveBeenCalled();
+    expect(swallow).not.toHaveBeenCalled();
+    expect(bubbling).not.toHaveBeenCalled();
   });
 
   it("leaves other keys to the plugin", async () => {
@@ -72,6 +94,29 @@ describe("PluginOverlay", () => {
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(close).not.toHaveBeenCalled();
+  });
+
+  it("closes from the host's own close button", async () => {
+    render(<PluginOverlay />);
+    const { close } = open();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Close (Esc)" }));
+
+    expect(close).toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("closes instead of leaving a blank fullscreen layer when mount throws", async () => {
+    expectConsole(/threw in mount\(\)/);
+    render(<PluginOverlay />);
+    const { close } = open({
+      mount: () => {
+        throw new Error("boom");
+      },
+    });
+
+    await waitFor(() => expect(close).toHaveBeenCalled());
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("swaps in a newly opened overlay in place of the open one", async () => {
@@ -98,5 +143,27 @@ describe("PluginOverlay", () => {
     act(() => close());
     await waitFor(() => expect(button).toHaveFocus());
     button.remove();
+  });
+
+  it("leaves focus where the plugin put it, and still restores the opener", async () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    render(<PluginOverlay />);
+    const { close } = open({
+      mount: (el) => {
+        const deck = document.createElement("div");
+        deck.tabIndex = 0;
+        deck.dataset.testid = "deck";
+        el.append(deck);
+        deck.focus();
+      },
+    });
+    await screen.findByRole("dialog");
+    expect(screen.getByTestId("deck")).toHaveFocus();
+
+    act(() => close());
+    await waitFor(() => expect(opener).toHaveFocus());
+    opener.remove();
   });
 });

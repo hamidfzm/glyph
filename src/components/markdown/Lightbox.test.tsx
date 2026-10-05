@@ -49,6 +49,13 @@ describe("Lightbox", () => {
     expect(screen.getByText("1 / 3")).toBeInTheDocument();
   });
 
+  it("takes the window fullscreen while open", async () => {
+    render(<Harness />);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("set_overlay_fullscreen", { enter: true }),
+    );
+  });
+
   it("closes on Escape", () => {
     const onClose = vi.fn();
     render(<Harness onClose={onClose} />);

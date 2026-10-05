@@ -76,14 +76,19 @@ async function embedAsset(el: Element, attr: "src" | "href"): Promise<void> {
  * through exactly as the user sees them.
  */
 export async function prepareContent({
-  entries,
-  includeToc,
   doc = document,
-  pdf = false,
-  mediaLimit = 0,
+  ...options
 }: PrepareOptions): Promise<PreparedContent | null> {
   const body = doc.querySelector<HTMLElement>(".markdown-body, .notebook-body");
   if (!body) return null;
+  return prepareBody(body, options);
+}
+
+/** {@link prepareContent} for a rendered body the caller has already picked. */
+export async function prepareBody(
+  body: HTMLElement,
+  { entries, includeToc, pdf = false, mediaLimit = 0 }: Omit<PrepareOptions, "doc">,
+): Promise<PreparedContent> {
   const bodyClass = body.classList.contains("notebook-body") ? "notebook-body" : "markdown-body";
 
   const clone = body.cloneNode(true) as HTMLElement;

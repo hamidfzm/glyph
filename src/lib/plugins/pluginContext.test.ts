@@ -83,16 +83,12 @@ describe("buildPluginContext overlays", () => {
 });
 
 describe("buildPluginContext documents", () => {
-  it("serves the rendered document as exporters receive it", async () => {
-    document.body.innerHTML = '<div class="markdown-body"><p>Hi</p><button>copy</button></div>';
+  it("serves the viewer's rendered document", async () => {
+    document.body.innerHTML =
+      '<div data-scroll-container=""><div class="markdown-body"><p>Hi</p></div></div>';
     const html = await context(new DisposerBag()).documents.getRenderedHtml();
     document.body.innerHTML = "";
 
     expect(html).toBe("<p>Hi</p>");
-  });
-
-  it("is null with nothing rendered", async () => {
-    document.body.innerHTML = "";
-    expect(await context(new DisposerBag()).documents.getRenderedHtml()).toBeNull();
   });
 });

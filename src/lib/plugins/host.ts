@@ -46,7 +46,7 @@ export interface LoadedPluginInfo {
 }
 
 export interface PluginHost {
-  /** Commands contributed by loaded plugins (palette section "Commands"). */
+  /** Commands contributed by loaded plugins (palette section "Commands", and the View menu). */
   readonly commands: Registry<CommandContribution>;
   /** Status bar items contributed by loaded plugins. */
   readonly statusBarItems: Registry<StatusBarItemContribution>;

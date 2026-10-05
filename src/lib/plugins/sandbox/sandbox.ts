@@ -96,9 +96,10 @@ export function startSandbox(
           else console.error(`Sandboxed plugin ${plugin.id} error:`, data.message);
           break;
         case "register-command":
+          // Worker data is untrusted: the host lists these strings in menus.
           api.registerCommand({
-            id: data.id,
-            title: data.title,
+            id: String(data.id),
+            title: String(data.title),
             menu: data.menu,
             run: () => worker.postMessage({ type: "run-command", id: data.id }),
           });
@@ -129,9 +130,9 @@ export function startSandbox(
           break;
         case "register-exporter":
           api.registerExporter({
-            id: data.id,
-            label: data.label,
-            extension: data.extension,
+            id: String(data.id),
+            label: String(data.label),
+            extension: String(data.extension),
             build: (bodyHtml, doc) =>
               new Promise((res, rej) => {
                 const callId = ++exportSeq;

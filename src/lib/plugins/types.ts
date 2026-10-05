@@ -166,7 +166,7 @@ export interface CommandContribution {
   id: string;
   title: string;
   run: () => void | Promise<void>;
-  /** 0.26.0: also list it in this native menu (desktop). */
+  /** 0.26.0: also list it in this native menu (desktop), keyed by `id`. */
   menu?: "view";
 }
 
@@ -208,6 +208,7 @@ export interface SettingsPanelContribution extends MountContribution {
 
 /** 0.26.0: what an exporter needs to make its output look like the app. */
 export interface ExportDocument {
+  /** Plain text; escape it before putting it in markup. */
   title: string;
   /** Every style rule the app applies, so the body HTML renders as it does in the app. */
   css: string;
