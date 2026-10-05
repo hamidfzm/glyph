@@ -528,14 +528,22 @@ mod tests {
     }
 
     #[test]
-    fn default_author_returns_a_hint_for_a_directory_without_a_repo() {
-        // No `.git/config` available: we still get a hint, just one with
-        // whatever the host's global git config happens to carry (which
-        // we can't pin in a unit test). The contract is "no panic, no
-        // error" -- both fields are `Option<String>` and the call must
-        // succeed regardless of what's on disk.
+    fn default_author_matches_the_host_global_config_for_a_directory_without_a_repo() {
+        // No `.git/config` available, so both fields come from libgit2's
+        // default chain. The host's identity can't be pinned to a literal,
+        // so compare against the same chain read directly; on a host with
+        // no global identity both sides are `None`.
         let tmp = TempDir::new().unwrap();
-        let _hint = default_author(&tmp.path().to_string_lossy());
+        let hint = default_author(&tmp.path().to_string_lossy());
+
+        let host = git2::Config::open_default().ok();
+        let host_value = |key: &str| {
+            host.as_ref()
+                .and_then(|cfg| cfg.get_string(key).ok())
+                .filter(|s| !s.is_empty())
+        };
+        assert_eq!(hint.name, host_value("user.name"));
+        assert_eq!(hint.email, host_value("user.email"));
     }
 
     #[tokio::test]
@@ -564,25 +572,6 @@ mod tests {
         assert_eq!(remote.url().unwrap(), "https://example.com/b.git");
     }
 
-    #[test]
-    fn default_author_reads_workspace_user_config_when_repo_present() {
-        // Mirror of the same test in `git::tests`: write a per-repo
-        // `[user]` section into the workspace's `.git/config` and confirm
-        // `default_author` surfaces both fields. Worth the duplication
-        // because `ops::default_author` is the actual code path the Tauri
-        // command goes through, and it has its own fallback chain on top.
-        let tmp = TempDir::new().unwrap();
-        git2::Repository::init(tmp.path()).unwrap();
-        let cfg_path = tmp.path().join(".git/config");
-        let mut cfg = git2::Config::open(&cfg_path).unwrap();
-        cfg.set_str("user.name", "Workspace Author").unwrap();
-        cfg.set_str("user.email", "ws@example.com").unwrap();
-
-        let hint = default_author(&tmp.path().to_string_lossy());
-        assert_eq!(hint.name.as_deref(), Some("Workspace Author"));
-        assert_eq!(hint.email.as_deref(), Some("ws@example.com"));
-    }
-
     /// Write `contents` as a stand-in global git config inside `dir` and
     /// return its path, for `author_hint` to open in place of the host's.
     fn global_config(dir: &TempDir, contents: &str) -> PathBuf {
@@ -592,7 +581,7 @@ mod tests {
     }
 
     #[test]
-    fn default_author_falls_back_to_global_config_when_workspace_is_missing_a_field() {
+    fn author_hint_falls_back_to_global_config_when_workspace_is_missing_a_field() {
         // Drives the workspace-then-global merge: workspace knows the name
         // only, global supplies the email.
         let tmp = TempDir::new().unwrap();
@@ -616,9 +605,9 @@ mod tests {
     }
 
     #[test]
-    fn default_author_skips_workspace_config_when_it_cannot_be_opened() {
+    fn author_hint_skips_workspace_config_when_it_cannot_be_opened() {
         // `<ws>/.git/config` exists but is a *directory*, so
-        // `git2::Config::open` returns Err and `default_author` falls
+        // `git2::Config::open` returns Err and `author_hint` falls
         // through to the global lookup instead of reading the workspace
         // file. Exercises the Err arm of the workspace-config branch and
         // re-enters the global-config block with an empty global config.
@@ -637,7 +626,7 @@ mod tests {
     }
 
     #[test]
-    fn default_author_returns_only_workspace_email_when_global_is_empty() {
+    fn author_hint_returns_only_workspace_email_when_global_is_empty() {
         // Workspace supplies email only; the global config has nothing.
         // Email comes through from the workspace, name stays None.
         let tmp = TempDir::new().unwrap();
