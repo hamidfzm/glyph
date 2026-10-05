@@ -22,16 +22,18 @@ async function renderEmbedded(
     return undefined as unknown as string;
   });
   renderInWorkspace(
-    // MarkdownViewer wraps rendered markdown in `.markdown-body`; mirror it so
-    // prepareContent's `document.querySelector(".markdown-body")` finds it.
-    <div className="markdown-body">
-      <MarkdownContent
-        content={content}
-        filePath="/ws/doc.md"
-        workspaceFiles={["/ws/Note.md"]}
-        onOpenWikilink={vi.fn()}
-        showFrontmatter={false}
-      />
+    // MarkdownViewer wraps rendered markdown in `.markdown-body` inside its
+    // marked scroller; mirror it so prepareContent resolves it as the document.
+    <div data-scroll-container="">
+      <div className="markdown-body">
+        <MarkdownContent
+          content={content}
+          filePath="/ws/doc.md"
+          workspaceFiles={["/ws/Note.md"]}
+          onOpenWikilink={vi.fn()}
+          showFrontmatter={false}
+        />
+      </div>
     </div>,
     "/ws",
   );

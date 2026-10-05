@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { documentBody } from "@/lib/documentBody";
 import { NotebookViewer } from "./NotebookViewer";
 
 function notebook(cells: unknown[], metadata?: unknown): string {
@@ -17,6 +18,14 @@ describe("NotebookViewer", () => {
     render(<NotebookViewer content={content} {...viewerProps} />);
     expect(screen.getByRole("heading", { name: "Hello" })).toBeInTheDocument();
     expect(screen.getByText("body text")).toBeInTheDocument();
+  });
+
+  // Export, print, and the quote locator find the notebook through the
+  // scroller marker; without it they silently do nothing.
+  it("renders the body documentBody() resolves", () => {
+    const content = notebook([{ cell_type: "markdown", source: "# Hello" }]);
+    const { container } = render(<NotebookViewer content={content} {...viewerProps} />);
+    expect(documentBody()).toBe(container.querySelector(".notebook-body"));
   });
 
   it("shows In/Out prompts for a code cell with output", () => {

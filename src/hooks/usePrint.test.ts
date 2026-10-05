@@ -1,6 +1,8 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrintSettings } from "@/lib/settings";
+import { AI_REPLY_HTML } from "@/test/fixtures/aiReply";
+import { mountDocumentBody } from "@/test/mountDocumentBody";
 import { usePrint } from "./usePrint";
 import type { TocEntry } from "./useTableOfContents";
 
@@ -32,9 +34,7 @@ const ENTRIES: TocEntry[] = [
 
 describe("usePrint", () => {
   beforeEach(() => {
-    const body = document.createElement("div");
-    body.className = "markdown-body";
-    document.body.appendChild(body);
+    mountDocumentBody();
     invokeMock.mockReset();
     invokeMock.mockResolvedValue(undefined);
   });
@@ -66,21 +66,18 @@ describe("usePrint", () => {
     }
   });
 
-  it("no-ops when no .markdown-body is present", async () => {
+  it("no-ops when no document is rendered", async () => {
     document.body.innerHTML = "";
     const { result } = renderHook(() => usePrint({ entries: ENTRIES, settings: DEFAULT_PRINT }));
     await result.current();
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it("no-ops when the only markdown body belongs to a canvas card", async () => {
-    document.body.innerHTML = "";
-    const board = document.createElement("div");
-    board.className = "glyph-canvas";
-    const card = document.createElement("div");
-    card.className = "markdown-body";
-    board.appendChild(card);
-    document.body.appendChild(board);
+  it.each([
+    ["a canvas card", '<div class="glyph-canvas"><div class="markdown-body"></div></div>'],
+    ["an AI reply", AI_REPLY_HTML],
+  ])("no-ops when the only markdown body belongs to %s", async (_owner, html) => {
+    document.body.innerHTML = html;
 
     const { result } = renderHook(() => usePrint({ entries: ENTRIES, settings: DEFAULT_PRINT }));
     await result.current();
@@ -115,6 +112,16 @@ describe("usePrint", () => {
     expect(links.length).toBe(2);
     expect(links[0].getAttribute("href")).toBe("#intro");
     expect(links[1].textContent).toBe("Details");
+  });
+
+  it("injects the print-toc into the document, not a markdown body ahead of it", async () => {
+    document.body.innerHTML = AI_REPLY_HTML;
+    const body = mountDocumentBody();
+    const { result } = renderHook(() =>
+      usePrint({ entries: ENTRIES, settings: { ...DEFAULT_PRINT, includeToc: true } }),
+    );
+    await result.current();
+    expect(document.querySelector(".print-toc")?.parentElement).toBe(body);
   });
 
   it("does not inject a print-toc when includeToc is true but entries are empty", async () => {

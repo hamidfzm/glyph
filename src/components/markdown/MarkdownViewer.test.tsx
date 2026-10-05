@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { documentBody } from "@/lib/documentBody";
 import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { MarkdownViewer } from "./MarkdownViewer";
 
@@ -257,13 +258,19 @@ describe("MarkdownViewer scrolling", () => {
     expect(onScrollChange).toHaveBeenCalledWith(42);
   });
 
-  // Split view finds this pane's scroller by attribute, so the marker is part
-  // of the contract rather than a styling detail.
+  // Split view finds this pane's scroller by attribute, and export, print, and
+  // the quote locator find the document through it, so the marker is part of
+  // the contract rather than a styling detail.
   it("marks the scroll container so split view can drive it", () => {
     const { container } = renderMd("# Title");
     expect(container.querySelector("[data-scroll-container]")).toBe(
       container.querySelector(".overflow-y-auto"),
     );
+  });
+
+  it("renders the body documentBody() resolves", () => {
+    const { container } = renderMd("# Title");
+    expect(documentBody()).toBe(container.querySelector(".markdown-body"));
   });
 });
 

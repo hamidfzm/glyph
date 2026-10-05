@@ -14,7 +14,7 @@ interface ExportDocumentOptions {
 }
 
 /**
- * Export the rendered `.markdown-body` document, reusing the live DOM for
+ * Export the active document's rendered body, reusing the live DOM for
  * fidelity. The heavy builders (jszip / docx / pdfmake) are imported here so
  * they load only when the user actually exports.
  */

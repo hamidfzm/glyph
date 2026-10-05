@@ -2,15 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mirrorDocumentAsset } from "@/lib/documentAssets";
 import { trackPluginLoad } from "@/lib/markdown/pluginLoads";
+import { AI_REPLY_HTML } from "@/test/fixtures/aiReply";
+import { mountDocumentBody as setBody } from "@/test/mountDocumentBody";
 import { waitForRenderIdle } from "./renderReady";
-
-function setBody(html: string): HTMLElement {
-  const body = document.createElement("div");
-  body.className = "markdown-body";
-  body.innerHTML = html;
-  document.body.appendChild(body);
-  return body;
-}
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -19,14 +13,14 @@ afterEach(() => {
 describe("waitForRenderIdle", () => {
   it("settles once a rendered document sits still", async () => {
     setBody("<p>done</p>");
-    await expect(waitForRenderIdle(document, 2000)).resolves.toEqual({ settled: true });
+    await expect(waitForRenderIdle(2000)).resolves.toEqual({ settled: true });
   });
 
   // A document waiting on a lazy chunk mutates nothing, so the quiet check
   // alone would call it finished and export the unrendered shortcode.
   it("waits for a plugin render marked aria-busy", async () => {
     const body = setBody('<div data-fenced-language="d2"><div aria-busy="true"></div></div>');
-    const pending = waitForRenderIdle(document, 3000);
+    const pending = waitForRenderIdle(3000);
 
     await new Promise((resolve) => setTimeout(resolve, 400));
     let done = false;
@@ -48,7 +42,7 @@ describe("waitForRenderIdle", () => {
         settle = resolve;
       }),
     );
-    const pending = waitForRenderIdle(document, 3000);
+    const pending = waitForRenderIdle(3000);
 
     await new Promise((resolve) => setTimeout(resolve, 400));
     let done = false;
@@ -73,7 +67,7 @@ describe("waitForRenderIdle", () => {
       }),
     );
     void mirrorDocumentAsset("/notes/cover.png");
-    const pending = waitForRenderIdle(document, 3000);
+    const pending = waitForRenderIdle(3000);
 
     await new Promise((resolve) => setTimeout(resolve, 400));
     let done = false;
@@ -87,6 +81,14 @@ describe("waitForRenderIdle", () => {
     await expect(pending).resolves.toEqual({ settled: true });
   });
 
+  // An AI reply ahead of the viewer is quiet and complete; the document's own
+  // pending diagram still has to hold the gate.
+  it("waits on the document, not a markdown body rendered ahead of it", async () => {
+    document.body.innerHTML = AI_REPLY_HTML;
+    setBody('<div data-fenced-language="d2"><div aria-busy="true"></div></div>');
+    await expect(waitForRenderIdle(300)).resolves.toEqual({ settled: false });
+  });
+
   // A board is an exportable root in its own right; treating only the document
   // bodies as one made every canvas export wait out the deadline.
   it("settles on a canvas board", async () => {
@@ -94,21 +96,21 @@ describe("waitForRenderIdle", () => {
     board.className = "glyph-canvas";
     board.innerHTML = '<div class="markdown-body"><p>card</p></div>';
     document.body.appendChild(board);
-    await expect(waitForRenderIdle(document, 2000)).resolves.toEqual({ settled: true });
+    await expect(waitForRenderIdle(2000)).resolves.toEqual({ settled: true });
   });
 
   it("gives up at the deadline so one stuck diagram cannot hang the process", async () => {
     setBody('<div data-fenced-language="mermaid"><div aria-busy="true"></div></div>');
-    await expect(waitForRenderIdle(document, 300)).resolves.toEqual({ settled: false });
+    await expect(waitForRenderIdle(300)).resolves.toEqual({ settled: false });
   });
 
   it("waits for the document to appear, since a CLI launch opens it after mount", async () => {
-    const pending = waitForRenderIdle(document, 3000);
+    const pending = waitForRenderIdle(3000);
     setTimeout(() => setBody("<p>opened late</p>"), 50);
     await expect(pending).resolves.toEqual({ settled: true });
   });
 
   it("reports the timeout when no document ever appears", async () => {
-    await expect(waitForRenderIdle(document, 300)).resolves.toEqual({ settled: false });
+    await expect(waitForRenderIdle(300)).resolves.toEqual({ settled: false });
   });
 });
