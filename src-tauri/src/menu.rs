@@ -197,6 +197,15 @@ mod tests {
     }
 
     #[test]
+    fn closing_a_spawned_window_keeps_the_main_window_s_menu_refs() {
+        // Windows: only w1's refs go, so its label now resolves to main's.
+        let mut refs = registry(&["main", "w1"]);
+        forget_window_refs(&mut refs, "w1", true);
+
+        assert_eq!(refs_for_window(&refs, "w1"), Some(&"main"));
+    }
+
+    #[test]
     fn unknown_id_returns_none() {
         assert!(menu_action_for_id("not-a-thing").is_none());
         assert!(menu_action_for_id("").is_none());
