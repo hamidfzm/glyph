@@ -1,7 +1,8 @@
 // Pure menu-action plumbing. Everything in this file is independent of the
 // Tauri runtime: `MenuAction` is plain data, `menu_action_for_id` is a pure
-// `&str -> Option<MenuAction>` mapping, and `dispatch_menu_action` is generic
-// over `tauri::Runtime` so it can be driven by `tauri::test::MockRuntime`.
+// `&str -> Option<MenuAction>` mapping, `dispatch_menu_action` is generic
+// over `tauri::Runtime` so it can be driven by `tauri::test::MockRuntime`, and
+// the `MenuRegistry` lookup and teardown rules are generic over what they hold.
 //
 // The runtime-bound half (build_menu / apply_menu_state / handle_menu_event)
 // lives in [`crate::menu_runtime`] and is excluded from codecov. We re-export
@@ -12,7 +13,23 @@ pub use crate::menu_runtime::{
     apply_menu_state, build_menu, handle_menu_event, MenuRegistry, MenuStateFlags,
 };
 
+use std::collections::HashMap;
+
 use tauri::{Emitter, Manager};
+
+/// The menu refs serving window `label`: its own (Windows), else the shared
+/// app menu's, held under `main`.
+pub fn refs_for_window<'a, T>(refs: &'a HashMap<String, T>, label: &str) -> Option<&'a T> {
+    refs.get(label).or_else(|| refs.get("main"))
+}
+
+/// Drop a destroyed window's menu refs. A shared app menu's refs serve every
+/// window, so without per-window menus they outlive all of them.
+pub fn forget_window_refs<T>(refs: &mut HashMap<String, T>, label: &str, per_window_menus: bool) {
+    if per_window_menus {
+        refs.remove(label);
+    }
+}
 
 /// What a native menu item id maps to. `Emit` forwards an event (with an
 /// optional string payload) to the frontend; `CloseWindow` closes the window
@@ -153,6 +170,30 @@ mod tests {
             event,
             payload: Some(payload),
         }
+    }
+
+    /// A registry whose entries are named after the window that owns them.
+    fn registry(labels: &[&'static str]) -> HashMap<String, &'static str> {
+        labels.iter().map(|l| (l.to_string(), *l)).collect()
+    }
+
+    #[test]
+    fn shared_menu_refs_outlive_the_main_window() {
+        // macOS/Linux: the one app menu still serves the windows left open.
+        let mut refs = registry(&["main"]);
+        forget_window_refs(&mut refs, "main", false);
+
+        assert_eq!(refs_for_window(&refs, "w1"), Some(&"main"));
+    }
+
+    #[test]
+    fn per_window_menu_refs_are_dropped_with_their_window() {
+        // Windows: each window owns its menu, so its refs die with it.
+        let mut refs = registry(&["main", "w1"]);
+        forget_window_refs(&mut refs, "main", true);
+
+        assert_eq!(refs_for_window(&refs, "main"), None);
+        assert_eq!(refs_for_window(&refs, "w1"), Some(&"w1"));
     }
 
     #[test]
