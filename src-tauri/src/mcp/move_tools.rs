@@ -60,9 +60,8 @@ fn rename_note(session: &Session, args: Value) -> Result<Value, String> {
     let args: MoveArgs = arguments(args)?;
     relocate_note(session, &args, |source, _| {
         let name = args.to.trim();
-        let one_name = Path::new(name).components().count() == 1
-            && !matches!(name, "." | "..")
-            && !name.contains(UNSAFE_NAME_CHARS);
+        let one_name =
+            !name.is_empty() && !matches!(name, "." | "..") && !name.contains(UNSAFE_NAME_CHARS);
         if !one_name {
             return Err(format!(
                 "{name:?} is not a file name: it must be one name, holding none of {UNSAFE_NAME_CHARS:?}. move_note moves a note to another folder."
@@ -286,11 +285,13 @@ mod tests {
         assert_eq!(h.relative(&board["path"]), "Map.canvas");
         assert!(h.read("Index.md").contains("![[Map]]"));
 
-        for to in [
-            "", "  ", ".", "..", "a/b", "a\\b", "x:y", "what?", ".hidden",
-        ] {
-            h.refused("rename_note", json!({ "ref": "Index", "to": to }));
+        // Refused as a name, before anything is asked of the disk.
+        for to in ["", "  ", ".", "..", "a/b", "a\\b", "x:y", "what?"] {
+            let refusal = h.refused("rename_note", json!({ "ref": "Index", "to": to }));
+            assert!(refusal.contains("is not a file name"), "{to:?}: {refusal}");
         }
+        let hidden = h.refused("rename_note", json!({ "ref": "Index", "to": ".hidden" }));
+        assert!(hidden.contains("does not index"), "{hidden}");
         assert!(h.root.join("Index.md").is_file());
     }
 

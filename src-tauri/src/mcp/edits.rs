@@ -233,6 +233,23 @@ mod tests {
     }
 
     #[test]
+    fn a_note_may_grow_to_the_size_the_index_reads_and_no_further() {
+        let h = Harness::writing("edits_size_cap");
+        let sized = |bytes: u64| {
+            edit_note(&h.session(), None, NOTE, |_, _| {
+                Ok(Outcome {
+                    text: Some("x".repeat(bytes as usize)),
+                    summary: String::new(),
+                })
+            })
+        };
+        assert!(sized(SCAN_MAX_FILE_BYTES + 1).is_err());
+        assert_eq!(sized(SCAN_MAX_FILE_BYTES).unwrap()["changed"], true);
+        // Still a note the index holds, so the next call finds it.
+        h.ok("read_note", json!({ "ref": NOTE }));
+    }
+
+    #[test]
     fn a_file_that_cannot_be_written_says_so() {
         let h = Harness::writing("edits_read_only");
         let path = h.path(NOTE);
