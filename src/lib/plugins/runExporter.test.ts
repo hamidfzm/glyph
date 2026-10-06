@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pickSave } from "@/lib/pickers";
+import { mountDocumentBody } from "@/test/mountDocumentBody";
 import { runExporter } from "./runExporter";
 
 vi.mock("@/lib/pickers", () => ({
@@ -20,8 +21,7 @@ function exporter(over: Partial<ExporterContribution> = {}): ExporterContributio
 }
 
 function setBody() {
-  document.body.innerHTML =
-    '<div data-scroll-container=""><div class="markdown-body"><h1>Doc</h1></div></div>';
+  mountDocumentBody("<h1>Doc</h1>");
 }
 
 describe("runExporter", () => {

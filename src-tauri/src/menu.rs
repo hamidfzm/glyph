@@ -1,7 +1,8 @@
 // Pure menu-action plumbing. Everything in this file is independent of the
 // Tauri runtime: `MenuAction` is plain data, `menu_action_for_id` is a pure
-// `&str -> Option<MenuAction>` mapping, and `dispatch_menu_action` is generic
-// over `tauri::Runtime` so it can be driven by `tauri::test::MockRuntime`.
+// `&str -> Option<MenuAction>` mapping, `dispatch_menu_action` is generic
+// over `tauri::Runtime` so it can be driven by `tauri::test::MockRuntime`, and
+// the `MenuRegistry` lookup and teardown rules are generic over what they hold.
 //
 // The runtime-bound half (build_menu / apply_menu_state / handle_menu_event)
 // lives in [`crate::menu_runtime`] and is excluded from codecov. We re-export
@@ -12,8 +13,37 @@ pub use crate::menu_runtime::{
     apply_menu_state, build_menu, handle_menu_event, MenuRegistry, MenuStateFlags,
 };
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager};
+
+/// The menu refs serving window `label`: its own (Windows), else the shared
+/// app menu's, held under `main`.
+pub fn refs_for_window<'a, T>(refs: &'a HashMap<String, T>, label: &str) -> Option<&'a T> {
+    refs.get(label).or_else(|| refs.get("main"))
+}
+
+/// [`refs_for_window`], for a caller that changes the refs it finds.
+pub fn refs_for_window_mut<'a, T>(
+    refs: &'a mut HashMap<String, T>,
+    label: &str,
+) -> Option<&'a mut T> {
+    let key = if refs.contains_key(label) {
+        label
+    } else {
+        "main"
+    };
+    refs.get_mut(key)
+}
+
+/// Drop a destroyed window's menu refs. A shared app menu's refs serve every
+/// window, so without per-window menus they outlive all of them.
+pub fn forget_window_refs<T>(refs: &mut HashMap<String, T>, label: &str, per_window_menus: bool) {
+    if per_window_menus {
+        refs.remove(label);
+    }
+}
 
 /// Native menus that list plugin contributions: exporters under File > Export
 /// and `menu: "view"` commands under View.
@@ -330,6 +360,49 @@ mod tests {
         let (listed, refused) = listable_plugin_menu_entries(offered);
         assert_eq!(listed.len(), MAX_PLUGIN_MENU_ITEMS);
         assert_eq!(refused, 3);
+    }
+
+    /// A registry whose entries are named after the window that owns them.
+    fn registry(labels: &[&'static str]) -> HashMap<String, &'static str> {
+        labels.iter().map(|l| (l.to_string(), *l)).collect()
+    }
+
+    #[test]
+    fn shared_menu_refs_outlive_the_main_window() {
+        // macOS/Linux: the one app menu still serves the windows left open.
+        let mut refs = registry(&["main"]);
+        forget_window_refs(&mut refs, "main", false);
+
+        assert_eq!(refs_for_window(&refs, "w1"), Some(&"main"));
+    }
+
+    #[test]
+    fn per_window_menu_refs_are_dropped_with_their_window() {
+        // Windows: each window owns its menu, so its refs die with it.
+        let mut refs = registry(&["main", "w1"]);
+        forget_window_refs(&mut refs, "main", true);
+
+        assert_eq!(refs_for_window(&refs, "main"), None);
+        assert_eq!(refs_for_window(&refs, "w1"), Some(&"w1"));
+    }
+
+    #[test]
+    fn closing_a_spawned_window_keeps_the_main_window_s_menu_refs() {
+        // Windows: only w1's refs go, so its label now resolves to main's.
+        let mut refs = registry(&["main", "w1"]);
+        forget_window_refs(&mut refs, "w1", true);
+
+        assert_eq!(refs_for_window(&refs, "w1"), Some(&"main"));
+    }
+
+    #[test]
+    fn refs_to_change_resolve_like_refs_to_read() {
+        let mut refs = registry(&["main", "w1"]);
+        assert_eq!(refs_for_window_mut(&mut refs, "w1"), Some(&mut "w1"));
+        assert_eq!(refs_for_window_mut(&mut refs, "w2"), Some(&mut "main"));
+
+        let mut none: HashMap<String, &'static str> = HashMap::new();
+        assert_eq!(refs_for_window_mut(&mut none, "w1"), None);
     }
 
     #[test]

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { staticRenderers } from "@/lib/plugins/staticRenderers";
+import { AI_REPLY_HTML } from "@/test/fixtures/aiReply";
+import { mountDocumentBody as setBody } from "@/test/mountDocumentBody";
 import { prepareContent } from "./prepareContent";
 
 // Rendering needs a real layout/canvas/WASM engine; mock the helpers so the
@@ -25,13 +27,6 @@ vi.mock("dompurify", () => ({
 
 const ENTRIES: TocEntry[] = [{ id: "intro", text: "Intro", level: 1 }];
 
-function setBody(html: string, className = "markdown-body"): void {
-  const body = document.createElement("div");
-  body.className = className;
-  body.innerHTML = html;
-  document.body.appendChild(body);
-}
-
 // Most assertions only care about the produced HTML.
 async function prepareHtml(includeToc = false): Promise<string | null> {
   const result = await prepareContent({ entries: ENTRIES, includeToc });
@@ -46,6 +41,17 @@ afterEach(() => {
 describe("prepareContent", () => {
   it("returns null when there is no rendered body", async () => {
     expect(await prepareContent({ entries: ENTRIES, includeToc: false })).toBeNull();
+  });
+
+  it("returns null when the only markdown body is an AI reply", async () => {
+    document.body.innerHTML = AI_REPLY_HTML;
+    expect(await prepareContent({ entries: ENTRIES, includeToc: false })).toBeNull();
+  });
+
+  it("exports the document, not a markdown body rendered ahead of it", async () => {
+    document.body.innerHTML = AI_REPLY_HTML;
+    setBody("<p>Document</p>");
+    expect(await prepareHtml()).toBe("<p>Document</p>");
   });
 
   it("reports the markdown body class", async () => {

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { installed } from "@/test/fixtures/pluginHost";
+import { mountDocumentBody } from "@/test/mountDocumentBody";
 import { DisposerBag } from "./disposer";
 import { overlays } from "./overlays";
 import { buildPluginContext } from "./pluginContext";
@@ -84,8 +85,7 @@ describe("buildPluginContext overlays", () => {
 
 describe("buildPluginContext documents", () => {
   it("serves the viewer's rendered document", async () => {
-    document.body.innerHTML =
-      '<div data-scroll-container=""><div class="markdown-body"><p>Hi</p></div></div>';
+    mountDocumentBody("<p>Hi</p>");
     const html = await context(new DisposerBag()).documents.getRenderedHtml();
     document.body.innerHTML = "";
 

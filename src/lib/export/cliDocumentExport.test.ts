@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CliExportRequest } from "@/lib/cliExport";
+import { AI_REPLY_HTML } from "@/test/fixtures/aiReply";
+import { mountDocumentBody } from "@/test/mountDocumentBody";
 import { runCliDocumentExport } from "./cliDocumentExport";
 
 const exportDocumentMock = vi.fn();
@@ -19,10 +21,7 @@ const REQUEST: CliExportRequest = {
 };
 
 function setBody(): void {
-  const body = document.createElement("div");
-  body.className = "markdown-body";
-  body.innerHTML = "<h1>Getting Started</h1>";
-  document.body.appendChild(body);
+  mountDocumentBody("<h1>Getting Started</h1>");
 }
 
 beforeEach(() => {
@@ -116,6 +115,19 @@ describe("runCliDocumentExport", () => {
   it("fails loudly when the document never rendered", async () => {
     // exportDocument silently no-ops without a body, which would otherwise
     // report success for an export that wrote nothing.
+    await expect(
+      runCliDocumentExport(REQUEST, () => ({
+        entries: [],
+        includeToc: false,
+        content: null,
+        epubMediaLimit: 0,
+      })),
+    ).rejects.toThrow("did not finish rendering");
+    expect(exportDocumentMock).not.toHaveBeenCalled();
+  });
+
+  it("does not take a markdown body outside the viewer for the document", async () => {
+    document.body.innerHTML = AI_REPLY_HTML;
     await expect(
       runCliDocumentExport(REQUEST, () => ({
         entries: [],

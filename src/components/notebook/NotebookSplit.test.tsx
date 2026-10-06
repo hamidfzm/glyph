@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { documentBody } from "@/lib/documentBody";
 import { NotebookSplit } from "./NotebookSplit";
 
 function notebook(cells: unknown[]): string {
@@ -20,6 +21,12 @@ describe("NotebookSplit", () => {
     // Rendered pane: the markdown heading.
     const heading = container.querySelector(".split-view-preview h1");
     expect(heading?.textContent).toBe("Heading");
+  });
+
+  it("makes the rendered pane, not the JSON source pane, the document", () => {
+    const content = notebook([{ cell_type: "markdown", source: "# Heading" }]);
+    const { container } = render(<NotebookSplit content={content} {...props} />);
+    expect(documentBody()).toBe(container.querySelector(".split-view-preview .notebook-body"));
   });
 
   it("labels the source pane and does not show an editable field", () => {

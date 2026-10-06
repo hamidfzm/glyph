@@ -1,4 +1,5 @@
 import { pendingDocumentAssets } from "@/lib/documentAssets";
+import { documentBody } from "@/lib/documentBody";
 import { pendingPluginLoads } from "@/lib/markdown/pluginLoads";
 
 // Diagrams and math render asynchronously after the document mounts (diagram
@@ -11,10 +12,13 @@ import { pendingPluginLoads } from "@/lib/markdown/pluginLoads";
 // enough not to pad every export.
 const QUIET_MS = 250;
 
-// Every root an export can snapshot. A canvas board is included because its
-// cards hold their own markdown bodies, so it has the same lazy content to
-// wait on; leaving it out made a board export sit here until the deadline.
-export const EXPORTABLE_ROOT_SELECTOR = ".markdown-body, .notebook-body, .glyph-canvas";
+// The root an export snapshots: the active document, or a canvas board. A
+// board counts because its cards hold their own markdown bodies, so it has the
+// same lazy content to wait on; leaving it out made a board export sit here
+// until the deadline.
+export function exportableRoot(): Element | null {
+  return documentBody() ?? document.querySelector(".glyph-canvas");
+}
 
 /** Plugin renders (diagrams) that mark themselves `aria-busy` while pending. */
 function pendingDiagrams(root: ParentNode): number {
@@ -35,10 +39,7 @@ function pendingDiagrams(root: ParentNode): number {
  * Reports whether the document settled on its own so the caller can tell the
  * two apart.
  */
-export function waitForRenderIdle(
-  doc: Document = document,
-  timeoutMs = 15_000,
-): Promise<{ settled: boolean }> {
+export function waitForRenderIdle(timeoutMs = 15_000): Promise<{ settled: boolean }> {
   return new Promise((resolve) => {
     let quietTimer = 0;
     let deadline = 0;
@@ -54,12 +55,12 @@ export function waitForRenderIdle(
     function armQuietTimer() {
       window.clearTimeout(quietTimer);
       quietTimer = window.setTimeout(() => {
-        const body = doc.querySelector(EXPORTABLE_ROOT_SELECTOR);
+        const root = exportableRoot();
         // Quiet but incomplete means the document is still loading, or a
         // diagram is between frames; keep waiting for the deadline to decide.
         const isComplete =
-          body !== null &&
-          pendingDiagrams(body) === 0 &&
+          root !== null &&
+          pendingDiagrams(root) === 0 &&
           pendingPluginLoads() === 0 &&
           pendingDocumentAssets() === 0;
         if (isComplete) finish(true);
@@ -70,7 +71,7 @@ export function waitForRenderIdle(
     deadline = window.setTimeout(() => finish(false), timeoutMs);
     // Observed from the root, not the body: on a CLI launch the document is
     // still being opened and the body element does not exist yet.
-    observer.observe(doc.documentElement, { childList: true, subtree: true });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
     armQuietTimer();
   });
 }

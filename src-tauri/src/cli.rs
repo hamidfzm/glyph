@@ -571,8 +571,8 @@ fn export_plan(env_args: &[String], cwd: &Path) -> Result<CliLaunch, String> {
         )),
         (_, Some(InitialOpenAction::File(input))) => {
             // A canvas board and a D2 file are "supported documents" for
-            // opening, but neither renders as one `.markdown-body`: a canvas
-            // would export a single card as if it were the whole board.
+            // opening, but neither renders as one document body: a canvas
+            // has only its cards, so the export would find nothing to write.
             if !is_exportable_document(Path::new(&input)) {
                 return Err(format!(
                     "the {} format only takes a markdown or notebook document, not {}",
@@ -609,8 +609,8 @@ pub fn plain_path(path: &str) -> String {
 }
 
 /// Whether a document export can render this input. Canvas boards and D2
-/// files open fine but do not render as a single document body, so exporting
-/// one would silently write a fragment (a canvas exports its first card).
+/// files open fine but do not render as a single document body (a canvas
+/// renders only its cards), so there is no document for the export to write.
 #[cfg(desktop)]
 fn is_exportable_document(path: &Path) -> bool {
     crate::is_markdown_file(path) || crate::is_notebook_file(path)
@@ -1564,8 +1564,8 @@ mod tests {
 
     #[test]
     fn launch_plan_rejects_an_input_that_is_not_one_document() {
-        // A canvas renders each card in its own `.markdown-body`, so exporting
-        // one would silently write the first card as the whole document.
+        // A canvas renders each card in its own `.markdown-body` and no
+        // document body, so a document export has nothing to write.
         let cwd = unique_tmp("lp_canvas");
         fs::create_dir_all(&cwd).unwrap();
         fs::write(cwd.join("board.canvas"), "{}").unwrap();
