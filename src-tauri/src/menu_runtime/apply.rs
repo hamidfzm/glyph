@@ -58,7 +58,7 @@ pub fn apply_keybindings(
     registry: State<MenuRegistry>,
     bindings: HashMap<String, String>,
 ) -> Result<(), String> {
-    // A missing entry means the window is mid-teardown; nothing to update.
+    // None only on Windows, once this window's menu and main's are both gone.
     registry
         .with_refs(window.label(), |refs| {
             apply_keybindings_impl(refs, &bindings)
