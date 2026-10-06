@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickSave } from "@/lib/pickers";
 import type { PrintSettings } from "@/lib/settings";
 import { deferred } from "@/test/deferred";
+import { AI_REPLY_HTML } from "@/test/fixtures/aiReply";
+import { mountDocumentBody } from "@/test/mountDocumentBody";
 import { useExport } from "./useExport";
 
 vi.mock("@/lib/pickers", () => ({
@@ -46,11 +48,8 @@ function options(over: Partial<Parameters<typeof useExport>[0]> = {}) {
   };
 }
 
-function setBody(html = "<h1>Intro</h1>"): void {
-  const body = document.createElement("div");
-  body.className = "markdown-body";
-  body.innerHTML = html;
-  document.body.appendChild(body);
+function setBody(): void {
+  mountDocumentBody("<h1>Intro</h1>");
 }
 
 function setCanvas(): void {
@@ -83,6 +82,31 @@ describe("useExport", () => {
     });
     expect(pickSave).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("does nothing in edit mode, where the only markdown body is an AI reply", async () => {
+    document.body.innerHTML = `<div class="cm-editor"></div>${AI_REPLY_HTML}`;
+    vi.mocked(pickSave).mockResolvedValue("/out.html");
+    const { result } = renderHook(() => useExport(options()));
+    await act(async () => {
+      await result.current.exportHtml();
+    });
+    expect(pickSave).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("exports the document when an AI reply is rendered ahead of it", async () => {
+    document.body.innerHTML = AI_REPLY_HTML;
+    setBody();
+    vi.mocked(pickSave).mockResolvedValue("/out.html");
+    const { result } = renderHook(() => useExport(options()));
+    await act(async () => {
+      await result.current.exportHtml();
+    });
+    const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_file");
+    const content = (call![1] as { content: string }).content;
+    expect(content).toContain("<h1>Intro</h1>");
+    expect(content).not.toContain("AI reply");
   });
 
   it("writes HTML via write_file with the source-derived filename", async () => {

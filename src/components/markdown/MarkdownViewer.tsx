@@ -88,7 +88,8 @@ export function MarkdownViewer({
       <div
         ref={scrollRef}
         // Split view resolves this scroller by attribute, as it does the
-        // editor's `.cm-scroller`, so neither pane needs a ref prop.
+        // editor's `.cm-scroller`, so neither pane needs a ref prop. It is
+        // also how `documentBody()` tells the document from other markdown.
         data-scroll-container=""
         className="absolute inset-0 overflow-y-auto"
         // Keep anchor targets a few pixels off the top edge when scrolled to

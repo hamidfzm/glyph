@@ -20,7 +20,8 @@ function exporter(over: Partial<ExporterContribution> = {}): ExporterContributio
 }
 
 function setBody() {
-  document.body.innerHTML = '<div class="markdown-body"><h1>Doc</h1></div>';
+  document.body.innerHTML =
+    '<div data-scroll-container=""><div class="markdown-body"><h1>Doc</h1></div></div>';
 }
 
 describe("runExporter", () => {

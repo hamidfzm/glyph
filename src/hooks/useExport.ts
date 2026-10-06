@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { documentBody } from "@/lib/documentBody";
 import type { ExportFormat } from "@/lib/export/writeExport";
 import { pickSave } from "@/lib/pickers";
 import { epubMediaLimitBytes, type PrintSettings } from "@/lib/settings";
@@ -26,10 +27,10 @@ export interface ExportHandlers {
 }
 
 /**
- * Export the active document to HTML/DOCX/EPUB/PDF. Reuses the rendered
- * `.markdown-body` DOM for fidelity, shows a native save dialog, and writes a
- * file via Rust commands (text for HTML, bytes for DOCX/EPUB/PDF), with no
- * print dialog. The separate File > Print item is the print-dialog path.
+ * Export the active document to HTML/DOCX/EPUB/PDF. Reuses the rendered DOM
+ * for fidelity, shows a native save dialog, and writes a file via Rust commands
+ * (text for HTML, bytes for DOCX/EPUB/PDF), with no print dialog. The separate
+ * File > Print item is the print-dialog path.
  */
 export function useExport({
   entries,
@@ -44,11 +45,9 @@ export function useExport({
 
   const run = useCallback(
     async (format: ExportFormat) => {
-      // The canvas check runs first: cards contain their own small
-      // `.markdown-body` elements which would fool the document guard.
       const canvas = document.querySelector(".glyph-canvas") !== null;
       // Cheap guard so we don't pop a save dialog with nothing to export.
-      if (!canvas && !document.querySelector(".markdown-body")) return;
+      if (!canvas && !documentBody()) return;
 
       try {
         // The export pipeline is loaded on first use so none of it (nor its
@@ -59,7 +58,7 @@ export function useExport({
           { exportDocument },
           { deriveExportMeta },
           { EXPORT_EXT },
-          { EXPORTABLE_ROOT_SELECTOR, waitForRenderIdle },
+          { exportableRoot, waitForRenderIdle },
         ] = await Promise.all([
           import("@/lib/export/exportCanvas"),
           import("@/lib/export/exportDocument"),
@@ -79,7 +78,7 @@ export function useExport({
         // The document can be closed while the native dialog sits open. There
         // is nothing to wait for then, and waiting would stall until the
         // gate's deadline instead of aborting.
-        if (!document.querySelector(EXPORTABLE_ROOT_SELECTOR)) return;
+        if (!exportableRoot()) return;
         // Export reads the live DOM, so a diagram still compiling or a lazy
         // plugin chunk still in flight would be snapshotted half-rendered.
         // Same gate the CLI export uses; normally settles in one quiet window.

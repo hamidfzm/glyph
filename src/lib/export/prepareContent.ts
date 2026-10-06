@@ -1,4 +1,5 @@
 import type { TocEntry } from "@/hooks/useTableOfContents";
+import { documentBody } from "@/lib/documentBody";
 import { type PackagedMedia, packageExportMedia } from "./mediaAssets";
 import {
   inlineCodeColors,
@@ -11,8 +12,6 @@ import { buildTocElement } from "./toc";
 export interface PrepareOptions {
   entries: TocEntry[];
   includeToc: boolean;
-  // Overridable for tests; defaults to the live document.
-  doc?: Document;
   // PDF export needs extra work the vector walker can't do itself: inline the
   // rendered syntax-highlight colors onto code spans, rasterize math, and any
   // text block holding math or RTL text, to embedded images, and re-render
@@ -66,10 +65,10 @@ async function embedAsset(el: Element, attr: "src" | "href"): Promise<void> {
 }
 
 /**
- * Clone the rendered document body (markdown or notebook), strip app-only UI,
- * make task checkboxes non-interactive, inline images, and optionally prepend a
- * table of contents. Returns the cleaned inner HTML plus its wrapper class, or
- * `null` when there is no rendered body to export.
+ * Clone the active document's rendered body (markdown or notebook), strip
+ * app-only UI, make task checkboxes non-interactive, inline images, and
+ * optionally prepend a table of contents. Returns the cleaned inner HTML plus
+ * its wrapper class, or `null` when no document is rendered.
  *
  * Reusing the live DOM (rather than re-parsing markdown) means rendered math,
  * highlighted code, GFM tables, alerts, Mermaid SVGs, and notebook cells come
@@ -78,11 +77,10 @@ async function embedAsset(el: Element, attr: "src" | "href"): Promise<void> {
 export async function prepareContent({
   entries,
   includeToc,
-  doc = document,
   pdf = false,
   mediaLimit = 0,
 }: PrepareOptions): Promise<PreparedContent | null> {
-  const body = doc.querySelector<HTMLElement>(".markdown-body, .notebook-body");
+  const body = documentBody();
   if (!body) return null;
   const bodyClass = body.classList.contains("notebook-body") ? "notebook-body" : "markdown-body";
 

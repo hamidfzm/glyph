@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback } from "react";
+import { documentBody } from "@/lib/documentBody";
 import type { PrintSettings } from "@/lib/settings";
 import type { TocEntry } from "./useTableOfContents";
 
@@ -10,10 +11,9 @@ interface UsePrintOptions {
 
 export function usePrint({ entries, settings }: UsePrintOptions) {
   return useCallback(async () => {
-    const body = document.querySelector<HTMLElement>(".markdown-body");
-    // Canvas cards carry their own small markdown bodies; printing one of
-    // those is never what the user wants. Export the board as PNG instead.
-    if (!body || body.closest(".glyph-canvas")) return;
+    // A canvas or an editor-only tab renders no document to print.
+    const body = documentBody();
+    if (!body) return;
 
     // Loaded on first print so the diagram-relight/TOC helpers (and their
     // rasterize dependencies) stay out of the startup bundle. A failed chunk

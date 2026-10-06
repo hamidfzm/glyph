@@ -1,5 +1,6 @@
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import type { CliExportRequest } from "@/lib/cliExport";
+import { documentBody } from "@/lib/documentBody";
 import { exportDocument } from "@/lib/export/exportDocument";
 import { deriveExportMeta } from "@/lib/export/meta";
 import { waitForRenderIdle } from "@/lib/export/renderReady";
@@ -34,7 +35,7 @@ export async function runCliDocumentExport(
   const { settled } = await waitForRenderIdle();
   // `exportDocument` no-ops when there is no rendered body, which would report
   // a success that wrote no file.
-  if (!document.querySelector(".markdown-body, .notebook-body")) {
+  if (!documentBody()) {
     throw new Error(`${request.input} did not finish rendering`);
   }
   const { entries, includeToc, content, epubMediaLimit } = getOptions();
