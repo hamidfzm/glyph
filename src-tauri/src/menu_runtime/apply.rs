@@ -3,9 +3,11 @@
 
 use std::collections::HashMap;
 
-use tauri::{menu::MenuItem, Runtime, State};
+use tauri::{menu::MenuItem, Manager, Runtime, State};
 
 use super::{MenuItemRefs, MenuLabels, MenuRegistry, MenuStateFlags};
+use crate::menu::may_write_shared_menu_state;
+use crate::windows_runtime::focused_window_label;
 
 /// Maps a bindable command id to its menu item, for accelerator updates.
 fn accelerator_target<'a, R: Runtime>(
@@ -136,6 +138,13 @@ pub fn set_menu_state(
     registry: State<MenuRegistry>,
     flags: MenuStateFlags,
 ) -> Result<(), String> {
+    // Windows menus are per window, so there is no other window to overwrite.
+    if !cfg!(windows) {
+        let focused = focused_window_label(window.app_handle());
+        if !may_write_shared_menu_state(window.label(), focused.as_deref()) {
+            return Ok(());
+        }
+    }
     registry
         .with_refs(window.label(), |refs| apply_menu_state(refs, &flags))
         .unwrap_or(Ok(()))

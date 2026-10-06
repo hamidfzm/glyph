@@ -31,6 +31,15 @@ pub fn forget_window_refs<T>(refs: &mut HashMap<String, T>, label: &str, per_win
     }
 }
 
+/// Whether window `label` may write a shared app menu's enabled state. The
+/// menu mirrors the focused window, which re-sends its state on gaining focus.
+pub fn may_write_shared_menu_state(label: &str, focused: Option<&str>) -> bool {
+    match focused {
+        Some(focused) => focused == label,
+        None => true,
+    }
+}
+
 /// What a native menu item id maps to. `Emit` forwards an event (with an
 /// optional string payload) to the frontend; `CloseWindow` closes the window
 /// whose menu was used; `ToggleDevTools` (debug builds only) toggles the
@@ -203,6 +212,20 @@ mod tests {
         forget_window_refs(&mut refs, "w1", true);
 
         assert_eq!(refs_for_window(&refs, "w1"), Some(&"main"));
+    }
+
+    #[test]
+    fn shared_menu_takes_state_only_from_the_focused_window() {
+        // macOS/Linux: a background window (or a late push from the window
+        // that just lost focus) must not overwrite the focused window's state.
+        assert!(may_write_shared_menu_state("w1", Some("w1")));
+        assert!(!may_write_shared_menu_state("main", Some("w1")));
+    }
+
+    #[test]
+    fn shared_menu_takes_state_from_any_window_while_none_is_focused() {
+        // A window pushes on mount, before it is shown and focused.
+        assert!(may_write_shared_menu_state("main", None));
     }
 
     #[test]
