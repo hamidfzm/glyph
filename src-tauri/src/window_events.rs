@@ -25,6 +25,7 @@ pub fn handle_window_event(window: &Window, event: &WindowEvent) {
                 }
             }
             registry.remove(label);
+            windows_runtime::publish_documents(window.app_handle(), &registry);
         }
         #[cfg(desktop)]
         if let Some(menus) = window.try_state::<menu::MenuRegistry>() {

@@ -4,14 +4,17 @@
 //! caller can drive in-process. [`stdio`] is the adapter that exists today,
 //! and the only code on this path that writes to stdout.
 
+mod edits;
 mod launch;
 mod link_tools;
+mod move_tools;
 mod note_tools;
 mod refs;
 mod registry;
 mod session;
 mod stdio;
 mod vault_tools;
+mod write_tools;
 
 #[cfg(test)]
 mod tests;
@@ -23,6 +26,14 @@ use std::path::{Path, PathBuf};
 use crate::grants::GrantRegistry;
 use crate::vault::VaultStore;
 use registry::Session;
+
+/// The tools that change notes, each off until the user turns it on. The
+/// settings list them from here, so a tool added to the registry gets its
+/// toggle without being named a second time.
+#[tauri::command]
+pub fn agent_write_tools() -> Vec<&'static str> {
+    registry::edit_tools().map(|tool| tool.name).collect()
+}
 
 /// Serve until the client closes `input`, and return the exit code. `vaults`
 /// are the `--vault` roots, already checked to be folders, and all the server
@@ -44,7 +55,13 @@ pub fn run(
     // Folders the user let the agent add, served until the session ends.
     let mut allowed: Vec<String> = Vec::new();
 
-    let served = stdio::serve(input, output, |name, args, ask| {
+    // The settings are read again each time, so a tool the user turns on
+    // mid-conversation is offered from the next listing on.
+    let list = || {
+        let open = session::open_state(&vaults, &grants, stores.as_deref());
+        registry::list(&open).map(|tool| tool.describe()).collect()
+    };
+    let served = stdio::serve(input, output, list, |name, args, ask| {
         let mut open = session::open_state(&vaults, &grants, stores.as_deref());
         with_allowed(&mut open, &allowed, &grants);
         // `--vault` names every folder the session may read.

@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::refs::{capped, how_to_add_a_vault, read_vault, vault_property};
-use super::registry::{arguments, Effect, Session, ToolDef};
+use super::registry::{self, arguments, Effect, Session, ToolDef};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -24,7 +24,7 @@ fn vault_schema() -> Value {
 pub(super) const VAULT_CONTEXT: ToolDef = ToolDef {
     name: "vault_context",
     title: "What is open",
-    description: "The vaults this server reads, whether each index is complete and whether the server can ask the user for another folder, and, when Glyph is running, the note in front of the user, the open tabs and the expanded folders. None of this is in any file an agent would read. Call it first.",
+    description: "The vaults this server reads, whether each index is complete, whether the server can ask the user for another folder, which of the tools that change notes the user has turned on, and, when Glyph is running, the note in front of the user, the open tabs and the expanded folders. None of this is in any file an agent would read. Call it first.",
     input_schema: || json!({ "type": "object", "properties": {}, "additionalProperties": false }),
     effect: Effect::ReadOnly,
     handler: vault_context,
@@ -51,6 +51,10 @@ fn vault_context(session: &Session, args: Value) -> Result<Value, String> {
         "appRunning": open.app_running,
         "vaults": vaults,
         "canAskForVaults": session.allow_vault.is_some(),
+        "writeTools": registry::list(open)
+            .filter(|tool| tool.effect == Effect::Edits)
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>(),
         "activeNote": open.active_note,
         "openTabs": capped(open.tabs.iter()),
         "expandedFolders": open

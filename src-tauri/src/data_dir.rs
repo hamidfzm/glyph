@@ -7,10 +7,25 @@
 use std::fs::{File, OpenOptions, TryLockError};
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 /// `identifier` in `tauri.conf.json`, emitted by `build.rs`.
 pub const IDENTIFIER: &str = env!("GLYPH_IDENTIFIER");
 
 const INSTANCE_LOCK: &str = "instance.lock";
+
+/// What the running app has open, rewritten as that changes, so `glyph mcp`
+/// keeps off a note someone is editing. Only the holder of the instance lock
+/// writes it, and it means nothing while that lock is free.
+pub const OPEN_DOCUMENTS: &str = "open-documents.json";
+
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct OpenDocuments {
+    /// Every file open in a tab of any window.
+    pub open: Vec<String>,
+    /// Those among them holding edits not yet saved.
+    pub unsaved: Vec<String>,
+}
 
 /// The app data directory, then the config directory where that differs
 /// (Linux), which is where an older layout may have left the settings.
@@ -60,6 +75,20 @@ pub fn read_store_in(dir: &Path, name: &str) -> Option<String> {
 /// included, so it can never go stale.
 pub struct InstanceLock {
     _file: File,
+    dir: PathBuf,
+}
+
+impl InstanceLock {
+    /// Replace the published list. Written in place: a reader that catches it
+    /// half written cannot parse it, and treats that as not knowing.
+    pub fn publish(&self, documents: &OpenDocuments) {
+        let written = serde_json::to_vec(documents)
+            .map_err(std::io::Error::from)
+            .and_then(|json| std::fs::write(self.dir.join(OPEN_DOCUMENTS), json));
+        if let Err(err) = written {
+            eprintln!("glyph: cannot write {OPEN_DOCUMENTS}: {err}");
+        }
+    }
 }
 
 /// The app data directory, where the instance lock lives.
@@ -79,7 +108,13 @@ pub fn hold_instance_lock(dir: &Path) -> Option<InstanceLock> {
         .map_err(|err| eprintln!("glyph: cannot open {INSTANCE_LOCK}: {err}"))
         .ok()?;
     acquire(|| file.try_lock())?;
-    Some(InstanceLock { _file: file })
+    let lock = InstanceLock {
+        _file: file,
+        dir: dir.to_path_buf(),
+    };
+    // Whatever an earlier run left behind describes windows that are gone.
+    lock.publish(&OpenDocuments::default());
+    Some(lock)
 }
 
 /// The lock once a probe in flight has let go; `None` for another window, or
@@ -151,6 +186,39 @@ mod tests {
             !running_in(dir.path()),
             "the lock file stays, the lock does not"
         );
+    }
+
+    fn published(dir: &Path) -> Option<OpenDocuments> {
+        serde_json::from_str(&read_store_in(dir, OPEN_DOCUMENTS)?).ok()
+    }
+
+    #[test]
+    fn taking_the_lock_clears_what_an_earlier_run_published() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let stale = r#"{"open":["/gone.md"],"unsaved":["/gone.md"]}"#;
+        std::fs::write(dir.path().join(OPEN_DOCUMENTS), stale).unwrap();
+
+        let held = hold_instance_lock(dir.path()).unwrap();
+        assert_eq!(published(dir.path()), Some(OpenDocuments::default()));
+
+        let now = OpenDocuments {
+            open: vec!["/a.md".to_string(), "/b.md".to_string()],
+            unsaved: vec!["/b.md".to_string()],
+        };
+        held.publish(&now);
+        assert_eq!(published(dir.path()), Some(now));
+    }
+
+    #[test]
+    fn a_list_that_cannot_be_written_does_not_cost_the_app_its_lock() {
+        let dir = tempfile::TempDir::new().unwrap();
+        // A folder sits where the list goes, so every write to it fails.
+        std::fs::create_dir(dir.path().join(OPEN_DOCUMENTS)).unwrap();
+
+        let held = hold_instance_lock(dir.path());
+        assert!(held.is_some() && running_in(dir.path()));
+        // Nothing readable is there, which a reader takes as not knowing.
+        assert_eq!(published(dir.path()), None);
     }
 
     #[test]

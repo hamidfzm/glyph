@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 
 use super::registry::{dispatch, list, AllowVault, Session, ToolError};
 use super::session::{OpenState, OpenTab};
+use crate::data_dir::OpenDocuments;
 use crate::grants::GrantRegistry;
 use crate::vault::test_support::{
     fixture_vault, fixtures_dir, in_vault, link_folder, relative, unique_tmp,
@@ -52,8 +53,49 @@ impl Harness {
         }
     }
 
-    fn path(&self, relative: &str) -> String {
+    pub(super) fn path(&self, relative: &str) -> String {
         in_vault(&self.root, relative)
+    }
+
+    /// A vault with every tool that changes notes turned on.
+    pub(super) fn writing(name: &str) -> Self {
+        let mut h = Self::new(name);
+        h.turn_on(&WRITE_TOOLS);
+        h
+    }
+
+    /// Turn on the tools that change notes, as the user does in the settings.
+    fn turn_on(&mut self, tools: &[&str]) {
+        self.open.write_tools = tools.iter().map(|tool| tool.to_string()).collect();
+    }
+
+    /// The app is running with these notes open, and these among them unsaved.
+    pub(super) fn editing(&mut self, open: &[&str], unsaved: &[&str]) {
+        let paths = |notes: &[&str]| notes.iter().map(|note| self.path(note)).collect();
+        self.open.documents = Some(OpenDocuments {
+            open: paths(open),
+            unsaved: paths(unsaved),
+        });
+        self.open.app_running = true;
+    }
+
+    /// The app is running and has not said what it has open.
+    pub(super) fn running_unreported(&mut self) {
+        self.open.documents = None;
+        self.open.app_running = true;
+    }
+
+    /// Grant a second folder, as a session serving several vaults holds.
+    pub(super) fn grant(&self, folder: &std::path::Path) {
+        self.grants.grant_workspace(folder).unwrap();
+    }
+
+    pub(super) fn read(&self, relative: &str) -> String {
+        fs::read_to_string(self.path(relative)).unwrap()
+    }
+
+    pub(super) fn write(&self, relative: &str, content: &str) {
+        fs::write(self.path(relative), content).unwrap();
     }
 
     pub(super) fn session(&self) -> Session<'_> {
@@ -66,17 +108,17 @@ impl Harness {
         }
     }
 
-    fn call(&self, tool: &str, args: Value) -> Result<Value, ToolError> {
+    pub(super) fn call(&self, tool: &str, args: Value) -> Result<Value, ToolError> {
         let text = dispatch(tool, args, &self.session())?;
         Ok(serde_json::from_str(&text).expect("a tool answers in JSON"))
     }
 
-    fn ok(&self, tool: &str, args: Value) -> Value {
+    pub(super) fn ok(&self, tool: &str, args: Value) -> Value {
         self.call(tool, args.clone())
             .unwrap_or_else(|err| panic!("{tool}({args}) failed: {err:?}"))
     }
 
-    fn refused(&self, tool: &str, args: Value) -> String {
+    pub(super) fn refused(&self, tool: &str, args: Value) -> String {
         match self.call(tool, args.clone()) {
             Err(ToolError::Failed(message)) => message,
             other => panic!("{tool}({args}) should have refused, got {other:?}"),
@@ -88,7 +130,7 @@ impl Harness {
         Vault::build(&self.root).unwrap()
     }
 
-    fn relative(&self, path: &Value) -> String {
+    pub(super) fn relative(&self, path: &Value) -> String {
         relative(&self.root, path.as_str().unwrap())
     }
 }
@@ -109,11 +151,21 @@ fn fixture(name: &str) -> Value {
 
 // ------------------------------------------------------------ the registry
 
+/// The tools that change notes, in the order the registry lists them.
+const WRITE_TOOLS: [&str; 5] = [
+    "patch_note",
+    "set_property",
+    "update_task",
+    "rename_note",
+    "move_note",
+];
+
 #[test]
 fn every_tool_is_listed_with_an_object_schema() {
-    let names: Vec<&str> = list().map(|tool| tool.name).collect();
+    let mut h = Harness::new("mcp_listed");
+    let names = |h: &Harness| -> Vec<&str> { list(&h.open).map(|tool| tool.name).collect() };
     assert_eq!(
-        names,
+        names(&h),
         [
             "vault_context",
             "resolve_link",
@@ -129,7 +181,10 @@ fn every_tool_is_listed_with_an_object_schema() {
             "export",
         ]
     );
-    for tool in list() {
+    // The tools that change notes join the list once the user turns them on.
+    h.turn_on(&WRITE_TOOLS);
+    assert_eq!(names(&h)[12..], WRITE_TOOLS);
+    for tool in list(&h.open) {
         let described = tool.describe();
         assert_eq!(described["inputSchema"]["type"], "object", "{}", tool.name);
         assert_eq!(
@@ -636,6 +691,242 @@ fn a_path_outside_the_vault_is_refused_by_every_tool() {
     fs::remove_dir_all(&outside).unwrap();
 }
 
+// ------------------------------------------------- tools that change notes
+
+/// One call per write tool, each of which would change the fixture vault.
+fn write_calls() -> [(&'static str, Value); 5] {
+    [
+        (
+            "patch_note",
+            json!({ "ref": "Index", "section": "Index", "content": "added", "mode": "append" }),
+        ),
+        (
+            "set_property",
+            json!({ "ref": "Index", "key": "status", "value": "draft" }),
+        ),
+        (
+            "update_task",
+            json!({ "ref": "Index", "task": "anything", "state": "done" }),
+        ),
+        ("rename_note", json!({ "ref": "Index", "to": "Home" })),
+        ("move_note", json!({ "ref": "Index", "to": "Notes" })),
+    ]
+}
+
+#[test]
+fn every_write_tool_is_off_until_the_user_turns_it_on() {
+    let mut h = Harness::new("mcp_write_off");
+    let before = h.read("Index.md");
+    assert_eq!(write_calls().map(|(tool, _)| tool), WRITE_TOOLS);
+
+    let turned_off = |h: &Harness, tool: &str, args: &Value| {
+        matches!(h.call(tool, args.clone()),
+            Err(ToolError::Failed(message)) if message.contains("turned off"))
+    };
+    // A client can call a name it was never offered; the call is refused all
+    // the same.
+    for (tool, args) in &write_calls() {
+        assert!(turned_off(&h, tool, args), "{tool}");
+    }
+    assert_eq!(h.read("Index.md"), before);
+    assert_eq!(h.ok("vault_context", json!({}))["writeTools"], json!([]));
+
+    // Names that are not write tools turn nothing on.
+    h.turn_on(&["read_note", "delete_note", "PATCH_NOTE", ""]);
+    for (tool, args) in &write_calls() {
+        assert!(turned_off(&h, tool, args), "{tool}");
+    }
+
+    // One toggle is one tool.
+    h.turn_on(&["set_property"]);
+    let offered: Vec<&str> = list(&h.open)
+        .map(|tool| tool.name)
+        .filter(|name| WRITE_TOOLS.contains(name))
+        .collect();
+    assert_eq!(offered, ["set_property"]);
+    assert_eq!(
+        h.ok("vault_context", json!({}))["writeTools"],
+        json!(["set_property"])
+    );
+    for (tool, args) in &write_calls() {
+        assert_eq!(
+            turned_off(&h, tool, args),
+            *tool != "set_property",
+            "{tool}"
+        );
+    }
+    assert!(h.read("Index.md").contains("status: draft"));
+    assert!(h.root.join("Index.md").is_file());
+}
+
+#[test]
+fn a_write_tool_is_marked_as_changing_things() {
+    let h = Harness::writing("mcp_write_hints");
+    for tool in list(&h.open).filter(|tool| WRITE_TOOLS.contains(&tool.name)) {
+        let hints = &tool.describe()["annotations"];
+        assert_eq!(hints["readOnlyHint"], false, "{}", tool.name);
+        assert_eq!(hints["destructiveHint"], true, "{}", tool.name);
+    }
+    assert_eq!(super::agent_write_tools(), WRITE_TOOLS);
+    // `AgentToolsSection.test.tsx` holds the settings' strings to the same
+    // file, so a tool cannot be added here without its toggle being named.
+    assert_eq!(json!(WRITE_TOOLS), fixture("mcp-write-tools.json"));
+}
+
+#[test]
+fn no_write_tool_reaches_outside_the_vault_it_is_reading() {
+    let h = Harness::writing("mcp_write_outside");
+    let outside = unique_tmp("mcp_write_outside_target");
+    let secret = outside.join("Secret.md");
+    fs::write(
+        &secret,
+        "---\nkey: classified\n---\n# Secret\n- [ ] classified\n",
+    )
+    .unwrap();
+    // A second vault the session holds a grant for, which is not this one.
+    let (other, other_root) = other_folder("mcp_write_other");
+    h.grant(&other);
+    link_folder(&outside, &h.root.join("linked"));
+
+    let spelled = |path: &std::path::Path| path.to_string_lossy().to_string();
+    let escapes = [
+        spelled(&secret),
+        "../mcp_write_outside_target/Secret.md".to_string(),
+        "linked/Secret.md".to_string(),
+        spelled(&other.join("Elsewhere.md")),
+    ];
+    for reference in &escapes {
+        let refusals = [
+            h.refused(
+                "patch_note",
+                json!({ "ref": reference, "section": "Secret", "content": "x", "mode": "replace" }),
+            ),
+            h.refused(
+                "set_property",
+                json!({ "ref": reference, "key": "key", "value": "x" }),
+            ),
+            h.refused(
+                "update_task",
+                json!({ "ref": reference, "task": "classified", "state": "done" }),
+            ),
+            h.refused("rename_note", json!({ "ref": reference, "to": "Taken" })),
+            h.refused("move_note", json!({ "ref": reference, "to": "Notes" })),
+        ];
+        for refusal in refusals {
+            assert!(!refusal.contains("classified"), "leaked content: {refusal}");
+        }
+    }
+    // A note of this vault is not moved out of it either: not by an absolute
+    // folder, a climb, a link out, or into the other vault.
+    for to in [
+        spelled(&outside),
+        "../mcp_write_outside_target".to_string(),
+        "linked".to_string(),
+        other_root,
+    ] {
+        h.refused("move_note", json!({ "ref": "Index", "to": to }));
+    }
+    for to in [
+        "../Escaped",
+        "linked/Escaped",
+        "..",
+        "/Escaped",
+        "C:Escaped",
+    ] {
+        h.refused("rename_note", json!({ "ref": "Index", "to": to }));
+    }
+
+    assert!(h.root.join("Index.md").is_file());
+    assert_eq!(
+        fs::read_to_string(&secret).unwrap(),
+        "---\nkey: classified\n---\n# Secret\n- [ ] classified\n"
+    );
+    let stray = |folder: &std::path::Path| fs::read_dir(folder).unwrap().count();
+    assert_eq!((stray(&outside), stray(&other)), (1, 1));
+    fs::remove_dir_all(&outside).unwrap();
+    fs::remove_dir_all(&other).unwrap();
+}
+
+#[test]
+fn a_toggle_and_an_unsaved_note_reach_the_server_through_the_apps_files() {
+    use crate::data_dir::hold_instance_lock;
+
+    let root = fixture_vault("mcp_write_served");
+    let vault = root.to_string_lossy().to_string();
+    let note = in_vault(&root, "Index.md");
+    let stores = tempfile::TempDir::new().unwrap();
+    let listing = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }).to_string();
+    let offered = |messages: &[Value]| -> Vec<String> {
+        let tools = messages[0]["result"]["tools"].as_array().unwrap();
+        let names = tools.iter().filter_map(|tool| tool["name"].as_str());
+        names
+            .filter(|name| WRITE_TOOLS.contains(name))
+            .map(str::to_string)
+            .collect()
+    };
+    // Settings that say nothing offer no tool that changes a note.
+    let messages = serve_in(
+        stores.path(),
+        vec![vault.clone()],
+        std::slice::from_ref(&listing),
+    );
+    assert!(offered(&messages).is_empty());
+
+    let settings = json!({ "settings": { "ai": { "agentWriteTools": ["set_property"] } } });
+    fs::write(stores.path().join("settings.json"), settings.to_string()).unwrap();
+    // The app is running, and holds unsaved edits to the note.
+    let app = hold_instance_lock(stores.path()).unwrap();
+    app.publish(&OpenDocuments {
+        open: vec![note.clone()],
+        unsaved: vec![note.clone()],
+    });
+
+    let set = |id| {
+        tool_call(
+            id,
+            "set_property",
+            json!({ "ref": "Index", "key": "status", "value": "draft" }),
+        )
+    };
+    let patch = tool_call(
+        3,
+        "patch_note",
+        json!({ "ref": "Index", "section": "Index", "content": "x", "mode": "append" }),
+    );
+    let text_of = |messages: &[Value], id: u64| -> (String, bool) {
+        let reply = messages.iter().find(|message| message["id"] == id).unwrap();
+        let text = reply["result"]["content"][0]["text"].as_str().unwrap();
+        (text.to_string(), reply["result"]["isError"] == true)
+    };
+
+    let messages = serve_in(
+        stores.path(),
+        vec![vault.clone()],
+        &[listing, set(2), patch],
+    );
+    assert_eq!(offered(&messages), ["set_property"]);
+    let (refusal, refused) = text_of(&messages, 2);
+    assert!(
+        refused && refusal.starts_with("unsaved changes"),
+        "{refusal}"
+    );
+    let (refusal, refused) = text_of(&messages, 3);
+    assert!(refused && refusal.contains("turned off"), "{refusal}");
+
+    // Saved, the same call goes through.
+    app.publish(&OpenDocuments {
+        open: vec![note],
+        unsaved: Vec::new(),
+    });
+    let messages = serve_in(stores.path(), vec![vault], &[set(2)]);
+    assert_eq!(result_of(&messages, 2)["changed"], true);
+    assert!(fs::read_to_string(root.join("Index.md"))
+        .unwrap()
+        .contains("status: draft"));
+    drop(app);
+    fs::remove_dir_all(&root).unwrap();
+}
+
 // ------------------------------------------------------ folders on request
 
 /// A folder the server was not given, with one tagged note, and its path as
@@ -807,11 +1098,16 @@ fn a_path_that_could_disguise_itself_is_never_put_to_the_user() {
 /// Drive the whole server over streams, one message per line, with the
 /// `--vault` roots given; what it writes comes back parsed.
 fn serve_lines(vaults: Vec<String>, lines: &[String]) -> Vec<Value> {
-    let mut output = Vec::new();
-    let input = lines.join("\n");
     // An empty data directory, so nothing this machine has open leaks in.
     let stores = tempfile::TempDir::new().unwrap();
-    let stores = Some(stores.path().to_path_buf());
+    serve_in(stores.path(), vaults, lines)
+}
+
+/// [`serve_lines`] over the app data directory `stores`.
+fn serve_in(stores: &std::path::Path, vaults: Vec<String>, lines: &[String]) -> Vec<Value> {
+    let mut output = Vec::new();
+    let input = lines.join("\n");
+    let stores = Some(stores.to_path_buf());
     assert_eq!(super::run(vaults, stores, input.as_bytes(), &mut output), 0);
     String::from_utf8(output)
         .unwrap()

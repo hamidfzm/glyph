@@ -263,6 +263,32 @@
     },
     "speed": {
       "label": "Velocidad"
+    },
+    "agentTools": {
+      "title": "Herramientas para agentes",
+      "description": "Un agente de IA conectado al servidor MCP de Glyph (glyph mcp) siempre puede leer tus espacios de trabajo abiertos: enlaces, enlaces entrantes, etiquetas, encabezados y el grafo. Las herramientas que modifican tus notas permanecen desactivadas hasta que actives cada una aquí. Una nota con cambios sin guardar en Glyph nunca se sobrescribe.",
+      "tools": {
+        "patch_note": {
+          "label": "Editar una sección",
+          "description": "Reemplaza el texto bajo un encabezado, o añade texto al principio o al final. El resto de la nota no se toca."
+        },
+        "set_property": {
+          "label": "Establecer una propiedad",
+          "description": "Establece o elimina una propiedad del frontmatter y conserva el orden, los comentarios y las comillas de las demás."
+        },
+        "update_task": {
+          "label": "Marcar tareas",
+          "description": "Marca una tarea como hecha o pendiente. Las casillas en bloques de código y citas nunca se tocan."
+        },
+        "rename_note": {
+          "label": "Renombrar notas",
+          "description": "Renombra una nota y reescribe los enlaces que apuntan a ella."
+        },
+        "move_note": {
+          "label": "Mover notas",
+          "description": "Mueve una nota a otra carpeta y reescribe los enlaces que apuntan a ella."
+        }
+      }
     }
   },
   "print": {

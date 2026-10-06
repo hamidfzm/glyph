@@ -5,12 +5,13 @@
 //! both sides to the same answers, and both split lines on CRLF, CR and LF.
 
 use std::cmp::Ordering;
+use std::ops::Range;
 
 use serde::Serialize;
 
 use super::slug_table::STRIPPED;
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub(crate) struct Heading {
     pub level: u8,
     pub text: String,
@@ -20,7 +21,7 @@ pub(crate) struct Heading {
 
 /// JavaScript's `\s`, which is also what `trim()` removes: Unicode White_Space
 /// plus U+FEFF, minus U+0085.
-fn is_js_space(c: char) -> bool {
+pub(super) fn is_js_space(c: char) -> bool {
     (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}'
 }
 
@@ -67,20 +68,37 @@ impl Fences {
 /// The lines of `text` as `split(/\r\n|\r|\n/)` yields them, without the empty
 /// piece a final terminator leaves, as `str::lines` does.
 pub(crate) fn js_lines(text: &str) -> impl Iterator<Item = &str> {
-    let mut rest = text;
+    js_line_starts(text).map(|(_, line)| line)
+}
+
+/// [`js_lines`], each with the byte it starts at. A line and its terminator
+/// end where the next line starts, or where `text` does.
+pub(crate) fn js_line_starts(text: &str) -> impl Iterator<Item = (usize, &str)> {
+    let mut at = 0;
     std::iter::from_fn(move || {
+        let rest = &text[at..];
         if rest.is_empty() {
             return None;
         }
         let end = rest.find(['\r', '\n']).unwrap_or(rest.len());
-        let line = &rest[..end];
-        let after = &rest[end..];
-        rest = after
-            .strip_prefix("\r\n")
-            .or_else(|| after.get(1..))
-            .unwrap_or("");
-        Some(line)
+        let terminator = match &rest[end..] {
+            after if after.starts_with("\r\n") => 2,
+            "" => 0,
+            _ => 1,
+        };
+        let start = at;
+        at += end + terminator;
+        Some((start, &rest[..end]))
     })
+}
+
+/// The terminator `text` uses, judged by its first, for text added to it.
+pub(crate) fn line_ending(text: &str) -> &'static str {
+    match text.find(['\r', '\n']) {
+        Some(at) if text[at..].starts_with("\r\n") => "\r\n",
+        Some(at) if text[at..].starts_with('\r') => "\r",
+        _ => "\n",
+    }
 }
 
 /// `^(#{1,6})\s+`, then the text trimmed at the end before it is checked for
@@ -182,6 +200,47 @@ pub(crate) fn section(content: &str, body_start: usize, wanted: &str) -> Option<
         .map_or(usize::MAX, |h| h.line as usize - 1);
     let lines: Vec<&str> = js_lines(content).skip(first).take(end - first).collect();
     Some(lines.join("\n").trim_end_matches(is_js_space).to_string())
+}
+
+/// Where one section's body sits in the note, in bytes.
+#[derive(Debug, PartialEq)]
+pub(crate) struct SectionSpan {
+    pub heading: Heading,
+    /// The body without the blank lines around it, through its last line's
+    /// terminator. Empty, at the end of the heading line, for a section that
+    /// holds nothing.
+    pub body: Range<usize>,
+}
+
+/// Every section whose heading is named `wanted`, each sliced as [`section`]
+/// slices the first. A caller that changes a section has to know when the
+/// name alone does not pick one.
+pub(crate) fn section_spans(content: &str, body_start: usize, wanted: &str) -> Vec<SectionSpan> {
+    let lines: Vec<(usize, &str)> = js_line_starts(content).collect();
+    let start_of = |line: usize| lines.get(line).map_or(content.len(), |(start, _)| *start);
+    let filled = |line: &usize| !lines[*line].1.trim_matches(is_js_space).is_empty();
+    let headings = parse_headings(content, body_start);
+    let mut spans = Vec::new();
+    for (at, heading) in headings.iter().enumerate() {
+        if !names_heading(&heading.text, wanted) {
+            continue;
+        }
+        // A heading's 1-based line is the 0-based line after it.
+        let first = heading.line as usize;
+        let end = headings[at + 1..]
+            .iter()
+            .find(|next| next.level <= heading.level)
+            .map_or(lines.len(), |next| next.line as usize - 1);
+        let body = match ((first..end).find(filled), (first..end).rfind(filled)) {
+            (Some(top), Some(bottom)) => start_of(top)..start_of(bottom + 1),
+            _ => start_of(first)..start_of(first),
+        };
+        spans.push(SectionSpan {
+            heading: heading.clone(),
+            body,
+        });
+    }
+    spans
 }
 
 #[cfg(test)]
@@ -304,6 +363,60 @@ mod tests {
         let md = "## Real\ntext\n```\n## Fake\n```\nmore";
         assert_eq!(section(md, 0, "Fake"), None);
         assert_eq!(section(md, 0, "Real").as_deref(), Some(md));
+    }
+
+    fn bodies<'a>(md: &'a str, wanted: &str) -> Vec<&'a str> {
+        section_spans(md, 0, wanted)
+            .into_iter()
+            .map(|span| &md[span.body])
+            .collect()
+    }
+
+    #[test]
+    fn a_section_body_is_spanned_without_the_blank_lines_around_it() {
+        // The subsection belongs to its parent, as it does when read.
+        assert_eq!(bodies(DOC, "Recipes"), ["pasta\n\n### Sauce\ntomato\n"]);
+        assert_eq!(bodies(DOC, "sauce"), ["tomato\n"]);
+        assert_eq!(bodies(DOC, "Notes"), ["footer\n"]);
+        assert!(bodies(DOC, "Nope").is_empty());
+
+        let spaced = "# A\r\n\r\n  \r\nbody\r\n\r\n# B\r\n";
+        assert_eq!(bodies(spaced, "A"), ["body\r\n"]);
+        // The last line of the note has no terminator to take.
+        assert_eq!(bodies("# A\nlast", "A"), ["last"]);
+    }
+
+    #[test]
+    fn an_empty_section_spans_nothing_just_past_its_heading() {
+        for (md, at) in [
+            ("# A\n# B\n", 4),
+            ("# A\n\n\n# B\n", 4),
+            ("# A", 3),
+            ("# A\n", 4),
+        ] {
+            assert_eq!(section_spans(md, 0, "A")[0].body, at..at, "{md:?}");
+        }
+    }
+
+    #[test]
+    fn every_heading_that_shares_the_name_is_spanned() {
+        let md = "# Mon\n## Tasks\none\n# Tue\n## Tasks\ntwo\n```\n## Tasks\n```\n";
+        let spans = section_spans(md, 0, "tasks");
+        let lines: Vec<u32> = spans.iter().map(|span| span.heading.line).collect();
+        assert_eq!(lines, [2, 5]);
+        // A fenced line that looks like a heading ends nothing.
+        assert_eq!(&md[spans[1].body.clone()], "two\n```\n## Tasks\n```\n");
+    }
+
+    #[test]
+    fn lines_start_where_the_one_before_ended() {
+        let starts: Vec<(usize, &str)> = js_line_starts("a\r\nbb\rc\n\nd").collect();
+        assert_eq!(starts, [(0, "a"), (3, "bb"), (6, "c"), (8, ""), (9, "d")]);
+        assert_eq!(js_line_starts("").count(), 0);
+        assert_eq!(line_ending("a\r\nb\n"), "\r\n");
+        assert_eq!(line_ending("a\rb"), "\r");
+        assert_eq!(line_ending("a\nb\r\n"), "\n");
+        assert_eq!(line_ending("no terminator"), "\n");
     }
 
     #[test]

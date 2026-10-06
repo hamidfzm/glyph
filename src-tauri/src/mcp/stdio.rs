@@ -8,7 +8,7 @@ use std::io::{self, BufRead, Read, Write};
 
 use serde_json::{json, Value};
 
-use super::registry::{self, ToolError};
+use super::registry::ToolError;
 
 /// Newest first. A client asking for one of these gets it back; any other
 /// request gets the newest, and the client decides whether it speaks that.
@@ -26,7 +26,7 @@ const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_FOUND: i64 = -32601;
 const INVALID_PARAMS: i64 = -32602;
 
-const INSTRUCTIONS: &str = "Glyph's index of markdown vaults: wikilinks resolved the way the app resolves them, backlinks, tags, headings, the link graph and canvas boards. A note reference (`ref`) is a wikilink target such as `Note`, `Folder/Note` or `Note#Heading`, a path relative to the vault, or an absolute path. Call vault_context first to see which vaults are open. When it reports canAskForVaults, a folder that is not listed can be passed by its absolute path as `vault`, and the user is asked to allow it.";
+const INSTRUCTIONS: &str = "Glyph's index of markdown vaults: wikilinks resolved the way the app resolves them, backlinks, tags, headings, the link graph and canvas boards. A note reference (`ref`) is a wikilink target such as `Note`, `Folder/Note` or `Note#Heading`, a path relative to the vault, or an absolute path. Call vault_context first to see which vaults are open. When it reports canAskForVaults, a folder that is not listed can be passed by its absolute path as `vault`, and the user is asked to allow it. Tools that change notes are listed only once the user has turned each one on in Glyph's settings; vault_context reports which are on.";
 
 /// Puts a question to the user in the middle of a call.
 pub(super) trait Ask {
@@ -59,11 +59,13 @@ struct Client<R, W> {
     held: VecDeque<Incoming>,
 }
 
-/// Answer requests from `input` until it ends. `call` runs one tool; this loop
-/// owns everything else about the protocol.
+/// Answer requests from `input` until it ends. `list` describes the tools on
+/// offer right now and `call` runs one; this loop owns everything else about
+/// the protocol.
 pub(super) fn serve(
     input: impl BufRead,
     output: impl Write,
+    mut list: impl FnMut() -> Vec<Value>,
     mut call: impl FnMut(&str, Value, &mut dyn Ask) -> Result<String, ToolError>,
 ) -> io::Result<()> {
     let mut client = Client {
@@ -88,7 +90,9 @@ pub(super) fn serve(
                 "message is larger than 1 MiB",
             )),
             Some(Incoming::Malformed) => Some(error(Value::Null, PARSE_ERROR, "Parse error")),
-            Some(Incoming::Message(message)) => respond(&message, &mut client, &mut call),
+            Some(Incoming::Message(message)) => {
+                respond(&message, &mut client, &mut list, &mut call)
+            }
         };
         if let Some(reply) = reply {
             send(&mut client.output, &reply)?;
@@ -157,6 +161,7 @@ fn error(id: Value, code: i64, message: &str) -> Value {
 fn respond<R: BufRead, W: Write>(
     message: &Value,
     client: &mut Client<R, W>,
+    list: &mut impl FnMut() -> Vec<Value>,
     call: &mut impl FnMut(&str, Value, &mut dyn Ask) -> Result<String, ToolError>,
 ) -> Option<Value> {
     let Some(object) = message.as_object() else {
@@ -192,9 +197,7 @@ fn respond<R: BufRead, W: Write>(
             Ok(initialize(&params))
         }
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(json!({
-            "tools": registry::list().map(|tool| tool.describe()).collect::<Vec<_>>()
-        })),
+        "tools/list" => Ok(json!({ "tools": list() })),
         "tools/call" => {
             client.call_id = id.clone();
             let result = call_tool(&params, client, call);
@@ -349,6 +352,7 @@ mod tests {
         serve(
             input.as_bytes(),
             &mut output,
+            || vec![json!({ "name": "echo" })],
             |name, args, ask| match name {
                 "echo" => Ok(args.to_string()),
                 "ask" => ask
@@ -410,15 +414,9 @@ mod tests {
     }
 
     #[test]
-    fn tools_are_listed_with_their_schemas() {
+    fn the_tools_listed_are_the_ones_on_offer_when_asked() {
         let replies = exchange(&request(1, "tools/list", Value::Null));
-        let tools = replies[0]["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), registry::list().count());
-        for tool in tools {
-            assert!(tool["name"].is_string());
-            assert_eq!(tool["inputSchema"]["type"], "object", "{}", tool["name"]);
-            assert!(tool["annotations"]["readOnlyHint"].is_boolean());
-        }
+        assert_eq!(replies[0]["result"]["tools"], json!([{ "name": "echo" }]));
     }
 
     #[test]
@@ -528,7 +526,7 @@ mod tests {
         let huge = format!("{{\"pad\":\"{}\"", "z".repeat(MAX_MESSAGE_BYTES + 100));
         let input = std::io::BufReader::with_capacity(64, huge.as_bytes());
         let mut output = Vec::new();
-        serve(input, &mut output, |_, _, _| Ok(String::new())).unwrap();
+        serve(input, &mut output, Vec::new, |_, _, _| Ok(String::new())).unwrap();
         let text = String::from_utf8(output).unwrap();
         assert_eq!(text.lines().count(), 1, "one refusal, then the end: {text}");
     }
@@ -736,7 +734,7 @@ mod tests {
             request(2, "tools/call", json!({ "name": "ask" })),
         );
         let mut refusal = None;
-        let served = serve(input.as_bytes(), Closing(1), |_, _, ask| {
+        let served = serve(input.as_bytes(), Closing(1), Vec::new, |_, _, ask| {
             refusal = ask.confirm("May I?").err();
             Ok(String::new())
         });

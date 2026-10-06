@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { toggleTaskAtLine } from "./taskList";
 
@@ -53,5 +55,18 @@ describe("toggleTaskAtLine", () => {
 
   it("ignores `[ ]` not preceded by a list bullet (e.g. inside a paragraph)", () => {
     expect(toggleTaskAtLine("see [ ] in text", 1)).toBe("see [ ] in text");
+  });
+});
+
+// The MCP server ports this pattern (`src-tauri/src/vault/tasks.rs`). Both are
+// held to `vault-tasks.json`, so a change to either fails here and in
+// `vault::tasks::tests::task_lines_match_the_shared_expectation` together.
+describe("the shared task fixture", () => {
+  const expected: { lines: { line: string; task: boolean }[] } = JSON.parse(
+    readFileSync(path.join(process.cwd(), "src-tauri", "fixtures", "vault-tasks.json"), "utf-8"),
+  );
+
+  it.each(expected.lines)("agrees with the Rust matcher on $line", ({ line, task }) => {
+    expect(toggleTaskAtLine(line, 1) !== line).toBe(task);
   });
 });

@@ -5,7 +5,7 @@ import { type Tab, tabPathOf, type Workspace } from "@/lib/tabs";
 
 /**
  * Report what this window shows to the Rust window registry: its folder
- * workspace and its open file tabs.
+ * workspace, its open file tabs, and which of those hold unsaved edits.
  *
  * Routing uses both to keep a path in at most one window. A request for a note
  * another window already shows focuses that window instead of opening a second
@@ -32,6 +32,12 @@ export function useWindowRegistrySync(
     .filter((tab) => tab.kind === "file" && !tab.file.virtual)
     .map((tab) => tabPathOf(tab));
   const key = paths.join("\0");
+  // Keyed like the paths: every keystroke re-renders the tabs, but a buffer
+  // turns unsaved once and saved once.
+  const unsaved = tabs
+    .filter((tab) => tab.kind === "file" && !tab.file.virtual && tab.file.dirty)
+    .map((tab) => tabPathOf(tab));
+  const unsavedKey = unsaved.join("\0");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `paths` is derived from `key`, which is the real dependency
   useEffect(() => {
@@ -42,4 +48,11 @@ export function useWindowRegistrySync(
     invoke("set_window_workspace", { root }).catch(() => {});
     invoke("set_window_files", { paths }).catch(() => {});
   }, [root, key, initializing]);
+
+  // The MCP server reads this to keep off a note someone is editing.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `unsaved` is derived from `unsavedKey`, which is the real dependency
+  useEffect(() => {
+    if (initializing || isCliExportProcess()) return;
+    invoke("set_window_unsaved", { paths: unsaved }).catch(() => {});
+  }, [unsavedKey, initializing]);
 }

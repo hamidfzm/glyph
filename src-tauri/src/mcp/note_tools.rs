@@ -158,7 +158,12 @@ fn frontmatter_json(frontmatter: Frontmatter) -> Value {
 }
 
 /// No heading matched, so say which ones exist for the model to pick from.
-fn missing_section(content: &str, body_start: usize, heading: &str, path: &str) -> String {
+pub(super) fn missing_section(
+    content: &str,
+    body_start: usize,
+    heading: &str,
+    path: &str,
+) -> String {
     let known: Vec<String> = parse_headings(content, body_start)
         .into_iter()
         .take(50)

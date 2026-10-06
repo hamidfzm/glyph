@@ -141,6 +141,10 @@ export interface AISettings {
   model: string;
   ttsVoice: string;
   ttsSpeed: number;
+  /** Names of the MCP tools that change notes which the user has turned on.
+   *  `glyph mcp` reads this list before every call; a name it does not know
+   *  turns nothing on. */
+  agentWriteTools: string[];
 }
 
 export interface PrintSettings {
@@ -296,6 +300,7 @@ export const DEFAULT_SETTINGS: Settings = {
     model: "",
     ttsVoice: "",
     ttsSpeed: 1.0,
+    agentWriteTools: [],
   },
   print: {
     pageBreakLevel: "none",

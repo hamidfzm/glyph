@@ -58,7 +58,10 @@ re-grants it recursively, so a subfolder or an exact-file grant may not pass),
 ever re-scope a path the session already holds; a new window never widens
 the process's filesystem reach. `set_window_workspace`, which a window calls
 to report the workspace it shows, updates routing state only and mints
-nothing.
+nothing. The same holds for `set_window_files` and `set_window_unsaved`: the
+paths they carry are reports, published for `glyph mcp` to read (see
+[MCP server](#mcp-server-glyph-mcp)), and never become readable or writable
+by being reported.
 
 Workspace and file grants are also mirrored into Tauri's runtime
 asset-protocol scope so `asset://` image URLs resolve only inside granted
@@ -266,15 +269,43 @@ the way a renderer-supplied path is.
   grant already sits on that share: resolving one connects to the host, which
   can hand it the user's credentials.
 - **Every path goes through the registry.** A note reference that names a
-  path, `resolve_link`'s `from`, `read_canvas`'s `path`, and `export`'s `out`
-  pass `ensure_readable` or `ensure_writable` before anything is read or
-  written. A wikilink target resolves only to a note the index already holds,
-  and the index keeps its walk rules: no symlink out of the vault, no hidden
-  folder, nothing over 5 MB.
-- **Effects.** Every tool is read-only except two. `export` writes only
-  inside the vault it reads, to a name carrying the format's extension, so it
-  cannot replace a note. `open_in_glyph` hands the app a path the server can
-  already read, the way a file manager would.
+  path, `resolve_link`'s `from`, `read_canvas`'s `path`, `export`'s `out`, a
+  note a write tool changes, and the destination of a rename or a move pass
+  `ensure_readable` or `ensure_writable` before anything is read or written.
+  A wikilink target resolves only to a note the index already holds, and the
+  index keeps its walk rules: no symlink out of the vault, no hidden folder,
+  nothing over 5 MB.
+- **Effects.** `export` writes only inside the vault it reads, to a name
+  carrying the format's extension, so it cannot replace a note.
+  `open_in_glyph` hands the app a path the server can already read, the way a
+  file manager would. Five tools change notes: `patch_note`, `set_property`,
+  `update_task`, `rename_note` and `move_note`. Every other tool is read-only.
+- **Write tools are off until turned on.** Each of the five has its own toggle
+  in Settings, stored as a list of names in `settings.json`
+  (`ai.agentWriteTools`) that the server reads again before every listing and
+  every call. A tool that is off is left out of `tools/list`, and the check
+  that matters is in dispatch: a call to a name the client was never offered
+  is refused the same way. Turning one on turns on that one alone.
+- **A write stays inside the vault and inside the edit.** The target passes
+  `ensure_writable` and must sit in the vault the call reads, which the grants
+  alone do not ensure once a session serves several. The edit is worked out
+  from the file as it is on disk, and written only if the file still holds
+  exactly that; otherwise nothing is written and the caller is told to call
+  again. `set_property` parses its result again and refuses it if any other
+  property would read differently. A result past the 5 MB the index reads is
+  refused. A rename or a move refuses a destination that exists, one outside
+  the vault, and one the index would not read, and a link rewrite that stops
+  partway is reported with the note it stopped at, never as a success.
+- **Notes being edited.** The running app publishes, in `open-documents.json`
+  in its data directory, the files every window has open and which of them
+  hold unsaved edits, from each window's own report. The server reads it only
+  while the instance lock is held, and keeps only the paths its grants admit.
+  A write to a note with unsaved edits is refused with a message that opens
+  `unsaved changes`; a rename or a move is refused for a note open in any
+  window, saved or not, because the app would go on saving it under its old
+  path, and for a move that would rewrite links in a note with unsaved edits.
+  A running app whose list is missing or unreadable is treated as not having
+  said, and every write is refused until it has.
 - **Stdout** carries JSON-RPC messages and nothing else. The processes the
   server starts get null or captured stdio, never its own.
 - **Bounds.** A message over 1 MiB is refused; a listing stops at 200 rows and
@@ -294,6 +325,21 @@ the way a renderer-supplied path is.
   without showing it to the user, or a user who approves by reflex, gives the
   model that folder until the session ends. Starting the server with
   `--vault` turns asking off.
+- **A write tool that is on reaches every note in the served vaults.** The
+  toggle is per tool, not per vault or per note, and a model that reads
+  untrusted note content can be talked into using it. `--vault` narrows the
+  vaults; there is no undo beyond the vault's own version control.
+- **The write-tool toggles are renderer-writable.** They live in
+  `settings.json`, so a compromised renderer can turn a write tool on for a
+  connected agent. That gives the agent nothing the renderer lacks: the
+  renderer already writes every file under those roots through `write_file`.
+  Accepted so the toggles sit with the other settings; it only matters after
+  the renderer is already compromised.
+- **The unsaved-changes guard is a report, not a lock.** An edit typed in the
+  instant before a write is not yet in the published list, and a compromised
+  renderer can leave a path out of it. The app keeps an unsaved buffer over a
+  change on disk, so in that window it is the agent's write that the next
+  save replaces, not the user's edit.
 
 - **Persisted-session grant staging.** The settings store (`settings.json`)
   is renderer-writable, and the backend seeds grants from it at the next
