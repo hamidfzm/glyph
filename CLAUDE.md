@@ -71,10 +71,11 @@ Do **not** use `closing` (or `closed out`, `fixing`, `resolving`, or any other v
 
 ## Component Structure
 
-- `src/components/markdown/`: Markdown rendering (MarkdownViewer, LinkComponent, ImageComponent, HeadingComponent)
-- `src/components/layout/`: App shell (Sidebar, StatusBar, Titlebar, EmptyState)
+- `src/components/markdown/`: Markdown rendering (MarkdownViewer, LinkComponent, ImageComponent, MarkdownHeading)
+- `src/components/layout/`: App shell (Sidebar, StatusBar, TabBar, EmptyState)
 - `src/components/icons/`: SVG icon components
-- `src/components/modals/`: Overlay UI (SettingsModal, AIPanel)
+- `src/components/modals/`: Overlay UI (CommandPalette, SearchPanel, `settings/SettingsModal`)
+- `src/components/ai/`: AI chat (AIChatPanel)
 - `src/plugins/core/<id>/`: Core plugins (bundled, toggled in Settings, Plugins), each self-contained and registered only through the public plugin API; the list is `src/lib/plugins/corePlugins.ts`
 
 ## Releases
@@ -101,4 +102,4 @@ Releases are not always cut from main's tip: hotfixes may build on a previous ta
 - `src/hooks/useTabs.ts`: Core file/workspace loading and tab state (CLI args + dialog)
 - `src/components/App.tsx`: Root layout, menu event listeners, and theme injection
 - `src/lib/settings.ts`: Settings types, defaults, and constants
-- `src/contexts/SettingsContext.tsx`: Settings persistence via Tauri store
+- `src/contexts/SettingsProvider.tsx`: Settings persistence via Tauri store
