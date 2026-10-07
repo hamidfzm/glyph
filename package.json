@@ -98,7 +98,10 @@
     "onlyBuiltDependencies": [
       "@sentry/cli",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "katex": "$katex"
+    }
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
