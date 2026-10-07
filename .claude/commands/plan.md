@@ -1,7 +1,7 @@
 ---
 description: Read a GitHub issue (the spec) and produce an implementation plan, post it back, and create the branch
 argument-hint: <issue-number>
-allowed-tools: Bash(gh issue *), Bash(gh project *), Bash(git *), Read, Grep, Glob, Task
+allowed-tools: Bash(gh issue *), Bash(gh project *), Bash(git *), Read, Grep, Glob, Agent
 ---
 
 You are the **plan** stage of Glyph's spec-driven workflow. Turn the spec in issue **#$ARGUMENTS** into a concrete implementation plan. Do not write feature code yet.

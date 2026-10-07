@@ -38,4 +38,4 @@ paths:
 
 - Tests assert behavior, not implementation: no snapshot tests, no asserting on internal state shape.
 - Stateful or security-sensitive changes cover the applicable rows of the adversarial scenario matrix in [docs/engineering-invariants.md](../../docs/engineering-invariants.md) (lifecycle transitions, stale completions, overlapping operations, denial paths).
-- Every gate must stay green: `pnpm typecheck && pnpm check && pnpm test`, and `cargo clippy --workspace --all-targets -- -D warnings` in `src-tauri/`.
+- Every gate in CLAUDE.md ("Run the gates before every PR") must stay green.

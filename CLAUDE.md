@@ -28,7 +28,7 @@ The spec stays current throughout: acceptance-criteria and task checkboxes on th
 - **Run the gates before every PR** (the same gate the Husky pre-commit hook and CI enforce):
   ```bash
   pnpm typecheck && pnpm check && pnpm test
-  cd src-tauri && cargo clippy --workspace --all-targets -- -D warnings
+  cd src-tauri && cargo test --workspace --lib && cargo clippy --workspace --all-targets -- -D warnings
   ```
   Fix Biome warnings by applying the suggested fix, never by suppressing.
 - **Branches** are cut from `main` as `feat/<slug>` or `fix/<slug>`, each in its own git worktree under `.claude/worktrees/`. See [.claude/rules/worktrees.md](.claude/rules/worktrees.md) for the GitHub Flow worktree workflow and how to clean up merged worktrees (see [CONTRIBUTING.md](CONTRIBUTING.md) for the wider conventions).
@@ -39,7 +39,7 @@ The spec stays current throughout: acceptance-criteria and task checkboxes on th
 Delegate to the project agents in `.claude/agents/` rather than doing their job inline:
 
 - **`tester`**: runs the full gates (typecheck, Biome, frontend tests and build, `cargo test`, strict clippy) and reports missing scenario coverage; use it to gate `/implement` and `/ship`.
-- **`code-reviewer`**: reviews the diff for correctness, typing, Rust error handling, security, and consistency; used by `/ship` before opening a PR.
+- **`code-reviewer`**: reviews the diff against the engineering invariants, correctness, the `.claude/rules/` conventions, security, DOM-consumer reach, and stale descriptions; used by `/ship` before opening a PR.
 - **`builder`**: runs the production `pnpm tauri build` and reports bundle/binary size and warnings.
 - **`ui-inspector`**: audits components for accessibility, platform-adaptive styling, and dark mode.
 

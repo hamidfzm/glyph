@@ -1,7 +1,7 @@
 ---
 description: Implement a spec issue task-by-task with tests, ticking off acceptance criteria and running the gates
 argument-hint: <issue-number> (defaults to the issue named in the current branch)
-allowed-tools: Bash(gh issue *), Bash(pnpm *), Bash(npx tauri *), Bash(cd src-tauri && cargo *), Bash(git *), Read, Edit, Write, Grep, Glob, Task
+allowed-tools: Bash(gh issue *), Bash(pnpm *), Bash(npx tauri *), Bash(cd src-tauri && cargo *), Bash(git *), Read, Edit, Write, Grep, Glob, Agent
 ---
 
 You are the **implement** stage of Glyph's spec-driven workflow. Build the feature defined in issue **#$ARGUMENTS** (if no number is given, infer it from the current branch name or ask). The issue body + its plan comment are the source of truth.
@@ -19,12 +19,7 @@ You are the **implement** stage of Glyph's spec-driven workflow. Build the featu
 
 3. **Add tests beside the source**: `*.test.{ts,tsx}` (Vitest + Testing Library) and Rust `#[cfg(test)]` modules, covering each acceptance criterion.
 
-4. **Run the gates** before declaring any task done (delegate to the `tester` agent, or run directly):
-   ```bash
-   pnpm typecheck && pnpm check && pnpm test
-   cd src-tauri && cargo clippy --workspace --all-targets -- -D warnings
-   ```
-   Fix every Biome warning per `ci-hygiene.md`: apply the fix, do not suppress.
+4. **Run the gates** from CLAUDE.md before declaring any task done (delegate to the `tester` agent, or run them directly). Fix every Biome warning per `ci-hygiene.md`: apply the fix, do not suppress.
 
 5. **Check patch coverage before committing.** Run `pnpm test:coverage` and read the summary table for every file you created or changed: each one must have no uncovered lines attributable to your diff (event handlers, drag-start/reset callbacks, keyboard paths, and error branches are the usual escapees). Add tests until the new lines are covered; Codecov will fail the PR on patch coverage otherwise, and `/ship` will bounce it back here.
 
