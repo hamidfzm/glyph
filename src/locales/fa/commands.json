@@ -40,5 +40,6 @@
   "aiChat": "گفتگو با هوش مصنوعی",
   "readAloud": "خواندن با صدای بلند",
   "managePlugins": "مدیریت افزونه‌ها…",
-  "exportAs": "برون‌بری: {{label}}…"
+  "exportAs": "برون‌بری: {{label}}…",
+  "exportMenuItem": "{{label}}…"
 }

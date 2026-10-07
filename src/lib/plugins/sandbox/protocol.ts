@@ -3,6 +3,8 @@
 // invoke, and its network access is gated by declared `network:<host>`
 // permissions.
 
+import type { ExportDocument } from "@/lib/plugins/types";
+
 /** Host -> worker. */
 export type HostMessage =
   | {
@@ -13,7 +15,7 @@ export type HostMessage =
       settings: Record<string, unknown>;
     }
   | { type: "run-command"; id: string }
-  | { type: "build-export"; callId: number; id: string; bodyHtml: string }
+  | { type: "build-export"; callId: number; id: string; bodyHtml: string; doc: ExportDocument }
   /** Run a registered dictionary's `load()`; nothing is read until a language is selected. */
   | { type: "load-dictionary"; callId: number; language: string }
   /** Reply to any worker-initiated call (workspace-read/list, asset-read). */
@@ -23,7 +25,7 @@ export type HostMessage =
 export type WorkerMessage =
   | { type: "activated" }
   | { type: "error"; message: string }
-  | { type: "register-command"; id: string; title: string }
+  | { type: "register-command"; id: string; title: string; menu?: "view" }
   | { type: "add-styles"; css: string }
   | {
       type: "register-translations";

@@ -40,5 +40,6 @@
   "aiChat": "AI Chat",
   "readAloud": "Read Aloud",
   "managePlugins": "Manage Plugins…",
-  "exportAs": "Export: {{label}}…"
+  "exportAs": "Export: {{label}}…",
+  "exportMenuItem": "{{label}}…"
 }

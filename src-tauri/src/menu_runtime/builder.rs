@@ -9,7 +9,7 @@ use tauri::{
     AppHandle, Runtime,
 };
 
-use super::MenuItemRefs;
+use super::{MenuItemRefs, PluginMenuSection};
 
 /// Build the full menu. With `owner: Some(label)` (per-window menus on
 /// Windows) every item id is prefixed `label:` so menu events route to the
@@ -358,6 +358,8 @@ pub fn build_menu<R: Runtime>(
         ai_menu,
         help_menu,
         export_menu,
+        plugin_export: PluginMenuSection::default(),
+        plugin_view: PluginMenuSection::default(),
     };
 
     Ok((menu, refs))

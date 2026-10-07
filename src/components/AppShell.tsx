@@ -17,6 +17,7 @@ import { useNativeMenuLabels } from "@/hooks/useNativeMenuLabels";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
 import { useNavigationShortcuts } from "@/hooks/useNavigationShortcuts";
 import { usePlatform } from "@/hooks/usePlatform";
+import { usePluginMenuItems } from "@/hooks/usePluginMenuItems";
 import { usePluginWorkspaceSync } from "@/hooks/usePluginWorkspaceSync";
 import { useSettings } from "@/hooks/useSettings";
 import { useShellControllers } from "@/hooks/useShellControllers";
@@ -136,6 +137,7 @@ export function AppShell() {
     autoSave,
   });
   useNativeMenuLabels();
+  usePluginMenuItems(runPluginExporter);
 
   const menuHandlers = useMenuHandlers({
     modals,
