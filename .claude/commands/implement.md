@@ -14,7 +14,7 @@ You are the **implement** stage of Glyph's spec-driven workflow. Build the featu
    - One component per file, ~200-line soft cap, `@/` imports, named exports (`code-organization.md`).
    - `invoke()`/`listen()`, CSS custom properties for theme + platform (`frontend.md`).
    - `Result`/`Option`, `camelCase` serde, register commands in `lib.rs` (`rust.md`).
-   - Update `README.md` / `samples/README.md` and keyboard-shortcut tables when shipping user-facing features (`docs.md`).
+   - Showcase new markdown syntax and workspace features in `samples/README.md`, and keep its shortcuts table current; `README.md` changes only for a new category of capability (`docs.md`).
    - When removing or replacing anything, clean up fully, with no dead code or shims (`cleanup.md`).
 
 3. **Add tests beside the source**: `*.test.{ts,tsx}` (Vitest + Testing Library) and Rust `#[cfg(test)]` modules, covering each acceptance criterion.
@@ -22,7 +22,7 @@ You are the **implement** stage of Glyph's spec-driven workflow. Build the featu
 4. **Run the gates** before declaring any task done (delegate to the `tester` agent, or run directly):
    ```bash
    pnpm typecheck && pnpm check && pnpm test
-   cd src-tauri && cargo clippy --all-targets -- -D warnings
+   cd src-tauri && cargo clippy --workspace --all-targets -- -D warnings
    ```
    Fix every Biome warning per `ci-hygiene.md`: apply the fix, do not suppress.
 
