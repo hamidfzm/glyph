@@ -1,6 +1,9 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ContextMenuActions } from "@/lib/contextMenuItems";
+import { AI_REPLY_HTML } from "@/test/fixtures/aiReply";
+import { CANVAS_CARDS_HTML } from "@/test/fixtures/canvasCards";
+import { mountDocumentBody } from "@/test/mountDocumentBody";
 import { useContextMenu } from "./useContextMenu";
 
 function fireContextMenu(target: EventTarget, init?: MouseEventInit) {
@@ -10,19 +13,14 @@ function fireContextMenu(target: EventTarget, init?: MouseEventInit) {
 }
 
 function mountMarkdown() {
-  const body = document.createElement("div");
-  body.className = "markdown-body";
-  const para = document.createElement("p");
-  para.textContent = "doc body";
-  body.appendChild(para);
-  document.body.appendChild(body);
-  return para;
+  return mountDocumentBody("<p>doc body</p>").firstElementChild as Element;
 }
 
 const baseActions: ContextMenuActions = {};
 
 afterEach(() => {
   vi.restoreAllMocks();
+  window.getSelection()?.removeAllRanges();
   document.body.innerHTML = "";
 });
 
@@ -50,15 +48,8 @@ describe("useContextMenu", () => {
   it("shows no themed menu over assistant replies in the AI chat panel", () => {
     // Chat replies render with .markdown-body too, but the document-targeted
     // menu is wrong there; the panel has its own per-message actions.
-    const panel = document.createElement("aside");
-    panel.className = "ai-chat-panel";
-    const reply = document.createElement("div");
-    reply.className = "markdown-body ai-msg-markdown";
-    const para = document.createElement("p");
-    para.textContent = "assistant reply";
-    reply.appendChild(para);
-    panel.appendChild(reply);
-    document.body.appendChild(panel);
+    document.body.innerHTML = AI_REPLY_HTML;
+    const para = document.querySelector(".ai-chat-panel p") as Element;
     const { result } = renderHook(() => useContextMenu(baseActions));
 
     let event: MouseEvent;
@@ -173,6 +164,21 @@ describe("useContextMenu", () => {
     });
 
     expect(actionLabels(result.current.menu)).toEqual(["Select All"]);
+  });
+
+  it("Select All selects only the canvas card that was right-clicked", () => {
+    document.body.innerHTML = CANVAS_CARDS_HTML;
+    const { result } = renderHook(() => useContextMenu(baseActions));
+
+    act(() => {
+      fireContextMenu(document.querySelectorAll(".markdown-body p")[2]);
+    });
+
+    const selectAll = result.current.menu?.items.find(
+      (i) => i.kind === "action" && i.label === "Select All",
+    );
+    if (selectAll?.kind === "action") selectAll.onSelect();
+    expect(window.getSelection()?.toString()).toBe("third");
   });
 
   it("close() clears the open menu", () => {

@@ -6,6 +6,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { TFunction } from "i18next";
 import type { ReactNode } from "react";
 import { AI_ACTIONS } from "./aiPrompts";
+import { documentBody } from "./documentBody";
 
 export interface ContextMenuActions {
   ttsSpeak?: (text: string) => void;
@@ -59,13 +60,15 @@ export function copySelection(text: string): void {
   void navigator.clipboard.writeText(text).catch(() => undefined);
 }
 
-/** Select the rendered document body (falls back to the whole page). */
-export function selectAllContent(): void {
-  const target = document.querySelector(".markdown-body") ?? document.body;
+/** Select the document when the click is inside it, otherwise only the clicked body. */
+export function selectAllContent(target: Element): void {
+  const doc = documentBody();
+  const body = doc?.contains(target) ? doc : target.closest(".markdown-body");
   const selection = window.getSelection();
-  if (!selection) return;
+  // The clicked body can unmount before the item runs (a hover preview closing).
+  if (!body?.isConnected || !selection) return;
   const range = document.createRange();
-  range.selectNodeContents(target);
+  range.selectNodeContents(body);
   selection.removeAllRanges();
   selection.addRange(range);
 }
@@ -95,6 +98,7 @@ export function buildContextMenuItems(
   actions: ContextMenuActions,
   selection: string,
   t: TFunction<"common">,
+  target: Element,
   linkHref?: string,
 ): ContextMenuItem[] {
   const link: ContextMenuItem[] = [];
@@ -122,7 +126,11 @@ export function buildContextMenuItems(
       onSelect: () => copySelection(selection),
     });
   }
-  text.push({ kind: "action", label: t("contextMenu.selectAll"), onSelect: selectAllContent });
+  text.push({
+    kind: "action",
+    label: t("contextMenu.selectAll"),
+    onSelect: () => selectAllContent(target),
+  });
   if (selection) {
     text.push({
       kind: "action",
