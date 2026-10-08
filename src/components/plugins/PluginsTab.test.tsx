@@ -5,8 +5,8 @@ import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
 import type { RegistryEntry } from "@/lib/plugins/marketplace";
 import { createRegistry } from "@/lib/plugins/registry";
 import type {
-  CommandContribution,
-  ExporterContribution,
+  CommandEntry,
+  ExporterEntry,
   FencedRendererContribution,
   InstalledPlugin,
   MarkdownPlugin,
@@ -40,7 +40,7 @@ const available: RegistryEntry = {
 
 function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
   return {
-    commands: createRegistry<CommandContribution>(),
+    commands: createRegistry<CommandEntry>(),
     statusBarItems: createRegistry<StatusBarItemContribution>(),
     remarkPlugins: createRegistry<MarkdownPlugin>(),
     rehypePlugins: createRegistry<MarkdownPlugin>(),
@@ -48,7 +48,7 @@ function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
     sidebarPanels: createRegistry<SidebarPanelContribution>(),
     settingsPanels: createRegistry<SettingsPanelContribution>(),
     styles: createRegistry<StyleContribution>(),
-    exporters: createRegistry<ExporterContribution>(),
+    exporters: createRegistry<ExporterEntry>(),
     siteThemes: createRegistry(),
     installed: [installed],
     disabled: [],

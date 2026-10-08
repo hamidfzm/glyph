@@ -29,5 +29,5 @@ The main repo is `hamidfzm/glyph`. Every satellite (Homebrew tap, Scoop bucket, 
 
 ## Satellite gotchas
 
-- **PR APIs 404 on repos with Issues disabled** (`homebrew-tap`, `scoop-bucket`): GitHub's `/pulls` endpoints ride on the issues subsystem, so `gh pr create` fails even with admin. Either enable Issues first, or push doc-level changes to `main` directly via the contents API.
+- **PR APIs 404 on repos with Issues disabled** (`homebrew-tap`, `scoop-bucket`): GitHub's `/pulls` endpoints ride on the issues subsystem, so `gh pr create` fails even with admin. Enable Issues first, then open the PR: the never-push-to-`main` rule in [github.md](./github.md) covers satellites too.
 - **Plugin API phases ship ecosystem-wide**: any change to `ctx.*`, manifest fields, or registry entry fields also updates `glyph-md/plugin-template` (`types/glyph.d.ts`, "API vX.Y" header) and `glyph-md/plugins` (`docs/api-reference.md`, `index.schema.json`, CONTRIBUTING) in the same delivery, with matching `PLUGIN_API_VERSION`.

@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import { createRegistry } from "@/lib/plugins/registry";
 import type {
-  CommandContribution,
-  ExporterContribution,
+  CommandEntry,
+  ExporterEntry,
   FencedRendererContribution,
   MarkdownPlugin,
   SettingsPanelContribution,
@@ -16,7 +16,7 @@ import { PluginStyles } from "./PluginStyles";
 
 function value(styles = createRegistry<StyleContribution>()): PluginsContextValue {
   return {
-    commands: createRegistry<CommandContribution>(),
+    commands: createRegistry<CommandEntry>(),
     statusBarItems: createRegistry<StatusBarItemContribution>(),
     remarkPlugins: createRegistry<MarkdownPlugin>(),
     rehypePlugins: createRegistry<MarkdownPlugin>(),
@@ -24,7 +24,7 @@ function value(styles = createRegistry<StyleContribution>()): PluginsContextValu
     sidebarPanels: createRegistry<SidebarPanelContribution>(),
     settingsPanels: createRegistry<SettingsPanelContribution>(),
     styles,
-    exporters: createRegistry<ExporterContribution>(),
+    exporters: createRegistry<ExporterEntry>(),
     siteThemes: createRegistry(),
     installed: [],
     disabled: [],

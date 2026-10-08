@@ -15,11 +15,14 @@ use std::sync::Mutex;
 
 use serde::Deserialize;
 use tauri::{
-    menu::{CheckMenuItem, MenuItem, Submenu},
+    menu::{CheckMenuItem, MenuItem, PredefinedMenuItem, Submenu},
     Runtime, Wry,
 };
 
-use crate::menu::{dispatch_menu_action, forget_window_refs, menu_action_for_id, refs_for_window};
+use crate::menu::{
+    dispatch_menu_action, forget_window_refs, menu_action_for_id, refs_for_window,
+    refs_for_window_mut,
+};
 
 // The `#[tauri::command]` entry points stay behind `apply::` so
 // `generate_handler!` can reach the items the attribute expands alongside them.
@@ -74,6 +77,25 @@ pub struct MenuItemRefs<R: Runtime = Wry> {
     ai_menu: Submenu<R>,
     help_menu: Submenu<R>,
     export_menu: Submenu<R>,
+    // Plugin contributions, replaced wholesale by `set_plugin_menu_items`.
+    plugin_export: PluginMenuSection<R>,
+    plugin_view: PluginMenuSection<R>,
+}
+
+/// One menu's plugin entries, behind a separator that sets them apart from
+/// the built-in entries they sit under.
+pub struct PluginMenuSection<R: Runtime = Wry> {
+    separator: Option<PredefinedMenuItem<R>>,
+    items: Vec<MenuItem<R>>,
+}
+
+impl<R: Runtime> Default for PluginMenuSection<R> {
+    fn default() -> Self {
+        Self {
+            separator: None,
+            items: Vec::new(),
+        }
+    }
 }
 
 /// Localized labels for every Glyph-defined menu entry. Pushed from the
@@ -167,6 +189,15 @@ impl<R: Runtime> MenuRegistry<R> {
     fn with_refs<T>(&self, label: &str, f: impl FnOnce(&MenuItemRefs<R>) -> T) -> Option<T> {
         let map = self.0.lock().unwrap();
         refs_for_window(&map, label).map(f)
+    }
+
+    fn with_refs_mut<T>(
+        &self,
+        label: &str,
+        f: impl FnOnce(&mut MenuItemRefs<R>) -> T,
+    ) -> Option<T> {
+        let mut map = self.0.lock().unwrap();
+        refs_for_window_mut(&mut map, label).map(f)
     }
 }
 
