@@ -1,9 +1,10 @@
 //! Per-workspace model: a workspace is one git repository's top level, and its
 //! Glyph-managed config lives inside it under `.glyph/`.
 //!
-//! - [`config`] owns the `.glyph/config.json` (committed sync settings,
+//! - [`config`] owns the `.glyph/config.json` (committed settings: sync,
 //!   the source of truth that replaces the in-memory `sync::SyncState`
-//!   map) and `.glyph/state.json` (git-ignored volatile last-opened file).
+//!   map, and daily notes) and `.glyph/state.json` (git-ignored volatile
+//!   last-opened file).
 //! - [`paths`] normalizes stored paths to workspace-relative forward slashes.
 //! - [`resolve`] implements the "one folder = one non-nested git repo"
 //!   guard (#262).
@@ -14,7 +15,7 @@
 
 pub mod commands;
 pub mod config;
-mod paths;
+pub(crate) mod paths;
 mod resolve;
 
 // Consumed only by the sync module, which is desktop-gated.

@@ -175,6 +175,7 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         "save" => emit("menu-save"),
         "toggle-auto-save" => emit("menu-toggle-auto-save"),
         "new-workspace" => emit("menu-new-workspace"),
+        "open-daily-note" => emit("menu-open-daily-note"),
         "open-graph" => emit("menu-open-graph"),
         "close-tab" => emit("menu-close-tab"),
         "close-workspace" => emit("menu-close-workspace"),
@@ -442,6 +443,10 @@ mod tests {
         assert_eq!(
             menu_action_for_id("new-workspace"),
             Some(emit("menu-new-workspace"))
+        );
+        assert_eq!(
+            menu_action_for_id("open-daily-note"),
+            Some(emit("menu-open-daily-note"))
         );
         assert_eq!(
             menu_action_for_id("close-tab"),

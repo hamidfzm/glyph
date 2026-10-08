@@ -20,6 +20,13 @@ describe("BINDABLE_COMMANDS", () => {
     expect(command?.nativeMenu).toBe(true);
   });
 
+  it("binds today's note to CmdOrCtrl+Shift+T by default", () => {
+    const command = getBindableCommand("open-daily-note");
+    expect(command?.defaultAccelerator).toBe("CmdOrCtrl+Shift+T");
+    expect(command?.event).toBe("menu-open-daily-note");
+    expect(command?.nativeMenu).toBe(true);
+  });
+
   it("binds back/forward navigation to CmdOrCtrl+Alt+Left/Right, in-app only", () => {
     expect(getBindableCommand("navigate-back")?.defaultAccelerator).toBe("CmdOrCtrl+Alt+Left");
     expect(getBindableCommand("navigate-forward")?.defaultAccelerator).toBe("CmdOrCtrl+Alt+Right");

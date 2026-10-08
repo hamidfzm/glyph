@@ -22,6 +22,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     openFile: vi.fn(),
     openFolder: vi.fn(),
     newWorkspace: vi.fn(),
+    openDailyNote: vi.fn(),
     openGraph: vi.fn(),
     save: vi.fn(),
     toggleAutoSave: vi.fn(),
@@ -150,6 +151,28 @@ describe("useAppCommands", () => {
       }),
     );
     expect(closed.result.current.some((c) => c.id === "cmd:searchWorkspace")).toBe(false);
+  });
+
+  it("offers today's note only when a workspace is open", () => {
+    const actions = makeActions();
+    const open = renderHook(() =>
+      useAppCommands({ workspaceOpen: true, workspaceFiles: [], tocEntries: [], actions }),
+    );
+    const cmd = open.result.current.find((c) => c.id === "cmd:openDailyNote");
+    expect(cmd?.title).toBe("Open Today's Note");
+    expect(cmd?.shortcut).toBe("Cmd/Ctrl+Shift+T");
+    cmd?.run();
+    expect(actions.openDailyNote).toHaveBeenCalledOnce();
+
+    const closed = renderHook(() =>
+      useAppCommands({
+        workspaceOpen: false,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions: makeActions(),
+      }),
+    );
+    expect(closed.result.current.some((c) => c.id === "cmd:openDailyNote")).toBe(false);
   });
 
   it("emits a Heading command per TOC entry", () => {

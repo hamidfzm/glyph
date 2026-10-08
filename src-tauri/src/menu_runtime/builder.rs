@@ -38,6 +38,10 @@ pub fn build_menu<R: Runtime>(
         .build(handle)?;
     let new_workspace =
         MenuItemBuilder::with_id(mid("new-workspace"), "New Workspace\u{2026}").build(handle)?;
+    // Gated on has_workspace in apply_menu_state: the note lives in the workspace.
+    let open_daily_note = MenuItemBuilder::with_id(mid("open-daily-note"), "Open Today's Note")
+        .accelerator("CmdOrCtrl+Shift+T")
+        .build(handle)?;
     let reset_view = MenuItemBuilder::with_id(mid("reset-view"), "Reset View").build(handle)?;
     let save = MenuItemBuilder::with_id(mid("save"), "Save")
         .accelerator("CmdOrCtrl+S")
@@ -240,6 +244,7 @@ pub fn build_menu<R: Runtime>(
             .item(&open)
             .item(&open_folder)
             .item(&new_workspace)
+            .item(&open_daily_note)
             .separator()
             .item(&save)
             .item(&auto_save)
@@ -288,6 +293,7 @@ pub fn build_menu<R: Runtime>(
             .item(&open)
             .item(&open_folder)
             .item(&new_workspace)
+            .item(&open_daily_note)
             .separator()
             .item(&save)
             .item(&auto_save)
@@ -321,6 +327,7 @@ pub fn build_menu<R: Runtime>(
         save,
         auto_save,
         new_workspace,
+        open_daily_note,
         reset_view,
         close_tab,
         close_workspace,

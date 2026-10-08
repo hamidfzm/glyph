@@ -4,8 +4,9 @@
 //! a `git clone` and survives move / rename — unlike the old absolute-path
 //! keyed global store. Two files:
 //!
-//! - `.glyph/config.json` — **committed**. Durable sync settings. This is
-//!   the source of truth that replaces the in-memory `SyncState` map.
+//! - `.glyph/config.json`: **committed**. Durable settings: cloud sync (the
+//!   source of truth that replaces the in-memory `SyncState` map) and daily
+//!   notes.
 //! - `.glyph/state.json` — **git-ignored** (via a `.glyph/.gitignore` we
 //!   write). Volatile per-machine state (the last-opened file) that would
 //!   otherwise churn sync history on every file switch.
@@ -42,6 +43,10 @@ pub struct WorkspaceConfig {
     /// Cloud-sync settings, or `None` when sync isn't configured.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sync: Option<SyncSettings>,
+    /// Daily-notes settings, or `None` until the user saves them (the
+    /// defaults apply meanwhile).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub daily_notes: Option<DailyNotesSettings>,
 }
 
 impl Default for WorkspaceConfig {
@@ -49,6 +54,30 @@ impl Default for WorkspaceConfig {
         Self {
             version: 1,
             sync: None,
+            daily_notes: None,
+        }
+    }
+}
+
+/// Where a day's note lives and what a new one starts from. Paths are
+/// workspace-relative; the frontend turns the pattern's date tokens into a
+/// file name.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DailyNotesSettings {
+    /// Empty means the workspace root.
+    pub folder: String,
+    pub filename_pattern: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
+}
+
+impl Default for DailyNotesSettings {
+    fn default() -> Self {
+        Self {
+            folder: "daily".to_string(),
+            filename_pattern: "YYYY-MM-DD.md".to_string(),
+            template: None,
         }
     }
 }
@@ -123,7 +152,6 @@ pub fn read_config(workspace_root: &Path) -> Result<Option<WorkspaceConfig>, Str
 
 /// Write `.glyph/config.json`, creating `.glyph/` (and its `.gitignore`)
 /// if needed. Pretty-printed with a trailing newline for clean diffs.
-#[cfg(desktop)]
 pub fn write_config(workspace_root: &Path, config: &WorkspaceConfig) -> Result<(), String> {
     let dir = glyph_dir(workspace_root);
     fs::create_dir_all(&dir).map_err(|e| format!("failed to create .glyph: {e}"))?;
@@ -203,6 +231,25 @@ pub fn clear_sync_config(root: &str) -> Result<(), String> {
     };
     vc.sync = None;
     write_config(path, &vc)
+}
+
+// --- Daily notes ---------------------------------------------------------
+
+/// The workspace's daily-notes settings, or the defaults when none are saved.
+pub fn load_daily_notes(workspace_root: &Path) -> Result<DailyNotesSettings, String> {
+    Ok(read_config(workspace_root)?
+        .and_then(|c| c.daily_notes)
+        .unwrap_or_default())
+}
+
+/// Persist the daily-notes settings, keeping the config's other blocks.
+pub fn store_daily_notes(
+    workspace_root: &Path,
+    settings: DailyNotesSettings,
+) -> Result<(), String> {
+    let mut vc = read_config(workspace_root)?.unwrap_or_default();
+    vc.daily_notes = Some(settings);
+    write_config(workspace_root, &vc)
 }
 
 #[cfg(test)]
@@ -293,6 +340,80 @@ mod tests {
     fn clear_sync_config_is_noop_when_absent() {
         let tmp = TempDir::new().unwrap();
         clear_sync_config(&tmp.path().to_string_lossy()).unwrap();
+    }
+
+    #[test]
+    fn daily_notes_default_until_saved() {
+        let tmp = TempDir::new().unwrap();
+        let defaults = load_daily_notes(tmp.path()).unwrap();
+        assert_eq!(defaults.folder, "daily");
+        assert_eq!(defaults.filename_pattern, "YYYY-MM-DD.md");
+        assert_eq!(defaults.template, None);
+        // Reading the defaults never materializes `.glyph/`.
+        assert!(!tmp.path().join(".glyph").exists());
+    }
+
+    #[test]
+    fn daily_notes_round_trip_with_camel_case_keys() {
+        let tmp = TempDir::new().unwrap();
+        let settings = DailyNotesSettings {
+            folder: "journal".into(),
+            filename_pattern: "YYYY/MM-DD.md".into(),
+            template: Some("templates/daily.md".into()),
+        };
+        store_daily_notes(tmp.path(), settings.clone()).unwrap();
+
+        let raw = std::fs::read_to_string(tmp.path().join(".glyph/config.json")).unwrap();
+        assert!(raw.contains("\"dailyNotes\""));
+        assert!(raw.contains("\"filenamePattern\""));
+        assert_eq!(load_daily_notes(tmp.path()).unwrap(), settings);
+    }
+
+    #[test]
+    fn daily_notes_fill_missing_keys_with_defaults() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".glyph")).unwrap();
+        std::fs::write(
+            tmp.path().join(".glyph/config.json"),
+            r#"{"dailyNotes":{"folder":""}}"#,
+        )
+        .unwrap();
+        let loaded = load_daily_notes(tmp.path()).unwrap();
+        // An explicit empty folder (the workspace root) is kept, not defaulted.
+        assert_eq!(loaded.folder, "");
+        assert_eq!(loaded.filename_pattern, "YYYY-MM-DD.md");
+    }
+
+    #[test]
+    fn daily_notes_and_sync_blocks_survive_each_other() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().to_string_lossy().to_string();
+        let settings = DailyNotesSettings {
+            folder: "journal".into(),
+            ..DailyNotesSettings::default()
+        };
+
+        store_sync_config(&sample_config(&root)).unwrap();
+        store_daily_notes(tmp.path(), settings.clone()).unwrap();
+        assert!(load_sync_config(&root).unwrap().is_some());
+
+        store_sync_config(&sample_config(&root)).unwrap();
+        assert_eq!(load_daily_notes(tmp.path()).unwrap(), settings);
+
+        clear_sync_config(&root).unwrap();
+        assert_eq!(load_daily_notes(tmp.path()).unwrap(), settings);
+    }
+
+    #[test]
+    fn daily_notes_refuse_to_overwrite_a_corrupt_config() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".glyph")).unwrap();
+        std::fs::write(tmp.path().join(".glyph/config.json"), "{not json").unwrap();
+
+        assert!(load_daily_notes(tmp.path()).is_err());
+        assert!(store_daily_notes(tmp.path(), DailyNotesSettings::default()).is_err());
+        let raw = std::fs::read_to_string(tmp.path().join(".glyph/config.json")).unwrap();
+        assert_eq!(raw, "{not json");
     }
 
     #[test]

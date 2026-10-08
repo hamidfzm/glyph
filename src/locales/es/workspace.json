@@ -11,6 +11,11 @@
     "indexIncompleteDepth": "El índice del espacio de trabajo está incompleto: las carpetas anidadas a más de {{limit}} niveles no se indexaron, por lo que la lista de archivos, el grafo, los enlaces entrantes y los wikilinks pueden estar incompletos.",
     "relinkFailed": "La actualización de enlaces se detuvo en \"{{name}}\", así que algunos enlaces aún apuntan al nombre o la ubicación anterior."
   },
+  "dailyNote": {
+    "failed": "No se pudo abrir la nota de hoy: {{error}}",
+    "patternRequired": "Las notas diarias no tienen un patrón de nombre de archivo. Define uno en la configuración del espacio de trabajo.",
+    "invalidPath": "La carpeta, el patrón de nombre de archivo o la plantilla de las notas diarias no forman una ruta válida. Corrígelo en la configuración del espacio de trabajo."
+  },
   "confirmDelete": {
     "message": "¿Eliminar \"{{name}}\"? Esto no se puede deshacer.",
     "title": "Eliminar"

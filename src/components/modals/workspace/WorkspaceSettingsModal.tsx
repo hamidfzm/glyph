@@ -2,10 +2,11 @@ import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
+import { DailyNotesSettingsTab } from "./DailyNotesSettingsTab";
 import { SyncSettingsTab } from "./SyncSettingsTab";
 import { WebsiteSettingsTab } from "./WebsiteSettingsTab";
 
-export type WorkspaceSettingsTabId = "website" | "sync";
+export type WorkspaceSettingsTabId = "website" | "dailyNotes" | "sync";
 
 interface WorkspaceSettingsModalProps {
   open: boolean;
@@ -50,6 +51,7 @@ export function WorkspaceSettingsModal({
 
   const tabs: { id: WorkspaceSettingsTabId; label: string }[] = [
     { id: "website", label: t("tabs.website") },
+    { id: "dailyNotes", label: t("tabs.dailyNotes") },
     { id: "sync", label: t("tabs.sync") },
   ];
 
@@ -103,6 +105,7 @@ export function WorkspaceSettingsModal({
               className={`settings-body settings-workspace${tab === "sync" ? " settings-sync" : ""}`}
             >
               {tab === "website" && <WebsiteSettingsTab onClose={onClose} />}
+              {tab === "dailyNotes" && <DailyNotesSettingsTab onClose={onClose} />}
               {tab === "sync" && <SyncSettingsTab />}
             </div>
           </div>

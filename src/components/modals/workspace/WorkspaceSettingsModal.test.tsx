@@ -222,6 +222,25 @@ describe("WorkspaceSettingsModal", () => {
     expect(screen.queryByRole("textbox", { name: /site title/i })).not.toBeInTheDocument();
   });
 
+  it("switches from Website to the Daily Notes tab", async () => {
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      switch (cmd) {
+        case "read_file":
+          return Promise.reject(new Error("not found"));
+        case "workspace_get_daily_notes":
+          return Promise.resolve({ folder: "journal", filenamePattern: "YYYY-MM-DD.md" });
+        default:
+          return Promise.reject(new Error(`unexpected command ${cmd}`));
+      }
+    });
+    const user = userEvent.setup();
+    renderInWorkspace(<Controlled />);
+
+    await user.click(screen.getByRole("button", { name: "Daily Notes" }));
+    expect(await screen.findByRole("textbox", { name: /^folder/i })).toHaveValue("journal");
+    expect(screen.queryByRole("textbox", { name: /site title/i })).not.toBeInTheDocument();
+  });
+
   it("renders nothing while closed", () => {
     mockConfigFile(null);
     const { container } = renderInWorkspace(

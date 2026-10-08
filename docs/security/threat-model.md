@@ -111,6 +111,8 @@ and files: <path>`), which never echoes the grant list.
 | `request_open` | folders only; the path must already be a granted workspace root |
 | `open_in_new_window` | readable |
 | `workspace_get_last_file`, `workspace_set_last_file` | granted workspace |
+| `workspace_get_daily_notes`, `workspace_set_daily_notes` | granted workspace. The folder, file name pattern, and template are stored as given: they only become paths in `create_daily_note`, which checks them |
+| `create_daily_note` | `root` must be a granted workspace. The note and the template are workspace-relative (`..`, a drive letter, or a backslash is refused) and each must canonicalize strictly inside that workspace, so a symlink resolving outside it, or into another granted workspace, is refused. The note is opened with `create_new`: a file that already exists is reported back and never written to |
 | `sync_*` | granted workspace (`sync_clone_remote` clones into the workspace path itself); `sync_init_repo`, `sync_clone_remote`, and `sync_set_origin` accept only `https://` without credentials, `ssh://`, or scp-like `user@host:path` remotes, since libgit2 would also take a local path or `file://` (pulling any local repository into a granted workspace) and cleartext `http://`/`git://` |
 | `install_plugin` | consumes the pending picked folder; no path argument |
 

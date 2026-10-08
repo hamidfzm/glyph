@@ -30,6 +30,7 @@ function makeHandlers(): MenuEventHandlers {
     openFile: vi.fn(),
     openFolder: vi.fn(),
     newWorkspace: vi.fn(),
+    openDailyNote: vi.fn(),
     openGraph: vi.fn(),
     save: vi.fn(),
     toggleAutoSave: vi.fn(),
@@ -81,6 +82,11 @@ describe("useMenuShortcuts", () => {
   it.each([
     ["opens a file on Ctrl+O", { code: "KeyO", key: "o" }, "openFile"],
     ["opens a folder on Ctrl+Shift+O", { code: "KeyO", key: "o", shiftKey: true }, "openFolder"],
+    [
+      "opens today's note on Ctrl+Shift+T",
+      { code: "KeyT", key: "t", shiftKey: true },
+      "openDailyNote",
+    ],
     ["saves on Ctrl+S", { code: "KeyS", key: "s" }, "save"],
     ["prints on Ctrl+P", { code: "KeyP", key: "p" }, "print"],
     ["closes a tab on Ctrl+W", { code: "KeyW", key: "w" }, "closeTab"],

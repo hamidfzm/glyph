@@ -3,6 +3,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { UnsavedChoice } from "@/components/modals/UnsavedChangesModal";
+import { useDailyNote } from "@/hooks/useDailyNote";
 import { useDiskReload } from "@/hooks/useDiskReload";
 import { useDocumentEdits } from "@/hooks/useDocumentEdits";
 import { useDocumentSave } from "@/hooks/useDocumentSave";
@@ -294,6 +295,14 @@ export function useTabs(options: UseTabsOptions) {
     [createInWorkspace],
   );
 
+  const { openDailyNote } = useDailyNote({
+    workspaceRef,
+    openFile,
+    setTabMode,
+    refreshLoadedDirs,
+    onWorkspaceNotice: options.onWorkspaceNotice,
+  });
+
   // Delete a note/folder after confirming, then close any tabs under it.
   const deletePath = useCallback(
     async (path: string): Promise<boolean> => {
@@ -433,6 +442,7 @@ export function useTabs(options: UseTabsOptions) {
     createNote,
     createNoteInWorkspace,
     createCanvasInWorkspace,
+    openDailyNote,
     createCanvas,
     createFolder,
     commitEdit,

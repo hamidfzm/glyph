@@ -5,6 +5,7 @@
   },
   "tabs": {
     "website": "Website",
+    "dailyNotes": "Daily Notes",
     "sync": "Cloud Sync"
   },
   "empty": "Open a folder workspace to edit its settings.",
@@ -39,6 +40,30 @@
       "theme": {
         "label": "Theme"
       }
+    },
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "dailyNotes": {
+    "description": "Where Open Today's Note keeps each day's note. Saved to .glyph/config.json, so it travels with the folder.",
+    "fields": {
+      "folder": {
+        "label": "Folder",
+        "hint": "workspace-relative; empty for the workspace root"
+      },
+      "filenamePattern": {
+        "label": "File name pattern",
+        "hint": "YYYY, YY, MM, M, DD, and D are replaced by today's date; [text] in brackets is kept as written"
+      },
+      "template": {
+        "label": "Template file",
+        "hint": "workspace-relative; copied into each new note"
+      }
+    },
+    "preview": "Today's note: {{path}}",
+    "errors": {
+      "patternRequired": "Enter a file name pattern.",
+      "invalidPath": "The folder, file name pattern, and template can't contain \"..\" or any of < > : \" | ? *"
     },
     "save": "Save",
     "cancel": "Cancel"

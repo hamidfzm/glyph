@@ -9,7 +9,9 @@ use tauri::State;
 
 use crate::grants::GrantRegistry;
 
-use super::config::{read_config, read_state, write_state};
+use super::config::{
+    load_daily_notes, read_config, read_state, store_daily_notes, write_state, DailyNotesSettings,
+};
 use super::paths::{from_workspace_relative, to_workspace_relative};
 use super::resolve::{resolve_workspace, WorkspaceResolution};
 
@@ -48,8 +50,8 @@ pub fn workspace_get_last_file(
 /// No-op for a plain folder that hasn't been turned into a workspace yet
 /// (no `.glyph/config.json`): we never materialize `.glyph/` just because the
 /// user browsed a file. The directory only gains Glyph state once it has been
-/// explicitly enabled (e.g. by configuring Cloud Sync), which is what writes
-/// `config.json` in the first place.
+/// explicitly enabled (by configuring Cloud Sync or saving its daily-notes
+/// settings), which is what writes `config.json` in the first place.
 #[tauri::command]
 pub fn workspace_set_last_file(
     workspace_root: String,
@@ -65,6 +67,29 @@ pub fn workspace_set_last_file(
     let mut state = read_state(root)?;
     state.last_file = Some(rel);
     write_state(root, &state)
+}
+
+/// The workspace's daily-notes settings, or the defaults when none are saved.
+#[tauri::command]
+pub fn workspace_get_daily_notes(
+    workspace_root: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<DailyNotesSettings, String> {
+    grants.ensure_workspace(&workspace_root)?;
+    load_daily_notes(Path::new(&workspace_root))
+}
+
+/// Save the daily-notes settings into `.glyph/config.json`. The paths are
+/// stored as given: `create_daily_note` is what refuses one that leaves the
+/// workspace.
+#[tauri::command]
+pub fn workspace_set_daily_notes(
+    workspace_root: String,
+    settings: DailyNotesSettings,
+    grants: State<'_, GrantRegistry>,
+) -> Result<(), String> {
+    grants.ensure_workspace(&workspace_root)?;
+    store_daily_notes(Path::new(&workspace_root), settings)
 }
 
 #[cfg(test)]
@@ -169,6 +194,51 @@ mod tests {
             app.state::<GrantRegistry>(),
         );
         assert!(write.is_err());
+    }
+
+    #[test]
+    fn daily_notes_settings_round_trip_through_the_commands() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().to_string_lossy().to_string();
+        let app = app_with_root(&root);
+
+        let defaults =
+            super::workspace_get_daily_notes(root.clone(), app.state::<GrantRegistry>()).unwrap();
+        assert_eq!(defaults, DailyNotesSettings::default());
+
+        let settings = DailyNotesSettings {
+            folder: "journal".into(),
+            filename_pattern: "DD-MM-YYYY.md".into(),
+            template: Some("templates/day.md".into()),
+        };
+        super::workspace_set_daily_notes(
+            root.clone(),
+            settings.clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
+        assert_eq!(
+            super::workspace_get_daily_notes(root, app.state::<GrantRegistry>()).unwrap(),
+            settings
+        );
+    }
+
+    #[test]
+    fn daily_notes_commands_require_a_granted_workspace() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().to_string_lossy().to_string();
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+
+        let read = super::workspace_get_daily_notes(root.clone(), app.state::<GrantRegistry>());
+        assert!(read.is_err());
+        let write = super::workspace_set_daily_notes(
+            root,
+            DailyNotesSettings::default(),
+            app.state::<GrantRegistry>(),
+        );
+        assert!(write.is_err());
+        assert!(!tmp.path().join(".glyph").exists());
     }
 
     #[test]
