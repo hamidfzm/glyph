@@ -299,21 +299,21 @@
   padding-inline-start: 1.5em;
 }
 
+/* Item text stays inline so code spans and bold runs flow and wrap like
+ * prose. The checkbox hangs in the padding via a negative margin, so
+ * wrapped lines align with the first line's text, not the checkbox. */
 .markdown-body li.task-list-item {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5em;
+  padding-inline-start: 1.5em;
 }
 
-.markdown-body li.task-list-item > input[type="checkbox"],
 .markdown-body li input[type="checkbox"] {
   appearance: auto;
   -webkit-appearance: checkbox;
   accent-color: var(--color-accent);
   width: 1em;
   height: 1em;
-  margin: 0;
-  flex-shrink: 0;
+  margin: 0 0.5em 0 -1.5em;
+  vertical-align: -0.125em;
   cursor: pointer;
 }
 
