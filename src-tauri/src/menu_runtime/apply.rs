@@ -1,11 +1,18 @@
 //! Runtime mutations of an already-built menu: accelerators, enabled state,
-//! and localized labels, plus the Tauri commands the frontend calls.
+//! localized labels, and plugin entries, plus the Tauri commands the frontend
+//! calls.
 
 use std::collections::HashMap;
 
-use tauri::{menu::MenuItem, Runtime, State};
+use tauri::{
+    menu::{MenuItem, MenuItemBuilder, PredefinedMenuItem, Submenu},
+    Runtime, State,
+};
 
-use super::{MenuItemRefs, MenuLabels, MenuRegistry, MenuStateFlags};
+use super::{MenuItemRefs, MenuLabels, MenuRegistry, MenuStateFlags, PluginMenuSection};
+use crate::menu::{
+    listable_plugin_menu_entries, parse_menu_id, plugin_menu_item_id, PluginMenuEntry,
+};
 
 /// Maps a bindable command id to its menu item, for accelerator updates.
 fn accelerator_target<'a, R: Runtime>(
@@ -127,7 +134,103 @@ pub fn apply_menu_state<R: Runtime>(
     refs.ai_read_aloud
         .set_enabled(flags.tts_available && flags.has_content)
         .map_err(stringify)?;
+    for item in &refs.plugin_export.items {
+        item.set_enabled(flags.has_file).map_err(stringify)?;
+    }
     Ok(())
+}
+
+/// Rebuild one menu's plugin section right after `anchor`.
+fn replace_plugin_items<R: Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    submenu: &Submenu<R>,
+    anchor: &MenuItem<R>,
+    section: &mut PluginMenuSection<R>,
+    menu: &str,
+    entries: &[PluginMenuEntry],
+    enabled: bool,
+) -> Result<(), String> {
+    let s = |e: tauri::Error| e.to_string();
+    // The handles are forgotten even when a native removal fails, so one
+    // stuck item cannot block every later update.
+    if let Some(separator) = section.separator.take() {
+        let _ = submenu.remove(&separator);
+    }
+    for item in std::mem::take(&mut section.items) {
+        let _ = submenu.remove(&item);
+    }
+    if entries.is_empty() {
+        return Ok(());
+    }
+
+    let items = submenu.items().map_err(s)?;
+    let start = items
+        .iter()
+        .position(|item| item.id() == anchor.id())
+        .map_or(items.len(), |at| at + 1);
+    let separator = PredefinedMenuItem::separator(window).map_err(s)?;
+    submenu.insert(&separator, start).map_err(s)?;
+    section.separator = Some(separator);
+
+    // Same owner prefix as the built-in items, so clicks route to this window.
+    let (owner, _) = parse_menu_id(anchor.id().as_ref());
+    for (offset, entry) in entries.iter().enumerate() {
+        let base = plugin_menu_item_id(menu, &entry.key);
+        let id = match owner {
+            Some(owner) => format!("{owner}:{base}"),
+            None => base,
+        };
+        // A lone `&` would mark a mnemonic instead of showing.
+        let item = MenuItemBuilder::with_id(id, entry.label.replace('&', "&&"))
+            .enabled(enabled)
+            .build(window)
+            .map_err(s)?;
+        submenu.insert(&item, start + 1 + offset).map_err(s)?;
+        section.items.push(item);
+    }
+    Ok(())
+}
+
+/// Plugin exporters go after the built-in formats in File > Export, and
+/// `menu: "view"` commands after Open Graph in View. Picking one emits
+/// `menu-plugin-item` with its menu and key. Returns how many entries were
+/// refused (see `listable_plugin_menu_entries`); the rest are listed. Fails
+/// when the window has no menu, as it does mid-teardown.
+#[tauri::command]
+pub fn set_plugin_menu_items(
+    window: tauri::WebviewWindow,
+    registry: State<MenuRegistry>,
+    export: Vec<PluginMenuEntry>,
+    view: Vec<PluginMenuEntry>,
+) -> Result<usize, String> {
+    let (export, export_refused) = listable_plugin_menu_entries(export);
+    let (view, view_refused) = listable_plugin_menu_entries(view);
+    registry
+        .with_refs_mut(window.label(), |refs| {
+            let exports_enabled = refs.export_pdf.is_enabled().map_err(|e| e.to_string())?;
+            replace_plugin_items(
+                &window,
+                &refs.export_menu,
+                &refs.export_pdf,
+                &mut refs.plugin_export,
+                "export",
+                &export,
+                exports_enabled,
+            )?;
+            replace_plugin_items(
+                &window,
+                &refs.view_menu,
+                &refs.open_graph,
+                &mut refs.plugin_view,
+                "view",
+                &view,
+                true,
+            )
+        })
+        // Unlike the other menu commands this one reports what it listed, so
+        // a window without a menu is an error, not a quiet success.
+        .ok_or("this window has no menu to list plugin entries in")??;
+    Ok(export_refused + view_refused)
 }
 
 #[tauri::command]
@@ -229,16 +332,16 @@ fn covers_monitor(window: &tauri::WebviewWindow) -> bool {
     }
 }
 
-// Fullscreen for the image lightbox, with the in-window menu bar (Windows/
-// Linux) hidden while fullscreen. Entering hides the menu before the
-// transition so the bar never flashes over the fullscreen window. On Windows
-// the fullscreen resize is applied with SWP_ASYNCWINDOWPOS and can lose the
-// race against the menu change's frame recalculation; tao then caches
+// Fullscreen for the image lightbox and plugin overlays, with the in-window
+// menu bar (Windows/Linux) hidden while fullscreen. Entering hides the menu
+// before the transition so the bar never flashes over the fullscreen window.
+// On Windows the fullscreen resize is applied with SWP_ASYNCWINDOWPOS and can
+// lose the race against the menu change's frame recalculation; tao then caches
 // "fullscreen" with the window never resized and early-returns every later
 // request. The verify-retry below heals exactly that: it measures the real
 // bounds against the monitor and clears + re-applies until they match.
 #[tauri::command]
-pub fn set_lightbox_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Result<(), String> {
+pub fn set_overlay_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         // Simple (pre-Lion) fullscreen: covers the screen instantly on the
@@ -250,7 +353,7 @@ pub fn set_lightbox_fullscreen(window: tauri::WebviewWindow, enter: bool) -> Res
             .map_err(|e| e.to_string())?;
         // The transition's style-mask toggle drops the webview as first
         // responder, silencing keyboard events (Escape stopped dismissing
-        // the lightbox). Hand focus back once the mask change has settled;
+        // an overlay). Hand focus back once the mask change has settled;
         // the exit path applies its mask asynchronously.
         let w = window.clone();
         std::thread::spawn(move || {

@@ -42,8 +42,10 @@ describe("sandboxed plugins", () => {
     worker.emit({ type: "notify", message: "hi from box" });
 
     expect(host.commands.list().map((c) => c.id)).toEqual(["c1"]);
+    expect(host.commands.list().map((c) => c.pluginId)).toEqual(["com.x.demo"]);
     expect(host.styles.list().map((s) => s.css)).toEqual([".x{}"]);
     expect(host.exporters.list().map((e) => e.id)).toEqual(["e1"]);
+    expect(host.exporters.list().map((e) => e.pluginId)).toEqual(["com.x.demo"]);
     expect(host.siteThemes.list().map((t) => t.id)).toEqual(["t1"]);
     expect(notify).toHaveBeenCalledWith("hi from box");
 

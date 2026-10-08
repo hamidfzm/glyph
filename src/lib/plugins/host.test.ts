@@ -18,6 +18,8 @@ describe("createPluginHost lifecycle", () => {
     await host.load(installed(), importerFor(module));
 
     expect(host.commands.list().map((c) => c.id)).toEqual(["c1"]);
+    // Stamped by the host: ids are only unique within one plugin.
+    expect(host.commands.list().map((c) => c.pluginId)).toEqual(["com.x.demo"]);
     expect(host.statusBarItems.list().map((s) => s.id)).toEqual(["s1"]);
     expect(host.listLoaded()).toEqual([
       { id: "com.x.demo", name: "Demo", version: "1.0.0", description: undefined },

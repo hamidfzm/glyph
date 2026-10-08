@@ -7,6 +7,7 @@ import type { TocEntry } from "@/hooks/useTableOfContents";
 import { appPaletteCommands } from "@/lib/appPaletteCommands";
 import type { Command } from "@/lib/commands";
 import { basename } from "@/lib/paths";
+import { contributionKey } from "@/lib/plugins/contributionKey";
 import type { ExporterContribution } from "@/lib/plugins/types";
 import { scrollToHeading } from "@/lib/scrollToHeading";
 import { useRegistryEntries } from "./usePluginRegistry";
@@ -92,7 +93,7 @@ export function useAppCommands({
     // and remove actions all live in the Settings Plugins tab instead).
     for (const c of pluginCommands) {
       out.push({
-        id: `plugin:${c.id}`,
+        id: `plugin:${contributionKey(c)}`,
         title: c.title,
         section: "Commands",
         run: () => {
@@ -104,7 +105,7 @@ export function useAppCommands({
     // Export formats contributed by plugins run through the shared pipeline.
     for (const exporter of pluginExporters) {
       out.push({
-        id: `plugin-export:${exporter.id}`,
+        id: `plugin-export:${contributionKey(exporter)}`,
         title: t("exportAs", { label: exporter.label }),
         section: "Commands",
         icon: FileTextIcon,

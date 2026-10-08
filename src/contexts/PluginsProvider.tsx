@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useRef, useState } from "react";
+import { PluginOverlay } from "@/components/plugins/PluginOverlay";
 import { PluginStyles } from "@/components/plugins/PluginStyles";
 import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToasts";
 import { PluginsContext } from "@/contexts/PluginsContext";
@@ -88,6 +89,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       {children}
       <PluginStyles />
       <PluginToasts toasts={toasts} />
+      <PluginOverlay />
     </PluginsContext.Provider>
   );
 }

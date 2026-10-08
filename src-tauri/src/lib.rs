@@ -361,7 +361,9 @@ pub fn run() {
             #[cfg(desktop)]
             menu_runtime::apply::set_menu_labels,
             #[cfg(desktop)]
-            menu_runtime::apply::set_lightbox_fullscreen,
+            menu_runtime::apply::set_overlay_fullscreen,
+            #[cfg(desktop)]
+            menu_runtime::apply::set_plugin_menu_items,
             windows_runtime::set_window_workspace,
             windows_runtime::set_window_files,
             windows_runtime::request_open,
