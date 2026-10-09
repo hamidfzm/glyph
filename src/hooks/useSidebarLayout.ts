@@ -122,26 +122,6 @@ export function useSidebarLayout({
     [updateSettings],
   );
 
-  const setBacklinksHeight = useCallback(
-    (height: number | null) => updateSettings("layout.backlinksHeight", height),
-    [updateSettings],
-  );
-
-  const setTagsHeight = useCallback(
-    (height: number | null) => updateSettings("layout.tagsHeight", height),
-    [updateSettings],
-  );
-
-  const setBacklinksCollapsed = useCallback(
-    (collapsed: boolean) => updateSettings("layout.backlinksCollapsed", collapsed),
-    [updateSettings],
-  );
-
-  const setTagsCollapsed = useCallback(
-    (collapsed: boolean) => updateSettings("layout.tagsCollapsed", collapsed),
-    [updateSettings],
-  );
-
   const resetLayout = useCallback(() => {
     updateSettings("layout.filesSidebarVisible", true);
     updateSettings("layout.outlineSidebarVisible", true);
@@ -150,10 +130,7 @@ export function useSidebarLayout({
     updateSettings("layout.filesSidebarWidth", SIDEBAR_WIDTH_DEFAULT);
     updateSettings("layout.outlineSidebarWidth", SIDEBAR_WIDTH_DEFAULT);
     updateSettings("layout.aiPanelWidth", AI_PANEL_WIDTH_DEFAULT);
-    updateSettings("layout.backlinksHeight", null);
-    updateSettings("layout.tagsHeight", null);
-    updateSettings("layout.backlinksCollapsed", false);
-    updateSettings("layout.tagsCollapsed", false);
+    updateSettings("layout.blocks", {});
   }, [updateSettings]);
 
   return {
@@ -168,10 +145,6 @@ export function useSidebarLayout({
     toggleOutline,
     setFilesSidebarWidth,
     setOutlineSidebarWidth,
-    setBacklinksHeight,
-    setTagsHeight,
-    setBacklinksCollapsed,
-    setTagsCollapsed,
     resetLayout,
   };
 }

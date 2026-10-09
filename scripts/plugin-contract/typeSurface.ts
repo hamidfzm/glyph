@@ -29,6 +29,9 @@ export const context: Equal<Omit<HostCtx, "markdown">, Omit<TemplateCtx, "markdo
 export const commands: Equal<HostCtx["commands"], TemplateCtx["commands"]> = true;
 export const ui: Equal<HostCtx["ui"], TemplateCtx["ui"]> = true;
 export const workspace: Equal<HostCtx["workspace"], TemplateCtx["workspace"]> = true;
+export const documents: Equal<HostCtx["documents"], TemplateCtx["documents"]> = true;
+export const vault: Equal<HostCtx["vault"], TemplateCtx["vault"]> = true;
+export const navigation: Equal<HostCtx["navigation"], TemplateCtx["navigation"]> = true;
 export const assets: Equal<HostCtx["assets"], TemplateCtx["assets"]> = true;
 export const exporters: Equal<HostCtx["exporters"], TemplateCtx["exporters"]> = true;
 export const spellcheck: Equal<HostCtx["spellcheck"], TemplateCtx["spellcheck"]> = true;
@@ -49,6 +52,8 @@ export const sidebarPanelContribution: Equal<
   Host.SidebarPanelContribution,
   Template.SidebarPanelContribution
 > = true;
+export const fileTreeFilter: Equal<Host.FileTreeFilter, Template.FileTreeFilter> = true;
+export const activeDocument: Equal<Host.ActiveDocument, Template.ActiveDocument> = true;
 export const exporterContribution: Equal<Host.ExporterContribution, Template.ExporterContribution> =
   true;
 export const siteThemeContribution: Equal<

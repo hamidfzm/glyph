@@ -57,7 +57,6 @@ export function tabsContextValue(over: Partial<TabsContextValue> = {}): TabsCont
     redoEdit: vi.fn(),
     displayContent: null,
     tocEntries: [],
-    backlinks: [],
     workspaceNotice: null,
     dismissWorkspaceNotice: vi.fn(),
     ...over,

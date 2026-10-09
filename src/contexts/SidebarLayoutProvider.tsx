@@ -18,10 +18,6 @@ export function SidebarLayoutProvider({ children }: { children: ReactNode }) {
       swapSidebarSides: settings.layout.swapSidebarSides,
       filesSidebarWidth: settings.layout.filesSidebarWidth,
       outlineSidebarWidth: settings.layout.outlineSidebarWidth,
-      backlinksHeight: settings.layout.backlinksHeight,
-      tagsHeight: settings.layout.tagsHeight,
-      backlinksCollapsed: settings.layout.backlinksCollapsed,
-      tagsCollapsed: settings.layout.tagsCollapsed,
     }),
     [
       layout,
@@ -29,10 +25,6 @@ export function SidebarLayoutProvider({ children }: { children: ReactNode }) {
       settings.layout.swapSidebarSides,
       settings.layout.filesSidebarWidth,
       settings.layout.outlineSidebarWidth,
-      settings.layout.backlinksHeight,
-      settings.layout.tagsHeight,
-      settings.layout.backlinksCollapsed,
-      settings.layout.tagsCollapsed,
     ],
   );
 

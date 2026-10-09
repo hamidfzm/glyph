@@ -1,0 +1,7 @@
+{
+  "heading": "Tags",
+  "filterBy": "Nach #{{tag}} filtern",
+  "filtered": "#{{tag}} ({{total}})",
+  "sortByCount": "Tags nach Anzahl sortieren",
+  "empty": "Keine Tags"
+}

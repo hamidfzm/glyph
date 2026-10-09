@@ -1,44 +1,10 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
+import { PluginsContext } from "@/contexts/PluginsContext";
 import { createRegistry } from "@/lib/plugins/registry";
-import type {
-  CommandEntry,
-  ExporterEntry,
-  FencedRendererContribution,
-  MarkdownPlugin,
-  SettingsPanelContribution,
-  SidebarPanelContribution,
-  StatusBarItemContribution,
-  StyleContribution,
-} from "@/lib/plugins/types";
+import type { StatusBarItemContribution } from "@/lib/plugins/types";
+import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import { PluginStatusBarItems } from "./PluginStatusBarItems";
-
-function value(statusBarItems = createRegistry<StatusBarItemContribution>()): PluginsContextValue {
-  return {
-    commands: createRegistry<CommandEntry>(),
-    statusBarItems,
-    remarkPlugins: createRegistry<MarkdownPlugin>(),
-    rehypePlugins: createRegistry<MarkdownPlugin>(),
-    fencedRenderers: createRegistry<FencedRendererContribution>(),
-    sidebarPanels: createRegistry<SidebarPanelContribution>(),
-    settingsPanels: createRegistry<SettingsPanelContribution>(),
-    styles: createRegistry<StyleContribution>(),
-    exporters: createRegistry<ExporterEntry>(),
-    siteThemes: createRegistry(),
-    installed: [],
-    disabled: [],
-    loaded: [],
-    registry: [],
-    updates: [],
-    installFromFolder: async () => {},
-    installFromRegistry: async () => {},
-    setEnabled: async () => {},
-    uninstall: async () => {},
-    setWorkspaceRoot: () => {},
-    initialLoadDone: true,
-  };
-}
 
 describe("PluginStatusBarItems", () => {
   it("renders nothing without a provider", () => {
@@ -48,7 +14,7 @@ describe("PluginStatusBarItems", () => {
 
   it("renders nothing when no items are registered", () => {
     const { container } = render(
-      <PluginsContext.Provider value={value()}>
+      <PluginsContext.Provider value={pluginsContextValue()}>
         <PluginStatusBarItems />
       </PluginsContext.Provider>,
     );
@@ -56,15 +22,15 @@ describe("PluginStatusBarItems", () => {
   });
 
   it("renders a slot per registered item", () => {
-    const items = createRegistry<StatusBarItemContribution>();
-    items.register({
+    const statusBarItems = createRegistry<StatusBarItemContribution>();
+    statusBarItems.register({
       id: "it1",
       mount: (el) => {
         el.textContent = "A";
       },
     });
     const { container } = render(
-      <PluginsContext.Provider value={value(items)}>
+      <PluginsContext.Provider value={pluginsContextValue({ statusBarItems })}>
         <PluginStatusBarItems />
       </PluginsContext.Provider>,
     );

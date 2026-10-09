@@ -479,6 +479,32 @@ describe("worker bootstrap", () => {
     },
   );
 
+  // App state is not bridged to the worker; an absent method would die as a
+  // bare "is not a function" with nothing pointing at the sandbox.
+  it.each([
+    'ui.filterFileTree({ label: "x", paths: [], onClear() {} })',
+    "documents.getActive()",
+    "documents.onActiveChange(() => {})",
+    "workspace.getRoot()",
+    "workspace.onChange(() => {})",
+    "vault.graph()",
+    'vault.backlinks("a.md")',
+    "vault.tags()",
+    'vault.pathsWithTag("work")',
+    "vault.status()",
+    "vault.onChange(() => {})",
+    'navigation.openFile("a.md")',
+  ])("refuses ctx.%s by name", async (call) => {
+    const w = bootWorker();
+    await w.send(init(`export default { activate(ctx) { ctx.${call}; } }`));
+
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("error"));
+    const error = w.posted.find((m) => m.type === "error") as { message: string };
+    expect(error.message).toContain(`ctx.${call.slice(0, call.indexOf("("))}`);
+    expect(error.message).toContain("only offered in the app context");
+    expect(error.message).toContain('"sandbox": false');
+  });
+
   it("still offers the ui methods a worker can implement", async () => {
     const w = bootWorker();
     await w.send(init(`export default { activate(ctx) { ctx.ui.addStyles("body{}"); } }`));

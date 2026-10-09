@@ -47,14 +47,13 @@ function wrap() {
 }
 
 describe("TabsProvider", () => {
-  it("exposes the useTabs API plus derived displayContent/toc/backlinks", async () => {
+  it("exposes the useTabs API plus derived displayContent/toc", async () => {
     const { result } = renderHook(() => useTabsContext(), { wrapper: wrap() });
     await waitFor(() => expect(result.current.initializing).toBe(false));
     expect(result.current.tabs).toEqual([]);
     expect(result.current.activeTab).toBeNull();
     expect(result.current.displayContent).toBeNull();
     expect(result.current.tocEntries).toEqual([]);
-    expect(result.current.backlinks).toEqual([]);
     expect(typeof result.current.openFile).toBe("function");
     expect(typeof result.current.openFolder).toBe("function");
   });

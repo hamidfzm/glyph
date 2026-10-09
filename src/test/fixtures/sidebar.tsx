@@ -68,14 +68,6 @@ export interface RenderOpts {
   toggleOutline?: () => void;
   setFilesSidebarWidth?: (width: number) => void;
   setOutlineSidebarWidth?: (width: number) => void;
-  setBacklinksHeight?: (height: number | null) => void;
-  backlinksHeight?: number | null;
-  setTagsHeight?: (height: number | null) => void;
-  tagsHeight?: number | null;
-  backlinksCollapsed?: boolean;
-  tagsCollapsed?: boolean;
-  setBacklinksCollapsed?: (collapsed: boolean) => void;
-  setTagsCollapsed?: (collapsed: boolean) => void;
   tabs?: Partial<TabsContextValue>;
 }
 
@@ -101,16 +93,8 @@ function buildSidebarContext(opts: RenderOpts): SidebarLayoutContextValue {
     toggleOutline: opts.toggleOutline ?? vi.fn(),
     sidebarLayout: opts.sidebarLayout ?? "split",
     swapSidebarSides: opts.swapSidebarSides ?? false,
-    backlinksHeight: opts.backlinksHeight ?? null,
-    tagsHeight: opts.tagsHeight ?? null,
     setFilesSidebarWidth: opts.setFilesSidebarWidth ?? vi.fn(),
     setOutlineSidebarWidth: opts.setOutlineSidebarWidth ?? vi.fn(),
-    setBacklinksHeight: opts.setBacklinksHeight ?? vi.fn(),
-    setTagsHeight: opts.setTagsHeight ?? vi.fn(),
-    backlinksCollapsed: opts.backlinksCollapsed ?? false,
-    tagsCollapsed: opts.tagsCollapsed ?? false,
-    setBacklinksCollapsed: opts.setBacklinksCollapsed ?? vi.fn(),
-    setTagsCollapsed: opts.setTagsCollapsed ?? vi.fn(),
   });
 }
 

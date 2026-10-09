@@ -19,6 +19,14 @@ export interface AppearanceSettings {
 // File tabs only show Outline, so this only affects folder tabs.
 export type SidebarLayout = "split" | "combined" | "beside";
 
+// Where the user left one block of the Files panel (a plugin panel placed
+// below the tree).
+export interface FilesBlockLayout {
+  // Pixel height; null keeps the natural height until the divider is dragged.
+  height: number | null;
+  collapsed: boolean;
+}
+
 export interface LayoutSettings {
   // Toggles the Files panel (only meaningful in folder tabs).
   filesSidebarVisible: boolean;
@@ -27,15 +35,10 @@ export interface LayoutSettings {
   filesSidebarWidth: number;
   outlineSidebarWidth: number;
   aiPanelWidth: number;
-  // Pixel height of the backlinks block inside the Files panel. null keeps its
-  // natural height until the user drags the divider.
-  backlinksHeight: number | null;
-  // Same, for the tag cloud block.
-  tagsHeight: number | null;
-  // Collapsed state of the two blocks, kept workspace-wide so switching files
-  // doesn't reshuffle the panel.
-  backlinksCollapsed: boolean;
-  tagsCollapsed: boolean;
+  // Files panel blocks by `<plugin id>:<panel id>`, kept workspace-wide so
+  // switching files doesn't reshuffle the panel. Stored and updated as a whole
+  // object, like the keybinding overrides.
+  blocks: Record<string, FilesBlockLayout>;
   sidebarLayout: SidebarLayout;
   // Mirrors the sidebar layout. Default Files-left / Outline-right; when true
   // it becomes Files-right / Outline-left. Affects all layout modes.
@@ -51,8 +54,6 @@ export const SIDEBAR_WIDTH_MAX = 480;
 export const AI_PANEL_WIDTH_DEFAULT = 340;
 export const AI_PANEL_WIDTH_MIN = 280;
 export const AI_PANEL_WIDTH_MAX_FRACTION = 0.45;
-export const BACKLINKS_HEIGHT_MIN = 80;
-export const TAGS_HEIGHT_MIN = 56;
 
 // Editor modes for a document tab. Defined as a constant object so call sites
 // reference `EDITOR_MODE.view` etc. instead of bare string literals; the
@@ -231,6 +232,10 @@ export interface CorePluginSettings {
   mermaid: boolean;
   /** Math: $inline$ and $$block$$, rendered with KaTeX. */
   math: boolean;
+  /** The tag cloud in the Files panel, and filtering the file list by a tag. */
+  tags: boolean;
+  /** The notes linking to the open one, in the Files panel. */
+  backlinks: boolean;
 }
 
 export interface Settings {
@@ -270,10 +275,7 @@ export const DEFAULT_SETTINGS: Settings = {
     filesSidebarWidth: SIDEBAR_WIDTH_DEFAULT,
     outlineSidebarWidth: SIDEBAR_WIDTH_DEFAULT,
     aiPanelWidth: AI_PANEL_WIDTH_DEFAULT,
-    backlinksHeight: null,
-    tagsHeight: null,
-    backlinksCollapsed: false,
-    tagsCollapsed: false,
+    blocks: {},
     sidebarLayout: "beside",
     swapSidebarSides: false,
   },
@@ -327,5 +329,7 @@ export const DEFAULT_SETTINGS: Settings = {
     d2: true,
     mermaid: true,
     math: true,
+    tags: true,
+    backlinks: true,
   },
 };

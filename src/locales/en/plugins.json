@@ -54,6 +54,14 @@
     "math": {
       "name": "Math (KaTeX)",
       "description": "Render $inline$ and $$block$$ math with KaTeX."
+    },
+    "tags": {
+      "name": "Tags",
+      "description": "Browse the workspace's tags in the files sidebar and filter the file list by one."
+    },
+    "backlinks": {
+      "name": "Backlinks",
+      "description": "List the notes that link to the open one, in the files sidebar."
     }
   }
 }

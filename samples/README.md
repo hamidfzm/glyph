@@ -48,6 +48,8 @@ Documents without frontmatter render as before — no extra spacing, no empty ca
 
 With a folder open, these keys are also indexed workspace-wide: tags (frontmatter or inline `#tag`) fill the sidebar's Tags panel, and the command palette takes `tag:demo` or any frontmatter field as a filter (`status:draft`). See [[Index]] for a walkthrough.
 
+The Tags panel is a core plugin: switch it off under **Settings → Plugins → Core plugins** and it leaves the sidebar, without loading its code. The `tag:` filter in the command palette stays.
+
 ## GitHub Flavored Markdown
 
 ### Tables
@@ -424,7 +426,9 @@ leaves every relative link to the browser instead.
 
 ### Backlinks
 
-When you have the `samples/` folder open, the **Backlinks** section under the file tree lists every other note that links to the current document. This file is referenced from [[Index]] and [[Notes/Cooking]], so opening either of them will show *this* file in their backlinks panel.
+When you have the `samples/` folder open, the **Backlinks** section under the file tree lists every other note that links to the current document. This file is referenced from [[Index]] and [[Notes/Cooking]], so opening either of them will show *this* file in their backlinks panel. Clicking a backlink opens the note at the line the link is on.
+
+Backlinks is a core plugin: switch it off under **Settings → Plugins → Core plugins** and the section leaves the sidebar, without loading its code.
 
 Renaming or moving a note or folder in the file tree keeps those links working: Glyph lists the notes whose `[[wikilinks]]`, `![[embeds]]`, relative `[links](Notes/Cooking.md)` and canvas cards point at it, and rewrites them once you confirm. Aliases and `#heading` fragments are kept, links inside inline code or fenced code blocks stay as written, and a same-named note in another folder keeps its own links.
 

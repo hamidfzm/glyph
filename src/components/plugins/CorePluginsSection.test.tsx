@@ -1,7 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { PluginsContext } from "@/contexts/PluginsContext";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
+import { createRegistry } from "@/lib/plugins/registry";
+import type { SettingsPanelContribution } from "@/lib/plugins/types";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import { CorePluginsSection } from "./CorePluginsSection";
 
 function renderSection(d2: boolean) {
@@ -47,5 +51,43 @@ describe("CorePluginsSection", () => {
     const value = renderSection(false);
     fireEvent.click(screen.getByRole("checkbox", { name: "Enable D2 diagrams" }));
     expect(value.updateSettings).toHaveBeenCalledWith("corePlugins.d2", true);
+  });
+
+  it("lists the tags and backlinks plugins with their own settings", () => {
+    const value = renderSection(true);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Enable Tags" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Enable Backlinks" }));
+    expect(value.updateSettings).toHaveBeenCalledWith("corePlugins.tags", false);
+    expect(value.updateSettings).toHaveBeenCalledWith("corePlugins.backlinks", false);
+  });
+
+  it("shows a core plugin's settings panel under its row while it is registered", () => {
+    const settingsPanels = createRegistry<SettingsPanelContribution>();
+    const removePanel = settingsPanels.register({
+      pluginId: "glyph.core.d2",
+      id: "d2-settings",
+      mount: (el) => {
+        el.textContent = "layout engine";
+      },
+    });
+    // A community plugin's panel belongs to its own row in the list below.
+    settingsPanels.register({
+      pluginId: "com.x.demo",
+      id: "demo-settings",
+      mount: (el) => {
+        el.textContent = "demo option";
+      },
+    });
+    render(
+      <PluginsContext.Provider value={pluginsContextValue({ settingsPanels })}>
+        <CorePluginsSection />
+      </PluginsContext.Provider>,
+    );
+    expect(screen.getByText("layout engine")).toBeInTheDocument();
+    expect(screen.queryByText("demo option")).not.toBeInTheDocument();
+
+    // Turning the plugin off unloads it, which removes the panel.
+    act(() => removePanel());
+    expect(screen.queryByText("layout engine")).not.toBeInTheDocument();
   });
 });

@@ -54,6 +54,14 @@
     "math": {
       "name": "Mathematik (KaTeX)",
       "description": "Stellt $inline$- und $$block$$-Formeln mit KaTeX dar."
+    },
+    "tags": {
+      "name": "Tags",
+      "description": "Zeigt die Tags des Arbeitsbereichs in der Dateien-Seitenleiste und filtert die Dateiliste nach einem Tag."
+    },
+    "backlinks": {
+      "name": "Rückverweise",
+      "description": "Listet in der Dateien-Seitenleiste die Notizen auf, die auf die geöffnete verweisen."
     }
   }
 }

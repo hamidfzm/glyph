@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { relativePath as pluginRelativePath } from "@/plugins/core/backlinks/relativePath";
 import {
   basename,
   displayName,
@@ -167,5 +168,20 @@ describe("relativeToRoot", () => {
 
   it("falls back to the file name outside the root", () => {
     expect(relativeToRoot("/elsewhere/Plan.md", "/ws")).toBe("Plan.md");
+  });
+
+  // The backlinks core plugin cannot import this module, so it carries a copy;
+  // the sidebar must still write a path the way the rest of the app does.
+  it("matches the backlinks plugin's own copy", () => {
+    const cases: Array<[path: string, root: string]> = [
+      ["/ws/Notes/Plan.md", "/ws"],
+      ["C:\\ws\\Notes\\Plan.md", "C:\\ws"],
+      ["/elsewhere/Plan.md", "/ws"],
+      ["/ws-other/Plan.md", "/ws"],
+      ["Plan.md", "/ws"],
+    ];
+    for (const [path, root] of cases) {
+      expect(pluginRelativePath(path, root), path).toBe(relativeToRoot(path, root));
+    }
   });
 });

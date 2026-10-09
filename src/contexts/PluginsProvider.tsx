@@ -6,6 +6,7 @@ import { PluginsContext } from "@/contexts/PluginsContext";
 import { useCorePlugins } from "@/hooks/useCorePlugins";
 import { usePluginLibrary } from "@/hooks/usePluginLibrary";
 import { registerTranslations } from "@/lib/i18n";
+import { pluginAppState } from "@/lib/plugins/appState";
 import { createPluginHost } from "@/lib/plugins/host";
 import { loadPluginSettings, savePluginSettings } from "@/lib/plugins/settingsStore";
 
@@ -29,18 +30,11 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     }, TOAST_DURATION_MS);
   }, []);
 
-  // The opened workspace root, mirrored from TabsContext by
-  // usePluginWorkspaceSync (this provider mounts above TabsProvider, so it
-  // cannot read that context directly). A ref, not state: only ctx.workspace
-  // calls read it, and they always want the current value.
-  const workspaceRootRef = useRef<string | null>(null);
-  const setWorkspaceRoot = useCallback((root: string | null) => {
-    workspaceRootRef.current = root;
-  }, []);
-
   // One host per provider; pushToast is stable so the closure stays valid.
+  // The workspace root is mirrored from TabsContext by usePluginAppBridge
+  // (this provider mounts above TabsProvider and cannot read it directly).
   const [host] = useState(() =>
-    createPluginHost(pushToast, registerTranslations, () => workspaceRootRef.current, {
+    createPluginHost(pushToast, registerTranslations, () => pluginAppState().workspaceRoot, {
       load: loadPluginSettings,
       save: (id, settings) => void savePluginSettings(id, settings),
     }),
@@ -69,6 +63,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         rehypePlugins: host.rehypePlugins,
         fencedRenderers: host.fencedRenderers,
         sidebarPanels: host.sidebarPanels,
+        fileTreeFilters: host.fileTreeFilters,
         settingsPanels: host.settingsPanels,
         styles: host.styles,
         exporters: host.exporters,
@@ -82,7 +77,6 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         installFromRegistry,
         setEnabled,
         uninstall,
-        setWorkspaceRoot,
         initialLoadDone,
       }}
     >

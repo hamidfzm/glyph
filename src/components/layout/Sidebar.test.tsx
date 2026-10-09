@@ -2,16 +2,10 @@ import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SIDEBAR_WIDTH_DEFAULT } from "@/lib/settings";
 import { makeWorkspace, renderBothSides, renderSidebar } from "@/test/fixtures/sidebar";
-import { vaultSnapshot } from "@/test/tabsHarness";
 
 vi.mock("@/lib/pickers", () => ({
   pickMoveDir: vi.fn(),
 }));
-
-// One tagged note, enough for the Files panel to render the tag cloud.
-function taggedIndex() {
-  return vaultSnapshot(["/tmp/notes/readme.md"], { tagCounts: [{ tag: "notes", count: 1 }] });
-}
 
 describe("Sidebar placement", () => {
   it("renders nothing when no active tab and no workspace", () => {
@@ -211,108 +205,6 @@ describe("Sidebar placement", () => {
     const nav = container.querySelector('nav[data-sidebar="left"]') as HTMLElement;
     fireEvent.doubleClick(within(nav).getByRole("separator", { name: "Resize sidebar" }));
     expect(setFilesSidebarWidth).toHaveBeenCalledExactlyOnceWith(SIDEBAR_WIDTH_DEFAULT);
-  });
-
-  it("drags the backlinks divider and persists the height", () => {
-    const setBacklinksHeight = vi.fn();
-    const { container } = renderSidebar({
-      workspace: makeWorkspace(),
-      setBacklinksHeight,
-      tabs: { backlinks: [{ source: "/tmp/notes/other.md", line: 3, snippet: "see readme" }] },
-    });
-    const wrapper = container.querySelector(".backlinks-section")?.parentElement as HTMLElement;
-    Object.defineProperty(wrapper, "offsetHeight", { configurable: true, value: 150 });
-    Object.defineProperty(wrapper.parentElement as HTMLElement, "clientHeight", {
-      configurable: true,
-      value: 500,
-    });
-    const handle = screen.getByRole("separator", { name: "Resize backlinks" });
-    fireEvent.pointerDown(handle, { button: 0, clientY: 400 });
-    // The block sits at the bottom: dragging the divider up grows it.
-    fireEvent.pointerMove(handle, { clientY: 350 });
-    expect(wrapper.style.height).toBe("200px");
-    fireEvent.pointerUp(handle);
-    expect(setBacklinksHeight).toHaveBeenCalledExactlyOnceWith(200);
-  });
-
-  it("applies a persisted backlinks height when idle", () => {
-    const { container } = renderSidebar({
-      workspace: makeWorkspace(),
-      backlinksHeight: 150,
-      tabs: { backlinks: [{ source: "/tmp/notes/other.md", line: 3, snippet: "see readme" }] },
-    });
-    const wrapper = container.querySelector(".backlinks-section")?.parentElement as HTMLElement;
-    expect(wrapper.style.height).toBe("150px");
-    const handle = screen.getByRole("separator", { name: "Resize backlinks" });
-    expect(handle).toHaveAttribute("aria-valuenow", "150");
-  });
-
-  it("double-click on the backlinks divider restores the automatic height", () => {
-    const setBacklinksHeight = vi.fn();
-    renderSidebar({
-      workspace: makeWorkspace(),
-      setBacklinksHeight,
-      tabs: { backlinks: [{ source: "/tmp/notes/other.md", line: 3, snippet: "see readme" }] },
-    });
-    fireEvent.doubleClick(screen.getByRole("separator", { name: "Resize backlinks" }));
-    expect(setBacklinksHeight).toHaveBeenCalledExactlyOnceWith(null);
-  });
-
-  // The block stays put so opening a note without backlinks doesn't reflow the
-  // panel around it.
-  it("keeps the backlinks block when the active note has none", () => {
-    renderSidebar({ workspace: makeWorkspace(), tabs: { backlinks: [] } });
-    expect(screen.getByText("Backlinks")).toBeInTheDocument();
-    expect(screen.getByText("No backlinks")).toBeInTheDocument();
-  });
-
-  it("persists the backlinks collapsed state instead of holding it locally", () => {
-    const setBacklinksCollapsed = vi.fn();
-    renderSidebar({ workspace: makeWorkspace(), setBacklinksCollapsed });
-    fireEvent.click(screen.getByRole("button", { name: /backlinks/i }));
-    expect(setBacklinksCollapsed).toHaveBeenCalledExactlyOnceWith(true);
-  });
-
-  // Nothing left to resize once the block is just its heading.
-  it("drops the backlinks divider while the block is collapsed", () => {
-    renderSidebar({ workspace: makeWorkspace(), backlinksCollapsed: true });
-    expect(screen.queryByRole("separator", { name: "Resize backlinks" })).not.toBeInTheDocument();
-  });
-
-  it("drags the tags divider and persists the height", () => {
-    const setTagsHeight = vi.fn();
-    renderSidebar({ workspace: makeWorkspace(), setTagsHeight, tabs: { snapshot: taggedIndex() } });
-    const handle = screen.getByRole("separator", { name: "Resize tags" });
-    const block = handle.nextElementSibling as HTMLElement;
-    Object.defineProperty(block, "offsetHeight", { configurable: true, value: 100 });
-    Object.defineProperty(block.parentElement as HTMLElement, "clientHeight", {
-      configurable: true,
-      value: 500,
-    });
-    fireEvent.pointerDown(handle, { button: 0, clientY: 400 });
-    // The block sits below the tree: dragging the divider up grows it.
-    fireEvent.pointerMove(handle, { clientY: 360 });
-    expect(block.style.height).toBe("140px");
-    fireEvent.pointerUp(handle);
-    expect(setTagsHeight).toHaveBeenCalledExactlyOnceWith(140);
-  });
-
-  it("applies a persisted tags height when idle", () => {
-    renderSidebar({
-      workspace: makeWorkspace(),
-      tagsHeight: 120,
-      tabs: { snapshot: taggedIndex() },
-    });
-    const handle = screen.getByRole("separator", { name: "Resize tags" });
-    expect((handle.nextElementSibling as HTMLElement).style.height).toBe("120px");
-    expect(handle).toHaveAttribute("aria-valuenow", "120");
-  });
-
-  it("double-click on the tags divider restores the automatic height", () => {
-    const setTagsHeight = vi.fn();
-    renderSidebar({ workspace: makeWorkspace(), setTagsHeight, tabs: { snapshot: taggedIndex() } });
-    fireEvent.doubleClick(screen.getByRole("separator", { name: "Resize tags" }));
-    expect(setTagsHeight).toHaveBeenCalledExactlyOnceWith(null);
   });
 
   it("swaps sides when swapSidebarSides=true (file tab outline goes right)", () => {

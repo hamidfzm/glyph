@@ -1,10 +1,12 @@
 import { i18n } from "@/lib/i18n";
 import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_VERSION } from "./apiVersion";
+import { onPluginAppStateChange, pluginAppState } from "./appState";
 import { createAssetsApi } from "./assetsApi";
 import type { Disposer, DisposerBag } from "./disposer";
 import { registerFileType } from "./fileTypes";
 import type { PluginSettingsBackend } from "./host";
+import { createNavigationApi } from "./navigationApi";
 import { showOverlay } from "./overlays";
 import type { Registry } from "./registry";
 import { prepareRenderedHtml } from "./renderedHtml";
@@ -13,17 +15,21 @@ import type {
   CommandEntry,
   ExporterEntry,
   FencedRendererContribution,
+  FileTreeFilter,
   GlyphPluginContext,
   InstalledPlugin,
   MarkdownPlugin,
   RehypeContribution,
   SettingsPanelContribution,
   SidebarPanelContribution,
+  SidebarPanelEntry,
   SiteThemeContribution,
   StatusBarItemContribution,
   StyleContribution,
 } from "./types";
+import { createVaultApi } from "./vaultApi";
 import { createWorkspaceApi } from "./workspaceApi";
+import { resolveWorkspacePath } from "./workspacePath";
 
 /** The contribution registries a plugin context writes into. */
 export interface ContextRegistries {
@@ -32,7 +38,8 @@ export interface ContextRegistries {
   remarkPlugins: Registry<MarkdownPlugin>;
   rehypePlugins: Registry<RehypeContribution>;
   fencedRenderers: Registry<FencedRendererContribution>;
-  sidebarPanels: Registry<SidebarPanelContribution>;
+  sidebarPanels: Registry<SidebarPanelEntry>;
+  fileTreeFilters: Registry<FileTreeFilter>;
   settingsPanels: Registry<SettingsPanelContribution>;
   styles: Registry<StyleContribution>;
   exporters: Registry<ExporterEntry>;
@@ -52,14 +59,59 @@ interface BuildContextOptions {
 }
 
 /** Route a registration through the plugin's own DisposerBag so unload removes
- *  exactly its contributions. */
+ *  exactly its contributions. Disposing early also leaves the bag: a plugin
+ *  that subscribes on every mount would otherwise pin each closure until unload. */
 export const tracked =
   <T>(register: (entry: T) => Disposer, bag: DisposerBag) =>
   (entry: T): Disposer => {
     const dispose = register(entry);
     bag.add(dispose);
-    return dispose;
+    return () => {
+      dispose();
+      bag.delete(dispose);
+    };
   };
+
+/**
+ * The Files panel renders a filter as given and opens the file a user clicks,
+ * so a malformed one is refused here, and its paths are confined to the
+ * workspace the way `navigation.openFile` confines its own.
+ */
+function checkedFileTreeFilter(filter: FileTreeFilter, root: string | null): FileTreeFilter {
+  const { label, paths, onClear } = filter ?? {};
+  const hasPaths = Array.isArray(paths) && paths.every((path) => typeof path === "string");
+  if (typeof label !== "string" || !hasPaths || typeof onClear !== "function") {
+    throw new Error("a file tree filter needs a label, a list of paths, and an onClear function");
+  }
+  if (!root) throw new Error("no workspace is open");
+  const confined = paths.map((path) => {
+    const resolved = resolveWorkspacePath(root, path);
+    if (!resolved) throw new Error(`path is outside the workspace: ${path}`);
+    return resolved;
+  });
+  return { label, paths: confined, onClear };
+}
+
+function isHeight(value: unknown): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/** A frame the divider cannot work with (`NaN`, a negative height) is refused. */
+function checkedSidebarPanel(panel: SidebarPanelContribution): SidebarPanelContribution {
+  const frame = panel.frame;
+  if (frame === undefined) return panel;
+  const hasNaturalMax = frame.naturalMax === undefined || isHeight(frame.naturalMax);
+  if (!isHeight(frame.min) || !hasNaturalMax) {
+    throw new Error("a sidebar panel frame needs finite, non-negative heights");
+  }
+  return panel;
+}
+
+function subscribeToLanguage(listener: () => void): Disposer {
+  const handleLanguageChanged = () => listener();
+  i18n.on("languageChanged", handleLanguageChanged);
+  return () => i18n.off("languageChanged", handleLanguageChanged);
+}
 
 /** The `ctx` object handed to a plugin's `activate()`. */
 export function buildPluginContext({
@@ -79,11 +131,15 @@ export function buildPluginContext({
     rehypePlugins,
     fencedRenderers,
     sidebarPanels,
+    fileTreeFilters,
     settingsPanels,
     styles,
     exporters,
     siteThemes,
   } = registries;
+  const permissions = plugin.permissions ?? [];
+  const workspace = createWorkspaceApi(getWorkspaceRoot, permissions);
+  const vault = createVaultApi(getWorkspaceRoot, permissions);
   return {
     apiVersion: PLUGIN_API_VERSION,
     commands: {
@@ -93,7 +149,14 @@ export function buildPluginContext({
     },
     ui: {
       addStatusBarItem: tracked(statusBarItems.register, bag),
-      addSidebarPanel: tracked(sidebarPanels.register, bag),
+      addSidebarPanel(panel) {
+        const entry = { ...checkedSidebarPanel(panel), pluginId: plugin.id };
+        return tracked(sidebarPanels.register, bag)(entry);
+      },
+      filterFileTree(filter) {
+        const checked = checkedFileTreeFilter(filter, getWorkspaceRoot());
+        return tracked(fileTreeFilters.register, bag)(checked);
+      },
       addSettingsPanel(panel) {
         return tracked(settingsPanels.register, bag)({ ...panel, pluginId: plugin.id });
       },
@@ -128,9 +191,27 @@ export function buildPluginContext({
     },
     documents: {
       registerFileType: tracked(registerFileType, bag),
+      getActive() {
+        const active = pluginAppState().activeDocument;
+        if (!active) return null;
+        return {
+          ...active,
+          // Read on use: most callers want the path, and a long selection is
+          // not free to serialize.
+          get selection() {
+            return window.getSelection()?.toString() ?? "";
+          },
+        };
+      },
+      onActiveChange: tracked(
+        (listener) => onPluginAppStateChange("activeDocument", listener),
+        bag,
+      ),
       getRenderedHtml: prepareRenderedHtml,
     },
-    workspace: createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? []),
+    workspace: { ...workspace, onChange: tracked(workspace.onChange, bag) },
+    vault: { ...vault, onChange: tracked(vault.onChange, bag) },
+    navigation: createNavigationApi(getWorkspaceRoot),
     assets: createAssetsApi(plugin.id),
     exporters: {
       register(exporter) {
@@ -151,18 +232,7 @@ export function buildPluginContext({
     },
     i18n: {
       t: (key, values) => i18n.t(key, values ?? {}),
-      onLanguageChange(listener) {
-        const handleLanguageChanged = () => listener();
-        i18n.on("languageChanged", handleLanguageChanged);
-        const unsubscribe = () => i18n.off("languageChanged", handleLanguageChanged);
-        bag.add(unsubscribe);
-        // Renderers subscribe on every mount, so an early dispose must also
-        // leave the bag, or each remount would pin its closure until unload.
-        return () => {
-          unsubscribe();
-          bag.delete(unsubscribe);
-        };
-      },
+      onLanguageChange: tracked(subscribeToLanguage, bag),
     },
     notify,
     registerTranslations,
