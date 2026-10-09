@@ -52,6 +52,8 @@ fn ensure_entry_inside_root(target: &Path, root: &Path) -> Result<PathBuf, Strin
 
 /// Pick the first non-colliding name in `dir` built from `stem`/`ext`:
 /// `Untitled.md`, `Untitled 1.md`, … (or `Untitled Folder`, `Untitled Folder 1`).
+/// A link whose target is missing still holds its name: `exists()` would call
+/// it free, and the write that follows would create the target.
 fn unique_path(dir: &Path, stem: &str, ext: Option<&str>) -> PathBuf {
     let build = |name: String| -> PathBuf {
         match ext {
@@ -61,18 +63,22 @@ fn unique_path(dir: &Path, stem: &str, ext: Option<&str>) -> PathBuf {
     };
     let mut candidate = build(stem.to_string());
     let mut n = 1;
-    while candidate.exists() {
+    while candidate.symlink_metadata().is_ok() {
         candidate = build(format!("{stem} {n}"));
         n += 1;
     }
     candidate
 }
 
-/// Reduce a user-typed name to a single safe path component: drops directory
-/// separators and characters that are illegal on Windows, trims whitespace.
+/// What a file name may not hold: directory separators, and the characters
+/// that are illegal on Windows.
+pub(crate) const UNSAFE_NAME_CHARS: [char; 9] = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+
+/// Reduce a user-typed name to a single safe path component: drops the
+/// characters a name may not hold, trims whitespace.
 fn sanitize_name(name: &str) -> String {
     name.chars()
-        .filter(|c| !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+        .filter(|c| !UNSAFE_NAME_CHARS.contains(c))
         .collect::<String>()
         .trim()
         .to_string()
@@ -525,6 +531,49 @@ mod tests {
         assert!(first.ends_with("Untitled.md"));
         assert!(second.ends_with("Untitled 1.md"));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_link_to_a_missing_target_still_holds_its_name() {
+        let outer = unique_tmp("dangling_name");
+        let ws = outer.join("ws");
+        fs::create_dir_all(&ws).unwrap();
+        let note = ws.join("real.md");
+        fs::write(&note, "x").unwrap();
+        // Each name a command would pick first is a link out of the workspace
+        // whose target is missing, so writing to that name would create it.
+        for name in [
+            "Untitled.md",
+            "Untitled.canvas",
+            "Untitled Folder",
+            "real copy.md",
+            "taken.md",
+        ] {
+            let target = outer.join(format!("planted {name}"));
+            crate::vault::test_support::link_folder(&target, &ws.join(name));
+        }
+        let root = ws.to_string_lossy().to_string();
+        let note = note.to_string_lossy().to_string();
+
+        for (created, next_free_name) in [
+            (create_note(root.clone(), root.clone()), "Untitled 1.md"),
+            (
+                create_canvas(root.clone(), root.clone()),
+                "Untitled 1.canvas",
+            ),
+            (
+                create_folder(root.clone(), root.clone()),
+                "Untitled Folder 1",
+            ),
+            (duplicate_path(note.clone(), root.clone()), "real copy 1.md"),
+            (rename_path(note, "taken".to_string(), root), "taken 1.md"),
+        ] {
+            let path = created.unwrap();
+            assert!(path.ends_with(next_free_name), "{path}");
+        }
+        // Only the workspace: no link was followed to its target.
+        assert_eq!(fs::read_dir(&outer).unwrap().count(), 1);
+        let _ = fs::remove_dir_all(&outer);
     }
 
     #[test]

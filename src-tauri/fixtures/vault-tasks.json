@@ -1,0 +1,21 @@
+{
+  "lines": [
+    { "line": "- [ ] todo", "task": true },
+    { "line": "* [x] done", "task": true },
+    { "line": "+ [X] shouted", "task": true },
+    { "line": "    - [ ] nested", "task": true },
+    { "line": "\t- [ ] tabbed", "task": true },
+    { "line": "-   [ ] wide", "task": true },
+    { "line": "- [x]\tafter a tab", "task": true },
+    { "line": "1. [ ] ordered", "task": false },
+    { "line": "> - [ ] quoted", "task": false },
+    { "line": "- - [ ] inner", "task": false },
+    { "line": "- [ ]", "task": false },
+    { "line": "- [ ]glued", "task": false },
+    { "line": "-[ ] no space", "task": false },
+    { "line": "- [y] another mark", "task": false },
+    { "line": "- [  ] two spaces", "task": false },
+    { "line": "see [ ] in text", "task": false },
+    { "line": "[ ] no bullet", "task": false }
+  ]
+}

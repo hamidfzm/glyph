@@ -771,6 +771,23 @@ fn growing_past_the_file_cap_is_reported_rather_than_indexed() {
 }
 
 #[test]
+fn two_files_arriving_together_with_room_for_one_fill_the_cap_and_no_more() {
+    let root = fixture_vault("incremental_cap_pair");
+    let mut vault = Vault::build_capped(&root, 10, 32).unwrap();
+
+    let arrived = [root.join("Tenth.md"), root.join("Eleventh.md")];
+    for file in &arrived {
+        fs::write(file, "one of two\n").unwrap();
+    }
+    vault.apply_changes(&arrived);
+
+    let snapshot = vault.snapshot();
+    assert_eq!(snapshot.files.len(), 10);
+    assert!(snapshot.status.truncated);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
 fn a_file_that_vanishes_between_the_event_and_the_read_is_dropped() {
     let root = fixture_vault("vanished");
     let mut vault = build(&root);
@@ -1225,6 +1242,22 @@ fn a_sync_catches_the_index_up_with_the_disk() {
             .as_deref(),
         Some("Renamed.md")
     );
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_note_renamed_to_its_own_name_in_other_letters_is_still_one_note() {
+    let root = fixture_vault("sync_case");
+    let mut vault = build(&root);
+
+    // Where the filesystem ignores case, `Index.md` still opens after this,
+    // so reading it does not say the old name is gone.
+    fs::rename(root.join("Index.md"), root.join("index.md")).unwrap();
+    vault.sync().unwrap();
+
+    assert!(vault.note(&in_vault(&root, "Index.md")).is_none());
+    assert!(vault.note(&in_vault(&root, "index.md")).is_some());
     assert_matches_rebuild(&vault, &root);
     fs::remove_dir_all(&root).unwrap();
 }

@@ -263,6 +263,32 @@
     },
     "speed": {
       "label": "语速"
+    },
+    "agentTools": {
+      "title": "智能体工具",
+      "description": "连接到 Glyph 的 MCP 服务器 (glyph mcp) 的 AI 智能体始终可以读取你打开的工作区：链接、反向链接、标签、标题和图谱。会修改笔记的工具默认关闭，需要在这里逐个开启。对在 Glyph 中有未保存更改的笔记所做的修改会被拒绝。",
+      "tools": {
+        "patch_note": {
+          "label": "编辑章节",
+          "description": "替换某个标题下的文本，或在其开头或末尾添加内容。笔记的其余部分保持不变。"
+        },
+        "set_property": {
+          "label": "设置属性",
+          "description": "设置或移除一个 frontmatter 属性，并保留其他属性的顺序、注释和引号。"
+        },
+        "update_task": {
+          "label": "勾选任务",
+          "description": "将任务标记为已完成或待办。围栏代码块或引用中的复选框不算作任务。"
+        },
+        "rename_note": {
+          "label": "重命名笔记",
+          "description": "重命名笔记，并改写指向它的链接。"
+        },
+        "move_note": {
+          "label": "移动笔记",
+          "description": "将笔记移到另一个文件夹，并改写指向它的链接。"
+        }
+      }
     }
   },
   "print": {
