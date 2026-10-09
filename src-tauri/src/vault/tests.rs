@@ -416,6 +416,31 @@ fn a_folder_rename_reported_as_its_two_paths_reindexes_every_note_inside() {
     fs::remove_dir_all(&root).unwrap();
 }
 
+#[test]
+fn a_folder_renamed_to_its_own_name_in_other_letters_takes_its_notes_along() {
+    let root = fixture_vault("folder_case");
+    let mut vault = build(&root);
+
+    // Where the filesystem ignores case, `Notes` and every note in it still
+    // open after this, so only the root's listing says the old name is gone.
+    let (old, new) = (root.join("Notes"), root.join("notes"));
+    fs::rename(&old, &new).unwrap();
+    // One path per update, as a watcher may report them.
+    vault.apply_changes(&[old]);
+    vault.apply_changes(&[new]);
+
+    assert!(vault.note(&in_vault(&root, "Notes/Cooking.md")).is_none());
+    assert!(vault.note(&in_vault(&root, "notes/Cooking.md")).is_some());
+    assert_matches_rebuild(&vault, &root);
+
+    // With no watcher to name the folder, the walk finds its notes moved.
+    fs::rename(root.join("notes"), root.join("NOTES")).unwrap();
+    vault.sync().unwrap();
+    assert!(vault.note(&in_vault(&root, "NOTES/Cooking.md")).is_some());
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
 // ------------------------------------------------------- moving with links
 
 /// Every file under `dir` with its bytes, by forward-slashed relative path.
@@ -509,6 +534,32 @@ fn a_folder_move_rewrites_notes_and_canvas_cards_and_reindexes() {
     let index = fs::read_to_string(root.join("Index.md")).unwrap();
     assert!(index.contains("[[Recipes/Travel]]"), "{index}");
     with_vault(&path, &grants, &store, |vault| {
+        assert_matches_rebuild(vault, &root);
+        Ok(())
+    })
+    .unwrap();
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_folder_renamed_in_case_only_rewrites_the_paths_that_name_it_and_reindexes() {
+    let root = fixture_vault("relocate_case");
+    let app = app_with_workspace(&root);
+    let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+    let path = root.to_string_lossy().to_string();
+    let (from, to) = (root.join("Notes"), root.join("notes"));
+
+    let moved = relocate(&path, &from, &to, false, &grants, &store).unwrap();
+
+    // A wikilink ignores case and stays as written; a path is spelled as the
+    // disk spells it, so the card follows.
+    assert_eq!(relinked_files(&root, &moved.files), ["Board.canvas"]);
+    let board = fs::read_to_string(root.join("Board.canvas")).unwrap();
+    assert!(board.contains("\"file\": \"notes/Cooking.md\""), "{board}");
+    let index = fs::read_to_string(root.join("Index.md")).unwrap();
+    assert!(index.contains("[[Notes/Travel]]"), "{index}");
+    with_vault(&path, &grants, &store, |vault| {
+        assert!(vault.note(&in_vault(&root, "Notes/Travel.md")).is_none());
         assert_matches_rebuild(vault, &root);
         Ok(())
     })
