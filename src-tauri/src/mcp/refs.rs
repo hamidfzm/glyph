@@ -16,7 +16,7 @@ pub(super) const MAX_ITEMS: usize = 200;
 /// Most characters of note text one result carries.
 pub(super) const MAX_TEXT_CHARS: usize = 50_000;
 /// The size past which the index refuses a note, as the refusals put it.
-const MAX_NOTE_MB: u64 = SCAN_MAX_FILE_BYTES / (1024 * 1024);
+pub(super) const MAX_NOTE_MB: u64 = SCAN_MAX_FILE_BYTES / (1024 * 1024);
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -29,7 +29,7 @@ pub(super) struct NoteArgs {
 pub(super) fn vault_property() -> Value {
     json!({
         "type": "string",
-        "description": "Root folder of the vault to read. Defaults to the vault of the note open in Glyph, or to the only vault; vault_context lists them. Any other folder, given as an absolute path, is served once the user allows it."
+        "description": "Root folder of the vault to work in. Defaults to the vault of the note open in Glyph, or to the only vault; vault_context lists them. Any other folder, given as an absolute path, is served once the user allows it."
     })
 }
 
@@ -270,9 +270,14 @@ pub(super) fn note_path(
     Ok(Some(indexed))
 }
 
-/// A note's text, read through the grant check, refused past the size the
-/// index refuses, and without the leading BOM the index skips.
+/// A note's text without the leading BOM the index skips.
 pub(super) fn read_text(session: &Session, path: &str) -> Result<String, String> {
+    read_raw(session, path).map(|text| strip_bom(&text).to_string())
+}
+
+/// A note as it is on disk, read through the grant check and refused past the
+/// size the index refuses.
+pub(super) fn read_raw(session: &Session, path: &str) -> Result<String, String> {
     let canonical = session.grants.ensure_readable(path)?;
     let size = std::fs::metadata(&canonical)
         .map_err(|err| format!("cannot read {path}: {err}"))?
@@ -282,14 +287,12 @@ pub(super) fn read_text(session: &Session, path: &str) -> Result<String, String>
             "{path} is larger than the {MAX_NOTE_MB} MB Glyph indexes"
         ));
     }
-    let text =
-        std::fs::read_to_string(&canonical).map_err(|err| format!("cannot read {path}: {err}"))?;
-    Ok(strip_bom(&text).to_string())
+    std::fs::read_to_string(&canonical).map_err(|err| format!("cannot read {path}: {err}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::Harness;
+    use super::super::test_support::Harness;
     use super::*;
 
     #[test]

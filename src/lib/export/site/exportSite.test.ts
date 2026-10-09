@@ -114,7 +114,7 @@ describe("exportSite", () => {
       onProgress: (done, total) => progress.push([done, total]),
     });
 
-    expect(result).toEqual({ pages: 2, assets: 0, removed: 0 });
+    expect(result).toEqual({ pages: 2, assets: 0, removed: 0, pruneError: null });
     expect([...fs.writes.keys()].sort()).toEqual([
       "/out/guide/intro.html",
       "/out/index.html",
@@ -486,22 +486,25 @@ describe("exportSite", () => {
     error.mockRestore();
   });
 
-  it("still reports a successful export when the prune fails", async () => {
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("succeeds when the prune fails, and says why it failed", async () => {
     const fs = mockFs({ "/ws/README.md": "# A" });
     const base = vi.mocked(invoke).getMockImplementation()!;
     vi.mocked(invoke).mockImplementation((cmd, args) => {
-      if (cmd === "prune_export_dir") return Promise.reject(new Error("locked"));
+      // A rejected command throws its Err string, not an Error.
+      if (cmd === "prune_export_dir") return Promise.reject("Failed to write file: locked");
       return base(cmd, args);
     });
 
     // Every page and asset is on disk; only the cleanup failed.
     const result = await exportSite({ root: "/ws", outDir: "/out" });
 
-    expect(result).toEqual({ pages: 1, assets: 0, removed: 0 });
+    expect(result).toEqual({
+      pages: 1,
+      assets: 0,
+      removed: 0,
+      pruneError: "Failed to write file: locked",
+    });
     expect(fs.writes.has("/out/index.html")).toBe(true);
-    expect(error).toHaveBeenCalled();
-    error.mockRestore();
   });
 
   it("does not prune when the export fails part way through", async () => {

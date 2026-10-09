@@ -33,8 +33,8 @@ const GAMMA = fixture("gamma.md");
 const DELTA = fixture("delta.md");
 const EPSILON = fixture("epsilon.md");
 const ZETA = fixture("zeta.md");
-// A type Glyph refuses to open. The Linux desktop entry lists text/plain, so a
-// file manager can hand one over beside the markdown files.
+// A type Glyph refuses to open. One can still arrive beside the markdown
+// files: a mixed selection dropped on the launcher, or `glyph *` in a terminal.
 const UNSUPPORTED = fixture("unsupported.txt");
 
 let driver: ChildProcess;

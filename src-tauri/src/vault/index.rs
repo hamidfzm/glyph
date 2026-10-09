@@ -2,6 +2,7 @@
 //! keeping it current as files change.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use super::canvas::{self, Canvas};
@@ -17,6 +18,13 @@ use crate::commands::walk::{
 /// attachment the index only ever points at.
 fn is_indexable(path: &Path) -> bool {
     crate::is_markdown_file(path) || crate::is_canvas_file(path)
+}
+
+/// The names `dir` lists, as it spells them, which is not what opening a path
+/// tells where the filesystem ignores case.
+pub(crate) fn names_in(dir: &Path) -> HashSet<OsString> {
+    let entries = std::fs::read_dir(dir).into_iter().flatten();
+    entries.flatten().map(|entry| entry.file_name()).collect()
 }
 
 #[derive(Debug)]
@@ -92,6 +100,19 @@ impl Vault {
     /// new ones are inserted; nothing else is read from disk.
     pub fn apply_changes(&mut self, paths: &[PathBuf]) {
         let paths = self.with_folder_contents(paths);
+        // Where the filesystem ignores case, a note renamed to its own name
+        // in other letters still opens under the old one, so its folder is
+        // asked which name it has; each folder once.
+        // ponytail: the last name only. A folder renamed that way keeps its
+        // notes under the old spelling until the index is built again.
+        let mut listings: HashMap<PathBuf, HashSet<OsString>> = HashMap::new();
+        let mut listed = |path: &Path| {
+            let named = path.parent().zip(path.file_name());
+            named.is_some_and(|(dir, name)| {
+                let names = listings.entry(dir.to_path_buf());
+                names.or_insert_with(|| names_in(dir)).contains(name)
+            })
+        };
         let mut seen = HashSet::new();
         let mut removed = HashSet::new();
         let mut added = Vec::new();
@@ -109,9 +130,8 @@ impl Vault {
                 continue;
             }
 
-            let content = self
-                .walkable(&path, &relative)
-                .then(|| std::fs::read_to_string(&path));
+            let there = self.walkable(&path, &relative) && listed(&path);
+            let content = there.then(|| std::fs::read_to_string(&path));
             let Some(Ok(content)) = content else {
                 // A path the walker would have skipped, a deletion, or a file
                 // that went away mid-update: none of them belong in the index.

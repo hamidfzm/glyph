@@ -3,6 +3,9 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef } from "react";
 import { useExportReadiness } from "@/hooks/useExportReadiness";
 import { getCliServeRequest } from "@/lib/cliServe";
+import { errorMessage } from "@/lib/errorMessage";
+import type { ExportSiteResult } from "@/lib/export/site/exportSite";
+import { pruneWarning } from "@/lib/pruneWarning";
 
 /** Rust emits this whenever the watched folder changed, already debounced. */
 export const SERVE_CHANGED_EVENT = "serve://changed";
@@ -22,7 +25,8 @@ export function resetCliServeRunner(): void {
  * The site pipeline only exists in the renderer, so the process splits in
  * two: Rust owns the socket and the file watch, this hook owns the export.
  * It renders once on mount, then again on every change Rust reports, telling
- * Rust after each build so the open browsers reload.
+ * Rust after each build so the open browsers reload. A build whose cleanup
+ * failed still reloads them, with a warning on stderr.
  *
  * A failed build is reported and otherwise ignored: whatever was exported
  * last is still on disk and still being served, so the browser keeps showing
@@ -49,6 +53,8 @@ export function useCliServe(): void {
     // edits that arrived while it was running.
     let building = false;
     let queued = false;
+    // A cleanup that keeps failing the same way is said once, not on every save.
+    let lastPruneError: string | null = null;
 
     const build = async (root: string, outDir: string) => {
       if (building) {
@@ -63,25 +69,31 @@ export function useCliServe(): void {
           // queued while the last one was reporting would otherwise render a
           // whole site for a process that has already gone.
           if (disposed) return;
-          let built = false;
+          let built: ExportSiteResult | null = null;
           try {
             const { exportSite } = await import("@/lib/export/site/exportSite");
-            await exportSite({
+            built = await exportSite({
               root,
               outDir,
               themes: contributions.current.themes,
               remarkPlugins: contributions.current.remarkPlugins,
               rehypePlugins: contributions.current.rehypePlugins,
             });
-            built = true;
           } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
             if (disposed) return;
-            await invoke("serve_failed", { message: `Rebuild failed: ${message}` });
+            await invoke("serve_failed", { message: `Rebuild failed: ${errorMessage(err)}` });
           }
           // Reporting lives outside the try so that an IPC failure is not
           // announced as a failed build: the site did render.
-          if (built && !disposed) await invoke("serve_ready");
+          if (built && !disposed) {
+            const { pruneError } = built;
+            const isNewPruneError = pruneError !== null && pruneError !== lastPruneError;
+            await invoke("serve_ready", {
+              warning: isNewPruneError ? pruneWarning(pruneError) : null,
+            });
+            // Only once it was said: a failed report must not silence the reason.
+            lastPruneError = pruneError;
+          }
         } while (queued);
       } finally {
         building = false;

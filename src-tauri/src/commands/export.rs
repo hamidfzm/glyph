@@ -114,6 +114,16 @@ mod tests {
     }
 
     #[test]
+    fn a_warning_stays_on_stderr_with_the_summary() {
+        // A site whose cleanup failed still exits 0, so a script must still
+        // capture a path and nothing else.
+        let message = "Exported 3 pages to /out\nWarning: cleanup after the export failed";
+        let (stdout, stderr) = outcome(0, Some("/out"), message);
+        assert_eq!(stdout, "/out\n");
+        assert_eq!(stderr, format!("{message}\n"));
+    }
+
+    #[test]
     fn a_failed_export_prints_nothing_to_stdout() {
         let (stdout, stderr) = outcome(1, Some("/ws/notes.pdf"), "Export failed: boom");
         assert_eq!(stdout, "");

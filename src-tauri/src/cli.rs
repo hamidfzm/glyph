@@ -820,8 +820,8 @@ mod tests {
 
     #[test]
     fn launch_opens_skips_an_unsupported_first_path_and_opens_the_rest() {
-        // The desktop entry lists `text/plain`, so a file manager can hand over
-        // a mixed selection. The first path being refused must not sink the launch.
+        // A mixed selection dropped on the launcher, or `glyph *` in a terminal.
+        // The first path being refused must not sink the launch.
         let cwd = unique_tmp("lo_mixed");
         fs::write(cwd.join("notes.txt"), "<script>").unwrap();
         fs::write(cwd.join("a.md"), "x").unwrap();

@@ -2,13 +2,15 @@
 //
 // Types the OS knows about (markdown, D2) live in `src-tauri/tauri.conf.json`
 // under `bundle.fileAssociations`, because Tauri reads that file directly to
-// register them (Windows registry, macOS Info.plist, Linux .desktop) and so it
-// has to hold them. Every other type lives in `src-tauri/extensions.json` next
-// to it.
+// register them (Windows registry, macOS Info.plist, Android manifest) and so
+// it has to hold them. Every other type lives in `src-tauri/extensions.json`
+// next to it.
 //
 // `src-tauri/build.rs` generates the matching Rust consts from those same two
 // files, so the frontend checks, the backend checks, and the OS registration
-// cannot drift. Adding an extension is a one-line edit to one JSON file.
+// cannot drift. Adding an extension is a one-line edit to one JSON file, and
+// tests then ask for it wherever a platform lists extensions by hand (the
+// macOS Info.plist, the Windows preview handler, the Linux MIME package).
 // biome-ignore lint/style/noRestrictedImports: lives outside src/, but it is the canonical config
 import declaredConfig from "../../src-tauri/extensions.json";
 // biome-ignore lint/style/noRestrictedImports: lives outside src/, but it is the canonical config

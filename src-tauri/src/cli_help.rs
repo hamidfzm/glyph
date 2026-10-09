@@ -70,7 +70,9 @@ and set `DISPLAY` instead.
 `mcp` speaks the Model Context Protocol on stdin and stdout until its client
 closes them, and needs no display. Register `glyph mcp` with an MCP client to
 give an agent Glyph's view of a vault: resolved links, backlinks, tags,
-headings, the graph and canvases, instead of raw files.",
+headings, the graph and canvases, instead of raw files. The tools that change
+notes (a section, a property, a task, a note's name or folder) are off until
+each is turned on in Glyph's settings, under AI.",
         host = crate::cli::DEFAULT_SERVE_HOST,
         port = crate::cli::DEFAULT_SERVE_PORT,
         version = env!("CARGO_PKG_VERSION"),

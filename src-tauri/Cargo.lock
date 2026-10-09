@@ -1581,6 +1581,7 @@ dependencies = [
  "keyring",
  "notify",
  "regex",
+ "same-file",
  "sentry",
  "serde",
  "serde_json",

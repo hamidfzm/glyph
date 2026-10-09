@@ -415,6 +415,37 @@ fn remove_forgets_both_maps_for_a_closed_window() {
 }
 
 #[test]
+fn documents_are_every_windows_files_and_the_unsaved_among_them() {
+    let registry = WindowRegistry::new();
+    let paths = |names: &[&str]| {
+        names
+            .iter()
+            .map(|name| name.to_string())
+            .collect::<Vec<_>>()
+    };
+    registry.set_files("main", paths(&["/a/two.md", "/a/one.md"]));
+    registry.set_files("w1", paths(&["/b/three.md", "/a/one.md"]));
+    registry.set_unsaved("main", paths(&["/a/two.md"]));
+    registry.set_unsaved("w1", paths(&["/b/three.md"]));
+
+    assert_eq!(
+        registry.documents(),
+        (
+            paths(&["/a/one.md", "/a/two.md", "/b/three.md"]),
+            paths(&["/a/two.md", "/b/three.md"])
+        )
+    );
+
+    // A saved buffer and a closed window both leave the unsaved list.
+    registry.set_unsaved("main", Vec::new());
+    registry.remove("w1");
+    assert_eq!(
+        registry.documents(),
+        (paths(&["/a/one.md", "/a/two.md"]), Vec::new())
+    );
+}
+
+#[test]
 fn add_file_registers_a_spawn_before_its_window_reports() {
     let registry = WindowRegistry::new();
     registry.add_file("w1", "/a/note.md".to_string());

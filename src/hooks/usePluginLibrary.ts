@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePluginConsent } from "@/hooks/usePluginConsent";
+import { errorMessage } from "@/lib/errorMessage";
 import { pickPluginDir } from "@/lib/pickers";
 import { loadDisabled, saveDisabled } from "@/lib/plugins/disabledStore";
 import type { PluginGrant } from "@/lib/plugins/grantsStore";
@@ -124,8 +125,7 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
   const reportFailure = useCallback(
     (err: unknown) => {
       console.error("Plugin operation failed:", err);
-      const message = err instanceof Error ? err.message : String(err);
-      pushToast(t("toast.error", { message }), "error");
+      pushToast(t("toast.error", { message: errorMessage(err) }), "error");
     },
     [pushToast, t],
   );
