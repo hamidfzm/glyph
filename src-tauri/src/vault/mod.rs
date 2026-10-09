@@ -18,6 +18,7 @@ pub mod commands;
 
 mod canvas;
 mod frontmatter;
+mod frontmatter_edit;
 mod graph;
 mod headings;
 mod index;
@@ -31,6 +32,7 @@ mod slug_table;
 mod snapshot;
 mod store;
 mod tags;
+mod tasks;
 
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -38,12 +40,17 @@ pub(crate) mod test_support;
 mod tests;
 
 pub(crate) use frontmatter::{parse_frontmatter, split_frontmatter, Frontmatter};
-pub(crate) use headings::{js_lines, parse_headings, section, slug};
+pub(crate) use frontmatter_edit::{set_property, NewValue, Scalar};
+pub(crate) use headings::{
+    js_lines, line_ending, parse_headings, section, section_spans, slug, uncertain_line,
+    SectionSpan,
+};
 pub(crate) use index::strip_bom;
 pub use index::Vault;
 pub use queries::Direction;
-pub(crate) use relink::respelled;
 pub use relink::{relocate, Relink};
+pub(crate) use relink::{respelled, write_unchanged};
 pub(crate) use resolve::split_heading;
 pub(crate) use store::with_synced_vault;
 pub use store::{apply_changes, forget, VaultStore};
+pub(crate) use tasks::{parse_tasks, task_text, Task};

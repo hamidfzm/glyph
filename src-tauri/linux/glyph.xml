@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Installed as /usr/share/mime/packages/glyph.xml. The globs follow
+     bundle.fileAssociations in tauri.conf.json, and
+     scripts/desktop-entry.test.mjs fails when they drift. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <!-- Extends the system's type, which globs only md, mkd and markdown and
+       already has the comment and the parent type. *.mdx is also its glob for
+       Sega 32X ROMs: at equal weight the content decides, so leave the weight
+       off. -->
+  <mime-type type="text/markdown">
+    <glob pattern="*.md"/>
+    <glob pattern="*.markdown"/>
+    <glob pattern="*.mdown"/>
+    <glob pattern="*.mkd"/>
+    <glob pattern="*.mkdn"/>
+    <glob pattern="*.mdx"/>
+    <glob pattern="*.mmd"/>
+    <glob pattern="*.mdtext"/>
+    <glob pattern="*.mdtxt"/>
+  </mime-type>
+  <mime-type type="text/x-d2">
+    <comment>D2 diagram</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.d2"/>
+  </mime-type>
+</mime-info>

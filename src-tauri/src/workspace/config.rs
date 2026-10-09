@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::grants::is_symlink;
 #[cfg(desktop)]
 use crate::sync::WorkspaceSyncConfig;
 use crate::sync::{BackendKind, CommitIdentity, ConflictPolicy};
@@ -114,13 +115,6 @@ pub struct WorkspaceState {
 
 fn glyph_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join(format!(".{}", crate::APP_NAME))
-}
-
-/// True for a link that dangles too, which `exists()` reports as absent and a
-/// write would follow.
-fn is_symlink(path: &Path) -> bool {
-    path.symlink_metadata()
-        .is_ok_and(|meta| meta.file_type().is_symlink())
 }
 
 /// The path of `.glyph/<name>`, refused when `.glyph` or the file is a

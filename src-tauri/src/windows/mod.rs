@@ -160,6 +160,8 @@ pub struct WindowRegistry {
 struct Windows {
     workspaces: HashMap<String, Option<String>>,
     files: HashMap<String, Vec<String>>,
+    /// The files in each window holding edits not yet saved.
+    unsaved: HashMap<String, Vec<String>>,
 }
 
 impl WindowRegistry {
@@ -183,6 +185,26 @@ impl WindowRegistry {
             .unwrap()
             .files
             .insert(label.to_string(), paths);
+    }
+
+    /// Record which of a window's file tabs hold edits not yet saved.
+    pub fn set_unsaved(&self, label: &str, paths: Vec<String>) {
+        self.inner
+            .lock()
+            .unwrap()
+            .unsaved
+            .insert(label.to_string(), paths);
+    }
+
+    /// Every file open in any window, then those among them not yet saved.
+    /// Sorted, each path once, so the same windows always report the same.
+    pub fn documents(&self) -> (Vec<String>, Vec<String>) {
+        let windows = self.inner.lock().unwrap();
+        let all = |by_window: &HashMap<String, Vec<String>>| {
+            let paths: std::collections::BTreeSet<&String> = by_window.values().flatten().collect();
+            paths.into_iter().cloned().collect()
+        };
+        (all(&windows.files), all(&windows.unsaved))
     }
 
     /// Register one file against a window before that window can report for
@@ -243,6 +265,7 @@ impl WindowRegistry {
         let mut windows = self.inner.lock().unwrap();
         windows.workspaces.remove(label);
         windows.files.remove(label);
+        windows.unsaved.remove(label);
     }
 
     /// A stable snapshot of what every window shows, for routing.

@@ -180,15 +180,24 @@ fn write_rewrites(
     (files, None)
 }
 
-/// A file that changed since it was planned keeps its new content: the planned
-/// text would put back what an editor or a sync pull just replaced.
 fn write_rewrite(grants: &GrantRegistry, rewrite: &Rewrite) -> Result<(), String> {
     let path = grants.ensure_writable(&rewrite.moved_to)?;
-    let current = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    if current != rewrite.original {
-        return Err("changed on disk while its links were being updated".to_string());
+    match write_unchanged(&path, &rewrite.original, &rewrite.content) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err("changed on disk while its links were being updated".to_string()),
+        Err(e) => Err(e.to_string()),
     }
-    fs::write(&path, &rewrite.content).map_err(|e| e.to_string())
+}
+
+/// Write `content` over `path` only while it still holds `original`, and say
+/// whether it did. A file that changed since an edit was worked out keeps its
+/// new content: the edit would put back what an editor or a sync pull just
+/// replaced.
+pub(crate) fn write_unchanged(path: &Path, original: &str, content: &str) -> std::io::Result<bool> {
+    if fs::read_to_string(path)? != original {
+        return Ok(false);
+    }
+    fs::write(path, content).map(|()| true)
 }
 
 struct Move {

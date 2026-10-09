@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Manager, Runtime, State};
 
-use crate::grants::{self, GrantRegistry};
+use crate::grants::{self, is_symlink, GrantRegistry};
 
 pub struct InitialFile(pub Mutex<Option<String>>);
 
@@ -157,6 +157,12 @@ pub fn prune_export_dir(
 ) -> Result<usize, String> {
     let out_dir = grants.ensure_writable(&out_dir)?;
     let manifest = out_dir.join(SITE_MANIFEST_REL);
+    // `out_dir` is checked and holds no link, but one below it leads anywhere,
+    // and the manifest is read and replaced where it leads.
+    let mut below_out_dir = manifest.ancestors().take_while(|path| *path != out_dir);
+    if below_out_dir.any(is_symlink) {
+        return Err(format!("Refusing to follow a link at {SITE_MANIFEST_REL}"));
+    }
     let previous: Vec<String> = fs::read_to_string(&manifest)
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
@@ -226,6 +232,7 @@ pub fn get_file_metadata(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vault::test_support::link_folder;
     use std::io::Write;
     use tauri::test::{mock_app, MockRuntime};
     use tauri::Manager;
@@ -624,6 +631,38 @@ mod tests {
     }
 
     #[test]
+    fn writes_through_a_link_to_a_missing_target_are_denied() {
+        let outer = tempfile::TempDir::new().unwrap();
+        let ws = outer.path().join("ws");
+        fs::create_dir_all(&ws).unwrap();
+        let source = ws.join("real.md");
+        fs::write(&source, "x").unwrap();
+        // The target's folder exists, so a write that followed the link would
+        // create the target there, outside the workspace.
+        let planted = outer.path().join("planted.md");
+        let link = ws.join("note.md");
+        link_folder(&planted, &link);
+        let arg = |path: &Path| path.to_string_lossy().to_string();
+
+        let app = app_with_workspace(&ws);
+        let grants = || app.state::<GrantRegistry>();
+        for result in [
+            write_file(arg(&link), "x".to_string(), grants()),
+            write_binary_file(arg(&link), vec![1], grants()),
+            copy_file(arg(&source), arg(&link), grants()),
+            create_dir_all(arg(&link.join("sub")), grants()),
+            prune_export_dir(arg(&link), vec![], grants()).map(|_| ()),
+        ] {
+            let err = result.expect_err("must be denied");
+            assert!(
+                err.starts_with("path is outside the allowed workspaces and files:"),
+                "got: {err}"
+            );
+        }
+        assert!(!planted.exists());
+    }
+
+    #[test]
     fn write_file_bad_path_errors() {
         // Granted but unwritable (parent directory missing): the fs error path.
         let dir = std::env::temp_dir().join("glyph_test_write_bad");
@@ -956,6 +995,29 @@ mod tests {
         assert!(victim.exists());
 
         let _ = fs::remove_dir_all(&outer);
+    }
+
+    #[test]
+    fn prune_export_dir_refuses_a_manifest_behind_a_link() {
+        let outer = tempfile::TempDir::new().unwrap();
+        let elsewhere = outer.path().join("elsewhere");
+        let linked_folder = outer.path().join("site-a");
+        let linked_file = outer.path().join("site-b");
+        fs::create_dir_all(&elsewhere).unwrap();
+        fs::create_dir_all(&linked_folder).unwrap();
+        fs::create_dir_all(linked_file.join(".glyph")).unwrap();
+        link_folder(&elsewhere, &linked_folder.join(".glyph"));
+        link_folder(
+            &elsewhere.join("planted.json"),
+            &linked_file.join(".glyph").join("site-manifest.json"),
+        );
+
+        for dir in [linked_folder, linked_file] {
+            let err = prune(&dir, &["index.html"]).unwrap_err();
+            assert!(err.contains("Refusing to follow a link"), "{err}");
+        }
+        // Nothing was written where either link leads.
+        assert_eq!(fs::read_dir(&elsewhere).unwrap().count(), 0);
     }
 
     #[test]

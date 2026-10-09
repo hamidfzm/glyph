@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { errorMessage } from "@/lib/errorMessage";
 import { collectStyles } from "@/lib/export/collectStyles";
 import { escapeXml } from "@/lib/export/escape";
 import { buildHtmlDocument } from "@/lib/export/html";
@@ -48,6 +49,9 @@ export interface ExportSiteResult {
   assets: number;
   /** Files a previous export into the same directory wrote and this one did not. */
   removed: number;
+  /** Why the prune failed, or null when it ran. The site is complete either
+   *  way, but stale files may remain, so every caller reports it (INV-7). */
+  pruneError: string | null;
 }
 
 /** Join a site-relative POSIX path onto the output directory. */
@@ -73,7 +77,8 @@ function siteDir(rel: string): string {
  * Exporting again into the same directory prunes what the previous export
  * wrote and this one did not, so a deleted or renamed note leaves no page
  * behind. Only Glyph's own output is pruned; anything else in the directory
- * (a CNAME, a .nojekyll) is left alone.
+ * (a CNAME, a .nojekyll) is left alone. A prune that fails does not fail the
+ * export: the result names the failure in `pruneError`.
  */
 export async function exportSite({
   root,
@@ -188,6 +193,7 @@ export async function exportSite({
   let done = 0;
   let copied = 0;
   let removed = 0;
+  let pruneError: string | null = null;
   for (const { file, content, rel: pageRel } of jobs) {
     const rendered = await renderPageHtml({
       content,
@@ -266,10 +272,9 @@ export async function exportSite({
     removed = await invoke<number>("prune_export_dir", { outDir, written });
   } catch (err) {
     // Cleanup, not part of producing the site: the pages and assets are all
-    // on disk, so a failure here leaves stale files behind rather than
-    // failing an export that succeeded.
-    console.error("Failed to prune stale files from the export:", err);
+    // on disk, so the export still succeeds and carries the failure with it.
+    pruneError = errorMessage(err);
   }
 
-  return { pages: done, assets: copied, removed };
+  return { pages: done, assets: copied, removed, pruneError };
 }

@@ -434,11 +434,10 @@ fn a_folder_renamed_to_its_own_name_in_other_letters_takes_its_notes_along() {
     assert_matches_rebuild(&vault, &root);
 
     // With no watcher to name the folder, the walk finds its notes moved.
-    let mut walked = build(&root);
     fs::rename(root.join("notes"), root.join("NOTES")).unwrap();
-    walked.sync().unwrap();
-    assert!(walked.note(&in_vault(&root, "NOTES/Cooking.md")).is_some());
-    assert_matches_rebuild(&walked, &root);
+    vault.sync().unwrap();
+    assert!(vault.note(&in_vault(&root, "NOTES/Cooking.md")).is_some());
+    assert_matches_rebuild(&vault, &root);
     fs::remove_dir_all(&root).unwrap();
 }
 
@@ -819,6 +818,23 @@ fn growing_past_the_file_cap_is_reported_rather_than_indexed() {
     assert_eq!(snapshot.files.len(), 9);
     assert!(snapshot.status.truncated);
     assert_eq!(snapshot.status.reason, Some("fileLimit"));
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn two_files_arriving_together_with_room_for_one_fill_the_cap_and_no_more() {
+    let root = fixture_vault("incremental_cap_pair");
+    let mut vault = Vault::build_capped(&root, 10, 32).unwrap();
+
+    let arrived = [root.join("Tenth.md"), root.join("Eleventh.md")];
+    for file in &arrived {
+        fs::write(file, "one of two\n").unwrap();
+    }
+    vault.apply_changes(&arrived);
+
+    let snapshot = vault.snapshot();
+    assert_eq!(snapshot.files.len(), 10);
+    assert!(snapshot.status.truncated);
     fs::remove_dir_all(&root).unwrap();
 }
 
@@ -1347,6 +1363,112 @@ fn a_file_that_displaces_the_last_walked_note_is_not_mistaken_for_it() {
         vault.note(&last_key).is_none(),
         "gone from disk, gone from the index"
     );
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_sync_drops_a_note_an_update_indexed_once_it_leaves_the_disk() {
+    let root = fixture_vault("sync_unstamped");
+    let mut vault = build(&root);
+
+    // The update indexes the folder's notes under their new paths, which no
+    // walk has seen yet.
+    let (old, new) = (root.join("Notes"), root.join("Recipes"));
+    fs::rename(&old, &new).unwrap();
+    vault.apply_changes(&[old, new]);
+    assert_matches_rebuild(&vault, &root);
+
+    // Renamed again with nothing reporting it: only the walk can tell.
+    fs::rename(root.join("Recipes"), root.join("Other")).unwrap();
+    vault.sync().unwrap();
+    assert!(vault.note(&in_vault(&root, "Recipes/Cooking.md")).is_none());
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+/// Date `path` an hour back, so a sync has only its stamp to go on: a file
+/// written in the last two seconds is re-read whatever the stamp says.
+fn age(path: &Path) {
+    let an_hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    let file = fs::File::options().write(true).open(path).unwrap();
+    file.set_modified(an_hour_ago).unwrap();
+}
+
+#[test]
+fn a_note_an_update_indexed_gives_up_its_place_under_the_cap_when_it_goes() {
+    let root = fixture_vault("sync_cap_unstamped");
+    let mut vault = Vault::build_capped(&root, 9, 32).unwrap();
+
+    // Still the last note in walk order, now one no walk has stamped.
+    let last = root.join("Notes").join("Travel.md");
+    let moved = root.join("Notes").join("Zeta.md");
+    let moved_key = moved.to_string_lossy().to_string();
+    fs::rename(&last, &moved).unwrap();
+    vault.apply_changes(&[last, moved.clone()]);
+
+    // Sorts first, so the capped walk no longer reaches the moved note, and
+    // is turned away at the cap with a stamp that will not change.
+    let first = root.join("A0.md");
+    fs::write(&first, "first\n").unwrap();
+    age(&first);
+    vault.sync().unwrap();
+    assert!(vault.snapshot().status.truncated);
+    assert!(
+        vault.note(&moved_key).is_some(),
+        "still on disk, still indexed"
+    );
+
+    fs::remove_file(&moved).unwrap();
+    vault.sync().unwrap();
+    let snapshot = vault.snapshot();
+    assert!(!snapshot.status.truncated);
+    assert!(snapshot.files.iter().any(|path| path.ends_with("A0.md")));
+    assert!(
+        vault.note(&moved_key).is_none(),
+        "gone from disk, gone from the index"
+    );
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_sync_indexes_a_note_an_update_dropped_once_it_is_back_unchanged() {
+    let root = fixture_vault("sync_moved_back");
+    let (home, away) = (root.join("Aliased.md"), root.join("Elsewhere.md"));
+    age(&home);
+    let mut vault = build(&root);
+
+    fs::rename(&home, &away).unwrap();
+    vault.apply_changes(&[home.clone(), away.clone()]);
+    assert_matches_rebuild(&vault, &root);
+
+    // Moved back with nothing reporting it: the same size and modified time
+    // the last walk saw at this path.
+    fs::rename(&away, &home).unwrap();
+    vault.sync().unwrap();
+    assert!(vault.note(&home.to_string_lossy()).is_some());
+    assert!(vault.note(&away.to_string_lossy()).is_none());
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_sync_rereads_a_note_an_update_read_once_the_walked_version_is_back() {
+    let root = fixture_vault("sync_restored");
+    let (path, backup) = (root.join("Aliased.md"), root.join("Aliased.bak"));
+    age(&path);
+    let mut vault = build(&root);
+
+    fs::rename(&path, &backup).unwrap();
+    fs::write(&path, "#edited\n").unwrap();
+    vault.apply_changes(std::slice::from_ref(&path));
+    assert_eq!(vault.paths_with_tag("edited").len(), 1);
+
+    // Restored with nothing reporting it: the very file the last walk saw.
+    fs::rename(&backup, &path).unwrap();
+    vault.sync().unwrap();
+    assert!(vault.paths_with_tag("edited").is_empty());
     assert_matches_rebuild(&vault, &root);
     fs::remove_dir_all(&root).unwrap();
 }
