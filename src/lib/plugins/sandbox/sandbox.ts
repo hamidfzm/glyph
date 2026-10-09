@@ -101,6 +101,8 @@ export function startSandbox(
             id: String(data.id),
             title: String(data.title),
             menu: data.menu,
+            shortcut: data.shortcut,
+            when: data.when,
             run: () => worker.postMessage({ type: "run-command", id: data.id }),
           });
           break;

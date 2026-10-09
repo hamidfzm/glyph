@@ -25,6 +25,7 @@ function registries(): ContextRegistries {
     sidebarPanels: createRegistry(),
     fileTreeFilters: createRegistry(),
     settingsPanels: createRegistry(),
+    workspaceSettingsPanels: createRegistry(),
     styles: createRegistry(),
     exporters: createRegistry(),
     siteThemes: createRegistry(),
@@ -64,6 +65,32 @@ describe("buildPluginContext i18n", () => {
 
     ctx.i18n.onLanguageChange(() => {});
     expect(bag.size).toBe(1);
+  });
+});
+
+describe("buildPluginContext workspace settings", () => {
+  it("lists a Workspace Settings tab under its plugin until the plugin unloads", () => {
+    const into = registries();
+    const bag = new DisposerBag();
+    const ctx = context(bag, into);
+
+    ctx.ui.addWorkspaceSettingsPanel({ id: "notes", title: "Daily Notes", mount: () => {} });
+    expect(into.workspaceSettingsPanels.list()).toEqual([
+      expect.objectContaining({ id: "notes", title: "Daily Notes", pluginId: "com.x.demo" }),
+    ]);
+
+    bag.dispose();
+    expect(into.workspaceSettingsPanels.list()).toEqual([]);
+  });
+
+  it("removes a Workspace Settings tab when its disposer runs", () => {
+    const into = registries();
+    const ctx = context(new DisposerBag(), into);
+
+    const remove = ctx.ui.addWorkspaceSettingsPanel({ id: "notes", title: "N", mount: () => {} });
+    remove();
+
+    expect(into.workspaceSettingsPanels.list()).toEqual([]);
   });
 });
 

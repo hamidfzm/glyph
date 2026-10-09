@@ -1,19 +1,25 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { usePlatform } from "@/hooks/usePlatform";
+import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { useSettings } from "@/hooks/useSettings";
 import { BINDABLE_COMMANDS, type CommandCategory } from "@/lib/bindableCommands";
 import { findConflicts, resolveBindings } from "@/lib/keybindings";
+import { pluginBindableCommands } from "@/lib/plugins/commandBindings";
 import { HotkeyRow } from "./HotkeyRow";
 
-const CATEGORY_ORDER: CommandCategory[] = ["File", "Edit", "View", "Application"];
+const CATEGORY_ORDER: CommandCategory[] = ["File", "Edit", "View", "Application", "Plugins"];
 
 export function HotkeysTab() {
   const { t } = useTranslation("settings");
   const platform = usePlatform();
   const { settings, updateSettings } = useSettings();
   const overrides = settings.keybindings.overrides;
-  const resolved = resolveBindings(overrides);
+  const plugins = usePluginsOptional();
+  const pluginCommands = useRegistryEntries(plugins?.commands ?? null);
+  const bindable = [...BINDABLE_COMMANDS, ...pluginBindableCommands(pluginCommands)];
+  const resolved = resolveBindings(overrides, bindable);
   const conflicts = findConflicts(resolved);
   const [query, setQuery] = useState("");
   const filter = query.trim().toLowerCase();
@@ -47,7 +53,7 @@ export function HotkeysTab() {
         />
       </div>
       {CATEGORY_ORDER.map((category) => {
-        const commands = BINDABLE_COMMANDS.filter(
+        const commands = bindable.filter(
           (c) => c.category === category && c.label.toLowerCase().includes(filter),
         );
         if (commands.length === 0) return null;

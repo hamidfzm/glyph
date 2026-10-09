@@ -53,6 +53,11 @@ export const sidebarPanelContribution: Equal<
   Template.SidebarPanelContribution
 > = true;
 export const fileTreeFilter: Equal<Host.FileTreeFilter, Template.FileTreeFilter> = true;
+export const workspaceSettingsPanelContribution: Equal<
+  Host.WorkspaceSettingsPanelContribution,
+  Template.WorkspaceSettingsPanelContribution
+> = true;
+export const createdFile: Equal<Host.CreatedFile, Template.CreatedFile> = true;
 export const activeDocument: Equal<Host.ActiveDocument, Template.ActiveDocument> = true;
 export const exporterContribution: Equal<Host.ExporterContribution, Template.ExporterContribution> =
   true;

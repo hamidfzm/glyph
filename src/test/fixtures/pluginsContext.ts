@@ -15,6 +15,7 @@ export function pluginsContextValue(
     sidebarPanels: createRegistry(),
     fileTreeFilters: createRegistry(),
     settingsPanels: createRegistry(),
+    workspaceSettingsPanels: createRegistry(),
     styles: createRegistry(),
     exporters: createRegistry(),
     siteThemes: createRegistry(),

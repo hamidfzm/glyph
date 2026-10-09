@@ -145,6 +145,24 @@ describe("startSandbox", () => {
     expect(command.menu).toBe("view");
   });
 
+  it("carries a command's shortcut and workspace condition across the bridge", async () => {
+    const { worker, api } = await startActivated();
+    worker.emit({
+      type: "register-command",
+      id: "c1",
+      title: "Today",
+      menu: "file",
+      shortcut: "CmdOrCtrl+Shift+T",
+      when: "workspace",
+    });
+    const [command] = vi.mocked(api.registerCommand).mock.calls[0];
+    expect(command).toMatchObject({
+      menu: "file",
+      shortcut: "CmdOrCtrl+Shift+T",
+      when: "workspace",
+    });
+  });
+
   it("bridges styles, notify, translations, and settings-set", async () => {
     const { worker, api } = await startActivated();
     worker.emit({ type: "add-styles", css: "body{color:red}" });

@@ -113,7 +113,9 @@ and files: <path>`), which never echoes the grant list.
 | `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target). `rename_path` and `move_path` also rewrite links in the workspace's own indexed notes and canvases, each write passing `ensure_writable`; a link or canvas card target that resolves outside the workspace is never rewritten or probed on disk, a file changed since the plan read it is left as it is, and `dryRun` reads without writing |
 | `request_open` | folders only; the path must already be a granted workspace root |
 | `open_in_new_window` | readable |
-| `workspace_get_last_file`, `workspace_set_last_file` | granted workspace |
+| `workspace_get_last_file`, `workspace_set_last_file` | granted workspace. Everything kept under `.glyph/` (this state, the plugin settings below, and the Cloud Sync settings) is read and written only when neither `.glyph` nor the file itself is a symbolic link, a dangling one included: a cloned workspace can ship either one pointing outside itself, and any JSON object would parse as an empty config and be replaced |
+| `workspace_get_plugin_settings`, `workspace_set_plugin_settings` | granted workspace, and a well-formed plugin id (it becomes a key in the committed `.glyph/config.json`). The settings are an opaque JSON object capped at 64 KiB per plugin; nothing in the backend treats a value as a path. The symbolic-link refusal in the row above applies |
+| `create_workspace_file` | `root` must be a granted workspace. The path is workspace-relative (`..`, a drive letter, or a backslash is refused) and must canonicalize strictly inside that workspace, so a symlink resolving outside it, or into another granted workspace, is refused. A hidden name anywhere in the resolved path is refused too, which keeps `.git/hooks` and `.glyph` out of reach. The file is opened with `create_new`: one that already exists is reported back and never written to |
 | `sync_*` | granted workspace (`sync_clone_remote` clones into the workspace path itself); `sync_init_repo`, `sync_clone_remote`, and `sync_set_origin` accept only `https://` without credentials, `ssh://`, or scp-like `user@host:path` remotes, since libgit2 would also take a local path or `file://` (pulling any local repository into a granted workspace) and cleartext `http://`/`git://` |
 | `install_plugin` | consumes the pending picked folder; no path argument |
 
@@ -429,11 +431,19 @@ the way a renderer-supplied path is.
   index queries go through the `vault_*` commands, which check the workspace
   grant themselves, and an open is an ordinary `read_file`. The paths a plugin
   opens or lists are confined to the workspace in the renderer first, as a
-  consistency check rather than the boundary. Sandboxed plugins get none of
-  it. Core plugins (the compiled-in `CORE_PLUGINS` list: D2, Mermaid, math,
-  tags, and backlinks today) are app code shipped in the signed binary: they
-  load with full trust and no consent prompt, take the permissions they need
-  (`workspace:read` for tags and backlinks) from that same list rather than
-  from disk, and only their on/off state lives in `settings.json`. The backend
+  consistency check rather than the boundary. One that declared
+  `workspace:write` can also create a file in the workspace and keep a
+  settings object of its own in the workspace's `.glyph/config.json`. Those
+  two do add commands (`create_workspace_file` and
+  `workspace_set_plugin_settings`, in the table above), and each holds its
+  boundary itself: the first never replaces a file and refuses hidden paths
+  such as `.git/hooks`, the second writes one size-capped block keyed by the
+  plugin's id. Sandboxed plugins get none of it. Core plugins (the compiled-in
+  `CORE_PLUGINS` list: D2, Mermaid, math, tags, backlinks, and daily notes
+  today) are app code shipped in the signed binary: they load with full trust
+  and no consent prompt, take the permissions they need (`workspace:read` for
+  tags and backlinks, and `workspace:write` as well for daily notes) from that
+  same list rather than from disk, and only their on/off state lives in
+  `settings.json`. The backend
   reserves the `glyph.core.` id prefix, so an installed plugin cannot take a
   core plugin's settings, grants, or host slot.
