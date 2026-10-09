@@ -372,6 +372,13 @@ the way a renderer-supplied path is.
 - **A replaced destination.** A rename or a move checks that nothing is at
   the destination and renames afterwards, as a rename made in the app does. A
   file created there in between is replaced.
+- **The section check reads line by line.** `patch_note` judges whether a
+  section's bounds match the rendered note without building CommonMark's
+  block structure. What that cannot settle mostly errs toward refusing. Three
+  shapes are known to pass with bounds that differ: fence lines indented four
+  or more columns among other fence lines, a lone closing tag on the line
+  under a list item followed by a line of bare hashes, and an indented code
+  line followed by two lone dashes. Each already renders visibly broken.
 
 - **Persisted-session grant staging.** The settings store (`settings.json`)
   is renderer-writable, and the backend seeds grants from it at the next
