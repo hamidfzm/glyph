@@ -5,8 +5,8 @@ import { ExportToasts } from "./ExportToasts";
 const defaultProps = {
   exporting: null,
   siteProgress: null,
-  siteNotice: null,
-  onDismissSiteNotice: vi.fn(),
+  notice: null,
+  onDismissNotice: vi.fn(),
 };
 
 describe("ExportToasts", () => {
@@ -30,7 +30,7 @@ describe("ExportToasts", () => {
       <ExportToasts
         {...defaultProps}
         exporting="html"
-        siteNotice={{ kind: "failed", reason: "disk full" }}
+        notice={{ kind: "failed", reason: "disk full" }}
       />,
     );
     expect(screen.getByRole("alert")).toHaveTextContent("disk full");
@@ -43,15 +43,15 @@ describe("ExportToasts", () => {
   });
 
   it("dismisses the notice through its close button", () => {
-    const onDismissSiteNotice = vi.fn();
+    const onDismissNotice = vi.fn();
     render(
       <ExportToasts
         {...defaultProps}
-        siteNotice={{ kind: "insideWorkspace" }}
-        onDismissSiteNotice={onDismissSiteNotice}
+        notice={{ kind: "insideWorkspace" }}
+        onDismissNotice={onDismissNotice}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Dismiss export notice" }));
-    expect(onDismissSiteNotice).toHaveBeenCalledOnce();
+    expect(onDismissNotice).toHaveBeenCalledOnce();
   });
 });

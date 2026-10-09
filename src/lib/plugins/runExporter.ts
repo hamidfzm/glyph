@@ -8,6 +8,8 @@ export interface RunExporterOptions {
   exporter: ExporterContribution;
   filePath?: string;
   content: string | null;
+  /** Called before the plugin builds; a cancelled dialog never reaches it. */
+  onDestinationPicked?: () => void;
 }
 
 /**
@@ -20,6 +22,7 @@ export async function runExporter({
   exporter,
   filePath,
   content,
+  onDestinationPicked,
 }: RunExporterOptions): Promise<void> {
   const html = await prepareRenderedHtml();
   if (html == null) return; // nothing rendered to export
@@ -31,6 +34,7 @@ export async function runExporter({
   ]);
   if (!path) return; // user cancelled
 
+  onDestinationPicked?.();
   const output = await exporter.build(html, {
     title: meta.title,
     css: collectStyles(),
