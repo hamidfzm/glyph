@@ -448,6 +448,91 @@ describe("useTabs reloads overtaken by a save or a newer reload", () => {
   });
 });
 
+describe("useTabs reloads and the tab they were issued for", () => {
+  it("drops a read whose tab was closed and reopened before it arrived", async () => {
+    const staleRead = deferred<string>();
+    const reads = ["v1", staleRead.promise, "v3"];
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ read_file: async () => reads.shift() }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+
+    // The reload's read is still out when the tab closes, and the file changes
+    // again before it is reopened.
+    await changeOnDisk(fileChanged, "/p/a.md");
+    await act(async () => {
+      await result.current.closeTab(result.current.tabs[0].id);
+    });
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    expect(fileOf(result).content).toBe("v3");
+    await deliver(() => staleRead.resolve("v2"));
+
+    expect(fileOf(result).content).toBe("v3");
+  });
+
+  it("reads nothing for a tab closed before the debounce ended", async () => {
+    const fileChanged = captureListener("file-changed");
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    vi.mocked(invoke).mockClear();
+
+    await act(async () => {
+      fileChanged.handler?.({ payload: "/p/a.md" });
+      await result.current.closeTab(result.current.tabs[0].id);
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/a.md" });
+  });
+
+  it("reloads a tab that was still opening when the change was reported", async () => {
+    let body = "v1";
+    const watching = deferred();
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => body,
+        watch_file: () => watching.promise,
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    // The watch starts before the tab is on the strip, so its first event can
+    // arrive for a path no tab holds yet.
+    let opening: Promise<unknown> | undefined;
+    await act(async () => {
+      opening = result.current.openFile("/p/a.md");
+      await waitFor(() => expect(invoke).toHaveBeenCalledWith("watch_file", { path: "/p/a.md" }));
+    });
+    expect(result.current.tabs).toHaveLength(0);
+    body = "v2";
+    // One act: the debounce cannot end between the report and the tab landing.
+    await act(async () => {
+      fileChanged.handler?.({ payload: "/p/a.md" });
+      watching.resolve();
+      await opening;
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    expect(fileOf(result).content).toBe("v2");
+  });
+});
+
 // Only /p/ws is indexed; any other root answers empty, which is what proves a
 // late refresh never lands on the workspace that replaced it.
 function forRoot(root: string) {

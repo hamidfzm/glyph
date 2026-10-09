@@ -100,6 +100,10 @@ export function tabPathOf(tab: Tab): string {
   return tab.kind === "file" ? tab.file.path : tab.root;
 }
 
+export function fileTabs(state: TabsState): FileTab[] {
+  return state.tabs.filter((tab): tab is FileTab => tab.kind === "file");
+}
+
 export function normalizePersistedTabs(value: PersistedTab[] | string[]): PersistedTab[] {
   if (value.length === 0) return [];
   // Legacy: array of file paths
