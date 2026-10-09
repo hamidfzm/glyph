@@ -133,6 +133,7 @@ describe("createPluginHost plugin context", () => {
     expect(host.settingsPanels.list().map((p) => p.pluginId)).toEqual(["com.x.demo"]);
     expect(host.styles.list().map((s) => s.css)).toEqual([".markdown-body { color: red }"]);
     expect(host.exporters.list().map((e) => e.id)).toEqual(["p.export"]);
+    expect(host.exporters.list().map((e) => e.pluginId)).toEqual(["com.x.demo"]);
     expect(host.siteThemes.list().map((t) => t.id)).toEqual(["p.theme"]);
 
     host.unload("com.x.demo");

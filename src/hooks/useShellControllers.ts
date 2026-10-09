@@ -40,7 +40,6 @@ export function useShellControllers() {
   // (note font, graph camera) via the ZoomProvider; no-op with nothing focused.
   const zoomActions = useZoomApi()?.actions;
   const runPluginExporter = usePluginExporterRunner({
-    entries: tocEntries,
     filePath: activeFile?.path,
     content: displayContent,
   });

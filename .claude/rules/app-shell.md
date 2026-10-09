@@ -14,4 +14,4 @@ paths:
 - **Render-mode branching belongs in its own component.** `TabContent` owns the view/edit/split switch; don't reintroduce an inline `renderContent` in AppShell.
 - **Hook order over comment scaffolding.** If a section of AppShell needs a header comment to be navigable ("// AI", "// Print", "// Menu events"), that section is a hook waiting to be extracted.
 
-When in doubt: if a change adds more than ~3 lines to App.tsx or AppShell.tsx, write a hook or a provider for it instead.
+A feature adds only its hook or provider call to App.tsx or AppShell.tsx.

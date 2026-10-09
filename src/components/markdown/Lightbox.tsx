@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   type CSSProperties,
   type SyntheticEvent,
@@ -15,6 +13,7 @@ import { ChevronRightIcon } from "@/components/icons/ChevronRightIcon";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { useDragPan } from "@/hooks/useDragPan";
 import { useLightboxKeys } from "@/hooks/useLightboxKeys";
+import { useWindowFullscreen } from "@/hooks/useWindowFullscreen";
 import { clampScale, fitScale, type LightboxImage } from "@/lib/lightbox";
 import { svgSizeFromUrl } from "@/lib/svgSizeFromUrl";
 import { LightboxToolbar } from "./LightboxToolbar";
@@ -138,26 +137,7 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
     return () => window.removeEventListener("resize", handleResize);
   }, [isFit, computeFit]);
 
-  // Take the OS window fullscreen while the lightbox is open (it should cover
-  // the monitor, not just the app window), restoring on close unless the
-  // window was already fullscreen before. The backend command also hides the
-  // in-window menu bar for the overlay's lifetime.
-  useEffect(() => {
-    let closed = false;
-    let entered = false;
-    getCurrentWindow()
-      .isFullscreen()
-      .then((already) => {
-        if (already || closed) return;
-        entered = true;
-        return invoke("set_lightbox_fullscreen", { enter: true });
-      })
-      .catch(() => {});
-    return () => {
-      closed = true;
-      if (entered) invoke("set_lightbox_fullscreen", { enter: false }).catch(() => {});
-    };
-  }, []);
+  useWindowFullscreen();
 
   // Ctrl/Cmd + wheel zooms; a plain wheel keeps panning a zoomed image. Native
   // non-passive listener so preventDefault cancels the scroll.

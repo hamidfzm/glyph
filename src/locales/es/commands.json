@@ -40,5 +40,6 @@
   "aiChat": "Chat de IA",
   "readAloud": "Leer en voz alta",
   "managePlugins": "Gestionar complementos…",
-  "exportAs": "Exportar: {{label}}…"
+  "exportAs": "Exportar: {{label}}…",
+  "exportMenuItem": "{{label}}…"
 }

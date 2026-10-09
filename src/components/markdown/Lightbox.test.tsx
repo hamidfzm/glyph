@@ -49,6 +49,13 @@ describe("Lightbox", () => {
     expect(screen.getByText("1 / 3")).toBeInTheDocument();
   });
 
+  it("takes the window fullscreen while open", async () => {
+    render(<Harness />);
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("set_overlay_fullscreen", { enter: true }),
+    );
+  });
+
   it("closes on Escape", () => {
     const onClose = vi.fn();
     render(<Harness onClose={onClose} />);
@@ -153,26 +160,6 @@ describe("Lightbox", () => {
     fireEvent.load(img);
     await waitFor(() => expect(img.style.width).toBe("300px"));
     expect(img.style.objectFit).toBe("");
-  });
-
-  it("goes window-fullscreen while open and restores on close", async () => {
-    const { unmount } = render(<Harness />);
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("set_lightbox_fullscreen", { enter: true }),
-    );
-    unmount();
-    await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("set_lightbox_fullscreen", { enter: false }),
-    );
-  });
-
-  it("leaves an already-fullscreen window alone", async () => {
-    isFullscreen.mockResolvedValueOnce(true);
-    const { unmount } = render(<Harness />);
-    await waitFor(() => expect(isFullscreen).toHaveBeenCalled());
-    unmount();
-    expect(invoke).not.toHaveBeenCalledWith("set_lightbox_fullscreen", { enter: true });
-    expect(invoke).not.toHaveBeenCalledWith("set_lightbox_fullscreen", { enter: false });
   });
 
   it("zooms with ctrl+wheel and ignores a plain wheel", () => {
