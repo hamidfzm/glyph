@@ -197,6 +197,24 @@ pub fn make_app_builder(forward_to_running_instance: bool) -> tauri::Builder<tau
     builder
 }
 
+/// The state commands on every platform read. Generic over the runtime so a
+/// test can build it on a mock app, which `run()` itself cannot be.
+fn manage_state<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
+    builder
+        .manage(FileWatcherState(Arc::new(Mutex::new(
+            std::collections::HashMap::new(),
+        ))))
+        .manage(commands::InitialFile(Mutex::new(None)))
+        .manage(commands::InitialFolder(Mutex::new(None)))
+        .manage(commands::CliExport(Mutex::new(None)))
+        .manage(windows::WindowRegistry::new())
+        .manage(grants::GrantRegistry::default())
+        .manage(vault::VaultStore::default())
+        .manage(commands::default_app::DefaultAppHost(Box::new(
+            commands::default_app::ProcessHost,
+        )))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Answered before Tauri (and therefore GTK/WebKit) starts, so packaging
@@ -276,16 +294,7 @@ pub fn run() {
         .manage(sync::SyncState::new())
         .manage(telemetry::TelemetryState(Mutex::new(None)));
 
-    let app = builder
-        .manage(FileWatcherState(Arc::new(Mutex::new(
-            std::collections::HashMap::new(),
-        ))))
-        .manage(commands::InitialFile(Mutex::new(None)))
-        .manage(commands::InitialFolder(Mutex::new(None)))
-        .manage(commands::CliExport(Mutex::new(None)))
-        .manage(windows::WindowRegistry::new())
-        .manage(grants::GrantRegistry::default())
-        .manage(vault::VaultStore::default())
+    let app = manage_state(builder)
         .setup(setup_app)
         .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
@@ -322,7 +331,7 @@ pub fn run() {
             commands::serve::serve_ready,
             #[cfg(desktop)]
             commands::serve::serve_failed,
-            commands::default_app_runtime::set_default_markdown_app,
+            commands::default_app::set_default_markdown_app,
             commands::secrets::secret_get,
             commands::secrets::secret_set,
             commands::secrets::secret_has,
@@ -674,6 +683,18 @@ mod tests {
         // the user already has open, which would skip the export entirely.
         std::mem::drop(make_app_builder(true));
         std::mem::drop(make_app_builder(false));
+    }
+
+    #[test]
+    fn the_app_manages_the_host_the_default_app_command_reads() {
+        // Without it the command fails on every platform, and no other test
+        // builds the state the way `run()` does.
+        let app = manage_state(tauri::test::mock_builder())
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("mock app should build");
+        assert!(app
+            .try_state::<commands::default_app::DefaultAppHost>()
+            .is_some());
     }
 
     // Each (directive, source) pair backs a shipped surface: WASM for

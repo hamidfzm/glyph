@@ -1,8 +1,6 @@
 pub mod create;
 pub mod create_file;
-#[cfg(any(target_os = "linux", test))]
 pub mod default_app;
-pub mod default_app_runtime;
 pub mod directory;
 pub mod export;
 pub mod export_runtime;

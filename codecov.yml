@@ -62,13 +62,6 @@ ignore:
   # unit test cannot survive. The testable halves (CLI export state and the
   # stdout/stderr routing) live in commands/export.rs with direct tests.
   - "src-tauri/src/commands/export_runtime.rs"
-  # set_default_markdown_app is OS handler-registration glue: its arms shell out
-  # to a real process (xdg-mime on Linux, `start ms-settings:` on Windows) or
-  # return static guidance (macOS), and running the Linux one rewrites the
-  # host's default-app registration, so it can't run under test. What that arm
-  # decides on (which install can register, where the desktop entry is looked
-  # up) lives in commands/default_app.rs with direct tests.
-  - "src-tauri/src/commands/default_app_runtime.rs"
   # Multi-window runtime wiring (focus/spawn/emit_to real windows + the
   # set_window_workspace / request_open command shims): every line drives the
   # live window manager and can't be reached from MockRuntime. The routing
