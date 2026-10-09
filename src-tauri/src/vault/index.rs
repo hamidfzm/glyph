@@ -2,6 +2,7 @@
 //! keeping it current as files change.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use super::canvas::{self, Canvas};
@@ -17,6 +18,34 @@ use crate::commands::walk::{
 /// attachment the index only ever points at.
 fn is_indexable(path: &Path) -> bool {
     crate::is_markdown_file(path) || crate::is_canvas_file(path)
+}
+
+/// The names `dir` lists, as it spells them, which is not what opening a path
+/// tells where the filesystem ignores case.
+pub(crate) fn names_in(dir: &Path) -> HashSet<OsString> {
+    let entries = std::fs::read_dir(dir).into_iter().flatten();
+    entries.flatten().map(|entry| entry.file_name()).collect()
+}
+
+/// What each folder lists, read once per update. Where the filesystem ignores
+/// case, a note or folder renamed to its own name in other letters still opens
+/// under the old one, so only the folders above a path say how it is spelled.
+#[derive(Default)]
+struct Listings(HashMap<PathBuf, HashSet<OsString>>);
+
+impl Listings {
+    /// Whether every name in `relative` is one its folder lists, from `root` down.
+    fn list(&mut self, root: &Path, relative: &Path) -> bool {
+        let mut dir = root.to_path_buf();
+        relative.components().all(|part| {
+            let names = self.0.entry(dir.clone());
+            let listed = names
+                .or_insert_with(|| names_in(&dir))
+                .contains(part.as_os_str());
+            dir.push(part);
+            listed
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -89,9 +118,10 @@ impl Vault {
     }
 
     /// Re-index only the paths that changed. Files that vanished are dropped,
-    /// new ones are inserted; nothing else is read from disk.
+    /// new ones are inserted; no other file is read.
     pub fn apply_changes(&mut self, paths: &[PathBuf]) {
-        let paths = self.with_folder_contents(paths);
+        let mut listings = Listings::default();
+        let paths = self.with_folder_contents(paths, &mut listings);
         let mut seen = HashSet::new();
         let mut removed = HashSet::new();
         let mut added = Vec::new();
@@ -109,12 +139,12 @@ impl Vault {
                 continue;
             }
 
-            let content = self
-                .walkable(&path, &relative)
-                .then(|| std::fs::read_to_string(&path));
+            let there = self.walkable(&path, &relative) && listings.list(&self.root, &relative);
+            let content = there.then(|| std::fs::read_to_string(&path));
             let Some(Ok(content)) = content else {
-                // A path the walker would have skipped, a deletion, or a file
-                // that went away mid-update: none of them belong in the index.
+                // A path the walker would have skipped, a deletion, a spelling
+                // the file no longer has, or a file that went away mid-update:
+                // none of them belong in the index.
                 if let Some(index) = existing {
                     removed.insert(index);
                     self.canvases.remove(&key);
@@ -167,15 +197,19 @@ impl Vault {
     }
 
     /// `paths` plus what a folder among them stands for: the files under one
-    /// that exists, and the notes still indexed under one that is gone. A
-    /// folder rename reaches the index as the folder's two paths alone.
-    fn with_folder_contents(&self, paths: &[PathBuf]) -> Vec<PathBuf> {
+    /// that exists, and the notes still indexed under one that is gone or no
+    /// longer spelled that way. A folder rename reaches the index as the
+    /// folder's two paths alone.
+    fn with_folder_contents(&self, paths: &[PathBuf], listings: &mut Listings) -> Vec<PathBuf> {
         let mut expanded = paths.to_vec();
         for path in paths {
-            let Some((spelled, _)) = self.inside_root(path) else {
+            let Some((spelled, relative)) = self.inside_root(path) else {
                 continue;
             };
-            if spelled.is_dir() {
+            // Opening is not enough: a folder still opens under a spelling it
+            // no longer has.
+            let there = listings.list(&self.root, &relative) && spelled.exists();
+            if there && spelled.is_dir() {
                 // A folder already holding indexed notes reports its changes file
                 // by file; only a newly arrived one needs walking.
                 let known = self
@@ -189,7 +223,7 @@ impl Vault {
                     .map(|(files, _)| files)
                     .unwrap_or_default();
                 expanded.extend(walked.into_iter().map(|(file, _)| file));
-            } else if !spelled.exists() && self.id_of(&spelled.to_string_lossy()).is_none() {
+            } else if !there && self.id_of(&spelled.to_string_lossy()).is_none() {
                 expanded.extend(
                     self.notes
                         .iter()
@@ -386,6 +420,21 @@ fn read_and_index(path: &Path) -> Option<(Note, Option<Canvas>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vault::test_support::unique_tmp;
+
+    #[test]
+    fn a_path_is_listed_only_when_every_folder_above_it_spells_its_name() {
+        let root = unique_tmp("listings");
+        std::fs::create_dir(root.join("notes")).unwrap();
+        std::fs::write(root.join("notes").join("Cooking.md"), "").unwrap();
+        let mut listings = Listings::default();
+
+        assert!(listings.list(&root, Path::new("notes/Cooking.md")));
+        // Both open where the filesystem ignores case, and neither is listed.
+        assert!(!listings.list(&root, Path::new("Notes/Cooking.md")));
+        assert!(!listings.list(&root, Path::new("notes/cooking.md")));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn a_leading_bom_is_dropped_before_any_parser_sees_the_note() {

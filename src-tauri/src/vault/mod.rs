@@ -42,6 +42,7 @@ pub(crate) use headings::{js_lines, parse_headings, section, slug};
 pub(crate) use index::strip_bom;
 pub use index::Vault;
 pub use queries::Direction;
+pub(crate) use relink::respelled;
 pub use relink::{relocate, Relink};
 pub(crate) use resolve::split_heading;
 pub(crate) use store::with_synced_vault;
