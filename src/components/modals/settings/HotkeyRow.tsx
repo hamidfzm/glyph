@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Platform } from "@/hooks/usePlatform";
-import { acceleratorFromEvent, formatAccelerator } from "@/lib/accelerator";
+import {
+  formatAccelerator,
+  hasCommandModifier,
+  parseKeyEvent,
+  serializeAccelerator,
+} from "@/lib/accelerator";
 import type { BindableCommand } from "@/lib/bindableCommands";
 
 interface HotkeyRowProps {
@@ -40,10 +45,9 @@ export function HotkeyRow({
         setRecording(false);
         return;
       }
-      if (!event.metaKey && !event.ctrlKey && !event.altKey) return;
-      const next = acceleratorFromEvent(event);
-      if (next) {
-        onRecord(next);
+      const next = parseKeyEvent(event);
+      if (next && hasCommandModifier(next)) {
+        onRecord(serializeAccelerator(next));
         setRecording(false);
       }
     };

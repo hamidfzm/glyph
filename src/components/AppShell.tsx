@@ -18,6 +18,7 @@ import { useNativeMenuState } from "@/hooks/useNativeMenuState";
 import { useNavigationShortcuts } from "@/hooks/useNavigationShortcuts";
 import { usePlatform } from "@/hooks/usePlatform";
 import { usePluginAppBridge } from "@/hooks/usePluginAppBridge";
+import { usePluginCommandShortcuts } from "@/hooks/usePluginCommandShortcuts";
 import { usePluginMenuItems } from "@/hooks/usePluginMenuItems";
 import { useSettings } from "@/hooks/useSettings";
 import { useShellControllers } from "@/hooks/useShellControllers";
@@ -147,6 +148,7 @@ export function AppShell() {
   });
   useMenuEvents(menuHandlers);
   useMenuShortcuts({ platform, handlers: menuHandlers });
+  usePluginCommandShortcuts(platform);
   useNativeKeybindings();
 
   const palette = useCommandPaletteController({

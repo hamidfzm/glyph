@@ -13,6 +13,24 @@ describe("resolveBindings", () => {
     expect(resolved.get("open")).toBe("CmdOrCtrl+Shift+P");
     expect(resolved.get("find")).toBe("CmdOrCtrl+F");
   });
+
+  it("resolves the commands it is given, such as a plugin's", () => {
+    const commands = [
+      {
+        id: "plugin:com.x.notes/today",
+        label: "Open Today's Note",
+        category: "Plugins" as const,
+        defaultAccelerator: "CmdOrCtrl+Shift+T",
+        nativeMenu: true,
+      },
+    ];
+
+    expect([...resolveBindings({}, commands)]).toEqual([
+      ["plugin:com.x.notes/today", "CmdOrCtrl+Shift+T"],
+    ]);
+    const rebound = resolveBindings({ "plugin:com.x.notes/today": "CmdOrCtrl+Alt+D" }, commands);
+    expect(rebound.get("plugin:com.x.notes/today")).toBe("CmdOrCtrl+Alt+D");
+  });
 });
 
 describe("findConflicts", () => {

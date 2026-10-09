@@ -1,5 +1,5 @@
 import { type ParsedAccelerator, parseAccelerator } from "@/lib/accelerator";
-import { BINDABLE_COMMANDS } from "@/lib/bindableCommands";
+import { BINDABLE_COMMANDS, type BindableCommand } from "@/lib/bindableCommands";
 
 // Merging default bindings with the user's overrides, and spotting two commands
 // that ended up on the same accelerator.
@@ -7,9 +7,12 @@ import { BINDABLE_COMMANDS } from "@/lib/bindableCommands";
 export type BindingOverrides = Record<string, string>;
 
 /** Merge default bindings with user overrides into a id -> accelerator map. */
-export function resolveBindings(overrides: BindingOverrides = {}): Map<string, string> {
+export function resolveBindings(
+  overrides: BindingOverrides = {},
+  commands: readonly BindableCommand[] = BINDABLE_COMMANDS,
+): Map<string, string> {
   const resolved = new Map<string, string>();
-  for (const command of BINDABLE_COMMANDS) {
+  for (const command of commands) {
     const override = overrides[command.id];
     resolved.set(
       command.id,

@@ -1,8 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PluginsContext } from "@/contexts/PluginsContext";
+import { createRegistry, type Registry } from "@/lib/plugins/registry";
+import type { WorkspaceSettingsPanelEntry } from "@/lib/plugins/types";
+import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { renderWithSync } from "@/test/renderWithSync";
 import { WorkspaceSettingsModal, type WorkspaceSettingsTabId } from "./WorkspaceSettingsModal";
@@ -20,6 +24,27 @@ function Controlled({ initial = "website" }: { initial?: WorkspaceSettingsTabId 
   const [tab, setTab] = useState<WorkspaceSettingsTabId>(initial);
   return (
     <WorkspaceSettingsModal open tab={tab} onTabChange={setTab} onClose={defaultProps.onClose} />
+  );
+}
+
+const notesPanel: WorkspaceSettingsPanelEntry = {
+  pluginId: "com.x.notes",
+  id: "settings",
+  title: "Daily Notes",
+  mount: (el) => {
+    el.textContent = "notes panel";
+  },
+};
+
+function pluginPanels() {
+  return { panels: createRegistry<WorkspaceSettingsPanelEntry>() };
+}
+
+function renderWithPluginPanels(panels: Registry<WorkspaceSettingsPanelEntry>) {
+  return renderInWorkspace(
+    <PluginsContext.Provider value={pluginsContextValue({ workspaceSettingsPanels: panels })}>
+      <Controlled />
+    </PluginsContext.Provider>,
   );
 }
 
@@ -220,6 +245,43 @@ describe("WorkspaceSettingsModal", () => {
     await user.click(screen.getByRole("button", { name: "Cloud Sync" }));
     expect(await screen.findByRole("button", { name: "Save config" })).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /site title/i })).not.toBeInTheDocument();
+  });
+
+  it("lists a plugin's tab after the built-in ones and mounts its panel when picked", async () => {
+    mockConfigFile(null);
+    const { panels } = pluginPanels();
+    panels.register(notesPanel);
+    const user = userEvent.setup();
+    renderWithPluginPanels(panels);
+
+    const labels = screen
+      .getAllByRole("button")
+      .map((button) => button.textContent)
+      .filter((label) => ["Website", "Cloud Sync", "Daily Notes"].includes(label ?? ""));
+    expect(labels).toEqual(["Website", "Cloud Sync", "Daily Notes"]);
+
+    await user.click(screen.getByRole("button", { name: "Daily Notes" }));
+    expect(screen.getByText("notes panel")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Daily Notes" })).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+    expect(screen.queryByRole("textbox", { name: /site title/i })).not.toBeInTheDocument();
+  });
+
+  it("falls back to the first tab when the plugin behind the open one unloads", async () => {
+    mockConfigFile(null);
+    const { panels } = pluginPanels();
+    const unload = panels.register(notesPanel);
+    const user = userEvent.setup();
+    renderWithPluginPanels(panels);
+    await user.click(screen.getByRole("button", { name: "Daily Notes" }));
+
+    act(() => unload());
+
+    expect(screen.queryByText("notes panel")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Daily Notes" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("textbox", { name: /site title/i })).toBeInTheDocument();
   });
 
   it("renders nothing while closed", () => {

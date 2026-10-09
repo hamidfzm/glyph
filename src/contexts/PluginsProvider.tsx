@@ -65,6 +65,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         sidebarPanels: host.sidebarPanels,
         fileTreeFilters: host.fileTreeFilters,
         settingsPanels: host.settingsPanels,
+        workspaceSettingsPanels: host.workspaceSettingsPanels,
         styles: host.styles,
         exporters: host.exporters,
         siteThemes: host.siteThemes,

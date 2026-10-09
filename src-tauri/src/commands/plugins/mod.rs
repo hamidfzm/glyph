@@ -42,6 +42,8 @@ mod test_support;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use manifest::is_well_formed_id;
+
 use store::{
     inspect_dir, install_into, install_package, read_asset_from, scan_plugins_root, uninstall_from,
 };
