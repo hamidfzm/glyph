@@ -23,14 +23,14 @@ The spec stays current throughout: acceptance-criteria and task checkboxes on th
 
 - **Plan before non-trivial work.** Anything beyond a one-line change starts from a spec (`/spec`) or an existing issue, not freeform edits.
 - **Ask, don't guess.** When acceptance criteria or scope are ambiguous, ask the user before writing code.
-- **Follow the rules in `.claude/rules/`**, which are authoritative for code organization, frontend, i18n, Rust, security (grants, capabilities, telemetry), app-shell, docs, cleanup, CI hygiene, the worktree workflow, sibling repos (the glyph-md org), and Sentry issue fixes.
+- **Follow the rules in `.claude/rules/`**, which are authoritative for code organization, frontend, i18n, Rust, security (grants, capabilities, telemetry), app-shell, docs, cleanup, CI hygiene, the worktree workflow, the shared machine (the heavy-command queue, no windows on the maintainer's desktop), sibling repos (the glyph-md org), and Sentry issue fixes.
 - **Never break the [engineering invariants](docs/engineering-invariants.md).** Stateful or security-sensitive changes name the invariants they touch and cover the adversarial scenario matrix with tests.
 - **Run the gates before every PR** (the same gate the Husky pre-commit hook and CI enforce):
   ```bash
   pnpm typecheck && pnpm check && pnpm test
   cd src-tauri && cargo test --workspace --lib && cargo clippy --workspace --all-targets -- -D warnings
   ```
-  Fix Biome warnings by applying the suggested fix, never by suppressing.
+  Fix Biome warnings by applying the suggested fix, never by suppressing. The heavy ones run one at a time through `scripts/test-queue.sh`, and a commit already is a gate run: see [.claude/rules/shared-machine.md](.claude/rules/shared-machine.md).
 - **Branches** are cut from `main` as `feat/<slug>` or `fix/<slug>`, each in its own git worktree under `.claude/worktrees/`. See [.claude/rules/worktrees.md](.claude/rules/worktrees.md) for the GitHub Flow worktree workflow and how to clean up merged worktrees (see [CONTRIBUTING.md](CONTRIBUTING.md) for the wider conventions).
 - **No co-authored-by lines** in commits, and no em dashes anywhere in output. No AI attribution of any kind (`Co-Authored-By:`, `Generated with ...`) in a commit message: the `.husky/commit-msg` hook rejects it, and GitHub's squash merge harvests such a trailer from a branch commit straight onto `main`.
 
