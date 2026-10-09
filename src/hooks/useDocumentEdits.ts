@@ -28,9 +28,9 @@ export function useDocumentEdits({
     editHistory.current.delete(id);
   }, []);
 
-  // Apply a programmatic edit. In view mode writes straight to disk (with the
-  // self-save grace so the file-watcher doesn't re-enter); in edit/split mode
-  // it updates editContent so auto-save flushes it.
+  // Apply a programmatic edit. In view mode writes straight to disk (marked as
+  // the app's own, so a reload reading meanwhile reads again); in edit/split
+  // mode it updates editContent so auto-save flushes it.
   const applyProgrammaticEdit = useCallback(
     async (id: string, next: string): Promise<boolean> => {
       const tab = stateRef.current.tabs.find((candidate) => candidate.id === id);

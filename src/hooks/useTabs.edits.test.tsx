@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   captureListener,
+  changeOnDisk,
   defaultOptions,
   type Invoker,
   makeInvoker,
@@ -353,25 +354,49 @@ describe("useTabs programmatic edits", () => {
     });
     writeFile.mockClear();
 
-    // Skip past the self-save grace window (1500ms) so the file-changed event
-    // is treated as a true external reload rather than the echo of our write.
-    const realNow = Date.now;
-    const offset = 5000;
-    Date.now = () => realNow() + offset;
-    try {
-      body = "EXTERNAL EDIT";
-      await act(async () => {
-        fileChanged.handler?.({ payload: "/p/tasks.md" });
-        await new Promise((r) => setTimeout(r, 350));
-      });
-    } finally {
-      Date.now = realNow;
-    }
+    body = "EXTERNAL EDIT";
+    await changeOnDisk(fileChanged, "/p/tasks.md");
 
     await act(async () => {
       await result.current.undoEdit(tabId);
     });
     expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("the watcher's echo of a toggle keeps the undo stack", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    let body = "- [ ] task";
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => body,
+        write_file: writeFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/tasks.md");
+    });
+    const tabId = result.current.tabs[0].id;
+
+    await act(async () => {
+      await result.current.toggleTask(tabId, 1);
+    });
+
+    // The disk holds what the toggle wrote, and the watcher reports that write.
+    body = "- [x] task";
+    await changeOnDisk(fileChanged, "/p/tasks.md");
+
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+    expect(writeFile).toHaveBeenLastCalledWith("write_file", {
+      path: "/p/tasks.md",
+      content: "- [ ] task",
+    });
   });
 
   it("skips an external reload while the file is dirty in edit mode", async () => {

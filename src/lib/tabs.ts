@@ -109,6 +109,20 @@ export function normalizePersistedTabs(value: PersistedTab[] | string[]): Persis
   return value as PersistedTab[];
 }
 
+/** Pass every file tab's state through `update`. When each one is handed back
+ *  as it was, `prev` itself is returned, so React skips the render. */
+export function updateFiles(prev: TabsState, update: (tab: FileTab) => FileState): TabsState {
+  let changed = false;
+  const tabs = prev.tabs.map((tab) => {
+    if (tab.kind !== "file") return tab;
+    const file = update(tab);
+    if (file === tab.file) return tab;
+    changed = true;
+    return { ...tab, file };
+  });
+  return changed ? { ...prev, tabs } : prev;
+}
+
 /** Remove `ids` from the tab strip, moving the active tab to a neighbour when
  *  the current one is among the removed. */
 export function removeTabs(prev: TabsState, ids: ReadonlySet<string>): TabsState {
