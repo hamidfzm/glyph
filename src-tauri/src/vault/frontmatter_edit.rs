@@ -114,7 +114,10 @@ pub(crate) fn set_property(
             let unclear = || format!("{key} is written in a way that cannot be edited");
             let colon = key_colon(entry, line_at(entry.line)).ok_or_else(unclear)?;
             let next = entries.get(at + 1).map_or(closing_fence, |next| next.line);
-            let end = value_end(entry, next, colon, &line_at).ok_or_else(unclear)?;
+            // The value ends on a line of its own entry, or nothing is cut.
+            let end = value_end(entry, next, colon, &line_at)
+                .filter(|end| (entry.line..next).contains(&end.line))
+                .ok_or_else(unclear)?;
             // What is left between this entry and the next has to be comment.
             if !reads_the_same_without(&inner, end.line + 1..next, &entries) {
                 return Err(unclear());
@@ -126,10 +129,6 @@ pub(crate) fn set_property(
             (entry.line..end.line + 1, lines)
         }
     };
-    let inside_block = replaced.start <= replaced.end && replaced.end <= closing_fence;
-    if !inside_block {
-        return Err(format!("{key} is written in a way that cannot be edited"));
-    }
 
     let mut edited = String::with_capacity(content.len() + 64);
     edited.push_str(&content[..start_of(replaced.start)]);
@@ -785,6 +784,10 @@ mod tests {
             set(&closing, "a", &text("new")),
             block("a: \"new\"   # keep me\nb: 1\n")
         );
+        // A list item whose quotes close on a later line: the `#` on the
+        // key's line is inside them, and no comment to keep.
+        let wrapped = block("a: [\"one # still text\n  two\", three]\nb: 1\n");
+        assert_eq!(set(&wrapped, "a", &text("new")), block("a: new\nb: 1\n"));
     }
 
     #[test]

@@ -76,10 +76,7 @@ pub fn run(
             added.borrow_mut().push(root.to_string());
             Ok(())
         };
-        let editing = || match stores.as_deref() {
-            Some(dir) => data_dir::editing_in(dir),
-            None => data_dir::editing(),
-        };
+        let editing = || data_dir::editing(stores.as_deref());
         let session = Session {
             grants: &grants,
             vaults: &store,

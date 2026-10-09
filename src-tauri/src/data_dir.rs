@@ -185,12 +185,14 @@ pub enum Editing {
     Unknown,
 }
 
-/// What the app running on this machine holds, asked of every store directory.
-pub fn editing() -> Editing {
-    combined(store_dirs().iter().map(|dir| editing_in(dir)))
+/// What the app running on this machine holds. `stores` is where it keeps its
+/// lock; `None` asks every store directory.
+pub fn editing(stores: Option<&Path>) -> Editing {
+    let dirs = stores.map_or_else(store_dirs, |dir| vec![dir.to_path_buf()]);
+    combined(dirs.iter().map(|dir| editing_in(dir)))
 }
 
-pub fn editing_in(dir: &Path) -> Editing {
+fn editing_in(dir: &Path) -> Editing {
     match lock_in(dir) {
         Lock::Free => Editing::Closed,
         Lock::Unknown => Editing::Unknown,
@@ -300,6 +302,14 @@ mod tests {
         assert!(held.is_some() && running_in(dir.path()));
         // Nothing readable is there, which a reader takes as not knowing.
         assert_eq!(editing_in(dir.path()), Editing::Unknown);
+    }
+
+    #[test]
+    fn a_lock_that_cannot_be_opened_is_not_taken_for_no_app() {
+        // No file name holds a NUL, so opening the lock fails for a reason
+        // other than its absence.
+        let unaskable = Path::new("stores\0");
+        assert_eq!(editing(Some(unaskable)), Editing::Unknown);
     }
 
     #[test]
