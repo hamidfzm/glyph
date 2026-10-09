@@ -21,6 +21,11 @@ pub struct OpenState {
     pub tabs: Vec<OpenTab>,
     /// Folders expanded in each vault's file tree, by root.
     pub expanded: BTreeMap<String, Vec<String>>,
+    /// The tools that change notes which the user has turned on, by name.
+    pub write_tools: Vec<String>,
+    /// The user turned Auto Reload off: a window keeps showing, and will save
+    /// again, the text a file had before something else changed it.
+    pub auto_reload_off: bool,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -104,6 +109,16 @@ fn parse(settings: Option<&str>, sessions: Option<&str>) -> OpenState {
             _ => {}
         }
     }
+
+    // One switch per tool, so two windows changing different ones merge.
+    state.write_tools = settings["settings"]["ai"]["agentWriteTools"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter(|(_, on)| on.as_bool() == Some(true))
+        .map(|(tool, _)| tool.clone())
+        .collect();
+    state.auto_reload_off = behavior["autoReload"].as_bool() == Some(false);
 
     let active = behavior["activeTabPath"].as_str().unwrap_or_default();
     for root in &state.roots {
@@ -260,6 +275,43 @@ mod tests {
             ]
         );
         assert_eq!(state.expanded[&root].len(), 1);
+    }
+
+    #[test]
+    fn write_tools_are_the_names_the_settings_list_and_nothing_else() {
+        let on = |tools: Value| {
+            let settings =
+                json!({ "settings": { "ai": { "agentWriteTools": tools } } }).to_string();
+            parse(Some(&settings), None).write_tools
+        };
+        let switches = json!({
+            "patch_note": true,
+            "set_property": false,
+            "update_task": "true",
+            "rename_note": 1,
+            "move_note": true,
+        });
+        // Only a switch that is exactly `true` is on.
+        assert_eq!(on(switches), ["move_note", "patch_note"]);
+        for malformed in [json!(true), json!("patch_note"), json!(["patch_note"])] {
+            assert!(on(malformed).is_empty());
+        }
+        assert!(parse(Some("{}"), None).write_tools.is_empty());
+        assert!(parse(None, None).write_tools.is_empty());
+    }
+
+    #[test]
+    fn auto_reload_is_off_only_when_the_settings_say_so() {
+        let off = |behavior: Value| {
+            let settings = json!({ "settings": { "behavior": behavior } }).to_string();
+            parse(Some(&settings), None).auto_reload_off
+        };
+        assert!(off(json!({ "autoReload": false })));
+        // On by default, and anything else leaves it on.
+        assert!(!off(json!({ "autoReload": true })));
+        assert!(!off(json!({ "autoReload": "false" })));
+        assert!(!off(json!({})));
+        assert!(!parse(None, None).auto_reload_off);
     }
 
     #[test]

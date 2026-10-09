@@ -13,7 +13,7 @@ interface ExportProgressProps {
  * written. Export reuses the rendered DOM and inlines images, which can take a
  * moment for image-heavy documents, so the user gets explicit feedback rather
  * than a silent pause. The website export renders many files and reports
- * determinate N-of-M progress instead.
+ * determinate N-of-M progress instead. Positioned by `ExportToasts`.
  */
 export function ExportProgress({ format, progress }: ExportProgressProps) {
   const { t } = useTranslation("common");
@@ -26,7 +26,7 @@ export function ExportProgress({ format, progress }: ExportProgressProps) {
       role="status"
       aria-live="polite"
       data-export-ignore="true"
-      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm text-[var(--color-text-primary)] shadow-lg select-none"
+      className="flex items-center gap-3 px-4 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm text-[var(--color-text-primary)] shadow-lg select-none"
     >
       <span
         aria-hidden="true"

@@ -4,6 +4,8 @@ import { useExportReadiness } from "@/hooks/useExportReadiness";
 import { useSettings } from "@/hooks/useSettings";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { getCliExportRequest } from "@/lib/cliExport";
+import { errorMessage } from "@/lib/errorMessage";
+import { pruneWarning } from "@/lib/pruneWarning";
 import { epubMediaLimitBytes } from "@/lib/settings";
 
 // Once-per-process latch: the effect may fire more than once (StrictMode,
@@ -24,9 +26,9 @@ interface UseCliExportOptions {
  * Runs the headless CLI export (`glyph export <path> --format <format>`). When the
  * process was launched with an export request, the window stays hidden (see
  * useWindowReveal), the document or workspace renders straight to disk, and the
- * process exits: 0 with the output path on stdout and the summary below on
- * stderr, 1 with a stderr message on failure. On interactive launches this
- * resolves to a no-op.
+ * process exits: 0 with the output path on stdout and the summary below (and
+ * any warning) on stderr, 1 with a stderr message on failure. On interactive
+ * launches this resolves to a no-op.
  *
  * Waits for persisted settings (the print options an export honors) and for the
  * plugin host's startup load, so a theme contributed by a plugin is registered
@@ -69,6 +71,8 @@ export function useCliExport({ entries, content }: UseCliExportOptions): void {
           // previous run into the same directory left behind.
           const pruned = result.removed > 0 ? `, removing ${result.removed} stale files` : "";
           message = `Exported ${result.pages} pages and ${result.assets} assets to ${request.output}${pruned}`;
+          // The site is complete, so this still exits 0, on a line of its own.
+          if (result.pruneError !== null) message += `\n${pruneWarning(result.pruneError)}`;
         } else {
           const { runCliDocumentExport } = await import("@/lib/export/cliDocumentExport");
           const { path, settled } = await runCliDocumentExport(request, () => ({
@@ -87,7 +91,7 @@ export function useCliExport({ entries, content }: UseCliExportOptions): void {
       } catch (err) {
         await invoke("finish_cli_export", {
           code: 1,
-          message: `Export failed: ${err instanceof Error ? err.message : String(err)}`,
+          message: `Export failed: ${errorMessage(err)}`,
         });
       }
     })();

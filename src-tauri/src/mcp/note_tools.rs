@@ -158,13 +158,26 @@ fn frontmatter_json(frontmatter: Frontmatter) -> Value {
 }
 
 /// No heading matched, so say which ones exist for the model to pick from.
-fn missing_section(content: &str, body_start: usize, heading: &str, path: &str) -> String {
-    let known: Vec<String> = parse_headings(content, body_start)
-        .into_iter()
-        .take(50)
+pub(super) fn missing_section(
+    content: &str,
+    body_start: usize,
+    heading: &str,
+    path: &str,
+) -> String {
+    const LISTED: usize = 50;
+    let headings = parse_headings(content, body_start);
+    let known: Vec<String> = headings
+        .iter()
+        .take(LISTED)
         .map(|found| found.text.chars().take(100).collect::<String>())
         .collect();
-    format!("no heading in {path} matches {heading:?}; its headings are: {known:?}")
+    // A list cut short says so, or it would pass for every heading there is.
+    let which = if headings.len() > LISTED {
+        format!("the first {LISTED} of its {} headings", headings.len())
+    } else {
+        "its headings".to_string()
+    };
+    format!("no heading in {path} matches {heading:?}; {which} are: {known:?}")
 }
 
 pub(super) const NOTE_INFO: ToolDef = ToolDef {

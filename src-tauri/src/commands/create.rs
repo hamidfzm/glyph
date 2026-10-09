@@ -5,6 +5,7 @@
 //! open workspace. New entries get collision-safe default names; the frontend
 //! then lets the user rename them inline, and confirms before deleting.
 
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::State;
@@ -52,6 +53,8 @@ fn ensure_entry_inside_root(target: &Path, root: &Path) -> Result<PathBuf, Strin
 
 /// Pick the first non-colliding name in `dir` built from `stem`/`ext`:
 /// `Untitled.md`, `Untitled 1.md`, … (or `Untitled Folder`, `Untitled Folder 1`).
+/// A link whose target is missing still holds its name: `exists()` would call
+/// it free, and the write that follows would create the target.
 fn unique_path(dir: &Path, stem: &str, ext: Option<&str>) -> PathBuf {
     let build = |name: String| -> PathBuf {
         match ext {
@@ -61,18 +64,22 @@ fn unique_path(dir: &Path, stem: &str, ext: Option<&str>) -> PathBuf {
     };
     let mut candidate = build(stem.to_string());
     let mut n = 1;
-    while candidate.exists() {
+    while candidate.symlink_metadata().is_ok() {
         candidate = build(format!("{stem} {n}"));
         n += 1;
     }
     candidate
 }
 
-/// Reduce a user-typed name to a single safe path component: drops directory
-/// separators and characters that are illegal on Windows, trims whitespace.
+/// What a file name may not hold: directory separators, and the characters
+/// that are illegal on Windows.
+pub(crate) const UNSAFE_NAME_CHARS: [char; 9] = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+
+/// Reduce a user-typed name to a single safe path component: drops the
+/// characters a name may not hold, trims whitespace.
 fn sanitize_name(name: &str) -> String {
     name.chars()
-        .filter(|c| !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+        .filter(|c| !UNSAFE_NAME_CHARS.contains(c))
         .collect::<String>()
         .trim()
         .to_string()
@@ -120,9 +127,45 @@ pub fn create_folder(
     Ok(path.to_string_lossy().to_string())
 }
 
+/// The stem and extension `source` takes for a `typed` name; an empty stem
+/// means no name is left. A file keeps its extension unless the name ends in
+/// that extension or in another of its kind, a document's for a document and
+/// an image's for an image: any other dot belongs to the name ("Trip v1.2").
+/// A folder has no extension.
+fn renamed_parts<'a>(source: &'a Path, typed: &'a str) -> (&'a str, Option<&'a str>) {
+    // Windows drops a trailing dot or space, so a name must not end in one.
+    let bare = typed.trim_end_matches(['.', ' ']);
+    if bare.is_empty() || !source.is_file() {
+        return (bare, None);
+    }
+    let bare_path = Path::new(bare);
+    let typed_ext = bare_path.extension().and_then(|ext| ext.to_str());
+    let stem = bare_path.file_stem().and_then(|stem| stem.to_str());
+    let as_typed = (stem.unwrap_or(bare), typed_ext);
+    let own_ext = source.extension().and_then(|ext| ext.to_str());
+    let Some(own_ext) = own_ext.filter(|ext| !ext.is_empty()) else {
+        return as_typed;
+    };
+    let its_own = typed_ext.is_some_and(|ext| ext.eq_ignore_ascii_case(own_ext));
+    let both_documents = crate::is_supported_file(bare_path) && crate::is_supported_file(source);
+    let both_images = crate::is_image_file(bare_path) && crate::is_image_file(source);
+    if its_own || both_documents || both_images {
+        return as_typed;
+    }
+    // The extension ends the name here, so a typed trailing dot stays ("5 p.m.").
+    (typed, Some(own_ext))
+}
+
+/// Whether `name` is what `source` is called already: its whole name, or a
+/// file's name without its extension, which is what the rename box offers.
+fn is_current_name(source: &Path, name: &str) -> bool {
+    let name = Some(OsStr::new(name));
+    source.file_name() == name || (source.is_file() && source.file_stem() == name)
+}
+
 /// Rename `path` to `new_name` within the same directory, rewriting the links
-/// the rename would break. The extension of the original file is preserved when
-/// the typed name doesn't carry one (so "My Note" stays a `.md` file). Reports
+/// the rename would break. A file keeps its extension (so "My Note" stays a
+/// `.md` file) unless the name ends in one `renamed_parts` accepts. Reports
 /// the final (collision-safe) path; a dry run reports it without renaming or writing.
 #[tauri::command]
 pub async fn rename_path(
@@ -141,25 +184,10 @@ pub async fn rename_path(
         .ok_or_else(|| "Path has no parent directory".to_string())?;
 
     let sanitized = sanitize_name(&new_name);
-    if sanitized.is_empty() {
+    let (stem, ext) = renamed_parts(source, &sanitized);
+    if stem.is_empty() {
         return Err("Name is empty".to_string());
     }
-
-    // Preserve the source extension when the typed name omits one and the source
-    // is a file (folders never get an extension).
-    let typed = Path::new(&sanitized);
-    let (stem, ext) = if typed.extension().is_none() && source.is_file() {
-        (
-            sanitized.as_str(),
-            source.extension().and_then(|e| e.to_str()),
-        )
-    } else {
-        let stem = typed
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or(&sanitized);
-        (stem, typed.extension().and_then(|e| e.to_str()))
-    };
 
     // Renaming to the current name (including typing it without its extension) is
     // a no-op; return before unique_path would bump it to "<name> 1".
@@ -167,7 +195,7 @@ pub async fn rename_path(
         Some(ext) => parent.join(format!("{stem}.{ext}")),
         None => parent.join(stem),
     };
-    if desired == source {
+    if desired == source || is_current_name(source, &new_name) {
         return Ok(Relink::unmoved(path));
     }
 
@@ -528,6 +556,49 @@ mod tests {
     }
 
     #[test]
+    fn a_link_to_a_missing_target_still_holds_its_name() {
+        let outer = unique_tmp("dangling_name");
+        let ws = outer.join("ws");
+        fs::create_dir_all(&ws).unwrap();
+        let note = ws.join("real.md");
+        fs::write(&note, "x").unwrap();
+        // Each name a command would pick first is a link out of the workspace
+        // whose target is missing, so writing to that name would create it.
+        for name in [
+            "Untitled.md",
+            "Untitled.canvas",
+            "Untitled Folder",
+            "real copy.md",
+            "taken.md",
+        ] {
+            let target = outer.join(format!("planted {name}"));
+            crate::vault::test_support::link_folder(&target, &ws.join(name));
+        }
+        let root = ws.to_string_lossy().to_string();
+        let note = note.to_string_lossy().to_string();
+
+        for (created, next_free_name) in [
+            (create_note(root.clone(), root.clone()), "Untitled 1.md"),
+            (
+                create_canvas(root.clone(), root.clone()),
+                "Untitled 1.canvas",
+            ),
+            (
+                create_folder(root.clone(), root.clone()),
+                "Untitled Folder 1",
+            ),
+            (duplicate_path(note.clone(), root.clone()), "real copy 1.md"),
+            (rename_path(note, "taken".to_string(), root), "taken 1.md"),
+        ] {
+            let path = created.unwrap();
+            assert!(path.ends_with(next_free_name), "{path}");
+        }
+        // Only the workspace: no link was followed to its target.
+        assert_eq!(fs::read_dir(&outer).unwrap().count(), 1);
+        let _ = fs::remove_dir_all(&outer);
+    }
+
+    #[test]
     fn create_folder_makes_untitled_folder() {
         let dir = unique_tmp("folder");
         let root = dir.to_string_lossy().to_string();
@@ -681,7 +752,7 @@ mod tests {
 
         // sanitize_name strips separators but keeps dots; whatever survives
         // must land inside the workspace, never above it.
-        for (i, evil) in ["../escape", "..\\escape", ".."].iter().enumerate() {
+        for (i, evil) in ["../escape", "..\\escape"].iter().enumerate() {
             let file = root.join(format!("victim{i}.md"));
             fs::write(&file, "x").unwrap();
             // Every sanitized name is a valid single component, so the rename
@@ -698,6 +769,16 @@ mod tests {
                 "rename to {evil:?} escaped the root: {new_path}"
             );
         }
+        // Nothing but dots names nothing, a note included.
+        let file = root.join("victim.md");
+        fs::write(&file, "x").unwrap();
+        let nameless = rename_path(
+            file.to_string_lossy().to_string(),
+            "..".to_string(),
+            root.to_string_lossy().to_string(),
+        );
+        assert_eq!(nameless.unwrap_err(), "Name is empty");
+        assert!(file.is_file());
 
         let _ = fs::remove_dir_all(&root);
     }
@@ -721,6 +802,10 @@ mod tests {
         let note = create_note(root.clone(), root.clone()).unwrap();
         let renamed = rename_path(note, "Taken".to_string(), root.clone()).unwrap();
         assert!(renamed.ends_with("Taken 1.md"));
+        // A typed extension stays last: the count goes before it.
+        let note = create_note(root.clone(), root.clone()).unwrap();
+        let renamed = rename_path(note, "Taken.md".to_string(), root.clone()).unwrap();
+        assert!(renamed.ends_with("Taken 2.md"));
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -751,6 +836,91 @@ mod tests {
         let note = create_note(root.clone(), root.clone()).unwrap();
         let renamed = rename_path(note, "readme.markdown".to_string(), root.clone()).unwrap();
         assert!(renamed.ends_with("readme.markdown"));
+        // In any case, and without the stray dot after it.
+        let renamed = rename_path(renamed, "README.MD.".to_string(), root.clone()).unwrap();
+        assert!(renamed.ends_with("README.MD"));
+        assert_eq!(listed(&dir), ["README.MD"]);
+        // Another kind of document too, which is how a diagram is started
+        // from the tree.
+        let renamed = rename_path(renamed, "flow.d2".to_string(), root.clone()).unwrap();
+        assert!(renamed.ends_with("flow.d2"));
+        assert_eq!(listed(&dir), ["flow.d2"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The names `dir` lists, as the disk spells them.
+    fn listed(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn rename_keeps_the_extension_when_the_name_has_a_dot() {
+        let dir = unique_tmp("rename_dotted");
+        let root = dir.to_string_lossy().to_string();
+        // No ending here is another document's: ".2", the "m" of "p.m.", a
+        // video, or an image, which a note cannot become.
+        let names = [
+            "Trip v1.2",
+            "Meeting at 5 p.m.",
+            "Convert .mov to .mp4",
+            "logo.png",
+        ];
+        for name in names {
+            let note = create_note(root.clone(), root.clone()).unwrap();
+            let renamed = rename_path(note, name.to_string(), root.clone()).unwrap();
+            assert_eq!(Path::new(&renamed), dir.join(format!("{name}.md")));
+        }
+        // A second note of that name counts before the extension it kept.
+        let note = create_note(root.clone(), root.clone()).unwrap();
+        let renamed = rename_path(note, "Trip v1.2".to_string(), root.clone()).unwrap();
+        assert!(renamed.ends_with("Trip v1.2 1.md"));
+        assert_eq!(
+            listed(&dir),
+            [
+                "Convert .mov to .mp4.md",
+                "Meeting at 5 p.m..md",
+                "Trip v1.2 1.md",
+                "Trip v1.2.md",
+                "logo.png.md"
+            ]
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_keeps_an_image_an_image() {
+        let dir = unique_tmp("rename_image");
+        let root = dir.to_string_lossy().to_string();
+        fs::write(dir.join("photo.jpeg"), "x").unwrap();
+        let path = dir.join("photo.jpeg").to_string_lossy().to_string();
+        // Another image's extension is taken; a document's is part of the name.
+        let renamed = rename_path(path, "photo.jpg".to_string(), root.clone()).unwrap();
+        assert!(renamed.ends_with("photo.jpg"));
+        let renamed = rename_path(renamed, "notes.md".to_string(), root.clone()).unwrap();
+        assert!(renamed.ends_with("notes.md.jpg"));
+        assert_eq!(listed(&dir), ["notes.md.jpg"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_takes_a_files_own_extension_as_typed() {
+        let dir = unique_tmp("rename_own_ext");
+        let root = dir.to_string_lossy().to_string();
+        // Neither a document nor an image, so only the file's own extension is one.
+        let json = Path::new("notes.json");
+        assert!(!crate::is_supported_file(json) && !crate::is_image_file(json));
+        fs::write(dir.join("notes.json"), "x").unwrap();
+        let path = dir.join("notes.json").to_string_lossy().to_string();
+        let renamed = rename_path(path, "todo.JSON".to_string(), root.clone()).unwrap();
+        assert!(renamed.ends_with("todo.JSON"));
+        let renamed = rename_path(renamed, "todo v1.2".to_string(), root.clone()).unwrap();
+        assert!(renamed.ends_with("todo v1.2.JSON"));
+        assert_eq!(listed(&dir), ["todo v1.2.JSON"]);
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -762,6 +932,58 @@ mod tests {
         let renamed = rename_path(folder, "Archive".to_string(), root_s.clone()).unwrap();
         assert!(renamed.ends_with("Archive"));
         assert!(Path::new(&renamed).is_dir());
+        // A dot in a folder's name splits nothing off: a collision counts after it.
+        fs::create_dir(root.join("v1.2")).unwrap();
+        let renamed = rename_path(renamed, "v1.2".to_string(), root_s.clone()).unwrap();
+        assert!(renamed.ends_with("v1.2 1"));
+        // Nor is what precedes the dot the name it already has.
+        let renamed = rename_path(renamed, "v1".to_string(), root_s.clone()).unwrap();
+        assert_eq!(Path::new(&renamed), root.join("v1"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rename_drops_the_trailing_dots_and_spaces_windows_would() {
+        let root = unique_tmp("rename_trailing");
+        let root_s = root.to_string_lossy().to_string();
+        let folder = create_folder(root_s.clone(), root_s.clone()).unwrap();
+        let renamed = rename_path(folder, "Drafts. .".to_string(), root_s.clone()).unwrap();
+        assert_eq!(Path::new(&renamed), root.join("Drafts"));
+        // The name it has is no collision with itself.
+        let again = rename_path(renamed.clone(), "Drafts.".to_string(), root_s.clone()).unwrap();
+        assert_eq!(again, renamed);
+        // Nothing but dots leaves no name at all.
+        let nameless = rename_path(renamed, "...".to_string(), root_s.clone());
+        assert_eq!(nameless.unwrap_err(), "Name is empty");
+
+        fs::write(root.join("LICENSE"), "x").unwrap();
+        let license = root.join("LICENSE").to_string_lossy().to_string();
+        let renamed = rename_path(license, "COPYING.".to_string(), root_s).unwrap();
+        assert_eq!(Path::new(&renamed), root.join("COPYING"));
+        assert_eq!(listed(&root), ["COPYING", "Drafts"]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rename_to_a_name_only_unix_holds_that_it_already_has_is_a_noop() {
+        // The rename box offers a folder's whole name and a file's stem:
+        // committing either unchanged must not tidy it into another name.
+        let root = unique_tmp("rename_unix_noop");
+        let root_s = root.to_string_lossy().to_string();
+        fs::create_dir(root.join("Acme Inc.")).unwrap();
+        fs::write(root.join("Why?.md"), "x").unwrap();
+        for (name, offered) in [("Acme Inc.", "Acme Inc."), ("Why?.md", "Why?")] {
+            let entry = root.join(name).to_string_lossy().to_string();
+            let renamed = rename_path(entry.clone(), offered.to_string(), root_s.clone()).unwrap();
+            assert_eq!(renamed, entry);
+        }
+        // A file that ends in a dot has no extension to keep.
+        fs::write(root.join("notes."), "x").unwrap();
+        let dotted = root.join("notes.").to_string_lossy().to_string();
+        let renamed = rename_path(dotted, "other".to_string(), root_s).unwrap();
+        assert_eq!(Path::new(&renamed), root.join("other"));
+        assert_eq!(listed(&root), ["Acme Inc.", "Why?.md", "other"]);
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -940,6 +1162,15 @@ mod tests {
         assert_eq!(renamed, path);
         assert!(dir.join("note.md").is_file());
         assert!(!dir.join("note 1.md").exists());
+        // So does the stem the rename box offers, whatever follows its last dot:
+        // no type, or one that would win if it were typed afresh.
+        for (name, offered) in [("Trip v1.2.md", "Trip v1.2"), ("flow.d2.md", "flow.d2")] {
+            fs::write(dir.join(name), "body").unwrap();
+            let dotted = dir.join(name).to_string_lossy().to_string();
+            let renamed = rename_path(dotted.clone(), offered.to_string(), root.clone()).unwrap();
+            assert_eq!(renamed, dotted);
+        }
+        assert_eq!(listed(&dir), ["Trip v1.2.md", "flow.d2.md", "note.md"]);
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -957,6 +1188,10 @@ mod tests {
         assert!(renamed.ends_with("COPYING"));
         assert!(!renamed.ends_with(".md"));
         assert!(Path::new(&renamed).is_file());
+        // With no extension to keep, a typed one is taken as one.
+        fs::write(dir.join("NOTICE.txt"), "x").unwrap();
+        let renamed = rename_path(renamed, "NOTICE.txt".to_string(), root.clone()).unwrap();
+        assert!(renamed.ends_with("NOTICE 1.txt"));
         let _ = fs::remove_dir_all(&dir);
     }
 

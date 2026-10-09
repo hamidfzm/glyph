@@ -263,6 +263,32 @@
     },
     "speed": {
       "label": "Geschwindigkeit"
+    },
+    "agentTools": {
+      "title": "Agenten-Werkzeuge",
+      "description": "Ein KI-Agent, der mit dem MCP-Server von Glyph (glyph mcp) verbunden ist, kann deine geöffneten Arbeitsbereiche immer lesen: Links, Rückverweise, Tags, Überschriften und den Graphen. Werkzeuge, die deine Notizen ändern, bleiben aus, bis du sie hier einzeln einschaltest. Eine Änderung an einer Notiz mit ungespeicherten Änderungen in Glyph wird abgelehnt.",
+      "tools": {
+        "patch_note": {
+          "label": "Abschnitt bearbeiten",
+          "description": "Den Text unter einer Überschrift ersetzen oder am Anfang oder Ende ergänzen. Der Rest der Notiz bleibt unberührt."
+        },
+        "set_property": {
+          "label": "Eigenschaft setzen",
+          "description": "Eine Frontmatter-Eigenschaft setzen oder entfernen. Reihenfolge, Kommentare und Anführungszeichen der übrigen bleiben erhalten."
+        },
+        "update_task": {
+          "label": "Aufgaben abhaken",
+          "description": "Eine Aufgabe als erledigt oder offen markieren. Ein Kontrollkästchen in einem umzäunten Codeblock oder in einem Zitat gilt nicht als Aufgabe."
+        },
+        "rename_note": {
+          "label": "Notizen umbenennen",
+          "description": "Eine Notiz umbenennen und die Links anpassen, die auf sie zeigen."
+        },
+        "move_note": {
+          "label": "Notizen verschieben",
+          "description": "Eine Notiz in einen anderen Ordner verschieben und die Links anpassen, die auf sie zeigen."
+        }
+      }
     }
   },
   "print": {
@@ -369,6 +395,8 @@
       "registered": "Glyph ist jetzt deine Standard-Markdown-App.",
       "openedSettings": "Einstellungen für Standard-Apps geöffnet. Wähle dort Glyph für Markdown-Dateien.",
       "guidance": "Klicke im Finder mit der rechten Maustaste auf eine Markdown-Datei, wähle „Informationen“, stelle „Öffnen mit“ auf Glyph und klicke auf „Alle ändern“.",
+      "sandboxed": "Diese Glyph-Installation läuft in einer Sandbox (Flatpak oder Snap) und kann deine Standard-Apps nicht ändern. Klicke im Dateimanager mit der rechten Maustaste auf eine Markdown-Datei, wähle „Öffnen mit“ und lege Glyph als Standard fest.",
+      "noDesktopEntry": "Glyph konnte seinen Anwendungseintrag auf diesem System nicht finden (ein AppImage installiert keinen) und kann sich daher nicht als Standard festlegen. Installiere Glyph aus einem Paket und versuche es erneut. Wenn du das AppImage in dein Anwendungsmenü aufgenommen hast, wähle Glyph stattdessen im Dateimanager unter „Öffnen mit“.",
       "error": "Standard-App konnte nicht festgelegt werden. Lege sie stattdessen in den Systemeinstellungen fest."
     }
   }

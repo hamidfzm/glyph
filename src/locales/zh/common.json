@@ -104,6 +104,12 @@
     "website": "网站",
     "exportingPages": "正在导出第 {{done}}/{{total}} 页…"
   },
+  "exportNotice": {
+    "pruneFailed": "网站已导出，但导出后的清理未完成。文件夹中可能留有过时的页面，无论是现在还是下次导出之后。",
+    "failed": "网站导出失败。",
+    "insideWorkspace": "无法将网站导出到生成它的工作区内。请选择工作区之外的文件夹。",
+    "dismiss": "忽略导出提示"
+  },
   "contextMenu": {
     "copy": "复制",
     "copyLinkAddress": "复制链接地址",
