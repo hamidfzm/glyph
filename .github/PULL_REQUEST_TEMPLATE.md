@@ -26,7 +26,7 @@
 
 ### Invariants at stake and evidence
 
-<!-- For each checked area: which invariants from docs/engineering-invariants.md apply, and which tests (or reasoning) prove them. Example: "INV-3: stale write cannot clobber newer edit; covered by useTabs.test.tsx 'stale completion' cases." -->
+<!-- For each checked area: which invariants from docs/engineering-invariants.md apply, and which tests (or reasoning) prove them. Example: "INV-3: stale write cannot clobber newer edit; covered by useTabs.saving.test.tsx 'in-flight write' cases." -->
 
 ## Testing
 

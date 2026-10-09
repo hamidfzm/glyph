@@ -8,8 +8,8 @@ Non-negotiable guarantees for Glyph. Every stateful or security-sensitive change
 
 A user edit is never discarded without a completed durable write or an explicit, informed discard by the user.
 
-- Owners: `src/hooks/useTabs.ts` (save path, dirty tracking), `src/hooks/useAutoSave.ts`, `src/hooks/useWindowClose.ts`
-- Evidence: `src/hooks/useAutoSave.test.ts`, `src/hooks/useTabs.test.tsx`
+- Owners: `src/hooks/useDocumentSave.ts` (save path), `src/hooks/useTabStrip.ts` (dirty tracking), `src/hooks/useTabs.ts` (close flush, discard prompt), `src/hooks/useAutoSave.ts`, `src/hooks/useWindowClose.ts`
+- Evidence: `src/hooks/useAutoSave.test.ts`, `src/hooks/useTabs.saving.test.tsx`, `src/hooks/useTabs.virtual.test.tsx`
 
 ### INV-2: Empty is not absent
 
@@ -22,15 +22,15 @@ Empty string is valid loaded document content. `null`/`undefined` represents abs
 
 Older asynchronous work cannot overwrite newer state or mark it complete. Writes to the same path are serialized; completions are revision-guarded.
 
-- Owners: `src/hooks/useTabs.ts` (`writeChains`, revision guards)
-- Evidence: `src/hooks/useTabs.test.tsx` stale-completion cases
+- Owners: `src/hooks/useDocumentSave.ts` (`writeChains`, revision guards), `src/hooks/useDiskReload.ts` (revision guard)
+- Evidence: stale-completion cases in `src/hooks/useTabs.saving.test.tsx` and `src/hooks/useTabs.virtual.test.tsx`
 
 ### INV-4: Owners flush before they die
 
 Closing or replacing an owner (tab, workspace, window) flushes or transfers every pending operation it owns. Nothing pending is dropped on unmount, tab close, workspace switch, or app exit. The single exception is an explicit user discard: with Auto Save off, the close prompt's **Don't Save** drops the pending edits, which is the informed discard INV-1 allows.
 
 - Owners: `src/hooks/useTabs.ts` close-flush coordination, `src/hooks/useWindowClose.ts`
-- Evidence: lifecycle transition tests (edit -> switch -> close, shutdown flush), `src/hooks/useTabs.test.tsx` close-prompt cases
+- Evidence: lifecycle transition tests (edit -> switch -> close, shutdown flush), `src/hooks/useTabs.closing.test.tsx` close-prompt cases
 
 ### INV-5: All external input is untrusted
 
