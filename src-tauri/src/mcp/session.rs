@@ -1,9 +1,7 @@
 //! What the user has open, read from the stores the app persists: the
 //! workspace pointer and loose files in `settings.json`, and each workspace's
 //! own tabs in `workspace-sessions.json` under its root. The renderer writes
-//! both, so every field is optional and anything malformed is skipped. The app
-//! itself publishes `open-documents.json`: what every window has open, and
-//! which of those hold edits not yet saved.
+//! both, so every field is optional and anything malformed is skipped.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -11,7 +9,7 @@ use std::path::Path;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::data_dir::{self, OpenDocuments, OPEN_DOCUMENTS};
+use crate::data_dir;
 use crate::grants::GrantRegistry;
 
 #[derive(Debug, Default)]
@@ -25,10 +23,9 @@ pub struct OpenState {
     pub expanded: BTreeMap<String, Vec<String>>,
     /// The tools that change notes which the user has turned on, by name.
     pub write_tools: Vec<String>,
-    /// What every window of the running app has open and unsaved. `None`
-    /// while it runs is the app not having said, which no write may assume
-    /// means nothing is being edited.
-    pub documents: Option<OpenDocuments>,
+    /// The user turned Auto Reload off: a window keeps showing, and will save
+    /// again, the text a file had before something else changed it.
+    pub auto_reload_off: bool,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -47,41 +44,25 @@ pub(super) fn open_state(
     grants: &GrantRegistry,
     stores: Option<&Path>,
 ) -> OpenState {
-    let read = |name: &str| match stores {
-        Some(dir) => data_dir::read_store_in(dir, name),
-        None => data_dir::read_store(name),
+    let (settings, sessions, app_running) = match stores {
+        Some(dir) => (
+            data_dir::read_store_in(dir, "settings.json"),
+            data_dir::read_store_in(dir, "workspace-sessions.json"),
+            data_dir::running_in(dir),
+        ),
+        None => (
+            data_dir::read_store("settings.json"),
+            data_dir::read_store("workspace-sessions.json"),
+            data_dir::app_running(),
+        ),
     };
-    // Asked first: a list read before the app took its lock is an earlier run's.
-    let app_running = match stores {
-        Some(dir) => data_dir::running_in(dir),
-        None => data_dir::app_running(),
-    };
-    let mut state = observed(
+    observed(
         cli_vaults,
         grants,
-        read("settings.json").as_deref(),
-        read("workspace-sessions.json").as_deref(),
+        settings.as_deref(),
+        sessions.as_deref(),
         app_running,
-    );
-    state.documents = documents(read(OPEN_DOCUMENTS).as_deref(), app_running, grants);
-    state
-}
-
-/// The open and unsaved files the grants admit. A closed app has none; a
-/// running one whose list is missing or unreadable has not said.
-fn documents(
-    published: Option<&str>,
-    app_running: bool,
-    grants: &GrantRegistry,
-) -> Option<OpenDocuments> {
-    if !app_running {
-        return Some(OpenDocuments::default());
-    }
-    let mut documents: OpenDocuments = serde_json::from_str(published?).ok()?;
-    let admitted = |path: &String| grants.ensure_readable(path).is_ok();
-    documents.open.retain(admitted);
-    documents.unsaved.retain(admitted);
-    Some(documents)
+    )
 }
 
 /// [`open_state`] over store contents already read.
@@ -129,13 +110,15 @@ fn parse(settings: Option<&str>, sessions: Option<&str>) -> OpenState {
         }
     }
 
+    // One switch per tool, so two windows changing different ones merge.
     state.write_tools = settings["settings"]["ai"]["agentWriteTools"]
-        .as_array()
+        .as_object()
         .into_iter()
         .flatten()
-        .filter_map(Value::as_str)
-        .map(str::to_string)
+        .filter(|(_, on)| on.as_bool() == Some(true))
+        .map(|(tool, _)| tool.clone())
         .collect();
+    state.auto_reload_off = behavior["autoReload"].as_bool() == Some(false);
 
     let active = behavior["activeTabPath"].as_str().unwrap_or_default();
     for root in &state.roots {
@@ -301,16 +284,16 @@ mod tests {
                 json!({ "settings": { "ai": { "agentWriteTools": tools } } }).to_string();
             parse(Some(&settings), None).write_tools
         };
-        assert_eq!(
-            on(json!(["patch_note", 7, null, "move_note"])),
-            ["patch_note", "move_note"]
-        );
-        // Anything but a list of names turns nothing on.
-        for malformed in [
-            json!(true),
-            json!("patch_note"),
-            json!({ "patch_note": true }),
-        ] {
+        let switches = json!({
+            "patch_note": true,
+            "set_property": false,
+            "update_task": "true",
+            "rename_note": 1,
+            "move_note": true,
+        });
+        // Only a switch that is exactly `true` is on.
+        assert_eq!(on(switches), ["move_note", "patch_note"]);
+        for malformed in [json!(true), json!("patch_note"), json!(["patch_note"])] {
             assert!(on(malformed).is_empty());
         }
         assert!(parse(Some("{}"), None).write_tools.is_empty());
@@ -318,27 +301,17 @@ mod tests {
     }
 
     #[test]
-    fn open_documents_are_known_only_from_a_list_the_running_app_published() {
-        let (_tmp, root, a, _b, loose) = fixture();
-        let grants = GrantRegistry::default();
-        grants.grant_workspace(std::path::Path::new(&root)).unwrap();
-        let published = json!({ "open": [a, loose], "unsaved": [a, loose] }).to_string();
-
-        // The loose file is outside every grant, so not even its path is kept.
-        let known = documents(Some(&published), true, &grants).unwrap();
-        assert_eq!(known.open, std::slice::from_ref(&a));
-        assert_eq!(known.unsaved, [a]);
-
-        // A closed app is editing nothing, whatever an earlier run left behind.
-        assert_eq!(
-            documents(Some(&published), false, &grants),
-            Some(OpenDocuments::default())
-        );
-        // A running app that has not said, or said it badly, is not known to
-        // be editing nothing.
-        for unknown in [None, Some("{"), Some(r#"{"open":"all"}"#), Some("[]")] {
-            assert_eq!(documents(unknown, true, &grants), None);
-        }
+    fn auto_reload_is_off_only_when_the_settings_say_so() {
+        let off = |behavior: Value| {
+            let settings = json!({ "settings": { "behavior": behavior } }).to_string();
+            parse(Some(&settings), None).auto_reload_off
+        };
+        assert!(off(json!({ "autoReload": false })));
+        // On by default, and anything else leaves it on.
+        assert!(!off(json!({ "autoReload": true })));
+        assert!(!off(json!({ "autoReload": "false" })));
+        assert!(!off(json!({})));
+        assert!(!parse(None, None).auto_reload_off);
     }
 
     #[test]

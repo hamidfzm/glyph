@@ -141,10 +141,12 @@ export interface AISettings {
   model: string;
   ttsVoice: string;
   ttsSpeed: number;
-  /** Names of the MCP tools that change notes which the user has turned on.
-   *  `glyph mcp` reads this list before every call; a name it does not know
-   *  turns nothing on. */
-  agentWriteTools: string[];
+  /** The MCP tools that change notes, each off until turned on. `glyph mcp`
+   *  reads these before every call. One switch per tool, not a list, so two
+   *  windows changing different tools merge instead of overwriting. The names
+   *  are the server's: `src-tauri/fixtures/mcp-write-tools.json` holds both
+   *  sides to the same list. */
+  agentWriteTools: Record<string, boolean>;
 }
 
 export interface PrintSettings {
@@ -300,7 +302,13 @@ export const DEFAULT_SETTINGS: Settings = {
     model: "",
     ttsVoice: "",
     ttsSpeed: 1.0,
-    agentWriteTools: [],
+    agentWriteTools: {
+      patch_note: false,
+      set_property: false,
+      update_task: false,
+      rename_note: false,
+      move_note: false,
+    },
   },
   print: {
     pageBreakLevel: "none",

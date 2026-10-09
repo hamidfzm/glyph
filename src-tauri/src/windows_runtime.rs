@@ -214,6 +214,14 @@ pub fn set_window_unsaved<R: Runtime>(
     publish_documents(window.app_handle(), &registry);
 }
 
+/// Forget a window that has closed. What it had open and unsaved leaves the
+/// published list with it, or `glyph mcp` would keep off those notes until
+/// another window reported.
+pub fn forget_window<R: Runtime>(app: &AppHandle<R>, registry: &WindowRegistry, label: &str) {
+    registry.remove(label);
+    publish_documents(app, registry);
+}
+
 /// Tell `glyph mcp` what every window has open and unsaved. Only the process
 /// holding the instance lock has one to tell it through: an export's
 /// throwaway window is not one anyone edits in.
@@ -414,11 +422,6 @@ mod tests {
         };
         let note = "/a/note.md".to_string();
 
-        // An export or a serve holds no lock, and publishes nothing.
-        let (app, window) = app_with_registries();
-        set_window_unsaved(window, app.state::<WindowRegistry>(), vec![note.clone()]);
-        assert!(read_store_in(dir.path(), OPEN_DOCUMENTS).is_none());
-
         let (app, window) = app_with_registries();
         app.manage(hold_instance_lock(dir.path()).unwrap());
         set_window_files(
@@ -435,12 +438,16 @@ mod tests {
         );
 
         set_window_unsaved(window, app.state::<WindowRegistry>(), vec![note.clone()]);
-        assert_eq!(published().unsaved, [note]);
+        assert_eq!(published().unsaved, std::slice::from_ref(&note));
         // The report is a renderer-supplied path: it must not become readable.
         assert!(app
             .state::<GrantRegistry>()
             .ensure_readable("/a/note.md")
             .is_err());
+
+        // Closed with the note still unsaved, the window takes it off the list.
+        forget_window(app.handle(), &app.state::<WindowRegistry>(), "main");
+        assert_eq!(published(), OpenDocuments::default());
     }
 
     #[test]

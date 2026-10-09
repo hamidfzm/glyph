@@ -8,7 +8,7 @@ Non-negotiable guarantees for Glyph. Every stateful or security-sensitive change
 
 A user edit is never discarded without a completed durable write or an explicit, informed discard by the user.
 
-- Owners: `src/hooks/useTabs.ts` (save path, dirty tracking), `src/hooks/useAutoSave.ts`, `src/hooks/useWindowClose.ts`, `src-tauri/src/mcp/edits.rs` (an agent's write never lands on a note with unsaved edits, or on one that changed since the edit was worked out)
+- Owners: `src/hooks/useTabs.ts` (save path, dirty tracking), `src/hooks/useAutoSave.ts`, `src/hooks/useWindowClose.ts`, `src-tauri/src/mcp/edits.rs` (an agent's write is refused for a note the app reports unsaved edits in, and for one that changed since the edit was worked out)
 - Evidence: `src/hooks/useAutoSave.test.ts`, `src/hooks/useTabs.test.tsx`, the tests in `src-tauri/src/mcp/edits.rs`
 
 ### INV-2: Empty is not absent

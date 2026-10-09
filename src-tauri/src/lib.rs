@@ -364,8 +364,6 @@ pub fn run() {
             menu_runtime::apply::set_overlay_fullscreen,
             #[cfg(desktop)]
             menu_runtime::apply::set_plugin_menu_items,
-            #[cfg(desktop)]
-            mcp::agent_write_tools,
             windows_runtime::set_window_workspace,
             windows_runtime::set_window_files,
             windows_runtime::set_window_unsaved,

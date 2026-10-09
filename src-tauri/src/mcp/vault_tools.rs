@@ -51,10 +51,7 @@ fn vault_context(session: &Session, args: Value) -> Result<Value, String> {
         "appRunning": open.app_running,
         "vaults": vaults,
         "canAskForVaults": session.allow_vault.is_some(),
-        "writeTools": registry::list(open)
-            .filter(|tool| tool.effect == Effect::Edits)
-            .map(|tool| tool.name)
-            .collect::<Vec<_>>(),
+        "writeTools": registry::edits_on(open),
         "activeNote": open.active_note,
         "openTabs": capped(open.tabs.iter()),
         "expandedFolders": open

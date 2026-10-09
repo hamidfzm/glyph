@@ -42,7 +42,8 @@ mod tests;
 pub(crate) use frontmatter::{parse_frontmatter, split_frontmatter, Frontmatter};
 pub(crate) use frontmatter_edit::{set_property, NewValue, Scalar};
 pub(crate) use headings::{
-    js_lines, line_ending, parse_headings, section, section_spans, slug, SectionSpan,
+    js_lines, line_ending, parse_headings, section, section_spans, slug, uncertain_line,
+    SectionSpan,
 };
 pub(crate) use index::strip_bom;
 pub use index::Vault;

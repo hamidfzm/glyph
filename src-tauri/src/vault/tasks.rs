@@ -4,7 +4,7 @@
 //! parser found, so the lines it never reaches are skipped here: fenced code,
 //! and a quoted task, whose line opens with `>` and so never matches.
 
-use super::headings::{is_js_space, js_line_starts, Fences};
+use super::headings::{is_js_space, js_line_starts, StrictFences};
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Task {
@@ -43,7 +43,7 @@ pub(crate) fn task_text(line: &str) -> &str {
 /// Every task from line `body_start` on, skipping fenced code.
 pub(crate) fn parse_tasks(content: &str, body_start: usize) -> Vec<Task> {
     let mut tasks = Vec::new();
-    let mut fences = Fences::new();
+    let mut fences = StrictFences::new();
     for (idx, (start, line)) in js_line_starts(content).enumerate().skip(body_start) {
         if fences.skip(line) {
             continue;
@@ -110,6 +110,19 @@ mod tests {
         let md = "- [ ] real\n```md\n- [ ] in a fence\n```\n~~~\n- [x] in tildes\n~~~\n> - [ ] quoted\n> > - [x] quoted twice\n- [x] also real\n";
         let lines: Vec<u32> = parse_tasks(md, 0).iter().map(|task| task.line).collect();
         assert_eq!(lines, [1, 10]);
+    }
+
+    #[test]
+    fn a_fence_is_read_by_its_length_and_at_any_depth() {
+        // Code inside a nested list item sits deeper than a top-level fence may.
+        let nested =
+            "- parent\n  - child\n    ```\n    - [ ] sample in code\n    ```\n- [ ] real\n";
+        // A three-backtick line does not close a four-backtick fence.
+        let wrapped = "````md\n```md\n- [ ] example task\n```\n````\n- [ ] real\n";
+        for md in [nested, wrapped] {
+            let texts: Vec<String> = parse_tasks(md, 0).into_iter().map(|t| t.text).collect();
+            assert_eq!(texts, ["real"], "{md:?}");
+        }
     }
 
     #[test]

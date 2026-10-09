@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use super::edits::{refuse_open, refuse_unsaved, writable};
+use super::edits::{refuse_open, refuse_unsaved};
 use super::refs::{capped, read_vault, ref_property, resolve_note, vault_property};
 use super::registry::{arguments, Effect, Session, ToolDef};
 use crate::commands::create::UNSAFE_NAME_CHARS;
@@ -99,7 +99,11 @@ fn move_note(session: &Session, args: Value) -> Result<Value, String> {
         // before the disk is asked anything about it: looking a network path
         // up connects to its host, and any answer about a folder outside the
         // grants is one the caller should not get.
-        let folder = Path::new(root).join(args.to.trim());
+        let to = args.to.trim();
+        if to.is_empty() {
+            return Err("`to` is empty; `.` names the vault's root".to_string());
+        }
+        let folder = Path::new(root).join(to);
         session.grants.ensure_writable(&folder.to_string_lossy())?;
         if !folder.is_dir() {
             return Err(format!(
@@ -131,7 +135,7 @@ fn relocate_note(
     let planned = read_vault(session, args.vault.as_deref(), |vault, root| {
         let found = resolve_note(session, vault, root, &args.note)?;
         let source = PathBuf::from(&found.path);
-        let source_file = writable(session, vault, root, &found.path)?;
+        let source_file = session.grants.ensure_writable(&found.path)?;
         refuse_open(session, &source_file, &found.path)?;
 
         let asked = target_of(&source, root)?;
@@ -353,6 +357,8 @@ mod tests {
         fs::create_dir_all(h.root.join(".obsidian")).unwrap();
         fs::create_dir_all(h.root.join("node_modules")).unwrap();
         for (to, why) in [
+            ("", "is empty"),
+            ("  ", "is empty"),
             ("Missing", "not a folder"),
             ("Index.md", "not a folder"),
             (".obsidian", "does not index"),

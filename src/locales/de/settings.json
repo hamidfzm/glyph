@@ -266,7 +266,7 @@
     },
     "agentTools": {
       "title": "Agenten-Werkzeuge",
-      "description": "Ein KI-Agent, der mit dem MCP-Server von Glyph (glyph mcp) verbunden ist, kann deine geöffneten Arbeitsbereiche immer lesen: Links, Rückverweise, Tags, Überschriften und den Graphen. Werkzeuge, die deine Notizen ändern, bleiben aus, bis du sie hier einzeln einschaltest. Eine Notiz mit ungespeicherten Änderungen in Glyph wird nie überschrieben.",
+      "description": "Ein KI-Agent, der mit dem MCP-Server von Glyph (glyph mcp) verbunden ist, kann deine geöffneten Arbeitsbereiche immer lesen: Links, Rückverweise, Tags, Überschriften und den Graphen. Werkzeuge, die deine Notizen ändern, bleiben aus, bis du sie hier einzeln einschaltest. Eine Änderung an einer Notiz mit ungespeicherten Änderungen in Glyph wird abgelehnt.",
       "tools": {
         "patch_note": {
           "label": "Abschnitt bearbeiten",
@@ -278,7 +278,7 @@
         },
         "update_task": {
           "label": "Aufgaben abhaken",
-          "description": "Eine Aufgabe als erledigt oder offen markieren. Kontrollkästchen in Codeblöcken und Zitaten werden nie angefasst."
+          "description": "Eine Aufgabe als erledigt oder offen markieren. Ein Kontrollkästchen in einem umzäunten Codeblock oder in einem Zitat gilt nicht als Aufgabe."
         },
         "rename_note": {
           "label": "Notizen umbenennen",

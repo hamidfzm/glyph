@@ -34,10 +34,10 @@ export function useWindowRegistrySync(
   const key = paths.join("\0");
   // Keyed like the paths: every keystroke re-renders the tabs, but a buffer
   // turns unsaved once and saved once.
-  const unsaved = tabs
+  const unsavedKey = tabs
     .filter((tab) => tab.kind === "file" && !tab.file.virtual && tab.file.dirty)
-    .map((tab) => tabPathOf(tab));
-  const unsavedKey = unsaved.join("\0");
+    .map((tab) => tabPathOf(tab))
+    .join("\0");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `paths` is derived from `key`, which is the real dependency
   useEffect(() => {
@@ -50,9 +50,9 @@ export function useWindowRegistrySync(
   }, [root, key, initializing]);
 
   // The MCP server reads this to keep off a note someone is editing.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `unsaved` is derived from `unsavedKey`, which is the real dependency
   useEffect(() => {
     if (initializing || isCliExportProcess()) return;
-    invoke("set_window_unsaved", { paths: unsaved }).catch(() => {});
+    const paths = unsavedKey === "" ? [] : unsavedKey.split("\0");
+    invoke("set_window_unsaved", { paths }).catch(() => {});
   }, [unsavedKey, initializing]);
 }

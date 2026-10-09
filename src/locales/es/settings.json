@@ -266,7 +266,7 @@
     },
     "agentTools": {
       "title": "Herramientas para agentes",
-      "description": "Un agente de IA conectado al servidor MCP de Glyph (glyph mcp) siempre puede leer tus espacios de trabajo abiertos: enlaces, enlaces entrantes, etiquetas, encabezados y el grafo. Las herramientas que modifican tus notas permanecen desactivadas hasta que actives cada una aquí. Una nota con cambios sin guardar en Glyph nunca se sobrescribe.",
+      "description": "Un agente de IA conectado al servidor MCP de Glyph (glyph mcp) siempre puede leer tus espacios de trabajo abiertos: enlaces, enlaces entrantes, etiquetas, encabezados y el grafo. Las herramientas que modifican tus notas permanecen desactivadas hasta que actives cada una aquí. Un cambio en una nota con cambios sin guardar en Glyph se rechaza.",
       "tools": {
         "patch_note": {
           "label": "Editar una sección",
@@ -278,7 +278,7 @@
         },
         "update_task": {
           "label": "Marcar tareas",
-          "description": "Marca una tarea como hecha o pendiente. Las casillas en bloques de código y citas nunca se tocan."
+          "description": "Marca una tarea como hecha o pendiente. Una casilla dentro de un bloque de código delimitado o de una cita no se trata como tarea."
         },
         "rename_note": {
           "label": "Renombrar notas",

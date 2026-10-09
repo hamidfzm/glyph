@@ -9,9 +9,9 @@ use std::rc::Rc;
 
 use serde_json::{json, Value};
 
-use super::registry::{dispatch, list, AllowVault, Session, ToolError};
+use super::registry::{dispatch, edits_on, list, AllowVault, Session, ToolError};
 use super::session::{OpenState, OpenTab};
-use crate::data_dir::OpenDocuments;
+use crate::data_dir::{Editing, OpenDocuments};
 use crate::grants::GrantRegistry;
 use crate::vault::test_support::{
     fixture_vault, fixtures_dir, in_vault, link_folder, relative, unique_tmp,
@@ -23,6 +23,8 @@ pub(super) struct Harness {
     grants: GrantRegistry,
     store: VaultStore,
     open: OpenState,
+    /// What the running app's windows hold, as a call about to write is told.
+    app: Box<dyn Fn() -> Editing>,
     exe: PathBuf,
     /// The user's answer when a call asks for a folder; `None` for a client
     /// that cannot ask.
@@ -46,6 +48,7 @@ impl Harness {
             grants,
             store: VaultStore::default(),
             open,
+            app: Box::new(|| Editing::Closed),
             // Nothing by this name exists, so a launch fails instead of
             // starting anything.
             exe: PathBuf::from("glyph-tests-start-nothing"),
@@ -72,17 +75,25 @@ impl Harness {
     /// The app is running with these notes open, and these among them unsaved.
     pub(super) fn editing(&mut self, open: &[&str], unsaved: &[&str]) {
         let paths = |notes: &[&str]| notes.iter().map(|note| self.path(note)).collect();
-        self.open.documents = Some(OpenDocuments {
-            open: paths(open),
-            unsaved: paths(unsaved),
-        });
+        self.editing_paths(paths(open), paths(unsaved));
+    }
+
+    /// [`Self::editing`] for files named in full, wherever they are.
+    fn editing_paths(&mut self, open: Vec<String>, unsaved: Vec<String>) {
+        let documents = OpenDocuments { open, unsaved };
+        self.app = Box::new(move || Editing::Open(documents.clone()));
         self.open.app_running = true;
     }
 
     /// The app is running and has not said what it has open.
     pub(super) fn running_unreported(&mut self) {
-        self.open.documents = None;
+        self.app = Box::new(|| Editing::Unknown);
         self.open.app_running = true;
+    }
+
+    /// The user turned Auto Reload off in the settings.
+    pub(super) fn auto_reload_off(&mut self) {
+        self.open.auto_reload_off = true;
     }
 
     /// Grant a second folder, as a session serving several vaults holds.
@@ -103,6 +114,7 @@ impl Harness {
             grants: &self.grants,
             vaults: &self.store,
             open: &self.open,
+            editing: &*self.app,
             exe: &self.exe,
             allow_vault: self.allow.as_deref(),
         }
@@ -767,7 +779,7 @@ fn a_write_tool_is_marked_as_changing_things() {
         assert_eq!(hints["readOnlyHint"], false, "{}", tool.name);
         assert_eq!(hints["destructiveHint"], true, "{}", tool.name);
     }
-    assert_eq!(super::agent_write_tools(), WRITE_TOOLS);
+    assert_eq!(edits_on(&h.open), WRITE_TOOLS);
     // `AgentToolsSection.test.tsx` holds the settings' strings to the same
     // file, so a tool cannot be added here without its toggle being named.
     assert_eq!(json!(WRITE_TOOLS), fixture("mcp-write-tools.json"));
@@ -872,7 +884,8 @@ fn a_toggle_and_an_unsaved_note_reach_the_server_through_the_apps_files() {
     );
     assert!(offered(&messages).is_empty());
 
-    let settings = json!({ "settings": { "ai": { "agentWriteTools": ["set_property"] } } });
+    let switches = json!({ "set_property": true, "patch_note": false });
+    let settings = json!({ "settings": { "ai": { "agentWriteTools": switches } } });
     fs::write(stores.path().join("settings.json"), settings.to_string()).unwrap();
     // The app is running, and holds unsaved edits to the note.
     let app = hold_instance_lock(stores.path()).unwrap();
@@ -925,6 +938,57 @@ fn a_toggle_and_an_unsaved_note_reach_the_server_through_the_apps_files() {
         .contains("status: draft"));
     drop(app);
     fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_folder_allowed_during_the_call_is_still_checked_for_unsaved_notes() {
+    let mut h = Harness::writing("mcp_write_allowed_late");
+    let (folder, shown) = other_folder("mcp_write_allowed_late_folder");
+    let note = folder.join("Elsewhere.md");
+    let before = fs::read_to_string(&note).unwrap();
+    // Another window holds the folder's note unsaved. No grant covers that
+    // path when the call begins; the user's answer adds one partway through.
+    let spelled = note.to_string_lossy().to_string();
+    h.editing_paths(vec![spelled.clone()], vec![spelled]);
+    let asked = answering(&mut h, Ok(()));
+
+    let args = json!({ "ref": "Elsewhere", "key": "status", "value": "x", "vault": shown });
+    let refusal = h.refused("set_property", args);
+    assert_eq!(asked.borrow().len(), 1);
+    assert!(refusal.starts_with("unsaved changes"), "{refusal}");
+    assert_eq!(fs::read_to_string(&note).unwrap(), before);
+    fs::remove_dir_all(&folder).unwrap();
+}
+
+#[test]
+fn the_folder_prompt_says_what_the_write_tools_could_do_there() {
+    let (folder, _) = other_folder("mcp_prompt_writes");
+    let asked_with = |switches: Value| -> String {
+        let stores = tempfile::TempDir::new().unwrap();
+        let settings = json!({ "settings": { "ai": { "agentWriteTools": switches } } });
+        fs::write(stores.path().join("settings.json"), settings.to_string()).unwrap();
+        let decline =
+            json!({ "jsonrpc": "2.0", "id": "glyph-ask-1", "result": { "action": "decline" } });
+        let lines = [
+            init_able_to_ask(),
+            tool_call(2, "list_tags", json!({ "vault": folder.to_string_lossy() })),
+            decline.to_string(),
+        ];
+        let messages = serve_in(stores.path(), Vec::new(), &lines);
+        let question = questions(&messages)[0]["params"]["message"]
+            .as_str()
+            .unwrap();
+        question.to_string()
+    };
+
+    let reading = asked_with(json!({}));
+    assert!(!reading.contains("change notes"), "{reading}");
+    let writing = asked_with(json!({ "move_note": true, "set_property": true }));
+    assert!(
+        writing.contains("change notes there with the tools turned on in Glyph's settings (set_property, move_note)"),
+        "{writing}"
+    );
+    fs::remove_dir_all(&folder).unwrap();
 }
 
 // ------------------------------------------------------ folders on request

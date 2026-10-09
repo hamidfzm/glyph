@@ -1,20 +1,21 @@
 //! What every tool that changes a note shares: the checks before a write, and
 //! the write itself.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::{json, Value};
 
 use super::refs::{read_raw, read_vault, resolve_note, NoteRef, MAX_NOTE_MB};
 use super::registry::Session;
 use crate::commands::walk::SCAN_MAX_FILE_BYTES;
-use crate::data_dir::OpenDocuments;
-use crate::vault::{strip_bom, write_unchanged, Vault};
+use crate::data_dir::{Editing, OpenDocuments};
+use crate::vault::{strip_bom, write_unchanged};
 
 /// Opens the refusal for a note holding unsaved edits, so a caller can tell
 /// it from every other refusal.
 pub(super) const UNSAVED: &str = "unsaved changes";
-/// Opens the refusal for a note open in a window, which a move would strand.
+/// Opens the refusal for a note a window has open and would save its own
+/// copy of: one being moved, or any at all while Auto Reload is off.
 pub(super) const OPEN: &str = "open in Glyph";
 
 /// What an edit worked out against a note's text.
@@ -40,7 +41,7 @@ pub(super) fn edit_note(
         if !crate::is_markdown_file(Path::new(path)) {
             return Err(format!("{path} is not a markdown note"));
         }
-        let target = writable(session, vault, root, path)?;
+        let target = session.grants.ensure_writable(path)?;
         refuse_unsaved(session, &target, path)?;
         let raw = read_raw(session, path)?;
         let text = strip_bom(&raw);
@@ -64,37 +65,21 @@ pub(super) fn edit_note(
     })
 }
 
-/// The file a write to `path` lands on: inside the grants, and inside the
-/// vault being read, which the grants alone do not ensure once a session
-/// serves several vaults.
-pub(super) fn writable(
-    session: &Session,
-    vault: &Vault,
-    root: &str,
-    path: &str,
-) -> Result<PathBuf, String> {
-    let canonical = session.grants.ensure_writable(path)?;
-    if vault.inside_root(&canonical).is_none() {
-        return Err(format!("{path} is not inside the vault {root}"));
-    }
-    Ok(canonical)
-}
-
-/// What the running app has open; `None` while it is closed, when nothing is.
-fn documents<'a>(session: &'a Session) -> Result<Option<&'a OpenDocuments>, String> {
-    if !session.open.app_running {
-        return Ok(None);
-    }
-    match &session.open.documents {
-        Some(documents) => Ok(Some(documents)),
-        None => Err(
-            "Glyph is running but has not said which notes are being edited, so nothing was written. Call again in a moment."
+/// What the running app's windows hold, asked now; `None` while no app runs.
+fn documents(session: &Session) -> Result<Option<OpenDocuments>, String> {
+    match (session.editing)() {
+        Editing::Closed => Ok(None),
+        Editing::Open(documents) => Ok(Some(documents)),
+        Editing::Unknown => Err(
+            "Glyph is running, or may be, and has not said which notes are being edited, so nothing was written. A Glyph older than this server never says, and neither does one whose data folder cannot hold a lock; closing Glyph lets the call through."
                 .to_string(),
         ),
     }
 }
 
-/// Whether `target` is one of `paths`, however the app spells it.
+/// Whether `target` is one of `paths`, however the app spells it. Resolved
+/// through the grants as they stand now, a folder allowed during this call
+/// included.
 fn lists(session: &Session, paths: &[String], target: &Path) -> bool {
     paths.iter().any(|path| {
         let listed = session.grants.ensure_readable(path);
@@ -102,14 +87,23 @@ fn lists(session: &Session, paths: &[String], target: &Path) -> bool {
     })
 }
 
-/// Refuse to write over a note holding unsaved edits in a running window. The
-/// app keeps its buffer over a change on disk, so the write would be undone
-/// by the next save without anyone being told.
+/// Refuse to write a note the running app would not take the change from.
+/// One holding unsaved edits: the app keeps its buffer over a change on disk,
+/// so the next save would undo the write without anyone being told. And, with
+/// Auto Reload off, any note open in a window, which goes on showing the old
+/// text and saves that back.
 pub(super) fn refuse_unsaved(session: &Session, target: &Path, shown: &str) -> Result<(), String> {
-    let editing = documents(session)?.is_some_and(|open| lists(session, &open.unsaved, target));
-    if editing {
+    let Some(documents) = documents(session)? else {
+        return Ok(());
+    };
+    if lists(session, &documents.unsaved, target) {
         return Err(format!(
             "{UNSAVED}: {shown} is being edited in Glyph and holds changes that are not saved. Nothing was written. Call again once the user has saved or discarded them."
+        ));
+    }
+    if session.open.auto_reload_off && lists(session, &documents.open, target) {
+        return Err(format!(
+            "{OPEN}: {shown} is open in a Glyph window, and Auto Reload is turned off there, so the window would keep its old text and save it over this change. Nothing was written. Call again once the user has closed its tab or turned Auto Reload on."
         ));
     }
     Ok(())
@@ -119,10 +113,10 @@ pub(super) fn refuse_unsaved(session: &Session, target: &Path, shown: &str) -> R
 /// app does not follow a move made outside it: the tab would keep the old
 /// path, and its next save would bring the old file back.
 pub(super) fn refuse_open(session: &Session, target: &Path, shown: &str) -> Result<(), String> {
-    let open = documents(session)?.is_some_and(|open| {
-        lists(session, &open.open, target) || lists(session, &open.unsaved, target)
-    });
-    if open {
+    let Some(documents) = documents(session)? else {
+        return Ok(());
+    };
+    if lists(session, &documents.open, target) || lists(session, &documents.unsaved, target) {
         return Err(format!(
             "{OPEN}: {shown} is open in a Glyph window, which would go on showing and saving it under its old path. Nothing was moved. Call again once the user has closed its tab, or let the user rename it in Glyph."
         ));
@@ -182,6 +176,32 @@ mod tests {
         let refusal = h.refused("rename_note", json!({ "ref": NOTE, "to": "Trip" }));
         assert!(refusal.contains("has not said"), "{refusal}");
         assert_eq!(h.read(NOTE), before);
+    }
+
+    #[test]
+    fn with_auto_reload_off_a_note_open_in_a_window_is_not_written() {
+        // The window would keep showing the old text and save it back over
+        // the change, saved tab or not.
+        let mut h = Harness::writing("edits_no_reload");
+        let before = h.read(NOTE);
+        h.editing(&[NOTE], &[]);
+        h.auto_reload_off();
+        let refusal = h.refused("patch_note", append());
+        assert!(refusal.starts_with(OPEN), "{refusal}");
+        assert!(refusal.contains("Auto Reload"), "{refusal}");
+        assert_eq!(h.read(NOTE), before);
+        // So is a note whose links a rename would rewrite.
+        h.editing(&["Index.md"], &[]);
+        let refusal = h.refused("rename_note", json!({ "ref": NOTE, "to": "Trip" }));
+        assert!(
+            refusal.starts_with(OPEN) && refusal.contains("Index.md"),
+            "{refusal}"
+        );
+        assert!(h.root.join("Notes").join("Travel.md").is_file());
+
+        // A note no window holds is written all the same.
+        let closed = json!({ "ref": "Aliased", "key": "status", "value": "x" });
+        assert_eq!(h.ok("set_property", closed)["changed"], true);
     }
 
     #[test]

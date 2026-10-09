@@ -13,7 +13,7 @@ describe("createAIProvider", () => {
     model: "test-model",
     ttsVoice: "",
     ttsSpeed: 1.0,
-    agentWriteTools: [],
+    agentWriteTools: {},
   };
 
   it("returns null for none provider", () => {

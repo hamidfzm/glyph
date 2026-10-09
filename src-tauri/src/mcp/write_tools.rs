@@ -10,8 +10,14 @@ use super::refs::{ref_property, vault_property};
 use super::registry::{arguments, Effect, Session, ToolDef};
 use crate::vault::{
     js_lines, line_ending, parse_tasks, section_spans, set_property as set_in_frontmatter,
-    split_frontmatter, task_text, NewValue, Scalar, SectionSpan, Task,
+    split_frontmatter, task_text, uncertain_line, NewValue, Scalar, SectionSpan, Task,
 };
+
+/// Text as a summary quotes it: a result past the size cap is reported as a
+/// failure, and by then the note is written.
+fn short(text: &str) -> String {
+    text.chars().take(100).collect()
+}
 
 pub(super) const PATCH_NOTE: ToolDef = ToolDef {
     name: "patch_note",
@@ -68,17 +74,24 @@ fn patch_note(session: &Session, args: Value) -> Result<Value, String> {
         )?;
         let (_, body_start) = split_frontmatter(text);
         let mut spans = section_spans(text, body_start, wanted);
-        match spans.len() {
-            0 => Err(missing_section(text, body_start, wanted, &found.path)),
-            1 => Ok(patch(text, &spans.remove(0), &args.content, args.mode)),
+        let span = match spans.len() {
+            0 => return Err(missing_section(text, body_start, wanted, &found.path)),
+            1 => spans.remove(0),
             several => {
                 let lines: Vec<u32> = spans.iter().map(|span| span.heading.line).collect();
-                Err(format!(
+                return Err(format!(
                     "{several} headings in {} match {wanted:?}, on lines {lines:?}; patch_note needs a name only one of them has",
                     found.path
-                ))
+                ));
             }
+        };
+        if let Some(line) = uncertain_line(text, body_start, &span) {
+            return Err(format!(
+                "where the section {wanted:?} of {} begins and ends is not certain: line {line} is a heading to only one of the two ways the note is read (underlined or indented, or beside code fences that nest). Nothing was written.",
+                found.path
+            ));
         }
+        Ok(patch(text, &span, &args.content, args.mode))
     })
 }
 
@@ -103,7 +116,11 @@ fn patch(text: &str, span: &SectionSpan, content: &str, mode: Mode) -> Outcome {
     }
     edited.push_str(&text[end..]);
 
-    let heading = format!("{:?} (line {})", span.heading.text, span.heading.line);
+    let heading = format!(
+        "{:?} (line {})",
+        short(&span.heading.text),
+        span.heading.line
+    );
     if edited == text {
         return Outcome {
             text: None,
@@ -166,13 +183,14 @@ fn set_property(session: &Session, args: Value) -> Result<Value, String> {
     if key.trim().is_empty() {
         return Err("key is empty".to_string());
     }
+    let named = short(key);
     let value = new_value(&args.value)?;
     edit_note(session, args.vault.as_deref(), &args.note, |text, found| {
         let path = &found.path;
         let Some(edit) = set_in_frontmatter(text, key, value.as_ref())? else {
             let summary = match value {
-                Some(_) => format!("{key:?} in {path} already holds that value; nothing changed"),
-                None => format!("{path} has no property {key:?}; nothing changed"),
+                Some(_) => format!("{named:?} in {path} already holds that value; nothing changed"),
+                None => format!("{path} has no property {named:?}; nothing changed"),
             };
             return Ok(Outcome {
                 text: None,
@@ -180,9 +198,9 @@ fn set_property(session: &Session, args: Value) -> Result<Value, String> {
             });
         };
         let summary = match (&value, edit.existed) {
-            (Some(_), true) => format!("Changed the property {key:?}"),
-            (Some(_), false) => format!("Added the property {key:?}"),
-            (None, _) => format!("Removed the property {key:?}"),
+            (Some(_), true) => format!("Changed the property {named:?}"),
+            (Some(_), false) => format!("Added the property {named:?}"),
+            (None, _) => format!("Removed the property {named:?}"),
         };
         Ok(Outcome {
             text: Some(edit.content),
@@ -216,7 +234,7 @@ fn new_value(value: &Value) -> Result<Option<NewValue>, String> {
 pub(super) const UPDATE_TASK: ToolDef = ToolDef {
     name: "update_task",
     title: "Check or uncheck a task",
-    description: "Mark one task list item done or to do, changing only the character between its brackets. A task is what a click on a checkbox in Glyph toggles: a `-`, `*` or `+` item opening with `[ ]`, `[x]` or `[X]`. Lines that only look like one, in fenced code or in a quote, never match. The task is named by its text; when several tasks share it, the refusal lists their lines and `line` picks one. Refused while the note holds unsaved changes in Glyph.",
+    description: "Mark one task list item done or to do, changing only the character between its brackets. A task is what a click on a checkbox in Glyph toggles: a `-`, `*` or `+` item opening with `[ ]`, `[x]` or `[X]`. A line that only looks like one, inside fenced code or a quote, is not a task. The task is named by its text; when several tasks share it, the refusal lists their lines and `line` picks one. Refused while the note holds unsaved changes in Glyph.",
     input_schema: || {
         json!({
             "type": "object",
@@ -301,7 +319,8 @@ fn update_task(session: &Session, args: Value) -> Result<Value, String> {
             text: Some(edited),
             summary: format!(
                 "Marked the task on line {} {state}: {:?}",
-                task.line, task.text
+                task.line,
+                short(&task.text)
             ),
         })
     })
@@ -309,18 +328,19 @@ fn update_task(session: &Session, args: Value) -> Result<Value, String> {
 
 /// No task reads `wanted`, so say which ones exist for the model to pick from.
 fn no_such_task(tasks: &[Task], wanted: &str, path: &str) -> String {
+    const LISTED: usize = 50;
     let known: Vec<String> = tasks
         .iter()
-        .take(50)
-        .map(|task| {
-            format!(
-                "{}: {}",
-                task.line,
-                task.text.chars().take(100).collect::<String>()
-            )
-        })
+        .take(LISTED)
+        .map(|task| format!("{}: {}", task.line, short(&task.text)))
         .collect();
-    format!("no task in {path} reads {wanted:?}; its tasks, by line, are: {known:?}")
+    // A list cut short says so, or it would pass for every task there is.
+    let which = if tasks.len() > LISTED {
+        format!("the first {LISTED} of its {} tasks", tasks.len())
+    } else {
+        "its tasks".to_string()
+    };
+    format!("no task in {path} reads {wanted:?}; {which}, by line, are: {known:?}")
 }
 
 #[cfg(test)]
@@ -427,6 +447,46 @@ mod tests {
             h.read(NOTE),
             "# Mon\n## Tasks\none\n# Tue\nx\n## Tasks\ntwo\n"
         );
+    }
+
+    #[test]
+    fn patch_note_refuses_a_section_whose_bounds_the_rendered_note_does_not_share() {
+        // Each holds a heading the slicer and CommonMark read differently, so
+        // a replace would take out, or stop short of, what the note shows.
+        for content in [
+            "# Intro\ntext\n\nNext Chapter\n============\nchapter body\n\n# Last\nlast\n",
+            "# Intro\ntext\n # Second\nbody\n# Last\n",
+            "# Intro\nintro\n\n````md\n```sh\n# install deps\nnpm i\n```\n````\n\ntail\n# Last\n",
+            "# Intro\n````\n``` not a close\n````\n# Next\nbody\n# Last\n",
+        ] {
+            let h = vault("patch_doubt", content);
+            for mode in ["replace", "append", "prepend"] {
+                let args =
+                    json!({ "ref": NOTE, "section": "Intro", "content": "NEW", "mode": mode });
+                let refusal = h.refused("patch_note", args);
+                assert!(refusal.contains("is not certain"), "{mode}: {refusal}");
+            }
+            assert_eq!(h.read(NOTE), content);
+        }
+    }
+
+    #[test]
+    fn a_summary_quotes_long_text_short() {
+        // A result past the size cap would be reported as a failure after
+        // the note was written, and retried.
+        let long = "x".repeat(5_000);
+        let h = vault("summary_short", &format!("# {long}\nbody\n- [ ] {long}\n"));
+        let results = [
+            patch(&h, &long, "more", "append"),
+            // A key YAML still takes as one, well past what a summary quotes.
+            set(&h, &long[..300], json!("value")),
+            task(&h, &long, "done"),
+        ];
+        for result in results {
+            assert_eq!(result["changed"], true);
+            let summary = result["summary"].as_str().unwrap();
+            assert!(summary.len() < 300, "{}", summary.len());
+        }
     }
 
     // ---------------------------------------------------------- set_property
@@ -555,6 +615,26 @@ mod tests {
             assert!(!refusal.contains("6: quoted"), "{refusal}");
         }
         assert_eq!(h.read(NOTE), TASKS);
+    }
+
+    #[test]
+    fn a_refusal_listing_tasks_says_when_the_list_is_cut() {
+        let many: String = (1..=60).map(|n| format!("- [ ] task {n}\n")).collect();
+        let h = vault("task_listing", &many);
+        let args = json!({ "ref": NOTE, "task": "absent", "state": "done" });
+        let refusal = h.refused("update_task", args.clone());
+        assert!(
+            refusal.contains("the first 50 of its 60 tasks"),
+            "{refusal}"
+        );
+        assert!(!refusal.contains("task 51"), "{refusal}");
+
+        h.write(NOTE, "- [ ] only\n");
+        let refusal = h.refused("update_task", args);
+        assert!(
+            refusal.contains("; its tasks, by line, are: [\"1: only\"]"),
+            "{refusal}"
+        );
     }
 
     #[test]

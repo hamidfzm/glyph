@@ -280,32 +280,50 @@ the way a renderer-supplied path is.
   `open_in_glyph` hands the app a path the server can already read, the way a
   file manager would. Five tools change notes: `patch_note`, `set_property`,
   `update_task`, `rename_note` and `move_note`. Every other tool is read-only.
-- **Write tools are off until turned on.** Each of the five has its own toggle
-  in Settings, stored as a list of names in `settings.json`
-  (`ai.agentWriteTools`) that the server reads again before every listing and
-  every call. A tool that is off is left out of `tools/list`, and the check
-  that matters is in dispatch: a call to a name the client was never offered
-  is refused the same way. Turning one on turns on that one alone.
+- **Write tools are off until turned on.** Each of the five has its own switch
+  in Settings, one boolean per tool under `ai.agentWriteTools` in
+  `settings.json`, so two windows changing different tools merge instead of
+  one overwriting the other. The server reads them again before every listing
+  and every call. A tool that is off is left out of `tools/list`, and the
+  check that matters is in dispatch: a call to a name the client was never
+  offered is refused the same way. The folder prompt names the write tools
+  that are on, since allowing a folder lets them change notes in it.
 - **A write stays inside the vault and inside the edit.** The target passes
-  `ensure_writable` and must sit in the vault the call reads, which the grants
-  alone do not ensure once a session serves several. The edit is worked out
-  from the file as it is on disk, and written only if the file still holds
-  exactly that; otherwise nothing is written and the caller is told to call
-  again. `set_property` parses its result again and refuses it if any other
-  property would read differently. A result past the 5 MB the index reads is
-  refused. A rename or a move refuses a destination that exists, one outside
-  the vault, and one the index would not read, and a link rewrite that stops
-  partway is reported with the note it stopped at, never as a success.
+  `ensure_writable`, and a rename or a move checks its destination against the
+  grants before it asks the disk anything about it, then against the vault the
+  call reads, which the grants alone do not ensure once a session serves
+  several. The edit is worked out from the file as it is on disk, and written
+  only if the file still holds exactly that; otherwise nothing is written and
+  the caller is told to call again. A result past the 5 MB the index reads is
+  refused.
+- **An edit the parsers cannot place is refused, not guessed.** Sections are
+  cut by the renderer's embed slicer, which follows unindented `#` headings
+  and matches fences by character. `patch_note` refuses a section in which
+  CommonMark reads a heading the slicer does not, or the reverse (an
+  underlined or indented heading, a fence closed by length), because its
+  bounds would not be the rendered note's. `set_property` refuses a block
+  holding a bare carriage return or a NUL, where the parser's line count and
+  the slicer's part ways, checks that the key sits on the line the parser
+  named, and parses its result again: every other property has to read as it
+  did, and everything from the closing fence on has to be untouched.
+  `update_task` reads fences by length and at any depth. A rename or a move
+  refuses a destination that exists and one the index would not read, and a
+  link rewrite that stops partway is reported with the note it stopped at,
+  never as a success.
 - **Notes being edited.** The running app publishes, in `open-documents.json`
   in its data directory, the files every window has open and which of them
-  hold unsaved edits, from each window's own report. The server reads it only
-  while the instance lock is held, and keeps only the paths its grants admit.
-  A write to a note with unsaved edits is refused with a message that opens
-  `unsaved changes`; a rename or a move is refused for a note open in any
-  window, saved or not, because the app would go on saving it under its old
-  path, and for a move that would rewrite links in a note with unsaved edits.
-  A running app whose list is missing or unreadable is treated as not having
-  said, and every write is refused until it has.
+  hold unsaved edits, from each window's own report. The server reads it at
+  the moment a call is about to write, not when the call began, and from
+  whichever store directory holds the instance lock; it compares paths
+  through the grants as they stand then, a folder allowed during the call
+  included. A write to a note with unsaved edits is refused with a message
+  that opens `unsaved changes`. A rename or a move is refused for a note open
+  in any window, saved or not, because the app would go on saving it under
+  its old path, and for a move that would rewrite links in a note with
+  unsaved edits. With Auto Reload off, a write to any note a window has open
+  is refused, since the window would save its old text back. A running app
+  whose list is missing or unreadable, and a lock that cannot be asked at
+  all, are treated as not knowing: every write is refused.
 - **Stdout** carries JSON-RPC messages and nothing else. The processes the
   server starts get null or captured stdio, never its own.
 - **Bounds.** A message over 1 MiB is refused; a listing stops at 200 rows and
@@ -331,15 +349,26 @@ the way a renderer-supplied path is.
   vaults; there is no undo beyond the vault's own version control.
 - **The write-tool toggles are renderer-writable.** They live in
   `settings.json`, so a compromised renderer can turn a write tool on for a
-  connected agent. That gives the agent nothing the renderer lacks: the
-  renderer already writes every file under those roots through `write_file`.
-  Accepted so the toggles sit with the other settings; it only matters after
-  the renderer is already compromised.
+  connected agent, against the rule that nothing gating backend behaviour is
+  read back from that file. For vaults the app itself has open this gives the
+  agent nothing the renderer lacks, since the renderer already writes every
+  file under them through `write_file`. It does reach further where the
+  server serves what the renderer holds no grant for: a `--vault` folder, or
+  one the user allowed in the client. The agent still has to make the call;
+  the renderer cannot make it for the agent, only plant text for the model to
+  read. Accepted so the toggles sit with the other settings.
 - **The unsaved-changes guard is a report, not a lock.** An edit typed in the
   instant before a write is not yet in the published list, and a compromised
-  renderer can leave a path out of it. The app keeps an unsaved buffer over a
-  change on disk, so in that window it is the agent's write that the next
-  save replaces, not the user's edit.
+  renderer can leave a path out of it. In edit or split mode the app keeps an
+  unsaved buffer over a change on disk, so in that window it is the agent's
+  write that the next save replaces, not the user's edit. Two cases it does
+  not see at all: a second Glyph process that could not take the instance
+  lock (a debug build, or `open -n` on macOS) publishes nothing, and a write
+  landing within the second and a half after the app saved the same file is
+  taken by the app for its own save and not reloaded.
+- **A replaced destination.** A rename or a move checks that nothing is at
+  the destination and renames afterwards, as a rename made in the app does. A
+  file created there in between is replaced.
 
 - **Persisted-session grant staging.** The settings store (`settings.json`)
   is renderer-writable, and the backend seeds grants from it at the next

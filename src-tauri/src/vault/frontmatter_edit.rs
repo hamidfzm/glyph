@@ -63,8 +63,17 @@ pub(crate) fn set_property(
         };
         let entry = render(&key_text(key), value, "", None, None).join(eol);
         let edited = format!("---{eol}{entry}{eol}---{eol}{content}");
-        return verified(edited, &[], key, Some(value), false).map(Some);
+        return verified(edited, &[], content, key, Some(value), false).map(Some);
     };
+    // The parser breaks a line at a lone carriage return and stops reading at
+    // a NUL, and the block is sliced by line feeds: past either, an entry is
+    // not on the line the parser says it is.
+    if inner.contains(['\r', '\0']) {
+        return Err(
+            "the frontmatter holds a bare carriage return or a NUL character, so its lines cannot be told apart safely"
+                .to_string(),
+        );
+    }
     let entries = sited_entries(&inner).ok_or(
         "the frontmatter is not YAML Glyph reads: malformed, not a mapping, or a key appears twice",
     )?;
@@ -99,15 +108,24 @@ pub(crate) fn set_property(
         }
         (Some(at), value) => {
             let entry = &entries[at];
+            if value.is_some_and(|value| already_holds(entry, value)) {
+                return Ok(None);
+            }
+            let unclear = || format!("{key} is written in a way that cannot be edited");
+            let colon = key_colon(entry, line_at(entry.line)).ok_or_else(unclear)?;
             let next = entries.get(at + 1).map_or(closing_fence, |next| next.line);
-            let last = last_line(entry, next, &line_at);
+            let last = last_line(entry, next, colon, &line_at).ok_or_else(unclear)?;
             let lines = match value {
                 None => Vec::new(),
-                Some(value) => rewritten(entry, value, &line_at)?,
+                Some(value) => rewritten(entry, value, colon, &line_at),
             };
             (entry.line..last + 1, lines)
         }
     };
+    let inside_block = replaced.start <= replaced.end && replaced.end <= closing_fence;
+    if !inside_block {
+        return Err(format!("{key} is written in a way that cannot be edited"));
+    }
 
     let mut edited = String::with_capacity(content.len() + 64);
     edited.push_str(&content[..start_of(replaced.start)]);
@@ -119,14 +137,39 @@ pub(crate) fn set_property(
     if edited == content {
         return Ok(None);
     }
-    verified(edited, &entries, key, value, found.is_some()).map(Some)
+    let tail = &content[start_of(closing_fence)..];
+    verified(edited, &entries, tail, key, value, found.is_some()).map(Some)
 }
 
-/// `edited`, once parsing it again shows `key` holding `value` and every other
-/// entry of `before` unchanged and in its place.
+/// Whether `entry` already reads as `value`, to a reader of this note and to
+/// any other YAML reader, for whom `5` and `"5"` are not one value.
+fn already_holds(entry: &Entry, value: &NewValue) -> bool {
+    let reads =
+        |now: &Value, wanted: &Scalar| matches!(now, Value::Scalar(text) if text == wanted.text());
+    match (value, &entry.value) {
+        (NewValue::Scalar(wanted), Value::Scalar(text)) => {
+            let plain = entry.value_style == Some(TScalarStyle::Plain);
+            let typed_now = plain && (text.is_empty() || reads_as_another_type(text));
+            text == wanted.text() && typed_now == matches!(wanted, Scalar::Bare(_))
+        }
+        (NewValue::List(wanted), Value::Sequence(now)) => {
+            now.len() == wanted.len()
+                && now
+                    .iter()
+                    .zip(wanted)
+                    .all(|(now, wanted)| reads(now, wanted))
+        }
+        _ => false,
+    }
+}
+
+/// `edited`, once parsing it again shows `key` holding `value`, every other
+/// entry of `before` unchanged and in its place, and everything from the
+/// closing fence on, `tail`, untouched.
 fn verified(
     edited: String,
     before: &[Entry],
+    tail: &str,
     key: &str,
     value: Option<&NewValue>,
     existed: bool,
@@ -157,7 +200,7 @@ fn verified(
         };
         after.len() == expected.len() && after.iter().zip(&expected).all(same)
     });
-    if !kept {
+    if !kept || !edited.ends_with(tail) {
         return Err(format!(
             "{key} cannot be changed without disturbing the rest of the frontmatter"
         ));
@@ -172,48 +215,86 @@ fn indent_of(line: &str) -> &str {
     &line[..line.len() - line.trim_start_matches([' ', '\t']).len()]
 }
 
-/// Whether `entry` holds a quoted scalar that does not close on the line it
-/// opens on, so the lines after it are still inside the quotes.
-fn wraps_in_quotes<'a>(entry: &Entry, line_at: &impl Fn(usize) -> &'a str) -> bool {
-    let quoted = matches!(
-        entry.value_style,
-        Some(TScalarStyle::SingleQuoted | TScalarStyle::DoubleQuoted)
-    );
-    if !quoted {
-        return false;
-    }
-    let line = line_at(entry.value_line);
-    let opens_at = match after_colon(line, entry.key_style) {
-        Some(colon) if entry.value_line == entry.line => colon,
-        _ => 0,
-    };
-    quoted_end(line[opens_at..].trim_start_matches([' ', '\t'])).is_none()
+/// The byte after the colon ending `entry`'s key on `line`, once the line is
+/// seen to hold that key: the parser's line numbers are only trusted as far
+/// as the text agrees with them.
+fn key_colon(entry: &Entry, line: &str) -> Option<usize> {
+    let colon = after_colon(line, entry.key_style)?;
+    let written = line[indent_of(line).len()..colon - 1].trim_end_matches([' ', '\t']);
+    let plain = entry.key_style == TScalarStyle::Plain;
+    (!plain || written == entry.key).then_some(colon)
 }
 
-/// The last line of `entry`, which ends before line `next`: the comments and
-/// blank lines after a value are not part of it.
-fn last_line<'a>(entry: &Entry, next: usize, line_at: &impl Fn(usize) -> &'a str) -> usize {
+/// Where the quoted scalar `entry` holds opens: its line, and the byte of the
+/// quote in it. `None` for any other value.
+fn quote_start<'a>(
+    entry: &Entry,
+    colon: usize,
+    line_at: &impl Fn(usize) -> &'a str,
+) -> Option<(usize, usize)> {
+    let quote = match entry.value_style? {
+        TScalarStyle::SingleQuoted => '\'',
+        TScalarStyle::DoubleQuoted => '"',
+        _ => return None,
+    };
+    // A tag or an anchor may stand between the colon and the quote.
+    let from = if entry.value_line == entry.line {
+        colon
+    } else {
+        0
+    };
+    let at = line_at(entry.value_line)[from..].find(quote)?;
+    Some((entry.value_line, from + at))
+}
+
+/// The last line of `entry`, which ends before line `next`. Blank lines and
+/// comments after a value are not part of it, and what is a comment depends
+/// on the value. `None` when its end cannot be found.
+fn last_line<'a>(
+    entry: &Entry,
+    next: usize,
+    colon: usize,
+    line_at: &impl Fn(usize) -> &'a str,
+) -> Option<usize> {
+    let after = entry.line + 1..next;
+    let filled = |line: &usize| !line_at(*line).trim().is_empty();
+    if let Some((opens, at)) = quote_start(entry, colon, line_at) {
+        // Inside quotes a `#` line is text: the value ends where they close.
+        let lines: Vec<&str> = (opens..next).map(line_at).collect();
+        let text = lines.join("\n");
+        let end = at + quoted_end(text.get(at..)?)?;
+        return Some(opens + text[..end].matches('\n').count());
+    }
     let block_scalar = matches!(
         entry.value_style,
         Some(TScalarStyle::Literal | TScalarStyle::Folded)
     );
-    let depth = indent_of(line_at(entry.line)).len();
-    let wraps = wraps_in_quotes(entry, line_at);
-    let trails = |line: &str| {
-        let text = line.trim_start_matches([' ', '\t']);
-        if text.is_empty() {
-            return true;
+    if block_scalar {
+        // A block scalar holds every line indented as deep as its first. A
+        // shallower `#` line after it is a comment. A header on a later line,
+        // or one that sets the indent itself, is left alone.
+        let header = &line_at(entry.line)[colon..];
+        let depth = indent_of(line_at(entry.line)).len();
+        let mut tokens = header.split_whitespace();
+        let indicator = tokens.find(|token| token.starts_with(['|', '>']))?;
+        if indicator.contains(|c: char| c.is_ascii_digit()) {
+            return None;
         }
-        // Indented under a block scalar, or inside quotes still open, a `#`
-        // line is the value's own text.
-        let scalar_text = wraps || (block_scalar && indent_of(line).len() > depth);
-        text.starts_with('#') && !scalar_text
-    };
-    let mut last = next - 1;
-    while last > entry.line && trails(line_at(last)) {
-        last -= 1;
+        let indent = |line: usize| indent_of(line_at(line)).len();
+        let content = after
+            .clone()
+            .find(filled)
+            .map(indent)
+            .filter(|at| *at > depth);
+        let last = content.and_then(|content| {
+            after
+                .rev()
+                .find(|line| filled(line) && indent(*line) >= content)
+        });
+        return Some(last.unwrap_or(entry.line));
     }
-    last
+    let said = |line: &usize| filled(line) && !line_at(*line).trim_start().starts_with('#');
+    Some(after.rev().find(said).unwrap_or(entry.line))
 }
 
 /// The lines that replace `entry` when it takes `value`: the key as written,
@@ -221,20 +302,33 @@ fn last_line<'a>(entry: &Entry, next: usize, line_at: &impl Fn(usize) -> &'a str
 fn rewritten<'a>(
     entry: &Entry,
     value: &NewValue,
+    colon: usize,
     line_at: &impl Fn(usize) -> &'a str,
-) -> Result<Vec<String>, String> {
+) -> Vec<String> {
     let line = line_at(entry.line);
-    let colon = after_colon(line, entry.key_style)
-        .ok_or_else(|| format!("{} is written in a way that cannot be edited", entry.key))?;
-    let (head, rest) = line.split_at(colon);
-    let comment = comment_at(rest).map_or("", |at| &rest[at..]);
+    // A comment starts after the value: past the closing quote when the value
+    // is quoted on this line, and nowhere on it when the quotes run on.
+    let quote_here = quote_start(entry, colon, line_at).filter(|(opens, _)| *opens == entry.line);
+    let value_end = match quote_here {
+        Some((_, at)) => quoted_end(&line[at..]).map(|end| at + end),
+        None => Some(colon),
+    };
+    let comment = value_end
+        .and_then(|from| comment_at(&line[from..]).map(|at| &line[from + at..]))
+        .unwrap_or("");
     // A block sequence keeps its shape and its items' indent.
     let items_at = line_at(entry.value_line);
     let block_list = matches!(entry.value, Value::Sequence(_))
         && entry.value_line > entry.line
         && items_at.trim_start().starts_with('-');
     let item_indent = block_list.then(|| indent_of(items_at));
-    Ok(render(head, value, comment, entry.value_style, item_indent))
+    render(
+        &line[..colon],
+        value,
+        comment,
+        entry.value_style,
+        item_indent,
+    )
 }
 
 /// An entry's lines: `head` is the key through its colon. A list is written
@@ -612,6 +706,92 @@ mod tests {
     }
 
     #[test]
+    fn a_comment_after_a_value_that_runs_over_lines_is_not_taken_with_it() {
+        // After quotes that close on a later line.
+        let quoted = block("a: \"first\n  second\"\n# about b\nb: 1\n");
+        assert_eq!(remove(&quoted, "a"), block("# about b\nb: 1\n"));
+        assert_eq!(
+            set(&quoted, "a", &text("new")),
+            block("a: \"new\"\n# about b\nb: 1\n")
+        );
+        // After a block scalar, shallower than its text and so no part of it.
+        let folded = block("a: >\n    folded\n    # still text\n  # about b\n# and this\nb: 1\n");
+        assert_eq!(
+            remove(&folded, "a"),
+            block("  # about b\n# and this\nb: 1\n")
+        );
+        // A block scalar holding nothing, with a comment straight after.
+        let empty = block("a: |\n# about b\nb: 1\n");
+        assert_eq!(remove(&empty, "a"), block("# about b\nb: 1\n"));
+    }
+
+    #[test]
+    fn a_tag_or_an_anchor_before_a_quoted_value_hides_no_comment() {
+        // The `#5` sits inside the quotes, however the value is introduced.
+        let tagged = block("title: !!str \"Issue #5 notes\"\nb: 1\n");
+        assert_eq!(
+            set(&tagged, "title", &text("x")),
+            block("title: \"x\"\nb: 1\n")
+        );
+        let anchored = block("title: &t \"Plan\" # kept\n# reviewed quarterly\nb: 1\n");
+        assert_eq!(
+            set(&anchored, "title", &text("x")),
+            block("title: \"x\" # kept\n# reviewed quarterly\nb: 1\n")
+        );
+    }
+
+    #[test]
+    fn a_value_that_already_reads_the_same_is_left_exactly_as_written() {
+        let spaced = block("status:   draft  # wip\ntags:\n  - a # first\n  - b\ncount: 5\nflag: \"true\"\nnone:\n");
+        let bare = |text: &str| NewValue::Scalar(Scalar::Bare(text.to_string()));
+        for (key, value) in [
+            ("status", text("draft")),
+            ("tags", list(&["a", "b"])),
+            ("count", bare("5")),
+            ("flag", text("true")),
+        ] {
+            assert_eq!(set_property(&spaced, key, Some(&value)), Ok(None), "{key}");
+        }
+        // Text where a number stood, and the reverse, is a change another
+        // YAML reader sees; so is an empty string where nothing stood.
+        assert_eq!(
+            set(&spaced, "count", &text("5")),
+            spaced.replace("count: 5", "count: \"5\"")
+        );
+        assert_eq!(
+            set(&spaced, "flag", &bare("true")),
+            spaced.replace("flag: \"true\"", "flag: true")
+        );
+        assert_eq!(
+            set(&spaced, "none", &text("")),
+            spaced.replace("none:", "none: \"\"")
+        );
+    }
+
+    #[test]
+    fn a_block_whose_lines_the_parser_counts_differently_is_refused() {
+        // A lone carriage return is a line break to the parser and not to the
+        // slicer; a NUL ends the parser's reading with entries still to come.
+        for inner in ["A: 1\rB: 2\nK: old\n", "a: 1\n\0b: 2\n"] {
+            let note = block(inner);
+            for value in [Some(text("x")), Some(text("old")), None] {
+                for key in ["A", "K", "a", "b"] {
+                    let refusal = set_property(&note, key, value.as_ref()).unwrap_err();
+                    assert!(
+                        refusal.contains("cannot be told apart"),
+                        "{inner:?}: {refusal}"
+                    );
+                }
+            }
+        }
+        // CRLF is one line break to both.
+        assert_eq!(
+            set("---\r\na: 1\r\n---\r\n", "a", &text("x")),
+            "---\r\na: x\r\n---\r\n"
+        );
+    }
+
+    #[test]
     fn the_last_property_can_go_and_an_empty_block_can_take_one() {
         assert_eq!(remove(&block("only: 1\n"), "only"), block(""));
         assert_eq!(
@@ -635,7 +815,12 @@ mod tests {
         }
         assert!(refused("---\na: 1\n\nnever closed\n", "a").contains("never closed"));
         assert!(refused(&block("{a: 1, b: 2}\n"), "a").contains("one line"));
-        assert!(refused(&block("{a: 1}\n"), "a").contains("disturbing"));
+        assert!(refused(&block("{a: 1}\n"), "a").contains("cannot be edited"));
+        // A block scalar that sets its own indent, or opens on a later line.
+        for inner in ["a: |2\n   text\nb: 1\n", "a:\n  |\n  text\nb: 1\n"] {
+            let refusal = refused(&block(inner), "a");
+            assert!(refusal.contains("cannot be edited"), "{inner:?}: {refusal}");
+        }
         // Another property reads this one's anchor, so it cannot change alone.
         assert!(refused(&block("a: &who Ada\nb: *who\n"), "a").contains("disturbing"));
         assert!(refused(&block("? a\n: 1\n"), "a").contains("cannot be edited"));

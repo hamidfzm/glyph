@@ -24,8 +24,7 @@ pub fn handle_window_event(window: &Window, event: &WindowEvent) {
                     crate::vault::forget(&store, path);
                 }
             }
-            registry.remove(label);
-            windows_runtime::publish_documents(window.app_handle(), &registry);
+            windows_runtime::forget_window(window.app_handle(), &registry, label);
         }
         #[cfg(desktop)]
         if let Some(menus) = window.try_state::<menu::MenuRegistry>() {

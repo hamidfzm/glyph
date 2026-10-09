@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 
 use super::session::OpenState;
 use super::{launch, link_tools, move_tools, note_tools, vault_tools, write_tools};
+use crate::data_dir::Editing;
 use crate::grants::GrantRegistry;
 use crate::vault::VaultStore;
 
@@ -20,6 +21,10 @@ pub struct Session<'a> {
     /// What the user has open: read from the persisted stores by the stdio
     /// adapter before each call, passed live by an in-app caller.
     pub open: &'a OpenState,
+    /// What the running app's windows hold, asked when a call is about to
+    /// write: a list read as the call began is stale once the user has been
+    /// asked something, and misses a folder allowed since.
+    pub editing: &'a dyn Fn() -> Editing,
     /// The Glyph binary that `open_in_glyph` and `export` start.
     pub exe: &'a Path,
     /// Asks the user to let the session serve a folder it was not given;
@@ -86,10 +91,10 @@ pub fn list(open: &OpenState) -> impl Iterator<Item = &'static ToolDef> + '_ {
     TOOLS.iter().filter(|tool| tool.is_on(open))
 }
 
-/// Every tool that changes a note, on or off, for the settings that turn
-/// each one on.
-pub fn edit_tools() -> impl Iterator<Item = &'static ToolDef> {
-    TOOLS.iter().filter(|tool| tool.effect == Effect::Edits)
+/// The tools that change notes which `open` has turned on, by name.
+pub fn edits_on(open: &OpenState) -> Vec<&'static str> {
+    let edits = list(open).filter(|tool| tool.effect == Effect::Edits);
+    edits.map(|tool| tool.name).collect()
 }
 
 /// The most one result may carry, serialized. Listings and text are cut far

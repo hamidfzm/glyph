@@ -29,7 +29,7 @@ pub(super) struct NoteArgs {
 pub(super) fn vault_property() -> Value {
     json!({
         "type": "string",
-        "description": "Root folder of the vault to read. Defaults to the vault of the note open in Glyph, or to the only vault; vault_context lists them. Any other folder, given as an absolute path, is served once the user allows it."
+        "description": "Root folder of the vault to work in. Defaults to the vault of the note open in Glyph, or to the only vault; vault_context lists them. Any other folder, given as an absolute path, is served once the user allows it."
     })
 }
 

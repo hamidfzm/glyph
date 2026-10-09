@@ -23,17 +23,10 @@ use std::cell::RefCell;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
+use crate::data_dir;
 use crate::grants::GrantRegistry;
 use crate::vault::VaultStore;
 use registry::Session;
-
-/// The tools that change notes, each off until the user turns it on. The
-/// settings list them from here, so a tool added to the registry gets its
-/// toggle without being named a second time.
-#[tauri::command]
-pub fn agent_write_tools() -> Vec<&'static str> {
-    registry::edit_tools().map(|tool| tool.name).collect()
-}
 
 /// Serve until the client closes `input`, and return the exit code. `vaults`
 /// are the `--vault` roots, already checked to be folders, and all the server
@@ -68,17 +61,30 @@ pub fn run(
         let can_ask = vaults.is_empty() && ask.can_ask();
         let ask = RefCell::new(ask);
         let added = RefCell::new(Vec::new());
+        // What allowing the folder lets the agent do, write tools included.
+        let changes = match registry::edits_on(&open).as_slice() {
+            [] => String::new(),
+            tools => format!(
+                " change notes there with the tools turned on in Glyph's settings ({}),",
+                tools.join(", ")
+            ),
+        };
         let allow_vault = |root: &str| -> Result<(), String> {
             ask.borrow_mut().confirm(&format!(
-                "An agent asks to read the folder \"{root}\". Allow it until this session ends? It could then read every note in that folder, and save exported documents there, replacing files of the same name."
+                "An agent asks to read the folder \"{root}\". Allow it until this session ends? It could then read every note in that folder,{changes} and save exported documents there, replacing files of the same name."
             ))?;
             added.borrow_mut().push(root.to_string());
             Ok(())
+        };
+        let editing = || match stores.as_deref() {
+            Some(dir) => data_dir::editing_in(dir),
+            None => data_dir::editing(),
         };
         let session = Session {
             grants: &grants,
             vaults: &store,
             open: &open,
+            editing: &editing,
             exe: &exe,
             allow_vault: can_ask.then_some(&allow_vault),
         };
