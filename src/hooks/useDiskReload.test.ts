@@ -3,15 +3,15 @@ import { act, renderHook } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EDITOR_MODE } from "@/lib/settings";
-import type { TabsState } from "@/lib/tabs";
+import type { FileState, TabsState } from "@/lib/tabs";
 import { type Deferred, deferred } from "@/test/deferred";
 import { useDiskReload } from "./useDiskReload";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@/lib/platform", () => ({ isMobilePlatform: () => false }));
 
-/** An edit-mode tab on /p/a.md at `revision`, beside a graph tab. */
-const stateAt = (revision: number, dirty = false): TabsState => ({
+/** A clean edit-mode tab on /p/a.md at `revision`, beside a graph tab. */
+const stateAt = (revision: number, file: Partial<FileState> = {}): TabsState => ({
   activeTabId: "a",
   tabs: [
     {
@@ -24,20 +24,23 @@ const stateAt = (revision: number, dirty = false): TabsState => ({
         scrollTop: 0,
         mode: EDITOR_MODE.edit,
         editContent: "old",
-        dirty,
+        dirty: false,
         virtual: false,
         revision,
+        ...file,
       },
     },
     { id: "g", kind: "graph", root: "/p", file: null },
   ],
 });
 
+const unsaved = { dirty: true, editContent: "typed" };
+
 function renderReload(initial: TabsState, selfSaveCount = () => 0) {
   const forgetHistory = vi.fn();
   const hook = renderHook(() => {
     const [state, setState] = useState(initial);
-    return { state, reload: useDiskReload({ setState, forgetHistory, selfSaveCount }) };
+    return { state, setState, reload: useDiskReload({ setState, forgetHistory, selfSaveCount }) };
   });
   return { ...hook, forgetHistory };
 }
@@ -55,6 +58,7 @@ function parkReads() {
 }
 
 const contentOf = (state: TabsState) => state.tabs[0].file?.content;
+const bufferOf = (state: TabsState) => state.tabs[0].file?.editContent;
 
 describe("useDiskReload", () => {
   beforeEach(() => {
@@ -160,18 +164,58 @@ describe("useDiskReload", () => {
     expect(contentOf(result.current.state)).toBe("new");
   });
 
-  it("keeps unsaved edits, and a failed read changes nothing", async () => {
-    const { result } = renderReload(stateAt(3, true));
+  it.each(Object.values(EDITOR_MODE))("keeps unsaved edits in %s mode", async (mode) => {
+    const { result, forgetHistory } = renderReload(stateAt(3, { ...unsaved, mode }));
 
     await act(async () => {
       await result.current.reload("/p/a.md");
     });
-    expect(contentOf(result.current.state)).toBe("old");
 
+    expect(result.current.state.tabs[0].file).toMatchObject({
+      content: "old",
+      editContent: "typed",
+    });
+    expect(forgetHistory).not.toHaveBeenCalled();
+  });
+
+  it("keeps unsaved edits when the revision the caller names still matches", async () => {
+    const { result } = renderReload(stateAt(3, unsaved));
+
+    await act(async () => {
+      await result.current.reload("/p/a.md", 3);
+    });
+
+    expect(bufferOf(result.current.state)).toBe("typed");
+  });
+
+  it("keeps an edit made while the file was being read", async () => {
+    let finishRead: (content: string) => void = () => {};
+    const pendingRead = new Promise<string>((resolve) => {
+      finishRead = resolve;
+    });
+    vi.mocked(invoke).mockImplementation(async (cmd) => (cmd === "read_file" ? pendingRead : null));
+    const { result } = renderReload(stateAt(3, { mode: EDITOR_MODE.view }));
+
+    const reloading = result.current.reload("/p/a.md");
+    act(() => {
+      result.current.setState(stateAt(4, { ...unsaved, mode: EDITOR_MODE.view }));
+    });
+    await act(async () => {
+      finishRead("new");
+      await reloading;
+    });
+
+    expect(bufferOf(result.current.state)).toBe("typed");
+  });
+
+  it("changes nothing when the read fails", async () => {
     vi.mocked(invoke).mockRejectedValue(new Error("gone"));
+    const { result } = renderReload(stateAt(3));
+
     await act(async () => {
       await result.current.reload("/p/a.md");
     });
+
     expect(contentOf(result.current.state)).toBe("old");
   });
 });

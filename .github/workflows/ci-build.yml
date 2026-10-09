@@ -30,9 +30,10 @@ jobs:
             # Bundle analysis is the codecov Vite plugin, which runs during
             # the frontend build; it does not need installer packaging.
             args_full: ""
-            # The Docker check installs this leg's .deb, so a pull request has
-            # to produce one. Only the .deb: AppImage bundling downloads
-            # linuxdeploy and is minutes of work nothing here consumes.
+            # The Docker check installs this leg's .deb and the desktop entry
+            # smoke test opens it, so a pull request has to produce one. Only
+            # the .deb: AppImage bundling downloads linuxdeploy and is minutes
+            # of work nothing here consumes.
             args_pr: "--bundles deb"
             bundle_analysis: true
           # No include entry for ubuntu-22.04-arm: include is processed
@@ -57,7 +58,7 @@ jobs:
         uses: ./.github/actions/linux-deps
         with:
           cache-key: apt-webkit-${{ matrix.platform }}-v1
-          extra-packages: xdg-utils xvfb
+          extra-packages: xdg-utils xvfb desktop-file-utils
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: src-tauri
@@ -83,6 +84,11 @@ jobs:
       - name: Quick Look smoke test
         if: matrix.platform == 'macos-latest'
         run: ./scripts/quicklook-smoke.sh "$(find src-tauri/target -maxdepth 5 -path '*/release/bundle/macos/Glyph.app' | head -n 1)"
+      # Checks the .deb installs a desktop entry that file managers list under
+      # "Open With". The AUR, PPA, apt and snap packages all repack this .deb.
+      - name: Desktop entry smoke test
+        if: matrix.platform == 'ubuntu-22.04'
+        run: ./scripts/desktop-entry-smoke.sh src-tauri/target/release/bundle/deb/*.deb
       # Starts `glyph mcp` the way an MCP client does, on every platform and
       # with no xvfb: the server must answer without a display, and on Windows
       # the release binary is a GUI-subsystem program talking over pipes. A

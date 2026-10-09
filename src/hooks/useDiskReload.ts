@@ -1,6 +1,5 @@
 import { type Dispatch, type SetStateAction, useCallback, useRef } from "react";
 import { loadFileContent } from "@/lib/documentContent";
-import { EDITOR_MODE } from "@/lib/settings";
 import type { TabsState } from "@/lib/tabs";
 
 interface UseDiskReloadOptions {
@@ -38,7 +37,7 @@ export function useDiskReload({ setState, forgetHistory, selfSaveCount }: UseDis
             if (t.kind === "graph" || t.file.path !== path) return t;
             // Checked against the latest state, so an edit made while the file
             // was being read is never replaced.
-            if (t.file.mode !== EDITOR_MODE.view && t.file.dirty) return t;
+            if (t.file.dirty) return t;
             if (revision !== undefined && t.file.revision !== revision) return t;
             // Replaying old diffs against changed content is unsafe.
             forgetHistory(t.id);
