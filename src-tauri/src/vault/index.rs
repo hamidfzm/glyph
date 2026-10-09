@@ -43,8 +43,8 @@ pub struct Vault {
     /// so the palette does not recompute it per keystroke.
     pub(super) field_names: BTreeSet<String>,
     pub(super) walk_status: ScanStatus,
-    /// Modified time and size of every file the last walk saw, so a sync
-    /// re-reads only what changed.
+    /// Modified time and size of every file the last walk saw, less those an
+    /// incremental update has read since, so a sync re-reads only what changed.
     stamps: HashMap<String, Stamp>,
     /// Set when an update was turned away at the file cap.
     refused_at_cap: bool,
@@ -184,6 +184,11 @@ impl Vault {
         if touched {
             self.rebuild_derived();
         }
+        // What the index holds at these paths is no longer what the last walk
+        // saw, so a matching stamp must not spare the next sync the read.
+        for key in &seen {
+            self.stamps.remove(key);
+        }
     }
 
     /// `paths` plus what a folder among them stands for: the files under one
@@ -221,10 +226,10 @@ impl Vault {
         expanded
     }
 
-    /// Catch up with the disk without a watcher: walk again, and re-read only
-    /// the files that appeared, vanished, or carry a new modified time or
-    /// size. The fresh walk's status replaces the stored one, cap refusals
-    /// included, because it has just looked.
+    /// Catch up with the disk where no event said what changed: walk again,
+    /// and re-read only the files the index and the walk disagree on, or that
+    /// carry a new modified time or size. The fresh walk's status replaces the
+    /// stored one, cap refusals included, because it has just looked.
     pub fn sync(&mut self) -> Result<(), String> {
         let (files, status) =
             collect_files(&self.root, is_indexable, self.max_files, self.max_depth)?;
@@ -233,23 +238,29 @@ impl Vault {
             .map(|(path, stamp)| (path.to_string_lossy().to_string(), stamp))
             .collect();
         // Removals first, so a file that took a deleted one's place under the
-        // cap is not turned away.
+        // cap is not turned away. Each indexed note the walk did not reach is
+        // looked up on disk: one a capped walk stopped short of is still there.
         let mut changed: Vec<PathBuf> = self
-            .stamps
-            .keys()
-            .filter(|path| !walked.contains_key(*path))
-            .map(PathBuf::from)
+            .notes
+            .iter()
+            .filter(|note| !walked.contains_key(&note.path))
+            .map(|note| PathBuf::from(&note.path))
             .collect();
         // A stamp inside the filesystem's clock resolution cannot tell two
         // saves apart, so a file written in the last two seconds is re-read.
         let recent = std::time::SystemTime::now()
             .checked_sub(std::time::Duration::from_secs(2))
             .unwrap_or(std::time::UNIX_EPOCH);
+        // A file the index lacks is read whatever its stamp says, so one
+        // refused at the cap is tried again.
+        let indexed: HashSet<&str> = self.notes.iter().map(|note| note.path.as_str()).collect();
         changed.extend(
             walked
                 .iter()
                 .filter(|(path, stamp)| {
-                    self.stamps.get(*path) != Some(*stamp) || stamp.written_after(recent)
+                    !indexed.contains(path.as_str())
+                        || self.stamps.get(*path) != Some(*stamp)
+                        || stamp.written_after(recent)
                 })
                 .map(|(path, _)| PathBuf::from(path)),
         );
@@ -258,19 +269,7 @@ impl Vault {
         }
         // Stamps come from the walk alone, so two walks compare like with like:
         // on Windows a directory listing and a file's own metadata can differ.
-        // Only indexed files keep one: a file refused at the cap is tried
-        // again, and a note a capped walk no longer reaches stays known until
-        // it is gone.
-        let kept: Vec<(String, Stamp)> = std::mem::take(&mut self.stamps)
-            .into_iter()
-            .filter(|(path, _)| !walked.contains_key(path))
-            .collect();
-        let indexed: HashSet<&str> = self.notes.iter().map(|note| note.path.as_str()).collect();
-        self.stamps = walked
-            .into_iter()
-            .chain(kept)
-            .filter(|(path, _)| indexed.contains(path.as_str()))
-            .collect();
+        self.stamps = walked;
         self.walk_status = status;
         self.refused_at_cap = false;
         Ok(())
