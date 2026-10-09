@@ -134,11 +134,16 @@ impl Harness {
             .unwrap_or_else(|err| panic!("{tool}({args}) failed: {err:?}"))
     }
 
+    /// Why the tool refused. A tool that does not exist is not a refusal.
     pub(super) fn refused(&self, tool: &str, args: Value) -> String {
-        match self.call(tool, args.clone()) {
-            Err(ToolError::Failed(message)) => message,
-            other => panic!("{tool}({args}) should have refused, got {other:?}"),
-        }
+        let asked = format!("{tool}({args}) should have refused");
+        let refusal = self.call(tool, args).expect_err(&asked);
+        assert!(
+            matches!(refusal, ToolError::Failed(_)),
+            "{asked}: {refusal:?}"
+        );
+        let (ToolError::Failed(message) | ToolError::Unknown(message)) = refusal;
+        message
     }
 
     /// A fresh build of the same folder: the answer the app would give.
