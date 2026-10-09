@@ -56,12 +56,14 @@ describe("useExportSite", () => {
 
   it("warns when the site exported but its cleanup failed", async () => {
     vi.mocked(pickExportDir).mockResolvedValue("/out");
-    const unrecorded = "Failed to write .glyph/site-manifest.json: locked";
-    exportSiteMock.mockResolvedValue({ ...EXPORTED, pruneError: unrecorded });
+    exportSiteMock.mockResolvedValue({ ...EXPORTED, pruneError: "Failed to write file: locked" });
     const { result } = renderHook(() => useExportSite("/ws"));
     await act(() => result.current.exportWebsite());
     expect(result.current.siteProgress).toBeNull();
-    expect(result.current.siteNotice).toEqual({ kind: "pruneFailed", reason: unrecorded });
+    expect(result.current.siteNotice).toEqual({
+      kind: "pruneFailed",
+      reason: "Failed to write file: locked",
+    });
   });
 
   it("keeps the notice up until it is dismissed", async () => {
