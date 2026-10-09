@@ -367,9 +367,9 @@ the way a renderer-supplied path is.
   read. Accepted so the toggles sit with the other settings.
 - **The unsaved-changes guard is a report, not a lock.** An edit typed in the
   instant before a write is not yet in the published list, and a compromised
-  renderer can leave a path out of it. In edit or split mode the app keeps an
-  unsaved buffer over a change on disk, so in that window it is the agent's
-  write that the next save replaces, not the user's edit. Two cases it does
+  renderer can leave a path out of it. The app keeps an unsaved buffer over a
+  change on disk, so in that window it is the agent's write that the next
+  save replaces, not the user's edit. Two cases it does
   not see at all: a second Glyph process that could not take the instance
   lock (a debug build, or `open -n` on macOS) publishes nothing, and a write
   landing within the second and a half after the app saved the same file is
