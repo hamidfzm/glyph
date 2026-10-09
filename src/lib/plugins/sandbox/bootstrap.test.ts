@@ -290,6 +290,24 @@ describe("worker bootstrap", () => {
     });
   });
 
+  it("relays a command's shortcut and its workspace condition", async () => {
+    const w = bootWorker();
+    await w.send(
+      init(
+        `export default { activate(ctx) { ctx.commands.register({ id: "today", title: "Today", menu: "file", shortcut: "CmdOrCtrl+Shift+T", when: "workspace", run() {} }); } }`,
+      ),
+    );
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
+    expect(w.posted).toContainEqual({
+      type: "register-command",
+      id: "today",
+      title: "Today",
+      menu: "file",
+      shortcut: "CmdOrCtrl+Shift+T",
+      when: "workspace",
+    });
+  });
+
   it("refuses to hand a sandboxed plugin the open document at will", async () => {
     const w = bootWorker();
     await w.send(

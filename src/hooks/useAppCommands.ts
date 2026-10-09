@@ -7,6 +7,7 @@ import type { TocEntry } from "@/hooks/useTableOfContents";
 import { appPaletteCommands } from "@/lib/appPaletteCommands";
 import type { Command } from "@/lib/commands";
 import { basename } from "@/lib/paths";
+import { isCommandAvailable, paletteShortcut } from "@/lib/plugins/commandBindings";
 import { contributionKey } from "@/lib/plugins/contributionKey";
 import type { ExporterContribution } from "@/lib/plugins/types";
 import { scrollToHeading } from "@/lib/scrollToHeading";
@@ -92,10 +93,12 @@ export function useAppCommands({
     // Commands contributed by loaded plugins (the marketplace, install, enable,
     // and remove actions all live in the Settings Plugins tab instead).
     for (const c of pluginCommands) {
+      if (!isCommandAvailable(c, workspaceOpen)) continue;
       out.push({
         id: `plugin:${contributionKey(c)}`,
         title: c.title,
         section: "Commands",
+        shortcut: paletteShortcut(c),
         run: () => {
           void c.run();
         },

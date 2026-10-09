@@ -168,7 +168,14 @@ export interface CommandContribution {
   title: string;
   run: () => void | Promise<void>;
   /** 0.26.0: also list it in this native menu (desktop). */
-  menu?: "view";
+  menu?: "file" | "view";
+  /**
+   * 0.26.0: the default keyboard shortcut, as an accelerator such as
+   * "CmdOrCtrl+Shift+T". The user can rebind it under Settings, Hotkeys.
+   */
+  shortcut?: string;
+  /** 0.26.0: offer the command only while a folder workspace is open. */
+  when?: "workspace";
 }
 
 /** A command as the host holds it, stamped with the plugin that added it. */

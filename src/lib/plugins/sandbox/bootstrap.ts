@@ -129,6 +129,8 @@ function buildContext(init) {
           id: command.id,
           title: command.title,
           menu: command.menu,
+          shortcut: command.shortcut,
+          when: command.when,
         });
         return () => commands.delete(command.id);
       },
