@@ -300,13 +300,16 @@ the way a renderer-supplied path is.
   cut by the renderer's embed slicer, which follows unindented `#` headings
   and matches fences by character. `patch_note` refuses a section in which
   CommonMark reads a heading the slicer does not, or the reverse (an
-  underlined or indented heading, a fence closed by length), because its
-  bounds would not be the rendered note's. `set_property` refuses a block
-  holding a bare carriage return or a NUL, where the parser's line count and
-  the slicer's part ways, checks that the key sits on the line the parser
-  named, and parses its result again: every other property has to read as it
-  did, and everything from the closing fence on has to be untouched.
-  `update_task` reads fences by length and at any depth. A rename or a move
+  underlined or indented heading, hashes alone, a `#` line inside raw HTML or
+  display math, a fence closed by length or by the end of the list item
+  holding it), because its bounds would not be the rendered note's.
+  `set_property` refuses a block holding a bare carriage return or a NUL,
+  where the parser's line count and the slicer's part ways, checks that the
+  key sits on the line the parser named and that the lines it leaves behind
+  an entry are comments to the parser too, and parses its result again: every
+  other property has to read as it did, and everything from the closing fence
+  on has to be untouched. `update_task` reads fences by length and at any
+  depth. A rename or a move
   refuses a destination that exists and one the index would not read, and a
   link rewrite that stops partway is reported with the note it stopped at,
   never as a success.

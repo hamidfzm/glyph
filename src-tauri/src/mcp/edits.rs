@@ -71,7 +71,7 @@ fn documents(session: &Session) -> Result<Option<OpenDocuments>, String> {
         Editing::Closed => Ok(None),
         Editing::Open(documents) => Ok(Some(documents)),
         Editing::Unknown => Err(
-            "Glyph is running, or may be, and has not said which notes are being edited, so nothing was written. A Glyph older than this server never says, and neither does one whose data folder cannot hold a lock; closing Glyph lets the call through."
+            "Glyph is running, or may be, and has not said which notes are being edited, so nothing was written. Call again: its list may have been read while being rewritten. If the refusal repeats, the running Glyph is older than this server and has to be restarted, or its data folder cannot hold a file lock, in which case no call can be let through."
                 .to_string(),
         ),
     }

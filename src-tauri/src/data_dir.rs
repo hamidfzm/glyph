@@ -201,17 +201,21 @@ pub fn editing_in(dir: &Path) -> Editing {
 }
 
 /// One answer from several directories: not knowing about any of them is not
-/// knowing.
+/// knowing, and two apps running from two of them both count.
 fn combined(states: impl Iterator<Item = Editing>) -> Editing {
-    let mut answer = Editing::Closed;
+    let mut running: Option<OpenDocuments> = None;
     for state in states {
         match state {
             Editing::Unknown => return Editing::Unknown,
-            Editing::Open(_) if answer == Editing::Closed => answer = state,
-            _ => {}
+            Editing::Closed => {}
+            Editing::Open(found) => {
+                let all = running.get_or_insert_with(OpenDocuments::default);
+                all.open.extend(found.open);
+                all.unsaved.extend(found.unsaved);
+            }
         }
     }
-    answer
+    running.map_or(Editing::Closed, Editing::Open)
 }
 
 #[cfg(test)]
@@ -313,9 +317,11 @@ mod tests {
         let open = || Editing::Open(documents(&["/a.md"], &[]));
         let other = || Editing::Open(documents(&["/b.md"], &[]));
         assert_eq!(combined([].into_iter()), Editing::Closed);
+        assert_eq!(combined([Editing::Closed, open()].into_iter()), open());
+        // Two apps, each under its own directory: both lists count.
         assert_eq!(
-            combined([Editing::Closed, open(), other()].into_iter()),
-            open()
+            combined([open(), Editing::Closed, other()].into_iter()),
+            Editing::Open(documents(&["/a.md", "/b.md"], &[]))
         );
         assert_eq!(
             combined([open(), Editing::Closed, Editing::Unknown].into_iter()),

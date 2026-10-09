@@ -68,17 +68,37 @@ impl Fences {
 /// Fenced code the way CommonMark reads it, for a caller about to write.
 /// [`Fences`] is the renderer's embed slicer, which matches on the fence
 /// character alone; here a fence closes only on a bare run of that character
-/// at least as long as the one that opened it. Any indent counts, since a
-/// fence inside a nested list item sits deeper than three columns.
-pub(super) struct StrictFences(Option<(char, usize)>);
+/// at least as long as the one that opened it, indented no more than three
+/// columns past it. An opener counts at any depth, since a fence inside a
+/// nested list item sits deeper than three columns.
+pub(super) struct StrictFences(Option<Fence>);
+
+#[derive(Clone, Copy)]
+struct Fence {
+    marker: char,
+    length: usize,
+    indent: usize,
+}
+
+/// The width of the whitespace `line` opens with, a tab counting as four.
+fn indent_width(line: &str) -> usize {
+    let blanks = line.chars().take_while(|c| matches!(c, ' ' | '\t'));
+    blanks.map(|c| if c == '\t' { 4 } else { 1 }).sum()
+}
 
 impl StrictFences {
     pub(super) fn new() -> Self {
         StrictFences(None)
     }
 
+    /// How deep the fence still open sits, if one is.
+    fn open_indent(&self) -> Option<usize> {
+        self.0.map(|fence| fence.indent)
+    }
+
     pub(super) fn skip(&mut self, line: &str) -> bool {
         let text = line.trim_start_matches(is_js_space);
+        let indent = indent_width(line);
         let marker = text.chars().next().filter(|c| matches!(c, '`' | '~'));
         let run = marker.map_or(0, |m| text.chars().take_while(|&c| c == m).count());
         let after = &text[run..];
@@ -86,13 +106,19 @@ impl StrictFences {
             (None, Some(marker)) if run >= 3 => {
                 // A backtick in the info string makes the run inline code.
                 let opens = marker == '~' || !after.contains('`');
-                self.0 = opens.then_some((marker, run));
+                let fence = Fence {
+                    marker,
+                    length: run,
+                    indent,
+                };
+                self.0 = opens.then_some(fence);
                 opens
             }
             (None, _) => false,
-            (Some((open, length)), Some(marker)) => {
+            (Some(open), Some(marker)) => {
                 let bare = after.trim_matches(is_js_space).is_empty();
-                if marker == open && run >= length && bare {
+                let same_run = marker == open.marker && run >= open.length;
+                if same_run && bare && indent <= open.indent + 3 {
                     self.0 = None;
                 }
                 true
@@ -283,16 +309,94 @@ pub(crate) fn section_spans(content: &str, body_start: usize, wanted: &str) -> V
     spans
 }
 
+/// Raw HTML, an HTML comment, or display math: blocks in which the renderer
+/// reads no heading, and which the slicer does not know.
+#[derive(Default)]
+struct RawBlocks {
+    comment: bool,
+    math: bool,
+    html: bool,
+}
+
+impl RawBlocks {
+    /// Whether the line trimmed to `text` opens, closes or sits inside one.
+    fn skip(&mut self, text: &str) -> bool {
+        if self.comment {
+            self.comment = !text.contains("-->");
+            return true;
+        }
+        if self.math {
+            self.math = !text.ends_with("$$");
+            return true;
+        }
+        if let Some(rest) = text.strip_prefix("<!--") {
+            self.comment = !rest.contains("-->");
+            return true;
+        }
+        if let Some(rest) = text.strip_prefix("$$") {
+            // `$$ x $$` on one line opens nothing.
+            self.math = !rest.ends_with("$$");
+            return true;
+        }
+        // An HTML block runs to the next blank line.
+        let tag = text.strip_prefix('<').and_then(|rest| rest.chars().next());
+        if tag.is_some_and(|c| c.is_ascii_alphabetic() || matches!(c, '/' | '!' | '?')) {
+            self.html = true;
+        }
+        if text.is_empty() {
+            self.html = false;
+        }
+        self.html
+    }
+}
+
+/// A line of `=` or of `-`, which under a line of text makes it a heading.
+fn is_rule(text: &str) -> bool {
+    !text.is_empty() && (text.chars().all(|c| c == '=') || text.chars().all(|c| c == '-'))
+}
+
+/// Whether `text` opens a list item or a quote. The text on such a line is
+/// inside it, so a rule on the next line is not that text's underline.
+fn opens_container(text: &str) -> bool {
+    let bullet = text.strip_prefix(['-', '*', '+']);
+    let digits = text.trim_start_matches(|c: char| c.is_ascii_digit());
+    let numbered = digits.len() < text.len();
+    let ordered = digits.strip_prefix(['.', ')']).filter(|_| numbered);
+    let item = bullet
+        .or(ordered)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '\t']));
+    item || text.starts_with('>')
+}
+
+/// The level CommonMark gives `line` as a heading, outside code and raw
+/// blocks: one to six hashes then a space, a tab or nothing, indented up to
+/// three columns, or a rule under a line of text.
+fn commonmark_level(line: &str, above_is_text: bool) -> Option<u8> {
+    let text = line.trim_matches(is_js_space);
+    if indent_width(line) > 3 {
+        return None;
+    }
+    let hashes = text.chars().take_while(|&c| c == '#').count();
+    let after = &text[hashes..];
+    if (1..=6).contains(&hashes) && (after.is_empty() || after.starts_with([' ', '\t'])) {
+        return Some(hashes as u8);
+    }
+    let underline = above_is_text && is_rule(text);
+    underline.then(|| if text.starts_with('=') { 1 } else { 2 })
+}
+
 /// The first line, 1-based, that puts the bounds of `span`'s section in doubt.
 /// Sections are cut by the renderer's embed slicer, which follows only
 /// unindented `#` headings and matches fences by character. CommonMark also
-/// reads a heading in a line indented by spaces or underlined with `=` or `-`,
-/// and closes a fence by its length. A heading only one of the two readings
-/// has, at the section's level or above, means a write would land on bounds
-/// the rendered note does not have.
+/// reads a heading in a line indented up to three columns, underlined with
+/// `=` or `-`, or made of hashes alone; reads none inside raw HTML or display
+/// math; and closes a fence by its length, or with the list item holding it.
+/// A heading only one of the two readings has, at the section's level or
+/// above, means a write would land on bounds the rendered note does not have.
 pub(crate) fn uncertain_line(content: &str, body_start: usize, span: &SectionSpan) -> Option<u32> {
     let heading_line = span.heading.line as usize - 1;
     let (mut loose, mut strict) = (Fences::new(), StrictFences::new());
+    let mut raw = RawBlocks::default();
     let mut above_is_text = false;
     // Through the heading that ends the section, which has to be one too.
     let lines = js_lines(content).enumerate().take(span.end_line + 1);
@@ -300,17 +404,29 @@ pub(crate) fn uncertain_line(content: &str, body_start: usize, span: &SectionSpa
     for (idx, line) in lines.skip(body_start) {
         let (code, strict_code) = (loose.skip(line), strict.skip(line));
         let text = line.trim_matches(is_js_space);
-        let rule =
-            !text.is_empty() && (text.chars().all(|c| c == '=') || text.chars().all(|c| c == '-'));
-        // The level of a heading here that only one reading has.
-        let disputed = match atx(line) {
-            Some((level, _)) => (code != strict_code).then_some(level),
-            None if strict_code => None,
-            None if line.starts_with(' ') => atx(line.trim_start_matches(' ')).map(|found| found.0),
-            None if rule && above_is_text => Some(if text.starts_with('=') { 1 } else { 2 }),
-            None => None,
+        // A fence left open in a list item ends with the item for CommonMark,
+        // and swallows the rest of the note for both readers here.
+        let shallower = |opened: usize| !text.is_empty() && indent_width(line) < opened;
+        if strict.open_indent().is_some_and(shallower) {
+            return Some(idx as u32 + 1);
+        }
+        let hidden = strict_code || raw.skip(text);
+        let slicer = if code {
+            None
+        } else {
+            atx(line).map(|found| found.0)
         };
-        above_is_text = !strict_code && !text.is_empty() && !rule && atx(line).is_none();
+        let commonmark = if hidden {
+            None
+        } else {
+            commonmark_level(line, above_is_text)
+        };
+        let disputed = match (slicer, commonmark) {
+            (Some(level), None) | (None, Some(level)) => Some(level),
+            _ => None,
+        };
+        let plain_text = !is_rule(text) && commonmark.is_none() && !opens_container(text);
+        above_is_text = !hidden && !text.is_empty() && indent_width(line) <= 3 && plain_text;
         let moves_a_bound = match disputed {
             Some(_) if idx == heading_line => true,
             Some(level) => idx > heading_line && level <= span.heading.level,
@@ -538,6 +654,65 @@ mod tests {
     }
 
     #[test]
+    fn more_headings_only_one_reading_has() {
+        // An underline is one indented up to three columns too.
+        let indented = "## A\ntext\n\nNext\n ---\nbody of next\n\n## B\nb\n";
+        assert_eq!(doubt(indented, "A"), Some(5));
+        // Hashes alone are an empty heading to CommonMark; hashes followed by
+        // other whitespace are a heading to the slicer only.
+        assert_eq!(doubt("# A\ntext\n#\nmore\n", "A"), Some(3));
+        assert_eq!(
+            doubt("# A\ntext\n#\u{3000}Not one\nmore\n# B\n", "A"),
+            Some(3)
+        );
+
+        // A `#` line in an HTML comment, an HTML block or display math is a
+        // heading to the slicer and to nothing that renders the note.
+        let comment = "# Intro\ntext\n<!--\n# Old draft\nold text\n-->\nmore intro\n# Next\nn\n";
+        assert_eq!(doubt(comment, "Intro"), Some(4));
+        assert_eq!(doubt("# A\n<table>\n</table>\n# B\nb\n", "A"), Some(4));
+        assert_eq!(doubt("# A\n$$\n# x\n$$\n# B\n", "A"), Some(3));
+        // Closed, each leaves the next heading alone.
+        assert_eq!(doubt("# A\n<!-- note -->\n\n# B\n", "A"), None);
+        assert_eq!(doubt("# A\n<div>x</div>\n\n# B\n", "A"), None);
+        assert_eq!(doubt("# A\n$$ x $$\n# B\n", "A"), None);
+    }
+
+    #[test]
+    fn a_fence_left_open_in_a_list_item_puts_the_section_in_doubt() {
+        // CommonMark closes it where the item ends, and renders the headings
+        // after; both readers here take the rest of the note for code.
+        let open = "# Intro\n- step\n  ```\n  code\n\n# Second\nbody\n\n# Third\n";
+        assert_eq!(parse_headings(open, 0).len(), 1);
+        assert_eq!(doubt(open, "Intro"), Some(6));
+        // Closed inside its item, it is no doubt.
+        let closed = "# Intro\n- step\n  ```\n  code\n  ```\n\n# Second\n";
+        assert_eq!(doubt(closed, "Intro"), None);
+    }
+
+    #[test]
+    fn what_only_looks_like_a_heading_form_is_no_doubt() {
+        // An empty bullet under a list item is not that item's underline, nor
+        // is a rule straight after a quote or a numbered item.
+        for md in [
+            "## A\n- item\n-\n- more\n## B\n",
+            "## A\n> quoted\n---\n## B\n",
+            "## A\n1. one\n===\n## B\n",
+            "## A\n10) ten\n---\n## B\n",
+        ] {
+            assert_eq!(doubt(md, "A"), None, "{md:?}");
+        }
+        // Four columns in is code or a list's own text, not a heading.
+        assert_eq!(
+            doubt("# A\ntext\n\n    # a comment in code\n\n# B\n", "A"),
+            None
+        );
+        assert_eq!(doubt("# A\n- item\n\n    text\n    ---\n# B\n", "A"), None);
+        // A tab before the hashes is four columns as well.
+        assert_eq!(doubt("# A\n\t# x\n# B\n", "A"), None);
+    }
+
+    #[test]
     fn strict_fences_close_on_their_own_length_and_count_at_any_depth() {
         let code = |md: &str| -> Vec<bool> {
             let mut fences = StrictFences::new();
@@ -552,9 +727,15 @@ mod tests {
         assert_eq!(code("~~~\n```\n~~~\nc"), [true, true, true, false]);
         // Deep inside a list it is still a fence.
         assert_eq!(
-            code("        ```\n        b\n        ```"),
-            [true, true, true]
+            code("        ```\n        b\n        ```\nc"),
+            [true, true, true, false]
         );
+        // A run four columns deeper than the opener is the block's own text.
+        assert_eq!(
+            code("```\n    ```\nb\n```\nc"),
+            [true, true, true, true, false]
+        );
+        assert_eq!(code("```\n   ```\nc"), [true, true, false]);
         // Backticks in the info string make it inline code, not a fence.
         assert_eq!(code("``` `x` ```\nb"), [false, false]);
         assert_eq!(code("``\nb"), [false, false]);

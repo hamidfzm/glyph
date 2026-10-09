@@ -471,6 +471,19 @@ mod tests {
     }
 
     #[test]
+    fn a_refusal_listing_headings_says_when_the_list_is_cut() {
+        let many: String = (1..=60).map(|n| format!("## Part {n}\n")).collect();
+        let h = vault("heading_listing", &many);
+        let args = json!({ "ref": NOTE, "section": "Absent", "content": "x", "mode": "append" });
+        let refusal = h.refused("patch_note", args);
+        assert!(
+            refusal.contains("the first 50 of its 60 headings"),
+            "{refusal}"
+        );
+        assert!(!refusal.contains("Part 51"), "{refusal}");
+    }
+
+    #[test]
     fn a_summary_quotes_long_text_short() {
         // A result past the size cap would be reported as a failure after
         // the note was written, and retried.
