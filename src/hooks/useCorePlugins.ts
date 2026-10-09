@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
+import { errorMessage } from "@/lib/errorMessage";
 import { CORE_PLUGINS, coreInstalledPlugin } from "@/lib/plugins/corePlugins";
 import type { PluginHost } from "@/lib/plugins/host";
 
@@ -36,8 +37,7 @@ export function useCorePlugins(
           await host.load(coreInstalledPlugin(core), core.load);
         } catch (err) {
           console.error(`Failed to load core plugin ${core.id}:`, err);
-          const message = err instanceof Error ? err.message : String(err);
-          pushToast(tRef.current("toast.error", { message }), "error");
+          pushToast(tRef.current("toast.error", { message: errorMessage(err) }), "error");
         }
       }),
     ).then(() => {

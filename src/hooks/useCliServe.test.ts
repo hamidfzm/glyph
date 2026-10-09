@@ -22,6 +22,9 @@ vi.mock("@/hooks/useExportReadiness", () => ({
 }));
 
 const REQUEST = { root: "/ws", outDir: "/tmp/glyph-serve-1" };
+const BUILT = { pages: 3, assets: 1, removed: 0, pruneError: null };
+const warning = (reason: string) =>
+  `Warning: the cleanup after the export did not finish, so outdated pages may be left in the folder, now or after a later export: ${reason}`;
 
 /** Fires whatever the hook registered for the change event. */
 let emitChange: (() => void) | undefined;
@@ -48,7 +51,7 @@ beforeEach(() => {
     }
     return Promise.resolve(unlistenMock);
   });
-  exportSiteMock.mockReset().mockResolvedValue({ pages: 3, assets: 1 });
+  exportSiteMock.mockReset().mockResolvedValue(BUILT);
   resetCliServeRequestCache();
   resetCliServeRunner();
 });
@@ -92,7 +95,7 @@ describe("useCliServe", () => {
     exportSiteMock.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          releaseFirst = () => resolve({ pages: 1, assets: 0 });
+          releaseFirst = () => resolve(BUILT);
         }),
     );
     renderHook(() => useCliServe());
@@ -133,6 +136,82 @@ describe("useCliServe", () => {
     });
   });
 
+  it("reloads with a warning when a build's cleanup failed", async () => {
+    stubServe(REQUEST);
+    exportSiteMock.mockResolvedValueOnce({ ...BUILT, pruneError: "locked" });
+    renderHook(() => useCliServe());
+
+    // The site did render, so this is a finished build, not a failed one.
+    await waitFor(() => expect(invokeCalls("serve_ready")).toHaveLength(1));
+    expect(invokeCalls("serve_ready")[0][1]).toEqual({ warning: warning("locked") });
+    expect(invokeCalls("serve_failed")).toHaveLength(0);
+  });
+
+  it("says a cleanup failure once per reason, and again when it comes back", async () => {
+    stubServe(REQUEST);
+    exportSiteMock
+      .mockResolvedValueOnce({ ...BUILT, pruneError: "locked" })
+      .mockResolvedValueOnce({ ...BUILT, pruneError: "locked" })
+      .mockResolvedValueOnce({ ...BUILT, pruneError: "disk full" })
+      .mockResolvedValueOnce(BUILT)
+      .mockResolvedValueOnce({ ...BUILT, pruneError: "disk full" });
+    renderHook(() => useCliServe());
+    await waitFor(() => expect(invokeCalls("serve_ready")).toHaveLength(1));
+    for (const builds of [2, 3, 4, 5]) {
+      emitChange?.();
+      await waitFor(() => expect(invokeCalls("serve_ready")).toHaveLength(builds));
+    }
+
+    expect(invokeCalls("serve_ready").map(([, args]) => args)).toEqual([
+      { warning: warning("locked") },
+      // Every save would otherwise repeat the same line.
+      { warning: null },
+      // A different reason is news even straight after another.
+      { warning: warning("disk full") },
+      { warning: null },
+      { warning: warning("disk full") },
+    ]);
+  });
+
+  it("stays quiet about the same reason across a failed build", async () => {
+    stubServe(REQUEST);
+    exportSiteMock
+      .mockResolvedValueOnce({ ...BUILT, pruneError: "locked" })
+      .mockRejectedValueOnce(new Error("bad site.json"))
+      .mockResolvedValueOnce({ ...BUILT, pruneError: "locked" });
+    renderHook(() => useCliServe());
+    await waitFor(() => expect(invokeCalls("serve_ready")).toHaveLength(1));
+    emitChange?.();
+    await waitFor(() => expect(invokeCalls("serve_failed")).toHaveLength(1));
+    emitChange?.();
+    await waitFor(() => expect(invokeCalls("serve_ready")).toHaveLength(2));
+
+    expect(invokeCalls("serve_ready")[1][1]).toEqual({ warning: null });
+  });
+
+  it("repeats a warning that never reached stderr", async () => {
+    stubServe(REQUEST);
+    exportSiteMock
+      .mockResolvedValueOnce(BUILT)
+      .mockResolvedValue({ ...BUILT, pruneError: "locked" });
+    const base = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation((cmd, args) => {
+      // The second report, the first to carry the warning, is lost.
+      if (cmd === "serve_ready" && invokeCalls("serve_ready").length === 2) {
+        return Promise.reject(new Error("ipc down"));
+      }
+      return base(cmd, args);
+    });
+    renderHook(() => useCliServe());
+    await waitFor(() => expect(invokeCalls("serve_ready")).toHaveLength(1));
+    emitChange?.();
+    await waitFor(() => expect(invokeCalls("serve_ready")).toHaveLength(2));
+
+    emitChange?.();
+    await waitFor(() => expect(invokeCalls("serve_ready")).toHaveLength(3));
+    expect(invokeCalls("serve_ready")[2][1]).toEqual({ warning: warning("locked") });
+  });
+
   it("keeps serving after a failed build", async () => {
     stubServe(REQUEST);
     exportSiteMock.mockRejectedValueOnce(new Error("transient"));
@@ -151,7 +230,7 @@ describe("useCliServe", () => {
     exportSiteMock.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          releaseBuild = () => resolve({ pages: 1, assets: 0 });
+          releaseBuild = () => resolve(BUILT);
         }),
     );
 

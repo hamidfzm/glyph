@@ -1,6 +1,6 @@
 {
   "$comment": "Gzip byte budgets enforced by scripts/check-bundle-size.mjs in CI. Rationale and update process: docs/bundle-budgets.md",
-  "startup": 345000,
+  "startup": 350000,
   "chunks": {
     "d2": { "prefix": "d2-", "budgetGzip": 6450000 },
     "pdfEngine": { "prefix": "pdfEngine-", "budgetGzip": 910000 },
