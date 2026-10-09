@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { errorMessage } from "@/lib/errorMessage";
 import {
   configString,
   parseSiteConfig,
@@ -102,7 +103,7 @@ export function useSiteConfigForm(workspaceRoot: string | undefined) {
       });
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
       return false;
     }
   };

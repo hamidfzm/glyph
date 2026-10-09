@@ -76,12 +76,19 @@ pub fn get_cli_serve<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Option<CliS
 
 /// A build finished. The first one announces the URL, since the site only
 /// becomes worth visiting once there is something in it; every later one
-/// tells the open browsers to reload.
+/// tells the open browsers to reload. `warning` is a build that rendered but
+/// left something undone: it is printed, and the site is served all the same.
 #[tauri::command]
-pub fn serve_ready<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
+pub fn serve_ready<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    warning: Option<String>,
+) -> Result<(), String> {
     let state = app
         .try_state::<ServeState>()
         .ok_or_else(|| "not serving".to_string())?;
+    if let Some(warning) = warning {
+        eprintln!("{warning}");
+    }
     if state.take_first_build() {
         println!("Serving {} at {}", state.display_root, state.url);
     }
@@ -191,7 +198,7 @@ mod tests {
             reload,
         ));
 
-        assert_eq!(serve_ready(app.handle().clone()), Ok(()));
+        assert_eq!(serve_ready(app.handle().clone(), None), Ok(()));
         assert_eq!(
             browser.try_recv(),
             Ok(()),
@@ -199,7 +206,12 @@ mod tests {
         );
 
         // The second build is a rebuild: it reloads without announcing again.
-        assert_eq!(serve_ready(app.handle().clone()), Ok(()));
+        assert_eq!(serve_ready(app.handle().clone(), None), Ok(()));
+        assert_eq!(browser.try_recv(), Ok(()));
+
+        // A warning is about the cleanup, not the site: the pages still reload.
+        let warning = Some("Warning: cleanup after the export failed".to_string());
+        assert_eq!(serve_ready(app.handle().clone(), warning), Ok(()));
         assert_eq!(browser.try_recv(), Ok(()));
     }
 
@@ -238,7 +250,7 @@ mod tests {
         // announce a URL and print to stderr on an ordinary launch.
         let app = tauri::test::mock_app();
         assert_eq!(
-            serve_ready(app.handle().clone()),
+            serve_ready(app.handle().clone(), Some("anything".to_string())),
             Err("not serving".to_string())
         );
         assert_eq!(
