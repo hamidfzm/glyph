@@ -197,6 +197,19 @@ impl GrantRegistry {
         Ok(canonical)
     }
 
+    /// Grant a website export destination unless it sits inside `workspace`,
+    /// a canonical root as `ensure_workspace` returns it: the site would land
+    /// among the notes it is made from. `false` is that refusal, with no grant.
+    #[cfg(desktop)]
+    pub fn grant_export_dir_outside(&self, dir: &Path, workspace: &Path) -> Result<bool, String> {
+        let canonical = canonicalize_lenient(dir)?;
+        if canonical.starts_with(workspace) {
+            return Ok(false);
+        }
+        self.lock()?.export_dirs.insert(canonical);
+        Ok(true)
+    }
+
     /// Grant exact-path write on a single export target (may not exist yet).
     #[cfg(desktop)]
     pub fn grant_export_file(&self, path: &Path) -> Result<PathBuf, String> {
@@ -809,6 +822,87 @@ mod tests {
         assert!(grants.ensure_writable(&as_str(&nested)).is_ok());
         assert!(grants.ensure_readable(&as_str(&out)).is_err());
         assert!(grants.ensure_readable(&as_str(&nested)).is_err());
+    }
+
+    #[test]
+    fn an_export_dir_inside_the_workspace_is_refused_and_not_granted() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("ws");
+        fs::create_dir_all(root.join("sub")).unwrap();
+        let workspace = root.canonicalize().unwrap();
+        let grants = GrantRegistry::default();
+
+        // Spelled as a dialog returns them, which on Windows is not how the
+        // canonical root is spelled: the two share no string prefix there.
+        for inside in [
+            root.clone(),
+            root.join("sub"),
+            root.join("new").join("site"),
+        ] {
+            assert_eq!(
+                grants.grant_export_dir_outside(&inside, &workspace),
+                Ok(false),
+                "{inside:?}"
+            );
+            let page = inside.join("index.html");
+            assert!(grants.ensure_writable(&as_str(&page)).is_err());
+        }
+    }
+
+    #[test]
+    fn an_export_dir_outside_the_workspace_is_granted() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("ws");
+        fs::create_dir_all(&root).unwrap();
+        let workspace = root.canonicalize().unwrap();
+        let grants = GrantRegistry::default();
+
+        // A sibling that only shares the root's name as a prefix is outside it.
+        let sibling = tmp.path().join("ws-site");
+        assert_eq!(
+            grants.grant_export_dir_outside(&sibling, &workspace),
+            Ok(true)
+        );
+        let page = sibling.join("notes").join("a.html");
+        assert!(grants.ensure_writable(&as_str(&page)).is_ok());
+    }
+
+    #[test]
+    fn an_export_dir_is_judged_by_where_a_link_leads() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("ws");
+        let elsewhere = tmp.path().join("elsewhere");
+        fs::create_dir_all(root.join("sub")).unwrap();
+        fs::create_dir_all(&elsewhere).unwrap();
+        // The workspace is opened through a link of its own, as `/tmp` is on macOS.
+        let opened_as = tmp.path().join("ws-link");
+        link_folder(&root, &opened_as);
+        let leads_in = tmp.path().join("shortcut");
+        link_folder(&root.join("sub"), &leads_in);
+        let leads_out = root.join("public");
+        link_folder(&elsewhere, &leads_out);
+
+        let grants = GrantRegistry::default();
+        let workspace = grants.grant_workspace(&opened_as).unwrap();
+
+        for inside in [leads_in, root.join("sub"), opened_as.join("sub")] {
+            assert_eq!(
+                grants.grant_export_dir_outside(&inside, &workspace),
+                Ok(false),
+                "{inside:?}"
+            );
+        }
+        // A site written through this link lands outside the workspace.
+        assert_eq!(
+            grants.grant_export_dir_outside(&leads_out, &workspace),
+            Ok(true)
+        );
+        // A link to nothing shows nowhere to judge: an error, not a grant.
+        let leads_nowhere = tmp.path().join("dangling");
+        link_folder(&tmp.path().join("gone"), &leads_nowhere);
+        assert!(grants
+            .grant_export_dir_outside(&leads_nowhere, &workspace)
+            .is_err());
     }
 
     #[test]

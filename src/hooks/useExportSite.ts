@@ -2,7 +2,6 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { errorMessage } from "@/lib/errorMessage";
-import { isPathInside } from "@/lib/paths";
 import { pickExportDir } from "@/lib/pickers";
 
 export interface SiteExportProgress {
@@ -51,9 +50,9 @@ export function useExportSite(root: string | undefined): ExportSiteHandlers {
     if (!root || isExportingRef.current) return;
     isExportingRef.current = true;
     try {
-      const outDir = await pickExportDir();
-      if (typeof outDir !== "string" || outDir === "") return; // cancelled
-      if (isPathInside(outDir, root)) {
+      const picked = await pickExportDir(root);
+      if (picked === null) return; // cancelled
+      if (picked.kind === "insideWorkspace") {
         // Exporting into the watched workspace would pollute it (and re-export
         // its own output next time).
         setSiteNotice({ kind: "insideWorkspace" });
@@ -65,7 +64,7 @@ export function useExportSite(root: string | undefined): ExportSiteHandlers {
       const { exportSite } = await import("@/lib/export/site/exportSite");
       const { pruneError } = await exportSite({
         root,
-        outDir,
+        outDir: picked.path,
         themes: pluginThemes,
         // Plugin markdown syntax renders in the export as it does in the viewer.
         remarkPlugins,

@@ -45,9 +45,77 @@ pub(crate) fn write_cli_export_outcome(
     Ok(())
 }
 
+/// What picking a website export folder came to: granted write-only, or
+/// refused with no grant because it is inside the workspace being exported.
+#[cfg(desktop)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ExportDirPick {
+    Granted { path: String },
+    InsideWorkspace,
+}
+
+/// Split from `pick_export_dir` (in [`super::pick`]) so what follows the
+/// dialog is unit-testable. `picked` goes back as the dialog spelled it: the
+/// export joins page paths onto it with `/`, which a verbatim path does not
+/// take as a separator.
+#[cfg(desktop)]
+pub(crate) fn settle_export_dir(
+    grants: &crate::grants::GrantRegistry,
+    picked: &std::path::Path,
+    workspace: &std::path::Path,
+) -> Result<ExportDirPick, String> {
+    if !grants.grant_export_dir_outside(picked, workspace)? {
+        return Ok(ExportDirPick::InsideWorkspace);
+    }
+    Ok(ExportDirPick::Granted {
+        path: picked.to_string_lossy().to_string(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_picked_export_dir_is_refused_inside_the_workspace_and_granted_outside_it() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path().join("ws");
+        let out = tmp.path().join("out");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::create_dir_all(&out).unwrap();
+        let grants = crate::grants::GrantRegistry::default();
+        let workspace = grants.grant_workspace(&root).unwrap();
+
+        assert_eq!(
+            settle_export_dir(&grants, &root.join("sub"), &workspace),
+            Ok(ExportDirPick::InsideWorkspace)
+        );
+        // Not the canonical spelling, which on Windows carries a verbatim prefix.
+        assert_eq!(
+            settle_export_dir(&grants, &out, &workspace),
+            Ok(ExportDirPick::Granted {
+                path: out.to_string_lossy().to_string()
+            })
+        );
+        let page = out.join("index.html").to_string_lossy().to_string();
+        assert!(grants.ensure_writable(&page).is_ok());
+    }
+
+    #[test]
+    fn an_export_dir_pick_reaches_the_frontend_tagged_by_kind() {
+        let granted = ExportDirPick::Granted {
+            path: "/out".to_string(),
+        };
+        assert_eq!(
+            serde_json::to_value(granted).unwrap(),
+            serde_json::json!({ "kind": "granted", "path": "/out" })
+        );
+        assert_eq!(
+            serde_json::to_value(ExportDirPick::InsideWorkspace).unwrap(),
+            serde_json::json!({ "kind": "insideWorkspace" })
+        );
+    }
 
     #[test]
     fn get_cli_export_returns_the_stashed_request_without_consuming_it() {
