@@ -5,8 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EDITOR_MODE } from "@/lib/settings";
 import type { Relink } from "@/lib/vault";
 import { expectConsole } from "@/test/consoleGuard";
+import { deferred } from "@/test/deferred";
 import {
+  captureListener,
+  changeOnDisk,
   defaultOptions,
+  deliver,
   fileOf,
   makeInvoker,
   resetTabsMocks,
@@ -596,6 +600,67 @@ describe("useTabs link rewriting on rename and move", () => {
 
     await waitFor(() => expect(fileOf(result).content).toBe("![map](../map.png)"));
     expect(fileOf(result).path).toBe("/p/ws/dest/travel.md");
+  });
+
+  it("drops a watcher read of a rewritten file that began before the rewrite", async () => {
+    const staleRead = deferred<string>();
+    const reads = ["see [[travel]]", staleRead.promise, "see [[trip]]"];
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => reads.shift(),
+        rename_path: async () => relinked("/p/ws/trip.md", { files: index }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await openWorkspace(result);
+    await act(async () => {
+      await result.current.openFile("/p/ws/index.md");
+    });
+
+    // The watcher's read is still out when the rename rewrites the file.
+    await changeOnDisk(fileChanged, "/p/ws/index.md");
+    await act(async () => {
+      await result.current.renamePath("/p/ws/travel.md", "trip");
+    });
+    await waitFor(() => expect(fileOf(result).content).toBe("see [[trip]]"));
+    await deliver(() => staleRead.resolve("see [[travel]]"));
+
+    expect(fileOf(result).content).toBe("see [[trip]]");
+  });
+
+  it("drops a watcher read that arrives before the rewrite's own reload", async () => {
+    const staleRead = deferred<string>();
+    const ownReload = deferred<string>();
+    const reads = ["see [[travel]]", staleRead.promise, ownReload.promise];
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => reads.shift(),
+        rename_path: async () => relinked("/p/ws/trip.md", { files: index }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await openWorkspace(result);
+    await act(async () => {
+      await result.current.openFile("/p/ws/index.md");
+    });
+
+    await changeOnDisk(fileChanged, "/p/ws/index.md");
+    let renaming: Promise<string | null> | undefined;
+    act(() => {
+      renaming = result.current.renamePath("/p/ws/travel.md", "trip");
+    });
+    await waitFor(() => expect(reads).toHaveLength(0));
+    // No newer read has landed yet, so only the mark on the rewritten file drops this one.
+    await deliver(() => staleRead.resolve("theirs"));
+    expect(fileOf(result).content).toBe("see [[travel]]");
+
+    await act(async () => {
+      ownReload.resolve("see [[trip]]");
+      await renaming;
+    });
+    expect(fileOf(result).content).toBe("see [[trip]]");
   });
 
   it("names the file a rewrite stopped at and reads back only open files", async () => {

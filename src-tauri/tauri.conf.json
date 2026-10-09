@@ -56,6 +56,25 @@
     "macOS": {
       "minimumSystemVersion": "10.15"
     },
+    "linux": {
+      "appimage": {
+        "files": {
+          "/usr/share/mime/packages/glyph.xml": "linux/glyph.xml"
+        }
+      },
+      "deb": {
+        "desktopTemplate": "linux/glyph.desktop",
+        "files": {
+          "/usr/share/mime/packages/glyph.xml": "linux/glyph.xml"
+        }
+      },
+      "rpm": {
+        "desktopTemplate": "linux/glyph.desktop",
+        "files": {
+          "/usr/share/mime/packages/glyph.xml": "linux/glyph.xml"
+        }
+      }
+    },
     "fileAssociations": [
       {
         "ext": [

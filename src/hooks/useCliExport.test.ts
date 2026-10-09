@@ -42,7 +42,9 @@ const HOOK_ARGS = { entries: [], content: "# Notes" };
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
-  exportSiteMock.mockReset().mockResolvedValue({ pages: 3, assets: 1, removed: 0 });
+  exportSiteMock
+    .mockReset()
+    .mockResolvedValue({ pages: 3, assets: 1, removed: 0, pruneError: null });
   runCliDocumentExportMock.mockReset().mockResolvedValue({ path: "/ws/notes.pdf", settled: true });
   settings.loaded = true;
   resetCliExportRequestCache();
@@ -127,13 +129,34 @@ describe("useCliExport", () => {
   });
 
   it("names the stale files a repeat export removed", async () => {
-    exportSiteMock.mockResolvedValue({ pages: 3, assets: 1, removed: 2 });
+    exportSiteMock.mockResolvedValue({ pages: 3, assets: 1, removed: 2, pruneError: null });
     stubRequest(SITE_REQUEST);
     renderHook(() => useCliExport(HOOK_ARGS));
     await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
     expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
       code: 0,
       message: "Exported 3 pages and 1 assets to /out, removing 2 stale files",
+    });
+  });
+
+  it("exits 0 with a warning when the site exported but its cleanup failed", async () => {
+    exportSiteMock.mockResolvedValue({
+      pages: 3,
+      assets: 1,
+      removed: 0,
+      pruneError: "Failed to write file: Access is denied. (os error 5)",
+    });
+    stubRequest(SITE_REQUEST);
+    renderHook(() => useCliExport(HOOK_ARGS));
+    await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
+    // The site is on disk, so the script still gets its path and a zero exit.
+    expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
+      code: 0,
+      message:
+        "Exported 3 pages and 1 assets to /out\n" +
+        "Warning: the cleanup after the export did not finish, so outdated pages may be left " +
+        "in the folder, now or after a later export: " +
+        "Failed to write file: Access is denied. (os error 5)",
     });
   });
 

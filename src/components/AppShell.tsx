@@ -31,7 +31,7 @@ import { AIChatPanel } from "./ai/lazyAIChatPanel";
 import { AppBanners } from "./layout/AppBanners";
 import { AppModals } from "./layout/AppModals";
 import { EmptyState } from "./layout/EmptyState";
-import { ExportProgress } from "./layout/ExportProgress";
+import { ExportToasts } from "./layout/ExportToasts";
 import { Sidebar } from "./layout/Sidebar";
 import { SidebarDrawerBackdrop } from "./layout/SidebarDrawerBackdrop";
 import { StatusBar } from "./layout/StatusBar";
@@ -262,10 +262,12 @@ export function AppShell() {
       </div>
       <StatusBar onOpenSync={modals.openSyncSettings} />
 
-      {exporters.exporting && <ExportProgress format={exporters.exporting} />}
-      {siteExporter.siteProgress && (
-        <ExportProgress format="website" progress={siteExporter.siteProgress} />
-      )}
+      <ExportToasts
+        exporting={exporters.exporting}
+        siteProgress={siteExporter.siteProgress}
+        siteNotice={siteExporter.siteNotice}
+        onDismissSiteNotice={siteExporter.dismissSiteNotice}
+      />
 
       <CommandPalette
         open={palette.open}

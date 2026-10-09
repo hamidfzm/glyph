@@ -8,7 +8,7 @@ use std::io::{self, BufRead, Read, Write};
 
 use serde_json::{json, Value};
 
-use super::registry::{self, ToolError};
+use super::registry::ToolError;
 
 /// Newest first. A client asking for one of these gets it back; any other
 /// request gets the newest, and the client decides whether it speaks that.
@@ -26,7 +26,7 @@ const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_FOUND: i64 = -32601;
 const INVALID_PARAMS: i64 = -32602;
 
-const INSTRUCTIONS: &str = "Glyph's index of markdown vaults: wikilinks resolved the way the app resolves them, backlinks, tags, headings, the link graph and canvas boards. A note reference (`ref`) is a wikilink target such as `Note`, `Folder/Note` or `Note#Heading`, a path relative to the vault, or an absolute path. Call vault_context first to see which vaults are open. When it reports canAskForVaults, a folder that is not listed can be passed by its absolute path as `vault`, and the user is asked to allow it.";
+const INSTRUCTIONS: &str = "Glyph's index of markdown vaults: wikilinks resolved the way the app resolves them, backlinks, tags, headings, the link graph and canvas boards. A note reference (`ref`) is a wikilink target such as `Note`, `Folder/Note` or `Note#Heading`, a path relative to the vault, or an absolute path. Call vault_context first to see which vaults are open. When it reports canAskForVaults, a folder that is not listed can be passed by its absolute path as `vault`, and the user is asked to allow it. Tools that change notes are listed only once the user has turned each one on in Glyph's settings; vault_context reports which are on.";
 
 /// Puts a question to the user in the middle of a call.
 pub(super) trait Ask {
@@ -57,13 +57,17 @@ struct Client<R, W> {
     asked: u64,
     /// What arrived while a question was out, handled once the call returns.
     held: VecDeque<Incoming>,
+    /// The tools the client was last told of, once it has asked for them.
+    listed: Option<Vec<String>>,
 }
 
-/// Answer requests from `input` until it ends. `call` runs one tool; this loop
-/// owns everything else about the protocol.
+/// Answer requests from `input` until it ends. `list` describes the tools on
+/// offer right now and `call` runs one; this loop owns everything else about
+/// the protocol.
 pub(super) fn serve(
     input: impl BufRead,
     output: impl Write,
+    mut list: impl FnMut() -> Vec<Value>,
     mut call: impl FnMut(&str, Value, &mut dyn Ask) -> Result<String, ToolError>,
 ) -> io::Result<()> {
     let mut client = Client {
@@ -74,6 +78,7 @@ pub(super) fn serve(
         cancelled: false,
         asked: 0,
         held: VecDeque::new(),
+        listed: None,
     };
     loop {
         let next = match client.held.pop_front() {
@@ -88,8 +93,23 @@ pub(super) fn serve(
                 "message is larger than 1 MiB",
             )),
             Some(Incoming::Malformed) => Some(error(Value::Null, PARSE_ERROR, "Parse error")),
-            Some(Incoming::Message(message)) => respond(&message, &mut client, &mut call),
+            Some(Incoming::Message(message)) => {
+                respond(&message, &mut client, &mut list, &mut call)
+            }
         };
+        // A client that keeps the list it was given learns here that the user
+        // turned a tool on or off since.
+        // ponytail: noticed when the client next writes, not the moment the
+        // setting changes; watching the settings file would close that.
+        if let Some(listed) = &mut client.listed {
+            let now = names(&list());
+            if *listed != now {
+                *listed = now;
+                let notice =
+                    json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" });
+                send(&mut client.output, &notice)?;
+            }
+        }
         if let Some(reply) = reply {
             send(&mut client.output, &reply)?;
         }
@@ -157,6 +177,7 @@ fn error(id: Value, code: i64, message: &str) -> Value {
 fn respond<R: BufRead, W: Write>(
     message: &Value,
     client: &mut Client<R, W>,
+    list: &mut impl FnMut() -> Vec<Value>,
     call: &mut impl FnMut(&str, Value, &mut dyn Ask) -> Result<String, ToolError>,
 ) -> Option<Value> {
     let Some(object) = message.as_object() else {
@@ -192,9 +213,11 @@ fn respond<R: BufRead, W: Write>(
             Ok(initialize(&params))
         }
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(json!({
-            "tools": registry::list().map(|tool| tool.describe()).collect::<Vec<_>>()
-        })),
+        "tools/list" => {
+            let tools = list();
+            client.listed = Some(names(&tools));
+            Ok(json!({ "tools": tools }))
+        }
         "tools/call" => {
             client.call_id = id.clone();
             let result = call_tool(&params, client, call);
@@ -220,10 +243,16 @@ fn initialize(params: &Value) -> Value {
         .unwrap_or(PROTOCOL_VERSIONS[0]);
     json!({
         "protocolVersion": version,
-        "capabilities": { "tools": { "listChanged": false } },
+        "capabilities": { "tools": { "listChanged": true } },
         "serverInfo": { "name": "glyph", "title": "Glyph", "version": env!("CARGO_PKG_VERSION") },
         "instructions": INSTRUCTIONS,
     })
+}
+
+/// The tools a listing names, which is all that changes between two of them.
+fn names(tools: &[Value]) -> Vec<String> {
+    let name = |tool: &Value| tool["name"].as_str().map(str::to_string);
+    tools.iter().filter_map(name).collect()
 }
 
 /// A tool that refuses is a result the model reads, marked `isError`, so it
@@ -349,6 +378,7 @@ mod tests {
         serve(
             input.as_bytes(),
             &mut output,
+            || vec![json!({ "name": "echo" })],
             |name, args, ask| match name {
                 "echo" => Ok(args.to_string()),
                 "ask" => ask
@@ -360,6 +390,10 @@ mod tests {
             },
         )
         .unwrap();
+        messages(output)
+    }
+
+    fn messages(output: Vec<u8>) -> Vec<Value> {
         let text = String::from_utf8(output).unwrap();
         text.lines()
             .map(|line| {
@@ -391,7 +425,10 @@ mod tests {
         assert_eq!(replies[2]["result"]["protocolVersion"], "2025-11-25");
         assert_eq!(replies[0]["id"], 1);
         assert_eq!(replies[0]["result"]["serverInfo"]["name"], "glyph");
-        assert!(replies[0]["result"]["capabilities"]["tools"].is_object());
+        assert_eq!(
+            replies[0]["result"]["capabilities"]["tools"]["listChanged"],
+            true
+        );
     }
 
     #[test]
@@ -410,15 +447,54 @@ mod tests {
     }
 
     #[test]
-    fn tools_are_listed_with_their_schemas() {
+    fn the_tools_listed_are_the_ones_on_offer_when_asked() {
         let replies = exchange(&request(1, "tools/list", Value::Null));
-        let tools = replies[0]["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), registry::list().count());
-        for tool in tools {
-            assert!(tool["name"].is_string());
-            assert_eq!(tool["inputSchema"]["type"], "object", "{}", tool["name"]);
-            assert!(tool["annotations"]["readOnlyHint"].is_boolean());
-        }
+        assert_eq!(replies[0]["result"]["tools"], json!([{ "name": "echo" }]));
+    }
+
+    #[test]
+    fn a_client_that_listed_the_tools_is_told_once_when_they_change() {
+        // `on` and `off` add and take away a second tool, as a setting would.
+        let extra = std::cell::Cell::new(false);
+        let call = |name: &str| request(0, "tools/call", json!({ "name": name }));
+        let input = format!(
+            "{}{}{}{}{}",
+            call("on"),
+            request(1, "tools/list", Value::Null),
+            call("off"),
+            request(2, "ping", Value::Null),
+            call("on"),
+        );
+        let mut output = Vec::new();
+        serve(
+            input.as_bytes(),
+            &mut output,
+            || {
+                let mut tools = vec![json!({ "name": "echo" })];
+                tools.extend(extra.get().then(|| json!({ "name": "patch" })));
+                tools
+            },
+            |name, _, _| {
+                extra.set(name == "on");
+                Ok("null".to_string())
+            },
+        )
+        .unwrap();
+
+        let sent: Vec<String> = messages(output)
+            .iter()
+            .map(|message| match message["method"].as_str() {
+                Some(method) => method.to_string(),
+                None => format!("reply {}", message["id"]),
+            })
+            .collect();
+        let changed = "notifications/tools/list_changed";
+        // Nothing before the client has a list to be out of date, and nothing
+        // again while the list stays as it was last told.
+        assert_eq!(
+            sent,
+            ["reply 0", "reply 1", changed, "reply 0", "reply 2", changed, "reply 0"]
+        );
     }
 
     #[test]
@@ -528,7 +604,7 @@ mod tests {
         let huge = format!("{{\"pad\":\"{}\"", "z".repeat(MAX_MESSAGE_BYTES + 100));
         let input = std::io::BufReader::with_capacity(64, huge.as_bytes());
         let mut output = Vec::new();
-        serve(input, &mut output, |_, _, _| Ok(String::new())).unwrap();
+        serve(input, &mut output, Vec::new, |_, _, _| Ok(String::new())).unwrap();
         let text = String::from_utf8(output).unwrap();
         assert_eq!(text.lines().count(), 1, "one refusal, then the end: {text}");
     }
@@ -736,7 +812,7 @@ mod tests {
             request(2, "tools/call", json!({ "name": "ask" })),
         );
         let mut refusal = None;
-        let served = serve(input.as_bytes(), Closing(1), |_, _, ask| {
+        let served = serve(input.as_bytes(), Closing(1), Vec::new, |_, _, ask| {
             refusal = ask.confirm("May I?").err();
             Ok(String::new())
         });

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EDITOR_MODE } from "@/lib/settings";
 import type { FileState, TabsState } from "@/lib/tabs";
+import { type Deferred, deferred } from "@/test/deferred";
 import { useDiskReload } from "./useDiskReload";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -35,13 +36,25 @@ const stateAt = (revision: number, file: Partial<FileState> = {}): TabsState => 
 
 const unsaved = { dirty: true, editContent: "typed" };
 
-function renderReload(initial: TabsState) {
+function renderReload(initial: TabsState, selfSaveCount = () => 0) {
   const forgetHistory = vi.fn();
   const hook = renderHook(() => {
     const [state, setState] = useState(initial);
-    return { state, setState, reload: useDiskReload({ setState, forgetHistory }) };
+    return { state, setState, reload: useDiskReload({ setState, forgetHistory, selfSaveCount }) };
   });
   return { ...hook, forgetHistory };
+}
+
+/** Park every read on a promise the test settles, listed in the order the reads began. */
+function parkReads() {
+  const reads: Deferred<string>[] = [];
+  vi.mocked(invoke).mockImplementation(async (cmd) => {
+    if (cmd !== "read_file") return null;
+    const read = deferred<string>();
+    reads.push(read);
+    return read.promise;
+  });
+  return reads;
 }
 
 const contentOf = (state: TabsState) => state.tabs[0].file?.content;
@@ -65,6 +78,76 @@ describe("useDiskReload", () => {
       editContent: "new",
     });
     expect(forgetHistory).toHaveBeenCalledWith("a");
+  });
+
+  it("drops a read the app's own write overtook", async () => {
+    let saves = 0;
+    const reads = parkReads();
+    const { result } = renderReload(stateAt(3), () => saves);
+
+    const reloading = result.current.reload("/p/a.md", 3);
+    saves += 1;
+    await act(async () => {
+      reads[0].resolve("new");
+      await reloading;
+    });
+
+    expect(contentOf(result.current.state)).toBe("old");
+  });
+
+  it("keeps the later of two reads when the earlier one resolves last", async () => {
+    const reads = parkReads();
+    const { result } = renderReload(stateAt(3));
+
+    const earlier = result.current.reload("/p/a.md");
+    const later = result.current.reload("/p/a.md");
+    await act(async () => {
+      reads[1].resolve("later");
+      await later;
+    });
+    await act(async () => {
+      reads[0].resolve("earlier");
+      await earlier;
+    });
+
+    expect(contentOf(result.current.state)).toBe("later");
+  });
+
+  it("applies two overlapping reads in turn when they resolve in order", async () => {
+    const reads = parkReads();
+    const { result } = renderReload(stateAt(3));
+
+    const earlier = result.current.reload("/p/a.md");
+    const later = result.current.reload("/p/a.md");
+    await act(async () => {
+      reads[0].resolve("earlier");
+      await earlier;
+    });
+    expect(contentOf(result.current.state)).toBe("earlier");
+    await act(async () => {
+      reads[1].resolve("later");
+      await later;
+    });
+
+    expect(contentOf(result.current.state)).toBe("later");
+  });
+
+  it("lets a read land after a later read of another path", async () => {
+    const reads = parkReads();
+    const { result } = renderReload(stateAt(3));
+
+    const reloading = result.current.reload("/p/a.md");
+    const other = result.current.reload("/p/b.md");
+    await act(async () => {
+      reads[1].resolve("elsewhere");
+      await other;
+    });
+    await act(async () => {
+      reads[0].resolve("new");
+      await reloading;
+    });
+
+    expect(contentOf(result.current.state)).toBe("new");
   });
 
   it("keeps a tab edited since the revision the caller names", async () => {
@@ -106,11 +189,7 @@ describe("useDiskReload", () => {
   });
 
   it("keeps an edit made while the file was being read", async () => {
-    let finishRead: (content: string) => void = () => {};
-    const pendingRead = new Promise<string>((resolve) => {
-      finishRead = resolve;
-    });
-    vi.mocked(invoke).mockImplementation(async (cmd) => (cmd === "read_file" ? pendingRead : null));
+    const reads = parkReads();
     const { result } = renderReload(stateAt(3, { mode: EDITOR_MODE.view }));
 
     const reloading = result.current.reload("/p/a.md");
@@ -118,7 +197,7 @@ describe("useDiskReload", () => {
       result.current.setState(stateAt(4, { ...unsaved, mode: EDITOR_MODE.view }));
     });
     await act(async () => {
-      finishRead("new");
+      reads[0].resolve("new");
       await reloading;
     });
 

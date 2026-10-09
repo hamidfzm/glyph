@@ -30,10 +30,12 @@ jobs:
             # Bundle analysis is the codecov Vite plugin, which runs during
             # the frontend build; it does not need installer packaging.
             args_full: ""
-            # The Docker check installs this leg's .deb, so a pull request has
-            # to produce one. Only the .deb: AppImage bundling downloads
-            # linuxdeploy and is minutes of work nothing here consumes.
-            args_pr: "--bundles deb"
+            # The Docker check and the desktop entry smoke test both install
+            # this leg's .deb, and a later step looks inside the .rpm, so a
+            # pull request has to produce both. Not the AppImage: bundling it
+            # downloads linuxdeploy and is minutes of work nothing here
+            # consumes.
+            args_pr: "--bundles deb,rpm"
             bundle_analysis: true
           # No include entry for ubuntu-22.04-arm: include is processed
           # AFTER exclude, so an entry here would resurrect the excluded
@@ -57,7 +59,7 @@ jobs:
         uses: ./.github/actions/linux-deps
         with:
           cache-key: apt-webkit-${{ matrix.platform }}-v1
-          extra-packages: xdg-utils xvfb
+          extra-packages: xdg-utils xvfb desktop-file-utils rpm
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: src-tauri
@@ -83,6 +85,20 @@ jobs:
       - name: Quick Look smoke test
         if: matrix.platform == 'macos-latest'
         run: ./scripts/quicklook-smoke.sh "$(find src-tauri/target -maxdepth 5 -path '*/release/bundle/macos/Glyph.app' | head -n 1)"
+      # Installs the .deb, checks the desktop offers Glyph under "Open With" for
+      # its own file types and no others, and removes it again. The AUR, PPA and
+      # apt packages repack this .deb whole. So does the snap, but snapd does
+      # not export the MIME package, so the snap is offered only for the
+      # Markdown extensions the system already knows.
+      - name: Desktop entry smoke test
+        if: matrix.platform == 'ubuntu-22.04'
+        timeout-minutes: 5
+        run: ./scripts/desktop-entry-smoke.sh src-tauri/target/release/bundle/deb/*.deb
+      # Nothing here installs the .rpm, and its desktop entry claims types that
+      # exist only once this file is on the system.
+      - name: The .rpm carries the MIME package
+        if: matrix.platform == 'ubuntu-22.04'
+        run: rpm -qlp src-tauri/target/release/bundle/rpm/*.rpm | grep -qx /usr/share/mime/packages/glyph.xml
       # Starts `glyph mcp` the way an MCP client does, on every platform and
       # with no xvfb: the server must answer without a display, and on Windows
       # the release binary is a GUI-subsystem program talking over pipes. A

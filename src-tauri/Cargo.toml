@@ -29,6 +29,9 @@ serde_json = "1"
 notify = "8"
 tauri-plugin-opener = "2.5.4"
 walkdir = "2.5.0"
+# Whether two paths are one file, which their spelling cannot say where the
+# filesystem ignores case. Already in the tree through walkdir.
+same-file = "1"
 thiserror = "2"
 # Backs all three workspace-search toggles (literal, whole-word, regex) with a
 # single compiled pattern. Already in the tree transitively.

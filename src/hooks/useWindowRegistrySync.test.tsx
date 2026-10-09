@@ -31,6 +31,17 @@ function reportedPaths() {
     .map(([, args]) => (args as { paths: string[] }).paths);
 }
 
+function reportedUnsaved() {
+  return vi
+    .mocked(invoke)
+    .mock.calls.filter(([cmd]) => cmd === "set_window_unsaved")
+    .map(([, args]) => (args as { paths: string[] }).paths);
+}
+
+function dirty(tab: Tab): Tab {
+  return { ...tab, file: { ...tab.file, dirty: true } } as Tab;
+}
+
 function reportedRoots() {
   return vi
     .mocked(invoke)
@@ -100,6 +111,31 @@ describe("useWindowRegistrySync", () => {
     );
 
     expect(reportedPaths()).toEqual([["/ws/one.md"]]);
+  });
+
+  it("reports which tabs hold unsaved edits, as that changes and not per keystroke", () => {
+    const one = fileTab("a", "/ws/one.md");
+    const two = fileTab("b", "/ws/two.md");
+    const { rerender } = renderHook(({ tabs }) => useWindowRegistrySync(null, tabs, false), {
+      initialProps: { tabs: [one, two] },
+    });
+    expect(reportedUnsaved()).toEqual([[]]);
+
+    rerender({ tabs: [dirty(one), two] });
+    // Another keystroke in the same buffer changes nothing worth reporting.
+    rerender({ tabs: [dirty(one), two] });
+    expect(reportedUnsaved()).toEqual([[], ["/ws/one.md"]]);
+
+    rerender({ tabs: [dirty(one), dirty(two)] });
+    // Saved, or closed while unsaved: either way it leaves the list.
+    rerender({ tabs: [one, dirty(two)] });
+    rerender({ tabs: [one] });
+    expect(reportedUnsaved().slice(2)).toEqual([["/ws/one.md", "/ws/two.md"], ["/ws/two.md"], []]);
+  });
+
+  it("leaves a scratch buffer out of the unsaved list: it has no file to protect", () => {
+    renderHook(() => useWindowRegistrySync(null, [dirty(fileTab("a", "Untitled-1", true))], false));
+    expect(reportedUnsaved()).toEqual([[]]);
   });
 
   it("reports an empty list once the last tab closes", () => {
