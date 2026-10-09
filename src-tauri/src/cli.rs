@@ -1491,6 +1491,10 @@ mod tests {
             "expected a normal folder open, got {plan:?}"
         );
         assert!(serve_fields(plan).is_none(), "it must not plan a serve");
+
+        // The bare word is still the subcommand, and that plan opens nothing.
+        let bare = launch_plan(&argv_of(&["serve", "./serve"]), &cwd).expect("plans");
+        assert_eq!(open_plan_of(&bare), None, "got {bare:?}");
         let _ = fs::remove_dir_all(&cwd);
     }
 
