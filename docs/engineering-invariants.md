@@ -8,8 +8,8 @@ Non-negotiable guarantees for Glyph. Every stateful or security-sensitive change
 
 A user edit is never discarded without a completed durable write or an explicit, informed discard by the user.
 
-- Owners: `src/hooks/useDocumentSave.ts` (save path), `src/hooks/useTabStrip.ts` (dirty tracking), `src/hooks/useDocumentEdits.ts` (a checkbox toggle, canvas commit, undo, or redo joins a dirty tab's buffer and never replaces text typed since), `src/hooks/useAutoSave.ts`, `src/hooks/useWindowClose.ts`
-- Evidence: `src/hooks/useAutoSave.test.ts`, `src/hooks/useTabs.*.test.tsx`
+- Owners: `src/hooks/useDocumentSave.ts` (save path), `src/hooks/useTabStrip.ts` (dirty tracking), `src/hooks/useDiskReload.ts` (a dirty tab is never reloaded from disk, in any editor mode), `src/hooks/useDocumentEdits.ts` (a checkbox toggle, canvas commit, undo, or redo joins a dirty tab's buffer and never replaces text typed since), `src/hooks/useAutoSave.ts`, `src/hooks/useWindowClose.ts`
+- Evidence: `src/hooks/useAutoSave.test.ts`, `src/hooks/useTabs.*.test.tsx`, `src/hooks/useDiskReload.test.ts`
 
 ### INV-2: Empty is not absent
 
@@ -22,15 +22,15 @@ Empty string is valid loaded document content. `null`/`undefined` represents abs
 
 Older asynchronous work cannot overwrite newer state or mark it complete. Writes to the same path are serialized; completions are revision-guarded.
 
-- Owners: `src/hooks/useWriteQueue.ts` (the per-path queue every document write goes through), `src/hooks/useDocumentSave.ts` and `src/hooks/useDocumentEdits.ts` (revision guards)
-- Evidence: `src/hooks/useWriteQueue.test.ts`, `src/hooks/useTabs.saving.test.tsx` and `src/hooks/useTabs.dirtyView.test.tsx` stale-completion and in-flight cases
+- Owners: `src/hooks/useWriteQueue.ts` (the per-path queue that saves and programmatic edits of an open file go through), `src/hooks/useDocumentSave.ts` and `src/hooks/useDocumentEdits.ts` (revision guards)
+- Evidence: `src/hooks/useWriteQueue.test.ts`, `src/hooks/useTabs.*.test.tsx` stale-completion and in-flight cases
 
 ### INV-4: Owners flush before they die
 
 Closing or replacing an owner (tab, workspace, window) flushes or transfers every pending operation it owns. Nothing pending is dropped on unmount, tab close, workspace switch, or app exit. The single exception is an explicit user discard: with Auto Save off, the close prompt's **Don't Save** drops the pending edits, which is the informed discard INV-1 allows.
 
 - Owners: `src/hooks/useTabs.ts` close-flush coordination, `src/hooks/useWindowClose.ts`
-- Evidence: lifecycle transition tests (edit -> switch -> close, shutdown flush), `src/hooks/useTabs.test.tsx` close-prompt cases
+- Evidence: lifecycle transition tests (edit -> switch -> close, shutdown flush), `src/hooks/useTabs.*.test.tsx` close-prompt cases
 
 ### INV-5: All external input is untrusted
 
@@ -73,9 +73,10 @@ For stateful or security-sensitive changes, tests and PR evidence must cover the
 ## Mutation testing
 
 Targeted mutation testing guards the authorization and persistence command
-modules: `src-tauri/src/grants.rs`, `src-tauri/src/commands/file.rs`, and
-`src-tauri/src/commands/create.rs`, scoped in `src-tauri/.cargo/mutants.toml`.
+modules: `src-tauri/src/grants.rs`, `src-tauri/src/commands/file.rs`,
+`src-tauri/src/commands/create.rs`, and `src-tauri/src/commands/create_file.rs`,
+scoped in `src-tauri/.cargo/mutants.toml`.
 
 - Run locally with `cargo mutants` in `src-tauri/` (install: `cargo install cargo-mutants`). CI runs it weekly and on demand via the Mutation workflow (`ci-mutation.yml`), non-blocking.
-- **Baseline (2026-07-27): 70 mutants tested, 0 missed** (64 caught, 5 unviable, 1 caught by test timeout). The threshold is non-decreasing: a run that reports any missed mutant is a review failure; either kill the mutant with a test or triage it into the config's `exclude_re` with a written justification (current triage: `print_document`, a one-line webview delegation the mock runtime cannot make observably fail).
+- **Baseline (2026-07-27): 70 mutants tested, 0 missed** (64 caught, 5 unviable, 1 caught by test timeout). `commands/create_file.rs` joined the scope on 2026-10-09 with 6 more, 0 missed (5 caught, 1 unviable). The threshold is non-decreasing: a run that reports any missed mutant is a review failure; either kill the mutant with a test or triage it into the config's `exclude_re` with a written justification (current triage: `print_document`, a one-line webview delegation the mock runtime cannot make observably fail).
 - Every surviving high-impact mutant found by a scheduled run gets the same treatment before the next release.

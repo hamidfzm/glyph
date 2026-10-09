@@ -9,6 +9,7 @@ import {
   fileOf,
   fileScan,
   makeInvoker,
+  openEditable,
   resetTabsMocks,
   vaultSnapshot,
 } from "@/test/tabsHarness";
@@ -250,6 +251,48 @@ describe("useTabs file-changed events", () => {
     const tab = result.current.tabs[0];
     expect(tab.kind === "file" ? tab.file.editContent : null).toBe("my unsaved work");
     expect(tab.kind === "file" ? tab.file.content : null).toBe("v1");
+  });
+
+  it("keeps the unsaved buffer of a dirty tab switched back to view mode", async () => {
+    let body = "v1";
+    let reads = 0;
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => {
+          reads += 1;
+          return body;
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoReload: true, autoSave: false })),
+    );
+    const tabId = await openEditable(result);
+    // Leaving the editor neither saves nor clears the dirty flag.
+    act(() => {
+      result.current.updateEditContent(tabId, "my unsaved work");
+      result.current.setTabMode(tabId, EDITOR_MODE.view);
+    });
+
+    body = "v2";
+    await act(async () => {
+      fileChanged.handler?.({ payload: "/p/a.md" });
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    // The reload ran and read the file, so it is the guard that kept the buffer.
+    expect(reads).toBe(2);
+    expect(fileOf(result).editContent).toBe("my unsaved work");
+    expect(fileOf(result).content).toBe("v1");
+
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+    expect(invoke).toHaveBeenCalledWith("write_file", {
+      path: "/p/a.md",
+      content: "my unsaved work",
+    });
   });
 });
 

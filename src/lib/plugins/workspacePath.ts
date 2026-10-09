@@ -2,11 +2,11 @@
 // inside the opened workspace, whatever separators or `..` segments it sends.
 
 /**
- * Resolve `relPath` against `root` and return the absolute path, or `null`
- * when the input is absolute or escapes the root. Handles both `/` and `\`
- * separators; the result uses the platform separator found in `root`.
+ * The segments of a workspace-relative path, or `null` when the input is
+ * absolute, escapes the root, or names the root itself. Either separator is
+ * accepted.
  */
-export function resolveInsideRoot(root: string, relPath: string): string | null {
+function workspaceSegments(relPath: string): string[] | null {
   // Absolute inputs (posix, Windows drive, or UNC) are rejected outright: the
   // API is documented as workspace-relative.
   if (/^([a-zA-Z]:|[\\/])/.test(relPath)) return null;
@@ -21,11 +21,26 @@ export function resolveInsideRoot(root: string, relPath: string): string | null 
     }
     segments.push(part);
   }
-  if (segments.length === 0) return null; // "" / "." / "a/.." resolve to the root itself
+  // "" / "." / "a/.." resolve to the root itself.
+  return segments.length === 0 ? null : segments;
+}
 
+/**
+ * Resolve `relPath` against `root` and return the absolute path, or `null`
+ * when it does not name something inside the root. The result uses the
+ * platform separator found in `root`.
+ */
+export function resolveInsideRoot(root: string, relPath: string): string | null {
+  const segments = workspaceSegments(relPath);
+  if (!segments) return null;
   const sep = root.includes("\\") ? "\\" : "/";
   const base = root.endsWith(sep) ? root.slice(0, -sep.length) : root;
   return `${base}${sep}${segments.join(sep)}`;
+}
+
+/** `relPath` as the forward-slash form the backend takes, or `null` as {@link resolveInsideRoot}. */
+export function workspaceRelativePath(relPath: string): string | null {
+  return workspaceSegments(relPath)?.join("/") ?? null;
 }
 
 /** `path` without the workspace root in front, or as given when it is not under it. */

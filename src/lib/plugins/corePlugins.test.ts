@@ -43,6 +43,7 @@ describe("CORE_PLUGINS", () => {
     };
     expect(granted("glyph.core.tags")).toEqual(["workspace:read"]);
     expect(granted("glyph.core.backlinks")).toEqual(["workspace:read"]);
+    expect(granted("glyph.core.daily-notes")).toEqual(["workspace:read", "workspace:write"]);
     expect(granted("glyph.core.d2")).toBeUndefined();
   });
 
