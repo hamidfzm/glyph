@@ -677,6 +677,51 @@ fn an_incremental_update_refuses_a_note_under_a_symlinked_directory() {
     fs::remove_dir_all(&outside).unwrap();
 }
 
+// A link that stays inside the workspace is no way out of it, but the walk
+// does not descend into that one either, so an update that did would index its
+// notes a second time, beside the ones at their real paths.
+#[test]
+#[ignore = "fails until an update refuses a path with a link above the file"]
+fn an_incremental_update_refuses_a_note_under_a_folder_linked_within_the_workspace() {
+    let root = fixture_vault("inner_link");
+    let mut vault = build(&root);
+    // One link straight onto a folder of notes, and one with a real folder
+    // between it and them.
+    let (linked, looped) = (root.join("Linked"), root.join("Loop"));
+    link_folder(&root.join("Notes"), &linked);
+    link_folder(&root, &looped);
+
+    // A link arriving, which stands for the files under it, then a note behind
+    // each link changing.
+    for event in [
+        linked.clone(),
+        linked.join("Cooking.md"),
+        looped.join("Notes").join("Cooking.md"),
+    ] {
+        vault.apply_changes(&[event]);
+        assert!(vault.note(&in_vault(&root, "Linked/Cooking.md")).is_none());
+        assert_matches_rebuild(&vault, &root);
+    }
+    fs::remove_dir_all(&root).unwrap();
+}
+
+// Notes behind such a link would count toward the file cap too, and a scan
+// that reached every file would read as cut short.
+#[test]
+#[ignore = "fails until an update refuses a path with a link above the file"]
+fn a_folder_linked_within_the_workspace_takes_no_place_under_the_file_cap() {
+    let root = fixture_vault("inner_link_cap");
+    let mut vault = Vault::build_capped(&root, 9, 32).unwrap();
+    let linked = root.join("Linked");
+    link_folder(&root.join("Notes"), &linked);
+
+    vault.apply_changes(&[linked]);
+
+    assert!(!vault.snapshot().status.truncated);
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
 #[test]
 fn one_workspace_caches_one_index_however_the_root_is_spelled() {
     // The store key cannot be the caller's string: a renderer that asked for
