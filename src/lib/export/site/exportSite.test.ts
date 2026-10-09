@@ -4,7 +4,7 @@ import { i18n } from "@/lib/i18n";
 import { pathStem } from "@/lib/paths";
 import { staticRenderers } from "@/lib/plugins/staticRenderers";
 import type { MarkdownPlugin } from "@/lib/plugins/types";
-import { exportSite } from "./exportSite";
+import { exportSite, type PruneReport } from "./exportSite";
 
 // happy-dom cannot run DOMPurify faithfully; the sanitize wiring is covered
 // in staticInline.test.ts.
@@ -18,7 +18,10 @@ interface FakeFs {
   pruned: string[][];
 }
 
-function mockFs(files: Record<string, string>, removed = 0): FakeFs {
+function mockFs(
+  files: Record<string, string>,
+  pruned: PruneReport = { removed: 0, error: null },
+): FakeFs {
   const fs: FakeFs = { writes: new Map(), dirs: [], copies: [], pruned: [] };
   vi.mocked(invoke).mockImplementation((cmd: string, args?: unknown) => {
     const a = (args ?? {}) as Record<string, string>;
@@ -41,7 +44,7 @@ function mockFs(files: Record<string, string>, removed = 0): FakeFs {
         return Promise.resolve(undefined);
       case "prune_export_dir":
         fs.pruned.push((a as unknown as { written: string[] }).written);
-        return Promise.resolve(removed);
+        return Promise.resolve(pruned);
       case "vault_refresh":
         return Promise.resolve(undefined);
       case "vault_resolve": {
@@ -452,12 +455,13 @@ describe("exportSite", () => {
         "/ws/.glyph/site.json": JSON.stringify({ robots: "none" }),
         "/ws/guide/shot.png": "<binary>",
       },
-      2,
+      { removed: 2, error: null },
     );
 
     const result = await exportSite({ root: "/ws", outDir: "/out" });
 
     expect(result.removed).toBe(2);
+    expect(result.pruneError).toBeNull();
     expect(fs.pruned).toHaveLength(1);
     expect([...fs.pruned[0]].sort()).toEqual([
       "guide/intro.html",
@@ -486,12 +490,22 @@ describe("exportSite", () => {
     error.mockRestore();
   });
 
+  it("carries a prune that fell short, with what it did remove", async () => {
+    // The command succeeds here: some stale pages went, one is still published.
+    const stuck = 'Failed to remove "guide.html": Access is denied. (os error 5)';
+    mockFs({ "/ws/README.md": "# A" }, { removed: 2, error: stuck });
+
+    const result = await exportSite({ root: "/ws", outDir: "/out" });
+
+    expect(result).toEqual({ pages: 1, assets: 0, removed: 2, pruneError: stuck });
+  });
+
   it("succeeds when the prune fails, and says why it failed", async () => {
     const fs = mockFs({ "/ws/README.md": "# A" });
     const base = vi.mocked(invoke).getMockImplementation()!;
     vi.mocked(invoke).mockImplementation((cmd, args) => {
       // A rejected command throws its Err string, not an Error.
-      if (cmd === "prune_export_dir") return Promise.reject("Failed to write file: locked");
+      if (cmd === "prune_export_dir") return Promise.reject("Failed to read the manifest: locked");
       return base(cmd, args);
     });
 
@@ -502,7 +516,7 @@ describe("exportSite", () => {
       pages: 1,
       assets: 0,
       removed: 0,
-      pruneError: "Failed to write file: locked",
+      pruneError: "Failed to read the manifest: locked",
     });
     expect(fs.writes.has("/out/index.html")).toBe(true);
   });
