@@ -289,7 +289,7 @@ impl Vault {
 
     /// Whether the walk would have visited `path`. `apply_changes` reads files
     /// the walk never offered it, so the same gates have to hold here: no
-    /// hidden or noisy directories, no symlinks out of the workspace, and no
+    /// hidden or noisy directories, nothing reached through a link, and no
     /// file past the size cap.
     fn walkable(&self, path: &Path, relative: &Path) -> bool {
         if !is_indexable(path) || relative.components().count() > self.max_depth {
@@ -309,9 +309,19 @@ impl Vault {
         if !meta.is_file() || meta.len() > SCAN_MAX_FILE_BYTES {
             return false;
         }
-        // A symlink further up the path is invisible to that check, and the
-        // watcher follows links, so a linked directory would otherwise deliver
-        // events for files outside the workspace entirely.
+        // A link further up the path is invisible to that check, and changes
+        // are reported for files behind one. The walk never descends into a
+        // linked folder, wherever it leads.
+        let folders_are_real = path
+            .ancestors()
+            .skip(1)
+            .take_while(|folder| *folder != self.root)
+            .all(|folder| std::fs::symlink_metadata(folder).is_ok_and(|meta| meta.is_dir()));
+        if !folders_are_real {
+            return false;
+        }
+        // The root is the one link the walk does follow, so where the path
+        // lands is still held to the workspace the index was built over.
         std::fs::canonicalize(path).is_ok_and(|resolved| resolved.starts_with(&self.canonical_root))
     }
 

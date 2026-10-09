@@ -654,10 +654,9 @@ fn an_incremental_update_refuses_a_symlinked_note() {
 }
 
 // The walk refuses a symlink structurally: it never descends into a linked
-// directory. `walkable` stats only the leaf, which a link further up the path
-// is invisible to, and the watcher follows links, so events for a linked
-// directory arrive spelled as if they were inside the workspace.
-#[cfg(unix)]
+// directory. A stat of the leaf cannot see a link further up the path, and the
+// watcher follows links, so events for a linked directory arrive spelled as if
+// they were inside the workspace.
 #[test]
 fn an_incremental_update_refuses_a_note_under_a_symlinked_directory() {
     let root = fixture_vault("incremental_symlink_dir");
@@ -666,7 +665,7 @@ fn an_incremental_update_refuses_a_note_under_a_symlinked_directory() {
 
     let mut vault = build(&root);
     let linked = root.join("linked_archive");
-    std::os::unix::fs::symlink(&outside, &linked).unwrap();
+    link_folder(&outside, &linked);
     vault.apply_changes(&[linked.join("secret.md")]);
 
     assert!(vault.paths_with_tag("classified").is_empty());
@@ -681,7 +680,6 @@ fn an_incremental_update_refuses_a_note_under_a_symlinked_directory() {
 // does not descend into that one either, so an update that did would index its
 // notes a second time, beside the ones at their real paths.
 #[test]
-#[ignore = "fails until an update refuses a path with a link above the file"]
 fn an_incremental_update_refuses_a_note_under_a_folder_linked_within_the_workspace() {
     let root = fixture_vault("inner_link");
     let mut vault = build(&root);
@@ -708,7 +706,6 @@ fn an_incremental_update_refuses_a_note_under_a_folder_linked_within_the_workspa
 // Notes behind such a link would count toward the file cap too, and a scan
 // that reached every file would read as cut short.
 #[test]
-#[ignore = "fails until an update refuses a path with a link above the file"]
 fn a_folder_linked_within_the_workspace_takes_no_place_under_the_file_cap() {
     let root = fixture_vault("inner_link_cap");
     let mut vault = Vault::build_capped(&root, 9, 32).unwrap();
@@ -720,6 +717,51 @@ fn a_folder_linked_within_the_workspace_takes_no_place_under_the_file_cap() {
     assert!(!vault.snapshot().status.truncated);
     assert_matches_rebuild(&vault, &root);
     fs::remove_dir_all(&root).unwrap();
+}
+
+// The root is the one link the walk does follow, so a workspace opened through
+// one is indexed, and has to keep taking updates.
+#[test]
+fn a_workspace_opened_through_a_link_still_takes_updates() {
+    let real = fixture_vault("linked_root");
+    let links = unique_tmp("linked_root_links");
+    let root = links.join("vault");
+    link_folder(&real, &root);
+    let mut vault = build(&root);
+
+    let added = root.join("Notes").join("Added.md");
+    fs::write(&added, "body #added\n").unwrap();
+    vault.apply_changes(&[added]);
+
+    assert_eq!(vault.paths_with_tag("added").len(), 1);
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&links).unwrap();
+    fs::remove_dir_all(&real).unwrap();
+}
+
+// Events are respelled onto the root the index was opened with. Once that link
+// points somewhere else, the folder behind it is not the workspace anyone
+// granted, so an update must not read from it.
+#[test]
+fn an_incremental_update_does_not_follow_a_root_link_that_was_moved() {
+    let real = fixture_vault("moved_root");
+    let decoy = unique_tmp("moved_root_decoy");
+    fs::write(decoy.join("Index.md"), "top secret #classified\n").unwrap();
+    let links = unique_tmp("moved_root_links");
+    let root = links.join("vault");
+    link_folder(&real, &root);
+    let mut vault = build(&root);
+
+    fs::remove_dir(&root)
+        .or_else(|_| fs::remove_file(&root))
+        .unwrap();
+    link_folder(&decoy, &root);
+    vault.apply_changes(&[root.join("Index.md")]);
+
+    assert!(vault.paths_with_tag("classified").is_empty());
+    fs::remove_dir_all(&links).unwrap();
+    fs::remove_dir_all(&real).unwrap();
+    fs::remove_dir_all(&decoy).unwrap();
 }
 
 #[test]
