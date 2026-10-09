@@ -20,10 +20,10 @@ Empty string is valid loaded document content. `null`/`undefined` represents abs
 
 ### INV-3: Stale results never win
 
-Older asynchronous work cannot overwrite newer state or mark it complete. Writes to the same path are serialized; completions are revision-guarded. A reload from disk is dropped when the app wrote the path, or a later reload of it reached the tab, while the file was being read.
+Older asynchronous work cannot overwrite newer state or mark it complete. Writes to the same path are serialized; completions are revision-guarded. A reload from disk is dropped when the app wrote the path, or a later reload of it reached the tab, while the file was being read. A plugin install does not undo a removal or a disable the user made while it was in flight.
 
-- Owners: `src/hooks/useDocumentSave.ts` (`writeChains`, revision guards), `src/hooks/useDiskReload.ts` with `src/hooks/useSelfSaveTracker.ts` (reload guards)
-- Evidence: `src/hooks/useTabs.*.test.tsx` stale-completion and overtaken-reload cases, `src/hooks/useDiskReload.test.ts`, `src/hooks/useSelfSaveTracker.test.ts`
+- Owners: `src/hooks/useDocumentSave.ts` (`writeChains`, revision guards), `src/hooks/useDiskReload.ts` with `src/hooks/useSelfSaveTracker.ts` (reload guards), `src/hooks/usePluginLibrary.ts` (an install yields to a later removal or disable) with the load generations in `src/lib/plugins/host.ts`
+- Evidence: `src/hooks/useTabs.*.test.tsx` stale-completion and overtaken-reload cases, `src/hooks/useDiskReload.test.ts`, `src/hooks/useSelfSaveTracker.test.ts`, `src/contexts/PluginsProvider.overtake.test.tsx`, `src/lib/plugins/host.races.test.ts`
 
 ### INV-4: Owners flush before they die
 
