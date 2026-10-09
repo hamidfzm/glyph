@@ -6,6 +6,7 @@ examine_globs = [
     "src/grants.rs",
     "src/commands/file.rs",
     "src/commands/create.rs",
+    "src/commands/create_file.rs",
 ]
 
 # Triaged acceptable miss: print_document is a one-line delegation to the

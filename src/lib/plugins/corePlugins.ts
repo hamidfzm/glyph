@@ -42,6 +42,12 @@ export const CORE_PLUGINS: readonly CorePlugin[] = [
     permissions: ["workspace:read"],
     load: () => import("@/plugins/core/backlinks/backlinksPlugin"),
   },
+  {
+    id: "glyph.core.daily-notes",
+    settingsKey: "dailyNotes",
+    permissions: ["workspace:read", "workspace:write"],
+    load: () => import("@/plugins/core/daily-notes/dailyNotesPlugin"),
+  },
 ];
 
 /** The host entry for a core plugin: bundled, so there is no folder or source text. */

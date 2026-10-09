@@ -80,13 +80,20 @@ pub struct MenuItemRefs<R: Runtime = Wry> {
     // Plugin contributions, replaced wholesale by `set_plugin_menu_items`.
     plugin_export: PluginMenuSection<R>,
     plugin_view: PluginMenuSection<R>,
+    plugin_file: PluginMenuSection<R>,
 }
 
 /// One menu's plugin entries, behind a separator that sets them apart from
 /// the built-in entries they sit under.
 pub struct PluginMenuSection<R: Runtime = Wry> {
     separator: Option<PredefinedMenuItem<R>>,
-    items: Vec<MenuItem<R>>,
+    items: Vec<PluginMenuItem<R>>,
+}
+
+pub struct PluginMenuItem<R: Runtime = Wry> {
+    item: MenuItem<R>,
+    /// Kept enabled only while a workspace is open, by `apply_menu_state`.
+    requires_workspace: bool,
 }
 
 impl<R: Runtime> Default for PluginMenuSection<R> {

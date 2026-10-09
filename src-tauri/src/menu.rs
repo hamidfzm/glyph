@@ -54,9 +54,9 @@ pub fn may_write_shared_menu_state(label: &str, focused: Option<&str>) -> bool {
     }
 }
 
-/// Native menus that list plugin contributions: exporters under File > Export
-/// and `menu: "view"` commands under View.
-const PLUGIN_MENUS: [&str; 2] = ["export", "view"];
+/// Native menus that list plugin contributions: exporters under File > Export,
+/// and commands under File or View as their `menu` names.
+const PLUGIN_MENUS: [&str; 3] = ["export", "view", "file"];
 /// Caps on what `set_plugin_menu_items` lists from the renderer, per menu.
 pub const MAX_PLUGIN_MENU_ITEMS: usize = 32;
 pub const MAX_PLUGIN_MENU_LABEL: usize = 100;
@@ -66,12 +66,26 @@ const MAX_PLUGIN_MENU_KEY: usize = 128;
 /// when the item is picked, so the frontend runs that contribution and not
 /// whatever sits at the same position by then.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PluginMenuEntry {
     pub key: String,
     pub label: String,
+    /// Shown beside the label and, where the platform delivers menu
+    /// accelerators, what triggers the item.
+    #[serde(default)]
+    pub accelerator: Option<String>,
+    /// The item is enabled only while a workspace is open.
+    #[serde(default)]
+    pub requires_workspace: bool,
 }
 
 impl PluginMenuEntry {
+    /// Whether the item is enabled when listed: its menu's own condition must
+    /// hold, and a workspace must be open if it needs one.
+    pub fn starts_enabled(&self, menu_enabled: bool, has_workspace: bool) -> bool {
+        menu_enabled && (!self.requires_workspace || has_workspace)
+    }
+
     fn is_listable(&self) -> bool {
         let key_fits = !self.key.is_empty() && self.key.len() <= MAX_PLUGIN_MENU_KEY;
         let label_fits =
@@ -292,11 +306,48 @@ mod tests {
         PluginMenuEntry {
             key: key.to_string(),
             label: label.to_string(),
+            accelerator: None,
+            requires_workspace: false,
         }
     }
 
     #[test]
+    fn a_plugin_menu_entry_reads_its_optional_fields_from_camel_case() {
+        let plain: PluginMenuEntry = serde_json::from_str(r#"{"key":"k","label":"L"}"#).unwrap();
+        assert_eq!(plain, entry("k", "L"));
+
+        let full: PluginMenuEntry = serde_json::from_str(
+            r#"{"key":"k","label":"L","accelerator":"CmdOrCtrl+Shift+T","requiresWorkspace":true}"#,
+        )
+        .unwrap();
+        assert_eq!(full.accelerator.as_deref(), Some("CmdOrCtrl+Shift+T"));
+        assert!(full.requires_workspace);
+    }
+
+    #[test]
+    fn a_plugin_menu_entry_starts_enabled_only_when_its_conditions_hold() {
+        let anywhere = entry("k", "L");
+        assert!(anywhere.starts_enabled(true, false));
+        assert!(!anywhere.starts_enabled(false, true));
+
+        let in_workspace = PluginMenuEntry {
+            requires_workspace: true,
+            ..entry("k", "L")
+        };
+        assert!(in_workspace.starts_enabled(true, true));
+        assert!(!in_workspace.starts_enabled(true, false));
+        assert!(!in_workspace.starts_enabled(false, true));
+    }
+
+    #[test]
     fn plugin_item_ids_round_trip_any_key() {
+        assert_eq!(
+            menu_action_for_id(&plugin_menu_item_id("file", "notes.today")),
+            Some(MenuAction::PluginItem {
+                menu: "file",
+                key: "notes.today".to_string()
+            })
+        );
         for key in ["slides.revealjs", "w1:odd key/é", "-"] {
             let id = plugin_menu_item_id("export", key);
             assert_eq!(parse_menu_id(&id), (None, id.as_str()), "{key}");
