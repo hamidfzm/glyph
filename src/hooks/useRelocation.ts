@@ -72,6 +72,7 @@ export function useRelocation({
 
   const settle = useCallback(
     async (done: Relink, from: string, root: string, revisions: Map<string, number>) => {
+      // Marked before the reloads below start, or each would drop its own read as overtaken.
       for (const file of done.files) markSelfSave(file.path);
       if (done.failed) {
         console.error("Failed to update links:", done.failed.error);

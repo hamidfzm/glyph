@@ -8,8 +8,8 @@ Non-negotiable guarantees for Glyph. Every stateful or security-sensitive change
 
 A user edit is never discarded without a completed durable write or an explicit, informed discard by the user.
 
-- Owners: `src/hooks/useDocumentSave.ts` (save path), `src/hooks/useTabStrip.ts` (dirty tracking), `src/hooks/useDiskReload.ts` (a dirty tab is never reloaded from disk, in any editor mode), `src/hooks/useDocumentEdits.ts` (a checkbox toggle, canvas commit, undo, or redo joins a dirty tab's buffer and never replaces text typed since), `src/hooks/useAutoSave.ts`, `src/hooks/useWindowClose.ts`
-- Evidence: `src/hooks/useAutoSave.test.ts`, `src/hooks/useTabs.*.test.tsx`, `src/hooks/useDiskReload.test.ts`
+- Owners: `src/hooks/useDocumentSave.ts` (save path), `src/hooks/useTabStrip.ts` (dirty tracking), `src/hooks/useDiskReload.ts` (a dirty tab is never reloaded from disk, in any editor mode), `src/hooks/useDocumentEdits.ts` (a checkbox toggle, canvas commit, undo, or redo joins a dirty tab's buffer and never replaces text typed since), `src/hooks/useAutoSave.ts`, `src/hooks/useWindowClose.ts`, `src-tauri/src/mcp/edits.rs` (an agent's write is refused for a note the app reports unsaved edits in, and for one that changed since the edit was worked out)
+- Evidence: `src/hooks/useAutoSave.test.ts`, `src/hooks/useTabs.*.test.tsx`, `src/hooks/useDiskReload.test.ts`, the tests in `src-tauri/src/mcp/edits.rs`
 
 ### INV-2: Empty is not absent
 
@@ -20,10 +20,10 @@ Empty string is valid loaded document content. `null`/`undefined` represents abs
 
 ### INV-3: Stale results never win
 
-Older asynchronous work cannot overwrite newer state or mark it complete. Writes to the same path are serialized; completions are revision-guarded.
+Older asynchronous work cannot overwrite newer state or mark it complete. Writes to the same path are serialized; completions are revision-guarded. A reload from disk is dropped when the app wrote the path, or a later reload of it reached the tab, while the file was being read.
 
-- Owners: `src/hooks/useWriteQueue.ts` (the per-path queue that saves and programmatic edits of an open file go through), `src/hooks/useDocumentSave.ts` and `src/hooks/useDocumentEdits.ts` (revision guards)
-- Evidence: `src/hooks/useWriteQueue.test.ts`, `src/hooks/useTabs.*.test.tsx` stale-completion and in-flight cases
+- Owners: `src/hooks/useWriteQueue.ts` (the per-path queue that saves and programmatic edits of an open file go through), `src/hooks/useDocumentSave.ts` and `src/hooks/useDocumentEdits.ts` (revision guards), `src/hooks/useDiskReload.ts` with `src/hooks/useSelfSaveTracker.ts` (reload guards)
+- Evidence: `src/hooks/useWriteQueue.test.ts`, `src/hooks/useTabs.*.test.tsx` stale-completion, in-flight, and overtaken-reload cases, `src/hooks/useDiskReload.test.ts`, `src/hooks/useSelfSaveTracker.test.ts`
 
 ### INV-4: Owners flush before they die
 
@@ -43,8 +43,8 @@ Renderer input, Markdown content, plugins, filenames, URLs, and IPC arguments ar
 
 Frontend permission labels and disabled buttons are UX, not security boundaries. Backend validation (`grants.rs` `ensure_readable` / `ensure_writable` / `ensure_watchable` / `ensure_workspace`) is authoritative for every filesystem and IPC operation.
 
-- Owners: `src-tauri/src/grants.rs`, `src-tauri/src/commands/`
-- Evidence: denial tests driving the command surface without grants
+- Owners: `src-tauri/src/grants.rs`, `src-tauri/src/commands/`, `src-tauri/src/mcp/registry.rs` (a write tool the user has not turned on is refused in dispatch, whatever a client was offered)
+- Evidence: denial tests driving the command surface without grants, and `src-tauri/src/mcp/tests.rs` calling each write tool while it is off and with paths outside the vault
 
 ### INV-7: Partial results are explicit
 

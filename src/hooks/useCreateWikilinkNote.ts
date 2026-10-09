@@ -17,8 +17,8 @@ export function useCreateWikilinkNote(): ((target: string) => Promise<void>) | n
       if (!root || !createNote || !renamePath || !openFile) return;
       const created = await createNote(root);
       if (!created) return;
-      // rename_path keeps the .md extension when the name carries none, and
-      // resolves collisions, so the target name goes through as authored.
+      // rename_path keeps the .md extension unless the name ends in another
+      // document's, and resolves collisions, so the target name goes through as authored.
       const renamed = await renamePath(created, target);
       await openFile(renamed ?? created);
     },

@@ -122,6 +122,22 @@ export function captureListener(
   return ref;
 }
 
+/** Report a change to `path` and wait out the reload debounce; a parked read stays out. */
+export async function changeOnDisk(fileChanged: ReturnType<typeof captureListener>, path: string) {
+  await act(async () => {
+    fileChanged.handler?.({ payload: path });
+    await new Promise((r) => setTimeout(r, 350));
+  });
+}
+
+/** Settle a parked call and let whatever awaited it run to the end. */
+export async function deliver(settle: () => void) {
+  await act(async () => {
+    settle();
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
 export function watchDirectoryCalls(path: string) {
   return vi
     .mocked(invoke)

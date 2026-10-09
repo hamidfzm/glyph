@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "@/lib/ai/types";
 import { createAIProvider } from "@/lib/ai-providers";
 import { type AIDocContext, buildSystemPrompt } from "@/lib/aiPrompts";
+import { errorMessage } from "@/lib/errorMessage";
 import type { AISettings } from "@/lib/settings";
 
 export interface ChatTurn {
@@ -83,7 +84,7 @@ export function useAIChat(aiSettings: AISettings, getDocContext: () => AIDocCont
         // the error. Either way an assistant turn that never got a token is
         // dropped rather than left as an empty bubble.
         if (!(err instanceof DOMException && err.name === "AbortError")) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(errorMessage(err));
         }
         setTurns((prev) => prev.filter((turn) => turn.id !== assistantId || turn.content));
       } finally {

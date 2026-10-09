@@ -4,15 +4,20 @@
 //! caller can drive in-process. [`stdio`] is the adapter that exists today,
 //! and the only code on this path that writes to stdout.
 
+mod edits;
 mod launch;
 mod link_tools;
+mod move_tools;
 mod note_tools;
 mod refs;
 mod registry;
 mod session;
 mod stdio;
 mod vault_tools;
+mod write_tools;
 
+#[cfg(test)]
+mod test_support;
 #[cfg(test)]
 mod tests;
 
@@ -20,6 +25,7 @@ use std::cell::RefCell;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
+use crate::data_dir;
 use crate::grants::GrantRegistry;
 use crate::vault::VaultStore;
 use registry::Session;
@@ -44,24 +50,40 @@ pub fn run(
     // Folders the user let the agent add, served until the session ends.
     let mut allowed: Vec<String> = Vec::new();
 
-    let served = stdio::serve(input, output, |name, args, ask| {
+    // The settings are read again each time, so a tool the user turns on
+    // mid-conversation is offered from the next listing on.
+    let list = || {
+        let open = session::open_state(&vaults, &grants, stores.as_deref());
+        registry::list(&open).map(|tool| tool.describe()).collect()
+    };
+    let served = stdio::serve(input, output, list, |name, args, ask| {
         let mut open = session::open_state(&vaults, &grants, stores.as_deref());
         with_allowed(&mut open, &allowed, &grants);
         // `--vault` names every folder the session may read.
         let can_ask = vaults.is_empty() && ask.can_ask();
         let ask = RefCell::new(ask);
         let added = RefCell::new(Vec::new());
+        // What allowing the folder lets the agent do, write tools included.
+        let changes = match registry::edits_on(&open).as_slice() {
+            [] => String::new(),
+            tools => format!(
+                " change notes there with the tools turned on in Glyph's settings ({}),",
+                tools.join(", ")
+            ),
+        };
         let allow_vault = |root: &str| -> Result<(), String> {
             ask.borrow_mut().confirm(&format!(
-                "An agent asks to read the folder \"{root}\". Allow it until this session ends? It could then read every note in that folder, and save exported documents there, replacing files of the same name."
+                "An agent asks to read the folder \"{root}\". Allow it until this session ends? It could then read every note in that folder,{changes} and save exported documents there, replacing files of the same name."
             ))?;
             added.borrow_mut().push(root.to_string());
             Ok(())
         };
+        let editing = || data_dir::editing(stores.as_deref());
         let session = Session {
             grants: &grants,
             vaults: &store,
             open: &open,
+            editing: &editing,
             exe: &exe,
             allow_vault: can_ask.then_some(&allow_vault),
         };

@@ -9,7 +9,8 @@ use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 
 use super::session::OpenState;
-use super::{launch, link_tools, note_tools, vault_tools};
+use super::{launch, link_tools, move_tools, note_tools, vault_tools, write_tools};
+use crate::data_dir::Editing;
 use crate::grants::GrantRegistry;
 use crate::vault::VaultStore;
 
@@ -20,6 +21,10 @@ pub struct Session<'a> {
     /// What the user has open: read from the persisted stores by the stdio
     /// adapter before each call, passed live by an in-app caller.
     pub open: &'a OpenState,
+    /// What the running app's windows hold, asked when a call is about to
+    /// write: a list read as the call began is stale once the user has been
+    /// asked something, and misses a folder allowed since.
+    pub editing: &'a dyn Fn() -> Editing,
     /// The Glyph binary that `open_in_glyph` and `export` start.
     pub exe: &'a Path,
     /// Asks the user to let the session serve a folder it was not given;
@@ -40,6 +45,8 @@ pub enum Effect {
     Launches,
     /// Writes a file, replacing one already there.
     Writes,
+    /// Changes a note the user wrote. Off until the user turns that tool on.
+    Edits,
 }
 
 pub struct ToolDef {
@@ -59,7 +66,7 @@ pub enum ToolError {
     Failed(String),
 }
 
-static TOOLS: [ToolDef; 12] = [
+static TOOLS: [ToolDef; 17] = [
     vault_tools::VAULT_CONTEXT,
     note_tools::RESOLVE_LINK,
     note_tools::READ_NOTE,
@@ -72,10 +79,22 @@ static TOOLS: [ToolDef; 12] = [
     link_tools::READ_CANVAS,
     launch::OPEN_IN_GLYPH,
     launch::EXPORT,
+    write_tools::PATCH_NOTE,
+    write_tools::SET_PROPERTY,
+    write_tools::UPDATE_TASK,
+    move_tools::RENAME_NOTE,
+    move_tools::MOVE_NOTE,
 ];
 
-pub fn list() -> impl Iterator<Item = &'static ToolDef> {
-    TOOLS.iter()
+/// The tools a session with `open` offers.
+pub fn list(open: &OpenState) -> impl Iterator<Item = &'static ToolDef> + '_ {
+    TOOLS.iter().filter(|tool| tool.is_on(open))
+}
+
+/// The tools that change notes which `open` has turned on, by name.
+pub fn edits_on(open: &OpenState) -> Vec<&'static str> {
+    let edits = list(open).filter(|tool| tool.effect == Effect::Edits);
+    edits.map(|tool| tool.name).collect()
 }
 
 /// The most one result may carry, serialized. Listings and text are cut far
@@ -83,9 +102,17 @@ pub fn list() -> impl Iterator<Item = &'static ToolDef> {
 const MAX_RESULT_BYTES: usize = 1024 * 1024;
 
 pub fn dispatch(name: &str, args: Value, session: &Session) -> Result<String, ToolError> {
-    let tool = list()
+    let tool = TOOLS
+        .iter()
         .find(|tool| tool.name == name)
         .ok_or_else(|| ToolError::Unknown(name.to_string()))?;
+    // Checked here and not only where the tools are listed: a client can call
+    // a name it was never offered.
+    if !tool.is_on(session.open) {
+        return Err(ToolError::Failed(format!(
+            "{name} is turned off. It changes notes, so the user has to turn it on in Glyph: Settings, AI, Agent tools."
+        )));
+    }
     // A client may leave out the arguments of a tool that takes none.
     let args = if args.is_null() { json!({}) } else { args };
     run_tool(tool, session, args)
@@ -110,6 +137,10 @@ fn run_tool(tool: &ToolDef, session: &Session, args: Value) -> Result<String, To
 }
 
 impl ToolDef {
+    fn is_on(&self, open: &OpenState) -> bool {
+        self.effect != Effect::Edits || open.write_tools.iter().any(|on| on == self.name)
+    }
+
     /// This tool's entry in a `tools/list` result.
     pub fn describe(&self) -> Value {
         json!({
@@ -119,7 +150,7 @@ impl ToolDef {
             "inputSchema": (self.input_schema)(),
             "annotations": {
                 "readOnlyHint": self.effect == Effect::ReadOnly,
-                "destructiveHint": self.effect == Effect::Writes,
+                "destructiveHint": matches!(self.effect, Effect::Writes | Effect::Edits),
                 "openWorldHint": false,
             },
         })
@@ -133,7 +164,7 @@ pub(super) fn arguments<T: DeserializeOwned>(args: Value) -> Result<T, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::Harness;
+    use super::super::test_support::Harness;
     use super::*;
 
     fn tool(handler: fn(&Session, Value) -> Result<Value, String>) -> ToolDef {
@@ -153,6 +184,8 @@ mod tests {
         let session = h.session();
         let panics = tool(|_, _| panic!("a handler bug"));
         let floods = tool(|_, _| Ok(json!("x".repeat(MAX_RESULT_BYTES))));
+        // With its two quotes, an answer of the limit exactly.
+        let fills = tool(|_, _| Ok(json!("x".repeat(MAX_RESULT_BYTES - 2))));
         let answers = tool(|_, args| Ok(args));
 
         let refused = |tool: &ToolDef, reason: &str| {
@@ -161,6 +194,9 @@ mod tests {
         };
         assert!(refused(&panics, "failed unexpectedly"));
         assert!(refused(&floods, "ask for less"));
+        assert!(
+            run_tool(&fills, &session, json!({})).is_ok_and(|text| text.len() == MAX_RESULT_BYTES)
+        );
         assert_eq!(
             run_tool(&answers, &session, json!({ "a": 1 })),
             Ok(r#"{"a":1}"#.to_string())

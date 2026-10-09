@@ -141,7 +141,7 @@ export function useTabs(options: UseTabsOptions) {
     onWorkspaceNotice: options.onWorkspaceNotice,
   });
 
-  const { markSelfSave, isRecentSelfSave } = useSelfSaveTracker();
+  const { markSelfSave, isRecentSelfSave, selfSaveCount } = useSelfSaveTracker();
 
   const addToRecent = useCallback((path: string) => {
     // A headless export must not rewrite the user's recent files with the
@@ -187,7 +187,7 @@ export function useTabs(options: UseTabsOptions) {
     enqueueWrite,
   });
 
-  const reloadFromDisk = useDiskReload({ setState, forgetHistory });
+  const reloadFromDisk = useDiskReload({ setState, forgetHistory, selfSaveCount });
 
   const { renamePath, movePath } = useRelocation({
     stateRef,

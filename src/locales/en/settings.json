@@ -263,6 +263,32 @@
     },
     "speed": {
       "label": "Speed"
+    },
+    "agentTools": {
+      "title": "Agent tools",
+      "description": "An AI agent connected to Glyph's MCP server (glyph mcp) can always read your open workspaces: links, backlinks, tags, headings and the graph. Tools that change your notes stay off until you turn each one on here. A change to a note that has unsaved changes in Glyph is refused.",
+      "tools": {
+        "patch_note": {
+          "label": "Edit a section",
+          "description": "Replace the text under one heading, or add to its start or end. The rest of the note is left untouched."
+        },
+        "set_property": {
+          "label": "Set a property",
+          "description": "Set or remove one frontmatter property, keeping the order, comments and quoting of the others."
+        },
+        "update_task": {
+          "label": "Check off tasks",
+          "description": "Mark a task done or to do. A checkbox inside fenced code or a quote is not treated as a task."
+        },
+        "rename_note": {
+          "label": "Rename notes",
+          "description": "Rename a note and rewrite the links that point to it."
+        },
+        "move_note": {
+          "label": "Move notes",
+          "description": "Move a note to another folder and rewrite the links that point to it."
+        }
+      }
     }
   },
   "print": {
@@ -369,6 +395,8 @@
       "registered": "Glyph is now your default Markdown app.",
       "openedSettings": "Opened Default Apps settings. Choose Glyph for Markdown files.",
       "guidance": "In Finder, right-click a Markdown file, choose Get Info, set Open With to Glyph, then Change All.",
+      "sandboxed": "This Glyph install is sandboxed (Flatpak or Snap) and can't change your default apps. In your file manager, right-click a Markdown file, choose Open With, and set Glyph as the default.",
+      "noDesktopEntry": "Glyph couldn't find its application entry on this system (an AppImage doesn't install one), so it can't set itself as the default. Install Glyph from a package and try again. If you added the AppImage to your application menu, choose Glyph from your file manager's Open With menu instead.",
       "error": "Couldn't set the default app. Set it from your system settings instead."
     }
   }

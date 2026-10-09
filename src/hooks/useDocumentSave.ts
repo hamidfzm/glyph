@@ -42,19 +42,24 @@ export function useDocumentSave({
   // Save a virtual buffer to a chosen path (Save As): on success it becomes an
   // ordinary file tab; a cancelled dialog returns false so close can discard.
   const saveVirtualAs = useCallback(
-    async (id: string, file: FileState): Promise<boolean> => {
-      // A virtual tab always carries a string edit buffer (newDocument seeds "").
-      /* v8 ignore start -- unreachable: editContent is never null for a virtual tab */
-      const content = file.editContent ?? "";
-      /* v8 ignore stop */
+    async (id: string, title: string): Promise<boolean> => {
       // Default into the open workspace so a new note lands beside its siblings.
       const target = await pickSave(
-        `${file.path}.md`,
+        `${title}.md`,
         t("common:fileDialog.markdown"),
         MARKDOWN_EXTENSIONS as string[],
         getWorkspaceRoot() ?? undefined,
       );
+      // The dialog does not block the editor, so the buffer is read only now.
+      // A tab closed while it was open has nothing left to save.
+      const latest = stateRef.current.tabs.find((tab) => tab.id === id);
+      if (latest?.kind !== "file") return true;
       if (!target) return false;
+      // newDocument seeds the edit buffer with "" and nothing resets it to null.
+      /* v8 ignore start -- unreachable: a tab that began virtual always has an edit buffer */
+      const content = latest.file.editContent ?? "";
+      /* v8 ignore stop */
+      const { revision } = latest.file;
       // `openFile` activates the existing tab when a path is already open, so
       // Save As is the only way two tabs could land on one file. Refuse before
       // writing: the open tab may hold unsaved edits, and once the write has
@@ -93,7 +98,15 @@ export function useDocumentSave({
           if (tab.id !== id || tab.kind !== "file") return tab;
           return {
             ...tab,
-            file: { ...tab.file, path: target, virtual: false, dirty: false, content, metadata },
+            file: {
+              ...tab.file,
+              path: target,
+              virtual: false,
+              // Stay dirty when a newer edit landed while the write was in flight.
+              dirty: tab.file.revision !== revision,
+              content,
+              metadata,
+            },
           };
         }),
       }));
@@ -120,7 +133,7 @@ export function useDocumentSave({
       if (tab?.kind !== "file") return Promise.resolve(true);
       const file = tab.file;
       // A virtual buffer has no disk path yet: route through Save As.
-      if (file.virtual) return saveVirtualAs(id, file);
+      if (file.virtual) return saveVirtualAs(id, file.path);
       if (!file.dirty) return Promise.resolve(true);
       // editContent is the edit buffer, always set once a tab is dirty; the null
       // check only narrows the type for the write below ("" stays valid, since a
