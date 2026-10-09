@@ -60,9 +60,9 @@ pub fn create_workspace_file(
     if target.is_dir() {
         return Err("A folder already has that name".to_string());
     }
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create the folder: {e}"))?;
-    }
+    // Strictly inside the root (checked above), so there is always a parent.
+    let parent = target.parent().unwrap_or(&canonical_root);
+    fs::create_dir_all(parent).map_err(|e| format!("Failed to create the folder: {e}"))?;
     let created = write_new(&target, &content)?;
     Ok(CreatedFile { path, created })
 }
