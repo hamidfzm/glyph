@@ -2,8 +2,16 @@ import { invoke } from "@tauri-apps/api/core";
 
 // What the backend did when asked to make Glyph the default Markdown app.
 // "registered" = set for us; "openedSettings" = OS Default Apps page opened;
-// "guidance" = no programmatic path, show manual steps; "error" = it failed.
-export type DefaultAppOutcome = "registered" | "openedSettings" | "guidance" | "error";
+// "guidance" = no programmatic path, show manual steps; "sandboxed" = a Flatpak
+// or snap that cannot reach the host's defaults; "noDesktopEntry" = a Linux
+// install with no application entry to register; "error" = it failed.
+export type DefaultAppOutcome =
+  | "registered"
+  | "openedSettings"
+  | "guidance"
+  | "sandboxed"
+  | "noDesktopEntry"
+  | "error";
 
 /** Ask the backend to set (or guide the user to set) Glyph as the default
  *  Markdown handler. Never rejects; a failure resolves to "error". */

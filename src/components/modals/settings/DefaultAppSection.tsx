@@ -3,8 +3,8 @@ import { useTranslation } from "react-i18next";
 import { type DefaultAppOutcome, setDefaultMarkdownApp } from "@/lib/defaultApp";
 
 // The canonical place to (re)register Glyph as the default Markdown app, with a
-// per-platform result line (silent success on Linux, an opened settings page on
-// Windows, or manual guidance on macOS).
+// per-platform result line (silent success on Linux where the install allows
+// it, an opened settings page on Windows, or manual guidance elsewhere).
 export function DefaultAppSection() {
   const { t } = useTranslation("settings");
   const [outcome, setOutcome] = useState<DefaultAppOutcome | "busy" | null>(null);

@@ -369,6 +369,8 @@
       "registered": "Glyph ahora es tu app de Markdown predeterminada.",
       "openedSettings": "Se abrió la configuración de Apps predeterminadas. Elige Glyph para los archivos Markdown.",
       "guidance": "En el Finder, haz clic derecho en un archivo Markdown, elige Obtener información, ajusta Abrir con a Glyph y pulsa Cambiar todo.",
+      "sandboxed": "Esta instalación de Glyph se ejecuta en un entorno aislado (Flatpak o Snap) y no puede cambiar tus apps predeterminadas. En tu gestor de archivos, haz clic derecho en un archivo Markdown, elige Abrir con y establece Glyph como predeterminada.",
+      "noDesktopEntry": "Glyph no encontró su entrada de aplicación en este sistema (una AppImage no instala ninguna), así que no puede establecerse como predeterminada. Instala Glyph desde un paquete y vuelve a intentarlo. Si añadiste la AppImage a tu menú de aplicaciones, elige Glyph en el menú Abrir con de tu gestor de archivos.",
       "error": "No se pudo establecer la app predeterminada. Configúrala desde los ajustes del sistema."
     }
   }
