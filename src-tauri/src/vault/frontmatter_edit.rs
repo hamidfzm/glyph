@@ -226,26 +226,38 @@ fn key_colon(entry: &Entry, line: &str) -> Option<usize> {
     (!plain || written == entry.key).then_some(colon)
 }
 
-/// Where the quoted scalar `entry` holds opens: its line, and the byte of the
-/// quote in it. `None` for any other value.
+/// The quote character of the scalar `entry` holds, if it is a quoted one.
+fn quote_of(entry: &Entry) -> Option<char> {
+    match entry.value_style? {
+        TScalarStyle::SingleQuoted => Some('\''),
+        TScalarStyle::DoubleQuoted => Some('"'),
+        _ => None,
+    }
+}
+
+/// Where the scalar `entry` holds in `quote` opens: its line, and the byte of
+/// the quote in it. `None` when the quote cannot be told from one that only
+/// stands in what introduces the value.
 fn quote_start<'a>(
     entry: &Entry,
+    quote: char,
     colon: usize,
     line_at: &impl Fn(usize) -> &'a str,
 ) -> Option<(usize, usize)> {
-    let quote = match entry.value_style? {
-        TScalarStyle::SingleQuoted => '\'',
-        TScalarStyle::DoubleQuoted => '"',
-        _ => return None,
-    };
-    // A tag or an anchor may stand between the colon and the quote.
     let from = if entry.value_line == entry.line {
         colon
     } else {
         0
     };
-    let at = line_at(entry.value_line)[from..].find(quote)?;
-    Some((entry.value_line, from + at))
+    let line = line_at(entry.value_line);
+    let at = line[from..].find(quote)?;
+    // Only a tag or an anchor may stand between the colon and the value.
+    let before = &line[from..from + at];
+    let introduces = before
+        .split_whitespace()
+        .all(|token| token.starts_with(['&', '!']));
+    let opens_a_token = before.is_empty() || before.ends_with([' ', '\t']);
+    (introduces && opens_a_token).then_some((entry.value_line, from + at))
 }
 
 /// Where an entry's value ends.
@@ -270,8 +282,9 @@ fn value_end<'a>(
         line,
         after_quote: None,
     };
-    if let Some((opens, at)) = quote_start(entry, colon, line_at) {
+    if let Some(quote) = quote_of(entry) {
         // Inside quotes a `#` line is text: the value ends where they close.
+        let (opens, at) = quote_start(entry, quote, colon, line_at)?;
         let lines: Vec<&str> = (opens..next).map(line_at).collect();
         let text = lines.join("\n");
         let end = at + quoted_end(text.get(at..)?)?;
@@ -797,6 +810,10 @@ mod tests {
             set(&tagged, "title", &text("x")),
             block("title: \"x\"\nb: 1\n")
         );
+        // A quote inside the anchor's own name is not where the value opens.
+        let odd = block("a: &it's 'x # y'\nb: 1\n");
+        let refusal = set_property(&odd, "a", Some(&text("new"))).unwrap_err();
+        assert!(refusal.contains("cannot be edited"), "{refusal}");
         let anchored = block("title: &t \"Plan\" # kept\n# reviewed quarterly\nb: 1\n");
         assert_eq!(
             set(&anchored, "title", &text("x")),

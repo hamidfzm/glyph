@@ -121,7 +121,9 @@ mod tests {
         let wrapped = "````md\n```md\n- [ ] example task\n```\n````\n- [ ] real\n";
         // Nor does a run sitting four columns deeper than the fence's opener.
         let deeper = "```md\n    ```\n- [ ] still code\n```\n- [ ] real\n";
-        for md in [nested, wrapped, deeper] {
+        // A fence may open on the bullet's own line.
+        let on_bullet = "- ```md\n  - [ ] in code\n  ```\n- [ ] real\n";
+        for md in [nested, wrapped, deeper, on_bullet] {
             let texts: Vec<String> = parse_tasks(md, 0).into_iter().map(|t| t.text).collect();
             assert_eq!(texts, ["real"], "{md:?}");
         }

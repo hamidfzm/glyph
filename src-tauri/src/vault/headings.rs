@@ -69,8 +69,8 @@ impl Fences {
 /// [`Fences`] is the renderer's embed slicer, which matches on the fence
 /// character alone; here a fence closes only on a bare run of that character
 /// at least as long as the one that opened it, indented no more than three
-/// columns past it. An opener counts at any depth, since a fence inside a
-/// nested list item sits deeper than three columns.
+/// columns past it. An opener counts at any depth, and straight after a list
+/// marker, since a fence inside a list item sits wherever the item puts it.
 pub(super) struct StrictFences(Option<Fence>);
 
 #[derive(Clone, Copy)]
@@ -86,6 +86,28 @@ fn indent_width(line: &str) -> usize {
     blanks.map(|c| if c == '\t' { 4 } else { 1 }).sum()
 }
 
+/// `line` past its indent and any list markers it opens with, and the column
+/// that leaves it at: a fence may open on the bullet's own line.
+fn past_list_markers(line: &str) -> (usize, &str) {
+    let mut column = 0;
+    let mut rest = line;
+    loop {
+        column += indent_width(rest);
+        rest = rest.trim_start_matches([' ', '\t']);
+        let digits = rest.len() - rest.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+        let marker = match rest.as_bytes().get(digits) {
+            Some(b'-' | b'*' | b'+') if digits == 0 => 1,
+            Some(b'.' | b')') if digits > 0 => digits + 1,
+            _ => return (column, rest),
+        };
+        if !rest[marker..].starts_with([' ', '\t']) {
+            return (column, rest);
+        }
+        column += marker;
+        rest = &rest[marker..];
+    }
+}
+
 impl StrictFences {
     pub(super) fn new() -> Self {
         StrictFences(None)
@@ -97,35 +119,38 @@ impl StrictFences {
     }
 
     pub(super) fn skip(&mut self, line: &str) -> bool {
-        let text = line.trim_start_matches(is_js_space);
-        let indent = indent_width(line);
-        let marker = text.chars().next().filter(|c| matches!(c, '`' | '~'));
-        let run = marker.map_or(0, |m| text.chars().take_while(|&c| c == m).count());
-        let after = &text[run..];
-        match (self.0, marker) {
-            (None, Some(marker)) if run >= 3 => {
-                // A backtick in the info string makes the run inline code.
-                let opens = marker == '~' || !after.contains('`');
-                let fence = Fence {
-                    marker,
-                    length: run,
-                    indent,
-                };
-                self.0 = opens.then_some(fence);
-                opens
-            }
-            (None, _) => false,
-            (Some(open), Some(marker)) => {
-                let bare = after.trim_matches(is_js_space).is_empty();
-                let same_run = marker == open.marker && run >= open.length;
-                if same_run && bare && indent <= open.indent + 3 {
-                    self.0 = None;
-                }
-                true
-            }
-            (Some(_), None) => true,
+        let Some(open) = self.0 else {
+            let (indent, text) = past_list_markers(line);
+            let (marker, run, after) = fence_run(text);
+            // A backtick in the info string makes the run inline code.
+            let opens = run >= 3 && (marker == '~' || !after.contains('`'));
+            let fence = Fence {
+                marker,
+                length: run,
+                indent,
+            };
+            self.0 = opens.then_some(fence);
+            return opens;
+        };
+        let (marker, run, after) = fence_run(line.trim_start_matches(is_js_space));
+        let bare = after.trim_matches(is_js_space).is_empty();
+        let same_run = marker == open.marker && run >= open.length;
+        if same_run && bare && indent_width(line) <= open.indent + 3 {
+            self.0 = None;
         }
+        true
     }
+}
+
+/// The fence character `text` opens with, how many of it, and what follows.
+/// A `text` opening with neither has a run of none.
+fn fence_run(text: &str) -> (char, usize, &str) {
+    let marker = text.chars().next().unwrap_or_default();
+    if !matches!(marker, '`' | '~') {
+        return (marker, 0, text);
+    }
+    let run = text.chars().take_while(|&c| c == marker).count();
+    (marker, run, &text[run..])
 }
 
 /// The lines of `text` as `split(/\r\n|\r|\n/)` yields them, without the empty
@@ -309,50 +334,196 @@ pub(crate) fn section_spans(content: &str, body_start: usize, wanted: &str) -> V
     spans
 }
 
-/// Raw HTML, an HTML comment, or display math: blocks in which the renderer
-/// reads no heading, and which the slicer does not know.
+/// The tags that open an HTML block running to the next blank line, as
+/// CommonMark lists them. Any other tag on a line of text is inline.
+const BLOCK_TAGS: [&str; 62] = [
+    "address",
+    "article",
+    "aside",
+    "base",
+    "basefont",
+    "blockquote",
+    "body",
+    "caption",
+    "center",
+    "col",
+    "colgroup",
+    "dd",
+    "details",
+    "dialog",
+    "dir",
+    "div",
+    "dl",
+    "dt",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "frame",
+    "frameset",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "head",
+    "header",
+    "hr",
+    "html",
+    "iframe",
+    "legend",
+    "li",
+    "link",
+    "main",
+    "menu",
+    "menuitem",
+    "nav",
+    "noframes",
+    "ol",
+    "optgroup",
+    "option",
+    "p",
+    "param",
+    "search",
+    "section",
+    "summary",
+    "table",
+    "tbody",
+    "td",
+    "tfoot",
+    "th",
+    "thead",
+    "title",
+    "tr",
+    "track",
+    "ul",
+];
+/// The tags whose block runs to a closing tag instead, blank lines included.
+const VERBATIM_TAGS: [&str; 4] = ["pre", "script", "style", "textarea"];
+const VERBATIM_ENDS: [&str; 4] = ["</pre>", "</script>", "</style>", "</textarea>"];
+
+/// Raw HTML or display math: blocks in which the renderer reads no heading
+/// and no fence, and which the slicer does not know.
 #[derive(Default)]
-struct RawBlocks {
-    comment: bool,
-    math: bool,
-    html: bool,
+enum RawBlocks {
+    #[default]
+    Outside,
+    /// Until a line holding one of these.
+    Until(&'static [&'static str]),
+    UntilBlank,
+    /// Display math, until a run of `$` at least this long.
+    Math(usize),
 }
 
 impl RawBlocks {
     /// Whether the line trimmed to `text` opens, closes or sits inside one.
-    fn skip(&mut self, text: &str) -> bool {
-        if self.comment {
-            self.comment = !text.contains("-->");
-            return true;
+    /// `in_paragraph` is whether the line above is text this one would carry
+    /// on: a lone tag opens a block only where it does not.
+    fn skip(&mut self, text: &str, in_paragraph: bool) -> bool {
+        let lower = text.to_ascii_lowercase();
+        match *self {
+            RawBlocks::Until(ends) => {
+                if ends.iter().any(|end| lower.contains(end)) {
+                    *self = RawBlocks::Outside;
+                }
+                return true;
+            }
+            RawBlocks::UntilBlank if text.is_empty() => {
+                *self = RawBlocks::Outside;
+                return false;
+            }
+            RawBlocks::UntilBlank => return true,
+            RawBlocks::Math(length) => {
+                let run = text.chars().take_while(|&c| c == '$').count();
+                if run >= length && text[run..].trim().is_empty() {
+                    *self = RawBlocks::Outside;
+                }
+                return true;
+            }
+            RawBlocks::Outside => {}
         }
-        if self.math {
-            self.math = !text.ends_with("$$");
-            return true;
+        let Some(opened) = raw_opener(&lower, in_paragraph) else {
+            return false;
+        };
+        // A block that meets its end on the line it opens on is that line.
+        let closed_already = match opened {
+            RawBlocks::Until(ends) => ends.iter().any(|end| lower[2..].contains(end)),
+            _ => false,
+        };
+        if !closed_already {
+            *self = opened;
         }
-        if let Some(rest) = text.strip_prefix("<!--") {
-            self.comment = !rest.contains("-->");
-            return true;
-        }
-        if let Some(rest) = text.strip_prefix("$$") {
-            // `$$ x $$` on one line opens nothing.
-            self.math = !rest.ends_with("$$");
-            return true;
-        }
-        // An HTML block runs to the next blank line.
-        let tag = text.strip_prefix('<').and_then(|rest| rest.chars().next());
-        if tag.is_some_and(|c| c.is_ascii_alphabetic() || matches!(c, '/' | '!' | '?')) {
-            self.html = true;
-        }
-        if text.is_empty() {
-            self.html = false;
-        }
-        self.html
+        true
     }
+}
+
+/// The raw block a line opens, given lowercased and trimmed.
+fn raw_opener(lower: &str, in_paragraph: bool) -> Option<RawBlocks> {
+    let dollars = lower.chars().take_while(|&c| c == '$').count();
+    // `$$ x $$ and more` is inline math in a line of text.
+    if dollars >= 2 && !lower[dollars..].contains('$') {
+        return Some(RawBlocks::Math(dollars));
+    }
+    let tag = lower.strip_prefix('<')?;
+    if tag.starts_with("!--") {
+        return Some(RawBlocks::Until(&["-->"]));
+    }
+    if tag.starts_with('?') {
+        return Some(RawBlocks::Until(&["?>"]));
+    }
+    if tag.starts_with("![cdata[") {
+        return Some(RawBlocks::Until(&["]]>"]));
+    }
+    if let Some(declared) = tag.strip_prefix('!') {
+        let declaration = declared.starts_with(|c: char| c.is_ascii_alphabetic());
+        return declaration.then_some(RawBlocks::Until(&[">"]));
+    }
+    let name_at = usize::from(tag.starts_with('/'));
+    let name_len = tag[name_at..]
+        .find(|c: char| !c.is_ascii_alphanumeric())
+        .unwrap_or(tag.len() - name_at);
+    let name = &tag[name_at..name_at + name_len];
+    let ends_name = matches!(
+        tag[name_at + name_len..].chars().next(),
+        None | Some(' ' | '\t' | '>' | '/')
+    );
+    if name.is_empty() || !ends_name {
+        return None;
+    }
+    if name_at == 0 && VERBATIM_TAGS.contains(&name) {
+        return Some(RawBlocks::Until(&VERBATIM_ENDS));
+    }
+    if BLOCK_TAGS.contains(&name) {
+        return Some(RawBlocks::UntilBlank);
+    }
+    // Any other tag opens a block only alone on its line, and never in the
+    // middle of a paragraph.
+    let alone = lower.ends_with('>') && lower.matches('<').count() == 1;
+    (alone && !in_paragraph).then_some(RawBlocks::UntilBlank)
 }
 
 /// A line of `=` or of `-`, which under a line of text makes it a heading.
 fn is_rule(text: &str) -> bool {
     !text.is_empty() && (text.chars().all(|c| c == '=') || text.chars().all(|c| c == '-'))
+}
+
+/// Three or more of `-`, `*` or `_`, spaces between them or not: a break in
+/// the text, and no text itself.
+fn is_thematic_break(text: &str) -> bool {
+    let mut marks = text.chars().filter(|c| !matches!(c, ' ' | '\t'));
+    let Some(first) = marks.next().filter(|c| matches!(c, '-' | '*' | '_')) else {
+        return false;
+    };
+    let mut count = 1;
+    for mark in marks {
+        if mark != first {
+            return false;
+        }
+        count += 1;
+    }
+    count >= 3
 }
 
 /// Whether `text` opens a list item or a quote. The text on such a line is
@@ -393,6 +564,9 @@ fn commonmark_level(line: &str, above_is_text: bool) -> Option<u8> {
 /// math; and closes a fence by its length, or with the list item holding it.
 /// A heading only one of the two readings has, at the section's level or
 /// above, means a write would land on bounds the rendered note does not have.
+// ponytail: line by line, with no block structure. What that cannot settle
+// (a fence's indent relative to its list item, a paragraph carried on by an
+// oddly shaped line) errs toward refusing; a block parser would settle it.
 pub(crate) fn uncertain_line(content: &str, body_start: usize, span: &SectionSpan) -> Option<u32> {
     let heading_line = span.heading.line as usize - 1;
     let (mut loose, mut strict) = (Fences::new(), StrictFences::new());
@@ -402,15 +576,21 @@ pub(crate) fn uncertain_line(content: &str, body_start: usize, span: &SectionSpa
     let lines = js_lines(content).enumerate().take(span.end_line + 1);
     // Fences carry over from every line above, so both are fed from the top.
     for (idx, line) in lines.skip(body_start) {
-        let (code, strict_code) = (loose.skip(line), strict.skip(line));
+        let code = loose.skip(line);
         let text = line.trim_matches(is_js_space);
+        let indent = indent_width(line);
+        // To CommonMark nothing opens inside a fence, and no fence opens
+        // inside raw HTML or math.
+        let fenced = strict.open_indent().is_some();
+        let in_raw = !fenced && indent <= 3 && raw.skip(text, above_is_text);
+        let strict_code = !in_raw && strict.skip(line);
         // A fence left open in a list item ends with the item for CommonMark,
         // and swallows the rest of the note for both readers here.
-        let shallower = |opened: usize| !text.is_empty() && indent_width(line) < opened;
-        if strict.open_indent().is_some_and(shallower) {
+        let shallower = |opened: usize| !text.is_empty() && indent < opened;
+        if fenced && strict.open_indent().is_some_and(shallower) {
             return Some(idx as u32 + 1);
         }
-        let hidden = strict_code || raw.skip(text);
+        let hidden = strict_code || in_raw;
         let slicer = if code {
             None
         } else {
@@ -425,8 +605,10 @@ pub(crate) fn uncertain_line(content: &str, body_start: usize, span: &SectionSpa
             (Some(level), None) | (None, Some(level)) => Some(level),
             _ => None,
         };
-        let plain_text = !is_rule(text) && commonmark.is_none() && !opens_container(text);
-        above_is_text = !hidden && !text.is_empty() && indent_width(line) <= 3 && plain_text;
+        // A line four columns in is text only where it carries a paragraph on.
+        let carries_on = indent <= 3 || above_is_text;
+        let plain_text = commonmark.is_none() && !opens_container(text) && !is_thematic_break(text);
+        above_is_text = !hidden && !text.is_empty() && plain_text && carries_on;
         let moves_a_bound = match disputed {
             Some(_) if idx == heading_line => true,
             Some(level) => idx > heading_line && level <= span.heading.level,
@@ -679,6 +861,56 @@ mod tests {
     }
 
     #[test]
+    fn only_the_tags_commonmark_takes_for_a_block_hide_what_follows() {
+        // An inline tag opens a line of text: the rule under it is an
+        // underline, and the heading under an anchor is a heading.
+        assert_eq!(
+            doubt("# Top\n<span>inline</span> text\n===\n", "Top"),
+            Some(3)
+        );
+        let anchored =
+            "## A\ntext\n\n<a name=\"x\"></a>\nInstallation\n------------\nbody\n\n## B\n";
+        assert_eq!(doubt(anchored, "A"), Some(6));
+        assert_eq!(
+            doubt("# A\n<a id=\"x\"></a>\n### Options\ntext\n# B\n", "A"),
+            None
+        );
+        // A `<pre>` block runs to its closing tag, blank lines and all.
+        let pre = "# A\ntext\n<pre>\noutput\n\n# not a heading\n</pre>\nmore\n# B\n";
+        assert_eq!(doubt(pre, "A"), Some(6));
+        assert_eq!(doubt("# A\n<pre>x</pre>\n\n# B\n", "A"), None);
+        // A tag of no special kind opens a block alone on its line, and only
+        // where it does not carry a paragraph on.
+        assert_eq!(doubt("# A\n\n<MyTag>\n# inside\n\n# B\n", "A"), Some(4));
+        assert_eq!(doubt("# A\ntext\n<MyTag>\n# B\n", "A"), None);
+        // No fence opens inside a raw block, so the heading after it is real
+        // to CommonMark while the slicer is still inside its fence.
+        let details = "# A\n<details>\n```js\ncode\n\n# B\nb\n\n# C\n";
+        assert_eq!(doubt(details, "A"), Some(6));
+        // `$$` with more text on the line is inline math, not a block.
+        assert_eq!(doubt("# A\n$$E=mc^2$$ is famous\n\n# B\n", "A"), None);
+        assert_eq!(
+            doubt("# A\ntext\n\n$$ x $$\n===\nbody\n# B\n", "A"),
+            Some(5)
+        );
+    }
+
+    #[test]
+    fn text_above_an_underline_is_whatever_carries_a_paragraph_on() {
+        // A wrapped title, its second line four columns in.
+        let wrapped =
+            "## A\ntext\n\nA long title that wraps\n    onto a second line\n---\nbody\n\n## B\n";
+        assert_eq!(doubt(wrapped, "A"), Some(6));
+        // A line of `=` with nothing above it is text, and the next underlines it.
+        assert_eq!(
+            doubt("# A\ntext\n\n=====\n=====\nbody\n# B\n", "A"),
+            Some(5)
+        );
+        // A break in the text is not text.
+        assert_eq!(doubt("# A\ntext\n\n* * *\n===\n# B\n", "A"), None);
+    }
+
+    #[test]
     fn a_fence_left_open_in_a_list_item_puts_the_section_in_doubt() {
         // CommonMark closes it where the item ends, and renders the headings
         // after; both readers here take the rest of the note for code.
@@ -688,6 +920,14 @@ mod tests {
         // Closed inside its item, it is no doubt.
         let closed = "# Intro\n- step\n  ```\n  code\n  ```\n\n# Second\n";
         assert_eq!(doubt(closed, "Intro"), None);
+        // One opened on the bullet's own line is a fence to CommonMark. The
+        // slicer first sees its closing line and takes that for an opening,
+        // so the heading after it is in doubt, and after a second such fence
+        // the slicer is back where it started.
+        let on_bullet = "# Intro\n- ```json\n  {}\n  ```\n# Second\n";
+        assert_eq!(doubt(on_bullet, "Intro"), Some(5));
+        let paired = "# Intro\n- ```a\n  x\n  ```\n1. ```b\n   y\n   ```\n# Second\n";
+        assert_eq!(doubt(paired, "Intro"), None);
     }
 
     #[test]
