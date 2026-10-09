@@ -189,11 +189,7 @@ describe("useDiskReload", () => {
   });
 
   it("keeps an edit made while the file was being read", async () => {
-    let finishRead: (content: string) => void = () => {};
-    const pendingRead = new Promise<string>((resolve) => {
-      finishRead = resolve;
-    });
-    vi.mocked(invoke).mockImplementation(async (cmd) => (cmd === "read_file" ? pendingRead : null));
+    const reads = parkReads();
     const { result } = renderReload(stateAt(3, { mode: EDITOR_MODE.view }));
 
     const reloading = result.current.reload("/p/a.md");
@@ -201,7 +197,7 @@ describe("useDiskReload", () => {
       result.current.setState(stateAt(4, { ...unsaved, mode: EDITOR_MODE.view }));
     });
     await act(async () => {
-      finishRead("new");
+      reads[0].resolve("new");
       await reloading;
     });
 
