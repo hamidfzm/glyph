@@ -1230,26 +1230,6 @@ fn a_sync_catches_the_index_up_with_the_disk() {
 }
 
 #[test]
-fn a_sync_drops_a_note_an_update_indexed_once_it_leaves_the_disk() {
-    let root = fixture_vault("sync_unstamped");
-    let mut vault = build(&root);
-
-    // The update indexes the folder's notes under their new paths, which no
-    // walk has seen yet.
-    let (old, new) = (root.join("Notes"), root.join("Recipes"));
-    fs::rename(&old, &new).unwrap();
-    vault.apply_changes(&[old, new]);
-    assert_matches_rebuild(&vault, &root);
-
-    // Renamed again with nothing reporting it: only the walk can tell.
-    fs::rename(root.join("Recipes"), root.join("Other")).unwrap();
-    vault.sync().unwrap();
-    assert!(vault.note(&in_vault(&root, "Recipes/Cooking.md")).is_none());
-    assert_matches_rebuild(&vault, &root);
-    fs::remove_dir_all(&root).unwrap();
-}
-
-#[test]
 fn a_sync_reports_the_cap_the_walk_hit_and_lifts_it_when_room_returns() {
     let root = fixture_vault("sync_cap");
     let mut vault = Vault::build_capped(&root, 9, 32).unwrap();
@@ -1299,6 +1279,26 @@ fn a_file_that_displaces_the_last_walked_note_is_not_mistaken_for_it() {
         vault.note(&last_key).is_none(),
         "gone from disk, gone from the index"
     );
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_sync_drops_a_note_an_update_indexed_once_it_leaves_the_disk() {
+    let root = fixture_vault("sync_unstamped");
+    let mut vault = build(&root);
+
+    // The update indexes the folder's notes under their new paths, which no
+    // walk has seen yet.
+    let (old, new) = (root.join("Notes"), root.join("Recipes"));
+    fs::rename(&old, &new).unwrap();
+    vault.apply_changes(&[old, new]);
+    assert_matches_rebuild(&vault, &root);
+
+    // Renamed again with nothing reporting it: only the walk can tell.
+    fs::rename(root.join("Recipes"), root.join("Other")).unwrap();
+    vault.sync().unwrap();
+    assert!(vault.note(&in_vault(&root, "Recipes/Cooking.md")).is_none());
     assert_matches_rebuild(&vault, &root);
     fs::remove_dir_all(&root).unwrap();
 }
