@@ -56,6 +56,14 @@
     "macOS": {
       "minimumSystemVersion": "10.15"
     },
+    "linux": {
+      "deb": {
+        "desktopTemplate": "linux/glyph.desktop"
+      },
+      "rpm": {
+        "desktopTemplate": "linux/glyph.desktop"
+      }
+    },
     "fileAssociations": [
       {
         "ext": [
