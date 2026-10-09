@@ -292,11 +292,14 @@ mod tests {
 
     #[test]
     fn the_packaging_recipes_agree_with_the_names_assumed_here() {
+        let smoke = include_str!("../../../scripts/desktop-entry-smoke.sh");
         let snap = include_str!("../../../snap/snapcraft.yaml");
         let flatpak = include_str!("../../../flatpak/com.hamidfzm.glyph.yml");
 
-        // The snap repacks the .deb, so its recipe names the entry the bundler wrote.
-        assert!(snap.contains(&format!("usr/share/applications/{DESKTOP_ENTRY}")));
+        // CI opens a built .deb with that script, and the snap repacks the .deb.
+        let installed = format!("usr/share/applications/{DESKTOP_ENTRY}");
+        assert!(smoke.contains(&installed));
+        assert!(snap.contains(&installed));
         assert!(snap
             .lines()
             .any(|line| line == format!("name: {SNAP_NAME}")));
