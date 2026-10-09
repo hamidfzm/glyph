@@ -36,21 +36,9 @@
     "closeWorkspace": "关闭工作区",
     "outline": "大纲",
     "resize": "调整侧边栏大小",
-    "resizeBacklinks": "调整反向链接大小",
-    "resizeTags": "调整标签大小",
+    "resizeBlock": "调整{{name}}大小",
+    "clearFilter": "清除筛选",
     "indexIncomplete": "索引不完整"
-  },
-  "backlinks": {
-    "heading": "反向链接",
-    "empty": "没有反向链接"
-  },
-  "tags": {
-    "heading": "标签",
-    "filterBy": "按 #{{tag}} 筛选",
-    "filtered": "#{{tag}}（{{total}}）",
-    "clearFilter": "清除标签筛选",
-    "sortByCount": "按数量排序标签",
-    "empty": "没有标签"
   },
   "tabBar": {
     "graphLabel": "图谱：{{name}}",

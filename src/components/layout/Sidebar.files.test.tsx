@@ -1,11 +1,19 @@
-import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { PluginsContext } from "@/contexts/PluginsContext";
 import { pickMoveDir } from "@/lib/pickers";
-import { makeFileTab, makeWorkspace, renderSidebar, Wrapper } from "@/test/fixtures/sidebar";
-import { vaultSnapshot } from "@/test/tabsHarness";
+import { createRegistry } from "@/lib/plugins/registry";
+import type { FileTreeFilter } from "@/lib/plugins/types";
+import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
+import {
+  makeFileTab,
+  makeWorkspace,
+  type RenderOpts,
+  renderSidebar,
+  Wrapper,
+} from "@/test/fixtures/sidebar";
 
 vi.mock("@/lib/pickers", () => ({
   pickMoveDir: vi.fn(),
@@ -107,145 +115,72 @@ describe("Sidebar files panel", () => {
     expect(movePath).not.toHaveBeenCalled();
   });
 
-  describe("tags", () => {
-    // What the index answers for this workspace. Which files carry a tag,
-    // nested children included, is decided in Rust and tested there.
-    const tagged: Record<string, string[]> = {
-      work: ["/tmp/notes/readme.md", "/tmp/notes/deep/plan.md"],
-      personal: ["/tmp/notes/diary.md"],
+  describe("file tree filter", () => {
+    const work: FileTreeFilter = {
+      label: "#work (2)",
+      paths: ["/tmp/notes/readme.md", "/tmp/notes/deep/plan.md"],
+      onClear: vi.fn(),
     };
-    const snapshot = vaultSnapshot(
-      ["/tmp/notes/readme.md", "/tmp/notes/deep/plan.md", "/tmp/notes/diary.md"],
-      {
-        tagCounts: [
-          { tag: "work", count: 2 },
-          { tag: "personal", count: 1 },
-        ],
-      },
-    );
 
-    beforeEach(() => {
-      vi.mocked(invoke).mockImplementation(((cmd: string, args: { tag?: string }) =>
-        Promise.resolve(
-          cmd === "vault_paths_with_tag" ? (tagged[args?.tag ?? ""] ?? []) : undefined,
-        )) as unknown as typeof invoke);
-    });
-
-    it("lists the workspace tags with their counts", () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
-      expect(screen.getByText("Tags")).toBeInTheDocument();
-      expect(screen.getByTitle("Filter by #work")).toBeInTheDocument();
-      expect(screen.getByTitle("Filter by #personal")).toBeInTheDocument();
-    });
-
-    // The block stays put so the panel doesn't reflow as tags come and go.
-    it("keeps the tags block when the workspace carries no metadata", () => {
-      renderSidebar({ workspace: makeWorkspace() });
-      expect(screen.getByText("Tags")).toBeInTheDocument();
-      expect(screen.getByText("No tags")).toBeInTheDocument();
-    });
-
-    it("persists the collapsed state instead of holding it locally", () => {
-      const setTagsCollapsed = vi.fn();
-      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot }, setTagsCollapsed });
-      fireEvent.click(screen.getByRole("button", { name: /^Tags/ }));
-      expect(setTagsCollapsed).toHaveBeenCalledExactlyOnceWith(true);
-    });
+    function renderFiltered(filter: FileTreeFilter, opts: RenderOpts = {}) {
+      const fileTreeFilters = createRegistry<FileTreeFilter>();
+      const remove = fileTreeFilters.register(filter);
+      const fullOpts = { activeTab: makeFileTab(), workspace: makeWorkspace(), ...opts };
+      render(
+        <PluginsContext.Provider value={pluginsContextValue({ fileTreeFilters })}>
+          <Wrapper opts={fullOpts}>
+            <Sidebar side="left" />
+          </Wrapper>
+        </PluginsContext.Provider>,
+      );
+      return { fileTreeFilters, remove };
+    }
 
     // The filtered list replaces the tree: matches can live in folders the
     // lazily-loaded tree has never expanded.
-    it("replaces the tree with the tagged files when a tag is picked", async () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-
-      expect(await screen.findByText("#work (2)")).toBeInTheDocument();
+    it("replaces the tree with the files a plugin filters it to", () => {
+      renderFiltered(work);
+      expect(screen.getByText("#work (2)")).toBeInTheDocument();
       expect(screen.getByText("deep/plan.md")).toBeInTheDocument();
-      expect(screen.queryByText("diary.md")).not.toBeInTheDocument();
     });
 
-    it("opens a tagged file from the filtered list", async () => {
+    it("opens a file from the filtered list", () => {
       const openFile = vi.fn();
-      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot, openFile } });
-      fireEvent.click(screen.getByTitle("Filter by #personal"));
-      fireEvent.click(await screen.findByText("diary.md"));
-      expect(openFile).toHaveBeenCalledWith("/tmp/notes/diary.md");
+      renderFiltered(work, { tabs: { openFile } });
+      fireEvent.click(screen.getByText("deep/plan.md"));
+      expect(openFile).toHaveBeenCalledWith("/tmp/notes/deep/plan.md");
     });
 
-    it("restores the tree when the filter is cleared", async () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-      fireEvent.click(await screen.findByRole("button", { name: "Clear tag filter" }));
+    it("hands the clear button to the plugin that owns the filter", () => {
+      const onClear = vi.fn();
+      renderFiltered({ ...work, onClear });
+      fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));
+      expect(onClear).toHaveBeenCalledOnce();
+    });
+
+    it("restores the tree when the plugin removes its filter", () => {
+      const { remove } = renderFiltered(work);
+      act(() => remove());
       expect(screen.getByText("readme.md")).toBeInTheDocument();
       expect(screen.queryByText("#work (2)")).not.toBeInTheDocument();
     });
 
-    it("clears the filter when the active tag chip is clicked again", async () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-      expect(await screen.findByText("#work (2)")).toBeInTheDocument();
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-      expect(screen.getByText("readme.md")).toBeInTheDocument();
-      expect(screen.queryByText("#work (2)")).not.toBeInTheDocument();
-    });
-
-    it("hides the tree-only toolbar actions while a tag filters the panel", async () => {
-      renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-      expect(await screen.findByText("#work (2)")).toBeInTheDocument();
+    it("hides the tree-only toolbar actions while a filter replaces the tree", () => {
+      renderFiltered(work);
       expect(screen.queryByTitle("New note")).not.toBeInTheDocument();
       expect(screen.getByTitle("Close workspace")).toBeInTheDocument();
     });
 
-    // Same tag name, different vault: the filter belongs to the workspace it
-    // was picked in, so it must not silently re-apply to unrelated files.
-    it("drops the filter when another workspace is opened", async () => {
-      const { rerender } = renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-      expect(await screen.findByText("#work (2)")).toBeInTheDocument();
-
-      const opts = {
-        activeTab: makeFileTab(),
-        workspace: makeWorkspace({
-          root: "/tmp/other",
-          nodes: new Map([
-            [
-              "/tmp/other",
-              [{ name: "other.md", path: "/tmp/other/other.md", isDirectory: false, modified: 0 }],
-            ],
-          ]),
-        }),
-        tabs: {
-          snapshot: vaultSnapshot(["/tmp/other/other.md"], {
-            tagCounts: [{ tag: "work", count: 1 }],
-          }),
-        },
-      };
-      rerender(
-        <Wrapper opts={opts}>
-          <Sidebar side="left" />
-        </Wrapper>,
-      );
-      expect(screen.getByText("other.md")).toBeInTheDocument();
-      expect(screen.queryByText("#work (1)")).not.toBeInTheDocument();
-    });
-
-    // A rescan can drop the filtered tag (note deleted, tag edited away).
-    it("falls back to the tree when the filtered tag leaves the index", async () => {
-      const { rerender } = renderSidebar({ workspace: makeWorkspace(), tabs: { snapshot } });
-      fireEvent.click(screen.getByTitle("Filter by #work"));
-      expect(await screen.findByText("#work (2)")).toBeInTheDocument();
-
-      const opts = {
-        activeTab: makeFileTab(),
-        workspace: makeWorkspace(),
-        tabs: { snapshot: vaultSnapshot([]) },
-      };
-      rerender(
-        <Wrapper opts={opts}>
-          <Sidebar side="left" />
-        </Wrapper>,
-      );
-      expect(screen.getByText("readme.md")).toBeInTheDocument();
+    it("shows the newest filter when plugins register more than one", () => {
+      const { fileTreeFilters } = renderFiltered(work);
+      act(() => {
+        fileTreeFilters.register({
+          label: "#personal (1)",
+          paths: ["/tmp/notes/diary.md"],
+          onClear: vi.fn(),
+        });
+      });
+      expect(screen.getByText("#personal (1)")).toBeInTheDocument();
       expect(screen.queryByText("#work (2)")).not.toBeInTheDocument();
     });
   });

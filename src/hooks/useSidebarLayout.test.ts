@@ -58,7 +58,7 @@ describe("useSidebarLayout", () => {
     expect(updateSettings).toHaveBeenCalledWith("layout.outlineSidebarVisible", false);
   });
 
-  it("persists panel sizes through the width and backlinks setters", () => {
+  it("persists panel sizes through the width setters", () => {
     const updateSettings = vi.fn();
     const { result } = renderHook(() =>
       useSidebarLayout({
@@ -70,19 +70,9 @@ describe("useSidebarLayout", () => {
     act(() => {
       result.current.setFilesSidebarWidth(300);
       result.current.setOutlineSidebarWidth(280);
-      result.current.setBacklinksHeight(150);
-      result.current.setTagsHeight(120);
-      result.current.setBacklinksCollapsed(true);
-      result.current.setTagsCollapsed(true);
-      result.current.setBacklinksHeight(null);
     });
-    expect(updateSettings).toHaveBeenCalledWith("layout.tagsHeight", 120);
-    expect(updateSettings).toHaveBeenCalledWith("layout.backlinksCollapsed", true);
-    expect(updateSettings).toHaveBeenCalledWith("layout.tagsCollapsed", true);
     expect(updateSettings).toHaveBeenCalledWith("layout.filesSidebarWidth", 300);
     expect(updateSettings).toHaveBeenCalledWith("layout.outlineSidebarWidth", 280);
-    expect(updateSettings).toHaveBeenCalledWith("layout.backlinksHeight", 150);
-    expect(updateSettings).toHaveBeenLastCalledWith("layout.backlinksHeight", null);
   });
 
   it("resetLayout writes every layout default, sizes included", () => {
@@ -104,10 +94,7 @@ describe("useSidebarLayout", () => {
     expect(updateSettings).toHaveBeenCalledWith("layout.filesSidebarWidth", 224);
     expect(updateSettings).toHaveBeenCalledWith("layout.outlineSidebarWidth", 224);
     expect(updateSettings).toHaveBeenCalledWith("layout.aiPanelWidth", 340);
-    expect(updateSettings).toHaveBeenCalledWith("layout.backlinksHeight", null);
-    expect(updateSettings).toHaveBeenCalledWith("layout.tagsHeight", null);
-    expect(updateSettings).toHaveBeenCalledWith("layout.backlinksCollapsed", false);
-    expect(updateSettings).toHaveBeenCalledWith("layout.tagsCollapsed", false);
+    expect(updateSettings).toHaveBeenCalledWith("layout.blocks", {});
   });
 
   it("serves capture and restore through the session bridge without touching settings", () => {

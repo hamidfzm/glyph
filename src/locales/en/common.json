@@ -36,21 +36,9 @@
     "closeWorkspace": "Close workspace",
     "outline": "Outline",
     "resize": "Resize sidebar",
-    "resizeBacklinks": "Resize backlinks",
-    "resizeTags": "Resize tags",
+    "resizeBlock": "Resize {{name}}",
+    "clearFilter": "Clear filter",
     "indexIncomplete": "Index incomplete"
-  },
-  "backlinks": {
-    "heading": "Backlinks",
-    "empty": "No backlinks"
-  },
-  "tags": {
-    "heading": "Tags",
-    "filterBy": "Filter by #{{tag}}",
-    "filtered": "#{{tag}} ({{total}})",
-    "clearFilter": "Clear tag filter",
-    "sortByCount": "Sort tags by count",
-    "empty": "No tags"
   },
   "tabBar": {
     "graphLabel": "Graph: {{name}}",

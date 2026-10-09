@@ -55,6 +55,49 @@ function migrateMathToCorePlugin(saved: Record<string, unknown>): Record<string,
   return { ...saved, markdown: rest, corePlugins: { ...corePlugins, math: false } };
 }
 
+const LEGACY_FILES_BLOCKS = [
+  {
+    key: "glyph.core.backlinks:backlinks",
+    height: "backlinksHeight",
+    collapsed: "backlinksCollapsed",
+  },
+  { key: "glyph.core.tags:tags", height: "tagsHeight", collapsed: "tagsCollapsed" },
+];
+
+/**
+ * Backlinks and tags moved into core plugins, whose Files panel blocks keep
+ * their layout in `layout.blocks`. Carry the four legacy keys over (unless the
+ * store already has the block) and drop them.
+ */
+function migrateFilesBlocks(saved: Record<string, unknown>): Record<string, unknown> {
+  const layout = saved.layout;
+  if (!isSafePlainObject(layout)) return saved;
+  const legacy = LEGACY_FILES_BLOCKS.filter(
+    (block) => block.height in layout || block.collapsed in layout,
+  );
+  // The consumers index into the map, so a corrupt store value is discarded
+  // here (the default then applies) rather than crashing the Files panel.
+  const corrupt = "blocks" in layout && !isSafePlainObject(layout.blocks);
+  if (legacy.length === 0 && !corrupt) return saved;
+
+  const rest = { ...layout };
+  const blocks = isSafePlainObject(rest.blocks) ? { ...rest.blocks } : {};
+  for (const block of legacy) {
+    const height = rest[block.height];
+    if (!(block.key in blocks)) {
+      blocks[block.key] = {
+        height: typeof height === "number" ? height : null,
+        collapsed: rest[block.collapsed] === true,
+      };
+    }
+    delete rest[block.height];
+    delete rest[block.collapsed];
+  }
+  return { ...saved, layout: { ...rest, blocks } };
+}
+
 export function migrateLegacySettings(saved: Record<string, unknown>): Record<string, unknown> {
-  return migrateMathToCorePlugin(migrateSpellCheckLanguages(migrateSidebarWidth(saved)));
+  return migrateFilesBlocks(
+    migrateMathToCorePlugin(migrateSpellCheckLanguages(migrateSidebarWidth(saved))),
+  );
 }

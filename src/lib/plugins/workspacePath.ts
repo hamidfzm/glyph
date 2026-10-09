@@ -27,3 +27,22 @@ export function resolveInsideRoot(root: string, relPath: string): string | null 
   const base = root.endsWith(sep) ? root.slice(0, -sep.length) : root;
   return `${base}${sep}${segments.join(sep)}`;
 }
+
+/** `path` without the workspace root in front, or as given when it is not under it. */
+function relativeToWorkspace(root: string, path: string): string {
+  // A drive root (`D:\`) already ends in its separator.
+  const base = root.replace(/[\\/]+$/, "");
+  const next = path.charAt(base.length);
+  const isUnderRoot = path.startsWith(base) && (next === "/" || next === "\\");
+  return isUnderRoot ? path.slice(base.length).replace(/^[\\/]+/, "") : path;
+}
+
+/**
+ * Resolve a workspace file a plugin names by absolute path (as the vault
+ * queries return them) or relative to the root. Either form comes out as the
+ * one normalized path the tabs know a file by, or `null` when it is the root
+ * itself or outside it.
+ */
+export function resolveWorkspacePath(root: string, path: string): string | null {
+  return resolveInsideRoot(root, relativeToWorkspace(root, path));
+}

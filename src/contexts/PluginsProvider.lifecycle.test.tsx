@@ -5,6 +5,7 @@ import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { PluginsProvider } from "@/contexts/PluginsProvider";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
+import { pluginAppState, setPluginAppState } from "@/lib/plugins/appState";
 import { installedPlugin, resetPluginsMocks } from "@/test/pluginsHarness";
 
 vi.mock("@/lib/pickers", () => ({
@@ -111,7 +112,10 @@ describe("PluginsProvider enable and uninstall", () => {
       const commands = useRegistryEntries(p?.commands ?? null);
       return (
         <div>
-          <button type="button" onClick={() => p?.setWorkspaceRoot("/ws")}>
+          <button
+            type="button"
+            onClick={() => setPluginAppState({ ...pluginAppState(), workspaceRoot: "/ws" })}
+          >
             setroot
           </button>
           <button type="button" onClick={() => void commands[0]?.run()}>

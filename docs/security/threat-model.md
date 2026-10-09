@@ -335,9 +335,17 @@ the way a renderer-supplied path is.
   overlay guard against a plugin's bugs, not against a hostile one); that mode
   requires an explicit full-trust consent, persisted per plugin, and
   marketplace packages are SHA-256-verified against the reviewed registry
-  entry before install. Core plugins (the compiled-in
-  `CORE_PLUGINS` list: D2, Mermaid, and math today) are app code shipped in the signed binary:
-  they load with full trust and no consent prompt, and only their on/off
-  state lives in `settings.json`. The backend reserves the `glyph.core.` id
-  prefix, so an installed plugin cannot take a core plugin's settings, grants,
-  or host slot.
+  entry before install. The app-context API also lets a full-trust plugin
+  read the active document, query the workspace index, open workspace files,
+  and list workspace files in the Files panel. None of that adds a command:
+  index queries go through the `vault_*` commands, which check the workspace
+  grant themselves, and an open is an ordinary `read_file`. The paths a plugin
+  opens or lists are confined to the workspace in the renderer first, as a
+  consistency check rather than the boundary. Sandboxed plugins get none of
+  it. Core plugins (the compiled-in `CORE_PLUGINS` list: D2, Mermaid, math,
+  tags, and backlinks today) are app code shipped in the signed binary: they
+  load with full trust and no consent prompt, take the permissions they need
+  (`workspace:read` for tags and backlinks) from that same list rather than
+  from disk, and only their on/off state lives in `settings.json`. The backend
+  reserves the `glyph.core.` id prefix, so an installed plugin cannot take a
+  core plugin's settings, grants, or host slot.

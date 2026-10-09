@@ -54,10 +54,11 @@ export function locateInDocument(text: string): boolean {
 /**
  * Scroll the viewer to the top-level block covering source `line` (the last
  * `data-line` marker at or above it, stamped by the pipeline) and flash it.
- * A pane rendered without markers falls back to matching `text`. Returns false
- * when neither locates, e.g. the line only exists in stripped frontmatter.
+ * A pane rendered without markers falls back to matching `text`, when the
+ * caller has any. Returns false when neither locates, e.g. the line only exists
+ * in stripped frontmatter.
  */
-export function locateLineInDocument(line: number, text: string): boolean {
+export function locateLineInDocument(line: number, text = ""): boolean {
   const container = documentBody();
   if (!container) return false;
 
@@ -66,7 +67,9 @@ export function locateLineInDocument(line: number, text: string): boolean {
     if (Number(block.getAttribute("data-line")) > line) break;
     byLine = block;
   }
-  const block = byLine ?? findBlock(container, normalize(text));
+  // An empty needle would match the first block of any document.
+  const needle = normalize(text);
+  const block = byLine ?? (needle ? findBlock(container, needle) : null);
   if (!block) return false;
 
   flashBlock(container, block);

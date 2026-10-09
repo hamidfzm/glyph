@@ -69,8 +69,6 @@ export function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): I
         return vaultSnapshot();
       case "vault_forget":
         return undefined;
-      case "vault_backlinks":
-      case "vault_paths_with_tag":
       case "vault_resolve":
         return [];
       case "vault_query":

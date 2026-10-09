@@ -54,6 +54,14 @@
     "math": {
       "name": "Matemáticas (KaTeX)",
       "description": "Muestra las fórmulas $inline$ y $$block$$ con KaTeX."
+    },
+    "tags": {
+      "name": "Etiquetas",
+      "description": "Muestra las etiquetas del espacio de trabajo en la barra de archivos y filtra la lista de archivos por una."
+    },
+    "backlinks": {
+      "name": "Enlaces entrantes",
+      "description": "Muestra en la barra de archivos las notas que enlazan a la nota abierta."
     }
   }
 }
