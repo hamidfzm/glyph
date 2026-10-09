@@ -1230,6 +1230,27 @@ fn a_sync_catches_the_index_up_with_the_disk() {
 }
 
 #[test]
+#[ignore = "fails until a sync checks the notes no walk has stamped"]
+fn a_sync_drops_a_note_an_update_indexed_once_it_leaves_the_disk() {
+    let root = fixture_vault("sync_unstamped");
+    let mut vault = build(&root);
+
+    // The update indexes the folder's notes under their new paths, which no
+    // walk has seen yet.
+    let (old, new) = (root.join("Notes"), root.join("Recipes"));
+    fs::rename(&old, &new).unwrap();
+    vault.apply_changes(&[old, new]);
+    assert_matches_rebuild(&vault, &root);
+
+    // Renamed again with nothing reporting it: only the walk can tell.
+    fs::rename(root.join("Recipes"), root.join("Other")).unwrap();
+    vault.sync().unwrap();
+    assert!(vault.note(&in_vault(&root, "Recipes/Cooking.md")).is_none());
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
 fn a_sync_reports_the_cap_the_walk_hit_and_lifts_it_when_room_returns() {
     let root = fixture_vault("sync_cap");
     let mut vault = Vault::build_capped(&root, 9, 32).unwrap();
@@ -1279,6 +1300,70 @@ fn a_file_that_displaces_the_last_walked_note_is_not_mistaken_for_it() {
         vault.note(&last_key).is_none(),
         "gone from disk, gone from the index"
     );
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+#[ignore = "fails until a sync checks the notes no walk has stamped"]
+fn a_note_an_update_indexed_gives_up_its_place_under_the_cap_when_it_goes() {
+    let root = fixture_vault("sync_cap_unstamped");
+    let mut vault = Vault::build_capped(&root, 9, 32).unwrap();
+
+    // Still the last note in walk order, now one no walk has stamped.
+    let last = root.join("Notes").join("Travel.md");
+    let moved = root.join("Notes").join("Zeta.md");
+    let moved_key = moved.to_string_lossy().to_string();
+    fs::rename(&last, &moved).unwrap();
+    vault.apply_changes(&[last, moved.clone()]);
+
+    // Sorts first, so the capped walk no longer reaches the moved note.
+    fs::write(root.join("A0.md"), "first\n").unwrap();
+    vault.sync().unwrap();
+    assert!(vault.snapshot().status.truncated);
+    assert!(
+        vault.note(&moved_key).is_some(),
+        "still on disk, still indexed"
+    );
+
+    fs::remove_file(&moved).unwrap();
+    vault.sync().unwrap();
+    let snapshot = vault.snapshot();
+    assert!(!snapshot.status.truncated);
+    assert!(snapshot.files.iter().any(|path| path.ends_with("A0.md")));
+    assert!(
+        vault.note(&moved_key).is_none(),
+        "gone from disk, gone from the index"
+    );
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+#[ignore = "fails until a sync reads every walked file the index lacks"]
+fn a_sync_indexes_a_note_an_update_dropped_once_it_is_back_unchanged() {
+    let root = fixture_vault("sync_moved_back");
+    let (home, away) = (root.join("Aliased.md"), root.join("Elsewhere.md"));
+    // Old enough that the two-second window cannot ask for the re-read.
+    let an_hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    fs::File::options()
+        .write(true)
+        .open(&home)
+        .unwrap()
+        .set_modified(an_hour_ago)
+        .unwrap();
+    let mut vault = build(&root);
+
+    fs::rename(&home, &away).unwrap();
+    vault.apply_changes(&[home.clone(), away.clone()]);
+    assert_matches_rebuild(&vault, &root);
+
+    // Moved back with nothing reporting it: the same size and modified time
+    // the last walk saw at this path.
+    fs::rename(&away, &home).unwrap();
+    vault.sync().unwrap();
+    assert!(vault.note(&home.to_string_lossy()).is_some());
+    assert!(vault.note(&away.to_string_lossy()).is_none());
     assert_matches_rebuild(&vault, &root);
     fs::remove_dir_all(&root).unwrap();
 }
