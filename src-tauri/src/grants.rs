@@ -54,13 +54,11 @@ fn canonicalize_lenient(path: &Path) -> Result<PathBuf, String> {
     let name = path.file_name().ok_or_else(|| denied(path))?;
     // On Windows `name:stream` opens a stream of `name`, through `name` when
     // it is a link, and is not a link itself.
-    if cfg!(windows) && name.to_string_lossy().contains(':') {
-        return Err(denied(path));
-    }
+    let names_a_stream = cfg!(windows) && name.to_string_lossy().contains(':');
     // Asked of the rebuilt path, the one a caller opens: as spelled, a
     // trailing separator makes the lookup go through the link.
     let rebuilt = canonicalize_lenient(parent)?.join(name);
-    if is_symlink(&rebuilt) {
+    if names_a_stream || is_symlink(&rebuilt) {
         return Err(denied(path));
     }
     Ok(rebuilt)
