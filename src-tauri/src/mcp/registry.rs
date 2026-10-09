@@ -184,6 +184,8 @@ mod tests {
         let session = h.session();
         let panics = tool(|_, _| panic!("a handler bug"));
         let floods = tool(|_, _| Ok(json!("x".repeat(MAX_RESULT_BYTES))));
+        // With its two quotes, an answer of the limit exactly.
+        let fills = tool(|_, _| Ok(json!("x".repeat(MAX_RESULT_BYTES - 2))));
         let answers = tool(|_, args| Ok(args));
 
         let refused = |tool: &ToolDef, reason: &str| {
@@ -192,6 +194,9 @@ mod tests {
         };
         assert!(refused(&panics, "failed unexpectedly"));
         assert!(refused(&floods, "ask for less"));
+        assert!(
+            run_tool(&fills, &session, json!({})).is_ok_and(|text| text.len() == MAX_RESULT_BYTES)
+        );
         assert_eq!(
             run_tool(&answers, &session, json!({ "a": 1 })),
             Ok(r#"{"a":1}"#.to_string())
