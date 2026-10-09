@@ -58,6 +58,9 @@ function written(writeFile: Mock): string[] {
   return writeFile.mock.calls.map(([, args]) => (args as { content: string }).content);
 }
 
+/** Let work that is free to start do so, without waiting for it to finish. */
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 async function openTab(result: TabsHook, path = "/p/a.md") {
   await waitFor(() => expect(result.current.initializing).toBe(false));
   await act(async () => {
@@ -83,9 +86,8 @@ function typeThenView(result: TabsHook, tabId: string, text: string) {
   });
 }
 
-// Reproductions for #880, marked as expected failures until the fix lands.
 describe("useTabs programmatic edits on a dirty view-mode tab", () => {
-  it.fails("toggleTask applies to the unsaved buffer instead of writing over it", async () => {
+  it("toggleTask applies to the unsaved buffer instead of writing over it", async () => {
     const writeFile = mockDisk(SAVED);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await openTab(result);
@@ -107,7 +109,7 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
     expect(fileOf(result).dirty).toBe(false);
   });
 
-  it.fails("toggleTask targets the line of the buffer, which is what the view renders", async () => {
+  it("toggleTask targets the line of the buffer, which is what the view renders", async () => {
     mockDisk(SAVED);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await openTab(result);
@@ -120,7 +122,7 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
     expect(fileOf(result).editContent).toBe("intro\n\n- [x] task");
   });
 
-  it.fails("commitEdit lands in the unsaved buffer and undo restores that buffer", async () => {
+  it("commitEdit lands in the unsaved buffer and undo restores that buffer", async () => {
     const writeFile = mockDisk("SAVED BOARD");
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await openTab(result, "/p/board.canvas");
@@ -149,7 +151,7 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
     expect(writeFile).not.toHaveBeenCalled();
   });
 
-  it.fails("undoEdit does not replay an older edit over text typed since", async () => {
+  it("undoEdit does not replay an older edit over text typed since", async () => {
     const writeFile = mockDisk(SAVED);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await openTab(result);
@@ -168,7 +170,7 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
     expect(written(writeFile)).toEqual([TICKED]);
   });
 
-  it.fails("redoEdit does not replay an older edit over text typed since", async () => {
+  it("redoEdit does not replay an older edit over text typed since", async () => {
     const writeFile = mockDisk(SAVED);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await openTab(result);
@@ -190,7 +192,7 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
     expect(written(writeFile)).toEqual([TICKED, SAVED]);
   });
 
-  it.fails("undoEdit is dropped in edit mode too once the user has typed over the edit", async () => {
+  it("undoEdit is dropped in edit mode too once the user has typed over the edit", async () => {
     mockDisk(SAVED);
     const { result } = renderHook(() => useTabs(defaultOptions({ defaultEditorMode: "edit" })));
     const tabId = await openTab(result);
@@ -208,7 +210,7 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
     expect(fileOf(result).editContent).toBe(UNSAVED_TICKED);
   });
 
-  it.fails("a toggle made while a save is in flight does not start a second write", async () => {
+  it("a toggle made while a save is in flight does not start a second write", async () => {
     const { writeFile, started, release } = gatedFirstWrite();
     mockDisk(SAVED, writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -223,15 +225,21 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
     act(() => {
       result.current.setTabMode(tabId, "view");
     });
+    let toggling: Promise<void> | undefined;
     await act(async () => {
-      await result.current.toggleTask(tabId, 1);
+      toggling = result.current.toggleTask(tabId, 1);
+      await tick();
     });
-    expect(writeFile).toHaveBeenCalledTimes(1);
+    // Read while the save is still held, asserted once it is released so a
+    // failure here cannot strand the held write.
+    const writesDuringSave = written(writeFile);
 
     await act(async () => {
       release();
       await saving;
+      await toggling;
     });
+    expect(writesDuringSave).toEqual([UNSAVED]);
     // The save landed, but the toggle is newer, so the tab stays dirty.
     expect(fileOf(result).content).toBe(UNSAVED);
     expect(fileOf(result).editContent).toBe(UNSAVED_TICKED);
@@ -244,7 +252,7 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
     expect(fileOf(result).dirty).toBe(false);
   });
 
-  it.fails("text typed while a view-mode write is in flight survives the write landing", async () => {
+  it("text typed while a view-mode write is in flight survives the write landing", async () => {
     const { writeFile, started, release } = gatedFirstWrite();
     mockDisk(SAVED, writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -267,7 +275,7 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
     expect(fileOf(result).dirty).toBe(true);
   });
 
-  it.fails("a save started while a view-mode write is in flight lands after it", async () => {
+  it("a save started while a view-mode write is in flight lands after it", async () => {
     const { writeFile, started, release } = gatedFirstWrite();
     mockDisk(SAVED, writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -283,21 +291,23 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
     let saving: Promise<boolean> | undefined;
     await act(async () => {
       saving = result.current.saveDocument(tabId);
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await tick();
     });
-    expect(writeFile).toHaveBeenCalledTimes(1);
+    const writesDuringToggle = written(writeFile);
 
     await act(async () => {
       release();
       await toggling;
       await saving;
     });
+    // The save did not start until the write ahead of it had finished.
+    expect(writesDuringToggle).toEqual([TICKED]);
     expect(written(writeFile)).toEqual([TICKED, UNSAVED]);
     expect(fileOf(result).content).toBe(UNSAVED);
     expect(fileOf(result).dirty).toBe(false);
   });
 
-  it.fails("closing the tab after a toggle flushes the typed text and the toggle together", async () => {
+  it("closing the tab after a toggle flushes the typed text and the toggle together", async () => {
     const writeFile = mockDisk(SAVED);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await openTab(result);

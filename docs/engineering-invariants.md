@@ -8,8 +8,8 @@ Non-negotiable guarantees for Glyph. Every stateful or security-sensitive change
 
 A user edit is never discarded without a completed durable write or an explicit, informed discard by the user.
 
-- Owners: `src/hooks/useTabs.ts` (save path, dirty tracking), `src/hooks/useAutoSave.ts`, `src/hooks/useWindowClose.ts`
-- Evidence: `src/hooks/useAutoSave.test.ts`, `src/hooks/useTabs.test.tsx`
+- Owners: `src/hooks/useDocumentSave.ts` (save path), `src/hooks/useTabStrip.ts` (dirty tracking), `src/hooks/useDocumentEdits.ts` (a checkbox toggle, canvas commit, undo, or redo joins a dirty tab's buffer and never replaces text typed since), `src/hooks/useAutoSave.ts`, `src/hooks/useWindowClose.ts`
+- Evidence: `src/hooks/useAutoSave.test.ts`, `src/hooks/useTabs.*.test.tsx`
 
 ### INV-2: Empty is not absent
 
@@ -22,8 +22,8 @@ Empty string is valid loaded document content. `null`/`undefined` represents abs
 
 Older asynchronous work cannot overwrite newer state or mark it complete. Writes to the same path are serialized; completions are revision-guarded.
 
-- Owners: `src/hooks/useTabs.ts` (`writeChains`, revision guards)
-- Evidence: `src/hooks/useTabs.test.tsx` stale-completion cases
+- Owners: `src/hooks/useWriteQueue.ts` (the per-path queue every document write goes through), `src/hooks/useDocumentSave.ts` and `src/hooks/useDocumentEdits.ts` (revision guards)
+- Evidence: `src/hooks/useWriteQueue.test.ts`, `src/hooks/useTabs.saving.test.tsx` and `src/hooks/useTabs.dirtyView.test.tsx` stale-completion and in-flight cases
 
 ### INV-4: Owners flush before they die
 

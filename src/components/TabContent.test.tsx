@@ -53,8 +53,10 @@ vi.mock("./graph/lazyGraph", () => ({
 }));
 
 vi.mock("./markdown/MarkdownViewer", () => ({
-  MarkdownViewer: ({ filePath }: { filePath?: string }) => (
-    <div data-testid="markdown-viewer">{filePath}</div>
+  MarkdownViewer: ({ filePath, content }: { filePath?: string; content: string }) => (
+    <div data-testid="markdown-viewer" data-content={content}>
+      {filePath}
+    </div>
   ),
 }));
 
@@ -242,6 +244,17 @@ describe("TabContent", () => {
     const tab = makeFileTab("view");
     renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
     expect(screen.getByTestId("markdown-viewer")).toHaveTextContent("/p/file.md");
+  });
+
+  it("shows unsaved edits in the viewer of a tab left dirty in view mode", () => {
+    const tab = makeFileTab("view");
+    tab.file.editContent = "# hi\n\nunsaved";
+    tab.file.dirty = true;
+    renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
+    expect(screen.getByTestId("markdown-viewer")).toHaveAttribute(
+      "data-content",
+      tab.file.editContent,
+    );
   });
 
   it("renders MarkdownEditor in edit mode and forwards changes to updateEditContent", () => {
