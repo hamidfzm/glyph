@@ -70,7 +70,7 @@ describe("useDiskReload", () => {
     const { result, forgetHistory } = renderReload(stateAt(3));
 
     await act(async () => {
-      await result.current.reload("/p/a.md");
+      await result.current.reload("a", "/p/a.md");
     });
 
     expect(result.current.state.tabs[0].file).toMatchObject({
@@ -80,12 +80,51 @@ describe("useDiskReload", () => {
     expect(forgetHistory).toHaveBeenCalledWith("a");
   });
 
+  it("keeps the undo stack when the file still holds the text the tab has", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd) => (cmd === "read_file" ? "old" : null));
+    const { result, forgetHistory } = renderReload(stateAt(3));
+
+    await act(async () => {
+      await result.current.reload("a", "/p/a.md");
+    });
+
+    expect(contentOf(result.current.state)).toBe("old");
+    expect(forgetHistory).not.toHaveBeenCalled();
+  });
+
+  it("drops a read started for a tab that is gone, though another holds its path", async () => {
+    const { result, forgetHistory } = renderReload(stateAt(3));
+
+    await act(async () => {
+      await result.current.reload("closed", "/p/a.md");
+    });
+
+    expect(contentOf(result.current.state)).toBe("old");
+    expect(forgetHistory).not.toHaveBeenCalled();
+  });
+
+  it("drops a read of the path its tab has since moved off", async () => {
+    const reads = parkReads();
+    const { result } = renderReload(stateAt(3));
+
+    const reloading = result.current.reload("a", "/p/a.md");
+    act(() => {
+      result.current.setState(stateAt(3, { path: "/p/b.md" }));
+    });
+    await act(async () => {
+      reads[0].resolve("new");
+      await reloading;
+    });
+
+    expect(contentOf(result.current.state)).toBe("old");
+  });
+
   it("drops a read the app's own write overtook", async () => {
     let saves = 0;
     const reads = parkReads();
     const { result } = renderReload(stateAt(3), () => saves);
 
-    const reloading = result.current.reload("/p/a.md", 3);
+    const reloading = result.current.reload("a", "/p/a.md", 3);
     saves += 1;
     await act(async () => {
       reads[0].resolve("new");
@@ -99,8 +138,8 @@ describe("useDiskReload", () => {
     const reads = parkReads();
     const { result } = renderReload(stateAt(3));
 
-    const earlier = result.current.reload("/p/a.md");
-    const later = result.current.reload("/p/a.md");
+    const earlier = result.current.reload("a", "/p/a.md");
+    const later = result.current.reload("a", "/p/a.md");
     await act(async () => {
       reads[1].resolve("later");
       await later;
@@ -117,8 +156,8 @@ describe("useDiskReload", () => {
     const reads = parkReads();
     const { result } = renderReload(stateAt(3));
 
-    const earlier = result.current.reload("/p/a.md");
-    const later = result.current.reload("/p/a.md");
+    const earlier = result.current.reload("a", "/p/a.md");
+    const later = result.current.reload("a", "/p/a.md");
     await act(async () => {
       reads[0].resolve("earlier");
       await earlier;
@@ -136,8 +175,8 @@ describe("useDiskReload", () => {
     const reads = parkReads();
     const { result } = renderReload(stateAt(3));
 
-    const reloading = result.current.reload("/p/a.md");
-    const other = result.current.reload("/p/b.md");
+    const reloading = result.current.reload("a", "/p/a.md");
+    const other = result.current.reload("b", "/p/b.md");
     await act(async () => {
       reads[1].resolve("elsewhere");
       await other;
@@ -154,12 +193,12 @@ describe("useDiskReload", () => {
     const { result } = renderReload(stateAt(3));
 
     await act(async () => {
-      await result.current.reload("/p/a.md", 2);
+      await result.current.reload("a", "/p/a.md", 2);
     });
     expect(contentOf(result.current.state)).toBe("old");
 
     await act(async () => {
-      await result.current.reload("/p/a.md", 3);
+      await result.current.reload("a", "/p/a.md", 3);
     });
     expect(contentOf(result.current.state)).toBe("new");
   });
@@ -168,7 +207,7 @@ describe("useDiskReload", () => {
     const { result, forgetHistory } = renderReload(stateAt(3, { ...unsaved, mode }));
 
     await act(async () => {
-      await result.current.reload("/p/a.md");
+      await result.current.reload("a", "/p/a.md");
     });
 
     expect(result.current.state.tabs[0].file).toMatchObject({
@@ -182,7 +221,7 @@ describe("useDiskReload", () => {
     const { result } = renderReload(stateAt(3, unsaved));
 
     await act(async () => {
-      await result.current.reload("/p/a.md", 3);
+      await result.current.reload("a", "/p/a.md", 3);
     });
 
     expect(bufferOf(result.current.state)).toBe("typed");
@@ -192,7 +231,7 @@ describe("useDiskReload", () => {
     const reads = parkReads();
     const { result } = renderReload(stateAt(3, { mode: EDITOR_MODE.view }));
 
-    const reloading = result.current.reload("/p/a.md");
+    const reloading = result.current.reload("a", "/p/a.md");
     act(() => {
       result.current.setState(stateAt(4, { ...unsaved, mode: EDITOR_MODE.view }));
     });
@@ -209,7 +248,7 @@ describe("useDiskReload", () => {
     const { result } = renderReload(stateAt(3));
 
     await act(async () => {
-      await result.current.reload("/p/a.md");
+      await result.current.reload("a", "/p/a.md");
     });
 
     expect(contentOf(result.current.state)).toBe("old");

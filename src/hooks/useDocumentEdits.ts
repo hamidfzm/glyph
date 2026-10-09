@@ -23,7 +23,7 @@ export function useDocumentEdits({
 }: UseDocumentEditsOptions) {
   const editHistory = useRef<Map<string, TabHistory>>(new Map());
 
-  /** Drop a tab's undo stack (tab closed, file deleted, or externally reloaded). */
+  /** Drop a tab's undo stack (tab closed, file deleted, or reloaded with different text). */
   const forgetHistory = useCallback((id: string) => {
     editHistory.current.delete(id);
   }, []);

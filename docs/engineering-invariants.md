@@ -20,10 +20,10 @@ Empty string is valid loaded document content. `null`/`undefined` represents abs
 
 ### INV-3: Stale results never win
 
-Older asynchronous work cannot overwrite newer state or mark it complete. Writes to the same path are serialized; completions are revision-guarded. A reload from disk is dropped when the app wrote the path, or a later reload of it reached the tab, while the file was being read.
+Older asynchronous work cannot overwrite newer state or mark it complete. Writes to the same path are serialized; completions are revision-guarded. A reload from disk is dropped when the app wrote the path, or a later reload of it reached the tab, while the file was being read. It reaches only the tab it was started for, so a tab reopened on the same path keeps the text it opened with, and a change reported for a tab that is renamed or moved before its read starts is read from the tab's new path.
 
-- Owners: `src/hooks/useDocumentSave.ts` (`writeChains`, revision guards), `src/hooks/useDiskReload.ts` with `src/hooks/useSelfSaveTracker.ts` (reload guards)
-- Evidence: `src/hooks/useTabs.*.test.tsx` stale-completion and overtaken-reload cases, `src/hooks/useDiskReload.test.ts`, `src/hooks/useSelfSaveTracker.test.ts`
+- Owners: `src/hooks/useDocumentSave.ts` (`writeChains`, revision guards), `src/hooks/useDiskReload.ts` with `src/hooks/useSelfSaveTracker.ts` (reload guards), `src/hooks/useTabEvents.ts` (a reported change stays with its tab)
+- Evidence: `src/hooks/useTabs.*.test.tsx` stale-completion, overtaken-reload and reload-identity cases, `src/hooks/useDiskReload.test.ts`, `src/hooks/useSelfSaveTracker.test.ts`
 
 ### INV-4: Owners flush before they die
 
