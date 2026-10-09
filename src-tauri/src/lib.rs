@@ -367,6 +367,7 @@ pub fn run() {
             menu_runtime::apply::set_plugin_menu_items,
             windows_runtime::set_window_workspace,
             windows_runtime::set_window_files,
+            windows_runtime::set_window_unsaved,
             windows_runtime::request_open,
             windows_runtime::open_in_new_window,
             windows_runtime::window_showing_file,

@@ -66,7 +66,10 @@ re-grants it recursively, so a subfolder or an exact-file grant may not pass),
 ever re-scope a path the session already holds; a new window never widens
 the process's filesystem reach. `set_window_workspace`, which a window calls
 to report the workspace it shows, updates routing state only and mints
-nothing.
+nothing. The same holds for `set_window_files` and `set_window_unsaved`: the
+paths they carry are reports, published for `glyph mcp` to read (see
+[MCP server](#mcp-server-glyph-mcp)), and never become readable or writable
+by being reported.
 
 Workspace and file grants are also mirrored into Tauri's runtime
 asset-protocol scope so `asset://` image URLs resolve only inside granted
@@ -276,15 +279,67 @@ the way a renderer-supplied path is.
   grant already sits on that share: resolving one connects to the host, which
   can hand it the user's credentials.
 - **Every path goes through the registry.** A note reference that names a
-  path, `resolve_link`'s `from`, `read_canvas`'s `path`, and `export`'s `out`
-  pass `ensure_readable` or `ensure_writable` before anything is read or
-  written. A wikilink target resolves only to a note the index already holds,
-  and the index keeps its walk rules: no symlink out of the vault, no hidden
-  folder, nothing over 5 MB.
-- **Effects.** Every tool is read-only except two. `export` writes only
-  inside the vault it reads, to a name carrying the format's extension, so it
-  cannot replace a note. `open_in_glyph` hands the app a path the server can
-  already read, the way a file manager would.
+  path, `resolve_link`'s `from`, `read_canvas`'s `path`, `export`'s `out`, a
+  note a write tool changes, and the destination of a rename or a move pass
+  `ensure_readable` or `ensure_writable` before anything is read or written.
+  A wikilink target resolves only to a note the index already holds, and the
+  index keeps its walk rules: no symlink out of the vault, no hidden folder,
+  nothing over 5 MB.
+- **Effects.** `export` writes only inside the vault it reads, to a name
+  carrying the format's extension, so it cannot replace a note.
+  `open_in_glyph` hands the app a path the server can already read, the way a
+  file manager would. Five tools change notes: `patch_note`, `set_property`,
+  `update_task`, `rename_note` and `move_note`. Every other tool is read-only.
+- **Write tools are off until turned on.** Each of the five has its own switch
+  in Settings, one boolean per tool under `ai.agentWriteTools` in
+  `settings.json`, so two windows changing different tools merge instead of
+  one overwriting the other. The server reads them again before every listing
+  and every call. A tool that is off is left out of `tools/list`, and the
+  check that matters is in dispatch: a call to a name the client was never
+  offered is refused the same way. The folder prompt names the write tools
+  that are on, since allowing a folder lets them change notes in it.
+- **A write stays inside the vault and inside the edit.** The target passes
+  `ensure_writable`, and a rename or a move checks its destination against the
+  grants before it asks the disk anything about it, then against the vault the
+  call reads, which the grants alone do not ensure once a session serves
+  several. The edit is worked out from the file as it is on disk, and written
+  only if the file still holds exactly that; otherwise nothing is written and
+  the caller is told to call again. A result past the 5 MB the index reads is
+  refused.
+- **An edit the parsers cannot place is refused, not guessed.** Sections are
+  cut by the renderer's embed slicer, which follows unindented `#` headings
+  and matches fences by character. `patch_note` refuses a section in which
+  CommonMark reads a heading the slicer does not, or the reverse (an
+  underlined or indented heading, hashes alone, a `#` line inside raw HTML or
+  display math, a fence closed by length or by the end of the list item
+  holding it), because its bounds would not be the rendered note's.
+  `set_property` refuses a block holding a bare carriage return or a NUL,
+  where the parser's line count and the slicer's part ways, checks that the
+  key sits on the line the parser named and that the lines it leaves behind
+  an entry are comments to the parser too, and parses its result again: every
+  other property has to read as it did, and everything from the closing fence
+  on has to be untouched. `update_task` reads fences by length and at any
+  depth. A rename or a move
+  refuses a destination that exists and one the index would not read, and a
+  link rewrite that stops partway is reported with the note it stopped at,
+  never as a success. The one destination that may exist is the note itself:
+  where the filesystem ignores case, a note's own name in other letters
+  reaches that note, and is taken for a rename in place only when the two
+  paths are one file and its folder lists no entry spelled the new way.
+- **Notes being edited.** The running app publishes, in `open-documents.json`
+  in its data directory, the files every window has open and which of them
+  hold unsaved edits, from each window's own report. The server reads it at
+  the moment a call is about to write, not when the call began, and from
+  whichever store directory holds the instance lock; it compares paths
+  through the grants as they stand then, a folder allowed during the call
+  included. A write to a note with unsaved edits is refused with a message
+  that opens `unsaved changes`. A rename or a move is refused for a note open
+  in any window, saved or not, because the app would go on saving it under
+  its old path, and for a move that would rewrite links in a note with
+  unsaved edits. With Auto Reload off, a write to any note a window has open
+  is refused, since the window would save its old text back. A running app
+  whose list is missing or unreadable, and a lock that cannot be asked at
+  all, are treated as not knowing: every write is refused.
 - **Stdout** carries JSON-RPC messages and nothing else. The processes the
   server starts get null or captured stdio, never its own.
 - **Bounds.** A message over 1 MiB is refused; a listing stops at 200 rows and
@@ -304,6 +359,39 @@ the way a renderer-supplied path is.
   without showing it to the user, or a user who approves by reflex, gives the
   model that folder until the session ends. Starting the server with
   `--vault` turns asking off.
+- **A write tool that is on reaches every note in the served vaults.** The
+  toggle is per tool, not per vault or per note, and a model that reads
+  untrusted note content can be talked into using it. `--vault` narrows the
+  vaults; there is no undo beyond the vault's own version control.
+- **The write-tool toggles are renderer-writable.** They live in
+  `settings.json`, so a compromised renderer can turn a write tool on for a
+  connected agent, against the rule that nothing gating backend behaviour is
+  read back from that file. For vaults the app itself has open this gives the
+  agent nothing the renderer lacks, since the renderer already writes every
+  file under them through `write_file`. It does reach further where the
+  server serves what the renderer holds no grant for: a `--vault` folder, or
+  one the user allowed in the client. The agent still has to make the call;
+  the renderer cannot make it for the agent, only plant text for the model to
+  read. Accepted so the toggles sit with the other settings.
+- **The unsaved-changes guard is a report, not a lock.** An edit typed in the
+  instant before a write is not yet in the published list, and a compromised
+  renderer can leave a path out of it. The app keeps an unsaved buffer over a
+  change on disk, so in that window it is the agent's write that the next
+  save replaces, not the user's edit. Two cases it does
+  not see at all: a second Glyph process that could not take the instance
+  lock (a debug build, or `open -n` on macOS) publishes nothing, and a write
+  landing within the second and a half after the app saved the same file is
+  taken by the app for its own save and not reloaded.
+- **A replaced destination.** A rename or a move checks that nothing is at
+  the destination and renames afterwards, as a rename made in the app does. A
+  file created there in between is replaced.
+- **The section check reads line by line.** `patch_note` judges whether a
+  section's bounds match the rendered note without building CommonMark's
+  block structure. What that cannot settle mostly errs toward refusing. Three
+  shapes are known to pass with bounds that differ: fence lines indented four
+  or more columns among other fence lines, a lone closing tag on the line
+  under a list item followed by a line of bare hashes, and an indented code
+  line followed by two lone dashes. Each already renders visibly broken.
 
 - **Check, then write.** A path is checked and then written in two steps, and
   the write follows whatever is at the path by then. A link that appears

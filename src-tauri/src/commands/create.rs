@@ -70,11 +70,15 @@ fn unique_path(dir: &Path, stem: &str, ext: Option<&str>) -> PathBuf {
     candidate
 }
 
-/// Reduce a user-typed name to a single safe path component: drops directory
-/// separators and characters that are illegal on Windows, trims whitespace.
+/// What a file name may not hold: directory separators, and the characters
+/// that are illegal on Windows.
+pub(crate) const UNSAFE_NAME_CHARS: [char; 9] = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+
+/// Reduce a user-typed name to a single safe path component: drops the
+/// characters a name may not hold, trims whitespace.
 fn sanitize_name(name: &str) -> String {
     name.chars()
-        .filter(|c| !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+        .filter(|c| !UNSAFE_NAME_CHARS.contains(c))
         .collect::<String>()
         .trim()
         .to_string()

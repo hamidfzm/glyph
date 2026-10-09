@@ -15,7 +15,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use yaml_rust2::parser::{Event, EventReceiver, Parser};
+use yaml_rust2::parser::{Event, Parser};
+use yaml_rust2::scanner::TScalarStyle;
 
 /// The block is untrusted note content and every field reaches the frontend,
 /// so it is bounded here rather than at the far end. A file whose frontmatter
@@ -25,8 +26,8 @@ const MAX_FRONTMATTER_BYTES: usize = 8 * 1024;
 /// notes sit in single digits.
 const MAX_NESTING_DEPTH: usize = 64;
 
-#[derive(Debug, PartialEq)]
-enum Value {
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum Value {
     Scalar(String),
     Sequence(Vec<Value>),
     Mapping(Vec<(String, Value)>),
@@ -79,7 +80,7 @@ pub fn split_frontmatter(content: &str) -> (Option<String>, usize) {
 
 /// `---` plus any trailing spaces or tabs, as remark-frontmatter reads a fence.
 /// `lines` has already taken the `\r` of a CRLF ending.
-fn is_fence(line: &str) -> bool {
+pub(super) fn is_fence(line: &str) -> bool {
     line.trim_end_matches([' ', '\t']) == "---"
 }
 
@@ -159,11 +160,34 @@ enum Frame {
     },
 }
 
+/// One entry of the block's root mapping, and how it was written. Lines count
+/// from 1 within the block.
+#[derive(Debug)]
+pub(super) struct Entry {
+    pub key: String,
+    pub value: Value,
+    pub line: usize,
+    pub key_style: TScalarStyle,
+    /// The line the value opens on, and its style when it is one scalar. A
+    /// value left empty has no line of its own to report.
+    pub value_line: usize,
+    pub value_style: Option<TScalarStyle>,
+}
+
+struct Site {
+    line: usize,
+    key_style: TScalarStyle,
+    value_line: usize,
+    value_style: Option<TScalarStyle>,
+}
+
 #[derive(Default)]
 struct Builder {
     stack: Vec<Frame>,
     root: Option<Value>,
     rejected: bool,
+    /// Where each key of the root mapping was written, in order.
+    sites: Vec<Site>,
     /// Scalars carrying an `&anchor`, so a later `*alias` resolves to the same
     /// text the renderer's parser substitutes.
     anchors: HashMap<usize, String>,
@@ -211,8 +235,35 @@ impl Builder {
     }
 }
 
-impl EventReceiver for Builder {
-    fn on_event(&mut self, ev: Event) {
+impl Builder {
+    /// Note where a key of the root mapping, or the value after it, opens.
+    fn site(&mut self, ev: &Event, line: usize) {
+        let [Frame::Mapping { key, .. }] = self.stack.as_slice() else {
+            return;
+        };
+        let style = match ev {
+            Event::Scalar(_, style, ..) => Some(*style),
+            Event::Alias(_) | Event::SequenceStart(..) | Event::MappingStart(..) => None,
+            _ => return,
+        };
+        match (key, style, self.sites.last_mut()) {
+            (None, Some(key_style), _) => self.sites.push(Site {
+                line,
+                key_style,
+                value_line: line,
+                value_style: None,
+            }),
+            (Some(_), value_style, Some(site)) => {
+                site.value_line = line;
+                site.value_style = value_style;
+            }
+            _ => {}
+        }
+    }
+
+    /// Take the next event, read at `line` of the block.
+    fn on_event(&mut self, ev: Event, line: usize) {
+        self.site(&ev, line);
         match ev {
             Event::Scalar(text, _, anchor, _) => {
                 if anchor > 0 {
@@ -242,7 +293,11 @@ impl EventReceiver for Builder {
     }
 }
 
-fn parse_mapping(inner: &str) -> Option<Vec<(String, Value)>> {
+/// The block's root value, `None` inside for a block holding none, and where
+/// the keys of a root mapping sit. `None` for YAML the renderer shows nothing
+/// for: malformed, nested too deep, a duplicate or non-scalar key, a second
+/// document.
+fn parse_root(inner: &str) -> Option<(Option<Value>, Vec<Site>)> {
     // Events are pulled one at a time rather than through `Parser::load`,
     // which recurses once per nesting level as it reads: a block deep enough
     // overflows the stack, and that aborts the process instead of unwinding.
@@ -252,11 +307,11 @@ fn parse_mapping(inner: &str) -> Option<Vec<(String, Value)>> {
     let mut parser = Parser::new_from_str(inner);
     let mut builder = Builder::default();
     loop {
-        let (event, _) = parser.next_token().ok()?;
+        let (event, mark) = parser.next_token().ok()?;
         if event == Event::StreamEnd {
             break;
         }
-        builder.on_event(event);
+        builder.on_event(event, mark.line());
         if builder.rejected || builder.stack.len() > MAX_NESTING_DEPTH {
             return None;
         }
@@ -264,10 +319,38 @@ fn parse_mapping(inner: &str) -> Option<Vec<(String, Value)>> {
     // A collection left open would have errored above rather than reaching
     // `StreamEnd`, and the root mapping's duplicate keys were checked as it
     // closed, so the only thing left to ask is whether the root is a mapping.
-    match builder.root? {
+    Some((builder.root, builder.sites))
+}
+
+fn parse_mapping(inner: &str) -> Option<Vec<(String, Value)>> {
+    match parse_root(inner)?.0? {
         Value::Mapping(entries) => Some(entries),
         _ => None,
     }
+}
+
+/// The root mapping's entries with where each was written, for a caller that
+/// rewrites one. A block holding nothing has none; `None` when the block is
+/// not a mapping this parser reads.
+pub(super) fn sited_entries(inner: &str) -> Option<Vec<Entry>> {
+    let (root, sites) = parse_root(inner)?;
+    let entries = match root {
+        None => return Some(Vec::new()),
+        Some(Value::Mapping(entries)) => entries,
+        Some(_) => return None,
+    };
+    let sited = entries
+        .into_iter()
+        .zip(sites)
+        .map(|((key, value), site)| Entry {
+            key,
+            value,
+            line: site.line,
+            key_style: site.key_style,
+            value_line: site.value_line,
+            value_style: site.value_style,
+        });
+    Some(sited.collect())
 }
 
 /// js-yaml throws on a duplicate mapping key, so a block carrying one shows
@@ -476,8 +559,47 @@ mod tests {
         // the contract is that a close without a matching open rejects the
         // document rather than being read as an empty collection.
         let mut builder = Builder::default();
-        builder.on_event(Event::MappingEnd);
+        builder.on_event(Event::MappingEnd, 1);
         assert!(builder.rejected);
+    }
+
+    #[test]
+    fn root_entries_know_the_line_and_style_they_were_written_in() {
+        let block = "# lead\ntitle: \"Quoted\"\ntags:\n  - a\n  - b\n'odd key': plain # note\nnested:\n  title: inner\nlist: [x, y]\nempty:\n";
+        let entries = sited_entries(block).unwrap();
+        let seen: Vec<(&str, usize, usize, Option<TScalarStyle>)> = entries
+            .iter()
+            .map(|entry| {
+                (
+                    entry.key.as_str(),
+                    entry.line,
+                    entry.value_line,
+                    entry.value_style,
+                )
+            })
+            .collect();
+        assert_eq!(
+            seen,
+            [
+                ("title", 2, 2, Some(TScalarStyle::DoubleQuoted)),
+                ("tags", 3, 4, None),
+                ("odd key", 6, 6, Some(TScalarStyle::Plain)),
+                // A key inside a nested mapping is not a root entry.
+                ("nested", 7, 8, None),
+                ("list", 9, 9, None),
+                // A value left empty opens wherever the next token does.
+                ("empty", 10, 11, Some(TScalarStyle::Plain)),
+            ]
+        );
+        assert_eq!(entries[2].key_style, TScalarStyle::SingleQuoted);
+
+        // A block holding nothing is an empty mapping to add to, while one
+        // that is not a mapping, or not YAML, is not.
+        assert!(sited_entries("").unwrap().is_empty());
+        assert!(sited_entries("# only a comment\n").unwrap().is_empty());
+        assert!(sited_entries("- one\n").is_none());
+        assert!(sited_entries("a: 1\na: 2\n").is_none());
+        assert!(sited_entries("a: [unclosed\n").is_none());
     }
 
     #[test]

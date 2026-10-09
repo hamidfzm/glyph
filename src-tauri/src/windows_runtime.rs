@@ -198,7 +198,43 @@ pub fn set_window_files<R: Runtime>(
     paths: Vec<String>,
 ) {
     registry.set_files(window.label(), paths);
+    publish_documents(window.app_handle(), &registry);
 }
+
+/// Frontend reports which of its file tabs hold edits not yet saved, so
+/// `glyph mcp` can refuse to write over one. A report, not a grant: nothing
+/// here widens what the renderer or an agent may touch.
+#[tauri::command]
+pub fn set_window_unsaved<R: Runtime>(
+    window: tauri::WebviewWindow<R>,
+    registry: State<'_, WindowRegistry>,
+    paths: Vec<String>,
+) {
+    registry.set_unsaved(window.label(), paths);
+    publish_documents(window.app_handle(), &registry);
+}
+
+/// Forget a window that has closed. What it had open and unsaved leaves the
+/// published list with it, or `glyph mcp` would keep off those notes until
+/// another window reported.
+pub fn forget_window<R: Runtime>(app: &AppHandle<R>, registry: &WindowRegistry, label: &str) {
+    registry.remove(label);
+    publish_documents(app, registry);
+}
+
+/// Tell `glyph mcp` what every window has open and unsaved. Only the process
+/// holding the instance lock has one to tell it through: an export's
+/// throwaway window is not one anyone edits in.
+#[cfg(desktop)]
+pub fn publish_documents<R: Runtime>(app: &AppHandle<R>, registry: &WindowRegistry) {
+    if let Some(lock) = app.try_state::<crate::data_dir::InstanceLock>() {
+        let (open, unsaved) = registry.documents();
+        lock.publish(&crate::data_dir::OpenDocuments { open, unsaved });
+    }
+}
+
+#[cfg(not(desktop))]
+pub fn publish_documents<R: Runtime>(_: &AppHandle<R>, _: &WindowRegistry) {}
 
 /// In-app Open Folder request (the Rust folder picker's result), routed the
 /// same way as OS-level launches with the calling window as current.
@@ -373,6 +409,45 @@ mod tests {
             app.state::<WindowRegistry>().snapshot().files,
             vec![("main".to_string(), vec!["/a/note.md".to_string()])]
         );
+    }
+
+    #[cfg(desktop)]
+    #[test]
+    fn open_and_unsaved_reports_are_published_while_the_lock_is_held() {
+        use crate::data_dir::{hold_instance_lock, read_store_in, OpenDocuments, OPEN_DOCUMENTS};
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let published = || -> OpenDocuments {
+            serde_json::from_str(&read_store_in(dir.path(), OPEN_DOCUMENTS).unwrap()).unwrap()
+        };
+        let note = "/a/note.md".to_string();
+
+        let (app, window) = app_with_registries();
+        app.manage(hold_instance_lock(dir.path()).unwrap());
+        set_window_files(
+            window.clone(),
+            app.state::<WindowRegistry>(),
+            vec![note.clone()],
+        );
+        assert_eq!(
+            published(),
+            OpenDocuments {
+                open: vec![note.clone()],
+                unsaved: Vec::new()
+            }
+        );
+
+        set_window_unsaved(window, app.state::<WindowRegistry>(), vec![note.clone()]);
+        assert_eq!(published().unsaved, std::slice::from_ref(&note));
+        // The report is a renderer-supplied path: it must not become readable.
+        assert!(app
+            .state::<GrantRegistry>()
+            .ensure_readable("/a/note.md")
+            .is_err());
+
+        // Closed with the note still unsaved, the window takes it off the list.
+        forget_window(app.handle(), &app.state::<WindowRegistry>(), "main");
+        assert_eq!(published(), OpenDocuments::default());
     }
 
     #[test]

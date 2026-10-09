@@ -263,6 +263,32 @@
     },
     "speed": {
       "label": "Speed"
+    },
+    "agentTools": {
+      "title": "Agent tools",
+      "description": "An AI agent connected to Glyph's MCP server (glyph mcp) can always read your open workspaces: links, backlinks, tags, headings and the graph. Tools that change your notes stay off until you turn each one on here. A change to a note that has unsaved changes in Glyph is refused.",
+      "tools": {
+        "patch_note": {
+          "label": "Edit a section",
+          "description": "Replace the text under one heading, or add to its start or end. The rest of the note is left untouched."
+        },
+        "set_property": {
+          "label": "Set a property",
+          "description": "Set or remove one frontmatter property, keeping the order, comments and quoting of the others."
+        },
+        "update_task": {
+          "label": "Check off tasks",
+          "description": "Mark a task done or to do. A checkbox inside fenced code or a quote is not treated as a task."
+        },
+        "rename_note": {
+          "label": "Rename notes",
+          "description": "Rename a note and rewrite the links that point to it."
+        },
+        "move_note": {
+          "label": "Move notes",
+          "description": "Move a note to another folder and rewrite the links that point to it."
+        }
+      }
     }
   },
   "print": {

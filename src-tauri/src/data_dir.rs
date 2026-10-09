@@ -7,10 +7,25 @@
 use std::fs::{File, OpenOptions, TryLockError};
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 /// `identifier` in `tauri.conf.json`, emitted by `build.rs`.
 pub const IDENTIFIER: &str = env!("GLYPH_IDENTIFIER");
 
 const INSTANCE_LOCK: &str = "instance.lock";
+
+/// What the running app has open, rewritten as that changes, so `glyph mcp`
+/// keeps off a note someone is editing. Only the holder of the instance lock
+/// writes it, and it means nothing while that lock is free.
+pub const OPEN_DOCUMENTS: &str = "open-documents.json";
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct OpenDocuments {
+    /// Every file open in a tab of any window.
+    pub open: Vec<String>,
+    /// Those among them holding edits not yet saved.
+    pub unsaved: Vec<String>,
+}
 
 /// The app data directory, then the config directory where that differs
 /// (Linux), which is where an older layout may have left the settings.
@@ -60,6 +75,20 @@ pub fn read_store_in(dir: &Path, name: &str) -> Option<String> {
 /// included, so it can never go stale.
 pub struct InstanceLock {
     _file: File,
+    dir: PathBuf,
+}
+
+impl InstanceLock {
+    /// Replace the published list. Written in place: a reader that catches it
+    /// half written cannot parse it, and treats that as not knowing.
+    pub fn publish(&self, documents: &OpenDocuments) {
+        let written = serde_json::to_vec(documents)
+            .map_err(std::io::Error::from)
+            .and_then(|json| std::fs::write(self.dir.join(OPEN_DOCUMENTS), json));
+        if let Err(err) = written {
+            eprintln!("glyph: cannot write {OPEN_DOCUMENTS}: {err}");
+        }
+    }
 }
 
 /// The app data directory, where the instance lock lives.
@@ -79,7 +108,13 @@ pub fn hold_instance_lock(dir: &Path) -> Option<InstanceLock> {
         .map_err(|err| eprintln!("glyph: cannot open {INSTANCE_LOCK}: {err}"))
         .ok()?;
     acquire(|| file.try_lock())?;
-    Some(InstanceLock { _file: file })
+    let lock = InstanceLock {
+        _file: file,
+        dir: dir.to_path_buf(),
+    };
+    // Whatever an earlier run left behind describes windows that are gone.
+    lock.publish(&OpenDocuments::default());
+    Some(lock)
 }
 
 /// The lock once a probe in flight has let go; `None` for another window, or
@@ -95,7 +130,7 @@ fn acquire(mut try_lock: impl FnMut() -> Result<(), TryLockError>) -> Option<()>
             }
             Err(TryLockError::Error(err)) => {
                 eprintln!(
-                    "glyph: cannot lock {INSTANCE_LOCK}, so `glyph mcp` will see the app as closed: {err}"
+                    "glyph: cannot lock {INSTANCE_LOCK}, so `glyph mcp` cannot tell whether the app is running and will not change notes: {err}"
                 );
                 return None;
             }
@@ -104,16 +139,85 @@ fn acquire(mut try_lock: impl FnMut() -> Result<(), TryLockError>) -> Option<()>
     None
 }
 
-/// Whether an interactive Glyph is running on this machine.
+/// Whether an interactive Glyph is running on this machine. Every store
+/// directory is asked, as the settings are looked for in each: a server
+/// started with other XDG variables than the app still has to find its lock.
 pub fn app_running() -> bool {
-    app_dir().is_some_and(|dir| running_in(&dir))
+    store_dirs().iter().any(|dir| running_in(dir))
 }
 
 pub(crate) fn running_in(dir: &Path) -> bool {
-    let Ok(file) = File::open(dir.join(INSTANCE_LOCK)) else {
-        return false;
-    };
-    matches!(file.try_lock_shared(), Err(TryLockError::WouldBlock))
+    matches!(lock_in(dir), Lock::Held)
+}
+
+enum Lock {
+    Free,
+    Held,
+    /// The lock could not be asked, so an app may hold it.
+    Unknown,
+}
+
+fn lock_in(dir: &Path) -> Lock {
+    match File::open(dir.join(INSTANCE_LOCK)) {
+        Ok(file) => lock_state(file.try_lock_shared()),
+        // No app has run from here.
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Lock::Free,
+        Err(_) => Lock::Unknown,
+    }
+}
+
+fn lock_state(probe: Result<(), TryLockError>) -> Lock {
+    match probe {
+        Ok(()) => Lock::Free,
+        Err(TryLockError::WouldBlock) => Lock::Held,
+        Err(TryLockError::Error(_)) => Lock::Unknown,
+    }
+}
+
+/// What a running app's windows hold, for a caller about to change a note.
+#[derive(Debug, PartialEq)]
+pub enum Editing {
+    /// No app is running, so nothing is open.
+    Closed,
+    Open(OpenDocuments),
+    /// An app is running, or may be, and has not said what it holds: its list
+    /// is missing or unreadable, or its lock cannot be asked.
+    Unknown,
+}
+
+/// What the app running on this machine holds. `stores` is where it keeps its
+/// lock; `None` asks every store directory.
+pub fn editing(stores: Option<&Path>) -> Editing {
+    let dirs = stores.map_or_else(store_dirs, |dir| vec![dir.to_path_buf()]);
+    combined(dirs.iter().map(|dir| editing_in(dir)))
+}
+
+fn editing_in(dir: &Path) -> Editing {
+    match lock_in(dir) {
+        Lock::Free => Editing::Closed,
+        Lock::Unknown => Editing::Unknown,
+        Lock::Held => read_store_in(dir, OPEN_DOCUMENTS)
+            .and_then(|raw| serde_json::from_str(&raw).ok())
+            .map_or(Editing::Unknown, Editing::Open),
+    }
+}
+
+/// One answer from several directories: not knowing about any of them is not
+/// knowing, and two apps running from two of them both count.
+fn combined(states: impl Iterator<Item = Editing>) -> Editing {
+    let mut running: Option<OpenDocuments> = None;
+    for state in states {
+        match state {
+            Editing::Unknown => return Editing::Unknown,
+            Editing::Closed => {}
+            Editing::Open(found) => {
+                let all = running.get_or_insert_with(OpenDocuments::default);
+                all.open.extend(found.open);
+                all.unsaved.extend(found.unsaved);
+            }
+        }
+    }
+    running.map_or(Editing::Closed, Editing::Open)
 }
 
 #[cfg(test)]
@@ -150,6 +254,92 @@ mod tests {
         assert!(
             !running_in(dir.path()),
             "the lock file stays, the lock does not"
+        );
+    }
+
+    fn documents(open: &[&str], unsaved: &[&str]) -> OpenDocuments {
+        let paths = |paths: &[&str]| paths.iter().map(|path| path.to_string()).collect();
+        OpenDocuments {
+            open: paths(open),
+            unsaved: paths(unsaved),
+        }
+    }
+
+    #[test]
+    fn what_is_being_edited_is_read_only_from_the_app_holding_the_lock() {
+        let dir = tempfile::TempDir::new().unwrap();
+        // No app has run here; and a list an earlier run left says nothing.
+        assert_eq!(editing_in(dir.path()), Editing::Closed);
+        let stale = r#"{"open":["/gone.md"],"unsaved":["/gone.md"]}"#;
+        std::fs::write(dir.path().join(OPEN_DOCUMENTS), stale).unwrap();
+
+        // Taking the lock clears it.
+        let held = hold_instance_lock(dir.path()).unwrap();
+        assert_eq!(
+            editing_in(dir.path()),
+            Editing::Open(OpenDocuments::default())
+        );
+        let now = documents(&["/a.md", "/b.md"], &["/b.md"]);
+        held.publish(&now);
+        assert_eq!(editing_in(dir.path()), Editing::Open(now));
+
+        // A list the reader cannot make sense of is not an empty one.
+        for garbled in ["{", r#"{"open":"all"}"#, "[]"] {
+            std::fs::write(dir.path().join(OPEN_DOCUMENTS), garbled).unwrap();
+            assert_eq!(editing_in(dir.path()), Editing::Unknown, "{garbled}");
+        }
+        drop(held);
+        assert_eq!(editing_in(dir.path()), Editing::Closed);
+    }
+
+    #[test]
+    fn a_list_that_cannot_be_written_does_not_cost_the_app_its_lock() {
+        let dir = tempfile::TempDir::new().unwrap();
+        // A folder sits where the list goes, so every write to it fails.
+        std::fs::create_dir(dir.path().join(OPEN_DOCUMENTS)).unwrap();
+
+        let held = hold_instance_lock(dir.path());
+        assert!(held.is_some() && running_in(dir.path()));
+        // Nothing readable is there, which a reader takes as not knowing.
+        assert_eq!(editing_in(dir.path()), Editing::Unknown);
+    }
+
+    #[test]
+    fn a_lock_that_cannot_be_opened_is_not_taken_for_no_app() {
+        // No file name holds a NUL, so opening the lock fails for a reason
+        // other than its absence.
+        let unaskable = Path::new("stores\0");
+        assert_eq!(editing(Some(unaskable)), Editing::Unknown);
+    }
+
+    #[test]
+    fn not_knowing_whether_an_app_runs_is_not_a_closed_app() {
+        // A filesystem that cannot lock leaves the lock unasked.
+        let unsupported = Err(TryLockError::Error(std::io::ErrorKind::Unsupported.into()));
+        assert!(matches!(lock_state(unsupported), Lock::Unknown));
+        assert!(matches!(lock_state(Ok(())), Lock::Free));
+        assert!(matches!(
+            lock_state(Err(TryLockError::WouldBlock)),
+            Lock::Held
+        ));
+
+        // One directory not knowing outweighs the others, in any order.
+        let open = || Editing::Open(documents(&["/a.md"], &[]));
+        let other = || Editing::Open(documents(&["/b.md"], &[]));
+        assert_eq!(combined([].into_iter()), Editing::Closed);
+        assert_eq!(combined([Editing::Closed, open()].into_iter()), open());
+        // Two apps, each under its own directory: both lists count.
+        assert_eq!(
+            combined([open(), Editing::Closed, other()].into_iter()),
+            Editing::Open(documents(&["/a.md", "/b.md"], &[]))
+        );
+        assert_eq!(
+            combined([open(), Editing::Closed, Editing::Unknown].into_iter()),
+            Editing::Unknown
+        );
+        assert_eq!(
+            combined([Editing::Unknown, open()].into_iter()),
+            Editing::Unknown
         );
     }
 
