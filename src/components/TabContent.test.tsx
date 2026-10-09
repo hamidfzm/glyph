@@ -257,6 +257,18 @@ describe("TabContent", () => {
     );
   });
 
+  it("renders an untitled document's text in the viewer before it has ever been saved", () => {
+    // Nothing is on disk yet, so content is still empty: the text lives in the
+    // buffer alone.
+    const tab = makeFileTab("view");
+    tab.file.virtual = true;
+    tab.file.content = "";
+    tab.file.editContent = "# hello";
+    tab.file.dirty = true;
+    renderTabContent({ activeTab: tab, activeTabId: tab.id, activeFile: tab.file });
+    expect(screen.getByTestId("markdown-viewer")).toHaveAttribute("data-content", "# hello");
+  });
+
   it("renders MarkdownEditor in edit mode and forwards changes to updateEditContent", () => {
     const tab = makeFileTab("edit");
     const updateEditContent = vi.fn();

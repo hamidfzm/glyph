@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { pickSave } from "@/lib/pickers";
+import { expectConsole } from "@/test/consoleGuard";
 import { deferred } from "@/test/deferred";
 import {
   defaultOptions,
@@ -92,6 +94,7 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await openTab(result);
     typeThenView(result, tabId, UNSAVED);
+    const revisionBefore = fileOf(result).revision;
 
     await act(async () => {
       await result.current.toggleTask(tabId, 1);
@@ -99,6 +102,8 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
 
     expect(fileOf(result).editContent).toBe(UNSAVED_TICKED);
     expect(fileOf(result).dirty).toBe(true);
+    // A new revision is what makes autosave schedule a save for the toggle.
+    expect(fileOf(result).revision).toBeGreaterThan(revisionBefore);
     // Nothing reached disk around the buffer; the save path writes both edits.
     expect(writeFile).not.toHaveBeenCalled();
 
@@ -206,8 +211,97 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
     await act(async () => {
       await result.current.undoEdit(tabId);
     });
-
     expect(fileOf(result).editContent).toBe(UNSAVED_TICKED);
+
+    // The stack is dropped, not just skipped: had the entry survived, this undo
+    // would find the text it was recorded against again and revert it.
+    act(() => {
+      result.current.updateEditContent(tabId, TICKED);
+    });
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+    expect(fileOf(result).editContent).toBe(TICKED);
+  });
+
+  it("undo and redo step a toggle through the unsaved buffer without writing", async () => {
+    const writeFile = mockDisk(SAVED);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await openTab(result);
+    typeThenView(result, tabId, UNSAVED);
+    await act(async () => {
+      await result.current.toggleTask(tabId, 1);
+    });
+
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+    expect(fileOf(result).editContent).toBe(UNSAVED);
+
+    await act(async () => {
+      await result.current.redoEdit(tabId);
+    });
+    expect(fileOf(result).editContent).toBe(UNSAVED_TICKED);
+    expect(fileOf(result).dirty).toBe(true);
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("a toggle in an untitled document waits for Save As like the text around it", async () => {
+    const writeFile = mockDisk(SAVED);
+    vi.mocked(pickSave).mockResolvedValue("/p/saved.md");
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    act(() => {
+      result.current.newDocument();
+    });
+    const tabId = result.current.tabs[0].id;
+    act(() => {
+      result.current.updateEditContent(tabId, SAVED);
+    });
+    act(() => {
+      result.current.setTabMode(tabId, "view");
+    });
+
+    await act(async () => {
+      await result.current.toggleTask(tabId, 1);
+    });
+    expect(fileOf(result).editContent).toBe(TICKED);
+    // An untitled document has no file to write to yet.
+    expect(writeFile).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/saved.md", content: TICKED });
+  });
+
+  it("a toggle made after a failed save is written by the retry", async () => {
+    expectConsole(/Auto-save failed/);
+    const writeFile = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("disk full"))
+      .mockResolvedValue(undefined);
+    mockDisk(SAVED, writeFile);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await openTab(result);
+    typeInEditMode(result, tabId, UNSAVED);
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+    expect(fileOf(result).dirty).toBe(true);
+    act(() => {
+      result.current.setTabMode(tabId, "view");
+    });
+
+    await act(async () => {
+      await result.current.toggleTask(tabId, 1);
+    });
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+
+    expect(written(writeFile)).toEqual([UNSAVED, UNSAVED_TICKED]);
+    expect(fileOf(result).dirty).toBe(false);
   });
 
   it("a toggle made while a save is in flight does not start a second write", async () => {
@@ -320,7 +414,30 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
       await result.current.closeTab(tabId);
     });
 
-    expect(written(writeFile).at(-1)).toBe(UNSAVED_TICKED);
+    expect(written(writeFile)).toEqual([UNSAVED_TICKED]);
+    expect(result.current.tabs).toHaveLength(0);
+  });
+
+  it("with Auto Save off, Save on the close prompt writes the typed text and the toggle", async () => {
+    const writeFile = mockDisk(SAVED);
+    const confirmUnsaved = vi.fn(async () => "save" as const);
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved })),
+    );
+    const tabId = await openTab(result);
+    typeThenView(result, tabId, UNSAVED);
+    await act(async () => {
+      await result.current.toggleTask(tabId, 1);
+    });
+    // The user has not asked for a save yet, so the toggle writes nothing.
+    expect(writeFile).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.closeTab(tabId);
+    });
+
+    expect(confirmUnsaved).toHaveBeenCalledWith(["/p/a.md"]);
+    expect(written(writeFile)).toEqual([UNSAVED_TICKED]);
     expect(result.current.tabs).toHaveLength(0);
   });
 });

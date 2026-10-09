@@ -98,8 +98,8 @@ export function activeFileOf(tab: Tab | null | undefined): FileState | null {
 
 /**
  * The text a tab shows and edits: its edit buffer once it has one, else the
- * text loaded from disk. A clean buffer is kept equal to `content`, so the two
- * differ only while the tab holds unsaved edits, in any editor mode.
+ * text loaded from disk. Whatever writes `content` keeps a clean buffer equal
+ * to it, so the two differ only while the tab holds unsaved edits.
  */
 export function liveContentOf(file: FileState): string | null {
   return file.editContent ?? file.content;

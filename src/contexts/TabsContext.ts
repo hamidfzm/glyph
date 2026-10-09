@@ -12,9 +12,8 @@ import { EMPTY_SNAPSHOT, type VaultSnapshot } from "@/lib/vault";
 type TabsApi = ReturnType<typeof useTabs>;
 
 export interface TabsContextValue extends TabsApi {
-  // Derived from the active file's live text: the edit buffer once it has one
-  // (so previews and a dirty view-mode tab reflect unsaved edits), else the
-  // saved content.
+  // Derived from the active file's live text: its edit buffer when it has one
+  // (previews and a dirty view-mode tab show unsaved edits), else what is saved.
   displayContent: string | null;
   tocEntries: TocEntry[];
   // Notice shown for a workspace event (#262): a refusal, or a persistent
