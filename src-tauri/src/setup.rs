@@ -6,14 +6,12 @@
 //! be exercised from a `MockRuntime` test; the pure selection and
 //! classification logic it calls lives in [`crate::cli`] and is tested there.
 
-// `Manager` is not desktop-only: the registry seeding below runs on every
-// platform, and `state()` comes from that trait.
+#[cfg(desktop)]
 use tauri::Manager;
 use tauri_plugin_store::StoreExt;
 
-use crate::windows;
 #[cfg(desktop)]
-use crate::{cli, commands, data_dir, grants, menu, open_launch};
+use crate::{cli, commands, data_dir, grants, menu, open_launch, windows};
 
 /// Renderer-facing stores, opened here because the renderer holds no
 /// `store:allow-load` (see docs/security/threat-model.md). The session store
@@ -46,11 +44,9 @@ pub fn setup_app(
         }
     }
 
-    // Seed the registry's "main" entry so routing knows what the first
-    // window shows; a desktop folder launch overrides it below.
-    app.state::<windows::WindowRegistry>()
-        .set_workspace("main", None);
-
+    // The window registry is not seeded with an empty `main` here: routing
+    // already treats an unknown window as empty, and a launch forwarded before
+    // this hook ran may have claimed `main` for its folder.
     #[cfg(desktop)]
     {
         // Windows uses per-window menus with owner-prefixed item ids
@@ -122,7 +118,7 @@ pub fn setup_app(
                     if let Ok(canonical) = grant_registry.grant_file(std::path::Path::new(&input)) {
                         grants::allow_asset_file(app.handle(), &canonical);
                     }
-                    app.state::<windows::WindowRegistry>().deliver(
+                    app.state::<windows::WindowRegistry>().queue_open(
                         "main",
                         windows::PendingOpen {
                             kind: windows::OpenKind::File,

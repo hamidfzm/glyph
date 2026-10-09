@@ -111,9 +111,7 @@ export function defaultOptions(over: Partial<Parameters<typeof useTabs>[0]> = {}
   };
 }
 
-export function captureListener(
-  event: "open-file" | "open-folder" | "file-changed" | "directory-changed",
-) {
+export function captureListener(event: "opens-pending" | "file-changed" | "directory-changed") {
   const ref: { handler: ((e: { payload: string }) => void) | null } = { handler: null };
   vi.mocked(listen).mockImplementation(((name: string, fn: (e: { payload: string }) => void) => {
     if (name === event) ref.handler = fn;

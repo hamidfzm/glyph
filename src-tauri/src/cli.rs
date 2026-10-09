@@ -30,11 +30,11 @@ pub fn path_args(argv: &[String]) -> Vec<&str> {
     paths
 }
 
-/// What an initial-launch path resolves to. Shared by every entry that turns
-/// a user-supplied path into an "open this" intent — CLI args, macOS
-/// `RunEvent::Opened`, and the single-instance plugin callback. Callers pick
-/// what to do with each variant (store in managed state, emit a frontend
-/// event, or warn + skip).
+/// What one launch path resolves to. Shared by every entry that turns a
+/// user-supplied path into an "open this" intent: launch arguments (cold start
+/// and second instance), macOS `RunEvent::Opened`, and the `export` and
+/// `serve` subcommands, which each take exactly one. [`LaunchOpens`] collects
+/// these for a launch that names several.
 #[derive(Debug, PartialEq, Eq)]
 pub enum InitialOpenAction {
     /// Open as a folder workspace. Inner is the absolute path.
@@ -71,9 +71,10 @@ pub fn classify_resolved_path(canonical: &Path) -> Option<InitialOpenAction> {
 }
 
 /// Resolve a user-supplied path string against `cwd` and classify the
-/// result. Used by the CLI argument parser at first launch — the user may
-/// pass a relative path; classification needs to happen against the
-/// canonicalized form so symlinks and `..` traversal are normalised.
+/// result. Used for every launch argument, on a cold start and from a second
+/// instance: the user may pass a relative path, and classification needs to
+/// happen against the canonicalized form so symlinks and `..` traversal are
+/// normalised.
 pub fn classify_initial_arg(path_str: &str, cwd: &Path) -> Option<InitialOpenAction> {
     let canonical = resolve_initial_path(path_str, cwd)?;
     classify_resolved_path(&canonical)

@@ -11,7 +11,8 @@ use std::process::Command;
 /// The arguments this process can use, and the ones it had to drop.
 #[derive(Debug, PartialEq, Eq)]
 pub struct LaunchArgs {
-    /// argv with the program name at index 0, every entry valid Unicode.
+    /// argv with the program name at index 0, every entry valid Unicode. A
+    /// dropped argument leaves an empty string where it stood.
     pub args: Vec<String>,
     /// Arguments that are not valid Unicode. A path crosses IPC as a string,
     /// so a file named this way cannot be opened; the caller reports it.
@@ -20,6 +21,11 @@ pub struct LaunchArgs {
 
 /// Split raw arguments into the usable and the dropped. The program name is
 /// kept whatever it holds, lossily if need be: it is a position, never a path.
+///
+/// A dropped argument is replaced by an empty string, which every scanner
+/// skips, instead of being removed. Removing it would shift what follows:
+/// `glyph <dropped> export` would turn into the `export` subcommand, and a
+/// flag would take the next flag as its value.
 pub fn split_unicode(raw: impl IntoIterator<Item = OsString>) -> LaunchArgs {
     let mut raw = raw.into_iter();
     let mut args = Vec::new();
@@ -30,51 +36,23 @@ pub fn split_unicode(raw: impl IntoIterator<Item = OsString>) -> LaunchArgs {
     for arg in raw {
         match arg.into_string() {
             Ok(arg) => args.push(arg),
-            Err(arg) => dropped.push(arg),
+            Err(arg) => {
+                args.push(String::new());
+                dropped.push(arg);
+            }
         }
     }
     LaunchArgs { args, dropped }
 }
 
 /// `exe` again with `args`, whose index 0 is the program name the new process
-/// sets for itself.
+/// sets for itself. Running it replaces this process, which no test can
+/// survive, so that half lives beside `run()` in lib.rs.
 #[cfg(desktop)]
-fn relaunch_command(exe: &Path, args: &[String]) -> Command {
+pub fn relaunch_command(exe: &Path, args: &[String]) -> Command {
     let mut command = Command::new(exe);
     command.args(args.iter().skip(1));
     command
-}
-
-/// Start this launch over with `args` as its whole argument list, so nothing
-/// in the process can read the dropped ones. The single-instance plugin does
-/// (`std::env::args()`) when it forwards a launch, and would panic before any
-/// valid path reached the running app. Returns only if the relaunch could not
-/// start.
-#[cfg(desktop)]
-pub fn relaunch(args: &[String]) {
-    let err = match std::env::current_exe() {
-        Ok(exe) => hand_over_to(relaunch_command(&exe, args)),
-        Err(err) => err,
-    };
-    eprintln!("Could not relaunch without the ignored arguments: {err}");
-}
-
-#[cfg(all(desktop, unix))]
-fn hand_over_to(mut command: Command) -> std::io::Error {
-    use std::os::unix::process::CommandExt;
-    // Replaces this process and keeps its pid, so whatever started Glyph is
-    // still waiting on the right one.
-    command.exec()
-}
-
-#[cfg(all(desktop, not(unix)))]
-fn hand_over_to(mut command: Command) -> std::io::Error {
-    match command.spawn() {
-        // The child is the launch now. Only an open launch gets here, and
-        // that has no exit status worth waiting for.
-        Ok(_) => std::process::exit(0),
-        Err(err) => err,
-    }
 }
 
 #[cfg(test)]
@@ -116,8 +94,25 @@ mod tests {
         raw.push(OsString::from("b.md"));
 
         let split = split_unicode(raw);
-        assert_eq!(split.args, ["glyph", "a.md", "b.md"]);
+        assert_eq!(split.args, ["glyph", "a.md", "", "b.md"]);
         assert_eq!(split.dropped, [not_unicode()]);
+    }
+
+    #[test]
+    fn a_dropped_argument_does_not_shift_the_ones_after_it() {
+        // Removed outright, the first would make `export` the first argument
+        // (a subcommand) and the second would hand `--format` to `--out`.
+        let mut raw = vec![OsString::from("glyph"), not_unicode()];
+        raw.push(OsString::from("export"));
+        assert_eq!(split_unicode(raw).args, ["glyph", "", "export"]);
+
+        let mut raw = os(&["glyph", "export", "notes.md", "--out"]);
+        raw.push(not_unicode());
+        raw.extend(os(&["--format", "pdf"]));
+        assert_eq!(
+            split_unicode(raw).args,
+            ["glyph", "export", "notes.md", "--out", "", "--format", "pdf"]
+        );
     }
 
     #[test]
@@ -139,12 +134,13 @@ mod tests {
 
     #[cfg(desktop)]
     #[test]
-    fn the_relaunch_runs_the_same_executable_with_the_kept_arguments_only() {
-        let args = ["glyph", "a.md", "b.md"].map(String::from);
+    fn the_relaunch_runs_the_same_executable_with_the_usable_arguments() {
+        // The placeholder goes along, so positions hold in the new process too.
+        let args = ["glyph", "a.md", "", "b.md"].map(String::from);
         let command = relaunch_command(Path::new("/opt/glyph/glyph"), &args);
 
         assert_eq!(command.get_program(), "/opt/glyph/glyph");
         let relaunched: Vec<_> = command.get_args().collect();
-        assert_eq!(relaunched, ["a.md", "b.md"]);
+        assert_eq!(relaunched, ["a.md", "", "b.md"]);
     }
 }

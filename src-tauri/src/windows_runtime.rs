@@ -34,13 +34,9 @@ fn grant_open<R: Runtime>(app: &AppHandle<R>, kind: OpenKind, path: &str) {
     }
 }
 
-/// The frontend event a pending open is delivered as.
-fn event_name(kind: OpenKind) -> &'static str {
-    match kind {
-        OpenKind::Folder => "open-folder",
-        OpenKind::File => "open-file",
-    }
-}
+/// Tells a window that opens are waiting in its queue. It carries no path:
+/// the frontend answers with `take_pending_opens` (see `windows/pending.rs`).
+const OPENS_PENDING_EVENT: &str = "opens-pending";
 
 /// Bring a window to the front (un-minimizing and showing it first).
 pub fn focus_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
@@ -130,15 +126,14 @@ fn apply_route<R: Runtime>(app: &AppHandle<R>, registry: &WindowRegistry, route:
     match route {
         OpenRoute::Focus(label) => focus_window(app, &label),
         OpenRoute::Adopt(label, pending) => {
-            // A window that is not listening yet keeps the open queued until
-            // its frontend drains it on mount. It is also still hidden, and
-            // reveals itself after its first paint, so it is not shown here.
-            if let Some(open) = registry.deliver(&label, pending) {
+            // A window that has not mounted is still hidden and reveals itself
+            // after its first paint, so it is not shown from here.
+            if registry.queue_open(&label, pending) {
                 focus_window(app, &label);
-                // emit_to targets just this window; a window's `.emit` would
-                // broadcast to every window in Tauri v2.
-                let _ = app.emit_to(&label, event_name(open.kind), open.path);
             }
+            // emit_to targets just this window; a window's `.emit` would
+            // broadcast to every window in Tauri v2.
+            let _ = app.emit_to(&label, OPENS_PENDING_EVENT, ());
         }
         OpenRoute::NewWindow(pending) => spawn_window(app, registry, pending),
     }
@@ -202,10 +197,10 @@ fn spawn_window<R: Runtime>(app: &AppHandle<R>, registry: &WindowRegistry, pendi
     });
 }
 
-/// The calling window has attached its `open-file` / `open-folder` listeners:
-/// hand over the opens that arrived before it could hear them, and emit to it
-/// directly from now on. Every path in the queue was granted when it was
-/// routed, and a window can only ever drain its own queue.
+/// Hand the calling window the opens queued for it. The frontend calls this
+/// when nudged, and once on mount after attaching its listener. Every path in
+/// the queue was granted when it was routed, and a window can only ever take
+/// its own queue.
 #[tauri::command]
 pub fn take_pending_opens<R: Runtime>(
     window: tauri::WebviewWindow<R>,
@@ -590,21 +585,21 @@ mod tests {
     fn take_pending_opens_hands_a_window_its_own_queue_only() {
         let (app, window) = app_with_registries();
         let registry = app.state::<WindowRegistry>();
-        registry.deliver("main", file_open("/a/one.md"));
-        registry.deliver("main", file_open("/a/two.md"));
-        registry.deliver("w1", file_open("/a/other.md"));
+        registry.queue_open("main", file_open("/a/one.md"));
+        registry.queue_open("main", file_open("/a/two.md"));
+        registry.queue_open("w1", file_open("/a/other.md"));
 
         assert_eq!(
             take_pending_opens(window.clone(), app.state::<WindowRegistry>()),
             vec![file_open("/a/one.md"), file_open("/a/two.md")]
         );
-        // Drained, and `main` is listening now: nothing left to hand over.
+        // Taken once: nothing left to hand over.
         assert!(take_pending_opens(window, app.state::<WindowRegistry>()).is_empty());
         assert_eq!(registry.take_pending("w1"), vec![file_open("/a/other.md")]);
     }
 
     #[test]
-    fn open_all_in_app_queues_a_launch_for_a_window_that_is_not_listening() {
+    fn open_all_in_app_grants_and_queues_every_open_of_a_launch() {
         let dir = unique_tmp("open_all");
         let workspace = dir.join("ws");
         std::fs::create_dir_all(&workspace).unwrap();

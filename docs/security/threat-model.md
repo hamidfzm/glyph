@@ -66,10 +66,10 @@ re-grants it recursively, so a subfolder or an exact-file grant may not pass),
 ever re-scope a path the session already holds; a new window never widens
 the process's filesystem reach. `set_window_workspace`, which a window calls
 to report the workspace it shows, updates routing state only and mints
-nothing. `take_pending_opens`, which a window calls once its open listeners
-are attached, takes no path at all: it hands back the opens the backend
-already granted and queued for that window, and a window can drain only its
-own queue.
+nothing. `take_pending_opens`, which a window calls on mount and whenever the
+backend nudges it, takes no path at all: it hands back the opens the backend
+already granted and queued for that window, and a window can take only its
+own queue. The nudge event itself carries no path.
 
 Workspace and file grants are also mirrored into Tauri's runtime
 asset-protocol scope so `asset://` image URLs resolve only inside granted

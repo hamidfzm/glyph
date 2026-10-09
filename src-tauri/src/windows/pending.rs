@@ -1,40 +1,49 @@
-//! Handing open requests to a window whose frontend may not be listening yet
-//! (a cold start, a launch forwarded in the app's first moments, a macOS
-//! `Opened` event at launch). An event emitted before the listeners exist is
-//! lost, so a window's opens are queued until it takes the queue; from that
-//! step on they are emitted. Nothing arrives twice or is left to resurface.
+//! Handing open requests to a window. An event carrying the path is lost
+//! whenever the window is not listening (a cold start, the app's first
+//! moments, a page reload), so the path waits in a queue per window and the
+//! event is only a nudge: the frontend takes the whole queue when nudged, and
+//! once on mount after attaching its listener. An open queued before a take
+//! is returned by it and one queued after is nudged again, so each is handed
+//! over exactly once and none is left to resurface.
 
 use super::{OpenKind, PendingOpen, WindowRegistry};
 
 impl WindowRegistry {
-    /// Hand `open` to the window `label`: returned when that window is
-    /// listening, for the caller to emit, and queued otherwise.
+    /// Queue `open` for the window `label`, for the caller to nudge. Returns
+    /// whether that window has mounted.
     ///
-    /// A queued folder also claims the window's workspace, which the window
-    /// cannot report until it has mounted, so routing sends the next folder
-    /// elsewhere.
-    pub fn deliver(&self, label: &str, open: PendingOpen) -> Option<PendingOpen> {
+    /// Until it has, the window cannot report what it shows, so the open also
+    /// claims its path for routing: a folder as the window's workspace, a file
+    /// as one of its tabs. The window's first report replaces the claim.
+    pub fn queue_open(&self, label: &str, open: PendingOpen) -> bool {
         let mut windows = self.inner.lock().unwrap();
-        if windows.listening.contains(label) {
-            return Some(open);
-        }
-        if open.kind == OpenKind::Folder {
-            windows
-                .workspaces
-                .insert(label.to_string(), Some(open.path.clone()));
+        let mounted = windows.mounted.contains(label);
+        if !mounted {
+            match open.kind {
+                OpenKind::Folder => {
+                    windows
+                        .workspaces
+                        .insert(label.to_string(), Some(open.path.clone()));
+                }
+                OpenKind::File => {
+                    let files = windows.files.entry(label.to_string()).or_default();
+                    if !files.contains(&open.path) {
+                        files.push(open.path.clone());
+                    }
+                }
+            }
         }
         let queue = windows.pending.entry(label.to_string()).or_default();
         if !queue.contains(&open) {
             queue.push(open);
         }
-        None
+        mounted
     }
 
-    /// The window `label` has attached its listeners: take everything queued
-    /// for it, in arrival order, and deliver to it directly from here on.
+    /// Take everything queued for the window `label`, in arrival order.
     pub fn take_pending(&self, label: &str) -> Vec<PendingOpen> {
         let mut windows = self.inner.lock().unwrap();
-        windows.listening.insert(label.to_string());
+        windows.mounted.insert(label.to_string());
         windows.pending.remove(label).unwrap_or_default()
     }
 }
@@ -61,10 +70,10 @@ mod tests {
     #[test]
     fn a_second_open_before_mount_does_not_overwrite_the_first() {
         // Two forwarded launches in the app's first moments, or one launch
-        // naming two files: the single stash slot kept only the last.
+        // naming two files: a single slot kept only the last.
         let registry = WindowRegistry::new();
-        assert_eq!(registry.deliver("main", file("/a.md")), None);
-        assert_eq!(registry.deliver("main", file("/b.md")), None);
+        registry.queue_open("main", file("/a.md"));
+        registry.queue_open("main", file("/b.md"));
 
         assert_eq!(
             registry.take_pending("main"),
@@ -75,7 +84,7 @@ mod tests {
     #[test]
     fn the_queue_is_handed_over_exactly_once() {
         let registry = WindowRegistry::new();
-        registry.deliver("main", file("/a.md"));
+        registry.queue_open("main", file("/a.md"));
 
         assert_eq!(registry.take_pending("main"), vec![file("/a.md")]);
         // A reload asking again must not get an earlier launch's file back.
@@ -83,19 +92,22 @@ mod tests {
     }
 
     #[test]
-    fn a_listening_window_gets_its_opens_directly_and_nothing_is_kept() {
+    fn an_open_for_a_mounted_window_waits_in_the_queue_too() {
+        // The path never rides on the event: a window that is reloading when
+        // it arrives finds it here once the new page takes its queue.
         let registry = WindowRegistry::new();
-        assert!(registry.take_pending("main").is_empty());
+        assert!(!registry.queue_open("main", file("/a.md")));
+        registry.take_pending("main");
 
-        assert_eq!(registry.deliver("main", file("/a.md")), Some(file("/a.md")));
-        assert!(registry.take_pending("main").is_empty());
+        assert!(registry.queue_open("main", file("/b.md")));
+        assert_eq!(registry.take_pending("main"), vec![file("/b.md")]);
     }
 
     #[test]
-    fn the_same_open_queued_twice_is_delivered_once() {
+    fn the_same_open_queued_twice_is_handed_over_once() {
         let registry = WindowRegistry::new();
-        registry.deliver("main", file("/a.md"));
-        registry.deliver("main", file("/a.md"));
+        registry.queue_open("main", file("/a.md"));
+        registry.queue_open("main", file("/a.md"));
 
         assert_eq!(registry.take_pending("main"), vec![file("/a.md")]);
     }
@@ -103,12 +115,12 @@ mod tests {
     #[test]
     fn each_window_has_its_own_queue() {
         let registry = WindowRegistry::new();
-        registry.deliver("main", file("/a.md"));
-        registry.deliver("w1", file("/b.md"));
+        registry.queue_open("main", file("/a.md"));
+        registry.queue_open("w1", file("/b.md"));
 
         assert_eq!(registry.take_pending("w1"), vec![file("/b.md")]);
-        // `w1` listening does not make `main` listen.
-        assert_eq!(registry.deliver("main", file("/c.md")), None);
+        // `w1` mounting does not mount `main`.
+        assert!(!registry.queue_open("main", file("/c.md")));
         assert_eq!(
             registry.take_pending("main"),
             vec![file("/a.md"), file("/c.md")]
@@ -116,17 +128,10 @@ mod tests {
     }
 
     #[test]
-    fn a_queued_folder_claims_the_window_so_the_next_one_spawns() {
+    fn a_folder_queued_before_mount_claims_the_window_so_the_next_one_spawns() {
         let registry = WindowRegistry::new();
-        registry.set_workspace("main", None);
-        registry.deliver("main", file("/a.md"));
-        assert_eq!(
-            registry.snapshot().workspaces,
-            vec![("main".to_string(), None)],
-            "a queued file claims nothing"
-        );
+        registry.queue_open("main", folder("/ws"));
 
-        registry.deliver("main", folder("/ws"));
         let snapshot = registry.snapshot();
         assert_eq!(
             snapshot.workspaces,
@@ -145,25 +150,46 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_emitted_to_a_listening_window_claims_nothing() {
-        // That window reports its own workspace once it has adopted the
-        // folder, and reports nothing if it refuses it.
+    fn a_file_queued_before_mount_claims_its_path_so_no_other_window_opens_it() {
+        // A window spawned in the same launch may restore this file from its
+        // own session before `main` has mounted and reported it.
         let registry = WindowRegistry::new();
-        registry.take_pending("main");
+        registry.queue_open("main", file("/ws/note.md"));
+        registry.queue_open("main", file("/ws/note.md"));
 
-        assert_eq!(registry.deliver("main", folder("/ws")), Some(folder("/ws")));
-        assert!(registry.snapshot().workspaces.is_empty());
+        let snapshot = registry.snapshot();
+        assert_eq!(
+            snapshot.files,
+            vec![("main".to_string(), vec!["/ws/note.md".to_string()])]
+        );
+        assert_eq!(snapshot.window_with_file("/ws/note.md", "w1"), Some("main"));
     }
 
     #[test]
-    fn a_closed_window_forgets_its_queue_and_stops_listening() {
+    fn an_open_for_a_mounted_window_claims_nothing() {
+        // That window reports for itself once it has opened the path, and
+        // reports nothing if it refuses it.
         let registry = WindowRegistry::new();
-        registry.deliver("w1", file("/a.md"));
+        registry.take_pending("main");
+
+        registry.queue_open("main", folder("/ws"));
+        registry.queue_open("main", file("/a.md"));
+
+        assert_eq!(
+            registry.snapshot(),
+            super::super::WindowsSnapshot::default()
+        );
+    }
+
+    #[test]
+    fn a_closed_window_forgets_its_queue_and_that_it_had_mounted() {
+        let registry = WindowRegistry::new();
+        registry.queue_open("w1", file("/a.md"));
         registry.remove("w1");
         assert!(registry.take_pending("w1").is_empty());
 
-        // The label is listening after that take; closing resets it too.
+        // That take mounted the label; closing clears it too.
         registry.remove("w1");
-        assert_eq!(registry.deliver("w1", file("/b.md")), None);
+        assert!(!registry.queue_open("w1", file("/b.md")));
     }
 }

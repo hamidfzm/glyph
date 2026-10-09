@@ -158,12 +158,12 @@ describe("useTabs initialization", () => {
     expect(tabPaths(result.current.tabs)).toEqual(["/p/a.md", "/p/b.md"]);
   });
 
-  it("drains the startup queue only once the open listeners are attached", async () => {
-    // The backend emits from the drain onward, so an open arriving between a
-    // drain and a late listener would reach nobody.
+  it("takes the startup queue only once the nudge listener is attached", async () => {
+    // An open queued between an early take and a late listener would have its
+    // nudge go unheard.
     const attached = deferred<() => void>();
     vi.mocked(listen).mockImplementation(((name: string) =>
-      name === "open-file" ? attached.promise : Promise.resolve(() => {})) as typeof listen);
+      name === "opens-pending" ? attached.promise : Promise.resolve(() => {})) as typeof listen);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
     expect(invoke).not.toHaveBeenCalledWith("take_pending_opens");
@@ -174,7 +174,7 @@ describe("useTabs initialization", () => {
     expect(invoke).toHaveBeenCalledWith("take_pending_opens");
   });
 
-  it("still drains when a listener cannot be attached", async () => {
+  it("still takes the startup queue when the listener cannot be attached", async () => {
     vi.mocked(listen).mockRejectedValue(new Error("no event system"));
     vi.mocked(invoke).mockImplementation(queueing([{ kind: "file", path: "/p/cli.md" }]));
     const { result } = renderHook(() => useTabs(defaultOptions()));

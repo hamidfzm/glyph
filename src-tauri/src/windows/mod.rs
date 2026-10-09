@@ -37,8 +37,8 @@ pub enum OpenTarget {
 }
 
 /// One "open this path" request on its way to a window: injected into a
-/// freshly-spawned window as `window.__GLYPH_OPEN__`, or queued for a window
-/// whose frontend is not listening yet (see [`WindowRegistry::deliver`]).
+/// freshly-spawned window as `window.__GLYPH_OPEN__`, or queued for an
+/// existing one to take (see [`WindowRegistry::queue_open`]).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingOpen {
@@ -196,16 +196,16 @@ pub struct WindowRegistry {
 }
 
 /// Everything lives under one lock so a routing snapshot cannot see a window's
-/// workspace without its files, and an open cannot be queued for a window in
-/// the instant it starts listening.
+/// workspace without its files, or a queued open without the path it claims.
 #[derive(Default)]
 struct Windows {
     workspaces: HashMap<String, Option<String>>,
     files: HashMap<String, Vec<String>>,
-    /// Opens waiting for a window that is not listening yet, in arrival order.
+    /// Opens waiting for their window to take them, in arrival order.
     pending: HashMap<String, Vec<PendingOpen>>,
-    /// Windows whose frontend has attached its open listeners.
-    listening: HashSet<String>,
+    /// Windows whose frontend has taken its queue at least once, and so can
+    /// report what it shows for itself.
+    mounted: HashSet<String>,
 }
 
 impl WindowRegistry {
@@ -290,7 +290,7 @@ impl WindowRegistry {
         windows.workspaces.remove(label);
         windows.files.remove(label);
         windows.pending.remove(label);
-        windows.listening.remove(label);
+        windows.mounted.remove(label);
     }
 
     /// A stable snapshot of what every window shows, for routing.

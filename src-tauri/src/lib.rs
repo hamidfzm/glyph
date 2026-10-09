@@ -53,13 +53,50 @@ pub use notebook::{is_notebook_file, is_supported_file};
 
 pub const APP_NAME: &str = "glyph";
 
-/// Whether this build registers the single-instance plugin: the condition
-/// [`make_app_builder`] is gated on.
+/// Whether this build hands a launch over to a Glyph that is already running:
+/// release builds on Windows and Linux, through the single-instance plugin.
+/// macOS routes second launches via `RunEvent::Opened` instead.
+///
+/// Debug builds never do: with the plugin registered, `tauri dev` silently
+/// forwards to any glyph.exe left over from an earlier session and exits,
+/// which both kills the dev run and leaves stale code on screen.
 #[cfg(desktop)]
 const FORWARDS_LAUNCHES: bool = cfg!(all(
     not(debug_assertions),
     any(target_os = "linux", target_os = "windows")
 ));
+
+/// Start this launch over with `args` as its whole argument list, so nothing
+/// in the process can read the arguments that were dropped. The single-instance
+/// plugin does (`std::env::args()`) when it forwards a launch, and would panic
+/// before any valid path reached the running app. Returns only if the relaunch
+/// could not start.
+#[cfg(desktop)]
+fn relaunch(args: &[String]) {
+    let err = match std::env::current_exe() {
+        Ok(exe) => hand_over_to(launch_args::relaunch_command(&exe, args)),
+        Err(err) => err,
+    };
+    eprintln!("Could not relaunch without the ignored arguments: {err}");
+}
+
+#[cfg(all(desktop, unix))]
+fn hand_over_to(mut command: std::process::Command) -> std::io::Error {
+    use std::os::unix::process::CommandExt;
+    // Replaces this process and keeps its pid, so whatever started Glyph is
+    // still waiting on the right one.
+    command.exec()
+}
+
+#[cfg(all(desktop, not(unix)))]
+fn hand_over_to(mut command: std::process::Command) -> std::io::Error {
+    match command.spawn() {
+        // The child is the launch now. Only an open launch gets here, and
+        // that has no exit status worth waiting for.
+        Ok(_) => std::process::exit(0),
+        Err(err) => err,
+    }
+}
 
 /// Open what a launch named, the same way on every platform: a cold start, a
 /// second instance and a macOS `Opened` event all come through here. Each
@@ -113,13 +150,8 @@ pub fn handle_opened_paths<R: tauri::Runtime>(
     open_launch(app_handle, cli::opened_paths(&paths));
 }
 
-/// Build a fresh `tauri::Builder` with the platform-conditional single-instance
-/// plugin registered on Windows and Linux. macOS routes second launches via
-/// `RunEvent::Opened`, so it gets a vanilla builder.
-///
-/// Debug builds skip the plugin everywhere: with it registered, `tauri dev`
-/// silently forwards to any glyph.exe left over from an earlier session and
-/// exits, which both kills the dev run and leaves stale code on screen.
+/// Build a fresh `tauri::Builder`, with the single-instance plugin registered
+/// where this build forwards launches (see [`FORWARDS_LAUNCHES`]).
 ///
 /// Extracted from `run()` so the cfg-gated branches can be unit-tested without
 /// actually starting the Tauri runtime.
@@ -128,20 +160,15 @@ pub fn handle_opened_paths<R: tauri::Runtime>(
 /// the arguments to whatever Glyph the user already has open and exits 0, so
 /// the export would silently never run.
 pub fn make_app_builder(forward_to_running_instance: bool) -> tauri::Builder<tauri::Wry> {
-    #[cfg(all(not(debug_assertions), any(target_os = "linux", target_os = "windows")))]
-    let builder = if forward_to_running_instance {
-        tauri::Builder::default().plugin(tauri_plugin_single_instance::init(handle_second_instance))
-    } else {
-        tauri::Builder::default()
-    };
-
-    #[cfg(not(all(not(debug_assertions), any(target_os = "linux", target_os = "windows"))))]
-    let builder = {
-        let _ = forward_to_running_instance;
-        tauri::Builder::default()
-    };
-
-    builder
+    // The plugin crate only exists on these two targets; whether to use it is
+    // the constant's call, so the relaunch in `run()` can never disagree.
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    if FORWARDS_LAUNCHES && forward_to_running_instance {
+        return tauri::Builder::default()
+            .plugin(tauri_plugin_single_instance::init(handle_second_instance));
+    }
+    let _ = forward_to_running_instance;
+    tauri::Builder::default()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -166,6 +193,15 @@ pub fn run() {
     if cli_help::wants_help(&args) {
         println!("{}", cli_help::usage());
         return;
+    }
+
+    // An open launch goes on without the argument. A subcommand cannot: it
+    // reads one path and its flag values by position, and with one of them
+    // missing it would export or serve something the caller did not name.
+    #[cfg(desktop)]
+    if !dropped.is_empty() && cli::subcommand(&args).is_some() {
+        eprintln!("A subcommand cannot run without it.");
+        std::process::exit(2);
     }
 
     // `glyph mcp` answers on stdio for as long as its client keeps it open.
@@ -204,7 +240,7 @@ pub fn run() {
     // forwards a launch, and would panic on what was dropped above.
     #[cfg(desktop)]
     if FORWARDS_LAUNCHES && forward_to_running_instance && !dropped.is_empty() {
-        launch_args::relaunch(&args);
+        relaunch(&args);
     }
 
     let builder = make_app_builder(forward_to_running_instance)
@@ -614,49 +650,35 @@ mod tests {
     }
 
     #[test]
-    fn a_launch_after_the_window_is_listening_leaves_nothing_behind() {
-        // Once drained, opens are emitted, not kept: a later mount or reload
-        // asking again must not get an old launch's file back.
-        let cwd = unique_tmp("hsi_live");
-        fs::write(cwd.join("a.md"), "hi").unwrap();
-        fs::write(cwd.join("b.md"), "hi").unwrap();
-        let app = routed_app();
-
-        second_instance(&app, &cwd, &["a.md"]);
-        assert_eq!(drain_main(&app).len(), 1);
-        second_instance(&app, &cwd, &["b.md"]);
-
-        assert!(drain_main(&app).is_empty());
-        // It was still routed: the path is granted for the emitted open.
-        assert!(can_read(&app, &cwd.join("b.md")));
-        let _ = fs::remove_dir_all(&cwd);
-    }
-
-    #[test]
-    fn a_launch_for_a_listening_window_is_emitted_to_it_in_order() {
+    fn a_launch_for_a_mounted_window_is_nudged_and_handed_over_once_in_order() {
         use tauri::Listener;
 
-        let cwd = unique_tmp("hsi_emit");
+        let cwd = unique_tmp("hsi_live");
         let names = ["a.md", "b.md", "c.md"];
         for name in names {
             fs::write(cwd.join(name), "hi").unwrap();
         }
         let app = routed_app();
+        // The window's frontend has mounted and taken its (empty) queue.
         drain_main(&app);
-        let emitted = Arc::new(Mutex::new(Vec::new()));
-        let sink = emitted.clone();
-        app.listen_any("open-file", move |event| {
-            let path: String = serde_json::from_str(event.payload()).unwrap();
-            sink.lock().unwrap().push(PathBuf::from(path));
+        let nudges = Arc::new(Mutex::new(0));
+        let counter = nudges.clone();
+        app.listen_any("opens-pending", move |_| {
+            *counter.lock().unwrap() += 1;
         });
 
         second_instance(&app, &cwd, &names);
 
+        // The event carries no path, so a window that misses it (a reload)
+        // loses nothing: the paths wait for its next take.
+        assert!(*nudges.lock().unwrap() > 0, "the window must be nudged");
         let expected: Vec<_> = names
             .iter()
-            .map(|name| cwd.join(name).canonicalize().unwrap())
+            .map(|name| file_open(&cwd.join(name)))
             .collect();
-        assert_eq!(*emitted.lock().unwrap(), expected);
+        assert_eq!(drain_main(&app), expected);
+        // A later mount asking again must not get this launch's files back.
+        assert!(drain_main(&app).is_empty());
         let _ = fs::remove_dir_all(&cwd);
     }
 
