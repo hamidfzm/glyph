@@ -38,7 +38,7 @@ fn ensure_preview_handler_staging() {
 ///   builds the app).
 /// - `GLYPH_PRODUCT_NAME`, which the Tauri bundler names the Linux desktop
 ///   entry after (`<productName>.desktop`), the id `commands/default_app.rs`
-///   registers.
+///   looks for before it is registered.
 fn emit_app_names() {
     let conf = read_json("tauri.conf.json");
     for (key, var) in [

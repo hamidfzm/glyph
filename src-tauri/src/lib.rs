@@ -322,7 +322,7 @@ pub fn run() {
             commands::serve::serve_ready,
             #[cfg(desktop)]
             commands::serve::serve_failed,
-            commands::default_app::set_default_markdown_app,
+            commands::default_app_runtime::set_default_markdown_app,
             commands::secrets::secret_get,
             commands::secrets::secret_set,
             commands::secrets::secret_has,

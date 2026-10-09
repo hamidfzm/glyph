@@ -1,33 +1,28 @@
-#[cfg(any(target_os = "linux", test))]
+// What "set Glyph as the default Markdown app" can do on Linux, decided from
+// facts the command reads off the process. The command itself, which spawns
+// `xdg-mime`, is in [`super::default_app_runtime`].
+
 use std::ffi::OsString;
-#[cfg(any(target_os = "linux", test))]
 use std::path::PathBuf;
-#[cfg(any(target_os = "linux", target_os = "windows"))]
-use std::process::Command;
 
 /// The desktop entry of the .deb, the .rpm and every package built from one.
 /// The Tauri bundler names it after the product name, not the bundle identifier.
-#[cfg(any(target_os = "linux", test))]
-const DESKTOP_ENTRY: &str = concat!(env!("GLYPH_PRODUCT_NAME"), ".desktop");
+pub(super) const DESKTOP_ENTRY: &str = concat!(env!("GLYPH_PRODUCT_NAME"), ".desktop");
 
 /// The Flatpak app id (`flatpak/com.hamidfzm.glyph.yml`) is the bundle identifier.
-#[cfg(any(target_os = "linux", test))]
 const FLATPAK_ID: &str = crate::data_dir::IDENTIFIER;
 
 /// `name:` in `snap/snapcraft.yaml`.
-#[cfg(any(target_os = "linux", test))]
 const SNAP_NAME: &str = "glyph";
 
-#[cfg(any(target_os = "linux", test))]
 #[derive(Debug, PartialEq)]
-enum LinuxPlan {
+pub(super) enum LinuxPlan {
     Register,
     Sandboxed,
     NoDesktopEntry,
 }
 
-#[cfg(any(target_os = "linux", test))]
-fn linux_plan(
+pub(super) fn linux_plan(
     flatpak_id: Option<&str>,
     snap_name: Option<&str>,
     entry_installed: bool,
@@ -48,8 +43,7 @@ fn linux_plan(
 /// Every directory the desktop session reads entries from: the user's data
 /// directory, then `XDG_DATA_DIRS` or the default the XDG Base Directory spec
 /// gives it.
-#[cfg(any(target_os = "linux", test))]
-fn applications_dirs(
+pub(super) fn applications_dirs(
     user_data: Option<PathBuf>,
     xdg_data_dirs: Option<OsString>,
     appdir: Option<OsString>,
@@ -73,82 +67,10 @@ fn applications_dirs(
         .collect()
 }
 
-#[cfg(any(target_os = "linux", test))]
-fn desktop_entry_installed(applications_dirs: &[PathBuf]) -> bool {
+pub(super) fn desktop_entry_installed(applications_dirs: &[PathBuf]) -> bool {
     applications_dirs
         .iter()
         .any(|dir| dir.join(DESKTOP_ENTRY).is_file())
-}
-
-/// Set, or guide the user to set, Glyph as the default application for Markdown
-/// files. Silently registering a default handler is restricted on modern
-/// desktops, so the behaviour is per-platform and the returned tag tells the UI
-/// what happened:
-/// - `"registered"`     the association was set for us (Linux, via `xdg-mime`)
-/// - `"openedSettings"` the OS Default Apps page was opened so the user can
-///                      pick Glyph (Windows blocks silent handler changes)
-/// - `"guidance"`       no programmatic path; the UI shows manual steps (macOS)
-/// - `"sandboxed"`      a Flatpak or snap cannot reach the host's defaults; the
-///                      UI shows file-manager steps (Linux)
-/// - `"noDesktopEntry"` no desktop entry is installed to register, as with an
-///                      AppImage (Linux)
-#[tauri::command]
-pub fn set_default_markdown_app() -> Result<String, String> {
-    // Exactly one arm survives cfg on any given target, so each is the tail
-    // expression of the function (no `return` needed).
-    #[cfg(target_os = "linux")]
-    {
-        let entry_installed = desktop_entry_installed(&applications_dirs(
-            dirs::data_dir(),
-            std::env::var_os("XDG_DATA_DIRS"),
-            std::env::var_os("APPDIR"),
-        ));
-        let plan = linux_plan(
-            std::env::var("FLATPAK_ID").ok().as_deref(),
-            std::env::var("SNAP_NAME").ok().as_deref(),
-            entry_installed,
-        );
-        match plan {
-            LinuxPlan::Sandboxed => Ok("sandboxed".into()),
-            LinuxPlan::NoDesktopEntry => Ok("noDesktopEntry".into()),
-            LinuxPlan::Register => {
-                // Cover the common MIME spellings file managers use for Markdown.
-                for mime in ["text/markdown", "text/x-markdown"] {
-                    let status = Command::new("xdg-mime")
-                        .args(["default", DESKTOP_ENTRY, mime])
-                        .status()
-                        .map_err(|e| format!("xdg-mime is unavailable: {e}"))?;
-                    if !status.success() {
-                        return Err(format!("xdg-mime exited with {status}"));
-                    }
-                }
-                Ok("registered".into())
-            }
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        // Windows 10+ forbids silently changing the default handler; open the
-        // Default Apps settings page so the user can assign Glyph to Markdown.
-        Command::new("cmd")
-            .args(["/C", "start", "", "ms-settings:defaultapps"])
-            .status()
-            .map_err(|e| format!("failed to open Default Apps settings: {e}"))?;
-        Ok("openedSettings".into())
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        // Changing the handler needs private LaunchServices calls, so the UI
-        // shows Get Info -> Open With guidance instead.
-        Ok("guidance".into())
-    }
-
-    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
-    {
-        Ok("guidance".into())
-    }
 }
 
 #[cfg(test)]
