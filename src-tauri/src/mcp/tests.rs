@@ -1225,6 +1225,22 @@ fn export_stays_inside_the_vault_it_reads_whatever_else_is_granted() {
 }
 
 #[test]
+fn export_refuses_an_out_that_is_a_link_to_a_missing_target() {
+    let h = Harness::new("mcp_export_dangling");
+    // Beside the vault, so an export that followed the link would create the
+    // target outside it.
+    link_folder(&h.root.with_extension("planted"), &h.root.join("out.html"));
+
+    for out in ["out.html", "out.html/"] {
+        let refusal = h.refused(
+            "export",
+            json!({ "ref": "Index", "format": "html", "out": out }),
+        );
+        assert!(refusal.contains("outside the allowed"), "{out}: {refusal}");
+    }
+}
+
+#[test]
 fn a_vault_is_found_however_it_is_spelled() {
     let h = Harness::new("mcp_vault_spelling");
     let spelled = h.root.join(".").to_string_lossy().to_string();

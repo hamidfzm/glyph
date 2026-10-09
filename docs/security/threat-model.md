@@ -24,7 +24,15 @@ four grant kinds. Every path is canonicalized on both sides (grant time and
 check time), so `..` traversal and symlinks inside a granted tree cannot
 escape it. For paths that do not exist yet (export targets), the nearest
 existing ancestor is canonicalized and the remainder re-appended; a `..` in
-the missing remainder is rejected.
+the missing remainder is rejected. So is a link in it: each name is
+re-appended only when the path it makes is not a symbolic link or, on
+Windows, a junction. A path that does not canonicalize can still lead through
+one, in two ways. The link's target is missing, so a write would create the
+target wherever the link points; or the link leads to a file and the path
+ends in a separator, so a read or a write would reach that file. A cloned or
+synced workspace can ship either. On Windows a name with a `:` in it is
+refused as well, since `name:stream` opens a stream of whatever `name` leads
+to.
 
 | Grant | Scope | Rights |
 | ----- | ----- | ------ |
@@ -104,13 +112,13 @@ and files: <path>`), which never echoes the grant list.
 | `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_query`, `vault_paths_with_tag` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable |
 | `copy_file` | source readable and destination writable |
-| `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export) |
+| `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export). The manifest is neither read nor replaced when it, or the `.glyph` folder holding it, is a link: the output directory is checked, but a link below it leads anywhere |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |
-| `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it |
-| `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target). `rename_path` and `move_path` also rewrite links in the workspace's own indexed notes and canvases, each write passing `ensure_writable`; a link or canvas card target that resolves outside the workspace is never rewritten or probed on disk, a file changed since the plan read it is left as it is, and `dryRun` reads without writing |
+| `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it. The entry takes the first default name nothing holds, and a link holds its name even when its target is missing, so creating never writes through one |
+| `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target). `rename_path` and `move_path` also rewrite links in the workspace's own indexed notes and canvases, each write passing `ensure_writable`; a link or canvas card target that resolves outside the workspace is never rewritten or probed on disk, a file changed since the plan read it is left as it is, and `dryRun` reads without writing. The name a copy, a rename, or a move lands on is picked the way a new entry's is, so it is never one a link holds |
 | `request_open` | folders only; the path must already be a granted workspace root |
 | `open_in_new_window` | readable |
-| `workspace_get_last_file`, `workspace_set_last_file` | granted workspace. Everything kept under `.glyph/` (this state, the plugin settings below, and the Cloud Sync settings) is read and written only when neither `.glyph` nor the file itself is a symbolic link, a dangling one included: a cloned workspace can ship either one pointing outside itself, and any JSON object would parse as an empty config and be replaced |
+| `workspace_get_last_file`, `workspace_set_last_file` | granted workspace. `.glyph/state.json`, `.glyph/config.json` (the Cloud Sync settings and the plugin settings below), and the `.gitignore` written beside them are read and written only when neither `.glyph` nor the file itself is a symbolic link, a dangling one included: a cloned workspace can ship either one pointing outside itself. A JSON object behind such a link would parse as a config or a state, and so be replaced, unless a key those formats define holds a value of another type (unknown keys are ignored, and a file that fails to parse is left as it is). `.glyph/site.json` (the Website tab) is not one of these: it is read and written through `read_file` and `write_file`, so the grant check decides |
 | `workspace_get_plugin_settings`, `workspace_set_plugin_settings` | granted workspace, and a well-formed plugin id (it becomes a key in the committed `.glyph/config.json`). The settings are an opaque JSON object capped at 64 KiB per plugin; nothing in the backend treats a value as a path. The symbolic-link refusal in the row above applies |
 | `create_workspace_file` | `root` must be a granted workspace. The path is workspace-relative (`..`, a drive letter, or a backslash is refused) and must canonicalize strictly inside that workspace, so a symlink resolving outside it, or into another granted workspace, is refused. A hidden name anywhere in the resolved path is refused too, which keeps `.git/hooks` and `.glyph` out of reach. The file is opened with `create_new`: one that already exists is reported back and never written to |
 | `sync_*` | granted workspace (`sync_clone_remote` clones into the workspace path itself); `sync_init_repo`, `sync_clone_remote`, and `sync_set_origin` accept only `https://` without credentials, `ssh://`, or scp-like `user@host:path` remotes, since libgit2 would also take a local path or `file://` (pulling any local repository into a granted workspace) and cleartext `http://`/`git://` |
@@ -297,6 +305,11 @@ the way a renderer-supplied path is.
   model that folder until the session ends. Starting the server with
   `--vault` turns asking off.
 
+- **Check, then write.** A path is checked and then written in two steps, and
+  the write follows whatever is at the path by then. A link that appears
+  there in between, planted by another process or landing with a sync pull,
+  is followed. Closing that window takes writes that refuse a link when they
+  open the file, which the commands do not do today.
 - **Persisted-session grant staging.** The settings store (`settings.json`)
   is renderer-writable, and the backend seeds grants from it at the next
   launch, so a compromised renderer can stage grants for paths it names
