@@ -11,7 +11,7 @@ use super::refs::{capped, read_vault, ref_property, resolve_note, vault_property
 use super::registry::{arguments, Effect, Session, ToolDef};
 use crate::commands::create::UNSAFE_NAME_CHARS;
 use crate::commands::walk::WALK_SKIP_DIRS;
-use crate::vault::relocate;
+use crate::vault::{names_in, relocate};
 
 /// What both tools promise, closing each one's description.
 macro_rules! relinking {
@@ -115,6 +115,12 @@ fn move_note(session: &Session, args: Value) -> Result<Value, String> {
     })
 }
 
+/// Whether the folder of `path` lists an entry spelled exactly as its name.
+fn has_entry(path: &Path) -> bool {
+    let named = path.parent().zip(path.file_name());
+    named.is_some_and(|(dir, name)| names_in(dir).contains(name))
+}
+
 enum Planned {
     Move {
         root: String,
@@ -149,7 +155,12 @@ fn relocate_note(
                 asked.display()
             ));
         };
-        if resolved == source_file {
+        // Where the filesystem ignores case, the note's own name in other
+        // letters reaches the note itself, though its folder lists no entry
+        // spelled that way. That is a rename in place, with nothing in its way.
+        let respelled =
+            same_file::is_same_file(&source_file, &asked).unwrap_or(false) && !has_entry(&asked);
+        if resolved == source_file && !respelled {
             return Ok(Planned::AlreadyThere(found.path));
         }
         let skipped = relative.components().any(|part| {
@@ -166,16 +177,19 @@ fn relocate_note(
         // ponytail: checked here, renamed later, so a file created in between
         // is replaced, as it is for a rename made in the app; a no-replace
         // rename in `relocate` would close that for both.
-        if std::fs::symlink_metadata(&target).is_ok() {
+        if !respelled && std::fs::symlink_metadata(&target).is_ok() {
             return Err(format!(
                 "{} already exists. Nothing was moved; pick another name.",
                 target.display()
             ));
         }
+        // Under the name asked for, which is not the one the filesystem
+        // answers with for a note reached by another spelling.
+        let name = asked.file_name().unwrap_or_default();
         Ok(Planned::Move {
             root: root.to_string(),
             from: found.path,
-            target,
+            target: target.with_file_name(name),
         })
     })?;
     let (root, from, target) = match planned {
@@ -274,6 +288,54 @@ mod tests {
         // The index has caught up: the old name is gone from the next answer.
         let found = h.ok("resolve_link", json!({ "ref": "Trip" }));
         assert_eq!(h.relative(&found["resolution"]["path"]), "Notes/Trip.md");
+    }
+
+    /// The names a folder of the vault lists, as it spells them.
+    fn listed(h: &Harness, folder: &str) -> Vec<String> {
+        let entries = fs::read_dir(h.root.join(folder)).unwrap();
+        let mut names: Vec<String> = entries
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn rename_note_changes_the_case_of_a_name() {
+        // Where the filesystem ignores case, the new name already reaches the
+        // note, which is neither a note in the way nor the name it has.
+        let h = Harness::writing("move_case");
+        let result = rename(&h, "Notes/Travel", "travel");
+        assert_eq!(result["changed"], true, "{result}");
+        assert_eq!(h.relative(&result["path"]), "Notes/travel.md");
+        assert_eq!(
+            listed(&h, "Notes"),
+            ["Cooking.md", "Sections.md", "travel.md"]
+        );
+
+        // The index holds one note, under the new spelling: it answers as an
+        // index built from the folder now does.
+        let found = h.ok("resolve_link", json!({ "ref": "Notes/Travel" }));
+        assert_eq!(h.relative(&found["resolution"]["path"]), "Notes/travel.md");
+        let fresh = std::mem::ManuallyDrop::new(Harness::over(h.root.clone()));
+        let report = |h: &Harness| h.ok("vault_report", json!({}));
+        assert_eq!(report(&h), report(&fresh));
+
+        // And the name it now has is the name it has.
+        let again = rename(&h, "Notes/travel", "travel");
+        assert_eq!(again["changed"], false, "{again}");
+    }
+
+    #[test]
+    fn rename_note_takes_no_name_that_is_another_entry_for_the_same_file() {
+        let h = Harness::writing("move_alias");
+        fs::hard_link(h.path("Notes/Travel.md"), h.path("Notes/Alias.md")).unwrap();
+        let refusal = h.refused(
+            "rename_note",
+            json!({ "ref": "Notes/Travel", "to": "Alias" }),
+        );
+        assert!(refusal.contains("already exists"), "{refusal}");
+        assert!(h.root.join("Notes").join("Travel.md").is_file());
     }
 
     #[test]

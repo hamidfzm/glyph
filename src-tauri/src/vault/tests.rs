@@ -1230,6 +1230,22 @@ fn a_sync_catches_the_index_up_with_the_disk() {
 }
 
 #[test]
+fn a_note_renamed_to_its_own_name_in_other_letters_is_still_one_note() {
+    let root = fixture_vault("sync_case");
+    let mut vault = build(&root);
+
+    // Where the filesystem ignores case, `Index.md` still opens after this,
+    // so reading it does not say the old name is gone.
+    fs::rename(root.join("Index.md"), root.join("index.md")).unwrap();
+    vault.sync().unwrap();
+
+    assert!(vault.note(&in_vault(&root, "Index.md")).is_none());
+    assert!(vault.note(&in_vault(&root, "index.md")).is_some());
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
 fn a_sync_reports_the_cap_the_walk_hit_and_lifts_it_when_room_returns() {
     let root = fixture_vault("sync_cap");
     let mut vault = Vault::build_capped(&root, 9, 32).unwrap();

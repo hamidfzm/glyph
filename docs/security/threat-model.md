@@ -312,7 +312,10 @@ the way a renderer-supplied path is.
   depth. A rename or a move
   refuses a destination that exists and one the index would not read, and a
   link rewrite that stops partway is reported with the note it stopped at,
-  never as a success.
+  never as a success. The one destination that may exist is the note itself:
+  where the filesystem ignores case, a note's own name in other letters
+  reaches that note, and is taken for a rename in place only when the two
+  paths are one file and its folder lists no entry spelled the new way.
 - **Notes being edited.** The running app publishes, in `open-documents.json`
   in its data directory, the files every window has open and which of them
   hold unsaved edits, from each window's own report. The server reads it at
