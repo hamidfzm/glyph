@@ -133,6 +133,8 @@ function buildContext(init) {
           id: command.id,
           title: command.title,
           menu: command.menu,
+          shortcut: command.shortcut,
+          when: command.when,
         });
         return () => commands.delete(command.id);
       },
@@ -150,6 +152,7 @@ function buildContext(init) {
       addStatusBarItem: sandboxUnavailable("ui.addStatusBarItem"),
       addSidebarPanel: sandboxUnavailable("ui.addSidebarPanel"),
       addSettingsPanel: sandboxUnavailable("ui.addSettingsPanel"),
+      addWorkspaceSettingsPanel: sandboxUnavailable("ui.addWorkspaceSettingsPanel"),
       openOverlay: sandboxUnavailable("ui.openOverlay"),
       // No element involved, but it drives the app's own Files panel.
       filterFileTree: sandboxUnavailable("ui.filterFileTree", APP_CONTEXT_ONLY),
@@ -204,6 +207,9 @@ function buildContext(init) {
       },
       getRoot: sandboxUnavailable("workspace.getRoot", APP_CONTEXT_ONLY),
       onChange: sandboxUnavailable("workspace.onChange", APP_CONTEXT_ONLY),
+      createFile: sandboxUnavailable("workspace.createFile", APP_CONTEXT_ONLY),
+      getSettings: sandboxUnavailable("workspace.getSettings", APP_CONTEXT_ONLY),
+      setSettings: sandboxUnavailable("workspace.setSettings", APP_CONTEXT_ONLY),
     },
     vault: {
       graph: sandboxUnavailable("vault.graph", APP_CONTEXT_ONLY),

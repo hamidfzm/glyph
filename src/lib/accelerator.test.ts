@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  acceleratorFromEvent,
   formatAccelerator,
+  hasCommandModifier,
   matchesAccelerator,
   parseAccelerator,
+  parseKeyEvent,
+  serializeAccelerator,
 } from "./accelerator";
 
 function kd(
@@ -56,30 +58,66 @@ describe("parseAccelerator", () => {
   });
 });
 
-describe("acceleratorFromEvent", () => {
-  it("builds a canonical string from a letter key", () => {
-    expect(acceleratorFromEvent(kd("KeyO", { meta: true }))).toBe("CmdOrCtrl+O");
+describe("parseKeyEvent", () => {
+  // The event as the accelerator a recorded shortcut is stored under.
+  function recorded(event: KeyboardEvent): string | null {
+    const parsed = parseKeyEvent(event);
+    return parsed && serializeAccelerator(parsed);
+  }
+
+  it("reads the modifiers and the key of a keydown", () => {
+    expect(parseKeyEvent(kd("KeyO", { meta: true }))).toEqual({
+      cmdOrCtrl: true,
+      alt: false,
+      shift: false,
+      key: "O",
+    });
   });
 
   it("includes Alt and Shift and maps digits", () => {
-    expect(acceleratorFromEvent(kd("Digit5", { ctrl: true, shift: true }))).toBe(
-      "CmdOrCtrl+Shift+5",
-    );
+    expect(recorded(kd("Digit5", { ctrl: true, shift: true }))).toBe("CmdOrCtrl+Shift+5");
   });
 
   it("maps punctuation codes to their tokens", () => {
-    expect(acceleratorFromEvent(kd("Backslash", { meta: true }))).toBe("CmdOrCtrl+\\");
-    expect(acceleratorFromEvent(kd("Equal", { ctrl: true }))).toBe("CmdOrCtrl+=");
-    expect(acceleratorFromEvent(kd("Comma", { alt: true }))).toBe("Alt+,");
+    expect(recorded(kd("Backslash", { meta: true }))).toBe("CmdOrCtrl+\\");
+    expect(recorded(kd("Equal", { ctrl: true }))).toBe("CmdOrCtrl+=");
+    expect(recorded(kd("Comma", { alt: true }))).toBe("Alt+,");
   });
 
   it("returns null when only modifier keys are held", () => {
-    expect(acceleratorFromEvent(kd("ShiftLeft", { shift: true }))).toBeNull();
-    expect(acceleratorFromEvent(kd("MetaLeft", { meta: true }))).toBeNull();
+    expect(parseKeyEvent(kd("ShiftLeft", { shift: true }))).toBeNull();
+    expect(parseKeyEvent(kd("MetaLeft", { meta: true }))).toBeNull();
   });
 
   it("maps function keys", () => {
-    expect(acceleratorFromEvent(kd("F5", { ctrl: true }))).toBe("CmdOrCtrl+F5");
+    expect(recorded(kd("F5", { ctrl: true }))).toBe("CmdOrCtrl+F5");
+  });
+});
+
+describe("serializeAccelerator", () => {
+  it("spells the modifiers in one order, whatever order they were written in", () => {
+    const parsed = parseAccelerator("Shift+Alt+Ctrl+t");
+    expect(parsed && serializeAccelerator(parsed)).toBe("CmdOrCtrl+Alt+Shift+T");
+  });
+
+  it("writes a bare key as the key alone", () => {
+    expect(serializeAccelerator({ cmdOrCtrl: false, alt: false, shift: false, key: "F5" })).toBe(
+      "F5",
+    );
+  });
+});
+
+describe("hasCommandModifier", () => {
+  const bare = { cmdOrCtrl: false, alt: false, shift: false, key: "A" };
+
+  it("holds for Cmd/Ctrl or Alt", () => {
+    expect(hasCommandModifier({ ...bare, cmdOrCtrl: true })).toBe(true);
+    expect(hasCommandModifier({ ...bare, alt: true })).toBe(true);
+  });
+
+  it("does not hold for a bare key, or one with Shift alone", () => {
+    expect(hasCommandModifier(bare)).toBe(false);
+    expect(hasCommandModifier({ ...bare, shift: true })).toBe(false);
   });
 });
 

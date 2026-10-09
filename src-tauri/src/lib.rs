@@ -336,6 +336,7 @@ pub fn run() {
             commands::create::duplicate_path,
             commands::create::move_path,
             commands::create::delete_path,
+            commands::create_file::create_workspace_file,
             vault::commands::vault_snapshot,
             vault::commands::vault_refresh,
             vault::commands::vault_forget,
@@ -400,6 +401,8 @@ pub fn run() {
             workspace::commands::workspace_resolve,
             workspace::commands::workspace_get_last_file,
             workspace::commands::workspace_set_last_file,
+            workspace::commands::workspace_get_plugin_settings,
+            workspace::commands::workspace_set_plugin_settings,
             #[cfg(desktop)]
             telemetry::set_error_reporting,
         ])

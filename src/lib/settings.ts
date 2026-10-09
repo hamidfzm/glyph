@@ -236,6 +236,8 @@ export interface CorePluginSettings {
   tags: boolean;
   /** The notes linking to the open one, in the Files panel. */
   backlinks: boolean;
+  /** Open Today's Note, with its per-workspace folder, file name pattern, and template. */
+  dailyNotes: boolean;
 }
 
 export interface Settings {
@@ -331,5 +333,6 @@ export const DEFAULT_SETTINGS: Settings = {
     math: true,
     tags: true,
     backlinks: true,
+    dailyNotes: true,
   },
 };

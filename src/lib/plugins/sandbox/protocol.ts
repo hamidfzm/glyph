@@ -25,7 +25,14 @@ export type HostMessage =
 export type WorkerMessage =
   | { type: "activated" }
   | { type: "error"; message: string }
-  | { type: "register-command"; id: string; title: string; menu?: "view" }
+  | {
+      type: "register-command";
+      id: string;
+      title: string;
+      menu?: "file" | "view";
+      shortcut?: string;
+      when?: "workspace";
+    }
   | { type: "add-styles"; css: string }
   | {
       type: "register-translations";
