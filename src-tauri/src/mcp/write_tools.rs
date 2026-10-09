@@ -345,7 +345,7 @@ fn no_such_task(tasks: &[Task], wanted: &str, path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::Harness;
+    use super::super::test_support::Harness;
     use super::*;
 
     const NOTE: &str = "Scratch.md";

@@ -164,7 +164,7 @@ pub(super) fn arguments<T: DeserializeOwned>(args: Value) -> Result<T, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::Harness;
+    use super::super::test_support::Harness;
     use super::*;
 
     fn tool(handler: fn(&Session, Value) -> Result<Value, String>) -> ToolDef {

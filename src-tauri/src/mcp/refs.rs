@@ -292,7 +292,7 @@ pub(super) fn read_raw(session: &Session, path: &str) -> Result<String, String> 
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::Harness;
+    use super::super::test_support::Harness;
     use super::*;
 
     #[test]

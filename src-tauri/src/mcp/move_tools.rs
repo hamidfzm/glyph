@@ -223,7 +223,7 @@ mod tests {
     use std::fs;
 
     use super::super::edits::{OPEN, UNSAVED};
-    use super::super::tests::Harness;
+    use super::super::test_support::Harness;
     use super::*;
     use crate::grants::GrantRegistry;
     use crate::vault::test_support::fixture_vault;

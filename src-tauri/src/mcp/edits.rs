@@ -126,7 +126,7 @@ pub(super) fn refuse_open(session: &Session, target: &Path, shown: &str) -> Resu
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::Harness;
+    use super::super::test_support::Harness;
     use super::*;
 
     const NOTE: &str = "Notes/Travel.md";

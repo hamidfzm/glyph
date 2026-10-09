@@ -17,6 +17,8 @@ mod vault_tools;
 mod write_tools;
 
 #[cfg(test)]
+mod test_support;
+#[cfg(test)]
 mod tests;
 
 use std::cell::RefCell;
