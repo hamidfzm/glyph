@@ -170,10 +170,11 @@ describe("App", () => {
   it("shows the export progress toast while an export is in flight", async () => {
     vi.mocked(useExport).mockReturnValue({ ...IDLE_EXPORTERS, exporting: "docx" });
     const { wrapper } = withProviders();
-    const { findByRole } = render(<App />, { wrapper });
+    const { findByText } = render(<App />, { wrapper });
 
-    const status = await findByRole("status");
-    expect(status).toHaveTextContent("Exporting Word document…");
+    // By its text: the first-run default-app banner is a status region as well.
+    const status = await findByText("Exporting Word document…");
+    expect(status).toHaveAttribute("role", "status");
   });
 
   it("renders the empty state when there are no tabs", async () => {
