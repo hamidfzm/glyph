@@ -290,6 +290,24 @@ describe("worker bootstrap", () => {
     });
   });
 
+  it("relays a command's shortcut and its workspace condition", async () => {
+    const w = bootWorker();
+    await w.send(
+      init(
+        `export default { activate(ctx) { ctx.commands.register({ id: "today", title: "Today", menu: "file", shortcut: "CmdOrCtrl+Shift+T", when: "workspace", run() {} }); } }`,
+      ),
+    );
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
+    expect(w.posted).toContainEqual({
+      type: "register-command",
+      id: "today",
+      title: "Today",
+      menu: "file",
+      shortcut: "CmdOrCtrl+Shift+T",
+      when: "workspace",
+    });
+  });
+
   it("refuses to hand a sandboxed plugin the open document at will", async () => {
     const w = bootWorker();
     await w.send(
@@ -446,20 +464,23 @@ describe("worker bootstrap", () => {
   // so a sandboxed plugin calling one died with "ctx.ui.addStatusBarItem is
   // not a function" and nothing said the sandbox was the reason.
 
-  it.each(["addStatusBarItem", "addSidebarPanel", "addSettingsPanel", "openOverlay"])(
-    "refuses ui.%s by name instead of being undefined",
-    async (method) => {
-      const w = bootWorker();
-      await w.send(init(`export default { activate(ctx) { ctx.ui.${method}({ id: "x" }); } }`));
+  it.each([
+    "addStatusBarItem",
+    "addSidebarPanel",
+    "addSettingsPanel",
+    "addWorkspaceSettingsPanel",
+    "openOverlay",
+  ])("refuses ui.%s by name instead of being undefined", async (method) => {
+    const w = bootWorker();
+    await w.send(init(`export default { activate(ctx) { ctx.ui.${method}({ id: "x" }); } }`));
 
-      await vi.waitFor(() => expect(w.typesPosted()).toContain("error"));
-      const error = w.posted.find((m) => m.type === "error") as { message: string };
-      expect(error.message).toContain(`ctx.ui.${method}`);
-      expect(error.message).toContain("sandboxed plugins");
-      expect(error.message).toContain('"sandbox": false');
-      expect(error.message).not.toContain("is not a function");
-    },
-  );
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("error"));
+    const error = w.posted.find((m) => m.type === "error") as { message: string };
+    expect(error.message).toContain(`ctx.ui.${method}`);
+    expect(error.message).toContain("sandboxed plugins");
+    expect(error.message).toContain('"sandbox": false');
+    expect(error.message).not.toContain("is not a function");
+  });
 
   // App state is not bridged to the worker; an absent method would die as a
   // bare "is not a function" with nothing pointing at the sandbox.
@@ -469,6 +490,9 @@ describe("worker bootstrap", () => {
     "documents.onActiveChange(() => {})",
     "workspace.getRoot()",
     "workspace.onChange(() => {})",
+    'workspace.createFile("a.md")',
+    "workspace.getSettings()",
+    "workspace.setSettings({})",
     "vault.graph()",
     'vault.backlinks("a.md")',
     "vault.tags()",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveInsideRoot, resolveWorkspacePath } from "./workspacePath";
+import { resolveInsideRoot, resolveWorkspacePath, workspaceRelativePath } from "./workspacePath";
 
 describe("resolveWorkspacePath", () => {
   it("accepts a file by absolute path or relative to the root, as one spelling", () => {
@@ -55,5 +55,19 @@ describe("resolveInsideRoot", () => {
     expect(resolveInsideRoot("/ws", "")).toBeNull();
     expect(resolveInsideRoot("/ws", ".")).toBeNull();
     expect(resolveInsideRoot("/ws", "a/..")).toBeNull();
+  });
+});
+
+describe("workspaceRelativePath", () => {
+  it("writes a relative path with forward slashes, whichever separator came in", () => {
+    expect(workspaceRelativePath("daily\\2026\\note.md")).toBe("daily/2026/note.md");
+    expect(workspaceRelativePath("./a//b/../c.md")).toBe("a/c.md");
+  });
+
+  it("refuses what resolveInsideRoot refuses", () => {
+    expect(workspaceRelativePath("../escape.md")).toBeNull();
+    expect(workspaceRelativePath("/etc/passwd")).toBeNull();
+    expect(workspaceRelativePath("C:\\Windows\\system.ini")).toBeNull();
+    expect(workspaceRelativePath("")).toBeNull();
   });
 });

@@ -438,6 +438,10 @@ With the `samples/` folder open, press `Cmd/Ctrl+G` (or View → Open Graph) to 
 
 This workspace is wired to make the graph worth a look: [[Index]] and [[Graph View]] act as hubs, the cooking notes ([[Notes/Cooking]], [[Ingredients]], [[Techniques]]) form a tight cluster, and `Scratchpad` sits off on its own as a muted orphan. The [[Graph View]] note is a full walkthrough of the feature.
 
+### Daily notes
+
+With the `samples/` folder open, press `Cmd/Ctrl+Shift+T` (or File → Open Today's Note) to open today's note, creating it first when it does not exist yet. By default it lands in `daily/` as `YYYY-MM-DD.md`, so the notes sort by date. File → Workspace Settings… → Daily Notes changes the folder, the file name pattern (`YYYY`, `YY`, `MM`, `M`, `DD`, and `D` are filled from today's date; text in `[brackets]` is kept as written), and an optional template file that every new note starts as a copy of. The settings are saved to `.glyph/config.json`, so they travel with the workspace.
+
 ### Export as a website
 
 With the `samples/` folder open, `File → Export → Website…` turns this whole workspace into a static site: every note becomes a linked HTML page (the root `index.md`, or else this README, becomes `index.html`), wikilinks and relative links navigate between pages, images are copied alongside, Mermaid and D2 diagrams render as inline SVG (while their core plugins are on), and a navigation sidebar ties it together. This folder's [`.glyph/site.json`](.glyph/site.json) shows the optional site metadata (editable in-app via File > Workspace Settings…): a site title for every page's browser tab and social tags, a shared description, a robots.txt directive, and a theme (GitHub-style by default, with a site header on every page; plugins can add more); a `favicon`, `socialImage`, and `baseUrl` can join it for link previews. The same export runs headless from the terminal for CI publishing:
@@ -501,6 +505,7 @@ Open [AI Playground](AI%20Playground.md) for a guided set of prompts to try agai
 |----------|--------|
 | `Cmd+O` | Open file(s) |
 | `Cmd+Shift+O` | Open folder |
+| `Cmd+Shift+T` | Open today's note |
 | `Cmd+K` | Command palette |
 | `Cmd+G` | Workspace graph |
 | `Cmd+P` | Print / Export to PDF |

@@ -62,6 +62,10 @@
     "backlinks": {
       "name": "Backlinks",
       "description": "List the notes that link to the open one, in the files sidebar."
+    },
+    "dailyNotes": {
+      "name": "Daily notes",
+      "description": "Open or create today's note from the File menu, the palette, or a shortcut. Its folder, file name pattern, and template are set per workspace in Workspace Settings."
     }
   }
 }

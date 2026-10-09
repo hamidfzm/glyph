@@ -22,6 +22,7 @@ import type {
   SiteThemeContribution,
   StatusBarItemContribution,
   StyleContribution,
+  WorkspaceSettingsPanelEntry,
 } from "./types";
 import { createWorkspaceApi } from "./workspaceApi";
 
@@ -63,6 +64,8 @@ export interface PluginHost {
   readonly fileTreeFilters: Registry<FileTreeFilter>;
   /** Per-plugin settings UIs, shown under each row in the Settings Plugins tab. */
   readonly settingsPanels: Registry<SettingsPanelContribution>;
+  /** Tabs plugins add to Workspace Settings. */
+  readonly workspaceSettingsPanels: Registry<WorkspaceSettingsPanelEntry>;
   /** Stylesheets contributed by loaded plugins, injected after app styles. */
   readonly styles: Registry<StyleContribution>;
   /** Export formats contributed by loaded plugins. */
@@ -117,6 +120,7 @@ export function createPluginHost(
   const sidebarPanels = createRegistry<SidebarPanelEntry>();
   const fileTreeFilters = createRegistry<FileTreeFilter>();
   const settingsPanels = createRegistry<SettingsPanelContribution>();
+  const workspaceSettingsPanels = createRegistry<WorkspaceSettingsPanelEntry>();
   const styles = createRegistry<StyleContribution>();
   const exporters = createRegistry<ExporterEntry>();
   const siteThemes = createRegistry<SiteThemeContribution>();
@@ -130,6 +134,7 @@ export function createPluginHost(
     sidebarPanels,
     fileTreeFilters,
     settingsPanels,
+    workspaceSettingsPanels,
     styles,
     exporters,
     siteThemes,
@@ -170,6 +175,7 @@ export function createPluginHost(
     sidebarPanels,
     fileTreeFilters,
     settingsPanels,
+    workspaceSettingsPanels,
     styles,
     exporters,
     siteThemes,
@@ -185,7 +191,7 @@ export function createPluginHost(
       if (plugin.sandbox) {
         const settings = await settingsBackend.load(plugin.id);
         const bag = new DisposerBag();
-        const workspace = createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? []);
+        const workspace = createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? [], plugin.id);
         const terminate = await startSandbox(
           plugin,
           settings,
