@@ -11,11 +11,6 @@
     "indexIncompleteDepth": "The workspace index is incomplete: folders nested deeper than {{limit}} levels were not indexed, so the file list, graph, backlinks, and wikilinks may be missing results.",
     "relinkFailed": "Updating links stopped at \"{{name}}\", so some links still point to the old name or location."
   },
-  "dailyNote": {
-    "failed": "Couldn't open today's note: {{error}}",
-    "patternRequired": "Daily notes have no file name pattern. Set one in Workspace Settings.",
-    "invalidPath": "The daily notes folder, file name pattern, or template isn't a valid path. Fix it in Workspace Settings."
-  },
   "confirmDelete": {
     "message": "Delete \"{{name}}\"? This can't be undone.",
     "title": "Delete"

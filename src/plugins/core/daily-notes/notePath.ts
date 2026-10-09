@@ -1,5 +1,4 @@
-import { hasExtension, MARKDOWN_EXTENSIONS } from "@/lib/extensionConfig";
-import type { DailyNotesSettings } from "@/lib/workspace";
+import type { DailyNotesSettings } from "./settings";
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
@@ -22,15 +21,13 @@ export function formatDatePattern(pattern: string, date: Date): string {
   );
 }
 
-/** Always a markdown file name: `.md` is added when the pattern names no markdown extension. */
+/** Always a `.md` file name: the extension is added when the pattern does not end in it. */
 export function dailyNoteName(pattern: string, date: Date): string {
   const trimmed = pattern.trim();
-  if (!hasExtension(trimmed, MARKDOWN_EXTENSIONS)) {
-    return `${formatDatePattern(trimmed, date)}.md`;
-  }
-  // The extension is set aside so its letters are never read as tokens.
-  const dot = trimmed.lastIndexOf(".");
-  return formatDatePattern(trimmed.slice(0, dot), date) + trimmed.slice(dot);
+  // Set aside before formatting, so the extension's letters are never read as tokens.
+  const extension = /\.md$/i.exec(trimmed)?.[0] ?? "";
+  const stem = trimmed.slice(0, trimmed.length - extension.length);
+  return formatDatePattern(stem, date) + (extension || ".md");
 }
 
 /** Forward-slash segments from either separator; empty and `.` segments are dropped. */
@@ -48,20 +45,10 @@ export function dailyNotePath(settings: DailyNotesSettings, date: Date): string 
   return normalizeRelativePath(`${settings.folder}/${name}`);
 }
 
-/** `settings` as they are stored: paths normalized, a blank template dropped. */
-export function normalizeDailyNotes(settings: DailyNotesSettings): DailyNotesSettings {
-  const template = normalizeRelativePath(settings.template ?? "");
-  return {
-    folder: normalizeRelativePath(settings.folder),
-    filenamePattern: settings.filenamePattern.trim(),
-    template: template === "" ? undefined : template,
-  };
-}
-
 // `..` leaves the workspace; the other characters cannot be in a file name on Windows.
 const UNSAFE_SEGMENT = /^\.\.$|[<>:"|?*]/;
 
-type DailyNotesProblem = "patternRequired" | "invalidPath";
+export type DailyNotesProblem = "patternRequired" | "invalidPath";
 
 /** Checked on save and again before creating: `.glyph/config.json` can be edited by hand. */
 export function dailyNotesProblem(
@@ -69,7 +56,7 @@ export function dailyNotesProblem(
   date: Date,
 ): DailyNotesProblem | null {
   if (settings.filenamePattern.trim() === "") return "patternRequired";
-  const paths = [dailyNotePath(settings, date), normalizeRelativePath(settings.template ?? "")];
+  const paths = [dailyNotePath(settings, date), normalizeRelativePath(settings.template)];
   const unsafe = paths.some((path) =>
     path.split("/").some((segment) => UNSAFE_SEGMENT.test(segment)),
   );

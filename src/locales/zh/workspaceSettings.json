@@ -5,7 +5,6 @@
   },
   "tabs": {
     "website": "网站",
-    "dailyNotes": "每日笔记",
     "sync": "云同步"
   },
   "empty": "打开一个文件夹工作区以编辑其设置。",
@@ -40,30 +39,6 @@
       "theme": {
         "label": "主题"
       }
-    },
-    "save": "保存",
-    "cancel": "取消"
-  },
-  "dailyNotes": {
-    "description": "\"打开今日笔记\"存放每天笔记的位置。保存到 .glyph/config.json，随文件夹一起迁移。",
-    "fields": {
-      "folder": {
-        "label": "文件夹",
-        "hint": "相对于工作区；留空表示工作区根目录"
-      },
-      "filenamePattern": {
-        "label": "文件名模式",
-        "hint": "YYYY、YY、MM、M、DD 和 D 会替换为今天的日期；方括号中的 [文本] 保持原样"
-      },
-      "template": {
-        "label": "模板文件",
-        "hint": "相对于工作区；会复制到每篇新笔记中"
-      }
-    },
-    "preview": "今日笔记：{{path}}",
-    "errors": {
-      "patternRequired": "请输入文件名模式。",
-      "invalidPath": "文件夹、文件名模式和模板不能包含 \"..\" 或以下任何字符：< > : \" | ? *"
     },
     "save": "保存",
     "cancel": "取消"

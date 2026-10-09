@@ -5,7 +5,6 @@
   },
   "tabs": {
     "website": "Sitio web",
-    "dailyNotes": "Notas diarias",
     "sync": "Sincronización en la nube"
   },
   "empty": "Abre un espacio de trabajo de carpeta para editar su configuración.",
@@ -40,30 +39,6 @@
       "theme": {
         "label": "Tema"
       }
-    },
-    "save": "Guardar",
-    "cancel": "Cancelar"
-  },
-  "dailyNotes": {
-    "description": "Dónde guarda \"Abrir la nota de hoy\" la nota de cada día. Se guarda en .glyph/config.json, así que viaja con la carpeta.",
-    "fields": {
-      "folder": {
-        "label": "Carpeta",
-        "hint": "relativa al espacio de trabajo; vacía para la raíz del espacio de trabajo"
-      },
-      "filenamePattern": {
-        "label": "Patrón de nombre de archivo",
-        "hint": "YYYY, YY, MM, M, DD y D se sustituyen por la fecha de hoy; el [texto] entre corchetes se conserva tal cual"
-      },
-      "template": {
-        "label": "Archivo de plantilla",
-        "hint": "relativa al espacio de trabajo; se copia en cada nota nueva"
-      }
-    },
-    "preview": "Nota de hoy: {{path}}",
-    "errors": {
-      "patternRequired": "Introduce un patrón de nombre de archivo.",
-      "invalidPath": "La carpeta, el patrón de nombre de archivo y la plantilla no pueden contener \"..\" ni ninguno de < > : \" | ? *"
     },
     "save": "Guardar",
     "cancel": "Cancelar"

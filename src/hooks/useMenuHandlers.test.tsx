@@ -119,12 +119,6 @@ describe("useMenuHandlers", () => {
     expect(value.setTabMode).toHaveBeenCalledWith("tab-1", EDITOR_MODE.edit);
   });
 
-  it("opens today's note through the tabs action", () => {
-    const { handlers, value } = renderHandlers();
-    handlers.openDailyNote();
-    expect(value.openDailyNote).toHaveBeenCalledOnce();
-  });
-
   it("toggles autosave to the opposite of the stored setting", () => {
     const { handlers } = renderHandlers();
     handlers.toggleAutoSave();

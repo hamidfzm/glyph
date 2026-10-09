@@ -5,7 +5,6 @@
   },
   "tabs": {
     "website": "Website",
-    "dailyNotes": "Tägliche Notizen",
     "sync": "Cloud-Synchronisierung"
   },
   "empty": "Öffne einen Ordner-Arbeitsbereich, um seine Einstellungen zu bearbeiten.",
@@ -40,30 +39,6 @@
       "theme": {
         "label": "Theme"
       }
-    },
-    "save": "Speichern",
-    "cancel": "Abbrechen"
-  },
-  "dailyNotes": {
-    "description": "Wo \"Heutige Notiz öffnen\" die Notiz jedes Tages ablegt. Gespeichert in .glyph/config.json, wandert also mit dem Ordner mit.",
-    "fields": {
-      "folder": {
-        "label": "Ordner",
-        "hint": "relativ zum Arbeitsbereich; leer für den Stammordner des Arbeitsbereichs"
-      },
-      "filenamePattern": {
-        "label": "Dateinamenmuster",
-        "hint": "YYYY, YY, MM, M, DD und D werden durch das heutige Datum ersetzt; [Text] in Klammern bleibt unverändert"
-      },
-      "template": {
-        "label": "Vorlagendatei",
-        "hint": "relativ zum Arbeitsbereich; wird in jede neue Notiz kopiert"
-      }
-    },
-    "preview": "Heutige Notiz: {{path}}",
-    "errors": {
-      "patternRequired": "Gib ein Dateinamenmuster ein.",
-      "invalidPath": "Ordner, Dateinamenmuster und Vorlage dürfen weder \"..\" noch eines der Zeichen < > : \" | ? * enthalten."
     },
     "save": "Speichern",
     "cancel": "Abbrechen"

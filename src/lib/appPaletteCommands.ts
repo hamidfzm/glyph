@@ -1,6 +1,5 @@
 import type { TFunction } from "i18next";
 import { ActualSizeIcon } from "@/components/icons/ActualSizeIcon";
-import { CalendarIcon } from "@/components/icons/CalendarIcon";
 import { EditModeIcon } from "@/components/icons/EditModeIcon";
 import { ExternalLinkIcon } from "@/components/icons/ExternalLinkIcon";
 import { FileTextIcon } from "@/components/icons/FileTextIcon";
@@ -181,17 +180,9 @@ export function appPaletteCommands(
     },
   );
 
-  // Workspace-wide actions; pointless (and menu-disabled) without a folder.
+  // Workspace-wide export; pointless (and menu-disabled) without a folder.
   if (workspaceOpen) {
     out.push(
-      {
-        id: "cmd:openDailyNote",
-        title: t("openDailyNote"),
-        section: "Commands",
-        icon: CalendarIcon,
-        shortcut: "Cmd/Ctrl+Shift+T",
-        run: actions.openDailyNote,
-      },
       {
         id: "cmd:searchWorkspace",
         title: t("searchWorkspace"),

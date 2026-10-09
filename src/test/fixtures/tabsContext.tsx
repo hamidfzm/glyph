@@ -29,7 +29,6 @@ export function tabsContextValue(over: Partial<TabsContextValue> = {}): TabsCont
     createNote: vi.fn(),
     createNoteInWorkspace: vi.fn(),
     createCanvasInWorkspace: vi.fn(),
-    openDailyNote: vi.fn(),
     createCanvas: vi.fn(),
     commitEdit: vi.fn(),
     createFolder: vi.fn(),

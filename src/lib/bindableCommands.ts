@@ -41,14 +41,6 @@ export const BINDABLE_COMMANDS: readonly BindableCommand[] = [
     nativeMenu: true,
   },
   {
-    id: "open-daily-note",
-    label: "Open Today's Note",
-    category: "File",
-    defaultAccelerator: "CmdOrCtrl+Shift+T",
-    event: "menu-open-daily-note",
-    nativeMenu: true,
-  },
-  {
     id: "save",
     label: "Save",
     category: "File",

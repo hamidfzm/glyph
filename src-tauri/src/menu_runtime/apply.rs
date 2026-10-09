@@ -22,7 +22,6 @@ fn accelerator_target<'a, R: Runtime>(
     let item = match id {
         "open" => &refs.open,
         "open-folder" => &refs.open_folder,
-        "open-daily-note" => &refs.open_daily_note,
         "print" => &refs.print,
         "close-tab" => &refs.close_tab,
         "close" => &refs.close,
@@ -108,9 +107,6 @@ pub fn apply_menu_state<R: Runtime>(
         .set_enabled(flags.has_workspace)
         .map_err(stringify)?;
     refs.workspace_settings
-        .set_enabled(flags.has_workspace)
-        .map_err(stringify)?;
-    refs.open_daily_note
         .set_enabled(flags.has_workspace)
         .map_err(stringify)?;
     refs.find.set_enabled(flags.has_file).map_err(stringify)?;
@@ -265,9 +261,6 @@ pub fn apply_menu_labels<R: Runtime>(refs: &MenuItemRefs<R>, l: &MenuLabels) -> 
     refs.save.set_text(&l.save).map_err(s)?;
     refs.auto_save.set_text(&l.auto_save).map_err(s)?;
     refs.new_workspace.set_text(&l.new_workspace).map_err(s)?;
-    refs.open_daily_note
-        .set_text(&l.open_daily_note)
-        .map_err(s)?;
     refs.reset_view.set_text(&l.reset_view).map_err(s)?;
     refs.print.set_text(&l.print).map_err(s)?;
     refs.export_html.set_text(&l.export_html).map_err(s)?;

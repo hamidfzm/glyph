@@ -5,8 +5,8 @@
 //! keyed global store. Two files:
 //!
 //! - `.glyph/config.json`: **committed**. Durable settings: cloud sync (the
-//!   source of truth that replaces the in-memory `SyncState` map) and daily
-//!   notes.
+//!   source of truth that replaces the in-memory `SyncState` map) and what
+//!   plugins keep per workspace.
 //! - `.glyph/state.json` — **git-ignored** (via a `.glyph/.gitignore` we
 //!   write). Volatile per-machine state (the last-opened file) that would
 //!   otherwise churn sync history on every file switch.
@@ -14,6 +14,7 @@
 //! All stored paths are workspace-relative and forward-slash normalized (see
 //! [`super::paths`]) so they stay valid across machines and on Windows.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -43,41 +44,20 @@ pub struct WorkspaceConfig {
     /// Cloud-sync settings, or `None` when sync isn't configured.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sync: Option<SyncSettings>,
-    /// Daily-notes settings, or `None` until the user saves them (the
-    /// defaults apply meanwhile).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub daily_notes: Option<DailyNotesSettings>,
+    /// What each plugin keeps for this workspace, keyed by plugin id. The
+    /// values are the plugin's own and opaque here.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub plugins: BTreeMap<String, PluginSettings>,
 }
+
+pub type PluginSettings = serde_json::Map<String, serde_json::Value>;
 
 impl Default for WorkspaceConfig {
     fn default() -> Self {
         Self {
             version: 1,
             sync: None,
-            daily_notes: None,
-        }
-    }
-}
-
-/// Where a day's note lives and what a new one starts from. Paths are
-/// workspace-relative; the frontend turns the pattern's date tokens into a
-/// file name.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-pub struct DailyNotesSettings {
-    /// Empty means the workspace root.
-    pub folder: String,
-    pub filename_pattern: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub template: Option<String>,
-}
-
-impl Default for DailyNotesSettings {
-    fn default() -> Self {
-        Self {
-            folder: "daily".to_string(),
-            filename_pattern: "YYYY-MM-DD.md".to_string(),
-            template: None,
+            plugins: BTreeMap::new(),
         }
     }
 }
@@ -233,22 +213,26 @@ pub fn clear_sync_config(root: &str) -> Result<(), String> {
     write_config(path, &vc)
 }
 
-// --- Daily notes ---------------------------------------------------------
+// --- Plugin settings -----------------------------------------------------
 
-/// The workspace's daily-notes settings, or the defaults when none are saved.
-pub fn load_daily_notes(workspace_root: &Path) -> Result<DailyNotesSettings, String> {
+/// What `plugin_id` keeps for this workspace; empty when it has saved nothing.
+pub fn load_plugin_settings(
+    workspace_root: &Path,
+    plugin_id: &str,
+) -> Result<PluginSettings, String> {
     Ok(read_config(workspace_root)?
-        .and_then(|c| c.daily_notes)
+        .and_then(|mut c| c.plugins.remove(plugin_id))
         .unwrap_or_default())
 }
 
-/// Persist the daily-notes settings, keeping the config's other blocks.
-pub fn store_daily_notes(
+/// Replace what `plugin_id` keeps, leaving sync and every other plugin's entry alone.
+pub fn store_plugin_settings(
     workspace_root: &Path,
-    settings: DailyNotesSettings,
+    plugin_id: &str,
+    settings: PluginSettings,
 ) -> Result<(), String> {
     let mut vc = read_config(workspace_root)?.unwrap_or_default();
-    vc.daily_notes = Some(settings);
+    vc.plugins.insert(plugin_id.to_string(), settings);
     write_config(workspace_root, &vc)
 }
 
@@ -342,76 +326,91 @@ mod tests {
         clear_sync_config(&tmp.path().to_string_lossy()).unwrap();
     }
 
+    fn plugin_settings(folder: &str) -> PluginSettings {
+        let mut settings = PluginSettings::new();
+        settings.insert("folder".into(), folder.into());
+        settings
+    }
+
     #[test]
-    fn daily_notes_default_until_saved() {
+    fn plugin_settings_are_empty_until_saved() {
         let tmp = TempDir::new().unwrap();
-        let defaults = load_daily_notes(tmp.path()).unwrap();
-        assert_eq!(defaults.folder, "daily");
-        assert_eq!(defaults.filename_pattern, "YYYY-MM-DD.md");
-        assert_eq!(defaults.template, None);
-        // Reading the defaults never materializes `.glyph/`.
+        assert!(load_plugin_settings(tmp.path(), "glyph.core.daily-notes")
+            .unwrap()
+            .is_empty());
+        // Reading never materializes `.glyph/`.
         assert!(!tmp.path().join(".glyph").exists());
     }
 
     #[test]
-    fn daily_notes_round_trip_with_camel_case_keys() {
+    fn plugin_settings_round_trip_under_the_plugin_s_id() {
         let tmp = TempDir::new().unwrap();
-        let settings = DailyNotesSettings {
-            folder: "journal".into(),
-            filename_pattern: "YYYY/MM-DD.md".into(),
-            template: Some("templates/daily.md".into()),
-        };
-        store_daily_notes(tmp.path(), settings.clone()).unwrap();
-
-        let raw = std::fs::read_to_string(tmp.path().join(".glyph/config.json")).unwrap();
-        assert!(raw.contains("\"dailyNotes\""));
-        assert!(raw.contains("\"filenamePattern\""));
-        assert_eq!(load_daily_notes(tmp.path()).unwrap(), settings);
-    }
-
-    #[test]
-    fn daily_notes_fill_missing_keys_with_defaults() {
-        let tmp = TempDir::new().unwrap();
-        std::fs::create_dir_all(tmp.path().join(".glyph")).unwrap();
-        std::fs::write(
-            tmp.path().join(".glyph/config.json"),
-            r#"{"dailyNotes":{"folder":""}}"#,
+        store_plugin_settings(
+            tmp.path(),
+            "glyph.core.daily-notes",
+            plugin_settings("journal"),
         )
         .unwrap();
-        let loaded = load_daily_notes(tmp.path()).unwrap();
-        // An explicit empty folder (the workspace root) is kept, not defaulted.
-        assert_eq!(loaded.folder, "");
-        assert_eq!(loaded.filename_pattern, "YYYY-MM-DD.md");
+
+        let raw = std::fs::read_to_string(tmp.path().join(".glyph/config.json")).unwrap();
+        assert!(raw.contains("\"plugins\""));
+        assert!(raw.contains("\"glyph.core.daily-notes\""));
+        assert_eq!(
+            load_plugin_settings(tmp.path(), "glyph.core.daily-notes").unwrap(),
+            plugin_settings("journal")
+        );
     }
 
     #[test]
-    fn daily_notes_and_sync_blocks_survive_each_other() {
+    fn one_plugin_s_settings_leave_another_s_alone() {
+        let tmp = TempDir::new().unwrap();
+        store_plugin_settings(tmp.path(), "first", plugin_settings("a")).unwrap();
+        store_plugin_settings(tmp.path(), "second", plugin_settings("b")).unwrap();
+        store_plugin_settings(tmp.path(), "first", plugin_settings("c")).unwrap();
+
+        assert_eq!(
+            load_plugin_settings(tmp.path(), "first").unwrap(),
+            plugin_settings("c")
+        );
+        assert_eq!(
+            load_plugin_settings(tmp.path(), "second").unwrap(),
+            plugin_settings("b")
+        );
+    }
+
+    #[test]
+    fn plugin_settings_and_the_sync_block_survive_each_other() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path().to_string_lossy().to_string();
-        let settings = DailyNotesSettings {
-            folder: "journal".into(),
-            ..DailyNotesSettings::default()
-        };
 
         store_sync_config(&sample_config(&root)).unwrap();
-        store_daily_notes(tmp.path(), settings.clone()).unwrap();
+        store_plugin_settings(tmp.path(), "notes", plugin_settings("journal")).unwrap();
         assert!(load_sync_config(&root).unwrap().is_some());
 
         store_sync_config(&sample_config(&root)).unwrap();
-        assert_eq!(load_daily_notes(tmp.path()).unwrap(), settings);
-
         clear_sync_config(&root).unwrap();
-        assert_eq!(load_daily_notes(tmp.path()).unwrap(), settings);
+        assert_eq!(
+            load_plugin_settings(tmp.path(), "notes").unwrap(),
+            plugin_settings("journal")
+        );
     }
 
     #[test]
-    fn daily_notes_refuse_to_overwrite_a_corrupt_config() {
+    fn a_config_without_plugins_writes_no_plugins_key() {
+        let tmp = TempDir::new().unwrap();
+        store_sync_config(&sample_config(&tmp.path().to_string_lossy())).unwrap();
+        let raw = std::fs::read_to_string(tmp.path().join(".glyph/config.json")).unwrap();
+        assert!(!raw.contains("plugins"));
+    }
+
+    #[test]
+    fn plugin_settings_refuse_to_overwrite_a_corrupt_config() {
         let tmp = TempDir::new().unwrap();
         std::fs::create_dir_all(tmp.path().join(".glyph")).unwrap();
         std::fs::write(tmp.path().join(".glyph/config.json"), "{not json").unwrap();
 
-        assert!(load_daily_notes(tmp.path()).is_err());
-        assert!(store_daily_notes(tmp.path(), DailyNotesSettings::default()).is_err());
+        assert!(load_plugin_settings(tmp.path(), "notes").is_err());
+        assert!(store_plugin_settings(tmp.path(), "notes", plugin_settings("a")).is_err());
         let raw = std::fs::read_to_string(tmp.path().join(".glyph/config.json")).unwrap();
         assert_eq!(raw, "{not json");
     }

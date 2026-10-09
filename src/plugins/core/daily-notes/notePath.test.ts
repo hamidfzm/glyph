@@ -4,15 +4,13 @@ import {
   dailyNotePath,
   dailyNotesProblem,
   formatDatePattern,
-  normalizeDailyNotes,
   normalizeRelativePath,
-} from "./dailyNotes";
+} from "./notePath";
+import { DEFAULT_SETTINGS } from "./settings";
 
-// Local time, like the "today" the app passes in.
+// Local time, like the "today" the plugin passes in.
 const OCT_8 = new Date(2026, 9, 8);
 const MAR_5 = new Date(2031, 2, 5);
-
-const DEFAULTS = { folder: "daily", filenamePattern: "YYYY-MM-DD.md" };
 
 describe("formatDatePattern", () => {
   it("fills the padded tokens", () => {
@@ -44,7 +42,7 @@ describe("dailyNoteName", () => {
     expect(dailyNoteName("YYYY-MM-DD.md", OCT_8)).toBe("2026-10-08.md");
   });
 
-  it("adds .md when the pattern names no markdown extension", () => {
+  it("adds .md when the pattern does not end in it", () => {
     expect(dailyNoteName("YYYY-MM-DD", OCT_8)).toBe("2026-10-08.md");
     expect(dailyNoteName("YYYY.MM.DD", OCT_8)).toBe("2026.10.08.md");
     expect(dailyNoteName("YYYY-MM-DD.txt", OCT_8)).toBe("2026-10-08.txt.md");
@@ -52,7 +50,6 @@ describe("dailyNoteName", () => {
 
   it("never reads the extension's letters as tokens", () => {
     expect(dailyNoteName("YYYY-MM-DD.MD", OCT_8)).toBe("2026-10-08.MD");
-    expect(dailyNoteName("DD-MM-YYYY.markdown", OCT_8)).toBe("08-10-2026.markdown");
   });
 
   it("ignores whitespace around the pattern", () => {
@@ -75,68 +72,54 @@ describe("normalizeRelativePath", () => {
 
 describe("dailyNotePath", () => {
   it("joins the folder and the day's file name", () => {
-    expect(dailyNotePath(DEFAULTS, OCT_8)).toBe("daily/2026-10-08.md");
+    expect(dailyNotePath(DEFAULT_SETTINGS, OCT_8)).toBe("daily/2026-10-08.md");
   });
 
   it("puts the note at the workspace root for an empty folder", () => {
-    expect(dailyNotePath({ ...DEFAULTS, folder: "" }, OCT_8)).toBe("2026-10-08.md");
+    expect(dailyNotePath({ ...DEFAULT_SETTINGS, folder: "" }, OCT_8)).toBe("2026-10-08.md");
   });
 
   it("lets the pattern nest notes in dated folders", () => {
-    const settings = { folder: "journal/", filenamePattern: "YYYY/MM/DD.md" };
+    const settings = { ...DEFAULT_SETTINGS, folder: "journal/", filenamePattern: "YYYY/MM/DD.md" };
     expect(dailyNotePath(settings, OCT_8)).toBe("journal/2026/10/08.md");
-  });
-});
-
-describe("normalizeDailyNotes", () => {
-  it("stores forward-slash paths and a trimmed pattern", () => {
-    const stored = normalizeDailyNotes({
-      folder: "\\journal\\",
-      filenamePattern: " YYYY-MM-DD.md ",
-      template: "templates\\daily.md",
-    });
-    expect(stored).toEqual({
-      folder: "journal",
-      filenamePattern: "YYYY-MM-DD.md",
-      template: "templates/daily.md",
-    });
-  });
-
-  it("drops a blank template", () => {
-    expect(normalizeDailyNotes({ ...DEFAULTS, template: "  " }).template).toBeUndefined();
-    expect(normalizeDailyNotes(DEFAULTS).template).toBeUndefined();
   });
 });
 
 describe("dailyNotesProblem", () => {
   it("accepts the defaults and a template inside the workspace", () => {
-    expect(dailyNotesProblem(DEFAULTS, OCT_8)).toBeNull();
-    expect(dailyNotesProblem({ ...DEFAULTS, template: "templates/daily.md" }, OCT_8)).toBeNull();
+    expect(dailyNotesProblem(DEFAULT_SETTINGS, OCT_8)).toBeNull();
+    const withTemplate = { ...DEFAULT_SETTINGS, template: "templates/daily.md" };
+    expect(dailyNotesProblem(withTemplate, OCT_8)).toBeNull();
   });
 
   it("requires a file name pattern", () => {
-    expect(dailyNotesProblem({ ...DEFAULTS, filenamePattern: "  " }, OCT_8)).toBe(
+    expect(dailyNotesProblem({ ...DEFAULT_SETTINGS, filenamePattern: "  " }, OCT_8)).toBe(
       "patternRequired",
     );
   });
 
   it.each([
-    ["a folder", { ...DEFAULTS, folder: "../outside" }],
-    ["a pattern", { ...DEFAULTS, filenamePattern: "../YYYY-MM-DD.md" }],
-    ["a template", { ...DEFAULTS, template: "templates/../../secret.md" }],
+    ["a folder", { ...DEFAULT_SETTINGS, folder: "../outside" }],
+    ["a pattern", { ...DEFAULT_SETTINGS, filenamePattern: "../YYYY-MM-DD.md" }],
+    ["a template", { ...DEFAULT_SETTINGS, template: "templates/../../secret.md" }],
   ])("refuses %s that climbs out of the workspace", (_name, settings) => {
     expect(dailyNotesProblem(settings, OCT_8)).toBe("invalidPath");
   });
 
   it("refuses characters a file name cannot have on every platform", () => {
-    expect(dailyNotesProblem({ ...DEFAULTS, folder: "C:\\notes" }, OCT_8)).toBe("invalidPath");
-    expect(dailyNotesProblem({ ...DEFAULTS, filenamePattern: "YYYY?.md" }, OCT_8)).toBe(
+    expect(dailyNotesProblem({ ...DEFAULT_SETTINGS, folder: "C:\\notes" }, OCT_8)).toBe(
       "invalidPath",
     );
-    expect(dailyNotesProblem({ ...DEFAULTS, template: "what*.md" }, OCT_8)).toBe("invalidPath");
+    expect(dailyNotesProblem({ ...DEFAULT_SETTINGS, filenamePattern: "YYYY?.md" }, OCT_8)).toBe(
+      "invalidPath",
+    );
+    expect(dailyNotesProblem({ ...DEFAULT_SETTINGS, template: "what*.md" }, OCT_8)).toBe(
+      "invalidPath",
+    );
   });
 
   it("allows dots that are not a parent segment", () => {
-    expect(dailyNotesProblem({ ...DEFAULTS, filenamePattern: "YYYY..MM.md" }, OCT_8)).toBeNull();
+    const settings = { ...DEFAULT_SETTINGS, filenamePattern: "YYYY..MM.md" };
+    expect(dailyNotesProblem(settings, OCT_8)).toBeNull();
   });
 });

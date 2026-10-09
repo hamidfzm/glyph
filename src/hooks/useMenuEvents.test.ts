@@ -9,7 +9,6 @@ function noopHandlers(overrides: Partial<MenuEventHandlers> = {}): MenuEventHand
     openFile: vi.fn(),
     openFolder: vi.fn(),
     newWorkspace: vi.fn(),
-    openDailyNote: vi.fn(),
     openGraph: vi.fn(),
     save: vi.fn(),
     toggleAutoSave: vi.fn(),
@@ -58,7 +57,6 @@ describe("useMenuEvents", () => {
         "menu-open-file",
         "menu-open-folder",
         "menu-new-workspace",
-        "menu-open-daily-note",
         "menu-open-graph",
         "menu-save",
         "menu-toggle-auto-save",
@@ -103,9 +101,6 @@ describe("useMenuEvents", () => {
 
     captured["menu-open-file"]?.({ payload: undefined });
     expect(handlers.openFile).toHaveBeenCalled();
-
-    captured["menu-open-daily-note"]?.({ payload: undefined });
-    expect(handlers.openDailyNote).toHaveBeenCalled();
 
     captured["menu-ai-action"]?.({ payload: "summarize" });
     expect(handlers.aiAction).toHaveBeenCalledWith("summarize");

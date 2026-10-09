@@ -11,11 +11,6 @@
     "indexIncompleteDepth": "工作区索引不完整：嵌套超过 {{limit}} 层的文件夹未被索引，因此文件列表、图谱、反向链接和维基链接可能缺少结果。",
     "relinkFailed": "更新链接在 \"{{name}}\" 处停止，部分链接仍指向旧名称或旧位置。"
   },
-  "dailyNote": {
-    "failed": "无法打开今日笔记：{{error}}",
-    "patternRequired": "每日笔记没有设置文件名模式。请在工作区设置中设置。",
-    "invalidPath": "每日笔记的文件夹、文件名模式或模板不是有效路径。请在工作区设置中修正。"
-  },
   "confirmDelete": {
     "message": "删除 \"{{name}}\"？此操作无法撤销。",
     "title": "删除"

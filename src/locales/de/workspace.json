@@ -11,11 +11,6 @@
     "indexIncompleteDepth": "Der Arbeitsbereich-Index ist unvollständig: Ordner mit mehr als {{limit}} Verschachtelungsebenen wurden nicht indiziert, daher können Dateiliste, Graph, Rückverweise und Wikilinks unvollständig sein.",
     "relinkFailed": "Das Aktualisieren der Links stoppte bei \"{{name}}\". Einige Links zeigen noch auf den alten Namen oder Ort."
   },
-  "dailyNote": {
-    "failed": "Die heutige Notiz konnte nicht geöffnet werden: {{error}}",
-    "patternRequired": "Für tägliche Notizen ist kein Dateinamenmuster festgelegt. Lege eines in den Arbeitsbereich-Einstellungen fest.",
-    "invalidPath": "Ordner, Dateinamenmuster oder Vorlage der täglichen Notizen ergeben keinen gültigen Pfad. Korrigiere das in den Arbeitsbereich-Einstellungen."
-  },
   "confirmDelete": {
     "message": "\"{{name}}\" löschen? Das kann nicht rückgängig gemacht werden.",
     "title": "Löschen"

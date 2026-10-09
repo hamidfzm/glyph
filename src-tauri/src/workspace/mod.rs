@@ -3,8 +3,8 @@
 //!
 //! - [`config`] owns the `.glyph/config.json` (committed settings: sync,
 //!   the source of truth that replaces the in-memory `sync::SyncState`
-//!   map, and daily notes) and `.glyph/state.json` (git-ignored volatile
-//!   last-opened file).
+//!   map, and what plugins keep per workspace) and `.glyph/state.json`
+//!   (git-ignored volatile last-opened file).
 //! - [`paths`] normalizes stored paths to workspace-relative forward slashes.
 //! - [`resolve`] implements the "one folder = one non-nested git repo"
 //!   guard (#262).
