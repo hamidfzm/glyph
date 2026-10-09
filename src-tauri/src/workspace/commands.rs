@@ -7,9 +7,13 @@
 use std::path::Path;
 use tauri::State;
 
+use crate::commands::plugins::is_well_formed_id;
 use crate::grants::GrantRegistry;
 
-use super::config::{read_config, read_state, write_state};
+use super::config::{
+    load_plugin_settings, read_config, read_state, store_plugin_settings, write_state,
+    PluginSettings,
+};
 use super::paths::{from_workspace_relative, to_workspace_relative};
 use super::resolve::{resolve_workspace, WorkspaceResolution};
 
@@ -48,8 +52,8 @@ pub fn workspace_get_last_file(
 /// No-op for a plain folder that hasn't been turned into a workspace yet
 /// (no `.glyph/config.json`): we never materialize `.glyph/` just because the
 /// user browsed a file. The directory only gains Glyph state once it has been
-/// explicitly enabled (e.g. by configuring Cloud Sync), which is what writes
-/// `config.json` in the first place.
+/// explicitly enabled (by configuring Cloud Sync, or by a plugin saving
+/// settings for it), which is what writes `config.json` in the first place.
 #[tauri::command]
 pub fn workspace_set_last_file(
     workspace_root: String,
@@ -65,6 +69,49 @@ pub fn workspace_set_last_file(
     let mut state = read_state(root)?;
     state.last_file = Some(rel);
     write_state(root, &state)
+}
+
+/// The workspace commits `config.json`, so one plugin cannot bloat it.
+const MAX_PLUGIN_SETTINGS_BYTES: usize = 64 * 1024;
+
+fn ensure_plugin_id(plugin_id: &str) -> Result<(), String> {
+    if is_well_formed_id(plugin_id) {
+        Ok(())
+    } else {
+        Err(format!("invalid plugin id \"{plugin_id}\""))
+    }
+}
+
+/// What `plugin_id` keeps for this workspace; empty when it has saved nothing.
+#[tauri::command]
+pub fn workspace_get_plugin_settings(
+    workspace_root: String,
+    plugin_id: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<PluginSettings, String> {
+    grants.ensure_workspace(&workspace_root)?;
+    ensure_plugin_id(&plugin_id)?;
+    load_plugin_settings(Path::new(&workspace_root), &plugin_id)
+}
+
+/// Replace what `plugin_id` keeps for this workspace in `.glyph/config.json`.
+/// The values are the plugin's own: nothing here treats them as paths.
+#[tauri::command]
+pub fn workspace_set_plugin_settings(
+    workspace_root: String,
+    plugin_id: String,
+    settings: PluginSettings,
+    grants: State<'_, GrantRegistry>,
+) -> Result<(), String> {
+    grants.ensure_workspace(&workspace_root)?;
+    ensure_plugin_id(&plugin_id)?;
+    let size = serde_json::to_string(&settings).map_or(usize::MAX, |json| json.len());
+    if size > MAX_PLUGIN_SETTINGS_BYTES {
+        return Err(format!(
+            "plugin settings are limited to {MAX_PLUGIN_SETTINGS_BYTES} bytes"
+        ));
+    }
+    store_plugin_settings(Path::new(&workspace_root), &plugin_id, settings)
 }
 
 #[cfg(test)]
@@ -169,6 +216,137 @@ mod tests {
             app.state::<GrantRegistry>(),
         );
         assert!(write.is_err());
+    }
+
+    const PLUGIN: &str = "glyph.core.daily-notes";
+
+    fn plugin_settings(folder: &str) -> PluginSettings {
+        let mut settings = PluginSettings::new();
+        settings.insert("folder".into(), folder.into());
+        settings
+    }
+
+    // Shadow the commands so the test bodies run with `root` granted.
+    fn workspace_get_plugin_settings(
+        root: &Path,
+        plugin_id: &str,
+    ) -> Result<PluginSettings, String> {
+        let root = root.to_string_lossy().to_string();
+        let app = app_with_root(&root);
+        super::workspace_get_plugin_settings(root, plugin_id.into(), app.state::<GrantRegistry>())
+    }
+
+    fn workspace_set_plugin_settings(
+        root: &Path,
+        plugin_id: &str,
+        settings: PluginSettings,
+    ) -> Result<(), String> {
+        let root = root.to_string_lossy().to_string();
+        let app = app_with_root(&root);
+        super::workspace_set_plugin_settings(
+            root,
+            plugin_id.into(),
+            settings,
+            app.state::<GrantRegistry>(),
+        )
+    }
+
+    #[test]
+    fn plugin_settings_round_trip_through_the_commands() {
+        let tmp = TempDir::new().unwrap();
+        assert!(workspace_get_plugin_settings(tmp.path(), PLUGIN)
+            .unwrap()
+            .is_empty());
+
+        workspace_set_plugin_settings(tmp.path(), PLUGIN, plugin_settings("journal")).unwrap();
+
+        assert_eq!(
+            workspace_get_plugin_settings(tmp.path(), PLUGIN).unwrap(),
+            plugin_settings("journal")
+        );
+        // Another plugin does not see them.
+        assert!(workspace_get_plugin_settings(tmp.path(), "someone.else")
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn plugin_settings_commands_require_a_granted_workspace() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().to_string_lossy().to_string();
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+
+        let read = super::workspace_get_plugin_settings(
+            root.clone(),
+            PLUGIN.into(),
+            app.state::<GrantRegistry>(),
+        );
+        assert!(read.is_err());
+        let write = super::workspace_set_plugin_settings(
+            root,
+            PLUGIN.into(),
+            plugin_settings("journal"),
+            app.state::<GrantRegistry>(),
+        );
+        assert!(write.is_err());
+        assert!(!tmp.path().join(".glyph").exists());
+    }
+
+    // The id becomes a key in a file the workspace commits.
+    #[test]
+    fn plugin_settings_refuse_a_malformed_plugin_id() {
+        let tmp = TempDir::new().unwrap();
+        for id in ["", ".hidden", "a/b", "a b", "a\"b"] {
+            assert!(
+                workspace_get_plugin_settings(tmp.path(), id).is_err(),
+                "{id}"
+            );
+            let write = workspace_set_plugin_settings(tmp.path(), id, plugin_settings("x"));
+            assert!(write.is_err(), "{id}");
+        }
+        assert!(!tmp.path().join(".glyph").exists());
+    }
+
+    #[test]
+    fn plugin_settings_over_the_size_cap_are_refused() {
+        let tmp = TempDir::new().unwrap();
+        // The JSON adds the key, quotes, and braces around the value.
+        let overhead = r#"{"folder":""}"#.len();
+        let at_cap = plugin_settings(&"x".repeat(MAX_PLUGIN_SETTINGS_BYTES - overhead));
+        let over_cap = plugin_settings(&"x".repeat(MAX_PLUGIN_SETTINGS_BYTES - overhead + 1));
+
+        workspace_set_plugin_settings(tmp.path(), PLUGIN, at_cap.clone()).unwrap();
+        let err = workspace_set_plugin_settings(tmp.path(), PLUGIN, over_cap).unwrap_err();
+
+        assert!(err.contains("limited to"), "{err}");
+        assert_eq!(
+            workspace_get_plugin_settings(tmp.path(), PLUGIN).unwrap(),
+            at_cap
+        );
+    }
+
+    // The workspace is granted, and its `.glyph` still leads out of it.
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_glyph_folder_gets_nothing_read_or_written_through_the_commands() {
+        let ws = TempDir::new().unwrap();
+        let elsewhere = TempDir::new().unwrap();
+        std::fs::write(elsewhere.path().join("config.json"), "{}").unwrap();
+        std::os::unix::fs::symlink(elsewhere.path(), ws.path().join(".glyph")).unwrap();
+        let note = ws.path().join("a.md");
+        std::fs::write(&note, "# hi").unwrap();
+        let root = ws.path().to_string_lossy().to_string();
+
+        assert!(workspace_get_plugin_settings(ws.path(), PLUGIN).is_err());
+        assert!(workspace_set_plugin_settings(ws.path(), PLUGIN, plugin_settings("x")).is_err());
+        assert!(workspace_get_last_file(root.clone()).is_err());
+        assert!(workspace_set_last_file(root, note.to_string_lossy().to_string()).is_err());
+
+        let theirs = std::fs::read_to_string(elsewhere.path().join("config.json")).unwrap();
+        assert_eq!(theirs, "{}");
+        assert!(!elsewhere.path().join("state.json").exists());
+        assert!(!elsewhere.path().join(".gitignore").exists());
     }
 
     #[test]

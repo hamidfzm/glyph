@@ -13,6 +13,7 @@ export interface PluginsContextValue {
   sidebarPanels: PluginHost["sidebarPanels"];
   fileTreeFilters: PluginHost["fileTreeFilters"];
   settingsPanels: PluginHost["settingsPanels"];
+  workspaceSettingsPanels: PluginHost["workspaceSettingsPanels"];
   styles: PluginHost["styles"];
   exporters: PluginHost["exporters"];
   siteThemes: PluginHost["siteThemes"];

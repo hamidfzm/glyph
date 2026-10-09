@@ -360,6 +360,7 @@ pub fn build_menu<R: Runtime>(
         export_menu,
         plugin_export: PluginMenuSection::default(),
         plugin_view: PluginMenuSection::default(),
+        plugin_file: PluginMenuSection::default(),
     };
 
     Ok((menu, refs))

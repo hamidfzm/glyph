@@ -5,7 +5,7 @@
 // accelerators (which the Rust side rebuilds when a binding changes). `CmdOrCtrl`
 // resolves to Cmd on macOS and Ctrl elsewhere.
 
-export type CommandCategory = "File" | "Edit" | "View" | "Application";
+export type CommandCategory = "File" | "Edit" | "View" | "Application" | "Plugins";
 
 export interface BindableCommand {
   /** Stable id; for native-menu commands this equals the Rust menu item id. */
