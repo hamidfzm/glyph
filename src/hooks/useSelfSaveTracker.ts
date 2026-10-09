@@ -5,18 +5,32 @@ import { useCallback, useRef } from "react";
 // content into the editor would dismiss any active autocomplete popup.
 const SELF_SAVE_GRACE_MS = 1500;
 
-/** Remembers when each path was last written by the app itself. */
-export function useSelfSaveTracker() {
-  const times = useRef<Map<string, number>>(new Map());
+interface SelfSaves {
+  lastAt: number;
+  count: number;
+}
 
-  const markSelfSave = useCallback((path: string) => {
-    times.current.set(path, Date.now());
-  }, []);
+/**
+ * Remembers when each path was last written by the app itself, and how often.
+ * Every write to an open document is marked here: a disk reload compares the
+ * count to tell that a save overtook its read.
+ */
+export function useSelfSaveTracker() {
+  const saves = useRef<Map<string, SelfSaves>>(new Map());
+
+  const selfSaveCount = useCallback((path: string) => saves.current.get(path)?.count ?? 0, []);
+
+  const markSelfSave = useCallback(
+    (path: string) => {
+      saves.current.set(path, { lastAt: Date.now(), count: selfSaveCount(path) + 1 });
+    },
+    [selfSaveCount],
+  );
 
   const isRecentSelfSave = useCallback((path: string) => {
-    const last = times.current.get(path);
-    return last !== undefined && Date.now() - last < SELF_SAVE_GRACE_MS;
+    const last = saves.current.get(path);
+    return last !== undefined && Date.now() - last.lastAt < SELF_SAVE_GRACE_MS;
   }, []);
 
-  return { markSelfSave, isRecentSelfSave };
+  return { markSelfSave, isRecentSelfSave, selfSaveCount };
 }

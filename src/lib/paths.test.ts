@@ -50,6 +50,12 @@ describe("stem", () => {
     expect(stem("archive.tar.gz")).toBe("archive.tar");
   });
 
+  it("keeps the dots of the name itself", () => {
+    // rename_path takes this stem, committed unchanged, for the name the file has.
+    expect(stem("Trip v1.2.md")).toBe("Trip v1.2");
+    expect(stem("Meeting at 5 p.m..md")).toBe("Meeting at 5 p.m.");
+  });
+
   it("returns a name without an extension unchanged", () => {
     expect(stem("Folder")).toBe("Folder");
   });

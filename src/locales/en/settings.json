@@ -395,6 +395,8 @@
       "registered": "Glyph is now your default Markdown app.",
       "openedSettings": "Opened Default Apps settings. Choose Glyph for Markdown files.",
       "guidance": "In Finder, right-click a Markdown file, choose Get Info, set Open With to Glyph, then Change All.",
+      "sandboxed": "This Glyph install is sandboxed (Flatpak or Snap) and can't change your default apps. In your file manager, right-click a Markdown file, choose Open With, and set Glyph as the default.",
+      "noDesktopEntry": "Glyph couldn't find its application entry on this system (an AppImage doesn't install one), so it can't set itself as the default. Install Glyph from a package and try again. If you added the AppImage to your application menu, choose Glyph from your file manager's Open With menu instead.",
       "error": "Couldn't set the default app. Set it from your system settings instead."
     }
   }
