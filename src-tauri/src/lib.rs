@@ -9,6 +9,7 @@ mod data_dir;
 mod extensions;
 mod grants;
 mod image;
+mod launch_args;
 mod markdown;
 // `glyph mcp`, served before any Tauri builder exists.
 #[cfg(desktop)]
@@ -52,40 +53,36 @@ pub use notebook::{is_notebook_file, is_supported_file};
 
 pub const APP_NAME: &str = "glyph";
 
-/// Stash a backend-observed open into the `InitialFile` / `InitialFolder`
-/// managed state, the startup safety net: the routed emit is lost when it fires
-/// before the target webview has attached its `open-file` / `open-folder`
-/// listeners, but the frontend's mount-time `get_initial_file` /
-/// `get_initial_folder` query reads (and consumes) the stash, so the open
-/// survives either way.
-pub(crate) fn stash_initial_open<R: tauri::Runtime>(
+/// Whether this build registers the single-instance plugin: the condition
+/// [`make_app_builder`] is gated on.
+#[cfg(desktop)]
+const FORWARDS_LAUNCHES: bool = cfg!(all(
+    not(debug_assertions),
+    any(target_os = "linux", target_os = "windows")
+));
+
+/// Open what a launch named, the same way on every platform: a cold start, a
+/// second instance and a macOS `Opened` event all come through here. Each
+/// supported path opens as if it had been launched on its own, in the order
+/// given (see [`windows::route_opens`]); each skipped one is reported and
+/// never stops the rest. An open for a window whose frontend is not listening
+/// yet waits in that window's queue.
+pub(crate) fn open_launch<R: tauri::Runtime>(
     app_handle: &tauri::AppHandle<R>,
-    kind: windows::OpenKind,
-    path: &str,
+    launch: cli::LaunchOpens,
 ) {
-    match kind {
-        windows::OpenKind::Folder => {
-            if let Some(state) = app_handle.try_state::<commands::InitialFolder>() {
-                if let Ok(mut slot) = state.0.lock() {
-                    *slot = Some(path.to_string());
-                }
-            }
-        }
-        windows::OpenKind::File => {
-            if let Some(state) = app_handle.try_state::<commands::InitialFile>() {
-                if let Ok(mut slot) = state.0.lock() {
-                    *slot = Some(path.to_string());
-                }
-            }
-        }
+    for skipped in &launch.skipped {
+        eprintln!("{skipped}");
     }
+    let Some(registry) = app_handle.try_state::<windows::WindowRegistry>() else {
+        return;
+    };
+    let current = windows_runtime::current_window_label(app_handle);
+    windows_runtime::open_all_in_app(app_handle, &registry, launch.opens, &current);
 }
 
-/// Handle a second-instance launch: refocus the main window and forward the
-/// file/folder argument (if any) to the frontend via the same `open-file` /
-/// `open-folder` events used by drag-and-drop and macOS RunEvent::Opened.
-/// The path is also stashed via [`stash_initial_open`] so an open that fires
-/// before the webview mounts is not lost.
+/// Handle a second-instance launch: refocus the current window and open every
+/// path the launch named in the running app.
 ///
 /// Generic over Tauri's runtime so we can drive it with `tauri::test::MockRuntime`
 /// in unit tests without a real window manager.
@@ -99,25 +96,13 @@ pub fn handle_second_instance<R: tauri::Runtime>(
     let current = windows_runtime::current_window_label(app_handle);
     windows_runtime::focus_window(app_handle, &current);
 
-    if let Some(event) = cli::second_instance_event(&argv, &std::path::PathBuf::from(&cwd_str)) {
-        let kind = if event.event_name == "open-folder" {
-            windows::OpenKind::Folder
-        } else {
-            windows::OpenKind::File
-        };
-        stash_initial_open(app_handle, kind, &event.path);
-        if let Some(registry) = app_handle.try_state::<windows::WindowRegistry>() {
-            windows_runtime::open_in_app(app_handle, &registry, kind, event.path, &current);
-        }
-    }
+    let launch = cli::launch_opens(&argv, std::path::Path::new(&cwd_str));
+    open_launch(app_handle, launch);
 }
 
-/// Handle a macOS `RunEvent::Opened`: classify each opened path, stash the first
-/// supported one as the initial file/folder, and route it to a window. The stash
-/// is the cold-start safety net — a launch that opens Glyph delivers this event
-/// before the frontend has registered its `open-file` listener, so the emit inside
-/// `open_in_app` is lost; the mount-time `get_initial_file` / `get_initial_folder`
-/// query reads the stash instead. First supported path wins.
+/// Handle a macOS `RunEvent::Opened`, which carries every document selected in
+/// Finder at once: open each supported one, under the same rules as a launch
+/// that names several paths on Linux or Windows.
 ///
 /// `pub` so it is exempt from dead-code warnings on non-macOS targets (same reason
 /// `handle_second_instance` is pub), and testable under `MockRuntime` everywhere.
@@ -125,45 +110,7 @@ pub fn handle_opened_paths<R: tauri::Runtime>(
     app_handle: &tauri::AppHandle<R>,
     paths: Vec<std::path::PathBuf>,
 ) {
-    let Some(registry) = app_handle.try_state::<windows::WindowRegistry>() else {
-        return;
-    };
-    let current = windows_runtime::current_window_label(app_handle);
-    for path in paths {
-        // `cli::classify_resolved_path` is the same classifier the CLI arg block
-        // uses, so the file/folder gating and the non-markdown rejection stay in
-        // lockstep. Routing decides whether to focus, adopt, or spawn a window.
-        match cli::classify_resolved_path(&path) {
-            Some(cli::InitialOpenAction::Folder(p)) => {
-                stash_initial_open(app_handle, windows::OpenKind::Folder, &p);
-                windows_runtime::open_in_app(
-                    app_handle,
-                    &registry,
-                    windows::OpenKind::Folder,
-                    p,
-                    &current,
-                );
-                break;
-            }
-            Some(cli::InitialOpenAction::File(p)) => {
-                stash_initial_open(app_handle, windows::OpenKind::File, &p);
-                windows_runtime::open_in_app(
-                    app_handle,
-                    &registry,
-                    windows::OpenKind::File,
-                    p,
-                    &current,
-                );
-                break;
-            }
-            Some(cli::InitialOpenAction::RejectedUnsupported(p)) => {
-                eprintln!("Refusing to open unsupported file type: {p}");
-                // Keep scanning the list — the user may have selected a mix of
-                // supported and unsupported files.
-            }
-            None => {}
-        }
-    }
+    open_launch(app_handle, cli::opened_paths(&paths));
 }
 
 /// Build a fresh `tauri::Builder` with the platform-conditional single-instance
@@ -199,10 +146,18 @@ pub fn make_app_builder(forward_to_running_instance: bool) -> tauri::Builder<tau
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Read once, here: `std::env::args()` panics on an argument that is not
+    // valid Unicode, which a file manager can hand over as a file name.
+    let launch_args::LaunchArgs { args, dropped } = launch_args::split_unicode(std::env::args_os());
+    for arg in &dropped {
+        eprintln!(
+            "Ignoring an argument that is not valid Unicode: {}",
+            arg.to_string_lossy()
+        );
+    }
+
     // Answered before Tauri (and therefore GTK/WebKit) starts, so packaging
-    // smoke tests can verify an installed binary headlessly. `tauri-plugin-cli`
-    // parses args from inside `setup`, which is far too late for that.
-    let args: Vec<String> = std::env::args().collect();
+    // smoke tests can verify an installed binary headlessly.
     if args.iter().skip(1).any(|a| a == "--version" || a == "-V") {
         println!("glyph {}", env!("CARGO_PKG_VERSION"));
         return;
@@ -245,6 +200,13 @@ pub fn run() {
     #[cfg(not(desktop))]
     let forward_to_running_instance = true;
 
+    // The single-instance plugin reads `std::env::args()` itself when it
+    // forwards a launch, and would panic on what was dropped above.
+    #[cfg(desktop)]
+    if FORWARDS_LAUNCHES && forward_to_running_instance && !dropped.is_empty() {
+        launch_args::relaunch(&args);
+    }
+
     let builder = make_app_builder(forward_to_running_instance)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -256,11 +218,10 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::new().build());
 
-    // CLI args, window-state restoration, the native menu bar, sync, and
-    // telemetry only exist on desktop (see the Cargo.toml target table).
+    // Window-state restoration, the native menu bar, sync, and telemetry only
+    // exist on desktop (see the Cargo.toml target table).
     #[cfg(desktop)]
     let builder = builder
-        .plugin(tauri_plugin_cli::init())
         .plugin(
             // Restore size/position/etc, but NOT visibility: the window is
             // created hidden (see tauri.conf.json) and revealed by the frontend
@@ -280,13 +241,11 @@ pub fn run() {
         .manage(FileWatcherState(Arc::new(Mutex::new(
             std::collections::HashMap::new(),
         ))))
-        .manage(commands::InitialFile(Mutex::new(None)))
-        .manage(commands::InitialFolder(Mutex::new(None)))
         .manage(commands::CliExport(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
         .manage(grants::GrantRegistry::default())
         .manage(vault::VaultStore::default())
-        .setup(setup_app)
+        .setup(move |app| setup_app(app, &args))
         .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
             commands::file::read_file,
@@ -296,7 +255,6 @@ pub fn run() {
             commands::file::copy_file,
             commands::file::prune_export_dir,
             commands::file::get_file_metadata,
-            commands::file::get_initial_file,
             commands::file::allow_document_asset,
             #[cfg(desktop)]
             commands::file::print_document,
@@ -326,7 +284,6 @@ pub fn run() {
             commands::secrets::secret_get,
             commands::secrets::secret_set,
             commands::secrets::secret_has,
-            commands::directory::get_initial_folder,
             commands::directory::read_directory,
             commands::directory::list_markdown_files,
             commands::create::create_note,
@@ -365,6 +322,7 @@ pub fn run() {
             menu_runtime::apply::set_overlay_fullscreen,
             #[cfg(desktop)]
             menu_runtime::apply::set_plugin_menu_items,
+            windows_runtime::take_pending_opens,
             windows_runtime::set_window_workspace,
             windows_runtime::set_window_files,
             windows_runtime::request_open,
@@ -440,34 +398,51 @@ mod tests {
     use tauri::test::{mock_app, MockRuntime};
     use tauri::WebviewWindowBuilder;
 
-    /// A mock app with a "main" window and a managed window registry, so
-    /// `handle_second_instance`'s focus + routing path can run end to end.
+    /// A mock app with a "main" window and the registries a launch runs
+    /// through. The mock window's frontend never mounts, so this is the
+    /// pre-mount case: every open routed to "main" waits in its queue.
     fn routed_app() -> tauri::App<MockRuntime> {
         let app = mock_app_with_main_window();
         app.manage(crate::windows::WindowRegistry::new());
         app.manage(crate::grants::GrantRegistry::default());
-        // The initial-file/folder state that `handle_opened_paths` and
-        // `handle_second_instance` stash into (the pre-mount safety net) so
-        // tests can read the stash back.
-        app.manage(commands::InitialFile(Mutex::new(None)));
-        app.manage(commands::InitialFolder(Mutex::new(None)));
         app
     }
 
-    fn stashed_file(app: &tauri::App<MockRuntime>) -> Option<String> {
-        app.state::<commands::InitialFile>()
-            .0
-            .lock()
-            .unwrap()
-            .clone()
+    /// Drain what launches queued for "main", the way its frontend does once
+    /// its listeners are attached.
+    fn drain_main(app: &tauri::App<MockRuntime>) -> Vec<(windows::OpenKind, PathBuf)> {
+        app.state::<windows::WindowRegistry>()
+            .take_pending("main")
+            .into_iter()
+            .map(|open| (open.kind, PathBuf::from(open.path)))
+            .collect()
     }
 
-    fn stashed_folder(app: &tauri::App<MockRuntime>) -> Option<String> {
-        app.state::<commands::InitialFolder>()
-            .0
-            .lock()
-            .unwrap()
-            .clone()
+    fn second_instance(app: &tauri::App<MockRuntime>, cwd: &std::path::Path, args: &[&str]) {
+        let argv = std::iter::once("glyph")
+            .chain(args.iter().copied())
+            .map(String::from)
+            .collect();
+        handle_second_instance(
+            &app.handle().clone(),
+            argv,
+            cwd.to_string_lossy().to_string(),
+        );
+    }
+
+    /// A launch argument is canonicalized before it is opened.
+    fn file_open(path: &std::path::Path) -> (windows::OpenKind, PathBuf) {
+        (windows::OpenKind::File, path.canonicalize().unwrap())
+    }
+
+    fn folder_open(path: &std::path::Path) -> (windows::OpenKind, PathBuf) {
+        (windows::OpenKind::Folder, path.canonicalize().unwrap())
+    }
+
+    fn can_read(app: &tauri::App<MockRuntime>, path: &std::path::Path) -> bool {
+        app.state::<crate::grants::GrantRegistry>()
+            .ensure_readable(path.to_string_lossy().as_ref())
+            .is_ok()
     }
 
     /// Build a mock app with a "main" webview window so the
@@ -496,89 +471,224 @@ mod tests {
         dir
     }
 
-    // handle_second_instance is thin glue over `cli::second_instance_event`
-    // (classification, tested in cli.rs) and `windows::route_open` (routing,
-    // tested in windows.rs). Its runtime effects (focus / emit_to / window
-    // spawn) can't be observed under MockRuntime, but the stash into
-    // InitialFile / InitialFolder can: it is the safety net for a second
-    // instance that fires before the first instance's webview has attached
-    // its open-file / open-folder listeners, so the emit alone would be lost.
+    // handle_second_instance is thin glue over `cli::launch_opens`
+    // (classification, tested in cli.rs) and `windows::route_opens` (routing,
+    // tested in windows/tests.rs). Its runtime effects (focus / emit_to /
+    // window spawn) can't be observed under MockRuntime, but the queue of a
+    // window that is not listening yet can: it is what carries a launch that
+    // fires before the first instance's webview has attached its open-file /
+    // open-folder listeners, when an emit alone would be lost.
     #[test]
-    fn handle_second_instance_stashes_the_file_for_a_pre_mount_window() {
+    fn a_second_instance_queues_its_file_for_a_window_that_has_not_mounted() {
         let cwd = unique_tmp("hsi_file");
         let file = cwd.join("note.md");
         fs::write(&file, "hi").unwrap();
         let app = routed_app();
-        handle_second_instance(
-            &app.handle().clone(),
-            vec!["glyph".to_string(), "note.md".to_string()],
-            cwd.to_string_lossy().to_string(),
-        );
-        assert_eq!(
-            PathBuf::from(stashed_file(&app).expect("file should be stashed"))
-                .canonicalize()
-                .unwrap(),
-            file.canonicalize().unwrap()
-        );
-        assert_eq!(stashed_folder(&app), None);
+
+        second_instance(&app, &cwd, &["note.md"]);
+
+        assert_eq!(drain_main(&app), vec![file_open(&file)]);
         let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]
-    fn handle_second_instance_stashes_the_folder_for_a_pre_mount_window() {
+    fn a_second_instance_queues_its_folder_and_claims_the_window_for_it() {
         let cwd = unique_tmp("hsi_dir");
         let folder = cwd.join("workspace");
         fs::create_dir_all(&folder).unwrap();
         let app = routed_app();
-        handle_second_instance(
-            &app.handle().clone(),
-            vec!["glyph".to_string(), "workspace".to_string()],
-            cwd.to_string_lossy().to_string(),
-        );
+
+        second_instance(&app, &cwd, &["workspace"]);
+
+        // Claimed before the frontend can report it, so a second folder
+        // launched in the same moments opens a window instead of replacing it.
+        let claimed = folder.canonicalize().unwrap();
         assert_eq!(
-            PathBuf::from(stashed_folder(&app).expect("folder should be stashed"))
-                .canonicalize()
-                .unwrap(),
-            folder.canonicalize().unwrap()
+            app.state::<windows::WindowRegistry>().snapshot().workspaces,
+            vec![(
+                "main".to_string(),
+                Some(claimed.to_string_lossy().to_string())
+            )]
         );
-        assert_eq!(stashed_file(&app), None);
+        assert_eq!(drain_main(&app), vec![folder_open(&folder)]);
         let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]
-    fn handle_second_instance_with_no_path_arg_only_focuses() {
+    fn a_second_instance_opens_every_supported_file_it_names() {
+        // `Exec=glyph %F` with three files selected, handed to a running Glyph.
+        let cwd = unique_tmp("hsi_many");
+        let names = ["a.md", "b.md", "c.md"];
+        for name in names {
+            fs::write(cwd.join(name), "hi").unwrap();
+        }
+        let app = routed_app();
+
+        second_instance(&app, &cwd, &names);
+
+        let expected: Vec<_> = names
+            .iter()
+            .map(|name| file_open(&cwd.join(name)))
+            .collect();
+        assert_eq!(drain_main(&app), expected);
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn an_unsupported_or_missing_path_does_not_stop_the_rest_and_is_never_granted() {
+        let cwd = unique_tmp("hsi_mixed");
+        let text = cwd.join("notes.txt");
+        fs::write(&text, "<script>alert('x')</script>").unwrap();
+        let a = cwd.join("a.md");
+        let b = cwd.join("b.md");
+        fs::write(&a, "hi").unwrap();
+        fs::write(&b, "hi").unwrap();
+        let app = routed_app();
+
+        second_instance(&app, &cwd, &["notes.txt", "a.md", "nope.md", "b.md"]);
+
+        assert_eq!(drain_main(&app), vec![file_open(&a), file_open(&b)]);
+        assert!(can_read(&app, &a) && can_read(&app, &b));
+        assert!(!can_read(&app, &text), "a skipped path must stay denied");
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn a_path_named_twice_in_one_launch_opens_once() {
+        let cwd = unique_tmp("hsi_dupes");
+        let file = cwd.join("note.md");
+        fs::write(&file, "hi").unwrap();
+        let app = routed_app();
+
+        let absolute = file.to_string_lossy();
+        second_instance(&app, &cwd, &["note.md", "./note.md", &*absolute]);
+
+        assert_eq!(drain_main(&app), vec![file_open(&file)]);
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn a_folder_among_files_opens_as_the_workspace_beside_them() {
+        let cwd = unique_tmp("hsi_folder_files");
+        let folder = cwd.join("workspace");
+        fs::create_dir_all(&folder).unwrap();
+        let a = cwd.join("a.md");
+        let b = cwd.join("b.md");
+        fs::write(&a, "hi").unwrap();
+        fs::write(&b, "hi").unwrap();
+        let app = routed_app();
+
+        second_instance(&app, &cwd, &["a.md", "workspace", "b.md"]);
+
+        assert_eq!(
+            drain_main(&app),
+            vec![file_open(&a), folder_open(&folder), file_open(&b)]
+        );
+        let grants = app.state::<crate::grants::GrantRegistry>();
+        assert!(grants
+            .ensure_workspace(folder.to_string_lossy().as_ref())
+            .is_ok());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launches_arriving_before_the_window_mounts_all_survive_in_order() {
+        // The single stash slot kept only the last of these.
+        let cwd = unique_tmp("hsi_two_launches");
+        let a = cwd.join("a.md");
+        let b = cwd.join("b.md");
+        let c = cwd.join("c.md");
+        for file in [&a, &b, &c] {
+            fs::write(file, "hi").unwrap();
+        }
+        let app = routed_app();
+
+        second_instance(&app, &cwd, &["a.md"]);
+        second_instance(&app, &cwd, &["b.md", "c.md"]);
+
+        assert_eq!(
+            drain_main(&app),
+            vec![file_open(&a), file_open(&b), file_open(&c)]
+        );
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn a_launch_after_the_window_is_listening_leaves_nothing_behind() {
+        // Once drained, opens are emitted, not kept: a later mount or reload
+        // asking again must not get an old launch's file back.
+        let cwd = unique_tmp("hsi_live");
+        fs::write(cwd.join("a.md"), "hi").unwrap();
+        fs::write(cwd.join("b.md"), "hi").unwrap();
+        let app = routed_app();
+
+        second_instance(&app, &cwd, &["a.md"]);
+        assert_eq!(drain_main(&app).len(), 1);
+        second_instance(&app, &cwd, &["b.md"]);
+
+        assert!(drain_main(&app).is_empty());
+        // It was still routed: the path is granted for the emitted open.
+        assert!(can_read(&app, &cwd.join("b.md")));
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn a_launch_for_a_listening_window_is_emitted_to_it_in_order() {
+        use tauri::Listener;
+
+        let cwd = unique_tmp("hsi_emit");
+        let names = ["a.md", "b.md", "c.md"];
+        for name in names {
+            fs::write(cwd.join(name), "hi").unwrap();
+        }
+        let app = routed_app();
+        drain_main(&app);
+        let emitted = Arc::new(Mutex::new(Vec::new()));
+        let sink = emitted.clone();
+        app.listen_any("open-file", move |event| {
+            let path: String = serde_json::from_str(event.payload()).unwrap();
+            sink.lock().unwrap().push(PathBuf::from(path));
+        });
+
+        second_instance(&app, &cwd, &names);
+
+        let expected: Vec<_> = names
+            .iter()
+            .map(|name| cwd.join(name).canonicalize().unwrap())
+            .collect();
+        assert_eq!(*emitted.lock().unwrap(), expected);
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn a_second_instance_with_no_path_arg_only_focuses() {
         let cwd = unique_tmp("hsi_noop");
         let app = routed_app();
-        handle_second_instance(
-            &app.handle().clone(),
-            vec!["glyph".to_string(), "--help".to_string()],
-            cwd.to_string_lossy().to_string(),
-        );
-        assert_eq!(stashed_file(&app), None);
-        assert_eq!(stashed_folder(&app), None);
+
+        second_instance(&app, &cwd, &["--help"]);
+
+        assert!(drain_main(&app).is_empty());
         let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]
-    fn handle_second_instance_silently_ignores_unresolvable_paths() {
+    fn a_second_instance_naming_only_unresolvable_paths_opens_nothing() {
         let cwd = unique_tmp("hsi_missing");
         let app = routed_app();
-        handle_second_instance(
-            &app.handle().clone(),
-            vec!["glyph".to_string(), "nope.md".to_string()],
-            cwd.to_string_lossy().to_string(),
-        );
-        assert_eq!(stashed_file(&app), None);
-        assert_eq!(stashed_folder(&app), None);
+
+        second_instance(&app, &cwd, &["nope.md"]);
+
+        assert!(drain_main(&app).is_empty());
         let _ = fs::remove_dir_all(&cwd);
     }
 
     // handle_opened_paths is the macOS file-association entry point. Its window
     // effects (focus / emit / spawn) can't be observed under MockRuntime, but the
-    // cold-start stash into InitialFile / InitialFolder — the actual fix for
-    // clicking a file while Glyph is closed — is managed state we can read back.
+    // queue is: clicking files while Glyph is closed delivers this event before
+    // the frontend is listening, and the queue is what carries them to it. The
+    // OS hands these paths over already resolved, so they are opened as given.
     #[test]
-    fn handle_opened_paths_stashes_a_file_for_cold_start() {
+    fn opened_paths_queue_a_file_for_cold_start() {
         let cwd = unique_tmp("op_file");
         let file = cwd.join("note.md");
         fs::write(&file, "hi").unwrap();
@@ -586,16 +696,12 @@ mod tests {
 
         handle_opened_paths(&app.handle().clone(), vec![file.clone()]);
 
-        assert_eq!(
-            stashed_file(&app).as_deref(),
-            Some(file.to_string_lossy().as_ref())
-        );
-        assert_eq!(stashed_folder(&app), None);
+        assert_eq!(drain_main(&app), vec![(windows::OpenKind::File, file)]);
         let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]
-    fn handle_opened_paths_stashes_a_folder_for_cold_start() {
+    fn opened_paths_queue_a_folder_for_cold_start() {
         let cwd = unique_tmp("op_folder");
         let folder = cwd.join("workspace");
         fs::create_dir_all(&folder).unwrap();
@@ -603,11 +709,43 @@ mod tests {
 
         handle_opened_paths(&app.handle().clone(), vec![folder.clone()]);
 
-        assert_eq!(
-            stashed_folder(&app).as_deref(),
-            Some(folder.to_string_lossy().as_ref())
+        assert_eq!(drain_main(&app), vec![(windows::OpenKind::Folder, folder)]);
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn opened_paths_open_every_supported_document_like_a_multi_file_launch() {
+        // Finder hands every selected document to one event. The platforms
+        // agree: the unsupported one is skipped, the rest all open, in order.
+        let cwd = unique_tmp("op_many");
+        let text = cwd.join("evil.txt");
+        fs::write(&text, "<script>alert('x')</script>").unwrap();
+        let a = cwd.join("a.md");
+        let b = cwd.join("b.md");
+        fs::write(&a, "hi").unwrap();
+        fs::write(&b, "hi").unwrap();
+        let app = routed_app();
+
+        handle_opened_paths(
+            &app.handle().clone(),
+            vec![
+                text.clone(),
+                a.clone(),
+                cwd.join("gone.md"),
+                b.clone(),
+                a.clone(),
+            ],
         );
-        assert_eq!(stashed_file(&app), None);
+
+        assert_eq!(
+            drain_main(&app),
+            vec![
+                (windows::OpenKind::File, a.clone()),
+                (windows::OpenKind::File, b.clone())
+            ]
+        );
+        assert!(can_read(&app, &a) && can_read(&app, &b));
+        assert!(!can_read(&app, &text), "a skipped path must stay denied");
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -640,28 +778,15 @@ mod tests {
     }
 
     #[test]
-    fn handle_opened_paths_ignores_unsupported_files() {
+    fn opened_paths_that_are_unsupported_or_missing_open_nothing() {
         let cwd = unique_tmp("op_txt");
         let file = cwd.join("evil.txt");
         fs::write(&file, "<script>alert('x')</script>").unwrap();
         let app = routed_app();
 
-        handle_opened_paths(&app.handle().clone(), vec![file]);
+        handle_opened_paths(&app.handle().clone(), vec![file, cwd.join("nope.md")]);
 
-        assert_eq!(stashed_file(&app), None);
-        assert_eq!(stashed_folder(&app), None);
-        let _ = fs::remove_dir_all(&cwd);
-    }
-
-    #[test]
-    fn handle_opened_paths_ignores_missing_paths() {
-        let cwd = unique_tmp("op_missing");
-        let app = routed_app();
-
-        handle_opened_paths(&app.handle().clone(), vec![cwd.join("nope.md")]);
-
-        assert_eq!(stashed_file(&app), None);
-        assert_eq!(stashed_folder(&app), None);
+        assert!(drain_main(&app).is_empty());
         let _ = fs::remove_dir_all(&cwd);
     }
 

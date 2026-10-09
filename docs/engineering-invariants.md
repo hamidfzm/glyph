@@ -22,8 +22,8 @@ Empty string is valid loaded document content. `null`/`undefined` represents abs
 
 Older asynchronous work cannot overwrite newer state or mark it complete. Writes to the same path are serialized; completions are revision-guarded.
 
-- Owners: `src/hooks/useDocumentSave.ts` (`writeChains`, revision guards)
-- Evidence: `src/hooks/useTabs.*.test.tsx` stale-completion cases
+- Owners: `src/hooks/useDocumentSave.ts` (`writeChains`, revision guards), `src-tauri/src/windows/pending.rs` (an open request reaches its window exactly once)
+- Evidence: `src/hooks/useTabs.*.test.tsx` stale-completion cases, `src-tauri/src/windows/pending.rs` and `src/hooks/useOpenRequests.test.tsx` handoff cases
 
 ### INV-4: Owners flush before they die
 
@@ -51,7 +51,7 @@ Frontend permission labels and disabled buttons are UX, not security boundaries.
 Truncation, fallback, and partial results are represented explicitly in types and UI. No silent truncation, no fallback that pretends to be the full result.
 
 - Owners: any code path that truncates, samples, or falls back
-- Evidence: tests asserting the partial state is surfaced, not hidden
+- Evidence: tests asserting the partial state is surfaced, not hidden (for a launch naming several paths, `LaunchOpens` in `src-tauri/src/cli.rs`: every supported path opens and every skipped one is reported)
 
 ## Adversarial scenario matrix
 

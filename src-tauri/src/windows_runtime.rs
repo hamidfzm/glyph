@@ -9,7 +9,9 @@
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::grants::{self, GrantRegistry};
-use crate::windows::{route_open, OpenKind, OpenRoute, OpenTarget, PendingOpen, WindowRegistry};
+use crate::windows::{
+    route_open, route_opens, OpenKind, OpenRoute, OpenTarget, PendingOpen, WindowRegistry,
+};
 
 /// Mint the grant for a backend-observed open and mirror it into the
 /// asset-protocol scope; grant failures are ignored (the open surfaces the
@@ -95,6 +97,21 @@ pub fn open_in_app<R: Runtime>(
     );
 }
 
+/// Route and apply every open of one launch, in order (see [`route_opens`]).
+pub fn open_all_in_app<R: Runtime>(
+    app: &AppHandle<R>,
+    registry: &WindowRegistry,
+    opens: Vec<PendingOpen>,
+    current_label: &str,
+) {
+    for open in &opens {
+        grant_open(app, open.kind, &open.path);
+    }
+    for route in route_opens(&opens, &registry.snapshot(), current_label) {
+        apply_route(app, registry, route);
+    }
+}
+
 /// Route and apply an open request against the live window set.
 fn open_with_target<R: Runtime>(
     app: &AppHandle<R>,
@@ -105,13 +122,23 @@ fn open_with_target<R: Runtime>(
     target: OpenTarget,
 ) {
     grant_open(app, kind, &path);
-    match route_open(kind, &path, &registry.snapshot(), current_label, target) {
+    let route = route_open(kind, &path, &registry.snapshot(), current_label, target);
+    apply_route(app, registry, route);
+}
+
+fn apply_route<R: Runtime>(app: &AppHandle<R>, registry: &WindowRegistry, route: OpenRoute) {
+    match route {
         OpenRoute::Focus(label) => focus_window(app, &label),
         OpenRoute::Adopt(label, pending) => {
-            focus_window(app, &label);
-            // emit_to targets just this window; a window's `.emit` would
-            // broadcast to every window in Tauri v2.
-            let _ = app.emit_to(&label, event_name(pending.kind), pending.path);
+            // A window that is not listening yet keeps the open queued until
+            // its frontend drains it on mount. It is also still hidden, and
+            // reveals itself after its first paint, so it is not shown here.
+            if let Some(open) = registry.deliver(&label, pending) {
+                focus_window(app, &label);
+                // emit_to targets just this window; a window's `.emit` would
+                // broadcast to every window in Tauri v2.
+                let _ = app.emit_to(&label, event_name(open.kind), open.path);
+            }
         }
         OpenRoute::NewWindow(pending) => spawn_window(app, registry, pending),
     }
@@ -173,6 +200,18 @@ fn spawn_window<R: Runtime>(app: &AppHandle<R>, registry: &WindowRegistry, pendi
             }
         }
     });
+}
+
+/// The calling window has attached its `open-file` / `open-folder` listeners:
+/// hand over the opens that arrived before it could hear them, and emit to it
+/// directly from now on. Every path in the queue was granted when it was
+/// routed, and a window can only ever drain its own queue.
+#[tauri::command]
+pub fn take_pending_opens<R: Runtime>(
+    window: tauri::WebviewWindow<R>,
+    registry: State<'_, WindowRegistry>,
+) -> Vec<PendingOpen> {
+    registry.take_pending(window.label())
 }
 
 /// Frontend reports the workspace its window now shows (or `None` when cleared),
@@ -537,6 +576,64 @@ mod tests {
             .unwrap_or_default();
         assert!(!main_files.contains(&path));
 
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn file_open(path: &str) -> PendingOpen {
+        PendingOpen {
+            kind: OpenKind::File,
+            path: path.to_string(),
+        }
+    }
+
+    #[test]
+    fn take_pending_opens_hands_a_window_its_own_queue_only() {
+        let (app, window) = app_with_registries();
+        let registry = app.state::<WindowRegistry>();
+        registry.deliver("main", file_open("/a/one.md"));
+        registry.deliver("main", file_open("/a/two.md"));
+        registry.deliver("w1", file_open("/a/other.md"));
+
+        assert_eq!(
+            take_pending_opens(window.clone(), app.state::<WindowRegistry>()),
+            vec![file_open("/a/one.md"), file_open("/a/two.md")]
+        );
+        // Drained, and `main` is listening now: nothing left to hand over.
+        assert!(take_pending_opens(window, app.state::<WindowRegistry>()).is_empty());
+        assert_eq!(registry.take_pending("w1"), vec![file_open("/a/other.md")]);
+    }
+
+    #[test]
+    fn open_all_in_app_queues_a_launch_for_a_window_that_is_not_listening() {
+        let dir = unique_tmp("open_all");
+        let workspace = dir.join("ws");
+        std::fs::create_dir_all(&workspace).unwrap();
+        let note = dir.join("note.md");
+        std::fs::write(&note, "hello").unwrap();
+        let root = workspace.to_string_lossy().to_string();
+        let path = note.to_string_lossy().to_string();
+        let folder_open = PendingOpen {
+            kind: OpenKind::Folder,
+            path: root.clone(),
+        };
+
+        let (app, _window) = app_with_registries();
+        let registry = app.state::<WindowRegistry>();
+        open_all_in_app(
+            app.handle(),
+            &registry,
+            vec![folder_open.clone(), file_open(&path)],
+            "main",
+        );
+
+        // Both were granted as backend-observed opens before being queued.
+        let grants = app.state::<GrantRegistry>();
+        assert!(grants.ensure_workspace(&root).is_ok());
+        assert!(grants.ensure_readable(&path).is_ok());
+        assert_eq!(
+            registry.take_pending("main"),
+            vec![folder_open, file_open(&path)]
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -88,16 +88,5 @@
         "description": "D2 Diagram"
       }
     ]
-  },
-  "plugins": {
-    "cli": {
-      "args": [
-        {
-          "name": "file",
-          "index": 1,
-          "takesValue": true
-        }
-      ]
-    }
   }
 }

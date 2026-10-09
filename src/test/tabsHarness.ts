@@ -35,9 +35,9 @@ export function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): I
     const fn = overrides[cmd];
     if (fn) return fn(cmd, args);
     switch (cmd) {
-      case "get_initial_file":
-      case "get_initial_folder":
-        return null;
+      case "take_pending_opens":
+        // Nothing was launched at this window.
+        return [];
       case "read_file":
         return "FILE BODY";
       case "get_file_metadata":

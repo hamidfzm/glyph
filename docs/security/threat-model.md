@@ -36,9 +36,17 @@ the missing remainder is rejected.
 Grants are minted only from backend-observed events, never from a bare
 webview-supplied path:
 
-- CLI launch arguments (folder, file, the `export` subcommand's `--format` and `--out`, the `serve` subcommand's `--host` and `--port`)
+- CLI launch arguments (every folder and file the launch names, the `export` subcommand's `--format` and `--out`, the `serve` subcommand's `--host` and `--port`)
 - Drag-and-drop onto a window (the OS event carries the path)
-- macOS `RunEvent::Opened` and second-instance launches
+- macOS `RunEvent::Opened` and second-instance launches, under the same
+  per-path rules as a cold start
+
+A launch can name several paths (a file manager expands `%F` to every selected
+file). Each one is classified on its own before anything is granted: a path
+that is unsupported, missing, or not valid Unicode is reported on stderr and
+skipped, never granted, and never stops the paths after it. The backend reads
+the arguments from the process itself (`launch_args.rs`, `cli.rs`), so no
+plugin and no renderer-callable command parses them.
 - Native pick dialogs run in Rust (`src-tauri/src/commands/pick.rs`): Open
   Folder, Open File(s), export Save As, website export destination
 - Session restore: at startup the backend reads the persisted settings store
@@ -58,7 +66,10 @@ re-grants it recursively, so a subfolder or an exact-file grant may not pass),
 ever re-scope a path the session already holds; a new window never widens
 the process's filesystem reach. `set_window_workspace`, which a window calls
 to report the workspace it shows, updates routing state only and mints
-nothing.
+nothing. `take_pending_opens`, which a window calls once its open listeners
+are attached, takes no path at all: it hands back the opens the backend
+already granted and queued for that window, and a window can drain only its
+own queue.
 
 Workspace and file grants are also mirrored into Tauri's runtime
 asset-protocol scope so `asset://` image URLs resolve only inside granted
@@ -241,6 +252,9 @@ it, and `http:default` is scoped to the marketplace hosts.
   `settings.json`, `plugins.json`, and `workspace-sessions.json` in
   `setup.rs`; the renderer attaches with `getStore` and holds the per-key
   commands only.
+- **Desktop.** `capabilities/desktop.json` holds `window-state:default` alone.
+  There is no CLI plugin: nothing in the renderer needs the launch arguments,
+  so there is no command that returns them.
 
 ## MCP server (`glyph mcp`)
 
