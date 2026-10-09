@@ -62,6 +62,10 @@
     "backlinks": {
       "name": "Rückverweise",
       "description": "Listet in der Dateien-Seitenleiste die Notizen auf, die auf die geöffnete verweisen."
+    },
+    "dailyNotes": {
+      "name": "Tägliche Notizen",
+      "description": "Die heutige Notiz über das Menü Datei, die Palette oder ein Tastenkürzel öffnen oder anlegen. Ordner, Dateinamenmuster und Vorlage werden pro Arbeitsbereich in den Arbeitsbereich-Einstellungen festgelegt."
     }
   }
 }

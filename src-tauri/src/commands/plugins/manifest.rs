@@ -100,6 +100,16 @@ pub(crate) fn required_str(value: &serde_json::Value, key: &str) -> Result<Strin
 /// and host slots by id, so no installed plugin may take one.
 const CORE_PLUGIN_ID_PREFIX: &str = "glyph.core.";
 
+/// The characters any plugin id may use, core ones included: safe as a folder
+/// name on every filesystem and as a key in the files the app writes.
+pub(crate) fn is_well_formed_id(id: &str) -> bool {
+    !id.is_empty()
+        && !id.starts_with('.')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+}
+
 /// The plugin id doubles as its folder name, so restrict it to characters that
 /// are safe on every filesystem and can never traverse out of the plugins dir.
 pub(crate) fn validate_id(id: &str) -> Result<(), String> {
@@ -108,12 +118,7 @@ pub(crate) fn validate_id(id: &str) -> Result<(), String> {
             "invalid plugin id \"{id}\": the \"{CORE_PLUGIN_ID_PREFIX}\" prefix is reserved for core plugins"
         ));
     }
-    let ok = !id.is_empty()
-        && !id.starts_with('.')
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
-    if ok {
+    if is_well_formed_id(id) {
         Ok(())
     } else {
         Err(format!(

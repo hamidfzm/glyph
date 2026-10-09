@@ -9,7 +9,9 @@ use tauri::{
     Manager, Runtime, State,
 };
 
-use super::{MenuItemRefs, MenuLabels, MenuRegistry, MenuStateFlags, PluginMenuSection};
+use super::{
+    MenuItemRefs, MenuLabels, MenuRegistry, MenuStateFlags, PluginMenuItem, PluginMenuSection,
+};
 use crate::menu::{
     listable_plugin_menu_entries, may_write_shared_menu_state, parse_menu_id, plugin_menu_item_id,
     PluginMenuEntry,
@@ -136,8 +138,16 @@ pub fn apply_menu_state<R: Runtime>(
     refs.ai_read_aloud
         .set_enabled(flags.tts_available && flags.has_content)
         .map_err(stringify)?;
-    for item in &refs.plugin_export.items {
-        item.set_enabled(flags.has_file).map_err(stringify)?;
+    for entry in &refs.plugin_export.items {
+        entry.item.set_enabled(flags.has_file).map_err(stringify)?;
+    }
+    for section in [&refs.plugin_file, &refs.plugin_view] {
+        for entry in section.items.iter().filter(|e| e.requires_workspace) {
+            entry
+                .item
+                .set_enabled(flags.has_workspace)
+                .map_err(stringify)?;
+        }
     }
     Ok(())
 }
@@ -150,7 +160,7 @@ fn replace_plugin_items<R: Runtime>(
     section: &mut PluginMenuSection<R>,
     menu: &str,
     entries: &[PluginMenuEntry],
-    enabled: bool,
+    is_enabled: impl Fn(&PluginMenuEntry) -> bool,
 ) -> Result<(), String> {
     let s = |e: tauri::Error| e.to_string();
     // The handles are forgotten even when a native removal fails, so one
@@ -158,8 +168,8 @@ fn replace_plugin_items<R: Runtime>(
     if let Some(separator) = section.separator.take() {
         let _ = submenu.remove(&separator);
     }
-    for item in std::mem::take(&mut section.items) {
-        let _ = submenu.remove(&item);
+    for entry in std::mem::take(&mut section.items) {
+        let _ = submenu.remove(&entry.item);
     }
     if entries.is_empty() {
         return Ok(());
@@ -182,34 +192,55 @@ fn replace_plugin_items<R: Runtime>(
             Some(owner) => format!("{owner}:{base}"),
             None => base,
         };
-        // A lone `&` would mark a mnemonic instead of showing.
-        let item = MenuItemBuilder::with_id(id, entry.label.replace('&', "&&"))
-            .enabled(enabled)
-            .build(window)
-            .map_err(s)?;
-        submenu.insert(&item, start + 1 + offset).map_err(s)?;
-        section.items.push(item);
+        let add = |accelerator: Option<&String>| -> tauri::Result<MenuItem<R>> {
+            // A lone `&` would mark a mnemonic instead of showing.
+            let builder = MenuItemBuilder::with_id(&id, entry.label.replace('&', "&&"))
+                .enabled(is_enabled(entry));
+            let item = match accelerator {
+                Some(accelerator) => builder.accelerator(accelerator).build(window),
+                None => builder.build(window),
+            }?;
+            submenu.insert(&item, start + 1 + offset)?;
+            Ok(item)
+        };
+        // An accelerator the platform refuses costs the item its shortcut, not
+        // its place in the menu. GTK refuses on insert, not on build.
+        let item = match add(entry.accelerator.as_ref()) {
+            Err(_) if entry.accelerator.is_some() => add(None),
+            added => added,
+        }
+        .map_err(s)?;
+        section.items.push(PluginMenuItem {
+            item,
+            requires_workspace: entry.requires_workspace,
+        });
     }
     Ok(())
 }
 
 /// Plugin exporters go after the built-in formats in File > Export, and
-/// `menu: "view"` commands after Open Graph in View. Picking one emits
-/// `menu-plugin-item` with its menu and key. Returns how many entries were
-/// refused (see `listable_plugin_menu_entries`); the rest are listed. Fails
-/// when the window has no menu, as it does mid-teardown.
+/// plugin commands after New Workspace in File or after Open Graph in View, as
+/// their `menu` names. Picking one emits `menu-plugin-item` with its menu and
+/// key. Returns how many entries were refused (see
+/// `listable_plugin_menu_entries`); the rest are listed. Fails when the window
+/// has no menu, as it does mid-teardown.
 #[tauri::command]
 pub fn set_plugin_menu_items(
     window: tauri::WebviewWindow,
     registry: State<MenuRegistry>,
     export: Vec<PluginMenuEntry>,
     view: Vec<PluginMenuEntry>,
+    file: Vec<PluginMenuEntry>,
 ) -> Result<usize, String> {
     let (export, export_refused) = listable_plugin_menu_entries(export);
     let (view, view_refused) = listable_plugin_menu_entries(view);
+    let (file, file_refused) = listable_plugin_menu_entries(file);
     registry
         .with_refs_mut(window.label(), |refs| {
-            let exports_enabled = refs.export_pdf.is_enabled().map_err(|e| e.to_string())?;
+            let s = |e: tauri::Error| e.to_string();
+            // The built-in items already carry the state the frontend last pushed.
+            let exports_enabled = refs.export_pdf.is_enabled().map_err(s)?;
+            let has_workspace = refs.close_workspace.is_enabled().map_err(s)?;
             replace_plugin_items(
                 &window,
                 &refs.export_menu,
@@ -217,7 +248,7 @@ pub fn set_plugin_menu_items(
                 &mut refs.plugin_export,
                 "export",
                 &export,
-                exports_enabled,
+                |entry| entry.starts_enabled(exports_enabled, has_workspace),
             )?;
             replace_plugin_items(
                 &window,
@@ -226,13 +257,22 @@ pub fn set_plugin_menu_items(
                 &mut refs.plugin_view,
                 "view",
                 &view,
-                true,
+                |entry| entry.starts_enabled(true, has_workspace),
+            )?;
+            replace_plugin_items(
+                &window,
+                &refs.file_menu,
+                &refs.new_workspace,
+                &mut refs.plugin_file,
+                "file",
+                &file,
+                |entry| entry.starts_enabled(true, has_workspace),
             )
         })
         // Unlike the other menu commands this one reports what it listed, so
         // a window without a menu is an error, not a quiet success.
         .ok_or("this window has no menu to list plugin entries in")??;
-    Ok(export_refused + view_refused)
+    Ok(export_refused + view_refused + file_refused)
 }
 
 #[tauri::command]

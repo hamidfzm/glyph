@@ -26,6 +26,7 @@ import type {
   SiteThemeContribution,
   StatusBarItemContribution,
   StyleContribution,
+  WorkspaceSettingsPanelEntry,
 } from "./types";
 import { createVaultApi } from "./vaultApi";
 import { createWorkspaceApi } from "./workspaceApi";
@@ -41,6 +42,7 @@ export interface ContextRegistries {
   sidebarPanels: Registry<SidebarPanelEntry>;
   fileTreeFilters: Registry<FileTreeFilter>;
   settingsPanels: Registry<SettingsPanelContribution>;
+  workspaceSettingsPanels: Registry<WorkspaceSettingsPanelEntry>;
   styles: Registry<StyleContribution>;
   exporters: Registry<ExporterEntry>;
   siteThemes: Registry<SiteThemeContribution>;
@@ -133,12 +135,13 @@ export function buildPluginContext({
     sidebarPanels,
     fileTreeFilters,
     settingsPanels,
+    workspaceSettingsPanels,
     styles,
     exporters,
     siteThemes,
   } = registries;
   const permissions = plugin.permissions ?? [];
-  const workspace = createWorkspaceApi(getWorkspaceRoot, permissions);
+  const workspace = createWorkspaceApi(getWorkspaceRoot, permissions, plugin.id);
   const vault = createVaultApi(getWorkspaceRoot, permissions);
   return {
     apiVersion: PLUGIN_API_VERSION,
@@ -159,6 +162,10 @@ export function buildPluginContext({
       },
       addSettingsPanel(panel) {
         return tracked(settingsPanels.register, bag)({ ...panel, pluginId: plugin.id });
+      },
+      addWorkspaceSettingsPanel(panel) {
+        const entry = { ...panel, pluginId: plugin.id };
+        return tracked(workspaceSettingsPanels.register, bag)(entry);
       },
       addStyles(css) {
         return tracked(styles.register, bag)({ css });
