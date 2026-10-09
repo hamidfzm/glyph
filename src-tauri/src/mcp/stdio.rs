@@ -57,6 +57,8 @@ struct Client<R, W> {
     asked: u64,
     /// What arrived while a question was out, handled once the call returns.
     held: VecDeque<Incoming>,
+    /// The tools the client was last told of, once it has asked for them.
+    listed: Option<Vec<String>>,
 }
 
 /// Answer requests from `input` until it ends. `list` describes the tools on
@@ -76,6 +78,7 @@ pub(super) fn serve(
         cancelled: false,
         asked: 0,
         held: VecDeque::new(),
+        listed: None,
     };
     loop {
         let next = match client.held.pop_front() {
@@ -94,6 +97,19 @@ pub(super) fn serve(
                 respond(&message, &mut client, &mut list, &mut call)
             }
         };
+        // A client that keeps the list it was given learns here that the user
+        // turned a tool on or off since.
+        // ponytail: noticed when the client next writes, not the moment the
+        // setting changes; watching the settings file would close that.
+        if let Some(listed) = &mut client.listed {
+            let now = names(&list());
+            if *listed != now {
+                *listed = now;
+                let notice =
+                    json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" });
+                send(&mut client.output, &notice)?;
+            }
+        }
         if let Some(reply) = reply {
             send(&mut client.output, &reply)?;
         }
@@ -197,7 +213,11 @@ fn respond<R: BufRead, W: Write>(
             Ok(initialize(&params))
         }
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(json!({ "tools": list() })),
+        "tools/list" => {
+            let tools = list();
+            client.listed = Some(names(&tools));
+            Ok(json!({ "tools": tools }))
+        }
         "tools/call" => {
             client.call_id = id.clone();
             let result = call_tool(&params, client, call);
@@ -223,10 +243,16 @@ fn initialize(params: &Value) -> Value {
         .unwrap_or(PROTOCOL_VERSIONS[0]);
     json!({
         "protocolVersion": version,
-        "capabilities": { "tools": { "listChanged": false } },
+        "capabilities": { "tools": { "listChanged": true } },
         "serverInfo": { "name": "glyph", "title": "Glyph", "version": env!("CARGO_PKG_VERSION") },
         "instructions": INSTRUCTIONS,
     })
+}
+
+/// The tools a listing names, which is all that changes between two of them.
+fn names(tools: &[Value]) -> Vec<String> {
+    let name = |tool: &Value| tool["name"].as_str().map(str::to_string);
+    tools.iter().filter_map(name).collect()
 }
 
 /// A tool that refuses is a result the model reads, marked `isError`, so it
@@ -364,6 +390,10 @@ mod tests {
             },
         )
         .unwrap();
+        messages(output)
+    }
+
+    fn messages(output: Vec<u8>) -> Vec<Value> {
         let text = String::from_utf8(output).unwrap();
         text.lines()
             .map(|line| {
@@ -395,7 +425,10 @@ mod tests {
         assert_eq!(replies[2]["result"]["protocolVersion"], "2025-11-25");
         assert_eq!(replies[0]["id"], 1);
         assert_eq!(replies[0]["result"]["serverInfo"]["name"], "glyph");
-        assert!(replies[0]["result"]["capabilities"]["tools"].is_object());
+        assert_eq!(
+            replies[0]["result"]["capabilities"]["tools"]["listChanged"],
+            true
+        );
     }
 
     #[test]
@@ -417,6 +450,51 @@ mod tests {
     fn the_tools_listed_are_the_ones_on_offer_when_asked() {
         let replies = exchange(&request(1, "tools/list", Value::Null));
         assert_eq!(replies[0]["result"]["tools"], json!([{ "name": "echo" }]));
+    }
+
+    #[test]
+    fn a_client_that_listed_the_tools_is_told_once_when_they_change() {
+        // `on` and `off` add and take away a second tool, as a setting would.
+        let extra = std::cell::Cell::new(false);
+        let call = |name: &str| request(0, "tools/call", json!({ "name": name }));
+        let input = format!(
+            "{}{}{}{}{}",
+            call("on"),
+            request(1, "tools/list", Value::Null),
+            call("off"),
+            request(2, "ping", Value::Null),
+            call("on"),
+        );
+        let mut output = Vec::new();
+        serve(
+            input.as_bytes(),
+            &mut output,
+            || {
+                let mut tools = vec![json!({ "name": "echo" })];
+                tools.extend(extra.get().then(|| json!({ "name": "patch" })));
+                tools
+            },
+            |name, _, _| {
+                extra.set(name == "on");
+                Ok("null".to_string())
+            },
+        )
+        .unwrap();
+
+        let sent: Vec<String> = messages(output)
+            .iter()
+            .map(|message| match message["method"].as_str() {
+                Some(method) => method.to_string(),
+                None => format!("reply {}", message["id"]),
+            })
+            .collect();
+        let changed = "notifications/tools/list_changed";
+        // Nothing before the client has a list to be out of date, and nothing
+        // again while the list stays as it was last told.
+        assert_eq!(
+            sent,
+            ["reply 0", "reply 1", changed, "reply 0", "reply 2", changed, "reply 0"]
+        );
     }
 
     #[test]
