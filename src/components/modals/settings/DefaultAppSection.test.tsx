@@ -35,4 +35,17 @@ describe("DefaultAppSection", () => {
       expect(screen.getByText(/right-click a Markdown file/i)).toBeInTheDocument(),
     );
   });
+
+  it.each([
+    ["sandboxed", /sandboxed \(Flatpak or Snap\)/],
+    ["noDesktopEntry", /couldn't find its application entry/],
+  ])("shows guidance, not success, for a %s Linux install", async (outcome, guidance) => {
+    setDefaultMock.mockResolvedValue(outcome);
+    render(<DefaultAppSection />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Set Glyph as default" }));
+
+    await waitFor(() => expect(screen.getByText(guidance)).toBeInTheDocument());
+    expect(screen.queryByText("Glyph is now your default Markdown app.")).not.toBeInTheDocument();
+  });
 });

@@ -395,6 +395,8 @@
       "registered": "Glyph ist jetzt deine Standard-Markdown-App.",
       "openedSettings": "Einstellungen für Standard-Apps geöffnet. Wähle dort Glyph für Markdown-Dateien.",
       "guidance": "Klicke im Finder mit der rechten Maustaste auf eine Markdown-Datei, wähle „Informationen“, stelle „Öffnen mit“ auf Glyph und klicke auf „Alle ändern“.",
+      "sandboxed": "Diese Glyph-Installation läuft in einer Sandbox (Flatpak oder Snap) und kann deine Standard-Apps nicht ändern. Klicke im Dateimanager mit der rechten Maustaste auf eine Markdown-Datei, wähle „Öffnen mit“ und lege Glyph als Standard fest.",
+      "noDesktopEntry": "Glyph konnte seinen Anwendungseintrag auf diesem System nicht finden (ein AppImage installiert keinen) und kann sich daher nicht als Standard festlegen. Installiere Glyph aus einem Paket und versuche es erneut. Wenn du das AppImage in dein Anwendungsmenü aufgenommen hast, wähle Glyph stattdessen im Dateimanager unter „Öffnen mit“.",
       "error": "Standard-App konnte nicht festgelegt werden. Lege sie stattdessen in den Systemeinstellungen fest."
     }
   }

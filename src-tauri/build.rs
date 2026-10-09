@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 fn main() {
     generate_extensions();
-    emit_identifier();
+    emit_app_names();
     emit_sentry_dsn();
     embed_comctl32_v6_in_test_binaries();
     ensure_preview_handler_staging();
@@ -32,15 +32,24 @@ fn ensure_preview_handler_staging() {
     }
 }
 
-/// The bundle identifier from `tauri.conf.json`, as `GLYPH_IDENTIFIER`, for
-/// code that finds the app's data directory without Tauri's path resolver
-/// (`glyph mcp`, which never builds the app).
-fn emit_identifier() {
+/// Names from `tauri.conf.json` that code reads at compile time:
+/// - `GLYPH_IDENTIFIER`, the bundle identifier, for code that finds the app's
+///   data directory without Tauri's path resolver (`glyph mcp`, which never
+///   builds the app).
+/// - `GLYPH_PRODUCT_NAME`, which the Tauri bundler names the Linux desktop
+///   entry after (`<productName>.desktop`), the id `commands/default_app.rs`
+///   registers.
+fn emit_app_names() {
     let conf = read_json("tauri.conf.json");
-    let identifier = conf["identifier"]
-        .as_str()
-        .expect("tauri.conf.json must name an identifier");
-    println!("cargo:rustc-env=GLYPH_IDENTIFIER={identifier}");
+    for (key, var) in [
+        ("identifier", "GLYPH_IDENTIFIER"),
+        ("productName", "GLYPH_PRODUCT_NAME"),
+    ] {
+        let value = conf[key]
+            .as_str()
+            .unwrap_or_else(|| panic!("tauri.conf.json must name {key}"));
+        println!("cargo:rustc-env={var}={value}");
+    }
 }
 
 /// Single source of truth for the Sentry DSN: `src-tauri/sentry.json` → `dsn`.
