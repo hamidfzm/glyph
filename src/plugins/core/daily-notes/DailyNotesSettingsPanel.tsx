@@ -9,7 +9,11 @@ interface DailyNotesSettingsPanelProps {
   t: Translate;
 }
 
-type Status = { kind: "idle" } | { kind: "saved" } | { kind: "error"; message: string };
+type Status =
+  | { kind: "idle" }
+  // The form as it was saved: an edit made while the save was under way is not saved.
+  | { kind: "saved"; form: DailyNotesSettings }
+  | { kind: "error"; message: string };
 
 /**
  * The Daily Notes tab of Workspace Settings. The fields and Save stay back
@@ -62,7 +66,7 @@ export function DailyNotesSettingsPanel({ load, save, t }: DailyNotesSettingsPan
     }
     try {
       await save(storedSettings(form));
-      setStatus({ kind: "saved" });
+      setStatus({ kind: "saved", form });
     } catch (err) {
       setStatus({ kind: "error", message: String(err) });
     }
@@ -129,7 +133,7 @@ export function DailyNotesSettingsPanel({ load, save, t }: DailyNotesSettingsPan
         <button type="button" className="settings-primary-btn" onClick={handleSave}>
           {t("settings.save")}
         </button>
-        {status.kind === "saved" && (
+        {status.kind === "saved" && status.form === form && (
           <span className="settings-field-hint" role="status">
             {t("settings.saved")}
           </span>

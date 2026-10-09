@@ -3,7 +3,8 @@
   "failed": "Die heutige Notiz konnte nicht geöffnet werden: {{error}}",
   "problem": {
     "patternRequired": "Für tägliche Notizen ist kein Dateinamenmuster festgelegt. Lege eines in den Arbeitsbereich-Einstellungen fest.",
-    "invalidPath": "Ordner, Dateinamenmuster oder Vorlage der täglichen Notizen ergeben keinen gültigen Pfad. Korrigiere das in den Arbeitsbereich-Einstellungen."
+    "invalidPath": "Ordner, Dateinamenmuster oder Vorlage der täglichen Notizen ergeben keinen gültigen Pfad. Korrigiere das in den Arbeitsbereich-Einstellungen.",
+    "hiddenPath": "Ordner oder Dateinamenmuster der täglichen Notizen beginnen einen Namen mit einem Punkt, und in versteckten Ordnern oder Dateien können keine Notizen angelegt werden. Korrigiere das in den Arbeitsbereich-Einstellungen."
   },
   "settings": {
     "title": "Tägliche Notizen",
@@ -23,7 +24,8 @@
     "preview": "Heutige Notiz: {{path}}",
     "errors": {
       "patternRequired": "Gib ein Dateinamenmuster ein.",
-      "invalidPath": "Ordner, Dateinamenmuster und Vorlage dürfen weder \"..\" noch eines der Zeichen < > : \" | ? * enthalten."
+      "invalidPath": "Ordner, Dateinamenmuster und Vorlage dürfen weder \"..\" noch eines der Zeichen < > : \" | ? * enthalten.",
+      "hiddenPath": "Ordner und Dateinamenmuster dürfen keinen Namen mit einem Punkt beginnen: In versteckten Ordnern oder Dateien können keine Notizen angelegt werden."
     },
     "save": "Speichern",
     "saved": "Gespeichert"

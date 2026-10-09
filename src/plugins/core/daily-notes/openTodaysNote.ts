@@ -37,9 +37,13 @@ export function createTodaysNoteOpener(ctx: GlyphPluginContext, t: Translate): (
   return async () => {
     if (pending) return;
     pending = true;
+    const root = ctx.workspace.getRoot();
+    // Checked after every wait: once the workspace is closed or replaced, the
+    // note is no longer this window's to create, open, or report on.
+    const workspaceChanged = () => ctx.workspace.getRoot() !== root;
     try {
-      const root = ctx.workspace.getRoot();
       const settings = readSettings(await ctx.workspace.getSettings());
+      if (workspaceChanged()) return;
       const today = new Date();
       const problem = dailyNotesProblem(settings, today);
       if (problem) {
@@ -48,11 +52,12 @@ export function createTodaysNoteOpener(ctx: GlyphPluginContext, t: Translate): (
       }
       const path = dailyNotePath(settings, today);
       const content = await newNoteContent(ctx, settings, path);
+      if (workspaceChanged()) return;
       const note = await ctx.workspace.createFile(path, content);
-      // The workspace was closed or replaced meanwhile: not this window's note to open.
-      if (ctx.workspace.getRoot() !== root) return;
+      if (workspaceChanged()) return;
       ctx.navigation.openFile(note.path);
     } catch (err) {
+      if (workspaceChanged()) return;
       ctx.notify(t("failed", { error: errorMessage(err) }));
     } finally {
       pending = false;

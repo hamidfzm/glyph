@@ -99,16 +99,32 @@ function normalizeKeyToken(token: string): string {
   return token;
 }
 
-/** Build a canonical accelerator string from a keydown event, or null if only
- *  modifier keys (or an unmappable key) are held. */
-export function acceleratorFromEvent(event: KeyboardEvent): string | null {
+/** The canonical spelling of an accelerator: "CmdOrCtrl+Alt+Shift+O". */
+export function serializeAccelerator(parsed: ParsedAccelerator): string {
+  const mods: string[] = [];
+  if (parsed.cmdOrCtrl) mods.push("CmdOrCtrl");
+  if (parsed.alt) mods.push("Alt");
+  if (parsed.shift) mods.push("Shift");
+  return [...mods, parsed.key].join("+");
+}
+
+/** Whether a shortcut holds Cmd/Ctrl or Alt. One with neither would fire on
+ *  ordinary typing, so it is never bound. */
+export function hasCommandModifier(parsed: ParsedAccelerator): boolean {
+  return parsed.cmdOrCtrl || parsed.alt;
+}
+
+/** Parse a keydown event into accelerator parts, or null if only modifier
+ *  keys (or an unmappable key) are held. */
+export function parseKeyEvent(event: KeyboardEvent): ParsedAccelerator | null {
   const token = tokenFromCode(event.code);
   if (token === null || MODIFIER_TOKENS.has(token)) return null;
-  const mods: string[] = [];
-  if (event.metaKey || event.ctrlKey) mods.push("CmdOrCtrl");
-  if (event.altKey) mods.push("Alt");
-  if (event.shiftKey) mods.push("Shift");
-  return [...mods, token].join("+");
+  return {
+    cmdOrCtrl: event.metaKey || event.ctrlKey,
+    alt: event.altKey,
+    shift: event.shiftKey,
+    key: token,
+  };
 }
 
 /** True when the event matches the given accelerator on this platform. */

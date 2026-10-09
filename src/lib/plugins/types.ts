@@ -174,7 +174,10 @@ export interface CommandContribution {
   menu?: "file" | "view";
   /**
    * 0.26.0: the default keyboard shortcut, as an accelerator such as
-   * "CmdOrCtrl+Shift+T". The user can rebind it under Settings, Hotkeys.
+   * "CmdOrCtrl+Shift+T". It must hold CmdOrCtrl or Alt, and cannot be a chord
+   * text editing needs (CmdOrCtrl with A, C, V, X, Y, Z, or Shift+Z); one the
+   * app does not take is dropped and the command stays. The user can rebind
+   * it under Settings, Hotkeys.
    */
   shortcut?: string;
   /** 0.26.0: offer the command only while a folder workspace is open. */
@@ -488,12 +491,6 @@ export interface NavigationApi {
   openFile(path: string, options?: { line?: number }): void;
 }
 
-/**
- * The capability object passed to {@link PluginModule.activate}. It is the only
- * door a plugin has to the host; there is no direct `invoke`. Every
- * registration returns a {@link Disposer}; the host collects them and runs
- * them on unload, so a plugin that only registers needs no `deactivate`.
- */
 /** 0.26.0: what {@link WorkspaceApi.createFile} did. */
 export interface CreatedFile {
   /** Absolute path of the file, spelled as it is on disk. */
@@ -556,6 +553,12 @@ export interface AssetsApi {
   readBinary(path: string): Promise<Uint8Array>;
 }
 
+/**
+ * The capability object passed to {@link PluginModule.activate}. It is the only
+ * door a plugin has to the host; there is no direct `invoke`. Every
+ * registration returns a {@link Disposer}; the host collects them and runs
+ * them on unload, so a plugin that only registers needs no `deactivate`.
+ */
 export interface GlyphPluginContext {
   readonly apiVersion: string;
   readonly commands: CommandRegistryApi;

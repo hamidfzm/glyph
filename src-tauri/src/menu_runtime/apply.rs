@@ -192,21 +192,24 @@ fn replace_plugin_items<R: Runtime>(
             Some(owner) => format!("{owner}:{base}"),
             None => base,
         };
-        // A lone `&` would mark a mnemonic instead of showing.
-        let build = |accelerator: Option<&String>| {
+        let add = |accelerator: Option<&String>| -> tauri::Result<MenuItem<R>> {
+            // A lone `&` would mark a mnemonic instead of showing.
             let builder = MenuItemBuilder::with_id(&id, entry.label.replace('&', "&&"))
                 .enabled(is_enabled(entry));
-            match accelerator {
+            let item = match accelerator {
                 Some(accelerator) => builder.accelerator(accelerator).build(window),
                 None => builder.build(window),
-            }
+            }?;
+            submenu.insert(&item, start + 1 + offset)?;
+            Ok(item)
         };
-        // An accelerator the platform cannot parse costs the item its
-        // shortcut, not its place in the menu.
-        let item = build(entry.accelerator.as_ref())
-            .or_else(|_| build(None))
-            .map_err(s)?;
-        submenu.insert(&item, start + 1 + offset).map_err(s)?;
+        // An accelerator the platform refuses costs the item its shortcut, not
+        // its place in the menu. GTK refuses on insert, not on build.
+        let item = match add(entry.accelerator.as_ref()) {
+            Err(_) if entry.accelerator.is_some() => add(None),
+            added => added,
+        }
+        .map_err(s)?;
         section.items.push(PluginMenuItem {
             item,
             requires_workspace: entry.requires_workspace,

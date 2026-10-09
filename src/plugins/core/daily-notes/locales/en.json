@@ -3,7 +3,8 @@
   "failed": "Couldn't open today's note: {{error}}",
   "problem": {
     "patternRequired": "Daily notes have no file name pattern. Set one in Workspace Settings.",
-    "invalidPath": "The daily notes folder, file name pattern, or template isn't a valid path. Fix it in Workspace Settings."
+    "invalidPath": "The daily notes folder, file name pattern, or template isn't a valid path. Fix it in Workspace Settings.",
+    "hiddenPath": "The daily notes folder or file name pattern starts a name with a dot, and notes can't be created in a hidden folder or file. Fix it in Workspace Settings."
   },
   "settings": {
     "title": "Daily Notes",
@@ -23,7 +24,8 @@
     "preview": "Today's note: {{path}}",
     "errors": {
       "patternRequired": "Enter a file name pattern.",
-      "invalidPath": "The folder, file name pattern, and template can't contain \"..\" or any of < > : \" | ? *"
+      "invalidPath": "The folder, file name pattern, and template can't contain \"..\" or any of < > : \" | ? *",
+      "hiddenPath": "The folder and file name pattern can't start a name with a dot: notes can't be created in a hidden folder or file."
     },
     "save": "Save",
     "saved": "Saved"

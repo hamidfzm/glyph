@@ -122,4 +122,25 @@ describe("dailyNotesProblem", () => {
     const settings = { ...DEFAULT_SETTINGS, filenamePattern: "YYYY..MM.md" };
     expect(dailyNotesProblem(settings, OCT_8)).toBeNull();
   });
+
+  // The host refuses to create these, so the settings must not pass as valid.
+  it.each([
+    ["a hidden folder", { ...DEFAULT_SETTINGS, folder: ".journal" }],
+    ["a hidden folder further down", { ...DEFAULT_SETTINGS, folder: "notes/.daily" }],
+    ["a hidden file name", { ...DEFAULT_SETTINGS, filenamePattern: ".YYYY-MM-DD" }],
+    ["a hidden folder in the pattern", { ...DEFAULT_SETTINGS, filenamePattern: ".YYYY/MM-DD" }],
+    ["a pattern that is only the extension", { ...DEFAULT_SETTINGS, filenamePattern: ".md" }],
+  ])("refuses %s for the note", (_name, settings) => {
+    expect(dailyNotesProblem(settings, OCT_8)).toBe("hiddenPath");
+  });
+
+  it("lets the template sit in a hidden folder, which is only read", () => {
+    const settings = { ...DEFAULT_SETTINGS, template: ".templates/daily.md" };
+    expect(dailyNotesProblem(settings, OCT_8)).toBeNull();
+  });
+
+  it("reports a path that is both hidden and unsafe as invalid", () => {
+    const settings = { ...DEFAULT_SETTINGS, folder: ".journal/../.." };
+    expect(dailyNotesProblem(settings, OCT_8)).toBe("invalidPath");
+  });
 });

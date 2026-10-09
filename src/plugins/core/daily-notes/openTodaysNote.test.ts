@@ -193,4 +193,52 @@ describe("createTodaysNoteOpener", () => {
     expect(ctx.navigation.openFile).not.toHaveBeenCalled();
     expect(ctx.notify).not.toHaveBeenCalled();
   });
+
+  // createFile writes to whichever workspace is open when it is called.
+  it("creates nothing in a workspace opened while the template was being read", async () => {
+    const { ctx, state, open } = fakeContext({ settings: { template: "templates/daily.md" } });
+    ctx.workspace.readFile.mockImplementation(async () => {
+      state.root = "/other";
+      return "# Template";
+    });
+
+    await open();
+
+    expect(ctx.workspace.createFile).not.toHaveBeenCalled();
+    expect(ctx.notify).not.toHaveBeenCalled();
+  });
+
+  it("judges no settings of a workspace that was replaced while they loaded", async () => {
+    const { ctx, state, open } = fakeContext();
+    ctx.workspace.getSettings.mockImplementation(async () => {
+      state.root = "/other";
+      return { filenamePattern: "" };
+    });
+
+    await open();
+
+    expect(ctx.workspace.createFile).not.toHaveBeenCalled();
+    expect(ctx.notify).not.toHaveBeenCalled();
+  });
+
+  it("reports no failure for a workspace that was closed meanwhile", async () => {
+    const { ctx, state, open } = fakeContext();
+    ctx.workspace.getSettings.mockImplementation(async () => {
+      state.root = null;
+      throw new Error("No workspace is open");
+    });
+
+    await open();
+
+    expect(ctx.notify).not.toHaveBeenCalled();
+  });
+
+  it("refuses settings that would put the note under a hidden name", async () => {
+    const { ctx, open } = fakeContext({ settings: { folder: ".journal" } });
+
+    await open();
+
+    expect(ctx.workspace.createFile).not.toHaveBeenCalled();
+    expect(ctx.notify).toHaveBeenCalledWith("problem.hiddenPath");
+  });
 });

@@ -48,7 +48,7 @@ export function dailyNotePath(settings: DailyNotesSettings, date: Date): string 
 // `..` leaves the workspace; the other characters cannot be in a file name on Windows.
 const UNSAFE_SEGMENT = /^\.\.$|[<>:"|?*]/;
 
-export type DailyNotesProblem = "patternRequired" | "invalidPath";
+export type DailyNotesProblem = "patternRequired" | "invalidPath" | "hiddenPath";
 
 /** Checked on save and again before creating: `.glyph/config.json` can be edited by hand. */
 export function dailyNotesProblem(
@@ -56,9 +56,10 @@ export function dailyNotesProblem(
   date: Date,
 ): DailyNotesProblem | null {
   if (settings.filenamePattern.trim() === "") return "patternRequired";
-  const paths = [dailyNotePath(settings, date), normalizeRelativePath(settings.template)];
-  const unsafe = paths.some((path) =>
-    path.split("/").some((segment) => UNSAFE_SEGMENT.test(segment)),
-  );
-  return unsafe ? "invalidPath" : null;
+  const note = dailyNotePath(settings, date).split("/");
+  const template = normalizeRelativePath(settings.template).split("/");
+  if ([...note, ...template].some((segment) => UNSAFE_SEGMENT.test(segment))) return "invalidPath";
+  // The host creates no file under a hidden name. It reads one, so a template may have it.
+  if (note.some((segment) => segment.startsWith("."))) return "hiddenPath";
+  return null;
 }

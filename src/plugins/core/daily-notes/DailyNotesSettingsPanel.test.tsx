@@ -4,25 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DailyNotesSettingsPanel } from "./DailyNotesSettingsPanel";
 import { type DailyNotesSettings, DEFAULT_SETTINGS } from "./settings";
 
-const t = (key: string, values?: Record<string, unknown>) =>
-  values ? `${key} ${JSON.stringify(values)}` : key;
+const defaultProps = {
+  load: async () => DEFAULT_SETTINGS,
+  save: vi.fn(async () => {}),
+  t: (key: string, values?: Record<string, unknown>) =>
+    values ? `${key} ${JSON.stringify(values)}` : key,
+};
 
 interface Settle {
   resolve: (settings: DailyNotesSettings) => void;
   reject: (reason: unknown) => void;
-}
-
-function renderPanel(over: {
-  load?: () => Promise<DailyNotesSettings>;
-  save?: () => Promise<void>;
-}) {
-  const props = {
-    load: over.load ?? (async () => DEFAULT_SETTINGS),
-    save: vi.fn(over.save ?? (async () => {})),
-    t,
-  };
-  render(<DailyNotesSettingsPanel {...props} />);
-  return props;
 }
 
 const folder = () => screen.findByRole("textbox", { name: /settings\.folder\.label/ });
@@ -42,13 +33,12 @@ afterEach(() => {
 
 describe("DailyNotesSettingsPanel", () => {
   it("shows the stored settings and where today's note goes", async () => {
-    renderPanel({
-      load: async () => ({
-        folder: "journal",
-        filenamePattern: "YYYY-MM-DD.md",
-        template: "templates/daily.md",
-      }),
+    const load = async () => ({
+      folder: "journal",
+      filenamePattern: "YYYY-MM-DD.md",
+      template: "templates/daily.md",
     });
+    render(<DailyNotesSettingsPanel {...defaultProps} load={load} />);
 
     expect(await folder()).toHaveValue("journal");
     expect(pattern()).toHaveValue("YYYY-MM-DD.md");
@@ -60,12 +50,11 @@ describe("DailyNotesSettingsPanel", () => {
 
   it("keeps the fields and Save back until the settings have loaded", async () => {
     let finish!: (settings: DailyNotesSettings) => void;
-    renderPanel({
-      load: () =>
-        new Promise<DailyNotesSettings>((resolve) => {
-          finish = resolve;
-        }),
-    });
+    const load = () =>
+      new Promise<DailyNotesSettings>((resolve) => {
+        finish = resolve;
+      });
+    render(<DailyNotesSettingsPanel {...defaultProps} load={load} />);
 
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
@@ -77,7 +66,7 @@ describe("DailyNotesSettingsPanel", () => {
 
   it("updates the preview while the pattern is edited, hiding it when invalid", async () => {
     const user = userEvent.setup();
-    renderPanel({});
+    render(<DailyNotesSettingsPanel {...defaultProps} />);
     await folder();
 
     await user.clear(pattern());
@@ -89,7 +78,8 @@ describe("DailyNotesSettingsPanel", () => {
 
   it("saves the edited fields in their stored form and says so", async () => {
     const user = userEvent.setup();
-    const { save } = renderPanel({});
+    const save = vi.fn(async () => {});
+    render(<DailyNotesSettingsPanel {...defaultProps} save={save} />);
 
     await user.clear(await folder());
     await user.type(await folder(), "journal/");
@@ -106,7 +96,7 @@ describe("DailyNotesSettingsPanel", () => {
 
   it("drops the Saved note as soon as a field changes again", async () => {
     const user = userEvent.setup();
-    renderPanel({});
+    render(<DailyNotesSettingsPanel {...defaultProps} />);
     await folder();
     await user.click(saveButton());
     await screen.findByRole("status");
@@ -116,12 +106,35 @@ describe("DailyNotesSettingsPanel", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
+  it("does not call an edit made during a save saved", async () => {
+    const user = userEvent.setup();
+    let finish!: () => void;
+    const save = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(<DailyNotesSettingsPanel {...defaultProps} save={save} />);
+    await folder();
+    await user.click(saveButton());
+
+    await user.type(template(), "t.md");
+    finish();
+    await user.click(await folder());
+
+    expect(save).toHaveBeenCalledExactlyOnceWith(DEFAULT_SETTINGS);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it.each([
     ["an empty pattern", "", "settings.errors.patternRequired"],
     ["a pattern that leaves the workspace", "../YYYY", "settings.errors.invalidPath"],
+    ["a pattern for a hidden file", ".YYYY-MM-DD", "settings.errors.hiddenPath"],
   ])("refuses %s with a message, saving nothing", async (_name, value, message) => {
     const user = userEvent.setup();
-    const { save } = renderPanel({});
+    const save = vi.fn(async () => {});
+    render(<DailyNotesSettingsPanel {...defaultProps} save={save} />);
     await folder();
 
     await user.clear(pattern());
@@ -130,11 +143,13 @@ describe("DailyNotesSettingsPanel", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
     expect(save).not.toHaveBeenCalled();
+    expect(screen.queryByText(/settings\.preview/)).not.toBeInTheDocument();
   });
 
   it("shows why the host did not save", async () => {
     const user = userEvent.setup();
-    renderPanel({ save: async () => Promise.reject("plugin settings are limited to 65536 bytes") });
+    const save = async () => Promise.reject("plugin settings are limited to 65536 bytes");
+    render(<DailyNotesSettingsPanel {...defaultProps} save={save} />);
     await folder();
 
     await user.click(saveButton());
@@ -144,7 +159,8 @@ describe("DailyNotesSettingsPanel", () => {
   });
 
   it("shows why the settings could not be read, and offers nothing to overwrite them with", async () => {
-    renderPanel({ load: async () => Promise.reject("corrupt .glyph/config.json") });
+    const load = async () => Promise.reject("corrupt .glyph/config.json");
+    render(<DailyNotesSettingsPanel {...defaultProps} load={load} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("corrupt .glyph/config.json");
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
@@ -163,7 +179,7 @@ describe("DailyNotesSettingsPanel", () => {
       new Promise<DailyNotesSettings>((resolve, reject) => {
         Object.assign(finish, { resolve, reject });
       });
-    const { unmount } = render(<DailyNotesSettingsPanel load={load} save={vi.fn()} t={t} />);
+    const { unmount } = render(<DailyNotesSettingsPanel {...defaultProps} load={load} />);
 
     unmount();
     settle(finish);

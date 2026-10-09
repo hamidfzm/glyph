@@ -3,7 +3,8 @@
   "failed": "No se pudo abrir la nota de hoy: {{error}}",
   "problem": {
     "patternRequired": "Las notas diarias no tienen un patrón de nombre de archivo. Define uno en la configuración del espacio de trabajo.",
-    "invalidPath": "La carpeta, el patrón de nombre de archivo o la plantilla de las notas diarias no forman una ruta válida. Corrígelo en la configuración del espacio de trabajo."
+    "invalidPath": "La carpeta, el patrón de nombre de archivo o la plantilla de las notas diarias no forman una ruta válida. Corrígelo en la configuración del espacio de trabajo.",
+    "hiddenPath": "La carpeta o el patrón de nombre de archivo de las notas diarias empiezan un nombre con un punto, y no se pueden crear notas en carpetas o archivos ocultos. Corrígelo en la configuración del espacio de trabajo."
   },
   "settings": {
     "title": "Notas diarias",
@@ -23,7 +24,8 @@
     "preview": "Nota de hoy: {{path}}",
     "errors": {
       "patternRequired": "Introduce un patrón de nombre de archivo.",
-      "invalidPath": "La carpeta, el patrón de nombre de archivo y la plantilla no pueden contener \"..\" ni ninguno de < > : \" | ? *"
+      "invalidPath": "La carpeta, el patrón de nombre de archivo y la plantilla no pueden contener \"..\" ni ninguno de < > : \" | ? *",
+      "hiddenPath": "La carpeta y el patrón de nombre de archivo no pueden empezar un nombre con un punto: no se pueden crear notas en carpetas o archivos ocultos."
     },
     "save": "Guardar",
     "saved": "Guardado"

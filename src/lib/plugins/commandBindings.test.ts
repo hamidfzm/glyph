@@ -57,6 +57,42 @@ describe("pluginBindableCommands", () => {
     ];
     expect(pluginBindableCommands(malformed)).toEqual([]);
   });
+
+  // A shortcut without Cmd/Ctrl or Alt would run the command on ordinary typing.
+  it("leaves out a shortcut that is a bare key, or holds Shift alone", () => {
+    const typing = ["A", "Space", "Enter", "F5", "Shift+A"].map((shortcut) =>
+      command({ shortcut }),
+    );
+    expect(pluginBindableCommands(typing)).toEqual([]);
+  });
+
+  it("leaves out a shortcut every text field needs", () => {
+    const editing = ["CmdOrCtrl+A", "Ctrl+C", "Cmd+V", "CmdOrCtrl+x", "CmdOrCtrl+Y"].map(
+      (shortcut) => command({ shortcut }),
+    );
+    expect(pluginBindableCommands(editing)).toEqual([]);
+    expect(pluginBindableCommands([command({ shortcut: "CmdOrCtrl+Z" })])).toEqual([]);
+    expect(pluginBindableCommands([command({ shortcut: "Shift+CmdOrCtrl+Z" })])).toEqual([]);
+  });
+
+  it("takes the same keys with another modifier", () => {
+    const rows = pluginBindableCommands([
+      command({ id: "a", shortcut: "CmdOrCtrl+Shift+V" }),
+      command({ id: "b", shortcut: "Alt+C" }),
+      command({ id: "c", shortcut: "CmdOrCtrl+Alt+Z" }),
+    ]);
+    expect(rows.map((row) => row.defaultAccelerator)).toEqual([
+      "CmdOrCtrl+Shift+V",
+      "Alt+C",
+      "CmdOrCtrl+Alt+Z",
+    ]);
+  });
+
+  // The native menu reads "Ctrl" as Control on macOS; the app reads it as Cmd.
+  it("respells a shortcut canonically, so the app and the menu read it alike", () => {
+    const [row] = pluginBindableCommands([command({ shortcut: "Shift+Ctrl+t" })]);
+    expect(row.defaultAccelerator).toBe("CmdOrCtrl+Shift+T");
+  });
 });
 
 describe("isMenuCommand", () => {
@@ -84,10 +120,12 @@ describe("paletteShortcut", () => {
   it("spells the default shortcut the way the palette does", () => {
     expect(paletteShortcut(command({ shortcut: "CmdOrCtrl+Shift+T" }))).toBe("Cmd/Ctrl+Shift+T");
     expect(paletteShortcut(command({ shortcut: "Alt+J" }))).toBe("Alt+J");
+    expect(paletteShortcut(command({ shortcut: "Shift+Cmd+t" }))).toBe("Cmd/Ctrl+Shift+T");
   });
 
   it("is absent without a usable shortcut", () => {
     expect(paletteShortcut(command())).toBeUndefined();
     expect(paletteShortcut(command({ shortcut: "A+B" }))).toBeUndefined();
+    expect(paletteShortcut(command({ shortcut: "T" }))).toBeUndefined();
   });
 });

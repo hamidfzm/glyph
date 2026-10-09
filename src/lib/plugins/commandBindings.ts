@@ -1,4 +1,4 @@
-import { parseAccelerator } from "@/lib/accelerator";
+import { hasCommandModifier, parseAccelerator, serializeAccelerator } from "@/lib/accelerator";
 import type { BindableCommand } from "@/lib/bindableCommands";
 import { contributionKey } from "./contributionKey";
 import type { CommandContribution, CommandEntry } from "./types";
@@ -6,16 +6,31 @@ import type { CommandContribution, CommandEntry } from "./types";
 // A command's `menu`, `shortcut`, and `when` come from plugin code (and, for a
 // sandboxed plugin, from its worker), so each is checked here before use.
 
+// What every text field needs: select all, copy, paste, cut, redo, undo. No
+// built-in command claims the first four, so nothing else would stop a plugin
+// default from taking them away from the user.
+const TEXT_EDITING_CHORDS = new Set(
+  ["A", "C", "V", "X", "Y", "Z", "Shift+Z"].map((key) => `CmdOrCtrl+${key}`),
+);
+
 /** The id a plugin command's shortcut is stored and rebound under. */
 export function pluginBindingId(command: CommandEntry): string {
   return `plugin:${contributionKey(command)}`;
 }
 
-/** The command's default shortcut, or null when it has none the app can parse. */
+/**
+ * The command's default shortcut in canonical spelling ("Ctrl+T" reads as
+ * "CmdOrCtrl+T" in the app and in the native menu alike), or null when it has
+ * none the app takes: it must parse, hold Cmd/Ctrl or Alt, and leave the
+ * text-editing chords alone.
+ */
 function defaultShortcut(command: CommandContribution): string | null {
   const shortcut: unknown = command.shortcut;
-  if (typeof shortcut !== "string" || !parseAccelerator(shortcut)) return null;
-  return shortcut;
+  if (typeof shortcut !== "string") return null;
+  const parsed = parseAccelerator(shortcut);
+  if (!parsed || !hasCommandModifier(parsed)) return null;
+  const canonical = serializeAccelerator(parsed);
+  return TEXT_EDITING_CHORDS.has(canonical) ? null : canonical;
 }
 
 export function isMenuCommand(command: CommandContribution): boolean {
