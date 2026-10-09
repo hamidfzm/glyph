@@ -171,6 +171,27 @@ mod tests {
         assert!(write.is_err());
     }
 
+    // The workspace is granted, and its `.glyph` still leads out of it.
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_glyph_folder_gets_nothing_read_or_written_through_the_commands() {
+        let ws = TempDir::new().unwrap();
+        let elsewhere = TempDir::new().unwrap();
+        std::fs::write(elsewhere.path().join("config.json"), "{}").unwrap();
+        std::os::unix::fs::symlink(elsewhere.path(), ws.path().join(".glyph")).unwrap();
+        let note = ws.path().join("a.md");
+        std::fs::write(&note, "# hi").unwrap();
+        let root = ws.path().to_string_lossy().to_string();
+
+        assert!(workspace_get_last_file(root.clone()).is_err());
+        assert!(workspace_set_last_file(root, note.to_string_lossy().to_string()).is_err());
+
+        let theirs = std::fs::read_to_string(elsewhere.path().join("config.json")).unwrap();
+        assert_eq!(theirs, "{}");
+        assert!(!elsewhere.path().join("state.json").exists());
+        assert!(!elsewhere.path().join(".gitignore").exists());
+    }
+
     #[test]
     fn resolve_reports_a_plain_folder() {
         let tmp = TempDir::new().unwrap();

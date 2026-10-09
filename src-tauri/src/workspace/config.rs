@@ -14,7 +14,7 @@
 //! [`super::paths`]) so they stay valid across machines and on Windows.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -103,15 +103,36 @@ pub struct WorkspaceState {
     pub last_file: Option<String>,
 }
 
-fn glyph_dir(workspace_root: &Path) -> std::path::PathBuf {
+fn glyph_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join(format!(".{}", crate::APP_NAME))
+}
+
+/// True for a link that dangles too, which `exists()` reports as absent and a
+/// write would follow.
+fn is_symlink(path: &Path) -> bool {
+    path.symlink_metadata()
+        .is_ok_and(|meta| meta.file_type().is_symlink())
+}
+
+/// The path of `.glyph/<name>`, refused when `.glyph` or the file is a
+/// symbolic link. A cloned workspace can ship either one pointing anywhere,
+/// and following it would read or replace a file outside the workspace.
+fn glyph_file(workspace_root: &Path, name: &str) -> Result<PathBuf, String> {
+    let dir = glyph_dir(workspace_root);
+    let file = dir.join(name);
+    if is_symlink(&dir) || is_symlink(&file) {
+        return Err(format!(
+            "refusing to follow a symbolic link at .glyph/{name}"
+        ));
+    }
+    Ok(file)
 }
 
 /// Read `.glyph/config.json`. `Ok(None)` when the file is absent (a workspace
 /// that's never been configured — not an error); `Err` only when a file
 /// exists but can't be read or parsed.
 pub fn read_config(workspace_root: &Path) -> Result<Option<WorkspaceConfig>, String> {
-    let path = glyph_dir(workspace_root).join(CONFIG_FILE);
+    let path = glyph_file(workspace_root, CONFIG_FILE)?;
     match fs::read_to_string(&path) {
         Ok(s) => serde_json::from_str(&s)
             .map(Some)
@@ -125,19 +146,17 @@ pub fn read_config(workspace_root: &Path) -> Result<Option<WorkspaceConfig>, Str
 /// if needed. Pretty-printed with a trailing newline for clean diffs.
 #[cfg(desktop)]
 pub fn write_config(workspace_root: &Path, config: &WorkspaceConfig) -> Result<(), String> {
-    let dir = glyph_dir(workspace_root);
-    fs::create_dir_all(&dir).map_err(|e| format!("failed to create .glyph: {e}"))?;
-    ensure_gitignore(&dir)?;
+    let path = glyph_file(workspace_root, CONFIG_FILE)?;
+    ensure_glyph_dir(workspace_root)?;
     let mut json = serde_json::to_string_pretty(config)
         .map_err(|e| format!("failed to serialize config: {e}"))?;
     json.push('\n');
-    fs::write(dir.join(CONFIG_FILE), json)
-        .map_err(|e| format!("failed to write .glyph/config.json: {e}"))
+    fs::write(path, json).map_err(|e| format!("failed to write .glyph/config.json: {e}"))
 }
 
 /// Read `.glyph/state.json`, defaulting when absent.
 pub fn read_state(workspace_root: &Path) -> Result<WorkspaceState, String> {
-    let path = glyph_dir(workspace_root).join(STATE_FILE);
+    let path = glyph_file(workspace_root, STATE_FILE)?;
     match fs::read_to_string(&path) {
         Ok(s) => serde_json::from_str(&s).map_err(|e| format!("corrupt .glyph/state.json: {e}")),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(WorkspaceState::default()),
@@ -148,25 +167,25 @@ pub fn read_state(workspace_root: &Path) -> Result<WorkspaceState, String> {
 /// Write `.glyph/state.json`, creating `.glyph/` (and its `.gitignore`) if
 /// needed.
 pub fn write_state(workspace_root: &Path, state: &WorkspaceState) -> Result<(), String> {
-    let dir = glyph_dir(workspace_root);
-    fs::create_dir_all(&dir).map_err(|e| format!("failed to create .glyph: {e}"))?;
-    ensure_gitignore(&dir)?;
+    let path = glyph_file(workspace_root, STATE_FILE)?;
+    ensure_glyph_dir(workspace_root)?;
     let mut json = serde_json::to_string_pretty(state)
         .map_err(|e| format!("failed to serialize state: {e}"))?;
     json.push('\n');
-    fs::write(dir.join(STATE_FILE), json)
-        .map_err(|e| format!("failed to write .glyph/state.json: {e}"))
+    fs::write(path, json).map_err(|e| format!("failed to write .glyph/state.json: {e}"))
 }
 
-/// Ensure `.glyph/.gitignore` excludes the volatile `state.json` so it
-/// never enters a commit, even though `.glyph/` itself is committed. Does
-/// not clobber an existing (possibly user-edited) `.gitignore`.
-fn ensure_gitignore(glyph_dir: &Path) -> Result<(), String> {
-    let path = glyph_dir.join(GITIGNORE_FILE);
-    if path.exists() {
+/// Create `.glyph/` if needed, with a `.gitignore` excluding the volatile
+/// `state.json` so it never enters a commit, even though `.glyph/` itself is
+/// committed. Does not clobber an existing (possibly user-edited) `.gitignore`.
+fn ensure_glyph_dir(workspace_root: &Path) -> Result<(), String> {
+    let gitignore = glyph_file(workspace_root, GITIGNORE_FILE)?;
+    fs::create_dir_all(glyph_dir(workspace_root))
+        .map_err(|e| format!("failed to create .glyph: {e}"))?;
+    if gitignore.exists() {
         return Ok(());
     }
-    fs::write(&path, format!("{STATE_FILE}\n"))
+    fs::write(&gitignore, format!("{STATE_FILE}\n"))
         .map_err(|e| format!("failed to write .glyph/.gitignore: {e}"))
 }
 
@@ -293,6 +312,93 @@ mod tests {
     fn clear_sync_config_is_noop_when_absent() {
         let tmp = TempDir::new().unwrap();
         clear_sync_config(&tmp.path().to_string_lossy()).unwrap();
+    }
+
+    // A cloned workspace can ship `.glyph`, or a file in it, as a link to anywhere.
+    #[cfg(unix)]
+    mod symlinks {
+        use super::*;
+        use std::os::unix::fs::symlink;
+
+        fn assert_refused<T: std::fmt::Debug>(result: Result<T, String>) {
+            let err = result.unwrap_err();
+            assert!(err.contains("symbolic link"), "{err}");
+        }
+
+        /// A workspace whose `.glyph/<name>` links to a file that is not there.
+        fn workspace_with_dangling(name: &str) -> (TempDir, TempDir) {
+            let ws = TempDir::new().unwrap();
+            let elsewhere = TempDir::new().unwrap();
+            fs::create_dir_all(ws.path().join(".glyph")).unwrap();
+            let link = ws.path().join(".glyph").join(name);
+            symlink(elsewhere.path().join("planted"), link).unwrap();
+            (ws, elsewhere)
+        }
+
+        #[test]
+        fn a_linked_glyph_folder_is_neither_read_nor_written() {
+            let ws = TempDir::new().unwrap();
+            let elsewhere = TempDir::new().unwrap();
+            fs::write(elsewhere.path().join(CONFIG_FILE), "{}").unwrap();
+            fs::write(elsewhere.path().join(STATE_FILE), "{}").unwrap();
+            symlink(elsewhere.path(), ws.path().join(".glyph")).unwrap();
+            let root = ws.path();
+
+            assert_refused(read_config(root));
+            assert_refused(read_state(root));
+            assert_refused(write_config(root, &WorkspaceConfig::default()));
+            assert_refused(write_state(root, &WorkspaceState::default()));
+            assert_refused(store_sync_config(&sample_config(&root.to_string_lossy())));
+
+            for name in [CONFIG_FILE, STATE_FILE] {
+                let theirs = fs::read_to_string(elsewhere.path().join(name)).unwrap();
+                assert_eq!(theirs, "{}", "{name}");
+            }
+            assert!(!elsewhere.path().join(GITIGNORE_FILE).exists());
+        }
+
+        // Any JSON object parses as an empty config, so only the link check
+        // stands between a linked file and being replaced.
+        #[test]
+        fn a_linked_file_is_neither_read_nor_written() {
+            let ws = TempDir::new().unwrap();
+            let elsewhere = TempDir::new().unwrap();
+            let theirs = elsewhere.path().join("settings.json");
+            fs::write(&theirs, "{}").unwrap();
+            fs::create_dir_all(ws.path().join(".glyph")).unwrap();
+            for name in [CONFIG_FILE, STATE_FILE] {
+                symlink(&theirs, ws.path().join(".glyph").join(name)).unwrap();
+            }
+            let root = ws.path();
+
+            assert_refused(read_config(root));
+            assert_refused(read_state(root));
+            assert_refused(write_config(root, &WorkspaceConfig::default()));
+            assert_refused(write_state(root, &WorkspaceState::default()));
+
+            assert_eq!(fs::read_to_string(&theirs).unwrap(), "{}");
+        }
+
+        #[test]
+        fn a_dangling_link_is_not_written_through() {
+            let (ws, elsewhere) = workspace_with_dangling(CONFIG_FILE);
+            assert_refused(write_config(ws.path(), &WorkspaceConfig::default()));
+            assert!(!elsewhere.path().join("planted").exists());
+
+            let (ws, elsewhere) = workspace_with_dangling(STATE_FILE);
+            assert_refused(write_state(ws.path(), &WorkspaceState::default()));
+            assert!(!elsewhere.path().join("planted").exists());
+        }
+
+        // Every write makes sure of the `.gitignore` first.
+        #[test]
+        fn a_dangling_gitignore_link_stops_every_write() {
+            let (ws, elsewhere) = workspace_with_dangling(GITIGNORE_FILE);
+            assert_refused(write_config(ws.path(), &WorkspaceConfig::default()));
+            assert_refused(write_state(ws.path(), &WorkspaceState::default()));
+            assert!(!elsewhere.path().join("planted").exists());
+            assert!(!ws.path().join(".glyph").join(CONFIG_FILE).exists());
+        }
     }
 
     #[test]
