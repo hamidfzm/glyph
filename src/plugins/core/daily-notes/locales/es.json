@@ -1,0 +1,31 @@
+{
+  "command": "Abrir la nota de hoy",
+  "failed": "No se pudo abrir la nota de hoy: {{error}}",
+  "problem": {
+    "patternRequired": "Las notas diarias no tienen un patrón de nombre de archivo. Define uno en la configuración del espacio de trabajo.",
+    "invalidPath": "La carpeta, el patrón de nombre de archivo o la plantilla de las notas diarias no forman una ruta válida. Corrígelo en la configuración del espacio de trabajo."
+  },
+  "settings": {
+    "title": "Notas diarias",
+    "description": "Dónde guarda \"Abrir la nota de hoy\" la nota de cada día. Se guarda en .glyph/config.json, así que viaja con la carpeta.",
+    "folder": {
+      "label": "Carpeta",
+      "hint": "relativa al espacio de trabajo; vacía para la raíz del espacio de trabajo"
+    },
+    "filenamePattern": {
+      "label": "Patrón de nombre de archivo",
+      "hint": "YYYY, YY, MM, M, DD y D se sustituyen por la fecha de hoy; el [texto] entre corchetes se conserva tal cual"
+    },
+    "template": {
+      "label": "Archivo de plantilla",
+      "hint": "relativa al espacio de trabajo; se copia en cada nota nueva"
+    },
+    "preview": "Nota de hoy: {{path}}",
+    "errors": {
+      "patternRequired": "Introduce un patrón de nombre de archivo.",
+      "invalidPath": "La carpeta, el patrón de nombre de archivo y la plantilla no pueden contener \"..\" ni ninguno de < > : \" | ? *"
+    },
+    "save": "Guardar",
+    "saved": "Guardado"
+  }
+}

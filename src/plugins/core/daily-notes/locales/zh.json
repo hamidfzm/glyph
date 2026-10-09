@@ -1,0 +1,31 @@
+{
+  "command": "打开今日笔记",
+  "failed": "无法打开今日笔记：{{error}}",
+  "problem": {
+    "patternRequired": "每日笔记没有设置文件名模式。请在工作区设置中设置。",
+    "invalidPath": "每日笔记的文件夹、文件名模式或模板不是有效路径。请在工作区设置中修正。"
+  },
+  "settings": {
+    "title": "每日笔记",
+    "description": "\"打开今日笔记\"存放每天笔记的位置。保存到 .glyph/config.json，随文件夹一起迁移。",
+    "folder": {
+      "label": "文件夹",
+      "hint": "相对于工作区；留空表示工作区根目录"
+    },
+    "filenamePattern": {
+      "label": "文件名模式",
+      "hint": "YYYY、YY、MM、M、DD 和 D 会替换为今天的日期；方括号中的 [文本] 保持原样"
+    },
+    "template": {
+      "label": "模板文件",
+      "hint": "相对于工作区；会复制到每篇新笔记中"
+    },
+    "preview": "今日笔记：{{path}}",
+    "errors": {
+      "patternRequired": "请输入文件名模式。",
+      "invalidPath": "文件夹、文件名模式和模板不能包含 \"..\" 或以下任何字符：< > : \" | ? *"
+    },
+    "save": "保存",
+    "saved": "已保存"
+  }
+}

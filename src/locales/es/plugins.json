@@ -62,6 +62,10 @@
     "backlinks": {
       "name": "Enlaces entrantes",
       "description": "Muestra en la barra de archivos las notas que enlazan a la nota abierta."
+    },
+    "dailyNotes": {
+      "name": "Notas diarias",
+      "description": "Abre o crea la nota de hoy desde el menú Archivo, la paleta o un atajo. Su carpeta, patrón de nombre de archivo y plantilla se definen por espacio de trabajo en la configuración del espacio de trabajo."
     }
   }
 }

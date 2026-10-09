@@ -343,11 +343,19 @@ the way a renderer-supplied path is.
   index queries go through the `vault_*` commands, which check the workspace
   grant themselves, and an open is an ordinary `read_file`. The paths a plugin
   opens or lists are confined to the workspace in the renderer first, as a
-  consistency check rather than the boundary. Sandboxed plugins get none of
-  it. Core plugins (the compiled-in `CORE_PLUGINS` list: D2, Mermaid, math,
-  tags, and backlinks today) are app code shipped in the signed binary: they
-  load with full trust and no consent prompt, take the permissions they need
-  (`workspace:read` for tags and backlinks) from that same list rather than
-  from disk, and only their on/off state lives in `settings.json`. The backend
+  consistency check rather than the boundary. One that declared
+  `workspace:write` can also create a file in the workspace and keep a
+  settings object of its own in the workspace's `.glyph/config.json`. Those
+  two do add commands (`create_workspace_file` and
+  `workspace_set_plugin_settings`, in the table above), and each holds its
+  boundary itself: the first never replaces a file and refuses hidden paths
+  such as `.git/hooks`, the second writes one size-capped block keyed by the
+  plugin's id. Sandboxed plugins get none of it. Core plugins (the compiled-in
+  `CORE_PLUGINS` list: D2, Mermaid, math, tags, backlinks, and daily notes
+  today) are app code shipped in the signed binary: they load with full trust
+  and no consent prompt, take the permissions they need (`workspace:read` for
+  tags and backlinks, and `workspace:write` as well for daily notes) from that
+  same list rather than from disk, and only their on/off state lives in
+  `settings.json`. The backend
   reserves the `glyph.core.` id prefix, so an installed plugin cannot take a
   core plugin's settings, grants, or host slot.

@@ -1,0 +1,31 @@
+{
+  "command": "Open Today's Note",
+  "failed": "Couldn't open today's note: {{error}}",
+  "problem": {
+    "patternRequired": "Daily notes have no file name pattern. Set one in Workspace Settings.",
+    "invalidPath": "The daily notes folder, file name pattern, or template isn't a valid path. Fix it in Workspace Settings."
+  },
+  "settings": {
+    "title": "Daily Notes",
+    "description": "Where Open Today's Note keeps each day's note. Saved to .glyph/config.json, so it travels with the folder.",
+    "folder": {
+      "label": "Folder",
+      "hint": "workspace-relative; empty for the workspace root"
+    },
+    "filenamePattern": {
+      "label": "File name pattern",
+      "hint": "YYYY, YY, MM, M, DD, and D are replaced by today's date; [text] in brackets is kept as written"
+    },
+    "template": {
+      "label": "Template file",
+      "hint": "workspace-relative; copied into each new note"
+    },
+    "preview": "Today's note: {{path}}",
+    "errors": {
+      "patternRequired": "Enter a file name pattern.",
+      "invalidPath": "The folder, file name pattern, and template can't contain \"..\" or any of < > : \" | ? *"
+    },
+    "save": "Save",
+    "saved": "Saved"
+  }
+}

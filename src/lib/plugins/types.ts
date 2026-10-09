@@ -258,6 +258,17 @@ export interface SettingsPanelContribution extends MountContribution {
   pluginId: string;
 }
 
+/** 0.26.0: a tab in Workspace Settings. */
+export interface WorkspaceSettingsPanelContribution extends MountContribution {
+  /** The tab's label. */
+  title: string;
+}
+
+/** A Workspace Settings tab as the host holds it, stamped with the plugin that added it. */
+export interface WorkspaceSettingsPanelEntry extends WorkspaceSettingsPanelContribution {
+  pluginId: string;
+}
+
 /** 0.26.0: what an exporter needs to make its output look like the app. */
 export interface ExportDocument {
   /** Plain text; escape it before putting it in markup. */
@@ -310,6 +321,12 @@ export interface UiRegistryApi {
   /** One settings panel per plugin; the host keys it by the plugin's id. Not
    *  available to sandboxed plugins; see {@link addStatusBarItem}. */
   addSettingsPanel(panel: MountContribution): Disposer;
+  /**
+   * 0.26.0: add a tab to Workspace Settings, for what the plugin keeps per
+   * workspace (see {@link WorkspaceApi.getSettings}). Not available to
+   * sandboxed plugins; see {@link addStatusBarItem}.
+   */
+  addWorkspaceSettingsPanel(panel: WorkspaceSettingsPanelContribution): Disposer;
   /**
    * 0.26.0: open an overlay over the whole app, replacing any open one. Escape
    * closes it and runs its cleanups, as does the returned disposer. Not
@@ -477,10 +494,18 @@ export interface NavigationApi {
  * registration returns a {@link Disposer}; the host collects them and runs
  * them on unload, so a plugin that only registers needs no `deactivate`.
  */
+/** 0.26.0: what {@link WorkspaceApi.createFile} did. */
+export interface CreatedFile {
+  /** Absolute path of the file, spelled as it is on disk. */
+  path: string;
+  /** False when a file was already there and was left as it is. */
+  created: boolean;
+}
+
 /**
- * Mediated, read-only access to the opened workspace. Requires the plugin to
- * declare the `workspace:read` permission; paths are workspace-relative and
- * confined to the workspace root.
+ * Mediated access to the opened workspace. Reading requires the plugin to
+ * declare the `workspace:read` permission and writing `workspace:write`; paths
+ * are workspace-relative and confined to the workspace root.
  */
 export interface WorkspaceApi {
   /** Read a file inside the workspace (workspace-relative path). */
@@ -497,6 +522,28 @@ export interface WorkspaceApi {
    * available to sandboxed plugins.
    */
   onChange(listener: () => void): Disposer;
+  /**
+   * 0.26.0: create a file (workspace-relative path) with `content`, along with
+   * any folders it needs. It never replaces a file: one that is already there
+   * is left as it is and reported with `created: false`. A hidden file or
+   * folder (a name starting with a dot) is refused. Requires the
+   * `workspace:write` permission. Not available to sandboxed plugins.
+   */
+  createFile(path: string, content?: string): Promise<CreatedFile>;
+  /**
+   * 0.26.0: what this plugin keeps for the opened workspace, empty when it has
+   * saved nothing. It lives in the workspace's `.glyph/config.json`, so it
+   * travels with the folder and can be edited by hand: check the values.
+   * Requires the `workspace:read` permission. Not available to sandboxed
+   * plugins.
+   */
+  getSettings(): Promise<Record<string, unknown>>;
+  /**
+   * 0.26.0: replace what this plugin keeps for the opened workspace, at most
+   * 64 KiB as JSON. Requires the `workspace:write` permission. Not available
+   * to sandboxed plugins.
+   */
+  setSettings(settings: Record<string, unknown>): Promise<void>;
 }
 
 /**
