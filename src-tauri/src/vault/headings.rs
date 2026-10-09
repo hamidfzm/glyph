@@ -418,10 +418,11 @@ enum RawBlocks {
 }
 
 impl RawBlocks {
-    /// Whether the line trimmed to `text` opens, closes or sits inside one.
-    /// `in_paragraph` is whether the line above is text this one would carry
-    /// on: a lone tag opens a block only where it does not.
-    fn skip(&mut self, text: &str, in_paragraph: bool) -> bool {
+    /// Whether the line trimmed to `text`, `indent` columns in, opens, closes
+    /// or sits inside one. `in_paragraph` is whether the line above is text
+    /// this one would carry on: a lone tag opens a block only where it does
+    /// not.
+    fn skip(&mut self, text: &str, indent: usize, in_paragraph: bool) -> bool {
         let lower = text.to_ascii_lowercase();
         match *self {
             RawBlocks::Until(ends) => {
@@ -443,6 +444,10 @@ impl RawBlocks {
                 return true;
             }
             RawBlocks::Outside => {}
+        }
+        // Four columns in, a line opens nothing; it can still end a block.
+        if indent > 3 {
+            return false;
         }
         let Some(opened) = raw_opener(&lower, in_paragraph) else {
             return false;
@@ -582,7 +587,7 @@ pub(crate) fn uncertain_line(content: &str, body_start: usize, span: &SectionSpa
         // To CommonMark nothing opens inside a fence, and no fence opens
         // inside raw HTML or math.
         let fenced = strict.open_indent().is_some();
-        let in_raw = !fenced && indent <= 3 && raw.skip(text, above_is_text);
+        let in_raw = !fenced && raw.skip(text, indent, above_is_text);
         let strict_code = !in_raw && strict.skip(line);
         // A fence left open in a list item ends with the item for CommonMark,
         // and swallows the rest of the note for both readers here.
@@ -605,10 +610,15 @@ pub(crate) fn uncertain_line(content: &str, body_start: usize, span: &SectionSpa
             (Some(level), None) | (None, Some(level)) => Some(level),
             _ => None,
         };
-        // A line four columns in is text only where it carries a paragraph on.
-        let carries_on = indent <= 3 || above_is_text;
-        let plain_text = commonmark.is_none() && !opens_container(text) && !is_thematic_break(text);
-        above_is_text = !hidden && !text.is_empty() && plain_text && carries_on;
+        // Four columns in, a line is text where it carries a paragraph on,
+        // whatever it is shaped like, and code where it does not.
+        let opens_text = commonmark.is_none() && !opens_container(text) && !is_thematic_break(text);
+        let is_text = if indent > 3 {
+            above_is_text
+        } else {
+            opens_text
+        };
+        above_is_text = !hidden && !text.is_empty() && is_text;
         let moves_a_bound = match disputed {
             Some(_) if idx == heading_line => true,
             Some(level) => idx > heading_line && level <= span.heading.level,
@@ -896,7 +906,54 @@ mod tests {
     }
 
     #[test]
+    fn a_raw_block_ends_where_commonmark_ends_it_however_that_line_is_indented() {
+        // The closing line sits five columns in. Missed, the comment would
+        // never end, and the underlined heading after it would stay hidden.
+        let comment =
+            "## Notes\ntext\n<!-- a comment\n     wrapped -->\n\nLater part\n----------\nmore\n";
+        assert_eq!(doubt(comment, "Notes"), Some(7));
+        assert_eq!(
+            doubt("# A\n<pre>\nx\n    </pre>\n\nNext\n===\nmore\n", "A"),
+            Some(7)
+        );
+        // A blank line holding spaces ends a block as an empty one does.
+        let spaced = "## A\n<div>\nx\n</div>\n    \nLater\n-----\nmore\n";
+        assert_eq!(doubt(spaced, "A"), Some(7));
+        // Ended, a block leaves the headings after it alone.
+        let after = "# A\n<!-- a comment\n     wrapped -->\n\n## Sub\ntext\n# B\n";
+        assert_eq!(doubt(after, "A"), None);
+        assert_eq!(doubt("# A\n$$\nx = 1\n$$$\n# B\n", "A"), None);
+    }
+
+    #[test]
+    fn each_kind_of_raw_block_hides_a_heading_until_its_own_end() {
+        for (open, close) in [
+            ("<?php", "?>"),
+            ("<![CDATA[", "]]>"),
+            ("<!DOCTYPE note [", "]>"),
+            ("<!--", "-->"),
+            ("<script>", "</script>"),
+        ] {
+            // Open across a blank line, the `#` line is the slicer's alone.
+            let open_still = format!("# A\n{open}\n\n# inside\n{close}\n# B\n");
+            assert_eq!(doubt(&open_still, "A"), Some(4), "{open}");
+            // Closed on the line it opened on, it hides nothing.
+            let closed = format!("# A\n{open} x {close}\n# B\n");
+            assert_eq!(doubt(&closed, "A"), None, "{open}");
+        }
+        // A `<` that opens no tag is text, and so is a run of mixed marks.
+        assert_eq!(doubt("# A\n<3 a heart\n===\n", "A"), Some(3));
+        assert_eq!(doubt("# A\n<a-b>\n===\n", "A"), Some(3));
+        assert_eq!(doubt("# A\n\n-*-\n===\n", "A"), Some(4));
+    }
+
+    #[test]
     fn text_above_an_underline_is_whatever_carries_a_paragraph_on() {
+        // Four columns in, a line carries the paragraph on whatever it is
+        // shaped like.
+        assert_eq!(doubt("# Top\npara one\n    - deep\n===\n", "Top"), Some(4));
+        // With no paragraph to carry on it is code, and the rule a rule.
+        assert_eq!(doubt("# Top\n\n    - deep\n===\n", "Top"), None);
         // A wrapped title, its second line four columns in.
         let wrapped =
             "## A\ntext\n\nA long title that wraps\n    onto a second line\n---\nbody\n\n## B\n";
