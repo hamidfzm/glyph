@@ -51,17 +51,22 @@ pub fn focus_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
     }
 }
 
+/// The window holding focus, if any of this app's windows does.
+pub fn focused_window_label<R: Runtime>(app: &AppHandle<R>) -> Option<String> {
+    app.webview_windows()
+        .into_iter()
+        .find(|(_, w)| w.is_focused().unwrap_or(false))
+        .map(|(label, _)| label)
+}
+
 /// The window an OS-level open (or menu action) should treat as "current":
 /// the focused one, else `main`, else any window. Preferring `main` keeps the
 /// no-focus fallback deterministic instead of HashMap iteration order.
 pub fn current_window_label<R: Runtime>(app: &AppHandle<R>) -> String {
-    let windows = app.webview_windows();
-    if let Some((label, _)) = windows
-        .iter()
-        .find(|(_, w)| w.is_focused().unwrap_or(false))
-    {
-        return label.clone();
+    if let Some(label) = focused_window_label(app) {
+        return label;
     }
+    let windows = app.webview_windows();
     if windows.contains_key("main") {
         return "main".to_string();
     }
@@ -160,6 +165,11 @@ fn spawn_window<R: Runtime>(app: &AppHandle<R>, registry: &WindowRegistry, pendi
             // entry that would swallow future open requests.
             if let Some(registry) = app.try_state::<WindowRegistry>() {
                 registry.remove(&label);
+            }
+            // No Destroyed event fires for a window that was never built.
+            #[cfg(windows)]
+            if let Some(menus) = app.try_state::<crate::menu::MenuRegistry<R>>() {
+                menus.remove(&label);
             }
         }
     });

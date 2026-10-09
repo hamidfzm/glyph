@@ -6,13 +6,15 @@ use std::collections::HashMap;
 
 use tauri::{
     menu::{MenuItem, MenuItemBuilder, PredefinedMenuItem, Submenu},
-    Runtime, State,
+    Manager, Runtime, State,
 };
 
 use super::{MenuItemRefs, MenuLabels, MenuRegistry, MenuStateFlags, PluginMenuSection};
 use crate::menu::{
-    listable_plugin_menu_entries, parse_menu_id, plugin_menu_item_id, PluginMenuEntry,
+    listable_plugin_menu_entries, may_write_shared_menu_state, parse_menu_id, plugin_menu_item_id,
+    PluginMenuEntry,
 };
+use crate::windows_runtime::focused_window_label;
 
 /// Maps a bindable command id to its menu item, for accelerator updates.
 fn accelerator_target<'a, R: Runtime>(
@@ -239,6 +241,13 @@ pub fn set_menu_state(
     registry: State<MenuRegistry>,
     flags: MenuStateFlags,
 ) -> Result<(), String> {
+    // Windows menus are per window, so there is no other window to overwrite.
+    if !cfg!(windows) {
+        let focused = focused_window_label(window.app_handle());
+        if !may_write_shared_menu_state(window.label(), focused.as_deref()) {
+            return Ok(());
+        }
+    }
     registry
         .with_refs(window.label(), |refs| apply_menu_state(refs, &flags))
         .unwrap_or(Ok(()))
