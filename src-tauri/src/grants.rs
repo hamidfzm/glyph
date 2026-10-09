@@ -42,15 +42,35 @@ fn denied(path: &Path) -> String {
     )
 }
 
-/// Canonicalize tolerating a not-yet-existing tail; a `..` or `.` in the
-/// missing tail makes `file_name()` return `None` and is rejected.
+/// Canonicalize tolerating a not-yet-existing tail; a `..` in the missing tail
+/// makes `file_name()` return `None` and is rejected. So is a link in that
+/// tail: nothing shows where it leads, and the read or write that comes next
+/// would follow it there.
 fn canonicalize_lenient(path: &Path) -> Result<PathBuf, String> {
     if let Ok(canonical) = path.canonicalize() {
         return Ok(canonical);
     }
     let parent = path.parent().ok_or_else(|| denied(path))?;
     let name = path.file_name().ok_or_else(|| denied(path))?;
-    Ok(canonicalize_lenient(parent)?.join(name))
+    // On Windows `name:stream` opens a stream of `name`, through `name` when
+    // it is a link, and is not a link itself.
+    if cfg!(windows) && name.to_string_lossy().contains(':') {
+        return Err(denied(path));
+    }
+    // Asked of the rebuilt path, the one a caller opens: as spelled, a
+    // trailing separator makes the lookup go through the link.
+    let rebuilt = canonicalize_lenient(parent)?.join(name);
+    if is_symlink(&rebuilt) {
+        return Err(denied(path));
+    }
+    Ok(rebuilt)
+}
+
+/// True for a link whose target is missing too, which `exists()` reports as
+/// absent. On Windows a junction is one.
+pub(crate) fn is_symlink(path: &Path) -> bool {
+    path.symlink_metadata()
+        .is_ok_and(|meta| meta.file_type().is_symlink())
 }
 
 /// Refuse a path that names a network share or a device, unless a grant
@@ -331,6 +351,7 @@ pub fn allow_asset_file<R: tauri::Runtime>(app: &tauri::AppHandle<R>, file: &Pat
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vault::test_support::link_folder;
     use std::fs;
     use tempfile::TempDir;
 
@@ -460,6 +481,64 @@ mod tests {
         grants.grant_workspace(&root).unwrap();
 
         assert!(grants.ensure_readable(&as_str(&link)).is_err());
+        // A file with a trailing separator does not canonicalize either, and
+        // the link still leads to it.
+        let trailing = format!("{}/", as_str(&link));
+        assert!(grants.ensure_readable(&trailing).is_err());
+        assert!(grants.ensure_writable(&trailing).is_err());
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_colon_in_a_new_name_is_only_special_on_windows() {
+        let tmp = TempDir::new().unwrap();
+        let grants = GrantRegistry::default();
+        grants.grant_workspace(tmp.path()).unwrap();
+
+        let note = tmp.path().join("Standup 10:30.md");
+        assert!(grants.ensure_writable(&as_str(&note)).is_ok());
+    }
+
+    #[test]
+    fn a_link_to_a_missing_target_is_refused_with_everything_under_it() {
+        let outer = TempDir::new().unwrap();
+        let root = outer.path().join("ws");
+        fs::create_dir_all(&root).unwrap();
+        // The target's folder exists, so a write through the link would
+        // create the target there, outside the workspace.
+        let link = root.join("note.md");
+        link_folder(&outer.path().join("planted.md"), &link);
+        let chained = root.join("alias.md");
+        link_folder(&link, &chained);
+        // Refused wherever it leads: nothing here follows a link by hand.
+        let inward = root.join("later.md");
+        link_folder(&root.join("not-yet.md"), &inward);
+
+        let grants = GrantRegistry::default();
+        grants.grant_workspace(&root).unwrap();
+
+        // A trailing separator or `.` makes the OS look through the link.
+        let trailing = format!("{}{}", as_str(&link), std::path::MAIN_SEPARATOR);
+        for path in [
+            link.clone(),
+            PathBuf::from(trailing),
+            link.join("."),
+            link.join("sub"),
+            link.join("sub").join("deep.md"),
+            chained,
+            inward,
+        ] {
+            assert!(grants.ensure_writable(&as_str(&path)).is_err(), "{path:?}");
+            assert!(grants.ensure_readable(&as_str(&path)).is_err(), "{path:?}");
+        }
+        // A stream of the link is opened through the link.
+        #[cfg(windows)]
+        assert!(grants
+            .ensure_writable(&format!("{}:stream", as_str(&link)))
+            .is_err());
+        // An export grant minted on the link would let the export write through it.
+        assert!(grants.grant_export_file(&link).is_err());
+        assert!(grants.grant_export_dir(&link).is_err());
     }
 
     #[test]
@@ -522,7 +601,7 @@ mod tests {
 
         // Junctions are the Windows escape vector symlinks are on unix.
         let link = root.join("innocent");
-        crate::vault::test_support::link_folder(&secret_dir, &link);
+        link_folder(&secret_dir, &link);
 
         let grants = GrantRegistry::default();
         grants.grant_workspace(&root).unwrap();
