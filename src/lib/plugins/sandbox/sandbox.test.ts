@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
+import type { ExporterContribution, InstalledPlugin } from "@/lib/plugins/types";
 import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
 import { expectConsole } from "@/test/consoleGuard";
 import { FakeWorker } from "@/test/fakeWorker";
-import { PLUGIN_API_VERSION } from "../apiVersion";
-import type { ExporterContribution, InstalledPlugin } from "../types";
 import type { SandboxHostApi } from "./sandbox";
 import { startSandbox } from "./sandbox";
 
@@ -126,6 +126,25 @@ describe("startSandbox", () => {
     expect(worker.posted).toContainEqual({ type: "run-command", id: "c1" });
   });
 
+  it("lists whatever a worker sends as its strings, never a raw value", async () => {
+    const { worker, api } = await startActivated();
+    // A worker is untrusted: its payload need not match the protocol's types.
+    worker.emit({ type: "register-command", id: 7, title: { toString: () => "T" } } as never);
+    worker.emit({ type: "register-exporter", id: 8, label: null, extension: 9 } as never);
+
+    const [command] = vi.mocked(api.registerCommand).mock.calls[0];
+    expect(command).toMatchObject({ id: "7", title: "T" });
+    const [exporter] = vi.mocked(api.registerExporter).mock.calls[0];
+    expect(exporter).toMatchObject({ id: "8", label: "null", extension: "9" });
+  });
+
+  it("carries a command's menu placement across the bridge", async () => {
+    const { worker, api } = await startActivated();
+    worker.emit({ type: "register-command", id: "c1", title: "Present", menu: "view" });
+    const [command] = vi.mocked(api.registerCommand).mock.calls[0];
+    expect(command.menu).toBe("view");
+  });
+
   it("bridges styles, notify, translations, and settings-set", async () => {
     const { worker, api } = await startActivated();
     worker.emit({ type: "add-styles", css: "body{color:red}" });
@@ -173,9 +192,10 @@ describe("startSandbox", () => {
     worker.emit({ type: "register-exporter", id: "e1", label: "Text", extension: "txt" });
     const [exporter] = vi.mocked(api.registerExporter).mock.calls[0] as [ExporterContribution];
 
-    const building = exporter.build("<p>hi</p>");
+    const doc = { title: "Talk", css: ".a{}", dark: true };
+    const building = exporter.build("<p>hi</p>", doc);
     const request = worker.posted.find((m) => m.type === "build-export");
-    expect(request).toMatchObject({ id: "e1", bodyHtml: "<p>hi</p>" });
+    expect(request).toMatchObject({ id: "e1", bodyHtml: "<p>hi</p>", doc });
     const callId = (request as { callId: number }).callId;
 
     worker.emit({ type: "export-result", callId, ok: true, output: "done" });
@@ -186,17 +206,18 @@ describe("startSandbox", () => {
     const { worker, api } = await startActivated();
     worker.emit({ type: "register-exporter", id: "e1", label: "Bin", extension: "bin" });
     const [exporter] = vi.mocked(api.registerExporter).mock.calls[0] as [ExporterContribution];
+    const doc = { title: "", css: "", dark: false };
 
-    const first = exporter.build("a");
+    const first = exporter.build("a", doc);
     worker.emit({ type: "export-result", callId: 1, ok: true, output: [1, 2] });
     await expect(first).resolves.toEqual(new Uint8Array([1, 2]));
 
-    const second = exporter.build("b");
+    const second = exporter.build("b", doc);
     worker.emit({ type: "export-result", callId: 2, ok: false, error: "no bytes" });
     await expect(second).rejects.toThrow("no bytes");
 
     // An ok result with no output still rejects instead of resolving undefined.
-    const third = exporter.build("c");
+    const third = exporter.build("c", doc);
     worker.emit({ type: "export-result", callId: 3, ok: true });
     await expect(third).rejects.toThrow("export failed");
 

@@ -1,7 +1,7 @@
 ---
 description: Turn a rough idea into a structured GitHub issue (the spec) with acceptance criteria and tasks
 argument-hint: <rough idea, e.g. "add a word-count item to the status bar">
-allowed-tools: Bash(gh issue *), Bash(gh project *), Bash(gh label *), Bash(git *), Read, Grep, Glob, Task
+allowed-tools: Bash(gh issue *), Bash(gh project *), Bash(gh label *), Bash(git *), Read, Grep, Glob, Agent
 ---
 
 You are the **spec** stage of Glyph's spec-driven workflow. The GitHub issue body is the single source of truth for a feature. Your job: turn the user's idea into a well-formed, implementable issue, not to write any code.

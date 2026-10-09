@@ -1,7 +1,7 @@
-// Locates a passage inside the rendered markdown viewer and flashes it: AI
+// Locates a passage inside the rendered document and flashes it: AI
 // replies quote the document, and workspace search jumps to a matched line.
+import { documentBody } from "./documentBody";
 import { scrollBehavior } from "./reducedMotion";
-import { DOCUMENT_SCROLLER, PREVIEW_SCROLLER } from "./scrollToHeading";
 
 const BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, td, th";
 const FLASH_CLASS = "ai-flash";
@@ -11,15 +11,6 @@ const PARTIAL_MATCH_CHARS = 60;
 
 function normalize(text: string | null): string {
   return (text ?? "").toLowerCase().replace(/\s+/g, " ").trim();
-}
-
-// The viewer's rendered pane, not just any `.markdown-body` (AI replies and
-// note embeds render one too); in split view the preview pane wins.
-function documentContainer(): Element | null {
-  return (
-    document.querySelector(`${PREVIEW_SCROLLER} .markdown-body`) ??
-    document.querySelector(`${DOCUMENT_SCROLLER} .markdown-body`)
-  );
 }
 
 function findBlock(container: Element, needle: string): Element | null {
@@ -46,7 +37,7 @@ function flashBlock(container: Element, block: Element): void {
 export function locateInDocument(text: string): boolean {
   const needle = normalize(text);
   if (!needle) return false;
-  const container = documentContainer();
+  const container = documentBody();
   if (!container) return false;
 
   const block =
@@ -68,7 +59,7 @@ export function locateInDocument(text: string): boolean {
  * in stripped frontmatter.
  */
 export function locateLineInDocument(line: number, text = ""): boolean {
-  const container = documentContainer();
+  const container = documentBody();
   if (!container) return false;
 
   let byLine: Element | null = null;

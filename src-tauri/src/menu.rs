@@ -1,7 +1,8 @@
 // Pure menu-action plumbing. Everything in this file is independent of the
 // Tauri runtime: `MenuAction` is plain data, `menu_action_for_id` is a pure
-// `&str -> Option<MenuAction>` mapping, and `dispatch_menu_action` is generic
-// over `tauri::Runtime` so it can be driven by `tauri::test::MockRuntime`.
+// `&str -> Option<MenuAction>` mapping, `dispatch_menu_action` is generic
+// over `tauri::Runtime` so it can be driven by `tauri::test::MockRuntime`, and
+// the `MenuRegistry` lookup and teardown rules are generic over what they hold.
 //
 // The runtime-bound half (build_menu / apply_menu_state / handle_menu_event)
 // lives in [`crate::menu_runtime`] and is excluded from codecov. We re-export
@@ -12,7 +13,89 @@ pub use crate::menu_runtime::{
     apply_menu_state, build_menu, handle_menu_event, MenuRegistry, MenuStateFlags,
 };
 
+use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager};
+
+/// The menu refs serving window `label`: its own (Windows), else the shared
+/// app menu's, held under `main`.
+pub fn refs_for_window<'a, T>(refs: &'a HashMap<String, T>, label: &str) -> Option<&'a T> {
+    refs.get(label).or_else(|| refs.get("main"))
+}
+
+/// [`refs_for_window`], for a caller that changes the refs it finds.
+pub fn refs_for_window_mut<'a, T>(
+    refs: &'a mut HashMap<String, T>,
+    label: &str,
+) -> Option<&'a mut T> {
+    let key = if refs.contains_key(label) {
+        label
+    } else {
+        "main"
+    };
+    refs.get_mut(key)
+}
+
+/// Drop a destroyed window's menu refs. A shared app menu's refs serve every
+/// window, so without per-window menus they outlive all of them.
+pub fn forget_window_refs<T>(refs: &mut HashMap<String, T>, label: &str, per_window_menus: bool) {
+    if per_window_menus {
+        refs.remove(label);
+    }
+}
+
+/// Whether window `label` may write a shared app menu's enabled state. The
+/// menu mirrors the focused window, which re-sends its state on gaining focus.
+pub fn may_write_shared_menu_state(label: &str, focused: Option<&str>) -> bool {
+    match focused {
+        Some(focused) => focused == label,
+        None => true,
+    }
+}
+
+/// Native menus that list plugin contributions: exporters under File > Export
+/// and `menu: "view"` commands under View.
+const PLUGIN_MENUS: [&str; 2] = ["export", "view"];
+/// Caps on what `set_plugin_menu_items` lists from the renderer, per menu.
+pub const MAX_PLUGIN_MENU_ITEMS: usize = 32;
+pub const MAX_PLUGIN_MENU_LABEL: usize = 100;
+const MAX_PLUGIN_MENU_KEY: usize = 128;
+
+/// One plugin contribution to list. `key` comes back in `menu-plugin-item`
+/// when the item is picked, so the frontend runs that contribution and not
+/// whatever sits at the same position by then.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct PluginMenuEntry {
+    pub key: String,
+    pub label: String,
+}
+
+impl PluginMenuEntry {
+    fn is_listable(&self) -> bool {
+        let key_fits = !self.key.is_empty() && self.key.len() <= MAX_PLUGIN_MENU_KEY;
+        let label_fits =
+            !self.label.trim().is_empty() && self.label.chars().count() <= MAX_PLUGIN_MENU_LABEL;
+        // A tab fakes an accelerator column and a NUL cuts the label short.
+        let label_is_plain = !self.label.chars().any(char::is_control);
+        key_fits && label_fits && label_is_plain
+    }
+}
+
+/// The entries fit to list, and how many were refused. The renderer is
+/// untrusted, and one plugin's bad label must not cost the others their items.
+pub fn listable_plugin_menu_entries(
+    entries: Vec<PluginMenuEntry>,
+) -> (Vec<PluginMenuEntry>, usize) {
+    let offered = entries.len();
+    let listed: Vec<PluginMenuEntry> = entries
+        .into_iter()
+        .filter(PluginMenuEntry::is_listable)
+        .take(MAX_PLUGIN_MENU_ITEMS)
+        .collect();
+    let refused = offered - listed.len();
+    (listed, refused)
+}
 
 /// What a native menu item id maps to. `Emit` forwards an event (with an
 /// optional string payload) to the frontend; `CloseWindow` closes the window
@@ -26,8 +109,48 @@ pub enum MenuAction {
         payload: Option<&'static str>,
     },
     CloseWindow,
+    /// The plugin item of `menu` listed under `key`; the frontend owns what it runs.
+    PluginItem {
+        menu: &'static str,
+        key: String,
+    },
     #[cfg(debug_assertions)]
     ToggleDevTools,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginItemEvent {
+    menu: &'static str,
+    key: String,
+}
+
+/// Id of the plugin item listed under `key` in `menu`. The key is hex-encoded
+/// so any string is a safe id (`:` would read as a window prefix).
+pub fn plugin_menu_item_id(menu: &str, key: &str) -> String {
+    let hex: String = key.bytes().map(|byte| format!("{byte:02x}")).collect();
+    format!("plugin-{menu}-{hex}")
+}
+
+fn decode_hex(hex: &str) -> Option<String> {
+    let is_hex = hex.len().is_multiple_of(2) && hex.bytes().all(|b| b.is_ascii_hexdigit());
+    if hex.is_empty() || !is_hex {
+        return None;
+    }
+    let bytes = (0..hex.len())
+        .step_by(2)
+        .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).ok())
+        .collect::<Option<Vec<u8>>>()?;
+    String::from_utf8(bytes).ok()
+}
+
+fn plugin_menu_action(id: &str) -> Option<MenuAction> {
+    let (menu, hex) = id.strip_prefix("plugin-")?.split_once('-')?;
+    let menu = PLUGIN_MENUS.into_iter().find(|m| *m == menu)?;
+    Some(MenuAction::PluginItem {
+        menu,
+        key: decode_hex(hex)?,
+    })
 }
 
 /// Split a menu item id into its owning-window label and base id. Per-window
@@ -45,6 +168,9 @@ pub fn parse_menu_id(id: &str) -> (Option<&str>, &str) {
 /// should perform. Split out so each arm is unit-testable without spinning up
 /// a Tauri runtime.
 pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
+    if let Some(action) = plugin_menu_action(id) {
+        return Some(action);
+    }
     let emit = |event| {
         Some(MenuAction::Emit {
             event,
@@ -124,6 +250,13 @@ pub fn dispatch_menu_action<R: tauri::Runtime>(
                 let _ = window.close();
             }
         }
+        MenuAction::PluginItem { menu, key } => {
+            let _ = app.emit_to(
+                window_label,
+                "menu-plugin-item",
+                PluginItemEvent { menu, key },
+            );
+        }
         #[cfg(debug_assertions)]
         MenuAction::ToggleDevTools => {
             if let Some(window) = app.get_webview_window(window_label) {
@@ -153,6 +286,146 @@ mod tests {
             event,
             payload: Some(payload),
         }
+    }
+
+    fn entry(key: &str, label: &str) -> PluginMenuEntry {
+        PluginMenuEntry {
+            key: key.to_string(),
+            label: label.to_string(),
+        }
+    }
+
+    #[test]
+    fn plugin_item_ids_round_trip_any_key() {
+        for key in ["slides.revealjs", "w1:odd key/é", "-"] {
+            let id = plugin_menu_item_id("export", key);
+            assert_eq!(parse_menu_id(&id), (None, id.as_str()), "{key}");
+            assert_eq!(
+                menu_action_for_id(&id),
+                Some(MenuAction::PluginItem {
+                    menu: "export",
+                    key: key.to_string()
+                })
+            );
+        }
+        assert_eq!(
+            menu_action_for_id(&plugin_menu_item_id("view", "slides.start")),
+            Some(MenuAction::PluginItem {
+                menu: "view",
+                key: "slides.start".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn malformed_plugin_item_ids_return_none() {
+        for id in [
+            "plugin-export-",
+            "plugin-export-6",
+            "plugin-export-zz",
+            "plugin-export-+f",
+            "plugin-export-ff",
+            "plugin-help-61",
+            "plugin-export",
+            "plugin-",
+        ] {
+            assert!(menu_action_for_id(id).is_none(), "{id}");
+        }
+    }
+
+    #[test]
+    fn plugin_menu_entries_within_the_caps_are_all_listed() {
+        let entries = vec![entry("slides", "Slides (reveal.js)"); MAX_PLUGIN_MENU_ITEMS];
+        assert_eq!(listable_plugin_menu_entries(entries.clone()), (entries, 0));
+        assert_eq!(listable_plugin_menu_entries(Vec::new()), (Vec::new(), 0));
+        let longest = vec![entry(
+            &"k".repeat(MAX_PLUGIN_MENU_KEY),
+            &"x".repeat(MAX_PLUGIN_MENU_LABEL),
+        )];
+        assert_eq!(listable_plugin_menu_entries(longest.clone()), (longest, 0));
+    }
+
+    #[test]
+    fn a_bad_plugin_menu_entry_is_refused_without_costing_the_rest() {
+        let good = entry("good", "Q&A deck");
+        let offered = vec![
+            entry("empty", ""),
+            entry("blank", "   "),
+            entry("long", &"x".repeat(MAX_PLUGIN_MENU_LABEL + 1)),
+            // Trimming must not hide length: the raw label is what gets listed.
+            entry("padded", &format!("x{}", " ".repeat(MAX_PLUGIN_MENU_LABEL))),
+            entry("tab", &format!("Save{}Ctrl+S", char::from(9))),
+            entry("nul", &format!("Sli{}des", char::from(0))),
+            entry("", "No key"),
+            entry(&"k".repeat(MAX_PLUGIN_MENU_KEY + 1), "Long key"),
+            good.clone(),
+        ];
+        assert_eq!(listable_plugin_menu_entries(offered), (vec![good], 8));
+    }
+
+    #[test]
+    fn plugin_menu_entries_beyond_the_item_cap_are_refused() {
+        let offered = vec![entry("item", "Item"); MAX_PLUGIN_MENU_ITEMS + 3];
+        let (listed, refused) = listable_plugin_menu_entries(offered);
+        assert_eq!(listed.len(), MAX_PLUGIN_MENU_ITEMS);
+        assert_eq!(refused, 3);
+    }
+
+    /// A registry whose entries are named after the window that owns them.
+    fn registry(labels: &[&'static str]) -> HashMap<String, &'static str> {
+        labels.iter().map(|l| (l.to_string(), *l)).collect()
+    }
+
+    #[test]
+    fn shared_menu_refs_outlive_the_main_window() {
+        // macOS/Linux: the one app menu still serves the windows left open.
+        let mut refs = registry(&["main"]);
+        forget_window_refs(&mut refs, "main", false);
+
+        assert_eq!(refs_for_window(&refs, "w1"), Some(&"main"));
+    }
+
+    #[test]
+    fn per_window_menu_refs_are_dropped_with_their_window() {
+        // Windows: each window owns its menu, so its refs die with it.
+        let mut refs = registry(&["main", "w1"]);
+        forget_window_refs(&mut refs, "main", true);
+
+        assert_eq!(refs_for_window(&refs, "main"), None);
+        assert_eq!(refs_for_window(&refs, "w1"), Some(&"w1"));
+    }
+
+    #[test]
+    fn closing_a_spawned_window_keeps_the_main_window_s_menu_refs() {
+        // Windows: only w1's refs go, so its label now resolves to main's.
+        let mut refs = registry(&["main", "w1"]);
+        forget_window_refs(&mut refs, "w1", true);
+
+        assert_eq!(refs_for_window(&refs, "w1"), Some(&"main"));
+    }
+
+    #[test]
+    fn refs_to_change_resolve_like_refs_to_read() {
+        let mut refs = registry(&["main", "w1"]);
+        assert_eq!(refs_for_window_mut(&mut refs, "w1"), Some(&mut "w1"));
+        assert_eq!(refs_for_window_mut(&mut refs, "w2"), Some(&mut "main"));
+
+        let mut none: HashMap<String, &'static str> = HashMap::new();
+        assert_eq!(refs_for_window_mut(&mut none, "w1"), None);
+    }
+
+    #[test]
+    fn shared_menu_takes_state_only_from_the_focused_window() {
+        // macOS/Linux: a background window (or a late push from the window
+        // that just lost focus) must not overwrite the focused window's state.
+        assert!(may_write_shared_menu_state("w1", Some("w1")));
+        assert!(!may_write_shared_menu_state("main", Some("w1")));
+    }
+
+    #[test]
+    fn shared_menu_takes_state_from_any_window_while_none_is_focused() {
+        // A window pushes on mount, before it is shown and focused.
+        assert!(may_write_shared_menu_state("main", None));
     }
 
     #[test]
@@ -425,6 +698,36 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(50));
 
             assert_eq!(on_w1.lock().unwrap().len(), 1);
+            assert_eq!(on_main.lock().unwrap().len(), 0);
+        }
+
+        #[test]
+        fn plugin_item_action_emits_menu_and_key_to_the_named_window() {
+            let app = mock_app();
+            let main = WebviewWindowBuilder::new(&app, "main", Default::default())
+                .build()
+                .expect("mock main window should build");
+            let w1 = WebviewWindowBuilder::new(&app, "w1", Default::default())
+                .build()
+                .expect("mock w1 window should build");
+            let handle = app.handle().clone();
+            let on_main = capture(&main, "menu-plugin-item");
+            let on_w1 = capture(&w1, "menu-plugin-item");
+
+            dispatch_menu_action(
+                &handle,
+                "w1",
+                MenuAction::PluginItem {
+                    menu: "view",
+                    key: "slides.start".to_string(),
+                },
+            );
+            std::thread::sleep(std::time::Duration::from_millis(50));
+
+            assert_eq!(
+                on_w1.lock().unwrap().clone(),
+                vec![r#"{"menu":"view","key":"slides.start"}"#.to_string()]
+            );
             assert_eq!(on_main.lock().unwrap().len(), 0);
         }
 

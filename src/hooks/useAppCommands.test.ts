@@ -3,7 +3,7 @@ import { createElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { PluginsContext } from "@/contexts/PluginsContext";
 import { createRegistry } from "@/lib/plugins/registry";
-import type { CommandContribution, ExporterContribution } from "@/lib/plugins/types";
+import type { CommandEntry, ExporterEntry } from "@/lib/plugins/types";
 import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import { type AppActions, useAppCommands } from "./useAppCommands";
 
@@ -266,12 +266,12 @@ describe("useAppCommands", () => {
   });
 
   it("surfaces commands contributed by loaded plugins", () => {
-    const commands = createRegistry<CommandContribution>();
+    const commands = createRegistry<CommandEntry>();
     const run = vi.fn();
-    commands.register({ id: "demo.greet", title: "Greet", run });
-    const value = pluginsContextValue({
-      commands,
-    });
+    commands.register({ pluginId: "com.x.demo", id: "demo.greet", title: "Greet", run });
+    // Ids are only unique within a plugin: a second plugin may reuse one.
+    commands.register({ pluginId: "com.y.other", id: "demo.greet", title: "Other", run: vi.fn() });
+    const value = pluginsContextValue({ commands });
     const wrapper = ({ children }: { children: ReactNode }) =>
       createElement(PluginsContext.Provider, { value }, children);
 
@@ -286,15 +286,19 @@ describe("useAppCommands", () => {
       { wrapper },
     );
 
-    const greet = result.current.find((c) => c.id === "plugin:demo.greet")!;
+    const greet = result.current.find((c) => c.id === "plugin:com.x.demo/demo.greet")!;
     expect(greet.title).toBe("Greet");
     greet.run();
     expect(run).toHaveBeenCalledOnce();
+    expect(result.current.find((c) => c.id === "plugin:com.y.other/demo.greet")?.title).toBe(
+      "Other",
+    );
   });
 
   it("surfaces plugin exporters as palette commands", () => {
-    const exporters = createRegistry<ExporterContribution>();
-    const slides: ExporterContribution = {
+    const exporters = createRegistry<ExporterEntry>();
+    const slides: ExporterEntry = {
+      pluginId: "com.x.slides",
       id: "x.slides",
       label: "Slides",
       extension: "html",
@@ -313,7 +317,7 @@ describe("useAppCommands", () => {
       { wrapper },
     );
 
-    const cmd = result.current.find((c) => c.id === "plugin-export:x.slides")!;
+    const cmd = result.current.find((c) => c.id === "plugin-export:com.x.slides/x.slides")!;
     expect(cmd.title).toContain("Slides");
     cmd.run();
     expect(actions.runPluginExporter).toHaveBeenCalledWith(slides);

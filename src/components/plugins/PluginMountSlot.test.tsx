@@ -52,4 +52,22 @@ describe("PluginMountSlot", () => {
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  it("tells the host when mount throws", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onError = vi.fn();
+    render(
+      <PluginMountSlot
+        contribution={{
+          id: "boom",
+          mount: () => {
+            throw new Error("nope");
+          },
+        }}
+        onError={onError}
+      />,
+    );
+    expect(onError).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
 });

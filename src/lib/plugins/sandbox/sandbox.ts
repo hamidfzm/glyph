@@ -1,12 +1,13 @@
-import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
-import { PLUGIN_API_VERSION } from "../apiVersion";
-import type { Disposer } from "../disposer";
+import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
+import type { Disposer } from "@/lib/plugins/disposer";
 import type {
+  CommandContribution,
   ExporterContribution,
   FileTypeContribution,
   InstalledPlugin,
   SiteThemeContribution,
-} from "../types";
+} from "@/lib/plugins/types";
+import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
 import { buildWorkerBootstrap } from "./bootstrap";
 import type { HostMessage, WorkerMessage } from "./protocol";
 
@@ -23,7 +24,7 @@ export type WorkerSpawner = (bootstrapSource: string) => WorkerLike;
 /** What the sandbox is allowed to do on the host side. All calls are already
  * routed through the owning plugin's DisposerBag by the host. */
 export interface SandboxHostApi {
-  registerCommand(command: { id: string; title: string; run: () => void }): void;
+  registerCommand(command: CommandContribution): void;
   addStyles(css: string): void;
   registerExporter(exporter: ExporterContribution): void;
   registerSiteTheme(theme: SiteThemeContribution): void;
@@ -95,9 +96,11 @@ export function startSandbox(
           else console.error(`Sandboxed plugin ${plugin.id} error:`, data.message);
           break;
         case "register-command":
+          // Worker data is untrusted: the host lists these strings in menus.
           api.registerCommand({
-            id: data.id,
-            title: data.title,
+            id: String(data.id),
+            title: String(data.title),
+            menu: data.menu,
             run: () => worker.postMessage({ type: "run-command", id: data.id }),
           });
           break;
@@ -127,14 +130,14 @@ export function startSandbox(
           break;
         case "register-exporter":
           api.registerExporter({
-            id: data.id,
-            label: data.label,
-            extension: data.extension,
-            build: (bodyHtml) =>
+            id: String(data.id),
+            label: String(data.label),
+            extension: String(data.extension),
+            build: (bodyHtml, doc) =>
               new Promise((res, rej) => {
                 const callId = ++exportSeq;
                 pendingExports.set(callId, { resolve: res, reject: rej });
-                worker.postMessage({ type: "build-export", callId, id: data.id, bodyHtml });
+                worker.postMessage({ type: "build-export", callId, id: data.id, bodyHtml, doc });
               }),
           });
           break;

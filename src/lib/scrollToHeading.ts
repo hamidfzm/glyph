@@ -9,8 +9,17 @@ const ACTIVE_HEADING_EVENT = "glyph:active-heading";
 
 /** The viewer marks its scroll container; split layouts wrap the rendered pane
  *  in `.split-view-preview` so it can be told apart from a source pane. */
-export const DOCUMENT_SCROLLER = "[data-scroll-container]";
+const DOCUMENT_SCROLLER = "[data-scroll-container]";
 export const PREVIEW_SCROLLER = `.split-view-preview ${DOCUMENT_SCROLLER}`;
+
+/** The active document's scroller, or null when no document is mounted. Split
+ *  layouts mount a source pane too, so the rendered pane wins when present. */
+export function documentScroller(): HTMLElement | null {
+  return (
+    document.querySelector<HTMLElement>(PREVIEW_SCROLLER) ??
+    document.querySelector<HTMLElement>(DOCUMENT_SCROLLER)
+  );
+}
 
 // Pick `start` when the target can scroll to the top of its scroll container,
 // otherwise `end`. Prevents end-of-document targets (the last heading, footnote
@@ -38,14 +47,10 @@ export function scrollToHeading(id: string): boolean {
   return true;
 }
 
-/** Put the active document's scroller (marked `data-scroll-container` by the
- *  viewer) back at `top`; a no-op when no document is mounted. Split layouts
- *  mount a source pane too, so the rendered pane under `.split-view-preview`
- *  wins when present. */
+/** Put the active document's scroller back at `top`; a no-op when no document
+ *  is mounted. */
 export function scrollDocumentTo(top: number): void {
-  const scroller =
-    document.querySelector<HTMLElement>(PREVIEW_SCROLLER) ??
-    document.querySelector<HTMLElement>(DOCUMENT_SCROLLER);
+  const scroller = documentScroller();
   if (scroller) scroller.scrollTop = top;
 }
 

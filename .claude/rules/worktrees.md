@@ -1,8 +1,3 @@
----
-paths:
-  - ".claude/worktrees/**"
----
-
 # Worktree Workflow (GitHub Flow)
 
 Glyph follows GitHub Flow with one git worktree per branch. There is no `develop`, `release/*`, or `hotfix/*` branch (that is Git Flow, which this project does not use).
@@ -31,18 +26,23 @@ cd ".claude/worktrees/<slug>"
 
 After a branch's PR is merged into `main`, remove its worktree and branch. Always list first, confirm with the user, then remove. Never delete without confirmation.
 
-1. Refresh state and find merged branches:
+1. Refresh state and list the candidates:
    ```bash
    git fetch --prune origin
    git worktree list
-   git branch --merged origin/main
    ```
-2. For each worktree whose branch appears in `git branch --merged origin/main` (excluding `main` and the current worktree), confirm with the user, then:
+2. Prove each candidate branch merged (excluding `main` and the current worktree). Squash and rebase merges rewrite commits, so `git branch --merged` and `git branch -d` never recognize a merged branch here; the proof is a merged PR whose head contains the local tip:
+   ```bash
+   gh pr list --head <branch> --state merged --json number
+   git fetch origin refs/pull/<number>/head && git merge-base --is-ancestor <branch> FETCH_HEAD   # exit 0: the PR head contains the local tip
+   ```
+   A branch counts as merged only when that check exits 0 (the tips are equal, or GitHub's "Update branch" added a merge on top). No merged PR, or local commits the PR head lacks, means leave the worktree and report it.
+3. Confirm the proven list with the user, then for each:
    ```bash
    git worktree remove ".claude/worktrees/<slug>"   # refuses if there are uncommitted changes
-   git branch -d <branch>                            # -d refuses if the branch is not merged
+   git branch -D <branch>                            # only after the proof in step 2
    ```
-3. Prune administrative entries for worktrees whose directory was deleted by hand:
+4. Prune administrative entries for worktrees whose directory was deleted by hand:
    ```bash
    git worktree prune
    ```
@@ -50,6 +50,6 @@ After a branch's PR is merged into `main`, remove its worktree and branch. Alway
 ### Safety rules
 
 - Never pass `--force` to `git worktree remove` to discard uncommitted tracked changes. If it refuses, stop and investigate.
-- Never use `git branch -D` for cleanup. `-d` only deletes branches already merged into `main`, which is the guard you want.
+- Never use `git branch -D` without the step 2 proof (a merged PR whose head contains the local tip) and the user's confirmation. `-d` is no guard here: it refuses every squash-merged branch.
 - Never remove the `main` worktree or delete the `main` branch.
 - Confirm the exact list of worktrees to remove with the user before deleting anything.

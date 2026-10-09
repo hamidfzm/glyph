@@ -18,6 +18,7 @@ import { useNativeMenuState } from "@/hooks/useNativeMenuState";
 import { useNavigationShortcuts } from "@/hooks/useNavigationShortcuts";
 import { usePlatform } from "@/hooks/usePlatform";
 import { usePluginAppBridge } from "@/hooks/usePluginAppBridge";
+import { usePluginMenuItems } from "@/hooks/usePluginMenuItems";
 import { useSettings } from "@/hooks/useSettings";
 import { useShellControllers } from "@/hooks/useShellControllers";
 import { useTabReorderShortcuts } from "@/hooks/useTabReorderShortcuts";
@@ -136,6 +137,7 @@ export function AppShell() {
     autoSave,
   });
   useNativeMenuLabels();
+  usePluginMenuItems(runPluginExporter);
 
   const menuHandlers = useMenuHandlers({
     modals,

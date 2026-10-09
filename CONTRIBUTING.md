@@ -75,7 +75,7 @@ sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl \
 1. **lint-staged**: Biome formats and lints staged `src/**/*.{ts,tsx,js,jsx,css}` files (auto-fixes and re-stages); `cargo fmt --check` runs once if any `src-tauri/**/*.rs` is staged.
 2. `pnpm typecheck`
 3. `pnpm test --run`
-4. `cargo test --lib` (in `src-tauri/`)
+4. `cargo test --workspace --lib` (in `src-tauri/`)
 5. `cargo clippy --workspace --all-targets -- -D warnings` (in `src-tauri/`)
 
 Budget roughly 1–2 minutes on a clean working tree. The fast lint-staged step gates the slow tests so a formatter miss fails in seconds.

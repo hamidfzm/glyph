@@ -128,7 +128,12 @@ function buildContext(init) {
     commands: {
       register(command) {
         commands.set(command.id, command.run);
-        postMessage({ type: "register-command", id: command.id, title: command.title });
+        postMessage({
+          type: "register-command",
+          id: command.id,
+          title: command.title,
+          menu: command.menu,
+        });
         return () => commands.delete(command.id);
       },
     },
@@ -145,6 +150,7 @@ function buildContext(init) {
       addStatusBarItem: sandboxUnavailable("ui.addStatusBarItem"),
       addSidebarPanel: sandboxUnavailable("ui.addSidebarPanel"),
       addSettingsPanel: sandboxUnavailable("ui.addSettingsPanel"),
+      openOverlay: sandboxUnavailable("ui.openOverlay"),
       // No element involved, but it drives the app's own Files panel.
       filterFileTree: sandboxUnavailable("ui.filterFileTree", APP_CONTEXT_ONLY),
     },
@@ -182,6 +188,12 @@ function buildContext(init) {
       },
       getActive: sandboxUnavailable("documents.getActive", APP_CONTEXT_ONLY),
       onActiveChange: sandboxUnavailable("documents.onActiveChange", APP_CONTEXT_ONLY),
+      // Document content reaches a sandboxed plugin only through an export
+      // the user runs; no permission covers reading it at will.
+      getRenderedHtml: sandboxUnavailable(
+        "documents.getRenderedHtml",
+        "it reads the open document without the user running an export",
+      ),
     },
     workspace: {
       readFile(path) {
@@ -271,7 +283,7 @@ onmessage = async (event) => {
     } else if (msg.type === "build-export") {
       const build = exporters.get(msg.id);
       try {
-        const output = await build(msg.bodyHtml);
+        const output = await build(msg.bodyHtml, msg.doc);
         postMessage({
           type: "export-result",
           callId: msg.callId,

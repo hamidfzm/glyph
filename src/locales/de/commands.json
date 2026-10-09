@@ -40,5 +40,6 @@
   "aiChat": "KI-Chat",
   "readAloud": "Vorlesen",
   "managePlugins": "Plugins verwalten…",
-  "exportAs": "Exportieren: {{label}}…"
+  "exportAs": "Exportieren: {{label}}…",
+  "exportMenuItem": "{{label}}…"
 }

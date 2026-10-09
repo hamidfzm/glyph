@@ -152,6 +152,16 @@ pub fn validate_remote_url(url: &str) -> Result<(), SyncError> {
 /// Each field is independently optional and a missing value is *not*
 /// an error: the frontend just shows a generic placeholder.
 pub fn default_author(workspace_path: &str) -> CommitAuthorHint {
+    author_hint(workspace_path, git2::Config::open_default)
+}
+
+/// [`default_author`] with the global config lookup injected. libgit2's search
+/// path is process-global, so a test that redirected it would race every other
+/// test that opens a repository; tests hand in their own config file instead.
+fn author_hint(
+    workspace_path: &str,
+    open_global: impl FnOnce() -> Result<git2::Config, git2::Error>,
+) -> CommitAuthorHint {
     let workspace_cfg_path = PathBuf::from(workspace_path).join(".git/config");
     let mut hint = CommitAuthorHint::default();
 
@@ -164,7 +174,7 @@ pub fn default_author(workspace_path: &str) -> CommitAuthorHint {
         return hint;
     }
 
-    if let Ok(cfg) = git2::Config::open_default() {
+    if let Ok(cfg) = open_global() {
         if hint.name.is_none() {
             hint.name = cfg.get_string("user.name").ok().filter(|s| !s.is_empty());
         }
@@ -518,14 +528,22 @@ mod tests {
     }
 
     #[test]
-    fn default_author_returns_a_hint_for_a_directory_without_a_repo() {
-        // No `.git/config` available: we still get a hint, just one with
-        // whatever the host's global git config happens to carry (which
-        // we can't pin in a unit test). The contract is "no panic, no
-        // error" -- both fields are `Option<String>` and the call must
-        // succeed regardless of what's on disk.
+    fn default_author_matches_the_host_global_config_for_a_directory_without_a_repo() {
+        // No `.git/config` available, so both fields come from libgit2's
+        // default chain. The host's identity can't be pinned to a literal,
+        // so compare against the same chain read directly; on a host with
+        // no global identity both sides are `None`.
         let tmp = TempDir::new().unwrap();
-        let _hint = default_author(&tmp.path().to_string_lossy());
+        let hint = default_author(&tmp.path().to_string_lossy());
+
+        let host = git2::Config::open_default().ok();
+        let host_value = |key: &str| {
+            host.as_ref()
+                .and_then(|cfg| cfg.get_string(key).ok())
+                .filter(|s| !s.is_empty())
+        };
+        assert_eq!(hint.name, host_value("user.name"));
+        assert_eq!(hint.email, host_value("user.email"));
     }
 
     #[tokio::test]
@@ -554,87 +572,18 @@ mod tests {
         assert_eq!(remote.url().unwrap(), "https://example.com/b.git");
     }
 
-    #[test]
-    fn default_author_reads_workspace_user_config_when_repo_present() {
-        // Mirror of the same test in `git::tests`: write a per-repo
-        // `[user]` section into the workspace's `.git/config` and confirm
-        // `default_author` surfaces both fields. Worth the duplication
-        // because `ops::default_author` is the actual code path the Tauri
-        // command goes through, and it has its own fallback chain on top.
-        let tmp = TempDir::new().unwrap();
-        git2::Repository::init(tmp.path()).unwrap();
-        let cfg_path = tmp.path().join(".git/config");
-        let mut cfg = git2::Config::open(&cfg_path).unwrap();
-        cfg.set_str("user.name", "Workspace Author").unwrap();
-        cfg.set_str("user.email", "ws@example.com").unwrap();
-
-        let hint = default_author(&tmp.path().to_string_lossy());
-        assert_eq!(hint.name.as_deref(), Some("Workspace Author"));
-        assert_eq!(hint.email.as_deref(), Some("ws@example.com"));
-    }
-
-    /// Serialises every test that touches libgit2's process-wide search
-    /// paths via `git2::opts::set_search_path`. Without this lock two
-    /// parallel tests would race to install their override and either
-    /// see the wrong global config or restore the host's path on top of
-    /// the other test's in-flight assertions.
-    fn search_path_guard() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        LOCK.lock().unwrap_or_else(|p| p.into_inner())
-    }
-
-    /// RAII helper: redirect libgit2's `Global` (and `Xdg` + `System`)
-    /// search path to a directory we control for the test and restore
-    /// the original paths on drop. Saves/restores via
-    /// `git2::opts::get_search_path` so the host's `.gitconfig`
-    /// lookup keeps working after the test finishes.
-    struct SearchPathOverride {
-        previous: Vec<(git2::ConfigLevel, std::ffi::CString)>,
-    }
-
-    impl SearchPathOverride {
-        fn install(dir: &std::path::Path) -> Self {
-            let levels = [
-                git2::ConfigLevel::Global,
-                git2::ConfigLevel::XDG,
-                git2::ConfigLevel::System,
-            ];
-            let mut previous = Vec::with_capacity(levels.len());
-            for level in levels {
-                // SAFETY: globally locked by `search_path_guard`. The
-                // pointer returned by `get_search_path` is copied into
-                // the owned CString before we mutate.
-                let prev = unsafe { git2::opts::get_search_path(level) }.unwrap_or_default();
-                previous.push((level, prev));
-                // SAFETY: same lock; `dir` outlives the call.
-                unsafe {
-                    git2::opts::set_search_path(level, dir.to_str().unwrap()).unwrap();
-                }
-            }
-            Self { previous }
-        }
-    }
-
-    impl Drop for SearchPathOverride {
-        fn drop(&mut self) {
-            for (level, prev) in &self.previous {
-                let s = prev.to_string_lossy().into_owned();
-                // SAFETY: still holding the search_path_guard lock for
-                // the duration of the test that owns this Drop.
-                unsafe {
-                    git2::opts::set_search_path(*level, s.as_str()).ok();
-                }
-            }
-        }
+    /// Write `contents` as a stand-in global git config inside `dir` and
+    /// return its path, for `author_hint` to open in place of the host's.
+    fn global_config(dir: &TempDir, contents: &str) -> PathBuf {
+        let path = dir.path().join("global.gitconfig");
+        fs::write(&path, contents).unwrap();
+        path
     }
 
     #[test]
-    fn default_author_falls_back_to_global_config_when_workspace_is_missing_a_field() {
+    fn author_hint_falls_back_to_global_config_when_workspace_is_missing_a_field() {
         // Drives the workspace-then-global merge: workspace knows the name
-        // only, global supplies the email. Covers the inner `is_none()`
-        // arms (lines 123-128) and the closing braces around them
-        // (lines 125, 128, 129).
-        let _g = search_path_guard();
+        // only, global supplies the email.
         let tmp = TempDir::new().unwrap();
 
         // Workspace config: name set, email missing.
@@ -645,52 +594,41 @@ mod tests {
             .set_str("user.name", "Workspace Only")
             .unwrap();
 
-        // Global config (libgit2 looks for `.gitconfig` in the dir we
-        // pointed `Global` at): email set, name absent.
-        let fake_home = tmp.path().join("fake-home");
-        std::fs::create_dir_all(&fake_home).unwrap();
-        std::fs::write(
-            fake_home.join(".gitconfig"),
-            "[user]\n\temail = global@example.com\n",
-        )
-        .unwrap();
-        let _override = SearchPathOverride::install(&fake_home);
+        // Global config: email set, name absent.
+        let global = global_config(&tmp, "[user]\n\temail = global@example.com\n");
 
-        let hint = default_author(&tmp.path().to_string_lossy());
+        let hint = author_hint(&tmp.path().to_string_lossy(), || {
+            git2::Config::open(&global)
+        });
         assert_eq!(hint.name.as_deref(), Some("Workspace Only"));
         assert_eq!(hint.email.as_deref(), Some("global@example.com"));
     }
 
     #[test]
-    fn default_author_skips_workspace_config_when_it_cannot_be_opened() {
+    fn author_hint_skips_workspace_config_when_it_cannot_be_opened() {
         // `<ws>/.git/config` exists but is a *directory*, so
-        // `git2::Config::open` returns Err and `default_author` falls
+        // `git2::Config::open` returns Err and `author_hint` falls
         // through to the global lookup instead of reading the workspace
         // file. Exercises the Err arm of the workspace-config branch and
-        // re-enters the global-config block with an empty redirect.
-        let _g = search_path_guard();
+        // re-enters the global-config block with an empty global config.
         let tmp = TempDir::new().unwrap();
         std::fs::create_dir_all(tmp.path().join(".git/config")).unwrap();
 
-        // Point the global lookup at an empty `.gitconfig` so the result is
-        // deterministic regardless of the host's real git identity.
-        let fake_home = tmp.path().join("fake-home");
-        std::fs::create_dir_all(&fake_home).unwrap();
-        std::fs::write(fake_home.join(".gitconfig"), "").unwrap();
-        let _override = SearchPathOverride::install(&fake_home);
+        // An empty global config keeps the result deterministic regardless
+        // of the host's real git identity.
+        let global = global_config(&tmp, "");
 
-        let hint = default_author(&tmp.path().to_string_lossy());
+        let hint = author_hint(&tmp.path().to_string_lossy(), || {
+            git2::Config::open(&global)
+        });
         assert_eq!(hint.name, None);
         assert_eq!(hint.email, None);
     }
 
     #[test]
-    fn default_author_returns_only_workspace_email_when_global_is_empty() {
-        // Workspace supplies email only; the redirected global config has
-        // nothing. Email comes through from the workspace, name stays None.
-        // Hits the lines 123-125 `is_none()` arm with the inner lookup
-        // returning None on line 124.
-        let _g = search_path_guard();
+    fn author_hint_returns_only_workspace_email_when_global_is_empty() {
+        // Workspace supplies email only; the global config has nothing.
+        // Email comes through from the workspace, name stays None.
         let tmp = TempDir::new().unwrap();
         git2::Repository::init(tmp.path()).unwrap();
         let workspace_cfg_path = tmp.path().join(".git/config");
@@ -699,12 +637,11 @@ mod tests {
             .set_str("user.email", "ws@example.com")
             .unwrap();
 
-        let fake_home = tmp.path().join("fake-home");
-        std::fs::create_dir_all(&fake_home).unwrap();
-        std::fs::write(fake_home.join(".gitconfig"), "").unwrap();
-        let _override = SearchPathOverride::install(&fake_home);
+        let global = global_config(&tmp, "");
 
-        let hint = default_author(&tmp.path().to_string_lossy());
+        let hint = author_hint(&tmp.path().to_string_lossy(), || {
+            git2::Config::open(&global)
+        });
         assert_eq!(hint.name, None);
         assert_eq!(hint.email.as_deref(), Some("ws@example.com"));
     }

@@ -222,21 +222,22 @@ describe("worker bootstrap", () => {
     const w = bootWorker();
     const plugin = `export default {
       activate(ctx) {
-        ctx.exporters.register({ id: "ok", label: "U", extension: "txt", build: async (h) => h.toUpperCase() });
+        ctx.exporters.register({ id: "ok", label: "U", extension: "txt", build: async (h, doc) => h.toUpperCase() + doc.title });
         ctx.exporters.register({ id: "bad", label: "B", extension: "txt", build: async () => { throw new Error("nope"); } });
       },
     }`;
     await w.send(init(plugin));
     await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
 
-    await w.send({ type: "build-export", callId: 1, id: "ok", bodyHtml: "<p>" });
-    await w.send({ type: "build-export", callId: 2, id: "bad", bodyHtml: "" });
+    const doc = { title: "Talk", css: "", dark: false };
+    await w.send({ type: "build-export", callId: 1, id: "ok", bodyHtml: "<p>", doc });
+    await w.send({ type: "build-export", callId: 2, id: "bad", bodyHtml: "", doc });
     await vi.waitFor(() => {
       expect(w.posted).toContainEqual({
         type: "export-result",
         callId: 1,
         ok: true,
-        output: "<P>",
+        output: "<P>Talk",
       });
       expect(w.posted).toContainEqual({
         type: "export-result",
@@ -271,6 +272,34 @@ describe("worker bootstrap", () => {
     expect(w.posted).toContainEqual({ type: "notify", message: "list:denied" });
     // A result for an unknown call is ignored.
     await w.send({ type: "host-result", callId: 999, ok: true, value: "" });
+  });
+
+  it("relays a command's menu placement", async () => {
+    const w = bootWorker();
+    await w.send(
+      init(
+        `export default { activate(ctx) { ctx.commands.register({ id: "show", title: "Show", menu: "view", run() {} }); } }`,
+      ),
+    );
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
+    expect(w.posted).toContainEqual({
+      type: "register-command",
+      id: "show",
+      title: "Show",
+      menu: "view",
+    });
+  });
+
+  it("refuses to hand a sandboxed plugin the open document at will", async () => {
+    const w = bootWorker();
+    await w.send(
+      init(`export default { async activate(ctx) { await ctx.documents.getRenderedHtml(); } }`),
+    );
+
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("error"));
+    const error = w.posted.find((m) => m.type === "error") as { message: string };
+    expect(error.message).toContain("ctx.documents.getRenderedHtml");
+    expect(error.message).toContain("sandboxed plugins");
   });
 
   it("serves ctx.assets reads via asset-read round trips", async () => {
@@ -417,7 +446,7 @@ describe("worker bootstrap", () => {
   // so a sandboxed plugin calling one died with "ctx.ui.addStatusBarItem is
   // not a function" and nothing said the sandbox was the reason.
 
-  it.each(["addStatusBarItem", "addSidebarPanel", "addSettingsPanel"])(
+  it.each(["addStatusBarItem", "addSidebarPanel", "addSettingsPanel", "openOverlay"])(
     "refuses ui.%s by name instead of being undefined",
     async (method) => {
       const w = bootWorker();

@@ -25,7 +25,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 // the document's rendered prose. Other surfaces own their own menus: the file
 // tree shows file actions, and the rest of the chrome falls through to the
 // native menu. Assistant replies in the AI chat panel also render with
-// `.markdown-body`, but the document-targeted menu is wrong there (Select All
+// `.markdown-body`, but the document-targeted menu is wrong there (Read Aloud
 // and the AI actions operate on the document, not the message; per-message
 // Copy / Read Aloud buttons cover the chat), so the panel is excluded.
 function isInsideMarkdownContent(target: EventTarget | null): boolean {
@@ -60,14 +60,15 @@ export function useContextMenu(actions: ContextMenuActions) {
       // Only the markdown viewer shows a themed menu; other chrome shows none.
       if (!isInsideMarkdownContent(e.target)) return;
       const selection = window.getSelection()?.toString().trim() ?? "";
+      const target = e.target as Element;
       // Raw attribute, not the resolved `href` property: resolution would turn
       // relative workspace links into http://localhost/... URLs, which would
       // wrongly pass the external-link filter in the builder.
-      const linkHref = (e.target as Element).closest("a[href]")?.getAttribute("href") ?? undefined;
+      const linkHref = target.closest("a[href]")?.getAttribute("href") ?? undefined;
       setMenu({
         x: e.clientX,
         y: e.clientY,
-        items: buildContextMenuItems(actions, selection, t, linkHref),
+        items: buildContextMenuItems(actions, selection, t, target, linkHref),
       });
     };
     document.addEventListener("contextmenu", handler);

@@ -7,11 +7,13 @@ import type { Disposer, DisposerBag } from "./disposer";
 import { registerFileType } from "./fileTypes";
 import type { PluginSettingsBackend } from "./host";
 import { createNavigationApi } from "./navigationApi";
+import { showOverlay } from "./overlays";
 import type { Registry } from "./registry";
+import { prepareRenderedHtml } from "./renderedHtml";
 import { staticRenderers } from "./staticRenderers";
 import type {
-  CommandContribution,
-  ExporterContribution,
+  CommandEntry,
+  ExporterEntry,
   FencedRendererContribution,
   FileTreeFilter,
   GlyphPluginContext,
@@ -31,7 +33,7 @@ import { resolveWorkspacePath } from "./workspacePath";
 
 /** The contribution registries a plugin context writes into. */
 export interface ContextRegistries {
-  commands: Registry<CommandContribution>;
+  commands: Registry<CommandEntry>;
   statusBarItems: Registry<StatusBarItemContribution>;
   remarkPlugins: Registry<MarkdownPlugin>;
   rehypePlugins: Registry<RehypeContribution>;
@@ -40,7 +42,7 @@ export interface ContextRegistries {
   fileTreeFilters: Registry<FileTreeFilter>;
   settingsPanels: Registry<SettingsPanelContribution>;
   styles: Registry<StyleContribution>;
-  exporters: Registry<ExporterContribution>;
+  exporters: Registry<ExporterEntry>;
   siteThemes: Registry<SiteThemeContribution>;
 }
 
@@ -140,7 +142,11 @@ export function buildPluginContext({
   const vault = createVaultApi(getWorkspaceRoot, permissions);
   return {
     apiVersion: PLUGIN_API_VERSION,
-    commands: { register: tracked(commands.register, bag) },
+    commands: {
+      register(command) {
+        return tracked(commands.register, bag)({ ...command, pluginId: plugin.id });
+      },
+    },
     ui: {
       addStatusBarItem: tracked(statusBarItems.register, bag),
       addSidebarPanel(panel) {
@@ -156,6 +162,17 @@ export function buildPluginContext({
       },
       addStyles(css) {
         return tracked(styles.register, bag)({ css });
+      },
+      openOverlay(overlay) {
+        // Closed from Escape as often as from the disposer, so it leaves the
+        // bag either way rather than piling up across slide shows.
+        const close = () => {
+          removeOverlay();
+          bag.delete(close);
+        };
+        const removeOverlay = showOverlay({ ...overlay, close });
+        bag.add(close);
+        return close;
       },
     },
     markdown: {
@@ -190,13 +207,16 @@ export function buildPluginContext({
         (listener) => onPluginAppStateChange("activeDocument", listener),
         bag,
       ),
+      getRenderedHtml: prepareRenderedHtml,
     },
     workspace: { ...workspace, onChange: tracked(workspace.onChange, bag) },
     vault: { ...vault, onChange: tracked(vault.onChange, bag) },
     navigation: createNavigationApi(getWorkspaceRoot),
     assets: createAssetsApi(plugin.id),
     exporters: {
-      register: tracked(exporters.register, bag),
+      register(exporter) {
+        return tracked(exporters.register, bag)({ ...exporter, pluginId: plugin.id });
+      },
       registerSiteTheme: tracked(siteThemes.register, bag),
     },
     // Dictionaries live in the spellcheck module's own registry (the speller

@@ -76,6 +76,18 @@ describe("locateInDocument", () => {
     expect(flashed?.textContent).toContain("preview");
   });
 
+  it("searches every cell of a notebook, not only the first", () => {
+    document.body.innerHTML = `
+      <div data-scroll-container>
+        <div class="notebook-body">
+          <div class="nb-cell markdown-body"><p>first cell</p></div>
+          <div class="nb-cell markdown-body"><p>quick brown fox in a later cell</p></div>
+        </div>
+      </div>`;
+    expect(locateInDocument("quick brown fox")).toBe(true);
+    expect(document.querySelector(".ai-flash")?.textContent).toContain("later cell");
+  });
+
   it("skips blocks whose textContent is null", () => {
     const first = document.querySelector("h1") as HTMLElement;
     Object.defineProperty(first, "textContent", { get: () => null });
