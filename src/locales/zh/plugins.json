@@ -54,6 +54,14 @@
     "math": {
       "name": "数学公式 (KaTeX)",
       "description": "使用 KaTeX 渲染 $行内$ 与 $$块级$$ 公式。"
+    },
+    "tags": {
+      "name": "标签",
+      "description": "在文件侧边栏中浏览工作区的标签，并按标签筛选文件列表。"
+    },
+    "backlinks": {
+      "name": "反向链接",
+      "description": "在文件侧边栏中列出链接到当前笔记的笔记。"
     }
   }
 }

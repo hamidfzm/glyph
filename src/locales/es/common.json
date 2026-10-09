@@ -36,21 +36,9 @@
     "closeWorkspace": "Cerrar espacio de trabajo",
     "outline": "Esquema",
     "resize": "Cambiar tamaño de la barra lateral",
-    "resizeBacklinks": "Cambiar tamaño de los enlaces entrantes",
-    "resizeTags": "Cambiar tamaño de las etiquetas",
+    "resizeBlock": "Cambiar tamaño de {{name}}",
+    "clearFilter": "Quitar el filtro",
     "indexIncomplete": "Índice incompleto"
-  },
-  "backlinks": {
-    "heading": "Enlaces entrantes",
-    "empty": "Sin enlaces entrantes"
-  },
-  "tags": {
-    "heading": "Etiquetas",
-    "filterBy": "Filtrar por #{{tag}}",
-    "filtered": "#{{tag}} ({{total}})",
-    "clearFilter": "Quitar el filtro de etiqueta",
-    "sortByCount": "Ordenar etiquetas por cantidad",
-    "empty": "Sin etiquetas"
   },
   "tabBar": {
     "graphLabel": "Grafo: {{name}}",

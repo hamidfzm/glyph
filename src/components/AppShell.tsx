@@ -17,8 +17,8 @@ import { useNativeMenuLabels } from "@/hooks/useNativeMenuLabels";
 import { useNativeMenuState } from "@/hooks/useNativeMenuState";
 import { useNavigationShortcuts } from "@/hooks/useNavigationShortcuts";
 import { usePlatform } from "@/hooks/usePlatform";
+import { usePluginAppBridge } from "@/hooks/usePluginAppBridge";
 import { usePluginMenuItems } from "@/hooks/usePluginMenuItems";
-import { usePluginWorkspaceSync } from "@/hooks/usePluginWorkspaceSync";
 import { useSettings } from "@/hooks/useSettings";
 import { useShellControllers } from "@/hooks/useShellControllers";
 import { useTabReorderShortcuts } from "@/hooks/useTabReorderShortcuts";
@@ -56,8 +56,8 @@ export function AppShell() {
   // are loaded, avoiding the white flash + geometry jump on launch.
   useWindowReveal();
 
-  // Keep the plugin host's workspace scope in sync with the open workspace.
-  usePluginWorkspaceSync();
+  // Keep what plugins may read of the app in sync, and let them open files.
+  usePluginAppBridge();
 
   const {
     tabs: openTabs,

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { isLazyMarkdownPlugin } from "@/lib/markdown/lazyPlugins";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
+import plugins from "@/locales/en/plugins.json";
 import { PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 import { CORE_PLUGINS, coreInstalledPlugin } from "./corePlugins";
 import { createPluginHost } from "./host";
@@ -31,6 +33,27 @@ describe("CORE_PLUGINS", () => {
     host.unload(math.id);
     await loading;
     expect(host.styles.list()).toEqual([]);
+  });
+
+  it("hands a core plugin the permissions the list grants it, and no others", () => {
+    const granted = (id: string) => {
+      const core = CORE_PLUGINS.find((entry) => entry.id === id);
+      if (!core) throw new Error(`${id} core plugin missing`);
+      return coreInstalledPlugin(core).permissions;
+    };
+    expect(granted("glyph.core.tags")).toEqual(["workspace:read"]);
+    expect(granted("glyph.core.backlinks")).toEqual(["workspace:read"]);
+    expect(granted("glyph.core.d2")).toBeUndefined();
+  });
+
+  it("is on by default, with a Settings name and description for every plugin", () => {
+    for (const core of CORE_PLUGINS) {
+      expect(DEFAULT_SETTINGS.corePlugins[core.settingsKey], core.id).toBe(true);
+      expect(Object.keys(plugins.core[core.settingsKey]).sort(), core.id).toEqual([
+        "description",
+        "name",
+      ]);
+    }
   });
 
   it("imports a module the host can activate", async () => {

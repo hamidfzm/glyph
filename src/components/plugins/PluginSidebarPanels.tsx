@@ -9,7 +9,9 @@ import { PluginMountSlot } from "./PluginMountSlot";
  */
 export function PluginSidebarPanels() {
   const plugins = usePluginsOptional();
-  const panels = useRegistryEntries(plugins?.sidebarPanels ?? null);
+  const registered = useRegistryEntries(plugins?.sidebarPanels ?? null);
+  // `files` panels render in the Files panel instead (PluginFilesBlocks).
+  const panels = registered.filter((panel) => panel.location !== "files");
 
   if (panels.length === 0) return null;
   return (

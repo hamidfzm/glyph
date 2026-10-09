@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { tagHue as pluginTagHue } from "@/plugins/core/tags/tagColor";
 import { tagHue } from "./tagColor";
 
 describe("tagHue", () => {
@@ -15,6 +16,14 @@ describe("tagHue", () => {
       const h = tagHue(tag);
       expect(h).toBeGreaterThanOrEqual(0);
       expect(h).toBeLessThan(360);
+    }
+  });
+
+  // The tags core plugin cannot import this module, so it carries a copy; a tag
+  // must still keep one colour between the sidebar and the frontmatter.
+  it("matches the tags plugin's own copy", () => {
+    for (const tag of ["", "a", "demo", "project/glyph", "really-long-tag-name", "🎨", "测试"]) {
+      expect(pluginTagHue(tag)).toBe(tagHue(tag));
     }
   });
 });

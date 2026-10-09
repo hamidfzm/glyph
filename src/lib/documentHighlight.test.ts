@@ -135,6 +135,14 @@ describe("locateLineInDocument", () => {
     expect(locateLineInDocument(7, "not in the document at all")).toBe(false);
   });
 
+  // A plugin jumping to a line has no text to fall back on; the first block of
+  // the document is not a match for it.
+  it("returns false, flashing nothing, without markers or a text to match", () => {
+    for (const el of document.querySelectorAll("[data-line]")) el.removeAttribute("data-line");
+    expect(locateLineInDocument(7)).toBe(false);
+    expect(document.querySelector(".ai-flash")).toBeNull();
+  });
+
   it("returns false without a viewer", () => {
     document.body.innerHTML = "";
     expect(locateLineInDocument(1, "anything")).toBe(false);

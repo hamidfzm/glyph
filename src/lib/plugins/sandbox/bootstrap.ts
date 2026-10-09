@@ -35,6 +35,10 @@ function sandboxUnavailable(name, reason = "it needs DOM access") {
   };
 }
 
+// The app state APIs (active document, vault, navigation) are not bridged to
+// the worker yet.
+const APP_CONTEXT_ONLY = "it is only offered in the app context";
+
 function hostCall(message) {
   return new Promise((resolve, reject) => {
     const callId = ++callSeq;
@@ -147,6 +151,8 @@ function buildContext(init) {
       addSidebarPanel: sandboxUnavailable("ui.addSidebarPanel"),
       addSettingsPanel: sandboxUnavailable("ui.addSettingsPanel"),
       openOverlay: sandboxUnavailable("ui.openOverlay"),
+      // No element involved, but it drives the app's own Files panel.
+      filterFileTree: sandboxUnavailable("ui.filterFileTree", APP_CONTEXT_ONLY),
     },
     exporters: {
       register(exporter) {
@@ -180,6 +186,8 @@ function buildContext(init) {
         });
         return () => {};
       },
+      getActive: sandboxUnavailable("documents.getActive", APP_CONTEXT_ONLY),
+      onActiveChange: sandboxUnavailable("documents.onActiveChange", APP_CONTEXT_ONLY),
       // Document content reaches a sandboxed plugin only through an export
       // the user runs; no permission covers reading it at will.
       getRenderedHtml: sandboxUnavailable(
@@ -194,6 +202,19 @@ function buildContext(init) {
       listFiles() {
         return hostCall({ type: "workspace-list" });
       },
+      getRoot: sandboxUnavailable("workspace.getRoot", APP_CONTEXT_ONLY),
+      onChange: sandboxUnavailable("workspace.onChange", APP_CONTEXT_ONLY),
+    },
+    vault: {
+      graph: sandboxUnavailable("vault.graph", APP_CONTEXT_ONLY),
+      backlinks: sandboxUnavailable("vault.backlinks", APP_CONTEXT_ONLY),
+      tags: sandboxUnavailable("vault.tags", APP_CONTEXT_ONLY),
+      pathsWithTag: sandboxUnavailable("vault.pathsWithTag", APP_CONTEXT_ONLY),
+      status: sandboxUnavailable("vault.status", APP_CONTEXT_ONLY),
+      onChange: sandboxUnavailable("vault.onChange", APP_CONTEXT_ONLY),
+    },
+    navigation: {
+      openFile: sandboxUnavailable("navigation.openFile", APP_CONTEXT_ONLY),
     },
     assets: {
       async readBinary(path) {

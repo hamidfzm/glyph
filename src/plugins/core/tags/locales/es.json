@@ -1,0 +1,7 @@
+{
+  "heading": "Etiquetas",
+  "filterBy": "Filtrar por #{{tag}}",
+  "filtered": "#{{tag}} ({{total}})",
+  "sortByCount": "Ordenar etiquetas por cantidad",
+  "empty": "Sin etiquetas"
+}

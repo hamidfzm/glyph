@@ -4,17 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
 import type { RegistryEntry } from "@/lib/plugins/marketplace";
-import { createRegistry } from "@/lib/plugins/registry";
-import type {
-  CommandEntry,
-  ExporterEntry,
-  FencedRendererContribution,
-  MarkdownPlugin,
-  SettingsPanelContribution,
-  SidebarPanelContribution,
-  StatusBarItemContribution,
-  StyleContribution,
-} from "@/lib/plugins/types";
+import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import { PluginMarketplace } from "./PluginMarketplace";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(async () => {}) }));
@@ -34,20 +24,7 @@ function entry(over: Partial<RegistryEntry> = {}): RegistryEntry {
 }
 
 function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
-  return {
-    commands: createRegistry<CommandEntry>(),
-    statusBarItems: createRegistry<StatusBarItemContribution>(),
-    remarkPlugins: createRegistry<MarkdownPlugin>(),
-    rehypePlugins: createRegistry<MarkdownPlugin>(),
-    fencedRenderers: createRegistry<FencedRendererContribution>(),
-    sidebarPanels: createRegistry<SidebarPanelContribution>(),
-    settingsPanels: createRegistry<SettingsPanelContribution>(),
-    styles: createRegistry<StyleContribution>(),
-    exporters: createRegistry<ExporterEntry>(),
-    siteThemes: createRegistry(),
-    installed: [],
-    disabled: [],
-    loaded: [],
+  return pluginsContextValue({
     registry: [
       entry(),
       entry({
@@ -58,15 +35,8 @@ function ctx(over: Partial<PluginsContextValue> = {}): PluginsContextValue {
         keywords: ["farsi"],
       }),
     ],
-    updates: [],
-    installFromFolder: vi.fn(async () => {}),
-    installFromRegistry: vi.fn(async () => {}),
-    setEnabled: vi.fn(async () => {}),
-    uninstall: vi.fn(async () => {}),
-    setWorkspaceRoot: vi.fn(),
-    initialLoadDone: true,
     ...over,
-  };
+  });
 }
 
 function renderMarket(value = ctx()) {

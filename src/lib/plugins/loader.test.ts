@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { importPluginModule } from "./loader";
+import type { GlyphPluginContext } from "./types";
+
+/** The plugins under test only call `notify`. */
+function notifyOnlyContext(notify: GlyphPluginContext["notify"]): GlyphPluginContext {
+  return { notify } as unknown as GlyphPluginContext;
+}
 
 describe("importPluginModule", () => {
   it("imports real ESM source and returns its default export", async () => {
@@ -12,31 +18,7 @@ describe("importPluginModule", () => {
     const module = await importPluginModule(source);
 
     const notify = vi.fn();
-    module.activate({
-      apiVersion: "1.0.0",
-      commands: { register: vi.fn() },
-      ui: {
-        addStatusBarItem: vi.fn(),
-        addSidebarPanel: vi.fn(),
-        addSettingsPanel: vi.fn(),
-        addStyles: vi.fn(),
-        openOverlay: vi.fn(),
-      },
-      exporters: { register: vi.fn(), registerSiteTheme: vi.fn() },
-      spellcheck: { registerDictionary: vi.fn() },
-      settings: { get: vi.fn(), set: vi.fn() },
-      markdown: {
-        registerRemarkPlugin: vi.fn(),
-        registerRehypePlugin: vi.fn(),
-        registerFencedRenderer: vi.fn(),
-      },
-      documents: { registerFileType: vi.fn(), getRenderedHtml: vi.fn() },
-      workspace: { readFile: vi.fn(), listFiles: vi.fn() },
-      assets: { readText: vi.fn(), readBinary: vi.fn() },
-      i18n: { t: vi.fn(), onLanguageChange: vi.fn() },
-      notify,
-      registerTranslations: vi.fn(),
-    });
+    module.activate(notifyOnlyContext(notify));
     expect(notify).toHaveBeenCalledWith("activated 1");
   });
 
@@ -45,31 +27,7 @@ describe("importPluginModule", () => {
       `export default { activate(ctx) { ctx.notify("héllo ✓ ☃"); } };`,
     );
     const notify = vi.fn();
-    module.activate({
-      apiVersion: "1.0.0",
-      commands: { register: vi.fn() },
-      ui: {
-        addStatusBarItem: vi.fn(),
-        addSidebarPanel: vi.fn(),
-        addSettingsPanel: vi.fn(),
-        addStyles: vi.fn(),
-        openOverlay: vi.fn(),
-      },
-      exporters: { register: vi.fn(), registerSiteTheme: vi.fn() },
-      spellcheck: { registerDictionary: vi.fn() },
-      settings: { get: vi.fn(), set: vi.fn() },
-      markdown: {
-        registerRemarkPlugin: vi.fn(),
-        registerRehypePlugin: vi.fn(),
-        registerFencedRenderer: vi.fn(),
-      },
-      documents: { registerFileType: vi.fn(), getRenderedHtml: vi.fn() },
-      workspace: { readFile: vi.fn(), listFiles: vi.fn() },
-      assets: { readText: vi.fn(), readBinary: vi.fn() },
-      i18n: { t: vi.fn(), onLanguageChange: vi.fn() },
-      notify,
-      registerTranslations: vi.fn(),
-    });
+    module.activate(notifyOnlyContext(notify));
     expect(notify).toHaveBeenCalledWith("héllo ✓ ☃");
   });
 

@@ -1,5 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { resolveInsideRoot } from "./workspacePath";
+import { resolveInsideRoot, resolveWorkspacePath } from "./workspacePath";
+
+describe("resolveWorkspacePath", () => {
+  it("accepts a file by absolute path or relative to the root, as one spelling", () => {
+    expect(resolveWorkspacePath("/ws", "/ws/notes/a.md")).toBe("/ws/notes/a.md");
+    expect(resolveWorkspacePath("/ws", "notes/a.md")).toBe("/ws/notes/a.md");
+    expect(resolveWorkspacePath("C:\\ws", "C:\\ws/notes/a.md")).toBe("C:\\ws\\notes\\a.md");
+  });
+
+  it("works for a workspace at a drive or filesystem root", () => {
+    expect(resolveWorkspacePath("D:\\", "D:\\notes\\a.md")).toBe("D:\\notes\\a.md");
+    expect(resolveWorkspacePath("/", "/notes/a.md")).toBe("/notes/a.md");
+  });
+
+  it("refuses the root itself and anything outside it", () => {
+    expect(resolveWorkspacePath("/ws", "/ws")).toBeNull();
+    expect(resolveWorkspacePath("/ws", "/ws/")).toBeNull();
+    expect(resolveWorkspacePath("/ws", "/ws-other/a.md")).toBeNull();
+    expect(resolveWorkspacePath("/ws", "/ws/../etc/passwd")).toBeNull();
+    expect(resolveWorkspacePath("C:\\ws", "D:\\ws\\a.md")).toBeNull();
+  });
+});
 
 describe("resolveInsideRoot", () => {
   it("resolves simple and nested relative paths", () => {
