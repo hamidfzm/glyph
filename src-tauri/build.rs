@@ -98,8 +98,9 @@ fn embed_comctl32_v6_in_test_binaries() {
 /// Types the OS knows about come from `tauri.conf.json` →
 /// `bundle.fileAssociations`, keyed by mime type rather than position so
 /// reordering the array cannot silently swap two lists. That array is also what
-/// the OS sees (Windows registry, macOS Info.plist, Linux `.desktop` file), so
-/// anything not in it can't reach the app via file association anyway.
+/// the OS sees (Windows registry, macOS Info.plist, and on Linux the globs in
+/// `linux/glyph.xml`, which a test holds to it), so anything not in it can't
+/// reach the app via file association anyway.
 ///
 /// Everything else (canvas, notebook, image, media) is not an OS file association and
 /// comes from `extensions.json` next to it. The frontend reads both files

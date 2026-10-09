@@ -30,10 +30,10 @@ jobs:
             # Bundle analysis is the codecov Vite plugin, which runs during
             # the frontend build; it does not need installer packaging.
             args_full: ""
-            # The Docker check installs this leg's .deb and the desktop entry
-            # smoke test opens it, so a pull request has to produce one. Only
-            # the .deb: AppImage bundling downloads linuxdeploy and is minutes
-            # of work nothing here consumes.
+            # The Docker check and the desktop entry smoke test both install
+            # this leg's .deb, so a pull request has to produce one. Only the
+            # .deb: AppImage bundling downloads linuxdeploy and is minutes of
+            # work nothing here consumes.
             args_pr: "--bundles deb"
             bundle_analysis: true
           # No include entry for ubuntu-22.04-arm: include is processed
@@ -84,8 +84,9 @@ jobs:
       - name: Quick Look smoke test
         if: matrix.platform == 'macos-latest'
         run: ./scripts/quicklook-smoke.sh "$(find src-tauri/target -maxdepth 5 -path '*/release/bundle/macos/Glyph.app' | head -n 1)"
-      # Checks the .deb installs a desktop entry that file managers list under
-      # "Open With". The AUR, PPA, apt and snap packages all repack this .deb.
+      # Installs the .deb, checks the desktop offers Glyph under "Open With" for
+      # its own file types and no others, and removes it again. The AUR, PPA,
+      # apt and snap packages all repack this .deb.
       - name: Desktop entry smoke test
         if: matrix.platform == 'ubuntu-22.04'
         run: ./scripts/desktop-entry-smoke.sh src-tauri/target/release/bundle/deb/*.deb
