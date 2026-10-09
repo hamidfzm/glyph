@@ -17,6 +17,9 @@ as_root() { if (( EUID == 0 )); then "$@"; else sudo "$@"; fi; }
 deb=$(realpath "$1")
 conf="$(dirname "$0")/../src-tauri/tauri.conf.json"
 package=$(dpkg-deb -f "$deb" Package)
+if dpkg-query -W -f='${Status}' "$package" 2> /dev/null | grep -q 'ok installed'; then
+  fail "$package is already installed here, and this would remove it"
+fi
 
 work=$(mktemp -d)
 installed=""
@@ -51,7 +54,7 @@ expect_type() {
 handles() { [[ "$(gio mime "$1")" == *Glyph.desktop* ]]; }
 
 installed=$package
-as_root apt-get install -y "$deb"
+as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "$deb"
 
 for ext in "${markdown[@]}"; do expect_type "$(text_file "sample.$ext")" text/markdown; done
 for ext in "${d2[@]}"; do expect_type "$(text_file "sample.$ext")" text/x-d2; done
@@ -74,6 +77,8 @@ grep -qx 'text/x-d2 text/plain' /usr/share/mime/subclasses || fail "text/x-d2 is
 as_root dpkg --remove "$package"
 installed=""
 expect_type "$work/sample.d2" text/plain
-if handles text/markdown; then fail "removing the package left Glyph registered"; fi
+if grep -q 'Glyph.desktop' /usr/share/applications/mimeinfo.cache; then
+  fail "removing the package left Glyph registered"
+fi
 
 echo "desktop entry smoke: passed (${markdown[*]} ${d2[*]})"

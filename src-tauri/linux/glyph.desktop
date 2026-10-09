@@ -9,6 +9,6 @@ Icon={{icon}}
 Name={{name}}
 Terminal=false
 Type=Application
-# Written out, not rendered from fileAssociations: the D2 association's
-# text/plain would offer Glyph for every text file. glyph.xml defines these.
+{{!-- Written out, not rendered from fileAssociations: the D2 association's --}}
+{{!-- text/plain would offer Glyph for every text file. glyph.xml defines these. --}}
 MimeType=text/markdown;text/x-d2;

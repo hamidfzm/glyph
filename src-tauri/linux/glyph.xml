@@ -3,10 +3,10 @@
      bundle.fileAssociations in tauri.conf.json, and
      scripts/desktop-entry.test.mjs fails when they drift. -->
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
-  <!-- Extends the system's type, which globs only md, mkd and markdown. It
-       supplies the comment and the parent type; a comment here would hide its
-       translations. *.mdx is also its glob for Sega 32X ROMs: at equal weight
-       the content decides, so leave the weight off. -->
+  <!-- Extends the system's type, which globs only md, mkd and markdown and
+       already has the comment and the parent type. *.mdx is also its glob for
+       Sega 32X ROMs: at equal weight the content decides, so leave the weight
+       off. -->
   <mime-type type="text/markdown">
     <glob pattern="*.md"/>
     <glob pattern="*.markdown"/>
