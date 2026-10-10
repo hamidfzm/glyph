@@ -31,7 +31,10 @@ function setPrompts({
 }) {
   vi.mocked(useDefaultAppPrompt).mockReturnValue({
     show: defaultApp,
+    busy: false,
+    outcome: null,
     setDefault: vi.fn(),
+    dismissOutcome: vi.fn(),
     notNow: vi.fn(),
     never: vi.fn(),
   });
