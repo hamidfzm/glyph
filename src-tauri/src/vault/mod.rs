@@ -45,11 +45,11 @@ pub(crate) use headings::{
     js_lines, line_ending, parse_headings, section, section_spans, slug, uncertain_line,
     SectionSpan,
 };
+pub(crate) use index::strip_bom;
 pub use index::Vault;
-pub(crate) use index::{names_in, strip_bom};
 pub use queries::Direction;
-pub(crate) use relink::write_unchanged;
 pub use relink::{relocate, Relink};
+pub(crate) use relink::{respelled, write_unchanged};
 pub(crate) use resolve::split_heading;
 pub(crate) use store::with_synced_vault;
 pub use store::{apply_changes, forget, VaultStore};

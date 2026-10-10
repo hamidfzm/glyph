@@ -100,7 +100,7 @@ describe("useTabs programmatic edits", () => {
     }
   });
 
-  it("commitEdit in view mode refreshes a stale editContent shadow", async () => {
+  it("commitEdit in view mode keeps a clean leftover edit buffer in step", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         read_file: async () => "A",
@@ -115,12 +115,10 @@ describe("useTabs programmatic edits", () => {
     });
     const tabId = result.current.tabs[0].id;
 
-    // Editing seeds editContent; switching back to view leaves it behind.
+    // Entering edit mode seeds editContent; leaving without typing leaves it
+    // behind as a clean copy of the content.
     act(() => {
       result.current.setTabMode(tabId, "edit");
-    });
-    act(() => {
-      result.current.updateEditContent(tabId, "EDIT-MODE-STATE");
     });
     act(() => {
       result.current.setTabMode(tabId, "view");
@@ -130,11 +128,11 @@ describe("useTabs programmatic edits", () => {
       await result.current.commitEdit(tabId, "VIEW-MODE-COMMIT");
     });
     if (result.current.tabs[0].kind === "file") {
-      // Both content and the leftover shadow must advance, or consumers that
-      // render `editContent ?? content` (the canvas viewer) would show the
-      // pre-commit board.
+      // Both content and the leftover buffer must advance, or the pane (which
+      // renders the buffer when there is one) would show the pre-commit board.
       expect(result.current.tabs[0].file.content).toBe("VIEW-MODE-COMMIT");
       expect(result.current.tabs[0].file.editContent).toBe("VIEW-MODE-COMMIT");
+      expect(result.current.tabs[0].file.dirty).toBe(false);
     }
   });
 
