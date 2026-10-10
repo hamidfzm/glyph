@@ -4,6 +4,7 @@ import { useTabsContext } from "@/contexts/TabsContext";
 import { locateLineInDocument, locateWhenRendered } from "@/lib/documentHighlight";
 import { setPluginAppState } from "@/lib/plugins/appState";
 import { setPluginFileOpener } from "@/lib/plugins/navigationApi";
+import { liveContentOf } from "@/lib/tabs";
 
 /**
  * Mirror what plugins may read of the app (workspace root, active document,
@@ -16,7 +17,7 @@ export function usePluginAppBridge(): void {
   const { compact, closeCompactPanels } = useSidebarLayoutContext();
   const root = workspace?.root ?? null;
   const path = activeFile?.path;
-  const text = activeFile ? (activeFile.editContent ?? activeFile.content) : null;
+  const text = activeFile ? liveContentOf(activeFile) : null;
 
   useEffect(() => {
     setPluginAppState({

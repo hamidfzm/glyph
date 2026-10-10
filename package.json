@@ -45,7 +45,6 @@
     "@replit/codemirror-vscode-keymap": "^6.0.2",
     "@sentry/react": "^10.75.3",
     "@tauri-apps/api": "^2.12.1",
-    "@tauri-apps/plugin-cli": "2.5.0",
     "@tauri-apps/plugin-clipboard-manager": "2.4.1",
     "@tauri-apps/plugin-dialog": "2.8.1",
     "@tauri-apps/plugin-fs": "2.6.0",

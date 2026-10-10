@@ -4,13 +4,10 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::grants::{self, is_symlink, GrantRegistry};
-
-pub struct InitialFile(pub Mutex<Option<String>>);
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,16 +16,6 @@ pub struct FileMetadata {
     pub path: String,
     pub size: u64,
     pub modified: u64,
-}
-
-/// Return the file the app was launched to open, if any, consuming it. `take`
-/// (not `clone`) matters now that macOS `RunEvent::Opened` can write this stash
-/// at any point in the app's life, not just at startup: consuming on first read
-/// means a later launch's path can never resurface in a subsequently-opened
-/// window (or a dev hot-reload) as a stale file.
-#[tauri::command]
-pub fn get_initial_file(state: State<'_, InitialFile>) -> Option<String> {
-    state.0.lock().ok()?.take()
 }
 
 #[tauri::command]
@@ -693,36 +680,6 @@ mod tests {
         let json = serde_json::to_string(&metadata).unwrap();
         assert!(!json.contains("file_name"));
         assert!(json.contains("name"));
-    }
-
-    #[test]
-    fn get_initial_file_returns_managed_value() {
-        let app = mock_app();
-        app.manage(InitialFile(Mutex::new(Some("/ws/file.md".to_string()))));
-        let result = get_initial_file(app.state::<InitialFile>());
-        assert_eq!(result.as_deref(), Some("/ws/file.md"));
-    }
-
-    #[test]
-    fn get_initial_file_returns_none_when_unset() {
-        let app = mock_app();
-        app.manage(InitialFile(Mutex::new(None)));
-        let result = get_initial_file(app.state::<InitialFile>());
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn get_initial_file_is_consumed_on_read() {
-        // The stash is read-once: a macOS `RunEvent::Opened` may have written a
-        // launch path, and once the primary window reads it, no later window (or
-        // dev hot-reload) should resurface it.
-        let app = mock_app();
-        app.manage(InitialFile(Mutex::new(Some("/ws/file.md".to_string()))));
-        assert_eq!(
-            get_initial_file(app.state::<InitialFile>()).as_deref(),
-            Some("/ws/file.md")
-        );
-        assert!(get_initial_file(app.state::<InitialFile>()).is_none());
     }
 
     #[test]
@@ -1625,19 +1582,5 @@ mod tests {
         // out would read as a reason of `undefined`.
         let json = serde_json::to_string(&clean(2)).unwrap();
         assert_eq!(json, r#"{"removed":2,"error":null}"#);
-    }
-
-    #[test]
-    fn initial_file_default_is_none() {
-        let initial = InitialFile(Mutex::new(None));
-        let guard = initial.0.lock().unwrap();
-        assert!(guard.is_none());
-    }
-
-    #[test]
-    fn initial_file_with_value() {
-        let initial = InitialFile(Mutex::new(Some("/path/to/file.md".to_string())));
-        let guard = initial.0.lock().unwrap();
-        assert_eq!(guard.as_deref(), Some("/path/to/file.md"));
     }
 }

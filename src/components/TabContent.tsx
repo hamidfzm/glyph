@@ -6,6 +6,7 @@ import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isImageFile } from "@/lib/imageExtensions";
 import { isNotebookFile } from "@/lib/notebookExtensions";
 import { EDITOR_MODE, effectiveEditorMode } from "@/lib/settings";
+import { liveContentOf } from "@/lib/tabs";
 import { CanvasPane } from "./CanvasPane";
 import { MarkdownEditor, SplitView } from "./editor/lazyEditor";
 import { GraphView } from "./graph/lazyGraph";
@@ -89,18 +90,19 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     return <ImageViewer key={`${activeTab.id}:${file.path}`} filePath={file.path} />;
   }
 
+  // Every pane renders the live text, so a tab left dirty in view mode shows
+  // its unsaved edits and a checkbox reports a line of the text it toggles.
+  const content = liveContentOf(file);
   // null is the loading/absent state; the empty string is a valid empty
   // document and must still render the editor/viewer shell.
-  if (file.content == null) return null;
-
-  const editorContent = file.editContent ?? file.content;
+  if (content == null) return null;
 
   if (isNotebookFile(file.path)) {
     return (
       <NotebookPane
         tabId={activeTab.id}
         file={file}
-        content={file.content}
+        content={content}
         mode={mode}
         searchOpen={searchOpen}
         onSearchClose={onSearchClose}
@@ -114,7 +116,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
       <CanvasPane
         tabId={activeTab.id}
         file={file}
-        content={editorContent}
+        content={content}
         onOpenFile={handleOpenWikilink}
         onChange={handleCanvasChange}
       />
@@ -126,7 +128,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
       <NoteZoomLayer tabId={activeTab.id}>
         <div className="flex-1 overflow-hidden">
           <MarkdownEditor
-            content={editorContent}
+            content={content}
             onChange={handleEditorChange}
             workspaceFiles={workspaceFiles}
             searchOpen={searchOpen}
@@ -142,7 +144,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
       <NoteZoomLayer tabId={activeTab.id}>
         <div className="flex-1 overflow-hidden">
           <SplitView
-            content={editorContent}
+            content={content}
             filePath={file.path}
             onChange={handleEditorChange}
             searchOpen={searchOpen}
@@ -161,7 +163,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     <NoteZoomLayer tabId={activeTab.id}>
       <MarkdownViewer
         key={`${activeTab.id}:${file.path}`}
-        content={file.content}
+        content={content}
         filePath={file.path}
         initialScrollTop={file.scrollTop}
         onScrollChange={saveScrollPosition}

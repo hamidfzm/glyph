@@ -10,7 +10,9 @@
 // decision. The runtime half (creating/focusing/emitting to real windows)
 // lives in [`crate::windows_runtime`].
 
-use std::collections::HashMap;
+mod pending;
+
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
@@ -34,8 +36,9 @@ pub enum OpenTarget {
     NewWindow,
 }
 
-/// A pending open handed to a freshly-spawned window via its init script; the
-/// frontend reads it from `window.__GLYPH_OPEN__` on mount.
+/// One "open this path" request on its way to a window: injected into a
+/// freshly-spawned window as `window.__GLYPH_OPEN__`, or queued for an
+/// existing one to take (see [`WindowRegistry::queue_open`]).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingOpen {
@@ -88,6 +91,13 @@ impl WindowsSnapshot {
         self.workspaces
             .iter()
             .any(|(l, workspace)| l == label && workspace.is_some())
+    }
+
+    /// Record that `label` is about to show `root`, ahead of its own report.
+    fn claim_workspace(&mut self, label: &str, root: &str) {
+        self.workspaces.retain(|(l, _)| l != label);
+        self.workspaces
+            .push((label.to_string(), Some(root.to_string())));
     }
 }
 
@@ -144,24 +154,60 @@ pub fn route_open(
     }
 }
 
+/// Route the opens of one launch, in order, as if each had been requested on
+/// its own. A window that adopts a folder cannot report it before the next
+/// decision is made, so the claim is carried forward here: the second folder
+/// of a launch sees the first one's window as occupied and spawns, instead of
+/// also adopting into it and replacing the workspace just opened.
+pub fn route_opens(
+    opens: &[PendingOpen],
+    snapshot: &WindowsSnapshot,
+    current_label: &str,
+) -> Vec<OpenRoute> {
+    let mut snapshot = snapshot.clone();
+    opens
+        .iter()
+        .map(|open| {
+            let route = route_open(
+                open.kind,
+                &open.path,
+                &snapshot,
+                current_label,
+                OpenTarget::Current,
+            );
+            if let OpenRoute::Adopt(label, adopted) = &route {
+                if adopted.kind == OpenKind::Folder {
+                    snapshot.claim_workspace(label, &adopted.path);
+                }
+            }
+            route
+        })
+        .collect()
+}
+
 /// Tracks what each window currently shows (its folder workspace and its open
-/// file tabs), plus a counter for minting unique labels for spawned windows.
-/// The frontend keeps the maps current via the `set_window_workspace` and
-/// `set_window_files` commands.
+/// file tabs) and what is waiting for it, plus a counter for minting unique
+/// labels for spawned windows. The frontend keeps the first two maps current
+/// via the `set_window_workspace` and `set_window_files` commands.
 #[derive(Default)]
 pub struct WindowRegistry {
     inner: Mutex<Windows>,
     counter: AtomicU64,
 }
 
-/// Both maps live under one lock so a routing snapshot cannot see a window's
-/// workspace without its files, or the other way round.
+/// Everything lives under one lock so a routing snapshot cannot see a window's
+/// workspace without its files, or a queued open without the path it claims.
 #[derive(Default)]
 struct Windows {
     workspaces: HashMap<String, Option<String>>,
     files: HashMap<String, Vec<String>>,
     /// The files in each window holding edits not yet saved.
     unsaved: HashMap<String, Vec<String>>,
+    /// Opens waiting for their window to take them, in arrival order.
+    pending: HashMap<String, Vec<PendingOpen>>,
+    /// Windows whose frontend has taken its queue at least once, and so can
+    /// report what it shows for itself.
+    mounted: HashSet<String>,
 }
 
 impl WindowRegistry {
@@ -266,6 +312,8 @@ impl WindowRegistry {
         windows.workspaces.remove(label);
         windows.files.remove(label);
         windows.unsaved.remove(label);
+        windows.pending.remove(label);
+        windows.mounted.remove(label);
     }
 
     /// A stable snapshot of what every window shows, for routing.

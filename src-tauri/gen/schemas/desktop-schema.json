@@ -2307,24 +2307,6 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Allows reading the CLI matches\n#### This default permission set includes:\n\n- `allow-cli-matches`",
-          "type": "string",
-          "const": "cli:default",
-          "markdownDescription": "Allows reading the CLI matches\n#### This default permission set includes:\n\n- `allow-cli-matches`"
-        },
-        {
-          "description": "Enables the cli_matches command without any pre-configured scope.",
-          "type": "string",
-          "const": "cli:allow-cli-matches",
-          "markdownDescription": "Enables the cli_matches command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the cli_matches command without any pre-configured scope.",
-          "type": "string",
-          "const": "cli:deny-cli-matches",
-          "markdownDescription": "Denies the cli_matches command without any pre-configured scope."
-        },
-        {
           "description": "No features are enabled by default, as we believe\nthe clipboard can be inherently dangerous and it is \napplication specific if read and/or write access is needed.\n\nClipboard interaction needs to be explicitly enabled.\n",
           "type": "string",
           "const": "clipboard-manager:default",

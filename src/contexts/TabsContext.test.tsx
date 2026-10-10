@@ -15,9 +15,8 @@ import { TabsProvider } from "./TabsProvider";
 function mockInvokeOpening(content: string) {
   vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
     switch (cmd) {
-      case "get_initial_folder":
-      case "get_initial_file":
-        return Promise.resolve(null);
+      case "take_pending_opens":
+        return Promise.resolve([]);
       case "read_file":
         return Promise.resolve(content);
       case "get_file_metadata":
@@ -134,13 +133,36 @@ describe("TabsProvider", () => {
     expect(result.current.displayContent).toBe("# editing");
   });
 
-  it("opens the file returned by get_initial_file (CLI path) on mount", async () => {
+  it("keeps displayContent and the outline on the unsaved edits after a switch to view", async () => {
+    mockInvokeOpening("# saved");
+    const { result } = renderHook(() => useTabsContext(), { wrapper: wrap() });
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/work/notes.md");
+    });
+    const id = result.current.activeTabId as string;
+    await act(async () => {
+      result.current.setTabMode(id, "edit");
+    });
+    await act(async () => {
+      result.current.updateEditContent(id, "# unsaved");
+    });
+    await act(async () => {
+      result.current.setTabMode(id, "view");
+    });
+
+    // The view pane renders the buffer of a dirty tab, so everything derived
+    // from the document has to describe that text, not the copy on disk.
+    expect(result.current.displayContent).toBe("# unsaved");
+    expect(result.current.tocEntries.map((entry) => entry.text)).toEqual(["unsaved"]);
+  });
+
+  it("opens the file a launch queued for the window (CLI path) on mount", async () => {
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
       switch (cmd) {
-        case "get_initial_folder":
-          return Promise.resolve(null);
-        case "get_initial_file":
-          return Promise.resolve("/cli/file.md");
+        case "take_pending_opens":
+          return Promise.resolve([{ kind: "file", path: "/cli/file.md" }]);
         case "read_file":
           return Promise.resolve("# Hello");
         case "get_file_metadata":

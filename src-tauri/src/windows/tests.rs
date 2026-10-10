@@ -261,6 +261,123 @@ fn new_window_target_never_duplicates_a_workspace() {
     );
 }
 
+#[test]
+fn a_pending_open_serializes_to_the_shape_the_frontend_reads() {
+    // The same object arrives as `window.__GLYPH_OPEN__` and from
+    // `take_pending_opens`; the frontend branches on `kind`.
+    assert_eq!(
+        serde_json::to_value(pending(OpenKind::Folder, "/ws")).unwrap(),
+        serde_json::json!({ "kind": "folder", "path": "/ws" })
+    );
+    assert_eq!(
+        serde_json::to_value(pending(OpenKind::File, "/a.md")).unwrap(),
+        serde_json::json!({ "kind": "file", "path": "/a.md" })
+    );
+}
+
+// --- several opens from one launch ----------------------------------------
+
+fn adopt(label: &str, kind: OpenKind, path: &str) -> OpenRoute {
+    OpenRoute::Adopt(label.to_string(), pending(kind, path))
+}
+
+#[test]
+fn opens_from_one_launch_route_like_separate_launches() {
+    // Files become tabs in the current window, which also adopts the folder
+    // because it has no workspace yet.
+    let routes = route_opens(
+        &[
+            pending(OpenKind::File, "/a.md"),
+            pending(OpenKind::Folder, "/ws"),
+            pending(OpenKind::File, "/b.md"),
+        ],
+        &ws(&[("main", None)]),
+        "main",
+    );
+    assert_eq!(
+        routes,
+        vec![
+            adopt("main", OpenKind::File, "/a.md"),
+            adopt("main", OpenKind::Folder, "/ws"),
+            adopt("main", OpenKind::File, "/b.md"),
+        ]
+    );
+}
+
+#[test]
+fn a_second_folder_in_one_launch_gets_a_window_of_its_own() {
+    // Routed against one unchanged snapshot, every folder would adopt into
+    // `main` and each would replace the workspace opened just before it.
+    let opens = [
+        pending(OpenKind::Folder, "/a"),
+        pending(OpenKind::Folder, "/b"),
+        pending(OpenKind::Folder, "/c"),
+    ];
+    let expected = vec![
+        adopt("main", OpenKind::Folder, "/a"),
+        OpenRoute::NewWindow(pending(OpenKind::Folder, "/b")),
+        OpenRoute::NewWindow(pending(OpenKind::Folder, "/c")),
+    ];
+    assert_eq!(
+        route_opens(&opens, &ws(&[("main", None)]), "main"),
+        expected
+    );
+    // Same for a current window that has not reported anything yet.
+    assert_eq!(
+        route_opens(&opens, &WindowsSnapshot::default(), "main"),
+        expected
+    );
+}
+
+#[test]
+fn folders_in_a_launch_never_adopt_into_an_occupied_window() {
+    let routes = route_opens(
+        &[
+            pending(OpenKind::Folder, "/b"),
+            pending(OpenKind::File, "/a/note.md"),
+        ],
+        &ws(&[("main", Some("/a"))]),
+        "main",
+    );
+    assert_eq!(
+        routes,
+        vec![
+            OpenRoute::NewWindow(pending(OpenKind::Folder, "/b")),
+            adopt("main", OpenKind::File, "/a/note.md"),
+        ]
+    );
+}
+
+#[test]
+fn a_launch_naming_what_is_already_open_focuses_it() {
+    let snapshot = WindowsSnapshot {
+        workspaces: vec![("main".to_string(), Some("/a".to_string()))],
+        files: vec![("w1".to_string(), vec!["/x.md".to_string()])],
+    };
+    let routes = route_opens(
+        &[
+            pending(OpenKind::Folder, "/a"),
+            pending(OpenKind::File, "/x.md"),
+            pending(OpenKind::File, "/y.md"),
+        ],
+        &snapshot,
+        "main",
+    );
+    assert_eq!(
+        routes,
+        vec![
+            OpenRoute::Focus("main".to_string()),
+            OpenRoute::Focus("w1".to_string()),
+            adopt("main", OpenKind::File, "/y.md"),
+        ]
+    );
+}
+
+#[test]
+fn a_launch_with_nothing_to_open_routes_nothing() {
+    assert!(route_opens(&[], &ws(&[("main", None)]), "main").is_empty());
+}
+
 // --- registry -------------------------------------------------------------
 
 #[test]
