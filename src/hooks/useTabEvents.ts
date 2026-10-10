@@ -10,7 +10,6 @@ interface UseTabEventsParams {
   stateRef: RefObject<TabsState>;
   workspaceRef: RefObject<Workspace | null>;
   isAutoReloadEnabled: () => boolean;
-  isRecentSelfSave: (path: string) => boolean;
   reloadFromDisk: (path: string) => Promise<void>;
   refreshWorkspace: (root: string) => Promise<void>;
 }
@@ -24,7 +23,6 @@ export function useTabEvents({
   stateRef,
   workspaceRef,
   isAutoReloadEnabled,
-  isRecentSelfSave,
   reloadFromDisk,
   refreshWorkspace,
 }: UseTabEventsParams): void {
@@ -44,8 +42,7 @@ export function useTabEvents({
         if (isImageFile(changedPath)) return;
         const isOpen = stateRef.current.tabs.some((t) => activeFileOf(t)?.path === changedPath);
         if (!isOpen) return;
-        // Skip if this file-changed was triggered by our own auto-save.
-        if (isRecentSelfSave(changedPath)) return;
+        // Read the echo of the app's own write too: only its text tells it from another program's.
         await reloadFromDisk(changedPath);
       }, FILE_RELOAD_DEBOUNCE);
       timeouts.set(changedPath, timeout);

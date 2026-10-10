@@ -38,8 +38,8 @@ export function useDocumentEdits({
 
   // Apply a programmatic edit. A tab in edit/split mode, or one still holding
   // unsaved edits, takes it in the buffer so the save path writes everything
-  // together; only a clean view-mode tab writes straight to disk (with the
-  // self-save grace so the file-watcher doesn't re-enter).
+  // together; only a clean view-mode tab writes straight to disk (marked as
+  // the app's own, so a reload reading meanwhile reads again).
   const applyProgrammaticEdit = useCallback(
     async (id: string, file: FileState, next: string): Promise<boolean> => {
       if (file.mode !== EDITOR_MODE.view || file.dirty) {

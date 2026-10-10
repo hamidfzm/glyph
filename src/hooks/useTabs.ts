@@ -142,7 +142,7 @@ export function useTabs(options: UseTabsOptions) {
     onWorkspaceNotice: options.onWorkspaceNotice,
   });
 
-  const { markSelfSave, isRecentSelfSave, selfSaveCount } = useSelfSaveTracker();
+  const { markSelfSave, selfSaveCount } = useSelfSaveTracker();
 
   const addToRecent = useCallback((path: string) => {
     // A headless export must not rewrite the user's recent files with the
@@ -405,7 +405,6 @@ export function useTabs(options: UseTabsOptions) {
     stateRef,
     workspaceRef,
     isAutoReloadEnabled,
-    isRecentSelfSave,
     reloadFromDisk,
     refreshWorkspace,
   });
