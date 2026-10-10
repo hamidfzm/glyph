@@ -1,10 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getCliExportRequest, resetCliExportRequestCache } from "@/lib/cliExport";
 import { registerFileType } from "@/lib/plugins/fileTypes";
+import { tabPathOf } from "@/lib/tabs";
+import type { PendingOpen } from "@/lib/windowContext";
 import { getWorkspaceSession } from "@/lib/workspaceSession";
+import { deferred } from "@/test/deferred";
 import { defaultOptions, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 import { RESTORE_PLUGIN_WAIT_MS } from "./useTabsSession";
@@ -15,6 +19,13 @@ vi.mock("@/lib/pickers", () => ({
   pickSave: vi.fn(),
   pickNewWorkspace: vi.fn(),
 }));
+
+/** An invoker whose window has `opens` waiting in the backend's startup queue. */
+const queueing = (opens: PendingOpen[]) =>
+  makeInvoker({ take_pending_opens: async () => opens }) as typeof invoke;
+
+const tabPaths = (tabs: ReturnType<typeof useTabs>["tabs"]) =>
+  tabs.map((tab) => (tab.kind === "file" ? tab.file.path : ""));
 
 beforeEach(() => {
   resetTabsMocks();
@@ -37,9 +48,6 @@ describe("useTabs initialization", () => {
   });
 
   describe("waiting for plugins before a saved-session restore", () => {
-    const tabPaths = (tabs: ReturnType<typeof useTabs>["tabs"]) =>
-      tabs.map((tab) => (tab.kind === "file" ? tab.file.path : ""));
-
     it("restores a plugin file type's tab once plugins are ready, not before", async () => {
       // Opened before its plugin registers, the tab would be refused and the
       // next session save would drop it.
@@ -77,10 +85,8 @@ describe("useTabs initialization", () => {
       }
     });
 
-    it("opens a CLI file right away, without waiting for plugins", async () => {
-      vi.mocked(invoke).mockImplementation(
-        makeInvoker({ get_initial_file: async () => "/p/cli.md" }) as typeof invoke,
-      );
+    it("opens a launch's file right away, without waiting for plugins", async () => {
+      vi.mocked(invoke).mockImplementation(queueing([{ kind: "file", path: "/p/cli.md" }]));
       const { result } = renderHook(() =>
         useTabs({ ...defaultOptions(), openTabs: ["/p/old.md"], pluginsReady: false }),
       );
@@ -102,12 +108,8 @@ describe("useTabs initialization", () => {
     });
   });
 
-  it("opens the initial file from get_initial_file", async () => {
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        get_initial_file: async () => "/p/cli.md",
-      }) as typeof invoke,
-    );
+  it("opens the file a launch queued for this window", async () => {
+    vi.mocked(invoke).mockImplementation(queueing([{ kind: "file", path: "/p/cli.md" }]));
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => {
       expect(result.current.tabs).toHaveLength(1);
@@ -120,31 +122,77 @@ describe("useTabs initialization", () => {
     expect(invoke).toHaveBeenCalledWith("watch_file", { path: "/p/cli.md" });
   });
 
-  it("opens the initial folder from get_initial_folder and prefers it over initial file", async () => {
+  it("opens every file a launch named, in order, and leaves the last one active", async () => {
+    // `Exec=glyph %F` with three files selected.
     vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        get_initial_folder: async () => "/p/workspace",
-        get_initial_file: async () => "/p/cli.md",
-      }) as typeof invoke,
+      queueing([
+        { kind: "file", path: "/p/a.md" },
+        { kind: "file", path: "/p/b.md" },
+        { kind: "file", path: "/p/c.md" },
+      ]),
     );
-    const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => {
-      expect(result.current.workspace?.root).toBe("/p/workspace");
-    });
-    expect(invoke).toHaveBeenCalledWith("watch_directory", { path: "/p/workspace" });
-    expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/cli.md" });
+    const { result } = renderHook(() =>
+      // A launch that named something stands in for the saved session.
+      useTabs(defaultOptions({ openTabs: ["/p/old.md"], reopenLastFile: true })),
+    );
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    expect(tabPaths(result.current.tabs)).toEqual(["/p/a.md", "/p/b.md", "/p/c.md"]);
+    expect(result.current.activeTab && tabPathOf(result.current.activeTab)).toBe("/p/c.md");
   });
 
-  it("keeps the CLI folder when StrictMode double-invokes the init effect", async () => {
-    // Regression: get_initial_folder consumes its value, so the second dev-mode
-    // run read None and fell through to session restore, replacing the folder
-    // the CLI had just opened.
-    let folderReads = 0;
+  it("opens a queued folder as the workspace and the files beside it as tabs", async () => {
+    vi.mocked(invoke).mockImplementation(
+      queueing([
+        { kind: "file", path: "/p/a.md" },
+        { kind: "folder", path: "/p/workspace" },
+        { kind: "file", path: "/p/b.md" },
+      ]),
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    expect(result.current.workspace?.root).toBe("/p/workspace");
+    expect(invoke).toHaveBeenCalledWith("watch_directory", { path: "/p/workspace" });
+    // Adopting the folder keeps the loose file opened before it.
+    expect(tabPaths(result.current.tabs)).toEqual(["/p/a.md", "/p/b.md"]);
+  });
+
+  it("takes the startup queue only once the nudge listener is attached", async () => {
+    // An open queued between an early take and a late listener would have its
+    // nudge go unheard.
+    const attached = deferred<() => void>();
+    vi.mocked(listen).mockImplementation(((name: string) =>
+      name === "opens-pending" ? attached.promise : Promise.resolve(() => {})) as typeof listen);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(invoke).not.toHaveBeenCalledWith("take_pending_opens");
+    expect(result.current.initializing).toBe(true);
+
+    attached.resolve(() => {});
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    expect(invoke).toHaveBeenCalledWith("take_pending_opens");
+  });
+
+  it("still takes the startup queue when the listener cannot be attached", async () => {
+    vi.mocked(listen).mockRejectedValue(new Error("no event system"));
+    vi.mocked(invoke).mockImplementation(queueing([{ kind: "file", path: "/p/cli.md" }]));
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    expect(tabPaths(result.current.tabs)).toEqual(["/p/cli.md"]);
+  });
+
+  it("keeps the launch's folder when StrictMode double-invokes the init effect", async () => {
+    // Regression: the startup queue is handed over once, so a second dev-mode
+    // run read nothing and fell through to session restore, replacing the
+    // folder the launch had just opened.
+    let drains = 0;
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        get_initial_folder: async () => {
-          folderReads += 1;
-          return folderReads === 1 ? "/p/cli-workspace" : null;
+        take_pending_opens: async () => {
+          drains += 1;
+          return drains === 1 ? [{ kind: "folder", path: "/p/cli-workspace" }] : [];
         },
       }) as typeof invoke,
     );
@@ -161,6 +209,7 @@ describe("useTabs initialization", () => {
     await waitFor(() => expect(result.current.initializing).toBe(false));
     expect(result.current.workspace?.root).toBe("/p/cli-workspace");
     expect(invoke).not.toHaveBeenCalledWith("watch_directory", { path: "/p/old-session" });
+    expect(drains).toBe(1);
   });
 
   it("restores legacy string[] open tabs", async () => {
@@ -255,19 +304,19 @@ describe("useTabs initialization", () => {
     }
   });
 
-  it("swallows init command failures and still finishes initializing", async () => {
+  it("falls back to the saved session when the startup queue cannot be read", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        get_initial_folder: async () => {
+        take_pending_opens: async () => {
           throw new Error("ipc broke");
         },
       }) as typeof invoke,
     );
-    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const { result } = renderHook(() => useTabs(defaultOptions({ openTabs: ["/p/old.md"] })));
     await waitFor(() => {
       expect(result.current.initializing).toBe(false);
     });
-    expect(result.current.tabs).toHaveLength(0);
+    expect(tabPaths(result.current.tabs)).toEqual(["/p/old.md"]);
     expect(result.current.workspace).toBeNull();
   });
 });
@@ -365,6 +414,20 @@ describe("useTabs multi-window", () => {
     expect(
       result.current.tabs.some((t) => t.kind === "file" && t.file.path === "/p/loose.md"),
     ).toBe(true);
+  });
+
+  it("a spawned window opens its injected path, then what was queued for it", async () => {
+    // A file routed to the new window before its frontend mounted waits in
+    // that window's own queue.
+    const g = window as unknown as Injectable;
+    g.__GLYPH_OPEN__ = { kind: "folder", path: "/p/spawned" };
+    g.__GLYPH_PRIMARY__ = false;
+    vi.mocked(invoke).mockImplementation(queueing([{ kind: "file", path: "/elsewhere/late.md" }]));
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    expect(result.current.workspace?.root).toBe("/p/spawned");
+    expect(tabPaths(result.current.tabs)).toEqual(["/elsewhere/late.md"]);
   });
 
   it("the primary window still persists the session", async () => {
