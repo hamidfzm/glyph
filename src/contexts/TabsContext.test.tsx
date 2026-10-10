@@ -133,6 +133,31 @@ describe("TabsProvider", () => {
     expect(result.current.displayContent).toBe("# editing");
   });
 
+  it("keeps displayContent and the outline on the unsaved edits after a switch to view", async () => {
+    mockInvokeOpening("# saved");
+    const { result } = renderHook(() => useTabsContext(), { wrapper: wrap() });
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/work/notes.md");
+    });
+    const id = result.current.activeTabId as string;
+    await act(async () => {
+      result.current.setTabMode(id, "edit");
+    });
+    await act(async () => {
+      result.current.updateEditContent(id, "# unsaved");
+    });
+    await act(async () => {
+      result.current.setTabMode(id, "view");
+    });
+
+    // The view pane renders the buffer of a dirty tab, so everything derived
+    // from the document has to describe that text, not the copy on disk.
+    expect(result.current.displayContent).toBe("# unsaved");
+    expect(result.current.tocEntries.map((entry) => entry.text)).toEqual(["unsaved"]);
+  });
+
   it("opens the file a launch queued for the window (CLI path) on mount", async () => {
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
       switch (cmd) {

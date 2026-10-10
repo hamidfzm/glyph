@@ -120,9 +120,6 @@ export function useTabStrip() {
         return {
           ...f,
           editContent,
-          // A virtual buffer has no disk copy, so its edits are its content;
-          // without this the view/preview pane would render an empty document.
-          ...(f.virtual ? { content: editContent } : {}),
           dirty: true,
           revision: f.revision + 1,
         };

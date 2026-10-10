@@ -86,7 +86,7 @@ describe("subscribeReady", () => {
     );
     const settled = vi.fn();
 
-    subscribeReady("open-file", vi.fn()).ready.then(settled);
+    subscribeReady("opens-pending", vi.fn()).ready.then(settled);
     await Promise.resolve();
     expect(settled).not.toHaveBeenCalled();
 
@@ -98,14 +98,14 @@ describe("subscribeReady", () => {
     // Whoever waits on it (the startup drain) must not be held up forever.
     vi.mocked(listen).mockRejectedValue(new Error("listen failed"));
 
-    await expect(subscribeReady("open-file", vi.fn()).ready).resolves.toBeUndefined();
+    await expect(subscribeReady("opens-pending", vi.fn()).ready).resolves.toBeUndefined();
   });
 
   it("unsubscribes through the same teardown as subscribe", async () => {
     const unlisten = vi.fn();
     vi.mocked(listen).mockResolvedValue(unlisten);
 
-    subscribeReady("open-file", vi.fn()).unsubscribe();
+    subscribeReady("opens-pending", vi.fn()).unsubscribe();
 
     await vi.waitFor(() => expect(unlisten).toHaveBeenCalledTimes(1));
   });
