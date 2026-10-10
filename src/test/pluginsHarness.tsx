@@ -4,6 +4,7 @@ import { vi } from "vitest";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
+import { loadPluginSettings } from "@/lib/plugins/settingsStore";
 import type { InstalledPlugin } from "@/lib/plugins/types";
 
 // Shared fixtures for the PluginsProvider suites. Each of those files mocks
@@ -78,6 +79,9 @@ export function resetPluginsMocks(): void {
   vi.mocked(invoke).mockResolvedValue(undefined);
   vi.mocked(getStore).mockReset();
   vi.mocked(getStore).mockResolvedValue(grantedStore() as never);
+  // A settings load is how a test sees that the host began loading a plugin,
+  // so one left over from an earlier test must not answer for this one.
+  vi.mocked(loadPluginSettings).mockClear();
   // The provider fetches the marketplace index on every mount; the global
   // setup stub answers ok: false, which would log a fetch failure in every
   // test. Serve an empty index instead; fetch-driven tests restub per case.
