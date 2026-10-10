@@ -69,8 +69,9 @@ ignore:
   - "src-tauri/src/windows_runtime.rs"
   # Native pick dialogs (commands/pick.rs): every command drives a live OS
   # file dialog via tauri-plugin-dialog's blocking API, which cannot be
-  # exercised from MockRuntime. The grant minting they call into lives in
-  # grants.rs with direct tests.
+  # exercised from MockRuntime past a check that runs before it. The grant
+  # minting they call into lives in grants.rs, and what follows the website
+  # export's dialog in commands/export.rs, both with direct tests.
   - "src-tauri/src/commands/pick.rs"
   # lib.rs hosts the Tauri `run()` entry point; every line in that
   # function calls into a real Builder/runtime, which can't be reached
