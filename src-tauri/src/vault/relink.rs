@@ -3,7 +3,7 @@
 //! only a link whose answer would change is rewritten, so a same-named note
 //! elsewhere or a mention in code is never touched.
 
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use super::canvas::file_values;
 use super::frontmatter::split_frontmatter;
-use super::index::strip_bom;
+use super::index::{names_in, strip_bom};
 use super::note::{scan, Note};
 use super::resolve::{compare_paths, stem_of, Resolver};
 use super::store::{apply_changes, with_synced_vault, VaultStore};
@@ -102,6 +102,31 @@ pub fn relocate(
         files,
         failed,
     })
+}
+
+/// Whether `to` is the entry at `from` under another spelling: where the
+/// filesystem ignores case, the same name in other letters reaches the entry
+/// itself, so a rename there is a rename in place with nothing in its way.
+pub(crate) fn respelled(from: &Path, to: &Path) -> bool {
+    let (Some(old), Some(new)) = (from.file_name(), to.file_name()) else {
+        return false;
+    };
+    let Some(dir) = to.parent() else {
+        return false;
+    };
+    if from.parent() != Some(dir) || old == new {
+        return false;
+    }
+    // That both paths open one file does not make them one entry: a link to
+    // another entry and a second hard link open it too, and a rename onto
+    // either replaces it. So the folder has to list `from`, and nothing else,
+    // in the letters of `to`.
+    let names = names_in(dir);
+    let in_those_letters: Vec<&OsString> = names
+        .iter()
+        .filter(|name| same_letters(name, new))
+        .collect();
+    in_those_letters == [old] && same_file::is_same_file(from, to).unwrap_or(false)
 }
 
 fn plan(vault: &Vault, from: &Path, to: &Path) -> Result<Vec<Rewrite>, String> {
@@ -199,11 +224,16 @@ impl Move {
     }
 }
 
+/// Whether two names differ in case at most.
+fn same_letters(a: &OsStr, b: &OsStr) -> bool {
+    a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+}
+
 /// Windows and macOS ignore case in file names by default, so a link can spell a
 /// folder or note differently from the disk and still reach it.
 #[cfg(any(windows, target_os = "macos"))]
 fn same_name(a: &OsStr, b: &OsStr) -> bool {
-    a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+    same_letters(a, b)
 }
 
 #[cfg(not(any(windows, target_os = "macos")))]
@@ -437,7 +467,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::vault::test_support::{relative, unique_tmp};
+    use crate::vault::test_support::{link_folder, relative, unique_tmp};
 
     /// A workspace holding `files`, named by forward-slashed relative paths.
     fn workspace(name: &str, files: &[(&str, &str)]) -> PathBuf {
@@ -835,6 +865,44 @@ mod tests {
         assert_eq!(relative(&root, &failed.expect("B.md changed").path), "B.md");
         assert_eq!(a, "[[Trip]]");
         assert_eq!(b, "[[Travel]] edited meanwhile");
+    }
+
+    #[test]
+    fn only_a_spelling_no_folder_lists_is_the_entry_respelled() {
+        let root = workspace("respelled", &[("Note.md", ""), ("Other.md", "")]);
+        let note = root.join("Note.md");
+        for folder in ["Docs", "Sub"] {
+            fs::create_dir(root.join(folder)).unwrap();
+        }
+        // Three other entries that open what an entry here opens.
+        fs::hard_link(&note, root.join("Alias.md")).unwrap();
+        fs::hard_link(&note, root.join("Sub").join("Note.md")).unwrap();
+        link_folder(&root.join("Docs"), &root.join("Shortcut"));
+
+        // The name it has, another note, a name nothing has, and the other
+        // entries for the same file, however their names are spelled.
+        for not_itself in [
+            "Note.md",
+            "Other.md",
+            "Free.md",
+            "Alias.md",
+            "alias.md",
+            "Sub/note.md",
+        ] {
+            assert!(!respelled(&note, &root.join(not_itself)), "{not_itself}");
+        }
+        // A link opens what it points at, which is not the link respelled.
+        assert!(!respelled(&root.join("Shortcut"), &root.join("docs")));
+        // The same letters in another case reach the entry only where the
+        // filesystem ignores case, which is where they are its own name.
+        for (entry, other_case) in [("Note.md", "note.md"), ("Docs", "docs")] {
+            let reached = root.join(other_case).exists();
+            assert_eq!(
+                respelled(&root.join(entry), &root.join(other_case)),
+                reached
+            );
+        }
+        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

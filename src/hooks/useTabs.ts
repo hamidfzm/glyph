@@ -18,6 +18,7 @@ import { useWorkspaceLifecycle } from "@/hooks/useWorkspaceLifecycle";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { useWorkspaceSession, type WorkspaceSessionApi } from "@/hooks/useWorkspaceSession";
 import { useWorkspaceTree } from "@/hooks/useWorkspaceTree";
+import { useWriteQueue } from "@/hooks/useWriteQueue";
 import { isCliExportProcess } from "@/lib/cliExport";
 import { pruneGraphViews } from "@/lib/graphViewStore";
 import { basename, isPathInside, movedPath } from "@/lib/paths";
@@ -53,9 +54,9 @@ interface UseTabsOptions {
  * The window's documents: the tab strip, its single folder workspace, and the
  * lifecycle that ties them together. Each concern lives in its own hook:
  * `useTabStrip`, `useWorkspaceTree`, `useWorkspaceIndex`, `useOpenDocument`,
- * `useDocumentSave`, `useDocumentEdits`, `useDiskReload`, `useRelocation`,
- * `useWorkspaceLifecycle`, `useTabsSession`, `useWorkspaceSession`,
- * `useTabEvents`. This hook wires
+ * `useWriteQueue`, `useDocumentSave`, `useDocumentEdits`, `useDiskReload`,
+ * `useRelocation`, `useWorkspaceLifecycle`, `useTabsSession`,
+ * `useWorkspaceSession`, `useTabEvents`. This hook wires
  * them together and owns only the operations that touch more than one.
  */
 export function useTabs(options: UseTabsOptions) {
@@ -164,6 +165,10 @@ export function useTabs(options: UseTabsOptions) {
 
   const getWorkspaceRoot = useCallback(() => workspaceRef.current?.root ?? null, [workspaceRef]);
 
+  // One queue for every document write, so a save and a programmatic edit of
+  // the same file can never overlap.
+  const enqueueWrite = useWriteQueue();
+
   const { saveDocument } = useDocumentSave({
     stateRef,
     setState,
@@ -172,12 +177,14 @@ export function useTabs(options: UseTabsOptions) {
     getWorkspaceRoot,
     onWorkspaceNotice: options.onWorkspaceNotice,
     markSelfSave,
+    enqueueWrite,
   });
 
   const { toggleTask, commitEdit, undoEdit, redoEdit, forgetHistory } = useDocumentEdits({
     stateRef,
     updateActiveFile,
     markSelfSave,
+    enqueueWrite,
   });
 
   const reloadFromDisk = useDiskReload({ setState, forgetHistory, selfSaveCount });

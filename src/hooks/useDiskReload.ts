@@ -43,7 +43,7 @@ export function useDiskReload({ setState, forgetHistory, selfSaveCount }: UseDis
             if (file.content === content) return file;
             // Replaying old diffs against changed content is unsafe.
             forgetHistory(id);
-            // Edit/split panes render `editContent ?? content`, so a seeded
+            // Every pane renders the buffer when there is one, so a seeded
             // buffer would shadow the reload.
             return {
               ...file,
