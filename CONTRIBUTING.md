@@ -80,6 +80,8 @@ sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl \
 
 Budget roughly 1–2 minutes on a clean working tree. The fast lint-staged step gates the slow tests so a formatter miss fails in seconds.
 
+Steps 3 to 5 take a turn in a machine-wide queue (`scripts/test-queue.sh`), so commits made from several worktrees at once run their tests one after another instead of competing for the CPU. A commit that has to wait prints who it is waiting behind; with a single checkout the queue is always free. To put any other heavy command in the same queue, run it as `bash scripts/test-queue.sh <label> -- <command>`.
+
 To bypass in a genuine emergency: `git commit --no-verify`. Don't make a habit of it. CI runs the same gate and will reject the PR.
 
 ## Development Commands

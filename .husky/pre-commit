@@ -11,18 +11,31 @@
 #   4. cargo test --workspace --lib (Rust unit tests)
 #   5. cargo clippy --workspace --all-targets -- -D warnings
 #
+# Steps 3 to 5 are the heavy ones, so they take a turn in the machine-wide
+# queue (scripts/test-queue.sh): commits made from several worktrees at once
+# run them one after another. The hook gets there by running itself again
+# through the queue, with `heavy` as its argument.
+#
 # To bypass in a genuine emergency: `git commit --no-verify`. Don't make
-# a habit of it — CI runs the same gate and will reject the PR.
+# a habit of it. CI runs the same gate and will reject the PR.
 
 set -e
 
-# 1. Per-file frontend format/lint via Biome + workspace-level cargo fmt
-#    --check when any Rust file is staged. See .lintstagedrc.mjs.
-pnpm exec lint-staged
+if [ "${1:-}" != heavy ]; then
+  # 1. Per-file frontend format/lint via Biome + workspace-level cargo fmt
+  #    --check when any Rust file is staged. See .lintstagedrc.mjs.
+  pnpm exec lint-staged
 
-# 2. Type-check the frontend.
-echo "→ pnpm typecheck"
-pnpm typecheck
+  # 2. Type-check the frontend.
+  echo "→ pnpm typecheck"
+  pnpm typecheck
+
+  # The queue script beside this hook, not the committing worktree's: with a
+  # shared hooks path this file also runs for branches that predate the script.
+  queue="$(dirname "$0")/../scripts/test-queue.sh"
+  branch=$(git symbolic-ref --short -q HEAD || echo "a detached HEAD")
+  exec bash "$queue" "commit on $branch" -- sh -e "$0" heavy
+fi
 
 # 3. Frontend tests.
 echo "→ pnpm test --run"

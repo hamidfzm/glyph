@@ -5,7 +5,7 @@ description: Review the working diff against Glyph's code standards (readable ov
 
 # Self-Review
 
-Review the current diff (`git diff` + `git diff --cached`, or `git diff origin/main...HEAD` for a whole branch) against the checklist. Fix findings directly, then re-run the gates. The diff's best outcome is getting shorter and plainer.
+Review the current diff (`git diff` + `git diff --cached`, or `git diff origin/main...HEAD` for a whole branch) against the checklist. Fix findings directly, then re-run the touched tests. The diff's best outcome is getting shorter and plainer.
 
 Worked bad-to-good examples and the correction history live in `references/examples.md`; read it only when a rule needs its example or when folding in a new correction.
 
@@ -27,7 +27,7 @@ Worked bad-to-good examples and the correction history live in `references/examp
 3. When the change ships as a PR, re-read CONTRIBUTING.md's Pull Requests section before `gh pr create` and verify against the posted result, not the draft: PR title in conventional commit style (`fix(settings): ...`, not a bare imperative sentence; squash merge makes the title the `main` commit), `Closes #N` present, and the template's Testing checkboxes claiming only what actually ran (automated gates are not "Tested on <platform>"; leave the box unchecked and say what ran).
 4. Run `/code-review` (medium) on the same diff and fold its confirmed findings into the fix list; self-review alone is the author grading their own homework.
 5. Apply every fix; skip only what would change intended behavior, and say so.
-6. Re-run the gates from CLAUDE.md; the `src-tauri` half only if Rust changed.
+6. Re-run `pnpm typecheck`, `pnpm check` and the touched test files. Leave the full gates to the commit that follows: its pre-commit hook runs them (`.claude/rules/shared-machine.md`).
 7. Report what was cut or rewritten and the net line delta.
 
 ## Self-improvement

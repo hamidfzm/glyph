@@ -38,3 +38,16 @@ jobs:
       - uses: ./.github/actions/rust-setup
       - run: bash scripts/bump-version.test.sh
       - run: bash scripts/release-changelog.test.sh
+
+  test-queue:
+    # Runs the local heavy-command queue (scripts/test-queue.sh, which the
+    # pre-commit hook also goes through) against a throwaway lock directory:
+    # two commands take turns, the exit code passes through, and an abandoned
+    # lock is taken over.
+    name: Test queue
+    runs-on: ubuntu-latest
+    # A regression here shows up as a command that waits forever.
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - run: bash scripts/test-queue.test.sh

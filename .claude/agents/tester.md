@@ -15,6 +15,8 @@ Run the complete gates (equivalent to or stricter than what CI runs):
 5. `cd src-tauri && cargo test --workspace`
 6. `cd src-tauri && cargo clippy --workspace --all-targets -- -D warnings`
 
+Steps 3 to 6 are heavy: run them through the queue, per [.claude/rules/shared-machine.md](../rules/shared-machine.md).
+
 Report each step pass/fail with the decisive error lines for failures, and inspect stderr for warnings even when a step passes.
 
 Then go beyond command success: for the change under test, compare its coverage against the adversarial scenario matrix in [docs/engineering-invariants.md](../../docs/engineering-invariants.md) and report which scenario classes (lifecycle transitions, stale completions, overlapping operations, malformed input, denial paths) have no test. Missing scenario classes are findings, not footnotes.

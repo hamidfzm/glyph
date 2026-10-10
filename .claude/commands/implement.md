@@ -19,12 +19,12 @@ You are the **implement** stage of Glyph's spec-driven workflow. Build the featu
 
 3. **Add tests beside the source**: `*.test.{ts,tsx}` (Vitest + Testing Library) and Rust `#[cfg(test)]` modules, covering each acceptance criterion.
 
-4. **Run the gates** from CLAUDE.md before declaring any task done (delegate to the `tester` agent, or run them directly). Fix every Biome warning per `ci-hygiene.md`: apply the fix, do not suppress.
+4. **Check each task with its own tests** before declaring it done: `pnpm typecheck`, `pnpm check`, and the test files the task touches. The full gates from CLAUDE.md run once, at the end: the commit in step 7 is that run (`shared-machine.md`). Fix every Biome warning per `ci-hygiene.md`: apply the fix, do not suppress.
 
-5. **Check patch coverage before committing.** Run `pnpm test:coverage` and read the summary table for every file you created or changed: each one must have no uncovered lines attributable to your diff (event handlers, drag-start/reset callbacks, keyboard paths, and error branches are the usual escapees). Add tests until the new lines are covered; Codecov will fail the PR on patch coverage otherwise, and `/ship` will bounce it back here.
+5. **Check patch coverage before committing.** Run `pnpm test:coverage` through the queue and read the summary table for every file you created or changed: each one must have no uncovered lines attributable to your diff (event handlers, drag-start/reset callbacks, keyboard paths, and error branches are the usual escapees). Add tests until the new lines are covered; Codecov will fail the PR on patch coverage otherwise, and `/ship` will bounce it back here.
 
 6. **Keep the issue current.** As tasks and acceptance criteria are satisfied, tick their checkboxes in the issue body (`gh issue edit $ARGUMENTS --body-file ...`) so the issue reflects real progress.
 
-7. When all acceptance criteria are met and the gates are green, commit with a conventional-commit message (no co-authored-by line) and tell the user the next step is `/ship $ARGUMENTS`.
+7. When all acceptance criteria are met, commit through the queue with a conventional-commit message (no co-authored-by line). The pre-commit hook is the full gate run, so do not run the gates by hand first. Then tell the user the next step is `/ship $ARGUMENTS`.
 
 No em dashes anywhere. Do not open the PR here; that is `/ship`.
