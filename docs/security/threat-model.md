@@ -44,9 +44,10 @@ to.
 Grants are minted only from backend-observed events, never from a bare
 webview-supplied path:
 
-- CLI launch arguments (folder, file, the `export` subcommand's `--format` and `--out`, the `serve` subcommand's `--host` and `--port`)
+- CLI launch arguments (every folder and file the launch names, the `export` subcommand's `--format` and `--out`, the `serve` subcommand's `--host` and `--port`)
 - Drag-and-drop onto a window (the OS event carries the path)
-- macOS `RunEvent::Opened` and second-instance launches
+- macOS `RunEvent::Opened` and second-instance launches, under the same
+  per-path rules as a cold start
 - Native pick dialogs run in Rust (`src-tauri/src/commands/pick.rs`): Open
   Folder, Open File(s), export Save As, website export destination
 - Session restore: at startup the backend reads the persisted settings store
@@ -55,6 +56,13 @@ webview-supplied path:
   re-read before each tool call, and, without `--vault`, any folder a tool
   names that the user then allows in the MCP client (see
   [MCP server](#mcp-server-glyph-mcp))
+
+A launch can name several paths (a file manager expands `%F` to every selected
+file). Each one is classified on its own before anything is granted: a path
+that is unsupported, missing, or not valid Unicode is reported on stderr and
+skipped, never granted, and never stops the paths after it. The backend reads
+the arguments from the process itself (`launch_args.rs`, `cli.rs`), so no
+plugin and no renderer-callable command parses them.
 
 `request_open` and `open_in_new_window` are deliberately not on that list.
 Both take a renderer-supplied path (a picker result in the legitimate flows,
@@ -69,7 +77,10 @@ to report the workspace it shows, updates routing state only and mints
 nothing. The same holds for `set_window_files` and `set_window_unsaved`: the
 paths they carry are reports, published for `glyph mcp` to read (see
 [MCP server](#mcp-server-glyph-mcp)), and never become readable or writable
-by being reported.
+by being reported. `take_pending_opens`, which a window calls on mount and
+whenever the backend nudges it, takes no path at all: it hands back the opens
+the backend already granted and queued for that window, and a window can take
+only its own queue. The nudge event itself carries no path.
 
 Workspace and file grants are also mirrored into Tauri's runtime
 asset-protocol scope so `asset://` image URLs resolve only inside granted
@@ -115,7 +126,7 @@ and files: <path>`), which never echoes the grant list.
 | `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_query`, `vault_paths_with_tag` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable |
 | `copy_file` | source readable and destination writable |
-| `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export). The manifest is neither read nor replaced when it, or the `.glyph` folder holding it, is a link: the output directory is checked, but a link below it leads anywhere |
+| `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export). The manifest is neither read nor replaced when it, or the `.glyph` folder holding it, is a link: the output directory is checked, but a link below it leads anywhere. A manifest that cannot be read or parsed is left as it is and nothing is pruned. A new one is written to a staging file of its own beside it, opened only if nothing holds that name, and moved over the old one in one step. The reason handed back names the first entry that could not be removed, quoted and escaped, because that name comes from the manifest and ends up in the app's notice and on stderr |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |
 | `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it. The entry takes the first default name nothing holds, and a link holds its name even when its target is missing, so creating never writes through one |
 | `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target). `rename_path` and `move_path` also rewrite links in the workspace's own indexed notes and canvases, each write passing `ensure_writable`; a link or canvas card target that resolves outside the workspace is never rewritten or probed on disk, a file changed since the plan read it is left as it is, and `dryRun` reads without writing. The name a copy, a rename, or a move lands on is picked the way a new entry's is, so it is never one a link holds |
@@ -252,6 +263,9 @@ it, and `http:default` is scoped to the marketplace hosts.
   `settings.json`, `plugins.json`, and `workspace-sessions.json` in
   `setup.rs`; the renderer attaches with `getStore` and holds the per-key
   commands only.
+- **Desktop.** `capabilities/desktop.json` holds `window-state:default` alone.
+  There is no CLI plugin: nothing in the renderer needs the launch arguments,
+  so there is no command that returns them.
 
 ## MCP server (`glyph mcp`)
 

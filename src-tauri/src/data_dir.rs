@@ -97,6 +97,14 @@ pub fn app_dir() -> Option<PathBuf> {
 }
 
 pub fn hold_instance_lock(dir: &Path) -> Option<InstanceLock> {
+    hold_with_pause(dir, || {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    })
+}
+
+/// [`hold_instance_lock`] with the wait between tries handed in, so a test can
+/// let a probe go at exactly that point instead of racing a timer for it.
+fn hold_with_pause(dir: &Path, pause: impl FnMut()) -> Option<InstanceLock> {
     let file = std::fs::create_dir_all(dir)
         .and_then(|()| {
             OpenOptions::new()
@@ -107,7 +115,7 @@ pub fn hold_instance_lock(dir: &Path) -> Option<InstanceLock> {
         })
         .map_err(|err| eprintln!("glyph: cannot open {INSTANCE_LOCK}: {err}"))
         .ok()?;
-    acquire(|| file.try_lock())?;
+    acquire(|| file.try_lock(), pause)?;
     let lock = InstanceLock {
         _file: file,
         dir: dir.to_path_buf(),
@@ -119,15 +127,16 @@ pub fn hold_instance_lock(dir: &Path) -> Option<InstanceLock> {
 
 /// The lock once a probe in flight has let go; `None` for another window, or
 /// for a filesystem that cannot lock at all.
-fn acquire(mut try_lock: impl FnMut() -> Result<(), TryLockError>) -> Option<()> {
+fn acquire(
+    mut try_lock: impl FnMut() -> Result<(), TryLockError>,
+    mut pause: impl FnMut(),
+) -> Option<()> {
     // A `glyph mcp` probe holds a shared lock for an instant, so only a lock
     // still taken after a few tries belongs to another window.
     for _ in 0..5 {
         match try_lock() {
             Ok(()) => return Some(()),
-            Err(TryLockError::WouldBlock) => {
-                std::thread::sleep(std::time::Duration::from_millis(20));
-            }
+            Err(TryLockError::WouldBlock) => pause(),
             Err(TryLockError::Error(err)) => {
                 eprintln!(
                     "glyph: cannot lock {INSTANCE_LOCK}, so `glyph mcp` cannot tell whether the app is running and will not change notes: {err}"
@@ -248,13 +257,55 @@ mod tests {
         let held = hold_instance_lock(dir.path()).expect("the first launch takes the lock");
         assert!(running_in(dir.path()));
         // A second window does not get it, and does not need it.
+        let asked = std::time::Instant::now();
         assert!(hold_instance_lock(dir.path()).is_none());
+        // It waited between its tries, which is what lets a probe go.
+        assert!(asked.elapsed() >= std::time::Duration::from_millis(60));
 
-        drop(held);
+        release(held, dir.path());
         assert!(
             !running_in(dir.path()),
             "the lock file stays, the lock does not"
         );
+    }
+
+    /// Drop the lock and wait out any copy of it. On Unix the lock belongs to
+    /// the open file, which a child process another test starts shares until
+    /// it execs or exits.
+    fn release(held: InstanceLock, dir: &Path) {
+        drop(held);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while running_in(dir) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    }
+
+    #[test]
+    fn a_copy_of_a_released_lock_is_waited_out() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let held = hold_instance_lock(dir.path()).unwrap();
+        // A second handle on the same open file, which is what a child holds.
+        let copy = held._file.try_clone().unwrap();
+        let let_go = Arc::new(AtomicBool::new(false));
+        let child = std::thread::spawn({
+            let let_go = Arc::clone(&let_go);
+            move || {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                let_go.store(true, Ordering::SeqCst);
+                drop(copy);
+            }
+        });
+
+        release(held, dir.path());
+        assert!(
+            let_go.load(Ordering::SeqCst),
+            "release came back while the copy still held the lock"
+        );
+        assert!(!running_in(dir.path()));
+        child.join().unwrap();
     }
 
     fn documents(open: &[&str], unsaved: &[&str]) -> OpenDocuments {
@@ -288,7 +339,7 @@ mod tests {
             std::fs::write(dir.path().join(OPEN_DOCUMENTS), garbled).unwrap();
             assert_eq!(editing_in(dir.path()), Editing::Unknown, "{garbled}");
         }
-        drop(held);
+        release(held, dir.path());
         assert_eq!(editing_in(dir.path()), Editing::Closed);
     }
 
@@ -345,10 +396,15 @@ mod tests {
 
     #[test]
     fn a_filesystem_that_cannot_lock_is_not_retried() {
-        let started = std::time::Instant::now();
-        let unsupported = || Err(TryLockError::Error(std::io::ErrorKind::Unsupported.into()));
-        assert!(acquire(unsupported).is_none());
-        assert!(started.elapsed() < std::time::Duration::from_millis(20));
+        let mut tries = 0;
+        let mut pauses = 0;
+        let unsupported = || {
+            tries += 1;
+            Err(TryLockError::Error(std::io::ErrorKind::Unsupported.into()))
+        };
+        assert!(acquire(unsupported, || pauses += 1).is_none());
+        assert_eq!(tries, 1);
+        assert_eq!(pauses, 0, "it gives up without waiting");
 
         let mut probes = 2;
         let held_briefly = || {
@@ -359,7 +415,15 @@ mod tests {
                 Ok(())
             }
         };
-        assert!(acquire(held_briefly).is_some());
+        assert!(acquire(held_briefly, || {}).is_some());
+
+        let mut tries = 0;
+        let another_window = || {
+            tries += 1;
+            Err(TryLockError::WouldBlock)
+        };
+        assert!(acquire(another_window, || {}).is_none());
+        assert_eq!(tries, 5);
     }
 
     #[test]
@@ -367,14 +431,14 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let probe = File::create(dir.path().join(INSTANCE_LOCK)).unwrap();
         probe.try_lock_shared().unwrap();
-        let release = std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(30));
-            drop(probe);
+        let mut pauses = 0;
+        // The probe lets go while the app waits. Unlocked rather than closed:
+        // a closed file keeps its lock for as long as a child holds a copy.
+        let held = hold_with_pause(dir.path(), || {
+            pauses += 1;
+            let _ = probe.unlock();
         });
-        assert!(
-            hold_instance_lock(dir.path()).is_some(),
-            "the app waits the probe out"
-        );
-        release.join().unwrap();
+        assert!(held.is_some(), "the app waits the probe out");
+        assert_eq!(pauses, 1, "it found the probe there once");
     }
 }

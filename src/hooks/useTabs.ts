@@ -8,6 +8,7 @@ import { useDocumentEdits } from "@/hooks/useDocumentEdits";
 import { useDocumentSave } from "@/hooks/useDocumentSave";
 import { useNavigationHistory } from "@/hooks/useNavigationHistory";
 import { useOpenDocument } from "@/hooks/useOpenDocument";
+import { useOpenRequests } from "@/hooks/useOpenRequests";
 import { useRelocation } from "@/hooks/useRelocation";
 import { useSelfSaveTracker } from "@/hooks/useSelfSaveTracker";
 import { useTabEvents } from "@/hooks/useTabEvents";
@@ -55,8 +56,8 @@ interface UseTabsOptions {
  * lifecycle that ties them together. Each concern lives in its own hook:
  * `useTabStrip`, `useWorkspaceTree`, `useWorkspaceIndex`, `useOpenDocument`,
  * `useWriteQueue`, `useDocumentSave`, `useDocumentEdits`, `useDiskReload`,
- * `useRelocation`, `useWorkspaceLifecycle`, `useTabsSession`,
- * `useWorkspaceSession`, `useTabEvents`. This hook wires
+ * `useRelocation`, `useWorkspaceLifecycle`, `useOpenRequests`,
+ * `useTabsSession`, `useWorkspaceSession`, `useTabEvents`. This hook wires
  * them together and owns only the operations that touch more than one.
  */
 export function useTabs(options: UseTabsOptions) {
@@ -351,6 +352,8 @@ export function useTabs(options: UseTabsOptions) {
 
   const closeTab = useCallback((id: string) => closeTabs([id]), [closeTabs]);
 
+  const { openStartupRequests } = useOpenRequests({ openFile, openFolder });
+
   const { initializing } = useTabsSession({
     optionsRef,
     tabs,
@@ -360,6 +363,7 @@ export function useTabs(options: UseTabsOptions) {
     openFile,
     openFolder,
     activateTabByPath,
+    openStartupRequests,
     pluginsReady: options.pluginsReady ?? true,
   });
 
@@ -400,8 +404,6 @@ export function useTabs(options: UseTabsOptions) {
   useTabEvents({
     stateRef,
     workspaceRef,
-    openFile,
-    openFolder,
     isAutoReloadEnabled,
     reloadFromDisk,
     refreshWorkspace,

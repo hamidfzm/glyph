@@ -47,11 +47,19 @@ export interface ExportSiteOptions {
 export interface ExportSiteResult {
   pages: number;
   assets: number;
-  /** Files a previous export into the same directory wrote and this one did not. */
+  /** Stale files deleted: ones a previous export into the same directory
+   *  wrote and this one did not. */
   removed: number;
-  /** Why the prune failed, or null when it ran. The site is complete either
-   *  way, but stale files may remain, so every caller reports it (INV-7). */
+  /** Why the prune fell short (it failed, or left stale files it could not
+   *  remove), or null when it finished. The site is complete either way, but
+   *  stale files may remain, so every caller reports it (INV-7). */
   pruneError: string | null;
+}
+
+/** What `prune_export_dir` returns (`PruneReport` in `commands/file.rs`). */
+export interface PruneReport {
+  removed: number;
+  error: string | null;
 }
 
 /** Join a site-relative POSIX path onto the output directory. */
@@ -77,8 +85,8 @@ function siteDir(rel: string): string {
  * Exporting again into the same directory prunes what the previous export
  * wrote and this one did not, so a deleted or renamed note leaves no page
  * behind. Only Glyph's own output is pruned; anything else in the directory
- * (a CNAME, a .nojekyll) is left alone. A prune that fails does not fail the
- * export: the result names the failure in `pruneError`.
+ * (a CNAME, a .nojekyll) is left alone. A prune that fails or falls short
+ * does not fail the export: the result says why in `pruneError`.
  */
 export async function exportSite({
   root,
@@ -269,7 +277,9 @@ export async function exportSite({
   // Last, so a failed export leaves the previous build's files (and its
   // manifest) alone rather than pruning against a half-written site.
   try {
-    removed = await invoke<number>("prune_export_dir", { outDir, written });
+    const pruned = await invoke<PruneReport>("prune_export_dir", { outDir, written });
+    removed = pruned.removed;
+    pruneError = pruned.error;
   } catch (err) {
     // Cleanup, not part of producing the site: the pages and assets are all
     // on disk, so the export still succeeds and carries the failure with it.

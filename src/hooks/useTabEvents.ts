@@ -9,41 +9,23 @@ const FILE_RELOAD_DEBOUNCE = 300;
 interface UseTabEventsParams {
   stateRef: RefObject<TabsState>;
   workspaceRef: RefObject<Workspace | null>;
-  openFile: (path: string) => Promise<unknown>;
-  openFolder: (root?: string) => Promise<void>;
   isAutoReloadEnabled: () => boolean;
   reloadFromDisk: (path: string) => Promise<void>;
   refreshWorkspace: (root: string) => Promise<void>;
 }
 
 /**
- * Backend-driven tab and workspace updates: open requests (drag-drop, file
- * associations, a second instance), external file edits picked up by the file
- * watcher, and workspace directory changes.
+ * File-watcher-driven tab and workspace updates: external edits to an open
+ * file, and workspace directory changes. Open requests live in
+ * `useOpenRequests`.
  */
 export function useTabEvents({
   stateRef,
   workspaceRef,
-  openFile,
-  openFolder,
   isAutoReloadEnabled,
   reloadFromDisk,
   refreshWorkspace,
 }: UseTabEventsParams): void {
-  // Listen for open-file and open-folder events (drag-drop, file associations)
-  useEffect(() => {
-    const unsubscribeFile = subscribe<string>("open-file", (event) => {
-      openFile(event.payload);
-    });
-    const unsubscribeFolder = subscribe<string>("open-folder", (event) => {
-      openFolder(event.payload);
-    });
-    return () => {
-      unsubscribeFile();
-      unsubscribeFolder();
-    };
-  }, [openFile, openFolder]);
-
   // Listen for file-changed events (auto-reload). Applies to any open file tab.
   // biome-ignore lint/correctness/useExhaustiveDependencies: subscribes once; every dependency is read through a ref or a stable callback
   useEffect(() => {

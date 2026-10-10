@@ -16,7 +16,7 @@ export function AppBanners() {
   // Once-per-session check for a newer GitHub release; the banner shows only
   // when the user has the feature on and an update is actually available.
   const updateCheck = useUpdateCheck(settings.behavior.checkForUpdates, loaded);
-  // One-time first-run nudge to make Glyph the default Markdown app.
+  // First-run nudge to make Glyph the default Markdown app.
   const defaultAppPrompt = useDefaultAppPrompt();
   const errorReportingPrompt = useErrorReportingPrompt();
 
@@ -25,9 +25,12 @@ export function AppBanners() {
       <UpdateBanner update={updateCheck.update} onDismiss={updateCheck.dismiss} />
       {defaultAppPrompt.show && (
         <DefaultAppBanner
+          outcome={defaultAppPrompt.outcome}
+          busy={defaultAppPrompt.busy}
           onSetDefault={defaultAppPrompt.setDefault}
           onNotNow={defaultAppPrompt.notNow}
           onNever={defaultAppPrompt.never}
+          onDismissOutcome={defaultAppPrompt.dismissOutcome}
         />
       )}
       {errorReportingPrompt.show && (

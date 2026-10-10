@@ -6,6 +6,7 @@ import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsCont
 import { CLI_PLUGIN_WAIT_MS } from "@/hooks/useExportReadiness";
 import { resetCliExportRequestCache } from "@/lib/cliExport";
 import { createRegistry } from "@/lib/plugins/registry";
+import { pruneWarning } from "@/lib/pruneWarning";
 import { resetCliExportRunner, useCliExport } from "./useCliExport";
 
 const exportSiteMock = vi.fn();
@@ -144,7 +145,7 @@ describe("useCliExport", () => {
       pages: 3,
       assets: 1,
       removed: 0,
-      pruneError: "Failed to write file: Access is denied. (os error 5)",
+      pruneError: "Failed to write .glyph/site-manifest.json: Access is denied. (os error 5)",
     });
     stubRequest(SITE_REQUEST);
     renderHook(() => useCliExport(HOOK_ARGS));
@@ -156,7 +157,20 @@ describe("useCliExport", () => {
         "Exported 3 pages and 1 assets to /out\n" +
         "Warning: the cleanup after the export did not finish, so outdated pages may be left " +
         "in the folder, now or after a later export: " +
-        "Failed to write file: Access is denied. (os error 5)",
+        "Failed to write .glyph/site-manifest.json: Access is denied. (os error 5)",
+    });
+  });
+
+  it("names the stale files a cleanup removed before it fell short", async () => {
+    const stuck = 'Failed to remove "guide.html": Access is denied. (os error 5)';
+    exportSiteMock.mockResolvedValue({ pages: 3, assets: 1, removed: 2, pruneError: stuck });
+    stubRequest(SITE_REQUEST);
+    renderHook(() => useCliExport(HOOK_ARGS));
+    await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
+    // Two pages were deleted, so the summary says so beside the warning.
+    expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
+      code: 0,
+      message: `Exported 3 pages and 1 assets to /out, removing 2 stale files\n${pruneWarning(stuck)}`,
     });
   });
 
