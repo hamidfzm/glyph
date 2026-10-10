@@ -3,7 +3,7 @@ import { createElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import type { ExportSiteResult } from "@/lib/export/site/exportSite";
-import { pickExportDir } from "@/lib/pickers";
+import { type ExportDirPick, pickExportDir } from "@/lib/pickers";
 import { createRegistry } from "@/lib/plugins/registry";
 import { deferred } from "@/test/deferred";
 import { useWithExportNotice } from "@/test/exportNoticeHarness";
@@ -19,6 +19,8 @@ vi.mock("@/lib/export/site/exportSite", () => ({
 }));
 
 const EXPORTED: ExportSiteResult = { pages: 2, assets: 0, removed: 0, pruneError: null };
+const GRANTED: ExportDirPick = { kind: "granted", path: "/out" };
+const REFUSED: ExportDirPick = { kind: "insideWorkspace" };
 
 function renderSite(root: string | undefined) {
   return renderHook(
@@ -45,28 +47,40 @@ describe("useExportSite", () => {
     vi.mocked(pickExportDir).mockResolvedValue(null);
     const { result } = renderSite("/ws");
     await act(() => result.current.exportWebsite());
-    expect(pickExportDir).toHaveBeenCalled();
+    expect(pickExportDir).toHaveBeenCalledWith("/ws");
     expect(exportSiteMock).not.toHaveBeenCalled();
     expect(result.current.notice).toBeNull();
   });
 
-  it("refuses a destination inside the workspace, and says so", async () => {
-    vi.mocked(pickExportDir).mockResolvedValue("/ws/site");
+  it("refuses a destination the backend places inside the workspace, and says so", async () => {
+    vi.mocked(pickExportDir).mockResolvedValue(REFUSED);
     const { result } = renderSite("/ws");
     await act(() => result.current.exportWebsite());
     expect(exportSiteMock).not.toHaveBeenCalled();
     expect(result.current.notice).toEqual({ kind: "insideWorkspace" });
   });
 
+  it("exports to a granted folder whose path only reads as inside the workspace", async () => {
+    // A link in the workspace that leads out of it: the backend judged where
+    // it leads, and the hook does not second-guess that from the strings.
+    vi.mocked(pickExportDir).mockResolvedValue({ kind: "granted", path: "/ws/public" });
+    const { result } = renderSite("/ws");
+    await act(() => result.current.exportWebsite());
+    expect(exportSiteMock).toHaveBeenCalledWith(
+      expect.objectContaining({ root: "/ws", outDir: "/ws/public" }),
+    );
+    expect(result.current.notice).toBeNull();
+  });
+
   it("raises no notice for an export that ran clean", async () => {
-    vi.mocked(pickExportDir).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
     const { result } = renderSite("/ws");
     await act(() => result.current.exportWebsite());
     expect(result.current.notice).toBeNull();
   });
 
   it("warns when the site exported but its cleanup failed", async () => {
-    vi.mocked(pickExportDir).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
     exportSiteMock.mockResolvedValue({ ...EXPORTED, pruneError: "Failed to write file: locked" });
     const { result } = renderSite("/ws");
     await act(() => result.current.exportWebsite());
@@ -78,7 +92,7 @@ describe("useExportSite", () => {
   });
 
   it("keeps the notice up until it is dismissed", async () => {
-    vi.mocked(pickExportDir).mockResolvedValue("/ws/site");
+    vi.mocked(pickExportDir).mockResolvedValue(REFUSED);
     const { result } = renderSite("/ws");
     await act(() => result.current.exportWebsite());
     // A cancelled picker is not a new export: the notice has not been read yet.
@@ -91,7 +105,7 @@ describe("useExportSite", () => {
   });
 
   it("ignores a second export while one is in flight", async () => {
-    vi.mocked(pickExportDir).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
     let finish: ((result: ExportSiteResult) => void) | undefined;
     exportSiteMock.mockImplementationOnce(
       () =>
@@ -118,7 +132,7 @@ describe("useExportSite", () => {
   });
 
   it("ignores a second export while the folder picker is still open", async () => {
-    let pick: ((dir: string | null) => void) | undefined;
+    let pick: ((picked: ExportDirPick | null) => void) | undefined;
     vi.mocked(pickExportDir).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -136,12 +150,12 @@ describe("useExportSite", () => {
 
   it.each([
     ["a cancelled picker", () => vi.mocked(pickExportDir).mockResolvedValueOnce(null)],
-    ["a refused destination", () => vi.mocked(pickExportDir).mockResolvedValueOnce("/ws/site")],
+    ["a refused destination", () => vi.mocked(pickExportDir).mockResolvedValueOnce(REFUSED)],
     ["a picker that failed", () => vi.mocked(pickExportDir).mockRejectedValueOnce("no dialog")],
     ["a failed export", () => exportSiteMock.mockRejectedValueOnce(new Error("boom"))],
   ])("runs the next export after %s", async (_name, arrange) => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(pickExportDir).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
     arrange();
     const { result } = renderSite("/ws");
     await act(() => result.current.exportWebsite());
@@ -155,7 +169,7 @@ describe("useExportSite", () => {
   });
 
   it("still reports an export whose workspace was switched away mid-run", async () => {
-    vi.mocked(pickExportDir).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
     let finish: ((result: ExportSiteResult) => void) | undefined;
     exportSiteMock.mockImplementationOnce(
       () =>
@@ -176,7 +190,7 @@ describe("useExportSite", () => {
   });
 
   it("treats an empty reason as a failed cleanup all the same", async () => {
-    vi.mocked(pickExportDir).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
     exportSiteMock.mockResolvedValue({ ...EXPORTED, pruneError: "" });
     const { result } = renderSite("/ws");
     await act(() => result.current.exportWebsite());
@@ -193,7 +207,7 @@ describe("useExportSite", () => {
   });
 
   it("drops the previous notice when the next export starts", async () => {
-    vi.mocked(pickExportDir).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
     exportSiteMock.mockResolvedValueOnce({ ...EXPORTED, pruneError: "locked" });
     const { result } = renderSite("/ws");
     await act(() => result.current.exportWebsite());
@@ -209,7 +223,7 @@ describe("useExportSite", () => {
   });
 
   it("keeps a notice another export raised while the folder picker was open", async () => {
-    const pick = deferred<string | null>();
+    const pick = deferred<ExportDirPick | null>();
     vi.mocked(pickExportDir).mockReturnValueOnce(pick.promise);
     const { result } = renderSite("/ws");
     act(() => {
@@ -218,13 +232,13 @@ describe("useExportSite", () => {
     // A document export failing behind the open picker.
     act(() => result.current.showNotice({ kind: "failed", reason: "disk full" }));
 
-    await act(async () => pick.resolve("/out"));
+    await act(async () => pick.resolve(GRANTED));
     await waitFor(() => expect(exportSiteMock).toHaveBeenCalledTimes(1));
     expect(result.current.notice).toEqual({ kind: "failed", reason: "disk full" });
   });
 
   it("keeps a notice another export raised while the site was being written", async () => {
-    vi.mocked(pickExportDir).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
     const run = deferred<ExportSiteResult>();
     exportSiteMock.mockReturnValueOnce(run.promise);
     const { result } = renderSite("/ws");
@@ -241,7 +255,7 @@ describe("useExportSite", () => {
   });
 
   it("keeps its handler's identity when a notice is raised", async () => {
-    vi.mocked(pickExportDir).mockResolvedValue("/ws/site");
+    vi.mocked(pickExportDir).mockResolvedValue(REFUSED);
     const { result } = renderSite("/ws");
     const { exportWebsite } = result.current;
     await act(() => result.current.exportWebsite());
@@ -251,7 +265,7 @@ describe("useExportSite", () => {
   });
 
   it("runs the export and surfaces determinate progress", async () => {
-    vi.mocked(pickExportDir).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
     let capturedProgress: ((done: number, total: number) => void) | undefined;
     exportSiteMock.mockImplementation(
       (opts: { onProgress: (done: number, total: number) => void }) => {
@@ -273,7 +287,7 @@ describe("useExportSite", () => {
 
   it("clears progress and reports the reason when the export fails", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(pickExportDir).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
     exportSiteMock.mockRejectedValue(new Error("boom"));
     const { result } = renderSite("/ws");
     await act(() => result.current.exportWebsite());
@@ -284,7 +298,7 @@ describe("useExportSite", () => {
   });
 
   it("passes plugin markdown contributions to the exporter", async () => {
-    vi.mocked(pickExportDir).mockResolvedValue("/out");
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
     const remark = [vi.fn()];
     const rehype = [vi.fn()];
     const siteThemes = createRegistry();

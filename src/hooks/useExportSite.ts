@@ -3,7 +3,6 @@ import { usePluginsOptional } from "@/contexts/PluginsContext";
 import type { ExportNoticeActions } from "@/hooks/useExportNotice";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { errorMessage } from "@/lib/errorMessage";
-import { isPathInside } from "@/lib/paths";
 import { pickExportDir } from "@/lib/pickers";
 
 export interface SiteExportProgress {
@@ -49,9 +48,9 @@ export function useExportSite({
     isExportingRef.current = true;
     const dropSeenNotice = captureSeenNotice();
     try {
-      const outDir = await pickExportDir();
-      if (typeof outDir !== "string" || outDir === "") return; // cancelled
-      if (isPathInside(outDir, root)) {
+      const picked = await pickExportDir(root);
+      if (picked === null) return; // cancelled
+      if (picked.kind === "insideWorkspace") {
         // Exporting into the watched workspace would pollute it (and re-export
         // its own output next time).
         showNotice({ kind: "insideWorkspace" });
@@ -63,7 +62,7 @@ export function useExportSite({
       const { exportSite } = await import("@/lib/export/site/exportSite");
       const { pruneError } = await exportSite({
         root,
-        outDir,
+        outDir: picked.path,
         themes: pluginThemes,
         // Plugin markdown syntax renders in the export as it does in the viewer.
         remarkPlugins,
