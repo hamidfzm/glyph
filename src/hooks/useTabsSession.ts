@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { type RefObject, useEffect, useRef, useState } from "react";
 import type { OpenFolderOptions } from "@/hooks/useWorkspaceLifecycle";
 import { isCliExportProcess } from "@/lib/cliExport";
@@ -10,7 +9,7 @@ import {
   tabPathOf,
   type Workspace,
 } from "@/lib/tabs";
-import { injectedOpen, isPrimaryWindow } from "@/lib/windowContext";
+import { injectedOpen, isPrimaryWindow, type PendingOpen } from "@/lib/windowContext";
 import { getWorkspaceSession, saveWorkspaceSession } from "@/lib/workspaceSession";
 import { buildSessionFromLegacy } from "@/lib/workspaceSessionSnapshot";
 
@@ -36,6 +35,9 @@ interface UseTabsSessionParams {
   openFile: (path: string) => Promise<unknown>;
   openFolder: (root?: string, options?: OpenFolderOptions) => Promise<void>;
   activateTabByPath: (path: string) => void;
+  /** Opens what reached this window before it could listen, and reports
+   *  whether there was anything (see `useOpenRequests`). */
+  openStartupRequests: (injected: PendingOpen | null) => Promise<boolean>;
   /**
    * Plugins have registered their file types. A saved-session restore waits
    * for it (up to RESTORE_PLUGIN_WAIT_MS): a tab of a plugin file type opened
@@ -46,11 +48,11 @@ interface UseTabsSessionParams {
 
 /**
  * Session restore and persistence for the tab strip: what reopens on launch
- * (CLI argument, injected open for a spawned window, or the stored session) and
- * what gets written back to settings as tabs change. The global key holds only
- * the workspace pointer and loose external files; everything inside the
- * workspace lives in its per-workspace snapshot (#226), restored by
- * `openFolder` itself.
+ * (the paths the launch named, the injected open of a spawned window, or the
+ * stored session) and what gets written back to settings as tabs change. The
+ * global key holds only the workspace pointer and loose external files;
+ * everything inside the workspace lives in its per-workspace snapshot (#226),
+ * restored by `openFolder` itself.
  */
 export function useTabsSession({
   optionsRef,
@@ -61,6 +63,7 @@ export function useTabsSession({
   openFile,
   openFolder,
   activateTabByPath,
+  openStartupRequests,
   pluginsReady,
 }: UseTabsSessionParams): { initializing: boolean } {
   const [initializing, setInitializing] = useState(true);
@@ -103,40 +106,30 @@ export function useTabsSession({
     optionsRef.current.onSettingsChange("behavior.activeTabPath", activeTabPath);
   }, [tabs, activeTab, workspace, initializing, optionsRef]);
 
-  // Initialize: load CLI arg, restore workspace + tabs, or reopen last file
+  // Initialize: open what the launch named, else restore workspace + tabs, or
+  // reopen the last file
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only effect
   useEffect(() => {
-    // `get_initial_file` / `get_initial_folder` consume their value, so a second
-    // run reads None and would fall through to session restore, replacing the
-    // folder the CLI just opened. StrictMode double-invokes effects in dev, so
-    // this must run exactly once per mount lifetime.
+    // The startup queue is handed over once, so a second run reads nothing and
+    // would fall through to session restore, replacing the folder the launch
+    // just opened. StrictMode double-invokes effects in dev, so this must run
+    // exactly once per mount lifetime.
     if (didInit.current) return;
     didInit.current = true;
     (async () => {
       const options = optionsRef.current;
       try {
-        // A spawned secondary window was created to open one specific path.
-        // Adopt it and skip the CLI / session-restore path entirely (those
-        // belong to the primary window).
-        const injected = injectedOpen();
-        if (injected) {
-          if (injected.kind === "folder") await openFolder(injected.path);
-          else await openFile(injected.path);
+        // What this window was asked to open before it could listen: the path
+        // a spawned window was created for, then the backend's queue. Any of
+        // it stands in for session restore.
+        if (await openStartupRequests(injectedOpen())) {
           setInitializing(false);
           return;
         }
-        const initialFolder = await invoke<string | null>("get_initial_folder");
-        if (initialFolder) {
-          await openFolder(initialFolder);
-          setInitializing(false);
-          return;
-        }
-        const initialPath = await invoke<string | null>("get_initial_file");
-        // CLI and OS opens were classified by the backend with the built-in
-        // rules, so only a saved session waits for plugin file types.
+        // Launch opens were classified by the backend with the built-in rules,
+        // so only a saved session waits for plugin file types.
         const willRestore =
-          !initialPath &&
-          (options.openTabs.length > 0 || (options.reopenLastFile && options.recentFiles[0]));
+          options.openTabs.length > 0 || (options.reopenLastFile && options.recentFiles[0]);
         if (willRestore && !pluginsReadyRef.current) {
           await new Promise<void>((resolve) => {
             const timer = window.setTimeout(resolve, RESTORE_PLUGIN_WAIT_MS);
@@ -149,9 +142,7 @@ export function useTabsSession({
         // Something the user opened while plugins loaded wins over the older
         // launch-time session.
         const userOpened = tabsRef.current.length > 0 || workspaceRef.current !== null;
-        if (initialPath) {
-          await openFile(initialPath);
-        } else if (userOpened) {
+        if (userOpened) {
           // Keep what the user opened.
         } else if (options.openTabs.length > 0) {
           const persistedTabs = normalizePersistedTabs(options.openTabs);

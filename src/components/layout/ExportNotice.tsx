@@ -1,10 +1,10 @@
 import { useTranslation } from "react-i18next";
 import { BannerCloseIcon } from "@/components/icons/BannerCloseIcon";
 import { WarningIcon } from "@/components/icons/WarningIcon";
-import type { SiteExportNotice } from "@/hooks/useExportSite";
+import type { ExportNoticeContent } from "@/hooks/useExportNotice";
 
 interface ExportNoticeProps {
-  notice: SiteExportNotice;
+  notice: ExportNoticeContent;
   onDismiss: () => void;
 }
 
@@ -14,10 +14,10 @@ const ACCENT_CLASS = {
 } as const;
 
 /**
- * Toast for a website export that needs the user's attention after it ended.
- * A cleanup failure is a warning (the site itself is complete); a refusal or a
- * failed export is an error. Unlike the progress toast it does not go away on
- * its own: an export can outlast the user's attention.
+ * Toast for an export that needs the user's attention after it ended. A
+ * website's cleanup failure is a warning (the site itself is complete); a
+ * refusal or a failed export is an error. Unlike the progress toast it does not
+ * go away on its own: an export can outlast the user's attention.
  */
 export function ExportNotice({ notice, onDismiss }: ExportNoticeProps) {
   const { t } = useTranslation("common");
@@ -33,7 +33,7 @@ export function ExportNotice({ notice, onDismiss }: ExportNoticeProps) {
       </span>
       <div className="min-w-0 max-h-[40vh] overflow-y-auto wrap-break-word text-[var(--color-text-primary)]">
         <p>{t(`exportNotice.${notice.kind}`)}</p>
-        {/* Isolated: the reason is in the backend's language and may hold a path. */}
+        {/* Isolated: the reason is in its source's language and may hold a path. */}
         {"reason" in notice && (
           <bdi className="block mt-1 text-[var(--color-text-secondary)]">{notice.reason}</bdi>
         )}

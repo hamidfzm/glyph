@@ -10,7 +10,7 @@ import { useWindowRegistrySync } from "@/hooks/useWindowRegistrySync";
 import { useWorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { displayContentFor, tocContentFor } from "@/lib/displayContent";
 import { fileTypes } from "@/lib/plugins/fileTypes";
-import { EDITOR_MODE } from "@/lib/settings";
+import { liveContentOf } from "@/lib/tabs";
 import type { RelinkRequest } from "@/lib/vault";
 import { TabsContext, type TabsContextValue } from "./TabsContext";
 
@@ -39,17 +39,10 @@ export function TabsProvider({ children }: { children: ReactNode }) {
   // showing a workspace or a note instead of opening it twice.
   useWindowRegistrySync(tabs.workspace, tabs.tabs, tabs.initializing);
 
-  const activeMode = tabs.activeFile?.mode ?? EDITOR_MODE.view;
-  const content = tabs.activeFile?.content ?? null;
   const activePath = tabs.activeFile?.path;
-  // View mode shows saved content; edit/split shows the in-memory editContent
-  // so previews reflect typing. editContent is seeded when entering edit mode,
-  // so the `?? content` fallback is defensive only.
-  const liveContent =
-    activeMode !== EDITOR_MODE.view
-      ? /* c8 ignore next */
-        (tabs.activeFile?.editContent ?? content)
-      : content;
+  // The text the active pane renders in every mode, so the outline, word
+  // count, export, and read aloud describe a dirty tab's unsaved edits too.
+  const liveContent = tabs.activeFile ? liveContentOf(tabs.activeFile) : null;
   // Per-file-type derivation (markdown passthrough, notebook suppression,
   // canvas prose projection) lives in lib/displayContent. A plugin file type
   // registering or going away changes the answer for an open tab.

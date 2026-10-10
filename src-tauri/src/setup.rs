@@ -2,21 +2,16 @@
 //! grants seeded from the persisted settings store. Split out of `run()` in
 //! lib.rs, which is otherwise plugin registration and the command table.
 //!
-//! Every line here drives the Tauri runtime (`App`, `AppHandle`, the CLI
-//! plugin), so it cannot be exercised from a `MockRuntime` test; the pure
-//! selection and classification logic it calls lives in [`crate::cli`] and is
-//! tested there.
+//! Every line here drives the Tauri runtime (`App`, `AppHandle`), so it cannot
+//! be exercised from a `MockRuntime` test; the pure selection and
+//! classification logic it calls lives in [`crate::cli`] and is tested there.
 
-// `Manager` is not desktop-only: the registry seeding below runs on every
-// platform, and `state()` comes from that trait.
-use tauri::Manager;
 #[cfg(desktop)]
-use tauri_plugin_cli::CliExt;
+use tauri::Manager;
 use tauri_plugin_store::StoreExt;
 
-use crate::windows;
 #[cfg(desktop)]
-use crate::{cli, commands, data_dir, grants, menu, stash_initial_open};
+use crate::{cli, commands, data_dir, grants, menu, open_launch, windows};
 
 /// Renderer-facing stores, opened here because the renderer holds no
 /// `store:allow-load` (see docs/security/threat-model.md). The session store
@@ -28,8 +23,15 @@ const STORES: [(&str, bool); 3] = [
     ("workspace-sessions.json", false),
 ];
 
-/// Runs inside Tauri's `setup` hook, before any window is shown.
-pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+/// Runs inside Tauri's `setup` hook, before any window is shown. `env_args` is
+/// the process argv as `run()` read it, with the program name at index 0.
+pub fn setup_app(
+    app: &mut tauri::App,
+    env_args: &[String],
+) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(not(desktop))]
+    let _ = env_args;
+
     for (file, auto_save) in STORES {
         let mut builder = app.store_builder(file);
         if !auto_save {
@@ -42,11 +44,9 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         }
     }
 
-    // Seed the registry's "main" entry so routing knows what the first
-    // window shows; a desktop folder launch overrides it below.
-    app.state::<windows::WindowRegistry>()
-        .set_workspace("main", None);
-
+    // The window registry is not seeded with an empty `main` here: routing
+    // already treats an unknown window as empty, and a launch forwarded before
+    // this hook ran may have claimed `main` for its folder.
     #[cfg(desktop)]
     {
         // Windows uses per-window menus with owner-prefixed item ids
@@ -62,27 +62,11 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         let _ = menu::apply_menu_state(&menu_refs, &menu::MenuStateFlags::default());
         app.manage(menu::MenuRegistry::with_main(menu_refs));
 
-        // Parse CLI arguments and store the initial file/folder. The pure
-        // selection + classification logic lives in `cli` (tested
-        // there); this block is the thin Tauri-runtime adapter that maps
-        // each variant to managed state or a warning.
-        //
-        // We pass both the `tauri-plugin-cli` value and raw `std::env::args()`
-        // into `cli::initial_open_action`; the helper prefers the plugin
-        // (so OS file-association launches still work) and falls back to
-        // argv. The fallback is what makes `pnpm tauri dev -- samples`
-        // work on Windows: pnpm's arg forwarding can land the positional
-        // arg in argv without ever populating the plugin's matches.
+        // Decide what this launch does from its arguments. The pure selection
+        // and classification logic lives in `cli` (tested there); this block
+        // is the thin Tauri-runtime adapter that maps each plan to managed
+        // state, an open, or a usage error.
         let cwd = std::env::current_dir().unwrap_or_default();
-        let cli_matches = app.cli().matches().ok();
-        let plugin_arg = |name: &str| -> Option<String> {
-            cli_matches
-                .as_ref()
-                .and_then(|m| m.args.get(name))
-                .and_then(|a| a.value.as_str().map(str::to_string))
-        };
-        let plugin_path = plugin_arg("file");
-        let env_args: Vec<String> = std::env::args().collect();
         // Session restore and the recent-files menu re-open paths from
         // earlier sessions; seed their grants from the persisted settings
         // store.
@@ -98,7 +82,7 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
                 grants::allow_asset_file(handle, file);
             }
         }
-        let plan = cli::launch_plan(plugin_path.as_deref(), &env_args, &cwd);
+        let plan = cli::launch_plan(env_args, &cwd);
         // What tells `glyph mcp` the app is open. An export or a serve is not
         // a window anyone is looking at, so neither takes it.
         if matches!(plan, Ok(cli::CliLaunch::Open(_))) {
@@ -121,8 +105,8 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
                 // Headless: the window stays hidden and the frontend runs the
                 // export on mount, then exits via `finish_cli_export`. A site
                 // export renders the workspace straight from disk; a document
-                // export reads the rendered DOM, so its input is also stashed
-                // as the initial file for the hidden window to open.
+                // export reads the rendered DOM, so its input is also queued
+                // for the hidden window to open.
                 if format == cli::ExportFormat::Site {
                     let _ = grant_registry.grant_workspace(std::path::Path::new(&input));
                     // A site is a tree of files, so the whole output directory
@@ -134,7 +118,13 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
                     if let Ok(canonical) = grant_registry.grant_file(std::path::Path::new(&input)) {
                         grants::allow_asset_file(app.handle(), &canonical);
                     }
-                    stash_initial_open(app.handle(), windows::OpenKind::File, &input);
+                    app.state::<windows::WindowRegistry>().queue_open(
+                        "main",
+                        windows::PendingOpen {
+                            kind: windows::OpenKind::File,
+                            path: input.clone(),
+                        },
+                    );
                 }
                 *app.state::<commands::CliExport>().0.lock().unwrap() =
                     Some(commands::export::CliExportRequest {
@@ -158,24 +148,9 @@ pub fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
                     std::process::exit(1);
                 }
             }
-            Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::Folder(p)))) => {
-                if let Ok(canonical) = grant_registry.grant_workspace(std::path::Path::new(&p)) {
-                    grants::allow_asset_dir(app.handle(), &canonical);
-                }
-                app.state::<windows::WindowRegistry>()
-                    .set_workspace("main", Some(p.clone()));
-                stash_initial_open(app.handle(), windows::OpenKind::Folder, &p);
-            }
-            Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::File(p)))) => {
-                if let Ok(canonical) = grant_registry.grant_file(std::path::Path::new(&p)) {
-                    grants::allow_asset_file(app.handle(), &canonical);
-                }
-                stash_initial_open(app.handle(), windows::OpenKind::File, &p);
-            }
-            Ok(cli::CliLaunch::Open(Some(cli::InitialOpenAction::RejectedUnsupported(p)))) => {
-                eprintln!("Refusing to open unsupported file type: {p}");
-            }
-            Ok(cli::CliLaunch::Open(None)) => {}
+            // No frontend is listening yet, so every open waits in its
+            // window's queue, and a folder claims `main` for routing.
+            Ok(cli::CliLaunch::Open(launch)) => open_launch(app.handle(), launch),
         }
     }
     Ok(())

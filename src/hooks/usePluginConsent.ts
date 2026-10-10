@@ -52,12 +52,6 @@ export function usePluginConsent() {
     void saveGrants(next);
   }, []);
 
-  /** Snapshot one plugin's grant, for undoing a failed flow via restoreGrant. */
-  const getGrant = useCallback(async (id: string): Promise<PluginGrant | undefined> => {
-    await hydrationRef.current;
-    return grantsRef.current[id];
-  }, []);
-
   const ensureConsent = useCallback(
     async (subject: ConsentSubject): Promise<boolean> => {
       await hydrationRef.current;
@@ -84,6 +78,26 @@ export function usePluginConsent() {
     [t, writeGrant],
   );
 
+  /**
+   * Consent for an install about to start: null when refused, otherwise the
+   * undo for an install that then fails. Nothing was installed, so the grant
+   * recorded here must not outlive the flow and pre-authorize a future one.
+   * The undo leaves a grant that changed in the meantime alone: an uninstall
+   * revoked it, and putting the earlier grant back would undo that.
+   */
+  const consentToInstall = useCallback(
+    async (subject: ConsentSubject): Promise<(() => void) | null> => {
+      await hydrationRef.current;
+      const before = grantsRef.current[subject.id];
+      if (!(await ensureConsent(subject))) return null;
+      const granted = grantsRef.current[subject.id];
+      return () => {
+        if (grantsRef.current[subject.id] === granted) writeGrant(subject.id, before);
+      };
+    },
+    [ensureConsent, writeGrant],
+  );
+
   const revokeGrant = useCallback(
     async (id: string) => {
       await hydrationRef.current;
@@ -96,9 +110,8 @@ export function usePluginConsent() {
   return {
     hydrateGrants,
     hasFullTrust,
-    getGrant,
-    restoreGrant: writeGrant,
     ensureConsent,
+    consentToInstall,
     revokeGrant,
   };
 }

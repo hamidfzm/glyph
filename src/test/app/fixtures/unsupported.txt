@@ -1,0 +1,2 @@
+A plain-text file. Glyph declines to open it, and that must not stop the
+files named beside it in the same launch.

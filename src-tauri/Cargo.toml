@@ -67,12 +67,11 @@ tokio = { version = "1", features = ["macros", "rt"] }
 [target."cfg(any(target_os = \"linux\", target_os = \"windows\"))".dependencies]
 tauri-plugin-single-instance = "2"
 
-# Desktop-only dependencies. The plugins have no mobile equivalent (no CLI
-# args or OS window state there); git2's vendored OpenSSL and sentry don't
+# Desktop-only dependencies. The window-state plugin has no mobile equivalent
+# (no OS window state there); git2's vendored OpenSSL and sentry don't
 # cross-compile for android/ios, and the features they power (workspace sync,
 # git repo detection, crash reporting) are desktop-only for now (see #79).
 [target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
-tauri-plugin-cli = "2"
 # `glyph serve`: the preview server behind the CLI's one subcommand. These are
 # already in the tree through Tauri's own HTTP stack, so declaring them adds
 # no new dependency graph; enabling `tower-http`'s `fs` feature does pull in a

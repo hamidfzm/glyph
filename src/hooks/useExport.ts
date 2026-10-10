@@ -1,14 +1,16 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { documentBody } from "@/lib/documentBody";
+import { errorMessage } from "@/lib/errorMessage";
 import type { ExportFormat } from "@/lib/export/writeExport";
 import { pickSave } from "@/lib/pickers";
 import { epubMediaLimitBytes, type PrintSettings } from "@/lib/settings";
+import type { ExportNoticeActions } from "./useExportNotice";
 import type { TocEntry } from "./useTableOfContents";
 
 export type { ExportFormat };
 
-interface UseExportOptions {
+interface UseExportOptions extends ExportNoticeActions {
   entries: TocEntry[];
   settings: PrintSettings;
   filePath: string | undefined;
@@ -30,13 +32,16 @@ export interface ExportHandlers {
  * Export the active document to HTML/DOCX/EPUB/PDF. Reuses the rendered DOM
  * for fidelity, shows a native save dialog, and writes a file via Rust commands
  * (text for HTML, bytes for DOCX/EPUB/PDF), with no print dialog. The separate
- * File > Print item is the print-dialog path.
+ * File > Print item is the print-dialog path. An export that fails says so in
+ * the export notice; a cancelled dialog says nothing.
  */
 export function useExport({
   entries,
   settings,
   filePath,
   content,
+  showNotice,
+  captureSeenNotice,
 }: UseExportOptions): ExportHandlers {
   const { t } = useTranslation("common");
   const includeToc = settings.includeToc;
@@ -49,6 +54,7 @@ export function useExport({
       // Cheap guard so we don't pop a save dialog with nothing to export.
       if (!canvas && !documentBody()) return;
 
+      const dropSeenNotice = captureSeenNotice();
       try {
         // The export pipeline is loaded on first use so none of it (nor its
         // docx/epub/pdf dependencies) weighs down startup; a failed chunk load
@@ -79,6 +85,7 @@ export function useExport({
         // is nothing to wait for then, and waiting would stall until the
         // gate's deadline instead of aborting.
         if (!exportableRoot()) return;
+        dropSeenNotice();
         // Export reads the live DOM, so a diagram still compiling or a lazy
         // plugin chunk still in flight would be snapshotted half-rendered.
         // Same gate the CLI export uses; normally settles in one quiet window.
@@ -87,11 +94,12 @@ export function useExport({
         else await exportDocument(format, path, meta, { entries, includeToc, epubMediaLimit });
       } catch (err) {
         console.error(`Failed to export ${format}:`, err);
+        showNotice({ kind: "failed", reason: errorMessage(err) });
       } finally {
         setExporting(null);
       }
     },
-    [entries, includeToc, epubMediaLimit, filePath, content, t],
+    [entries, includeToc, epubMediaLimit, filePath, content, t, showNotice, captureSeenNotice],
   );
 
   // Handler identities depend only on `run`, so they stay stable while

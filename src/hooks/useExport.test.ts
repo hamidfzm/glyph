@@ -4,9 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickSave } from "@/lib/pickers";
 import type { PrintSettings } from "@/lib/settings";
 import { deferred } from "@/test/deferred";
+import { useWithExportNotice } from "@/test/exportNoticeHarness";
 import { AI_REPLY_HTML } from "@/test/fixtures/aiReply";
 import { mountDocumentBody } from "@/test/mountDocumentBody";
 import { useExport } from "./useExport";
+import type { ExportNoticeActions } from "./useExportNotice";
 
 vi.mock("@/lib/pickers", () => ({
   pickSave: vi.fn(),
@@ -38,14 +40,17 @@ const PRINT: PrintSettings = {
 };
 const ENTRIES: TocEntry[] = [{ id: "intro", text: "Intro", level: 1 }];
 
-function options(over: Partial<Parameters<typeof useExport>[0]> = {}) {
-  return {
+type DocumentOptions = Omit<Parameters<typeof useExport>[0], keyof ExportNoticeActions>;
+
+function renderExport(over: Partial<DocumentOptions> = {}) {
+  const options = {
     entries: ENTRIES,
     settings: PRINT,
     filePath: "/docs/note.md",
     content: "# Intro",
     ...over,
   };
+  return renderHook(() => useWithExportNotice((actions) => useExport({ ...options, ...actions })));
 }
 
 function setBody(): void {
@@ -76,7 +81,7 @@ afterEach(() => {
 describe("useExport", () => {
   it("does nothing when there is no rendered body", async () => {
     vi.mocked(pickSave).mockResolvedValue("/out.html");
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportHtml();
     });
@@ -87,7 +92,7 @@ describe("useExport", () => {
   it("does nothing in edit mode, where the only markdown body is an AI reply", async () => {
     document.body.innerHTML = `<div class="cm-editor"></div>${AI_REPLY_HTML}`;
     vi.mocked(pickSave).mockResolvedValue("/out.html");
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportHtml();
     });
@@ -99,7 +104,7 @@ describe("useExport", () => {
     document.body.innerHTML = AI_REPLY_HTML;
     setBody();
     vi.mocked(pickSave).mockResolvedValue("/out.html");
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportHtml();
     });
@@ -112,7 +117,7 @@ describe("useExport", () => {
   it("writes HTML via write_file with the source-derived filename", async () => {
     setBody();
     vi.mocked(pickSave).mockResolvedValue("/out.html");
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportHtml();
     });
@@ -123,22 +128,24 @@ describe("useExport", () => {
     expect((call![1] as { content: string }).content).toContain(
       '<div class="markdown-body" dir="auto">',
     );
+    expect(result.current.notice).toBeNull();
   });
 
-  it("does not write when the save dialog is cancelled", async () => {
+  it("writes nothing and says nothing when the save dialog is cancelled", async () => {
     setBody();
     vi.mocked(pickSave).mockResolvedValue(null);
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportHtml();
     });
     expect(invoke).not.toHaveBeenCalled();
+    expect(result.current.notice).toBeNull();
   });
 
   it("writes EPUB bytes via write_binary_file", async () => {
     setBody();
     vi.mocked(pickSave).mockResolvedValue("/out.epub");
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportEpub();
     });
@@ -154,7 +161,7 @@ describe("useExport", () => {
   it("writes DOCX bytes via write_binary_file", async () => {
     setBody();
     vi.mocked(pickSave).mockResolvedValue("/out.docx");
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportDocx();
     });
@@ -167,7 +174,7 @@ describe("useExport", () => {
   it("writes PDF bytes via write_binary_file (no print dialog)", async () => {
     setBody();
     vi.mocked(pickSave).mockResolvedValue("/out.pdf");
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportPdf();
     });
@@ -186,7 +193,7 @@ describe("useExport", () => {
       document.body.innerHTML = "";
       return "/out.html";
     });
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportHtml();
     });
@@ -194,23 +201,25 @@ describe("useExport", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("logs and recovers when a write fails", async () => {
+  it("reports a failed write with its reason, and logs it", async () => {
     setBody();
     vi.mocked(pickSave).mockResolvedValue("/out.html");
     vi.mocked(invoke).mockRejectedValue(new Error("disk full"));
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportHtml();
     });
-    expect(spy).toHaveBeenCalled();
+    expect(result.current.notice).toEqual({ kind: "failed", reason: "disk full" });
+    expect(result.current.exporting).toBeNull();
+    expect(spy).toHaveBeenCalledWith("Failed to export html:", expect.any(Error));
     spy.mockRestore();
   });
 
   it("exports a canvas tab as a spatial vector HTML page", async () => {
     setCanvas();
     vi.mocked(pickSave).mockResolvedValue("/out.html");
-    const { result } = renderHook(() => useExport(options({ filePath: "/docs/board.canvas" })));
+    const { result } = renderExport({ filePath: "/docs/board.canvas" });
     await act(async () => {
       await result.current.exportHtml();
     });
@@ -227,7 +236,7 @@ describe("useExport", () => {
   it("exports a canvas tab to PDF as the spatial vector board", async () => {
     setCanvas();
     vi.mocked(pickSave).mockResolvedValue("/out.pdf");
-    const { result } = renderHook(() => useExport(options({ filePath: "/docs/board.canvas" })));
+    const { result } = renderExport({ filePath: "/docs/board.canvas" });
     await act(async () => {
       await result.current.exportPdf();
     });
@@ -249,7 +258,7 @@ describe("useExport", () => {
     setCanvas();
     vi.mocked(pickSave).mockResolvedValue("/out.pdf");
     buildModelMock.mockResolvedValue(null);
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportPdf();
     });
@@ -260,7 +269,7 @@ describe("useExport", () => {
   it("exports a canvas tab to EPUB and DOCX from the linearised document", async () => {
     setCanvas();
     vi.mocked(pickSave).mockResolvedValue("/out.epub");
-    const { result } = renderHook(() => useExport(options({ filePath: "/docs/board.canvas" })));
+    const { result } = renderExport({ filePath: "/docs/board.canvas" });
     await act(async () => {
       await result.current.exportEpub();
     });
@@ -281,7 +290,7 @@ describe("useExport", () => {
   it("does not write when the canvas save dialog is cancelled", async () => {
     setCanvas();
     vi.mocked(pickSave).mockResolvedValue(null);
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportPdf();
     });
@@ -294,7 +303,7 @@ describe("useExport", () => {
     vi.mocked(pickSave).mockResolvedValue("/out.html");
     buildBoardMock.mockResolvedValue(null);
     buildDocumentMock.mockResolvedValue(null);
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportHtml();
     });
@@ -305,15 +314,16 @@ describe("useExport", () => {
     expect(result.current.exporting).toBeNull();
   });
 
-  it("logs and recovers when the canvas export fails", async () => {
+  it("reports a canvas export that fails to render", async () => {
     setCanvas();
     vi.mocked(pickSave).mockResolvedValue("/out.html");
     buildBoardMock.mockRejectedValue(new Error("render failed"));
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     await act(async () => {
       await result.current.exportHtml();
     });
+    expect(result.current.notice).toEqual({ kind: "failed", reason: "render failed" });
     expect(spy).toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
     expect(result.current.exporting).toBeNull();
@@ -326,7 +336,7 @@ describe("useExport", () => {
     const write = deferred();
     vi.mocked(invoke).mockReturnValue(write.promise);
 
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     expect(result.current.exporting).toBeNull();
 
     let pending!: Promise<void>;
@@ -348,7 +358,7 @@ describe("useExport", () => {
     const write = deferred();
     vi.mocked(invoke).mockReturnValue(write.promise);
 
-    const { result } = renderHook(() => useExport(options()));
+    const { result } = renderExport();
     expect(result.current.exporting).toBeNull();
 
     let pending!: Promise<void>;

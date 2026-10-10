@@ -11,7 +11,7 @@ use super::refs::{capped, read_vault, ref_property, resolve_note, vault_property
 use super::registry::{arguments, Effect, Session, ToolDef};
 use crate::commands::create::UNSAFE_NAME_CHARS;
 use crate::commands::walk::WALK_SKIP_DIRS;
-use crate::vault::{names_in, relocate};
+use crate::vault::{relocate, respelled};
 
 /// What both tools promise, closing each one's description.
 macro_rules! relinking {
@@ -115,12 +115,6 @@ fn move_note(session: &Session, args: Value) -> Result<Value, String> {
     })
 }
 
-/// Whether the folder of `path` lists an entry spelled exactly as its name.
-fn has_entry(path: &Path) -> bool {
-    let named = path.parent().zip(path.file_name());
-    named.is_some_and(|(dir, name)| names_in(dir).contains(name))
-}
-
 enum Planned {
     Move {
         root: String,
@@ -155,12 +149,10 @@ fn relocate_note(
                 asked.display()
             ));
         };
-        // Where the filesystem ignores case, the note's own name in other
-        // letters reaches the note itself, though its folder lists no entry
-        // spelled that way. That is a rename in place, with nothing in its way.
-        let respelled =
-            same_file::is_same_file(&source_file, &asked).unwrap_or(false) && !has_entry(&asked);
-        if resolved == source_file && !respelled {
+        // The note's own name in other letters is a rename in place, with
+        // nothing in its way.
+        let in_place = respelled(&source, &asked);
+        if resolved == source_file && !in_place {
             return Ok(Planned::AlreadyThere(found.path));
         }
         let skipped = relative.components().any(|part| {
@@ -177,7 +169,7 @@ fn relocate_note(
         // ponytail: checked here, renamed later, so a file created in between
         // is replaced, as it is for a rename made in the app; a no-replace
         // rename in `relocate` would close that for both.
-        if !respelled && std::fs::symlink_metadata(&target).is_ok() {
+        if !in_place && std::fs::symlink_metadata(&target).is_ok() {
             return Err(format!(
                 "{} already exists. Nothing was moved; pick another name.",
                 target.display()
@@ -336,6 +328,13 @@ mod tests {
         );
         assert!(refusal.contains("already exists"), "{refusal}");
         assert!(h.root.join("Notes").join("Travel.md").is_file());
+
+        // That entry's name in other letters reaches it where the filesystem
+        // ignores case and is a free name elsewhere, so the answer differs,
+        // but the other entry is not replaced either way.
+        let other_case = json!({ "ref": "Notes/Travel", "to": "alias" });
+        let _ = h.call("rename_note", other_case);
+        assert!(listed(&h, "Notes").contains(&"Alias.md".to_string()));
     }
 
     #[test]

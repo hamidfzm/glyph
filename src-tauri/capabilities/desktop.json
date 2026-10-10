@@ -4,5 +4,5 @@
   "description": "Desktop-only capabilities for Glyph (plugins that don't exist on mobile)",
   "platforms": ["macOS", "windows", "linux"],
   "windows": ["main", "w*"],
-  "permissions": ["cli:default", "cli:allow-cli-matches", "window-state:default"]
+  "permissions": ["window-state:default"]
 }

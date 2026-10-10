@@ -416,6 +416,31 @@ fn a_folder_rename_reported_as_its_two_paths_reindexes_every_note_inside() {
     fs::remove_dir_all(&root).unwrap();
 }
 
+#[test]
+fn a_folder_renamed_to_its_own_name_in_other_letters_takes_its_notes_along() {
+    let root = fixture_vault("folder_case");
+    let mut vault = build(&root);
+
+    // Where the filesystem ignores case, `Notes` and every note in it still
+    // open after this, so only the root's listing says the old name is gone.
+    let (old, new) = (root.join("Notes"), root.join("notes"));
+    fs::rename(&old, &new).unwrap();
+    // One path per update, as a watcher may report them.
+    vault.apply_changes(&[old]);
+    vault.apply_changes(&[new]);
+
+    assert!(vault.note(&in_vault(&root, "Notes/Cooking.md")).is_none());
+    assert!(vault.note(&in_vault(&root, "notes/Cooking.md")).is_some());
+    assert_matches_rebuild(&vault, &root);
+
+    // With no watcher to name the folder, the walk finds its notes moved.
+    fs::rename(root.join("notes"), root.join("NOTES")).unwrap();
+    vault.sync().unwrap();
+    assert!(vault.note(&in_vault(&root, "NOTES/Cooking.md")).is_some());
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
 // ------------------------------------------------------- moving with links
 
 /// Every file under `dir` with its bytes, by forward-slashed relative path.
@@ -509,6 +534,32 @@ fn a_folder_move_rewrites_notes_and_canvas_cards_and_reindexes() {
     let index = fs::read_to_string(root.join("Index.md")).unwrap();
     assert!(index.contains("[[Recipes/Travel]]"), "{index}");
     with_vault(&path, &grants, &store, |vault| {
+        assert_matches_rebuild(vault, &root);
+        Ok(())
+    })
+    .unwrap();
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_folder_renamed_in_case_only_rewrites_the_paths_that_name_it_and_reindexes() {
+    let root = fixture_vault("relocate_case");
+    let app = app_with_workspace(&root);
+    let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+    let path = root.to_string_lossy().to_string();
+    let (from, to) = (root.join("Notes"), root.join("notes"));
+
+    let moved = relocate(&path, &from, &to, false, &grants, &store).unwrap();
+
+    // A wikilink ignores case and stays as written; a path is spelled as the
+    // disk spells it, so the card follows.
+    assert_eq!(relinked_files(&root, &moved.files), ["Board.canvas"]);
+    let board = fs::read_to_string(root.join("Board.canvas")).unwrap();
+    assert!(board.contains("\"file\": \"notes/Cooking.md\""), "{board}");
+    let index = fs::read_to_string(root.join("Index.md")).unwrap();
+    assert!(index.contains("[[Notes/Travel]]"), "{index}");
+    with_vault(&path, &grants, &store, |vault| {
+        assert!(vault.note(&in_vault(&root, "Notes/Travel.md")).is_none());
         assert_matches_rebuild(vault, &root);
         Ok(())
     })
@@ -654,10 +705,9 @@ fn an_incremental_update_refuses_a_symlinked_note() {
 }
 
 // The walk refuses a symlink structurally: it never descends into a linked
-// directory. `walkable` stats only the leaf, which a link further up the path
-// is invisible to, and the watcher follows links, so events for a linked
-// directory arrive spelled as if they were inside the workspace.
-#[cfg(unix)]
+// directory. A stat of the leaf cannot see a link further up the path, and the
+// watcher follows links, so events for a linked directory arrive spelled as if
+// they were inside the workspace.
 #[test]
 fn an_incremental_update_refuses_a_note_under_a_symlinked_directory() {
     let root = fixture_vault("incremental_symlink_dir");
@@ -666,7 +716,7 @@ fn an_incremental_update_refuses_a_note_under_a_symlinked_directory() {
 
     let mut vault = build(&root);
     let linked = root.join("linked_archive");
-    std::os::unix::fs::symlink(&outside, &linked).unwrap();
+    link_folder(&outside, &linked);
     vault.apply_changes(&[linked.join("secret.md")]);
 
     assert!(vault.paths_with_tag("classified").is_empty());
@@ -675,6 +725,94 @@ fn an_incremental_update_refuses_a_note_under_a_symlinked_directory() {
 
     fs::remove_dir_all(&root).unwrap();
     fs::remove_dir_all(&outside).unwrap();
+}
+
+// A link that stays inside the workspace is no way out of it, but the walk
+// does not descend into that one either, so an update that did would index its
+// notes a second time, beside the ones at their real paths.
+#[test]
+fn an_incremental_update_refuses_a_note_under_a_folder_linked_within_the_workspace() {
+    let root = fixture_vault("inner_link");
+    let mut vault = build(&root);
+    // One link straight onto a folder of notes, and one with a real folder
+    // between it and them.
+    let (linked, looped) = (root.join("Linked"), root.join("Loop"));
+    link_folder(&root.join("Notes"), &linked);
+    link_folder(&root, &looped);
+
+    // A link arriving, which stands for the files under it, then a note behind
+    // each link changing.
+    for event in [
+        linked.clone(),
+        linked.join("Cooking.md"),
+        looped.join("Notes").join("Cooking.md"),
+    ] {
+        vault.apply_changes(&[event]);
+        assert!(vault.note(&in_vault(&root, "Linked/Cooking.md")).is_none());
+        assert_matches_rebuild(&vault, &root);
+    }
+    fs::remove_dir_all(&root).unwrap();
+}
+
+// Notes behind such a link would count toward the file cap too, and a scan
+// that reached every file would read as cut short.
+#[test]
+fn a_folder_linked_within_the_workspace_takes_no_place_under_the_file_cap() {
+    let root = fixture_vault("inner_link_cap");
+    let mut vault = Vault::build_capped(&root, 9, 32).unwrap();
+    let linked = root.join("Linked");
+    link_folder(&root.join("Notes"), &linked);
+
+    vault.apply_changes(&[linked]);
+
+    assert!(!vault.snapshot().status.truncated);
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+// The root is the one link the walk does follow, so a workspace opened through
+// one is indexed, and has to keep taking updates.
+#[test]
+fn a_workspace_opened_through_a_link_still_takes_updates() {
+    let real = fixture_vault("linked_root");
+    let links = unique_tmp("linked_root_links");
+    let root = links.join("vault");
+    link_folder(&real, &root);
+    let mut vault = build(&root);
+
+    let added = root.join("Notes").join("Added.md");
+    fs::write(&added, "body #added\n").unwrap();
+    vault.apply_changes(&[added]);
+
+    assert_eq!(vault.paths_with_tag("added").len(), 1);
+    assert_matches_rebuild(&vault, &root);
+    fs::remove_dir_all(&links).unwrap();
+    fs::remove_dir_all(&real).unwrap();
+}
+
+// Events are respelled onto the root the index was opened with. Once that link
+// points somewhere else, the folder behind it is not the workspace anyone
+// granted, so an update must not read from it.
+#[test]
+fn an_incremental_update_does_not_follow_a_root_link_that_was_moved() {
+    let real = fixture_vault("moved_root");
+    let decoy = unique_tmp("moved_root_decoy");
+    fs::write(decoy.join("Index.md"), "top secret #classified\n").unwrap();
+    let links = unique_tmp("moved_root_links");
+    let root = links.join("vault");
+    link_folder(&real, &root);
+    let mut vault = build(&root);
+
+    fs::remove_dir(&root)
+        .or_else(|_| fs::remove_file(&root))
+        .unwrap();
+    link_folder(&decoy, &root);
+    vault.apply_changes(&[root.join("Index.md")]);
+
+    assert!(vault.paths_with_tag("classified").is_empty());
+    fs::remove_dir_all(&links).unwrap();
+    fs::remove_dir_all(&real).unwrap();
+    fs::remove_dir_all(&decoy).unwrap();
 }
 
 #[test]

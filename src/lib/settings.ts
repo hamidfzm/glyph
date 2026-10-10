@@ -127,11 +127,12 @@ export interface BehaviorSettings {
   defaultEditorMode: EditorMode;
   // Answer to the first-run "make Glyph your default Markdown app?" prompt.
   // The prompt auto-shows only while "unanswered", so any other value stops it
-  // from nagging; the Settings action stays available regardless.
+  // from nagging; the Settings action stays available regardless. "guided" is
+  // a yes the platform could only answer with manual steps, so nothing was set.
   defaultAppPrompt: DefaultAppPrompt;
 }
 
-export type DefaultAppPrompt = "unanswered" | "notNow" | "never" | "set";
+export type DefaultAppPrompt = "unanswered" | "notNow" | "never" | "set" | "guided";
 
 export interface AISettings {
   provider: "none" | "claude" | "openai" | "ollama";

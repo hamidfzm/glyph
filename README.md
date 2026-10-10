@@ -82,6 +82,7 @@ Installing from a package manager puts a `glyph` command on your `PATH`:
 
 ```bash
 glyph README.md      # open a file
+glyph a.md b.md      # open several files as tabs
 glyph ~/notes/       # open a folder as a workspace
 glyph --help         # usage, flags, and export formats
 

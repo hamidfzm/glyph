@@ -106,7 +106,8 @@
   },
   "exportNotice": {
     "pruneFailed": "The website was exported, but the cleanup after it did not finish. Outdated pages may be left in the folder, now or after a later export.",
-    "failed": "The website export failed.",
+    "failed": "The export failed.",
+    "siteFailed": "The website export failed.",
     "insideWorkspace": "The website can't be exported into the workspace it is made from. Choose a folder outside it.",
     "dismiss": "Dismiss export notice"
   },

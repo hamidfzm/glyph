@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { type Dispatch, type RefObject, type SetStateAction, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
+import type { EnqueueWrite } from "@/hooks/useWriteQueue";
 import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { basename, isPathInside } from "@/lib/paths";
 import { pickSave } from "@/lib/pickers";
@@ -16,12 +17,13 @@ interface UseDocumentSaveOptions {
   getWorkspaceRoot: () => string | null;
   onWorkspaceNotice: (notice: WorkspaceNotice, options?: { persistent?: boolean }) => void;
   markSelfSave: (path: string) => void;
+  enqueueWrite: EnqueueWrite;
 }
 
 /**
- * Persists dirty document tabs. Writes are serialized per path so two saves of
- * the same file can never land out of order, and a virtual (never-saved) buffer
- * is routed through a Save As dialog.
+ * Persists dirty document tabs. Writes go through the per-path queue so two
+ * writes of the same file can never land out of order, and a virtual
+ * (never-saved) buffer is routed through a Save As dialog.
  */
 export function useDocumentSave({
   stateRef,
@@ -31,14 +33,11 @@ export function useDocumentSave({
   getWorkspaceRoot,
   onWorkspaceNotice,
   markSelfSave,
+  enqueueWrite,
 }: UseDocumentSaveOptions) {
   const { t } = useTranslation("workspace");
   const onWorkspaceNoticeRef = useRef(onWorkspaceNotice);
   onWorkspaceNoticeRef.current = onWorkspaceNotice;
-
-  // Per-path write queue: serializes saves for the same file so two writes
-  // can't complete out of order (the newer edit must land last on disk).
-  const writeChains = useRef<Map<string, Promise<unknown>>>(new Map());
 
   // Save a virtual buffer to a chosen path (Save As): on success it becomes an
   // ordinary file tab; a cancelled dialog returns false so close can discard.
@@ -122,7 +121,7 @@ export function useDocumentSave({
   );
 
   // Persist one dirty editable tab. Safe to call for any tab id: skips graph,
-  // clean, and still-loading tabs. The write is serialized per path, and the
+  // clean, and still-loading tabs. The write is queued per path, and the
   // dirty flag is cleared only when the written revision is still current, so a
   // slow write completing after a newer edit never strands that edit. Resolves
   // true when the document is safely on disk (or there was nothing to save),
@@ -144,8 +143,7 @@ export function useDocumentSave({
       /* v8 ignore stop */
       const { path, editContent: content, revision } = file;
 
-      const previous = writeChains.current.get(path) ?? Promise.resolve();
-      const run = previous.then(async (): Promise<boolean> => {
+      return enqueueWrite(path, async (): Promise<boolean> => {
         try {
           await invoke("write_file", { path, content });
           markSelfSave(path);
@@ -168,14 +166,8 @@ export function useDocumentSave({
           return false;
         }
       });
-      // Keep the chain intact even if this write threw, so ordering holds.
-      writeChains.current.set(
-        path,
-        run.catch(() => {}),
-      );
-      return run;
     },
-    [markSelfSave, saveVirtualAs, stateRef, updateActiveFile],
+    [enqueueWrite, markSelfSave, saveVirtualAs, stateRef, updateActiveFile],
   );
 
   return { saveDocument };
