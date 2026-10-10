@@ -42,8 +42,22 @@ describe("runExporter", () => {
   it("does nothing when the save dialog is cancelled", async () => {
     setBody();
     vi.mocked(pickSave).mockResolvedValue(null);
-    await runExporter({ exporter: exporter(), content: null });
+    const onDestinationPicked = vi.fn();
+    await runExporter({ exporter: exporter(), content: null, onDestinationPicked });
     expect(invoke).not.toHaveBeenCalled();
+    expect(onDestinationPicked).not.toHaveBeenCalled();
+  });
+
+  it("says a destination was picked before the plugin builds", async () => {
+    setBody();
+    vi.mocked(pickSave).mockResolvedValue("/out.html");
+    const onDestinationPicked = vi.fn();
+    const build = vi.fn(async () => {
+      expect(onDestinationPicked).toHaveBeenCalledOnce();
+      return "deck";
+    });
+    await runExporter({ exporter: exporter({ build }), content: null, onDestinationPicked });
+    expect(build).toHaveBeenCalledOnce();
   });
 
   it("writes string output via write_file with the derived filename", async () => {

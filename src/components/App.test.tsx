@@ -37,8 +37,9 @@ vi.mock("@/lib/documentHighlight", async (importOriginal) => ({
   locateLineInDocument: vi.fn(() => true),
 }));
 
-// Mocked so a test can drive the in-progress-export state (the real hook never
-// sets it here — the mocked viewer renders no `.markdown-body` to export).
+// Mocked so a test can drive what the shell shows for an export, its progress
+// and its notice (the real hook never gets that far here: the mocked viewer
+// renders no `.markdown-body` to export).
 vi.mock("@/hooks/useExport", () => ({ useExport: vi.fn() }));
 
 import { type ExportHandlers, useExport } from "@/hooks/useExport";
@@ -171,6 +172,21 @@ describe("App", () => {
     // By its text: the first-run default-app banner is a status region as well.
     const status = await findByText("Exporting Word document…");
     expect(status).toHaveAttribute("role", "status");
+  });
+
+  it("shows the notice a failed export raises, until it is dismissed", async () => {
+    const { wrapper } = withProviders();
+    render(<App />, { wrapper });
+    await waitFor(() => expect(useExport).toHaveBeenCalled());
+    const { showNotice } = vi.mocked(useExport).mock.lastCall![0];
+
+    act(() => showNotice({ kind: "failed", reason: "disk full" }));
+    const notice = await screen.findByRole("alert");
+    expect(notice).toHaveTextContent("The export failed.");
+    expect(notice).toHaveTextContent("disk full");
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss export notice" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("renders the empty state when there are no tabs", async () => {

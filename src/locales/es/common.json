@@ -106,7 +106,8 @@
   },
   "exportNotice": {
     "pruneFailed": "El sitio web se exportó, pero la limpieza posterior no terminó. Pueden quedar páginas obsoletas en la carpeta, ahora o tras una exportación posterior.",
-    "failed": "Falló la exportación del sitio web.",
+    "failed": "Falló la exportación.",
+    "siteFailed": "Falló la exportación del sitio web.",
     "insideWorkspace": "El sitio web no se puede exportar dentro del espacio de trabajo del que se genera. Elige una carpeta fuera de él.",
     "dismiss": "Descartar aviso de exportación"
   },
