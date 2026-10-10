@@ -9,4 +9,4 @@ paths:
 - Use `serde(rename_all = "camelCase")` on structs returned to the frontend
 - File watcher state is the managed `FileWatcherState` in `watcher.rs` (`Arc<Mutex<HashMap<String, RecommendedWatcher>>>`)
 - Register all commands in `lib.rs` via `generate_handler![]`
-- Import Tauri traits explicitly (`Emitter`, `Manager`, `CliExt`); they're not in prelude
+- Import Tauri traits explicitly (`Emitter`, `Manager`, `StoreExt`); they're not in prelude

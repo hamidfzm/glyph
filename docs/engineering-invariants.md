@@ -22,8 +22,8 @@ Empty string is valid loaded document content. `null`/`undefined` represents abs
 
 Older asynchronous work cannot overwrite newer state or mark it complete. Writes to the same path are serialized; completions are revision-guarded. A reload from disk is dropped when the app wrote the path, or a later reload of it reached the tab, while the file was being read.
 
-- Owners: `src/hooks/useWriteQueue.ts` (the per-path queue that saves and programmatic edits of an open file go through), `src/hooks/useDocumentSave.ts` and `src/hooks/useDocumentEdits.ts` (revision guards), `src/hooks/useDiskReload.ts` with `src/hooks/useSelfSaveTracker.ts` (reload guards)
-- Evidence: `src/hooks/useWriteQueue.test.ts`, `src/hooks/useTabs.*.test.tsx` stale-completion, in-flight, and overtaken-reload cases, `src/hooks/useDiskReload.test.ts`, `src/hooks/useSelfSaveTracker.test.ts`
+- Owners: `src/hooks/useWriteQueue.ts` (the per-path queue that saves and programmatic edits of an open file go through), `src/hooks/useDocumentSave.ts` and `src/hooks/useDocumentEdits.ts` (revision guards), `src/hooks/useDiskReload.ts` with `src/hooks/useSelfSaveTracker.ts` (reload guards), `src-tauri/src/windows/pending.rs` (an open request reaches its window exactly once)
+- Evidence: `src/hooks/useWriteQueue.test.ts`, `src/hooks/useTabs.*.test.tsx` stale-completion, in-flight, and overtaken-reload cases, `src/hooks/useDiskReload.test.ts`, `src/hooks/useSelfSaveTracker.test.ts`, `src-tauri/src/windows/pending.rs` and `src/hooks/useOpenRequests.test.tsx` handoff cases
 
 ### INV-4: Owners flush before they die
 
@@ -51,7 +51,7 @@ Frontend permission labels and disabled buttons are UX, not security boundaries.
 Truncation, fallback, and partial results are represented explicitly in types and UI. No silent truncation, no fallback that pretends to be the full result.
 
 - Owners: any code path that truncates, samples, or falls back
-- Evidence: tests asserting the partial state is surfaced, not hidden
+- Evidence: tests asserting the partial state is surfaced, not hidden (for a launch naming several paths, `LaunchOpens` in `src-tauri/src/cli.rs`: every supported path opens and every skipped one is reported)
 
 ## Adversarial scenario matrix
 

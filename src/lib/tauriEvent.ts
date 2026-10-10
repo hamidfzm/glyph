@@ -13,6 +13,32 @@ function currentWindowTarget(): { target: { kind: "WebviewWindow"; label: string
   }
 }
 
+/** A window-scoped listener and the moment it is actually attached. */
+interface Subscription {
+  /** Settles once the listener is registered. Never rejects, so a failed
+   *  registration cannot hold up whoever waits on it. */
+  ready: Promise<void>;
+  unsubscribe: () => void;
+}
+
+/**
+ * `subscribe` for a caller that must know when the listener is attached:
+ * `listen` registers asynchronously, and an event emitted before it settles is
+ * never delivered.
+ */
+export function subscribeReady<T>(event: EventName, handler: EventCallback<T>): Subscription {
+  const unlisten = listen<T>(event, handler, currentWindowTarget());
+  return {
+    ready: unlisten.then(
+      () => {},
+      () => {},
+    ),
+    unsubscribe: () => {
+      unlisten.then((fn) => fn()).catch(() => {});
+    },
+  };
+}
+
 /**
  * Subscribe to a Tauri event, scoped to the current window, and return a
  * teardown function suitable for a React effect cleanup.
@@ -25,8 +51,5 @@ function currentWindowTarget(): { target: { kind: "WebviewWindow"; label: string
  * though nothing went wrong.
  */
 export function subscribe<T>(event: EventName, handler: EventCallback<T>): () => void {
-  const unlisten = listen<T>(event, handler, currentWindowTarget());
-  return () => {
-    unlisten.then((fn) => fn()).catch(() => {});
-  };
+  return subscribeReady(event, handler).unsubscribe;
 }

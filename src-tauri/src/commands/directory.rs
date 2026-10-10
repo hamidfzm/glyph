@@ -1,14 +1,11 @@
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
-use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 use tauri::State;
 
 use super::walk::{workspace_walker, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
 use crate::grants::GrantRegistry;
-
-pub struct InitialFolder(pub Mutex<Option<String>>);
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,13 +14,6 @@ pub struct DirEntry {
     pub path: String,
     pub is_directory: bool,
     pub modified: u64,
-}
-
-/// Return the folder the app was launched to open, if any, consuming it. See
-/// [`super::file::get_initial_file`] for why this takes rather than clones.
-#[tauri::command]
-pub fn get_initial_folder(state: State<'_, InitialFolder>) -> Option<String> {
-    state.0.lock().ok()?.take()
 }
 
 #[tauri::command]
@@ -436,42 +426,6 @@ mod tests {
         assert!(result.is_err());
 
         let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn initial_folder_default_is_none() {
-        let initial = InitialFolder(Mutex::new(None));
-        let guard = initial.0.lock().unwrap();
-        assert!(guard.is_none());
-    }
-
-    #[test]
-    fn initial_folder_with_value() {
-        let initial = InitialFolder(Mutex::new(Some("/path/to/folder".to_string())));
-        let guard = initial.0.lock().unwrap();
-        assert_eq!(guard.as_deref(), Some("/path/to/folder"));
-    }
-
-    #[test]
-    fn get_initial_folder_returns_managed_value() {
-        use tauri::test::mock_app;
-        use tauri::Manager;
-
-        let app = mock_app();
-        app.manage(InitialFolder(Mutex::new(Some("/ws/folder".to_string()))));
-        let result = get_initial_folder(app.state::<InitialFolder>());
-        assert_eq!(result.as_deref(), Some("/ws/folder"));
-    }
-
-    #[test]
-    fn get_initial_folder_returns_none_when_unset() {
-        use tauri::test::mock_app;
-        use tauri::Manager;
-
-        let app = mock_app();
-        app.manage(InitialFolder(Mutex::new(None)));
-        let result = get_initial_folder(app.state::<InitialFolder>());
-        assert!(result.is_none());
     }
 
     #[test]
