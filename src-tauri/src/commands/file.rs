@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::collections::HashSet;
+use std::ffi::OsString;
 use std::fs::{self, OpenOptions};
 use std::io::{self, ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
@@ -104,6 +105,23 @@ fn says_absent(e: &io::Error) -> bool {
     )
 }
 
+/// The folder and the file name `rel` points at under `out_dir`, when every
+/// segment of it is a plain name.
+fn entry_parts(out_dir: &Path, rel: &str) -> Option<(PathBuf, OsString)> {
+    let mut path = out_dir.to_path_buf();
+    for segment in rel.split(['/', '\\']) {
+        let mut components = Path::new(segment).components();
+        match (components.next(), components.next()) {
+            (Some(Component::Normal(name)), None) => path.push(name),
+            _ => return None,
+        }
+    }
+    Some((
+        path.parent()?.to_path_buf(),
+        path.file_name()?.to_os_string(),
+    ))
+}
+
 /// Resolve a manifest entry inside `out_dir`, refusing anything that could
 /// escape it. The manifest lives in the output directory, so a hand-edited one
 /// is untrusted input (INV-5): every segment must be a plain name, and the
@@ -113,15 +131,7 @@ fn says_absent(e: &io::Error) -> bool {
 /// folder that is gone. `Err` is a folder that could not be resolved either
 /// way, so the file may well still be in it.
 fn manifest_entry_path(out_dir: &Path, rel: &str) -> io::Result<Option<PathBuf>> {
-    let mut path = out_dir.to_path_buf();
-    for segment in rel.split(['/', '\\']) {
-        let mut components = Path::new(segment).components();
-        match (components.next(), components.next()) {
-            (Some(Component::Normal(name)), None) => path.push(name),
-            _ => return Ok(None),
-        }
-    }
-    let (Some(parent), Some(name)) = (path.parent(), path.file_name()) else {
+    let Some((parent, name)) = entry_parts(out_dir, rel) else {
         return Ok(None);
     };
     // Delete through the canonicalized parent, not the path as joined: an
@@ -200,9 +210,8 @@ fn staging_path(manifest: &Path) -> PathBuf {
 /// interrupted, or that overlapped another, would leave half a manifest, and
 /// one that does not parse stops every later cleanup until it is repaired.
 fn write_manifest(manifest: &Path, claimed: &[String]) -> io::Result<()> {
-    if let Some(parent) = manifest.parent() {
-        fs::create_dir_all(parent)?;
-    }
+    let folder = manifest.parent().ok_or(ErrorKind::InvalidInput)?;
+    fs::create_dir_all(folder)?;
     let json = serde_json::to_string(claimed)?;
     let staged = staging_path(manifest);
     // `create_new` refuses whatever already holds the name, a link included,
@@ -1503,6 +1512,25 @@ mod tests {
         );
 
         drop((stuck, blocked));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_manifest_leaves_no_staging_file_when_it_cannot_replace_the_manifest() {
+        let dir =
+            std::env::temp_dir().join(format!("glyph_test_manifest_swap_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        // A folder with something in it where the manifest goes: the copy is
+        // staged and written, and only the move into place can fail.
+        let manifest = dir.join(SITE_MANIFEST_REL);
+        fs::create_dir_all(&manifest).unwrap();
+        fs::write(manifest.join("inside.txt"), "blocks the move").unwrap();
+
+        let result = write_manifest(&manifest, &["index.html".to_string()]);
+
+        assert!(result.is_err());
+        assert_eq!(glyph_folder(&dir), ["site-manifest.json"]);
+
         let _ = fs::remove_dir_all(&dir);
     }
 
