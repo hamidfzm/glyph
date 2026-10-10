@@ -110,11 +110,13 @@ cd src-tauri && cargo test      # Rust tests
 
 ### Built-app smoke test (`pnpm test:app`)
 
-Launches the built binary over WebDriver (`tauri-driver`) and asserts a
-CLI-arg document renders, the editor is laid out and holds the document under
-the production CSP, and a second launch reuses the running window. This is the
-only test that exercises a real process launch and the production
-configuration; unit tests cannot.
+Launches the built binary over WebDriver (`tauri-driver`) and asserts every
+supported document named on the command line opens, the editor is laid out and
+holds the document under the production CSP, and a second launch reuses the
+running window for every file it names, including one launched beside a file
+name that is not valid Unicode (Linux only). This is the only test that
+exercises a real process launch and the production configuration; unit tests
+cannot.
 Supported on Linux and Windows; macOS has no WebKit WebDriver and is skipped.
 
 One-time setup:

@@ -17,9 +17,9 @@ pub struct CliExportRequest {
 
 pub struct CliExport(pub Mutex<Option<CliExportRequest>>);
 
-/// The CLI export request for this launch, if any. Unlike the initial
-/// file/folder stash this is *not* consumed: the window-reveal gate and the
-/// export runner both read it.
+/// The CLI export request for this launch, if any. Unlike a window's pending
+/// opens this is *not* consumed: the window-reveal gate and the export runner
+/// both read it.
 #[tauri::command]
 pub fn get_cli_export(state: State<'_, CliExport>) -> Option<CliExportRequest> {
     state.0.lock().ok()?.clone()

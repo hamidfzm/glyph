@@ -35,9 +35,9 @@ export function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): I
     const fn = overrides[cmd];
     if (fn) return fn(cmd, args);
     switch (cmd) {
-      case "get_initial_file":
-      case "get_initial_folder":
-        return null;
+      case "take_pending_opens":
+        // Nothing was launched at this window.
+        return [];
       case "read_file":
         return "FILE BODY";
       case "get_file_metadata":
@@ -111,9 +111,7 @@ export function defaultOptions(over: Partial<Parameters<typeof useTabs>[0]> = {}
   };
 }
 
-export function captureListener(
-  event: "open-file" | "open-folder" | "file-changed" | "directory-changed",
-) {
+export function captureListener(event: "opens-pending" | "file-changed" | "directory-changed") {
   const ref: { handler: ((e: { payload: string }) => void) | null } = { handler: null };
   vi.mocked(listen).mockImplementation(((name: string, fn: (e: { payload: string }) => void) => {
     if (name === event) ref.handler = fn;

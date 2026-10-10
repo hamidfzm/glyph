@@ -91,10 +91,8 @@ function mockWorkspaceLaunch(
 ) {
   vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
     switch (cmd) {
-      case "get_initial_folder":
-        return Promise.resolve("/workspace");
-      case "get_initial_file":
-        return Promise.resolve(null);
+      case "take_pending_opens":
+        return Promise.resolve([{ kind: "folder", path: "/workspace" }]);
       case "read_directory":
         return Promise.resolve([{ name: "a.md", path: "/workspace/a.md", isDirectory: false }]);
       case "list_markdown_files":
@@ -141,10 +139,8 @@ describe("App", () => {
   it("opens the CLI initial file and shows it in a tab", async () => {
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
       switch (cmd) {
-        case "get_initial_folder":
-          return Promise.resolve(null);
-        case "get_initial_file":
-          return Promise.resolve("/cli/test.md");
+        case "take_pending_opens":
+          return Promise.resolve([{ kind: "file", path: "/cli/test.md" }]);
         case "read_file":
           return Promise.resolve("# Hello CLI");
         case "get_file_metadata":
@@ -274,10 +270,8 @@ describe("App", () => {
   it("opens the AI panel in response to menu-ai-action when there is content", async () => {
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
       switch (cmd) {
-        case "get_initial_folder":
-          return Promise.resolve(null);
-        case "get_initial_file":
-          return Promise.resolve("/cli/with-content.md");
+        case "take_pending_opens":
+          return Promise.resolve([{ kind: "file", path: "/cli/with-content.md" }]);
         case "read_file":
           return Promise.resolve("hello world");
         case "get_file_metadata":
@@ -310,10 +304,8 @@ describe("App", () => {
     // path or they fall through to an empty pane (the SVG-blank regression).
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
       switch (cmd) {
-        case "get_initial_folder":
-          return Promise.resolve(null);
-        case "get_initial_file":
-          return Promise.resolve("/cli/diagram.svg");
+        case "take_pending_opens":
+          return Promise.resolve([{ kind: "file", path: "/cli/diagram.svg" }]);
         case "read_file":
           return Promise.resolve('<svg xmlns="http://www.w3.org/2000/svg"/>');
         case "get_file_metadata":
@@ -423,10 +415,8 @@ describe("App", () => {
   it("forwards menu-close-tab, menu-find, and menu-toggle-edit to AppShell handlers", async () => {
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
       switch (cmd) {
-        case "get_initial_folder":
-          return Promise.resolve(null);
-        case "get_initial_file":
-          return Promise.resolve("/cli/edit-target.md");
+        case "take_pending_opens":
+          return Promise.resolve([{ kind: "file", path: "/cli/edit-target.md" }]);
         case "read_file":
           return Promise.resolve("# header\n\ncontent");
         case "get_file_metadata":
