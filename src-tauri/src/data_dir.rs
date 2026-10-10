@@ -280,6 +280,34 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_copy_of_a_released_lock_is_waited_out() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let held = hold_instance_lock(dir.path()).unwrap();
+        // A second handle on the same open file, which is what a child holds.
+        let copy = held._file.try_clone().unwrap();
+        let let_go = Arc::new(AtomicBool::new(false));
+        let child = std::thread::spawn({
+            let let_go = Arc::clone(&let_go);
+            move || {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                let_go.store(true, Ordering::SeqCst);
+                drop(copy);
+            }
+        });
+
+        release(held, dir.path());
+        assert!(
+            let_go.load(Ordering::SeqCst),
+            "release came back while the copy still held the lock"
+        );
+        assert!(!running_in(dir.path()));
+        child.join().unwrap();
+    }
+
     fn documents(open: &[&str], unsaved: &[&str]) -> OpenDocuments {
         let paths = |paths: &[&str]| paths.iter().map(|path| path.to_string()).collect();
         OpenDocuments {
