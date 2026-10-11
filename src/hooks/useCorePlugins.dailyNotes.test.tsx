@@ -5,10 +5,13 @@ import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsC
 import { CORE_PLUGINS } from "@/lib/plugins/corePlugins";
 import { createPluginHost } from "@/lib/plugins/host";
 import { type CorePluginSettings, DEFAULT_SETTINGS } from "@/lib/settings";
+import { preloadCorePlugins } from "@/test/preloadCorePlugins";
 import { useCorePlugins } from "./useCorePlugins";
 
 // The real daily notes plugin against the real host: a command and a Workspace
 // Settings tab, there only while its setting is on.
+
+preloadCorePlugins("dailyNotes");
 
 const ALL_OFF = Object.fromEntries(
   Object.keys(DEFAULT_SETTINGS.corePlugins).map((key) => [key, false]),

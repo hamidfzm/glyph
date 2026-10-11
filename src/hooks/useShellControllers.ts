@@ -2,6 +2,7 @@ import { useTabsContext } from "@/contexts/TabsContext";
 import { useZoomApi } from "@/contexts/ZoomContext";
 import { useAIController } from "@/hooks/useAIController";
 import { useExport } from "@/hooks/useExport";
+import { useExportNotice } from "@/hooks/useExportNotice";
 import { useExportSite } from "@/hooks/useExportSite";
 import { usePluginExporterRunner } from "@/hooks/usePluginExporterRunner";
 import { usePrint } from "@/hooks/usePrint";
@@ -11,8 +12,9 @@ import { aiDocContext } from "@/lib/aiPrompts";
 
 /**
  * The document-surface controllers the shell owns: AI chat, read-aloud, print,
- * the export formats, workspace website export, zoom, and the plugin exporter
- * runner. Each is driven by the active document, so they are built together.
+ * the export formats, workspace website export, the notice those exports share,
+ * zoom, and the plugin exporter runner. Each is driven by the active document,
+ * so they are built together.
  */
 export function useShellControllers() {
   const { settings } = useSettings();
@@ -29,19 +31,25 @@ export function useShellControllers() {
   );
   const readAloud = useReadAloudController(settings.ai, () => displayContent);
   const printDoc = usePrint({ entries: tocEntries, settings: settings.print });
+  const exportNotice = useExportNotice();
+  const { showNotice, captureSeenNotice } = exportNotice;
   const exporters = useExport({
     entries: tocEntries,
     settings: settings.print,
     filePath: activeFile?.path,
     content: displayContent,
+    showNotice,
+    captureSeenNotice,
   });
-  const siteExporter = useExportSite(workspace?.root);
+  const siteExporter = useExportSite({ root: workspace?.root, showNotice, captureSeenNotice });
   // Zoom In/Out/Actual-Size dispatch to whichever document surface is active
   // (note font, graph camera) via the ZoomProvider; no-op with nothing focused.
   const zoomActions = useZoomApi()?.actions;
   const runPluginExporter = usePluginExporterRunner({
     filePath: activeFile?.path,
     content: displayContent,
+    showNotice,
+    captureSeenNotice,
   });
 
   return {
@@ -51,6 +59,7 @@ export function useShellControllers() {
     printDoc,
     exporters,
     siteExporter,
+    exportNotice,
     zoomActions,
     runPluginExporter,
   };

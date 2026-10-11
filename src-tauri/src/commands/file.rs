@@ -1,7 +1,10 @@
 use serde::Serialize;
 use std::collections::HashSet;
-use std::fs;
+use std::ffi::OsString;
+use std::fs::{self, OpenOptions};
+use std::io::{self, ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Manager, Runtime, State};
 
@@ -89,11 +92,22 @@ pub fn copy_file(
 /// style, matching the paths the exporter hands us.
 const SITE_MANIFEST_REL: &str = ".glyph/site-manifest.json";
 
-/// Resolve a manifest entry inside `out_dir`, refusing anything that could
-/// escape it. The manifest lives in the output directory, so a hand-edited one
-/// is untrusted input (INV-5): every segment must be a plain name, and the
-/// resolved parent must still be inside the output tree after symlinks.
-fn manifest_entry_path(out_dir: &Path, rel: &str) -> Option<PathBuf> {
+/// Whether a failed lookup says nothing is there, as opposed to not being able
+/// to tell. A name the volume cannot hold and a path that runs through a file
+/// are as absent as a missing one; "no permission" says nothing either way.
+fn says_absent(e: &io::Error) -> bool {
+    matches!(
+        e.kind(),
+        ErrorKind::NotFound
+            | ErrorKind::NotADirectory
+            | ErrorKind::InvalidFilename
+            | ErrorKind::InvalidInput
+    )
+}
+
+/// The folder and the file name `rel` points at under `out_dir`, when every
+/// segment of it is a plain name.
+fn entry_parts(out_dir: &Path, rel: &str) -> Option<(PathBuf, OsString)> {
     let mut path = out_dir.to_path_buf();
     for segment in rel.split(['/', '\\']) {
         let mut components = Path::new(segment).components();
@@ -102,12 +116,33 @@ fn manifest_entry_path(out_dir: &Path, rel: &str) -> Option<PathBuf> {
             _ => return None,
         }
     }
+    Some((
+        path.parent()?.to_path_buf(),
+        path.file_name()?.to_os_string(),
+    ))
+}
+
+/// Resolve a manifest entry inside `out_dir`, refusing anything that could
+/// escape it. The manifest lives in the output directory, so a hand-edited one
+/// is untrusted input (INV-5): every segment must be a plain name, and the
+/// resolved parent must still be inside the output tree after symlinks.
+///
+/// `Ok(None)` is an entry there is nothing to remove for: refused, or in a
+/// folder that is gone. `Err` is a folder that could not be resolved either
+/// way, so the file may well still be in it.
+fn manifest_entry_path(out_dir: &Path, rel: &str) -> io::Result<Option<PathBuf>> {
+    let Some((parent, name)) = entry_parts(out_dir, rel) else {
+        return Ok(None);
+    };
     // Delete through the canonicalized parent, not the path as joined: an
     // intermediate component swapped for a symlink between the check and the
     // unlink would otherwise escape the directory that was checked.
-    let parent = path.parent()?.canonicalize().ok()?;
-    let name = path.file_name()?;
-    parent.starts_with(out_dir).then(|| parent.join(name))
+    let parent = match parent.canonicalize() {
+        Ok(parent) => parent,
+        Err(e) if says_absent(&e) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    Ok(parent.starts_with(out_dir).then(|| parent.join(name)))
 }
 
 /// Fold a manifest entry for comparison: separators unified, case ignored. A
@@ -127,9 +162,132 @@ fn prune_empty_dirs(from: &Path, out_dir: &Path) {
     }
 }
 
+/// What a prune did, once it got as far as pruning. From there a cleanup that
+/// fell short is part of the result, not an `Err`: the count of what it did
+/// remove would be lost with one (INV-7).
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PruneReport {
+    pub removed: usize,
+    /// Why outdated files may be left in the output, when they may.
+    pub error: Option<String>,
+}
+
+/// The entries a previous export recorded, none when there was no previous
+/// export. A manifest that is there but cannot be read or parsed is an error,
+/// not an empty list: replacing it would orphan every file it claimed.
+fn read_manifest(manifest: &Path) -> Result<Vec<String>, String> {
+    let raw = match fs::read(manifest) {
+        Ok(raw) => raw,
+        Err(e) if says_absent(&e) => return Ok(Vec::new()),
+        // Deleting it is the lossy way out, so that is not offered for a file
+        // that may be fine and only out of reach right now.
+        Err(e) => {
+            return Err(format!(
+                "Failed to read the manifest of the previous export ({e}). Nothing was cleaned \
+                 up, and {SITE_MANIFEST_REL} was left as it is."
+            ))
+        }
+    };
+    serde_json::from_slice(&raw).map_err(|e| {
+        format!(
+            "The manifest of the previous export is not valid ({e}). Nothing was cleaned up; \
+             repair or delete {SITE_MANIFEST_REL} in the output folder."
+        )
+    })
+}
+
+static STAGED_MANIFESTS: AtomicU64 = AtomicU64::new(0);
+
+/// Where one write stages the manifest. The name is its own, so two exports
+/// into one folder never touch each other's staging file.
+fn staging_path(manifest: &Path) -> PathBuf {
+    let nth = STAGED_MANIFESTS.fetch_add(1, Ordering::Relaxed);
+    manifest.with_extension(format!("json.{}-{nth}.tmp", std::process::id()))
+}
+
+/// Replace the manifest in one step. Written in place, an export that was
+/// interrupted, or that overlapped another, would leave half a manifest, and
+/// one that does not parse stops every later cleanup until it is repaired.
+fn write_manifest(manifest: &Path, claimed: &[String]) -> io::Result<()> {
+    let folder = manifest.parent().ok_or(ErrorKind::InvalidInput)?;
+    fs::create_dir_all(folder)?;
+    let json = serde_json::to_string(claimed)?;
+    let staged = staging_path(manifest);
+    // `create_new` refuses whatever already holds the name, a link included,
+    // rather than write through it.
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&staged)?;
+    // Synced first: a rename that outlives a power cut must not name an empty file.
+    let written = file
+        .write_all(json.as_bytes())
+        .and_then(|()| file.sync_all());
+    drop(file);
+    let moved = written.and_then(|()| fs::rename(&staged, manifest));
+    if moved.is_err() {
+        let _ = fs::remove_file(&staged);
+    }
+    moved
+}
+
+/// Whether a file that could not be removed is still in the output. A folder
+/// at its path is not one of Glyph's files and never becomes removable, so it
+/// does not count. A path that cannot be inspected does: dropping the claim on
+/// a guess would orphan the file.
+fn is_file_there(path: &Path) -> bool {
+    match fs::symlink_metadata(path) {
+        Ok(found) => !found.is_dir(),
+        Err(e) => !says_absent(&e),
+    }
+}
+
+/// What became of one stale manifest entry.
+enum Pruned {
+    Removed,
+    /// Nothing of Glyph's is at the path, so the claim goes.
+    Dropped,
+    /// Still there, or impossible to tell: the claim stays and is reported.
+    Stuck(io::Error),
+}
+
+fn prune_entry(out_dir: &Path, rel: &str) -> Pruned {
+    let path = match manifest_entry_path(out_dir, rel) {
+        Ok(Some(path)) => path,
+        Ok(None) => return Pruned::Dropped,
+        Err(e) => return Pruned::Stuck(e),
+    };
+    match fs::remove_file(&path) {
+        Ok(()) => {
+            if let Some(parent) = path.parent() {
+                prune_empty_dirs(parent, out_dir);
+            }
+            Pruned::Removed
+        }
+        Err(e) if is_file_there(&path) => Pruned::Stuck(e),
+        Err(_) => Pruned::Dropped,
+    }
+}
+
+/// The first failed removal in full and the rest as a count, so a folder of
+/// locked pages still reads as one line.
+fn summarize_stuck(first: Option<String>, count: usize) -> Option<String> {
+    let first = first?;
+    if count == 1 {
+        return Some(first);
+    }
+    Some(format!(
+        "{first} ({} more could not be removed either)",
+        count - 1
+    ))
+}
+
 /// Delete the files a previous website export left in `out_dir` that this one
 /// did not write, then record what the output directory now holds of Glyph's.
-/// Returns how many files were removed.
+/// Reports how many files were removed and, when a stale file could not be
+/// removed or the record could not be written, why. A manifest that cannot be
+/// read or parsed fails the command before anything is removed or replaced.
 ///
 /// Pruning is against the previous export's own manifest, never against the
 /// whole directory, so anything the user keeps beside the generated site (a
@@ -141,7 +299,7 @@ pub fn prune_export_dir(
     out_dir: String,
     written: Vec<String>,
     grants: State<'_, GrantRegistry>,
-) -> Result<usize, String> {
+) -> Result<PruneReport, String> {
     let out_dir = grants.ensure_writable(&out_dir)?;
     let manifest = out_dir.join(SITE_MANIFEST_REL);
     // `out_dir` is checked and holds no link, but one below it leads anywhere,
@@ -150,40 +308,41 @@ pub fn prune_export_dir(
     if below_out_dir.any(is_symlink) {
         return Err(format!("Refusing to follow a link at {SITE_MANIFEST_REL}"));
     }
-    let previous: Vec<String> = fs::read_to_string(&manifest)
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default();
+    let previous = read_manifest(&manifest)?;
 
     let keep: HashSet<String> = written.iter().map(|rel| manifest_entry_key(rel)).collect();
     let mut claimed = written;
     let mut removed = 0;
+    let mut stuck_count = 0;
+    let mut first_stuck = None;
     for rel in previous
         .iter()
         .filter(|rel| !keep.contains(&manifest_entry_key(rel)))
     {
-        let Some(path) = manifest_entry_path(&out_dir, rel) else {
-            continue;
-        };
-        if fs::remove_file(&path).is_ok() {
-            removed += 1;
-            if let Some(parent) = path.parent() {
-                prune_empty_dirs(parent, &out_dir);
+        match prune_entry(&out_dir, rel) {
+            Pruned::Removed => removed += 1,
+            Pruned::Dropped => {}
+            Pruned::Stuck(e) => {
+                // Held open by another process, or in a folder that cannot be
+                // written to: keep claiming it so a later export prunes it.
+                // Dropping it here would orphan it in the output for good.
+                claimed.push(rel.clone());
+                stuck_count += 1;
+                // Debug-quoted: the name is manifest input and reaches a terminal.
+                first_stuck.get_or_insert_with(|| format!("Failed to remove {rel:?}: {e}"));
             }
-        } else if path.exists() {
-            // Read-only, locked by another process, or a directory: keep
-            // claiming it so a later export prunes it. Dropping it here would
-            // orphan the file in the output for good.
-            claimed.push(rel.clone());
         }
     }
 
-    if let Some(parent) = manifest.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
-    }
-    let json = serde_json::to_string(&claimed).map_err(|e| format!("Failed to serialize: {e}"))?;
-    fs::write(&manifest, json).map_err(|e| format!("Failed to write file: {e}"))?;
-    Ok(removed)
+    let stuck = summarize_stuck(first_stuck, stuck_count);
+    let unrecorded = write_manifest(&manifest, &claimed)
+        .err()
+        .map(|e| format!("Failed to write {SITE_MANIFEST_REL}: {e}"));
+    let error = match (stuck, unrecorded) {
+        (Some(stuck), Some(unrecorded)) => Some(format!("{stuck}; {unrecorded}")),
+        (stuck, unrecorded) => stuck.or(unrecorded),
+    };
+    Ok(PruneReport { removed, error })
 }
 
 #[tauri::command]
@@ -813,13 +972,100 @@ mod tests {
         dir
     }
 
-    fn prune(dir: &Path, written: &[&str]) -> Result<usize, String> {
+    fn prune(dir: &Path, written: &[&str]) -> Result<PruneReport, String> {
         let app = app_with_export_dir(dir);
         prune_export_dir(
             dir.to_string_lossy().to_string(),
             written.iter().map(|s| s.to_string()).collect(),
             app.state::<GrantRegistry>(),
         )
+    }
+
+    /// A prune that finished: `removed` stale files gone, nothing to report.
+    fn clean(removed: usize) -> PruneReport {
+        PruneReport {
+            removed,
+            error: None,
+        }
+    }
+
+    /// Files that can be read but neither removed nor replaced for as long as
+    /// this is alive.
+    struct Held {
+        #[cfg(windows)]
+        _handles: Vec<fs::File>,
+        #[cfg(unix)]
+        folder: PathBuf,
+    }
+
+    #[cfg(unix)]
+    impl Drop for Held {
+        fn drop(&mut self) {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&self.folder, fs::Permissions::from_mode(0o755));
+        }
+    }
+
+    /// Pin `names` in `<dir>/<folder>` the way each platform has it: another
+    /// handle holding each file open without delete sharing on Windows, a
+    /// folder that cannot be written to elsewhere (which root ignores, so
+    /// these tests assume an ordinary user).
+    fn hold(dir: &Path, folder: &str, names: &[&str]) -> Held {
+        let folder = dir.join(folder);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            const FILE_SHARE_READ: u32 = 1;
+            let open = |name: &&str| {
+                fs::OpenOptions::new()
+                    .read(true)
+                    .share_mode(FILE_SHARE_READ)
+                    .open(folder.join(name))
+                    .unwrap()
+            };
+            Held {
+                _handles: names.iter().map(open).collect(),
+            }
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = names;
+            fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
+            Held { folder }
+        }
+    }
+
+    /// Stale pages `names` in `<dir>/locked` that cannot be removed.
+    fn stick(dir: &Path, names: &[&str]) -> Held {
+        fs::create_dir_all(dir.join("locked")).unwrap();
+        for name in names {
+            fs::write(dir.join("locked").join(name), "stale").unwrap();
+        }
+        hold(dir, "locked", names)
+    }
+
+    /// A manifest that still reads and cannot be replaced.
+    fn block_manifest_write(dir: &Path) -> Held {
+        hold(dir, ".glyph", &["site-manifest.json"])
+    }
+
+    /// What `.glyph` holds, to tell a staging file that was left behind.
+    fn glyph_folder(dir: &Path) -> Vec<String> {
+        let entries = fs::read_dir(dir.join(".glyph")).unwrap();
+        entries
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect()
+    }
+
+    /// The line the report carries for a stuck `rel`, with this platform's error.
+    fn failure_line(dir: &Path, rel: &str) -> String {
+        let os_error = fs::remove_file(dir.join(rel)).expect_err("the page is stuck");
+        format!("Failed to remove {rel:?}: {os_error}")
+    }
+
+    fn manifest_text(dir: &Path) -> String {
+        fs::read_to_string(dir.join(SITE_MANIFEST_REL)).unwrap()
     }
 
     #[test]
@@ -830,15 +1076,15 @@ mod tests {
         // Not Glyph's file: a static host's marker the user keeps beside the site.
         fs::write(dir.join("CNAME"), "example.com").unwrap();
 
-        let removed = prune(&dir, &["index.html"]).unwrap();
+        assert_eq!(prune(&dir, &["index.html"]).unwrap(), clean(1));
 
-        assert_eq!(removed, 1);
         assert!(!dir.join("guide.html").exists());
         assert!(dir.join("index.html").exists());
         assert!(dir.join("CNAME").exists());
-        // The manifest now describes this export, so the next one prunes against it.
-        let manifest = fs::read_to_string(dir.join(SITE_MANIFEST_REL)).unwrap();
-        assert_eq!(manifest, r#"["index.html"]"#);
+        // The manifest now describes this export, so the next one prunes against
+        // it, and the copy it was staged in is not left beside it.
+        assert_eq!(manifest_text(&dir), r#"["index.html"]"#);
+        assert_eq!(glyph_folder(&dir), ["site-manifest.json"]);
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -849,7 +1095,7 @@ mod tests {
         fs::create_dir_all(dir.join("guide")).unwrap();
         fs::write(dir.join("guide/intro.html"), "gone").unwrap();
 
-        assert_eq!(prune(&dir, &[]).unwrap(), 1);
+        assert_eq!(prune(&dir, &[]).unwrap(), clean(1));
 
         assert!(!dir.join("guide").exists());
         assert!(dir.exists(), "the output directory itself is never removed");
@@ -865,7 +1111,7 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("keep.txt"), "not ours").unwrap();
 
-        assert_eq!(prune(&dir, &["index.html"]).unwrap(), 0);
+        assert_eq!(prune(&dir, &["index.html"]).unwrap(), clean(0));
 
         assert!(dir.join("keep.txt").exists());
         assert!(dir.join(SITE_MANIFEST_REL).exists());
@@ -874,16 +1120,71 @@ mod tests {
     }
 
     #[test]
-    fn prune_export_dir_ignores_a_malformed_manifest() {
-        let dir = std::env::temp_dir().join(format!("glyph_test_prune_bad_{}", std::process::id()));
+    fn prune_export_dir_leaves_a_manifest_that_does_not_parse_as_it_is() {
+        let dir = out_dir_with_manifest("prune_bad", &[]);
+        // Cut short, empty, the wrong shape, and not text at all.
+        let contents: [&[u8]; 4] = [b"{ not json", b"", br#"{"pages":[]}"#, &[0xff, 0xfe]];
+        for content in contents {
+            fs::write(dir.join(SITE_MANIFEST_REL), content).unwrap();
+
+            let err = prune(&dir, &["index.html"]).unwrap_err();
+
+            assert!(
+                err.starts_with("The manifest of the previous export is not valid ("),
+                "got: {err}"
+            );
+            assert!(
+                err.ends_with("repair or delete .glyph/site-manifest.json in the output folder."),
+                "got: {err}"
+            );
+            // Replacing it would orphan whatever it claimed, with no way back.
+            assert_eq!(fs::read(dir.join(SITE_MANIFEST_REL)).unwrap(), content);
+        }
+
         let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(dir.join(".glyph")).unwrap();
-        fs::write(dir.join(SITE_MANIFEST_REL), "{ not json").unwrap();
-        fs::write(dir.join("index.html"), "home").unwrap();
+    }
 
-        assert_eq!(prune(&dir, &["index.html"]).unwrap(), 0);
+    #[test]
+    fn prune_export_dir_fails_on_a_manifest_it_cannot_read() {
+        let dir =
+            std::env::temp_dir().join(format!("glyph_test_prune_unread_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        // A directory where the manifest goes: there, and not readable as a file.
+        fs::create_dir_all(dir.join(SITE_MANIFEST_REL)).unwrap();
 
-        assert!(dir.join("index.html").exists());
+        let err = prune(&dir, &["index.html"]).unwrap_err();
+
+        assert!(
+            err.starts_with("Failed to read the manifest of the previous export ("),
+            "got: {err}"
+        );
+        // Deleting it is not the advice for a manifest that may be fine.
+        assert!(
+            err.ends_with(".glyph/site-manifest.json was left as it is."),
+            "got: {err}"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_reports_a_manifest_it_has_nowhere_to_write() {
+        let dir =
+            std::env::temp_dir().join(format!("glyph_test_prune_nowhere_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        // A file where the manifest's folder goes: no previous export to read,
+        // and no place to record this one.
+        fs::write(dir.join(".glyph"), "not a folder").unwrap();
+
+        let report = prune(&dir, &["index.html"]).unwrap();
+
+        assert_eq!(report.removed, 0);
+        let error = report.error.expect("the unwritten manifest is reported");
+        assert!(
+            error.starts_with("Failed to write .glyph/site-manifest.json: "),
+            "got: {error}"
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -911,7 +1212,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(prune(&dir, &[]).unwrap(), 0);
+        assert_eq!(prune(&dir, &[]).unwrap(), clean(0));
 
         assert!(victim.exists());
 
@@ -947,7 +1248,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(prune(&dir, &[]).unwrap(), 0);
+        assert_eq!(prune(&dir, &[]).unwrap().removed, 0);
 
         assert!(victim.exists());
 
@@ -984,7 +1285,7 @@ mod tests {
         let dir = out_dir_with_manifest("prune_case", &["Guide.html"]);
         fs::write(dir.join("guide.html"), "the current page").unwrap();
 
-        assert_eq!(prune(&dir, &["guide.html"]).unwrap(), 0);
+        assert_eq!(prune(&dir, &["guide.html"]).unwrap(), clean(0));
 
         assert_eq!(
             fs::read_to_string(dir.join("guide.html")).unwrap(),
@@ -995,18 +1296,240 @@ mod tests {
     }
 
     #[test]
-    fn prune_export_dir_keeps_claiming_a_file_it_could_not_remove() {
-        // A directory stands in for the read-only or locked file the removal
-        // fails on: dropping the claim would orphan it in the output for good.
-        let dir = out_dir_with_manifest("prune_stuck", &["stuck"]);
-        fs::create_dir_all(dir.join("stuck")).unwrap();
-        fs::write(dir.join("stuck/inside.txt"), "blocks the removal").unwrap();
+    fn prune_export_dir_reports_a_file_it_could_not_remove_and_keeps_claiming_it() {
+        let dir = out_dir_with_manifest("prune_stuck", &["locked/old.html"]);
+        let stuck = stick(&dir, &["old.html"]);
+        let failure = failure_line(&dir, "locked/old.html");
 
-        assert_eq!(prune(&dir, &[]).unwrap(), 0);
+        let report = prune(&dir, &[]).unwrap();
 
-        assert!(dir.join("stuck").exists());
-        let manifest = fs::read_to_string(dir.join(SITE_MANIFEST_REL)).unwrap();
-        assert_eq!(manifest, r#"["stuck"]"#);
+        // The stale page is still published, so the prune must not read as clean.
+        assert_eq!(report.removed, 0);
+        assert_eq!(report.error, Some(failure));
+        assert!(dir.join("locked/old.html").exists());
+        // Dropping the claim would orphan it in the output for good.
+        assert_eq!(manifest_text(&dir), r#"["locked/old.html"]"#);
+
+        drop(stuck);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_quotes_the_name_of_a_file_it_could_not_remove() {
+        // A hand-edited manifest picks the name, and the report goes to a
+        // terminal: a control sequence and a text-direction override here.
+        let hostile = "evil\u{9b}2J\u{202e}Exported";
+        let rel = format!("locked/{hostile}");
+        let dir = out_dir_with_manifest("prune_quote", &[rel.as_str()]);
+        let stuck = stick(&dir, &[hostile]);
+
+        let error = prune(&dir, &[]).unwrap().error.expect("it is reported");
+
+        assert!(
+            error.starts_with(r#"Failed to remove "locked/evil\u{9b}2J\u{202e}Exported": "#),
+            "got: {error:?}"
+        );
+        assert!(!error.contains(['\u{9b}', '\u{202e}']), "got: {error:?}");
+
+        drop(stuck);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_removes_a_stuck_file_once_it_can() {
+        let dir = out_dir_with_manifest("prune_retry", &["locked/old.html"]);
+        let stuck = stick(&dir, &["old.html"]);
+        assert!(prune(&dir, &[]).unwrap().error.is_some());
+
+        // Whatever held it lets go: the next export finishes the job.
+        drop(stuck);
+
+        assert_eq!(prune(&dir, &[]).unwrap(), clean(1));
+        assert!(!dir.join("locked/old.html").exists());
+        assert_eq!(manifest_text(&dir), "[]");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_counts_what_it_removed_beside_what_it_could_not() {
+        let previous = [
+            "locked/a.html",
+            "old.html",
+            "locked/b.html",
+            "locked/c.html",
+        ];
+        let dir = out_dir_with_manifest("prune_mixed", &previous);
+        let stuck = stick(&dir, &["a.html", "b.html", "c.html"]);
+        let first_failure = failure_line(&dir, "locked/a.html");
+        fs::write(dir.join("old.html"), "stale").unwrap();
+
+        let report = prune(&dir, &["index.html"]).unwrap();
+
+        assert_eq!(report.removed, 1);
+        assert_eq!(
+            report.error,
+            Some(format!(
+                "{first_failure} (2 more could not be removed either)"
+            ))
+        );
+        assert!(!dir.join("old.html").exists());
+        assert_eq!(
+            manifest_text(&dir),
+            r#"["index.html","locked/a.html","locked/b.html","locked/c.html"]"#
+        );
+
+        drop(stuck);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_forgets_a_file_that_is_already_gone() {
+        // Deleted by hand since the last export, one with its whole folder:
+        // nothing is left behind, so it is neither a removal nor a failure.
+        let dir = out_dir_with_manifest("prune_gone", &["gone.html", "gone/page.html"]);
+
+        assert_eq!(prune(&dir, &[]).unwrap(), clean(0));
+
+        assert_eq!(manifest_text(&dir), "[]");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_forgets_a_name_this_volume_cannot_hold() {
+        // Written on a system that allows such names and synced here, or put
+        // in by hand: refused outright or just not found, depending on the
+        // platform. Either way no such file is in this folder, and a warning
+        // about it on every export would never stop.
+        let too_long = format!("{}.html", "a".repeat(300));
+        let previous = [
+            "what?.html",
+            "a\nb/page.html",
+            "zero\0byte.html",
+            too_long.as_str(),
+        ];
+        let dir = out_dir_with_manifest("prune_unholdable", &previous);
+
+        assert_eq!(prune(&dir, &[]).unwrap(), clean(0));
+
+        assert_eq!(manifest_text(&dir), "[]");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_forgets_a_claim_a_folder_now_stands_on() {
+        // An extensionless file once exported to `docs/guide`, where the
+        // workspace has since grown a folder: not Glyph's file, never removable.
+        let dir = out_dir_with_manifest("prune_folder", &["docs/guide"]);
+        fs::create_dir_all(dir.join("docs/guide")).unwrap();
+        fs::write(dir.join("docs/guide/intro.html"), "current").unwrap();
+
+        assert_eq!(prune(&dir, &["docs/guide/intro.html"]).unwrap(), clean(0));
+
+        assert!(dir.join("docs/guide/intro.html").exists());
+        assert_eq!(manifest_text(&dir), r#"["docs/guide/intro.html"]"#);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prune_export_dir_keeps_claiming_pages_in_a_folder_it_cannot_look_into() {
+        use std::os::unix::fs::PermissionsExt;
+        let previous = ["sealed/old.html", "sealed/deep/older.html"];
+        let dir = out_dir_with_manifest("prune_sealed", &previous);
+        let sealed = dir.join("sealed");
+        fs::create_dir_all(sealed.join("deep")).unwrap();
+        fs::write(sealed.join("old.html"), "stale").unwrap();
+        fs::write(sealed.join("deep/older.html"), "stale").unwrap();
+        fs::set_permissions(&sealed, fs::Permissions::from_mode(0o000)).unwrap();
+
+        let report = prune(&dir, &[]).unwrap();
+
+        fs::set_permissions(&sealed, fs::Permissions::from_mode(0o755)).unwrap();
+        // Neither page can be seen, so neither can be called gone: one fails
+        // at the removal, the other before its folder can even be resolved.
+        assert_eq!(report.removed, 0);
+        let error = report.error.expect("both are reported");
+        assert!(
+            error.starts_with(r#"Failed to remove "sealed/old.html": "#),
+            "got: {error}"
+        );
+        assert!(
+            error.ends_with("(1 more could not be removed either)"),
+            "got: {error}"
+        );
+        assert!(sealed.join("old.html").exists());
+        assert!(sealed.join("deep/older.html").exists());
+        assert_eq!(
+            manifest_text(&dir),
+            r#"["sealed/old.html","sealed/deep/older.html"]"#
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_keeps_its_count_when_the_manifest_cannot_be_written() {
+        let dir = out_dir_with_manifest("prune_unrecorded", &["index.html", "guide.html"]);
+        fs::write(dir.join("guide.html"), "stale").unwrap();
+        let blocked = block_manifest_write(&dir);
+
+        let report = prune(&dir, &["index.html"]).unwrap();
+
+        // The page is gone whether or not the record was written, so say so.
+        assert_eq!(report.removed, 1);
+        assert!(!dir.join("guide.html").exists());
+        let error = report.error.expect("the unwritten manifest is reported");
+        assert!(
+            error.starts_with("Failed to write .glyph/site-manifest.json: "),
+            "got: {error}"
+        );
+        // The previous manifest is whole, and the copy staged to replace it is gone.
+        assert_eq!(manifest_text(&dir), r#"["index.html","guide.html"]"#);
+        assert_eq!(glyph_folder(&dir), ["site-manifest.json"]);
+
+        drop(blocked);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_reports_a_stuck_file_and_an_unwritten_manifest_together() {
+        let dir = out_dir_with_manifest("prune_both", &["locked/old.html"]);
+        let stuck = stick(&dir, &["old.html"]);
+        let failure = failure_line(&dir, "locked/old.html");
+        let blocked = block_manifest_write(&dir);
+
+        let error = prune(&dir, &[]).unwrap().error.expect("both are reported");
+
+        assert!(
+            error.starts_with(&format!(
+                "{failure}; Failed to write .glyph/site-manifest.json: "
+            )),
+            "got: {error}"
+        );
+
+        drop((stuck, blocked));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_manifest_leaves_no_staging_file_when_it_cannot_replace_the_manifest() {
+        let dir =
+            std::env::temp_dir().join(format!("glyph_test_manifest_swap_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        // A folder with something in it where the manifest goes: the copy is
+        // staged and written, and only the move into place can fail.
+        let manifest = dir.join(SITE_MANIFEST_REL);
+        fs::create_dir_all(&manifest).unwrap();
+        fs::write(manifest.join("inside.txt"), "blocks the move").unwrap();
+
+        let result = write_manifest(&manifest, &["index.html".to_string()]);
+
+        assert!(result.is_err());
+        assert_eq!(glyph_folder(&dir), ["site-manifest.json"]);
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -1020,9 +1543,12 @@ mod tests {
         fs::write(dir.join("index.html"), "home").unwrap();
         fs::write(dir.join("guide.html"), "guide").unwrap();
 
-        assert_eq!(prune(&dir, &["index.html", "guide.html"]).unwrap(), 0);
+        assert_eq!(
+            prune(&dir, &["index.html", "guide.html"]).unwrap(),
+            clean(0)
+        );
         // Second export: guide.md is gone, so its page is no longer written.
-        assert_eq!(prune(&dir, &["index.html"]).unwrap(), 1);
+        assert_eq!(prune(&dir, &["index.html"]).unwrap(), clean(1));
 
         assert!(!dir.join("guide.html").exists());
         assert!(dir.join("index.html").exists());
@@ -1049,7 +1575,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(prune(&dir, &[]).unwrap(), 0);
+        assert_eq!(prune(&dir, &[]).unwrap().removed, 0);
 
         assert!(victim.exists());
 
@@ -1076,5 +1602,13 @@ mod tests {
         assert!(dir.join("index.html").exists());
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_report_serializes_a_clean_prune_with_a_null_error() {
+        // The exporter tells a clean prune by `error === null`: a field left
+        // out would read as a reason of `undefined`.
+        let json = serde_json::to_string(&clean(2)).unwrap();
+        assert_eq!(json, r#"{"removed":2,"error":null}"#);
     }
 }

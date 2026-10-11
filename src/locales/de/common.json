@@ -106,7 +106,8 @@
   },
   "exportNotice": {
     "pruneFailed": "Die Website wurde exportiert, aber das Aufräumen danach wurde nicht abgeschlossen. Veraltete Seiten können im Ordner zurückbleiben, jetzt oder nach einem späteren Export.",
-    "failed": "Der Website-Export ist fehlgeschlagen.",
+    "failed": "Der Export ist fehlgeschlagen.",
+    "siteFailed": "Der Website-Export ist fehlgeschlagen.",
     "insideWorkspace": "Die Website kann nicht in den Arbeitsbereich exportiert werden, aus dem sie erstellt wird. Wähle einen Ordner außerhalb davon.",
     "dismiss": "Export-Hinweis ausblenden"
   },

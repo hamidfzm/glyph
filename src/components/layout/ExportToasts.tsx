@@ -1,5 +1,6 @@
 import type { ExportFormat } from "@/hooks/useExport";
-import type { SiteExportNotice, SiteExportProgress } from "@/hooks/useExportSite";
+import type { ExportNoticeContent } from "@/hooks/useExportNotice";
+import type { SiteExportProgress } from "@/hooks/useExportSite";
 import { ExportNotice } from "./ExportNotice";
 import { ExportProgress } from "./ExportProgress";
 
@@ -7,8 +8,8 @@ interface ExportToastsProps {
   /** The single-document format being written, or null when idle. */
   exporting: ExportFormat | null;
   siteProgress: SiteExportProgress | null;
-  siteNotice: SiteExportNotice | null;
-  onDismissSiteNotice: () => void;
+  notice: ExportNoticeContent | null;
+  onDismissNotice: () => void;
 }
 
 /**
@@ -20,16 +21,16 @@ interface ExportToastsProps {
 export function ExportToasts({
   exporting,
   siteProgress,
-  siteNotice,
-  onDismissSiteNotice,
+  notice,
+  onDismissNotice,
 }: ExportToastsProps) {
-  if (!exporting && !siteProgress && !siteNotice) return null;
+  if (!exporting && !siteProgress && !notice) return null;
   return (
     <div
       data-print-hide="true"
       className="pointer-events-none fixed bottom-[calc(var(--glyph-safe-bottom)+2.5rem)] left-1/2 -translate-x-1/2 z-50 flex w-max max-w-[90vw] flex-col items-center gap-2"
     >
-      {siteNotice && <ExportNotice notice={siteNotice} onDismiss={onDismissSiteNotice} />}
+      {notice && <ExportNotice notice={notice} onDismiss={onDismissNotice} />}
       {exporting && <ExportProgress format={exporting} />}
       {siteProgress && <ExportProgress format="website" progress={siteProgress} />}
     </div>
