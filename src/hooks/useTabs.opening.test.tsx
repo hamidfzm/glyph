@@ -201,7 +201,7 @@ describe("useTabs opening documents", () => {
           format: "pdf",
           output: "/p/notes.pdf",
         }),
-        get_initial_file: async () => "/p/notes.md",
+        take_pending_opens: async () => [{ kind: "file", path: "/p/notes.md" }],
       }) as typeof invoke,
     );
     await getCliExportRequest();

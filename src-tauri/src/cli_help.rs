@@ -1,7 +1,7 @@
 // The `--help` text, answered before Tauri (and therefore GTK/WebKit) starts,
-// for the same reason as `--version`: `tauri-plugin-cli` parses its args from
-// inside `setup`, which needs a running app and a window. Printing here keeps
-// `glyph --help` working on a headless machine.
+// for the same reason as `--version`: everything after this point needs a
+// running app and a window. Printing here keeps `glyph --help` working on a
+// headless machine.
 
 use crate::cli::format_list;
 
@@ -13,7 +13,7 @@ pub fn usage() -> String {
 Markdown viewer with document and website export.
 
 USAGE:
-  glyph [<path>]                      Open a file or folder
+  glyph [<path>...]                   Open files and folders
   glyph export <path> --format <f>    Render a document or workspace and exit
   glyph serve <folder>                Serve a workspace, rebuilding it as the
                                       folder changes
@@ -118,6 +118,10 @@ mod tests {
         // The defaults are interpolated from the parser's own constants, so
         // changing one there cannot leave the help describing the old value.
         let text = usage();
+        assert!(
+            text.contains("glyph [<path>...]"),
+            "a plain launch must be shown taking several paths"
+        );
         assert!(
             text.contains("glyph serve <folder>"),
             "serve is undocumented"

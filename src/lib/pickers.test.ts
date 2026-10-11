@@ -75,10 +75,10 @@ describe("pickers", () => {
     });
   });
 
-  it("pickExportDir invokes the export-dir picker", async () => {
-    vi.mocked(invoke).mockResolvedValue("/site");
-    await expect(pickExportDir()).resolves.toBe("/site");
-    expect(invoke).toHaveBeenCalledWith("pick_export_dir");
+  it("pickExportDir names the workspace being exported and returns the backend's verdict", async () => {
+    vi.mocked(invoke).mockResolvedValue({ kind: "granted", path: "/site" });
+    await expect(pickExportDir("/ws")).resolves.toEqual({ kind: "granted", path: "/site" });
+    expect(invoke).toHaveBeenCalledWith("pick_export_dir", { root: "/ws" });
   });
 
   it("pickPluginDir invokes the plugin-dir picker", async () => {

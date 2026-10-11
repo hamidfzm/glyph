@@ -125,7 +125,8 @@ export function AppShell() {
   useWindowClose(useCloseFlush(flushForClose, flushSessionForClose));
 
   const controllers = useShellControllers();
-  const { aiController, tts, exporters, siteExporter, runPluginExporter } = controllers;
+  const { aiController, tts, exporters, siteExporter, exportNotice, runPluginExporter } =
+    controllers;
 
   useNativeMenuState({
     hasTab: openTabs.length > 0,
@@ -265,8 +266,8 @@ export function AppShell() {
       <ExportToasts
         exporting={exporters.exporting}
         siteProgress={siteExporter.siteProgress}
-        siteNotice={siteExporter.siteNotice}
-        onDismissSiteNotice={siteExporter.dismissSiteNotice}
+        notice={exportNotice.notice}
+        onDismissNotice={exportNotice.dismissNotice}
       />
 
       <CommandPalette

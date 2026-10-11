@@ -37,8 +37,9 @@ vi.mock("@/lib/documentHighlight", async (importOriginal) => ({
   locateLineInDocument: vi.fn(() => true),
 }));
 
-// Mocked so a test can drive the in-progress-export state (the real hook never
-// sets it here — the mocked viewer renders no `.markdown-body` to export).
+// Mocked so a test can drive what the shell shows for an export, its progress
+// and its notice (the real hook never gets that far here: the mocked viewer
+// renders no `.markdown-body` to export).
 vi.mock("@/hooks/useExport", () => ({ useExport: vi.fn() }));
 
 import { type ExportHandlers, useExport } from "@/hooks/useExport";
@@ -91,10 +92,8 @@ function mockWorkspaceLaunch(
 ) {
   vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
     switch (cmd) {
-      case "get_initial_folder":
-        return Promise.resolve("/workspace");
-      case "get_initial_file":
-        return Promise.resolve(null);
+      case "take_pending_opens":
+        return Promise.resolve([{ kind: "folder", path: "/workspace" }]);
       case "read_directory":
         return Promise.resolve([{ name: "a.md", path: "/workspace/a.md", isDirectory: false }]);
       case "list_markdown_files":
@@ -141,10 +140,8 @@ describe("App", () => {
   it("opens the CLI initial file and shows it in a tab", async () => {
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
       switch (cmd) {
-        case "get_initial_folder":
-          return Promise.resolve(null);
-        case "get_initial_file":
-          return Promise.resolve("/cli/test.md");
+        case "take_pending_opens":
+          return Promise.resolve([{ kind: "file", path: "/cli/test.md" }]);
         case "read_file":
           return Promise.resolve("# Hello CLI");
         case "get_file_metadata":
@@ -170,10 +167,26 @@ describe("App", () => {
   it("shows the export progress toast while an export is in flight", async () => {
     vi.mocked(useExport).mockReturnValue({ ...IDLE_EXPORTERS, exporting: "docx" });
     const { wrapper } = withProviders();
-    const { findByRole } = render(<App />, { wrapper });
+    const { findByText } = render(<App />, { wrapper });
 
-    const status = await findByRole("status");
-    expect(status).toHaveTextContent("Exporting Word document…");
+    // By its text: the first-run default-app banner is a status region as well.
+    const status = await findByText("Exporting Word document…");
+    expect(status).toHaveAttribute("role", "status");
+  });
+
+  it("shows the notice a failed export raises, until it is dismissed", async () => {
+    const { wrapper } = withProviders();
+    render(<App />, { wrapper });
+    await waitFor(() => expect(useExport).toHaveBeenCalled());
+    const { showNotice } = vi.mocked(useExport).mock.lastCall![0];
+
+    act(() => showNotice({ kind: "failed", reason: "disk full" }));
+    const notice = await screen.findByRole("alert");
+    expect(notice).toHaveTextContent("The export failed.");
+    expect(notice).toHaveTextContent("disk full");
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss export notice" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("renders the empty state when there are no tabs", async () => {
@@ -274,10 +287,8 @@ describe("App", () => {
   it("opens the AI panel in response to menu-ai-action when there is content", async () => {
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
       switch (cmd) {
-        case "get_initial_folder":
-          return Promise.resolve(null);
-        case "get_initial_file":
-          return Promise.resolve("/cli/with-content.md");
+        case "take_pending_opens":
+          return Promise.resolve([{ kind: "file", path: "/cli/with-content.md" }]);
         case "read_file":
           return Promise.resolve("hello world");
         case "get_file_metadata":
@@ -310,10 +321,8 @@ describe("App", () => {
     // path or they fall through to an empty pane (the SVG-blank regression).
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
       switch (cmd) {
-        case "get_initial_folder":
-          return Promise.resolve(null);
-        case "get_initial_file":
-          return Promise.resolve("/cli/diagram.svg");
+        case "take_pending_opens":
+          return Promise.resolve([{ kind: "file", path: "/cli/diagram.svg" }]);
         case "read_file":
           return Promise.resolve('<svg xmlns="http://www.w3.org/2000/svg"/>');
         case "get_file_metadata":
@@ -423,10 +432,8 @@ describe("App", () => {
   it("forwards menu-close-tab, menu-find, and menu-toggle-edit to AppShell handlers", async () => {
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
       switch (cmd) {
-        case "get_initial_folder":
-          return Promise.resolve(null);
-        case "get_initial_file":
-          return Promise.resolve("/cli/edit-target.md");
+        case "take_pending_opens":
+          return Promise.resolve([{ kind: "file", path: "/cli/edit-target.md" }]);
         case "read_file":
           return Promise.resolve("# header\n\ncontent");
         case "get_file_metadata":

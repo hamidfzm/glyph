@@ -14,6 +14,4 @@ pub mod secrets;
 pub mod serve;
 pub(crate) mod walk;
 
-pub use directory::InitialFolder;
 pub use export::CliExport;
-pub use file::InitialFile;

@@ -24,11 +24,18 @@ describe("ExportNotice", () => {
     expect(notice).toHaveTextContent("Access is denied. (os error 5)");
   });
 
-  it("reports a failed export with its reason", () => {
+  it("reports a failed document export with its reason", () => {
     render(<ExportNotice {...defaultProps} notice={{ kind: "failed", reason: "disk full" }} />);
     const notice = screen.getByRole("alert");
-    expect(notice).toHaveTextContent("The website export failed.");
+    expect(notice).toHaveTextContent("The export failed.");
     expect(notice).toHaveTextContent("disk full");
+  });
+
+  it("reports a failed website export with its reason", () => {
+    render(<ExportNotice {...defaultProps} notice={{ kind: "siteFailed", reason: "boom" }} />);
+    const notice = screen.getByRole("alert");
+    expect(notice).toHaveTextContent("The website export failed.");
+    expect(notice).toHaveTextContent("boom");
   });
 
   it("explains a destination refused for sitting inside the workspace", () => {

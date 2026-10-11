@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickFiles } from "@/lib/pickers";
 import { registerFileType } from "@/lib/plugins/fileTypes";
+import type { PendingOpen } from "@/lib/windowContext";
 import { saveWorkspaceSession } from "@/lib/workspaceSession";
 import {
   captureListener,
@@ -96,14 +97,19 @@ describe("useTabs opening folders", () => {
     expect(watchDirectoryCalls("/p/ws")).toHaveLength(1);
   });
 
-  it("openFile is wired to the open-file event", async () => {
-    const ref = captureListener("open-file");
+  it("opens a file the backend queued for the window when it is nudged", async () => {
+    const nudge = captureListener("opens-pending");
+    const queue: PendingOpen[] = [];
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ take_pending_opens: async () => queue.splice(0) }) as typeof invoke,
+    );
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
-    expect(ref.handler).not.toBeNull();
+    expect(nudge.handler).not.toBeNull();
 
+    queue.push({ kind: "file", path: "/p/evt.md" });
     await act(async () => {
-      ref.handler?.({ payload: "/p/evt.md" });
+      nudge.handler?.({ payload: "" });
     });
     await waitFor(() => {
       expect(
@@ -387,14 +393,19 @@ describe("useTabs opening folders", () => {
     });
   });
 
-  it("openFolder is wired to the open-folder event", async () => {
-    const ref = captureListener("open-folder");
+  it("adopts a folder the backend queued for the window when it is nudged", async () => {
+    const nudge = captureListener("opens-pending");
+    const queue: PendingOpen[] = [];
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ take_pending_opens: async () => queue.splice(0) }) as typeof invoke,
+    );
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
-    expect(ref.handler).not.toBeNull();
+    expect(nudge.handler).not.toBeNull();
 
+    queue.push({ kind: "folder", path: "/p/dropped" });
     await act(async () => {
-      ref.handler?.({ payload: "/p/dropped" });
+      nudge.handler?.({ payload: "" });
     });
     await waitFor(() => {
       expect(result.current.workspace?.root).toBe("/p/dropped");

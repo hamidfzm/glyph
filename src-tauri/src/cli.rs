@@ -4,25 +4,37 @@
 use std::path::{Path, PathBuf};
 
 use crate::is_supported_file;
+use crate::windows::{OpenKind, PendingOpen};
 
-/// Pick the first non-flag argument from a second-instance argv. The slice is
-/// expected to be the full argv including the program name at index 0, which
-/// `tauri-plugin-single-instance` hands to its callback verbatim.
+/// Every path argument of a launch, in the order given. `argv` is the full
+/// argument list with the program name at index 0, as both the process itself
+/// and `tauri-plugin-single-instance`'s callback provide it.
 ///
-/// Anything starting with `-` is treated as a flag and skipped, matching the
-/// way the OS hands us file-association launches: `glyph /path/to/file.md`.
-pub fn pick_path_arg(argv: &[String]) -> Option<&str> {
-    argv.iter()
-        .skip(1)
-        .find(|a| !a.is_empty() && !a.starts_with('-'))
-        .map(String::as_str)
+/// A launch names any number of paths: a file manager expands the desktop
+/// entry's `%F` to every selected file (`glyph /a.md /b.md /c.md`). Anything
+/// starting with `-` is a flag, up to a bare `--`; everything after that is a
+/// path.
+pub fn path_args(argv: &[String]) -> Vec<&str> {
+    let mut paths = Vec::new();
+    let mut flags_ended = false;
+    for arg in argv.iter().skip(1) {
+        if !flags_ended && arg == "--" {
+            flags_ended = true;
+            continue;
+        }
+        let is_flag = !flags_ended && arg.starts_with('-');
+        if !arg.is_empty() && !is_flag {
+            paths.push(arg.as_str());
+        }
+    }
+    paths
 }
 
-/// What an initial-launch path resolves to. Shared by every entry that turns
-/// a user-supplied path into an "open this" intent — CLI args, macOS
-/// `RunEvent::Opened`, and the single-instance plugin callback. Callers pick
-/// what to do with each variant (store in managed state, emit a frontend
-/// event, or warn + skip).
+/// What one launch path resolves to. Shared by every entry that turns a
+/// user-supplied path into an "open this" intent: launch arguments (cold start
+/// and second instance), macOS `RunEvent::Opened`, and the `export` and
+/// `serve` subcommands, which each take exactly one. [`LaunchOpens`] collects
+/// these for a launch that names several.
 #[derive(Debug, PartialEq, Eq)]
 pub enum InitialOpenAction {
     /// Open as a folder workspace. Inner is the absolute path.
@@ -59,66 +71,88 @@ pub fn classify_resolved_path(canonical: &Path) -> Option<InitialOpenAction> {
 }
 
 /// Resolve a user-supplied path string against `cwd` and classify the
-/// result. Used by the CLI argument parser at first launch — the user may
-/// pass a relative path; classification needs to happen against the
-/// canonicalized form so symlinks and `..` traversal are normalised.
+/// result. Used for every launch argument, on a cold start and from a second
+/// instance: the user may pass a relative path, and classification needs to
+/// happen against the canonicalized form so symlinks and `..` traversal are
+/// normalised.
 pub fn classify_initial_arg(path_str: &str, cwd: &Path) -> Option<InitialOpenAction> {
     let canonical = resolve_initial_path(path_str, cwd)?;
     classify_resolved_path(&canonical)
 }
 
-/// Pick the initial path to open at first launch from the two sources we
-/// have available, in order:
-///
-/// 1. `plugin_path` — the value `tauri-plugin-cli` parsed out of its
-///    configured args. Works when the OS hands us the file via association,
-///    or when the user runs the binary directly.
-/// 2. `env_args` — the raw process argv, scanned by [`pick_path_arg`]. This
-///    is the Windows-friendly path: `pnpm tauri dev -- samples` can land
-///    `samples` in argv without ever populating the plugin's matches, so we
-///    fall back to argv when the plugin yields nothing.
-#[cfg(desktop)]
-pub fn initial_open_action(
-    plugin_path: Option<&str>,
-    env_args: &[String],
-    cwd: &Path,
-) -> Option<InitialOpenAction> {
-    let path_str = plugin_path
-        .map(str::to_string)
-        .or_else(|| pick_path_arg(env_args).map(str::to_string))?;
-    classify_initial_arg(&path_str, cwd)
+/// A launch path that will not be opened, and why. The caller reports each one
+/// rather than dropping it, and none of them stops the paths after it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SkippedPath {
+    /// See [`InitialOpenAction::RejectedUnsupported`]. Inner is the absolute path.
+    Unsupported(String),
+    /// Resolves to neither a regular file nor a folder. Inner is the path as
+    /// the launch named it.
+    Missing(String),
 }
 
-/// The frontend event a second-instance launch should fire on the running
-/// window, plus the absolute path payload. Returned by [`second_instance_event`].
-#[derive(Debug, PartialEq, Eq)]
-pub struct SecondInstanceEvent {
-    pub event_name: &'static str,
-    pub path: String,
-}
-
-/// Decide what (if anything) a second instance should tell the running app to
-/// open. Picks the first non-flag arg out of `argv`, resolves it against
-/// `cwd`, and classifies the result. Non-markdown files are silently rejected
-/// here (the running app already logged the warning at first launch if it
-/// hit one).
-pub fn second_instance_event(argv: &[String], cwd: &Path) -> Option<SecondInstanceEvent> {
-    let path_arg = pick_path_arg(argv)?;
-    match classify_initial_arg(path_arg, cwd)? {
-        InitialOpenAction::Folder(path) => Some(SecondInstanceEvent {
-            event_name: "open-folder",
-            path,
-        }),
-        InitialOpenAction::File(path) => Some(SecondInstanceEvent {
-            event_name: "open-file",
-            path,
-        }),
-        InitialOpenAction::RejectedUnsupported(_) => None,
+impl std::fmt::Display for SkippedPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unsupported(path) => write!(f, "Refusing to open unsupported file type: {path}"),
+            Self::Missing(path) => write!(f, "Cannot open {path}: not a file or folder"),
+        }
     }
 }
 
-/// Value of a `--flag value` / `--flag=value` pair in argv, if present. The
-/// argv fallback for `tauri-plugin-cli` flags, mirroring [`pick_path_arg`].
+/// What the paths of one launch resolve to: the opens to perform, in the order
+/// given and without repeats, and the paths that were skipped.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct LaunchOpens {
+    pub opens: Vec<PendingOpen>,
+    pub skipped: Vec<SkippedPath>,
+}
+
+impl LaunchOpens {
+    /// Record how one path classified. `given` is the path as the launch named
+    /// it, for reporting one that did not resolve.
+    fn push(&mut self, given: &str, action: Option<InitialOpenAction>) {
+        let (kind, path) = match action {
+            Some(InitialOpenAction::Folder(path)) => (OpenKind::Folder, path),
+            Some(InitialOpenAction::File(path)) => (OpenKind::File, path),
+            Some(InitialOpenAction::RejectedUnsupported(path)) => {
+                self.skipped.push(SkippedPath::Unsupported(path));
+                return;
+            }
+            None => {
+                self.skipped.push(SkippedPath::Missing(given.to_string()));
+                return;
+            }
+        };
+        let open = PendingOpen { kind, path };
+        if !self.opens.contains(&open) {
+            self.opens.push(open);
+        }
+    }
+}
+
+/// Classify every path argument of a launch, each resolved against `cwd`.
+/// Shared by a cold start and a launch forwarded to the running instance, so
+/// both open the same set for the same arguments.
+pub fn launch_opens(argv: &[String], cwd: &Path) -> LaunchOpens {
+    let mut launch = LaunchOpens::default();
+    for path in path_args(argv) {
+        launch.push(path, classify_initial_arg(path, cwd));
+    }
+    launch
+}
+
+/// Classify the paths of a macOS `RunEvent::Opened`, which the OS has already
+/// resolved, under the same rules as [`launch_opens`].
+pub fn opened_paths(paths: &[PathBuf]) -> LaunchOpens {
+    let mut launch = LaunchOpens::default();
+    for path in paths {
+        launch.push(&path.to_string_lossy(), classify_resolved_path(path));
+    }
+    launch
+}
+
+/// Value of a `--flag value` / `--flag=value` pair in argv, if present.
 #[cfg(desktop)]
 pub fn pick_flag_value<'a>(argv: &'a [String], flag: &str) -> Option<&'a str> {
     let prefix = format!("{flag}=");
@@ -135,7 +169,7 @@ pub fn pick_flag_value<'a>(argv: &'a [String], flag: &str) -> Option<&'a str> {
 }
 
 /// Remove `--flag value` / `--flag=value` from argv so positional scanning
-/// ([`pick_path_arg`]) can't mistake the flag's value for the path argument.
+/// ([`path_args`]) can't mistake the flag's value for a path argument.
 #[cfg(desktop)]
 pub fn strip_flag(argv: &[String], flag: &str) -> Vec<String> {
     let prefix = format!("{flag}=");
@@ -255,8 +289,8 @@ pub const DEFAULT_SERVE_PORT: u16 = 4173;
 #[cfg(desktop)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum CliLaunch {
-    /// Normal interactive launch, optionally opening a path.
-    Open(Option<InitialOpenAction>),
+    /// Normal interactive launch, opening every supported path it names.
+    Open(LaunchOpens),
     /// Headless export: render `input` into `output` and exit. `input` is a
     /// workspace folder for `Site` and a document for every other format.
     Export {
@@ -307,11 +341,8 @@ fn subcommand_path(env_args: &[String], value_flags: &[&str]) -> Option<String> 
     let stripped = value_flags
         .iter()
         .fold(env_args.to_vec(), |argv, flag| strip_flag(&argv, flag));
-    stripped
-        .iter()
-        .skip(2)
-        .find(|arg| !arg.is_empty() && !arg.starts_with('-'))
-        .cloned()
+    // The first path argument is the subcommand word itself.
+    path_args(&stripped).get(1).map(|path| path.to_string())
 }
 
 /// Whether this launch should hand its arguments to a Glyph the user already
@@ -435,22 +466,16 @@ const MCP_USAGE: &str = "glyph mcp [--vault <folder>]...";
 
 /// What a launch that is no subcommand can look like.
 #[cfg(desktop)]
-const USAGE_SUMMARY: &str = "glyph [<path>] | glyph export ... | glyph serve ... | glyph mcp ...";
+const USAGE_SUMMARY: &str =
+    "glyph [<path>...] | glyph export ... | glyph serve ... | glyph mcp ...";
 
-/// Decide what this launch should do from argv.
-///
-/// `plugin_path` is the value `tauri-plugin-cli` parsed for the positional
-/// file, which is how an OS file-association launch arrives. Everything else
-/// is read straight from argv, because the subcommands carry flags the plugin
-/// does not declare.
+/// Decide what this launch should do from argv, the one source for it: an OS
+/// file-association launch, a terminal, and `pnpm tauri dev -- samples` all
+/// arrive there.
 ///
 /// `Err` is a usage error the caller should print before exiting nonzero.
 #[cfg(desktop)]
-pub fn launch_plan(
-    plugin_path: Option<&str>,
-    env_args: &[String],
-    cwd: &Path,
-) -> Result<CliLaunch, String> {
+pub fn launch_plan(env_args: &[String], cwd: &Path) -> Result<CliLaunch, String> {
     match subcommand(env_args) {
         Some(Subcommand::Export) => export_plan(env_args, cwd),
         Some(Subcommand::Serve) => serve_plan(env_args, cwd),
@@ -459,7 +484,7 @@ pub fn launch_plan(
         Some(Subcommand::Mcp) => Err(format!(
             "glyph mcp cannot start inside the app: {MCP_USAGE}"
         )),
-        None => open_plan(plugin_path, env_args, cwd),
+        None => open_plan(env_args, cwd),
     }
 }
 
@@ -504,17 +529,19 @@ pub fn mcp_plan(env_args: &[String], cwd: &Path) -> Result<Vec<String>, String> 
     Ok(vaults)
 }
 
-/// An ordinary launch: open the path, if one was given.
+/// An ordinary launch: open every path it was given.
 #[cfg(desktop)]
-fn open_plan(
-    plugin_path: Option<&str>,
-    env_args: &[String],
-    cwd: &Path,
-) -> Result<CliLaunch, String> {
+fn open_plan(env_args: &[String], cwd: &Path) -> Result<CliLaunch, String> {
+    // After a bare `--` everything is a path, even one spelled like a flag.
+    let flags_end = env_args
+        .iter()
+        .position(|arg| arg == "--")
+        .unwrap_or(env_args.len());
+    let flags = &env_args[..flags_end];
     // `--export <format>` was the old spelling of the export subcommand. It
     // is gone rather than deprecated, so say what replaced it: the flag is
     // sitting in people's CI scripts, and "unknown flag" would not help them.
-    if has_flag(env_args, "--export") {
+    if has_flag(flags, "--export") {
         return Err(format!(
             "--export was replaced by a subcommand: {EXPORT_USAGE}"
         ));
@@ -522,15 +549,11 @@ fn open_plan(
     // Any other flag here is a half-remembered subcommand, not an option this
     // shape takes, and silently opening an empty window would hide the typo.
     for flag in ["--format", "--out", "-o", "--host", "--port", "--vault"] {
-        if has_flag(env_args, flag) {
+        if has_flag(flags, flag) {
             return Err(format!("{flag} belongs to a subcommand: {USAGE_SUMMARY}"));
         }
     }
-    Ok(CliLaunch::Open(initial_open_action(
-        plugin_path,
-        env_args,
-        cwd,
-    )))
+    Ok(CliLaunch::Open(launch_opens(env_args, cwd)))
 }
 
 /// Parse `glyph export <path> --format <format> [--out <path>]`.
@@ -690,91 +713,211 @@ mod tests {
         dir
     }
 
-    #[test]
-    fn pick_path_arg_skips_program_name() {
-        let argv = vec!["glyph".to_string(), "notes.md".to_string()];
-        assert_eq!(pick_path_arg(&argv), Some("notes.md"));
+    /// Each open as (kind, file name), so assertions do not depend on how the
+    /// platform spells a canonical path.
+    fn opened(launch: &LaunchOpens) -> Vec<(OpenKind, String)> {
+        launch
+            .opens
+            .iter()
+            .map(|open| {
+                let name = Path::new(&open.path).file_name().unwrap();
+                (open.kind, name.to_string_lossy().to_string())
+            })
+            .collect()
+    }
+
+    fn file_named(name: &str) -> (OpenKind, String) {
+        (OpenKind::File, name.to_string())
+    }
+
+    fn folder_named(name: &str) -> (OpenKind, String) {
+        (OpenKind::Folder, name.to_string())
+    }
+
+    /// The opens of a plain launch, or `None` for a subcommand's plan.
+    fn open_plan_of(plan: &CliLaunch) -> Option<Vec<(OpenKind, String)>> {
+        match plan {
+            CliLaunch::Open(launch) => Some(opened(launch)),
+            _ => None,
+        }
     }
 
     #[test]
-    fn pick_path_arg_skips_flags() {
-        let argv = vec![
-            "glyph".to_string(),
-            "--verbose".to_string(),
-            "-q".to_string(),
-            "real.md".to_string(),
-        ];
-        assert_eq!(pick_path_arg(&argv), Some("real.md"));
-    }
-
-    #[test]
-    fn pick_path_arg_returns_none_when_no_path_arg() {
-        let argv = vec!["glyph".to_string()];
-        assert_eq!(pick_path_arg(&argv), None);
-        let only_flag = vec!["glyph".to_string(), "--help".to_string()];
-        assert_eq!(pick_path_arg(&only_flag), None);
-    }
-
-    #[test]
-    fn pick_path_arg_skips_empty_strings() {
-        let argv = vec!["glyph".to_string(), "".to_string(), "real.md".to_string()];
-        assert_eq!(pick_path_arg(&argv), Some("real.md"));
-    }
-
-    #[test]
-    fn second_instance_event_classifies_file_argv() {
-        let cwd = unique_tmp("si_file");
-        let file = cwd.join("note.md");
-        fs::write(&file, "x").unwrap();
-
-        let argv = vec!["glyph".to_string(), "note.md".to_string()];
-        let result = second_instance_event(&argv, &cwd).expect("should resolve");
-        assert_eq!(result.event_name, "open-file");
+    fn path_args_skips_the_program_name_flags_and_empty_strings() {
+        assert_eq!(path_args(&argv_of(&["notes.md"])), vec!["notes.md"]);
         assert_eq!(
-            PathBuf::from(&result.path).canonicalize().unwrap(),
-            file.canonicalize().unwrap()
+            path_args(&argv_of(&["--verbose", "-q", "", "real.md"])),
+            vec!["real.md"]
+        );
+        assert!(path_args(&argv_of(&[])).is_empty());
+        assert!(path_args(&argv_of(&["--help"])).is_empty());
+        // The program name is never a path, even when it is all there is.
+        assert!(path_args(&["notes.md".to_string()]).is_empty());
+    }
+
+    #[test]
+    fn path_args_returns_every_path_in_the_order_given() {
+        // What a file manager sends for `Exec=glyph %F` with three files selected.
+        assert_eq!(
+            path_args(&argv_of(&["/a.md", "/b.md", "/c.md"])),
+            vec!["/a.md", "/b.md", "/c.md"]
+        );
+        // A flag between two paths does not end the scan.
+        assert_eq!(
+            path_args(&argv_of(&["a.md", "--quiet", "b.md"])),
+            vec!["a.md", "b.md"]
+        );
+    }
+
+    #[test]
+    fn path_args_takes_everything_after_a_bare_double_dash_as_a_path() {
+        assert_eq!(
+            path_args(&argv_of(&["--", "-draft.md", "--notes.md"])),
+            vec!["-draft.md", "--notes.md"]
+        );
+        // Only the first one separates; a later one is a path like any other.
+        assert_eq!(
+            path_args(&argv_of(&["a.md", "--", "--"])),
+            vec!["a.md", "--"]
+        );
+    }
+
+    #[test]
+    fn launch_opens_classifies_a_file_and_a_folder() {
+        let cwd = unique_tmp("lo_kinds");
+        fs::write(cwd.join("note.md"), "x").unwrap();
+        fs::create_dir_all(cwd.join("workspace")).unwrap();
+
+        let launch = launch_opens(&argv_of(&["note.md"]), &cwd);
+        assert_eq!(opened(&launch), vec![file_named("note.md")]);
+        // The open carries the canonical absolute path, not the argument.
+        assert_eq!(
+            PathBuf::from(&launch.opens[0].path),
+            cwd.join("note.md").canonicalize().unwrap()
+        );
+        assert!(launch.skipped.is_empty());
+
+        let launch = launch_opens(&argv_of(&["workspace"]), &cwd);
+        assert_eq!(opened(&launch), vec![folder_named("workspace")]);
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_opens_keeps_every_supported_path_in_the_order_given() {
+        let cwd = unique_tmp("lo_many");
+        for name in ["a.md", "b.md", "c.md"] {
+            fs::write(cwd.join(name), "x").unwrap();
+        }
+
+        let launch = launch_opens(&argv_of(&["c.md", "--quiet", "a.md", "b.md"]), &cwd);
+        assert_eq!(
+            opened(&launch),
+            vec![file_named("c.md"), file_named("a.md"), file_named("b.md")]
+        );
+        assert!(launch.skipped.is_empty());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_opens_skips_an_unsupported_first_path_and_opens_the_rest() {
+        // A mixed selection dropped on the launcher, or `glyph *` in a terminal.
+        // The first path being refused must not sink the launch.
+        let cwd = unique_tmp("lo_mixed");
+        fs::write(cwd.join("notes.txt"), "<script>").unwrap();
+        fs::write(cwd.join("a.md"), "x").unwrap();
+        fs::write(cwd.join("b.md"), "x").unwrap();
+
+        let launch = launch_opens(&argv_of(&["notes.txt", "a.md", "b.md"]), &cwd);
+        assert_eq!(
+            opened(&launch),
+            vec![file_named("a.md"), file_named("b.md")]
+        );
+        assert!(
+            matches!(launch.skipped.as_slice(), [SkippedPath::Unsupported(p)] if p.ends_with("notes.txt")),
+            "got {:?}",
+            launch.skipped
         );
         let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]
-    fn second_instance_event_classifies_folder_argv() {
-        let cwd = unique_tmp("si_folder");
-        let sub = cwd.join("workspace");
-        fs::create_dir_all(&sub).unwrap();
+    fn launch_opens_reports_a_missing_path_without_stopping() {
+        let cwd = unique_tmp("lo_missing");
+        fs::write(cwd.join("a.md"), "x").unwrap();
+        fs::write(cwd.join("b.md"), "x").unwrap();
 
-        let argv = vec!["glyph".to_string(), "workspace".to_string()];
-        let result = second_instance_event(&argv, &cwd).expect("should resolve");
-        assert_eq!(result.event_name, "open-folder");
+        let launch = launch_opens(&argv_of(&["a.md", "nope.md", "b.md"]), &cwd);
         assert_eq!(
-            PathBuf::from(&result.path).canonicalize().unwrap(),
-            sub.canonicalize().unwrap()
+            opened(&launch),
+            vec![file_named("a.md"), file_named("b.md")]
+        );
+        assert_eq!(
+            launch.skipped,
+            vec![SkippedPath::Missing("nope.md".to_string())]
+        );
+
+        // A launch naming nothing that exists opens nothing and says so.
+        let launch = launch_opens(&argv_of(&["nope.md"]), &cwd);
+        assert!(launch.opens.is_empty());
+        assert_eq!(launch.skipped.len(), 1);
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_opens_opens_a_repeated_path_once() {
+        // Relative, dotted and absolute spellings canonicalize to one path.
+        let cwd = unique_tmp("lo_dupes");
+        let note = cwd.join("note.md");
+        fs::write(&note, "x").unwrap();
+        fs::write(cwd.join("other.md"), "x").unwrap();
+
+        let absolute = note.to_string_lossy();
+        let argv = argv_of(&["note.md", "./note.md", "other.md", &*absolute, "note.md"]);
+        let launch = launch_opens(&argv, &cwd);
+        assert_eq!(
+            opened(&launch),
+            vec![file_named("note.md"), file_named("other.md")]
+        );
+        assert!(launch.skipped.is_empty());
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_opens_keeps_a_folder_among_files_in_position() {
+        let cwd = unique_tmp("lo_folder");
+        fs::write(cwd.join("a.md"), "x").unwrap();
+        fs::write(cwd.join("b.md"), "x").unwrap();
+        fs::create_dir_all(cwd.join("workspace")).unwrap();
+
+        let launch = launch_opens(&argv_of(&["a.md", "workspace", "b.md"]), &cwd);
+        assert_eq!(
+            opened(&launch),
+            vec![
+                file_named("a.md"),
+                folder_named("workspace"),
+                file_named("b.md")
+            ]
         );
         let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]
-    fn second_instance_event_returns_none_when_no_path_arg() {
-        let cwd = unique_tmp("si_none");
-        let argv = vec!["glyph".to_string(), "--verbose".to_string()];
-        assert!(second_instance_event(&argv, &cwd).is_none());
-        let _ = fs::remove_dir_all(&cwd);
-    }
-
-    #[test]
-    fn second_instance_event_returns_none_when_path_does_not_exist() {
-        let cwd = unique_tmp("si_missing");
-        let argv = vec!["glyph".to_string(), "nope.md".to_string()];
-        assert!(second_instance_event(&argv, &cwd).is_none());
+    fn launch_opens_is_empty_without_path_arguments() {
+        let cwd = unique_tmp("lo_none");
+        assert_eq!(
+            launch_opens(&argv_of(&["--verbose"]), &cwd),
+            LaunchOpens::default()
+        );
+        assert_eq!(launch_opens(&argv_of(&[]), &cwd), LaunchOpens::default());
         let _ = fs::remove_dir_all(&cwd);
     }
 
     #[cfg(unix)]
     #[test]
-    fn second_instance_event_returns_none_for_non_file_non_dir_paths() {
+    fn launch_opens_reports_a_path_that_is_neither_file_nor_folder() {
         // A named pipe (FIFO) `.exists()` and canonicalises, but is_file/is_dir
-        // both return false — exercises the fallthrough `return None` branch.
-        let cwd = unique_tmp("si_fifo");
+        // both return false.
+        let cwd = unique_tmp("lo_fifo");
         let fifo = cwd.join("pipe");
         let status = std::process::Command::new("mkfifo")
             .arg(&fifo)
@@ -782,9 +925,58 @@ mod tests {
             .expect("mkfifo invocation should succeed on a unix runner");
         assert!(status.success(), "mkfifo should succeed on this runner");
 
-        let argv = vec!["glyph".to_string(), "pipe".to_string()];
-        assert!(second_instance_event(&argv, &cwd).is_none());
+        let launch = launch_opens(&argv_of(&["pipe"]), &cwd);
+        assert!(launch.opens.is_empty());
+        assert_eq!(
+            launch.skipped,
+            vec![SkippedPath::Missing("pipe".to_string())]
+        );
         let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn opened_paths_follows_the_same_rules_for_resolved_paths() {
+        // macOS hands every selected document to one `Opened` event.
+        let cwd = unique_tmp("op_many");
+        fs::write(cwd.join("evil.txt"), "<script>").unwrap();
+        fs::write(cwd.join("a.md"), "x").unwrap();
+        fs::create_dir_all(cwd.join("workspace")).unwrap();
+
+        let launch = opened_paths(&[
+            cwd.join("evil.txt"),
+            cwd.join("a.md"),
+            cwd.join("a.md"),
+            cwd.join("gone.md"),
+            cwd.join("workspace"),
+        ]);
+        assert_eq!(
+            opened(&launch),
+            vec![file_named("a.md"), folder_named("workspace")]
+        );
+        assert!(
+            matches!(
+                launch.skipped.as_slice(),
+                [SkippedPath::Unsupported(txt), SkippedPath::Missing(gone)]
+                    if txt.ends_with("evil.txt") && gone.ends_with("gone.md")
+            ),
+            "got {:?}",
+            launch.skipped
+        );
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn a_skipped_path_says_why_it_was_skipped() {
+        let unsupported = SkippedPath::Unsupported("/notes/evil.txt".to_string());
+        assert_eq!(
+            unsupported.to_string(),
+            "Refusing to open unsupported file type: /notes/evil.txt"
+        );
+        let missing = SkippedPath::Missing("nope.md".to_string());
+        assert_eq!(
+            missing.to_string(),
+            "Cannot open nope.md: not a file or folder"
+        );
     }
 
     #[test]
@@ -897,35 +1089,6 @@ mod tests {
     }
 
     #[test]
-    fn second_instance_event_returns_none_for_non_markdown_files() {
-        // Covers the RejectedUnsupported -> None arm in second_instance_event:
-        // a second instance pointed at evil.txt should not fire any event.
-        let cwd = unique_tmp("si_txt");
-        let file = cwd.join("evil.txt");
-        fs::write(&file, "<script>").unwrap();
-        let argv = vec!["glyph".to_string(), "evil.txt".to_string()];
-        assert!(second_instance_event(&argv, &cwd).is_none());
-        let _ = fs::remove_dir_all(&cwd);
-    }
-
-    #[test]
-    fn second_instance_event_skips_program_name_and_flags() {
-        let cwd = unique_tmp("si_flags");
-        let file = cwd.join("readme.md");
-        fs::write(&file, "x").unwrap();
-
-        let argv = vec![
-            "glyph".to_string(),
-            "--quiet".to_string(),
-            "-v".to_string(),
-            "readme.md".to_string(),
-        ];
-        let result = second_instance_event(&argv, &cwd).expect("should resolve");
-        assert_eq!(result.event_name, "open-file");
-        let _ = fs::remove_dir_all(&cwd);
-    }
-
-    #[test]
     fn pick_flag_value_finds_space_and_equals_forms() {
         let argv: Vec<String> = ["glyph", "docs", "--format", "site"]
             .iter()
@@ -1019,11 +1182,45 @@ mod tests {
         let ws = cwd.join("docs");
         fs::create_dir_all(&ws).unwrap();
 
-        let plan = launch_plan(None, &argv_of(&["docs"]), &cwd).expect("plans");
-        assert!(matches!(
-            plan,
-            CliLaunch::Open(Some(InitialOpenAction::Folder(_)))
-        ));
+        let plan = launch_plan(&argv_of(&["docs"]), &cwd).expect("plans");
+        assert_eq!(open_plan_of(&plan), Some(vec![folder_named("docs")]));
+
+        // No path at all is still a normal launch, with nothing to open.
+        let bare = launch_plan(&argv_of(&[]), &cwd).expect("plans");
+        assert_eq!(open_plan_of(&bare), Some(Vec::new()));
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn a_path_after_a_double_dash_is_never_read_as_a_flag() {
+        let cwd = unique_tmp("lp_dashes");
+        fs::write(cwd.join("-o.md"), "x").unwrap();
+
+        // Without the separator, `--out` is a half-remembered subcommand flag.
+        assert!(launch_plan(&argv_of(&["-o.md", "--out"]), &cwd).is_err());
+
+        let plan = launch_plan(&argv_of(&["--", "-o.md", "--out"]), &cwd).expect("plans");
+        assert_eq!(open_plan_of(&plan), Some(vec![file_named("-o.md")]));
+        assert!(
+            matches!(&plan, CliLaunch::Open(launch)
+                if launch.skipped == [SkippedPath::Missing("--out".to_string())]),
+            "got {plan:?}"
+        );
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn launch_plan_opens_every_path_a_plain_launch_names() {
+        let cwd = unique_tmp("lp_many");
+        fs::write(cwd.join("a.md"), "x").unwrap();
+        fs::write(cwd.join("b.md"), "x").unwrap();
+        fs::write(cwd.join("notes.txt"), "x").unwrap();
+
+        let plan = launch_plan(&argv_of(&["notes.txt", "a.md", "b.md"]), &cwd).expect("plans");
+        assert_eq!(
+            open_plan_of(&plan),
+            Some(vec![file_named("a.md"), file_named("b.md")])
+        );
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -1040,7 +1237,7 @@ mod tests {
             ("html", "html"),
         ] {
             let argv = argv_of(&["export", "note.md", "--format", format]);
-            let plan = launch_plan(None, &argv, &cwd).expect("plans");
+            let plan = launch_plan(&argv, &cwd).expect("plans");
             let expected = format!("note.{extension}");
             assert!(
                 matches!(&plan, CliLaunch::Export { input, format: parsed, output }
@@ -1089,7 +1286,7 @@ mod tests {
             // The flags' values must never be mistaken for the path.
             vec!["export", "--format", "pdf", "--out", "built.pdf", "note.md"],
         ] {
-            let plan = launch_plan(None, &argv_of(&args), &cwd).expect("plans");
+            let plan = launch_plan(&argv_of(&args), &cwd).expect("plans");
             assert!(
                 matches!(&plan, CliLaunch::Export { output, .. } if *output == expected),
                 "expected {expected}, got {plan:?}"
@@ -1114,7 +1311,7 @@ mod tests {
 
     /// Plan a serve, so the assertions below read as one line each.
     fn serve_of(argv: &[String], cwd: &Path) -> (String, std::net::IpAddr, u16, Option<String>) {
-        let plan = launch_plan(None, argv, cwd).expect("plans");
+        let plan = launch_plan(argv, cwd).expect("plans");
         serve_fields(plan).expect("expected a serve plan")
     }
 
@@ -1193,11 +1390,11 @@ mod tests {
         fs::create_dir_all(&cwd).unwrap();
         fs::write(cwd.join("note.md"), "hi").unwrap();
 
-        let missing = launch_plan(None, &argv_of(&["serve"]), &cwd).unwrap_err();
+        let missing = launch_plan(&argv_of(&["serve"]), &cwd).unwrap_err();
         assert!(missing.contains("needs a folder"), "got: {missing}");
 
         for target in ["nope", "note.md"] {
-            let err = launch_plan(None, &argv_of(&["serve", target]), &cwd).unwrap_err();
+            let err = launch_plan(&argv_of(&["serve", target]), &cwd).unwrap_err();
             assert!(
                 err.contains("requires an existing folder"),
                 "{target} gave: {err}"
@@ -1212,7 +1409,6 @@ mod tests {
         fs::create_dir_all(cwd.join("docs")).unwrap();
 
         let host = launch_plan(
-            None,
             &argv_of(&["serve", "docs", "--host", "not-an-address"]),
             &cwd,
         )
@@ -1220,8 +1416,7 @@ mod tests {
         assert!(host.contains("not a valid address"), "got: {host}");
 
         for bad in ["99999", "-1", "http"] {
-            let err =
-                launch_plan(None, &argv_of(&["serve", "docs", "--port", bad]), &cwd).unwrap_err();
+            let err = launch_plan(&argv_of(&["serve", "docs", "--port", bad]), &cwd).unwrap_err();
             assert!(err.contains("--port must be a number"), "{bad} gave: {err}");
         }
         let _ = fs::remove_dir_all(&cwd);
@@ -1236,8 +1431,7 @@ mod tests {
         fs::create_dir_all(&docs).unwrap();
 
         for out in ["docs/site", "docs"] {
-            let err =
-                launch_plan(None, &argv_of(&["serve", "docs", "--out", out]), &cwd).unwrap_err();
+            let err = launch_plan(&argv_of(&["serve", "docs", "--out", out]), &cwd).unwrap_err();
             assert!(
                 err.contains("cannot be inside the folder being served"),
                 "--out {out} gave: {err}"
@@ -1260,8 +1454,7 @@ mod tests {
         fs::create_dir_all(&docs).unwrap();
 
         for out in [".", ".."] {
-            let err =
-                launch_plan(None, &argv_of(&["serve", "docs", "--out", out]), &cwd).unwrap_err();
+            let err = launch_plan(&argv_of(&["serve", "docs", "--out", out]), &cwd).unwrap_err();
             assert!(
                 err.contains("cannot contain the folder being served"),
                 "--out {out} gave: {err}"
@@ -1278,7 +1471,7 @@ mod tests {
         fs::create_dir_all(cwd.join("docs")).unwrap();
 
         for flag in ["--host", "--port", "--out"] {
-            let err = launch_plan(None, &argv_of(&["serve", "docs", flag]), &cwd).unwrap_err();
+            let err = launch_plan(&argv_of(&["serve", "docs", flag]), &cwd).unwrap_err();
             assert!(err.contains(&format!("{flag} needs a value")), "got: {err}");
         }
         let _ = fs::remove_dir_all(&cwd);
@@ -1291,12 +1484,17 @@ mod tests {
         let cwd = unique_tmp("serve_named_folder");
         fs::create_dir_all(cwd.join("serve")).unwrap();
 
-        let plan = launch_plan(None, &argv_of(&["./serve"]), &cwd).expect("plans");
-        assert!(
-            matches!(&plan, CliLaunch::Open(Some(InitialOpenAction::Folder(p))) if p.ends_with("serve")),
+        let plan = launch_plan(&argv_of(&["./serve"]), &cwd).expect("plans");
+        assert_eq!(
+            open_plan_of(&plan),
+            Some(vec![folder_named("serve")]),
             "expected a normal folder open, got {plan:?}"
         );
         assert!(serve_fields(plan).is_none(), "it must not plan a serve");
+
+        // The bare word is still the subcommand, and that plan opens nothing.
+        let bare = launch_plan(&argv_of(&["serve", "./serve"]), &cwd).expect("plans");
+        assert_eq!(open_plan_of(&bare), None, "got {bare:?}");
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -1341,8 +1539,8 @@ mod tests {
     fn export_needs_a_path_and_says_so() {
         let cwd = unique_tmp("export_no_path");
         fs::create_dir_all(&cwd).unwrap();
-        let err = launch_plan(None, &argv_of(&["export", "--format", "pdf"]), &cwd)
-            .expect_err("usage error");
+        let err =
+            launch_plan(&argv_of(&["export", "--format", "pdf"]), &cwd).expect_err("usage error");
         assert!(err.contains("glyph export needs a path"), "got: {err}");
         let _ = fs::remove_dir_all(&cwd);
     }
@@ -1355,7 +1553,7 @@ mod tests {
         fs::write(cwd.join("note.md"), "# hi").unwrap();
 
         let argv = argv_of(&["export", "--out", "built.pdf", "--format", "pdf", "note.md"]);
-        let plan = launch_plan(None, &argv, &cwd).expect("plans");
+        let plan = launch_plan(&argv, &cwd).expect("plans");
         let expected = cwd.join("built.pdf").to_string_lossy().to_string();
         assert!(
             matches!(&plan, CliLaunch::Export { input, output, .. }
@@ -1372,7 +1570,6 @@ mod tests {
         fs::create_dir_all(cwd.join("docs")).unwrap();
 
         let err = launch_plan(
-            None,
             &argv_of(&["docs", "--export", "site", "--out", "out"]),
             &cwd,
         )
@@ -1391,8 +1588,8 @@ mod tests {
         fs::write(cwd.join("note.md"), "# hi").unwrap();
 
         for flag in ["--format", "--out", "-o", "--host", "--port", "--vault"] {
-            let err = launch_plan(None, &argv_of(&["note.md", flag, "x"]), &cwd)
-                .expect_err("usage error");
+            let err =
+                launch_plan(&argv_of(&["note.md", flag, "x"]), &cwd).expect_err("usage error");
             assert!(
                 err.contains("belongs to a subcommand"),
                 "{flag} gave: {err}"
@@ -1482,16 +1679,17 @@ mod tests {
         let cwd = unique_tmp("mcp_named_folder");
         fs::create_dir_all(cwd.join("mcp")).unwrap();
 
-        let plan = launch_plan(None, &argv_of(&["./mcp"]), &cwd).expect("plans");
-        assert!(
-            matches!(&plan, CliLaunch::Open(Some(InitialOpenAction::Folder(p))) if p.ends_with("mcp")),
+        let plan = launch_plan(&argv_of(&["./mcp"]), &cwd).expect("plans");
+        assert_eq!(
+            open_plan_of(&plan),
+            Some(vec![folder_named("mcp")]),
             "expected a normal folder open, got {plan:?}"
         );
         assert_eq!(subcommand(&argv_of(&["mcp"])), Some(Subcommand::Mcp));
         assert!(!forwards_to_running_instance(&argv_of(&["mcp"])));
         assert!(forwards_to_running_instance(&argv_of(&["./mcp"])));
         // Asked of the app's own planner, it is refused, never opened.
-        assert!(launch_plan(None, &argv_of(&["mcp"]), &cwd).is_err());
+        assert!(launch_plan(&argv_of(&["mcp"]), &cwd).is_err());
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -1502,7 +1700,7 @@ mod tests {
         fs::create_dir_all(&ws).unwrap();
         let argv = argv_of(&["export", "docs", "--format", "site", "--out", "site"]);
 
-        let plan = launch_plan(None, &argv, &cwd).expect("plans");
+        let plan = launch_plan(&argv, &cwd).expect("plans");
         let expected_out = cwd.join("site").to_string_lossy().to_string();
         assert!(
             matches!(
@@ -1524,15 +1722,15 @@ mod tests {
         fs::write(cwd.join("note.md"), "# hi").unwrap();
 
         let missing = argv_of(&["export", "note.md"]);
-        let err = launch_plan(None, &missing, &cwd).expect_err("usage error");
+        let err = launch_plan(&missing, &cwd).expect_err("usage error");
         assert!(err.contains("needs --format"), "got: {err}");
 
         let dangling = argv_of(&["export", "note.md", "--format"]);
-        let err = launch_plan(None, &dangling, &cwd).expect_err("usage error");
+        let err = launch_plan(&dangling, &cwd).expect_err("usage error");
         assert!(err.contains("--format needs a value"), "got: {err}");
 
         let unknown = argv_of(&["export", "note.md", "--format", "rtf"]);
-        let err = launch_plan(None, &unknown, &cwd).expect_err("usage error");
+        let err = launch_plan(&unknown, &cwd).expect_err("usage error");
         assert!(err.contains("unknown export format"), "got: {err}");
         // Every accepted spelling is named, so the message is actionable.
         assert!(err.contains("pdf") && err.contains("site"), "got: {err}");
@@ -1547,18 +1745,18 @@ mod tests {
         fs::write(cwd.join("note.md"), "# hi").unwrap();
 
         // A document format pointed at a folder.
-        let err = launch_plan(None, &argv_of(&["export", "docs", "--format", "pdf"]), &cwd)
+        let err = launch_plan(&argv_of(&["export", "docs", "--format", "pdf"]), &cwd)
             .expect_err("usage error");
         assert!(err.contains("needs an existing document"), "got: {err}");
 
         // `site` pointed at a file.
         let argv = argv_of(&["export", "note.md", "--format", "site", "-o", "out"]);
-        let err = launch_plan(None, &argv, &cwd).expect_err("usage error");
+        let err = launch_plan(&argv, &cwd).expect_err("usage error");
         assert!(err.contains("needs an existing folder"), "got: {err}");
 
         // Nothing to export at all.
         let argv = argv_of(&["export", "--format", "pdf"]);
-        assert!(launch_plan(None, &argv, &cwd).is_err());
+        assert!(launch_plan(&argv, &cwd).is_err());
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -1572,17 +1770,14 @@ mod tests {
         fs::write(cwd.join("shape.d2"), "a -> b").unwrap();
 
         for input in ["board.canvas", "shape.d2"] {
-            let err = launch_plan(None, &argv_of(&["export", input, "--format", "pdf"]), &cwd)
+            let err = launch_plan(&argv_of(&["export", input, "--format", "pdf"]), &cwd)
                 .expect_err("usage error");
             assert!(err.contains("markdown or notebook document"), "got: {err}");
         }
 
         // The same files still open normally.
-        let plan = launch_plan(None, &argv_of(&["board.canvas"]), &cwd).expect("plans");
-        assert!(matches!(
-            plan,
-            CliLaunch::Open(Some(InitialOpenAction::File(_)))
-        ));
+        let plan = launch_plan(&argv_of(&["board.canvas"]), &cwd).expect("plans");
+        assert_eq!(open_plan_of(&plan), Some(vec![file_named("board.canvas")]));
         let _ = fs::remove_dir_all(&cwd);
     }
 
@@ -1598,7 +1793,7 @@ mod tests {
             vec!["note.md", "--out", "built.pdf"],
             vec!["note.md", "-o", "built.pdf"],
         ] {
-            let err = launch_plan(None, &argv_of(&args), &cwd).expect_err("usage error");
+            let err = launch_plan(&argv_of(&args), &cwd).expect_err("usage error");
             assert!(err.contains("belongs to a subcommand"), "got: {err}");
         }
         let _ = fs::remove_dir_all(&cwd);
@@ -1610,12 +1805,8 @@ mod tests {
         let ws = cwd.join("docs");
         fs::create_dir_all(&ws).unwrap();
 
-        let err = launch_plan(
-            None,
-            &argv_of(&["export", "docs", "--format", "site"]),
-            &cwd,
-        )
-        .expect_err("usage error");
+        let err = launch_plan(&argv_of(&["export", "docs", "--format", "site"]), &cwd)
+            .expect_err("usage error");
         assert!(err.contains("output directory"), "got: {err}");
         let _ = fs::remove_dir_all(&cwd);
     }
@@ -1627,7 +1818,6 @@ mod tests {
         fs::write(cwd.join("note.md"), "# hi").unwrap();
 
         let err = launch_plan(
-            None,
             &argv_of(&["export", "note.md", "--format", "pdf", "--out", "   "]),
             &cwd,
         )
@@ -1687,59 +1877,6 @@ mod tests {
         let resolved = resolve_initial_path("notes.md", &inner).expect("should resolve via parent");
         assert_eq!(resolved, root.join("notes.md").canonicalize().unwrap());
         let _ = fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn initial_open_action_prefers_plugin_value_over_argv() {
-        let cwd = unique_tmp("ioa_pref");
-        let plugin_target = cwd.join("from-plugin");
-        let argv_target = cwd.join("from-argv");
-        fs::create_dir_all(&plugin_target).unwrap();
-        fs::create_dir_all(&argv_target).unwrap();
-
-        let env_args = vec!["glyph".to_string(), "from-argv".to_string()];
-        let result = initial_open_action(Some("from-plugin"), &env_args, &cwd).expect("classifies");
-        assert!(
-            matches!(&result, InitialOpenAction::Folder(p) if p.ends_with("from-plugin")),
-            "expected the plugin-supplied path to win, got {result:?}"
-        );
-        let _ = fs::remove_dir_all(&cwd);
-    }
-
-    #[test]
-    fn initial_open_action_falls_back_to_argv_when_plugin_is_empty() {
-        // This is the Windows path: tauri-plugin-cli's `file` arg is
-        // None / null because pnpm's arg forwarding bypassed it, but the
-        // positional arg is still in argv. The fallback must pick it up.
-        let cwd = unique_tmp("ioa_fallback");
-        let target = cwd.join("samples");
-        fs::create_dir_all(&target).unwrap();
-
-        let env_args = vec!["glyph".to_string(), "samples".to_string()];
-        let result = initial_open_action(None, &env_args, &cwd).expect("classifies via argv");
-        assert!(
-            matches!(&result, InitialOpenAction::Folder(p) if p.ends_with("samples")),
-            "expected argv fallback to find samples, got {result:?}"
-        );
-        let _ = fs::remove_dir_all(&cwd);
-    }
-
-    #[test]
-    fn initial_open_action_returns_none_when_neither_source_yields_a_path() {
-        let cwd = unique_tmp("ioa_none");
-        let env_args = vec!["glyph".to_string(), "--verbose".to_string()];
-        assert!(initial_open_action(None, &env_args, &cwd).is_none());
-        let _ = fs::remove_dir_all(&cwd);
-    }
-
-    #[test]
-    fn initial_open_action_returns_none_when_path_does_not_exist() {
-        // Plugin and argv agree on a path, but it isn't there. Should be
-        // None (and the caller decides whether to log).
-        let cwd = unique_tmp("ioa_missing");
-        let env_args = vec!["glyph".to_string(), "nope".to_string()];
-        assert!(initial_open_action(Some("nope"), &env_args, &cwd).is_none());
-        let _ = fs::remove_dir_all(&cwd);
     }
 
     #[test]

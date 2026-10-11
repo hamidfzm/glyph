@@ -46,9 +46,13 @@ export function pickSave(
   return invoke<string | null>("pick_save", { defaultName, filterName, extensions, defaultDir });
 }
 
-/** Folder picker for website export; grants the folder write-only. */
-export function pickExportDir(): Promise<string | null> {
-  return invoke<string | null>("pick_export_dir");
+export type ExportDirPick = { kind: "granted"; path: string } | { kind: "insideWorkspace" };
+
+/** Folder picker for a website export of the workspace at `root`: grants the
+ *  folder write-only, or refuses one the backend resolves inside that
+ *  workspace (the two paths can be spelled differently). Null on cancel. */
+export function pickExportDir(root: string): Promise<ExportDirPick | null> {
+  return invoke<ExportDirPick | null>("pick_export_dir", { root });
 }
 
 /** Plugin-install picker; the backend stashes the choice for the next `install_plugin` call. */

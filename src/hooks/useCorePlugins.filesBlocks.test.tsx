@@ -8,11 +8,14 @@ import { CORE_PLUGINS } from "@/lib/plugins/corePlugins";
 import { createPluginHost } from "@/lib/plugins/host";
 import { type CorePluginSettings, DEFAULT_SETTINGS } from "@/lib/settings";
 import { EMPTY_SNAPSHOT } from "@/lib/vault";
+import { preloadCorePlugins } from "@/test/preloadCorePlugins";
 import { vaultSnapshot } from "@/test/tabsHarness";
 import { useCorePlugins } from "./useCorePlugins";
 
 // The real tags and backlinks plugins against the real host: each is one block
 // in the Files panel, there only while its setting is on.
+
+preloadCorePlugins("tags", "backlinks");
 
 const ALL_OFF = Object.fromEntries(
   Object.keys(DEFAULT_SETTINGS.corePlugins).map((key) => [key, false]),

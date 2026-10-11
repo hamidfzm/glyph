@@ -200,6 +200,25 @@ describe("useTabs guards and no-ops", () => {
     expect(writeFile).not.toHaveBeenCalled();
   });
 
+  it("toggleTask is a no-op for a tab that carries no text", async () => {
+    const writeFile = vi.fn(async () => undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    // An image tab is never read as text, so its content stays null.
+    await act(async () => {
+      await result.current.openFile("/p/diagram.svg");
+    });
+
+    await act(async () => {
+      await result.current.toggleTask(result.current.tabs[0].id, 1);
+    });
+
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
   it("undo and redo stop at the ends of the history stack", async () => {
     const writeFile = vi.fn(async () => undefined);
     vi.mocked(invoke).mockImplementation(

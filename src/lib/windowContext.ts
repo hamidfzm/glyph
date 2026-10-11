@@ -3,13 +3,15 @@
 // window learns which folder it was opened for, and that it must not touch the
 // shared session-restore state. The primary window has neither global set.
 
-export interface InjectedOpen {
+/** An open request that reached this window before it could listen for one:
+ *  injected by the spawner, or queued by the backend (`take_pending_opens`). */
+export interface PendingOpen {
   kind: "folder" | "file";
   path: string;
 }
 
 interface GlyphWindowGlobals {
-  __GLYPH_OPEN__?: InjectedOpen;
+  __GLYPH_OPEN__?: PendingOpen;
   __GLYPH_PRIMARY__?: boolean;
 }
 
@@ -22,7 +24,7 @@ function globals(): GlyphWindowGlobals {
  * window and for any normal launch (the regular CLI / session-restore path runs
  * instead).
  */
-export function injectedOpen(): InjectedOpen | null {
+export function injectedOpen(): PendingOpen | null {
   const value = globals().__GLYPH_OPEN__;
   if (!value || (value.kind !== "folder" && value.kind !== "file")) return null;
   return typeof value.path === "string" && value.path.length > 0 ? value : null;

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use tauri::State;
 
 use crate::grants::GrantRegistry;
-use crate::vault::{relocate, Relink, VaultStore};
+use crate::vault::{relocate, respelled, Relink, VaultStore};
 
 const DEFAULT_NOTE_STEM: &str = "Untitled";
 const DEFAULT_FOLDER_NAME: &str = "Untitled Folder";
@@ -199,7 +199,13 @@ pub async fn rename_path(
         return Ok(Relink::unmoved(path));
     }
 
-    let target = unique_path(parent, stem, ext);
+    // Where the filesystem ignores case, the same name in other letters exists
+    // already, as the entry itself: unique_path would bump it to "<name> 1".
+    let target = if respelled(source, &desired) {
+        desired
+    } else {
+        unique_path(parent, stem, ext)
+    };
     relocate(&root, source, &target, dry_run, &grants, &store)
 }
 
@@ -1171,6 +1177,87 @@ mod tests {
             assert_eq!(renamed, dotted);
         }
         assert_eq!(listed(&dir), ["Trip v1.2.md", "flow.d2.md", "note.md"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_changes_only_the_case_of_a_name() {
+        // Where the filesystem ignores case, the new name already reaches the
+        // entry, which is neither an entry in the way nor the name it has.
+        let dir = unique_tmp("rename_case");
+        let root = dir.to_string_lossy().to_string();
+        fs::write(dir.join("Note.md"), "body").unwrap();
+        fs::create_dir(dir.join("Docs")).unwrap();
+        fs::write(dir.join("Docs").join("inner.md"), "inner").unwrap();
+        let path = |name: &str| dir.join(name).to_string_lossy().to_string();
+
+        // The preview the tree asks for first names the same path, and moves nothing.
+        let app = app_with_root(&root);
+        let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+        let preview = block_on(super::rename_path(
+            path("Note.md"),
+            "note".to_string(),
+            root.clone(),
+            true,
+            grants,
+            store,
+        ))
+        .unwrap();
+        assert_eq!(Path::new(&preview.new_path), dir.join("note.md"));
+        assert_eq!(listed(&dir), ["Docs", "Note.md"]);
+
+        let note = rename_path(path("Note.md"), "note".to_string(), root.clone()).unwrap();
+        assert_eq!(Path::new(&note), dir.join("note.md"));
+        assert_eq!(listed(&dir), ["Docs", "note.md"]);
+        assert_eq!(fs::read_to_string(&note).unwrap(), "body");
+
+        let folder = rename_path(path("Docs"), "docs".to_string(), root).unwrap();
+        assert_eq!(Path::new(&folder), dir.join("docs"));
+        assert_eq!(listed(&dir), ["docs", "note.md"]);
+        assert_eq!(listed(&dir.join("docs")), ["inner.md"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_onto_another_entry_for_the_same_file_keeps_both() {
+        // A hard link opens the file the note opens, and where the filesystem
+        // ignores case so does its name in other letters. It is still another
+        // entry, which a rename onto it would remove.
+        let dir = unique_tmp("rename_alias");
+        let root = dir.to_string_lossy().to_string();
+        let note = dir.join("Note.md");
+        fs::write(&note, "body").unwrap();
+        fs::hard_link(&note, dir.join("Alias.md")).unwrap();
+
+        let renamed = rename_path(
+            note.to_string_lossy().to_string(),
+            "alias".to_string(),
+            root,
+        )
+        .unwrap();
+
+        let names = listed(&dir);
+        assert_eq!(names.len(), 2, "{names:?}");
+        assert!(names.contains(&"Alias.md".to_string()), "{names:?}");
+        assert!(Path::new(&renamed).is_file());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rename_of_a_link_onto_its_targets_name_in_other_letters_keeps_the_target() {
+        // The link and the name both open the target, but the name is the
+        // target's own: renaming the link there would replace the file.
+        let dir = unique_tmp("rename_link_target");
+        let root = dir.to_string_lossy().to_string();
+        fs::write(dir.join("Real.md"), "body").unwrap();
+        std::os::unix::fs::symlink(dir.join("Real.md"), dir.join("link.md")).unwrap();
+
+        let link = dir.join("link.md").to_string_lossy().to_string();
+        rename_path(link, "real".to_string(), root).unwrap();
+
+        assert_eq!(fs::read_to_string(dir.join("Real.md")).unwrap(), "body");
+        assert_eq!(listed(&dir).len(), 2);
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -1,11 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePluginConsent } from "@/hooks/usePluginConsent";
 import { errorMessage } from "@/lib/errorMessage";
 import { pickPluginDir } from "@/lib/pickers";
 import { loadDisabled, saveDisabled } from "@/lib/plugins/disabledStore";
-import type { PluginGrant } from "@/lib/plugins/grantsStore";
 import type { LoadedPluginInfo, PluginHost } from "@/lib/plugins/host";
 import {
   installFromRegistry as downloadAndInstall,
@@ -33,13 +32,18 @@ interface UsePluginLibraryOptions {
  */
 export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePluginLibraryOptions) {
   const { t } = useTranslation("plugins");
-  const { hydrateGrants, hasFullTrust, getGrant, restoreGrant, ensureConsent, revokeGrant } =
+  const { hydrateGrants, hasFullTrust, ensureConsent, consentToInstall, revokeGrant } =
     usePluginConsent();
   const [installed, setInstalled] = useState<InstalledPlugin[]>([]);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [disabled, setDisabled] = useState<string[]>([]);
   const [loaded, setLoaded] = useState<LoadedPluginInfo[]>([]);
   const [registry, setRegistry] = useState<RegistryEntry[]>([]);
+  // Plugins the user removed or turned off since their latest install began.
+  // An install reaches the disk long after it starts (a download, a consent
+  // prompt), and what the user did to its plugin in the meantime stands.
+  const removedSince = useRef(new Set<string>());
+  const disabledSince = useRef(new Set<string>());
 
   useEffect(() => {
     if (!coreReady) return;
@@ -116,8 +120,9 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
     [host, pushToast, persistDisabled, t],
   );
 
-  // A load that a disable or uninstall overtook still landed on disk: show the
-  // new version if the plugin is still installed, without re-enabling it.
+  // A plugin that landed on disk but is not to be loaded, because a disable or
+  // an uninstall overtook its install: show the new version if the plugin is
+  // still installed, without re-enabling it.
   const keepInstalledCurrent = useCallback((plugin: InstalledPlugin) => {
     setInstalled((prev) => prev.map((p) => (p.id === plugin.id ? plugin : p)));
   }, []);
@@ -132,10 +137,13 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
 
   const uninstall = useCallback(
     async (id: string) => {
+      removedSince.current.add(id);
       host.unload(id);
       try {
         await invoke("uninstall_plugin", { id });
       } catch (err) {
+        // Still installed, so an install in flight goes ahead.
+        removedSince.current.delete(id);
         reportFailure(err);
         return;
       }
@@ -162,81 +170,82 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
     [ensureConsent, uninstall],
   );
 
+  // A new install of a plugin is a later word than removing it or turning it off.
+  const beginInstall = useCallback((id: string) => {
+    removedSince.current.delete(id);
+    disabledSince.current.delete(id);
+  }, []);
+
+  // Whether the user removed the plugin or turned it off while it was being
+  // installed: a removal takes the landed files out again, and a disable
+  // keeps the new version on disk without loading it.
+  const yieldToOvertake = useCallback(
+    async (plugin: InstalledPlugin) => {
+      if (removedSince.current.has(plugin.id)) await uninstall(plugin.id);
+      // A removal that failed took its mark back, and the install goes ahead.
+      if (removedSince.current.has(plugin.id)) return true;
+      if (disabledSince.current.has(plugin.id)) {
+        keepInstalledCurrent(plugin);
+        return true;
+      }
+      return false;
+    },
+    [uninstall, keepInstalledCurrent],
+  );
+
+  // The plugin is on disk: confirm consent for what landed, load it, record it.
+  const finishInstall = useCallback(
+    async (plugin: InstalledPlugin) => {
+      if (await yieldToOvertake(plugin)) return;
+      if (!(await consentInstalledOrRollBack(plugin))) return;
+      // The consent prompt can sit open for a while, so look again.
+      if (await yieldToOvertake(plugin)) return;
+      if (!(await host.load(plugin))) {
+        keepInstalledCurrent(plugin);
+        return;
+      }
+      afterInstall(plugin);
+    },
+    [host, yieldToOvertake, consentInstalledOrRollBack, keepInstalledCurrent, afterInstall],
+  );
+
   const installFromFolder = useCallback(async () => {
     // The backend picker stashes the folder; inspect_plugin peeks it and
     // install_plugin consumes it, so consent shows the manifest's identity,
     // trust mode, and permissions before any code is copied.
     const dir = await pickPluginDir();
     if (typeof dir !== "string") return; // cancelled
-    let consentedId: string | null = null;
-    let previousGrant: PluginGrant | undefined;
+    let undoConsent: (() => void) | null = null;
     let plugin: InstalledPlugin | null = null;
     try {
       const inspection = await invoke<PluginInspection>("inspect_plugin");
-      previousGrant = await getGrant(inspection.id);
-      if (!(await ensureConsent(inspection))) return;
-      consentedId = inspection.id;
+      beginInstall(inspection.id);
+      undoConsent = await consentToInstall(inspection);
+      if (!undoConsent) return;
       plugin = await invoke<InstalledPlugin>("install_plugin");
-      if (!(await consentInstalledOrRollBack(plugin))) return;
-      if (!(await host.load(plugin))) {
-        keepInstalledCurrent(plugin);
-        return;
-      }
-      afterInstall(plugin);
+      await finishInstall(plugin);
     } catch (err) {
-      // Nothing was installed, so the grant recorded at consent must not
-      // outlive the failed flow and pre-authorize a future install.
-      if (consentedId !== null && plugin === null) {
-        restoreGrant(consentedId, previousGrant);
-      }
+      if (plugin === null) undoConsent?.();
       reportFailure(err);
     }
-  }, [
-    host,
-    afterInstall,
-    reportFailure,
-    ensureConsent,
-    consentInstalledOrRollBack,
-    getGrant,
-    restoreGrant,
-    keepInstalledCurrent,
-  ]);
+  }, [beginInstall, consentToInstall, finishInstall, reportFailure]);
 
   const installFromRegistry = useCallback(
     async (entry: RegistryEntry) => {
-      let consented = false;
-      let previousGrant: PluginGrant | undefined;
+      let undoConsent: (() => void) | null = null;
       let plugin: InstalledPlugin | null = null;
       try {
-        previousGrant = await getGrant(entry.id);
-        if (!(await ensureConsent({ ...entry, sandbox: entry.sandbox !== false }))) return;
-        consented = true;
+        beginInstall(entry.id);
+        undoConsent = await consentToInstall({ ...entry, sandbox: entry.sandbox !== false });
+        if (!undoConsent) return;
         plugin = await downloadAndInstall(entry);
-        if (!(await consentInstalledOrRollBack(plugin))) return;
-        if (!(await host.load(plugin))) {
-          keepInstalledCurrent(plugin);
-          return;
-        }
-        afterInstall(plugin);
+        await finishInstall(plugin);
       } catch (err) {
-        // See installFromFolder: an accepted consent for a failed install
-        // rolls back to whatever grant existed before.
-        if (consented && plugin === null) {
-          restoreGrant(entry.id, previousGrant);
-        }
+        if (plugin === null) undoConsent?.();
         reportFailure(err);
       }
     },
-    [
-      host,
-      afterInstall,
-      reportFailure,
-      ensureConsent,
-      consentInstalledOrRollBack,
-      getGrant,
-      restoreGrant,
-      keepInstalledCurrent,
-    ],
+    [beginInstall, consentToInstall, finishInstall, reportFailure],
   );
 
   const setEnabled = useCallback(
@@ -244,6 +253,7 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
       if (enabled) {
         const plugin = installed.find((p) => p.id === id);
         if (!plugin) return;
+        disabledSince.current.delete(id);
         // Covers legacy full-trust plugins parked disabled at startup: the
         // warning runs here and the grant persists on acceptance.
         if (!(await ensureConsent(plugin))) return;
@@ -255,6 +265,7 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
         }
         persistDisabled((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : prev));
       } else {
+        disabledSince.current.add(id);
         host.unload(id);
         persistDisabled((prev) => (prev.includes(id) ? prev : [...prev, id]));
       }
