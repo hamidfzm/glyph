@@ -5,19 +5,9 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::grants::{self, is_symlink, GrantRegistry};
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FileMetadata {
-    pub name: String,
-    pub path: String,
-    pub size: u64,
-    pub modified: u64,
-}
 
 #[tauri::command]
 pub fn read_file(path: String, grants: State<'_, GrantRegistry>) -> Result<String, String> {
@@ -345,34 +335,13 @@ pub fn prune_export_dir(
     Ok(PruneReport { removed, error })
 }
 
+/// Refuses a missing or ungranted path for a caller that reads nothing itself (an image open).
 #[tauri::command]
-pub fn get_file_metadata(
-    path: String,
-    grants: State<'_, GrantRegistry>,
-) -> Result<FileMetadata, String> {
-    let canonical = grants.ensure_readable(&path)?;
-    let p = Path::new(&path);
-    let metadata = fs::metadata(&canonical).map_err(|e| format!("Failed to get metadata: {e}"))?;
-    let modified = metadata
-        .modified()
-        .map_err(|e| format!("Failed to get modified time: {e}"))?
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-
-    Ok(FileMetadata {
-        name: p
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default(),
-        path: p
-            .canonicalize()
-            .unwrap_or_else(|_| p.to_path_buf())
-            .to_string_lossy()
-            .to_string(),
-        size: metadata.len(),
-        modified,
-    })
+pub fn check_path_exists(path: String, grants: State<'_, GrantRegistry>) -> Result<(), String> {
+    let path = grants.ensure_readable(&path)?;
+    fs::metadata(&path)
+        .map(|_| ())
+        .map_err(|e| format!("Failed to find path: {e}"))
 }
 
 #[cfg(test)]
@@ -608,87 +577,53 @@ mod tests {
     }
 
     #[test]
-    fn get_metadata_success() {
-        let dir = std::env::temp_dir().join("glyph_test_meta");
+    fn check_path_exists_success() {
+        let dir = std::env::temp_dir().join("glyph_test_exists");
         let _ = fs::create_dir_all(&dir);
-        let file_path = dir.join("meta_test.md");
-        let mut file = fs::File::create(&file_path).unwrap();
-        file.write_all(b"content").unwrap();
+        let file_path = dir.join("there.md");
+        fs::write(&file_path, "content").unwrap();
 
         let app = app_with_workspace(&dir);
-        let result = get_file_metadata(
+        let result = check_path_exists(
             file_path.to_string_lossy().to_string(),
             app.state::<GrantRegistry>(),
         );
-        assert!(result.is_ok());
-
-        let metadata = result.unwrap();
-        assert_eq!(metadata.name, "meta_test.md");
-        assert_eq!(metadata.size, 7);
-        assert!(metadata.modified > 0);
-        assert!(!metadata.path.is_empty());
+        assert_eq!(result, Ok(()));
 
         let _ = fs::remove_file(&file_path);
     }
 
     #[test]
-    fn get_metadata_not_found() {
-        let dir = std::env::temp_dir().join("glyph_test_meta_missing");
+    fn check_path_exists_not_found() {
+        let dir = std::env::temp_dir().join("glyph_test_exists_missing");
         let _ = fs::create_dir_all(&dir);
         let app = app_with_workspace(&dir);
-        let result = get_file_metadata(
+        let result = check_path_exists(
             dir.join("nope.md").to_string_lossy().to_string(),
             app.state::<GrantRegistry>(),
         );
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to get metadata"));
+        assert!(result.unwrap_err().contains("Failed to find path"));
     }
 
     #[test]
-    fn get_metadata_denied_without_a_grant() {
-        let dir = std::env::temp_dir().join("glyph_test_meta_denied");
+    fn check_path_exists_denied_without_a_grant() {
+        let dir = std::env::temp_dir().join("glyph_test_exists_denied");
         let _ = fs::create_dir_all(&dir);
-        let file_path = dir.join("meta.md");
+        let file_path = dir.join("there.md");
         fs::write(&file_path, "x").unwrap();
 
         let app = app_with_grants();
-        let result = get_file_metadata(
+        let result = check_path_exists(
             file_path.to_string_lossy().to_string(),
             app.state::<GrantRegistry>(),
         );
-        assert!(result.is_err());
+        let err = result.expect_err("must be denied");
+        assert!(
+            err.starts_with("path is outside the allowed workspaces and files:"),
+            "got: {err}"
+        );
 
         let _ = fs::remove_file(&file_path);
-    }
-
-    #[test]
-    fn metadata_serialization() {
-        let metadata = FileMetadata {
-            name: "test.md".to_string(),
-            path: "/path/to/test.md".to_string(),
-            size: 42,
-            modified: 1700000000,
-        };
-
-        let json = serde_json::to_string(&metadata).unwrap();
-        assert!(json.contains("\"name\":\"test.md\""));
-        assert!(json.contains("\"path\":\"/path/to/test.md\""));
-        assert!(json.contains("\"size\":42"));
-        assert!(json.contains("\"modified\":1700000000"));
-    }
-
-    #[test]
-    fn metadata_camel_case_keys() {
-        let metadata = FileMetadata {
-            name: "test.md".to_string(),
-            path: "/test.md".to_string(),
-            size: 0,
-            modified: 0,
-        };
-
-        let json = serde_json::to_string(&metadata).unwrap();
-        assert!(!json.contains("file_name"));
-        assert!(json.contains("name"));
     }
 
     #[test]

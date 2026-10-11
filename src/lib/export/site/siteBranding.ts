@@ -19,7 +19,7 @@ export interface SiteBranding {
  */
 export async function resolveSiteBranding(root: string, config: SiteConfig): Promise<SiteBranding> {
   const fileExists = (path: string) =>
-    invoke("get_file_metadata", { path }).then(
+    invoke("check_path_exists", { path }).then(
       () => true,
       () => false,
     );

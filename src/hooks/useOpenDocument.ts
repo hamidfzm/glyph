@@ -133,7 +133,7 @@ export function useOpenDocument({
         let content: string | null = null;
         if (isImage) {
           // With no text to read, this is what refuses a missing or ungranted image.
-          if (!isMobilePlatform()) await invoke("get_file_metadata", { path });
+          if (!isMobilePlatform()) await invoke("check_path_exists", { path });
         } else {
           content = await loadFileContent(path);
           if (!isMobilePlatform()) await invoke("watch_file", { path });
