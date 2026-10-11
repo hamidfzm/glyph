@@ -1436,26 +1436,30 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    #[cfg(unix)]
+    // Linux, not every Unix: macOS reads the two names as one file by
+    // default, which is the test above.
+    #[cfg(target_os = "linux")]
     #[test]
     fn prune_export_dir_removes_the_old_page_of_a_case_only_rename_where_case_tells_files_apart() {
         let dir = out_dir_with_manifest("prune_case_apart", &["Guide.html"]);
         fs::write(dir.join("Guide.html"), "the old page").unwrap();
         fs::write(dir.join("guide.html"), "the current page").unwrap();
-        // One file where the volume ignores case (macOS by default), which is
-        // the test above: this one is for a volume that holds both.
-        if fs::read_to_string(dir.join("Guide.html")).unwrap() == "the old page" {
-            assert_eq!(prune(&dir, &["guide.html"]).unwrap(), clean(1));
+        assert_eq!(
+            fs::read_to_string(dir.join("Guide.html")).unwrap(),
+            "the old page",
+            "the temp folder is on a volume that ignores case"
+        );
 
-            // Left in place, the old URL would keep resolving to a file that
-            // no manifest claims any more.
-            assert!(!dir.join("Guide.html").exists());
-            assert_eq!(
-                fs::read_to_string(dir.join("guide.html")).unwrap(),
-                "the current page"
-            );
-            assert_eq!(manifest_text(&dir), r#"["guide.html"]"#);
-        }
+        assert_eq!(prune(&dir, &["guide.html"]).unwrap(), clean(1));
+
+        // Left in place, the old URL would keep resolving to a file that no
+        // manifest claims any more.
+        assert!(!dir.join("Guide.html").exists());
+        assert_eq!(
+            fs::read_to_string(dir.join("guide.html")).unwrap(),
+            "the current page"
+        );
+        assert_eq!(manifest_text(&dir), r#"["guide.html"]"#);
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -1603,7 +1607,9 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    #[cfg(unix)]
+    // Linux, not every Unix: where the volume ignores case, `Docs` cannot
+    // stand beside `docs` at all.
+    #[cfg(target_os = "linux")]
     #[test]
     fn prune_export_dir_compares_no_file_outside_the_output_directory() {
         let outer = tempfile::TempDir::new().unwrap();
@@ -1615,15 +1621,13 @@ mod tests {
         fs::write(dir.join(SITE_MANIFEST_REL), r#"["docs/old.html"]"#).unwrap();
         fs::write(dir.join("docs/old.html"), "stale").unwrap();
         // `Docs` leads out of the export, to another name for the stale page.
-        // Where the volume ignores case it cannot stand beside `docs` at all.
-        if std::os::unix::fs::symlink(&elsewhere, dir.join("Docs")).is_ok() {
-            fs::hard_link(dir.join("docs/old.html"), elsewhere.join("old.html")).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, dir.join("Docs")).unwrap();
+        fs::hard_link(dir.join("docs/old.html"), elsewhere.join("old.html")).unwrap();
 
-            // Followed, that name would pass the stale page off as written.
-            assert_eq!(prune(&dir, &["Docs/old.html"]).unwrap(), clean(1));
+        // Followed, that name would pass the stale page off as written.
+        assert_eq!(prune(&dir, &["Docs/old.html"]).unwrap(), clean(1));
 
-            assert!(!dir.join("docs/old.html").exists());
-        }
+        assert!(!dir.join("docs/old.html").exists());
     }
 
     #[test]
