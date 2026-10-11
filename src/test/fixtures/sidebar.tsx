@@ -28,7 +28,6 @@ export function makeFileTab(): FileTab {
     file: {
       path: "/tmp/post.md",
       content: "# Post",
-      metadata: { name: "post.md", path: "/tmp/post.md", size: 1, modified: 0 },
       scrollTop: 0,
       mode: "view",
       editContent: null,

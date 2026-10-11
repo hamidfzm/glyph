@@ -113,10 +113,6 @@ function mockWorkspaceLaunch(
           nestedUnder: null,
           glyphConflict: null,
         });
-      case "get_file_metadata": {
-        const path = String(args?.path ?? "");
-        return Promise.resolve({ name: path.split("/").pop(), path, size: 0, modified: 0 });
-      }
       default:
         return Promise.resolve(undefined);
     }
@@ -138,19 +134,12 @@ beforeEach(() => {
 
 describe("App", () => {
   it("opens the CLI initial file and shows it in a tab", async () => {
-    vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
+    vi.mocked(invoke).mockImplementation(((cmd: string) => {
       switch (cmd) {
         case "take_pending_opens":
           return Promise.resolve([{ kind: "file", path: "/cli/test.md" }]);
         case "read_file":
           return Promise.resolve("# Hello CLI");
-        case "get_file_metadata":
-          return Promise.resolve({
-            name: "test.md",
-            path: String(args?.path ?? ""),
-            size: 0,
-            modified: 0,
-          });
         case "watch_file":
         case "set_menu_state":
           return Promise.resolve(undefined);
@@ -253,9 +242,7 @@ describe("App", () => {
       ),
     ).toBeInTheDocument();
 
-    await act(async () => {
-      (await findByRole("button", { name: /close/i })).click();
-    });
+    fireEvent.click(await findByRole("button", { name: /close/i }));
     await waitFor(() => expect(queryByRole("dialog")).not.toBeInTheDocument());
   });
 
@@ -285,19 +272,12 @@ describe("App", () => {
   });
 
   it("opens the AI panel in response to menu-ai-action when there is content", async () => {
-    vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
+    vi.mocked(invoke).mockImplementation(((cmd: string) => {
       switch (cmd) {
         case "take_pending_opens":
           return Promise.resolve([{ kind: "file", path: "/cli/with-content.md" }]);
         case "read_file":
           return Promise.resolve("hello world");
-        case "get_file_metadata":
-          return Promise.resolve({
-            name: "with-content.md",
-            path: String(args?.path ?? ""),
-            size: 0,
-            modified: 0,
-          });
         default:
           return Promise.resolve(undefined);
       }
@@ -319,19 +299,12 @@ describe("App", () => {
   it("renders an image tab's viewer instead of a blank pane (null text content)", async () => {
     // Image tabs carry no text content; the content gate must admit them by
     // path or they fall through to an empty pane (the SVG-blank regression).
-    vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
+    vi.mocked(invoke).mockImplementation(((cmd: string) => {
       switch (cmd) {
         case "take_pending_opens":
           return Promise.resolve([{ kind: "file", path: "/cli/diagram.svg" }]);
         case "read_file":
           return Promise.resolve('<svg xmlns="http://www.w3.org/2000/svg"/>');
-        case "get_file_metadata":
-          return Promise.resolve({
-            name: "diagram.svg",
-            path: String(args?.path ?? ""),
-            size: 0,
-            modified: 0,
-          });
         default:
           return Promise.resolve(undefined);
       }
@@ -430,19 +403,12 @@ describe("App", () => {
   });
 
   it("forwards menu-close-tab, menu-find, and menu-toggle-edit to AppShell handlers", async () => {
-    vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
+    vi.mocked(invoke).mockImplementation(((cmd: string) => {
       switch (cmd) {
         case "take_pending_opens":
           return Promise.resolve([{ kind: "file", path: "/cli/edit-target.md" }]);
         case "read_file":
           return Promise.resolve("# header\n\ncontent");
-        case "get_file_metadata":
-          return Promise.resolve({
-            name: "edit-target.md",
-            path: String(args?.path ?? ""),
-            size: 0,
-            modified: 0,
-          });
         default:
           return Promise.resolve(undefined);
       }

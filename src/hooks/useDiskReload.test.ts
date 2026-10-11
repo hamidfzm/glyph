@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EDITOR_MODE } from "@/lib/settings";
@@ -20,7 +20,6 @@ const stateAt = (revision: number, file: Partial<FileState> = {}): TabsState => 
       file: {
         path: "/p/a.md",
         content: "old",
-        metadata: null,
         scrollTop: 0,
         mode: EDITOR_MODE.edit,
         editContent: "old",
@@ -48,8 +47,7 @@ function renderReload(initial: TabsState, selfSaveCount = () => 0) {
 /** Park every read on a promise the test settles, listed in the order the reads began. */
 function parkReads() {
   const reads: Deferred<string>[] = [];
-  vi.mocked(invoke).mockImplementation(async (cmd) => {
-    if (cmd !== "read_file") return null;
+  vi.mocked(invoke).mockImplementation(async () => {
     const read = deferred<string>();
     reads.push(read);
     return read.promise;
@@ -63,14 +61,14 @@ const bufferOf = (state: TabsState) => state.tabs[0].file?.editContent;
 describe("useDiskReload", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
-    vi.mocked(invoke).mockImplementation(async (cmd) => (cmd === "read_file" ? "new" : null));
+    vi.mocked(invoke).mockResolvedValue("new");
   });
 
   it("replaces a clean tab's content and buffer with what is on disk", async () => {
     const { result, forgetHistory } = renderReload(stateAt(3));
 
     await act(async () => {
-      await result.current.reload("/p/a.md");
+      await result.current.reload("a", "/p/a.md");
     });
 
     expect(result.current.state.tabs[0].file).toMatchObject({
@@ -80,15 +78,114 @@ describe("useDiskReload", () => {
     expect(forgetHistory).toHaveBeenCalledWith("a");
   });
 
-  it("drops a read the app's own write overtook", async () => {
+  it("changes nothing when the disk holds what the tab already shows", async () => {
+    vi.mocked(invoke).mockResolvedValue("old");
+    const initial = stateAt(3);
+    const { result, forgetHistory } = renderReload(initial);
+
+    await act(async () => {
+      await result.current.reload("a", "/p/a.md");
+    });
+
+    expect(result.current.state).toBe(initial);
+    expect(forgetHistory).not.toHaveBeenCalled();
+  });
+
+  it("drops a read started for a tab that is gone, though another holds its path", async () => {
+    const { result, forgetHistory } = renderReload(stateAt(3));
+
+    await act(async () => {
+      await result.current.reload("closed", "/p/a.md");
+    });
+
+    expect(contentOf(result.current.state)).toBe("old");
+    expect(forgetHistory).not.toHaveBeenCalled();
+  });
+
+  it("drops a read of the path its tab has since moved off", async () => {
+    const reads = parkReads();
+    const { result } = renderReload(stateAt(3));
+
+    const reloading = result.current.reload("a", "/p/a.md");
+    act(() => {
+      result.current.setState(stateAt(3, { path: "/p/b.md" }));
+    });
+    await act(async () => {
+      reads[0].resolve("new");
+      await reloading;
+    });
+
+    expect(contentOf(result.current.state)).toBe("old");
+  });
+
+  it("reads again when the app's own write overtook the read", async () => {
     let saves = 0;
     const reads = parkReads();
     const { result } = renderReload(stateAt(3), () => saves);
 
-    const reloading = result.current.reload("/p/a.md", 3);
+    const reloading = result.current.reload("a", "/p/a.md");
     saves += 1;
+    reads[0].resolve("read before the write");
+    await waitFor(() => expect(reads).toHaveLength(2));
+    expect(contentOf(result.current.state)).toBe("old");
+
     await act(async () => {
-      reads[0].resolve("new");
+      reads[1].resolve("new");
+      await reloading;
+    });
+    expect(contentOf(result.current.state)).toBe("new");
+  });
+
+  it("lets the repeated read land after a read that began in between", async () => {
+    let saves = 0;
+    const reads = parkReads();
+    const { result } = renderReload(stateAt(3), () => saves);
+
+    const overtaken = result.current.reload("a", "/p/a.md");
+    saves += 1;
+    const between = result.current.reload("a", "/p/a.md");
+    reads[0].resolve("read before the write");
+    await waitFor(() => expect(reads).toHaveLength(3));
+    await act(async () => {
+      reads[1].resolve("between");
+      await between;
+    });
+    await act(async () => {
+      reads[2].resolve("latest");
+      await overtaken;
+    });
+
+    expect(contentOf(result.current.state)).toBe("latest");
+  });
+
+  it("holds the repeated read to the revision the caller names", async () => {
+    let saves = 0;
+    const reads = parkReads();
+    const { result } = renderReload(stateAt(3), () => saves);
+
+    const reloading = result.current.reload("a", "/p/a.md", 2);
+    saves += 1;
+    reads[0].resolve("read before the write");
+    await waitFor(() => expect(reads).toHaveLength(2));
+    await act(async () => {
+      reads[1].resolve("new");
+      await reloading;
+    });
+
+    expect(contentOf(result.current.state)).toBe("old");
+  });
+
+  it("holds the repeated read to the tab it was started for", async () => {
+    let saves = 0;
+    const reads = parkReads();
+    const { result } = renderReload(stateAt(3), () => saves);
+
+    const reloading = result.current.reload("closed", "/p/a.md");
+    saves += 1;
+    reads[0].resolve("read before the write");
+    await waitFor(() => expect(reads).toHaveLength(2));
+    await act(async () => {
+      reads[1].resolve("new");
       await reloading;
     });
 
@@ -99,8 +196,8 @@ describe("useDiskReload", () => {
     const reads = parkReads();
     const { result } = renderReload(stateAt(3));
 
-    const earlier = result.current.reload("/p/a.md");
-    const later = result.current.reload("/p/a.md");
+    const earlier = result.current.reload("a", "/p/a.md");
+    const later = result.current.reload("a", "/p/a.md");
     await act(async () => {
       reads[1].resolve("later");
       await later;
@@ -117,8 +214,8 @@ describe("useDiskReload", () => {
     const reads = parkReads();
     const { result } = renderReload(stateAt(3));
 
-    const earlier = result.current.reload("/p/a.md");
-    const later = result.current.reload("/p/a.md");
+    const earlier = result.current.reload("a", "/p/a.md");
+    const later = result.current.reload("a", "/p/a.md");
     await act(async () => {
       reads[0].resolve("earlier");
       await earlier;
@@ -136,8 +233,8 @@ describe("useDiskReload", () => {
     const reads = parkReads();
     const { result } = renderReload(stateAt(3));
 
-    const reloading = result.current.reload("/p/a.md");
-    const other = result.current.reload("/p/b.md");
+    const reloading = result.current.reload("a", "/p/a.md");
+    const other = result.current.reload("b", "/p/b.md");
     await act(async () => {
       reads[1].resolve("elsewhere");
       await other;
@@ -154,12 +251,12 @@ describe("useDiskReload", () => {
     const { result } = renderReload(stateAt(3));
 
     await act(async () => {
-      await result.current.reload("/p/a.md", 2);
+      await result.current.reload("a", "/p/a.md", 2);
     });
     expect(contentOf(result.current.state)).toBe("old");
 
     await act(async () => {
-      await result.current.reload("/p/a.md", 3);
+      await result.current.reload("a", "/p/a.md", 3);
     });
     expect(contentOf(result.current.state)).toBe("new");
   });
@@ -168,7 +265,7 @@ describe("useDiskReload", () => {
     const { result, forgetHistory } = renderReload(stateAt(3, { ...unsaved, mode }));
 
     await act(async () => {
-      await result.current.reload("/p/a.md");
+      await result.current.reload("a", "/p/a.md");
     });
 
     expect(result.current.state.tabs[0].file).toMatchObject({
@@ -182,7 +279,7 @@ describe("useDiskReload", () => {
     const { result } = renderReload(stateAt(3, unsaved));
 
     await act(async () => {
-      await result.current.reload("/p/a.md", 3);
+      await result.current.reload("a", "/p/a.md", 3);
     });
 
     expect(bufferOf(result.current.state)).toBe("typed");
@@ -192,7 +289,7 @@ describe("useDiskReload", () => {
     const reads = parkReads();
     const { result } = renderReload(stateAt(3, { mode: EDITOR_MODE.view }));
 
-    const reloading = result.current.reload("/p/a.md");
+    const reloading = result.current.reload("a", "/p/a.md");
     act(() => {
       result.current.setState(stateAt(4, { ...unsaved, mode: EDITOR_MODE.view }));
     });
@@ -209,7 +306,7 @@ describe("useDiskReload", () => {
     const { result } = renderReload(stateAt(3));
 
     await act(async () => {
-      await result.current.reload("/p/a.md");
+      await result.current.reload("a", "/p/a.md");
     });
 
     expect(contentOf(result.current.state)).toBe("old");

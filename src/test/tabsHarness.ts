@@ -40,16 +40,6 @@ export function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): I
         return [];
       case "read_file":
         return "FILE BODY";
-      case "get_file_metadata":
-        return {
-          name:
-            String(args?.path ?? "")
-              .split("/")
-              .pop() ?? "",
-          path: String(args?.path ?? ""),
-          size: 0,
-          modified: 0,
-        };
       case "window_showing_file":
         // No other window holds the note, so the open proceeds here.
         return false;

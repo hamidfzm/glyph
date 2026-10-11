@@ -171,7 +171,7 @@ describe("useTabs opening documents", () => {
 
   it("opens an image in view mode without reading it as text", async () => {
     // Images are binary: openFile must skip read_file (and the file watch)
-    // entirely and load metadata only, opening the read-only image viewer.
+    // entirely and only check the file is there, opening the read-only image viewer.
     const { result } = renderHook(() =>
       useTabs({ ...defaultOptions(), defaultEditorMode: "edit" }),
     );
@@ -188,6 +188,26 @@ describe("useTabs opening documents", () => {
     expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/diagram.svg" });
     expect(invoke).not.toHaveBeenCalledWith("watch_file", { path: "/p/diagram.svg" });
     expect(invoke).toHaveBeenCalledWith("get_file_metadata", { path: "/p/diagram.svg" });
+  });
+
+  it("opens no tab for an image the backend refuses", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        get_file_metadata: async () => {
+          throw new Error("Failed to get metadata");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/gone.png");
+    });
+
+    expect(result.current.tabs).toHaveLength(0);
+    expect(errorSpy).toHaveBeenCalledWith("Failed to open file:", expect.anything());
   });
 
   it("opens the document of a headless export in view mode", async () => {
@@ -361,7 +381,7 @@ describe("mobile file opening", () => {
     vi.mocked(platform).mockReturnValue("macos");
   });
 
-  it("reads picked files via the fs plugin and skips metadata and watch", async () => {
+  it("reads picked files via the fs plugin and skips the watch", async () => {
     const { platform } = await import("@tauri-apps/plugin-os");
     vi.mocked(platform).mockReturnValue("android");
     const { readTextFile } = await import("@tauri-apps/plugin-fs");
@@ -376,11 +396,9 @@ describe("mobile file opening", () => {
 
     expect(result.current.tabs).toHaveLength(1);
     expect(result.current.activeFile?.content).toBe("# from the picker");
-    expect(result.current.activeFile?.metadata).toBeNull();
     expect(vi.mocked(readTextFile)).toHaveBeenCalledWith("content://com.provider/doc.md");
     const commands = vi.mocked(invoke).mock.calls.map((c) => c[0]);
     expect(commands).not.toContain("read_file");
-    expect(commands).not.toContain("get_file_metadata");
     expect(commands).not.toContain("watch_file");
   });
 
@@ -409,7 +427,7 @@ describe("mobile file opening", () => {
     warnSpy.mockRestore();
   });
 
-  it("opens picked images without Rust-side metadata", async () => {
+  it("opens picked images without the Rust-side check", async () => {
     const { platform } = await import("@tauri-apps/plugin-os");
     vi.mocked(platform).mockReturnValue("android");
 
@@ -421,7 +439,6 @@ describe("mobile file opening", () => {
     });
 
     expect(result.current.tabs).toHaveLength(1);
-    expect(result.current.activeFile?.metadata).toBeNull();
     const commands = vi.mocked(invoke).mock.calls.map((c) => c[0]);
     expect(commands).not.toContain("get_file_metadata");
   });

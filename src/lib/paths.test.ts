@@ -25,6 +25,10 @@ describe("basename", () => {
   it("returns the input unchanged when there is no directory", () => {
     expect(basename("c.md")).toBe("c.md");
   });
+
+  it("looks past a line break in a folder name", () => {
+    expect(basename("/ws/My\nNotes/c.md")).toBe("c.md");
+  });
 });
 
 describe("lastSegment", () => {
@@ -94,8 +98,31 @@ describe("displayName", () => {
     expect(displayName(uri)).toBe("note.md");
   });
 
+  it("returns the file name of a Windows path", () => {
+    expect(displayName("C:\\Users\\me\\notes\\Trip.md")).toBe("Trip.md");
+    expect(displayName("\\\\?\\C:\\notes\\Trip.md")).toBe("Trip.md");
+  });
+
+  // Only a URI is encoded: in a plain path these are ordinary characters.
+  it("keeps a colon in a plain path's file name", () => {
+    expect(displayName("/ws/Standup 10:30.md")).toBe("Standup 10:30.md");
+  });
+
+  it("keeps a percent sequence in a plain path's file name", () => {
+    expect(displayName("/ws/100%25 done.md")).toBe("100%25 done.md");
+  });
+
+  it("reads a drive letter as part of a path, not as a URI scheme", () => {
+    expect(displayName("C://notes/100%25 done.md")).toBe("100%25 done.md");
+  });
+
+  it("looks past an encoded line break in a picker URI's folder", () => {
+    const uri = "content://com.provider/document/primary%3AMy%0ANotes%2Fnote.md";
+    expect(displayName(uri)).toBe("note.md");
+  });
+
   it("keeps the raw segment when decoding fails", () => {
-    expect(displayName("/a/bad%2segment.md")).toBe("bad%2segment.md");
+    expect(displayName("file:///a/bad%2segment.md")).toBe("bad%2segment.md");
   });
 });
 
