@@ -31,6 +31,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** One file on disk: a read answers whatever the app, or the test as another program, wrote last. */
+function mockDisk(text: string) {
+  const disk = { text };
+  vi.mocked(invoke).mockImplementation(
+    makeInvoker({
+      read_file: async () => disk.text,
+      write_file: async (_cmd, args) => {
+        disk.text = String(args?.content);
+      },
+    }) as typeof invoke,
+  );
+  return disk;
+}
+
 describe("useTabs file-changed events", () => {
   it("ignores file-changed when autoReload is off", async () => {
     let body = "v1";
@@ -71,35 +85,58 @@ describe("useTabs file-changed events", () => {
     expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/other.md" });
   });
 
-  it("skips the reload triggered by our own recent save", async () => {
-    let body = "- [ ] task";
+  it("changes nothing for the echo of its own write, then reloads what another program wrote", async () => {
+    const disk = mockDisk("- [ ] task");
     const fileChanged = captureListener("file-changed");
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ read_file: async () => body }) as typeof invoke,
-    );
     const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
     await waitFor(() => expect(result.current.initializing).toBe(false));
     await act(async () => {
       await result.current.openFile("/p/tasks.md");
     });
-    const tabId = result.current.tabs[0].id;
-
     await act(async () => {
-      await result.current.toggleTask(tabId, 1);
+      await result.current.toggleTask(result.current.tabs[0].id, 1);
     });
 
-    // The watcher echoes our own write within the grace window; the reload is
-    // suppressed so the toggled content is kept even though disk says otherwise.
-    body = "DISK STATE";
-    await act(async () => {
-      fileChanged.handler?.({ payload: "/p/tasks.md" });
-      await new Promise((r) => setTimeout(r, 350));
-    });
+    // The watcher reports the toggle's own write: the disk holds what the tab shows.
+    const tabs = result.current.tabs;
+    await changeOnDisk(fileChanged, "/p/tasks.md");
+    expect(result.current.tabs).toBe(tabs);
 
-    if (result.current.tabs[0].kind === "file") {
-      expect(result.current.tabs[0].file.content).toBe("- [x] task");
-    }
+    // Another program writes while the toggle is still recent.
+    disk.text = "- [x] task\n- [ ] added elsewhere";
+    await changeOnDisk(fileChanged, "/p/tasks.md");
+    expect(fileOf(result).content).toBe("- [x] task\n- [ ] added elsewhere");
   });
+
+  it.each(Object.values(EDITOR_MODE))(
+    "reloads what another program wrote right after a save, in %s mode",
+    async (mode) => {
+      const disk = mockDisk("v1");
+      const fileChanged = captureListener("file-changed");
+      const { result } = renderHook(() =>
+        useTabs(defaultOptions({ autoReload: true, autoSave: false })),
+      );
+      const tabId = await openEditable(result);
+      act(() => {
+        result.current.updateEditContent(tabId, "mine");
+        result.current.setTabMode(tabId, mode);
+      });
+      await act(async () => {
+        await result.current.saveDocument(tabId);
+      });
+      expect(disk.text).toBe("mine");
+
+      // A formatter rewrites the file as soon as the save lands.
+      disk.text = "theirs";
+      await changeOnDisk(fileChanged, "/p/a.md");
+
+      expect(fileOf(result)).toMatchObject({
+        content: "theirs",
+        editContent: "theirs",
+        dirty: false,
+      });
+    },
+  );
 
   it("keeps the current content when the reload read fails", async () => {
     let fail = false;
@@ -320,51 +357,34 @@ function parkReloads(opened: string) {
 }
 
 describe("useTabs reloads overtaken by a save or a newer reload", () => {
-  it.each(Object.values(EDITOR_MODE))("drops a read a save overtook, in %s mode", async (mode) => {
-    const reloads = parkReloads("v1");
-    const fileChanged = captureListener("file-changed");
-    const { result } = renderHook(() =>
-      useTabs(defaultOptions({ autoReload: true, autoSave: false })),
-    );
-    const tabId = await openEditable(result);
-    act(() => {
-      result.current.updateEditContent(tabId, "mine");
-      result.current.setTabMode(tabId, mode);
-    });
+  it.each(Object.values(EDITOR_MODE))(
+    "does not apply a read a save overtook, in %s mode",
+    async (mode) => {
+      const reloads = parkReloads("v1");
+      const fileChanged = captureListener("file-changed");
+      const { result } = renderHook(() =>
+        useTabs(defaultOptions({ autoReload: true, autoSave: false })),
+      );
+      const tabId = await openEditable(result);
+      act(() => {
+        result.current.updateEditContent(tabId, "mine");
+        result.current.setTabMode(tabId, mode);
+      });
 
-    // The read that will answer "theirs" is still out when the save puts "mine" on disk.
-    await changeOnDisk(fileChanged, "/p/a.md");
-    expect(reloads).toHaveLength(1);
-    await act(async () => {
-      await result.current.saveDocument(tabId);
-    });
-    await deliver(() => reloads[0].resolve("theirs"));
+      // The read that will answer "theirs" is still out when the save puts "mine" on disk.
+      await changeOnDisk(fileChanged, "/p/a.md");
+      expect(reloads).toHaveLength(1);
+      await act(async () => {
+        await result.current.saveDocument(tabId);
+      });
+      await deliver(() => reloads[0].resolve("theirs"));
 
-    expect(fileOf(result)).toMatchObject({ content: "mine", editContent: "mine", dirty: false });
-  });
+      expect(fileOf(result)).toMatchObject({ content: "mine", editContent: "mine", dirty: false });
+      expect(reloads).toHaveLength(2);
+    },
+  );
 
-  it("drops a read that began on a clean tab edited and saved before it arrived", async () => {
-    const reloads = parkReloads("v1");
-    const fileChanged = captureListener("file-changed");
-    const { result } = renderHook(() =>
-      useTabs(defaultOptions({ autoReload: true, autoSave: false })),
-    );
-    const tabId = await openEditable(result);
-
-    await changeOnDisk(fileChanged, "/p/a.md");
-    expect(reloads).toHaveLength(1);
-    act(() => {
-      result.current.updateEditContent(tabId, "mine");
-    });
-    await act(async () => {
-      await result.current.saveDocument(tabId);
-    });
-    await deliver(() => reloads[0].resolve("theirs"));
-
-    expect(fileOf(result)).toMatchObject({ content: "mine", editContent: "mine", dirty: false });
-  });
-
-  it("drops a read that outlasts the self-save grace, then reloads the next change", async () => {
+  it("reads again after a save overtook the read, and applies what another program wrote since", async () => {
     const reloads = parkReloads("v1");
     const fileChanged = captureListener("file-changed");
     const { result } = renderHook(() =>
@@ -372,6 +392,7 @@ describe("useTabs reloads overtaken by a save or a newer reload", () => {
     );
     const tabId = await openEditable(result);
 
+    // The tab is clean when the read starts, then is edited and saved before it answers.
     await changeOnDisk(fileChanged, "/p/a.md");
     act(() => {
       result.current.updateEditContent(tabId, "mine");
@@ -379,18 +400,20 @@ describe("useTabs reloads overtaken by a save or a newer reload", () => {
     await act(async () => {
       await result.current.saveDocument(tabId);
     });
-    // A slow read arrives long after the save, so how recent the save is cannot be the test.
-    const realNow = Date.now;
-    vi.spyOn(Date, "now").mockImplementation(() => realNow() + 5000);
+    // This read may have run before the save or after a later write, so its text is not used.
     await deliver(() => reloads[0].resolve("theirs"));
     expect(fileOf(result).content).toBe("mine");
+    expect(reloads).toHaveLength(2);
 
-    await changeOnDisk(fileChanged, "/p/a.md");
-    await deliver(() => reloads[1].resolve("theirs again"));
-    expect(fileOf(result)).toMatchObject({ content: "theirs again", editContent: "theirs again" });
+    await deliver(() => reloads[1].resolve("theirs"));
+    expect(fileOf(result)).toMatchObject({
+      content: "theirs",
+      editContent: "theirs",
+      dirty: false,
+    });
   });
 
-  it("drops a read that a checklist toggle in view mode overtook", async () => {
+  it("does not apply a read that a checklist toggle in view mode overtook", async () => {
     const reloads = parkReloads("- [ ] task");
     const fileChanged = captureListener("file-changed");
     const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
@@ -409,6 +432,7 @@ describe("useTabs reloads overtaken by a save or a newer reload", () => {
     await deliver(() => reloads[0].resolve("theirs"));
 
     expect(fileOf(result).content).toBe("- [x] task");
+    expect(reloads).toHaveLength(2);
   });
 
   it("keeps the newer of two reads when the older one arrives last", async () => {

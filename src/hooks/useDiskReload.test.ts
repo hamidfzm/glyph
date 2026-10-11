@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EDITOR_MODE } from "@/lib/settings";
@@ -80,15 +80,70 @@ describe("useDiskReload", () => {
     expect(forgetHistory).toHaveBeenCalledWith("a");
   });
 
-  it("drops a read the app's own write overtook", async () => {
+  it("changes nothing when the disk holds what the tab already shows", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd) => (cmd === "read_file" ? "old" : null));
+    const initial = stateAt(3);
+    const { result, forgetHistory } = renderReload(initial);
+
+    await act(async () => {
+      await result.current.reload("/p/a.md");
+    });
+
+    expect(result.current.state).toBe(initial);
+    expect(forgetHistory).not.toHaveBeenCalled();
+  });
+
+  it("reads again when the app's own write overtook the read", async () => {
     let saves = 0;
     const reads = parkReads();
     const { result } = renderReload(stateAt(3), () => saves);
 
-    const reloading = result.current.reload("/p/a.md", 3);
+    const reloading = result.current.reload("/p/a.md");
     saves += 1;
+    reads[0].resolve("read before the write");
+    await waitFor(() => expect(reads).toHaveLength(2));
+    expect(contentOf(result.current.state)).toBe("old");
+
     await act(async () => {
-      reads[0].resolve("new");
+      reads[1].resolve("new");
+      await reloading;
+    });
+    expect(contentOf(result.current.state)).toBe("new");
+  });
+
+  it("lets the repeated read land after a read that began in between", async () => {
+    let saves = 0;
+    const reads = parkReads();
+    const { result } = renderReload(stateAt(3), () => saves);
+
+    const overtaken = result.current.reload("/p/a.md");
+    saves += 1;
+    const between = result.current.reload("/p/a.md");
+    reads[0].resolve("read before the write");
+    await waitFor(() => expect(reads).toHaveLength(3));
+    await act(async () => {
+      reads[1].resolve("between");
+      await between;
+    });
+    await act(async () => {
+      reads[2].resolve("latest");
+      await overtaken;
+    });
+
+    expect(contentOf(result.current.state)).toBe("latest");
+  });
+
+  it("holds the repeated read to the revision the caller names", async () => {
+    let saves = 0;
+    const reads = parkReads();
+    const { result } = renderReload(stateAt(3), () => saves);
+
+    const reloading = result.current.reload("/p/a.md", 2);
+    saves += 1;
+    reads[0].resolve("read before the write");
+    await waitFor(() => expect(reads).toHaveLength(2));
+    await act(async () => {
+      reads[1].resolve("new");
       await reloading;
     });
 

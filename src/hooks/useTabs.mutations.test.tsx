@@ -602,9 +602,39 @@ describe("useTabs link rewriting on rename and move", () => {
     expect(fileOf(result).path).toBe("/p/ws/dest/travel.md");
   });
 
-  it("drops a watcher read of a rewritten file that began before the rewrite", async () => {
+  it("reloads what another program wrote right after the rewrite", async () => {
+    let disk = "see [[travel]]";
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => disk,
+        rename_path: async (_cmd, args) => {
+          if (!args?.dryRun) disk = "see [[trip]]";
+          return relinked("/p/ws/trip.md", { files: index });
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await openWorkspace(result);
+    await act(async () => {
+      await result.current.openFile("/p/ws/index.md");
+    });
+    await act(async () => {
+      await result.current.renamePath("/p/ws/travel.md", "trip");
+    });
+    await waitFor(() => expect(fileOf(result).content).toBe("see [[trip]]"));
+
+    // A sync client pulls a newer copy while the rewrite is still recent.
+    disk = "see [[trip]] and [[plans]]";
+    await changeOnDisk(fileChanged, "/p/ws/index.md");
+
+    expect(fileOf(result).content).toBe("see [[trip]] and [[plans]]");
+  });
+
+  it("does not apply a watcher read of a rewritten file that began before the rewrite", async () => {
     const staleRead = deferred<string>();
-    const reads = ["see [[travel]]", staleRead.promise, "see [[trip]]"];
+    // The last read is the overtaken one repeated: it finds the rewritten text.
+    const reads = ["see [[travel]]", staleRead.promise, "see [[trip]]", "see [[trip]]"];
     const fileChanged = captureListener("file-changed");
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
@@ -627,12 +657,14 @@ describe("useTabs link rewriting on rename and move", () => {
     await deliver(() => staleRead.resolve("see [[travel]]"));
 
     expect(fileOf(result).content).toBe("see [[trip]]");
+    expect(reads).toHaveLength(0);
   });
 
-  it("drops a watcher read that arrives before the rewrite's own reload", async () => {
+  it("does not apply a watcher read that arrives before the rewrite's own reload", async () => {
     const staleRead = deferred<string>();
     const ownReload = deferred<string>();
-    const reads = ["see [[travel]]", staleRead.promise, ownReload.promise];
+    const readAgain = deferred<string>();
+    const reads = ["see [[travel]]", staleRead.promise, ownReload.promise, readAgain.promise];
     const fileChanged = captureListener("file-changed");
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
@@ -651,16 +683,22 @@ describe("useTabs link rewriting on rename and move", () => {
     act(() => {
       renaming = result.current.renamePath("/p/ws/travel.md", "trip");
     });
-    await waitFor(() => expect(reads).toHaveLength(0));
-    // No newer read has landed yet, so only the mark on the rewritten file drops this one.
+    await waitFor(() => expect(reads).toHaveLength(1));
+    // No newer read has landed yet, so only the mark on the rewritten file keeps this one out.
     await deliver(() => staleRead.resolve("theirs"));
     expect(fileOf(result).content).toBe("see [[travel]]");
+    expect(reads).toHaveLength(0);
 
     await act(async () => {
       ownReload.resolve("see [[trip]]");
       await renaming;
     });
     expect(fileOf(result).content).toBe("see [[trip]]");
+
+    // The overtaken read, repeated, finds the rewritten text and changes nothing.
+    const tabs = result.current.tabs;
+    await deliver(() => readAgain.resolve("see [[trip]]"));
+    expect(result.current.tabs).toBe(tabs);
   });
 
   it("names the file a rewrite stopped at and reads back only open files", async () => {
