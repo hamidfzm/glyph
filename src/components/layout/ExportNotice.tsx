@@ -15,13 +15,16 @@ const ACCENT_CLASS = {
 
 /**
  * Toast for an export that needs the user's attention after it ended. A
- * website's cleanup failure is a warning (the site itself is complete); a
- * refusal or a failed export is an error. Unlike the progress toast it does not
- * go away on its own: an export can outlast the user's attention.
+ * website that was written with something falling short is a warning, one
+ * message per shortfall; a refusal or a failed export is an error. Unlike the
+ * progress toast it does not go away on its own: an export can outlast the
+ * user's attention.
  */
 export function ExportNotice({ notice, onDismiss }: ExportNoticeProps) {
   const { t } = useTranslation("common");
-  const tone = notice.kind === "pruneFailed" ? "warning" : "error";
+  const isWarning = notice.kind === "siteWarnings";
+  const tone = isWarning ? "warning" : "error";
+  const messages = isWarning ? notice.warnings : [notice];
   return (
     <div
       role="alert"
@@ -31,12 +34,21 @@ export function ExportNotice({ notice, onDismiss }: ExportNoticeProps) {
       <span className="mt-1 shrink-0">
         <WarningIcon />
       </span>
-      <div className="min-w-0 max-h-[40vh] overflow-y-auto wrap-break-word text-[var(--color-text-primary)]">
-        <p>{t(`exportNotice.${notice.kind}`)}</p>
-        {/* Isolated: the reason is in its source's language and may hold a path. */}
-        {"reason" in notice && (
-          <bdi className="block mt-1 text-[var(--color-text-secondary)]">{notice.reason}</bdi>
-        )}
+      <div className="min-w-0 max-h-[40vh] overflow-y-auto wrap-break-word space-y-3 text-[var(--color-text-primary)]">
+        {messages.map((message) => (
+          <div key={message.kind}>
+            <p>{t(`exportNotice.${message.kind}`)}</p>
+            {/* Isolated: the reason is in its source's language and may hold a path. */}
+            {"reason" in message && (
+              <bdi className="block mt-1 text-[var(--color-text-secondary)]">{message.reason}</bdi>
+            )}
+            {"more" in message && message.more > 0 && (
+              <p className="mt-1 text-[var(--color-text-secondary)]">
+                {t("exportNotice.assetsFailedMore", { count: message.more })}
+              </p>
+            )}
+          </div>
+        ))}
       </div>
       <button
         type="button"

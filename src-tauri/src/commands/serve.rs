@@ -209,7 +209,7 @@ mod tests {
         assert_eq!(serve_ready(app.handle().clone(), None), Ok(()));
         assert_eq!(browser.try_recv(), Ok(()));
 
-        // A warning is about the cleanup, not the site: the pages still reload.
+        // A warning is about what the build left undone: the pages still reload.
         let warning = Some("Warning: cleanup after the export failed".to_string());
         assert_eq!(serve_ready(app.handle().clone(), warning), Ok(()));
         assert_eq!(browser.try_recv(), Ok(()));

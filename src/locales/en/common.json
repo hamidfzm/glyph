@@ -105,6 +105,9 @@
     "exportingPages": "Exporting page {{done}} of {{total}}…"
   },
   "exportNotice": {
+    "assetsFailed": "The website was exported, but some files its pages use could not be copied. Those pages may show a missing or outdated image, media file or download.",
+    "assetsFailedMore_one": "{{count}} more file could not be copied either.",
+    "assetsFailedMore_other": "{{count}} more files could not be copied either.",
     "pruneFailed": "The website was exported, but the cleanup after it did not finish. Outdated pages may be left in the folder, now or after a later export.",
     "failed": "The export failed.",
     "siteFailed": "The website export failed.",
