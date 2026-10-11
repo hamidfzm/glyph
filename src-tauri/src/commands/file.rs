@@ -1,3 +1,4 @@
+use icu_normalizer::ComposingNormalizerBorrowed;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -150,12 +151,15 @@ fn manifest_entry_path(out_dir: &Path, rel: &str) -> io::Result<Option<PathBuf>>
     Ok(parent.starts_with(out_dir).then(|| parent.join(name)))
 }
 
-/// Fold a manifest entry for lookup: separators unified, case ignored. Names
-/// that fold alike are only candidates: a rename that changes nothing but case
-/// rewrites one file on Windows and macOS and leaves two on Linux, which is
-/// the volume's to say (`is_one_file`).
+/// Fold a manifest entry for lookup: separators unified, case and Unicode
+/// normalization form ignored. Names that fold alike are only candidates: a
+/// rename that changes nothing but case rewrites one file on Windows and macOS
+/// and leaves two on Linux, and one that only recomposes an accent rewrites
+/// one file on macOS and leaves two elsewhere, which is the volume's to say
+/// (`is_one_file`).
 fn manifest_entry_key(rel: &str) -> String {
-    rel.replace('\\', "/").to_lowercase()
+    let composed = ComposingNormalizerBorrowed::new_nfc().normalize(rel);
+    composed.replace('\\', "/").to_lowercase()
 }
 
 /// Site-relative paths grouped by what they fold to.
@@ -320,8 +324,8 @@ fn prune_entry(
     let Some(path) = manifest_entry_path(out_dir, rel)? else {
         return Ok(Pruned::Dropped);
     };
-    // The same name in other letters is the page just written where the
-    // volume ignores case, and a stale page beside it where it does not.
+    // The same name spelled another way is the page just written where the
+    // volume reads the two as one, and a stale page beside it where it does not.
     if is_any_of(out_dir, &path, written)? {
         return Ok(Pruned::Dropped);
     }
@@ -1209,6 +1213,11 @@ mod tests {
         fs::read_to_string(dir.join(SITE_MANIFEST_REL)).unwrap()
     }
 
+    /// One name in both forms Unicode gives an accented letter: the letter
+    /// followed by its accent, and the two as a single character.
+    const DECOMPOSED: &str = "cafe\u{301}.html";
+    const COMPOSED: &str = "caf\u{e9}.html";
+
     #[test]
     fn prune_export_dir_removes_only_files_the_previous_export_wrote() {
         let dir = out_dir_with_manifest("prune_stale", &["index.html", "guide.html"]);
@@ -1485,6 +1494,52 @@ mod tests {
     }
 
     #[test]
+    fn prune_export_dir_keeps_the_page_a_recomposed_name_rewrote() {
+        // macOS opens one file by either form of an accented name, so pruning
+        // the old form would delete the page just written.
+        let dir = out_dir_with_manifest("prune_form", &[DECOMPOSED]);
+        fs::write(dir.join(COMPOSED), "the current page").unwrap();
+
+        assert_eq!(prune(&dir, &[COMPOSED]).unwrap(), clean(0));
+
+        assert_eq!(
+            fs::read_to_string(dir.join(COMPOSED)).unwrap(),
+            "the current page"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // Not macOS: it reads the two forms as one file, which is the test above.
+    #[cfg(any(target_os = "linux", windows))]
+    #[test]
+    fn prune_export_dir_removes_the_old_page_of_a_recomposed_name_where_the_form_tells_files_apart()
+    {
+        let dir = out_dir_with_manifest("prune_form_apart", &[DECOMPOSED]);
+        fs::write(dir.join(DECOMPOSED), "the old page").unwrap();
+        fs::write(dir.join(COMPOSED), "the current page").unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.join(DECOMPOSED)).unwrap(),
+            "the old page",
+            "the temp folder is on a volume that ignores the normalization form"
+        );
+
+        assert_eq!(prune(&dir, &[COMPOSED]).unwrap(), clean(1));
+
+        assert!(!dir.join(DECOMPOSED).exists());
+        assert_eq!(
+            fs::read_to_string(dir.join(COMPOSED)).unwrap(),
+            "the current page"
+        );
+        assert_eq!(
+            manifest_text(&dir),
+            serde_json::to_string(&[COMPOSED]).unwrap()
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn prune_export_dir_keeps_the_page_an_entry_names_with_the_other_separator() {
         // A manifest edited by hand: the same path on every platform.
         let dir = out_dir_with_manifest("prune_separator", &["guide\\intro.html"]);
@@ -1526,6 +1581,32 @@ mod tests {
             "got: {error}"
         );
         assert_eq!(manifest_text(&dir), r#"["guide.html","Guide.html"]"#);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_leaves_a_page_it_cannot_tell_from_its_recomposed_name() {
+        let dir = out_dir_with_manifest("prune_form_untold", &[DECOMPOSED]);
+        fs::write(dir.join(DECOMPOSED), "the old page, or the current one").unwrap();
+        fs::write(dir.join(COMPOSED), "the current page").unwrap();
+        // The two forms may be one file on any volume, and the old one cannot
+        // be opened to find out.
+        let sealed = seal(&dir.join(DECOMPOSED));
+
+        let report = prune(&dir, &[COMPOSED]).unwrap();
+
+        drop(sealed);
+        assert_eq!(report.removed, 0);
+        assert!(dir.join(DECOMPOSED).exists());
+        let error = report.error.expect("the page is reported");
+        let untold =
+            format!("Failed to remove {DECOMPOSED:?}: cannot tell whether it is {COMPOSED:?}: ");
+        assert!(error.starts_with(&untold), "got: {error}");
+        assert_eq!(
+            manifest_text(&dir),
+            serde_json::to_string(&[COMPOSED, DECOMPOSED]).unwrap()
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
