@@ -603,9 +603,39 @@ describe("useTabs link rewriting on rename and move", () => {
     expect(fileOf(result).path).toBe("/p/ws/dest/travel.md");
   });
 
-  it("drops a watcher read of a rewritten file that began before the rewrite", async () => {
+  it("reloads what another program wrote right after the rewrite", async () => {
+    let disk = "see [[travel]]";
+    const fileChanged = captureListener("file-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async () => disk,
+        rename_path: async (_cmd, args) => {
+          if (!args?.dryRun) disk = "see [[trip]]";
+          return relinked("/p/ws/trip.md", { files: index });
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await openWorkspace(result);
+    await act(async () => {
+      await result.current.openFile("/p/ws/index.md");
+    });
+    await act(async () => {
+      await result.current.renamePath("/p/ws/travel.md", "trip");
+    });
+    await waitFor(() => expect(fileOf(result).content).toBe("see [[trip]]"));
+
+    // A sync client pulls a newer copy while the rewrite is still recent.
+    disk = "see [[trip]] and [[plans]]";
+    await changeOnDisk(fileChanged, "/p/ws/index.md");
+
+    expect(fileOf(result).content).toBe("see [[trip]] and [[plans]]");
+  });
+
+  it("does not apply a watcher read of a rewritten file that began before the rewrite", async () => {
     const staleRead = deferred<string>();
-    const reads = ["see [[travel]]", staleRead.promise, "see [[trip]]"];
+    // The last read is the overtaken one repeated: it finds the rewritten text.
+    const reads = ["see [[travel]]", staleRead.promise, "see [[trip]]", "see [[trip]]"];
     const fileChanged = captureListener("file-changed");
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
@@ -628,12 +658,14 @@ describe("useTabs link rewriting on rename and move", () => {
     await deliver(() => staleRead.resolve("see [[travel]]"));
 
     expect(fileOf(result).content).toBe("see [[trip]]");
+    expect(reads).toHaveLength(0);
   });
 
-  it("drops a watcher read that arrives before the rewrite's own reload", async () => {
+  it("does not apply a watcher read that arrives before the rewrite's own reload", async () => {
     const staleRead = deferred<string>();
     const ownReload = deferred<string>();
-    const reads = ["see [[travel]]", staleRead.promise, ownReload.promise];
+    const readAgain = deferred<string>();
+    const reads = ["see [[travel]]", staleRead.promise, ownReload.promise, readAgain.promise];
     const fileChanged = captureListener("file-changed");
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
@@ -652,16 +684,22 @@ describe("useTabs link rewriting on rename and move", () => {
     act(() => {
       renaming = result.current.renamePath("/p/ws/travel.md", "trip");
     });
-    await waitFor(() => expect(reads).toHaveLength(0));
-    // No newer read has landed yet, so only the mark on the rewritten file drops this one.
+    await waitFor(() => expect(reads).toHaveLength(1));
+    // No newer read has landed yet, so only the mark on the rewritten file keeps this one out.
     await deliver(() => staleRead.resolve("theirs"));
     expect(fileOf(result).content).toBe("see [[travel]]");
+    expect(reads).toHaveLength(0);
 
     await act(async () => {
       ownReload.resolve("see [[trip]]");
       await renaming;
     });
     expect(fileOf(result).content).toBe("see [[trip]]");
+
+    // The overtaken read, repeated, finds the rewritten text and changes nothing.
+    const tabs = result.current.tabs;
+    await deliver(() => readAgain.resolve("see [[trip]]"));
+    expect(result.current.tabs).toBe(tabs);
   });
 
   it("names the file a rewrite stopped at and reads back only open files", async () => {
@@ -719,9 +757,9 @@ describe("useTabs reloads across a rename or move", () => {
   const RENAMED = "/p/ws/renamed.md";
 
   /**
-   * A disk where a rename or move really moves `from` to `to`, so a read of an
-   * old path fails. `onMoved` runs before the command answers, which is when
-   * the watcher reports the move.
+   * A disk that keeps what the app writes, and where a rename or move really
+   * moves `from` to `to`, so a read of an old path fails. `onMoved` runs before
+   * the command answers, which is when the watcher reports the move.
    */
   function movableDisk(
     files: Record<string, string>,
@@ -746,6 +784,9 @@ describe("useTabs reloads across a rename or move", () => {
           const body = disk.get(String(args?.path));
           if (body === undefined) throw new Error("No such file");
           return body;
+        },
+        write_file: async (_cmd, args) => {
+          disk.set(String(args?.path), String(args?.content));
         },
         rename_path: relocate,
         move_path: relocate,
@@ -847,17 +888,13 @@ describe("useTabs reloads across a rename or move", () => {
   it("keeps the undo stack when a rename's own report re-reads unchanged text", async () => {
     const fileChanged = captureListener("file-changed");
     // The report arrives while the tab is still on its old path, as it does in the app.
-    const disk = movableDisk({ [NOTE]: "- [ ] task" }, NOTE, RENAMED, () =>
+    movableDisk({ [NOTE]: "- [ ] task" }, NOTE, RENAMED, () =>
       fileChanged.handler?.({ payload: NOTE }),
     );
     const { result, tabId } = await openNote();
     await act(async () => {
       await result.current.toggleTask(tabId, 1);
     });
-    disk.set(NOTE, "- [x] task");
-    // Long after the toggle, so its self-save grace cannot be what skips the reload.
-    const realNow = Date.now;
-    vi.spyOn(Date, "now").mockImplementation(() => realNow() + 5000);
 
     await act(async () => {
       await result.current.renamePath(NOTE, "renamed");
@@ -871,22 +908,7 @@ describe("useTabs reloads across a rename or move", () => {
     expect(fileOf(result)).toMatchObject({ path: RENAMED, content: "- [ ] task" });
   });
 
-  it("skips the echo of a save made before the tab was renamed", async () => {
-    movableDisk({ [NOTE]: "- [ ] task" }, NOTE, RENAMED);
-    const fileChanged = captureListener("file-changed");
-    const { result, tabId } = await openNote();
-
-    // The mock disk never receives the toggle, so a reload would put the box back.
-    await act(async () => {
-      await result.current.toggleTask(tabId, 1);
-    });
-    await reportThen(fileChanged, [NOTE], () => result.current.renamePath(NOTE, "renamed"));
-    await waitOutDebounce();
-
-    expect(fileOf(result)).toMatchObject({ path: RENAMED, content: "- [x] task" });
-  });
-
-  it("skips a pending change when the renamed tab was saved since", async () => {
+  it("reloads another program's write after a save when the tab is renamed before the read", async () => {
     const disk = movableDisk({ [NOTE]: "v1" }, NOTE, RENAMED);
     const fileChanged = captureListener("file-changed");
     const { result, tabId } = await openNote();
@@ -894,16 +916,22 @@ describe("useTabs reloads across a rename or move", () => {
       result.current.setTabMode(tabId, EDITOR_MODE.edit);
       result.current.updateEditContent(tabId, "mine");
     });
-
-    // The mock disk keeps "theirs", so a reload after the save would replace "mine".
-    disk.set(NOTE, "theirs");
-    await reportThen(fileChanged, [NOTE], () => result.current.renamePath(NOTE, "renamed"));
     await act(async () => {
       await result.current.saveDocument(tabId);
     });
+    expect(disk.get(NOTE)).toBe("mine");
+
+    // A formatter rewrites the file as soon as the save lands, and the note is renamed at once.
+    disk.set(NOTE, "theirs");
+    await reportThen(fileChanged, [NOTE], () => result.current.renamePath(NOTE, "renamed"));
     await waitOutDebounce();
 
-    expect(fileOf(result)).toMatchObject({ path: RENAMED, content: "mine", dirty: false });
+    expect(fileOf(result)).toMatchObject({
+      path: RENAMED,
+      content: "theirs",
+      editContent: "theirs",
+      dirty: false,
+    });
   });
 
   it("reads nothing for a tab renamed to an image before the debounce ended", async () => {

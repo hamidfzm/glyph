@@ -10,7 +10,6 @@ interface UseTabEventsParams {
   stateRef: RefObject<TabsState>;
   workspaceRef: RefObject<Workspace | null>;
   isAutoReloadEnabled: () => boolean;
-  isRecentSelfSave: (path: string) => boolean;
   reloadFromDisk: (tabId: string, path: string) => Promise<void>;
   refreshWorkspace: (root: string) => Promise<void>;
 }
@@ -24,7 +23,6 @@ export function useTabEvents({
   stateRef,
   workspaceRef,
   isAutoReloadEnabled,
-  isRecentSelfSave,
   reloadFromDisk,
   refreshWorkspace,
 }: UseTabEventsParams): void {
@@ -52,8 +50,7 @@ export function useTabEvents({
         if (!tab) return;
         // Images are never watched and never read as text; ignore defensively.
         if (isImageFile(tab.file.path)) return;
-        // Skip the echo of our own write, marked under the path the tab had when it was written.
-        if (isRecentSelfSave(changedPath) || isRecentSelfSave(tab.file.path)) return;
+        // Read the echo of the app's own write too: only its text tells it from another program's.
         await reloadFromDisk(tab.id, tab.file.path);
       }, FILE_RELOAD_DEBOUNCE);
       timeouts.set(key, timeout);

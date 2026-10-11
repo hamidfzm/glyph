@@ -7,6 +7,7 @@ import {
   type Tab,
   type TabsState,
   tabPathOf,
+  updateFiles,
 } from "@/lib/tabs";
 
 /**
@@ -87,17 +88,7 @@ export function useTabStrip() {
   // That keeps a no-op edit from churning identities (and rescheduling
   // autosave) on every keystroke round-trip through the editor.
   const updateActiveFile = useCallback((id: string, mutator: (f: FileState) => FileState) => {
-    setState((prev) => {
-      let changed = false;
-      const tabs = prev.tabs.map((t) => {
-        if (t.id !== id || t.kind === "graph") return t;
-        const file = mutator(t.file);
-        if (file === t.file) return t;
-        changed = true;
-        return { ...t, file };
-      });
-      return changed ? { ...prev, tabs } : prev;
-    });
+    setState((prev) => updateFiles(prev, (tab) => (tab.id === id ? mutator(tab.file) : tab.file)));
   }, []);
 
   const setTabMode = useCallback(
