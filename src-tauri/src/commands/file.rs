@@ -335,7 +335,7 @@ pub fn prune_export_dir(
     Ok(PruneReport { removed, error })
 }
 
-/// Refuses a missing or ungranted path for a caller that reads nothing itself (an image open).
+/// Refuses a missing or ungranted path for a caller that reads nothing itself. A folder passes.
 #[tauri::command]
 pub fn check_path_exists(path: String, grants: State<'_, GrantRegistry>) -> Result<(), String> {
     let path = grants.ensure_readable(&path)?;
@@ -612,16 +612,20 @@ mod tests {
         let file_path = dir.join("there.md");
         fs::write(&file_path, "x").unwrap();
 
+        // A missing path gets the same answer, so the check runs before the
+        // lookup and says nothing about what is on disk.
         let app = app_with_grants();
-        let result = check_path_exists(
-            file_path.to_string_lossy().to_string(),
-            app.state::<GrantRegistry>(),
-        );
-        let err = result.expect_err("must be denied");
-        assert!(
-            err.starts_with("path is outside the allowed workspaces and files:"),
-            "got: {err}"
-        );
+        for path in [file_path.clone(), dir.join("nope.md")] {
+            let result = check_path_exists(
+                path.to_string_lossy().to_string(),
+                app.state::<GrantRegistry>(),
+            );
+            let err = result.expect_err("must be denied");
+            assert!(
+                err.starts_with("path is outside the allowed workspaces and files:"),
+                "got: {err}"
+            );
+        }
 
         let _ = fs::remove_file(&file_path);
     }
