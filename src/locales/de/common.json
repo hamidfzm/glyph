@@ -105,6 +105,9 @@
     "exportingPages": "Seite {{done}} von {{total}} wird exportiert…"
   },
   "exportNotice": {
+    "assetsFailed": "Die Website wurde exportiert, aber einige Dateien, die ihre Seiten verwenden, konnten nicht kopiert werden. Auf diesen Seiten kann ein Bild, eine Mediendatei oder ein Download fehlen oder veraltet sein.",
+    "assetsFailedMore_one": "{{count}} weitere Datei konnte ebenfalls nicht kopiert werden.",
+    "assetsFailedMore_other": "{{count}} weitere Dateien konnten ebenfalls nicht kopiert werden.",
     "pruneFailed": "Die Website wurde exportiert, aber das Aufräumen danach wurde nicht abgeschlossen. Veraltete Seiten können im Ordner zurückbleiben, jetzt oder nach einem späteren Export.",
     "failed": "Der Export ist fehlgeschlagen.",
     "siteFailed": "Der Website-Export ist fehlgeschlagen.",
