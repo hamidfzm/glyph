@@ -98,7 +98,6 @@ function makeNotebookTab(mode: EditorMode = "view"): FileTab {
     file: {
       path: "/p/analysis.ipynb",
       content: '{"cells": []}',
-      metadata: { name: "analysis.ipynb", path: "/p/analysis.ipynb", size: 0, modified: 0 },
       scrollTop: 0,
       mode,
       editContent: null,
@@ -116,7 +115,6 @@ function makeCanvasTab(mode: EditorMode = "view"): FileTab {
     file: {
       path: "/p/board.canvas",
       content: '{"nodes":[],"edges":[]}',
-      metadata: { name: "board.canvas", path: "/p/board.canvas", size: 0, modified: 0 },
       scrollTop: 0,
       mode,
       editContent: null,
@@ -134,7 +132,6 @@ function makeFileTab(mode: EditorMode = "view"): FileTab {
     file: {
       path: "/p/file.md",
       content: "# hi",
-      metadata: { name: "file.md", path: "/p/file.md", size: 0, modified: 0 },
       scrollTop: 0,
       mode,
       editContent: null,
@@ -153,7 +150,6 @@ function makeImageTab(): FileTab {
       path: "/p/diagram.svg",
       // Images carry no text content; the viewer renders from the asset protocol.
       content: null,
-      metadata: { name: "diagram.svg", path: "/p/diagram.svg", size: 0, modified: 0 },
       scrollTop: 0,
       mode: "view",
       editContent: null,

@@ -17,7 +17,6 @@ const makeFileTab = (i: number): FileTab => ({
   file: {
     path: `/path/to/file${i}.md`,
     content: `# File ${i}`,
-    metadata: { name: `file${i}.md`, path: `/path/to/file${i}.md`, size: 100, modified: 0 },
     scrollTop: 0,
     mode: "view",
     editContent: null,
@@ -130,6 +129,21 @@ describe("TabBar", () => {
     expect(screen.getByText("file2.md")).toBeInTheDocument();
   });
 
+  it("relabels a tab when its file is renamed under it", () => {
+    const tab = makeFileTab(0);
+    const { rerender, value } = renderTabBar({ tabs: [tab], activeTabId: "tab-0" });
+    expect(screen.getByRole("button", { name: "file0.md" })).toBeInTheDocument();
+
+    const renamed: FileTab = { ...tab, file: { ...tab.file, path: "/path/to/trip.md" } };
+    rerender(
+      <Wrapper value={{ ...value, tabs: [renamed] }} sidebar={sidebarLayoutValue()}>
+        <TabBar onToggleAIChat={null} onOpenPalette={vi.fn()} />
+      </Wrapper>,
+    );
+    expect(screen.getByRole("button", { name: "trip.md" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "file0.md" })).not.toBeInTheDocument();
+  });
+
   it("highlights the active tab", () => {
     renderTabBar({ tabs: makeTabs(2), activeTabId: "tab-1" });
     const activeTab = screen.getByText("file1.md").closest(".tab-item");
@@ -169,14 +183,7 @@ describe("TabBar", () => {
   it("marks file tabs outside the workspace as loose", () => {
     const inside = makeFileTab(0); // /path/to/file0.md
     const base = makeFileTab(1);
-    const outside: FileTab = {
-      ...base,
-      file: {
-        ...base.file,
-        path: "/elsewhere/loose.md",
-        metadata: { name: "loose.md", path: "/elsewhere/loose.md", size: 0, modified: 0 },
-      },
-    };
+    const outside: FileTab = { ...base, file: { ...base.file, path: "/elsewhere/loose.md" } };
     renderTabBar({
       tabs: [inside, outside],
       activeTabId: "tab-0",
@@ -202,19 +209,19 @@ describe("TabBar", () => {
     expect(container.querySelector(".tab-dirty-dot")).toBeInTheDocument();
   });
 
-  it("derives the label from the path when a file tab has no metadata (mobile picker)", () => {
+  it.each([
+    ["a Windows path", "C:\\Users\\me\\notes\\Trip.md", "Trip.md"],
+    ["a name with a colon", "/ws/Standup 10:30.md", "Standup 10:30.md"],
+    ["a mobile picker URI", "file:///On%20My%20iPhone/Picked%20Note.md", "Picked Note.md"],
+  ])("labels a tab on %s with the file's name", (_case, path, name) => {
     const tab = makeFileTab(0);
-    const bare: FileTab = {
-      ...tab,
-      file: { ...tab.file, path: "file:///On%20My%20iPhone/Picked%20Note.md", metadata: null },
-    };
-    renderTabBar({ tabs: [bare], activeTabId: "tab-0" });
-    expect(screen.getByText("Picked Note.md")).toBeInTheDocument();
+    renderTabBar({ tabs: [{ ...tab, file: { ...tab.file, path } }], activeTabId: "tab-0" });
+    expect(screen.getByRole("button", { name })).toBeInTheDocument();
   });
 
-  it("falls back to Untitled when a file tab has no metadata and no usable path", () => {
+  it("falls back to Untitled when a file tab has no usable path", () => {
     const tab = makeFileTab(0);
-    const bare: FileTab = { ...tab, file: { ...tab.file, path: "", metadata: null } };
+    const bare: FileTab = { ...tab, file: { ...tab.file, path: "" } };
     renderTabBar({ tabs: [bare], activeTabId: "tab-0" });
     expect(screen.getByText("Untitled")).toBeInTheDocument();
   });

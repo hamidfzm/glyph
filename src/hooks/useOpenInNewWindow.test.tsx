@@ -16,7 +16,7 @@ function openTab(path: string): Tab {
   return {
     id: "tab-0",
     kind: "file",
-    file: { path, content: "hi", mode: "view", dirty: false, metadata: null, virtual: false },
+    file: { path, content: "hi", mode: "view", dirty: false, virtual: false },
   } as Tab;
 }
 

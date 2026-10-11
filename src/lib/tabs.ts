@@ -4,13 +4,6 @@
 
 import type { EditorMode } from "@/lib/settings";
 
-export interface FileMetadata {
-  name: string;
-  path: string;
-  size: number;
-  modified: number;
-}
-
 export interface DirEntry {
   name: string;
   path: string;
@@ -21,7 +14,6 @@ export interface DirEntry {
 export interface FileState {
   path: string;
   content: string | null;
-  metadata: FileMetadata | null;
   scrollTop: number;
   mode: EditorMode;
   editContent: string | null;
@@ -81,7 +73,6 @@ export function makeFileState(path: string, mode: EditorMode): FileState {
   return {
     path,
     content: null,
-    metadata: null,
     scrollTop: 0,
     mode,
     editContent: null,
