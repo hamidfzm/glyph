@@ -18,7 +18,7 @@ import { useTabDragReorder } from "@/hooks/useTabDragReorder";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isImageFile } from "@/lib/imageExtensions";
 import { isLooseFilePath } from "@/lib/looseFile";
-import { displayName } from "@/lib/paths";
+import { displayName, lastSegment } from "@/lib/paths";
 import { isMobile } from "@/lib/platform";
 import { EDITOR_MODE, effectiveEditorMode } from "@/lib/settings";
 import { activeFileOf, type Tab, tabPathOf } from "@/lib/tabs";
@@ -26,12 +26,8 @@ import { ActionBarButton } from "./ActionBarButton";
 import { TabBarActions } from "./TabBarActions";
 
 function tabLabel(tab: Tab, t: TFunction<"common">): string {
-  if (tab.kind === "graph") {
-    const segments = tab.root.split(/[\\/]/).filter(Boolean);
-    return t("tabBar.graphLabel", { name: segments[segments.length - 1] ?? tab.root });
-  }
-  // Mobile picker files carry no metadata; fall back to the path itself.
-  return tab.file.metadata?.name ?? (displayName(tab.file.path) || t("tabBar.untitled"));
+  if (tab.kind === "graph") return t("tabBar.graphLabel", { name: lastSegment(tab.root) });
+  return displayName(tab.file.path) || t("tabBar.untitled");
 }
 
 interface TabBarProps {

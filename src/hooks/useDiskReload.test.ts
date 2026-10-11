@@ -20,7 +20,6 @@ const stateAt = (revision: number, file: Partial<FileState> = {}): TabsState => 
       file: {
         path: "/p/a.md",
         content: "old",
-        metadata: null,
         scrollTop: 0,
         mode: EDITOR_MODE.edit,
         editContent: "old",
@@ -48,8 +47,7 @@ function renderReload(initial: TabsState, selfSaveCount = () => 0) {
 /** Park every read on a promise the test settles, listed in the order the reads began. */
 function parkReads() {
   const reads: Deferred<string>[] = [];
-  vi.mocked(invoke).mockImplementation(async (cmd) => {
-    if (cmd !== "read_file") return null;
+  vi.mocked(invoke).mockImplementation(async () => {
     const read = deferred<string>();
     reads.push(read);
     return read.promise;
@@ -63,7 +61,7 @@ const bufferOf = (state: TabsState) => state.tabs[0].file?.editContent;
 describe("useDiskReload", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
-    vi.mocked(invoke).mockImplementation(async (cmd) => (cmd === "read_file" ? "new" : null));
+    vi.mocked(invoke).mockResolvedValue("new");
   });
 
   it("replaces a clean tab's content and buffer with what is on disk", async () => {

@@ -12,7 +12,7 @@ function fileTab(id: string, path: string, virtual = false): Tab {
   return {
     id,
     kind: "file",
-    file: { path, content: "", mode: "view", dirty: false, metadata: null, virtual },
+    file: { path, content: "", mode: "view", dirty: false, virtual },
   } as Tab;
 }
 

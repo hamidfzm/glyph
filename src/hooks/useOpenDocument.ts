@@ -16,7 +16,6 @@ import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { isSourceDocument } from "@/lib/sourceDocuments";
 import { generateTabId, nextUntitledTitle } from "@/lib/tabIds";
 import {
-  type FileMetadata,
   type FileTab,
   type GraphTab,
   makeFileState,
@@ -126,25 +125,18 @@ export function useOpenDocument({
 
       const id = generateTabId();
       try {
-        // Images are binary: never read them as text. Load metadata only and
-        // let the image viewer render straight from the asset protocol. (No
-        // file watch — the asset URL is static, so an on-disk change would not
-        // refresh it anyway.) Documents load their text and start a watch.
+        // Images are binary: never read them as text. The viewer renders from
+        // the asset protocol, whose URL is static, so a watch would refresh
+        // nothing. Mobile picker URIs are out of reach of the Rust commands
+        // (see loadFileContent), the check and the watch below included.
         const isImage = isImageFile(path);
-        let content: string | null;
-        let metadata: FileMetadata | null;
+        let content: string | null = null;
         if (isImage) {
-          content = null;
-          // Same sandboxed-URI caveat as loadFileContent.
-          metadata = isMobilePlatform()
-            ? null
-            : await invoke<FileMetadata>("get_file_metadata", { path });
+          // With no text to read, this is what refuses a missing or ungranted image.
+          if (!isMobilePlatform()) await invoke("get_file_metadata", { path });
         } else {
-          ({ content, metadata } = await loadFileContent(path));
-          // metadata is null exactly for mobile picker URIs, unwatchable too.
-          if (metadata) {
-            await invoke("watch_file", { path });
-          }
+          content = await loadFileContent(path);
+          if (!isMobilePlatform()) await invoke("watch_file", { path });
         }
         // The caller lost interest while the content loaded (the workspace
         // being restored was replaced): drop the tab and its fresh watch
@@ -175,7 +167,6 @@ export function useOpenDocument({
           file: {
             ...makeFileState(path, mode),
             content,
-            metadata,
             scrollTop: options?.initialScrollTop ?? 0,
           },
         };

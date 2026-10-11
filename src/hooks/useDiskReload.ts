@@ -25,7 +25,7 @@ export function useDiskReload({ setState, forgetHistory, selfSaveCount }: UseDis
       const order = started.current;
       const savesAtStart = selfSaveCount(path);
       try {
-        const { content, metadata } = await loadFileContent(path);
+        const content = await loadFileContent(path);
         // A save mid-read leaves the tab clean, so nothing below stops the text it replaced.
         if (selfSaveCount(path) !== savesAtStart) return;
         // Reads resolve in any order; an earlier one never replaces a later one.
@@ -48,7 +48,6 @@ export function useDiskReload({ setState, forgetHistory, selfSaveCount }: UseDis
               file: {
                 ...t.file,
                 content,
-                metadata,
                 ...(t.file.editContent != null ? { editContent: content } : {}),
               },
             };

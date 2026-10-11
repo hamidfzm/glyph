@@ -6,7 +6,7 @@ import type { EnqueueWrite } from "@/hooks/useWriteQueue";
 import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { basename, isPathInside } from "@/lib/paths";
 import { pickSave } from "@/lib/pickers";
-import type { FileMetadata, FileState, TabsState } from "@/lib/tabs";
+import type { FileState, TabsState } from "@/lib/tabs";
 import { setWorkspaceLastFile } from "@/lib/workspace";
 
 interface UseDocumentSaveOptions {
@@ -86,12 +86,9 @@ export function useDocumentSave({
         return false;
       }
       markSelfSave(target);
-      // pickSave grants write-only, so watch/metadata may be declined; both are
-      // best-effort and never block the save.
+      // pickSave grants write-only, so the watch may be declined; it is
+      // best-effort and never blocks the save.
       invoke("watch_file", { path: target }).catch(() => {});
-      const metadata = await invoke<FileMetadata>("get_file_metadata", { path: target }).catch(
-        () => null,
-      );
       setState((prev) => ({
         ...prev,
         tabs: prev.tabs.map((tab) => {
@@ -105,7 +102,6 @@ export function useDocumentSave({
               // Stay dirty when a newer edit landed while the write was in flight.
               dirty: tab.file.revision !== revision,
               content,
-              metadata,
             },
           };
         }),

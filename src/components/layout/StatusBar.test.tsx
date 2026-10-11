@@ -34,7 +34,6 @@ function buildFileTab(path: string): FileTab {
     file: {
       path,
       content: "x",
-      metadata: { name: path.split("/").pop() ?? path, path, size: 0, modified: 0 },
       scrollTop: 0,
       mode: "view",
       editContent: null,

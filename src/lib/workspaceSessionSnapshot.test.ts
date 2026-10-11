@@ -9,7 +9,6 @@ function fileTab(id: string, path: string): Tab & { kind: "file" } {
     file: {
       path,
       content: "",
-      metadata: null,
       scrollTop: 0,
       mode: "view",
       editContent: null,

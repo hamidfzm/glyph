@@ -237,19 +237,15 @@ describe("useTabs in-memory documents", () => {
     expect(fileOf(result).dirty).toBe(false);
   });
 
-  it("keeps the tab dirty when an edit lands after the Save As write, and the next save writes it", async () => {
-    const writeFile = vi.fn().mockResolvedValue(undefined);
-    const metadataStarted = deferred();
-    const metadataGate = deferred();
+  it("keeps the tab dirty when an edit lands during the Save As write, and the next save writes it", async () => {
+    const writeStarted = deferred();
+    const writeGate = deferred();
+    const writeFile = vi.fn().mockImplementation(async () => {
+      writeStarted.resolve();
+      await writeGate.promise;
+    });
     vi.mocked(invoke).mockImplementation(
-      makeInvoker({
-        write_file: writeFile as unknown as Invoker,
-        get_file_metadata: async () => {
-          metadataStarted.resolve();
-          await metadataGate.promise;
-          return { name: "saved.md", path: "/p/saved.md", size: 5, modified: 0 };
-        },
-      }) as typeof invoke,
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
     );
     vi.mocked(pickSave).mockResolvedValue("/p/saved.md");
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -258,13 +254,13 @@ describe("useTabs in-memory documents", () => {
     let saving: Promise<boolean> | undefined;
     await act(async () => {
       saving = result.current.saveDocument(tabId);
-      await metadataStarted.promise;
+      await writeStarted.promise;
     });
     act(() => {
       result.current.updateEditContent(tabId, "first second");
     });
     await act(async () => {
-      metadataGate.resolve();
+      writeGate.resolve();
       await saving;
     });
 
@@ -397,18 +393,17 @@ describe("useTabs in-memory documents", () => {
     expect(fileOf(result).dirty).toBe(false);
   });
 
-  it("saveDocument adopts the path outside the workspace even when metadata is declined", async () => {
+  it("saveDocument adopts the path outside the workspace even when the watch is declined", async () => {
     const setLastFile = vi.fn().mockResolvedValue(undefined);
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         write_file: async () => undefined,
-        get_file_metadata: async (_cmd, args) => {
-          // The pre-existing note's open reads metadata fine; only the saved
-          // target's read is declined (write-only grant).
+        watch_file: async (_cmd, args) => {
+          // The pre-existing note's open is watched fine; only the saved
+          // target's watch is declined (write-only grant).
           if ((args as { path: string }).path === "/save-out/note.md") {
             throw new Error("no read grant");
           }
-          return { name: "", path: "", size: 0, modified: 0 };
         },
         workspace_set_last_file: setLastFile as unknown as Invoker,
       }) as typeof invoke,
@@ -444,7 +439,6 @@ describe("useTabs in-memory documents", () => {
     expect(tab).toBeTruthy();
     if (tab?.kind === "file") {
       expect(tab.file.virtual).toBe(false);
-      expect(tab.file.metadata).toBeNull();
     }
     // The save target sits outside the workspace, so it is never recorded as
     // the workspace's last file (the earlier in-workspace open is unrelated).

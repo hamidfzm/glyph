@@ -1,11 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EDITOR_MODE } from "@/lib/settings";
 import type { Relink } from "@/lib/vault";
 import { expectConsole } from "@/test/consoleGuard";
 import { deferred } from "@/test/deferred";
+import { renderTabStrip } from "@/test/renderTabStrip";
 import {
   captureListener,
   changeOnDisk,
@@ -197,6 +198,25 @@ describe("useTabs renaming, moving and deleting", () => {
     expect(invoke).toHaveBeenCalledWith("watch_file", { path: "/p/ws/renamed.md" });
   });
 
+  it("renamePath relabels the tab of the renamed note", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ rename_path: async () => relinked("/p/ws/trip.md") }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await openWorkspace(result);
+    await act(async () => {
+      await result.current.openFile("/p/ws/travel.md");
+    });
+
+    await act(async () => {
+      await result.current.renamePath("/p/ws/travel.md", "trip");
+    });
+
+    renderTabStrip({ tabs: result.current.tabs });
+    expect(screen.getByRole("button", { name: "trip.md" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "travel.md" })).not.toBeInTheDocument();
+  });
+
   it("renamePath keeps the navigation history pointing at the renamed note", async () => {
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
@@ -300,6 +320,26 @@ describe("useTabs renaming, moving and deleting", () => {
     }
     expect(invoke).toHaveBeenCalledWith("unwatch_file", { path: "/p/ws/sub/a.md" });
     expect(invoke).toHaveBeenCalledWith("watch_file", { path: "/p/ws/dest/sub/a.md" });
+  });
+
+  it("movePath keeps the name on the tab of a note inside the moved folder", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ move_path: async () => relinked("/p/ws/dest/sub") }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await openWorkspace(result);
+    await act(async () => {
+      await result.current.openFile("/p/ws/sub/a.md");
+    });
+
+    await act(async () => {
+      await result.current.movePath("/p/ws/sub", "/p/ws/dest");
+    });
+
+    renderTabStrip({ tabs: result.current.tabs });
+    // The tooltip is the tab's whole path.
+    const tab = screen.getByTitle("/p/ws/dest/sub/a.md");
+    expect(within(tab).getByRole("button", { name: "a.md" })).toBeInTheDocument();
   });
 
   it("movePath returns the original path on a no-op move", async () => {

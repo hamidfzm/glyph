@@ -10,25 +10,14 @@ import {
 } from "./TabsContext";
 import { TabsProvider } from "./TabsProvider";
 
-// Mock invoke so opening a file resolves with content/metadata. `read_file`
-// echoes a marker derived from the path so we can assert which file is active.
+// Mock invoke so opening a file resolves with `content`.
 function mockInvokeOpening(content: string) {
-  vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
+  vi.mocked(invoke).mockImplementation(((cmd: string) => {
     switch (cmd) {
       case "take_pending_opens":
         return Promise.resolve([]);
       case "read_file":
         return Promise.resolve(content);
-      case "get_file_metadata":
-        return Promise.resolve({
-          name:
-            String(args?.path ?? "")
-              .split("/")
-              .pop() ?? "",
-          path: String(args?.path ?? ""),
-          size: 0,
-          modified: 0,
-        });
       default:
         return Promise.resolve(undefined);
     }
@@ -159,19 +148,12 @@ describe("TabsProvider", () => {
   });
 
   it("opens the file a launch queued for the window (CLI path) on mount", async () => {
-    vi.mocked(invoke).mockImplementation(((cmd: string, args?: Record<string, unknown>) => {
+    vi.mocked(invoke).mockImplementation(((cmd: string) => {
       switch (cmd) {
         case "take_pending_opens":
           return Promise.resolve([{ kind: "file", path: "/cli/file.md" }]);
         case "read_file":
           return Promise.resolve("# Hello");
-        case "get_file_metadata":
-          return Promise.resolve({
-            name: "file.md",
-            path: String(args?.path ?? ""),
-            size: 0,
-            modified: 0,
-          });
         case "watch_file":
         case "watch_directory":
           return Promise.resolve(undefined);
