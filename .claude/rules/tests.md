@@ -16,6 +16,7 @@ paths:
 - **Fixtures**: sample data reused across test files (tabs, TOC entries, DirEntry trees) goes in `src/test/fixtures/`. Data used by one file stays inline in that file.
 - Mock Tauri modules per file with `vi.mock("@tauri-apps/api/core")` etc.; mock only the modules the file under test touches.
 - Query priority: prefer `getByRole` with an accessible name, then `getByText`; reach for `container` queries only for non-semantic DOM (canvas, SVG internals).
+- **Never await a Testing Library async utility inside an `act(...)` callback** (`findBy*`, `waitFor`, a user-event call). While it waits it switches `IS_REACT_ACT_ENVIRONMENT` off, so a React update landing in the still-open `act` scope logs "The current testing environment is not configured to support act(...)" and the console guard fails the test, only on runs slow enough for an update to land there. Find the element first, then act on it (`fireEvent.click(await screen.findByRole(...))`); to wait on a mock inside `act`, use `vi.waitFor`, which leaves the act environment alone. That only works for a call the code makes without a render in between: renders queued in an open `act` scope run when it exits.
 
 ## WebKit smoke tests (Playwright)
 

@@ -253,9 +253,7 @@ describe("App", () => {
       ),
     ).toBeInTheDocument();
 
-    await act(async () => {
-      (await findByRole("button", { name: /close/i })).click();
-    });
+    fireEvent.click(await findByRole("button", { name: /close/i }));
     await waitFor(() => expect(queryByRole("dialog")).not.toBeInTheDocument());
   });
 

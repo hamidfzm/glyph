@@ -63,7 +63,7 @@ describe("useWorkspaceIndex", () => {
     await act(async () => {
       first = result.current.refreshIndexes("/ws", () => true);
       second = result.current.refreshIndexes("/ws", () => true);
-      await waitFor(() => expect(pending).toHaveLength(2));
+      await vi.waitFor(() => expect(pending).toHaveLength(2));
       pending[1](vault(["/ws/newest.md"]));
       pending[0](vault(["/ws/stale.md"]));
       await Promise.all([first, second]);
@@ -91,12 +91,12 @@ describe("useWorkspaceIndex", () => {
 
     await act(async () => {
       const opening = result.current.scanWorkspace("/ws", () => true);
-      await waitFor(() => expect(opened).toHaveLength(1));
+      await vi.waitFor(() => expect(opened).toHaveLength(1));
       // A file lands after the walker passed its folder.
       await result.current.refreshIndexes("/ws", () => true);
       opened[0](vault(["/ws/opened.md"]));
       await opening;
-      await waitFor(() => expect(opened).toHaveLength(2));
+      await vi.waitFor(() => expect(opened).toHaveLength(2));
       opened[1](vault(["/ws/opened.md", "/ws/late.md"]));
     });
 
@@ -113,7 +113,7 @@ describe("useWorkspaceIndex", () => {
 
     await act(async () => {
       const refresh = result.current.refreshIndexes("/ws", () => true);
-      await waitFor(() => expect(pending).toHaveLength(1));
+      await vi.waitFor(() => expect(pending).toHaveLength(1));
       result.current.clearIndexes();
       pending[0](vault(["/ws/late.md"]));
       await refresh;
@@ -128,7 +128,7 @@ describe("useWorkspaceIndex", () => {
 
     await act(async () => {
       const refresh = result.current.refreshIndexes("/ws", () => false);
-      await waitFor(() => expect(pending).toHaveLength(1));
+      await vi.waitFor(() => expect(pending).toHaveLength(1));
       pending[0](vault(["/ws/late.md"]));
       await refresh;
     });
