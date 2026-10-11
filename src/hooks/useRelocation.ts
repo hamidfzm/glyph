@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { type RefObject, useCallback } from "react";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import { basename, movedPath } from "@/lib/paths";
-import type { FileTab, TabsState, Workspace } from "@/lib/tabs";
+import { fileTabs, type TabsState, type Workspace } from "@/lib/tabs";
 import type { Relink, RelinkRequest } from "@/lib/vault";
 
 interface UseRelocationOptions {
@@ -10,16 +10,13 @@ interface UseRelocationOptions {
   workspaceRef: RefObject<Workspace | null>;
   saveDocument: (id: string) => Promise<boolean>;
   markSelfSave: (path: string) => void;
-  reloadFromDisk: (path: string, revision?: number) => Promise<void>;
+  reloadFromDisk: (tabId: string, path: string, revision?: number) => Promise<void>;
   refreshIndexes: (root: string, isCurrent: () => boolean) => Promise<void>;
   refreshAfterRename: (path: string, newPath: string, root: string) => Promise<void>;
   refreshAfterMove: (from: string, toDir: string, newPath: string, root: string) => Promise<void>;
   confirmRelink: (request: RelinkRequest) => Promise<boolean>;
   onWorkspaceNotice: (notice: WorkspaceNotice, options?: { persistent?: boolean }) => void;
 }
-
-const fileTabs = (state: TabsState) =>
-  state.tabs.filter((tab): tab is FileTab => tab.kind === "file");
 
 /**
  * Rename and move with their link rewrite. The backend previews the files it
@@ -87,7 +84,7 @@ export function useRelocation({
       const reloads = fileTabs(stateRef.current)
         .map((tab) => ({ id: tab.id, path: movedPath(tab.file.path, from, done.newPath) }))
         .filter((tab) => rewritten.has(tab.path))
-        .map((tab) => reloadFromDisk(tab.path, revisions.get(tab.id)));
+        .map((tab) => reloadFromDisk(tab.id, tab.path, revisions.get(tab.id)));
       const isCurrent = () => workspaceRef.current?.root === root;
       await Promise.all([...reloads, refreshIndexes(root, isCurrent)]);
     },

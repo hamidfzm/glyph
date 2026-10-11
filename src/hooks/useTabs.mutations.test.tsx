@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { isPathInside, movedPath } from "@/lib/paths";
 import { EDITOR_MODE } from "@/lib/settings";
 import type { Relink } from "@/lib/vault";
 import { expectConsole } from "@/test/consoleGuard";
@@ -748,5 +749,201 @@ describe("useTabs link rewriting on rename and move", () => {
     });
 
     expect([renamed, moved]).toEqual([null, null]);
+  });
+});
+
+describe("useTabs reloads across a rename or move", () => {
+  const NOTE = "/p/ws/note.md";
+  const RENAMED = "/p/ws/renamed.md";
+
+  /**
+   * A disk that keeps what the app writes, and where a rename or move really
+   * moves `from` to `to`, so a read of an old path fails. `onMoved` runs before
+   * the command answers, which is when the watcher reports the move.
+   */
+  function movableDisk(
+    files: Record<string, string>,
+    from: string,
+    to: string,
+    onMoved = () => {},
+  ) {
+    const disk = new Map(Object.entries(files));
+    const relocate = async (_cmd: string, args?: Record<string, unknown>) => {
+      if (args?.dryRun) return relinked(to);
+      for (const [path, body] of [...disk]) {
+        if (!isPathInside(path, from)) continue;
+        disk.delete(path);
+        disk.set(movedPath(path, from, to), body);
+      }
+      onMoved();
+      return relinked(to);
+    };
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_file: async (_cmd, args) => {
+          const body = disk.get(String(args?.path));
+          if (body === undefined) throw new Error("No such file");
+          return body;
+        },
+        write_file: async (_cmd, args) => {
+          disk.set(String(args?.path), String(args?.content));
+        },
+        rename_path: relocate,
+        move_path: relocate,
+      }) as typeof invoke,
+    );
+    return disk;
+  }
+
+  type FileChanged = ReturnType<typeof captureListener>;
+
+  /** Report a change to each path, then run `action` before the debounce can end. */
+  async function reportThen(
+    fileChanged: FileChanged,
+    paths: string[],
+    action: () => Promise<unknown>,
+  ) {
+    // One act: no timer can fire between the report and the action, however slow the run.
+    await act(async () => {
+      for (const path of paths) fileChanged.handler?.({ payload: path });
+      await action();
+    });
+  }
+
+  async function waitOutDebounce() {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 350));
+    });
+  }
+
+  async function openNote() {
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoReload: true, autoSave: false })),
+    );
+    await openWorkspace(result);
+    await act(async () => {
+      await result.current.openFile(NOTE);
+    });
+    return { result, tabId: result.current.tabs[0].id };
+  }
+
+  it.each([
+    ["renamed", RENAMED, (tabs: TabsHook) => tabs.current.renamePath(NOTE, "renamed")],
+    ["moved", "/p/ws/dest/note.md", (tabs: TabsHook) => tabs.current.movePath(NOTE, "/p/ws/dest")],
+  ])("reloads a tab %s before its reported change was read", async (_how, newPath, relocate) => {
+    const disk = movableDisk({ [NOTE]: "v1" }, NOTE, newPath);
+    const fileChanged = captureListener("file-changed");
+    const { result } = await openNote();
+
+    disk.set(NOTE, "v2");
+    await reportThen(fileChanged, [NOTE], () => relocate(result));
+    await waitOutDebounce();
+
+    expect(fileOf(result)).toMatchObject({ path: newPath, content: "v2" });
+  });
+
+  it("reloads each tab of a folder moved before their reported changes were read", async () => {
+    const inFolder = ["/p/ws/dir/a.md", "/p/ws/dir/b.md"];
+    const disk = movableDisk(
+      { [inFolder[0]]: "a1", [inFolder[1]]: "b1", "/p/ws/c.md": "c1" },
+      "/p/ws/dir",
+      "/p/ws/dest/dir",
+    );
+    const fileChanged = captureListener("file-changed");
+    const { result } = renderHook(() => useTabs(defaultOptions({ autoReload: true })));
+    await openWorkspace(result);
+    for (const path of [...inFolder, "/p/ws/c.md"]) {
+      await act(async () => {
+        await result.current.openFile(path);
+      });
+    }
+
+    disk.set(inFolder[0], "a2");
+    disk.set(inFolder[1], "b2");
+    // Never reported, so the tab outside the folder must not pick this up.
+    disk.set("/p/ws/c.md", "c2");
+    await reportThen(fileChanged, inFolder, () =>
+      result.current.movePath("/p/ws/dir", "/p/ws/dest"),
+    );
+    await waitOutDebounce();
+
+    expect(fileOf(result, 0)).toMatchObject({ path: "/p/ws/dest/dir/a.md", content: "a2" });
+    expect(fileOf(result, 1)).toMatchObject({ path: "/p/ws/dest/dir/b.md", content: "b2" });
+    expect(fileOf(result, 2)).toMatchObject({ path: "/p/ws/c.md", content: "c1" });
+  });
+
+  it("keeps the reload owed to a renamed tab when its old path reports the rename", async () => {
+    const disk = movableDisk({ [NOTE]: "v1" }, NOTE, RENAMED);
+    const fileChanged = captureListener("file-changed");
+    const { result } = await openNote();
+
+    disk.set(NOTE, "v2");
+    await reportThen(fileChanged, [NOTE], () => result.current.renamePath(NOTE, "renamed"));
+    // The watcher reports a rename as a change to the path it was watching.
+    await changeOnDisk(fileChanged, NOTE);
+
+    expect(fileOf(result)).toMatchObject({ path: RENAMED, content: "v2" });
+  });
+
+  it("keeps the undo stack when a rename's own report re-reads unchanged text", async () => {
+    const fileChanged = captureListener("file-changed");
+    // The report arrives while the tab is still on its old path, as it does in the app.
+    movableDisk({ [NOTE]: "- [ ] task" }, NOTE, RENAMED, () =>
+      fileChanged.handler?.({ payload: NOTE }),
+    );
+    const { result, tabId } = await openNote();
+    await act(async () => {
+      await result.current.toggleTask(tabId, 1);
+    });
+
+    await act(async () => {
+      await result.current.renamePath(NOTE, "renamed");
+    });
+    await waitOutDebounce();
+    expect(invoke).toHaveBeenCalledWith("read_file", { path: RENAMED });
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+
+    expect(fileOf(result)).toMatchObject({ path: RENAMED, content: "- [ ] task" });
+  });
+
+  it("reloads another program's write after a save when the tab is renamed before the read", async () => {
+    const disk = movableDisk({ [NOTE]: "v1" }, NOTE, RENAMED);
+    const fileChanged = captureListener("file-changed");
+    const { result, tabId } = await openNote();
+    act(() => {
+      result.current.setTabMode(tabId, EDITOR_MODE.edit);
+      result.current.updateEditContent(tabId, "mine");
+    });
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+    expect(disk.get(NOTE)).toBe("mine");
+
+    // A formatter rewrites the file as soon as the save lands, and the note is renamed at once.
+    disk.set(NOTE, "theirs");
+    await reportThen(fileChanged, [NOTE], () => result.current.renamePath(NOTE, "renamed"));
+    await waitOutDebounce();
+
+    expect(fileOf(result)).toMatchObject({
+      path: RENAMED,
+      content: "theirs",
+      editContent: "theirs",
+      dirty: false,
+    });
+  });
+
+  it("reads nothing for a tab renamed to an image before the debounce ended", async () => {
+    const disk = movableDisk({ [NOTE]: "v1" }, NOTE, "/p/ws/note.png");
+    const fileChanged = captureListener("file-changed");
+    const { result } = await openNote();
+
+    disk.set(NOTE, "v2");
+    await reportThen(fileChanged, [NOTE], () => result.current.renamePath(NOTE, "note.png"));
+    await waitOutDebounce();
+
+    expect(fileOf(result).path).toBe("/p/ws/note.png");
+    expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/ws/note.png" });
   });
 });
