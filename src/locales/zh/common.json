@@ -105,6 +105,9 @@
     "exportingPages": "正在导出第 {{done}}/{{total}} 页…"
   },
   "exportNotice": {
+    "assetsFailed": "网站已导出，但页面使用的部分文件未能复制。这些页面中的图片、媒体文件或下载文件可能缺失或已过时。",
+    "assetsFailedMore_one": "另有 {{count}} 个文件也未能复制。",
+    "assetsFailedMore_other": "另有 {{count}} 个文件也未能复制。",
     "pruneFailed": "网站已导出，但导出后的清理未完成。文件夹中可能留有过时的页面，无论是现在还是下次导出之后。",
     "failed": "导出失败。",
     "siteFailed": "网站导出失败。",

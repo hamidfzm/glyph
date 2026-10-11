@@ -1,14 +1,16 @@
 import { useCallback, useRef, useState } from "react";
+import type { SiteWarning } from "@/lib/siteWarnings";
 
 /**
  * How an export ended when it did not simply succeed: refused before it
- * started, failed part way, or (a website) written in full with its cleanup
- * failing. `reason` is what the export reported, shown as written (it is not
- * translated).
+ * started, failed part way, or (a website) written with something falling
+ * short, which `warnings` lists and is never empty. `reason` is what the
+ * export reported, shown as written (it is not translated).
  */
 export type ExportNoticeContent =
   | { kind: "insideWorkspace" }
-  | { kind: "failed" | "siteFailed" | "pruneFailed"; reason: string };
+  | { kind: "failed" | "siteFailed"; reason: string }
+  | { kind: "siteWarnings"; warnings: SiteWarning[] };
 
 export interface ExportNoticeActions {
   showNotice: (notice: ExportNoticeContent) => void;

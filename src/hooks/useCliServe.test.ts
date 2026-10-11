@@ -22,9 +22,11 @@ vi.mock("@/hooks/useExportReadiness", () => ({
 }));
 
 const REQUEST = { root: "/ws", outDir: "/tmp/glyph-serve-1" };
-const BUILT = { pages: 3, assets: 1, removed: 0, pruneError: null };
+const BUILT = { pages: 3, assets: 1, removed: 0, failedAssets: [], pruneError: null };
 const warning = (reason: string) =>
   `Warning: the cleanup after the export did not finish, so outdated pages may be left in the folder, now or after a later export: ${reason}`;
+const assetWarning = (reason: string) =>
+  `Warning: some files the pages use could not be copied, so those pages may show a missing or outdated image, media file or download: ${reason}`;
 
 /** Fires whatever the hook registered for the change event. */
 let emitChange: (() => void) | undefined;
@@ -167,6 +169,43 @@ describe("useCliServe", () => {
       // Every save would otherwise repeat the same line.
       { warning: null },
       // A different reason is news even straight after another.
+      { warning: warning("disk full") },
+      { warning: null },
+      { warning: warning("disk full") },
+    ]);
+  });
+
+  it("reloads with a warning when a build could not copy a file its pages use", async () => {
+    stubServe(REQUEST);
+    exportSiteMock.mockResolvedValueOnce({ ...BUILT, failedAssets: ['"shot.png": os error 2'] });
+    renderHook(() => useCliServe());
+
+    // The pages did render, so the browsers reload and show the gap.
+    await waitFor(() => expect(invokeCalls("serve_ready")).toHaveLength(1));
+    expect(invokeCalls("serve_ready")[0][1]).toEqual({
+      warning: assetWarning('"shot.png": os error 2'),
+    });
+    expect(invokeCalls("serve_failed")).toHaveLength(0);
+  });
+
+  it("gives each warning a line of its own, and repeats only the one that is news", async () => {
+    stubServe(REQUEST);
+    const missing = { ...BUILT, failedAssets: ['"shot.png": os error 2'] };
+    exportSiteMock
+      .mockResolvedValueOnce({ ...missing, pruneError: "locked" })
+      .mockResolvedValueOnce({ ...missing, pruneError: "disk full" })
+      .mockResolvedValueOnce(missing)
+      .mockResolvedValueOnce({ ...missing, pruneError: "disk full" });
+    renderHook(() => useCliServe());
+    await waitFor(() => expect(invokeCalls("serve_ready")).toHaveLength(1));
+    for (const builds of [2, 3, 4]) {
+      emitChange?.();
+      await waitFor(() => expect(invokeCalls("serve_ready")).toHaveLength(builds));
+    }
+
+    expect(invokeCalls("serve_ready").map(([, args]) => args)).toEqual([
+      { warning: `${assetWarning('"shot.png": os error 2')}\n${warning("locked")}` },
+      // The image is still missing, which was said; the cleanup reason is new.
       { warning: warning("disk full") },
       { warning: null },
       { warning: warning("disk full") },

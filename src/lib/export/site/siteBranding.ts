@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { fileExists } from "./fileExists";
 import { resolveConfigAsset, SITE_CONFIG_PATH, type SiteConfig } from "./siteConfig";
 
 export interface SiteBranding {
@@ -18,11 +18,6 @@ export interface SiteBranding {
  * favicon is picked up automatically.
  */
 export async function resolveSiteBranding(root: string, config: SiteConfig): Promise<SiteBranding> {
-  const fileExists = (path: string) =>
-    invoke("get_file_metadata", { path }).then(
-      () => true,
-      () => false,
-    );
   // A configured favicon/social image that doesn't exist is a config error,
   // not a broken <link> discovered after publishing; resolveConfigAsset also
   // clamps the path to the workspace, since the config may come from an
