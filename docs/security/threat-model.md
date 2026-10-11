@@ -117,7 +117,9 @@ webview-typed path.
 
 Every filesystem command validates against the registry before touching disk
 and returns the same denial message (`path is outside the allowed workspaces
-and files: <path>`), which never echoes the grant list.
+and files: <path>`), which never echoes the grant list. On Windows, a path
+refused as a network share or a device says so instead, before anything is
+looked up (see "Network paths" below).
 
 | Command | Check |
 | ------- | ----- |
@@ -292,7 +294,12 @@ the way a renderer-supplied path is.
   a network share or a device before it resolves anything, whether a tool
   argument, a renderer command, or the settings seed handed it over, unless a
   grant already sits on that share: resolving one connects to the host, which
-  can hand it the user's credentials.
+  can hand it the user's credentials. The check does not stop at the prefix
+  Rust's `Path` parses: the NT prefix `\??\` is refused whole, local folders
+  included, and so is a path opening with two separators that `Path` finds no
+  server and share in (`\\host\\share` still reaches `\\host\share`), even on
+  a share a grant sits on. Neither spelling comes from a picker, a drop, or a
+  launch argument.
 - **Every path goes through the registry.** A note reference that names a
   path, `resolve_link`'s `from`, `read_canvas`'s `path`, `export`'s `out`, a
   note a write tool changes, and the destination of a rename or a move pass
