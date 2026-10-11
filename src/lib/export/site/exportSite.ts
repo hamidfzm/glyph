@@ -15,6 +15,8 @@ import type {
 } from "@/lib/plugins/types";
 import { resolveTargets } from "@/lib/wikilinkResolutions";
 import type { FileScan } from "@/lib/workspaceScan";
+import { describeAssetFailure } from "./describeAssetFailure";
+import { fileExists } from "./fileExists";
 import { buildIndexBodyHtml } from "./indexPage";
 import { lightboxLabels } from "./lightboxScript";
 import { buildNavHtml } from "./nav";
@@ -50,6 +52,11 @@ export interface ExportSiteResult {
   /** Stale files deleted: ones a previous export into the same directory
    *  wrote and this one did not. */
   removed: number;
+  /** The files the pages use that could not be copied, one line each (the
+   *  site path, then why), none when all were. The pages are written either
+   *  way and point at a missing file or at the copy a previous export left, so
+   *  every caller reports them (INV-7). */
+  failedAssets: string[];
   /** Why the prune fell short (it failed, or left stale files it could not
    *  remove), or null when it finished. The site is complete either way, but
    *  stale files may remain, so every caller reports it (INV-7). */
@@ -86,7 +93,10 @@ function siteDir(rel: string): string {
  * wrote and this one did not, so a deleted or renamed note leaves no page
  * behind. Only Glyph's own output is pruned; anything else in the directory
  * (a CNAME, a .nojekyll) is left alone. A prune that fails or falls short
- * does not fail the export: the result says why in `pruneError`.
+ * does not fail the export: the result says why in `pruneError`. Nor does an
+ * asset that cannot be copied: the result names it in `failedAssets`, and
+ * while its source is still in the workspace the copy a previous export left
+ * of it is kept.
  */
 export async function exportSite({
   root,
@@ -238,17 +248,25 @@ export async function exportSite({
     onProgress?.(done, total);
   }
 
+  const failedAssets: string[] = [];
+  // Those of them whose copy from a previous export, if there is one, stays.
+  const unreplaced: string[] = [];
   for (const [src, destRel] of assets) {
     await ensureDir(destRel);
     try {
-      await invoke("copy_file", { src, dest: outPath(outDir, destRel) });
+      const isFile = await invoke<boolean>("copy_file", { src, dest: outPath(outDir, destRel) });
+      // A link to a folder: there is no file to copy, and nothing went wrong.
+      if (!isFile) continue;
       copied++;
       written.push(destRel);
     } catch (err) {
       // A reference to something missing on disk is already broken in the
-      // app; the exported page carries a broken reference too, rather than
-      // the whole export failing on it.
+      // app; the export goes on rather than failing on it, and says which.
       console.error(`Failed to copy asset ${src}:`, err);
+      failedAssets.push(describeAssetFailure(destRel, errorMessage(err)));
+      // Only while the source is there: a file deleted from the workspace
+      // stops being published, like the page of a deleted note.
+      if (await fileExists(src)) unreplaced.push(destRel);
     }
   }
 
@@ -277,14 +295,14 @@ export async function exportSite({
   // Last, so a failed export leaves the previous build's files (and its
   // manifest) alone rather than pruning against a half-written site.
   try {
-    const pruned = await invoke<PruneReport>("prune_export_dir", { outDir, written });
+    const pruned = await invoke<PruneReport>("prune_export_dir", { outDir, written, unreplaced });
     removed = pruned.removed;
     pruneError = pruned.error;
   } catch (err) {
-    // Cleanup, not part of producing the site: the pages and assets are all
-    // on disk, so the export still succeeds and carries the failure with it.
+    // Cleanup, not part of producing the site: the pages are all on disk, so
+    // the export still succeeds and carries the failure with it.
     pruneError = errorMessage(err);
   }
 
-  return { pages: done, assets: copied, removed, pruneError };
+  return { pages: done, assets: copied, removed, failedAssets, pruneError };
 }

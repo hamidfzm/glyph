@@ -18,9 +18,20 @@ vi.mock("@/lib/export/site/exportSite", () => ({
   exportSite: (...args: unknown[]) => exportSiteMock(...args),
 }));
 
-const EXPORTED: ExportSiteResult = { pages: 2, assets: 0, removed: 0, pruneError: null };
+const EXPORTED: ExportSiteResult = {
+  pages: 2,
+  assets: 0,
+  removed: 0,
+  failedAssets: [],
+  pruneError: null,
+};
 const GRANTED: ExportDirPick = { kind: "granted", path: "/out" };
 const REFUSED: ExportDirPick = { kind: "insideWorkspace" };
+
+/** The notice for a site that exported with only its cleanup falling short. */
+function cleanupNotice(reason: string) {
+  return { kind: "siteWarnings", warnings: [{ kind: "pruneFailed", reason }] };
+}
 
 function renderSite(root: string | undefined) {
   return renderHook(
@@ -85,9 +96,39 @@ describe("useExportSite", () => {
     const { result } = renderSite("/ws");
     await act(() => result.current.exportWebsite());
     expect(result.current.siteProgress).toBeNull();
+    expect(result.current.notice).toEqual(cleanupNotice("Failed to write file: locked"));
+  });
+
+  it("warns when the site exported but a file its pages use was not copied", async () => {
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
+    exportSiteMock.mockResolvedValue({
+      ...EXPORTED,
+      failedAssets: ['"shot.png": os error 2', '"clip.mp4": os error 5'],
+    });
+    const { result } = renderSite("/ws");
+    await act(() => result.current.exportWebsite());
     expect(result.current.notice).toEqual({
-      kind: "pruneFailed",
-      reason: "Failed to write file: locked",
+      kind: "siteWarnings",
+      warnings: [{ kind: "assetsFailed", reason: '"shot.png": os error 2', more: 1 }],
+    });
+  });
+
+  it("raises one notice for a failed copy and a failed cleanup together", async () => {
+    vi.mocked(pickExportDir).mockResolvedValue(GRANTED);
+    exportSiteMock.mockResolvedValue({
+      ...EXPORTED,
+      failedAssets: ['"shot.png": os error 2'],
+      pruneError: "locked",
+    });
+    const { result } = renderSite("/ws");
+    await act(() => result.current.exportWebsite());
+    // One notice is up at a time, so neither may push the other out.
+    expect(result.current.notice).toEqual({
+      kind: "siteWarnings",
+      warnings: [
+        { kind: "assetsFailed", reason: '"shot.png": os error 2', more: 0 },
+        { kind: "pruneFailed", reason: "locked" },
+      ],
     });
   });
 
@@ -124,7 +165,7 @@ describe("useExportSite", () => {
     expect(pickExportDir).toHaveBeenCalledTimes(1);
 
     await act(async () => finish?.({ ...EXPORTED, pruneError: "locked" }));
-    expect(result.current.notice).toEqual({ kind: "pruneFailed", reason: "locked" });
+    expect(result.current.notice).toEqual(cleanupNotice("locked"));
 
     // The latch releases with the export, so the next one runs.
     await act(() => result.current.exportWebsite());
@@ -186,7 +227,7 @@ describe("useExportSite", () => {
     rerender({ root: "/other" });
     await act(async () => finish?.({ ...EXPORTED, pruneError: "locked" }));
     // The user started it, so its outcome is still theirs to read.
-    expect(result.current.notice).toEqual({ kind: "pruneFailed", reason: "locked" });
+    expect(result.current.notice).toEqual(cleanupNotice("locked"));
   });
 
   it("treats an empty reason as a failed cleanup all the same", async () => {
@@ -194,7 +235,7 @@ describe("useExportSite", () => {
     exportSiteMock.mockResolvedValue({ ...EXPORTED, pruneError: "" });
     const { result } = renderSite("/ws");
     await act(() => result.current.exportWebsite());
-    expect(result.current.notice).toEqual({ kind: "pruneFailed", reason: "" });
+    expect(result.current.notice).toEqual(cleanupNotice(""));
   });
 
   it("reports a picker that could not open instead of failing silently", async () => {

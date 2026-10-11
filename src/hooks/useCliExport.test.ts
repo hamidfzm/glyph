@@ -6,7 +6,7 @@ import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsCont
 import { CLI_PLUGIN_WAIT_MS } from "@/hooks/useExportReadiness";
 import { resetCliExportRequestCache } from "@/lib/cliExport";
 import { createRegistry } from "@/lib/plugins/registry";
-import { pruneWarning } from "@/lib/pruneWarning";
+import { warningLine } from "@/lib/siteWarnings";
 import { resetCliExportRunner, useCliExport } from "./useCliExport";
 
 const exportSiteMock = vi.fn();
@@ -28,6 +28,7 @@ vi.mock("@/hooks/useSettings", () => ({
 
 const SITE_REQUEST = { input: "/ws", format: "site", output: "/out" };
 const PDF_REQUEST = { input: "/ws/notes.md", format: "pdf", output: "/ws/notes.pdf" };
+const EXPORTED = { pages: 3, assets: 1, removed: 0, failedAssets: [], pruneError: null };
 
 function stubRequest(request: unknown) {
   vi.mocked(invoke).mockImplementation((cmd: string) =>
@@ -43,9 +44,7 @@ const HOOK_ARGS = { entries: [], content: "# Notes" };
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
-  exportSiteMock
-    .mockReset()
-    .mockResolvedValue({ pages: 3, assets: 1, removed: 0, pruneError: null });
+  exportSiteMock.mockReset().mockResolvedValue(EXPORTED);
   runCliDocumentExportMock.mockReset().mockResolvedValue({ path: "/ws/notes.pdf", settled: true });
   settings.loaded = true;
   resetCliExportRequestCache();
@@ -130,7 +129,7 @@ describe("useCliExport", () => {
   });
 
   it("names the stale files a repeat export removed", async () => {
-    exportSiteMock.mockResolvedValue({ pages: 3, assets: 1, removed: 2, pruneError: null });
+    exportSiteMock.mockResolvedValue({ ...EXPORTED, removed: 2 });
     stubRequest(SITE_REQUEST);
     renderHook(() => useCliExport(HOOK_ARGS));
     await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
@@ -142,9 +141,7 @@ describe("useCliExport", () => {
 
   it("exits 0 with a warning when the site exported but its cleanup failed", async () => {
     exportSiteMock.mockResolvedValue({
-      pages: 3,
-      assets: 1,
-      removed: 0,
+      ...EXPORTED,
       pruneError: "Failed to write .glyph/site-manifest.json: Access is denied. (os error 5)",
     });
     stubRequest(SITE_REQUEST);
@@ -163,14 +160,58 @@ describe("useCliExport", () => {
 
   it("names the stale files a cleanup removed before it fell short", async () => {
     const stuck = 'Failed to remove "guide.html": Access is denied. (os error 5)';
-    exportSiteMock.mockResolvedValue({ pages: 3, assets: 1, removed: 2, pruneError: stuck });
+    exportSiteMock.mockResolvedValue({ ...EXPORTED, removed: 2, pruneError: stuck });
     stubRequest(SITE_REQUEST);
     renderHook(() => useCliExport(HOOK_ARGS));
     await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
     // Two pages were deleted, so the summary says so beside the warning.
     expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
       code: 0,
-      message: `Exported 3 pages and 1 assets to /out, removing 2 stale files\n${pruneWarning(stuck)}`,
+      message:
+        "Exported 3 pages and 1 assets to /out, removing 2 stale files\n" +
+        warningLine({ kind: "pruneFailed", reason: stuck }),
+    });
+  });
+
+  it("exits 0 with a warning when files the pages use could not be copied", async () => {
+    exportSiteMock.mockResolvedValue({
+      ...EXPORTED,
+      failedAssets: [
+        '"guide/shot.png": Failed to copy file: Access is denied. (os error 5)',
+        '"clip.mp4": Failed to copy file: Access is denied. (os error 5)',
+      ],
+    });
+    stubRequest(SITE_REQUEST);
+    renderHook(() => useCliExport(HOOK_ARGS));
+    await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
+    // The pages are on disk, so the script still gets its path and a zero exit.
+    expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
+      code: 0,
+      message:
+        "Exported 3 pages and 1 assets to /out\n" +
+        "Warning: some files the pages use could not be copied, so those pages may show a " +
+        "missing or outdated image, media file or download: " +
+        '"guide/shot.png": Failed to copy file: Access is denied. (os error 5) ' +
+        "(1 more could not be copied either)",
+    });
+  });
+
+  it("gives a failed copy and a failed cleanup a line each", async () => {
+    exportSiteMock.mockResolvedValue({
+      ...EXPORTED,
+      failedAssets: ['"shot.png": os error 2'],
+      pruneError: "locked",
+    });
+    stubRequest(SITE_REQUEST);
+    renderHook(() => useCliExport(HOOK_ARGS));
+    await waitFor(() => expect(invokeCalls("finish_cli_export")).toHaveLength(1));
+    expect(invokeCalls("finish_cli_export")[0][1]).toEqual({
+      code: 0,
+      message: [
+        "Exported 3 pages and 1 assets to /out",
+        warningLine({ kind: "assetsFailed", reason: '"shot.png": os error 2', more: 0 }),
+        warningLine({ kind: "pruneFailed", reason: "locked" }),
+      ].join("\n"),
     });
   });
 

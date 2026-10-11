@@ -60,10 +60,10 @@ describe("useExportNotice", () => {
     act(() => result.current.showNotice({ kind: "failed", reason: "disk full" }));
     const dropSeenNotice = result.current.captureSeenNotice();
     act(() => result.current.dismissNotice());
-    act(() => result.current.showNotice({ kind: "pruneFailed", reason: "locked" }));
+    act(() => result.current.showNotice({ kind: "siteFailed", reason: "locked" }));
 
     act(() => dropSeenNotice());
-    expect(result.current.notice).toEqual({ kind: "pruneFailed", reason: "locked" });
+    expect(result.current.notice).toEqual({ kind: "siteFailed", reason: "locked" });
   });
 
   it("keeps its actions' identity while the notice changes", () => {

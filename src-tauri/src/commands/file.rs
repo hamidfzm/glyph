@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs::{self, OpenOptions};
 use std::io::{self, ErrorKind, Write};
@@ -73,17 +73,22 @@ pub fn create_dir_all(path: String, grants: State<'_, GrantRegistry>) -> Result<
 }
 
 /// Copy a file byte-for-byte, e.g. an image referenced by an exported page.
-/// The destination's parent must already exist (`create_dir_all`).
+/// The destination's parent must already exist (`create_dir_all`). `Ok(false)`
+/// is a source that is a folder: a page can link to one, and then there is no
+/// file to copy and nothing has failed.
 #[tauri::command]
 pub fn copy_file(
     src: String,
     dest: String,
     grants: State<'_, GrantRegistry>,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let src = grants.ensure_readable(&src)?;
     let dest = grants.ensure_writable(&dest)?;
+    if src.is_dir() {
+        return Ok(false);
+    }
     fs::copy(&src, &dest)
-        .map(|_| ())
+        .map(|_| true)
         .map_err(|e| format!("Failed to copy file: {e}"))
 }
 
@@ -145,11 +150,55 @@ fn manifest_entry_path(out_dir: &Path, rel: &str) -> io::Result<Option<PathBuf>>
     Ok(parent.starts_with(out_dir).then(|| parent.join(name)))
 }
 
-/// Fold a manifest entry for comparison: separators unified, case ignored. A
-/// rename that only changes case writes the same file on Windows and macOS, so
-/// comparing verbatim would prune the page the current export just wrote.
+/// Fold a manifest entry for lookup: separators unified, case ignored. Names
+/// that fold alike are only candidates: a rename that changes nothing but case
+/// rewrites one file on Windows and macOS and leaves two on Linux, which is
+/// the volume's to say (`is_one_file`).
 fn manifest_entry_key(rel: &str) -> String {
     rel.replace('\\', "/").to_lowercase()
+}
+
+/// Site-relative paths grouped by what they fold to.
+struct EntriesByKey<'a>(HashMap<String, Vec<&'a str>>);
+
+impl<'a> EntriesByKey<'a> {
+    fn of(rels: &'a [String]) -> Self {
+        let mut by_key: HashMap<String, Vec<&str>> = HashMap::new();
+        for rel in rels {
+            by_key.entry(manifest_entry_key(rel)).or_default().push(rel);
+        }
+        Self(by_key)
+    }
+
+    fn alike(&self, key: &str) -> &[&'a str] {
+        self.0.get(key).map(Vec::as_slice).unwrap_or_default()
+    }
+}
+
+/// Whether two paths in the output lead to one file. A path that leads nowhere
+/// is no file's; any other failure to look leaves the answer unknown.
+fn is_one_file(a: &Path, b: &Path) -> io::Result<bool> {
+    match same_file::is_same_file(a, b) {
+        Err(e) if says_absent(&e) => Ok(false),
+        answer => answer,
+    }
+}
+
+/// Whether `path` is a file one of `rels` names. Each is confined like a
+/// manifest entry: the renderer supplies them (INV-5).
+fn is_any_of(out_dir: &Path, path: &Path, rels: &[&str]) -> io::Result<bool> {
+    for rel in rels {
+        let Some(other) = manifest_entry_path(out_dir, rel)? else {
+            continue;
+        };
+        // Named in the report: what is left in place may be the current file.
+        let is_same = is_one_file(path, &other)
+            .map_err(|e| io::Error::other(format!("cannot tell whether it is {rel:?}: {e}")))?;
+        if is_same {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Remove `from` and each parent up to (but never including) `out_dir`, for as
@@ -243,30 +292,57 @@ fn is_file_there(path: &Path) -> bool {
     }
 }
 
-/// What became of one stale manifest entry.
+/// What became of one claim of the previous manifest.
 enum Pruned {
     Removed,
-    /// Nothing of Glyph's is at the path, so the claim goes.
+    /// This export failed to replace the file: the previous copy stays, and
+    /// stays claimed.
+    Retained,
+    /// Nothing to carry over: this export claims the file under the name it
+    /// wrote it by, or nothing of Glyph's is at the path.
     Dropped,
-    /// Still there, or impossible to tell: the claim stays and is reported.
-    Stuck(io::Error),
 }
 
-fn prune_entry(out_dir: &Path, rel: &str) -> Pruned {
-    let path = match manifest_entry_path(out_dir, rel) {
-        Ok(Some(path)) => path,
-        Ok(None) => return Pruned::Dropped,
-        Err(e) => return Pruned::Stuck(e),
+/// Settle one entry of the previous manifest against what this export wrote
+/// and what it failed to replace, each narrowed to the paths that fold to the
+/// entry's key. `Err` is a file that is still there, or that cannot be told
+/// from one of those: the claim stays and is reported.
+fn prune_entry(
+    out_dir: &Path,
+    rel: &str,
+    written: &[&str],
+    unreplaced: &[&str],
+) -> io::Result<Pruned> {
+    // By name first: most entries are written again, and need no lookup.
+    if written.contains(&rel) {
+        return Ok(Pruned::Dropped);
+    }
+    let Some(path) = manifest_entry_path(out_dir, rel)? else {
+        return Ok(Pruned::Dropped);
     };
+    // The same name in other letters is the page just written where the
+    // volume ignores case, and a stale page beside it where it does not.
+    if is_any_of(out_dir, &path, written)? {
+        return Ok(Pruned::Dropped);
+    }
+    // By name before by file: a copy often fails because the previous one is
+    // held open, and then it cannot be opened to compare either.
+    if unreplaced.contains(&rel) || is_any_of(out_dir, &path, unreplaced)? {
+        return Ok(if is_file_there(&path) {
+            Pruned::Retained
+        } else {
+            Pruned::Dropped
+        });
+    }
     match fs::remove_file(&path) {
         Ok(()) => {
             if let Some(parent) = path.parent() {
                 prune_empty_dirs(parent, out_dir);
             }
-            Pruned::Removed
+            Ok(Pruned::Removed)
         }
-        Err(e) if is_file_there(&path) => Pruned::Stuck(e),
-        Err(_) => Pruned::Dropped,
+        Err(e) if is_file_there(&path) => Err(e),
+        Err(_) => Ok(Pruned::Dropped),
     }
 }
 
@@ -289,6 +365,10 @@ fn summarize_stuck(first: Option<String>, count: usize) -> Option<String> {
 /// removed or the record could not be written, why. A manifest that cannot be
 /// read or parsed fails the command before anything is removed or replaced.
 ///
+/// `unreplaced` names the files this export meant to write and could not: the
+/// previous copy of each is still what the pages point at, so it is neither
+/// removed nor reported, and stays claimed for the export that stops using it.
+///
 /// Pruning is against the previous export's own manifest, never against the
 /// whole directory, so anything the user keeps beside the generated site (a
 /// `CNAME`, a `.nojekyll`) is untouched. The manifest is trusted only to name
@@ -298,6 +378,7 @@ fn summarize_stuck(first: Option<String>, count: usize) -> Option<String> {
 pub fn prune_export_dir(
     out_dir: String,
     written: Vec<String>,
+    unreplaced: Vec<String>,
     grants: State<'_, GrantRegistry>,
 ) -> Result<PruneReport, String> {
     let out_dir = grants.ensure_writable(&out_dir)?;
@@ -310,29 +391,34 @@ pub fn prune_export_dir(
     }
     let previous = read_manifest(&manifest)?;
 
-    let keep: HashSet<String> = written.iter().map(|rel| manifest_entry_key(rel)).collect();
-    let mut claimed = written;
+    let written_by_key = EntriesByKey::of(&written);
+    let unreplaced_by_key = EntriesByKey::of(&unreplaced);
+    // The previous export's claims that outlive this one.
+    let mut carried = Vec::new();
     let mut removed = 0;
     let mut stuck_count = 0;
     let mut first_stuck = None;
-    for rel in previous
-        .iter()
-        .filter(|rel| !keep.contains(&manifest_entry_key(rel)))
-    {
-        match prune_entry(&out_dir, rel) {
-            Pruned::Removed => removed += 1,
-            Pruned::Dropped => {}
-            Pruned::Stuck(e) => {
-                // Held open by another process, or in a folder that cannot be
-                // written to: keep claiming it so a later export prunes it.
+    for rel in &previous {
+        let key = manifest_entry_key(rel);
+        let (written, unreplaced) = (written_by_key.alike(&key), unreplaced_by_key.alike(&key));
+        match prune_entry(&out_dir, rel, written, unreplaced) {
+            Ok(Pruned::Dropped) => {}
+            Ok(Pruned::Removed) => removed += 1,
+            Ok(Pruned::Retained) => carried.push(rel.clone()),
+            Err(e) => {
+                // Held open by another process, in a folder that cannot be
+                // written to, or not to be told from a file this export
+                // accounts for: keep claiming it so a later export prunes it.
                 // Dropping it here would orphan it in the output for good.
-                claimed.push(rel.clone());
+                carried.push(rel.clone());
                 stuck_count += 1;
                 // Debug-quoted: the name is manifest input and reaches a terminal.
                 first_stuck.get_or_insert_with(|| format!("Failed to remove {rel:?}: {e}"));
             }
         }
     }
+    let mut claimed = written;
+    claimed.extend(carried);
 
     let stuck = summarize_stuck(first_stuck, stuck_count);
     let unrecorded = write_manifest(&manifest, &claimed)
@@ -765,9 +851,9 @@ mod tests {
         for result in [
             write_file(arg(&link), "x".to_string(), grants()),
             write_binary_file(arg(&link), vec![1], grants()),
-            copy_file(arg(&source), arg(&link), grants()),
+            copy_file(arg(&source), arg(&link), grants()).map(|_| ()),
             create_dir_all(arg(&link.join("sub")), grants()),
-            prune_export_dir(arg(&link), vec![], grants()).map(|_| ()),
+            prune_export_dir(arg(&link), vec![], vec![], grants()).map(|_| ()),
         ] {
             let err = result.expect_err("must be denied");
             assert!(
@@ -881,8 +967,30 @@ mod tests {
             dest.to_string_lossy().to_string(),
             app.state::<GrantRegistry>(),
         );
-        assert!(result.is_ok());
+        assert_eq!(result, Ok(true));
         assert_eq!(fs::read(&dest).unwrap(), vec![0x89u8, 0x50, 0x4e, 0x47]);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn copy_file_copies_nothing_for_a_folder_and_does_not_fail() {
+        let root =
+            std::env::temp_dir().join(format!("glyph_test_copy_folder_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        // What `[examples](./examples)` in a note leads to.
+        fs::create_dir_all(root.join("examples")).unwrap();
+        fs::create_dir_all(root.join("out")).unwrap();
+
+        let app = app_with_workspace(&root);
+        let result = copy_file(
+            root.join("examples").to_string_lossy().to_string(),
+            root.join("out/examples").to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        );
+
+        assert_eq!(result, Ok(false));
+        assert!(!root.join("out/examples").exists());
 
         let _ = fs::remove_dir_all(&root);
     }
@@ -973,10 +1081,21 @@ mod tests {
     }
 
     fn prune(dir: &Path, written: &[&str]) -> Result<PruneReport, String> {
+        prune_with_unreplaced(dir, written, &[])
+    }
+
+    /// A prune after an export that wrote `written` and failed to copy `unreplaced`.
+    fn prune_with_unreplaced(
+        dir: &Path,
+        written: &[&str],
+        unreplaced: &[&str],
+    ) -> Result<PruneReport, String> {
         let app = app_with_export_dir(dir);
+        let owned = |rels: &[&str]| rels.iter().map(|s| s.to_string()).collect();
         prune_export_dir(
             dir.to_string_lossy().to_string(),
-            written.iter().map(|s| s.to_string()).collect(),
+            owned(written),
+            owned(unreplaced),
             app.state::<GrantRegistry>(),
         )
     }
@@ -1048,6 +1167,28 @@ mod tests {
     /// A manifest that still reads and cannot be replaced.
     fn block_manifest_write(dir: &Path) -> Held {
         hold(dir, ".glyph", &["site-manifest.json"])
+    }
+
+    /// Make `path` impossible to open and still possible to remove: a handle
+    /// that shares it for deletion alone on Windows, for as long as what this
+    /// returns is alive, and no permission bits elsewhere (which root ignores).
+    fn seal(path: &Path) -> Option<fs::File> {
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            const FILE_SHARE_DELETE: u32 = 4;
+            let handle = fs::OpenOptions::new()
+                .read(true)
+                .share_mode(FILE_SHARE_DELETE)
+                .open(path);
+            Some(handle.unwrap())
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(path, fs::Permissions::from_mode(0o000)).unwrap();
+            None
+        }
     }
 
     /// What `.glyph` holds, to tell a staging file that was left behind.
@@ -1291,6 +1432,230 @@ mod tests {
             fs::read_to_string(dir.join("guide.html")).unwrap(),
             "the current page"
         );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // Linux, not every Unix: macOS reads the two names as one file by
+    // default, which is the test above.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn prune_export_dir_removes_the_old_page_of_a_case_only_rename_where_case_tells_files_apart() {
+        let dir = out_dir_with_manifest("prune_case_apart", &["Guide.html"]);
+        fs::write(dir.join("Guide.html"), "the old page").unwrap();
+        fs::write(dir.join("guide.html"), "the current page").unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.join("Guide.html")).unwrap(),
+            "the old page",
+            "the temp folder is on a volume that ignores case"
+        );
+
+        assert_eq!(prune(&dir, &["guide.html"]).unwrap(), clean(1));
+
+        // Left in place, the old URL would keep resolving to a file that no
+        // manifest claims any more.
+        assert!(!dir.join("Guide.html").exists());
+        assert_eq!(
+            fs::read_to_string(dir.join("guide.html")).unwrap(),
+            "the current page"
+        );
+        assert_eq!(manifest_text(&dir), r#"["guide.html"]"#);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn prune_export_dir_removes_a_stale_page_whose_name_only_folds_to_the_new_one() {
+        // The Kelvin sign lowercases to `k`, and NTFS keeps the two apart all
+        // the same: the fold only finds candidates, the volume has the answer.
+        let dir = out_dir_with_manifest("prune_fold", &["\u{212a}.html"]);
+        fs::write(dir.join("\u{212a}.html"), "the old page").unwrap();
+        fs::write(dir.join("k.html"), "the current page").unwrap();
+
+        assert_eq!(prune(&dir, &["k.html"]).unwrap(), clean(1));
+
+        assert!(!dir.join("\u{212a}.html").exists());
+        assert_eq!(
+            fs::read_to_string(dir.join("k.html")).unwrap(),
+            "the current page"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_keeps_the_page_an_entry_names_with_the_other_separator() {
+        // A manifest edited by hand: the same path on every platform.
+        let dir = out_dir_with_manifest("prune_separator", &["guide\\intro.html"]);
+        fs::create_dir_all(dir.join("guide")).unwrap();
+        fs::write(dir.join("guide/intro.html"), "the current page").unwrap();
+
+        assert_eq!(prune(&dir, &["guide/intro.html"]).unwrap(), clean(0));
+
+        assert_eq!(
+            fs::read_to_string(dir.join("guide/intro.html")).unwrap(),
+            "the current page"
+        );
+        assert_eq!(manifest_text(&dir), r#"["guide/intro.html"]"#);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_leaves_a_page_it_cannot_tell_from_the_one_just_written() {
+        let dir = out_dir_with_manifest("prune_untold", &["Guide.html"]);
+        fs::write(dir.join("Guide.html"), "the old page, or the current one").unwrap();
+        fs::write(dir.join("guide.html"), "the current page").unwrap();
+        // One file or two, the old spelling cannot be opened to find out.
+        let sealed = seal(&dir.join("Guide.html"));
+
+        let report = prune(&dir, &["guide.html"]).unwrap();
+
+        drop(sealed);
+        // Removed on a guess, it could have been the page just written.
+        assert_eq!(report.removed, 0);
+        assert!(dir.join("Guide.html").exists());
+        // It may be the live page, so the report must not read as a plain
+        // leftover to delete by hand.
+        let error = report.error.expect("the page is reported");
+        assert!(
+            error.starts_with(
+                r#"Failed to remove "Guide.html": cannot tell whether it is "guide.html": "#
+            ),
+            "got: {error}"
+        );
+        assert_eq!(manifest_text(&dir), r#"["guide.html","Guide.html"]"#);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_opens_only_the_namesakes_of_a_stale_page() {
+        // A name that does not fold to the stale one is never a candidate, so
+        // a file that cannot be opened is no obstacle to pruning another.
+        let dir = out_dir_with_manifest("prune_namesakes", &["old.html", "index.html"]);
+        fs::write(dir.join("old.html"), "stale").unwrap();
+        fs::write(dir.join("index.html"), "home").unwrap();
+        let sealed = seal(&dir.join("index.html"));
+
+        let report = prune(&dir, &["index.html"]).unwrap();
+
+        drop(sealed);
+        assert_eq!(report, clean(1));
+        assert!(!dir.join("old.html").exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_keeps_the_previous_copy_of_a_file_the_export_failed_to_replace() {
+        let dir = out_dir_with_manifest("prune_unreplaced", &["index.html", "shot.png"]);
+        fs::write(dir.join("shot.png"), "the previous copy").unwrap();
+
+        // The page still points at `shot.png`, whose copy failed this time.
+        let report = prune_with_unreplaced(&dir, &["index.html"], &["shot.png"]).unwrap();
+
+        assert_eq!(report, clean(0));
+        assert_eq!(
+            fs::read_to_string(dir.join("shot.png")).unwrap(),
+            "the previous copy"
+        );
+        // Still Glyph's file: the export that stops using it removes it.
+        assert_eq!(manifest_text(&dir), r#"["index.html","shot.png"]"#);
+        assert_eq!(prune(&dir, &["index.html"]).unwrap(), clean(1));
+        assert!(!dir.join("shot.png").exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_does_not_report_a_previous_copy_it_cannot_open() {
+        // What often fails the copy in the first place: another program has
+        // the file, so it cannot be opened here either.
+        let dir = out_dir_with_manifest("prune_unreplaced_held", &["shot.png"]);
+        fs::write(dir.join("shot.png"), "the previous copy").unwrap();
+        let sealed = seal(&dir.join("shot.png"));
+
+        let report = prune_with_unreplaced(&dir, &[], &["shot.png"]).unwrap();
+
+        drop(sealed);
+        assert_eq!(report, clean(0));
+        assert!(dir.join("shot.png").exists());
+        assert_eq!(manifest_text(&dir), r#"["shot.png"]"#);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_keeps_a_previous_copy_the_manifest_spells_another_way() {
+        // The other separator names the same file on every platform, as
+        // another case does where the volume ignores case.
+        let dir = out_dir_with_manifest("prune_unreplaced_spelled", &["img\\shot.png"]);
+        fs::create_dir_all(dir.join("img")).unwrap();
+        fs::write(dir.join("img/shot.png"), "the previous copy").unwrap();
+
+        let report = prune_with_unreplaced(&dir, &[], &["img/shot.png"]).unwrap();
+
+        assert_eq!(report, clean(0));
+        assert_eq!(
+            fs::read_to_string(dir.join("img/shot.png")).unwrap(),
+            "the previous copy"
+        );
+        assert_eq!(manifest_text(&dir), r#"["img\\shot.png"]"#);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // Linux, not every Unix: where the volume ignores case, `Docs` cannot
+    // stand beside `docs` at all.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn prune_export_dir_compares_no_file_outside_the_output_directory() {
+        let outer = tempfile::TempDir::new().unwrap();
+        let dir = outer.path().join("site");
+        let elsewhere = outer.path().join("elsewhere");
+        fs::create_dir_all(dir.join(".glyph")).unwrap();
+        fs::create_dir_all(dir.join("docs")).unwrap();
+        fs::create_dir_all(&elsewhere).unwrap();
+        fs::write(dir.join(SITE_MANIFEST_REL), r#"["docs/old.html"]"#).unwrap();
+        fs::write(dir.join("docs/old.html"), "stale").unwrap();
+        // `Docs` leads out of the export, to another name for the stale page.
+        std::os::unix::fs::symlink(&elsewhere, dir.join("Docs")).unwrap();
+        fs::hard_link(dir.join("docs/old.html"), elsewhere.join("old.html")).unwrap();
+
+        // Followed, that name would pass the stale page off as written.
+        assert_eq!(prune(&dir, &["Docs/old.html"]).unwrap(), clean(1));
+
+        assert!(!dir.join("docs/old.html").exists());
+    }
+
+    #[test]
+    fn prune_export_dir_claims_no_file_the_export_failed_to_write_for_the_first_time() {
+        let dir = out_dir_with_manifest("prune_never_copied", &["index.html"]);
+        // Not Glyph's: the user's own file where the failed copy was headed.
+        fs::write(dir.join("shot.png"), "theirs").unwrap();
+
+        let report = prune_with_unreplaced(&dir, &["index.html"], &["shot.png"]).unwrap();
+
+        assert_eq!(report, clean(0));
+        assert_eq!(manifest_text(&dir), r#"["index.html"]"#);
+        // Unclaimed, it outlives the export that stops asking for it.
+        assert_eq!(prune(&dir, &["index.html"]).unwrap(), clean(0));
+        assert!(dir.join("shot.png").exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_forgets_a_previous_copy_that_is_gone_before_its_replacement_failed() {
+        let dir = out_dir_with_manifest("prune_unreplaced_gone", &["shot.png"]);
+
+        let report = prune_with_unreplaced(&dir, &[], &["shot.png"]).unwrap();
+
+        // A claim on nothing would later take whatever the user put there.
+        assert_eq!(report, clean(0));
+        assert_eq!(manifest_text(&dir), "[]");
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -1594,6 +1959,7 @@ mod tests {
         let app = app_with_grants();
         let result = prune_export_dir(
             dir.to_string_lossy().to_string(),
+            vec![],
             vec![],
             app.state::<GrantRegistry>(),
         );
