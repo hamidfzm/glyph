@@ -14,15 +14,17 @@ interface FakeFs {
   writes: Map<string, string>;
   dirs: string[];
   copies: Array<{ src: string; dest: string }>;
-  /** Site-relative paths handed to the pruner, one entry per export. */
+  /** Site-relative paths handed to the pruner as written, one entry per export. */
   pruned: string[][];
+  /** Those handed to it as not replaced, one entry per export. */
+  unreplaced: string[][];
 }
 
 function mockFs(
   files: Record<string, string>,
   pruned: PruneReport = { removed: 0, error: null },
 ): FakeFs {
-  const fs: FakeFs = { writes: new Map(), dirs: [], copies: [], pruned: [] };
+  const fs: FakeFs = { writes: new Map(), dirs: [], copies: [], pruned: [], unreplaced: [] };
   vi.mocked(invoke).mockImplementation((cmd: string, args?: unknown) => {
     const a = (args ?? {}) as Record<string, string>;
     switch (cmd) {
@@ -41,10 +43,13 @@ function mockFs(
         return Promise.resolve(undefined);
       case "copy_file":
         fs.copies.push({ src: a.src, dest: a.dest });
-        return Promise.resolve(undefined);
-      case "prune_export_dir":
-        fs.pruned.push((a as unknown as { written: string[] }).written);
+        return Promise.resolve(true);
+      case "prune_export_dir": {
+        const lists = args as { written: string[]; unreplaced: string[] };
+        fs.pruned.push(lists.written);
+        fs.unreplaced.push(lists.unreplaced);
         return Promise.resolve(pruned);
+      }
       case "vault_refresh":
         return Promise.resolve(undefined);
       case "vault_resolve": {
@@ -117,7 +122,13 @@ describe("exportSite", () => {
       onProgress: (done, total) => progress.push([done, total]),
     });
 
-    expect(result).toEqual({ pages: 2, assets: 0, removed: 0, pruneError: null });
+    expect(result).toEqual({
+      pages: 2,
+      assets: 0,
+      removed: 0,
+      failedAssets: [],
+      pruneError: null,
+    });
     expect([...fs.writes.keys()].sort()).toEqual([
       "/out/guide/intro.html",
       "/out/index.html",
@@ -443,8 +454,62 @@ describe("exportSite", () => {
     const result = await exportSite({ root: "/ws", outDir: "/out" });
     expect(result.assets).toBe(1);
     expect(fs.copies).toEqual([{ src: "/ws/ok.png", dest: "/out/ok.png" }]);
+    // The page is written with a reference that leads nowhere, so say which.
+    expect(result.failedAssets).toEqual(['"missing.png": os error 2']);
+    expect(fs.writes.has("/out/notes.html")).toBe(true);
     expect(error).toHaveBeenCalled();
     error.mockRestore();
+  });
+
+  it("names every asset that failed to copy, and keeps the previous copy of those still in the workspace", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fs = mockFs({
+      "/ws/notes.md": "![a](./a.png) ![b](./img/b.png) [c](./c.pdf) ![ok](./ok.png)",
+      "/ws/a.png": "<binary>",
+      "/ws/img/b.png": "<binary>",
+    });
+    const base = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation((cmd, args) => {
+      const a = (args ?? {}) as Record<string, string>;
+      // A rejected command throws its Err string, not an Error.
+      if (cmd === "copy_file" && a.src !== "/ws/ok.png") {
+        return Promise.reject("Failed to copy file: Access is denied. (os error 5)");
+      }
+      return base(cmd, args);
+    });
+
+    const result = await exportSite({ root: "/ws", outDir: "/out" });
+
+    expect(result.assets).toBe(1);
+    expect(result.failedAssets).toEqual([
+      '"a.png": Failed to copy file: Access is denied. (os error 5)',
+      '"img/b.png": Failed to copy file: Access is denied. (os error 5)',
+      '"c.pdf": Failed to copy file: Access is denied. (os error 5)',
+    ]);
+    // The pages still point at these two, and the copies a previous export
+    // left are the files to publish. `c.pdf` is gone from the workspace, so
+    // its copy is stale like the page of a deleted note.
+    expect(fs.unreplaced[0]).toEqual(["a.png", "img/b.png"]);
+    expect(fs.pruned[0]).not.toContain("a.png");
+    error.mockRestore();
+  });
+
+  it("copies nothing for a link to a folder, and has nothing to report about it", async () => {
+    const fs = mockFs({ "/ws/notes.md": "[examples](./examples) ![ok](./ok.png)" });
+    const base = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation((cmd, args) => {
+      const a = (args ?? {}) as Record<string, string>;
+      // What the command answers for a source that is a folder.
+      if (cmd === "copy_file" && a.src === "/ws/examples") return Promise.resolve(false);
+      return base(cmd, args);
+    });
+
+    const result = await exportSite({ root: "/ws", outDir: "/out" });
+
+    expect(result.assets).toBe(1);
+    expect(result.failedAssets).toEqual([]);
+    expect(fs.pruned[0]).not.toContain("examples");
+    expect(fs.unreplaced[0]).toEqual([]);
   });
 
   it("hands the pruner every file it wrote, and reports what was removed", async () => {
@@ -473,7 +538,7 @@ describe("exportSite", () => {
     ]);
   });
 
-  it("keeps an asset that failed to copy out of the pruner's list", async () => {
+  it("leaves the previous copy of an asset deleted from the workspace to the pruner", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const fs = mockFs({ "/ws/notes.md": "![gone](./missing.png)" });
     const base = vi.mocked(invoke).getMockImplementation()!;
@@ -487,6 +552,9 @@ describe("exportSite", () => {
     // Claiming it would make the next export believe it owns a file that is
     // not there, and a later real copy of the same name would go unpruned.
     expect(fs.pruned[0]).not.toContain("missing.png");
+    // Nor is it held back: a file deleted on purpose must not stay published
+    // because a note still names it.
+    expect(fs.unreplaced[0]).toEqual([]);
     error.mockRestore();
   });
 
@@ -497,7 +565,13 @@ describe("exportSite", () => {
 
     const result = await exportSite({ root: "/ws", outDir: "/out" });
 
-    expect(result).toEqual({ pages: 1, assets: 0, removed: 2, pruneError: stuck });
+    expect(result).toEqual({
+      pages: 1,
+      assets: 0,
+      removed: 2,
+      failedAssets: [],
+      pruneError: stuck,
+    });
   });
 
   it("succeeds when the prune fails, and says why it failed", async () => {
@@ -516,6 +590,7 @@ describe("exportSite", () => {
       pages: 1,
       assets: 0,
       removed: 0,
+      failedAssets: [],
       pruneError: "Failed to read the manifest: locked",
     });
     expect(fs.writes.has("/out/index.html")).toBe(true);

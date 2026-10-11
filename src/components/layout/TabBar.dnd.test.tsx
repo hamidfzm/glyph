@@ -1,12 +1,9 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SidebarLayoutContext } from "@/contexts/SidebarLayoutContext";
 import type { TabsContextValue } from "@/contexts/TabsContext";
 import type { FileTab, Tab } from "@/lib/tabs";
-import { sidebarLayoutValue } from "@/test/fixtures/sidebarLayout";
-import { TabsWrapper, tabsContextValue } from "@/test/fixtures/tabsContext";
 import { dragFromTo, ghostEl, moveTo, releaseAt, setHit } from "@/test/pointerDrag";
-import { TabBar } from "./TabBar";
+import { renderTabStrip } from "@/test/renderTabStrip";
 
 const makeFileTab = (i: number): FileTab => ({
   id: `tab-${i}`,
@@ -14,7 +11,6 @@ const makeFileTab = (i: number): FileTab => ({
   file: {
     path: `/path/to/file${i}.md`,
     content: `# File ${i}`,
-    metadata: { name: `file${i}.md`, path: `/path/to/file${i}.md`, size: 100, modified: 0 },
     scrollTop: 0,
     mode: "view",
     editContent: null,
@@ -27,13 +23,7 @@ const makeFileTab = (i: number): FileTab => ({
 const makeTabs = (count: number): Tab[] => Array.from({ length: count }, (_, i) => makeFileTab(i));
 
 function renderTabBar(over: Partial<TabsContextValue> = {}) {
-  return render(
-    <TabsWrapper value={tabsContextValue({ tabs: makeTabs(2), activeTabId: "tab-0", ...over })}>
-      <SidebarLayoutContext.Provider value={sidebarLayoutValue()}>
-        <TabBar onToggleAIChat={null} onOpenPalette={vi.fn()} />
-      </SidebarLayoutContext.Provider>
-    </TabsWrapper>,
-  );
+  return renderTabStrip({ tabs: makeTabs(2), activeTabId: "tab-0", ...over });
 }
 
 describe("pointer drag reordering", () => {

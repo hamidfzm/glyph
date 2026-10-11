@@ -5,8 +5,8 @@ import { useSettings } from "@/hooks/useSettings";
 import type { TocEntry } from "@/hooks/useTableOfContents";
 import { getCliExportRequest } from "@/lib/cliExport";
 import { errorMessage } from "@/lib/errorMessage";
-import { pruneWarning } from "@/lib/pruneWarning";
 import { epubMediaLimitBytes } from "@/lib/settings";
+import { siteWarnings, warningLine } from "@/lib/siteWarnings";
 
 // Once-per-process latch: the effect may fire more than once (StrictMode,
 // plugin readiness flipping) but the export itself must not.
@@ -71,8 +71,8 @@ export function useCliExport({ entries, content }: UseCliExportOptions): void {
           // previous run into the same directory left behind.
           const pruned = result.removed > 0 ? `, removing ${result.removed} stale files` : "";
           message = `Exported ${result.pages} pages and ${result.assets} assets to ${request.output}${pruned}`;
-          // The site is complete, so this still exits 0, on a line of its own.
-          if (result.pruneError !== null) message += `\n${pruneWarning(result.pruneError)}`;
+          // The pages are all written, so a warning still exits 0, on a line of its own.
+          for (const warning of siteWarnings(result)) message += `\n${warningLine(warning)}`;
         } else {
           const { runCliDocumentExport } = await import("@/lib/export/cliDocumentExport");
           const { path, settled } = await runCliDocumentExport(request, () => ({

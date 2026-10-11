@@ -17,7 +17,6 @@ const makeFileTab = (i: number): FileTab => ({
   file: {
     path: `/path/to/file${i}.md`,
     content: `# File ${i}`,
-    metadata: { name: `file${i}.md`, path: `/path/to/file${i}.md`, size: 100, modified: 0 },
     scrollTop: 0,
     mode: "view",
     editContent: null,

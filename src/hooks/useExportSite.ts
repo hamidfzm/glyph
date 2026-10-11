@@ -4,6 +4,7 @@ import type { ExportNoticeActions } from "@/hooks/useExportNotice";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { errorMessage } from "@/lib/errorMessage";
 import { pickExportDir } from "@/lib/pickers";
+import { siteWarnings } from "@/lib/siteWarnings";
 
 export interface SiteExportProgress {
   done: number;
@@ -25,9 +26,9 @@ export interface ExportSiteHandlers {
  * Export the active folder workspace as a static website. Shows a native
  * folder picker for the destination, then renders every markdown file
  * headlessly (no dependence on what is open on screen) with per-file progress.
- * An export that is refused, fails, or cannot clean up after itself says so in
- * the export notice. No-op without a workspace; the menu item is also disabled
- * then.
+ * An export that is refused, fails, cannot copy a file its pages use, or cannot
+ * clean up after itself says so in the export notice. No-op without a
+ * workspace; the menu item is also disabled then.
  */
 export function useExportSite({
   root,
@@ -60,7 +61,7 @@ export function useExportSite({
       setSiteProgress({ done: 0, total: 0 });
       // Heavy render pipeline loads only when the user actually exports.
       const { exportSite } = await import("@/lib/export/site/exportSite");
-      const { pruneError } = await exportSite({
+      const exported = await exportSite({
         root,
         outDir: picked.path,
         themes: pluginThemes,
@@ -69,7 +70,8 @@ export function useExportSite({
         rehypePlugins,
         onProgress: (done, total) => setSiteProgress({ done, total }),
       });
-      if (pruneError !== null) showNotice({ kind: "pruneFailed", reason: pruneError });
+      const warnings = siteWarnings(exported);
+      if (warnings.length > 0) showNotice({ kind: "siteWarnings", warnings });
     } catch (err) {
       console.error("Failed to export website:", err);
       showNotice({ kind: "siteFailed", reason: errorMessage(err) });

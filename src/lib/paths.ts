@@ -10,7 +10,7 @@ export function parentDir(path: string, fallback: string): string {
 
 /** Final path segment (file or folder name), with any directory prefix removed. */
 export function basename(path: string): string {
-  return path.replace(/^.*[/\\]/, "");
+  return path.replace(/^.*[/\\]/s, "");
 }
 
 /** Final non-empty segment, so a directory path keeps its name whether or not
@@ -32,13 +32,17 @@ export function pathStem(path: string): string {
   return stem(basename(path));
 }
 
-/** Human-readable file name from a plain path or a mobile picker URI
- *  (`file://` percent-encodes spaces; SAF `content://` URIs also encode
- *  separators, so strip again after decoding). */
+// Two characters at least, so a drive letter is never read as a scheme.
+const URI_SCHEME = /^[a-z][a-z\d+.-]+:\/\//i;
+
+/** Human-readable file name from a plain path or a mobile picker URI. Only a
+ *  URI is decoded: `file://` percent-encodes spaces, and SAF `content://` URIs
+ *  also encode separators, so strip again after decoding. */
 export function displayName(path: string): string {
   const last = basename(path);
+  if (!URI_SCHEME.test(path)) return last;
   try {
-    return decodeURIComponent(last).replace(/^.*[/\\:]/, "");
+    return decodeURIComponent(last).replace(/^.*[/\\:]/s, "");
   } catch {
     return last;
   }

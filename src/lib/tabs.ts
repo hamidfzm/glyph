@@ -4,13 +4,6 @@
 
 import type { EditorMode } from "@/lib/settings";
 
-export interface FileMetadata {
-  name: string;
-  path: string;
-  size: number;
-  modified: number;
-}
-
 export interface DirEntry {
   name: string;
   path: string;
@@ -21,7 +14,6 @@ export interface DirEntry {
 export interface FileState {
   path: string;
   content: string | null;
-  metadata: FileMetadata | null;
   scrollTop: number;
   mode: EditorMode;
   editContent: string | null;
@@ -81,7 +73,6 @@ export function makeFileState(path: string, mode: EditorMode): FileState {
   return {
     path,
     content: null,
-    metadata: null,
     scrollTop: 0,
     mode,
     editContent: null,
@@ -109,6 +100,10 @@ export function tabPathOf(tab: Tab): string {
   return tab.kind === "file" ? tab.file.path : tab.root;
 }
 
+export function fileTabs(state: TabsState): FileTab[] {
+  return state.tabs.filter((tab): tab is FileTab => tab.kind === "file");
+}
+
 export function normalizePersistedTabs(value: PersistedTab[] | string[]): PersistedTab[] {
   if (value.length === 0) return [];
   // Legacy: array of file paths
@@ -116,6 +111,20 @@ export function normalizePersistedTabs(value: PersistedTab[] | string[]): Persis
     return (value as string[]).map((path) => ({ kind: "file" as const, path }));
   }
   return value as PersistedTab[];
+}
+
+/** Pass every file tab's state through `update`. When each one is handed back
+ *  as it was, `prev` itself is returned, so React skips the render. */
+export function updateFiles(prev: TabsState, update: (tab: FileTab) => FileState): TabsState {
+  let changed = false;
+  const tabs = prev.tabs.map((tab) => {
+    if (tab.kind !== "file") return tab;
+    const file = update(tab);
+    if (file === tab.file) return tab;
+    changed = true;
+    return { ...tab, file };
+  });
+  return changed ? { ...prev, tabs } : prev;
 }
 
 /** Remove `ids` from the tab strip, moving the active tab to a neighbour when

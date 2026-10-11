@@ -105,6 +105,9 @@
     "exportingPages": "Exportando página {{done}} de {{total}}…"
   },
   "exportNotice": {
+    "assetsFailed": "El sitio web se exportó, pero no se pudieron copiar algunos archivos que usan sus páginas. En esas páginas puede faltar una imagen, un archivo multimedia o una descarga, o aparecer una versión obsoleta.",
+    "assetsFailedMore_one": "Tampoco se pudo copiar {{count}} archivo más.",
+    "assetsFailedMore_other": "Tampoco se pudieron copiar {{count}} archivos más.",
     "pruneFailed": "El sitio web se exportó, pero la limpieza posterior no terminó. Pueden quedar páginas obsoletas en la carpeta, ahora o tras una exportación posterior.",
     "failed": "Falló la exportación.",
     "siteFailed": "Falló la exportación del sitio web.",
