@@ -65,21 +65,34 @@ export type WorkerMessage =
   /** Read one of the plugin's own manifest-declared files; resolves to bytes. */
   | { type: "asset-read"; callId: number; path: string };
 
+/** A trailing dot names the same host. */
+function hostName(name: string): string {
+  return name.toLowerCase().replace(/\.$/, "");
+}
+
 /**
  * Is a URL reachable under the plugin's declared `network:<host>` permissions?
- * Exact host match, or a subdomain of a declared host. No declarations means
- * no network at all.
+ * http or https to the exact declared host or a subdomain of it; no
+ * declarations means no network at all. The webview's own hosts are never
+ * covered: the asset protocol serves every granted file from `asset.localhost`
+ * (or `asset://localhost`) and `ipc.localhost` is the command bridge, so a
+ * plugin declaring `network:localhost` for a local server reaches that server
+ * alone. The worker bootstrap carries the same rule in its own source.
  */
 export function isNetworkAllowed(permissions: readonly string[], url: string): boolean {
-  let host: string;
+  let parsed: URL;
   try {
-    host = new URL(url).hostname;
+    parsed = new URL(url);
   } catch {
     return false;
   }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+  const host = hostName(parsed.hostname);
+  if (host.endsWith(".localhost")) return false;
   return permissions.some((p) => {
     if (!p.startsWith("network:")) return false;
-    const allowed = p.slice("network:".length);
+    const allowed = hostName(p.slice("network:".length));
+    if (!allowed) return false;
     return host === allowed || host.endsWith(`.${allowed}`);
   });
 }
