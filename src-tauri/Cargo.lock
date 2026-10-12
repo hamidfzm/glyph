@@ -1580,6 +1580,7 @@ dependencies = [
  "hyper-util",
  "keyring",
  "notify",
+ "percent-encoding",
  "regex",
  "same-file",
  "sentry",

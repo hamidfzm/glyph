@@ -84,6 +84,8 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs"] }
+# `glyph serve` judges a request path the way tower-http reads it: decoded.
+percent-encoding = "2"
 futures-util = { version = "0.3", default-features = false }
 tokio = { version = "1", features = ["net", "sync", "signal", "time"] }
 # The site a `glyph serve` without `--out` writes to. Not just a name under
