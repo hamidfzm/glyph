@@ -70,24 +70,16 @@ function marketEntry(id: string, name: string, version: string): RegistryEntry {
   };
 }
 
-/** A marketplace listing only `entry`, whose package arrives when `download` does. */
-function serveMarket(
-  entry: RegistryEntry,
-  download: Promise<ArrayBuffer> = Promise.resolve(new Uint8Array([1]).buffer),
-) {
+/** A marketplace listing only `entry`; the package itself is fetched in Rust. */
+function serveMarket(entry: RegistryEntry) {
   vi.stubGlobal(
     "fetch",
-    vi.fn((url: string) =>
-      Promise.resolve(
-        url === entry.packageUrl
-          ? { ok: true, arrayBuffer: () => download }
-          : { ok: true, json: () => Promise.resolve({ plugins: [entry] }) },
-      ),
-    ),
+    vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ plugins: [entry] }) })),
   );
 }
 
-const isInstall = (cmd: string) => cmd === "install_plugin" || cmd === "install_plugin_package";
+const isInstall = (cmd: string) =>
+  cmd === "install_plugin" || cmd === "install_plugin_from_registry";
 
 const installsRequested = () =>
   vi.mocked(invoke).mock.calls.filter(([cmd]) => isInstall(cmd)).length;
@@ -292,13 +284,17 @@ describe("PluginsProvider installs overtaken by an uninstall", () => {
     expectConsole(/Plugin operation failed/);
     const store = grantedStore();
     vi.mocked(getStore).mockResolvedValue(store as never);
-    const download = deferred<ArrayBuffer>();
-    serveMarket(update, download.promise);
-    pluginsFolder(installedPlugin({ version: "2.0.0" }), { installed: [installedPlugin()] });
+    // The download runs in Rust, inside the install command.
+    const download = deferred<void>();
+    serveMarket(update);
+    pluginsFolder(installedPlugin({ version: "2.0.0" }), {
+      installed: [installedPlugin()],
+      landing: () => download.promise,
+    });
     const installs = await mountOvertake("com.x.demo", (p) => p.installFromRegistry(update));
 
     await press("install");
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(update.packageUrl));
+    await waitFor(() => expect(installsRequested()).toBe(1));
     await press("uninstall");
     await act(async () => {
       download.reject(new Error("offline"));

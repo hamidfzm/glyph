@@ -3,7 +3,7 @@
 // only), reading declared assets, and uninstalling.
 
 use super::manifest::{
-    parse_manifest, validate_file_path, validate_id, MAX_FILE_BYTES, MAX_TOTAL_BYTES,
+    parse_manifest, validate_file_path, validate_id, ManifestInfo, MAX_FILE_BYTES, MAX_TOTAL_BYTES,
 };
 use super::{InstalledPlugin, PluginInspection};
 use std::fs;
@@ -97,26 +97,42 @@ pub(crate) fn install_into(root: &Path, src: &Path) -> Result<InstalledPlugin, S
     read_plugin_dir(&dest)
 }
 
-/// Install a downloaded plugin package (a zip whose sha256 the frontend has
-/// already verified against the registry entry). The archive is never
-/// extracted wholesale: the manifest inside declares the plugin's files, only
-/// those are copied out, and a declared file missing from the archive fails
-/// the install. Size caps keep a hostile archive from filling the disk.
-pub(crate) fn install_package(root: &Path, bytes: &[u8]) -> Result<InstalledPlugin, String> {
+type Package<'a> = zip::ZipArchive<std::io::Cursor<&'a [u8]>>;
+
+/// Open a package and read its manifest, validated, without writing anything.
+fn open_package(bytes: &[u8]) -> Result<(Package<'_>, String, ManifestInfo), String> {
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes))
         .map_err(|e| format!("not a valid plugin package: {e}"))?;
-
     let mut manifest_json = String::new();
     {
         use std::io::Read;
-        let mut entry = archive
+        let entry = archive
             .by_name("manifest.json")
             .map_err(|_| String::from("package has no manifest.json at its root"))?;
         entry
+            .take(MAX_FILE_BYTES)
             .read_to_string(&mut manifest_json)
             .map_err(|e| format!("cannot read manifest.json from package: {e}"))?;
     }
     let info = parse_manifest(&manifest_json)?;
+    Ok((archive, manifest_json, info))
+}
+
+/// The validated manifest of a package, for the checks an install runs
+/// before it writes.
+pub(crate) fn read_package_manifest(bytes: &[u8]) -> Result<ManifestInfo, String> {
+    open_package(bytes).map(|(_, _, info)| info)
+}
+
+/// Install a downloaded plugin package, a zip the registry fetch has verified
+/// (see `registry.rs`). The archive is never extracted wholesale: the
+/// manifest inside declares the plugin's files, only those are copied out,
+/// and a declared file missing from the archive fails the install. Size caps
+/// keep a hostile archive from filling the disk, and an entry is read no
+/// further than the size its header declares, so a deflate bomb stops at the
+/// cap instead of unpacking into memory.
+pub(crate) fn install_package(root: &Path, bytes: &[u8]) -> Result<InstalledPlugin, String> {
+    let (mut archive, manifest_json, info) = open_package(bytes)?;
 
     // Validate every declared entry (present, within size caps) before
     // anything touches disk, so a rejected package leaves nothing behind.
@@ -141,13 +157,20 @@ pub(crate) fn install_package(root: &Path, bytes: &[u8]) -> Result<InstalledPlug
 
     for rel in info.install_files() {
         use std::io::Read;
-        let mut entry = archive
+        let entry = archive
             .by_name(&rel)
             .map_err(|_| format!("declared plugin file \"{rel}\" is missing from the package"))?;
-        let mut bytes = Vec::with_capacity(entry.size() as usize);
+        let declared = entry.size();
+        let mut bytes = Vec::with_capacity(declared as usize);
         entry
+            .take(declared + 1)
             .read_to_end(&mut bytes)
             .map_err(|e| format!("cannot read {rel} from package: {e}"))?;
+        if bytes.len() as u64 > declared {
+            return Err(format!(
+                "plugin file \"{rel}\" is larger than its header declares"
+            ));
+        }
         write_plugin_file(&dest, &rel, &bytes)?;
     }
     read_plugin_dir(&dest)
@@ -398,6 +421,58 @@ mod tests {
         let err = install_package(&root, &bytes).unwrap_err();
         assert!(err.contains("cannot write"), "unexpected error: {err}");
         let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A deflate entry whose header understates its size would otherwise
+    /// unpack past the cap into memory: the read stops at the declared size.
+    #[test]
+    fn install_package_stops_reading_an_entry_at_the_size_its_header_declares() {
+        let root = temp_root("pkg_header_lies");
+        let payload = vec![b'a'; 4096];
+        let mut bytes = zip_with(
+            zip::CompressionMethod::Deflated,
+            &[
+                ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+                ("main.js", &payload),
+                ("assets/data.txt", b"x"),
+            ],
+        );
+        // Rewrite the uncompressed size of `main.js` in both its local header
+        // and its central directory record to 16 bytes.
+        let patched = patch_uncompressed_size(&mut bytes, b"main.js", 16);
+        assert_eq!(patched, 2, "local header and central directory");
+
+        let err = install_package(&root, &bytes).unwrap_err();
+        assert!(err.contains("larger than its header declares"), "{err}");
+        assert!(!root.join("com.x.pkg").join("main.js").exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Patch the uncompressed-size field of every header naming `name`.
+    /// Local headers carry it at offset 22, central directory records at 24.
+    fn patch_uncompressed_size(bytes: &mut [u8], name: &[u8], size: u32) -> usize {
+        let mut patched = 0;
+        for (signature, size_at, name_len_at) in [
+            ([0x50, 0x4b, 0x03, 0x04], 22, 26),
+            ([0x50, 0x4b, 0x01, 0x02], 24, 28),
+        ] {
+            let mut at = 0;
+            while let Some(found) = bytes[at..].windows(4).position(|w| w == signature) {
+                let header = at + found;
+                let name_len = u16::from_le_bytes([
+                    bytes[header + name_len_at],
+                    bytes[header + name_len_at + 1],
+                ]) as usize;
+                let name_at = header + if size_at == 22 { 30 } else { 46 };
+                if &bytes[name_at..name_at + name_len] == name {
+                    bytes[header + size_at..header + size_at + 4]
+                        .copy_from_slice(&size.to_le_bytes());
+                    patched += 1;
+                }
+                at = header + 4;
+            }
+        }
+        patched
     }
 
     #[test]

@@ -6,6 +6,7 @@
 use serde::Serialize;
 use std::path::PathBuf;
 use tauri::Manager;
+use tauri_plugin_http::reqwest;
 
 use crate::grants::GrantRegistry;
 
@@ -36,6 +37,7 @@ pub struct InstalledPlugin {
 }
 
 mod manifest;
+mod registry;
 mod store;
 #[cfg(test)]
 mod test_support;
@@ -44,9 +46,11 @@ mod tests;
 
 pub(crate) use manifest::is_well_formed_id;
 
-use store::{
-    inspect_dir, install_into, install_package, read_asset_from, scan_plugins_root, uninstall_from,
+use registry::{
+    find_entry, install_verified, is_marketplace_url, MAX_INDEX_BYTES, MAX_PACKAGE_BYTES,
+    REGISTRY_URL,
 };
+use store::{inspect_dir, install_into, read_asset_from, scan_plugins_root, uninstall_from};
 
 fn plugins_root<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
     app.path()
@@ -100,14 +104,68 @@ pub fn install_plugin<R: tauri::Runtime>(
     install_into(&plugins_root(&app)?, &src_dir)
 }
 
+/// Install a marketplace plugin by id. The backend fetches the registry index
+/// itself, downloads the package the entry names, and verifies the bytes
+/// against the entry's hash before anything is written: the renderer never
+/// supplies a URL, a hash, or package bytes.
 #[tauri::command]
-pub fn install_plugin_package<R: tauri::Runtime>(
+pub async fn install_plugin_from_registry<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
-    // ponytail: bytes ride the JSON IPC as a number array; switch to Tauri's
-    // raw request body if multi-MB installs ever feel slow.
-    bytes: Vec<u8>,
+    id: String,
 ) -> Result<InstalledPlugin, String> {
-    install_package(&plugins_root(&app)?, &bytes)
+    manifest::validate_id(&id)?;
+    let root = plugins_root(&app)?;
+    let client = marketplace_client()?;
+    let index = download(&client, REGISTRY_URL, MAX_INDEX_BYTES).await?;
+    let index =
+        String::from_utf8(index).map_err(|_| String::from("the plugin registry is not UTF-8"))?;
+    let entry = find_entry(&index, &id)?;
+    let bytes = download(&client, &entry.package_url, MAX_PACKAGE_BYTES).await?;
+    tauri::async_runtime::spawn_blocking(move || install_verified(&root, &entry, &bytes))
+        .await
+        .map_err(|e| format!("plugin install task failed: {e}"))?
+}
+
+/// An HTTP client that follows a redirect only onto another marketplace host,
+/// the way the http capability scoped the renderer's download before.
+fn marketplace_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            if is_marketplace_url(attempt.url().as_str()) {
+                attempt.follow()
+            } else {
+                attempt.error("redirect leaves the marketplace hosts")
+            }
+        }))
+        .build()
+        .map_err(|e| format!("cannot build the download client: {e}"))
+}
+
+/// Fetch `url` into memory, refusing a body over `cap` bytes as it streams.
+async fn download(client: &reqwest::Client, url: &str, cap: usize) -> Result<Vec<u8>, String> {
+    if !is_marketplace_url(url) {
+        return Err(format!("{url} is outside the marketplace hosts"));
+    }
+    let mut response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("download failed: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("download failed: {}", response.status()));
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|e| format!("download failed: {e}"))?
+    {
+        if bytes.len() + chunk.len() > cap {
+            return Err(format!("download of {url} exceeds the size limit"));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
 }
 
 #[tauri::command]

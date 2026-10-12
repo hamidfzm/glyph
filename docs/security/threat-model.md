@@ -138,6 +138,7 @@ and files: <path>`), which never echoes the grant list.
 | `create_workspace_file` | `root` must be a granted workspace. The path is workspace-relative (`..`, a drive letter, or a backslash is refused) and must canonicalize strictly inside that workspace, so a symlink resolving outside it, or into another granted workspace, is refused. A hidden name anywhere in the resolved path is refused too, which keeps `.git/hooks` and `.glyph` out of reach. The file is opened with `create_new`: one that already exists is reported back and never written to |
 | `sync_*` | granted workspace (`sync_clone_remote` clones into the workspace path itself); `sync_init_repo`, `sync_clone_remote`, and `sync_set_origin` accept only `https://` without credentials, `ssh://`, or scp-like `user@host:path` remotes, since libgit2 would also take a local path or `file://` (pulling any local repository into a granted workspace) and cleartext `http://`/`git://` |
 | `install_plugin` | consumes the pending picked folder; no path argument |
+| `install_plugin_from_registry` | takes a plugin id and nothing else. The backend fetches the registry index from its fixed URL, finds the entry, downloads the package the entry names (the marketplace hosts alone, a redirect included, 50 MiB at most), and verifies the sha256 and the manifest id before anything is written, so a package that lies about itself never lands on another installed plugin |
 
 `vault_forget` takes no readable check: it only drops an index the process
 already built, so the worst a renderer can do with it is make the next
@@ -237,9 +238,12 @@ The app and the extension are ad-hoc signed; there is no Developer ID or notariz
 `capabilities/default.json` grants no permission set whose members resolve
 renderer-supplied paths: the dialog, filesystem, and store plugins get the
 exact commands the frontend calls instead of their `default` sets. The
-remaining default sets (`core`, `os`, `opener`, `http`) reach no file; the
-opener's `reveal_item_in_dir` takes a path but only opens the file manager at
-it, and `http:default` is scoped to the marketplace hosts.
+remaining default sets (`core`, `os`, `opener`) reach no file; the opener's
+`reveal_item_in_dir` takes a path but only opens the file manager at it. There
+is no `http` permission: the marketplace download runs in Rust
+(`install_plugin_from_registry` in the table above), which fetches the
+registry index from its fixed URL and follows the entry to a package on the
+marketplace hosts alone, so the renderer never names a URL.
 
 - **Dialog.** Desktop holds `dialog:allow-message` alone (it backs `ask`).
   The plugin's `open` command adds whatever the user picks to the fs and asset
@@ -452,8 +456,9 @@ the way a renderer-supplied path is.
   renderer sees (the host's own Escape handling and close button on a plugin
   overlay guard against a plugin's bugs, not against a hostile one); that mode
   requires an explicit full-trust consent, persisted per plugin, and
-  marketplace packages are SHA-256-verified against the reviewed registry
-  entry before install. The app-context API also lets a full-trust plugin
+  marketplace packages are downloaded and SHA-256-verified in Rust against
+  the registry entry it fetches itself, so a compromised renderer can install
+  a reviewed package but never bytes of its own. The app-context API also lets a full-trust plugin
   read the active document, query the workspace index, open workspace files,
   and list workspace files in the Files panel. None of that adds a command:
   index queries go through the `vault_*` commands, which check the workspace

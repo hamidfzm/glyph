@@ -64,8 +64,25 @@ fn install_plugin_command_errors_without_a_pending_pick() {
     assert_eq!(result.unwrap_err(), "no plugin folder was picked");
 }
 
+/// The registry install reaches the network, so the command is driven only
+/// as far as its id check: a reserved or unsafe id is refused before any
+/// request is made, with no plugins root touched.
 #[test]
-fn package_and_asset_commands_run_via_mock_app() {
+fn install_plugin_from_registry_refuses_a_bad_id_before_any_request() {
+    use tauri::test::mock_app;
+    let app = mock_app();
+    for id in ["glyph.core.mermaid", "../evil", "", "a/b"] {
+        let err = tauri::async_runtime::block_on(install_plugin_from_registry(
+            app.handle().clone(),
+            id.to_string(),
+        ))
+        .unwrap_err();
+        assert!(err.contains("plugin id"), "{id:?}: {err}");
+    }
+}
+
+#[test]
+fn asset_command_reads_a_declared_file_of_an_installed_package() {
     use tauri::test::mock_app;
     let app = mock_app();
     let bytes = zip_of(&[
@@ -73,8 +90,8 @@ fn package_and_asset_commands_run_via_mock_app() {
         ("main.js", b"export default {};"),
         ("assets/data.txt", b"payload"),
     ]);
-
-    let plugin = install_plugin_package(app.handle().clone(), bytes).unwrap();
+    let root = plugins_root(&app.handle().clone()).unwrap();
+    let plugin = super::store::install_package(&root, &bytes).unwrap();
     assert_eq!(plugin.id, "com.x.pkg");
 
     let asset = read_plugin_asset(
