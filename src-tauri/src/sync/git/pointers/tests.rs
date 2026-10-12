@@ -155,6 +155,31 @@ fn a_config_value_naming_a_network_path_is_refused_however_it_is_spelled() {
     }
 }
 
+// libgit2 resolves each of these as a network path, though `Path` finds no
+// share in the first two.
+#[test]
+fn an_unusual_spelling_of_a_network_path_is_refused() {
+    let spellings = [
+        r"\\glyph-test-host.invalid\\share\wt",
+        "//glyph-test-host.invalid//share/wt",
+        r"\\?\UNC\glyph-test-host.invalid\share\wt",
+        "//?/UNC/glyph-test-host.invalid/share/wt",
+    ];
+    for spelling in spellings {
+        let tmp = TempDir::new().unwrap();
+        let pointed = tmp.path().join("pointed");
+        write(&pointed.join(".git"), &format!("gitdir: {spelling}\n"));
+        assert!(check(&pointed).is_err(), "gitdir line: {spelling}");
+
+        let configured = tmp.path().join("configured");
+        init(&configured);
+        let escaped = spelling.replace('\\', r"\\");
+        append_config(&configured, &format!("[core]\n\tworktree = {escaped}\n"));
+        let refusal = check(&configured).unwrap_err();
+        assert!(refusal.contains("never looked up"), "{spelling}: {refusal}");
+    }
+}
+
 #[test]
 fn a_network_path_is_refused_under_any_key_and_in_either_config_file() {
     let cases: [(&str, Build); 5] = [
