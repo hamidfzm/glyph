@@ -12,10 +12,10 @@ permissions:
   contents: read
 
 env:
-  # cargo-mutants does not evaluate `cfg`, so a mutant inside `#[cfg(windows)]`
-  # code compiles to nothing on Linux and survives every test there. Mutants
-  # whose name matches this pattern run on the Windows leg and are left out of
-  # the Linux ones. A function only Windows compiles joins the pattern.
+  # cargo-mutants does not evaluate `cfg`, so a mutant in `#[cfg(windows)]`
+  # code, or in a function that only forwards to it, survives every test on
+  # Linux. Mutants whose name matches this pattern run on the Windows leg and
+  # are left out of the Linux ones. A function like that joins the pattern.
   WINDOWS_ONLY: '\b(refuse_remote|remote)\b'
 
 jobs:
@@ -54,7 +54,10 @@ jobs:
           tool: cargo-mutants,nextest
       - name: Run targeted mutation tests
         working-directory: src-tauri
-        shell: bash
+        # Not bash: on the Windows runner Git Bash enables the backup privilege
+        # for everything it starts, which opens a file a test holds sealed, and
+        # the unmutated tests fail before any mutant runs.
+        shell: pwsh
         env:
           SELECT: ${{ matrix.select }}
           SHARD: ${{ matrix.shard }}
@@ -70,20 +73,23 @@ jobs:
         # non-decreasing (docs/engineering-invariants.md). So does a leg that
         # catches nothing: a pattern that matches no mutant exits 0.
         run: |
-          cargo mutants --in-place --no-shuffle --test-tool=nextest \
-            "$SELECT" "$WINDOWS_ONLY" --shard "$SHARD" && ec=0 || ec=$?
-          if [ -s mutants.out/missed.txt ]; then
-            echo "Missed mutants:"
-            cat mutants.out/missed.txt
+          cargo mutants --in-place --no-shuffle --test-tool=nextest $env:SELECT $env:WINDOWS_ONLY --shard $env:SHARD
+          $ec = $LASTEXITCODE
+          $missed = Get-Content mutants.out/missed.txt -ErrorAction Ignore
+          if ($missed) {
+            "Missed mutants:"
+            $missed
             exit 2
-          fi
-          if [ "$ec" -ne 0 ] && [ "$ec" -ne 3 ]; then
-            exit "$ec"
-          fi
-          if [ ! -s mutants.out/caught.txt ]; then
-            echo "::error::No mutant was caught, so this leg tested nothing"
+          }
+          if ($ec -ne 0 -and $ec -ne 3) {
+            exit $ec
+          }
+          if (-not (Get-Content mutants.out/caught.txt -ErrorAction Ignore)) {
+            "::error::No mutant was caught, so this leg tested nothing"
             exit 1
-          fi
+          }
+          # Left to end by itself, the step takes cargo-mutants' exit code.
+          exit 0
       - name: Upload mutation report
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
