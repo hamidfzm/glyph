@@ -301,7 +301,9 @@ the way a renderer-supplied path is.
   index keeps its walk rules: no symlink out of the vault, no hidden folder,
   nothing over 5 MB.
 - **Effects.** `export` writes only inside the vault it reads, to a name
-  carrying the format's extension, so it cannot replace a note.
+  carrying the format's extension, so it cannot replace a note; the name
+  may not be a link either, since the write would follow it to whatever
+  note a cloned vault pointed it at.
   `open_in_glyph` hands the app a path the server can already read, the way a
   file manager would. Five tools change notes: `patch_note`, `set_property`,
   `update_task`, `rename_note` and `move_note`. Every other tool is read-only.
