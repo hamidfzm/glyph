@@ -1512,6 +1512,14 @@ mod tests {
 
         let report = prune(&dir, &["guide.html"]).unwrap();
 
+        eprintln!(
+            "DIAG one: report={report:?} manifest={} dir={dir:?} entries={:?}",
+            manifest_text(&dir),
+            fs::read_dir(&dir)
+                .unwrap()
+                .map(|e| e.unwrap().file_name())
+                .collect::<Vec<_>>()
+        );
         drop(sealed);
         // Removed on a guess, it could have been the page just written.
         assert_eq!(report.removed, 0);
@@ -1527,6 +1535,52 @@ mod tests {
         );
         assert_eq!(manifest_text(&dir), r#"["guide.html","Guide.html"]"#);
 
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn diag_seal() {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+        let dir = out_dir_with_manifest("diag_seal", &[]);
+        let upper = dir.join("Guide.html");
+        let lower = dir.join("guide.html");
+        fs::write(&upper, "one").unwrap();
+        fs::write(&lower, "two").unwrap();
+        let canonical = dir.canonicalize().unwrap();
+        eprintln!(
+            "DIAG probe: temp_dir={:?} dir={dir:?} canonical={canonical:?}",
+            std::env::temp_dir()
+        );
+        eprintln!(
+            "DIAG probe: before seal same_file={:?} upper={:?}",
+            same_file::is_same_file(&upper, &lower),
+            fs::read_to_string(&upper)
+        );
+        let sealed = seal(&upper);
+        eprintln!(
+            "DIAG probe: sealed, plain open={:?}",
+            fs::File::open(&upper).map(|_| ())
+        );
+        let backup = fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(&upper);
+        eprintln!("DIAG probe: sealed, backup open={:?}", backup.map(|_| ()));
+        eprintln!(
+            "DIAG probe: sealed, same_file={:?}",
+            same_file::is_same_file(&upper, &lower)
+        );
+        eprintln!(
+            "DIAG probe: sealed, is_one_file canonical={:?}",
+            is_one_file(&canonical.join("Guide.html"), &canonical.join("guide.html"))
+        );
+        eprintln!(
+            "DIAG probe: sealed, is_any_of={:?}",
+            is_any_of(&canonical, &canonical.join("Guide.html"), &["guide.html"])
+        );
+        drop(sealed);
         let _ = fs::remove_dir_all(&dir);
     }
 

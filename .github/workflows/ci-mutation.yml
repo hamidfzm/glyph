@@ -1,93 +1,72 @@
 name: Mutation
 
+# Throwaway diagnostic, never merged: why one test fails on the Windows leg.
 on:
   workflow_dispatch:
-  schedule:
-    # Weekly, Monday 04:00 UTC. Non-blocking: this workflow is not in the
-    # required-checks ruleset; a missed mutant is a review finding, not a
-    # red X on someone's PR.
-    - cron: "0 4 * * 1"
 
 permissions:
   contents: read
 
 env:
-  # cargo-mutants does not evaluate `cfg`, so a mutant inside `#[cfg(windows)]`
-  # code compiles to nothing on Linux and survives every test there. Mutants
-  # whose name matches this pattern run on the Windows leg and are left out of
-  # the Linux ones. A function only Windows compiles joins the pattern.
-  WINDOWS_ONLY: '\b(refuse_remote|remote)\b'
+  ONE: commands::file::tests::prune_export_dir_leaves_a_page_it_cannot_tell_from_the_one_just_written
+  PROBE: commands::file::tests::diag_seal
 
 jobs:
-  mutants:
-    name: cargo-mutants (${{ matrix.leg }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - leg: linux-1
-            os: ubuntu-latest
-            select: --exclude-re
-            shard: 0/2
-          - leg: linux-2
-            os: ubuntu-latest
-            select: --exclude-re
-            shard: 1/2
-          - leg: windows
-            os: windows-latest
-            select: --re
-            shard: 0/1
+  diag:
+    name: diag
+    runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: ./.github/actions/rust-setup
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        timeout-minutes: 8
-        uses: ./.github/actions/linux-deps
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
-          cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
-      - name: Install cargo-mutants
-        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
-        with:
-          tool: cargo-mutants,nextest
-      - name: Run targeted mutation tests
+          tool: nextest
+      - name: Build
         working-directory: src-tauri
-        shell: bash
-        env:
-          SELECT: ${{ matrix.select }}
-          SHARD: ${{ matrix.shard }}
-        # Scope comes from src-tauri/.cargo/mutants.toml (grants + file/create
-        # commands). In place, because the copy cargo-mutants otherwise tests
-        # holds only src-tauri/ and cannot build: tauri.conf.json bundles
-        # ../LICENSE. That rules out -j, hence the shards.
-        #
-        # Gate on the report, not the exit code: the clean baseline includes a
-        # mutant killed by timeout (an infinite-loop mutation), which makes
-        # cargo-mutants exit 3, and exit 3 also masks misses when both occur in
-        # one run. Missed mutants fail the leg, keeping the documented baseline
-        # non-decreasing (docs/engineering-invariants.md). So does a leg that
-        # catches nothing: a pattern that matches no mutant exits 0.
+        run: cargo test --lib --no-run
+      - name: Env, pwsh
         run: |
-          cargo mutants --in-place --no-shuffle --test-tool=nextest \
-            "$SELECT" "$WINDOWS_ONLY" --shard "$SHARD" && ec=0 || ec=$?
-          if [ -s mutants.out/missed.txt ]; then
-            echo "Missed mutants:"
-            cat mutants.out/missed.txt
-            exit 2
-          fi
-          if [ "$ec" -ne 0 ] && [ "$ec" -ne 3 ]; then
-            exit "$ec"
-          fi
-          if [ ! -s mutants.out/caught.txt ]; then
-            echo "::error::No mutant was caught, so this leg tested nothing"
-            exit 1
-          fi
-      - name: Upload mutation report
-        if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: mutants-report-${{ matrix.leg }}
-          path: src-tauri/mutants.out/
-          retention-days: 30
+          "pwsh TEMP=$env:TEMP TMP=$env:TMP"
+      - name: Env, bash
+        shell: bash
+        run: |
+          echo "bash TEMP=$TEMP TMP=$TMP"
+          cmd //c "echo native TEMP=%TEMP% TMP=%TMP%"
+      - name: Alone, cargo test, pwsh
+        working-directory: src-tauri
+        run: |
+          foreach ($i in 1..3) {
+            cargo test --lib -- --exact $env:ONE --nocapture
+            "one exit=$LASTEXITCODE"
+          }
+          cargo test --lib -- --exact $env:PROBE --nocapture
+          "probe exit=$LASTEXITCODE"
+          exit 0
+      - name: Alone, cargo test, bash
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          for i in 1 2 3; do
+            cargo test --lib -- --exact "$ONE" --nocapture && echo "one exit=0" || echo "one exit=$?"
+          done
+          cargo test --lib -- --exact "$PROBE" --nocapture && echo "probe exit=0" || echo "probe exit=$?"
+      - name: nextest, pwsh
+        working-directory: src-tauri
+        run: |
+          cargo nextest run --lib --no-fail-fast --failure-output final --success-output final prune_export_dir_leaves diag_seal
+          "nextest exit=$LASTEXITCODE"
+          cargo nextest run --lib --no-fail-fast prune_export_dir
+          "nextest prune exit=$LASTEXITCODE"
+          exit 0
+      - name: nextest, bash
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          cargo nextest run --lib --no-fail-fast --failure-output final --success-output final prune_export_dir_leaves diag_seal && echo "nextest exit=0" || echo "nextest exit=$?"
+          cargo nextest run --lib --no-fail-fast prune_export_dir && echo "nextest prune exit=0" || echo "nextest prune exit=$?"
+      - name: Whole lib, cargo test, bash
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          cargo test --lib 2>&1 | tail -30 || true
