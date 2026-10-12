@@ -4,11 +4,14 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { LinkComponent } from "@/components/markdown/LinkComponent";
 import type { ChatTurn } from "@/hooks/useAIChat";
+import { AIImagePlaceholder } from "./AIImagePlaceholder";
 import { AIQuoteBlock } from "./AIQuoteBlock";
 
 // A model-chosen href must open in the system browser behind the external-link
-// prompt, never navigate the app webview; LinkComponent owns that.
-const components = { blockquote: AIQuoteBlock, a: LinkComponent };
+// prompt, never navigate the app webview; LinkComponent owns that. A
+// model-chosen image never loads: the reply is shaped by the document it was
+// asked about, so an image URL is a channel out of the user's notes.
+const components = { blockquote: AIQuoteBlock, a: LinkComponent, img: AIImagePlaceholder };
 
 interface AIChatMessageProps {
   turn: ChatTurn;

