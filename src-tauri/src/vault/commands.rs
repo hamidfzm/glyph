@@ -40,6 +40,7 @@ pub fn vault_refresh(
     to_value(vaults[&key].snapshot())
 }
 
+/// Takes no check: the path is compared with what the store holds, never looked up.
 #[tauri::command]
 pub fn vault_forget(path: String, store: tauri::State<'_, VaultStore>) -> Result<(), String> {
     forget(&store, &path);

@@ -30,7 +30,8 @@ pub(super) fn lock(store: &VaultStore) -> Result<Vaults<'_>, String> {
     }))
 }
 
-/// The store key for a root that has not been through a grant check.
+/// The store key for a root a grant check let through earlier, when it was
+/// watched or handed to a command, but whose resolved path was not kept.
 fn key_for(root: &str) -> PathBuf {
     let path = Path::new(root);
     std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
@@ -99,8 +100,13 @@ pub fn apply_changes(store: &VaultStore, root: &str, paths: &[PathBuf]) {
 
 /// Drop the index for a closing workspace. Nothing else releases it, and it
 /// holds every note's tags, fields and links for the rest of the session.
+///
+/// Matched against the root as its index was built with, or its key, and never
+/// looked up: `root` is whatever a window says it had open, and on Windows
+/// looking a network path up connects to its host.
 pub fn forget(store: &VaultStore, root: &str) {
+    let root = Path::new(root);
     if let Ok(mut vaults) = store.0.lock() {
-        vaults.remove(&key_for(root));
+        vaults.retain(|key, vault| key != root && vault.root != root);
     }
 }

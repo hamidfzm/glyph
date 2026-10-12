@@ -2,9 +2,9 @@
 // `contextMenuItems`: no React, so the item set per tab position is unit
 // testable on its own.
 
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { TFunction } from "i18next";
 import { isMobilePlatform } from "@/lib/platform";
+import { revealPath } from "@/lib/revealPath";
 import type { Tab } from "@/lib/tabs";
 import { type ContextMenuItem, copySelection, joinGroups } from "./contextMenuItems";
 
@@ -86,9 +86,7 @@ export function buildTabMenuItems(
       {
         kind: "action",
         label: t("fileTree.reveal"),
-        // Best-effort: the reveal rejects when the file is gone, and there is
-        // no meaningful recovery for the gesture.
-        onSelect: () => void revealItemInDir(filePath).catch(() => undefined),
+        onSelect: () => revealPath(filePath),
       },
     );
   }
